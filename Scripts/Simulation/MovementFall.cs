@@ -35,6 +35,12 @@ public sealed partial class Defines
     public float MovementCrushedFollowing { get; set; } = 0.06f;
     /// <summary>A peaceful movement this marginal and this tame folds into ordinary politics.</summary>
     public float MovementFoldFollowing { get; set; } = 0.04f;
+    /// <summary>
+    /// How settled under its new rulers every region of a government in exile's homeland must be
+    /// (ScenarioState.BorderHabit, 0..1) before, with its following gone, it fades into history.
+    /// 0.9 is about 28 years at BorderHabitYears 12. Above 1 keeps every exile for ever.
+    /// </summary>
+    public float MovementExileForgottenHabit { get; set; } = 0.9f;
     public float MovementFoldMilitancy { get; set; } = 0.08f;
     /// <summary>
     /// The chance a beaten rising or breakaway goes underground rather than ending, before what
@@ -82,6 +88,8 @@ public static class MovementFall
         {
             var owner = MovementRules.OwnerOf(campaign, region);
             if (owner is null || owner.Movement is not null || campaign.Homelands.ContainsKey(owner.Id)) continue;
+            // A map artefact (common/country_merges) is not a people's state: no homeland to return to.
+            if (CountryMerges.IsMerged(owner.Tag)) continue;
             held ??= new Dictionary<int, List<int>>();
             if (!held.TryGetValue(owner.Id, out var list)) held[owner.Id] = list = new List<int>();
             list.Add(region.MapIndex);
@@ -108,9 +116,13 @@ public static class MovementFall
             // A country that never held ground of its own was a line on a map, not a state: the
             // Siachen Glacier and Baikonur are drawn as countries by the map source and go to
             // whoever governs them on the first day. It has no government to send abroad.
-            if (!campaign.Homelands.TryGetValue(nation.Id, out var held) || held.Count == 0)
+            // So is an entry of the merge table, whatever was remembered for it: no exile, no
+            // underground, nothing for a later rising to revive.
+            if (!campaign.Homelands.TryGetValue(nation.Id, out var held) || held.Count == 0 || CountryMerges.IsMerged(nation.Tag))
             {
                 nation.Population = 0;
+                nation.PublicImages.Clear();
+                if (CountryMerges.IsMerged(nation.Tag)) campaign.Homelands.Remove(nation.Id);
                 continue;
             }
             var chance = ExileChance(campaign, nation, out var refuge);
@@ -272,12 +284,15 @@ public static class MovementFall
         var found = Refuge(campaign, nation);
         refuge = found;
         if (found is null) return 0f;
-        var host = campaign.Nations.Find(candidate => candidate.MapIndex == found.NationMapIndex);
+        var host = campaign.NationByMapIndex(found.NationMapIndex);
         var chance = defines.MovementExileBase + defines.MovementExileStability * nation.Stability;
-        if (host is not null && CampaignDiplomacy.Get(campaign, host.Id, nation.Id).Opinion >= 30f) chance += defines.MovementExileFriend;
-        if (campaign.Homelands.TryGetValue(nation.Id, out var homeland) &&
-            homeland.Sum(index => campaign.States.Find(region => region.MapIndex == index)?.Population ?? 0L) > 5_000_000L)
-            chance += defines.MovementExileLarge;
+        if (host is not null && (CampaignDiplomacy.Peek(campaign, host.Id, nation.Id)?.Opinion ?? 0f) >= 30f) chance += defines.MovementExileFriend;
+        if (campaign.Homelands.TryGetValue(nation.Id, out var homeland))
+        {
+            long homelandPopulation = 0L;
+            foreach (var index in homeland) homelandPopulation += campaign.StateByMapIndex(index)?.Population ?? 0L;
+            if (homelandPopulation > 5_000_000L) chance += defines.MovementExileLarge;
+        }
         if (nation.IsHuman) chance += defines.MovementExilePlayer;
         return M.Clamp01(chance);
     }
@@ -288,13 +303,20 @@ public static class MovementFall
         var conquerors = new HashSet<int>();
         if (campaign.Homelands.TryGetValue(nation.Id, out var homeland))
             foreach (var index in homeland)
-                if (campaign.States.Find(region => region.MapIndex == index) is { } region &&
+                if (campaign.StateByMapIndex(index) is { } region &&
                     MovementRules.OwnerOf(campaign, region) is { } owner && owner.Id != nation.Id)
                     conquerors.Add(owner.Id);
-        foreach (var candidate in campaign.Nations)
-            foreach (var conqueror in conquerors.ToList())
-                if (candidate.Id != conqueror && CampaignDiplomacy.Get(campaign, candidate.Id, conqueror)?.Stance == DiplomaticStance.Allied)
-                    conquerors.Add(candidate.Id);
+        if (conquerors.Count > 0)
+        {
+            var primary = conquerors.ToArray();
+            foreach (var candidate in campaign.Nations)
+                for (var i = 0; i < primary.Length; i++)
+                {
+                    var conqueror = primary[i];
+                    if (candidate.Id != conqueror && CampaignDiplomacy.Peek(campaign, candidate.Id, conqueror)?.Stance == DiplomaticStance.Allied)
+                        conquerors.Add(candidate.Id);
+                }
+        }
         return conquerors;
     }
 
@@ -307,15 +329,15 @@ public static class MovementFall
     /// </summary>
     public static float Warmth(Campaign campaign, Nation host, Nation guest, IEnumerable<int> against = null)
     {
-        var relation = CampaignDiplomacy.Get(campaign, host.Id, guest.Id);
-        if (relation is null) return 0f;
+        if (host is null || guest is null || host.Id == guest.Id) return 0f;
+        var relation = CampaignDiplomacy.Peek(campaign, host.Id, guest.Id);
         // And the enemy of its enemy: a rival of whoever took its ground, or holds what it claims.
         var enmity = 0f;
         if (against is not null)
             foreach (var enemyId in against)
             {
                 if (enemyId == host.Id) return -200f;
-                var toEnemy = CampaignDiplomacy.Get(campaign, host.Id, enemyId);
+                var toEnemy = CampaignDiplomacy.Peek(campaign, host.Id, enemyId);
                 if (toEnemy is null) continue;
                 // The enemy's own ally never takes them in, and its friends think twice.
                 if (toEnemy.Stance == DiplomaticStance.Allied) return -200f;
@@ -331,8 +353,8 @@ public static class MovementFall
                 felt -= PoliticsCore.Affinity(campaign, host.Id, enemyId) * 0.6f;
                 enmity += felt;
             }
-        var warmth = relation.Opinion + PoliticsCore.Affinity(campaign, host.Id, guest.Id) * 0.5f;
-        warmth += relation.Stance switch
+        var warmth = (relation?.Opinion ?? 0f) + PoliticsCore.Affinity(campaign, host.Id, guest.Id) * 0.5f;
+        warmth += (relation?.Stance ?? DiplomaticStance.Neutral) switch
         {
             DiplomaticStance.Allied => 60f,
             DiplomaticStance.Friendly => 30f,
@@ -340,8 +362,11 @@ public static class MovementFall
             DiplomaticStance.AtWar => -200f,
             _ => 0f
         };
-        if (relation.GuaranteeByA || relation.GuaranteeByB) warmth += 30f;
-        if (relation.TradeAgreement) warmth += 8f;
+        if (relation is not null)
+        {
+            if (relation.GuaranteeByA || relation.GuaranteeByB) warmth += 30f;
+            if (relation.TradeAgreement) warmth += 8f;
+        }
         if (CampaignDiplomacy.SharesLandBorder(campaign, host.MapIndex, guest.MapIndex)) warmth += 6f;
         // And nearness: a government that has to flee goes next door or to its own part of the
         // world far more often than across it - London and Warsaw, not Havana.
@@ -506,6 +531,20 @@ public static class MovementFall
         else if (!state.Exile && Matured(campaign, state) && state.Militancy >= 0f && state.Militancy < defines.MovementFoldMilitancy &&
                  following < defines.MovementFoldFollowing && !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)))
             Dissolve(campaign, nation, Loc.Get("What is left of it has joined ordinary politics: the movement has folded into the parties."));
+        // A government in exile outlives everything but its people's forgetting: a generation
+        // grown up at home under other flags, and almost nobody there still following it.
+        else if (state.Exile && Matured(campaign, state) && following < defines.MovementFoldFollowing &&
+                 HomelandSettled(campaign, state, defines.MovementExileForgottenHabit) &&
+                 !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)))
+            Dissolve(campaign, nation, Loc.Get("A generation has grown up at home under other flags: the government in exile is a memory now."));
+    }
+
+    private static bool HomelandSettled(Campaign campaign, MovementState state, float habit)
+    {
+        if (habit > 1f || state.Homeland.Count == 0) return false;
+        foreach (var id in state.Homeland)
+            if (Movements.StateById(campaign, id) is not { } region || region.BorderHabit < habit) return false;
+        return true;
     }
 
     /// <summary>A year since it was founded, or since the world began for one that was there already.</summary>
@@ -529,6 +568,7 @@ public static class MovementFall
         state.HeadquartersStateMapIndex = -1;
         state.Cadres = 0f;
         nation.ManpowerReserve = 0f;
+        nation.PublicImages.Clear();
         state.LastReport = why;
         foreach (var army in campaign.Armies.Where(army => army.NationId == nation.Id).ToList())
             Attrition.Destroy(campaign, army, "movement dissolved", lost: false);

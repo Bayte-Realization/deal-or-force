@@ -502,12 +502,15 @@ public static class PoliticsCore
     /// of countries in the world are somewhat unlike each other, and a world where almost
     /// every pair is drifting towards hostility is a world at permanent war.
     /// </summary>
-    public static float Affinity(Campaign campaign, int leftId, int rightId)
+    public static float Affinity(Campaign campaign, int leftId, int rightId) =>
+        campaign is null ? 0f : Affinity(campaign, campaign.NationById(leftId), campaign.NationById(rightId));
+
+    internal static float Affinity(Campaign campaign, Nation left, Nation right)
     {
-        if (campaign is null) return 0f;
+        if (campaign is null || left is null || right is null) return 0f;
         var weight = campaign.Defines.IdeologyOpinionWeight;
         if (weight <= 0f) return 0f;
-        var distance = IdeologicalDistance(campaign.NationById(leftId), campaign.NationById(rightId));
+        var distance = IdeologicalDistance(left, right);
         return (0.38f - distance) * weight;
     }
 }

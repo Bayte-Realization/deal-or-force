@@ -31,5 +31,13 @@
     "import_access": 0.58,
     "export_access": 0.52,
     "tariff": 0.14
+  },
+
+  "protectionism": {
+    "name": "Protectionism",
+    "description": "Sell to the world at full pressure and buy back only what the border lets through. Duty is heavy, and so is the price of whatever still gets in.",
+    "import_access": 0.70,
+    "export_access": 1.14,
+    "tariff": 0.13
   }
 }

@@ -122,7 +122,11 @@ public static class OpinionSystem
     /// in a week has said one thing five times, not five things.
     /// </summary>
     public static void Remember(Campaign campaign, DiplomaticRelation relation, string id,
-        float scale = 1f)
+        float scale = 1f) =>
+        Remember(campaign, relation, id, scale, settle: true);
+
+    internal static void Remember(Campaign campaign, DiplomaticRelation relation, string id,
+        float scale, bool settle)
     {
         var definition = OpinionCatalog.Find(id);
         if (definition is null || relation is null) return;
@@ -151,13 +155,16 @@ public static class OpinionSystem
         held.Scale = scale;
         if (item.MaxStacks > 1 && !fresh) held.Stacks = Math.Min(item.MaxStacks, held.Stacks + 1);
         if (held.Stacks < 1) held.Stacks = 1;
-        Settle(campaign, relation);
+        if (settle) Settle(campaign, relation);
     }
 
     /// <summary>Forget a reason outright - a pact torn up stops being worth anything at once.</summary>
-    public static void Forget(Campaign campaign, DiplomaticRelation relation, string id)
+    public static void Forget(Campaign campaign, DiplomaticRelation relation, string id) =>
+        Forget(campaign, relation, id, settle: true);
+
+    internal static bool Forget(Campaign campaign, DiplomaticRelation relation, string id, bool settle)
     {
-        if (relation is null) return;
+        if (relation is null) return false;
         // By hand, and only settling when something actually went. RemoveAll takes a
         // predicate that captures the id, so it allocated a closure every time - and every
         // country tells the diplomacy pass to forget two or three things about each of its
@@ -170,7 +177,8 @@ public static class OpinionSystem
             relation.Reasons.RemoveAt(index);
             removed = true;
         }
-        if (removed) Settle(campaign, relation);
+        if (removed && settle) Settle(campaign, relation);
+        return removed;
     }
 
     /// <summary>Whether a relation currently holds a specific opinion modifier reason.</summary>
@@ -188,7 +196,11 @@ public static class OpinionSystem
     {
         var definition = OpinionCatalog.Find(reason.Id);
         if (definition is null) return 0f;
-        var item = definition.Value;
+        return WeightOf(campaign, reason, definition.Value);
+    }
+
+    private static float WeightOf(Campaign campaign, OpinionReason reason, in OpinionModifierDefinition item)
+    {
         var value = item.Opinion * Math.Max(1, reason.Stacks) * (reason.Scale <= 0f ? 1f : reason.Scale);
         if (!item.Decays || item.Days <= 0 || reason.ExpiresDay <= 0) return value;
 
@@ -223,17 +235,20 @@ public static class OpinionSystem
         var total = 0f;
         var witnessedAgainst = 0f;
         var witnessedFor = 0f;
-        foreach (var reason in relation.Reasons)
+        for (var index = 0; index < relation.Reasons.Count; index++)
         {
-            var weight = Weight(campaign, reason);
+            var reason = relation.Reasons[index];
+            var definition = OpinionCatalog.Find(reason.Id);
+            if (definition is null) continue;
+            var item = definition.Value;
+            var weight = WeightOf(campaign, reason, item);
             if (Math.Abs(weight) < 0.05f) continue;
             total += weight;
-            var definition = OpinionCatalog.Find(reason.Id);
-            if (definition is { ThirdParty: true })
+            if (item.ThirdParty)
             {
                 if (weight < 0f) witnessedAgainst += weight; else witnessedFor += weight;
             }
-            var name = definition?.Name ?? reason.Id;
+            var name = item.Name ?? reason.Id;
             relation.OpinionDrivers.Add(reason.Stacks > 1 ? $"{name} (x{reason.Stacks})" : name, weight);
         }
 
@@ -257,13 +272,16 @@ public static class OpinionSystem
             relation.OpinionDrivers.Add(Loc.Get("Other countries' quarrels, beyond what concerns us"), ceiling - witnessedFor);
         }
 
+        var leftNation = campaign.NationById(relation.A);
+        var rightNation = campaign.NationById(relation.B);
+
         // What the two of them make of each other's politics.
         //
         // Not a remembered reason like the rest: nobody has to be told that a country
         // changed its government, because this is recomputed from what both countries are
         // right now. A reason would have to be issued on every change by every observer,
         // and would be wrong for everybody who was not watching.
-        var affinity = PoliticsCore.Affinity(campaign, relation.A, relation.B);
+        var affinity = PoliticsCore.Affinity(campaign, leftNation, rightNation);
         if (MathF.Abs(affinity) >= 0.05f)
         {
             total += affinity;
@@ -274,14 +292,14 @@ public static class OpinionSystem
         // What the two states say they are, over what their peoples are: one declared faith
         // or one declared people, read from both countries as they stand. Continuous, like
         // the politics above - a declaration made yesterday is already in today's number.
-        var identity = StateIdentity.Affinity(campaign, relation.A, relation.B);
+        var identity = StateIdentity.Affinity(campaign, leftNation, rightNation);
         if (identity >= 0.05f)
         {
             total += identity;
             relation.OpinionDrivers.Add(Loc.Get("The same church, the same people"), identity);
         }
 
-        var memory = SocialMemory.OpinionEffect(campaign, relation);
+        var memory = SocialMemory.OpinionEffect(campaign, leftNation, rightNation);
         if (MathF.Abs(memory) >= 0.05f)
         {
             total += memory;
@@ -300,11 +318,19 @@ public static class OpinionSystem
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(OpinionSystem))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly fade, yielded between batches of relationships.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(OpinionSystem))) yield break;
         // A seventh of them each day, every relation still once a week. All on one day made
         // that day's frame walk thirty thousand relations at once.
+        var scanned = 0;
         foreach (var relation in campaign.Relations.Values)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (relation.MissionByA is not null || relation.MissionByB is not null) DiplomaticOutreach.Tick(campaign, relation);
             if ((campaign.ElapsedDays + (relation.A + relation.B) % 7) % 7 == 0)
                 Settle(campaign, relation);

@@ -7,6 +7,13 @@
 // a province is otherwise history/provinces/ownership.csv. A colonial-era scenario would list
 // its unclaimed regions here the same way.
 {
+  // Bir Tawil - claimed by neither Egypt nor Sudan, each of which claims the Hala'ib Triangle
+  // instead. Its polygon has a province but no administrative region of its own, so the line
+  // also gives a point on it ("latitude", "longitude"): the region is made for the unowned
+  // province under that point. A point only names ground that is already nobody's - it never
+  // takes a province from a country (ColonisationCore.EnsureAuthoredRegions).
+  "bir_tawil": { "name": "Bir Tawil", "owner": "none", "latitude": 21.91, "longitude": 33.66 },
+
   // Antarctica - held by no state under the 1959 Antarctic Treaty; nobody lives there for good.
   //
   // Seventeen lands, each settled on its own (ColonisationCore). "claims" are the seven

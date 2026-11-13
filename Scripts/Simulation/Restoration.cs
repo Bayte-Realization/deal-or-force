@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -50,9 +51,13 @@ public static class Restoration
         var control = campaign?.ProvinceController;
         if (topology is null || control is null || nation is null || region is null) return false;
         var any = false;
-        for (var province = 1; province <= topology.ProvinceCount; province++)
+        // The provinces of this one region. The old loop read every province on the map
+        // to find them, once per homeland piece, on every way home.
+        var provinces = topology.ProvincesOfState(region.MapIndex);
+        for (var i = 0; i < provinces.Length; i++)
         {
-            if (topology.ProvinceToState[province] != (ushort)region.MapIndex || topology.WaterByProvince[province]) continue;
+            var province = provinces[i];
+            if (topology.WaterByProvince[province]) continue;
             any = true;
             if (province >= control.Length || control[province] != (ushort)nation.MapIndex) return false;
         }
@@ -61,7 +66,7 @@ public static class Restoration
 
     /// <summary>The country that governs the region now, if a real one does.</summary>
     public static Nation Holder(Campaign campaign, ScenarioState region) =>
-        region is null ? null : campaign.Nations.Find(n => n.MapIndex == region.NationMapIndex);
+        region is null ? null : campaign.NationByMapIndex(region.NationMapIndex);
 
     public static string ConsentKey(int holderId) => "restoration_consent:" + holderId;
 
@@ -78,29 +83,32 @@ public static class Restoration
         holder is not null && campaign.StatesOf(holder).Any(region => IsHomeland(campaign, nation, region));
 
     /// <summary>Why the country cannot be restored to this region now; empty when it can.</summary>
-    public static string Refusal(Campaign campaign, Nation nation, ScenarioState region)
+    public static string Refusal(Campaign campaign, Nation nation, ScenarioState region) =>
+        CheckRefusal(campaign, nation, region, explain: true);
+
+    private static string CheckRefusal(Campaign campaign, Nation nation, ScenarioState region, bool explain)
     {
         var state = nation?.Movement;
-        if (state is null || state.Dissolved) return Loc.Get("Only a country that still has a government can be restored.");
-        if (!state.Exile) return Loc.Get("This is not a government in exile.");
-        if (region is null) return Loc.Get("Choose a region first.");
+        if (state is null || state.Dissolved) return explain ? Loc.Get("Only a country that still has a government can be restored.") : "-";
+        if (!state.Exile) return explain ? Loc.Get("This is not a government in exile.") : "-";
+        if (region is null) return explain ? Loc.Get("Choose a region first.") : "-";
         if (!IsHomeland(campaign, nation, region))
-            return Loc.Get("A country can only be restored to its own homeland.");
-        if (region.NationMapIndex == nation.MapIndex) return Loc.Get("That ground is already ours.");
+            return explain ? Loc.Get("A country can only be restored to its own homeland.") : "-";
+        if (region.NationMapIndex == nation.MapIndex) return explain ? Loc.Get("That ground is already ours.") : "-";
         // No active duplicate: the country must not already stand anywhere under its own name.
         if (campaign.HasOwnedLand(nation))
-            return Loc.Get("The country already stands on its own ground.");
-        if (campaign.Nations.Any(other => other.Id != nation.Id &&
-                string.Equals(other.Tag, nation.Tag, StringComparison.OrdinalIgnoreCase) && campaign.HasOwnedLand(other)))
-            return Loc.Get("Another country already bears this name.");
+            return explain ? Loc.Get("The country already stands on its own ground.") : "-";
+        if (AnotherLandedName(campaign, nation))
+            return explain ? Loc.Get("Another country already bears this name.") : "-";
         if (!float.IsFinite(region.Stability) || !float.IsFinite(region.StandardOfLiving) ||
             !float.IsFinite(region.Literacy) || !float.IsFinite(nation.Gdp))
-            return Loc.Get("Invalid simulation values prevent this action. Pause and inspect the campaign.");
+            return explain ? Loc.Get("Invalid simulation values prevent this action. Pause and inspect the campaign.") : "-";
         var holder = Holder(campaign, region);
         if (holder is not null && !float.IsFinite(holder.Gdp))
-            return Loc.Get("Invalid simulation values prevent this action. Pause and inspect the campaign.");
-        if (!Controls(campaign, nation, region) && !Consents(campaign, nation, holder))
-            return Loc.Get("The holder will not hand it back, and we do not hold it.");
+            return explain ? Loc.Get("Invalid simulation values prevent this action. Pause and inspect the campaign.") : "-";
+        var controls = Controls(campaign, nation, region);
+        if (!controls && !Consents(campaign, nation, holder))
+            return explain ? Loc.Get("The holder will not hand it back, and we do not hold it.") : "-";
         // Ground taken back from a rising is not handed straight to the government that lost
         // it. This is the half of the reconquest clock a rising cannot check (RevoltRecovery
         // stops uprisings and secessions; a return is neither), and without it an exile was
@@ -109,29 +117,175 @@ public static class Restoration
         // three regions under a peace treaty that then forbade the state it left from
         // answering. A country that has just been thrown out of a region does not get it back
         // until the region has stopped being a battlefield.
-        var recovery = Controls(campaign, nation, region)
+        var recovery = controls
             ? 0
             : RevoltRecovery.DaysLeft(campaign, holder, region);
         if (recovery > 0)
-            return Loc.Format("This ground was retaken too recently: {0} days must pass before it can change hands again.", recovery);
+            return explain ? Loc.Format("This ground was retaken too recently: {0} days must pass before it can change hands again.", recovery) : "-";
         return "";
     }
 
     public static bool CanRestore(Campaign campaign, Nation nation, ScenarioState region) =>
-        Refusal(campaign, nation, region).Length == 0;
+        CheckRefusal(campaign, nation, region, explain: false).Length == 0;
+
+    [ThreadStatic] static HashSet<int> _rememberedHomeland;
 
     /// <summary>The largest piece of its own homeland the country can be restored to now, or nothing.</summary>
     public static ScenarioState BestRegion(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null) return null;
+        var state = nation.Movement;
+        if (state is null || state.Dissolved || !state.Exile || campaign.HasOwnedLand(nation)) return null;
+        if (AnotherLandedName(campaign, nation)) return null;
         ScenarioState best = null;
-        foreach (var region in campaign.States)
+        // Only a homeland piece can be restored to. The title is a core tag or a remembered
+        // region, including a partition of one. The index is this campaign's and is rebuilt
+        // when the region list changes or a region is renamed. It does not walk every country.
+        var remembered = _rememberedHomeland ??= new HashSet<int>();
+        remembered.Clear();
+        if (campaign.Homelands.TryGetValue(nation.Id, out var homes) && homes is not null)
+            for (var i = 0; i < homes.Count; i++) remembered.Add(homes[i]);
+        var renounced = nation.RenouncedTerritoryOrigins;
+        var scanAll = false;
+        foreach (var id in remembered)
+            if (id <= 0) { scanAll = true; break; }
+        void Consider(ScenarioState region)
         {
-            if (!CanRestore(campaign, nation, region)) continue;
+            if (region is null || region.Unclaimed) return;
+            var origin = region.ParentMapIndex > 0 ? region.ParentMapIndex : region.MapIndex;
+            if (renounced is not null && renounced.Contains(origin)) return;
+            if (!remembered.Contains(region.MapIndex) && !remembered.Contains(origin) &&
+                !MovementDefinition.Listed(region.CoreTags, nation.Tag)) return;
+            if (!CanRestore(campaign, nation, region)) return;
             if (best is null || region.Population > best.Population ||
                 region.Population == best.Population && region.MapIndex < best.MapIndex) best = region;
         }
+        if (scanAll)
+        {
+            var states = campaign.States;
+            for (var si = 0; si < states.Count; si++) Consider(states[si]);
+            return best;
+        }
+        var index = OrderIndexOf(campaign);
+        foreach (var id in remembered)
+        {
+            Consider(campaign.StateByMapIndex(id));
+            if (index.Children.TryGetValue(id, out var children))
+                for (var i = 0; i < children.Count; i++) Consider(children[i]);
+        }
+        if (nation.Tag is { Length: > 0 } tag && index.ByCore.TryGetValue(tag, out var tagged))
+            for (var i = 0; i < tagged.Count; i++) Consider(tagged[i]);
         return best;
+    }
+
+    internal static bool SharesOrderIndex(Campaign left, Campaign right)
+    {
+        if (left is null || right is null || ReferenceEquals(left, right)) return false;
+        OrderIndexes.TryGetValue(left, out var a);
+        OrderIndexes.TryGetValue(right, out var b);
+        return a is not null && ReferenceEquals(a, b);
+    }
+
+    sealed class OrderIndex
+    {
+        public int Generation = int.MinValue;
+        public int Count = -1;
+        public List<ScenarioState> List;
+        public readonly Dictionary<int, List<ScenarioState>> Children = new();
+        public readonly Dictionary<string, List<ScenarioState>> ByCore = new(StringComparer.OrdinalIgnoreCase);
+        public readonly Stack<List<ScenarioState>> Pool = new();
+    }
+
+    static readonly ConditionalWeakTable<Campaign, OrderIndex> OrderIndexes = new();
+
+    static OrderIndex OrderIndexOf(Campaign campaign)
+    {
+        var index = OrderIndexes.GetValue(campaign, static _ => new OrderIndex());
+        var states = campaign.States;
+        var generation = Movements.RegionListGeneration(campaign);
+        if (index.Generation == generation && index.Count == states.Count && ReferenceEquals(index.List, states))
+            return index;
+        foreach (var list in index.Children.Values) { list.Clear(); index.Pool.Push(list); }
+        foreach (var list in index.ByCore.Values) { list.Clear(); index.Pool.Push(list); }
+        index.Children.Clear();
+        index.ByCore.Clear();
+        List<ScenarioState> Take()
+        {
+            if (index.Pool.Count > 0) return index.Pool.Pop();
+            return new List<ScenarioState>();
+        }
+        for (var i = 0; i < states.Count; i++)
+        {
+            var region = states[i];
+            if (region is null) continue;
+            if (region.ParentMapIndex > 0)
+            {
+                if (!index.Children.TryGetValue(region.ParentMapIndex, out var children))
+                    index.Children[region.ParentMapIndex] = children = Take();
+                children.Add(region);
+            }
+            var tags = region.CoreTags;
+            if (tags is null) continue;
+            for (var t = 0; t < tags.Count; t++)
+            {
+                var core = tags[t];
+                if (string.IsNullOrEmpty(core)) continue;
+                if (!index.ByCore.TryGetValue(core, out var tagged))
+                    index.ByCore[core] = tagged = Take();
+                tagged.Add(region);
+            }
+        }
+        index.List = states;
+        index.Count = states.Count;
+        index.Generation = Movements.RegionListGeneration(campaign);
+        return index;
+    }
+
+    sealed class NameMemory
+    {
+        public int Revision = int.MinValue;
+        public int Count = -1;
+        public readonly Dictionary<string, int> First = new(StringComparer.OrdinalIgnoreCase);
+        public readonly HashSet<string> Extra = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    static readonly ConditionalWeakTable<Campaign, NameMemory> NameMemories = new();
+
+    /// <summary>Another country with land already bears this tag. With a map, the answer is cached until ownership or the country list changes.</summary>
+    static bool AnotherLandedName(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return false;
+        if (campaign.ProvinceMap is null)
+        {
+            var open = campaign.Nations;
+            for (var i = 0; i < open.Count; i++)
+            {
+                var other = open[i];
+                if (other.Id != nation.Id &&
+                    string.Equals(other.Tag, nation.Tag, StringComparison.OrdinalIgnoreCase) && campaign.HasOwnedLand(other))
+                    return true;
+            }
+            return false;
+        }
+        var memory = NameMemories.GetValue(campaign, static _ => new NameMemory());
+        if (memory.Revision != campaign.OwnershipRevision || memory.Count != campaign.Nations.Count)
+        {
+            memory.Revision = campaign.OwnershipRevision;
+            memory.Count = campaign.Nations.Count;
+            memory.First.Clear();
+            memory.Extra.Clear();
+            var nations = campaign.Nations;
+            for (var i = 0; i < nations.Count; i++)
+            {
+                var other = nations[i];
+                if (!campaign.HasOwnedLand(other)) continue;
+                var tag = other.Tag ?? "";
+                if (!memory.First.TryAdd(tag, other.Id)) memory.Extra.Add(tag);
+            }
+        }
+        var key = nation.Tag ?? "";
+        if (!memory.First.TryGetValue(key, out var first)) return false;
+        return first != nation.Id || memory.Extra.Contains(key);
     }
 
     /// <summary>Bring the country home: the region becomes its own again, with its people and output.</summary>

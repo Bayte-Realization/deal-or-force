@@ -55,8 +55,9 @@ public static class FormableNations
 {
     private static readonly Dictionary<string, FormableNation> Definitions = new(StringComparer.Ordinal);
     private static IReadOnlyList<FormableNation> _visible;
-    public static IEnumerable<FormableNation> All => _visible ??= Array.AsReadOnly(Definitions.Values
+    internal static IReadOnlyList<FormableNation> AllList => _visible ??= Array.AsReadOnly(Definitions.Values
         .Where(d => d.AliasOf.Length == 0).OrderBy(d => d.Id, StringComparer.Ordinal).ToArray());
+    public static IEnumerable<FormableNation> All => AllList;
     static FormableNations() => ResetCatalog();
     public static void ResetCatalog()
     {
@@ -75,10 +76,44 @@ public static class FormableNations
     /// country of the starting world that has vanished and may be brought back.</summary>
     public static IEnumerable<FormableNation> AvailableIn(Campaign campaign) =>
         All.Concat(FormableRestorations.In(campaign));
+    internal static bool ContainsIgnoreCase(string[] items, string value)
+    {
+        if (items is null || value is null) return false;
+        for (var i = 0; i < items.Length; i++)
+            if (string.Equals(items[i], value, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static bool ContainsIgnoreCase(List<string> items, string value)
+    {
+        if (items is null || value is null) return false;
+        for (var i = 0; i < items.Count; i++)
+            if (string.Equals(items[i], value, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static bool MatchesCultureGroupOrFaith(string people, FormableNation definition)
+    {
+        if (definition.EligibleCultureGroups.Length > 0)
+        {
+            var culture = DemographyCatalog.Culture(people);
+            if (culture is not null && ContainsIgnoreCase(definition.EligibleCultureGroups, culture.Group))
+                return true;
+        }
+        if (definition.EligibleReligions.Length > 0)
+        {
+            var faiths = DemographyCatalog.FaithOf(people);
+            if (faiths.Count > 0 && faiths[0].Share >= 0.5f &&
+                ContainsIgnoreCase(definition.EligibleReligions, faiths[0].Religion))
+                return true;
+        }
+        return false;
+    }
+
     public static bool CompatibleProclamation(Nation nation, FormableNation definition) =>
         nation is not null && definition is not null && definition.AliasOf.Length == 0 &&
         !nation.FormedNationHistory.Contains(definition.Id) &&
-        (string.IsNullOrEmpty(nation.FormedNationId) || definition.Supersedes.Contains(nation.FormedNationId, StringComparer.OrdinalIgnoreCase));
+        (string.IsNullOrEmpty(nation.FormedNationId) || ContainsIgnoreCase(definition.Supersedes, nation.FormedNationId));
     public static bool Eligible(Nation nation, FormableNation definition) => Eligible(null, nation, definition);
 
     /// <summary>
@@ -92,23 +127,21 @@ public static class FormableNations
         if (nation is null || definition is null) return false;
         if (!string.IsNullOrEmpty(definition.Restores))
             return FormableRestorations.MayRestore(campaign, nation, definition.Restores);
-        if (definition.EligibleTags.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase)) return true;
-        if (definition.EligibleCultures.Any(c => DemographyCatalog.IsPrimary(nation.Tag, c) ||
-                nation.FoundedCultures.Contains(c, StringComparer.OrdinalIgnoreCase))) return true;
-        if (definition.EligibleCultureGroups.Length == 0 && definition.EligibleReligions.Length == 0) return false;
-        var peoples = DemographyCatalog.PrimaryCultures(nation.Tag).Concat(nation.FoundedCultures);
-        foreach (var people in peoples)
+        if (ContainsIgnoreCase(definition.EligibleTags, nation.Tag)) return true;
+        var cultures = definition.EligibleCultures;
+        for (var i = 0; i < cultures.Length; i++)
         {
-            var culture = DemographyCatalog.Culture(people);
-            if (culture is not null && definition.EligibleCultureGroups.Contains(culture.Group, StringComparer.OrdinalIgnoreCase))
+            var c = cultures[i];
+            if (DemographyCatalog.IsPrimary(nation.Tag, c) || ContainsIgnoreCase(nation.FoundedCultures, c))
                 return true;
-            if (definition.EligibleReligions.Length > 0)
-            {
-                var faith = DemographyCatalog.FaithOf(people).FirstOrDefault();
-                if (faith.Share >= 0.5f && definition.EligibleReligions.Contains(faith.Religion, StringComparer.OrdinalIgnoreCase))
-                    return true;
-            }
         }
+        if (definition.EligibleCultureGroups.Length == 0 && definition.EligibleReligions.Length == 0) return false;
+        var primary = DemographyCatalog.PrimaryCultures(nation.Tag);
+        for (var i = 0; i < primary.Count; i++)
+            if (MatchesCultureGroupOrFaith(primary[i], definition)) return true;
+        var founded = nation.FoundedCultures;
+        for (var i = 0; i < founded.Count; i++)
+            if (MatchesCultureGroupOrFaith(founded[i], definition)) return true;
         return false;
     }
     public static void Merge(JsonElement root, List<string> errors)
@@ -123,6 +156,8 @@ public static class FormableNations
     public static float ReligionShare(Campaign campaign, Nation nation, FormableNation definition)
     {
         if (campaign is null || nation is null || definition is null) return 0f;
+        var hasReligions = definition.RequiredReligions.Length > 0;
+        var hasGroups = definition.RequiredReligionGroups.Length > 0;
         double total = 0, matching = 0;
         foreach (var state in campaign.StatesOf(nation))
         {
@@ -131,8 +166,8 @@ public static class FormableNations
             {
                 if (population is null || population.Size <= 0) continue;
                 represented += population.Size;
-                if (definition.RequiredReligions.Contains(population.Religion ?? "", StringComparer.OrdinalIgnoreCase) ||
-                    definition.RequiredReligionGroups.Contains(DemographyCatalog.Religion(population.Religion)?.Group ?? "", StringComparer.OrdinalIgnoreCase))
+                if ((hasReligions && ContainsIgnoreCase(definition.RequiredReligions, population.Religion ?? "")) ||
+                    (hasGroups && ContainsIgnoreCase(definition.RequiredReligionGroups, DemographyCatalog.Religion(population.Religion)?.Group ?? "")))
                     matching += population.Size;
             }
             // A partial scenario profile must not make its unrepresented residents vanish
@@ -237,11 +272,23 @@ public static class FormableNations
     /// refused here. A newly generated country without an authored identity is compared
     /// with the land it actually owns and controls, never with an occupier's conquests.
     /// </summary>
-    public static bool SmallerThanCountry(Campaign campaign, Nation nation, FormableNation definition)
+    public static bool SmallerThanCountry(Campaign campaign, Nation nation, FormableNation definition) =>
+        SmallerThanCountry(campaign, nation, definition, cachedIdentity: null);
+
+    internal static bool SmallerThanCountry(Campaign campaign, Nation nation, FormableNation definition,
+        HashSet<int> cachedIdentity)
     {
         if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || nation is null || definition is null)
             return false;
-        return SmallerThanCountry(campaign, nation, PeacefulFormation.Territory(campaign, definition), definition.Id);
+        var formable = PeacefulFormation.LandTerritory(campaign, definition);
+        if (formable.Count == 0) return false;
+        var identity = cachedIdentity is not null &&
+            !string.Equals(nation.FormedNationId, definition.Id, StringComparison.OrdinalIgnoreCase)
+            ? cachedIdentity
+            : CountryIdentity(campaign, nation, definition.Id);
+        if (identity.Count == 0 || formable.IsSupersetOf(identity)) return false;
+        if (formable.Count < identity.Count) return true;
+        return People(campaign, formable) < People(campaign, identity);
     }
 
     // The on-load repair also needs to assess an already proclaimed restoration. It is
@@ -251,11 +298,20 @@ public static class FormableNations
         if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || nation is null) return false;
         var formable = LandProvinces(campaign, territory);
         if (formable.Count == 0) return false;
+        var identity = CountryIdentity(campaign, nation, definitionId);
+        if (identity.Count == 0 || formable.IsSupersetOf(identity)) return false;
+        if (formable.Count < identity.Count) return true;
+        return People(campaign, formable) < People(campaign, identity);
+    }
 
+    internal static HashSet<int> CountryIdentity(Campaign campaign, Nation nation, string excludeDefinitionId = null)
+    {
         var identity = new HashSet<int>();
+        if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || nation is null) return identity;
         AddHeld(campaign, nation, FormableRestorations.Authored(campaign, nation.Tag), identity);
         if (!string.IsNullOrEmpty(nation.FormedNationId) &&
-            !string.Equals(nation.FormedNationId, definitionId, StringComparison.OrdinalIgnoreCase))
+            (string.IsNullOrEmpty(excludeDefinitionId) ||
+             !string.Equals(nation.FormedNationId, excludeDefinitionId, StringComparison.OrdinalIgnoreCase)))
         {
             if (Find(campaign, nation.FormedNationId) is { } formed)
                 AddHeld(campaign, nation, PeacefulFormation.Territory(campaign, formed), identity);
@@ -267,8 +323,7 @@ public static class FormableNations
         }
         if (!string.IsNullOrEmpty(nation.ConsolidationProject) &&
             Find(campaign, nation.ConsolidationProject) is { } pursued)
-            foreach (var province in LandProvinces(campaign, PeacefulFormation.Territory(campaign, pursued)))
-                identity.Add(province);
+            identity.UnionWith(PeacefulFormation.LandTerritory(campaign, pursued));
         if (identity.Count == 0)
         {
             // A dynamic major power has no bookmark tag to protect it. Its own settled
@@ -282,9 +337,7 @@ public static class FormableNations
                 if (!map.WaterByProvince[province] && map.ProvinceToNation[province] == nation.MapIndex &&
                     controllers[province] == nation.MapIndex) identity.Add(province);
         }
-        if (identity.Count == 0 || formable.IsSupersetOf(identity)) return false;
-        if (formable.Count < identity.Count) return true;
-        return People(campaign, formable) < People(campaign, identity);
+        return identity;
     }
 
     private static HashSet<int> LandProvinces(Campaign campaign, IEnumerable<int> provinces)
@@ -316,18 +369,22 @@ public static class FormableNations
     }
 
     private static ProvinceTopology _peopleMap;
+    private static Campaign _peopleCampaign;
     private static int _peopleMapRevision = int.MinValue;
     private static Dictionary<int, int> _stateLandProvinceTotals;
 
-    /// <summary>People living on these provinces, by each region's share of its own ground.</summary>
-    private static long People(Campaign campaign, HashSet<int> provinces)
+    public static Dictionary<int, int> StateLandProvinceTotals(Campaign campaign)
     {
-        if (provinces.Count == 0 || campaign.States.Count == 0) return 0;
+        if (campaign?.ProvinceMap is null || campaign.States.Count == 0) return new Dictionary<int, int>();
         var map = campaign.ProvinceMap;
-        if (!ReferenceEquals(_peopleMap, map) || _peopleMapRevision != campaign.MapRevision || _stateLandProvinceTotals is null)
+        // Land provinces per region change only when regions are re-cut (OwnershipRevision), not
+        // when a controller takes one in battle.
+        if (!ReferenceEquals(_peopleMap, map) || !ReferenceEquals(_peopleCampaign, campaign) ||
+            _peopleMapRevision != campaign.OwnershipRevision || _stateLandProvinceTotals is null)
         {
             _peopleMap = map;
-            _peopleMapRevision = campaign.MapRevision;
+            _peopleCampaign = campaign;
+            _peopleMapRevision = campaign.OwnershipRevision;
             _stateLandProvinceTotals = new Dictionary<int, int>(campaign.States.Count);
             for (var province = 1; province <= map.ProvinceCount; province++)
             {
@@ -336,8 +393,22 @@ public static class FormableNations
                 _stateLandProvinceTotals[state] = _stateLandProvinceTotals.GetValueOrDefault(state) + 1;
             }
         }
-        var totals = _stateLandProvinceTotals;
-        var inside = new Dictionary<int, int>();
+        return _stateLandProvinceTotals;
+    }
+
+    [ThreadStatic] private static Dictionary<int, int> _peopleInsideScratch;
+    [ThreadStatic] private static HashSet<int> _evalProvincesScratch;
+    [ThreadStatic] private static HashSet<int> _evalPartnersScratch;
+    [ThreadStatic] private static HashSet<int> _evalNonPartnersScratch;
+
+    /// <summary>People living on these provinces, by each region's share of its own ground.</summary>
+    private static long People(Campaign campaign, HashSet<int> provinces)
+    {
+        if (provinces.Count == 0 || campaign.States.Count == 0) return 0;
+        var map = campaign.ProvinceMap;
+        var totals = StateLandProvinceTotals(campaign);
+        var inside = _peopleInsideScratch ??= new Dictionary<int, int>();
+        inside.Clear();
         foreach (var province in provinces)
         {
             if (province <= 0 || province > map.ProvinceCount || map.WaterByProvince[province]) continue;
@@ -345,11 +416,12 @@ public static class FormableNations
             inside[state] = inside.GetValueOrDefault(state) + 1;
         }
         long people = 0;
-        foreach (var state in campaign.States)
+        foreach (var (stateMapIndex, part) in inside)
         {
+            if (part <= 0) continue;
+            var state = campaign.StateByMapIndex(stateMapIndex);
             if (state is null || state.Population <= 0) continue;
-            if (!inside.TryGetValue(state.MapIndex, out var part) || part <= 0) continue;
-            if (!totals.TryGetValue(state.MapIndex, out var all) || all <= 0) continue;
+            if (!totals.TryGetValue(stateMapIndex, out var all) || all <= 0) continue;
             people += (long)Math.Round(state.Population * (part / (double)all));
         }
         return people;
@@ -366,6 +438,118 @@ public static class FormableNations
         return provinces.Where(p => map is not null && p > 0 && p <= map.ProvinceCount && !map.WaterByProvince[p]).ToArray();
     }
 
+    internal static bool IsAtPeace(Campaign campaign, int nationId)
+    {
+        for (var i = 0; i < campaign.Wars.Count; i++)
+        {
+            var w = campaign.Wars[i];
+            if (!w.Ended && w.Involves(nationId)) return false;
+        }
+        return true;
+    }
+
+    private static bool AnyFormedNation(Campaign campaign, string formableId)
+    {
+        for (var i = 0; i < campaign.Nations.Count; i++)
+            if (campaign.Nations[i].FormedNationId == formableId) return true;
+        return false;
+    }
+
+    internal static bool EvaluateCanForm(Campaign campaign, Nation nation, FormableNation d, out float cost,
+        HashSet<int> cachedIdentity = null)
+    {
+        cost = 0f;
+        if (campaign is null || nation is null || d is null) return false;
+        if (!Eligible(campaign, nation, d)) return false;
+        if (nation.FormedNationHistory.Contains(d.Id)) return false;
+        if (d.AliasOf.Length != 0 || (!string.IsNullOrEmpty(nation.FormedNationId) &&
+            !d.Supersedes.Contains(nation.FormedNationId, StringComparer.OrdinalIgnoreCase))) return false;
+        var map = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        if (map is null || controllers is null) return false;
+        if (nation.Population <= 0 || nation.IsSubject || nation.Landless || campaign.Fallen.Contains(nation.Id)) return false;
+        if (nation.Stability < d.MinimumStability) return false;
+        cost = Math.Max(.05f, nation.Gdp * d.CostShare);
+        if (nation.Treasury < cost) return false;
+        if (d.RequiredIdeology.Length > 0 && !d.RequiredIdeology.Contains(nation.Ideology, StringComparer.OrdinalIgnoreCase)) return false;
+        if (d.RequiredGovernment.Length > 0 && !d.RequiredGovernment.Contains(nation.Government, StringComparer.OrdinalIgnoreCase)) return false;
+        if (!IsAtPeace(campaign, nation.Id)) return false;
+        for (var i = 0; i < d.RequiredTags.Length; i++)
+            if (FormableRestorations.Authored(campaign, d.RequiredTags[i]).Length == 0) return false;
+        if (string.IsNullOrEmpty(d.Restores)
+            ? AnyFormedNation(campaign, d.Id)
+            : FormableRestorations.HasLivingIdentity(campaign, d.Restores)) return false;
+        if ((d.RequiredReligions.Length > 0 || d.RequiredReligionGroups.Length > 0) &&
+            ReligionShare(campaign, nation, d) < d.MinimumReligionShare) return false;
+
+        var provinces = _evalProvincesScratch ??= new HashSet<int>();
+        provinces.Clear();
+        for (var i = 0; i < d.RequiredProvinces.Length; i++) provinces.Add(d.RequiredProvinces[i]);
+        foreach (var p in PeacefulFormation.RegionProvinces(campaign, d)) provinces.Add(p);
+        for (var i = 0; i < d.RequiredTags.Length; i++)
+        {
+            var authored = FormableRestorations.Authored(campaign, d.RequiredTags[i]);
+            for (var j = 0; j < authored.Length; j++) provinces.Add(authored[j]);
+        }
+
+        var landCount = 0;
+        var owned = 0;
+        var partners = _evalPartnersScratch ??= new HashSet<int>();
+        var nonPartners = _evalNonPartnersScratch ??= new HashSet<int>();
+        partners.Clear();
+        nonPartners.Clear();
+        foreach (var p in provinces)
+        {
+            if (p <= 0 || p > map.ProvinceCount) { landCount++; continue; }
+            if (map.WaterByProvince[p]) continue;
+            landCount++;
+            if (p >= controllers.Length) continue;
+            var owner = (int)map.ProvinceToNation[p];
+            if (controllers[p] != owner || owner <= 0) continue;
+            if (!partners.Contains(owner))
+            {
+                if (nonPartners.Contains(owner)) continue;
+                var candidate = campaign.NationByMapIndex(owner);
+                if (candidate is not null && PeacefulFormation.Participates(campaign, nation, candidate, d))
+                    partners.Add(owner);
+                else
+                {
+                    nonPartners.Add(owner);
+                    continue;
+                }
+            }
+            owned++;
+        }
+        if (landCount == 0) return false;
+
+        if (d.MinimumComponentShare > 0f && string.IsNullOrEmpty(d.Restores))
+            for (var i = 0; i < d.RequiredTags.Length; i++)
+            {
+                var authored = FormableRestorations.Authored(campaign, d.RequiredTags[i]);
+                var compLen = 0;
+                var compSecured = 0;
+                for (var j = 0; j < authored.Length; j++)
+                {
+                    var p = authored[j];
+                    if (p <= 0 || p > map.ProvinceCount) { compLen++; continue; }
+                    if (map.WaterByProvince[p]) continue;
+                    compLen++;
+                    if (p < controllers.Length && partners.Contains(map.ProvinceToNation[p]) &&
+                        controllers[p] == map.ProvinceToNation[p]) compSecured++;
+                }
+                var needed = (int)MathF.Ceiling(compLen * d.MinimumComponentShare);
+                if (compLen == 0 || compSecured < needed) return false;
+            }
+
+        var heldShare = d.RequiredShare > 0f && d.RequiredShare <= 1f ? d.RequiredShare
+            : !string.IsNullOrEmpty(d.Restores) ? campaign.Defines.FormableRestorationShare
+            : campaign.Defines.FormableRequiredShare;
+        var requiredCount = landCount <= 1 ? landCount
+            : Math.Clamp((int)MathF.Ceiling(landCount * Math.Clamp(heldShare, 0.05f, 1f)), 1, landCount);
+        if (owned < requiredCount) return false;
+        return !SmallerThanCountry(campaign, nation, d, cachedIdentity);
+    }
+
     public static FormationStatus Evaluate(Campaign campaign, Nation nation, FormableNation d)
     {
         if (campaign is null || nation is null || d is null) return new(Array.Empty<FormationRequirement>(), 0, 0, 0);
@@ -377,7 +561,7 @@ public static class FormableNations
             new(Loc.Get("Compatible previous proclamation"), d.AliasOf.Length == 0 &&
                 (string.IsNullOrEmpty(nation.FormedNationId) ||
                 d.Supersedes.Contains(nation.FormedNationId, StringComparer.OrdinalIgnoreCase))),
-            new(Loc.Get("At peace"), !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id))),
+            new(Loc.Get("At peace"), IsAtPeace(campaign, nation.Id)),
             new(Loc.Format("Stability: {0:P0} / {1:P0}", nation.Stability, d.MinimumStability), nation.Stability >= d.MinimumStability),
             new(Loc.Get("Territorial map ready"), map is not null && campaign.ProvinceController is not null),
             new(Loc.Get("An independent country must lead the proclamation"), nation.Population > 0 &&
@@ -391,13 +575,33 @@ public static class FormableNations
             requirements.Add(new(Loc.Format("Scenario territory: {0}", tag), authored.Length > 0));
             provinces.UnionWith(authored);
         }
-        var partners = campaign.Nations.Where(n => PeacefulFormation.Participates(campaign, nation, n, d))
-            .Select(n => n.MapIndex).ToHashSet();
+        // Unresolved IDs fail closed rather than silently disappearing.
+        var land = provinces.Where(p => map is null || p <= 0 || p > map.ProvinceCount || !map.WaterByProvince[p]).ToArray();
+        // Only a country holding ground in this definition can make that ground count, so only
+        // those are asked whether they take part. Asking all five hundred, every one of whose
+        // answers walks every live war, for every definition of every founding country, was the
+        // most expensive thing this pass did on a late world. The owners are read straight off
+        // the land list: no index is built, and the walk of the world below is a membership test.
+        var wanted = new HashSet<int>();
+        if (map is not null)
+            foreach (var province in land)
+            {
+                // The land list deliberately keeps unresolved ids so they fail closed; an
+                // out-of-range province has no owner to ask about.
+                if (province <= 0 || province > map.ProvinceCount) continue;
+                wanted.Add(map.ProvinceToNation[province]);
+            }
+        var partners = new HashSet<int>();
+        foreach (var mapIdx in wanted)
+        {
+            if (mapIdx <= 0) continue;
+            var candidate = campaign.NationByMapIndex(mapIdx);
+            if (candidate is not null && PeacefulFormation.Participates(campaign, nation, candidate, d))
+                partners.Add(candidate.MapIndex);
+        }
         bool Held(int p) => map is not null && p > 0 && p <= map.ProvinceCount && !map.WaterByProvince[p] &&
             campaign.ProvinceController is not null && p < campaign.ProvinceController.Length &&
             partners.Contains(map.ProvinceToNation[p]) && campaign.ProvinceController[p] == map.ProvinceToNation[p];
-        // Unresolved IDs fail closed rather than silently disappearing.
-        var land = provinces.Where(p => map is null || p <= 0 || p > map.ProvinceCount || !map.WaterByProvince[p]).ToArray();
         var owned = land.Count(Held);
         // Authored components are separate founding mandates, not province-weighted votes.
         // Restorations retain their aggregate rule. Mods can explicitly opt out of
@@ -425,7 +629,7 @@ public static class FormableNations
         var cost = Math.Max(.05f, nation.Gdp * d.CostShare);
         requirements.Add(new(Loc.Get("Treasury covers the founding cost"), nation.Treasury >= cost));
         requirements.Add(string.IsNullOrEmpty(d.Restores)
-            ? new(Loc.Get("No other country has proclaimed this state"), !campaign.Nations.Any(n => n.FormedNationId == d.Id))
+            ? new(Loc.Get("No other country has proclaimed this state"), !AnyFormedNation(campaign, d.Id))
             : new(Loc.Get("No competing state or government in exile claims this identity"),
                 !FormableRestorations.HasLivingIdentity(campaign, d.Restores)));
         requirements.Add(new(Loc.Get("The new state is not smaller than the country already is"),
@@ -459,6 +663,99 @@ public static class FormableNations
         }
         return new(requirements.ToArray(), owned, land.Length, cost) { Required = requiredCount };
     }
+
+    internal static bool CanForm(Campaign campaign, Nation nation, FormableNation d)
+    {
+        if (campaign is null || nation is null || d is null) return false;
+        var map = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        if (map is null || controllers is null) return false;
+        if (nation.Population <= 0 || nation.IsSubject || nation.Landless || campaign.Fallen.Contains(nation.Id)) return false;
+        if (nation.Stability < d.MinimumStability) return false;
+        if (d.AliasOf.Length > 0) return false;
+        if (nation.FormedNationHistory.Contains(d.Id)) return false;
+        if (!string.IsNullOrEmpty(nation.FormedNationId) &&
+            !ContainsIgnoreCase(d.Supersedes, nation.FormedNationId)) return false;
+        if (!Eligible(campaign, nation, d)) return false;
+        if (!IsAtPeace(campaign, nation.Id)) return false;
+        var cost = Math.Max(.05f, nation.Gdp * d.CostShare);
+        if (nation.Treasury < cost) return false;
+        if (d.RequiredIdeology.Length > 0 && !ContainsIgnoreCase(d.RequiredIdeology, nation.Ideology)) return false;
+        if (d.RequiredGovernment.Length > 0 && !ContainsIgnoreCase(d.RequiredGovernment, nation.Government)) return false;
+        if (string.IsNullOrEmpty(d.Restores) ? AnyFormedNation(campaign, d.Id)
+                : FormableRestorations.HasLivingIdentity(campaign, d.Restores))
+            return false;
+        if (SmallerThanCountry(campaign, nation, d)) return false;
+        if ((d.RequiredReligions.Length > 0 || d.RequiredReligionGroups.Length > 0) &&
+            ReligionShare(campaign, nation, d) < d.MinimumReligionShare)
+            return false;
+
+        foreach (var tag in d.RequiredTags)
+            if (FormableRestorations.Authored(campaign, tag).Length == 0)
+                return false;
+
+        var land = PeacefulFormation.LandTerritory(campaign, d);
+        var unresolved = 0;
+        var provCount = map.ProvinceCount;
+        for (var i = 0; i < d.RequiredProvinces.Length; i++)
+        {
+            var p = d.RequiredProvinces[i];
+            if (p <= 0 || p > provCount) unresolved++;
+        }
+        var landTotal = land.Count + unresolved;
+        if (landTotal == 0) return false;
+
+        var participants = _canFormPartners ??= new Dictionary<int, bool>();
+        participants.Clear();
+        var owned = 0;
+        var provToNation = map.ProvinceToNation;
+        var ctrlLen = controllers.Length;
+        foreach (var p in land)
+        {
+            if (p <= 0 || p >= ctrlLen || p > provCount || map.WaterByProvince[p]) continue;
+            var ownerMap = provToNation[p];
+            if (controllers[p] != ownerMap || ownerMap == 0) continue;
+            if (!participants.TryGetValue(ownerMap, out var ok))
+            {
+                var candidate = campaign.NationByMapIndex(ownerMap);
+                ok = candidate is not null && PeacefulFormation.Participates(campaign, nation, candidate, d);
+                participants[ownerMap] = ok;
+            }
+            if (ok) owned++;
+        }
+
+        var heldShare = d.RequiredShare > 0f && d.RequiredShare <= 1f ? d.RequiredShare
+            : !string.IsNullOrEmpty(d.Restores) ? campaign.Defines.FormableRestorationShare
+            : campaign.Defines.FormableRequiredShare;
+        var requiredCount = landTotal <= 1 ? landTotal
+            : Math.Clamp((int)MathF.Ceiling(landTotal * Math.Clamp(heldShare, 0.05f, 1f)), 1, landTotal);
+        if (owned < requiredCount) return false;
+
+        if (d.MinimumComponentShare > 0f && string.IsNullOrEmpty(d.Restores))
+        {
+            var water = map.WaterByProvince;
+            foreach (var tag in d.RequiredTags)
+            {
+                var raw = FormableRestorations.Authored(campaign, tag);
+                var total = 0;
+                var secured = 0;
+                for (var i = 0; i < raw.Length; i++)
+                {
+                    var p = raw[i];
+                    if (p <= 0 || p > provCount || water[p]) continue;
+                    total++;
+                    if (p < ctrlLen && provToNation[p] == controllers[p] &&
+                        participants.TryGetValue(provToNation[p], out var ok) && ok)
+                        secured++;
+                }
+                var needed = (int)MathF.Ceiling(total * d.MinimumComponentShare);
+                if (total == 0 || secured < needed) return false;
+            }
+        }
+        return true;
+    }
+
+    [ThreadStatic] private static Dictionary<int, bool> _canFormPartners;
 }
 
 public sealed class FormNationCommand : ICampaignCommand

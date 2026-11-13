@@ -171,11 +171,53 @@ public sealed partial class StrategicWar
         IsAttacking(nationId) ? DefenderId : IsDefending(nationId) ? AttackerId : -1;
 
     /// <summary>Everybody on one side of it, leader first.</summary>
-    public IEnumerable<int> Side(bool attacking)
+    public readonly struct SideEnumerable : IEnumerable<int>
     {
-        yield return attacking ? AttackerId : DefenderId;
-        foreach (var member in attacking ? AttackerAllies : DefenderAllies) yield return member;
+        private readonly int _leader;
+        private readonly HashSet<int> _allies;
+        internal SideEnumerable(int leader, HashSet<int> allies) { _leader = leader; _allies = allies; }
+        public Enumerator GetEnumerator() => new(_leader, _allies);
+        IEnumerator<int> IEnumerable<int>.GetEnumerator() => GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public struct Enumerator : IEnumerator<int>
+        {
+            private readonly int _leader;
+            private readonly HashSet<int> _allies;
+            private HashSet<int>.Enumerator _alliesEnum;
+            private readonly bool _hasAllies;
+            private int _state;
+            private int _current;
+            internal Enumerator(int leader, HashSet<int> allies)
+            {
+                _leader = leader;
+                _allies = allies;
+                _hasAllies = allies is { Count: > 0 };
+                _alliesEnum = _hasAllies ? allies.GetEnumerator() : default;
+                _state = 0;
+                _current = 0;
+            }
+            public int Current => _current;
+            object System.Collections.IEnumerator.Current => _current;
+            public bool MoveNext()
+            {
+                if (_state == 0) { _state = 1; _current = _leader; return true; }
+                if (_state == 1 && _hasAllies && _alliesEnum.MoveNext()) { _current = _alliesEnum.Current; return true; }
+                _state = 2;
+                return false;
+            }
+            public void Reset()
+            {
+                _state = 0;
+                _current = 0;
+                _alliesEnum = _hasAllies ? _allies.GetEnumerator() : default;
+            }
+            public void Dispose() { _alliesEnum.Dispose(); }
+        }
     }
+
+    public SideEnumerable Side(bool attacking) =>
+        new(attacking ? AttackerId : DefenderId, attacking ? AttackerAllies : DefenderAllies);
 
     /// <summary>Everybody this country is fighting, leader first. Empty if it is not in the war.</summary>
     public IEnumerable<int> EnemiesOf(int nationId)
@@ -207,7 +249,9 @@ public sealed partial class StrategicWar
         }
     }
 
-    public IReadOnlySet<int> FriendlyFront(int nationId) =>
+    public IReadOnlySet<int> FriendlyFront(int nationId) => FriendlyFrontSet(nationId);
+
+    internal HashSet<int> FriendlyFrontSet(int nationId) =>
         IsAttacking(nationId) ? AttackerFront : IsDefending(nationId) ? DefenderFront : EmptyFront;
 
     private static readonly HashSet<int> EmptyFront = new();
@@ -307,6 +351,7 @@ public static class WarBootstrap
                     .OrderByDescending(state => state.Population).FirstOrDefault()?.MapIndex ?? -1
         });
         var relation = CampaignDiplomacy.Get(campaign, russia.Id, ukraine.Id);
+        if (relation.Stance == DiplomaticStance.Allied) campaign.NoteAllianceChange();
         relation.Stance = DiplomaticStance.AtWar;
         // Remembered, the way a declared war is, not written into the opinion: opinion is the
         // sum of its reasons, and the minus eighty that used to be set here was summed away at
@@ -353,13 +398,15 @@ public static partial class Warfare
         if (belligerents.Length <= largestMapIndex)
             belligerents = Belligerents = new bool[largestMapIndex + 1];
         Array.Clear(belligerents);
-        foreach (var war in campaign.Wars)
+        var live = LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
+            var war = live[index];
+            if (war.Ended) continue;
             war.AttackerFront.Clear();
             war.DefenderFront.Clear();
             war.FrontDirty = false;
             war.LastFrontDay = campaign.ElapsedDays;
-            if (war.Ended) continue;
             // Every pair across the two sides, not just the two leaders. A coalition war
             // has a front wherever any of its members touches any of the other side's, and
             // filing only the leaders' pair left everybody else's border unmanned.
@@ -414,6 +461,90 @@ public static partial class Warfare
     /// <summary>Order-independent key for a pair of countries.</summary>
     private static long PairKey(int a, int b) =>
         a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
+
+    sealed class LiveBoard
+    {
+        public readonly List<StrategicWar> Wars = new();
+        public readonly List<StrategicWar> Advance = new();
+        public int Revision = int.MinValue;
+        public int Count = -1;
+        /// <summary>The last war of the record when the board was built: a record replaced with one of the same length is another object.</summary>
+        public StrategicWar Tail;
+    }
+
+    static readonly ConditionalWeakTable<Campaign, LiveBoard> LiveBoards = new();
+
+    /// <summary>How many times a campaign's live list was rebuilt from the full war record.</summary>
+    internal static int LiveWarPasses { get; private set; }
+
+    /// <summary>
+    /// Wars the day's supply, fronts, scores and reviews still visit.
+    ///
+    /// An ended war stays on <see cref="Campaign.Wars"/>: the chronicle, the ledger and a
+    /// peace paper already on the table name it from there. The live list is rebuilt when
+    /// a war is declared or ends, and a day that changes neither does not walk the record.
+    /// Each campaign keeps its own list.
+    /// </summary>
+    public static IReadOnlyList<StrategicWar> LiveWars(Campaign campaign)
+    {
+        if (campaign is null) return Array.Empty<StrategicWar>();
+        var board = LiveBoards.GetValue(campaign, static _ => new LiveBoard());
+        if (board.Revision != campaign.WarRevision || board.Count != campaign.Wars.Count || EndedIn(board.Wars) ||
+            !ReferenceEquals(board.Tail, campaign.Wars.Count > 0 ? campaign.Wars[^1] : null))
+            RefreshLive(campaign, board);
+        return board.Wars;
+    }
+
+    /// <summary>
+    /// A copy of <see cref="LiveWars"/> for the advance pass, which yields between wars.
+    /// Refreshing the live list while that pass is suspended does not drop a war the pass
+    /// has not reached.
+    /// </summary>
+    internal static List<StrategicWar> AdvanceWars(Campaign campaign)
+    {
+        var board = LiveBoards.GetValue(campaign, static _ => new LiveBoard());
+        var live = LiveWars(campaign);
+        board.Advance.Clear();
+        for (var index = 0; index < live.Count; index++)
+        {
+            var war = live[index];
+            if (war is { Ended: false }) board.Advance.Add(war);
+        }
+        return board.Advance;
+    }
+
+    static bool EndedIn(List<StrategicWar> wars)
+    {
+        for (var index = 0; index < wars.Count; index++)
+            if (wars[index] is null || wars[index].Ended) return true;
+        return false;
+    }
+
+    static void RefreshLive(Campaign campaign, LiveBoard board)
+    {
+        LiveWarPasses++;
+        // The front rebuild used to clear an ended war on every pass. Once, as it leaves.
+        for (var index = 0; index < board.Wars.Count; index++)
+        {
+            var war = board.Wars[index];
+            if (war is not { Ended: true }) continue;
+            war.AttackerFront.Clear();
+            war.DefenderFront.Clear();
+            war.FrontDirty = false;
+            war.LastFrontDay = campaign.ElapsedDays;
+        }
+        board.Wars.Clear();
+        var wars = campaign.Wars;
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
+            if (war is null || war.Ended) continue;
+            board.Wars.Add(war);
+        }
+        board.Revision = campaign.WarRevision;
+        board.Count = wars.Count;
+        board.Tail = wars.Count > 0 ? wars[^1] : null;
+    }
 }
 
 public static partial class FrontPlanner
@@ -547,6 +678,10 @@ public static partial class FrontPlanner
     /// pass has them indexed already. Walking every division in the world for every war, every
     /// hour, to find the same few hundred was a third of what the advance pass cost.
     /// </param>
+    [ThreadStatic] private static Dictionary<int, AiStrategyDefinition> _executionProfiles;
+    [ThreadStatic] private static HashSet<ushort> _executionAttackerEnemyMaps;
+    [ThreadStatic] private static HashSet<ushort> _executionDefenderEnemyMaps;
+
     public static void UpdateAiExecution(Campaign campaign, StrategicWar war, List<Army> assigned)
     {
         // Filtered by hand: the lambda captured the war, so this was a fresh closure and a
@@ -557,7 +692,10 @@ public static partial class FrontPlanner
         // every war in the world - a quarter of a thousand lookups a day to arrive at a
         // dozen answers. The profile is still read fresh for each country, so an army that
         // has just lost its supply still switches to the defensive posture this hour.
-        var profiles = new Dictionary<int, AiStrategyDefinition>();
+        var profiles = _executionProfiles ??= new Dictionary<int, AiStrategyDefinition>();
+        profiles.Clear();
+        HashSet<ushort> attackerEnemyMaps = null;
+        HashSet<ushort> defenderEnemyMaps = null;
         foreach (var army in assigned)
         {
             if (army.AssignedWarId != war.Id || army.PlanActive) continue;
@@ -569,7 +707,32 @@ public static partial class FrontPlanner
             if (!profiles.TryGetValue(nation.Id, out var profile))
                 profiles[nation.Id] = profile = AiStrategyCatalog.Resolve(campaign, war, nation);
             if (StaffReasons.SupplyHoldsAttack(campaign, army)) continue;
-            if (army.Planning < profile.ExecutePlanningThreshold && !Warfare.CanStartOpenAdvance(campaign, war, army)) continue;
+            if (army.Planning < profile.ExecutePlanningThreshold)
+            {
+                var attacking = war.IsAttacking(army.NationId);
+                HashSet<ushort> enemyMaps;
+                if (attacking)
+                {
+                    if (attackerEnemyMaps is null)
+                    {
+                        attackerEnemyMaps = _executionAttackerEnemyMaps ??= new HashSet<ushort>();
+                        attackerEnemyMaps.Clear();
+                        WarCoalition.FillControllers(campaign, war, false, attackerEnemyMaps);
+                    }
+                    enemyMaps = attackerEnemyMaps;
+                }
+                else
+                {
+                    if (defenderEnemyMaps is null)
+                    {
+                        defenderEnemyMaps = _executionDefenderEnemyMaps ??= new HashSet<ushort>();
+                        defenderEnemyMaps.Clear();
+                        WarCoalition.FillControllers(campaign, war, true, defenderEnemyMaps);
+                    }
+                    enemyMaps = defenderEnemyMaps;
+                }
+                if (!Warfare.CanStartOpenAdvance(campaign, war, army, enemyMaps)) continue;
+            }
             new SetArmyPlanExecutionCommand { IssuerId = nation.Id, ArmyId = army.Id, Active = true }.Apply(campaign);
         }
     }
@@ -693,7 +856,9 @@ public static partial class FrontPlanner
     /// <summary>Fill missing roles with a replacement without reordering formations already marching.</summary>
     internal static void GiveIdleRole(Campaign c, Army army)
     {
-        var war = c.Wars.Find(w => !w.Ended && w.Id == army.AssignedWarId);
+        StrategicWar war = null;
+        foreach (var candidate in c.Wars)
+            if (!candidate.Ended && candidate.Id == army.AssignedWarId) { war = candidate; break; }
         var nation = c.NationById(army.NationId);
         if (war is null || nation is null) return;
         if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command)) return;
@@ -739,28 +904,30 @@ public static partial class FrontPlanner
     private static List<Army> ArmiesFor(Campaign campaign, StrategicWar war, int nationId)
     {
         var armies = FieldArmy(campaign, nationId);
-        SplitWars.Clear();
+        var scratch = UseSplitScratch();
+        var splitWars = scratch.SplitWars;
+        splitWars.Clear();
         var stamp = armies.Count;
         foreach (var candidate in campaign.Wars)
             if (!candidate.Ended && candidate.Involves(nationId))
             {
-                SplitWars.Add(candidate);
+                splitWars.Add(candidate);
                 stamp = HashCode.Combine(stamp, candidate.Id);
             }
-        if (SplitWars.Count < 2) return armies;
+        if (splitWars.Count < 2) return armies;
 
         // Once per simulation step: all wars read the same split within that step.
         // A day-long derived cache survives hourly movement and cannot be reproduced
         // by a cold client loading a snapshot halfway through that day.
-        if (!Splits.TryGetValue(nationId, out var split)) Splits[nationId] = split = new ArmySplit();
+        if (!scratch.Splits.TryGetValue(nationId, out var split)) scratch.Splits[nationId] = split = new ArmySplit();
         if (!ReferenceEquals(split.Campaign, campaign) || split.Hour != campaign.ElapsedHours || split.Stamp != stamp)
         {
             split.Campaign = campaign;
             split.Hour = campaign.ElapsedHours;
             split.Stamp = stamp;
-            Split(campaign, nationId, SplitWars, armies, split.ByWar);
+            Split(campaign, nationId, splitWars, armies, split.ByWar, scratch);
         }
-        return split.ByWar.TryGetValue(war.Id, out var share) ? share : new List<Army>();
+        return split.ByWar.TryGetValue(war.Id, out var share) ? share : scratch.EmptyArmyList;
     }
 
     private sealed class ArmySplit
@@ -771,38 +938,93 @@ public static partial class FrontPlanner
         public readonly Dictionary<int, List<Army>> ByWar = new();
     }
 
-    private static readonly Dictionary<int, ArmySplit> Splits = new();
-    private static readonly List<StrategicWar> SplitWars = new();
+    private sealed class SplitScratch
+    {
+        public readonly Dictionary<int, ArmySplit> Splits = new();
+        public readonly List<StrategicWar> SplitWars = new();
+        public readonly List<Army> EmptyArmyList = new();
+        public readonly List<List<Army>> SplitArmyPool = new();
+        public readonly List<List<int>> SplitFrontPool = new();
+        public float[] Weight = Array.Empty<float>();
+        public int[] Quota = Array.Empty<int>();
+        public int[] Taken = Array.Empty<int>();
+        public float[] Distance = Array.Empty<float>();
+        public int[] Serving = Array.Empty<int>();
+        public float[] SortKeys = Array.Empty<float>();
+        public readonly List<int> Order = new();
+        public readonly List<int> Free = new();
+        public readonly IComparer<int> OrderComparer;
+
+        public SplitScratch()
+        {
+            OrderComparer = Comparer<int>.Create((a, b) => SortKeys[a].CompareTo(SortKeys[b]));
+        }
+
+        public List<Army> RentArmyList()
+        {
+            var n = SplitArmyPool.Count;
+            if (n == 0) return new List<Army>();
+            var list = SplitArmyPool[n - 1];
+            SplitArmyPool.RemoveAt(n - 1);
+            return list;
+        }
+    }
+
+    [ThreadStatic] private static SplitScratch _splitScratch;
+    private static SplitScratch UseSplitScratch() => _splitScratch ??= new SplitScratch();
 
     private static void Split(Campaign campaign, int nationId, List<StrategicWar> wars, List<Army> armies,
-        Dictionary<int, List<Army>> byWar)
+        Dictionary<int, List<Army>> byWar, SplitScratch scratch)
     {
+        foreach (var existing in byWar.Values)
+        {
+            existing.Clear();
+            scratch.SplitArmyPool.Add(existing);
+        }
         byWar.Clear();
         var nation = campaign.NationById(nationId);
         var controllers = campaign.ProvinceController ?? campaign.ProvinceMap?.ProvinceToNation;
         var map = campaign.ProvinceMap;
         var count = wars.Count;
-        var weight = new float[count];
-        var fronts = new List<int>[count];
+        if (scratch.Weight.Length < count)
+        {
+            scratch.Weight = new float[count];
+            scratch.Quota = new int[count];
+            scratch.Taken = new int[count];
+        }
+        var weight = scratch.Weight;
+        while (scratch.SplitFrontPool.Count < count) scratch.SplitFrontPool.Add(new List<int>());
         for (var w = 0; w < count; w++)
         {
             var war = wars[w];
-            byWar[war.Id] = new List<Army>();
+            byWar[war.Id] = scratch.RentArmyList();
             var front = war.FriendlyFront(nationId);
-            var own = new List<int>();
+            var frontList = scratch.SplitFrontPool[w];
+            frontList.Clear();
             if (controllers is not null && nation is not null)
                 foreach (var province in front)
-                    if (controllers[province] == (ushort)nation.MapIndex) own.Add(province);
+                    if (controllers[province] == (ushort)nation.MapIndex) frontList.Add(province);
             var threat = 0;
-            foreach (var enemy in campaign.Armies)
+            var allArmies = campaign.Armies;
+            for (var i = 0; i < allArmies.Count; i++)
+            {
+                var enemy = allArmies[i];
                 if (enemy.AssignedWarId == war.Id && enemy.TemplateId != MilitiaCore.TemplateId &&
                     war.Opposes(nationId, enemy.NationId)) threat++;
-            weight[w] = own.Count > 0 ? own.Count + 0.5f * threat : 0.1f * Math.Min(front.Count, threat);
-            fronts[w] = own.Count > 0 ? own : new List<int>(front);
+            }
+            if (frontList.Count > 0)
+            {
+                weight[w] = frontList.Count + 0.5f * threat;
+            }
+            else
+            {
+                weight[w] = 0.1f * Math.Min(front.Count, threat);
+                foreach (var province in front) frontList.Add(province);
+            }
         }
 
         var total = 0f;
-        foreach (var value in weight) total += value;
+        for (var w = 0; w < count; w++) total += weight[w];
         if (total <= 0f || map is null || armies.Count == 0)
         {
             byWar[wars[0].Id].AddRange(armies);
@@ -810,7 +1032,7 @@ public static partial class FrontPlanner
         }
 
         // Whole divisions, largest remainders first, adding up to the army.
-        var quota = new int[count];
+        var quota = scratch.Quota;
         var given = 0;
         for (var w = 0; w < count; w++) given += quota[w] = (int)(armies.Count * weight[w] / total);
         while (given < armies.Count)
@@ -828,7 +1050,7 @@ public static partial class FrontPlanner
         // A front of its own is never left to nobody while the army has a division to spare.
         for (var w = 0; w < count; w++)
         {
-            if (quota[w] > 0 || fronts[w].Count == 0 || weight[w] < 1f) continue;
+            if (quota[w] > 0 || scratch.SplitFrontPool[w].Count == 0 || weight[w] < 1f) continue;
             var largest = 0;
             for (var v = 1; v < count; v++) if (quota[v] > quota[largest]) largest = v;
             if (quota[largest] <= 1) break;
@@ -836,29 +1058,44 @@ public static partial class FrontPlanner
             quota[w]++;
         }
 
-        var distance = new float[armies.Count * count];
+        var distLen = armies.Count * count;
+        if (scratch.Distance.Length < distLen) scratch.Distance = new float[distLen];
+        var distance = scratch.Distance;
         for (var i = 0; i < armies.Count; i++)
         {
             var (latitude, longitude) = map.CenterOf(armies[i].ProvinceId);
             for (var w = 0; w < count; w++)
-                distance[i * count + w] = SetArmyOrderCommand.FrontDistance(map, fronts[w], latitude, longitude);
+                distance[i * count + w] = SetArmyOrderCommand.FrontDistance(map, scratch.SplitFrontPool[w], latitude, longitude);
         }
 
-        var serving = new int[armies.Count];
-        var taken = new int[count];
-        var order = new List<int>(armies.Count);
+        if (scratch.Serving.Length < armies.Count)
+        {
+            scratch.Serving = new int[armies.Count];
+            scratch.SortKeys = new float[armies.Count];
+        }
+        var serving = scratch.Serving;
+        var taken = scratch.Taken;
+        Array.Clear(taken, 0, count);
+        var order = scratch.Order;
+        order.Clear();
         for (var i = 0; i < armies.Count; i++)
         {
-            serving[i] = wars.FindIndex(candidate => candidate.Id == armies[i].AssignedWarId);
+            var targetWarId = armies[i].AssignedWarId;
+            var found = -1;
+            for (var w = 0; w < count; w++)
+                if (wars[w].Id == targetWarId) { found = w; break; }
+            serving[i] = found;
+            scratch.SortKeys[i] = found < 0 ? float.MaxValue : distance[i * count + found];
             order.Add(i);
         }
         // Those already serving a war stay with it, nearest to its front first, up to one over
         // its share - one either way is not worth a march across the country.
-        order.Sort((a, b) => (serving[a] < 0 ? float.MaxValue : distance[a * count + serving[a]])
-            .CompareTo(serving[b] < 0 ? float.MaxValue : distance[b * count + serving[b]]));
-        var free = new List<int>();
-        foreach (var i in order)
+        order.Sort(scratch.OrderComparer);
+        var free = scratch.Free;
+        free.Clear();
+        for (var o = 0; o < order.Count; o++)
         {
+            var i = order[o];
             var w = serving[i];
             if (w >= 0 && quota[w] > 0 && taken[w] < quota[w] + 1) taken[w]++;
             else
@@ -929,7 +1166,7 @@ public static partial class FrontPlanner
         // The churn is real - 8,000-odd orders in three years against 2,900 arrivals - but
         // the cure is not here. It is that a division should be re-posted when its post has
         // stopped being useful, not when the list it came from was rebuilt.
-        armies.Sort((a, b) => b.Power != a.Power ? b.Power.CompareTo(a.Power) : a.Id.CompareTo(b.Id));
+        armies.Sort(static (a, b) => b.Power != a.Power ? b.Power.CompareTo(a.Power) : a.Id.CompareTo(b.Id));
 
         var advanceShare = AdvanceShare(campaign, war, nation, profile, attacking, out var pressing);
         var advance = AdvanceCount(armies.Count, advanceShare, pressing);

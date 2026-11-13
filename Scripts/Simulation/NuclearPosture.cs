@@ -517,13 +517,19 @@ public static class NuclearPosture
     /// </summary>
     public static void Week(Campaign c)
     {
-        if (!Active(c)) return;
+        foreach (var _ in WeekStages(c)) { }
+    }
+
+    public static IEnumerable<int> WeekStages(Campaign c)
+    {
+        if (!Active(c)) yield break;
         var d = c.Defines;
+        var liveWars = Warfare.LiveWars(c);
         foreach (var holder in c.Nations)
         {
             if (holder.NuclearPosture >= 3 || holder.Population <= 0 || !IsHolder(c, holder)) continue;
             var pressure = d.NuclearCoercionWarSupport * (3 - holder.NuclearPosture);
-            foreach (var war in c.Wars)
+            foreach (var war in liveWars)
             {
                 if (war.Ended || !war.Involves(holder.Id)) continue;
                 foreach (var enemyId in war.EnemiesOf(holder.Id))
@@ -531,7 +537,10 @@ public static class NuclearPosture
                         enemy.WarSupport = M.Clamp01(enemy.WarSupport - pressure);
             }
         }
-        if (d.AiNuclearPosture) AiWeek(c);
+        yield return 0;
+        if (d.AiNuclearPosture)
+            foreach (var _ in AiWeekStages(c, liveWars))
+                yield return 0;
         // A false warning in a tense season (DEFCON 3) takes the world to the brink's antechamber,
         // never past it: 1983 was a satellite mistaking sunlight for missiles, and the man on
         // duty did not pass it on. It used to fire at DEFCON 2 as well and take the world to 1 -
@@ -555,15 +564,17 @@ public static class NuclearPosture
     /// standoff with another holder is at crisis; stand down two months after the danger passes;
     /// sometimes test a weapon in a standoff; and talk on the red telephone when both are alarmed.
     /// </summary>
-    private static void AiWeek(Campaign c)
+    private static IEnumerable<int> AiWeekStages(Campaign c, IReadOnlyList<StrategicWar> liveWars)
     {
         var d = c.Defines;
         var holders = c.Nations.Where(n => n.Population > 0 && IsHolder(c, n)).OrderBy(n => n.Id).ToList();
-        foreach (var n in holders)
+        for (var idx = 0; idx < holders.Count; idx++)
         {
+            if (idx > 0 && idx % 4 == 0) yield return 0;
+            var n = holders[idx];
             if (n.IsHuman) continue;
             var wanted = 5;
-            foreach (var war in c.Wars)
+            foreach (var war in liveWars)
             {
                 if (war.Ended || !war.Involves(n.Id) || war.CivilConflict) continue;
                 // Losing badly, not merely behind: the score swings past -25 and back every month.
@@ -601,15 +612,20 @@ public static class NuclearPosture
                 MovementRules.Roll(c.Seed, n.Id, c.ElapsedDays, 0x2D5E) < d.AiNuclearRetaliationChance)
                 Apply(c, n, IsHolder(c, Avenging(c, n)) && Refusal(c, n, "devastate").Length == 0 ? "devastate" : "strike");
         }
+        yield return 0;
         for (var i = 0; i < holders.Count; i++)
-        for (var j = i + 1; j < holders.Count; j++)
         {
-            var a = holders[i]; var b = holders[j];
-            if (a.IsHuman || b.IsHuman || a.NuclearPosture > 3 || b.NuclearPosture > 3 || AtWarWith(c, a.Id, b.Id)) continue;
-            if ((CampaignDiplomacy.Peek(c, a.Id, b.Id)?.Opinion ?? 0f) < -60f) continue;
-            // A call is about the two of them: only when their own standoff is at crisis or worse.
-            if ((CampaignDiplomacy.Peek(c, a.Id, b.Id)?.TensionStage ?? 0) < (int)TensionStage.Crisis) continue;
-            if (MovementRules.Roll(c.Seed, a.Id, c.ElapsedDays, 0x7E1E + b.Id) < d.AiHotlineChance) Apply(c, a, "hotline", b);
+            if (i > 0 && i % 4 == 0) yield return 0;
+            for (var j = i + 1; j < holders.Count; j++)
+            {
+                var a = holders[i]; var b = holders[j];
+                if (a.IsHuman || b.IsHuman || a.NuclearPosture > 3 || b.NuclearPosture > 3 || AtWarWith(c, a.Id, b.Id)) continue;
+                var rel = CampaignDiplomacy.Peek(c, a.Id, b.Id);
+                if ((rel?.Opinion ?? 0f) < -60f) continue;
+                // A call is about the two of them: only when their own standoff is at crisis or worse.
+                if ((rel?.TensionStage ?? 0) < (int)TensionStage.Crisis) continue;
+                if (MovementRules.Roll(c.Seed, a.Id, c.ElapsedDays, 0x7E1E + b.Id) < d.AiHotlineChance) Apply(c, a, "hotline", b);
+            }
         }
     }
 }

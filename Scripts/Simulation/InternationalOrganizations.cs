@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace DealOrForce.Simulation;
@@ -195,9 +196,15 @@ public static class InternationalOrganizations
     // war aims): the LINQ chain allocated a membership enumeration, a Distinct buffer and
     // an OrderBy array per ask, per country, per day. The count stays small, so the answers
     // are kept per country and refilled only when the organization table changes.
-    private static readonly Dictionary<int, List<int>> DefencePartnersByNation = new();
-    private static int _defenceStamp = -1;
-    private static Campaign _defenceWorld;
+    private sealed class DefenceCache
+    {
+        public readonly Dictionary<int, List<int>> ByNation = new();
+        public int Stamp = -1;
+        public int Epoch = -1;
+    }
+
+    private static readonly ConditionalWeakTable<Campaign, DefenceCache> DefenceCaches = new();
+    private static int _defenceEpoch;
 
     private static int DefenceStamp(Campaign c)
     {
@@ -211,33 +218,43 @@ public static class InternationalOrganizations
 
     // Membership commands invalidate immediately, even if two edits leave the same
     // count/cohesion. Do not hash every member in every hot-path threat query.
-    public static void InvalidateDefencePartners() => _defenceStamp = -1;
+    public static void InvalidateDefencePartners() => _defenceEpoch++;
 
-    private static void EnsureDefencePartners(Campaign c)
+    private static DefenceCache EnsureDefencePartners(Campaign c)
     {
+        var cache = DefenceCaches.GetOrCreateValue(c);
         var stamp = DefenceStamp(c);
-        if (ReferenceEquals(_defenceWorld,c) && _defenceStamp == stamp && DefencePartnersByNation.Count > 0) return;
-        DefencePartnersByNation.Clear();
-        _defenceStamp = stamp; _defenceWorld = c;
-        if (!c.FeatureEnabled("organizations")) return;
+        if (cache.Epoch == _defenceEpoch && cache.Stamp == stamp) return cache;
+        cache.ByNation.Clear();
+        cache.Stamp = stamp;
+        cache.Epoch = _defenceEpoch;
+        if (!c.FeatureEnabled("organizations")) return cache;
         foreach (var o in Active(c))
         {
             if (o.Dissolved || Charter(o.CharterId) is not { Defence: true } || o.Cohesion < .25f) continue;
             foreach (var memberId in o.Members)
             {
-                if (!DefencePartnersByNation.TryGetValue(memberId, out var list))
-                    DefencePartnersByNation[memberId] = list = new List<int>();
+                if (!cache.ByNation.TryGetValue(memberId, out var list))
+                    cache.ByNation[memberId] = list = new List<int>();
                 foreach (var other in o.Members)
                     if (other != memberId && !list.Contains(other)) list.Add(other);
             }
         }
+        return cache;
     }
 
     public static IReadOnlyList<int> DefencePartners(Campaign c, int nationId)
     {
         if (!c.FeatureEnabled("organizations")) return Array.Empty<int>();
-        EnsureDefencePartners(c);
-        return DefencePartnersByNation.TryGetValue(nationId, out var list) ? list : Array.Empty<int>();
+        var cache = EnsureDefencePartners(c);
+        return cache.ByNation.TryGetValue(nationId, out var list) ? list : Array.Empty<int>();
+    }
+
+    internal static bool HasDefencePartner(Campaign c, int nationId, int otherId)
+    {
+        if (!c.FeatureEnabled("organizations")) return false;
+        var cache = EnsureDefencePartners(c);
+        return cache.ByNation.TryGetValue(nationId, out var list) && list.Contains(otherId);
     }
     public static float Dues(Campaign c, InternationalOrganization o, Nation n) =>
         Math.Max(0, n.Gdp) * (Charter(o.CharterId)?.WeeklyGdpDues ?? 0);
@@ -474,9 +491,17 @@ public static class InternationalOrganizations
 
     public static void Tick(Campaign c)
     {
-        if (!c.FeatureEnabled("organizations")) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same organization pass, yielded between assemblies.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (!c.FeatureEnabled("organizations")) yield break;
+        var ticked = 0;
         foreach (var org in Active(c).ToArray())
         {
+            if (++ticked % 4 == 0) yield return 0;
             // A live mod reload can remove a charter. Freeze its institution, do not crash
             // an assembly or silently reinterpret its voting rule.
             if (Charter(org.CharterId) is null) continue;

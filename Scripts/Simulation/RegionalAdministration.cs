@@ -83,13 +83,25 @@ public static class RegionalAdministration
         }
         var culture = DominantCulture(seed);
         var group = DemographyCatalog.Culture(culture)?.Group ?? "";
-        var seedCores = seed.CoreTags.Concat(seed.Claims)
-            .Where(t => !string.IsNullOrWhiteSpace(t) && !string.Equals(t, owner.Tag, StringComparison.OrdinalIgnoreCase))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var seedCores = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < seed.CoreTags.Count; i++)
+        {
+            var t = seed.CoreTags[i];
+            if (!string.IsNullOrWhiteSpace(t) && !string.Equals(t, owner.Tag, StringComparison.OrdinalIgnoreCase))
+                seedCores.Add(t);
+        }
+        for (var i = 0; i < seed.Claims.Count; i++)
+        {
+            var t = seed.Claims[i];
+            if (!string.IsNullOrWhiteSpace(t) && !string.Equals(t, owner.Tag, StringComparison.OrdinalIgnoreCase))
+                seedCores.Add(t);
+        }
         var seedUnruly = seed.Radicalism >= c.Defines.AiReleaseRegionHeatThreshold || seed.SecessionPressure >= 0.55f;
         var selected = new HashSet<int>();
         var queue = new Queue<int>(); queue.Enqueue(seed.MapIndex);
         long people = 0;
+        var threshold = float.IsFinite(c.Defines.AiAdministrationCultureShare)
+            ? Math.Clamp(c.Defines.AiAdministrationCultureShare, 0, 1) : .35f;
         while (queue.Count > 0 && selected.Count < maxCount)
         {
             var id = queue.Dequeue();
@@ -99,18 +111,28 @@ public static class RegionalAdministration
             // region or frontier vassal is for distinct peoples or genuinely non-core peripheries,
             // never for handing Sichuan, Guangdong and half of China to Macao!
             var foreignShare = EconomySystem.ForeignShare(state, owner.Tag);
-            if (foreignShare < 0.50f && !state.CoreTags.Concat(state.Claims).Any(seedCores.Contains))
+            var sharedCore = false;
+            if (seedCores.Count > 0)
+            {
+                for (var i = 0; i < state.CoreTags.Count && !sharedCore; i++)
+                    if (seedCores.Contains(state.CoreTags[i])) sharedCore = true;
+                for (var i = 0; i < state.Claims.Count && !sharedCore; i++)
+                    if (seedCores.Contains(state.Claims[i])) sharedCore = true;
+            }
+            if (foreignShare < 0.50f && !sharedCore)
                 continue;
             var local = DominantCulture(state);
             var related = local == culture || group.Length > 0 && DemographyCatalog.Culture(local)?.Group == group;
             var regionalCultures = EconomySystem.Cultures(state);
-            var total = regionalCultures.Sum(p => p.Size);
-            var kindred = regionalCultures.Where(p => p.Culture == culture ||
-                group.Length > 0 && DemographyCatalog.Culture(p.Culture)?.Group == group).Sum(p => p.Size);
-            var threshold = float.IsFinite(c.Defines.AiAdministrationCultureShare)
-                ? Math.Clamp(c.Defines.AiAdministrationCultureShare, 0, 1) : .35f;
-            var sharedCore = seedCores.Count > 0 &&
-                state.CoreTags.Concat(state.Claims).Any(seedCores.Contains);
+            long total = 0;
+            long kindred = 0;
+            for (var ci = 0; ci < regionalCultures.Count; ci++)
+            {
+                var (cName, cSize) = regionalCultures[ci];
+                total += cSize;
+                if (cName == culture || (group.Length > 0 && DemographyCatalog.Culture(cName)?.Group == group))
+                    kindred += cSize;
+            }
             var unrulyFrontier = seedUnruly && foreignShare >= 0.65f &&
                 (state.Radicalism >= c.Defines.AiReleaseRegionHeatThreshold * 0.85f || state.SecessionPressure >= 0.50f);
             // No stretching across a culturally unrelated stable core to reach an enclave.
@@ -176,25 +198,72 @@ public static class RegionalAdministration
         return pkg.Length > 0 ? pkg : new[] { borderCandidates[0].MapIndex };
     }
 
-    public static Nation MatchingSubject(Campaign c, Nation owner, ScenarioState seed)
+    public static Nation MatchingSubject(Campaign c, Nation owner, ScenarioState seed) =>
+        MatchingSubject(c, owner, seed, out _);
+
+    internal static Nation MatchingSubject(Campaign c, Nation owner, ScenarioState seed, out int[] package)
     {
         var culture = DominantCulture(seed);
         var group = DemographyCatalog.Culture(culture)?.Group ?? "";
-        var package = Package(c, owner, seed);
+        package = Package(c, owner, seed);
         if (package.Length == 0) return null;
-        var seedCores = seed.CoreTags.Concat(seed.Claims)
-            .Where(t => !string.IsNullOrWhiteSpace(t) && !string.Equals(t, owner.Tag, StringComparison.OrdinalIgnoreCase))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return c.Nations.Where(n => n.AnswersTo(owner.Id) && !c.Fallen.Contains(n.Id) &&
-                !n.SubjectIntegrating && !n.SubjectConspiring && !IsMicroCityEnclave(n) && n.LibertyDesire < .65f &&
-                package.Any(id => TerritorialCoherence.TouchesOwnedGround(c, n, id)) &&
-                (string.Equals(n.DeclaredCulture, culture, StringComparison.OrdinalIgnoreCase) ||
-                 n.FoundedCultures.Contains(culture, StringComparer.OrdinalIgnoreCase) ||
-                 (group.Length > 0 && string.Equals(DemographyCatalog.Culture(n.DeclaredCulture)?.Group, group, StringComparison.OrdinalIgnoreCase)) ||
-                 c.StatesOf(n).SelectMany(s => s.CoreTags.Concat(s.Claims)).Any(seedCores.Contains)))
-            .OrderByDescending(n => string.Equals(n.DeclaredCulture, culture, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
-            .ThenBy(n => n.Id)
-            .FirstOrDefault();
+        var seedCores = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < seed.CoreTags.Count; i++)
+        {
+            var t = seed.CoreTags[i];
+            if (!string.IsNullOrWhiteSpace(t) && !string.Equals(t, owner.Tag, StringComparison.OrdinalIgnoreCase))
+                seedCores.Add(t);
+        }
+        for (var i = 0; i < seed.Claims.Count; i++)
+        {
+            var t = seed.Claims[i];
+            if (!string.IsNullOrWhiteSpace(t) && !string.Equals(t, owner.Tag, StringComparison.OrdinalIgnoreCase))
+                seedCores.Add(t);
+        }
+        Nation best = null;
+        var bestMatch = -1;
+        for (var ni = 0; ni < c.Nations.Count; ni++)
+        {
+            var n = c.Nations[ni];
+            if (!n.AnswersTo(owner.Id) || c.Fallen.Contains(n.Id) ||
+                n.SubjectIntegrating || n.SubjectConspiring || IsMicroCityEnclave(n) || n.LibertyDesire >= .65f)
+                continue;
+            var touches = false;
+            for (var pi = 0; pi < package.Length; pi++)
+                if (TerritorialCoherence.TouchesOwnedGround(c, n, package[pi])) { touches = true; break; }
+            if (!touches) continue;
+            var exactCulture = string.Equals(n.DeclaredCulture, culture, StringComparison.OrdinalIgnoreCase);
+            var ok = exactCulture;
+            if (!ok)
+            {
+                for (var fi = 0; fi < n.FoundedCultures.Count; fi++)
+                    if (string.Equals(n.FoundedCultures[fi], culture, StringComparison.OrdinalIgnoreCase)) { ok = true; break; }
+            }
+            if (!ok && group.Length > 0 && string.Equals(DemographyCatalog.Culture(n.DeclaredCulture)?.Group, group, StringComparison.OrdinalIgnoreCase))
+                ok = true;
+            if (!ok && seedCores.Count > 0)
+            {
+                var nStates = c.States;
+                for (var si = 0; si < nStates.Count && !ok; si++)
+                {
+                    var s = nStates[si];
+                    if (s.NationMapIndex != n.MapIndex) continue;
+                    for (var ci = 0; ci < s.CoreTags.Count; ci++)
+                        if (seedCores.Contains(s.CoreTags[ci])) { ok = true; break; }
+                    if (!ok)
+                        for (var ci = 0; ci < s.Claims.Count; ci++)
+                            if (seedCores.Contains(s.Claims[ci])) { ok = true; break; }
+                }
+            }
+            if (!ok) continue;
+            var match = exactCulture ? 1 : 0;
+            if (best is null || match > bestMatch || (match == bestMatch && n.Id < best.Id))
+            {
+                best = n;
+                bestMatch = match;
+            }
+        }
+        return best;
     }
 
     public static bool MayGrant(Campaign c, Nation owner, Nation subject, IEnumerable<int> indices,

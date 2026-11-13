@@ -54,14 +54,17 @@ public static class Dismantlement
         if (born is null) return null;
         RegionalResourcePartition.Transfer(parent, born, share);
         var provinces = Enumerable.Range(1, c.ProvinceMap.ProvinceCount).Where(p => regions.Contains(c.ProvinceMap.ProvinceToState[p])).ToArray();
+        var tagged = false;
         foreach (var s in states)
         {
             if (voluntary) TerritorialClaims.Renounce(c, parent, s);
-            if (!s.CoreTags.Contains(born.Tag)) s.CoreTags.Add(born.Tag);
+            if (!s.CoreTags.Contains(born.Tag)) { s.CoreTags.Add(born.Tag); tagged = true; }
         }
+        if (tagged) Movements.NoteRegionRenamed(c);
         StatePartition.Annex(c, provinces, born, asConquest: false);
         RegionalResourcePartition.RecountResidents(c, parent, born);
         var relation = CampaignDiplomacy.Get(c, parent.Id, born.Id);
+        if (relation.Stance == DiplomaticStance.Allied) c.NoteAllianceChange();
         relation.Stance = DiplomaticStance.Truce;
         relation.TruceUntil = c.ElapsedDays + 3650;
         c.LocateCapitals(preserveExisting: true); c.MarkStrategicChange();

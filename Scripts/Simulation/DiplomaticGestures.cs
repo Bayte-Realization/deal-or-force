@@ -100,8 +100,8 @@ public static class DiplomaticGestures
         if (issuer is null || target is null || issuer.Id == target.Id || issuer.Movement is not null || target.Movement is not null ||
             issuer.Population <= 0 || target.Population <= 0 || c.Fallen.Contains(issuerId) || c.Fallen.Contains(targetId))
             return Loc.Get("Choose an existing foreign country.");
-        if (issuer.DecisionAvailableDay.GetValueOrDefault(Key(gesture, targetId)) > c.ElapsedDays)
-            return Loc.Format("Not again so soon: available in {0} days.", issuer.DecisionAvailableDay[Key(gesture, targetId)] - c.ElapsedDays);
+        if (issuer.DecisionAvailableDay.TryGetValue(Key(gesture, targetId), out var availDay) && availDay > c.ElapsedDays)
+            return Loc.Format("Not again so soon: available in {0} days.", availDay - c.ElapsedDays);
         var d = c.Defines;
         var relation = CampaignDiplomacy.Peek(c, issuerId, targetId);
         var atWar = CampaignDiplomacy.AtWar(c, issuerId, targetId);
@@ -124,9 +124,9 @@ public static class DiplomaticGestures
                 if (war is null) return Loc.Get("They are not at war with anybody we are not fighting ourselves.");
                 if (issuer.PoliticalPoints < d.MediationPoliticalCost)
                     return Loc.Format("Insufficient political credit: need {0:0.##}, available {1:0.##}.", d.MediationPoliticalCost, issuer.PoliticalPoints);
-                foreach (var side in new[] { war.AttackerId, war.DefenderId })
-                    if (CampaignDiplomacy.Peek(c, issuerId, side) is { Opinion: < 0f })
-                        return Loc.Get("Both sides must think well enough of us to listen.");
+                if (CampaignDiplomacy.Peek(c, issuerId, war.AttackerId) is { Opinion: < 0f } ||
+                    CampaignDiplomacy.Peek(c, issuerId, war.DefenderId) is { Opinion: < 0f })
+                    return Loc.Get("Both sides must think well enough of us to listen.");
                 return "";
             case "loan":
                 if (atWar) return Loc.Get("Not with a country we are at war with.");
@@ -169,24 +169,35 @@ public static class DiplomaticGestures
     public static List<Nation> CommonRivals(Campaign c, Nation a, Nation b)
     {
         var rivals = new List<Nation>();
+        var threshold = c.Defines.TensionCrisisAt * 0.6f;
         foreach (var other in c.Nations)
         {
             if (other.Id == a.Id || other.Id == b.Id || other.Movement is not null || other.Population <= 0) continue;
-            bool Rival(Nation n)
-            {
-                var tie = CampaignDiplomacy.Peek(c, n.Id, other.Id);
-                return tie is not null && (tie.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar ||
-                                           tie.Tension >= c.Defines.TensionCrisisAt * 0.6f || tie.Opinion <= -40f);
-            }
-            if (Rival(a) && Rival(b)) rivals.Add(other);
+            if (IsRival(c, a.Id, other.Id, threshold) && IsRival(c, b.Id, other.Id, threshold)) rivals.Add(other);
         }
         return rivals;
+
+        static bool IsRival(Campaign c, int nationId, int otherId, float threshold)
+        {
+            var tie = CampaignDiplomacy.Peek(c, nationId, otherId);
+            return tie is not null && (tie.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar ||
+                                       tie.Tension >= threshold || tie.Opinion <= -40f);
+        }
     }
 
     /// <summary>The war of theirs we could mediate: one they lead or fight in that we are not part of, the oldest first.</summary>
-    public static StrategicWar MediableWar(Campaign c, Nation issuer, Nation target) =>
-        c.Wars.Where(w => !w.Ended && w.Involves(target.Id) && !w.Involves(issuer.Id))
-            .OrderBy(w => w.StartedDay).ThenBy(w => w.Id).FirstOrDefault();
+    public static StrategicWar MediableWar(Campaign c, Nation issuer, Nation target)
+    {
+        StrategicWar best = null;
+        for (var i = 0; i < c.Wars.Count; i++)
+        {
+            var w = c.Wars[i];
+            if (w.Ended || !w.Involves(target.Id) || w.Involves(issuer.Id)) continue;
+            if (best is null || w.StartedDay < best.StartedDay || (w.StartedDay == best.StartedDay && w.Id < best.Id))
+                best = w;
+        }
+        return best;
+    }
 
     /// <summary>A third party cannot bypass either government's negotiation gate or a human signature.</summary>
     public static bool CanMediateArmistice(Campaign c, StrategicWar war)
@@ -196,10 +207,12 @@ public static class DiplomaticGestures
             CivilWarPersistence.NegotiationLocked(c, war) ||
             c.ElapsedDays - war.StartedDay < c.Defines.AiMinimumWarDays) return false;
         if (c.NationById(war.AttackerId) is null || c.NationById(war.DefenderId) is null) return false;
-        foreach (var side in new[] { war.AttackerId, war.DefenderId })
-            if (PeaceNegotiation.BlockReason(c, war, side, PeaceTerms.Ceasefire).Length > 0 ||
-                PeaceNegotiation.Acceptance(c, war, side, PeaceTerms.Ceasefire) < c.Defines.MediationAcceptance)
-                return false;
+        if (PeaceNegotiation.BlockReason(c, war, war.AttackerId, PeaceTerms.Ceasefire).Length > 0 ||
+            PeaceNegotiation.Acceptance(c, war, war.AttackerId, PeaceTerms.Ceasefire) < c.Defines.MediationAcceptance)
+            return false;
+        if (PeaceNegotiation.BlockReason(c, war, war.DefenderId, PeaceTerms.Ceasefire).Length > 0 ||
+            PeaceNegotiation.Acceptance(c, war, war.DefenderId, PeaceTerms.Ceasefire) < c.Defines.MediationAcceptance)
+            return false;
         return true;
     }
 
@@ -291,8 +304,8 @@ public static class DiplomaticGestures
                 var name = WarNames.Of(c, war);
                 PeaceNegotiation.Resolve(c, war, attacker, PeaceTerms.Ceasefire);
                 if (!war.Ended) return false;
-                foreach (var side in new[] { attacker, defender })
-                    OpinionSystem.Remember(c, CampaignDiplomacy.Get(c, issuerId, side), "mediated_peace");
+                OpinionSystem.Remember(c, CampaignDiplomacy.Get(c, issuerId, attacker), "mediated_peace");
+                OpinionSystem.Remember(c, CampaignDiplomacy.Get(c, issuerId, defender), "mediated_peace");
                 c.Chronicle.Record(c, "peace_mediated", issuerId, target.Id, name);
                 return true;
             case "loan":
@@ -324,15 +337,24 @@ public static class DiplomaticGestures
                 OpinionSystem.Remember(c, relation, "joint_exercises");
                 // A message to whoever both of them stand against: it is heard, and remembered.
                 var rivals = CommonRivals(c, issuer, target);
-                foreach (var rival in rivals)
-                    foreach (var side in new[] { issuer, target })
-                    {
-                        var tie = CampaignDiplomacy.Get(c, side.Id, rival.Id);
-                        tie.Tension = MathF.Min(100f, tie.Tension + d.ExercisesRivalTension);
-                        OpinionSystem.Remember(c, tie, "exercises_against_us");
-                    }
-                c.Chronicle.Record(c, "joint_exercises", issuerId, targetId,
-                    rivals.Count == 0 ? "" : string.Join(", ", rivals.Take(3).Select(r => r.DisplayName)));
+                for (var ri = 0; ri < rivals.Count; ri++)
+                {
+                    var rival = rivals[ri];
+                    var tieA = CampaignDiplomacy.Get(c, issuer.Id, rival.Id);
+                    tieA.Tension = MathF.Min(100f, tieA.Tension + d.ExercisesRivalTension);
+                    OpinionSystem.Remember(c, tieA, "exercises_against_us");
+                    var tieB = CampaignDiplomacy.Get(c, target.Id, rival.Id);
+                    tieB.Tension = MathF.Min(100f, tieB.Tension + d.ExercisesRivalTension);
+                    OpinionSystem.Remember(c, tieB, "exercises_against_us");
+                }
+                var rivalNames = rivals.Count switch
+                {
+                    0 => "",
+                    1 => rivals[0].DisplayName,
+                    2 => $"{rivals[0].DisplayName}, {rivals[1].DisplayName}",
+                    _ => $"{rivals[0].DisplayName}, {rivals[1].DisplayName}, {rivals[2].DisplayName}"
+                };
+                c.Chronicle.Record(c, "joint_exercises", issuerId, targetId, rivalNames);
                 cooldown = d.ExercisesCooldownDays;
                 break;
             case "apology":
@@ -381,9 +403,17 @@ public static class DiplomaticGestures
     /// </summary>
     public static void Tick(Campaign c)
     {
-        if (c is null || c.ElapsedDays <= 0 || c.ElapsedDays % 7 != 6) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same weekly instalments, yielded between batches of relationships.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || c.ElapsedDays <= 0 || c.ElapsedDays % 7 != 6) yield break;
+        var scanned = 0;
         foreach (var relation in c.Relations.Values)
         {
+            if (++scanned % 256 == 0) yield return 0;
             if (relation.LoanLender < 0 || relation.LoanOutstanding <= 0f) continue;
             var lender = c.NationById(relation.LoanLender);
             var borrower = c.NationById(relation.LoanLender == relation.A ? relation.B : relation.A);
@@ -413,8 +443,8 @@ public static class DiplomaticGestures
     /// Whether a relationship is worth mending for this government: a great power, a neighbour, or a
     /// country a noticeable share of our trade runs through. The AI does not apologise to the world.
     /// </summary>
-    private static bool Matters(Campaign c, Nation nation, Nation other) =>
-        AllianceSystem.GreatPowers(c).Contains(other.Id) ||
+    private static bool Matters(Campaign c, Nation nation, Nation other, IReadOnlySet<int> greatPowers = null) =>
+        (greatPowers ?? AllianceSystem.GreatPowers(c)).Contains(other.Id) ||
         CampaignDiplomacy.SharesLandBorder(c, nation.MapIndex, other.MapIndex) ||
         nation.TradeDependenceOn(other.Id) >= 0.02f;
 
@@ -426,70 +456,275 @@ public static class DiplomaticGestures
     /// </summary>
     public static void AiTick(Campaign c)
     {
-        if (c is null || c.ElapsedDays <= 0) return;
+        foreach (var _ in AiTickStages(c)) { }
+    }
+
+    /// <summary>
+    /// The same monthly gesture pass, yielded between countries.
+    ///
+    /// Two things were wrong with its shape on a fifty-year world. Every country that thought
+    /// built its own relation list by walking the whole table - 64 000 pairs at five hundred
+    /// countries - and grew a fresh list every time; and each of the eight questions below ran
+    /// its own LINQ pipeline, filtering into a list and sorting it. The lists are now gathered
+    /// once for the countries that act, and each question is a single walk of that list.
+    /// </summary>
+    public static IEnumerable<int> AiTickStages(Campaign c)
+    {
+        if (c is null || c.ElapsedDays <= 0) yield break;
+        var pending = ActingToday(c);
+        if (pending.Count == 0) yield break;
+        var byNation = new Dictionary<int, List<DiplomaticRelation>>(pending.Count);
+        foreach (var _ in GatherStages(c, pending, byNation)) yield return 0;
+        var inserted = new List<DiplomaticRelation>();
+        c.RelationInsertSink = inserted;
+        try
+        {
+            foreach (var nation in pending)
+            {
+                // A gesture in this pass can open a relation the table did not hold when the lists
+                // were gathered. Append any newly opened/woken pairs directly rather than rescanning
+                // all tens of thousands of relations.
+                if (inserted.Count > 0)
+                {
+                    for (var i = 0; i < inserted.Count; i++)
+                    {
+                        var rel = inserted[i];
+                        if (byNation.TryGetValue(rel.A, out var listA)) listA.Add(rel);
+                        if (byNation.TryGetValue(rel.B, out var listB)) listB.Add(rel);
+                    }
+                    inserted.Clear();
+                }
+                var relations = byNation.TryGetValue(nation.Id, out var pairs) ? pairs : NoRelations;
+
+                if (GestureRoll(c, nation.Id, 1) < 0.12f && Warmest(nation.Id, relations) is { } partner)
+                    Perform(c, nation.Id, Other(nation.Id, partner), "state_visit");
+
+                if (GestureRoll(c, nation.Id, 2) < 0.15f && Crisis(nation.Id, relations, c.Defines.TensionCrisisAt) is { } rival)
+                    Perform(c, nation.Id, Other(nation.Id, rival), "show_of_force");
+
+                if (GestureRoll(c, nation.Id, 3) < 0.10f && AllianceSystem.GreatPowers(c).Contains(nation.Id))
+                {
+                    yield return 0;
+                    var mediable = new List<StrategicWar>();
+                    foreach (var w in c.Wars)
+                        if (!w.Ended && !w.Involves(nation.Id) && c.ElapsedDays - w.StartedDay > 180)
+                            mediable.Add(w);
+                    if (mediable.Count > 1) mediable.Sort((a, b) => a.Id.CompareTo(b.Id));
+                    for (var i = 0; i < mediable.Count; i++)
+                    {
+                        if (i > 0) yield return 0;
+                        var war = mediable[i];
+                        if (CanMediateArmistice(c, war) && Refusal(c, nation.Id, war.DefenderId, "mediate").Length == 0)
+                        {
+                            yield return 0;
+                            Perform(c, nation.Id, war.DefenderId, "mediate");
+                            break;
+                        }
+                    }
+                }
+
+                // Diplomats expelled from a rival already deep in a crisis with us: rare, and loud.
+                if (GestureRoll(c, nation.Id, 5) < 0.04f && Expel(nation.Id, relations, c.Defines.TensionCrisisAt) is { } offender)
+                    Perform(c, nation.Id, Other(nation.Id, offender), "expel_diplomats");
+
+                // Exercises with an ally, when there is somebody both of them want to impress.
+                if (GestureRoll(c, nation.Id, 6) < 0.08f && ExerciseAlly(nation.Id, relations) is { } ally &&
+                    c.NationById(Other(nation.Id, ally)) is { } allied)
+                {
+                    yield return 0;
+                    if (CommonRivals(c, nation, allied).Count > 0)
+                        Perform(c, nation.Id, allied.Id, "joint_exercises");
+                }
+
+                if (GestureRoll(c, nation.Id, 4) < 0.05f && nation.Gdp > 500f && LoanFriend(c, nation, relations) is { } friend)
+                    Perform(c, nation.Id, Other(nation.Id, friend), "loan");
+
+                // Mending a relationship that has gone bad with a country that matters to us - a
+                // great power, a neighbour, a trading partner - and that we are not planning to fight.
+                // The same apology a player can make, on the same terms; the AI reaches for it rarely,
+                // and only where the grievances between the two are real.
+                yield return 0;
+                if (GestureRoll(c, nation.Id, 7) < 0.10f && Estranged(c, nation, relations) is { } estranged)
+                    Perform(c, nation.Id, Other(nation.Id, estranged), "apology");
+
+                // Help for a country in need that thinks poorly or only lukewarmly of us: the cheapest
+                // honest way back from a cold relationship, and one that does not need them to agree.
+                yield return 0;
+                if (GestureRoll(c, nation.Id, 8) < 0.06f && nation.Gdp > 50f && Needy(c, nation, relations) is { } needy)
+                    Perform(c, nation.Id, Other(nation.Id, needy), "humanitarian_aid");
+
+                yield return 0;
+            }
+        }
+        finally
+        {
+            c.RelationInsertSink = null;
+        }
+    }
+
+    private static float GestureRoll(Campaign c, int nationId, int salt) =>
+        Escalation.Roll(c.Seed, nationId, 0x6E5, c.ElapsedDays, salt);
+
+    private static readonly List<DiplomaticRelation> NoRelations = new();
+
+    /// <summary>The countries that act today, in the order the world lists them.</summary>
+    private static List<Nation> ActingToday(Campaign c)
+    {
+        var pending = new List<Nation>();
         foreach (var nation in c.Nations)
         {
             if (nation.Movement is not null || nation.Population <= 0 || c.Fallen.Contains(nation.Id)) continue;
             if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;
             if ((c.ElapsedDays + nation.Id * 7) % 30 != 0) continue;
-            float Roll(int salt) => Escalation.Roll(c.Seed, nation.Id, 0x6E5, c.ElapsedDays, salt);
-            var relations = c.Relations.Values.Where(r => r.A == nation.Id || r.B == nation.Id).ToList();
-            int Other(DiplomaticRelation r) => r.A == nation.Id ? r.B : r.A;
+            pending.Add(nation);
+        }
+        return pending;
+    }
 
-            if (Roll(1) < 0.12f && relations.Where(r => r.Stance is DiplomaticStance.Allied or DiplomaticStance.Friendly || r.TradeAgreement)
-                    .Where(r => r.Opinion is > 0f and < 45f).OrderBy(r => r.Opinion).ThenBy(Other).FirstOrDefault() is { } partner)
-                Perform(c, nation.Id, Other(partner), "state_visit");
-
-            if (Roll(2) < 0.15f && relations.Where(r => r.Tension >= c.Defines.TensionCrisisAt && r.Stance != DiplomaticStance.AtWar)
-                    .OrderByDescending(r => r.Tension).ThenBy(Other).FirstOrDefault() is { } rival)
-                Perform(c, nation.Id, Other(rival), "show_of_force");
-
-            if (Roll(3) < 0.10f && AllianceSystem.GreatPowers(c).Contains(nation.Id))
-                foreach (var war in c.Wars.Where(w => !w.Ended && !w.Involves(nation.Id) && c.ElapsedDays - w.StartedDay > 180).OrderBy(w => w.Id))
-                    if (CanMediateArmistice(c, war) && Refusal(c, nation.Id, war.DefenderId, "mediate").Length == 0)
-                    {
-                        Perform(c, nation.Id, war.DefenderId, "mediate");
-                        break;
-                    }
-
-            // Diplomats expelled from a rival already deep in a crisis with us: rare, and loud.
-            if (Roll(5) < 0.04f && relations.Where(r => r.Tension >= c.Defines.TensionCrisisAt && r.Opinion <= -50f &&
-                    r.Stance != DiplomaticStance.AtWar).OrderByDescending(r => r.Tension).ThenBy(Other).FirstOrDefault() is { } offender)
-                Perform(c, nation.Id, Other(offender), "expel_diplomats");
-
-            // Exercises with an ally, when there is somebody both of them want to impress.
-            if (Roll(6) < 0.08f && relations.Where(r => r.Stance == DiplomaticStance.Allied && r.Opinion >= 20f)
-                    .OrderByDescending(r => r.Opinion).ThenBy(Other).FirstOrDefault() is { } ally &&
-                c.NationById(Other(ally)) is { } allied && CommonRivals(c, nation, allied).Count > 0)
-                Perform(c, nation.Id, allied.Id, "joint_exercises");
-
-            if (Roll(4) < 0.05f && nation.Gdp > 500f &&
-                relations.Where(r => r.Opinion >= 30f && c.NationById(Other(r)) is { } poor && poor.Gdp < nation.Gdp * 0.05f)
-                    .OrderByDescending(r => r.Opinion).ThenBy(Other).FirstOrDefault() is { } friend)
-                Perform(c, nation.Id, Other(friend), "loan");
-
-            // Mending a relationship that has gone bad with a country that matters to us - a
-            // great power, a neighbour, a trading partner - and that we are not planning to fight.
-            // The same apology a player can make, on the same terms; the AI reaches for it rarely,
-            // and only where the grievances between the two are real.
-            if (Roll(7) < 0.10f && relations.Where(r => r.Opinion <= -30f && r.Stance != DiplomaticStance.AtWar &&
-                        Other(r) != nation.WarPlanTargetId && c.NationById(Other(r)) is { } them && Matters(c, nation, them) &&
-                        Refusal(c, nation.Id, them.Id, "apology").Length == 0)
-                    .OrderBy(r => r.Opinion).ThenBy(Other).FirstOrDefault() is { } estranged)
-                Perform(c, nation.Id, Other(estranged), "apology");
-
-            // Help for a country in need that thinks poorly or only lukewarmly of us: the cheapest
-            // honest way back from a cold relationship, and one that does not need them to agree.
-            if (Roll(8) < 0.06f && nation.Gdp > 50f && relations.Where(r => r.Opinion is > -70f and < 20f &&
-                        r.Stance != DiplomaticStance.AtWar && Other(r) != nation.WarPlanTargetId &&
-                        c.NationById(Other(r)) is { } them && Matters(c, nation, them) &&
-                        Refusal(c, nation.Id, them.Id, "humanitarian_aid").Length == 0)
-                    .OrderBy(r => r.Opinion).ThenBy(Other).FirstOrDefault() is { } needy)
-                Perform(c, nation.Id, Other(needy), "humanitarian_aid");
+    /// <summary>
+    /// One walk of the relation table, giving each acting country its own pairs in the order the
+    /// table holds them. Held for the pass and never shared: a process can be running a host's
+    /// world and a client's snapshot at once, and two of them must not read each other's lists.
+    /// </summary>
+    private static IEnumerable<int> GatherStages(Campaign c, List<Nation> pending, Dictionary<int, List<DiplomaticRelation>> byNation)
+    {
+        foreach (var list in byNation.Values) list.Clear();
+        foreach (var nation in pending)
+        {
+            if (!byNation.TryGetValue(nation.Id, out var list)) byNation[nation.Id] = list = new List<DiplomaticRelation>();
+            list.Clear();
+        }
+        var scanned = 0;
+        foreach (var relation in c.Relations.Values)
+        {
+            if (byNation.TryGetValue(relation.A, out var first)) first.Add(relation);
+            if (byNation.TryGetValue(relation.B, out var second)) second.Add(relation);
+            if (++scanned % 1024 == 0) yield return 0;
         }
     }
-}
 
+    private static int Other(int nationId, DiplomaticRelation relation) =>
+        relation.A == nationId ? relation.B : relation.A;
+
+    // The eight questions below were each a LINQ pipeline: filter into a list, sort it, take the
+    // first. Each is now one walk that keeps the same candidate - the same key, the same id as
+    // the tie-break - without the list, the sort, or the closures that made them.
+
+    /// <summary>A friend worth visiting: friendly or allied, or merely trading, and opinion still short of warm.</summary>
+    private static DiplomaticRelation Warmest(int nationId, List<DiplomaticRelation> relations)
+    {
+        DiplomaticRelation best = null;
+        foreach (var relation in relations)
+        {
+            if (relation.Stance is not (DiplomaticStance.Allied or DiplomaticStance.Friendly) && !relation.TradeAgreement) continue;
+            if (relation.Opinion <= 0f || relation.Opinion >= 45f) continue;
+            if (best is null || relation.Opinion < best.Opinion ||
+                (relation.Opinion == best.Opinion && Other(nationId, relation) < Other(nationId, best))) best = relation;
+        }
+        return best;
+    }
+
+    /// <summary>The rival closest to a crisis, for a show of force.</summary>
+    private static DiplomaticRelation Crisis(int nationId, List<DiplomaticRelation> relations, float threshold)
+    {
+        DiplomaticRelation best = null;
+        foreach (var relation in relations)
+        {
+            if (relation.Tension < threshold || relation.Stance == DiplomaticStance.AtWar) continue;
+            if (best is null || relation.Tension > best.Tension ||
+                (relation.Tension == best.Tension && Other(nationId, relation) < Other(nationId, best))) best = relation;
+        }
+        return best;
+    }
+
+    /// <summary>The rival deep enough in a crisis, and hostile enough, to have its diplomats sent home.</summary>
+    private static DiplomaticRelation Expel(int nationId, List<DiplomaticRelation> relations, float threshold)
+    {
+        DiplomaticRelation best = null;
+        foreach (var relation in relations)
+        {
+            if (relation.Tension < threshold || relation.Opinion > -50f || relation.Stance == DiplomaticStance.AtWar) continue;
+            if (best is null || relation.Tension > best.Tension ||
+                (relation.Tension == best.Tension && Other(nationId, relation) < Other(nationId, best))) best = relation;
+        }
+        return best;
+    }
+
+    /// <summary>An ally worth exercises with: the warmest one, before the common rival is asked about.</summary>
+    private static DiplomaticRelation ExerciseAlly(int nationId, List<DiplomaticRelation> relations)
+    {
+        DiplomaticRelation best = null;
+        foreach (var relation in relations)
+        {
+            if (relation.Stance != DiplomaticStance.Allied || relation.Opinion < 20f) continue;
+            if (best is null || relation.Opinion > best.Opinion ||
+                (relation.Opinion == best.Opinion && Other(nationId, relation) < Other(nationId, best))) best = relation;
+        }
+        return best;
+    }
+
+    /// <summary>A warm friend poor enough that a loan from this treasury means something.</summary>
+    private static DiplomaticRelation LoanFriend(Campaign c, Nation nation, List<DiplomaticRelation> relations)
+    {
+        DiplomaticRelation best = null;
+        foreach (var relation in relations)
+        {
+            if (relation.Opinion < 30f) continue;
+            var other = Other(nation.Id, relation);
+            if (c.NationById(other) is not { } poor || poor.Gdp >= nation.Gdp * 0.05f) continue;
+            if (best is null || relation.Opinion > best.Opinion ||
+                (relation.Opinion == best.Opinion && other < Other(nation.Id, best))) best = relation;
+        }
+        return best;
+    }
+
+    /// <summary>The coldest relationship worth mending: one that matters, and that nobody is planning to fight.</summary>
+    private static DiplomaticRelation Estranged(Campaign c, Nation nation, List<DiplomaticRelation> relations)
+    {
+        var d = c.Defines;
+        if (nation.PoliticalPoints < d.ApologyPoliticalCost || nation.Treasury < ApologyCost(c, nation))
+            return null;
+        var gps = AllianceSystem.GreatPowers(c);
+        DiplomaticRelation best = null;
+        foreach (var relation in relations)
+        {
+            if (relation.Opinion > -30f || relation.Stance == DiplomaticStance.AtWar) continue;
+            var other = Other(nation.Id, relation);
+            if (other == nation.WarPlanTargetId) continue;
+            if (OpinionWitnesses.Grievances(c, relation) > d.ApologyMinimumGrievance) continue;
+            if (c.NationById(other) is not { } them || them.Movement is not null || them.Population <= 0 || c.Fallen.Contains(other)) continue;
+            if (nation.DecisionAvailableDay.TryGetValue(Key("apology", them.Id), out var avail) && avail > c.ElapsedDays) continue;
+            if (!Matters(c, nation, them, gps)) continue;
+            if (Refusal(c, nation.Id, them.Id, "apology").Length != 0) continue;
+            if (best is null || relation.Opinion < best.Opinion ||
+                (relation.Opinion == best.Opinion && other < Other(nation.Id, best))) best = relation;
+        }
+        return best;
+    }
+
+    /// <summary>A country in need that thinks poorly or only lukewarmly of us: the cheapest way back.</summary>
+    private static DiplomaticRelation Needy(Campaign c, Nation nation, List<DiplomaticRelation> relations)
+    {
+        var d = c.Defines;
+        if (nation.Treasury < d.HumanitarianAidMinimumCash * 2f) return null;
+        var gps = AllianceSystem.GreatPowers(c);
+        DiplomaticRelation best = null;
+        foreach (var relation in relations)
+        {
+            if (relation.Opinion <= -70f || relation.Opinion >= 20f) continue;
+            if (relation.Stance == DiplomaticStance.AtWar) continue;
+            var other = Other(nation.Id, relation);
+            if (other == nation.WarPlanTargetId) continue;
+            if (c.NationById(other) is not { } them || them.Movement is not null || them.Population <= 0 || c.Fallen.Contains(other)) continue;
+            if (nation.DecisionAvailableDay.TryGetValue(Key("humanitarian_aid", them.Id), out var avail) && avail > c.ElapsedDays) continue;
+            if (!Matters(c, nation, them, gps)) continue;
+            if (Refusal(c, nation.Id, them.Id, "humanitarian_aid").Length != 0) continue;
+            if (best is null || relation.Opinion < best.Opinion ||
+                (relation.Opinion == best.Opinion && other < Other(nation.Id, best))) best = relation;
+        }
+        return best;
+    }
+}
 /// <summary>A diplomatic gesture made by a government (DiplomaticGestures): state_visit, show_of_force, mediate, loan,
 /// expel_diplomats, joint_exercises, apology or humanitarian_aid.</summary>
 public sealed class DiplomaticGestureCommand : ICampaignCommand

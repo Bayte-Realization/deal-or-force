@@ -137,22 +137,46 @@ public static class StateFailure
 
     public static void Tick(Campaign c)
     {
-        if (c?.ProvinceMap is null) return;
-        if (!MechanicFeatures.SystemEnabled(c, nameof(SecessionEvents))) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same failure watch, yielded between batches of nations.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c?.ProvinceMap is null) yield break;
+        if (!MechanicFeatures.SystemEnabled(c, nameof(SecessionEvents))) yield break;
         var d = c.Defines;
+        var count = c.Nations.Count;
+        var worked = 0;
         if (d.StateCollapses)
         {
             // Waves of a collapse already under way, every day: each runs on its own clock.
-            foreach (var nation in c.Nations.ToArray())
-                if (nation.CollapseStartDay >= 0) Continue(c, nation);
-            if (c.ElapsedDays % 7 == 6 && c.ElapsedDays >= d.CollapseEarliestDay) Begin(c);
+            for (var i = 0; i < count && i < c.Nations.Count; i++)
+            {
+                var nation = c.Nations[i];
+                if (nation.CollapseStartDay < 0) continue;
+                if (++worked % 8 == 0) yield return 0;
+                Continue(c, nation);
+            }
+            if (c.ElapsedDays % 7 == 6 && c.ElapsedDays >= d.CollapseEarliestDay)
+                foreach (var _ in BeginStages(c)) yield return 0;
         }
         if (d.Revolutions && c.ElapsedDays >= d.RevolutionEarliestDay)
-            foreach (var nation in c.Nations.ToArray())
-                if ((c.ElapsedDays + (long)nation.Id) % 30 == 0) ConsiderRevolution(c, nation);
+            for (var i = 0; i < count && i < c.Nations.Count; i++)
+            {
+                var nation = c.Nations[i];
+                if ((c.ElapsedDays + (long)nation.Id) % 30 != 0 || nation.Population <= 0) continue;
+                if (++worked % 8 == 0) yield return 0;
+                ConsiderRevolution(c, nation);
+            }
         if (d.CollapseReunions)
-            foreach (var nation in c.Nations.ToArray())
-                if ((c.ElapsedDays + (long)nation.Id * 3) % 30 == 17) ConsiderReunion(c, nation);
+            for (var i = 0; i < count && i < c.Nations.Count; i++)
+            {
+                var nation = c.Nations[i];
+                if ((c.ElapsedDays + (long)nation.Id * 3) % 30 != 17 || nation.Population <= 0) continue;
+                if (++worked % 8 == 0) yield return 0;
+                ConsiderReunion(c, nation);
+            }
     }
 
     // ---------------------------------------------------------------------------- signs
@@ -259,16 +283,29 @@ public static class StateFailure
     private static int CollapsesInLastYear(Campaign c) =>
         c.Nations.Count(n => n.LastCollapseDay >= 0 && c.ElapsedDays - (long)n.LastCollapseDay < 365);
 
-    private static void Begin(Campaign c)
+    private static IEnumerable<int> BeginStages(Campaign c)
     {
         var d = c.Defines;
         var thisYear = CollapsesInLastYear(c);
-        foreach (var nation in c.Nations.ToArray())
+        var count = c.Nations.Count;
+        var scanned = 0;
+        for (var i = 0; i < count && i < c.Nations.Count; i++)
         {
-            if (thisYear >= d.CollapseWorldPerYear) return;
-            if (nation.Stability >= d.CollapseStabilityThreshold) continue;   // the cheap test first
-            var chance = CollapseChance(c, nation);
-            if (chance <= 0f) { if (CollapseRefusal(c, nation) == "Too few signs of a failing state.") Count("collapse_one_sign_weeks"); continue; }
+            var nation = c.Nations[i];
+            if (thisYear >= d.CollapseWorldPerYear) yield break;
+            if (nation.Stability >= d.CollapseStabilityThreshold || nation.Population <= 0) continue;   // the cheap test first
+            if (++scanned % 8 == 0) yield return 0;
+            var refusal = CollapseRefusal(c, nation);
+            if (refusal.Length > 0)
+            {
+                if (refusal == "Too few signs of a failing state.") Count("collapse_one_sign_weeks");
+                continue;
+            }
+            var depth = M.Clamp01((d.CollapseStabilityThreshold - nation.Stability) / MathF.Max(0.01f, d.CollapseStabilityThreshold));
+            var extra = Signs(c, nation).Count - Math.Max(1, d.CollapseSignsNeeded);
+            var chance = d.CollapseWeeklyChance * depth * (1f + 0.5f * extra);
+            if (!float.IsFinite(chance) || chance <= 0f) continue;
+            chance = Math.Clamp(chance, 0f, 1f);
             Count("collapse_eligible_weeks");
             if (Escalation.Roll(c.Seed, nation.Id, 0xFA11, c.ElapsedDays, 0x5) >= chance) continue;
             if (StartCollapse(c, nation)) thisYear++;
@@ -407,7 +444,11 @@ public static class StateFailure
     /// <summary>An armed side on this ground, named for its seat and believing what its seat believes.</summary>
     private static Nation Rise(Campaign c, Nation nation, List<ScenarioState> ground, bool countsAsOutbreak)
     {
+        // The ground grew from its worst-governed region, but a side sits where its people are:
+        // its seat, its capital and its name are its most populous region, not a glacier.
         var seed = ground[0];
+        foreach (var region in ground)
+            if (region.Population > seed.Population) seed = region;
         var (template, ideology, government) = Allegiance(c, nation, seed);
         var parentTag = nation.Tag;
         var parentName = nation.Name;

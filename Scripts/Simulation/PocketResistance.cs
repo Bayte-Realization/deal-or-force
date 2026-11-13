@@ -35,6 +35,7 @@ public static class PocketResistance
         {
             if (army.ProvinceId != province || army.EmbarkedFleetId >= 0 || army.Divisions < .1f ||
                 army.Strength <= strength || !war.Involves(army.NationId) ||
+                army.Organisation <= 0.005f ||
                 !WarCoalition.FriendlyController(c, war, army.NationId, c.ProvinceController[province]) ||
                 !(army.PocketStores > 0f || army.SupplyLevel > supply)) continue;
             // Do not trust the three-day logistics trace to decide whether a ring just closed.

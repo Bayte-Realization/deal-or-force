@@ -126,6 +126,7 @@ static class Program
         c.AttachProvinceTopology(map);
         if (args.Contains("--map-peace-only")) { MapAndPeaceRegressionTests.Run(map); return; }
         if (args.Contains("--country-merges-map-only")) { CountryMergeTests.Run(c); return; }
+        if (args.Contains("--sea-lift-only")) { SeaLiftTests.Run(c); return; }
         if (args.Contains("--support-only")) { SupportTests.Run(c); return; }
         if (args.Contains("--airwar-only")) { AirWarTests.Run(c); return; }
         if (args.Contains("--long-range-only")) { LongRangeTests.Run(c); return; }
@@ -178,6 +179,7 @@ static class Program
         if (args.Contains("--front-staff-only")) { FrontStaffTests.Run(map); return; }
         if (args.Contains("--modifiers-only")) { ModifierTests.Run(map); return; }
         if (args.Contains("--conflicts-only")) { ConflictTests.Run(map); return; }
+        if (args.Contains("--separate-peace-only")) { SeparatePeaceTests.Run(map); return; }
         if (args.Contains("--whole-front-only")) { WholeFrontTests.Run(map); return; }
         var war = c.Wars.First(w => !w.Ended && w.Involves(rus.Id) && w.Involves(ukr.Id));
         c.Wars.RemoveAll(w => w != war); c.Battles.Clear(); c.Armies.Clear();

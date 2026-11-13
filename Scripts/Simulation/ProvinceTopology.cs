@@ -887,21 +887,38 @@ public sealed class ProvinceTopology
         => allowedControllers is null ? Array.Empty<int>()
             : FindOperationalRoute(startProvince, targetProvince, 0, 0, allowedControllers, controllers);
 
+    public void FillOperationalRoute(int startProvince, int targetProvince,
+        IReadOnlySet<ushort> allowedControllers, ushort[] controllers, List<int> destination)
+    {
+        if (destination is null) return;
+        destination.Clear();
+        if (allowedControllers is null) return;
+        if (!PopulateOperationalRoute(startProvince, targetProvince, 0, 0, allowedControllers, controllers)) return;
+        for (var i = 0; i < _routeBuffer.Count; i++)
+            destination.Add(_routeBuffer[i]);
+    }
+
     private int[] FindOperationalRoute(int startProvince, int targetProvince, ushort friendlyMapIndex,
+        ushort hostileMapIndex, IReadOnlySet<ushort> allowedControllers, ushort[] controllers)
+        => PopulateOperationalRoute(startProvince, targetProvince, friendlyMapIndex, hostileMapIndex, allowedControllers, controllers)
+            ? _routeBuffer.ToArray()
+            : Array.Empty<int>();
+
+    private bool PopulateOperationalRoute(int startProvince, int targetProvince, ushort friendlyMapIndex,
         ushort hostileMapIndex, IReadOnlySet<ushort> allowedControllers, ushort[] controllers)
     {
         if (startProvince <= 0 || targetProvince <= 0 ||
             startProvince >= Neighbors.Length || targetProvince >= Neighbors.Length ||
             controllers is null || controllers.Length < Neighbors.Length ||
             IsWater(startProvince) || IsWater(targetProvince))
-            return Array.Empty<int>();
-        if (startProvince == targetProvince) return Array.Empty<int>();
+            return false;
+        if (startProvince == targetProvince) return false;
 
         static bool Allowed(ushort controller, ushort friendly, ushort hostile, IReadOnlySet<ushort> coalition) =>
             coalition is null ? controller == friendly || controller == hostile : coalition.Contains(controller);
         if (!Allowed(controllers[startProvince], friendlyMapIndex, hostileMapIndex, allowedControllers) ||
             !Allowed(controllers[targetProvince], friendlyMapIndex, hostileMapIndex, allowedControllers))
-            return Array.Empty<int>();
+            return false;
 
         var generation = BeginRouteSearch();
         var previous = _routePrevious;
@@ -924,13 +941,13 @@ public sealed class ProvinceTopology
             }
         }
 
-        if (stamp[targetProvince] != generation) return Array.Empty<int>();
+        if (stamp[targetProvince] != generation) return false;
         var route = _routeBuffer;
         route.Clear();
         for (var cursor = targetProvince; cursor != startProvince; cursor = previous[cursor])
             route.Add(cursor);
         route.Reverse();
-        return route.ToArray();
+        return true;
     }
 
     public int[] FindRouteToAny(int startProvince, IReadOnlySet<int> targets, ushort nationMapIndex)

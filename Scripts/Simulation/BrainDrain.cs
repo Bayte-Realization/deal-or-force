@@ -143,9 +143,9 @@ public static class BrainDrain
         {
             var candidate = c.Nations[i];
             if (candidate.Id == source.Id || candidate.Movement is not null || candidate.Population <= 0) continue;
+            if (candidate.Stability < 0.52f || candidate.StandardOfLiving <= source.StandardOfLiving + 0.05f) continue;
             if (atWarNations.Contains(candidate.Id)) continue;
             if (ModifierSystem.Has(candidate, "strict_border_controls")) continue;
-            if (candidate.Stability < 0.52f || candidate.StandardOfLiving <= source.StandardOfLiving + 0.05f) continue;
 
             var states = c.StatesOf(candidate);
             if (states.Length == 0) continue;
@@ -184,9 +184,20 @@ public static class BrainDrain
     public static List<ScenarioState> ReceptionStates(Campaign c, Nation destination, int count)
     {
         var states = c.StatesOf(destination);
-        return states.Where(s => !s.Unclaimed && s.Population > 0)
-            .OrderByDescending(s => Attraction(destination, s)).ThenBy(s => s.MapIndex)
-            .Take(Math.Max(1, count)).ToList();
+        var list = new List<ScenarioState>(states.Length);
+        for (var i = 0; i < states.Length; i++)
+        {
+            var s = states[i];
+            if (!s.Unclaimed && s.Population > 0) list.Add(s);
+        }
+        list.Sort((left, right) =>
+        {
+            var byAttraction = Attraction(destination, right).CompareTo(Attraction(destination, left));
+            return byAttraction != 0 ? byAttraction : left.MapIndex.CompareTo(right.MapIndex);
+        });
+        var take = Math.Max(1, count);
+        if (list.Count > take) list.RemoveRange(take, list.Count - take);
+        return list;
     }
 
     private static float Attraction(Nation destination, ScenarioState s)
@@ -226,7 +237,7 @@ public static class BrainDrain
     }
 
     /// <summary>How many source countries one stage works through before the frame gets its turn back.</summary>
-    private const int StageCountries = 48;
+    private const int StageCountries = 2;
 
     /// <summary>
     /// The week's emigration in stages: the same countries in the same order, a pause every
@@ -239,10 +250,10 @@ public static class BrainDrain
         if (c.Nations.Count < 2 || c.States.Count < 2) yield break;
 
         var atWarNations = new HashSet<int>();
-        for (var i = 0; i < c.Wars.Count; i++)
+        var liveWars = Warfare.LiveWars(c);
+        for (var i = 0; i < liveWars.Count; i++)
         {
-            var w = c.Wars[i];
-            if (w.Ended) continue;
+            var w = liveWars[i];
             atWarNations.Add(w.AttackerId);
             atWarNations.Add(w.DefenderId);
         }
@@ -255,6 +266,7 @@ public static class BrainDrain
 
         var topSourceForDest = new Dictionary<int, (int SourceId, long Moved)>();
         var intakeRoom = new Dictionary<int, long>();
+        var receptionsCache = new Dictionary<int, List<ScenarioState>>();
         for (var i = 0; i < c.Nations.Count; i++)
         {
             var n = c.Nations[i];
@@ -288,7 +300,8 @@ public static class BrainDrain
 
             var destNation = BestDestination(c, sourceNation, atWarNations);
             if (destNation is null) continue;
-            var receptions = ReceptionStates(c, destNation, c.Defines.BrainDrainReceptionRegions);
+            if (!receptionsCache.TryGetValue(destNation.Id, out var receptions))
+                receptionsCache[destNation.Id] = receptions = ReceptionStates(c, destNation, c.Defines.BrainDrainReceptionRegions);
             if (receptions.Count == 0) continue;
             // A country takes in only so many a week, whoever they come from.
             if (!intakeRoom.TryGetValue(destNation.Id, out var room))
@@ -325,8 +338,13 @@ public static class BrainDrain
             intakeRoom[destNation.Id] = room;
             if (totalOutflow <= 0) continue;
 
-            sourceNation.Population = Math.Max(1L, states.Sum(s => s.Population));
-            destNation.Population = Math.Max(1L, c.StatesOf(destNation).Sum(s => s.Population));
+            long sourcePop = 0;
+            for (var sIdx = 0; sIdx < states.Length; sIdx++) sourcePop += states[sIdx].Population;
+            sourceNation.Population = Math.Max(1L, sourcePop);
+            var destStates = c.StatesOf(destNation);
+            long destPop = 0;
+            for (var dIdx = 0; dIdx < destStates.Length; dIdx++) destPop += destStates[dIdx].Population;
+            destNation.Population = Math.Max(1L, destPop);
 
             sourceNation.WeeklyNetMigration -= totalOutflow;
             sourceNation.CumulativeNetMigration -= totalOutflow;

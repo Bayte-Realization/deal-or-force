@@ -641,6 +641,7 @@ public static class TerritorialTopology
                 {
                     state.Iso = piece.Iso;
                     state.Id = piece.Iso.ToLowerInvariant().Replace('-', '_');
+                    Movements.NoteRegionRenamed(campaign);
                 }
                 if (!string.IsNullOrWhiteSpace(piece.Kind)) state.Kind = piece.Kind;
             }

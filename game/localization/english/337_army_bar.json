@@ -1,0 +1,15 @@
+// The army bar (ArmyBarUI).
+{
+  "Reserve": "Reserve",
+  "At sea": "At sea",
+  "In battle": "In battle",
+  "Attacking": "Attacking",
+  "Holding the front": "Holding the front",
+  "On the march": "On the march",
+  "Idle": "Idle",
+  "{0:N0} divisions · {1:N0} men": "{0:N0} divisions · {1:N0} men",
+  "Click: command this army · double-click: go to it · Ctrl+click: move the selected divisions into it": "Click: command this army · double-click: go to it · Ctrl+click: move the selected divisions into it",
+  "+ New army": "+ New army",
+  "Select divisions first: a new army is raised from the selection.": "Select divisions first: a new army is raised from the selection.",
+  "New army\nRaise a new army headquarters from the selected divisions.": "New army\nRaise a new army headquarters from the selected divisions."
+}

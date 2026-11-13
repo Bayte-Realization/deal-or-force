@@ -217,11 +217,19 @@ public static class TreasuryDynamics
 
     public static void Tick(Campaign c)
     {
-        if (c.ElapsedDays % 7 != 6 || !c.Defines.TreasuryDynamicsEnabled) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same weekly treasury pass, yielded between batches of countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c.ElapsedDays % 7 != 6 || !c.Defines.TreasuryDynamicsEnabled) yield break;
         var d = c.Defines;
         if (c.WorldLeverage < 0f) c.WorldLeverage = M.Clamp01(d.StartingLeverage);
+        var ticked = 0;
         foreach (var nation in c.Nations)
         {
+            if (++ticked % 8 == 0) yield return 0;
             if (nation.Movement is not null || nation.Population <= 0 || nation.Gdp <= 0f) continue;
             Erode(c, nation);
             SpendDown(c, nation);
@@ -236,7 +244,9 @@ public static class TreasuryDynamics
             }
             if (nation.RecessionDepth > 0f && c.ElapsedDays >= nation.RecessionUntilDay) nation.RecessionDepth = 0f;
         }
+        yield return 0;
         CreditCycle(c);
+        yield return 0;
         UnexpectedBills(c);
     }
 

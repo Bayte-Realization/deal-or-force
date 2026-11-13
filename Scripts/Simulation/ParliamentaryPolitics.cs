@@ -67,7 +67,7 @@ public static class ParliamentaryPolitics
 
         var p = nation.Parliament ??= new ParliamentState();
         var approval = ElectoralPolitics.Approval(campaign, nation);
-        var atWar = campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id));
+        var atWar = InLiveWar(campaign, nation.Id);
 
         if (!atWar)
         {
@@ -164,26 +164,50 @@ public static class ParliamentaryPolitics
         }
     }
 
+    public static void AddTo(Dictionary<string, float> totals, Nation nation)
+    {
+        if (nation?.Parliament is null) return;
+        if (nation.Parliament.MilitaryBudgetCutActive)
+        {
+            totals["reinforcement_rate"] = totals.GetValueOrDefault("reinforcement_rate") - 0.15f;
+            totals["recruitment_speed"] = totals.GetValueOrDefault("recruitment_speed") - 0.10f;
+        }
+        if (nation.Parliament.PeaceMandateActive)
+        {
+            totals["war_support_weekly"] = totals.GetValueOrDefault("war_support_weekly") - 0.0005f;
+        }
+    }
+
+    private static bool InLiveWar(Campaign campaign, int nationId)
+    {
+        var wars = Warfare.LiveWars(campaign);
+        for (var i = 0; i < wars.Count; i++)
+            if (!wars[i].Ended && wars[i].Involves(nationId)) return true;
+        return false;
+    }
+
+    private static readonly Dictionary<string, float> AntiWarBudgetModifiers =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["reinforcement_rate"] = -0.15f,
+            ["recruitment_speed"] = -0.10f
+        };
+
+    private static readonly Dictionary<string, float> PeaceMandateModifiers =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["war_support_weekly"] = -0.0005f
+        };
+
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation nation)
     {
         if (nation?.Parliament is null) yield break;
 
         if (nation.Parliament.MilitaryBudgetCutActive)
-        {
-            yield return ("modifier.parliament_anti_war_budget", new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["reinforcement_rate"] = -0.15f,
-                ["recruitment_speed"] = -0.10f
-            });
-        }
+            yield return ("modifier.parliament_anti_war_budget", AntiWarBudgetModifiers);
 
         if (nation.Parliament.PeaceMandateActive)
-        {
-            yield return ("modifier.parliament_peace_mandate", new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["war_support_weekly"] = -0.0005f
-            });
-        }
+            yield return ("modifier.parliament_peace_mandate", PeaceMandateModifiers);
     }
 
     public static void OnMinisterAppointed(Campaign campaign, Nation nation, string portfolio)

@@ -167,15 +167,13 @@ public static class DemographicCycle
     /// deliberate - its births and deaths are the figures this moves on, and a second clock of its
     /// own would drift away from them.
     /// </summary>
-    private static readonly List<PopulationGroup> WealthOrder = new();
-
     public static void Tick(Campaign campaign)
     {
         foreach (var _ in Stages(campaign)) { }
     }
 
     /// <summary>How many regions one stage of the cycle works through before the frame gets its turn back.</summary>
-    private const int StageRegions = 256;
+    private const int StageRegions = 16;
 
     /// <summary>
     /// The cycle in stages: the same regions in the same order, a pause every StageRegions. It was
@@ -195,9 +193,8 @@ public static class DemographicCycle
         // The world's lazily built indexes are built here first, on this thread, so no worker
         // builds them; the kin-state answers are a per-campaign table safe to fill from several.
         // By index and re-checked each stage: nothing in a stage adds or removes regions, but a
-        // pause is where something could.
-        var options = new System.Threading.Tasks.ParallelOptions
-            { MaxDegreeOfParallelism = Math.Max(1, Math.Min(Environment.ProcessorCount - 1, 8)) };
+        // pause is where something could. How many workers, and whether this machine has any,
+        // is DeterministicParallel's answer rather than a second copy of it here.
         for (var first = 0; first < campaign.States.Count; first += StageRegions)
         {
             if (first > 0) yield return 0;
@@ -207,7 +204,7 @@ public static class DemographicCycle
             if (campaign.Nations.Count > 0) campaign.HasOwnedLand(campaign.Nations[0]);
             KinTable(campaign);
             var changed = 0;
-            System.Threading.Tasks.Parallel.For(first, last, options, index =>
+            DeterministicParallel.For(campaign, first, last, index =>
             {
                 var state = campaign.States[index];
                 if (state is null || state.Unclaimed || state.Population <= 0) return;
@@ -240,6 +237,32 @@ public static class DemographicCycle
         var groups = state.PopulationGroups;
         if (groups.Count == 0 || state.Population <= 0) return;
         Assimilate(campaign, state, groups);
+        // Merge tiny profession/class splinters into the largest group of the exact same
+        // culture and religion in this region, so centuries of migration and assimilation
+        // never bloat PopulationGroups without changing anyone's people or faith.
+        if (groups.Count > 16)
+        {
+            for (var i = 0; i < groups.Count; i++)
+            {
+                var tiny = groups[i];
+                if (tiny.Size <= 0 || tiny.Size > 25) continue;
+                PopulationGroup host = null;
+                for (var j = 0; j < groups.Count; j++)
+                {
+                    if (j == i) continue;
+                    var candidate = groups[j];
+                    if (candidate.Size <= tiny.Size) continue;
+                    if (!string.Equals(candidate.Culture, tiny.Culture, StringComparison.OrdinalIgnoreCase) ||
+                        !string.Equals(candidate.Religion, tiny.Religion, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (host is null || candidate.Size > host.Size) host = candidate;
+                }
+                if (host is not null)
+                {
+                    host.Size += tiny.Size;
+                    tiny.Size = 0;
+                }
+            }
+        }
         // A group everybody has left or assimilated out of is nobody. Kept, they piled up -
         // every migration and every assimilation leaves its emptied group behind - and every
         // weekly walk over the region's people walked them too.
@@ -342,6 +365,8 @@ public static class DemographicCycle
             var hasKin = kinAlive.GetOrAdd(key, k => SecessionEvents.KinState(campaign, owner, k.Culture) is not null);
             var rate = annual * interval * kin * faith * size * schooling * calm * (hasKin ? 0.6f : 1f) * policy;
             var moved = Math.Min(group.Size, (long)Math.Round(group.Size * (double)rate));
+            if (moved <= 0 && rate > 0f && group.Size <= 10)
+                moved = Math.Min(group.Size, group.Size <= 3 ? group.Size : 1L);
             if (moved <= 0) continue;
             group.Size -= moved;
             Counterpart(groups, group, target).Size += moved;
@@ -351,8 +376,8 @@ public static class DemographicCycle
     private static bool SharesFaith(string religion, IReadOnlyList<(string Religion, float Share)> faiths)
     {
         if (string.IsNullOrEmpty(religion) || faiths.Count == 0) return true;
-        foreach (var (each, _) in faiths)
-            if (string.Equals(each, religion, StringComparison.OrdinalIgnoreCase)) return true;
+        for (var i = 0; i < faiths.Count; i++)
+            if (string.Equals(faiths[i].Religion, religion, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
 
@@ -421,6 +446,23 @@ public static class DemographicCycle
     /// unusually young country carries schools instead. Both are paid in the numbers a player already
     /// watches, and neither is a rule of its own.
     /// </summary>
+    public static void AddTo(Dictionary<string, float> totals, Nation nation)
+    {
+        if (nation is null || nation.WorkingShare <= 0f) return;
+        var excess = nation.OldShareExcess;
+        if (excess > 0.005f)
+        {
+            totals["stability_weekly"] = totals.GetValueOrDefault("stability_weekly") - excess * 0.05f;
+            totals["living_weekly"] = totals.GetValueOrDefault("living_weekly") - excess * 0.04f;
+            return;
+        }
+        if (nation.YoungShare > 0.34f)
+        {
+            totals["living_weekly"] = totals.GetValueOrDefault("living_weekly") - 0.004f;
+            totals["stability_weekly"] = totals.GetValueOrDefault("stability_weekly") + 0.003f;
+        }
+    }
+
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation nation)
     {
         if (nation is null || nation.WorkingShare <= 0f) yield break;
@@ -501,4 +543,10 @@ public sealed partial class Nation
 {
     /// <summary>What the age structure adds, kept between asks. Not saved; refilled from scratch.</summary>
     internal Dictionary<string, float> DemographicCycleModifiers;
+}
+
+public sealed partial class Defines
+{
+    /// <summary>Whether regions are worked side by side on the thread pool (demography, regional economy). Off: one at a time.</summary>
+    public bool ParallelRegions { get; set; } = true;
 }

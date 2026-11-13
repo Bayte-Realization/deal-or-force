@@ -1188,6 +1188,14 @@ public partial class DealOrForceGame
             row.AddChild(figure);
         }
 
+        var rivalLine = AllyRivalShift.Line(_campaign, relation);
+        if (rivalLine.Length > 0)
+        {
+            var rivalNote = WrappedUltimatumText(rivalLine, 13);
+            rivalNote.Name = "AllyRivalReason";
+            _diplomacyPactRows.AddChild(rivalNote);
+        }
+
         var allies = AllianceSystem.AlliesOf(_campaign, nation);
         if (relation.Stance == DiplomaticStance.Allied)
         {

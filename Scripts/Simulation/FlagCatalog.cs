@@ -379,6 +379,7 @@ public static partial class FlagCatalog
     public static string ValueOf(string source, Campaign campaign, Nation nation)
     {
         if (nation is null) return "";
+        if (source == "focus") return EnumSlug(nation.GovernmentFocus);
         var value = source switch
         {
             "ideology" => nation.Ideology,
@@ -386,7 +387,6 @@ public static partial class FlagCatalog
             "culture" => !string.IsNullOrEmpty(nation.DeclaredCulture) ? nation.DeclaredCulture : DemographyCatalog.PrimaryCulture(nation.Tag),
             "continent" => nation.Continent,
             "tag" => nation.Tag,
-            "focus" => nation.GovernmentFocus.ToString(),
             // A country that has proclaimed itself something. The most specific thing there
             // is to know about a flag - Yugoslavia is not Serbia with a different cabinet -
             // which is why it is declared first in common/flags.
@@ -409,8 +409,9 @@ public static partial class FlagCatalog
     private static bool AtWar(Campaign campaign, Nation nation)
     {
         if (campaign is null) return false;
-        foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Involves(nation.Id)) return true;
+        var active = WarsForFlags(campaign);
+        for (var i = 0; i < active.Count; i++)
+            if (active[i].Involves(nation.Id)) return true;
         return false;
     }
 
@@ -450,7 +451,7 @@ public static partial class FlagCatalog
         // A cabinet change does not erase a country's visual identity. Keep authored
         // national/formable/restored artwork before regime variants by default. Mods may
         // opt into the older qualifier-first policy without changing files or save fields.
-        if (PreferCountryBase && nation.Movement is null)
+        if (PreferCountryBase && KeepsNationalIdentity(nation))
         {
             if (FormableRestorations.RestoredTag(nation.FormedNationId) is { } identity)
                 names.Add("flag_" + Slug(identity));
@@ -465,10 +466,10 @@ public static partial class FlagCatalog
             // but before borrowed aliases or generic ideology art. A nation is not frozen.
         }
 
-        // A landless organisation's banner is its identity, not the hypothetical regime it
-        // might establish. Procedural government/ideology variants must not replace it.
-        // After taking territory or proclaiming a formable, ordinary dynamic rules resume.
-        if (PreferMovementBase && nation.Movement is { Landless: true, Exile: false } &&
+        // An organisation keeps its banner when it gains ground, too. Exiled governments
+        // instead continue the national resolution they used before losing their territory.
+        // A custom flag or a newly proclaimed formable can still replace either identity.
+        if (PreferMovementBase && nation.Movement is { Exile: false } &&
             string.IsNullOrEmpty(nation.FormedNationId))
         {
             names.Add($"flag_{tag}");
@@ -554,7 +555,7 @@ public static partial class FlagCatalog
         // being - in which case it goes to the very bottom, after everything else has had a
         // chance, because a communist banner over a conservative republic is worse than no
         // flag at all.
-        var ownFlagStillFits = PreferCountryBase && nation.Movement is null || Fits(campaign, nation, tag);
+        var ownFlagStillFits = PreferCountryBase && KeepsNationalIdentity(nation) || Fits(campaign, nation, tag);
         if (ownFlagStillFits) names.Add($"flag_{tag}");
         else if (Otherwise.TryGetValue(tag, out var instead) && instead.Length > 0)
             names.Add(instead);
@@ -770,10 +771,57 @@ public static partial class FlagCatalog
     /// letter or a digit becomes an underscore. So "Middle East" is `middle_east` and a
     /// mod does not have to guess.
     /// </summary>
+    [ThreadStatic] private static Dictionary<string, string> _slugCache;
+
+    private static class EnumSlugCache<T> where T : struct, Enum
+    {
+        public static readonly Dictionary<T, string> Map = Build();
+
+        private static Dictionary<T, string> Build()
+        {
+            var map = new Dictionary<T, string>();
+            foreach (var item in (T[])Enum.GetValues(typeof(T)))
+                map[item] = ComputeSlug(item.ToString());
+            return map;
+        }
+    }
+
+    private static string EnumSlug<T>(T value) where T : struct, Enum =>
+        EnumSlugCache<T>.Map.TryGetValue(value, out var slug) ? slug : Slug(value.ToString());
+
     public static string Slug(string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return "";
-        Span<char> buffer = stackalloc char[value.Length];
+        if (IsCanonical(value)) return value;
+        var cache = _slugCache ??= new Dictionary<string, string>(StringComparer.Ordinal);
+        if (cache.TryGetValue(value, out var cached)) return cached;
+        var slug = ComputeSlug(value);
+        if (cache.Count < 4096) cache[value] = slug;
+        return slug;
+    }
+
+    private static bool IsCanonical(string value)
+    {
+        var lastWasBreak = true;
+        for (var i = 0; i < value.Length; i++)
+        {
+            var character = value[i];
+            if (char.IsLetterOrDigit(character))
+            {
+                if (char.ToLowerInvariant(character) != character) return false;
+                lastWasBreak = false;
+                continue;
+            }
+            if (character != '_' || lastWasBreak) return false;
+            lastWasBreak = true;
+        }
+        return !lastWasBreak;
+    }
+
+    private static string ComputeSlug(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "";
+        Span<char> buffer = value.Length <= 512 ? stackalloc char[value.Length] : new char[value.Length];
         var length = 0;
         var lastWasBreak = true;
         foreach (var character in value)
@@ -789,6 +837,7 @@ public static partial class FlagCatalog
             lastWasBreak = true;
         }
         while (length > 0 && buffer[length - 1] == '_') length--;
-        return new string(buffer[..length]);
+        var normalized = buffer[..length];
+        return normalized.SequenceEqual(value.AsSpan()) ? value : new string(normalized);
     }
 }

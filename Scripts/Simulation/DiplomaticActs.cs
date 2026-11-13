@@ -203,10 +203,59 @@ public static class DiplomaticActs
     {
         if (campaign is null || asking is null || asked is null || asking.Id == asked.Id) return false;
         if (asking.IsHuman) return false;
-        foreach (var act in All)
+        if (asking.Population <= 0 || asked.Population <= 0 || asking.Movement is not null || asked.Movement is not null)
+            return false;
+        var relation = CampaignDiplomacy.Peek(campaign, asking.Id, asked.Id);
+        if (relation?.Stance == DiplomaticStance.AtWar || Pending(campaign, relation)) return false;
+
+        var opinion = relation?.Opinion ?? 0f;
+        var stance = relation?.Stance switch
         {
-            if (Refusal(campaign, asking, asked, act).Length > 0) continue;
-            if (Willingness(campaign, asking, asked, act) + 0.001f < campaign.Defines.DiplomaticActWillingness) continue;
+            DiplomaticStance.Friendly => 1,
+            DiplomaticStance.Allied => 2,
+            DiplomaticStance.Rival => 3,
+            DiplomaticStance.AtWar => 4,
+            _ => 0
+        };
+        var embargoByAsked = relation?.EmbargoBy(asked.Id) == true;
+        var talksUntilDay = relation?.TalksUntilDay ?? -9999;
+        var hasCooldowns = asking.DecisionAvailableDay.Count > 0;
+        var minWillingness = campaign.Defines.DiplomaticActWillingness;
+        var elapsedDays = campaign.ElapsedDays;
+
+        for (var i = 0; i < All.Length; i++)
+        {
+            var act = All[i];
+            var price = Price(campaign, act);
+            if (DealOrForce.Rules.DiplomaticActRules.EvaluateRefusal(
+                    true,
+                    false,
+                    false,
+                    0,
+                    elapsedDays,
+                    (int)act,
+                    embargoByAsked,
+                    talksUntilDay,
+                    opinion,
+                    asking.Treasury,
+                    price) != DealOrForce.Rules.DiplomaticActRefusal.Allowed)
+                continue;
+            if (DealOrForce.Rules.DiplomaticActRules.Willingness(opinion, stance, (int)act) + 0.001f < minWillingness)
+                continue;
+            if (hasCooldowns &&
+                DealOrForce.Rules.DiplomaticActRules.EvaluateRefusal(
+                    true,
+                    false,
+                    false,
+                    asking.DecisionAvailableDay.GetValueOrDefault(CooldownKey(act, asked.Id)),
+                    elapsedDays,
+                    (int)act,
+                    embargoByAsked,
+                    talksUntilDay,
+                    opinion,
+                    asking.Treasury,
+                    price) != DealOrForce.Rules.DiplomaticActRefusal.Allowed)
+                continue;
             var command = new DiplomaticActCommand
             {
                 IssuerId = asking.Id, TargetId = asked.Id, Act = act, Step = DiplomaticActStep.Propose
@@ -223,9 +272,18 @@ public static class DiplomaticActs
 
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || !campaign.StepOpensNewDay) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily sweep, yielded between relations so a full ledger of pending
+    /// acts does not clear in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || !campaign.StepOpensNewDay) yield break;
+        var scanned = 0;
         foreach (var relation in campaign.Relations.Values)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (relation.DiplomaticActBy < 0 || Pending(campaign, relation)) continue;
             relation.DiplomaticActBy = -1;
             relation.DiplomaticActKind = -1;

@@ -1,0 +1,39 @@
+// What a separate peace leaves between countries (Scripts/Simulation/SeparatePeace.cs).
+// A mod changes how long a coalition remembers being left, or how much a subsidy buys, here.
+{
+  // On the allies a member left behind, towards it.
+  "separate_peace_betrayal": {
+    "name": "Made its own peace and left us in the war",
+    "opinion": -55,
+    "days": 7300,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  // And when it went over to the other side of the same war.
+  "switched_sides_against_us": {
+    "name": "Changed sides against us in the middle of a war",
+    "opinion": -90,
+    "days": 10950,
+    "decays": true,
+    "max_stacks": 1
+  },
+
+  // Between the leaver and the side it made peace with: an enemy that chose to stop.
+  "left_the_war_against_us": {
+    "name": "Left the war against us of its own accord",
+    "opinion": 12,
+    "days": 1825,
+    "decays": true,
+    "max_stacks": 1
+  },
+
+  // A war leader's money that kept a wavering ally in.
+  "kept_us_in_the_war": {
+    "name": "Paid our costs to keep us in the war",
+    "opinion": 10,
+    "days": 1100,
+    "decays": true,
+    "max_stacks": 3
+  }
+}

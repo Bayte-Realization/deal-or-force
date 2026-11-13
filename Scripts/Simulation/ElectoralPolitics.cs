@@ -73,17 +73,24 @@ public static partial class ElectoralPolitics
         if (n.ReleasedFromId >= 0 || n.SecededFromId >= 0 || !string.IsNullOrWhiteSpace(n.FormedNationId) ||
             n.StartGovernment.Length > 0 && n.StartGovernment != n.Government ||
             n.StartIdeology.Length > 0 && n.StartIdeology != n.Ideology) return InstitutionalBase(n);
-        if (_initial is null)
+        return InitialControlTable.TryGetValue(n.Tag ?? "", out var value) ? value : InstitutionalBase(n);
+    }
+
+    /// <summary>Tag to the share of power its executive opens with, from `common/elections`.</summary>
+    public static IReadOnlyDictionary<string, float> InitialControlTable
+    {
+        get
         {
-            _initial = new(StringComparer.OrdinalIgnoreCase);
+            if (_initial is not null) return _initial;
+            var table = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             foreach (var doc in GameDataLoader.DataDocuments("common", "elections"))
             using (doc)
                 if (doc.RootElement.TryGetProperty("initial_control", out var rows) && rows.ValueKind == JsonValueKind.Object)
                     foreach (var row in rows.EnumerateObject())
                         if (row.Value.ValueKind == JsonValueKind.Number && row.Value.TryGetSingle(out var v) && float.IsFinite(v))
-                            _initial[row.Name] = Math.Clamp(v, 0, 1);
+                            table[row.Name] = Math.Clamp(v, 0, 1);
+            return _initial = table;
         }
-        return _initial.TryGetValue(n.Tag ?? "", out var value) ? value : InstitutionalBase(n);
     }
 
     public static float Approval(Campaign c, Nation n)
@@ -161,7 +168,7 @@ public static partial class ElectoralPolitics
         else
         {
             var candidate = Rulers.CandidatePool(c, n, 4).FirstOrDefault(p => p.Name != executive.Name);
-            e.Winner = candidate.Name ?? Rulers.GenerateName(n, e.Round + 3000, false, c.Seed);
+            e.Winner = candidate.Name ?? Rulers.GenerateName(n, e.Round + 3000, false, c.Seed, c);
             e.WinnerTrait = candidate.TraitId ?? "reformer";
             e.WinnerBirthYear = candidate.BirthYear != 0 ? candidate.BirthYear : c.Date.Year - 45;
             e.TransferOnDay = c.ElapsedDays + Math.Clamp(c.Defines.ElectionHandoverDays, 1, 365);

@@ -29,9 +29,9 @@ public sealed partial class MovementDefinition
 
     // The catalogue can spell a people twice. Deduplicate once for the day's regional sums
     // rather than once for every movement's week.
-    internal IReadOnlyList<string> DistinctPeoples =>
+    internal string[] DistinctPeoples =>
         _distinctPeoples ??= Peoples.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-    internal IReadOnlyList<string> DistinctFaiths =>
+    internal string[] DistinctFaiths =>
         _distinctFaiths ??= Faiths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
     /// <summary>
@@ -441,7 +441,7 @@ public static partial class Movements
         {
             var movement = nation.Movement;
             if (movement is null || !movement.Landless) continue;
-            var region = campaign.States.Find(state => state.MapIndex == movement.HeadquartersStateMapIndex);
+            var region = RegionAt(campaign, movement.HeadquartersStateMapIndex);
             if (region is null) continue;
             // Already placed in this region: a loaded game keeps the headquarters where the saved
             // one had it. Recomputed on load it could land on another city of the same region,
@@ -549,37 +549,125 @@ public static partial class Movements
     /// <summary>The country whose ground the headquarters stands on.</summary>
     public static Nation HostOf(Campaign campaign, Nation movement)
     {
-        var state = movement?.Movement is null ? null :
-            campaign.States.Find(candidate => candidate.MapIndex == movement.Movement.HeadquartersStateMapIndex);
-        return state is null ? null : campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
+        var state = RegionAt(campaign, movement?.Movement?.HeadquartersStateMapIndex ?? -1);
+        return state is null ? null : NationOwning(campaign, state.NationMapIndex);
     }
 
-    private static readonly Dictionary<string, ScenarioState> StatesById = new(StringComparer.OrdinalIgnoreCase);
-    private static List<ScenarioState> _statesByIdList;
-    private static int _statesByIdCount = -1;
+    /// <summary>The region with this map index. A positive index is the campaign's map, not a walk of every country.</summary>
+    internal static ScenarioState RegionAt(Campaign campaign, int mapIndex)
+    {
+        if (campaign is null || mapIndex < 0) return null;
+        if (mapIndex > 0) return campaign.StateByMapIndex(mapIndex);
+        var states = campaign.States;
+        for (var i = 0; i < states.Count; i++)
+            if (states[i] is { } state && state.MapIndex == mapIndex) return state;
+        return null;
+    }
+
+    /// <summary>The country with this map index. A positive index does not walk the country list.</summary>
+    internal static Nation NationOwning(Campaign campaign, int mapIndex)
+    {
+        if (campaign is null || mapIndex < 0) return null;
+        return campaign.NationByMapIndex(mapIndex);
+    }
+
+    private sealed class StateIdCache
+    {
+        public readonly Dictionary<string, ScenarioState> ById = new(StringComparer.OrdinalIgnoreCase);
+        public readonly HashSet<string> Absent = new(StringComparer.OrdinalIgnoreCase);
+        public List<ScenarioState> List;
+        public int Count = -1;
+        public int Generation;
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, StateIdCache> StateIdCaches = new();
+
+    /// <summary>How many times this process walked the region list to answer an id. A second campaign has its own index, and this count is the sum.</summary>
+    internal static int RegionIdWalks { get; private set; }
+
+    /// <summary>
+    /// A region's id was written in place. The next lookup rebuilds this campaign's index.
+    /// Adding a region already does that, because the list is longer.
+    /// </summary>
+    internal static void NoteRegionRenamed(Campaign campaign)
+    {
+        if (campaign is null) return;
+        var cache = StateIdCaches.GetOrCreateValue(campaign);
+        cache.Count = -1;
+        cache.Generation++;
+        cache.ById.Clear();
+        cache.Absent.Clear();
+    }
+
+    /// <summary>Changes when the region list is indexed again or a region is renamed.</summary>
+    internal static int RegionListGeneration(Campaign campaign)
+    {
+        if (campaign is null || !StateIdCaches.TryGetValue(campaign, out var cache)) return 0;
+        return cache.Generation;
+    }
 
     /// <summary>
     /// A region by its id, the first in the list with it - which is what a search of the list
-    /// gave. From an index now: the countries' weekly look at every movement asked this for
-    /// every region every movement claims, for every pair of country and movement, twice -
-    /// tens of millions of string comparisons a week, the week's largest frame. A hit is
-    /// checked against the region's id as it is now, and a miss searches the list as before,
-    /// so a region renamed or added since the index was built is still found.
+    /// gave. The index is this campaign's. An id the list does not have is remembered, so the
+    /// weekly look at every movement does not walk the list again for the same missing name.
+    /// A rename, or a longer list, forgets that memory and walks once.
     /// </summary>
     internal static ScenarioState StateById(Campaign campaign, string id)
     {
-        if (string.IsNullOrWhiteSpace(id)) return null;
+        if (campaign is null || string.IsNullOrWhiteSpace(id)) return null;
         var states = campaign.States;
-        if (!ReferenceEquals(_statesByIdList, states) || _statesByIdCount != states.Count)
+        var cache = StateIdCaches.GetOrCreateValue(campaign);
+        if (!ReferenceEquals(cache.List, states) || cache.Count != states.Count)
+            RebuildStateIds(cache, states);
+        if (cache.ById.TryGetValue(id, out var found))
         {
-            StatesById.Clear();
-            foreach (var state in states) StatesById.TryAdd(state.Id ?? "", state);
-            _statesByIdList = states;
-            _statesByIdCount = states.Count;
+            if (found is not null && string.Equals(found.Id, id, StringComparison.OrdinalIgnoreCase))
+                return found;
+            // The region kept its place and took a new id. The absent set may name that id.
+            RebuildStateIds(cache, states);
+            if (cache.ById.TryGetValue(id, out found) && found is not null &&
+                string.Equals(found.Id, id, StringComparison.OrdinalIgnoreCase))
+                return found;
+            cache.Absent.Add(id);
+            return null;
         }
-        if (StatesById.TryGetValue(id, out var found) && string.Equals(found.Id, id, StringComparison.OrdinalIgnoreCase))
-            return found;
-        return states.Find(state => string.Equals(state.Id, id, StringComparison.OrdinalIgnoreCase));
+        if (cache.Absent.Contains(id)) return null;
+        RegionIdWalks++;
+        var located = FindStateById(states, id);
+        if (located is null)
+        {
+            cache.Absent.Add(id);
+            return null;
+        }
+        cache.ById[id] = located;
+        return located;
+    }
+
+    static void RebuildStateIds(StateIdCache cache, List<ScenarioState> states)
+    {
+        cache.ById.Clear();
+        cache.Absent.Clear();
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            if (state is null) continue;
+            cache.ById.TryAdd(state.Id ?? "", state);
+        }
+        cache.List = states;
+        cache.Count = states.Count;
+        cache.Generation++;
+        RegionIdWalks++;
+    }
+
+    static ScenarioState FindStateById(List<ScenarioState> states, string id)
+    {
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            if (state is not null && string.Equals(state.Id, id, StringComparison.OrdinalIgnoreCase))
+                return state;
+        }
+        return null;
     }
 
     /// <summary>The province a headquarters in this region stands on: the host's capital if it is here, else the one nearest the middle.</summary>
@@ -616,7 +704,7 @@ public static partial class Movements
     {
         var topology = campaign.ProvinceMap;
         if (topology is null || region is null) return 0;
-        var host = campaign.Nations.Find(nation => nation.MapIndex == region.NationMapIndex);
+        var host = NationOwning(campaign, region.NationMapIndex);
         if (host is not null && host.CapitalProvinceId > 0 && host.CapitalProvinceId <= topology.ProvinceCount &&
             topology.ProvinceToState[host.CapitalProvinceId] == region.MapIndex)
             return host.CapitalProvinceId;

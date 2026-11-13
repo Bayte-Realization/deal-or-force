@@ -13,6 +13,12 @@ public sealed partial class Defines
 /// <summary>Beliefs use real population cohorts, including atheists. A declaration is not an instant census rewrite.</summary>
 public static class BeliefDynamics
 {
+    [ThreadStatic] private static Dictionary<(SocialClass, Sector, string, string), PopulationGroup> _reviewTargets;
+    [ThreadStatic] private static Dictionary<string, long> _religionCounts;
+
+    private static float BlendMean(float oldValue, long oldSize, float addedValue, long moved, long count) =>
+        (float)((oldValue * (double)oldSize + addedValue * (double)moved) / count);
+
     public static long Review(Campaign campaign, Nation owner, ScenarioState region, int days)
     {
         if (campaign is null || owner is null || region is null || region.Unclaimed || region.Population <= 0 ||
@@ -27,7 +33,8 @@ public static class BeliefDynamics
             (1 - .75 * M.Clamp01(region.Radicalism)) * (.5 + .5 * M.Clamp01(region.Stability));
         var groups = region.PopulationGroups;
         var originalCount = groups.Count;
-        Dictionary<(SocialClass, Sector, string, string), PopulationGroup> targets = null;
+        var targets = _reviewTargets;
+        var targetsReady = false;
         long changed = 0;
         for (var i = 0; i < originalCount; i++)
         {
@@ -37,12 +44,17 @@ public static class BeliefDynamics
             if (moved <= 0) continue;
             // A late save can have hundreds of cohorts in one region. Index target
             // counterparts once, rather than scanning every cohort for every convert.
-            if (targets is null)
+            if (!targetsReady)
             {
-                targets = new();
-                foreach (var candidate in groups)
+                targetsReady = true;
+                targets ??= _reviewTargets = new Dictionary<(SocialClass, Sector, string, string), PopulationGroup>();
+                targets.Clear();
+                for (var ci = 0; ci < groups.Count; ci++)
+                {
+                    var candidate = groups[ci];
                     if (StateIdentity.SameFaith(candidate.Religion, target))
                         targets.TryAdd((candidate.Class, candidate.Sector, candidate.Culture, candidate.Profession), candidate);
+                }
             }
             var key = (source.Class, source.Sector, source.Culture, source.Profession);
             if (!targets.TryGetValue(key, out var destination))
@@ -53,11 +65,11 @@ public static class BeliefDynamics
                 targets.Add(key, destination);
             }
             var count = destination.Size + moved;
-            float Mean(float old, float added) => (float)((old * (double)destination.Size + added * (double)moved) / count);
-            destination.Employment = Mean(destination.Employment, source.Employment);
-            destination.Wealth = Mean(destination.Wealth, source.Wealth);
-            destination.StandardOfLiving = Mean(destination.StandardOfLiving, source.StandardOfLiving);
-            destination.Radicalism = Mean(destination.Radicalism, source.Radicalism);
+            var oldSize = destination.Size;
+            destination.Employment = BlendMean(destination.Employment, oldSize, source.Employment, moved, count);
+            destination.Wealth = BlendMean(destination.Wealth, oldSize, source.Wealth, moved, count);
+            destination.StandardOfLiving = BlendMean(destination.StandardOfLiving, oldSize, source.StandardOfLiving, moved, count);
+            destination.Radicalism = BlendMean(destination.Radicalism, oldSize, source.Radicalism, moved, count);
             destination.Size = count; source.Size -= moved; changed += moved;
         }
         if (changed > 0) campaign.MovementPeople.Day = -1;
@@ -70,7 +82,8 @@ public static class BeliefDynamics
     {
         if (campaign is null || parent is null || regions is null || !campaign.FeatureEnabled("state_identity") ||
             string.IsNullOrEmpty(parent.DeclaredReligion) || StateIdentity.IsSecular(parent.DeclaredReligion)) return "";
-        var counts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var counts = _religionCounts ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        counts.Clear();
         long total = 0; double anger = 0;
         foreach (var region in regions)
             foreach (var group in region.PopulationGroups)

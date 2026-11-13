@@ -126,10 +126,18 @@ public static class Attrition
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Attrition))) return;
-        if (campaign is null) return;
-        StarveThePockets(campaign);
-        BuryTheBroken(campaign);
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same attrition pass, yielded between its phases.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Attrition))) yield break;
+        if (campaign is null) yield break;
+        foreach (var _ in StarveThePocketsStages(campaign)) yield return 0;
+        yield return 0;
+        foreach (var _ in BuryTheBrokenStages(campaign)) yield return 0;
+        yield return 0;
         // Starving and burying are rates and take their share of the step. Rebuilding is a
         // decision a country makes on a day - it divides the day number by its own interval -
         // so at an hourly step it must happen once on that day rather than every hour of it.
@@ -169,11 +177,19 @@ public static class Attrition
     /// </summary>
     private static void StarveThePockets(Campaign campaign)
     {
+        foreach (var _ in StarveThePocketsStages(campaign)) { }
+    }
+
+    /// <summary>The same starving pass, yielded between batches of formations.</summary>
+    private static IEnumerable<int> StarveThePocketsStages(Campaign campaign)
+    {
         var defines = campaign.Defines;
         var scale = campaign.TickScale;
         var captured = M.Clamp01(defines.EncircledLossCapturedShare);
+        var scanned = 0;
         foreach (var army in campaign.Armies)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (!army.CutOff || army.Divisions <= 0f)
             {
                 if (!army.CutOff) army.DaysCutOff = 0;
@@ -211,12 +227,19 @@ public static class Attrition
     /// </summary>
     private static void BuryTheBroken(Campaign campaign)
     {
+        foreach (var _ in BuryTheBrokenStages(campaign)) { }
+    }
+
+    /// <summary>The same burial pass, yielded between its two sweeps.</summary>
+    private static IEnumerable<int> BuryTheBrokenStages(Campaign campaign)
+    {
         var floor = campaign.Defines.DivisionBrokenStrength;
         Broken.Clear();
         foreach (var army in campaign.Armies)
             if (army.Divisions < 0.05f || army.Strength <= floor)
                 Broken.Add(army);
-        if (Broken.Count == 0) return;
+        if (Broken.Count == 0) yield break;
+        yield return 0;
 
         foreach (var army in Broken)
         {
@@ -379,8 +402,9 @@ public static class Attrition
             // treasury cannot pay for it: a country that can pay keeps the army it raised.
             // The same rule is the player's staff and every other government.
             var fighting = false;
-            foreach (var war in campaign.Wars)
-                if (!war.Ended && war.Involves(nation.Id)) { fighting = true; break; }
+            var liveWars = Warfare.LiveWars(campaign);
+            for (var wi = 0; wi < liveWars.Count; wi++)
+                if (!liveWars[wi].Ended && liveWars[wi].Involves(nation.Id)) { fighting = true; break; }
             if (!nation.IsHuman && !fighting && strength > nation.EstablishedDivisions * defines.ArmyPeaceDisbandMargin)
             {
                 var surplus = MathF.Max(1f, strength - nation.EstablishedDivisions);
@@ -445,10 +469,12 @@ public static class Attrition
         var controllers = campaign.ProvinceController;
         if (controllers is null) return 0f;
         var posts = 0;
-        foreach (var war in campaign.Wars)
+        var wars = Warfare.LiveWars(campaign);
+        for (var wi = 0; wi < wars.Count; wi++)
         {
+            var war = wars[wi];
             if (war.Ended || war.Limited || !war.Involves(nation.Id)) continue;
-            foreach (var province in war.FriendlyFront(nation.Id))
+            foreach (var province in war.FriendlyFrontSet(nation.Id))
                 if (province < controllers.Length && controllers[province] == (ushort)nation.MapIndex) posts++;
         }
         return posts * campaign.Defines.ArmyWarDivisionsPerPost;
@@ -472,14 +498,8 @@ public static class Attrition
         }
         if (weakest is null) return;
 
-        nation.ManpowerReserve += weakest.Personnel * campaign.Defines.ArmyStandDownReturn;
-        var name = weakest.Name;
-        Destroy(campaign, weakest, "stood down", lost: false);
-        campaign.Chronicle.Record(campaign, "army_stood_down", nation.Id,
-            subject: name, place: "unpaid_surplus", isPublic: false);
-        DiagnosticLogs.Write("simulation",
-            $"STAND_DOWN nation={nation.Tag} army={weakest.Id} day={campaign.ElapsedDays} reason=unpaid_surplus");
-        campaign.MarkStrategicChange();
+        // The same stand-down as a player's order (Demobilisation): the men to the reserve.
+        Demobilisation.StandDown(campaign, nation, weakest, "unpaid_surplus");
     }
 
     /// <summary>
@@ -495,10 +515,12 @@ public static class Attrition
         if (army.ProvinceId <= 0) return false;
         var map = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
-        foreach (var war in campaign.Wars)
+        var liveWars = Warfare.LiveWars(campaign);
+        for (var wi = 0; wi < liveWars.Count; wi++)
         {
+            var war = liveWars[wi];
             if (war.Ended || !war.Involves(nation.Id)) continue;
-            if (war.FriendlyFront(nation.Id).Contains(army.ProvinceId)) return true;
+            if (war.FriendlyFrontSet(nation.Id).Contains(army.ProvinceId)) return true;
             if (map is null || controllers is null || army.ProvinceId >= map.ProvinceToNation.Length ||
                 army.ProvinceId >= controllers.Length) continue;
             var owner = map.ProvinceToNation[army.ProvinceId];
@@ -516,9 +538,8 @@ public static class Attrition
         var bestControlled = -1;
         var people = 0L;
         var controlledPeople = 0L;
-        foreach (var state in campaign.States)
+        foreach (var state in campaign.StatesOf(nation))
         {
-            if (state.NationMapIndex != nation.MapIndex) continue;
             if (state.Population > people)
             {
                 people = state.Population;

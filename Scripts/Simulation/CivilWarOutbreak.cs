@@ -81,19 +81,27 @@ public static class CivilWarOutbreak
 
     public static void Tick(Campaign campaign)
     {
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly outbreak roll, yielded between batches of nations.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
         var d = campaign?.Defines;
-        if (d is null) return;
+        if (d is null) yield break;
         // Expired budget entries are administrative cleanup, including while outbreaks
         // are disabled. Turning the mechanic back on cannot resurrect an old year.
         campaign.CivilWarBudget ??= CivilWarBudgetState.FromLegacy(campaign);
         campaign.CivilWarBudget.Prune(campaign.ElapsedDays);
-        if (!d.CivilWarOutbreaks || campaign.ProvinceMap is null) return;
-        if (!MechanicFeatures.SystemEnabled(campaign, "SecessionEvents")) return;
-        if (campaign.ElapsedDays < d.CivilWarEarliestDay || campaign.ElapsedDays % 7 != 3) return;
+        if (!d.CivilWarOutbreaks || campaign.ProvinceMap is null) yield break;
+        if (!MechanicFeatures.SystemEnabled(campaign, "SecessionEvents")) yield break;
+        if (campaign.ElapsedDays < d.CivilWarEarliestDay || campaign.ElapsedDays % 7 != 3) yield break;
         var thisYear = StartsInLastYear(campaign);
+        var scanned = 0;
         foreach (var nation in campaign.Nations.ToArray())
         {
-            if (thisYear >= d.CivilWarWorldPerYear) return;
+            if (thisYear >= d.CivilWarWorldPerYear) yield break;
+            if (++scanned % 8 == 0) yield return 0;
             if (!Eligible(campaign, nation)) continue;
             var chance = Chance(campaign, nation);
             if (!float.IsFinite(chance) || chance <= 0f) continue;

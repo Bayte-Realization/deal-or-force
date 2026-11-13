@@ -1,0 +1,8 @@
+{
+  "importance": {
+    "alliance_rival_guarantee": 2,
+    "alliance_rival_friend": 2,
+    "alliance_rival_land": 2,
+    "alliance_rival_opinion": 2
+  }
+}

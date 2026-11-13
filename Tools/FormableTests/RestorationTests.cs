@@ -201,5 +201,20 @@ static class RestorationTests
         c.Fallen.Remove(partner.Id);
         MovementFall.Decide(c);
         Check(partner.Movement is { Exile: true }, "the control case still creates an exile after a genuine defeat");
+
+        // ---- and an exile does end, when its people have forgotten it --------------------
+        var (faded, fadedExile, _, fadedHome, _) = Fixture();
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours))!.SetValue(faded, 400 * 24L);
+        fadedHome.BorderHabit = 0.5f;
+        MovementFall.Endure(faded, fadedExile);
+        Check(fadedExile.Movement is { Dissolved: false }, "an exile whose homeland has not settled under its rulers carries on");
+        fadedHome.BorderHabit = 0.95f;
+        fadedExile.Movement.Support[fadedHome.MapIndex] = 0.2f;
+        MovementFall.Endure(faded, fadedExile);
+        Check(fadedExile.Movement is { Dissolved: false }, "nor one its people at home still follow");
+        fadedExile.Movement.Support.Clear();
+        MovementFall.Endure(faded, fadedExile);
+        Check(fadedExile.Movement is { Dissolved: true },
+            "a generation settled at home under other flags and nobody following: the government in exile becomes history");
     }
 }

@@ -1,5 +1,5 @@
 {
   "//": "Written by Tools/MapDataCompiler. Not hand-edited - it records which region layer provinces.png was cut from, so a mismatch can say so instead of looking like a corrupt map.",
   "regions": 13808168015189290105,
-  "provinces": 34650
+  "provinces": 34138
 }

@@ -36,6 +36,10 @@ public sealed partial class GlobePresentation
     private bool _cityDirty = true;
     private bool _cityLabelsEnabled = true;
     private string _citySeenLanguage = "";
+    private Font _cityWidthFont;
+    private int _cityWidthFontSize = -1;
+    private string _cityWidthLanguage = "";
+    private readonly Dictionary<string, float> _cityTextWidths = new(StringComparer.Ordinal);
     private ImageTexture _cityDotTexture;
     private ImageTexture _cityRegionalTexture;
     private ImageTexture _cityCapitalTexture;
@@ -61,6 +65,7 @@ public sealed partial class GlobePresentation
         public int City = -1;
         /// <summary>The capital's star a name stands beside, when it is one of those.</summary>
         public Node3D Star;
+        public float FlatPixelScale = -1f;
     }
 
     /// <summary>
@@ -199,7 +204,11 @@ public sealed partial class GlobePresentation
             // several frames then snap back whenever the 10 Hz placement pass runs.
             var pixels = _camera.Size / Math.Max(1, viewport.Y);
             foreach (var pin in _cityPins)
-                if (pin.Node.Visible) pin.Node.Scale = Vector3.One * pixels;
+                if (pin.Node.Visible && Mathf.Abs(pin.FlatPixelScale - pixels) > 1e-6f)
+                {
+                    pin.FlatPixelScale = pixels;
+                    pin.Node.Scale = Vector3.One * pixels;
+                }
         }
         var cameraTransform = _camera.GlobalTransform;
         var moved = _citySeenFlat != _flatMap || _citySeenViewport != viewport ||
@@ -238,6 +247,45 @@ public sealed partial class GlobePresentation
         using (SimProfiler.Measure("f:cities")) PlaceCities(viewport);
     }
 
+    private struct CityPassContext
+    {
+        public Vector2I Viewport;
+        public int Limit;
+        public int FontSize;
+        public float TextPixels;
+        public Font Font;
+        public int Tiers;
+        public float FixedPixel;
+        public float FlatPixel;
+        public Vector3 CameraNormal;
+        public Transform3D RootTransform;
+        public Transform3D RootInverse;
+        public Basis RootBasis;
+        public float Horizon;
+        public Color CapitalColor;
+        public Color CityColor;
+        public int Used;
+        public bool StarsNamed;
+    }
+
+    private float CityTextWidth(Font font, int fontSize, string name)
+    {
+        var language = Loc.Language;
+        if (!ReferenceEquals(_cityWidthFont, font) || _cityWidthFontSize != fontSize || _cityWidthLanguage != language)
+        {
+            _cityWidthFont = font;
+            _cityWidthFontSize = fontSize;
+            _cityWidthLanguage = language;
+            _cityTextWidths.Clear();
+        }
+        if (!_cityTextWidths.TryGetValue(name, out var width))
+        {
+            width = font.GetStringSize(name, HorizontalAlignment.Left, -1, fontSize).X;
+            if (_cityTextWidths.Count < 8192) _cityTextWidths[name] = width;
+        }
+        return width;
+    }
+
     private void PlaceCities(Vector2I viewport)
     {
         var limit = Math.Clamp((int)InterfaceSkin.Metric(_flatMap ? "map.flat_city_label_limit" : "map.city_label_limit", _flatMap ? 90f : 140f), 0, 400);
@@ -257,7 +305,8 @@ public sealed partial class GlobePresentation
         var fixedPixel = 2f * Mathf.Tan(Mathf.DegToRad(_camera.Fov * 0.5f)) / Math.Max(1, viewport.Y);
         var flatPixel = _camera.Size / Math.Max(1, viewport.Y);
         var cameraNormal = _flatMap ? Vector3.Zero : _camera.GlobalPosition.Normalized();
-        var rootBasis = _cityRoot.GlobalTransform.Basis;
+        var rootTransform = _cityRoot.GlobalTransform;
+        var rootBasis = rootTransform.Basis;
         var horizon = CityHorizon();
 
         _cityTaken.Clear();
@@ -270,7 +319,6 @@ public sealed partial class GlobePresentation
             ReserveSurfaceCard(marker.Plate, viewport);
         foreach (var parts in _fleetNodes.Values)
             ReserveSurfaceCard(parts.Plate, viewport);
-        var used = 0;
 
         // Where every capital's star stands on the screen, before any name is set: a name is
         // never written across a star that is not its own. Santo Domingo, with no room to its
@@ -291,39 +339,26 @@ public sealed partial class GlobePresentation
         // named at the star, by the name the country gives it. After the great capitals and
         // world cities, before the rest: a territory of fifty thousand people does not take the
         // room Santo Domingo's name needs.
-        var starsNamed = false;
-        void NameStars()
+        var pass = new CityPassContext
         {
-            starsNamed = true;
-            for (var star = 0; star < _starNames.Count && used < limit; star++)
-            {
-                var (marker, normal, city, nation) = _starNames[star];
-                if (_starScreens[star] is not { } screen) continue;
-                if (city >= 0 && _cities[city].Tier <= tiers) continue;
-                if (!_flatMap && (rootBasis * normal).Dot(cameraNormal) < horizon) continue;
-                var name = StarCapitalName(nation);
-                if (string.IsNullOrWhiteSpace(name) && city >= 0) name = _cities[city].DisplayName;
-                if (string.IsNullOrWhiteSpace(name)) continue;
-
-                var tierPixels = textPixels * 1.22f;
-                var textWidth = font.GetStringSize(name, HorizontalAlignment.Left, -1, fontSize).X * tierPixels / fontSize;
-                const float starSize = 12f;
-                var side = TakeLabelRoom(screen, starSize, textWidth, tierPixels, city, out _);
-                if (side == 0) continue;
-
-                var pin = CityPinAt(used++);
-                if (pin.City != -2 - star || pin.Name.Text != name) SetUpStarPin(pin, star, marker, name, font, fontSize);
-                pin.Name.Modulate = Ui.Colour("globe.city_capital");
-                pin.Node.Position = _cityRoot.ToLocal(marker.GlobalPosition);
-                var pixel = _flatMap ? 1f : fixedPixel;
-                pin.Node.Scale = _flatMap ? Vector3.One * flatPixel : Vector3.One;
-                pin.Name.PixelSize = pixel * tierPixels / fontSize;
-                SetLabelSide(pin, side, starSize, fontSize, tierPixels);
-                pin.Dot.Visible = false;
-                pin.Name.Visible = true;
-                pin.Node.Visible = true;
-            }
-        }
+            Viewport = viewport,
+            Limit = limit,
+            FontSize = fontSize,
+            TextPixels = textPixels,
+            Font = font,
+            Tiers = tiers,
+            FixedPixel = fixedPixel,
+            FlatPixel = flatPixel,
+            CameraNormal = cameraNormal,
+            RootTransform = rootTransform,
+            RootInverse = rootTransform.AffineInverse(),
+            RootBasis = rootBasis,
+            Horizon = horizon,
+            CapitalColor = Ui.Colour("globe.city_capital"),
+            CityColor = Ui.Colour("globe.city"),
+            Used = 0,
+            StarsNamed = false
+        };
 
         // Headquarters names have fixed anchors and never hide on collision. Reserve their
         // room first, then place capitals before lesser cities without a cyclic dependency
@@ -331,72 +366,107 @@ public sealed partial class GlobePresentation
         _movementLayer?.AddNames(_cityTaken);
         _capitalNameBoxes.Clear();
         _cityDone.Clear();
-        for (var index = 0; index < _cities.Count && used < limit; index++)
+        for (var index = 0; index < _cities.Count && pass.Used < limit; index++)
         {
             if (_cities[index].Tier > 0) break;
             if (!_cities[index].IsNationalCapital) continue;
             _cityDone.Add(index);
-            if (PlaceCity(index, out var room)) _capitalNameBoxes.Add(room);
+            if (PlaceCity(index, ref pass, out var room)) _capitalNameBoxes.Add(room);
         }
         var examined = 0;
-        for (var index = 0; index < _cities.Count && used < limit; index++)
+        for (var index = 0; index < _cities.Count && pass.Used < limit; index++)
         {
             if (_cities[index].Tier > tiers) break;
-            if (_cities[index].Tier > 0 && !starsNamed) NameStars();
-            if (used >= limit) break;
+            if (_cities[index].Tier > 0 && !pass.StarsNamed) NameStars(ref pass);
+            if (pass.Used >= limit) break;
             if (_cityDone.Contains(index)) continue;
             if (++examined > 4000) break;
-            PlaceCity(index, out _);
+            PlaceCity(index, ref pass, out _);
         }
-
-        bool PlaceCity(int index, out Rect2 room)
-        {
-            room = default;
-            var city = _cities[index];
-            var anchorAt = _cityAnchors[index];
-            if (TerrainGone(anchorAt.Latitude, anchorAt.Longitude)) return false;
-            Vector3 local;
-            if (_flatMap)
-            {
-                var anchor = _cityAnchors[index];
-                local = FlatPoint(anchor.Latitude, anchor.Longitude, 0f);
-            }
-            else
-            {
-                if ((rootBasis * _cityNormals[index]).Dot(cameraNormal) < horizon) return false;
-                local = _cityNormals[index] * GlobeRadius;
-            }
-            var world = _cityRoot.GlobalTransform * local;
-            if (_camera.IsPositionBehind(world)) return false;
-            var screen = _camera.UnprojectPosition(world);
-            if (screen.X < -40f || screen.Y < -20f || screen.X > viewport.X + 40f || screen.Y > viewport.Y + 20f) return false;
-
-            var tierPixels = textPixels * (city.Tier switch { 0 => 1.22f, 1 => 1.08f, _ => 1f });
-            var name = city.DisplayName;
-            var textWidth = font.GetStringSize(name, HorizontalAlignment.Left, -1, fontSize).X * tierPixels / fontSize;
-            var dot = city.Tier == 0 ? 9f : 7f;
-            var side = TakeLabelRoom(screen, dot, textWidth, tierPixels, index, out room);
-            var pin = CityPinAt(used++);
-            if (pin.City != index || pin.Name.Text != name) SetUpCityPin(pin, index, name, font, fontSize);
-            pin.Node.Position = local;
-            pin.Node.Quaternion = _flatMap ? Quaternion.Identity
-                : CountryLabelSurfaceBasis(_cityAnchors[index].Latitude, _cityAnchors[index].Longitude, 1f, 0f).GetRotationQuaternion();
-            var pixel = _flatMap ? 1f : fixedPixel;
-            pin.Node.Scale = _flatMap ? Vector3.One * flatPixel : Vector3.One;
-            pin.Name.PixelSize = pixel * tierPixels / fontSize;
-            pin.Name.Visible = side != 0;
-            if (side != 0) SetLabelSide(pin, side, dot, fontSize, tierPixels);
-            pin.Dot.PixelSize = pixel * dot / 32f;
-            pin.Dot.Visible = !(city.IsNationalCapital && NearCapitalMarker(index)) && !StarStandsOn(index);
-            pin.Name.Modulate = city.IsNationalCapital ? Ui.Colour("globe.city_capital") : Ui.Colour("globe.city");
-            pin.Dot.Modulate = Colors.White;
-            pin.Node.Visible = true;
-            // A crowded name may be omitted, but its geographical point must remain.
-            return side != 0;
-        }
-        if (!starsNamed) NameStars();
-        for (var index = used; index < _cityPins.Count; index++)
+        if (!pass.StarsNamed) NameStars(ref pass);
+        for (var index = pass.Used; index < _cityPins.Count; index++)
             if (_cityPins[index].Node.Visible) _cityPins[index].Node.Visible = false;
+    }
+
+    private void NameStars(ref CityPassContext pass)
+    {
+        pass.StarsNamed = true;
+        for (var star = 0; star < _starNames.Count && pass.Used < pass.Limit; star++)
+        {
+            var (marker, normal, city, nation) = _starNames[star];
+            if (_starScreens[star] is not { } screen) continue;
+            if (city >= 0 && _cities[city].Tier <= pass.Tiers) continue;
+            if (!_flatMap && (pass.RootBasis * normal).Dot(pass.CameraNormal) < pass.Horizon) continue;
+            var name = StarCapitalName(nation);
+            if (string.IsNullOrWhiteSpace(name) && city >= 0) name = _cities[city].DisplayName;
+            if (string.IsNullOrWhiteSpace(name)) continue;
+
+            var tierPixels = pass.TextPixels * 1.22f;
+            var textWidth = CityTextWidth(pass.Font, pass.FontSize, name) * tierPixels / pass.FontSize;
+            const float starSize = 12f;
+            var side = TakeLabelRoom(screen, starSize, textWidth, tierPixels, city, out _);
+            if (side == 0) continue;
+
+            var pin = CityPinAt(pass.Used++);
+            if (pin.City != -2 - star || pin.Name.Text != name) SetUpStarPin(pin, star, marker, name, pass.Font, pass.FontSize);
+            pin.Name.Modulate = pass.CapitalColor;
+            pin.Node.Position = pass.RootInverse * marker.GlobalPosition;
+            var pixel = _flatMap ? 1f : pass.FixedPixel;
+            pin.Node.Scale = _flatMap ? Vector3.One * pass.FlatPixel : Vector3.One;
+            pin.FlatPixelScale = _flatMap ? pass.FlatPixel : -1f;
+            pin.Name.PixelSize = pixel * tierPixels / pass.FontSize;
+            SetLabelSide(pin, side, starSize, pass.FontSize, tierPixels);
+            pin.Dot.Visible = false;
+            pin.Name.Visible = true;
+            pin.Node.Visible = true;
+        }
+    }
+
+    private bool PlaceCity(int index, ref CityPassContext pass, out Rect2 room)
+    {
+        room = default;
+        var city = _cities[index];
+        var anchorAt = _cityAnchors[index];
+        if (TerrainGone(anchorAt.Latitude, anchorAt.Longitude)) return false;
+        Vector3 local;
+        if (_flatMap)
+        {
+            var anchor = _cityAnchors[index];
+            local = FlatPoint(anchor.Latitude, anchor.Longitude, 0f);
+        }
+        else
+        {
+            if ((pass.RootBasis * _cityNormals[index]).Dot(pass.CameraNormal) < pass.Horizon) return false;
+            local = _cityNormals[index] * GlobeRadius;
+        }
+        var world = pass.RootTransform * local;
+        if (_camera.IsPositionBehind(world)) return false;
+        var screen = _camera.UnprojectPosition(world);
+        if (screen.X < -40f || screen.Y < -20f || screen.X > pass.Viewport.X + 40f || screen.Y > pass.Viewport.Y + 20f) return false;
+
+        var tierPixels = pass.TextPixels * (city.Tier switch { 0 => 1.22f, 1 => 1.08f, _ => 1f });
+        var name = city.DisplayName;
+        var textWidth = CityTextWidth(pass.Font, pass.FontSize, name) * tierPixels / pass.FontSize;
+        var dot = city.Tier == 0 ? 9f : 7f;
+        var side = TakeLabelRoom(screen, dot, textWidth, tierPixels, index, out room);
+        var pin = CityPinAt(pass.Used++);
+        if (pin.City != index || pin.Name.Text != name) SetUpCityPin(pin, index, name, pass.Font, pass.FontSize);
+        pin.Node.Position = local;
+        pin.Node.Quaternion = _flatMap ? Quaternion.Identity
+            : CountryLabelSurfaceBasis(_cityAnchors[index].Latitude, _cityAnchors[index].Longitude, 1f, 0f).GetRotationQuaternion();
+        var pixel = _flatMap ? 1f : pass.FixedPixel;
+        pin.Node.Scale = _flatMap ? Vector3.One * pass.FlatPixel : Vector3.One;
+        pin.FlatPixelScale = _flatMap ? pass.FlatPixel : -1f;
+        pin.Name.PixelSize = pixel * tierPixels / pass.FontSize;
+        pin.Name.Visible = side != 0;
+        if (side != 0) SetLabelSide(pin, side, dot, pass.FontSize, tierPixels);
+        pin.Dot.PixelSize = pixel * dot / 32f;
+        pin.Dot.Visible = !(city.IsNationalCapital && NearCapitalMarker(index)) && !StarStandsOn(index);
+        pin.Name.Modulate = city.IsNationalCapital ? pass.CapitalColor : pass.CityColor;
+        pin.Dot.Modulate = Colors.White;
+        pin.Node.Visible = true;
+        // A crowded name may be omitted, but its geographical point must remain.
+        return side != 0;
     }
 
     private void ReserveSurfaceCard(Sprite3D plate, Vector2I viewport)

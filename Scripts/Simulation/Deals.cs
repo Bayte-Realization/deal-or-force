@@ -307,30 +307,49 @@ public static partial class Ultimatum
         { reason = Loc.Get("Too many regions in this demand."); return false; }
         foreach (var id in ids)
         {
-            if (!c.States.Any(s => s.MapIndex == id && s.NationMapIndex == owner.MapIndex))
+            if (c.StateByMapIndex(id) is not { } candidate || candidate.NationMapIndex != owner.MapIndex)
             { reason = Loc.Get("They cannot yield what they do not hold."); return false; }
             // A capital is not for sale; it can only be lost. (Releasing it is Dismantlement's
             // question, which moves the government first.)
             if (id == owner.CapitalStateMapIndex && !side.ReleaseRegions)
             { reason = Loc.Get("A capital is not for sale."); return false; }
         }
-        var selected = ids.ToHashSet();
-        var mapped = new HashSet<int>();
-        var retained = false;
-        for (var p = 1; p <= c.ProvinceMap.ProvinceCount; p++)
+        if (ids.Length == 0) return true;
+        var map = c.ProvinceMap;
+        var controllers = c.ProvinceController ?? map.ProvinceToNation;
+        var selected = ids.Length <= 8 ? null : ids.ToHashSet();
+        bool Selected(int id) => selected is not null ? selected.Contains(id) : Array.IndexOf(ids, id) >= 0;
+
+        foreach (var id in ids)
         {
-            if (!selected.Contains(c.ProvinceMap.ProvinceToState[p]))
-            {
-                if (c.ProvinceMap.ProvinceToNation[p] == owner.MapIndex) retained = true;
-                continue;
-            }
-            if (c.ProvinceMap.ProvinceToNation[p] != owner.MapIndex ||
-                (c.ProvinceController ?? c.ProvinceMap.ProvinceToNation)[p] != owner.MapIndex)
+            var provinces = map.ProvincesOfState(id);
+            if (provinces.IsEmpty)
             { reason = Loc.Get("A demand must leave them territory and cannot include occupied land."); return false; }
-            mapped.Add(c.ProvinceMap.ProvinceToState[p]);
+            foreach (var p in provinces)
+            {
+                if (map.ProvinceToNation[p] != owner.MapIndex || controllers[p] != owner.MapIndex)
+                { reason = Loc.Get("A demand must leave them territory and cannot include occupied land."); return false; }
+            }
         }
-        // Check actual ground, not obsolete state records without mapped provinces.
-        if (ids.Length > 0 && (!retained || mapped.Count != ids.Length))
+
+        var retained = false;
+        foreach (var st in c.StatesOf(owner))
+        {
+            if (Selected(st.MapIndex)) continue;
+            foreach (var p in map.ProvincesOfState(st.MapIndex))
+                if (map.ProvinceToNation[p] == owner.MapIndex) { retained = true; break; }
+            if (retained) break;
+        }
+        // Check actual ground if state records are out of sync with province ownership.
+        if (!retained)
+        {
+            for (var p = 1; p <= map.ProvinceCount; p++)
+            {
+                if (!Selected(map.ProvinceToState[p]) && map.ProvinceToNation[p] == owner.MapIndex)
+                { retained = true; break; }
+            }
+        }
+        if (!retained)
         { reason = Loc.Get("A demand must leave them territory and cannot include occupied land."); return false; }
         return true;
     }

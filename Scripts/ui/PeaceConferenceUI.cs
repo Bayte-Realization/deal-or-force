@@ -447,6 +447,20 @@ public partial class DealOrForceGame
                 signed.Provinces.Count, added, removed)
             : Simulation.Loc.Format("Treaty border: {0} provinces, as drawn.", signed.Provinces.Count);
         if (_peaceDemand.ReleaseRegions) _peaceBorderNote.Text += "\n" + Tr("Selected regions become independent, not your territory. Homeland claims are retained after a compelled release.");
+        else if (beneficiary is not null)
+        {
+            // A reading of the line already on the table. It does not put the terms.
+            var why = PeaceShape.BorderWhy(_campaign, beneficiary, signed.Provinces, _peaceWar);
+            if (why.Length > 0) _peaceBorderNote.Text += "\n" + why;
+            // Occupation that same line keeps or sends back. Reading it does not put the terms.
+            var transfer = PeaceShape.TransferLine(_campaign, beneficiary, signed.Provinces, _peaceWar);
+            if (transfer.Length > 0) _peaceBorderNote.Text += "\n" + transfer;
+        }
+
+        // The years Resolve already writes. Reading them does not put the terms.
+        var truce = PeaceConference.TruceLine(_peaceDemand);
+        if (truce.Length > 0)
+            _peaceBorderNote.Text = _peaceBorderNote.Text.Length == 0 ? truce : _peaceBorderNote.Text + "\n" + truce;
 
         var block = PeaceConference.BlockReason(_campaign, _peaceWar, _peaceDemand);
         if (block.Length == 0) block = PeaceOffers.DeliveryBlockReason(_campaign, _peaceWar, player, loser);

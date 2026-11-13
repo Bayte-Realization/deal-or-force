@@ -1,0 +1,9 @@
+// The sea lift on the map and in the army panel (GlobeSeaLift, ArmyPanelUI).
+{
+  "⚓ waiting for ships at {0}": "⚓ ждёт корабли в {0}",
+  "⚓ to the ships at {0}": "⚓ к кораблям в {0}",
+  "⚓ {0:N0} aboard, landing at {1}": "⚓ на борту {0:N0}, высадка в {1}",
+  "⚓ aboard {0}, landing at {1}": "⚓ на борту {0}, высадка в {1}",
+  "⚓ waiting at {0} for {1}": "⚓ ждёт в {0}: {1}",
+  "⚓ marching to {0} to board {1}": "⚓ идёт в {0} на посадку: {1}"
+}

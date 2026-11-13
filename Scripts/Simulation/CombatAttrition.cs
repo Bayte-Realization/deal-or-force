@@ -7,9 +7,44 @@ namespace DealOrForce.Simulation;
 // Frontage, damage and casualty arithmetic; no orders, captures or random draws.
 public static partial class Warfare
 {
-    // Only values, never Army/Campaign references. Cleared before each damage pass.
-    // Pre-damage exposure is necessary even for duplicate ids in a legacy battle.
-    private static readonly List<(float Personnel, float Casualties)> DamageExposure = new();
+    // Damage rows are values, never Army or Campaign references. They live on the
+    // battle's scratch and are cleared before each pass of that battle. Pre-damage
+    // exposure is necessary even for duplicate ids in a legacy battle.
+
+    /// <summary>
+    /// Samples this battle's damage rows and does not spend them. The day's fighting
+    /// samples into the same list and then applies it. Another battle clears its own list.
+    /// It does not join a formation, rewrite an order, or change who dies.
+    /// </summary>
+    internal static void FillBattleDamageRows(Campaign campaign, LandBattle battle,
+        IReadOnlyList<Army> side, float organisationLoss, float casualtyScale)
+    {
+        if (campaign is null || battle is null || side is null) return;
+        UseBattleRows(campaign, battle);
+        SampleDamage(campaign, side, organisationLoss, casualtyScale, ActiveRows.Damage);
+    }
+
+    // The men and the casualties, in the order the side is listed, before any formation
+    // loses organisation. Returns the same total power the spending pass divides by.
+    private static float SampleDamage(Campaign campaign, IReadOnlyCollection<Army> side,
+        float organisationLoss, float casualtyScale, List<(float Personnel, float Casualties)> rows)
+    {
+        var list = side as IReadOnlyList<Army>;
+        double totalPowerSum = 0d;
+        if (list != null)
+            for (var i = 0; i < list.Count; i++) totalPowerSum += M.Max(0.01f, list[i].Power);
+        else
+            foreach (var army in side) totalPowerSum += M.Max(0.01f, army.Power);
+        var totalPower = (float)totalPowerSum;
+        rows.Clear();
+        if (list != null)
+            for (var i = 0; i < list.Count; i++)
+                rows.Add(Casualties(campaign, list[i], side.Count, totalPower, organisationLoss, casualtyScale));
+        else
+            foreach (var army in side)
+                rows.Add(Casualties(campaign, army, side.Count, totalPower, organisationLoss, casualtyScale));
+        return totalPower;
+    }
 
     /// <summary>Combined power of one country's divisions in a list of what is standing there.</summary>
     private static float Power(List<Army> present, int nationId)
@@ -20,8 +55,19 @@ public static partial class Warfare
     }
 
     /// <summary>Frontage a side would take if the province had unlimited room.</summary>
-    private static float WantedWidth(IReadOnlyCollection<Army> side) =>
-        side.Sum(army => army.Divisions * UnitTypeCatalog.Get(army.TemplateId).CombatWidth);
+    private static float WantedWidth(IReadOnlyCollection<Army> side)
+    {
+        var total = 0f;
+        if (side is IReadOnlyList<Army> list)
+        {
+            for (var i = 0; i < list.Count; i++)
+                total += list[i].Divisions * UnitTypeCatalog.Get(list[i].TemplateId).CombatWidth;
+            return total;
+        }
+        foreach (var army in side)
+            total += army.Divisions * UnitTypeCatalog.Get(army.TemplateId).CombatWidth;
+        return total;
+    }
 
     /// <summary>
     /// Overcrowding, for a side whose line is still wider than its ground - which now means
@@ -63,10 +109,18 @@ public static partial class Warfare
     }
 
     /// <summary>A division-weighted average of some per-division number.</summary>
-    private static float Weighted(IReadOnlyCollection<Army> side, Func<Army, float> select)
+    private static float Weighted(List<Army> side, Func<Army, float> select)
     {
-        var divisions = side.Sum(army => M.Max(0.01f, army.Divisions));
-        return divisions <= 0f ? 0f : side.Sum(army => select(army) * M.Max(0.01f, army.Divisions)) / divisions;
+        var divisions = 0f;
+        for (var i = 0; i < side.Count; i++) divisions += M.Max(0.01f, side[i].Divisions);
+        if (divisions <= 0f) return 0f;
+        var sum = 0f;
+        for (var i = 0; i < side.Count; i++)
+        {
+            var army = side[i];
+            sum += select(army) * M.Max(0.01f, army.Divisions);
+        }
+        return sum / divisions;
     }
 
     /// <summary>
@@ -84,30 +138,55 @@ public static partial class Warfare
         float organisationLoss, float casualtyScale, out float killed)
     {
         var defines = campaign.Defines;
-        var totalPower = side.Sum(army => M.Max(0.01f, army.Power));
+        var list = side as IReadOnlyList<Army>;
         // Calculate the denominator once, in the original summation order. Every
         // exposure is still sampled before any formation loses organisation.
-        DamageExposure.Clear();
-        foreach (var army in side)
-            DamageExposure.Add(Casualties(campaign, army, side.Count, totalPower, organisationLoss, casualtyScale));
+        // The list belongs to the battle now running. The next battle has its own.
+        var exposure = ActiveRows.Damage;
+        var totalPower = SampleDamage(campaign, side, organisationLoss, casualtyScale, exposure);
         var lost = 0f;
         killed = 0f;
         var woundedShare = M.Clamp01(defines.WoundedShareOfCasualties);
+        if (list != null)
+        {
+            for (var i = 0; i < list.Count; i++)
+            {
+                var army = list[i];
+                var template = UnitTypeCatalog.Get(army.TemplateId);
+                var share = M.Max(0.01f, army.Power) / totalPower * side.Count;
+                var loss = organisationLoss * share / M.Max(0.2f, template.Organisation);
+                var (personnel, casualties) = exposure[i];
+
+                army.Organisation = M.Clamp01(army.Organisation - loss);
+
+                // A division that holds the same ground goes on digging even while it is being
+                // shelled - that is what a prepared line is. Shelling costs it a little more
+                // than a day of work is worth only when the fighting is heavy; otherwise the
+                // position slowly deepens. Advancing throws all of it away, which is the price
+                // of an offensive and the reason a static front is so expensive to move.
+                army.Entrenchment = M.Clamp01(army.Entrenchment
+                    - defines.EntrenchmentLostPerCombatDay
+                    + defines.EntrenchmentPerDay * defines.EntrenchmentUnderFireShare);
+
+                if (personnel > 1f) army.Strength = M.Clamp01(army.Strength - casualties / personnel);
+                army.Personnel = Math.Max(0, army.Personnel - (int)MathF.Round(casualties));
+                army.Recovering += casualties * defines.WoundedReturningShare;
+                army.Experience = M.Clamp01(army.Experience + loss * 0.004f);
+                army.Cohesion = M.Clamp01(army.Cohesion - loss * 0.08f);
+                lost += casualties;
+                killed += casualties * (1f - woundedShare);
+            }
+            return lost;
+        }
         var index = 0;
         foreach (var army in side)
         {
             var template = UnitTypeCatalog.Get(army.TemplateId);
             var share = M.Max(0.01f, army.Power) / totalPower * side.Count;
             var loss = organisationLoss * share / M.Max(0.2f, template.Organisation);
-            var (personnel, casualties) = DamageExposure[index++];
+            var (personnel, casualties) = exposure[index++];
 
             army.Organisation = M.Clamp01(army.Organisation - loss);
-
-            // A division that holds the same ground goes on digging even while it is being
-            // shelled - that is what a prepared line is. Shelling costs it a little more
-            // than a day of work is worth only when the fighting is heavy; otherwise the
-            // position slowly deepens. Advancing throws all of it away, which is the price
-            // of an offensive and the reason a static front is so expensive to move.
             army.Entrenchment = M.Clamp01(army.Entrenchment
                 - defines.EntrenchmentLostPerCombatDay
                 + defines.EntrenchmentPerDay * defines.EntrenchmentUnderFireShare);
@@ -145,8 +224,24 @@ public static partial class Warfare
     private static (float Men, float Dead) CasualtyTotals(Campaign campaign, IReadOnlyCollection<Army> side,
         float organisationLoss, float casualtyScale)
     {
-        var totalPower = side.Sum(army => M.Max(0.01f, army.Power));
+        var list = side as IReadOnlyList<Army>;
+        double totalPowerSum = 0d;
+        if (list != null)
+            for (var i = 0; i < list.Count; i++) totalPowerSum += M.Max(0.01f, list[i].Power);
+        else
+            foreach (var army in side) totalPowerSum += M.Max(0.01f, army.Power);
+        var totalPower = (float)totalPowerSum;
         float men = 0f, dead = 0f;
+        if (list != null)
+        {
+            for (var i = 0; i < list.Count; i++)
+            {
+                var (personnel, casualties) = Casualties(campaign, list[i], side.Count, totalPower, organisationLoss, casualtyScale);
+                men += personnel;
+                dead += casualties;
+            }
+            return (men, dead);
+        }
         foreach (var army in side)
         {
             var (personnel, casualties) = Casualties(campaign, army, side.Count, totalPower, organisationLoss, casualtyScale);
@@ -156,16 +251,32 @@ public static partial class Warfare
         return (men, dead);
     }
 
-    private static float AverageOrganisation(IReadOnlyCollection<Army> side)
+    private static float AverageOrganisation(List<Army> side)
     {
-        var divisions = side.Sum(army => M.Max(0.01f, army.Divisions));
-        return divisions <= 0f ? 0f : side.Sum(army => army.Organisation * M.Max(0.01f, army.Divisions)) / divisions;
+        var divisions = 0f;
+        for (var i = 0; i < side.Count; i++) divisions += M.Max(0.01f, side[i].Divisions);
+        if (divisions <= 0f) return 0f;
+        var sum = 0f;
+        for (var i = 0; i < side.Count; i++)
+        {
+            var army = side[i];
+            sum += army.Organisation * M.Max(0.01f, army.Divisions);
+        }
+        return sum / divisions;
     }
 
-    private static float WeightedPlanning(IReadOnlyCollection<Army> side)
+    private static float WeightedPlanning(List<Army> side)
     {
-        var divisions = side.Sum(army => M.Max(0.01f, army.Divisions));
-        return divisions <= 0f ? 0f : side.Sum(army => army.Planning * M.Max(0.01f, army.Divisions)) / divisions;
+        var divisions = 0f;
+        for (var i = 0; i < side.Count; i++) divisions += M.Max(0.01f, side[i].Divisions);
+        if (divisions <= 0f) return 0f;
+        var sum = 0f;
+        for (var i = 0; i < side.Count; i++)
+        {
+            var army = side[i];
+            sum += army.Planning * M.Max(0.01f, army.Divisions);
+        }
+        return sum / divisions;
     }
 
 }

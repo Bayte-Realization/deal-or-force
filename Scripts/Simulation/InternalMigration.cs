@@ -74,13 +74,20 @@ public static class InternalMigration
     /// <summary>People moved inside their countries on the current day, for the benches.</summary>
     public static long MovedToday { get; private set; }
 
-    private static readonly List<ScenarioState> Regions = new();
-    private static readonly List<float> Pulls = new();
-    private static readonly List<(ScenarioState State, double Weight)> Destinations = new();
+    [ThreadStatic] private static List<ScenarioState> _regionsScratch;
+    [ThreadStatic] private static List<float> _pullsScratch;
+    [ThreadStatic] private static List<(ScenarioState State, double Weight)> _destinationsScratch;
+    [ThreadStatic] private static long[] _migrationResultsScratch;
+
+    private static List<ScenarioState> Regions => _regionsScratch ??= new();
+    private static List<float> Pulls => _pullsScratch ??= new();
+    private static List<(ScenarioState State, double Weight)> Destinations => _destinationsScratch ??= new();
+
     private static readonly Dictionary<int, (float Latitude, float Longitude)> Centres = new();
     private static Campaign _centresOf;
     private static int _centresRevision = -1;
     private static int _movedDay = -1;
+    private static Campaign _movedCampaign;
 
     /// <summary>
     /// What draws people to a region, and keeps them: the standard of living, work, order and
@@ -99,80 +106,110 @@ public static class InternalMigration
 
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null) return;
-        if (_movedDay != campaign.ElapsedDays) { MovedToday = 0; _movedDay = campaign.ElapsedDays; }
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same migration pass, yielded between batches of regions and countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null) yield break;
+        if (_movedDay != campaign.ElapsedDays || !ReferenceEquals(_movedCampaign, campaign))
+        { MovedToday = 0; _movedDay = campaign.ElapsedDays; _movedCampaign = campaign; }
         var defines = campaign.Defines;
-        if (!defines.InternalMigrationEnabled || !defines.HouseholdDynamicsEnabled) return;
-        if (campaign.ElapsedDays <= 0 || campaign.ElapsedDays % Math.Max(1, defines.EconomyTickDays) != 0) return;
+        if (!defines.InternalMigrationEnabled || !defines.HouseholdDynamicsEnabled) yield break;
+        if (campaign.ElapsedDays <= 0 || campaign.ElapsedDays % Math.Max(1, defines.EconomyTickDays) != 0) yield break;
         var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
         EnsureCentres(campaign);
-        foreach (var state in campaign.States) state.ReviewInternalMigration = 0;
+        campaign.StatesOf(0);
+        var reset = 0;
+        foreach (var state in campaign.States) { if (++reset % 512 == 0) yield return 0; state.ReviewInternalMigration = 0; }
+        yield return 0;
 
-        foreach (var nation in campaign.Nations)
+        var nations = campaign.Nations;
+        var nationCount = nations.Count;
+        const int batchSize = 32;
+        for (var start = 0; start < nationCount; start += batchSize)
         {
-            if (nation.Population <= 0 || nation.Movement is not null) continue;
-            var states = campaign.StatesOf(nation);
-            if (states.Length < 2) continue;
-            Regions.Clear();
-            Pulls.Clear();
-            double weighted = 0, people = 0;
-            foreach (var state in states)
-            {
-                if (state.Unclaimed || state.Population <= 0) continue;
-                var pull = Pull(nation, state);
-                Regions.Add(state);
-                Pulls.Add(pull);
-                weighted += pull * (double)state.Population;
-                people += state.Population;
-            }
-            if (Regions.Count < 2 || people <= 0) continue;
-            var average = (float)(weighted / people);
-
-            for (var from = 0; from < Regions.Count; from++)
-            {
-                var source = Regions[from];
-                var gap = average - Pulls[from];
-                var refugees = MathF.Max(0f, source.WarDamage - 0.10f) * defines.InternalRefugeeShare;
-                var share = MathF.Max(0f, gap) * defines.InternalMigrationAnnual * interval + refugees;
-                share = MathF.Min(share, MathF.Max(0f, defines.InternalMigrationMaxShare));
-                var leaving = (long)Math.Round(source.Population * (double)share);
-                if (leaving < 100) continue;
-
-                Destinations.Clear();
-                double total = 0;
-                var here = Centres.GetValueOrDefault(source.MapIndex);
-                for (var to = 0; to < Regions.Count; to++)
-                {
-                    if (to == from) continue;
-                    var target = Regions[to];
-                    var advantage = Pulls[to] - MathF.Max(Pulls[from], average - 0.02f);
-                    if (advantage <= 0f || target.WarDamage >= 0.10f) continue;
-                    var there = Centres.GetValueOrDefault(target.MapIndex);
-                    var km = NavalOperations.Distance(here.Latitude, here.Longitude, there.Latitude, there.Longitude) * 111f;
-                    var weight = advantage * Math.Sqrt(target.Population) /
-                                 (1.0 + km / Math.Max(1f, defines.InternalMigrationReachKm));
-                    if (weight <= 0) continue;
-                    Destinations.Add((target, weight));
-                    total += weight;
-                }
-                if (total <= 0) continue;
-                Destinations.Sort((a, b) => b.Weight.CompareTo(a.Weight));
-                if (Destinations.Count > 3) Destinations.RemoveRange(3, Destinations.Count - 3);
-                total = 0;
-                foreach (var (_, weight) in Destinations) total += weight;
-                var left = leaving;
-                for (var index = 0; index < Destinations.Count && left > 0; index++)
-                {
-                    var (target, weight) = Destinations[index];
-                    var count = index == Destinations.Count - 1 ? left : (long)Math.Round(leaving * weight / total);
-                    count = Math.Min(count, left);
-                    var moved = Move(source, target, count);
-                    left -= moved;
-                    MovedToday += moved;
-                }
-            }
-            Settle(campaign, nation, interval);
+            var count = Math.Min(batchSize, nationCount - start);
+            if (_migrationResultsScratch is null || _migrationResultsScratch.Length < count)
+                _migrationResultsScratch = new long[Math.Max(count, batchSize)];
+            var batchStart = start;
+            DeterministicParallel.Slots(campaign, count, _migrationResultsScratch,
+                i => MigrateNation(campaign, nations[batchStart + i], defines, interval),
+                (_, moved) => MovedToday += moved);
+            if (start + count < nationCount) yield return 0;
         }
+    }
+
+    private static long MigrateNation(Campaign campaign, Nation nation, Defines defines, float interval)
+    {
+        if (nation.Population <= 0 || nation.Movement is not null) return 0;
+        var states = campaign.StatesOf(nation);
+        if (states.Length < 2) return 0;
+        var regions = Regions;
+        var pulls = Pulls;
+        var destinations = Destinations;
+        regions.Clear();
+        pulls.Clear();
+        double weighted = 0, people = 0;
+        foreach (var state in states)
+        {
+            if (state.Unclaimed || state.Population <= 0) continue;
+            var pull = Pull(nation, state);
+            regions.Add(state);
+            pulls.Add(pull);
+            weighted += pull * (double)state.Population;
+            people += state.Population;
+        }
+        if (regions.Count < 2 || people <= 0) return 0;
+        var average = (float)(weighted / people);
+        long movedTotal = 0;
+
+        for (var from = 0; from < regions.Count; from++)
+        {
+            var source = regions[from];
+            var gap = average - pulls[from];
+            var refugees = MathF.Max(0f, source.WarDamage - 0.10f) * defines.InternalRefugeeShare;
+            var share = MathF.Max(0f, gap) * defines.InternalMigrationAnnual * interval + refugees;
+            share = MathF.Min(share, MathF.Max(0f, defines.InternalMigrationMaxShare));
+            var leaving = (long)Math.Round(source.Population * (double)share);
+            if (leaving < 100) continue;
+
+            destinations.Clear();
+            double total = 0;
+            var here = Centres.GetValueOrDefault(source.MapIndex);
+            for (var to = 0; to < regions.Count; to++)
+            {
+                if (to == from) continue;
+                var target = regions[to];
+                var advantage = pulls[to] - MathF.Max(pulls[from], average - 0.02f);
+                if (advantage <= 0f || target.WarDamage >= 0.10f) continue;
+                var there = Centres.GetValueOrDefault(target.MapIndex);
+                var km = NavalOperations.Distance(here.Latitude, here.Longitude, there.Latitude, there.Longitude) * 111f;
+                var weight = advantage * Math.Sqrt(target.Population) /
+                             (1.0 + km / Math.Max(1f, defines.InternalMigrationReachKm));
+                if (weight <= 0) continue;
+                destinations.Add((target, weight));
+                total += weight;
+            }
+            if (total <= 0) continue;
+            destinations.Sort((a, b) => b.Weight.CompareTo(a.Weight));
+            if (destinations.Count > 3) destinations.RemoveRange(3, destinations.Count - 3);
+            total = 0;
+            foreach (var (_, weight) in destinations) total += weight;
+            var left = leaving;
+            for (var index = 0; index < destinations.Count && left > 0; index++)
+            {
+                var (target, weight) = destinations[index];
+                var count = index == destinations.Count - 1 ? left : (long)Math.Round(leaving * weight / total);
+                count = Math.Min(count, left);
+                var moved = Move(source, target, count);
+                left -= moved;
+                movedTotal += moved;
+            }
+        }
+        movedTotal += Settle(campaign, nation, interval);
+        return movedTotal;
     }
 
     /// <summary>
@@ -184,24 +221,26 @@ public static class InternalMigration
     /// they go to every region of the country, at peace, where those people are under
     /// SettlementBelowShare - after which assimilation runs towards them (DemographicCycle).
     /// </summary>
-    private static void Settle(Campaign campaign, Nation nation, float interval)
+    private static long Settle(Campaign campaign, Nation nation, float interval)
     {
         var policy = NationalModifiers.Of(nation, "settlement");
-        if (policy <= 0f) return;
+        if (policy <= 0f) return 0;
         var defines = campaign.Defines;
         var national = DemographyCatalog.PrimaryCulture(nation.Tag);
-        if (string.IsNullOrEmpty(national)) return;
+        if (string.IsNullOrEmpty(national)) return 0;
+        var regions = Regions;
         ScenarioState home = null;
         long homePeople = 0;
-        foreach (var state in Regions)
+        foreach (var state in regions)
         {
             var own = PeopleOf(state, national);
             if (own < state.Population / 2 || own <= homePeople) continue;
             home = state;
             homePeople = own;
         }
-        if (home is null) return;
-        foreach (var state in Regions)
+        if (home is null) return 0;
+        long movedTotal = 0;
+        foreach (var state in regions)
         {
             if (ReferenceEquals(state, home) || state.WarDamage >= 0.10f) continue;
             if (PeopleOf(state, national) >= state.Population * (double)defines.SettlementBelowShare) continue;
@@ -211,12 +250,13 @@ public static class InternalMigration
             var settlers = (long)Math.Round(state.Population * (double)(defines.SettlementAnnual * policy * interval));
             settlers = Math.Min(settlers, PeopleOf(home, national) / 100);
             if (settlers < 50) continue;
-            var moved = Move(home, state, settlers, culture: national);
-            MovedToday += moved;
+            movedTotal += Move(home, state, settlers, culture: national);
         }
+        return movedTotal;
     }
 
-    private static readonly Dictionary<string, long> Tally = new(StringComparer.OrdinalIgnoreCase);
+    [ThreadStatic] private static Dictionary<string, long> _tallyScratch;
+    private static Dictionary<string, long> Tally => _tallyScratch ??= new(StringComparer.OrdinalIgnoreCase);
 
     private static string MajorityOf(ScenarioState state)
     {
@@ -288,13 +328,24 @@ public static class InternalMigration
 
     private static void Arrive(ScenarioState to, PopulationGroup like, long people)
     {
+        PopulationGroup sameFaithHost = null;
+        var coalesceSmall = people <= 25 && to.PopulationGroups.Count >= 16;
         foreach (var group in to.PopulationGroups)
         {
             if (!string.Equals(group.Culture, like.Culture, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(group.Religion, like.Religion, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(group.Profession, like.Profession, StringComparison.OrdinalIgnoreCase) ||
-                group.Class != like.Class) continue;
-            group.Size += people;
+                !string.Equals(group.Religion, like.Religion, StringComparison.OrdinalIgnoreCase)) continue;
+            if (string.Equals(group.Profession, like.Profession, StringComparison.OrdinalIgnoreCase) &&
+                group.Class == like.Class)
+            {
+                group.Size += people;
+                return;
+            }
+            if (coalesceSmall && (sameFaithHost is null || group.Size > sameFaithHost.Size))
+                sameFaithHost = group;
+        }
+        if (sameFaithHost is not null)
+        {
+            sameFaithHost.Size += people;
             return;
         }
         to.PopulationGroups.Add(new PopulationGroup

@@ -21,11 +21,47 @@ static class SaveReplay
         var path = Path.GetFullPath(args[at + 1]);
         var days = at + 2 < args.Length && int.TryParse(args[at + 2], out var requested) ? requested : 35;
         if (!File.Exists(path)) throw new Exception($"No save at {path}");
+        // Opt-in, because a full dump per day is noise on a run that is only looking for a
+        // crash: `--replay-detail [n]` names the passes a single day was spent in, and counts
+        // the collections it paid for. A weekly spike is invisible in a 30-day total - it is
+        // one day out of thirty - and a spike is what a player feels.
+        var detailAt = Array.IndexOf(args, "--replay-detail");
+        var detail = detailAt >= 0;
+        var detailTop = detail && detailAt + 1 < args.Length && int.TryParse(args[detailAt + 1], out var top) ? Math.Clamp(top, 1, 40) : 8;
+
+        // SaveSystem.Load sanitises the slot to letters, digits, '_' and '-'. A player title
+        // with spaces is a real file on disk and must still open. The copy is a temp name
+        // only; the evidence file is never written back.
+        var loadRoot = Path.GetDirectoryName(path)!;
+        var loadSlot = Path.GetFileNameWithoutExtension(path);
+        var safeSlot = new string(loadSlot.Where(character => char.IsLetterOrDigit(character) || character is '_' or '-').ToArray()).ToLowerInvariant();
+        string stagedDir = null;
+        if (!string.Equals(loadSlot, safeSlot, StringComparison.Ordinal))
+        {
+            stagedDir = Path.Combine(Path.GetTempPath(), "dof-replay-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(stagedDir);
+            File.Copy(path, Path.Combine(stagedDir, safeSlot + ".bdfsave"));
+            loadRoot = stagedDir;
+            loadSlot = safeSlot;
+            Console.WriteLine($"REPLAY_STAGED slot={safeSlot} source={Path.GetFileName(path)}");
+        }
 
         // Catalogues and the map tables are static; a bare process must build them once before a
         // save that references them can be read at all.
         _ = Campaign.CreateBootstrap(947986505);
-        var loaded = SaveSystem.Load(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path), "");
+        SaveLoadResult loaded;
+        try
+        {
+            loaded = SaveSystem.Load(loadRoot, loadSlot, "");
+        }
+        finally
+        {
+            if (stagedDir is not null)
+            {
+                try { Directory.Delete(stagedDir, true); }
+                catch (Exception error) { Console.WriteLine($"REPLAY_STAGE_CLEANUP {error.Message}"); }
+            }
+        }
         if (!loaded.Success || loaded.Campaign is null)
         {
             Console.WriteLine($"REPLAY_LOAD FAILED {loaded.Warning}");
@@ -40,13 +76,43 @@ static class SaveReplay
 
         Console.WriteLine($"REPLAY_LOADED day={c.ElapsedDays} date={c.Date.Display()} file={Path.GetFileName(path)}");
         Console.WriteLine($"REPLAY_WORLD {Summary(c)}");
+        Console.WriteLine($"REPLAY_SCALE armies={c.Armies.Count} battles={c.Battles.Count} wars={c.Wars.Count} " +
+                          $"fronts={c.FrontLines.Count} states={c.States.Count} relations={c.Relations.Count}");
+        // Smooth time is a frame budget in the Godot loop (SettingsCatalog smooth_ticks →
+        // Campaign.StepFor). This replay calls TickDay, which finishes each step in one
+        // StepFor(infinity). The same passes run either way; only the frame they land in changes.
+        Console.WriteLine("REPLAY_SMOOTH headless=full-step presentation_flag=smooth_ticks not consulted");
 
+        SimProfiler.Reset();
+        Warfare.ResetAdvanceRouteSearches();
+        var pace = System.Diagnostics.Stopwatch.StartNew();
+        long steadyMs = 0;
+        var steadyDays = 0;
+        // Per-day attribution. The profiler keeps running totals, so a day's own share is the
+        // difference from the totals read before it started; the same trick the chronicle uses
+        // for flows, and for the same reason - a total is not a day.
+        var previousScopeMs = new System.Collections.Generic.Dictionary<string, double>();
+        // Baseline the collection counters and the allocation marker before the first day, so
+        // the first row of the detail is that day and not the whole load before it.
+        _gen0 = GC.CollectionCount(0); _gen1 = GC.CollectionCount(1); _gen2 = GC.CollectionCount(2);
+        _allocated = GC.GetAllocatedBytesForCurrentThread();
         var start = c.ElapsedDays;
         for (var day = 0; day < days; day++)
         {
+            var dayClock = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 c.TickDay();
+                Console.WriteLine($"REPLAY_DAY n={day + 1} day={c.ElapsedDays} ms={dayClock.ElapsedMilliseconds}");
+                // The first day compiles the passes. Its samples are not the crawl the player feels
+                // on the days after it, so the scope table below starts once that day has finished.
+                if (day == 0)
+                {
+                    SimProfiler.Reset();
+                    Warfare.ResetAdvanceRouteSearches();
+                }
+                else { steadyMs += dayClock.ElapsedMilliseconds; steadyDays++; }
+                if (detail) PrintDayDetail(day + 1, dayClock, detailTop, previousScopeMs);
             }
             catch (Exception error)
             {
@@ -62,8 +128,72 @@ static class SaveReplay
             }
         }
 
-        Console.WriteLine($"REPLAY_OK days={c.ElapsedDays - start} day={c.ElapsedDays} date={c.Date.Display()}");
+        pace.Stop();
+        var ran = c.ElapsedDays - start;
+        Console.WriteLine($"REPLAY_OK days={ran} day={c.ElapsedDays} date={c.Date.Display()}");
+        Console.WriteLine($"REPLAY_FINGERPRINT {CampaignFingerprint.Of(c):X16}");
+        Console.WriteLine($"REPLAY_PACE days={ran} total_ms={pace.ElapsedMilliseconds} " +
+                          $"ms_per_day={(ran == 0 ? 0 : pace.ElapsedMilliseconds / (double)ran):0.0} " +
+                          $"steady_days={steadyDays} steady_ms={steadyMs} " +
+                          $"steady_ms_per_day={(steadyDays == 0 ? 0 : steadyMs / (double)steadyDays):0.0}");
         Console.WriteLine($"REPLAY_WORLD {Summary(c)}");
+        Console.WriteLine($"REPLAY_ROUTE asks={Warfare.AdvanceRouteAsks} keeps={Warfare.AdvanceRouteKeeps} " +
+                          $"reuses={Warfare.AdvanceRouteReuses} walks={Warfare.AdvanceRouteSearches}");
+        // The allocation column used to be formatted `,8:1`, which is a custom numeric format
+        // string: every row printed "1". Reading it as a measurement is how a scope that
+        // allocates 34 MB is mistaken for one that allocates nothing.
+        foreach (var sample in SimProfiler.All.OrderByDescending(s => s.TotalMilliseconds).Take(30))
+            Console.WriteLine($"REPLAY_SCOPE {sample.Name,-32} runs={sample.Runs,-6} total_ms={sample.TotalMilliseconds,10:0.0} " +
+                              $"mean_ms={sample.MeanMilliseconds,8:0.00} alloc_mb={sample.AllocatedBytes / 1048576.0,8:0.0}");
+        foreach (var sample in SimProfiler.All.OrderByDescending(s => s.AllocatedBytes).Take(detail ? 12 : 0))
+            Console.WriteLine($"REPLAY_ALLOC {sample.Name,-32} runs={sample.Runs,-6} alloc_mb={sample.AllocatedBytes / 1048576.0,8:0.0} " +
+                              $"kb_per_run={(sample.Runs == 0 ? 0 : sample.AllocatedBytes / 1024.0 / sample.Runs),8:0.0}");
+        // The top-30 table cannot see a pass that costs a few milliseconds a day, which is
+        // exactly the passes a slice or a parallel gate gets judged on. Named dumps instead.
+        foreach (var sample in SimProfiler.All
+                     .Where(s => s.Name.Contains("tally:") || s.Name.Contains("mod:") || s.Name.Contains("mkt:"))
+                     .OrderByDescending(s => s.TotalMilliseconds))
+            Console.WriteLine($"REPLAY_EXACT {sample.Name,-32} runs={sample.Runs,-6} total_ms={sample.TotalMilliseconds,10:0.0} " +
+                              $"mean_ms={sample.MeanMilliseconds,8:0.00} alloc_mb={sample.AllocatedBytes / 1048576.0,8:0.0}");
+    }
+
+    /// <summary>
+    /// What one day was spent in: the passes that grew since the day before it, the collections
+    /// it paid for and the heap it left behind.
+    ///
+    /// A day that costs four times the one before it is the day a player sees as a freeze, and the
+    /// thirty-day table cannot name it - the spike is one day out of thirty. Reading the difference
+    /// is how "the game is slow" turns into "the weekly pass takes two and a half seconds".
+    /// </summary>
+    static int _gen0, _gen1, _gen2;
+    static long _allocated;
+
+    static void PrintDayDetail(int n, System.Diagnostics.Stopwatch dayClock,
+        int top, System.Collections.Generic.Dictionary<string, double> previous)
+    {
+        var deltas = new System.Collections.Generic.List<(string Name, double Ms)>();
+        double topLevel = 0;
+        foreach (var sample in SimProfiler.All)
+        {
+            var before = previous.TryGetValue(sample.Name, out var value) ? value : 0;
+            var delta = sample.TotalMilliseconds - before;
+            previous[sample.Name] = sample.TotalMilliseconds;
+            if (delta <= 0) continue;
+            deltas.Add((sample.Name, delta));
+            // Scopes nest, so summing all of them counts a stage inside its parent as well. Only
+            // the unindented ones are passes of the day in their own right.
+            if (sample.Name.Length > 0 && sample.Name[0] != ' ') topLevel += delta;
+        }
+        var gen0 = GC.CollectionCount(0); var gen1 = GC.CollectionCount(1); var gen2 = GC.CollectionCount(2);
+        var allocated = GC.GetAllocatedBytesForCurrentThread();
+        Console.WriteLine($"REPLAY_DAY_GC n={n} ms={dayClock.ElapsedMilliseconds} passes_ms={topLevel:0.0} " +
+                          $"unmeasured_ms={Math.Max(0, dayClock.ElapsedMilliseconds - topLevel):0.0} " +
+                          $"alloc_mb={(allocated - _allocated) / 1048576.0:0.0} " +
+                          $"gen0={gen0 - _gen0} gen1={gen1 - _gen1} gen2={gen2 - _gen2} " +
+                          $"heap_mb={GC.GetTotalMemory(false) / 1048576.0:0.0}");
+        _gen0 = gen0; _gen1 = gen1; _gen2 = gen2; _allocated = allocated;
+        foreach (var (name, ms) in deltas.OrderByDescending(d => d.Ms).Take(top))
+            Console.WriteLine($"REPLAY_DAY_SCOPE n={n} name={name.Trim()} ms={ms:0.0}");
     }
 
     /// <summary>What a campaign looks like from outside: enough to tell a living world from a dead one.</summary>

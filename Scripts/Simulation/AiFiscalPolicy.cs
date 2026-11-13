@@ -30,7 +30,7 @@ public static class AiFiscalPolicy
     public static bool AtWar(Campaign c, Nation n)
     {
         if (c is null || n is null) return false;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.LiveWars(c))
             if (!war.Ended && war.Involves(n.Id)) return true;
         return false;
     }

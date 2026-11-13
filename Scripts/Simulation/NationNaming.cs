@@ -1337,9 +1337,12 @@ public static class NationNaming
     public static float NameHold(Campaign campaign, Nation nation, int[] regions)
     {
         if (campaign is null || nation is null || regions is null || regions.Length == 0) return 1f;
-        var wanted = new HashSet<int>(regions);
-        var states = campaign.States.Where(state => wanted.Contains(state.MapIndex) && state.Population > 0).ToArray();
-        long total = states.Sum(state => (long)state.Population);
+        long total = 0;
+        for (var i = 0; i < regions.Length; i++)
+        {
+            var s = campaign.StateByMapIndex(regions[i]);
+            if (s is { Population: > 0 }) total += s.Population;
+        }
         if (total <= 0) return 1f;
         var id = nation.FoundNameId ?? "";
         long held = 0;
@@ -1347,31 +1350,53 @@ public static class NationNaming
         {
             case "culture":
             case "culture_adj":
-                foreach (var state in states)
+                for (var i = 0; i < regions.Length; i++)
+                {
+                    var state = campaign.StateByMapIndex(regions[i]);
+                    if (state is not { Population: > 0 }) continue;
                     foreach (var (people, size) in EconomySystem.Cultures(state))
                         if (string.Equals(people, id, StringComparison.OrdinalIgnoreCase)) held += size;
+                }
                 break;
             case "land":
                 return LandAtlas.Find(id) is { } land ? LandAtlas.Share(campaign, land, regions) : 1f;
             case "region":
-                foreach (var state in states)
+                for (var i = 0; i < regions.Length; i++)
+                {
+                    var state = campaign.StateByMapIndex(regions[i]);
+                    if (state is not { Population: > 0 }) continue;
                     if (string.Equals(state.Id, id, StringComparison.OrdinalIgnoreCase) ||
-                        campaign.States.Find(s => s.MapIndex == state.ParentMapIndex) is { } whole &&
+                        campaign.StateByMapIndex(state.ParentMapIndex) is { } whole &&
                         string.Equals(whole.Id, id, StringComparison.OrdinalIgnoreCase))
                         held += state.Population;
+                }
                 // A region names the state it is the seat of, while a fifth of the people live in
                 // it. A "Military Command of Maharashtra" ruling 712 million is not Maharashtra's.
                 return M.Clamp01(held / (float)total * 1.5f);
             case "tag":
             case "free_tag":
-                foreach (var state in states)
-                    if (state.CoreTags.Contains(id, StringComparer.OrdinalIgnoreCase)) held += state.Population;
+                for (var i = 0; i < regions.Length; i++)
+                {
+                    var state = campaign.StateByMapIndex(regions[i]);
+                    if (state is not { Population: > 0 }) continue;
+                    var cores = state.CoreTags;
+                    for (var ci = 0; ci < cores.Count; ci++)
+                        if (string.Equals(cores[ci], id, StringComparison.OrdinalIgnoreCase)) { held += state.Population; break; }
+                }
                 break;
             case "literal" when MovementCatalog.Of(nation.Movement?.Id) is { Peoples.Count: > 0 } movement:
                 // The state name a movement fought for ("Belarus") is its peoples' name.
-                foreach (var state in states)
+                for (var i = 0; i < regions.Length; i++)
+                {
+                    var state = campaign.StateByMapIndex(regions[i]);
+                    if (state is not { Population: > 0 }) continue;
                     foreach (var (people, size) in EconomySystem.Cultures(state))
-                        if (movement.Peoples.Contains(people, StringComparer.OrdinalIgnoreCase)) held += size;
+                    {
+                        for (var pi = 0; pi < movement.Peoples.Count; pi++)
+                            if (string.Equals(movement.Peoples[pi], people, StringComparison.OrdinalIgnoreCase))
+                            { held += size; break; }
+                    }
+                }
                 break;
             default:
                 return 1f;
@@ -1387,8 +1412,10 @@ public static class NationNaming
     {
         if (campaign is null || nation is null || !string.IsNullOrWhiteSpace(nation.CustomName) ||
             string.IsNullOrEmpty(nation.FoundNameKind)) return false;
-        var regions = campaign.StatesOf(nation).Select(state => state.MapIndex).ToArray();
-        if (regions.Length == 0) return false;
+        var owned = campaign.StatesOf(nation);
+        if (owned.Length == 0) return false;
+        var regions = new int[owned.Length];
+        for (var i = 0; i < owned.Length; i++) regions[i] = owned[i].MapIndex;
         if (NameHold(campaign, nation, regions) >= campaign.Defines.NameHoldMinimum) return false;
         var parent = campaign.NationById(nation.SecededFromId) ?? campaign.NationById(nation.ReleasedFromId);
         var culture = !string.IsNullOrWhiteSpace(nation.DeclaredCulture) && IsPeoplesGround(campaign, regions, nation.DeclaredCulture)
@@ -1422,10 +1449,18 @@ public static class NationNaming
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null) return;
-        if (campaign.ElapsedDays % 30 != 11) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same monthly pass, yielded between countries.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null) yield break;
+        if (campaign.ElapsedDays % 30 != 11) yield break;
+        var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++scanned % 32 == 0) yield return 0;
             if (string.IsNullOrEmpty(nation.FoundNameKind) || !string.IsNullOrWhiteSpace(nation.CustomName)) continue;
             if (nation.Movement is null || !nation.Movement.Landless) Refit(campaign, nation, "ground");
             if (nation.NameSettledDay >= 0)

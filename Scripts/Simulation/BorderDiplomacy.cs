@@ -59,13 +59,29 @@ public static class BorderDiplomacy
 
     public static void Tick(Campaign c)
     {
-        if (c?.ProvinceMap is null || c.Defines.BorderDealReviewDays <= 0 || !c.FeatureEnabled("deals")) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same border review, yielded between batches of countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c?.ProvinceMap is null || c.Defines.BorderDealReviewDays <= 0 || !c.FeatureEnabled("deals")) yield break;
         var every = Math.Max(7, c.Defines.BorderDealReviewDays);
-        foreach (var nation in c.Nations.ToArray())
+        var count = c.Nations.Count;
+        var ticked = 0;
+        var warmed = false;
+        for (var i = 0; i < count && i < c.Nations.Count; i++)
         {
+            var nation = c.Nations[i];
             if ((c.ElapsedDays + (long)nation.Id * 13) % every != 5) continue;
             if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;
             if (nation.Movement is not null || nation.IsSubject || nation.Population <= 0 || !c.HasOwnedLand(nation)) continue;
+            if (!warmed)
+            {
+                warmed = true;
+                foreach (var _ in BorderShape.EnsureStages(c)) yield return 0;
+            }
+            if (++ticked % 2 == 0) yield return 0;
             Review(c, nation);
         }
     }
@@ -108,10 +124,10 @@ public static class BorderDiplomacy
         Ultimatum.Deal best = null;
         var bestMeans = Means.Swap;
         var bestValue = float.NegativeInfinity;
-        void Consider(Ultimatum.Deal deal, Means means)
+        void Consider(Ultimatum.Deal deal, Means means, Ultimatum.DealAssessment precomputed = null)
         {
             if (deal is null) return;
-            var assessment = Ultimatum.AssessNegotiatedDeal(c, nation, other, deal);
+            var assessment = precomputed ?? Ultimatum.AssessNegotiatedDeal(c, nation, other, deal);
             if (!assessment.Valid || !assessment.Acceptable || assessment.FromValue < 0f) return;
             // What it costs us, in our own points: the cheapest means is the one that leaves us best off.
             if (assessment.FromValue <= bestValue) return;
@@ -124,14 +140,21 @@ public static class BorderDiplomacy
             foreach (var give in offers)
             {
                 var swap = new Ultimatum.Deal(new Ultimatum.Side { Regions = new[] { give } }, new Ultimatum.Side { Regions = new[] { take } });
-                Consider(Balance(c, nation, other, swap), Means.Swap);
+                var balanced = Balance(c, nation, other, swap, out var pre);
+                Consider(balanced, Means.Swap, pre);
             }
         // 2. A purchase of what we want.
         foreach (var take in wanted)
-            Consider(Balance(c, nation, other, new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { Regions = new[] { take } })), Means.Purchase);
+        {
+            var balanced = Balance(c, nation, other, new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { Regions = new[] { take } }), out var pre);
+            Consider(balanced, Means.Purchase, pre);
+        }
         // 3. A sale of what we cannot hold, at what it is worth to them.
         foreach (var give in pockets)
-            Consider(Asking(c, nation, other, give), Means.Sale);
+        {
+            var asking = Asking(c, nation, other, give, out var pre);
+            Consider(asking, Means.Sale, pre);
+        }
 
         if (best is not null)
         {
@@ -165,7 +188,7 @@ public static class BorderDiplomacy
         var mine = AiStatecraft.StrengthOf(c, nation);
         var theirs = MathF.Max(0.01f, AiStatecraft.StrengthOf(c, other));
         var key = "ultimatum/" + other.Id;
-        var region = wanted.OrderByDescending(id => c.States.Find(s => s.MapIndex == id)?.Population ?? 0).ThenBy(id => id).First();
+        var region = wanted.OrderByDescending(id => c.StateByMapIndex(id)?.Population ?? 0).ThenBy(id => id).First();
         if (c.Defines.AiUltimatumsBeforeWar && mine / theirs >= c.Defines.BorderUltimatumStrength &&
             nation.DecisionAvailableDay.GetValueOrDefault(key) <= c.ElapsedDays && !Ultimatum.PendingBetween(c, nation.Id, other.Id) &&
             Ultimatum.CanDemand(c, other, region))
@@ -216,13 +239,14 @@ public static class BorderDiplomacy
     private static List<int> Bulges(Campaign c, Nation nation, Nation other)
     {
         var result = new List<(int Region, float Share)>();
-        var owners = c.States.Where(s => s.NationMapIndex > 0).ToDictionary(s => s.MapIndex, s => s.NationMapIndex);
         foreach (var state in c.StatesOf(nation))
         {
             var total = 0; var theirs = 0;
             foreach (var (next, edges) in TerritorialCoherence.RegionBorders(c, state.MapIndex))
             {
-                if (!owners.TryGetValue(next, out var by)) continue;
+                var nextState = c.StateByMapIndex(next);
+                var by = nextState?.NationMapIndex ?? 0;
+                if (by <= 0) continue;
                 total += edges;
                 if (by == other.MapIndex) theirs += edges;
             }
@@ -237,11 +261,13 @@ public static class BorderDiplomacy
     /// The table as it stands if they would sign it; else the same table with the cheque that would
     /// make them sign, if we can and would pay it. Null when it cannot be balanced.
     /// </summary>
-    private static Ultimatum.Deal Balance(Campaign c, Nation nation, Nation other, Ultimatum.Deal deal)
+    private static Ultimatum.Deal Balance(Campaign c, Nation nation, Nation other, Ultimatum.Deal deal,
+        out Ultimatum.DealAssessment precomputed)
     {
+        precomputed = null;
         var assessment = Ultimatum.AssessNegotiatedDeal(c, nation, other, deal);
         if (!assessment.Valid) return null;
-        if (assessment.Acceptable) return deal;
+        if (assessment.Acceptable) { precomputed = assessment; return deal; }
         if (assessment.TerritoryProtected) return null;
         var shortfall = assessment.GrudgePenalty - assessment.ToValuation.Total;
         var weight = Ultimatum.CashWeight(other);
@@ -252,16 +278,19 @@ public static class BorderDiplomacy
     }
 
     /// <summary>Our pocket for their money: half of what it is worth to them above nothing, as far as they can pay.</summary>
-    private static Ultimatum.Deal Asking(Campaign c, Nation nation, Nation other, int pocket)
+    private static Ultimatum.Deal Asking(Campaign c, Nation nation, Nation other, int pocket,
+        out Ultimatum.DealAssessment precomputed)
     {
+        precomputed = null;
         var deal = new Ultimatum.Deal(new Ultimatum.Side { Regions = new[] { pocket } }, new Ultimatum.Side());
         var assessment = Ultimatum.AssessNegotiatedDeal(c, nation, other, deal);
         if (!assessment.Valid || !assessment.Acceptable) return null;
         var surplus = assessment.ToValuation.Total - assessment.GrudgePenalty;
         var weight = Ultimatum.CashWeight(other);
-        if (!float.IsFinite(surplus) || weight <= 0f) return deal;
+        if (!float.IsFinite(surplus) || weight <= 0f) { precomputed = assessment; return deal; }
         var room = MathF.Max(0f, other.Treasury) * M.Clamp01(c.Defines.DealMaxTreasuryShare) * 0.5f;
         var asking = MathF.Floor(MathF.Min(room, surplus * 0.5f / weight) * 100f) / 100f;
-        return asking > 0f ? deal with { To = deal.To with { Cash = asking } } : deal;
+        if (asking <= 0f) { precomputed = assessment; return deal; }
+        return deal with { To = deal.To with { Cash = asking } };
     }
 }

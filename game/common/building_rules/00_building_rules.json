@@ -1,0 +1,14 @@
+// When a building may be put up at all (BuildingRules). The 2024 world builds everything it
+// knows how to, so the base game sets no rule here; this file is the worked example a scenario
+// or total conversion copies. Keys are building IDs from common/buildings, not translated names.
+//
+//   "AirBase":    { "enabled": false }                      - an age before flight
+//   "University": { "available_from": "1100-01-01",         - inclusive HistoricalDate, BCE allowed
+//                   "available_until": null,                - null lifts the limit
+//                   "requires_technologies": [] }           - every one listed must be known
+//
+// An omitted property keeps the earlier rule, so a mod can override one field of another mod's
+// rule. A malformed rule is refused whole and listed in BuildingRules.Problems; it never erases
+// a valid one before it. See docs/MODDING_BUILDING_RULES_RU.md.
+{
+}

@@ -447,17 +447,30 @@ public partial class DealOrForceGame
 
         var wanted = new System.Collections.Generic.List<int>();
         var refused = "";
-        foreach (var army in _campaign.Armies)
+        var map = _campaign.ProvinceMap;
+        var room = NavalInvasion.Capacity(_campaign, _selectedFleet) - NavalInvasion.CarriedDivisions(_campaign, _selectedFleet);
+        // Those standing at the fleet: in its port, or on the coast within a degree of where it
+        // lies - never every division on every coast five degrees around, which is what this was.
+        foreach (var army in _campaign.Armies.OrderByDescending(a => a.Divisions * a.Strength).ThenBy(a => a.Id))
         {
-            if (army.NationId != _campaign.Player.Id || army.EmbarkedFleetId >= 0) continue;
-            if (NavalInvasion.CanEmbark(_campaign, _selectedFleet, army, out var reason)) wanted.Add(army.Id);
+            if (army.NationId != _campaign.Player.Id || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 || map is null) continue;
+            var atPort = _selectedFleet.InPort && army.ProvinceId == _selectedFleet.BerthProvinceId;
+            if (!atPort && (!SeaLanes.TryHarbourPoint(map, army.ProvinceId, out var quayLatitude, out var quayLongitude) ||
+                            NavalOperations.Distance(_selectedFleet.Latitude, _selectedFleet.Longitude, quayLatitude, quayLongitude) > 1f))
+                continue;
+            if (army.Divisions > room + 0.001f) { if (refused.Length == 0) refused = Simulation.Loc.Format("{0} has no room for {1}.", Simulation.Loc.Get(_selectedFleet.Name), army.Name); continue; }
+            if (NavalInvasion.CanEmbark(_campaign, _selectedFleet, army, out var reason)) { wanted.Add(army.Id); room -= army.Divisions; }
             else if (refused.Length == 0 && reason.Length > 0) refused = reason;
         }
         if (wanted.Count == 0)
         {
-            SetFleetFeedback(refused.Length > 0
-                ? refused
-                : "No division of yours is standing at this fleet's port.");
+            var port = _selectedFleet.InPort && map is not null && _selectedFleet.BerthProvinceId > 0
+                ? _campaign.States.Find(s => s.MapIndex == map.ProvinceToState[_selectedFleet.BerthProvinceId])?.DisplayName ?? "?"
+                : "";
+            SetFleetFeedback(refused.Length > 0 ? refused
+                : port.Length > 0
+                    ? Simulation.Loc.Format("No division of yours is standing at {0}, where the fleet lies. March them there - or select them and right-click across the sea: they will board by themselves.", port)
+                    : Simulation.Loc.Get("The fleet is at sea: bring it into port where your divisions stand, or select the divisions and right-click across the sea."));
             return;
         }
 
@@ -487,6 +500,35 @@ public partial class DealOrForceGame
         if (landed == 0) { SetFleetFeedback(refused); return; }
         SetFleetFeedback(Simulation.Loc.Format(
             Simulation.Plural.Key("{0:N0} division put ashore.", landed), landed));
+    }
+
+    private Button _fleetDecommission;
+    private ulong _decommissionArmedUntil;
+    private int _decommissionArmedFleet = -1;
+
+    private void DecommissionSelectedFleet()
+    {
+        if (_selectedFleet is null || _campaign.Player is null || _selectedFleet.NationId != _campaign.Player.Id) return;
+        var now = Time.GetTicksMsec();
+        if (now > _decommissionArmedUntil || _decommissionArmedFleet != _selectedFleet.Id)
+        {
+            _decommissionArmedUntil = now + 4000;
+            _decommissionArmedFleet = _selectedFleet.Id;
+            SetFleetFeedback(Simulation.Loc.Format("Decommission {0} ({1:N0} hulls)? Press Decommission again to confirm.",
+                Simulation.Loc.Get(_selectedFleet.Name), _selectedFleet.Hulls));
+            if (IsInstanceValid(_fleetDecommission)) _fleetDecommission.Text = Tr("Confirm");
+            return;
+        }
+        _decommissionArmedUntil = 0;
+        _decommissionArmedFleet = -1;
+        if (IsInstanceValid(_fleetDecommission)) _fleetDecommission.Text = Tr("Decommission");
+        var name = Simulation.Loc.Get(_selectedFleet.Name);
+        var order = new Simulation.DecommissionFleetCommand { IssuerId = _campaign.Player.Id, FleetId = _selectedFleet.Id };
+        _campaign.Commands.Enqueue(order);
+        _campaign.Commands.ApplyAll(_campaign);
+        if (order.Refusal.Length > 0) { SetFleetFeedback(order.Refusal); return; }
+        CloseFleetPanel();
+        SetArmyFeedback(Simulation.Loc.Format("{0} decommissioned; {1} back to the treasury.", name, Fmt.Money(order.Refund)));
     }
 
     private void SetFleetFeedback(string text)
@@ -578,6 +620,11 @@ public partial class DealOrForceGame
         _fleetSplit.TooltipText = Ui.Tip(Tr("Split in half (Ctrl+X)\nDetach half the hulls as a new squadron in the same place, on the same mission. " +
                                  "Troops aboard and hulls on the slipways stay with this fleet."));
         formation.AddChild(_fleetSplit);
+
+        // Out of the navy: a share of the price back, the slipways cancelled. Asked twice.
+        _fleetDecommission = ActionButton("Decommission", DecommissionSelectedFleet, 148, 30);
+        _fleetDecommission.TooltipText = Ui.Tip(Tr("Decommission\nTake this fleet out of the navy: a share of what its hulls cost comes back and the hulls on its slipways are cancelled. Not in action or with troops aboard. Press twice to confirm."));
+        formation.AddChild(_fleetDecommission);
 
         rows.AddChild(Title("TROOPS", 11, Ui.Colour("text.caption")));
         var cargo = new HBoxContainer();

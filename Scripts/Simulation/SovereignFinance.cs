@@ -15,6 +15,10 @@ public sealed partial class Defines
     public int DebtRestructuringWeeks { get; set; } = 26;
     public float DebtHaircut { get; set; } = .30f;
     public float DebtRestructuringFeeShare { get; set; } = .00002f;
+    /// <summary>Whether a government nobody plays borrows to keep its operating reserve (SovereignFinance.ManageLiquidity).</summary>
+    public bool AiLiquidityBorrowing { get; set; } = true;
+    /// <summary>How far above the bare reserve that cash is kept, so the door is not shut by one week's bill.</summary>
+    public float AiLiquidityMargin { get; set; } = 1.15f;
 }
 
 public sealed partial class Nation
@@ -180,6 +184,29 @@ public static class SovereignFinance
         n.CreditConfidence = MathF.Min(n.CreditConfidence, .25f);
         c.Chronicle.Record(c, "debt_negotiations", n.Id);
         return true;
+    }
+
+    /// <summary>
+    /// A treasury that rolls its paper, as every real one does. A government nobody plays
+    /// (or a player who handed over the budget) used to spend its opening cash down to nothing
+    /// and then borrow only the overdraft of each week, so its cash sat at zero for ever - below
+    /// the operating reserve AiFiscalPolicy asks of any discretionary act. Measured on seed 7:
+    /// within a year 203 of 255 governments were short of runway and 185 could not consider a war,
+    /// build or raise welfare, and the world went quiet from bookkeeping rather than from choice.
+    ///
+    /// So a government in good standing tops its cash up to that reserve (with a margin) out of
+    /// the credit the market still offers it this week. Nothing is conjured: the money is debt,
+    /// it pays the spread, it counts against capacity, and a country that leans on it hard enough
+    /// is marked Stressed and stops being lent to - which is a debt crisis, not a freeze.
+    /// </summary>
+    public static float ManageLiquidity(Campaign c, Nation n)
+    {
+        var d = c.Defines;
+        if (!d.AiLiquidityBorrowing || !n.DebtMechanicActive || n.DebtCondition != DebtCondition.Current) return 0;
+        var assessment = AiFiscalPolicy.Assess(c, n, d.AiTreasuryFloor);
+        if (assessment.Reason is AiFiscalReason.InvalidAccounts or AiFiscalReason.OverdueBills or AiFiscalReason.DebtWorkout) return 0;
+        var gap = assessment.Reserve * MathF.Max(1f, d.AiLiquidityMargin) - n.Treasury;
+        return gap > 0 && float.IsFinite(gap) ? Borrow(c, n, gap) : 0;
     }
 
     public static float Repay(Nation n, float requested)

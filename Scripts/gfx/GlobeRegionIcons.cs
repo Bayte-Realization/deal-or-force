@@ -43,6 +43,8 @@ public sealed partial class GlobePresentation
     private bool _regionIconsEnabled = true;
     private readonly Dictionary<string, Texture2D> _regionIconTextures = new(StringComparer.Ordinal);
     private readonly Dictionary<int, (float Latitude, float Longitude)> _regionAnchors = new();
+    // Each region's size as the radius of a disc of the same ground, in degrees of arc.
+    private readonly Dictionary<int, float> _regionRadius = new();
     private readonly Dictionary<int, RegionBadge> _regionBadges = new();
     private int _regionAnchorsRevision = -1;
     private Simulation.Campaign _regionAnchorsCampaign;
@@ -57,6 +59,7 @@ public sealed partial class GlobePresentation
     private float _badgeLayoutDistance = -1f;
     private double _badgeStill;
     private double _badgeDataAge;
+    private double _badgeMovingClock;
     private bool _badgeLayoutDue = true;
     private StrategicMapMode _badgeMode;
 
@@ -101,7 +104,21 @@ public sealed partial class GlobePresentation
                 _badgeDataAge = 0;
                 _badgeLayoutDistance = distance;
             }
-            else if (moved && _badgeStill == 0) _badgeLayoutDue = true;
+            else if (moved)
+            {
+                // While the view moves, a lighter pass four times a second: the badges already
+                // shown stay exactly where they are, and regions coming into view get theirs at
+                // once rather than when the drag ends - which made the icons look as if the right
+                // button switched them on.
+                _badgeLayoutDue = true;
+                _badgeMovingClock += delta;
+                if (_badgeMovingClock >= 0.25)
+                {
+                    _badgeMovingClock = 0;
+                    LayOutRegionBadges(moving: true);
+                    _badgeLayoutDistance = distance;
+                }
+            }
         }
 
         // Fades: in over a fifth of a second, out a little quicker.
@@ -136,6 +153,7 @@ public sealed partial class GlobePresentation
         _regionAnchorsCampaign = _campaign;
         _regionAnchorsRevision = _campaign.MapRevision;
         _regionAnchors.Clear();
+        _regionRadius.Clear();
         _regionIconOrder.Clear();
         _regionIconOrder.AddRange(_campaign.States);
         _regionIconOrder.Sort((left, right) => right.Population != left.Population
@@ -195,6 +213,13 @@ public sealed partial class GlobePresentation
             }
             var anchor = map.CenterOf(best);
             _regionAnchors[region] = (anchor.Latitude, anchor.Longitude);
+            // Ground in square degrees of arc: a raster cell is (360 / width) degrees a side at the
+            // equator and narrower by the cosine of its latitude.
+            var cellDegrees = 360.0 / Math.Max(1, map.Width);
+            double ground = 0;
+            foreach (var province in list)
+                ground += Math.Max(1, cells[province]) * Math.Cos(map.CenterOf(province).Latitude * Math.PI / 180.0);
+            _regionRadius[region] = (float)Math.Sqrt(ground * cellDegrees * cellDegrees / Math.PI);
         }
     }
 
@@ -240,7 +265,7 @@ public sealed partial class GlobePresentation
     /// kept first, where they still fit; the rest by population. Forces, city names and capitals
     /// keep their room as they stand at this moment.
     /// </summary>
-    private void LayOutRegionBadges()
+    private void LayOutRegionBadges(bool moving = false)
     {
         RefreshRegionAnchors();
         var (iconSize, signSize, fontSize) = BadgeMetrics();
@@ -251,6 +276,10 @@ public sealed partial class GlobePresentation
         foreach (var parts in _fleetNodes.Values) ReserveIconRoom(parts.Plate);
         if (CityLabelsEnabled) _regionIconTaken.AddRange(_cityTaken);
         _regionIconTaken.AddRange(_capitalNameBoxes);
+        ReserveCountryNames(screenRect);
+        // Room around each badge: a little close in, more from far out, where a crowd of icons
+        // is all a player would see.
+        var spacing = ViewDistance > 5f ? 12f : 4f;
 
         var projects = new Dictionary<int, int>();
         foreach (var project in _campaign.Construction) projects[project.StateMapIndex] = projects.GetValueOrDefault(project.StateMapIndex) + 1;
@@ -263,6 +292,10 @@ public sealed partial class GlobePresentation
             if (placed >= limit || keep.Contains(state.MapIndex)) return;
             if (state.Unclaimed || state.Population <= 0 || !_regionAnchors.TryGetValue(state.MapIndex, out var anchor)) return;
             if (BadgeScreenPoint(anchor.Latitude, anchor.Longitude) is not { } point || !screenRect.HasPoint(point)) return;
+            // As large on the screen as the badge, or no badge yet: closer in, it gets one.
+            var radius = _regionRadius.GetValueOrDefault(state.MapIndex);
+            if (radius > 0f && BadgeScreenPoint(Math.Clamp(anchor.Latitude + radius, -89.5f, 89.5f), anchor.Longitude) is { } edge &&
+                edge.DistanceTo(point) * 2.2f < iconSize * 1.6f) return;
             if (!_regionBadges.TryGetValue(state.MapIndex, out var badge))
                 _regionBadges[state.MapIndex] = badge = new RegionBadge { Region = state.MapIndex };
             badge.Latitude = anchor.Latitude; badge.Longitude = anchor.Longitude;
@@ -271,13 +304,19 @@ public sealed partial class GlobePresentation
             // The middle first; where a city's name or a force stands there, just below, above or
             // beside it - still on the region - rather than no badge at all. The place found is kept
             // (and tried first next time), so a badge does not hop between them as the view moves.
+            if (moving && badge.Wanted && badge.Alpha > 0.5f)
+            {
+                var kept = new Rect2(point.X + badge.Offset.X - badge.Width / 2f, point.Y + badge.Offset.Y - iconSize / 2f,
+                    badge.Width, iconSize).Grow(spacing);
+                if (screenRect.Encloses(kept)) { _regionIconTaken.Add(kept); keep.Add(state.MapIndex); placed++; return; }
+            }
             var step = iconSize + 6f;
             var tries = new[] { badge.Offset, Vector2.Zero, new Vector2(0f, step), new Vector2(0f, -step),
                 new Vector2(badge.Width * 0.6f + 4f, 0f), new Vector2(-badge.Width * 0.6f - 4f, 0f) };
             Rect2? found = null;
             foreach (var offset in tries)
             {
-                var box = new Rect2(point.X + offset.X - badge.Width / 2f, point.Y + offset.Y - iconSize / 2f, badge.Width, iconSize).Grow(3f);
+                var box = new Rect2(point.X + offset.X - badge.Width / 2f, point.Y + offset.Y - iconSize / 2f, badge.Width, iconSize).Grow(spacing);
                 if (!screenRect.Encloses(box)) continue;
                 var free = true;
                 foreach (var other in _regionIconTaken) if (other.Intersects(box)) { free = false; break; }
@@ -298,6 +337,32 @@ public sealed partial class GlobePresentation
         foreach (var state in _regionIconOrder) Consider(state);
 
         foreach (var badge in _regionBadges.Values) badge.Wanted = keep.Contains(badge.Region);
+    }
+
+    /// <summary>
+    /// The letters of the country names, as boxes on the screen a badge must not cover. Each letter
+    /// is a node of its own; its size is read off the distance to the next letter of the same name.
+    /// </summary>
+    private void ReserveCountryNames(Rect2 screenRect)
+    {
+        Vector2? previous = null;
+        for (var index = 0; index < _countryGlyphs.Count; index++)
+        {
+            var glyph = _countryGlyphs[index].Node;
+            if (!IsInstanceValid(glyph) || !glyph.IsVisibleInTree() || _camera.IsPositionBehind(glyph.GlobalPosition)) { previous = null; continue; }
+            var point = _camera.UnprojectPosition(glyph.GlobalPosition);
+            if (!screenRect.HasPoint(point)) { previous = point; continue; }
+            var step = previous is { } before ? before.DistanceTo(point) : 0f;
+            if (index + 1 < _countryGlyphs.Count && IsInstanceValid(_countryGlyphs[index + 1].Node))
+            {
+                var after = _camera.UnprojectPosition(_countryGlyphs[index + 1].Node.GlobalPosition);
+                var next = after.DistanceTo(point);
+                if (next > 0f && (step <= 0f || next < step)) step = next;
+            }
+            var size = step is > 4f and < 160f ? step : 24f;
+            _regionIconTaken.Add(new Rect2(point.X - size * 0.55f, point.Y - size * 0.75f, size * 1.1f, size * 1.5f));
+            previous = point;
+        }
     }
 
     /// <summary>Where a point of the map is on the screen, or null on the far side of the globe or behind the camera.</summary>

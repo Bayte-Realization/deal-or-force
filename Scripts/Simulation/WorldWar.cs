@@ -55,35 +55,65 @@ public static class WorldWar
 {
     public static void Tick(Campaign c)
     {
-        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(WorldWar))) return;
-        Recognise(c);
-        if (c.ElapsedDays % 7 != 0) return;
-        Fear(c);
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same world-war pass, yielded between its phases.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(WorldWar))) yield break;
+        foreach (var _ in RecogniseStages(c)) yield return 0;
+        yield return 0;
+        if (c.ElapsedDays % 7 != 0) yield break;
+        foreach (var _ in FearStages(c)) yield return 0;
+        yield return 0;
         Incidents(c);
     }
+
+    /// <summary>How many wars one stage of the recognition works through.</summary>
+    private const int RecogniseStageWars = 32;
 
     /// <summary>Whether any world war is being fought.</summary>
     public static bool Active(Campaign c) => c is not null && c.Wars.Any(w => !w.Ended && w.WorldWarDay >= 0);
 
-    private static void Recognise(Campaign c)
+    /// <summary>
+    /// The recognition in stages: a few wars at a time.
+    ///
+    /// It used to be one call - the wars of the world, and a declaration that walks every
+    /// relation and every organisation membership - measured at 70 ms on a save with 494 wars
+    /// and 44 000 relations, against a nine millisecond frame. Nothing in it reads a war that
+    /// a later stage writes: each war is examined and, if it qualifies, declared, exactly as
+    /// before. The list is walked by index against the count taken when it started, so a war
+    /// declared between two frames - by the player, or by anything else - neither breaks the
+    /// walk nor joins it, which is what the one-call version did.
+    /// </summary>
+    private static IEnumerable<int> RecogniseStages(Campaign c)
     {
         HashSet<int> powers = null;
-        foreach (var war in c.Wars)
+        var count = c.Wars.Count;
+        var seen = 0;
+        for (var index = 0; index < count; index++)
         {
-            if (war.Ended || war.CivilConflict || war.WorldWarDay >= 0) continue;
-            if (war.BelligerentCount < 2) continue;
-            powers ??= WorldPowers(c);
-            var attackers = war.Side(true).Count(powers.Contains);
-            var defenders = war.Side(false).Count(powers.Contains);
-            if (attackers == 0 || defenders == 0) continue;
-            // Two great powers and a crowd is a regional war with friends - Russia and a mobilised
-            // Ukraine ranked among the strongest armies made the 2024 war a "world war" by spring,
-            // whose declaration then called in thirty countries. A world war has powers in the
-            // plural: three in all, or a crowd with at least two on each side.
-            var plural = attackers + defenders >= c.Defines.WorldWarMinimumPowers;
-            var crowd = war.BelligerentCount >= c.Defines.WorldWarMinimumBelligerents && attackers >= 2 && defenders >= 2;
-            if (!plural && !crowd) continue;
-            Declare(c, war, powers);
+            var war = c.Wars[index];
+            if (!war.Ended && !war.CivilConflict && war.WorldWarDay < 0 && war.BelligerentCount >= 2)
+            {
+                powers ??= WorldPowers(c);
+                var attackers = war.Side(true).Count(powers.Contains);
+                var defenders = war.Side(false).Count(powers.Contains);
+                if (attackers != 0 && defenders != 0)
+                {
+                    // Two great powers and a crowd is a regional war with friends - Russia and a
+                    // mobilised Ukraine ranked among the strongest armies made the 2024 war a
+                    // "world war" by spring, whose declaration then called in thirty countries. A
+                    // world war has powers in the plural: three in all, or a crowd with at least
+                    // two on each side.
+                    var plural = attackers + defenders >= c.Defines.WorldWarMinimumPowers;
+                    var crowd = war.BelligerentCount >= c.Defines.WorldWarMinimumBelligerents &&
+                                attackers >= 2 && defenders >= 2;
+                    if (plural || crowd) Declare(c, war, powers);
+                }
+            }
+            if (++seen % RecogniseStageWars == 0) yield return 0;
         }
     }
 
@@ -159,10 +189,18 @@ public static class WorldWar
     /// <summary>Every country outside a world war is afraid while it lasts.</summary>
     private static void Fear(Campaign c)
     {
-        if (!Active(c)) return;
+        foreach (var _ in FearStages(c)) { }
+    }
+
+    /// <summary>The same weekly fear pass, yielded between batches of countries.</summary>
+    private static IEnumerable<int> FearStages(Campaign c)
+    {
+        if (!Active(c)) yield break;
         var shock = M.Clamp(c.Defines.WorldWarFearPerWeek, 0f, 0.05f);
+        var ticked = 0;
         foreach (var nation in c.Nations)
         {
+            if (++ticked % 16 == 0) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null) continue;
             if (c.Wars.Any(w => !w.Ended && w.WorldWarDay >= 0 && w.Involves(nation.Id))) continue;
             nation.Stability = M.Clamp01(nation.Stability - shock);

@@ -188,9 +188,9 @@ public static class KinStatecraft
 
     /// <summary>The country that holds this region, or null for ground nobody's rules reach.</summary>
     public static Nation HostOf(Campaign campaign, ScenarioState region) =>
-        campaign?.Nations is null || region is null
+        campaign is null || region is null
             ? null
-            : campaign.Nations.Find(nation => nation is not null && nation.MapIndex == region.NationMapIndex);
+            : campaign.NationByMapIndex(region.NationMapIndex);
 
     /// <summary>
     /// A movement of our people with a following in this region: the one our volunteers would
@@ -605,12 +605,19 @@ public static class KinStatecraft
     {
         var month = campaign.ElapsedDays / 30;
         var state = Scans.GetValue(campaign, _ => new ScanState());
+        if (state.Month == month) return state.Candidates;
+        foreach (var _ in ScanStages(campaign, state)) { }
+        return state.Candidates;
+    }
+
+    /// <summary>The same month scan, yielded between regions so one frame does not carry it all.</summary>
+    private static IEnumerable<int> ScanStages(Campaign campaign, ScanState state)
+    {
+        state.Month = campaign.ElapsedDays / 30;
         var Candidates = state.Candidates;
-        if (state.Month == month) return Candidates;
-        state.Month = month;
         Candidates.Clear();
         LastScanKinEvaluations = 0;
-        if (campaign.States is null || campaign.Nations is null) return Candidates;
+        if (campaign.States is null || campaign.Nations is null) yield break;
 
         // Which countries claim which people, built once: the reverse of the demography's own
         // table, so a region's population groups are read once each rather than once per
@@ -626,7 +633,7 @@ public static class KinStatecraft
                 if (!list.Contains(nation)) list.Add(nation);
             }
         }
-        if (claims.Count == 0) return Candidates;
+        if (claims.Count == 0) yield break;
 
         var minimum = campaign.Defines?.KinAgitationMinShare ?? 0.15f;
         // Who holds what, once: a region's holder is asked of the whole world for every region
@@ -634,13 +641,18 @@ public static class KinStatecraft
         var holders = new Dictionary<int, Nation>(campaign.Nations.Count);
         foreach (var nation in campaign.Nations)
             if (nation is not null) holders.TryAdd(nation.MapIndex, nation);
-        var evaluated = new HashSet<int>();
+        var evaluated = new Dictionary<int, long>();
+        var order = new List<Nation>();
+        var scanned = 0;
         foreach (var region in campaign.States)
         {
+            using (SimProfiler.Measure("kin:scan"))
+            {
             if (region is null || region.Population <= 0) continue;
             if (!holders.TryGetValue(region.NationMapIndex, out var host)) continue;
             if (!Answerable(host)) continue;
             evaluated.Clear();
+            order.Clear();
             foreach (var group in region.PopulationGroups)
             {
                 if (group is null || group.Size <= 0) continue;
@@ -648,24 +660,29 @@ public static class KinStatecraft
                 foreach (var country in claimants)
                 {
                     if (country.Id == host.Id) continue;
-                    // A culture occurs in many class/sector/religion rows. Kin already
-                    // totals ALL those rows: repeating that same full scan for every row
-                    // made the monthly pass quadratic in a mature region's population mix.
-                    // First occurrence and candidate ordering are unchanged; no RNG is used.
-                    if (!evaluated.Add(country.Id)) continue;
-                    LastScanKinEvaluations++;
-                    var (ours, _, share) = Kin(campaign, country, region);
-                    if (ours <= 0 || share < minimum) continue;
-                    if (!Candidates.TryGetValue(country.Id, out var list))
-                        Candidates[country.Id] = list = new List<Candidate>(2);
-                    // One region per host is enough for a monthly decision, and it is the best one.
-                    var index = list.FindIndex(candidate => candidate.Host.Id == host.Id);
-                    if (index < 0) list.Add(new Candidate(host, region, share));
-                    else if (list[index].Share < share) list[index] = new Candidate(host, region, share);
+                    // Accumulate all primary culture groups per claimant in one pass
+                    // rather than re-walking PopulationGroups via Kin(...) for each claimant.
+                    if (!evaluated.TryGetValue(country.Id, out var ours))
+                        order.Add(country);
+                    evaluated[country.Id] = ours + group.Size;
                 }
             }
+            foreach (var country in order)
+            {
+                LastScanKinEvaluations++;
+                var ours = evaluated[country.Id];
+                var share = M.Clamp01(ours / (float)region.Population);
+                if (ours <= 0 || share < minimum) continue;
+                if (!Candidates.TryGetValue(country.Id, out var list))
+                    Candidates[country.Id] = list = new List<Candidate>(2);
+                // One region per host is enough for a monthly decision, and it is the best one.
+                var index = list.FindIndex(candidate => candidate.Host.Id == host.Id);
+                if (index < 0) list.Add(new Candidate(host, region, share));
+                else if (list[index].Share < share) list[index] = new Candidate(host, region, share);
+            }
+            }
+            if (++scanned % 48 == 0) yield return 0;
         }
-        return Candidates;
     }
 
     /// <summary>
@@ -676,8 +693,13 @@ public static class KinStatecraft
     public static void Ai(Campaign campaign)
     {
         if (campaign?.Defines is null || !MechanicFeatures.SystemEnabled(campaign, nameof(KinStatecraft))) return;
-        var Candidates = Scan(campaign);
-        if (Candidates.Count == 0) return;
+        foreach (var _ in AiStages(campaign, Scan(campaign))) { }
+    }
+
+    /// <summary>The decisions themselves, one country at a time for the smoothed step.</summary>
+    private static IEnumerable<int> AiStages(Campaign campaign, Dictionary<int, List<Candidate>> Candidates)
+    {
+        if (Candidates.Count == 0) yield break;
         var defines = campaign.Defines;
         const int cycle = 30;
         // A private copy, because founding a movement adds a country to the list this loop is
@@ -688,6 +710,8 @@ public static class KinStatecraft
         var nations = campaign.Nations.ToArray();
         foreach (var country in nations)
         {
+            using (SimProfiler.Measure("kin:ai"))
+            {
             if (country is null || country.IsHuman || country.Movement is not null) continue;
             if (!Candidates.TryGetValue(country.Id, out var list) || list.Count == 0) continue;
             if (!MovementRules.OnItsDay(campaign, country.Id, cycle)) continue;
@@ -720,14 +744,26 @@ public static class KinStatecraft
                     Refusal(campaign, country, candidate.Region, "agitate").Length == 0)
                     Do(campaign, country, candidate.Region, "agitate");
             }
+            }
+            yield return 0;
         }
+    }
+
+    /// <summary>The month's look at the world and its decisions, in stages for the smoothed step.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || campaign.ElapsedDays <= 0) yield break;
+        if (campaign.Defines is null || !MechanicFeatures.SystemEnabled(campaign, nameof(KinStatecraft))) yield break;
+        var state = Scans.GetValue(campaign, _ => new ScanState());
+        if (state.Month != campaign.ElapsedDays / 30)
+            foreach (var _ in ScanStages(campaign, state)) yield return 0;
+        foreach (var _ in AiStages(campaign, state.Candidates)) yield return 0;
     }
 
     /// <summary>The month's look at the world; the decisions themselves are the AI's.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || campaign.ElapsedDays <= 0) return;
-        Ai(campaign);
+        foreach (var _ in TickStages(campaign)) { }
     }
 
     /// <summary>What the month's scan found, for the bench and for tests that must not guess.</summary>

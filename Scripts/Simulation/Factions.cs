@@ -325,11 +325,19 @@ public static class Factions
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign?.ProvinceMap is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly faction pass, yielded between factions.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign?.ProvinceMap is null) yield break;
         SettleDefenselessRebelRemnants(campaign);
-        if (campaign.ElapsedDays % 7 != 4 || !campaign.FeatureEnabled("de_facto_factions")) return;
+        if (campaign.ElapsedDays % 7 != 4 || !campaign.FeatureEnabled("de_facto_factions")) yield break;
+        var ticked = 0;
         foreach (var faction in campaign.Nations.ToArray())
         {
+            if (++ticked % 4 == 0) yield return 0;
             if (campaign.Fallen.Contains(faction.Id)) continue;
             var parent = campaign.NationById(faction.SecededFromId);
             if (parent is null || campaign.Fallen.Contains(parent.Id) || parent.Movement is not null) continue;
@@ -498,7 +506,10 @@ public static class Factions
                     participant.FactionId = "";
                     participant.PoliticsChangedDay = campaign.ElapsedDays;
                     if (string.IsNullOrEmpty(participant.FormedNationId))
+                    {
                         participant.FormedNationId = FormableRestorations.Prefix + parent.Tag.ToLowerInvariant();
+                        FormableRestorations.Invalidate(campaign);
+                    }
                     campaign.LocateCapitals(preserveExisting: true);
                     campaign.Chronicle.Record(campaign, "regime_change", participant.Id, parent.Id, place: formerName);
                 }
@@ -846,6 +857,7 @@ public static class Factions
         {
             relation.Stance = DiplomaticStance.Allied;
             relation.AllianceSinceDay = campaign.ElapsedDays;
+            campaign.NoteAllianceChange();
             foreach (var enemyTag in definition.CoBelligerentAgainst)
             {
                 var enemy = campaign.NationByTag(enemyTag);

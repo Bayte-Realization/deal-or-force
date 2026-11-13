@@ -42,8 +42,17 @@ internal static class PeaceReport
             if (day % 365 != 0) continue;
             Console.WriteLine($"YEAR {day / 365} navies={c.Fleets.Select(f => f.NationId).Distinct().Count()} fleets={c.Fleets.Count} hulls={c.Fleets.Sum(f => f.Hulls)} at_sea={c.Fleets.Count(f => !f.InPort)} " +
                               $"carrying={c.Fleets.Count(f => f.Carried.Count > 0)} " + string.Join(" ", NavalInvasion.Tally.OrderBy(p => p.Key).Select(p => $"{p.Key}={p.Value}")));
+            foreach (var n in c.Nations.Where(n => n.Population > 0 && n.Movement is null).OrderByDescending(n => n.Gdp).Take(14))
+            {
+                var own = c.Fleets.Where(f => f.NationId == n.Id).ToList();
+                Console.WriteLine($"   {n.Tag} gdp={n.Gdp:0} mil={n.MilitarySpending:0.000} treasury={n.Treasury:0} fleets={own.Count} hulls={own.Sum(f => f.Hulls)} ordered={own.Sum(f => f.HullsOrdered)} " +
+                                  $"est={own.Sum(f => f.Establishment)} target={own.Sum(f => Shipbuilding.TargetHulls(c, n, f))} ambition={Shipbuilding.Ambition(c, n)} slips={Shipbuilding.Slipways(c, n):0.0} wars={c.Wars.Count(w => !w.Ended && w.Involves(n.Id))} [{string.Join(",", c.Wars.Where(w => !w.Ended && w.Involves(n.Id)).Take(3).Select(w => w.Name))}]");
+            }
         }
         Console.WriteLine($"START fleets={startFleets} hulls={startHulls}");
+        foreach (var w in c.Wars.Where(w => w.WorldWarDay >= 0))
+            Console.WriteLine($"WORLDWAR {w.Name} began day {w.StartedDay} world day {w.WorldWarDay} ended={w.Ended} first={c.NationById(w.AttackerId)?.Tag}-{c.NationById(w.DefenderId)?.Tag} | " +
+                              $"A: {string.Join(",", w.Side(true).Select(id => c.NationById(id)?.Tag))} | D: {string.Join(",", w.Side(false).Select(id => c.NationById(id)?.Tag))}");
         return 0;
     }
 

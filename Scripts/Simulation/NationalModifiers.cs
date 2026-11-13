@@ -78,16 +78,28 @@ public static class NationalModifiers
     {
         if (nation is null) return 0f;
         var totals = nation.ModifierTotals;
-        if (totals is null)
+        if (totals is null || System.Threading.Volatile.Read(ref nation.ModifierTotalsDirty))
         {
-            // The fill keeps-and-refills the country's own source dictionaries as it goes, so
-            // two workers building the same country aside at once would clear a table the
-            // other is halfway through copying. One builder a country at a time; whoever
-            // waited reads the table that was published.
+            // The fill keeps-and-refills the country's own swap dictionary under the lock so
+            // parallel workers never read a table halfway through copying, without allocating
+            // fresh dictionaries after warmup.
             lock (nation.ModifierGate)
-                totals = nation.ModifierTotals ??= BuildAside(nation);
+                totals = EnsureBuiltLocked(nation);
         }
         return totals.TryGetValue(key, out var value) ? value : 0f;
+    }
+
+    private static Dictionary<string, float> EnsureBuiltLocked(Nation nation)
+    {
+        if (nation.ModifierTotals is not null && !System.Threading.Volatile.Read(ref nation.ModifierTotalsDirty))
+            return nation.ModifierTotals;
+        var next = nation._modifierSwap ?? new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        next.Clear();
+        Fill(next, nation);
+        nation._modifierSwap = nation.ModifierTotals;
+        nation.ModifierTotals = next;
+        System.Threading.Volatile.Write(ref nation.ModifierTotalsDirty, false);
+        return next;
     }
 
     /// <summary>One plus <see cref="Of(Nation,string)"/>, never below a tenth: a multiplier.</summary>
@@ -96,7 +108,7 @@ public static class NationalModifiers
     /// <summary>Work the sums out again the next time they are asked for: a source changed.</summary>
     public static void Invalidate(Nation nation)
     {
-        if (nation is not null) nation.ModifierTotals = null;
+        if (nation is not null) System.Threading.Volatile.Write(ref nation.ModifierTotalsDirty, true);
     }
 
     /// <summary>Every source of one country's modifiers, with what each adds - for a tooltip.</summary>
@@ -134,21 +146,7 @@ public static class NationalModifiers
         var totals = nation.ModifierTotals ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         totals.Clear();
         Fill(totals, nation);
-        return totals;
-    }
-
-    /// <summary>
-    /// The lazy path a parallel region can reach. <see cref="Build"/> refills the country's
-    /// own dictionary in place, which is fine on the daily pass's thread and wrong on a
-    /// worker's: another region of the same country asking mid-fill would read a table that
-    /// says 'no such modifier' for everything not reached yet - a different world, not a
-    /// slower one. This builds aside and the caller publishes the finished table whole;
-    /// two racers publish identical complete tables, so either answer is the same numbers.
-    /// </summary>
-    private static Dictionary<string, float> BuildAside(Nation nation)
-    {
-        var totals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-        Fill(totals, nation);
+        System.Threading.Volatile.Write(ref nation.ModifierTotalsDirty, false);
         return totals;
     }
 
@@ -168,18 +166,19 @@ public static class NationalModifiers
             foreach (var (key, value) in modifiers)
                 totals[key] = totals.GetValueOrDefault(key) + value;
         }
-        foreach (var (_, modifiers) in NationalCourses.Sources(nation)) Add(totals, modifiers);
-        foreach (var (_, modifiers) in UnionCohesion.Sources(nation)) Add(totals, modifiers);
-        foreach (var (_, modifiers) in DemographicCycle.Sources(nation)) Add(totals, modifiers);
-        foreach (var (_, modifiers) in TacticalDoctrines.Sources(nation)) Add(totals, modifiers);
+        NationalCourses.AddTo(totals, nation);
+        UnionCohesion.AddTo(totals, nation);
+        DemographicCycle.AddTo(totals, nation);
+        // Same-shelf books share a ceiling here, on this sum. Sources still names each book whole.
+        TacticalDoctrines.AddTo(totals, nation);
         if (StrategicDoctrines.Of(nation) is { } stratDoc) Add(totals, stratDoc.Modifiers);
-        foreach (var (_, modifiers) in ParliamentaryPolitics.Sources(nation)) Add(totals, modifiers);
+        ParliamentaryPolitics.AddTo(totals, nation);
         if (nation.LawsActive)
             foreach (var category in PoliticalPolicyCatalog.NationalCategories)
                 if (PoliticalPolicies.Effective(nation, category) is { } law) Add(totals, law.Modifiers);
         if (nation.AgendasActive && nation.Agenda is { Completed: false } agenda &&
             PoliticalPolicyCatalog.Find(agenda.Id, true) is { } definition) Add(totals, definition.Modifiers);
-        foreach (var (_, modifiers) in Rulers.Sources(nation)) Add(totals, modifiers);
+        Rulers.AddTo(totals, nation);
         foreach (var id in nation.Technologies)
             if (TechnologyCatalog.Of(id) is { } technology) Add(totals, technology.Effects);
         foreach (var active in nation.Modifiers)
@@ -195,11 +194,22 @@ public static class NationalModifiers
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(NationalModifiers))) return;
-        PoliticalPolicies.Tick(campaign);
-        ParliamentaryPolitics.Tick(campaign);
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily modifier sum, yielded between batches of countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(NationalModifiers))) yield break;
+        using (SimProfiler.Measure("  mod:policies")) PoliticalPolicies.Tick(campaign);
+        using (SimProfiler.Measure("  mod:parliament")) ParliamentaryPolitics.Tick(campaign);
+        yield return 0;
+        var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++ticked % 24 == 0) yield return 0;
+            using (SimProfiler.Measure("  mod:nations"))
+            {
             // Rebuild into the country's own dictionary rather than dropping it: same sums,
             // none of the allocation. Invalidate still drops it outright on a source change.
             Build(nation);
@@ -214,6 +224,7 @@ public static class NationalModifiers
             {
                 if (radicalism != 0f) state.Radicalism = M.Clamp01(state.Radicalism + radicalism / 7f);
                 if (living != 0f) state.StandardOfLiving = M.Clamp01(state.StandardOfLiving + living / 7f);
+            }
             }
         }
     }
@@ -285,6 +296,8 @@ public sealed partial class Nation
 {
     /// <summary>What <see cref="NationalModifiers"/> added up for this country, until a source changes. Not saved.</summary>
     internal Dictionary<string, float> ModifierTotals;
+    internal Dictionary<string, float> _modifierSwap;
+    internal bool ModifierTotalsDirty;
 
     /// <summary>
     /// Serialises the aside build a parallel region can reach first. The fill keeps-and-refills

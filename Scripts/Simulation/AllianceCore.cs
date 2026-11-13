@@ -64,6 +64,64 @@ public sealed partial class Defines
 /// </summary>
 public static class AllianceSystem
 {
+    /// <summary>Read-only candidate assessment within ONE AI move. No day cache:
+    /// a successful move ends the scan, and the signature still uses the public live score.</summary>
+    internal sealed class OfferScan
+    {
+        private static readonly List<Nation> EmptyAllies = new();
+        private readonly Campaign _campaign;
+        private readonly Dictionary<int, List<Nation>> _allies = new();
+        private readonly Stack<List<Nation>> _pool = new();
+        private int _day = int.MinValue;
+        private int _revision = int.MinValue;
+
+        internal OfferScan(Campaign campaign) { _campaign = campaign; }
+
+        internal void Invalidate() => _revision = int.MinValue;
+
+        internal List<Nation> Allies(Campaign campaign, Nation nation)
+        {
+            if (campaign is null || nation is null) return EmptyAllies;
+            if (!ReferenceEquals(campaign, _campaign)) return AlliesOf(campaign, nation);
+            if (_day != campaign.ElapsedDays || _revision != campaign.AllianceRevision)
+                Rebuild(campaign);
+            return _allies.TryGetValue(nation.Id, out var allies) ? allies : EmptyAllies;
+        }
+
+        private void Rebuild(Campaign campaign)
+        {
+            foreach (var list in _allies.Values)
+            {
+                list.Clear();
+                _pool.Push(list);
+            }
+            _allies.Clear();
+            _day = campaign.ElapsedDays;
+            _revision = campaign.AllianceRevision;
+            AddTable(campaign, campaign.Relations);
+            AddTable(campaign, campaign.DormantRelations);
+            foreach (var list in _allies.Values)
+                if (list.Count > 1) list.Sort(static (left, right) => left.Id.CompareTo(right.Id));
+        }
+
+        private void AddTable(Campaign campaign, Dictionary<long, DiplomaticRelation> table)
+        {
+            foreach (var relation in table.Values)
+            {
+                if (relation.Stance != DiplomaticStance.Allied) continue;
+                var a = campaign.NationById(relation.A);
+                var b = campaign.NationById(relation.B);
+                if (a is null || b is null || a.Id == b.Id) continue;
+                if (!_allies.TryGetValue(a.Id, out var aList))
+                    _allies[a.Id] = aList = _pool.Count > 0 ? _pool.Pop() : new List<Nation>();
+                aList.Add(b);
+                if (!_allies.TryGetValue(b.Id, out var bList))
+                    _allies[b.Id] = bList = _pool.Count > 0 ? _pool.Pop() : new List<Nation>();
+                bList.Add(a);
+            }
+        }
+    }
+
     /// <summary>Every country this one is allied to.</summary>
     public static List<Nation> AlliesOf(Campaign campaign, Nation nation)
     {
@@ -109,9 +167,9 @@ public static class AllianceSystem
             return false;
         }
 
-        var relation = preview ? CampaignDiplomacy.ReadOrNeutral(campaign, proposer.Id, target.Id)
+        var relation = preview ? CampaignDiplomacy.Peek(campaign, proposer.Id, target.Id)
             : CampaignDiplomacy.Get(campaign, proposer.Id, target.Id);
-        if (relation.Stance == DiplomaticStance.Allied)
+        if (relation is { Stance: DiplomaticStance.Allied })
         {
             refusal = Loc.Format("{0} and {1} are already allied.", proposer.Tag, target.Tag);
             return false;
@@ -136,6 +194,8 @@ public static class AllianceSystem
             refusal = Loc.Format("{0} answers to {1}; ask them instead.", target.Tag, overlord?.Tag ?? Loc.Get("somebody"));
             return false;
         }
+
+        if (relation is null) return true;
 
         // Whether an offer is pending is the date, not who made it: an offer from country 0
         // (Indonesia) was stored as the same 0 that meant "no offer".
@@ -170,6 +230,24 @@ public static class AllianceSystem
         return true;
     }
 
+    internal static bool CanProposeQuiet(Campaign campaign, Nation proposer, Nation target, bool preview = false)
+    {
+        if (campaign is null || proposer is null || target is null || proposer.Id == target.Id)
+            return false;
+
+        var relation = preview ? CampaignDiplomacy.Peek(campaign, proposer.Id, target.Id)
+            : CampaignDiplomacy.Get(campaign, proposer.Id, target.Id);
+        if (relation is { Stance: DiplomaticStance.Allied }) return false;
+        if (CampaignDiplomacy.AtWar(campaign, proposer.Id, target.Id)) return false;
+        if (proposer.IsSubject || target.IsSubject) return false;
+        if (relation is null) return true;
+        if (!Expired(campaign, relation)) return false;
+        if (relation.AllianceOfferedDay >= 0 &&
+            (long)campaign.ElapsedDays - relation.AllianceOfferedDay - campaign.Defines.AllianceOfferDays < campaign.Defines.AllianceRefusalDays)
+            return false;
+        return campaign.ElapsedDays - relation.AllianceRefusedDay >= campaign.Defines.AllianceRefusalDays;
+    }
+
     /// <summary>
     /// What the asked country thinks of being asked, where anything above the define is yes.
     ///
@@ -180,28 +258,38 @@ public static class AllianceSystem
     /// history were actually about.
     /// </summary>
     public static float Willingness(Campaign campaign, Nation asked, Nation asking, Breakdown why = null,
-        bool refreshAssessment = true)
+        bool refreshAssessment = true) => Willingness(campaign, asked, asking, why, refreshAssessment, null);
+
+    internal static float Willingness(Campaign campaign, Nation asked, Nation asking, Breakdown why,
+        bool refreshAssessment, OfferScan scan)
     {
         why?.Begin("Whether they would sign", "share");
         if (campaign is null || asked is null || asking is null) return 0f;
-        var relation = refreshAssessment ? CampaignDiplomacy.Get(campaign, asked.Id, asking.Id)
-            : CampaignDiplomacy.ReadOrNeutral(campaign, asked.Id, asking.Id);
+        // A number is a read. Get would insert a relation, and a scan that only wants the
+        // number would then be a write. Propose creates the tie when a decision accepts it.
+        // refreshAssessment still updates the strength estimate; it does not open a stance.
+        var relation = CampaignDiplomacy.Peek(campaign, asked.Id, asking.Id);
         var defines = campaign.Defines;
 
-        var willingness = relation.Opinion / 100f;
-        why?.Add("How we regard them", relation.Opinion / 100f);
+        var opinion = relation?.Opinion ?? 0f;
+        var willingness = opinion / 100f;
+        why?.Add("How we regard them", opinion / 100f);
         var image = SocialMemory.Esteem(campaign, asked, asking) * defines.SocialAllianceWeight;
         willingness += image;
         why?.Add(Loc.Get("Their standing in our society"), image);
 
         // An alliance with a country already at war is a war, and everybody knows it.
-        foreach (var war in campaign.Wars)
+        var wars = Warfare.LiveWars(campaign);
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
             if (!war.Ended && war.Involves(asking.Id))
             {
                 willingness -= defines.AllianceWarPenalty;
                 why?.Add("They are already fighting", -defines.AllianceWarPenalty);
                 break;
             }
+        }
 
         // What they are worth as a friend, and what we are worth to them. A small country
         // wants somebody large to stand behind; a large one gains little from somebody it
@@ -227,14 +315,17 @@ public static class AllianceSystem
         var powers = GreatPowers(campaign);
         var asksBorders = CampaignDiplomacy.Neighbours(campaign, asked.MapIndex);
         var askingBorders = CampaignDiplomacy.Neighbours(campaign, asking.MapIndex);
+        var candidates = _sharedRivalCandidates ??= new HashSet<int>();
+        candidates.Clear();
+        foreach (var id in powers) candidates.Add(id);
+        AddBorderNationIds(campaign, asksBorders, candidates);
+        AddBorderNationIds(campaign, askingBorders, candidates);
         var shared = 0;
-        foreach (var third in campaign.Nations)
+        foreach (var thirdId in candidates)
         {
-            if (third.Id == asked.Id || third.Id == asking.Id) continue;
-            if (!powers.Contains(third.Id) && !asksBorders.Contains(third.MapIndex) &&
-                !askingBorders.Contains(third.MapIndex)) continue;
-            var ours = CampaignDiplomacy.Peek(campaign, asked.Id, third.Id);
-            var theirsToo = CampaignDiplomacy.Peek(campaign, asking.Id, third.Id);
+            if (thirdId == asked.Id || thirdId == asking.Id) continue;
+            var ours = CampaignDiplomacy.Peek(campaign, asked.Id, thirdId);
+            var theirsToo = CampaignDiplomacy.Peek(campaign, asking.Id, thirdId);
             if (ours is null || theirsToo is null) continue;
             if (ours.Opinion > defines.AiRivalryThreshold || theirsToo.Opinion > defines.AiRivalryThreshold) continue;
             shared++;
@@ -264,8 +355,8 @@ public static class AllianceSystem
 
         // Which camp they are in. An alliance with a friend of our rival is an alliance with
         // their wars against us, and an ally of ours who cannot stand them will say so.
-        var askedAllies = AlliesOf(campaign, asked);
-        var askingAllies = AlliesOf(campaign, asking);
+        var askedAllies = scan?.Allies(campaign, asked) ?? AlliesOf(campaign, asked);
+        var askingAllies = scan?.Allies(campaign, asking) ?? AlliesOf(campaign, asking);
         foreach (var friend in askingAllies)
         {
             if (friend.Id == asked.Id || askedAllies.Contains(friend)) continue;
@@ -328,6 +419,19 @@ public static class AllianceSystem
         internal readonly HashSet<int> Powers = new();
     }
     private static readonly ConditionalWeakTable<Campaign, PowerFrame> PowerFrames = new();
+    [ThreadStatic] private static HashSet<int> _sharedRivalCandidates;
+
+    private static void AddBorderNationIds(Campaign campaign, IReadOnlyCollection<int> borderMaps, HashSet<int> into)
+    {
+        if (borderMaps is HashSet<int> set)
+        {
+            foreach (var mapIndex in set)
+                if (campaign.NationByMapIndex(mapIndex) is { } neighbor) into.Add(neighbor.Id);
+            return;
+        }
+        foreach (var mapIndex in borderMaps)
+            if (campaign.NationByMapIndex(mapIndex) is { } neighbor) into.Add(neighbor.Id);
+    }
 
     /// <summary>
     /// The countries large enough that a quarrel with them is everybody's quarrel - the same
@@ -446,6 +550,7 @@ public static class AllianceSystem
         relation.AllianceAssessmentDay = campaign.ElapsedDays;
         relation.LastActionDay = campaign.ElapsedDays;
         OpinionSystem.Remember(campaign, relation, "alliance");
+        campaign.NoteAllianceChange();
         campaign.MarkStrategicChange();
         DiagnosticLogs.Write("simulation",
             $"ALLIANCE {one.Tag}+{other.Tag} day={campaign.ElapsedDays}");
@@ -471,6 +576,7 @@ public static class AllianceSystem
         }
 
         relation.Stance = DiplomaticStance.Neutral;
+        campaign.NoteAllianceChange();
         AlliancePrograms.Clear(relation);
         relation.AllianceSinceDay = -9999;
         relation.AllianceRefusedDay = campaign.ElapsedDays;
@@ -479,6 +585,10 @@ public static class AllianceSystem
         OpinionSystem.Forget(campaign, relation, "alliance");
         OpinionSystem.Remember(campaign, relation, "broke_our_alliance");
         campaign.MarkStrategicChange();
+        // One public fact for every caller. A cohesion rupture used to announce it
+        // afterwards, and the diplomacy button, an ultimatum and the console left
+        // the chronicle, the news and the public mark uninformed.
+        campaign.Chronicle.Record(campaign, "alliance_ended", nation.Id, other.Id);
         DiagnosticLogs.Write("simulation",
             $"ALLIANCE_END {nation.Tag}-{other.Tag} day={campaign.ElapsedDays}");
         return true;

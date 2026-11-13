@@ -106,18 +106,44 @@ public static class CapitalCore
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(CapitalCore))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    private sealed class SeatBoard
+    {
+        public readonly Dictionary<int, ScenarioState> Regions = new();
+        public readonly Dictionary<int, HashSet<int>> AvailableByOwner = new();
+        public readonly HashSet<int> LandOwners = new();
+        public readonly Stack<HashSet<int>> HeldPool = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, SeatBoard> SeatBoards = new();
+
+    /// <summary>The same seat watch, yielded between batches of nations.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(CapitalCore))) yield break;
         var topology = campaign?.ProvinceMap;
-        if (topology is null) return;
-        var regions = new Dictionary<int, ScenarioState>();
-        foreach (var state in campaign.States) regions[state.MapIndex] = state;
-        Dictionary<int, HashSet<int>> availableByOwner = null;
-        HashSet<int> landOwners = null;
+        if (topology is null) yield break;
+        var board = SeatBoards.GetOrCreateValue(campaign);
+        var regions = board.Regions;
+        regions.Clear();
+        for (var i = 0; i < campaign.States.Count; i++)
+        {
+            var state = campaign.States[i];
+            regions[state.MapIndex] = state;
+        }
+        var availableByOwner = board.AvailableByOwner;
+        var landOwners = board.LandOwners;
+        var heldPool = board.HeldPool;
+        var surveyed = false;
         void SurveyGround()
         {
-            if (availableByOwner is not null) return;
-            availableByOwner = new Dictionary<int, HashSet<int>>();
-            landOwners = new HashSet<int>();
+            if (surveyed) return;
+            surveyed = true;
+            foreach (var existing in availableByOwner.Values) { existing.Clear(); heldPool.Push(existing); }
+            availableByOwner.Clear();
+            landOwners.Clear();
             var controllers = campaign.ProvinceController;
             for (var province = 1; province <= topology.ProvinceCount; province++)
             {
@@ -125,12 +151,15 @@ public static class CapitalCore
                 if (owner <= 0 || topology.IsWater(province) || campaign.DestroyedProvinces.Contains(province)) continue;
                 landOwners.Add(owner);
                 if (controllers is not null && (province >= controllers.Length || controllers[province] != owner)) continue;
-                if (!availableByOwner.TryGetValue(owner, out var held)) availableByOwner[owner] = held = new HashSet<int>();
+                if (!availableByOwner.TryGetValue(owner, out var held))
+                    availableByOwner[owner] = held = heldPool.Count > 0 ? heldPool.Pop() : new HashSet<int>();
                 held.Add(topology.ProvinceToState[province]);
             }
         }
+        var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++scanned % 8 == 0) yield return 0;
             // A movement or a country never represented on this raster has no placed seat
             // to lose. Its field units are governed by its own lifecycle.
             if (nation.CapitalStateMapIndex <= 0 && nation.CapitalProvinceId <= 0 &&
@@ -245,7 +274,7 @@ public static class CapitalCore
         // a licence to use a remnant of the region after a placed capital has been captured.
         if (nation.CapitalProvinceId <= 0 && nation.CapitalStateMapIndex > 0)
         {
-            var region = campaign.States.Find(s => s.MapIndex == nation.CapitalStateMapIndex);
+            var region = campaign.StateByMapIndex(nation.CapitalStateMapIndex);
             if (region is not null)
             {
                 var legacy = Seat(campaign, nation, region);
@@ -269,7 +298,7 @@ public static class CapitalCore
         var province = EffectiveProvinceId(campaign, nation);
         if (province <= 0) return "";
         if (province == nation.CapitalProvinceId && !SeatNameLost(campaign, nation)) return CountryNames.Capital(nation);
-        return campaign.States.Find(state => state.MapIndex == campaign.ProvinceMap.ProvinceToState[province])?.DisplayName ?? "";
+        return campaign.StateByMapIndex(campaign.ProvinceMap.ProvinceToState[province])?.DisplayName ?? "";
     }
 
     /// <summary>
@@ -330,7 +359,7 @@ public static class CapitalCore
         if (!GroundAvailable(campaign, nation, province)) return false;
         var region = campaign.ProvinceMap.ProvinceToState[province];
         return UsableRegion(regions is not null ? regions.GetValueOrDefault(region) :
-            campaign.States.Find(state => state.MapIndex == region));
+            campaign.StateByMapIndex(region));
     }
 
     private static void BestSeat(Campaign campaign, Nation nation, HashSet<int> available,

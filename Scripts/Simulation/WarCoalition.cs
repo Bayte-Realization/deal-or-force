@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -47,16 +48,25 @@ public static class WarCoalition
     // The staff asks the same question dozens of times a day - one route per candidate per
     // hole per arrangement - so the answers live for the day and die with the first border
     // change (a capture bumps the map revision). Same inputs, same answer; only the work
-    // is shared.
-    private static Campaign _routeCacheFor;
-    private static long _routeCacheStamp;
-    private static readonly Dictionary<(int Nation, int From, int To), int[]> RouteCache = new();
-    private static readonly Dictionary<(int War, int Nation), HashSet<ushort>> AllowedCache = new();
+    private sealed class CoalitionCache
+    {
+        public long RouteStamp;
+        public readonly Dictionary<(int Nation, int From, int To), int[]> RouteCache = new();
+        public readonly Dictionary<(int War, int Nation), HashSet<ushort>> AllowedCache = new();
+        public long AllowedHour = -1;
+        public int AllowedWarRevision = -1;
+        public readonly Dictionary<(int Nation, int War), (int Belligerents, HashSet<ushort> Set)> OperationalAllowed = new();
+        public readonly object AllowedGate = new();
+    }
+
+    private static readonly ConditionalWeakTable<Campaign, CoalitionCache> Caches = new();
 
     internal static void InvalidateRoutes(Campaign c)
     {
-        if (!ReferenceEquals(_routeCacheFor, c)) return;
-        RouteCache.Clear(); AllowedCache.Clear();
+        if (c is null || !Caches.TryGetValue(c, out var cache)) return;
+        cache.RouteCache.Clear();
+        cache.AllowedCache.Clear();
+        lock (cache.AllowedGate) cache.OperationalAllowed.Clear();
     }
 
     internal static int[] FriendlyRoute(Campaign c, StrategicWar war, int nationId, int from, int to)
@@ -66,29 +76,29 @@ public static class WarCoalition
         // Wars join and leave without touching the map, so the stamp carries the war
         // revision too: a side change mid-day invalidates the allowed set in the solo run
         // exactly as it does in a run sharing the cache with another campaign.
+        var cache = Caches.GetOrCreateValue(c);
         var stamp = ((long)c.ElapsedDays << 24) ^ (uint)c.MapRevision ^ ((long)c.WarRevision << 40);
-        if (!ReferenceEquals(_routeCacheFor, c) || _routeCacheStamp != stamp)
+        if (cache.RouteStamp != stamp)
         {
-            RouteCache.Clear();
-            AllowedCache.Clear();
-            _routeCacheFor = c;
-            _routeCacheStamp = stamp;
+            cache.RouteCache.Clear();
+            cache.AllowedCache.Clear();
+            cache.RouteStamp = stamp;
         }
-        if (RouteCache.Count > 8192) RouteCache.Clear();
+        if (cache.RouteCache.Count > 8192) cache.RouteCache.Clear();
         var key = (nationId, from, to);
-        if (RouteCache.TryGetValue(key, out var cached)) return cached;
+        if (cache.RouteCache.TryGetValue(key, out var cached)) return cached;
         int[] route;
         {
             var allowedKey = (war?.Id ?? -1, nationId);
-            if (!AllowedCache.TryGetValue(allowedKey, out var allowed))
+            if (!cache.AllowedCache.TryGetValue(allowedKey, out var allowed))
             {
                 allowed = MilitaryAccess.Controllers(c, nationId);
                 if (war is not null && !war.Ended) FillControllers(c, war, war.IsAttacking(nationId), allowed);
-                AllowedCache[allowedKey] = allowed;
+                cache.AllowedCache[allowedKey] = allowed;
             }
             route = c.ProvinceMap.FindOperationalRoute(from, to, allowed, c.ProvinceController);
         }
-        return RouteCache[key] = route;
+        return cache.RouteCache[key] = route;
     }
 
     internal static bool SafeRetreatProvince(Campaign c, StrategicWar war, int nationId, int province)
@@ -110,10 +120,49 @@ public static class WarCoalition
     {
         if (c?.ProvinceMap is null || war is null || war.Ended || !war.Involves(nationId))
             return System.Array.Empty<int>();
-        var allowed = MilitaryAccess.Controllers(c, nationId);
-        FillControllers(c, war, true, allowed);
-        FillControllers(c, war, false, allowed);
-        return c.ProvinceMap.FindOperationalRoute(from, to, allowed, controllers);
+        return c.ProvinceMap.FindOperationalRoute(from, to, AllowedFor(c, war, nationId), controllers);
+    }
+
+    /// <summary>Populates <paramref name="destination"/> with the operational corridor without allocating an array.</summary>
+    internal static void FillOperationalRoute(Campaign c, StrategicWar war, int nationId,
+        int from, int to, ushort[] controllers, List<int> destination)
+    {
+        if (destination is null) return;
+        if (c?.ProvinceMap is null || war is null || war.Ended || !war.Involves(nationId))
+        {
+            destination.Clear();
+            return;
+        }
+        c.ProvinceMap.FillOperationalRoute(from, to, AllowedFor(c, war, nationId), controllers, destination);
+    }
+
+    /// <summary>
+    /// Where a nation's divisions may go in a war: every controller it may enter, and both sides
+    /// of the war. Built once per nation, war and game hour - it was built afresh for every
+    /// division's every search, asking every nation in the list each time.
+    /// </summary>
+    private static HashSet<ushort> AllowedFor(Campaign c, StrategicWar war, int nationId)
+    {
+        var cache = Caches.GetOrCreateValue(c);
+        lock (cache.AllowedGate)
+        {
+            if (cache.AllowedHour != c.ElapsedHours || cache.AllowedWarRevision != c.WarRevision)
+            {
+                cache.AllowedHour = c.ElapsedHours;
+                cache.AllowedWarRevision = c.WarRevision;
+                cache.OperationalAllowed.Clear();
+            }
+            if (cache.OperationalAllowed.TryGetValue((nationId, war.Id), out var cached) &&
+                cached.Belligerents == war.BelligerentCount)
+                return cached.Set;
+            var allowed = cached.Set ?? new HashSet<ushort>();
+            allowed.Clear();
+            MilitaryAccess.FillControllers(c, nationId, allowed);
+            FillControllers(c, war, true, allowed);
+            FillControllers(c, war, false, allowed);
+            cache.OperationalAllowed[(nationId, war.Id)] = (war.BelligerentCount, allowed);
+            return allowed;
+        }
     }
 
     private static bool EnemyStandsIn(Campaign c, StrategicWar war, int nationId, int province)

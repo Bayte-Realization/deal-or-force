@@ -104,6 +104,29 @@ public sealed class NationHistorySampleConverter : JsonConverter<NationHistorySa
         writer.WriteEndArray();
     }
 
+    internal static bool AllFinite(NationHistorySample sample) =>
+        float.IsFinite(sample.Gdp) &&
+        float.IsFinite(sample.Treasury) &&
+        float.IsFinite(sample.PopulationMillions) &&
+        float.IsFinite(sample.WeeklyIncome) &&
+        float.IsFinite(sample.WeeklyExpenses) &&
+        float.IsFinite(sample.WeeklyBalance) &&
+        float.IsFinite(sample.Productivity) &&
+        float.IsFinite(sample.StandardOfLiving) &&
+        float.IsFinite(sample.Literacy) &&
+        float.IsFinite(sample.Stability) &&
+        float.IsFinite(sample.MarketAccess) &&
+        float.IsFinite(sample.ShortageIndex) &&
+        float.IsFinite(sample.TradeBalance) &&
+        float.IsFinite(sample.MilitaryPower) &&
+        float.IsFinite(sample.ManpowerMillions) &&
+        float.IsFinite(sample.WarSupport) &&
+        float.IsFinite(sample.FoodPriceIndex) &&
+        float.IsFinite(sample.ConsumerPriceIndex) &&
+        float.IsFinite(sample.IndustrialPriceIndex) &&
+        float.IsFinite(sample.EnergyPriceIndex) &&
+        float.IsFinite(sample.ArmsPriceIndex);
+
     /// <summary>The figures after the day, in the order the record declares them and a row carries them.</summary>
     private static readonly string[] Fields =
     {
@@ -127,15 +150,16 @@ public sealed class NationHistorySampleConverter : JsonConverter<NationHistorySa
 /// </summary>
 public static class SaveStringTable
 {
-    private static string[] _table = Array.Empty<string>();
-    private static readonly System.Collections.Generic.Dictionary<string, int> Index =
-        new(StringComparer.Ordinal);
+    [ThreadStatic] private static string[] _table;
+    [ThreadStatic] private static System.Collections.Generic.Dictionary<string, int> _index;
+    [ThreadStatic] private static bool _internIdsDisabled;
 
     public static void Use(string[] table)
     {
         _table = table ?? Array.Empty<string>();
-        Index.Clear();
-        for (var i = 0; i < _table.Length; i++) Index[_table[i] ?? ""] = i;
+        var index = _index ??= new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal);
+        index.Clear();
+        for (var i = 0; i < _table.Length; i++) index[_table[i] ?? ""] = i;
     }
 
     public static string[] Build(System.Collections.Generic.IEnumerable<string> values)
@@ -145,17 +169,59 @@ public static class SaveStringTable
         return System.Linq.Enumerable.ToArray(set);
     }
 
+    public static string[] BuildForStates(System.Collections.Generic.IReadOnlyList<ScenarioState> states)
+    {
+        var set = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal) { "" };
+        var lastCulture = "";
+        var lastReligion = "";
+        var lastProfession = "";
+        for (var s = 0; s < states.Count; s++)
+        {
+            var groups = states[s].PopulationGroups;
+            for (var g = 0; g < groups.Count; g++)
+            {
+                var group = groups[g];
+                var culture = group.Culture;
+                if (!string.IsNullOrEmpty(culture) && !ReferenceEquals(culture, lastCulture))
+                {
+                    lastCulture = culture;
+                    set.Add(culture);
+                }
+                var religion = group.Religion;
+                if (!string.IsNullOrEmpty(religion) && !ReferenceEquals(religion, lastReligion))
+                {
+                    lastReligion = religion;
+                    set.Add(religion);
+                }
+                var profession = group.Profession;
+                if (!string.IsNullOrEmpty(profession) && !ReferenceEquals(profession, lastProfession))
+                {
+                    lastProfession = profession;
+                    set.Add(profession);
+                }
+            }
+        }
+        var result = new string[set.Count];
+        set.CopyTo(result);
+        Array.Sort(result, StringComparer.Ordinal);
+        return result;
+    }
+
     public static int IndexOf(string value)
     {
-        if (!InternIds || _table.Length == 0 || string.IsNullOrEmpty(value)) return -1;
-        return Index.TryGetValue(value, out var index) ? index : -1;
+        if (!InternIds || _table is null || _table.Length == 0 || string.IsNullOrEmpty(value) || _index is null) return -1;
+        return _index.TryGetValue(value, out var index) ? index : -1;
     }
 
     /// <summary>Text saves remain readable; the compact table is for the binary save path.</summary>
-    public static bool InternIds { get; set; } = true;
+    public static bool InternIds
+    {
+        get => !_internIdsDisabled;
+        set => _internIdsDisabled = !value;
+    }
 
     public static string At(int index) =>
-        index >= 0 && index < _table.Length ? _table[index] ?? "" : "";
+        _table is { } table && index >= 0 && index < table.Length ? table[index] ?? "" : "";
 }
 
 /// <summary>

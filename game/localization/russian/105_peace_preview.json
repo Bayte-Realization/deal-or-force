@@ -1,4 +1,11 @@
 {
   "Treaty border: {0} provinces · {1} added, {2} released by region rounding.": "Граница договора: {0} провинций · {1} добавлено, {2} возвращено при округлении по регионам.",
-  "Treaty border: {0} provinces, as drawn.": "Граница договора: {0} провинций, как нарисовано."
+  "Treaty border: {0} provinces, as drawn.": "Граница договора: {0} провинций, как нарисовано.",
+  "A pocket shut inside the line is kept with this border.": "Карман, замкнутый внутри линии, остаётся с этой границей.",
+  "A one-province tooth of the occupation was left off this border.": "Однопровинциальный выступ оккупации с этой границы снят.",
+  "This border keeps the occupation that touches home.": "Эта граница оставляет оккупацию, которая касается своей земли.",
+  "This settlement keeps a five-year truce.": "Это соглашение оставляет пятилетнее перемирие.",
+  "This settlement keeps a ten-year truce.": "Это соглашение оставляет десятилетнее перемирие.",
+  "This occupied ground stays with the holder.": "Эта оккупированная земля остаётся у того, кто её держит.",
+  "The pocket beyond the line goes back.": "Карман за линией возвращается."
 }

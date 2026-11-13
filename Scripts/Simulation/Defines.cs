@@ -168,7 +168,7 @@ public sealed partial class Defines
 	/// the war for everybody. Raise it in a mod and see for yourself; that is what it is a
 	/// define for.
 	/// </summary>
-	public float MarchProgressPerDay { get; set; } = 0.22f;
+	public float MarchProgressPerDay { get; set; } = 0.75f;
 
 	/// <summary>
 	/// The least a formation's supply can slow it down, as a share of its full pace.
@@ -222,6 +222,19 @@ public sealed partial class Defines
 	/// steadier frame rate and slower time, higher the reverse.
 	/// </summary>
 	public float FrameSimulationBudgetMs { get; set; } = 9f;
+
+	/// <summary>Frame budget in milliseconds when running at top speed with smooth ticks enabled.
+	/// Ignored when <see cref="FrameSimulationBudgetMs"/> is zero or negative.</summary>
+	public float SmoothFastSpeedSimulationBudgetMs { get; set; } = 16f;
+
+	/// <summary>Frame budget in milliseconds when running at speed 4 without smooth ticks.
+	/// Ignored when <see cref="FrameSimulationBudgetMs"/> is zero or negative.</summary>
+	public float FastSpeedSimulationBudgetMs { get; set; } = 42f;
+
+	/// <summary>Frame budget ceiling in milliseconds when running at top speed without smooth ticks,
+	/// maximising day throughput without freezing the application window on late saves.
+	/// Ignored when <see cref="FrameSimulationBudgetMs"/> is zero or negative.</summary>
+	public float UncheckedSpeedSimulationBudgetMs { get; set; } = 96f;
 
 	/// <summary>Steps (not days) a single frame may advance however cheap they turn out to be.
 	/// Twelve one-hour steps at sixty frames is thirty days a second, the top speed.</summary>
@@ -1195,7 +1208,7 @@ public sealed partial class Defines
 	/// wars, the same every count - so this is the knee of the curve and there is nothing above it
 	/// to buy. What remains is upstream: how many countries want a war at all.
 	/// </summary>
-	public float AiWarChance { get; set; } = 0.05f;
+	public float AiWarChance { get; set; } = 0.08f;
 
 	/// <summary>Whether countries start wars of their own at all.</summary>
 	public bool AiMayDeclareWar { get; set; } = true;
@@ -1262,7 +1275,7 @@ public sealed partial class Defines
 
 	// ---- Economy: how a country governs itself between crises ----
 
-	public float AiTreasuryFloor { get; set; } = 0.02f;
+	public float AiTreasuryFloor { get; set; } = 0.012f;
 	public float AiTreasuryComfort { get; set; } = 0.12f;
 	public float AiTaxStep { get; set; } = 0.012f;
 	/// <summary>How far a computer government takes the consumption tax and the tax on firms when it needs money, before it raises the income tax further.</summary>

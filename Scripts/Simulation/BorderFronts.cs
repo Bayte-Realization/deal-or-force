@@ -42,8 +42,10 @@ public static class BorderFronts
     public static void FillEnemies(Campaign campaign, int nationId, HashSet<int> into)
     {
         into.Clear();
-        foreach (var war in campaign.Wars)
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
+            var war = live[index];
             if (war.Ended || !war.Involves(nationId)) continue;
             foreach (var enemy in war.EnemiesOf(nationId))
                 if (enemy != nationId) into.Add(enemy);
@@ -59,8 +61,10 @@ public static class BorderFronts
     {
         long stamp = 17;
         var count = 0;
-        foreach (var war in campaign.Wars)
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
+            var war = live[index];
             if (war.Ended || !war.Involves(nationId)) continue;
             foreach (var enemy in war.EnemiesOf(nationId))
             {
@@ -126,8 +130,10 @@ public static class BorderFronts
         if (map is null || province <= 0 || province > map.ProvinceCount) return -1;
         var control = campaign.ProvinceController ?? map.ProvinceToNation;
         var best = -1;
-        foreach (var war in campaign.Wars)
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
+            var war = live[index];
             if (war.Ended || !war.Involves(nationId)) continue;
             foreach (var enemyId in war.EnemiesOf(nationId))
             {
@@ -153,8 +159,12 @@ public static class BorderFronts
     public static StrategicWar WarAt(Campaign campaign, int nationId, int province)
     {
         if (province <= 0) return null;
-        foreach (var war in campaign.Wars)
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
+        {
+            var war = live[index];
             if (!war.Ended && war.Involves(nationId) && war.FriendlyFront(nationId).Contains(province)) return war;
+        }
         return null;
     }
 

@@ -207,10 +207,24 @@ public static class SubjectBlocs
     /// </summary>
     public static void TickAi(Campaign campaign)
     {
-        if (campaign is null || campaign.ElapsedDays % 30 != 23 || !campaign.FeatureEnabled("subjects")) return;
+        foreach (var _ in TickAiStages(campaign)) { }
+    }
+
+    /// <summary>Staged monthly subject consolidation and border grants.</summary>
+    public static IEnumerable<int> TickAiStages(Campaign campaign)
+    {
+        if (campaign is null || campaign.ElapsedDays % 30 != 23 || !campaign.FeatureEnabled("subjects")) yield break;
+        HashSet<int> overlordsWithSubjects = null;
+        foreach (var n in campaign.Nations)
+            if (n.IsSubject && n.OverlordId >= 0)
+                (overlordsWithSubjects ??= new HashSet<int>()).Add(n.OverlordId);
+        if (overlordsWithSubjects is null) yield break;
+        var checkedAll = 0;
         foreach (var owner in campaign.Nations.ToArray())
         {
+            if (++checkedAll % 32 == 0) yield return 0;
             if (owner.IsHuman || owner.IsSubject || owner.Movement is not null || owner.Population < 5_000_000) continue;
+            if (!overlordsWithSubjects.Contains(owner.Id)) continue;
             var subjects = SubjectSystem.SubjectsOf(campaign, owner)
                 .Where(subject => !campaign.Fallen.Contains(subject.Id) && campaign.StatesOf(subject).Length > 0 &&
                                   !subject.SubjectIntegrating && !subject.SubjectConspiring &&
@@ -225,22 +239,37 @@ public static class SubjectBlocs
                 subject.Population <= owner.Population * .35f);
             if (grow is not null)
             {
-                var package = RegionalAdministration.QuickGrantPackage(campaign, owner, grow,
-                    campaign.Defines.AiSubjectGrantMaxRegions);
-                if (package.Length > 0 &&
-                    RegionalAdministration.MayGrant(campaign, owner, grow, package, out _, out _))
-                    new GrantSubjectRegionsCommand
-                    {
-                        IssuerId = owner.Id, SubjectId = grow.Id, StateMapIndices = package
-                    }.Apply(campaign);
+                int[] package;
+                using (SimProfiler.Measure("    sub:bloc_package"))
+                    package = RegionalAdministration.QuickGrantPackage(campaign, owner, grow,
+                        campaign.Defines.AiSubjectGrantMaxRegions);
+                if (package.Length > 0)
+                {
+                    yield return 0;
+                    using (SimProfiler.Measure("    sub:bloc_grant"))
+                        if (RegionalAdministration.MayGrant(campaign, owner, grow, package, out _, out _))
+                            new GrantSubjectRegionsCommand
+                            {
+                                IssuerId = owner.Id, SubjectId = grow.Id, StateMapIndices = package
+                            }.Apply(campaign);
+                }
+                yield return 0;
             }
 
-            var pair = Candidates(campaign, owner)
-                .Where(candidate => candidate.Absorb.Population <= candidate.Keep.Population * .60f &&
-                                    candidate.Keep.LibertyDesire < .70f && candidate.Absorb.LibertyDesire < .70f)
-                .OrderBy(candidate => candidate.Absorb.Population)
-                .FirstOrDefault();
-            if (pair.Keep is not null) Merge(campaign, owner, pair.Keep, pair.Absorb, out _);
+            SubjectMerge pair;
+            using (SimProfiler.Measure("    sub:bloc_candidates"))
+                pair = Candidates(campaign, owner)
+                    .Where(candidate => candidate.Absorb.Population <= candidate.Keep.Population * .60f &&
+                                        candidate.Keep.LibertyDesire < .70f && candidate.Absorb.LibertyDesire < .70f)
+                    .OrderBy(candidate => candidate.Absorb.Population)
+                    .FirstOrDefault();
+            if (pair.Keep is not null)
+            {
+                yield return 0;
+                using (SimProfiler.Measure("    sub:bloc_merge"))
+                    Merge(campaign, owner, pair.Keep, pair.Absorb, out _);
+            }
+            yield return 0;
         }
     }
 

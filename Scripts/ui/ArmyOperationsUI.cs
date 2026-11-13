@@ -386,6 +386,7 @@ public partial class DealOrForceGame
             }
         }
         var results = new Dictionary<ArmyMoveResult, int>();
+        var overseas = new List<int>();
         foreach (var army in targets)
         {
             if (railing)
@@ -412,12 +413,32 @@ public partial class DealOrForceGame
             };
             _campaign.Commands.Enqueue(command);
             _campaign.Commands.ApplyAll(_campaign);
+            if (command.Result == ArmyMoveResult.NoLandRoute && !append && !supporting) { overseas.Add(army.Id); continue; }
             results[command.Result] = results.GetValueOrDefault(command.Result) + 1;
 
             // Support is applied atomically by MoveArmyCommand after validation. A
             // rejected click must not change the previously executing order's mode.
         }
         if (railing) _redeploymentArmed = false;
+        // No march gets there: across the sea, by one order - a port, a fleet, a beach, and on.
+        var seaReport = "";
+        if (overseas.Count > 0)
+        {
+            var lift = new SeaLiftCommand { IssuerId = _campaign.Player.Id, ArmyIds = overseas.ToArray(), TargetProvinceId = pick.ProvinceId };
+            _campaign.Commands.Enqueue(lift);
+            _campaign.Commands.ApplyAll(_campaign);
+            if (lift.Order is { } order)
+            {
+                var fleetName = _campaign.Fleets.Find(f => f.Id == order.FleetId) is { } carrier ? Simulation.Loc.Get(carrier.Name) : "?";
+                seaReport = Simulation.Loc.Format("By sea: {0:N0} formation(s) march to {1}, where {2} takes them aboard and lands them at {3}.",
+                    order.ArmyIds.Count, ProvinceCaption(order.PortProvinceId), fleetName, ProvinceCaption(order.LandingProvinceId));
+            }
+            else
+            {
+                results[ArmyMoveResult.NoLandRoute] = results.GetValueOrDefault(ArmyMoveResult.NoLandRoute) + overseas.Count;
+                seaReport = Simulation.Loc.Get("Not by sea either:") + " " + lift.Refusal;
+            }
+        }
         ShowSelectedArmies();
         if (IsNetworkClient)
         {
@@ -428,11 +449,21 @@ public partial class DealOrForceGame
             return;
         }
         SetArmyFeedback((withdrawalFeedback.Length > 0 ? withdrawalFeedback + " · " : "") +
-                        MoveResultSummary(results, pick, append) +
+                        (seaReport.Length > 0 ? seaReport + (results.Count > 0 ? " · " : "") : "") +
+                        (results.Count > 0 || seaReport.Length == 0 ? MoveResultSummary(results, pick, append) : "") +
                         (supporting && targets.Any(army => army.SupportOnly)
                             ? " · " + Simulation.Loc.Get("supporting: they will fight and hold their ground.") : "") +
                         (railing
                             ? " · " + Simulation.Loc.Get("by rail: fast, and they will arrive shaken.") : ""));
+    }
+
+    /// <summary>A province by the region it lies in, for an order's report.</summary>
+    private string ProvinceCaption(int province)
+    {
+        var map = _campaign.ProvinceMap;
+        if (map is null || province <= 0 || province > map.ProvinceCount) return Simulation.Loc.Format("Province #{0:N0}", province);
+        var region = _campaign.States.Find(s => s.MapIndex == map.ProvinceToState[province]);
+        return region?.DisplayName ?? Simulation.Loc.Format("Province #{0:N0}", province);
     }
 
     private string MoveResultSummary(IReadOnlyDictionary<ArmyMoveResult, int> results, GlobePick pick, bool append)

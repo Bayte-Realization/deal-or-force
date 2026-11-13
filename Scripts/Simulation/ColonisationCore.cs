@@ -240,10 +240,19 @@ public static class ColonisationCore
     /// <summary>A day of settling, and a month's thinking for the countries nobody plays. Once a day.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ColonisationCore))) return;
-        if (campaign?.ProvinceMap is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily pass, yielded between regions so a frontier of simultaneous
+    /// landings does not found them all in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ColonisationCore))) yield break;
+        if (campaign?.ProvinceMap is null) yield break;
+        var scanned = 0;
         foreach (var state in campaign.States)
         {
+            if (++scanned % 64 == 0) yield return 0;
             if (state.ColonistMapIndex == 0) continue;
             var nation = Colonist(campaign, state);
             // Somebody else got there, or the settlers' country is gone.
@@ -401,9 +410,13 @@ public static class UnclaimedLand
     // Some source polygons have a province but no administrative region (Bir Tawil).
     // Coordinate declarations bind a dossier to actual unowned ground; they do not
     // change ownership or let a file silently steal another country's province.
+    // They live with every other region of the bookmark, in history/states/<year> (a line with a
+    // point on it); the old map_data/unclaimed_regions folder is still read so a mod written
+    // for it keeps working.
     private static void EnsureAuthoredRegions(Campaign c, ProvinceTopology map)
     {
-        foreach (var document in GameDataLoader.DataDocuments("map_data", "unclaimed_regions"))
+        foreach (var document in GameDataLoader.DataDocuments("history", "states", "2024")
+                     .Concat(GameDataLoader.DataDocuments("map_data", "unclaimed_regions")))
         using (document)
         {
             if (document.RootElement.ValueKind != JsonValueKind.Object) continue;

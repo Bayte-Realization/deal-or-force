@@ -27,39 +27,39 @@ static class BattleBucketIsolationTests
         Check(Ids(Warfare.BattleAttackers(first)).SequenceEqual(new[] { 1 }) &&
               Ids(Warfare.BattleDefenders(first)).SequenceEqual(new[] { 2 }),
             "the first campaign places its own armies on the two sides");
-        Check(Ids(Warfare.BattleAttackerLine(first)).SequenceEqual(new[] { 1 }) &&
-              Ids(Warfare.BattleDefenderLine(first)).SequenceEqual(new[] { 2 }) &&
-              Warfare.BattleAttackerReserve(first).Count == 0 && Warfare.BattleDefenderReserve(first).Count == 0,
+        Check(Ids(Warfare.BattleAttackerLine(first, firstBattle.Id)).SequenceEqual(new[] { 1 }) &&
+              Ids(Warfare.BattleDefenderLine(first, firstBattle.Id)).SequenceEqual(new[] { 2 }) &&
+              Warfare.BattleAttackerReserve(first, firstBattle.Id).Count == 0 && Warfare.BattleDefenderReserve(first, firstBattle.Id).Count == 0,
             "the first campaign keeps those armies in its own line");
         Check(Ids(Warfare.BattlePresent(first)).SequenceEqual(new[] { 2 }) &&
-              Ids(Warfare.BattleReinforcements(first)).SequenceEqual(new[] { 9 }) &&
-              Ids(Warfare.BattleLineCandidates(first)).SequenceEqual(new[] { 2 }),
+              Ids(Warfare.BattleReinforcements(first, firstBattle.Id)).SequenceEqual(new[] { 9 }) &&
+              Ids(Warfare.BattleLineCandidates(first, firstBattle.Id)).SequenceEqual(new[] { 2 }),
             "the first campaign records the defender present and the direct order waiting");
         Check(direct.DirectOrder && direct.OrderProvinceId == 1 && direct.ProvinceId == 1 && direct.BattleId < 0 &&
               !firstBattle.Attackers.Contains(direct.Id) && firstBattle.LastAttackerLine.Count == 0,
             "a direct order is not written into the battle");
         Check(Warfare.BattleAttackers(second).Count == 0 && Warfare.BattleDefenders(second).Count == 0 &&
-              Warfare.BattlePresent(second).Count == 0 && Warfare.BattleReinforcements(second).Count == 0 &&
-              Warfare.BattleAttackerLine(second).Count == 0 && Warfare.BattleDefenderLine(second).Count == 0 &&
-              Warfare.BattleLineCandidates(second).Count == 0,
+              Warfare.BattlePresent(second).Count == 0 && Warfare.BattleReinforcements(second, secondBattle.Id).Count == 0 &&
+              Warfare.BattleAttackerLine(second, secondBattle.Id).Count == 0 && Warfare.BattleDefenderLine(second, secondBattle.Id).Count == 0 &&
+              Warfare.BattleLineCandidates(second, secondBattle.Id).Count == 0,
             "a second campaign does not observe the first campaign's buckets");
 
         var attackers = Warfare.BattleAttackers(first);
         var defenders = Warfare.BattleDefenders(first);
         var present = Warfare.BattlePresent(first);
-        var reinforcements = Warfare.BattleReinforcements(first);
-        var attackerLine = Warfare.BattleAttackerLine(first);
-        var defenderLine = Warfare.BattleDefenderLine(first);
-        var attackerReserve = Warfare.BattleAttackerReserve(first);
-        var defenderReserve = Warfare.BattleDefenderReserve(first);
-        var candidates = Warfare.BattleLineCandidates(first);
+        var reinforcements = Warfare.BattleReinforcements(first, firstBattle.Id);
+        var attackerLine = Warfare.BattleAttackerLine(first, firstBattle.Id);
+        var defenderLine = Warfare.BattleDefenderLine(first, firstBattle.Id);
+        var attackerReserve = Warfare.BattleAttackerReserve(first, firstBattle.Id);
+        var defenderReserve = Warfare.BattleDefenderReserve(first, firstBattle.Id);
+        var candidates = Warfare.BattleLineCandidates(first, firstBattle.Id);
         Warfare.FillBattleBuckets(second, secondBattle);
         Check(Ids(Warfare.BattleAttackers(second)).SequenceEqual(new[] { 3 }) &&
               Ids(Warfare.BattleDefenders(second)).SequenceEqual(new[] { 4 }) &&
-              Ids(Warfare.BattleAttackerLine(second)).SequenceEqual(new[] { 3 }) &&
-              Ids(Warfare.BattleDefenderLine(second)).SequenceEqual(new[] { 4 }) &&
+              Ids(Warfare.BattleAttackerLine(second, secondBattle.Id)).SequenceEqual(new[] { 3 }) &&
+              Ids(Warfare.BattleDefenderLine(second, secondBattle.Id)).SequenceEqual(new[] { 4 }) &&
               Ids(Warfare.BattlePresent(second)).SequenceEqual(new[] { 4 }) &&
-              Ids(Warfare.BattleReinforcements(second)).SequenceEqual(new[] { 8 }),
+              Ids(Warfare.BattleReinforcements(second, secondBattle.Id)).SequenceEqual(new[] { 8 }),
             "the second campaign records only its own sides, line, presence and reinforcement");
         Check(ReferenceEquals(attackers, Warfare.BattleAttackers(first)) &&
               Ids(attackers).SequenceEqual(new[] { 1 }) && Ids(defenders).SequenceEqual(new[] { 2 }) &&
@@ -70,18 +70,18 @@ static class BattleBucketIsolationTests
         Check(!ReferenceEquals(attackers, Warfare.BattleAttackers(second)) &&
               !ReferenceEquals(defenders, Warfare.BattleDefenders(second)) &&
               !ReferenceEquals(present, Warfare.BattlePresent(second)) &&
-              !ReferenceEquals(reinforcements, Warfare.BattleReinforcements(second)) &&
-              !ReferenceEquals(attackerLine, Warfare.BattleAttackerLine(second)) &&
-              !ReferenceEquals(defenderLine, Warfare.BattleDefenderLine(second)) &&
-              !ReferenceEquals(attackerReserve, Warfare.BattleAttackerReserve(second)) &&
-              !ReferenceEquals(defenderReserve, Warfare.BattleDefenderReserve(second)) &&
-              !ReferenceEquals(candidates, Warfare.BattleLineCandidates(second)),
+              !ReferenceEquals(reinforcements, Warfare.BattleReinforcements(second, secondBattle.Id)) &&
+              !ReferenceEquals(attackerLine, Warfare.BattleAttackerLine(second, secondBattle.Id)) &&
+              !ReferenceEquals(defenderLine, Warfare.BattleDefenderLine(second, secondBattle.Id)) &&
+              !ReferenceEquals(attackerReserve, Warfare.BattleAttackerReserve(second, secondBattle.Id)) &&
+              !ReferenceEquals(defenderReserve, Warfare.BattleDefenderReserve(second, secondBattle.Id)) &&
+              !ReferenceEquals(candidates, Warfare.BattleLineCandidates(second, secondBattle.Id)),
             "the buckets are separate objects");
         Warfare.FillBattleBuckets(first, firstBattle);
         Check(ReferenceEquals(attackers, Warfare.BattleAttackers(first)) &&
               ReferenceEquals(defenders, Warfare.BattleDefenders(first)) &&
-              ReferenceEquals(attackerLine, Warfare.BattleAttackerLine(first)) &&
-              ReferenceEquals(reinforcements, Warfare.BattleReinforcements(first)) &&
+              ReferenceEquals(attackerLine, Warfare.BattleAttackerLine(first, firstBattle.Id)) &&
+              ReferenceEquals(reinforcements, Warfare.BattleReinforcements(first, firstBattle.Id)) &&
               Ids(attackers).SequenceEqual(new[] { 1 }) && Ids(defenders).SequenceEqual(new[] { 2 }),
             "the same campaign reuses its buckets");
         Check(direct.OrderProvinceId == 1 && direct.BattleId < 0 &&

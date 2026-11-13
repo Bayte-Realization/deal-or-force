@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -42,22 +43,132 @@ public sealed partial class Army
 /// </summary>
 public static class PocketBreakout
 {
-    private static readonly Queue<int> Frontier = new();
-    private static readonly Dictionary<int, int> CameFrom = new();
-    private static readonly List<int> Pocketed = new();
-    private static readonly HashSet<int> Pocket = new();
+    // The morning search used to keep one queue, one depth map and one neighbour list for
+    // the process. The next campaign's pocket cleared them. Each campaign now owns the
+    // scratch, and a second world's morning does not empty the first world's.
+    sealed class Scratch
+    {
+        public readonly Queue<int> Frontier = new();
+        public readonly Dictionary<int, int> CameFrom = new();
+        public readonly List<int> Pocketed = new();
+        public readonly HashSet<int> Pocket = new();
+        public int[] PocketMark = Array.Empty<int>();
+        public int PocketStamp;
+        public int[] SearchStamp = Array.Empty<int>();
+        public int[] CameFromArr = Array.Empty<int>();
+        public int[] DepthArr = Array.Empty<int>();
+        public int SearchTick;
+        public int CameFromTick = -1;
+        public int DepthTick = -1;
+        public readonly List<int> Neighbours = new();
+        public readonly Dictionary<int, int> Depth = new();
+        public readonly Dictionary<int, Army> ById = new();
+        public readonly Dictionary<(int NationId, int WarId), PassPair> PassCache = new();
+        public readonly Dictionary<(int NationId, int WarId, int ProvinceId), (List<int> Path, bool TooLarge)> DayPaths = new();
+        public int DayPathMapRevision = -1;
+        public readonly HashSet<ushort> LocalAllowed = new();
+        public readonly HashSet<ushort> LocalFriendly = new();
+        public readonly HashSet<ushort> LocalHostile = new();
+    }
+
+    sealed class PassPair
+    {
+        public readonly HashSet<ushort> Allowed;
+        public readonly HashSet<ushort> Friendly = new();
+        public readonly HashSet<ushort> Hostile = new();
+        public PassPair(HashSet<ushort> allowed) => Allowed = allowed;
+    }
+
+    static readonly ConditionalWeakTable<Campaign, Scratch> Scratches = new();
+    static readonly ConditionalWeakTable<ProvinceTopology, int[][]> SortedNeighborsCache = new();
     private const int PocketLimit = 200;
+
+    static int[][] GetSortedNeighbors(ProvinceTopology map) =>
+        SortedNeighborsCache.GetValue(map, static m =>
+        {
+            var src = m.Neighbors;
+            var dst = new int[src.Length][];
+            for (var i = 0; i < src.Length; i++)
+            {
+                var row = src[i];
+                if (row is null || row.Length == 0) { dst[i] = Array.Empty<int>(); continue; }
+                var copy = new int[row.Length];
+                Array.Copy(row, copy, row.Length);
+                Array.Sort(copy);
+                dst[i] = copy;
+            }
+            return dst;
+        });
+
+    static Scratch Board(Campaign campaign) => Scratches.GetOrCreateValue(campaign);
+
+    internal static Queue<int> SearchFrontier(Campaign campaign) =>
+        campaign is not null && Scratches.TryGetValue(campaign, out var scratch) ? scratch.Frontier : null;
+
+    internal static Dictionary<int, int> SearchCameFrom(Campaign campaign)
+    {
+        if (campaign is null || !Scratches.TryGetValue(campaign, out var scratch)) return null;
+        if (scratch.CameFromTick != scratch.SearchTick && scratch.SearchTick > 0)
+        {
+            scratch.CameFromTick = scratch.SearchTick;
+            scratch.CameFrom.Clear();
+            var stamp = scratch.SearchStamp;
+            var came = scratch.CameFromArr;
+            var tick = scratch.SearchTick;
+            for (var p = 0; p < stamp.Length; p++)
+                if (stamp[p] == tick) scratch.CameFrom[p] = came[p];
+        }
+        return scratch.CameFrom;
+    }
+
+    internal static Dictionary<int, int> SearchDepth(Campaign campaign)
+    {
+        if (campaign is null || !Scratches.TryGetValue(campaign, out var scratch)) return null;
+        if (scratch.DepthTick != scratch.SearchTick && scratch.SearchTick > 0)
+        {
+            scratch.DepthTick = scratch.SearchTick;
+            scratch.Depth.Clear();
+            var stamp = scratch.SearchStamp;
+            var depth = scratch.DepthArr;
+            var tick = scratch.SearchTick;
+            for (var p = 0; p < stamp.Length; p++)
+                if (stamp[p] == tick) scratch.Depth[p] = depth[p];
+        }
+        return scratch.Depth;
+    }
+
+    internal static List<int> SearchNeighbours(Campaign campaign) =>
+        campaign is not null && Scratches.TryGetValue(campaign, out var scratch) ? scratch.Neighbours : null;
+
+    internal static List<int> SearchPocketed(Campaign campaign) =>
+        campaign is not null && Scratches.TryGetValue(campaign, out var scratch) ? scratch.Pocketed : null;
+
+    internal static Dictionary<int, Army> SearchArmies(Campaign campaign) =>
+        campaign is not null && Scratches.TryGetValue(campaign, out var scratch) ? scratch.ById : null;
 
     /// <summary>Whether the last <see cref="WayHome"/> gave up because the "pocket" was a large piece of the country, not a pocket.</summary>
     internal static bool LastPocketTooLarge { get; private set; }
 
     public static void Tick(Campaign campaign)
     {
-        if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || !campaign.StepOpensNewDay) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
 
-        Pocketed.Clear();
+    /// <summary>The same daily breakout pass, yielded between batches of pockets.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || !campaign.StepOpensNewDay) yield break;
+
+        var scratch = Board(campaign);
+        var pocketed = scratch.Pocketed;
+        var byId = scratch.ById;
+        pocketed.Clear();
+        byId.Clear();
+        var scanned = 0;
         foreach (var army in campaign.Armies)
         {
+            if (!byId.ContainsKey(army.Id)) byId[army.Id] = army;
+            if (++scanned % 512 == 0) yield return 0;
             if (army.BreakingOut && !army.CutOff && !army.IsMoving && !army.InBattle)
             {
                 // Home: the staff has it back.
@@ -73,17 +184,46 @@ public static class PocketBreakout
                 continue;
             }
             if (army.Divisions < 0.1f || army.EmbarkedFleetId >= 0) continue;
-            Pocketed.Add(army.Id);
+            pocketed.Add(army.Id);
         }
 
-        foreach (var id in Pocketed)
+        yield return 0;
+        scratch.PassCache.Clear();
+        scratch.DayPaths.Clear();
+        scratch.DayPathMapRevision = campaign.MapRevision;
+        var cachedChecks = 0;
+        var needYield = false;
+        foreach (var id in pocketed)
         {
-            var army = campaign.Armies.Find(candidate => candidate.Id == id);
-            if (army is null) continue;
+            if (needYield || ++cachedChecks > 16)
+            {
+                needYield = false;
+                cachedChecks = 0;
+                yield return 0;
+            }
+            if (!byId.TryGetValue(id, out var army) || army is null) continue;
             var nation = campaign.NationById(army.NationId);
             if (nation is null) continue;
             // Measured for every pocket, played or not: the card reads it, and so does surrender.
-            var path = WayHome(campaign, nation, army.ProvinceId, WarLosses.WarOf(campaign, army));
+            var war = WarLosses.WarOf(campaign, army);
+            if (scratch.DayPathMapRevision != campaign.MapRevision)
+            {
+                scratch.DayPaths.Clear();
+                scratch.DayPathMapRevision = campaign.MapRevision;
+            }
+            var pathKey = (nation.Id, war?.Id ?? -1, army.ProvinceId);
+            List<int> path;
+            if (scratch.DayPaths.TryGetValue(pathKey, out var cached))
+            {
+                path = cached.Path;
+                LastPocketTooLarge = cached.TooLarge;
+            }
+            else
+            {
+                path = WayHomeCore(campaign, nation, army.ProvinceId, war, scratch.PassCache);
+                scratch.DayPaths[pathKey] = (path, LastPocketTooLarge);
+                needYield = true;
+            }
             // -2: not a pocket but a whole piece of the country cut off from its capital; nobody
             // surrenders a province of a country cut in two for want of a road home.
             army.ReliefDistance = path is not null ? path.Count - 1 : LastPocketTooLarge ? -2 : -1;
@@ -109,7 +249,11 @@ public static class PocketBreakout
     /// the provinces in order, the pocket first and the friendly province last; null if there is
     /// none within BreakoutSearchDepth.
     /// </summary>
-    internal static List<int> WayHome(Campaign campaign, Nation nation, int start, StrategicWar war = null)
+    internal static List<int> WayHome(Campaign campaign, Nation nation, int start, StrategicWar war = null) =>
+        WayHomeCore(campaign, nation, start, war, passCache: null);
+
+    private static List<int> WayHomeCore(Campaign campaign, Nation nation, int start, StrategicWar war,
+        Dictionary<(int NationId, int WarId), PassPair> passCache)
     {
         var map = campaign?.ProvinceMap;
         var controllers = campaign?.ProvinceController;
@@ -120,17 +264,47 @@ public static class PocketBreakout
         // Callers with a real formation pass its actual war. The three-argument read remains
         // useful to staff/tests and uses the same attribution rule, rather than admitting the
         // enemies of every unrelated war as shortcuts.
-        war ??= WarLosses.WarOf(campaign, new Army { NationId = nation.Id, ProvinceId = start });
+        war ??= WarLosses.WarOf(campaign, nation.Id, -1, start);
         if (war is not null && (war.Ended || !war.Involves(nation.Id))) war = null;
-        var allowed = MilitaryAccess.Controllers(campaign, nation.Id);
-        if (war is not null)
+        var board = Board(campaign);
+        HashSet<ushort> allowed;
+        HashSet<ushort> friendlyYes;
+        if (passCache is not null)
         {
-            WarCoalition.FillControllers(campaign, war, true, allowed);
-            WarCoalition.FillControllers(campaign, war, false, allowed);
+            var key = (nation.Id, war?.Id ?? -1);
+            if (!passCache.TryGetValue(key, out var pair))
+            {
+                var set = MilitaryAccess.Controllers(campaign, nation.Id);
+                pair = new PassPair(set);
+                foreach (var m in set) pair.Friendly.Add(m);
+                if (war is not null)
+                {
+                    if (!war.Ended && war.Involves(nation.Id))
+                        WarCoalition.FillControllers(campaign, war, war.IsAttacking(nation.Id), pair.Friendly);
+                    WarCoalition.FillControllers(campaign, war, true, set);
+                    WarCoalition.FillControllers(campaign, war, false, set);
+                }
+                passCache[key] = pair;
+            }
+            allowed = pair.Allowed;
+            friendlyYes = pair.Friendly;
         }
-        bool Valid(int province) => province > 0 && province <= map.ProvinceCount &&
-            province < map.Neighbors.Length && province < controllers.Length && !map.IsWater(province);
-        bool Friendly(int province) => WarCoalition.FriendlyController(campaign, war, nation.Id, controllers[province]);
+        else
+        {
+            allowed = board.LocalAllowed;
+            allowed.Clear();
+            MilitaryAccess.FillControllers(campaign, nation.Id, allowed);
+            friendlyYes = board.LocalFriendly;
+            friendlyYes.Clear();
+            foreach (var m in allowed) friendlyYes.Add(m);
+            if (war is not null)
+            {
+                if (!war.Ended && war.Involves(nation.Id))
+                    WarCoalition.FillControllers(campaign, war, war.IsAttacking(nation.Id), friendlyYes);
+                WarCoalition.FillControllers(campaign, war, true, allowed);
+                WarCoalition.FillControllers(campaign, war, false, allowed);
+            }
+        }
         // The pocket itself: the friendly ground it can reach without crossing the enemy's.
         // Home is friendly ground outside it. A "pocket" of hundreds of provinces is a country cut in
         // two, not a pocket, and is the staff's to deal with.
@@ -139,58 +313,91 @@ public static class PocketBreakout
         // has no pocket of its own ground to flood: flooding from there ran straight into the
         // homeland next door, found a "pocket" of hundreds of provinces and gave up on a road home
         // one province long. Its pocket is the province it stands on.
-        Pocket.Clear();
-        Frontier.Clear();
-        Frontier.Enqueue(start);
-        Pocket.Add(start);
-        if (!Friendly(start)) Frontier.Clear();
-        var neighbours = new List<int>();
-        while (Frontier.Count > 0)
+        var frontier = board.Frontier;
+        var neighbors = map.Neighbors;
+        var requiredLength = map.ProvinceCount + 1;
+        if (board.PocketMark.Length < requiredLength)
+            board.PocketMark = new int[requiredLength];
+        var pocketMark = board.PocketMark;
+        if (++board.PocketStamp == int.MaxValue)
         {
-            var here = Frontier.Dequeue();
-            neighbours.Clear();
-            neighbours.AddRange(map.Neighbors[here]);
-            neighbours.Sort();
-            foreach (var next in neighbours)
+            Array.Clear(pocketMark);
+            board.PocketStamp = 1;
+        }
+        var pocketStamp = board.PocketStamp;
+        var pocketCount = 1;
+        frontier.Clear();
+        frontier.Enqueue(start);
+        pocketMark[start] = pocketStamp;
+        if (!friendlyYes.Contains(controllers[start])) frontier.Clear();
+        while (frontier.Count > 0)
+        {
+            var here = frontier.Dequeue();
+            var row = neighbors[here];
+            for (var ni = 0; ni < row.Length; ni++)
             {
-                if (!Valid(next) || Pocket.Contains(next) || !Friendly(next)) continue;
-                Pocket.Add(next);
-                if (Pocket.Count > PocketLimit)
+                var next = row[ni];
+                if (!IsValidPocketProvince(map, controllers, next) || pocketMark[next] == pocketStamp ||
+                    !friendlyYes.Contains(controllers[next])) continue;
+                pocketMark[next] = pocketStamp;
+                if (++pocketCount > PocketLimit)
                 {
                     LastPocketTooLarge = true;
                     return null;
                 }
-                Frontier.Enqueue(next);
+                frontier.Enqueue(next);
             }
         }
-        Frontier.Clear();
-        CameFrom.Clear();
-        Frontier.Enqueue(start);
-        CameFrom[start] = -1;
-        var depth = new Dictionary<int, int> { [start] = 0 };
-        var limit = Math.Clamp(campaign.Defines.BreakoutSearchDepth, 1, map.ProvinceCount);
-        while (Frontier.Count > 0)
+        var sortedNeighbors = GetSortedNeighbors(map);
+        if (board.SearchStamp.Length < requiredLength)
         {
-            var here = Frontier.Dequeue();
-            if (!Pocket.Contains(here) && Friendly(here))
+            board.SearchStamp = new int[requiredLength];
+            board.CameFromArr = new int[requiredLength];
+            board.DepthArr = new int[requiredLength];
+        }
+        var searchStamp = board.SearchStamp;
+        var cameFromArr = board.CameFromArr;
+        var depthArr = board.DepthArr;
+        if (++board.SearchTick == int.MaxValue)
+        {
+            Array.Clear(searchStamp);
+            board.SearchTick = 1;
+        }
+        var searchTick = board.SearchTick;
+        frontier.Clear();
+        frontier.Enqueue(start);
+        searchStamp[start] = searchTick;
+        cameFromArr[start] = -1;
+        depthArr[start] = 0;
+        var limit = Math.Clamp(campaign.Defines.BreakoutSearchDepth, 1, map.ProvinceCount);
+        while (frontier.Count > 0)
+        {
+            var here = frontier.Dequeue();
+            if (pocketMark[here] != pocketStamp &&
+                friendlyYes.Contains(controllers[here]))
             {
                 var path = new List<int>();
-                for (var step = here; step >= 0; step = CameFrom[step]) path.Add(step);
+                for (var step = here; step >= 0; step = cameFromArr[step]) path.Add(step);
                 path.Reverse();
                 return path;
             }
-            if (depth[here] >= limit) continue;
-            neighbours.Clear();
-            neighbours.AddRange(map.Neighbors[here]);
-            neighbours.Sort();
-            foreach (var next in neighbours)
+            var hereDepth = depthArr[here];
+            if (hereDepth >= limit) continue;
+            var row = sortedNeighbors[here];
+            for (var ni = 0; ni < row.Length; ni++)
             {
-                if (!Valid(next) || CameFrom.ContainsKey(next) || !allowed.Contains(controllers[next])) continue;
-                CameFrom[next] = here;
-                depth[next] = depth[here] + 1;
-                Frontier.Enqueue(next);
+                var next = row[ni];
+                if (!IsValidPocketProvince(map, controllers, next) || searchStamp[next] == searchTick || !allowed.Contains(controllers[next])) continue;
+                searchStamp[next] = searchTick;
+                cameFromArr[next] = here;
+                depthArr[next] = hereDepth + 1;
+                frontier.Enqueue(next);
             }
         }
         return null;
     }
+
+    private static bool IsValidPocketProvince(ProvinceTopology map, ushort[] controllers, int province) =>
+        province > 0 && province <= map.ProvinceCount &&
+        province < map.Neighbors.Length && province < controllers.Length && !map.IsWater(province);
 }

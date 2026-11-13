@@ -230,6 +230,7 @@ public static class SubjectInteractions
             reb.WarSupport = MathF.Max(reb.WarSupport, 0.82f);
             reb.Stability = MathF.Max(reb.Stability, 0.55f);
             var rel = CampaignDiplomacy.Get(campaign, overlord.Id, reb.Id);
+            if (rel.Stance == DiplomaticStance.Allied) campaign.NoteAllianceChange();
             rel.Stance = DiplomaticStance.Rival;
             rel.TruceUntil = -1;
             rel.NonAggressionPact = false;
@@ -261,6 +262,7 @@ public static class SubjectInteractions
             };
             campaign.Wars.Add(war);
             var rel = CampaignDiplomacy.Get(campaign, overlord.Id, subject.Id);
+            if (rel.Stance == DiplomaticStance.Allied) campaign.NoteAllianceChange();
             rel.Stance = DiplomaticStance.AtWar;
             rel.LastActionDay = campaign.ElapsedDays;
         }
@@ -272,11 +274,13 @@ public static class SubjectInteractions
             if (!war.Involves(ally.Id))
                 war.Join(ally.Id, rebelAttacking);
             var rel = CampaignDiplomacy.Get(campaign, overlord.Id, ally.Id);
+            if (rel.Stance == DiplomaticStance.Allied) campaign.NoteAllianceChange();
             rel.Stance = DiplomaticStance.AtWar;
             rel.LastActionDay = campaign.ElapsedDays;
             if (ally.Id != subject.Id)
             {
                 var pactRel = CampaignDiplomacy.Get(campaign, subject.Id, ally.Id);
+                if (pactRel.Stance != DiplomaticStance.Allied) campaign.NoteAllianceChange();
                 pactRel.Stance = DiplomaticStance.Allied;
                 campaign.Chronicle.Record(campaign, "subject_rebellion", ally.Id, overlord.Id);
             }
@@ -827,18 +831,31 @@ public static class SubjectInteractions
     /// <summary>AI rivals and hostile powers periodically sponsor independence agitation inside their enemies' subjects.</summary>
     public static void TickAiForeignAgitation(Campaign campaign)
     {
-        if (campaign is null || campaign.ElapsedDays <= 60 || !campaign.FeatureEnabled("subjects")) return;
+        foreach (var _ in TickAiForeignAgitationStages(campaign)) { }
+    }
+
+    public static IEnumerable<int> TickAiForeignAgitationStages(Campaign campaign)
+    {
+        if (campaign is null || campaign.ElapsedDays <= 60 || !campaign.FeatureEnabled("subjects")) yield break;
+        var subjects = new List<Nation>();
+        foreach (var n in campaign.Nations)
+            if (n.IsSubject) subjects.Add(n);
+        if (subjects.Count == 0) yield break;
+        var checkedAll = 0;
         foreach (var sponsor in campaign.Nations)
         {
+            if (++checkedAll % 32 == 0) yield return 0;
             if (sponsor.IsHuman || sponsor.IsSubject || sponsor.Movement is not null || sponsor.Population < 10_000_000 || sponsor.Treasury < 0.8f)
                 continue;
             var roll = Escalation.Roll(campaign.Seed, sponsor.Id, 0x7A3, campaign.ElapsedDays, 0x2);
             if (roll >= 0.14f) continue;
+            yield return 0;
 
             Nation bestSubject = null;
             var bestScore = 0f;
-            foreach (var subject in campaign.Nations)
+            for (var si = 0; si < subjects.Count; si++)
             {
+                var subject = subjects[si];
                 if (!subject.IsSubject || subject.OverlordId == sponsor.Id) continue;
                 var overlord = campaign.NationById(subject.OverlordId);
                 if (overlord is null) continue;
@@ -856,7 +873,10 @@ public static class SubjectInteractions
                 }
             }
             if (bestSubject is not null)
+            {
                 AgitateSubject(campaign, sponsor, bestSubject, out _);
+                yield return 0;
+            }
         }
     }
 
@@ -924,22 +944,39 @@ public static class CountryRelease
             refusal = Loc.Get("A country with only one region cannot divide itself.");
             return false;
         }
-        var validStates = options.StateMapIndices
-            .Select(idx => campaign.States.Find(s => s.MapIndex == idx && s.NationMapIndex == parent.MapIndex))
-            .Where(s => s is not null && s.Population > 0 && !LakeRegions.IsWaterState(s))
-            .Distinct()
-            .ToList();
-        if (validStates.Count == 0)
+        var indices = options.StateMapIndices;
+        var validCount = 0;
+        var includesCapital = false;
+        var seenFirst = -1;
+        HashSet<int> seenMore = null;
+        for (var i = 0; i < indices.Count; i++)
+        {
+            var idx = indices[i];
+            var s = campaign.StateByMapIndex(idx);
+            if (s is null || s.NationMapIndex != parent.MapIndex || s.Population <= 0 || LakeRegions.IsWaterState(s))
+                continue;
+            if (idx == seenFirst) continue;
+            if (seenFirst < 0)
+                seenFirst = idx;
+            else
+            {
+                seenMore ??= new HashSet<int> { seenFirst };
+                if (!seenMore.Add(idx)) continue;
+            }
+            validCount++;
+            if (s.MapIndex == parent.CapitalStateMapIndex) includesCapital = true;
+        }
+        if (validCount == 0)
         {
             refusal = Loc.Get("Select at least one non-capital region to release.");
             return false;
         }
-        if (validStates.Any(s => s.MapIndex == parent.CapitalStateMapIndex))
+        if (includesCapital)
         {
             refusal = Loc.Get("The national capital region cannot be released.");
             return false;
         }
-        if (validStates.Count >= owned.Length)
+        if (validCount >= owned.Length)
         {
             refusal = Loc.Get("At least one region must remain with the homeland.");
             return false;
@@ -952,70 +989,173 @@ public static class CountryRelease
         return true;
     }
 
+    private sealed class ReleaseResult
+    {
+        public Nation Born;
+        public string Feedback = "";
+    }
+
+    private static readonly List<Nation> TickNationsScratch = new();
+
     public static Nation Release(Campaign campaign, Nation parent, ReleaseOptions options, out string feedback)
     {
-        if (!CanRelease(campaign, parent, options, out feedback)) return null;
+        var result = new ReleaseResult();
+        foreach (var _ in ReleaseStages(campaign, parent, options, result)) { }
+        feedback = result.Feedback;
+        return result.Born;
+    }
+
+    [ThreadStatic] private static List<ScenarioState> _releaseStates;
+    [ThreadStatic] private static HashSet<ushort> _releaseStateSet;
+    [ThreadStatic] private static Dictionary<string, long> _releaseTally;
+
+    private static IEnumerable<int> ReleaseStages(Campaign campaign, Nation parent, ReleaseOptions options, ReleaseResult result)
+    {
+        if (!CanRelease(campaign, parent, options, out var invalid))
+        {
+            result.Feedback = invalid;
+            yield break;
+        }
         var topology = campaign.ProvinceMap;
-        var states = options.StateMapIndices
-            .Select(idx => campaign.States.Find(s => s.MapIndex == idx && s.NationMapIndex == parent.MapIndex))
-            .Where(s => s is not null && s.Population > 0 && !LakeRegions.IsWaterState(s) && s.MapIndex != parent.CapitalStateMapIndex)
-            .Distinct()
-            .ToList();
-        if (states.Count == 0) { feedback = Loc.Get("No valid regions selected."); return null; }
+        // Thirteen release evaluations a day used to allocate a list, a set and two tally
+        // dictionaries each: forty-odd kilobytes a call, six and a half megabytes over twelve
+        // days. The scratch is thread-static and cleared on entry; one enumeration at a time.
+        var states = _releaseStates ??= new List<ScenarioState>();
+        states.Clear();
+        var stateSetUshort = _releaseStateSet ??= new HashSet<ushort>();
+        stateSetUshort.Clear();
+        for (var i = 0; i < options.StateMapIndices.Count; i++)
+        {
+            var idx = options.StateMapIndices[i];
+            if (idx <= 0 || idx > ushort.MaxValue) continue;
+            var candidate = campaign.StateByMapIndex(idx);
+            if (candidate is null || candidate.NationMapIndex != parent.MapIndex ||
+                candidate.Population <= 0 || LakeRegions.IsWaterState(candidate) ||
+                candidate.MapIndex == parent.CapitalStateMapIndex) continue;
+            if (stateSetUshort.Add((ushort)idx))
+                states.Add(candidate);
+        }
+        if (states.Count == 0)
+        {
+            result.Feedback = Loc.Get("No valid regions selected.");
+            yield break;
+        }
 
         // Determine dominant culture & religion across selected states if not explicitly chosen
         var culture = options.Culture;
         if (string.IsNullOrWhiteSpace(culture))
         {
-            var tally = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-            foreach (var st in states)
-                foreach (var g in st.PopulationGroups)
+            var tally = _releaseTally ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            tally.Clear();
+            for (var si = 0; si < states.Count; si++)
+            {
+                var groups = states[si].PopulationGroups;
+                for (var gi = 0; gi < groups.Count; gi++)
+                {
+                    var g = groups[gi];
                     tally[g.Culture] = tally.GetValueOrDefault(g.Culture) + g.Size;
-            culture = tally.Count == 0 ? DemographyCatalog.PrimaryCulture(parent.Tag) : tally.OrderByDescending(p => p.Value).First().Key;
+                }
+            }
+            if (tally.Count == 0)
+                culture = DemographyCatalog.PrimaryCulture(parent.Tag);
+            else
+            {
+                var bestKey = "";
+                var bestCount = long.MinValue;
+                foreach (var pair in tally)
+                {
+                    if (pair.Value > bestCount) { bestCount = pair.Value; bestKey = pair.Key; }
+                }
+                culture = bestKey;
+            }
         }
 
         var religion = options.Religion;
         if (string.IsNullOrWhiteSpace(religion))
         {
-            var tally = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-            foreach (var st in states)
-                foreach (var g in st.PopulationGroups)
+            var tally = _releaseTally ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            tally.Clear();
+            for (var si = 0; si < states.Count; si++)
+            {
+                var groups = states[si].PopulationGroups;
+                for (var gi = 0; gi < groups.Count; gi++)
+                {
+                    var g = groups[gi];
                     tally[g.Religion] = tally.GetValueOrDefault(g.Religion) + g.Size;
-            religion = tally.Count == 0 ? parent.DeclaredReligion : tally.OrderByDescending(p => p.Value).First().Key;
+                }
+            }
+            if (tally.Count == 0)
+                religion = parent.DeclaredReligion;
+            else
+            {
+                var bestKey = "";
+                var bestCount = long.MinValue;
+                foreach (var pair in tally)
+                {
+                    if (pair.Value > bestCount) { bestCount = pair.Value; bestKey = pair.Key; }
+                }
+                religion = bestKey;
+            }
         }
 
         // Check if a vanished historical tag matches the released ground or was explicitly requested
         Nation born = null;
         var restoredTag = options.RestoredTag;
+        using (SimProfiler.Measure("      sub:rel:vanish"))
         if (string.IsNullOrWhiteSpace(restoredTag))
         {
-            foreach (var vanished in campaign.Nations)
+            for (var ni = 0; ni < campaign.Nations.Count; ni++)
             {
+                var vanished = campaign.Nations[ni];
                 if (!FormableRestorations.Vanished(campaign, vanished)) continue;
                 var authored = FormableRestorations.Authored(campaign, vanished.Tag);
                 if (authored.Length == 0) continue;
-                var stateSet = states.Select(s => (ushort)s.MapIndex).ToHashSet();
-                if (authored.Any(p => p > 0 && p < topology.ProvinceToState.Length && stateSet.Contains(topology.ProvinceToState[p])))
+                var matched = false;
+                for (var ai = 0; ai < authored.Length; ai++)
+                {
+                    var p = authored[ai];
+                    if (p > 0 && p < topology.ProvinceToState.Length && stateSetUshort.Contains(topology.ProvinceToState[p]))
+                    {
+                        matched = true;
+                        break;
+                    }
+                }
+                if (matched)
                 {
                     restoredTag = vanished.Tag;
                     break;
                 }
             }
         }
+        yield return 0;
 
-        var totalParentPop = Math.Max(1d, campaign.StatesOf(parent).Sum(s => (double)s.Population));
-        var releasedPop = states.Sum(s => s.Population);
+        double rawParentPop = 0d;
+        var parentStates = campaign.StatesOf(parent);
+        for (var si = 0; si < parentStates.Length; si++) rawParentPop += parentStates[si].Population;
+        var totalParentPop = Math.Max(1d, rawParentPop);
+        long releasedPop = 0;
+        var seat = states[0];
+        for (var si = 0; si < states.Count; si++)
+        {
+            var st = states[si];
+            releasedPop += st.Population;
+            if (st.Population > seat.Population) seat = st;
+        }
         var share = (float)Math.Clamp(releasedPop / totalParentPop, 0.01d, 0.90d);
 
-        var stateSetUshort = states.Select(s => (ushort)s.MapIndex).ToHashSet();
         var provinces = new List<int>();
         for (var p = 1; p <= topology.ProvinceCount; p++)
             if (topology.ProvinceToNation[p] == parent.MapIndex && stateSetUshort.Contains(topology.ProvinceToState[p]))
                 provinces.Add(p);
 
-        if (provinces.Count == 0) { feedback = Loc.Get("Selected regions contain no provinces."); return null; }
+        if (provinces.Count == 0)
+        {
+            result.Feedback = Loc.Get("Selected regions contain no provinces.");
+            yield break;
+        }
+        yield return 0;
 
-        var seat = states.OrderByDescending(s => s.Population).First();
+        using (SimProfiler.Measure("      sub:rel:found"))
         if (!string.IsNullOrWhiteSpace(restoredTag) && campaign.NationByTag(restoredTag) is { } existingVanished && !campaign.HasOwnedLand(existingVanished))
         {
             born = existingVanished;
@@ -1024,14 +1164,23 @@ public static class CountryRelease
         }
         else
         {
-            var pieces = states.Select(s => new SecessionPiece
+            var pieces = new List<SecessionPiece>(states.Count);
+            for (var si = 0; si < states.Count; si++)
             {
-                MapIndex = s.MapIndex, Name = s.Name, Population = s.Population, Cause = SecessionCause.Nationality
-            }).ToList();
+                var s = states[si];
+                pieces.Add(new SecessionPiece
+                {
+                    MapIndex = s.MapIndex, Name = s.Name, Population = s.Population, Cause = SecessionCause.Nationality
+                });
+            }
             born = SecessionEvents.FoundReleased(campaign, parent, pieces, culture, releasedPop);
         }
 
-        if (born is null) { feedback = Loc.Get("Could not allocate a new country tag."); return null; }
+        if (born is null)
+        {
+            result.Feedback = Loc.Get("Could not allocate a new country tag.");
+            yield break;
+        }
 
         if (!string.IsNullOrWhiteSpace(options.CustomName))
             born.CustomName = options.CustomName.Trim();
@@ -1054,26 +1203,39 @@ public static class CountryRelease
 
         if (!string.IsNullOrWhiteSpace(culture))
         {
-            if (!born.FoundedCultures.Contains(culture, StringComparer.OrdinalIgnoreCase))
-                born.FoundedCultures.Insert(0, culture);
+            var hasCulture = false;
+            for (var fi = 0; fi < born.FoundedCultures.Count; fi++)
+                if (string.Equals(born.FoundedCultures[fi], culture, StringComparison.OrdinalIgnoreCase)) { hasCulture = true; break; }
+            if (!hasCulture) born.FoundedCultures.Insert(0, culture);
             DemographyCatalog.Declare(born.Tag, born.FoundedCultures);
         }
 
         RegionalResourcePartition.Transfer(parent, born, share);
-        StatePartition.Annex(campaign, provinces, born, asConquest: false);
+        using (SimProfiler.Measure("      sub:rel:annex"))
+            StatePartition.Annex(campaign, provinces, born, asConquest: false);
         RegionalResourcePartition.RecountResidents(campaign, parent, born);
         CampaignDiplomacy.ForgetBorders();
-        SecessionResearch.Inherit(campaign, parent, born, campaign.StatesOf(born), (long)totalParentPop);
-        campaign.Homelands[born.Id] = campaign.StatesOf(born).Select(s => s.MapIndex).ToList();
-        campaign.LocateCapitals(preserveExisting: true);
+        var bornStates = campaign.StatesOf(born);
+        SecessionResearch.Inherit(campaign, parent, born, bornStates, (long)totalParentPop);
+        var homelands = new List<int>(bornStates.Length);
+        for (var si = 0; si < bornStates.Length; si++) homelands.Add(bornStates[si].MapIndex);
+        campaign.Homelands[born.Id] = homelands;
+        yield return 0;
+
+        using (SimProfiler.Measure("      sub:rel:capitals"))
+            campaign.LocateCapitals(preserveExisting: true);
+        yield return 0;
 
         born.Stability = 0.58f;
         born.WarSupport = 0.50f;
         born.StabilityBias = 0f;
         born.StabilityBias = born.Stability - StabilityCore.Target(campaign, born);
 
-        Reintegration.Defect(campaign, parent, born, provinces.ToHashSet(),
-            Math.Max(0.25f, campaign.Defines.PeacefulSecessionDefectionShare));
+        var provinceSet = new HashSet<int>(provinces.Count);
+        for (var pi = 0; pi < provinces.Count; pi++) provinceSet.Add(provinces[pi]);
+        using (SimProfiler.Measure("      sub:rel:defect"))
+            Reintegration.Defect(campaign, parent, born, provinceSet,
+                Math.Max(0.25f, campaign.Defines.PeacefulSecessionDefectionShare));
 
         if (options.AsSubject)
         {
@@ -1090,18 +1252,23 @@ public static class CountryRelease
         }
 
         Rulers.ReplaceHeadOfState(campaign, born, "");
-        NationNaming.ApplyTo(campaign, born, parent,
-            states.Select(state => state.MapIndex).ToArray(),
-            string.IsNullOrWhiteSpace(restoredTag) ? "auto" : "historic", culture);
+        yield return 0;
+
+        var stateIndices = new int[states.Count];
+        for (var si = 0; si < states.Count; si++) stateIndices[si] = states[si].MapIndex;
+        using (SimProfiler.Measure("      sub:rel:name"))
+            NationNaming.ApplyTo(campaign, born, parent, stateIndices,
+                string.IsNullOrWhiteSpace(restoredTag) ? "auto" : "historic", culture);
         NationalModifiers.Invalidate(parent);
         NationalModifiers.Invalidate(born);
         campaign.Chronicle.Record(campaign, "country_released", born.Id, parent.Id, place: seat.Name);
-        campaign.MarkMapChanged();
+        using (SimProfiler.Measure("      sub:rel:map"))
+            campaign.MarkMapChanged();
         campaign.MarkStrategicChange();
-        feedback = options.AsSubject
+        result.Feedback = options.AsSubject
             ? Loc.Format("Released {0} as a {1}.", born.DisplayName, Loc.Get(SubjectCatalog.Of(born.SubjectType)?.Name ?? born.SubjectType))
             : Loc.Format("Released {0} as an independent state.", born.DisplayName);
-        return born;
+        result.Born = born;
     }
 
     /// <summary>
@@ -1110,72 +1277,140 @@ public static class CountryRelease
     /// </summary>
     public static void TickAi(Campaign campaign)
     {
-        if (campaign is null || campaign.ElapsedDays <= 60 || campaign.ElapsedDays % 30 != 23) return;
-        if (!campaign.FeatureEnabled("subjects")) return;
-        SubjectInteractions.TickAiForeignAgitation(campaign);
-        SubjectBlocs.TickAi(campaign);
-        if (!campaign.FeatureEnabled("secession")) return;
+        foreach (var _ in TickAiStages(campaign)) { }
+    }
 
-        foreach (var nation in campaign.Nations.ToArray())
+    public static IEnumerable<int> TickAiStages(Campaign campaign)
+    {
+        if (campaign is null || campaign.ElapsedDays <= 60 || campaign.ElapsedDays % 30 != 23) yield break;
+        if (!campaign.FeatureEnabled("subjects")) yield break;
+        using (var agitation = SubjectInteractions.TickAiForeignAgitationStages(campaign).GetEnumerator())
         {
-            // A human overlord who holds the colonial office is run on the same review as
-            // every other overlord; one who keeps it hands-on is skipped as before.
-            if ((nation.IsHuman && !Delegation.Holds(nation, Delegation.Subjects)) ||
-                nation.IsSubject || nation.Movement is not null || nation.Population < 5_000_000) continue;
-            var strained = nation.ImperialOverstretch >= campaign.Defines.AiReleaseOverstretchThreshold ||
-                nation.Stability <= 0.42f ||
-                (nation.Government is "military_junta" or "one_party_state" or "absolute_monarchy" or "theocracy" &&
-                 nation.Stability < 0.55f);
-            if (!strained) continue;
-            if (campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id))) continue;
-            if (campaign.ElapsedDays - nation.LastSecessionDay < 365) continue;
-
-            var states = campaign.StatesOf(nation);
-            if (states.Length < 5) continue;
-
-            var candidate = states
-                .Where(s => s.MapIndex != nation.CapitalStateMapIndex && s.Population >= 500_000 &&
-                            s.Population < nation.Population * 0.30f &&
-                            EconomySystem.ForeignShare(s, nation.Tag) >= 0.65f &&
-                            (s.Radicalism >= campaign.Defines.AiReleaseRegionHeatThreshold || s.SecessionPressure >= 0.65f))
-                .OrderByDescending(s => s.SecessionPressure + s.Radicalism)
-                .FirstOrDefault();
-            if (candidate is null) continue;
-
-            var roll = Escalation.Roll(campaign.Seed, nation.Id, 0x8E1, campaign.ElapsedDays, candidate.MapIndex);
-            if (roll >= 0.18f) continue;
-
-            var cultures = EconomySystem.Cultures(candidate);
-            var topCulture = cultures.Count > 0 ? cultures[0].Culture : "";
-            var existing = RegionalAdministration.MatchingSubject(campaign, nation, candidate);
-            if (existing is not null)
+            while (true)
             {
-                var grant = RegionalAdministration.Package(campaign, nation, candidate, existing);
-                if (RegionalAdministration.MayGrant(campaign, nation, existing, grant, out _, out _))
-                {
-                    new GrantSubjectRegionsCommand { IssuerId = nation.Id, SubjectId = existing.Id,
-                        StateMapIndices = grant }.Apply(campaign);
-                    nation.LastSecessionDay = campaign.ElapsedDays;
-                }
-                // Do not create a competing micro-vassal because an existing suitable
-                // administration is temporarily reorganising or the budget is short.
-                continue;
+                bool more;
+                using (SimProfiler.Measure("    sub:agitation")) more = agitation.MoveNext();
+                if (!more) break;
+                yield return 0;
             }
-            var package = RegionalAdministration.Package(campaign, nation, candidate);
-            if (package.Length == 0) continue;
-            var opts = new ReleaseOptions
+        }
+        yield return 0;
+        using (var blocs = SubjectBlocs.TickAiStages(campaign).GetEnumerator())
+        {
+            while (true)
             {
-                StateMapIndices = package.ToList(),
-                // Severe strain in a low-authority system can favour negotiated independence.
-                AsSubject = !(nation.Stability < .35f && PoliticsCore.IdeologyOf(nation).Authority < .25f &&
-                    Escalation.Roll(campaign.Seed, nation.Id, 0x8E2, campaign.ElapsedDays, candidate.MapIndex) < .25f),
-                SubjectType = RegionalAdministration.SubjectTypeFor(nation, candidate, package.Length),
-                Culture = topCulture,
-                Government = nation.Government,
-                Ideology = nation.Ideology
-            };
-            if (Release(campaign, nation, opts, out _) is not null)
-                nation.LastSecessionDay = campaign.ElapsedDays;
+                bool more;
+                using (SimProfiler.Measure("    sub:blocs")) more = blocs.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
+        yield return 0;
+        if (!campaign.FeatureEnabled("secession")) yield break;
+
+        var liveWars = Warfare.LiveWars(campaign);
+        TickNationsScratch.Clear();
+        for (var i = 0; i < campaign.Nations.Count; i++)
+            TickNationsScratch.Add(campaign.Nations[i]);
+        try
+        {
+            for (var ni = 0; ni < TickNationsScratch.Count; ni++)
+            {
+                if (ni > 0 && ni % 32 == 0) yield return 0;
+                var nation = TickNationsScratch[ni];
+                // A human overlord who holds the colonial office is run on the same review as
+                // every other overlord; one who keeps it hands-on is skipped as before.
+                if ((nation.IsHuman && !Delegation.Holds(nation, Delegation.Subjects)) ||
+                    nation.IsSubject || nation.Movement is not null || nation.Population < 5_000_000) continue;
+                var strained = nation.ImperialOverstretch >= campaign.Defines.AiReleaseOverstretchThreshold ||
+                    nation.Stability <= 0.42f ||
+                    (nation.Government is "military_junta" or "one_party_state" or "absolute_monarchy" or "theocracy" &&
+                     nation.Stability < 0.55f);
+                if (!strained) continue;
+                yield return 0;
+                var atWar = false;
+                for (var wi = 0; wi < liveWars.Count; wi++)
+                {
+                    var w = liveWars[wi];
+                    if (!w.Ended && w.Involves(nation.Id)) { atWar = true; break; }
+                }
+                if (atWar) continue;
+                if (campaign.ElapsedDays - nation.LastSecessionDay < 365) continue;
+
+                var ownedCount = 0;
+                ScenarioState candidate = null;
+                var candidateHeat = float.NegativeInfinity;
+                var allStates = campaign.States;
+                for (var si = 0; si < allStates.Count; si++)
+                {
+                    var s = allStates[si];
+                    if (s.NationMapIndex != nation.MapIndex) continue;
+                    ownedCount++;
+                    if (s.MapIndex == nation.CapitalStateMapIndex || s.Population < 500_000 ||
+                        s.Population >= nation.Population * 0.30f ||
+                        EconomySystem.ForeignShare(s, nation.Tag) < 0.65f ||
+                        (s.Radicalism < campaign.Defines.AiReleaseRegionHeatThreshold && s.SecessionPressure < 0.65f)) continue;
+                    var heat = s.SecessionPressure + s.Radicalism;
+                    if (candidate is null || heat > candidateHeat)
+                    {
+                        candidate = s;
+                        candidateHeat = heat;
+                    }
+                }
+                if (ownedCount < 5 || candidate is null) continue;
+
+                var roll = Escalation.Roll(campaign.Seed, nation.Id, 0x8E1, campaign.ElapsedDays, candidate.MapIndex);
+                if (roll >= 0.18f) continue;
+
+                var cultures = EconomySystem.Cultures(candidate);
+                var topCulture = cultures.Count > 0 ? cultures[0].Culture : "";
+                Nation existing;
+                int[] package;
+                using (SimProfiler.Measure("    sub:rel_match"))
+                    existing = RegionalAdministration.MatchingSubject(campaign, nation, candidate, out package);
+                if (existing is not null)
+                {
+                    yield return 0;
+                    int[] grant;
+                    using (SimProfiler.Measure("    sub:rel_grant_pkg"))
+                        grant = RegionalAdministration.Package(campaign, nation, candidate, existing);
+                    yield return 0;
+                    using (SimProfiler.Measure("    sub:rel_grant_apply"))
+                        if (RegionalAdministration.MayGrant(campaign, nation, existing, grant, out _, out _))
+                        {
+                            new GrantSubjectRegionsCommand { IssuerId = nation.Id, SubjectId = existing.Id,
+                                StateMapIndices = grant }.Apply(campaign);
+                            nation.LastSecessionDay = campaign.ElapsedDays;
+                        }
+                    yield return 0;
+                    // Do not create a competing micro-vassal because an existing suitable
+                    // administration is temporarily reorganising or the budget is short.
+                    continue;
+                }
+                if (package.Length == 0) continue;
+                yield return 0;
+                var opts = new ReleaseOptions
+                {
+                    StateMapIndices = package.ToList(),
+                    // Severe strain in a low-authority system can favour negotiated independence.
+                    AsSubject = !(nation.Stability < .35f && PoliticsCore.IdeologyOf(nation).Authority < .25f &&
+                        Escalation.Roll(campaign.Seed, nation.Id, 0x8E2, campaign.ElapsedDays, candidate.MapIndex) < .25f),
+                    SubjectType = RegionalAdministration.SubjectTypeFor(nation, candidate, package.Length),
+                    Culture = topCulture,
+                    Government = nation.Government,
+                    Ideology = nation.Ideology
+                };
+                var relResult = new ReleaseResult();
+                foreach (var _ in ReleaseStages(campaign, nation, opts, relResult))
+                    yield return 0;
+                if (relResult.Born is not null)
+                    nation.LastSecessionDay = campaign.ElapsedDays;
+                yield return 0;
+            }
+        }
+        finally
+        {
+            TickNationsScratch.Clear();
         }
     }
 }

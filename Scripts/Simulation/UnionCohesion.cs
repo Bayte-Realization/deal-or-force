@@ -104,14 +104,24 @@ public static class UnionCohesion
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(UnionCohesion))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly review, yielded between unions so a fracturing world does not
+    /// review every proclamation in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(UnionCohesion))) yield break;
         var defines = campaign.Defines;
         // SecessionEvents.Force appends a new country. Nation IDs keep their list
         // indices, so review only the initial cohort without a mutable enumerator
         // or a daily snapshot allocation. New countries join the next review.
         var nationsAtStart = campaign.Nations.Count;
+        var liveWars = Warfare.LiveWars(campaign);
+        HashSet<int> landlessHotspots = null;
         for (var index = 0; index < nationsAtStart; index++)
         {
+            if (index % 4 == 0) yield return 0;
             var nation = campaign.Nations[index];
             var isFormed = !string.IsNullOrEmpty(nation.FormedNationId);
             var isVulnerableFederation = !isFormed && campaign.FeatureEnabled("federal_fracture") &&
@@ -127,8 +137,11 @@ public static class UnionCohesion
             // A state proclaimed last month is not judged this month: the ink is still wet.
             if (campaign.ElapsedDays < nation.FormedNationDay + defines.UnionGraceDays) continue;
             var atWar = false;
-            foreach (var war in campaign.Wars)
+            for (var wi = 0; wi < liveWars.Count; wi++)
+            {
+                var war = liveWars[wi];
                 if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
+            }
             var weekly = defines.UnionCohesionRecoveryWeekly;
             if (atWar) weekly -= defines.UnionCohesionWarWeekly;
             weekly -= Radicalism(campaign, nation) * defines.UnionCohesionRadicalismWeekly;
@@ -139,11 +152,40 @@ public static class UnionCohesion
             if (campaign.ElapsedDays - nation.UnionLastSecessionDay < defines.UnionSecessionCooldownDays) continue;
             // A foreign war abroad rallies a country only while stability holds; a broken state collapses under fire.
             if (atWar && nation.Stability >= 0.25f && WarWeariness.NationalFatigue(campaign, nation) < 0.50f) continue;
-            if (!LoseTheAngriestRegion(campaign, nation)) continue;
+            yield return 0;
+            var states = campaign.StatesOf(nation);
+            if (states.Length < 2) continue;
+            if (landlessHotspots is null && campaign.ProvinceMap is not null)
+            {
+                landlessHotspots = new HashSet<int>();
+                FillLandlessHotspots(campaign, landlessHotspots);
+            }
+            ScenarioState angriest = null;
+            var highestScore = -1f;
+            for (var si = 0; si < states.Length; si++)
+            {
+                if (si > 0 && si % 4 == 0) yield return 0;
+                var state = states[si];
+                if (!TryScoreCandidate(campaign, nation, state, landlessHotspots, out var score)) continue;
+                if (angriest is null || score > highestScore)
+                {
+                    angriest = state;
+                    highestScore = score;
+                }
+            }
+            if (angriest is null) continue;
+            yield return 0;
+            SecessionReport forced = null;
+            foreach (var _ in SecessionEvents.ForceStages(campaign, angriest, result => forced = result, null, SecessionCause.Federal))
+                yield return 0;
+            if (forced is null) continue;
+            yield return 0;
+            if (landlessHotspots is not null) FillLandlessHotspots(campaign, landlessHotspots);
             nation.UnionLastSecessionDay = campaign.ElapsedDays;
             // Losing a region settles the rest for a while, the way a divorce does.
             nation.UnionCohesion = Math.Min(1f, nation.UnionCohesion + 0.25f);
             NationalModifiers.Invalidate(nation);
+            yield return 0;
         }
     }
 
@@ -157,6 +199,39 @@ public static class UnionCohesion
         return total / states.Length;
     }
 
+    private static void FillLandlessHotspots(Campaign campaign, HashSet<int> hotspots)
+    {
+        hotspots.Clear();
+        if (campaign.ProvinceMap is null) return;
+        foreach (var candidate in campaign.Nations)
+        {
+            if (candidate.Movement is not { Landless: true }) continue;
+            if (campaign.Homelands.TryGetValue(candidate.Id, out var h))
+                for (var hi = 0; hi < h.Count; hi++) hotspots.Add(h[hi]);
+            hotspots.Add(candidate.Movement.HeadquartersStateMapIndex);
+        }
+    }
+
+    private static bool TryScoreCandidate(Campaign campaign, Nation nation, ScenarioState state,
+        HashSet<int> landlessHotspots, out float score)
+    {
+        score = -1f;
+        // Not the capital - a "Republic of Moscow" leaving Russia is not a union coming apart -
+        // and not a region just taken back from a crushed breakaway (SecessionCore.CrushedPressure).
+        if (state.MapIndex == nation.CapitalStateMapIndex || state.SecessionPressure < 0f) return false;
+        // Nor ground whose people have a living state of their own: Ukrainians on land Russia
+        // took are Ukraine's lost land, not a "Ukrainian Republic" breaking from the union.
+        var cultures = EconomySystem.Cultures(state);
+        var people = cultures.Count > 0 ? cultures[0].Culture : null;
+        // The union's own peoples are not someone else's lost land, whoever else is of them.
+        if (!string.IsNullOrEmpty(people) && !DemographyCatalog.IsPrimary(nation.Tag, people) &&
+            SecessionEvents.KinNear(campaign, nation, people, state)) return false;
+        score = state.Radicalism;
+        if (landlessHotspots is not null && landlessHotspots.Contains(state.MapIndex))
+            score += 0.25f;
+        return true;
+    }
+
     /// <summary>
     /// The region that leaves: the angriest one the union holds, because that is the region whose
     /// people have been telling anyone who asks that they are not part of this. Public so that what
@@ -167,33 +242,17 @@ public static class UnionCohesion
     {
         var states = campaign.StatesOf(nation);
         if (states.Length < 2) return null;      // a country of one region cannot lose a region
+        HashSet<int> landlessHotspots = null;
+        if (campaign.ProvinceMap is not null)
+        {
+            landlessHotspots = new HashSet<int>();
+            FillLandlessHotspots(campaign, landlessHotspots);
+        }
         ScenarioState angriest = null;
         var highestScore = -1f;
         foreach (var state in states)
         {
-            // Not the capital - a "Republic of Moscow" leaving Russia is not a union coming apart -
-            // and not a region just taken back from a crushed breakaway (SecessionCore.CrushedPressure).
-            if (state.MapIndex == nation.CapitalStateMapIndex || state.SecessionPressure < 0f) continue;
-            // Nor ground whose people have a living state of their own: Ukrainians on land Russia
-            // took are Ukraine's lost land, not a "Ukrainian Republic" breaking from the union.
-            var people = EconomySystem.Cultures(state).FirstOrDefault().Culture;
-            // The union's own peoples are not someone else's lost land, whoever else is of them.
-            if (!string.IsNullOrEmpty(people) && !DemographyCatalog.IsPrimary(nation.Tag, people) &&
-                SecessionEvents.KinNear(campaign, nation, people, new[] { state })) continue;
-            var score = state.Radicalism;
-            if (campaign.ProvinceMap is not null)
-            {
-                foreach (var candidate in campaign.Nations)
-                {
-                    if (candidate.Movement is { Landless: true } &&
-                        ((campaign.Homelands.TryGetValue(candidate.Id, out var h) && h.Contains(state.MapIndex)) ||
-                         candidate.Movement.HeadquartersStateMapIndex == state.MapIndex))
-                    {
-                        score += 0.25f;
-                        break;
-                    }
-                }
-            }
+            if (!TryScoreCandidate(campaign, nation, state, landlessHotspots, out var score)) continue;
             if (angriest is null || score > highestScore)
             {
                 angriest = state;
@@ -203,19 +262,24 @@ public static class UnionCohesion
         return angriest;
     }
 
-    private static bool LoseTheAngriestRegion(Campaign campaign, Nation nation)
-    {
-        var angriest = AngriestRegion(campaign, nation);
-        if (angriest is null) return false;
-        // Named for what it is: a region leaving a union that cannot hold it is a federal break, and
-        // the reports the player reads already know that word (SecessionCause.Federal).
-        return SecessionEvents.Force(campaign, angriest, null, SecessionCause.Federal) is not null;
-    }
-
     /// <summary>
     /// What a union's state of mind does to the country, through the ordinary modifier sources: a
     /// union in trouble costs stability and pays radicalism, one that holds gives a little back.
     /// </summary>
+    public static void AddTo(Dictionary<string, float> totals, Nation nation)
+    {
+        if (nation is null || string.IsNullOrEmpty(nation.FormedNationId)) return;
+        var cohesion = nation.UnionCohesion;
+        if (cohesion >= 0.6f)
+        {
+            totals["stability_weekly"] = totals.GetValueOrDefault("stability_weekly") + 0.0025f + cohesion * 0.0025f;
+            return;
+        }
+        var trouble = 0.6f - cohesion;
+        totals["stability_weekly"] = totals.GetValueOrDefault("stability_weekly") - trouble * 0.03f;
+        totals["radicalism_weekly"] = totals.GetValueOrDefault("radicalism_weekly") + trouble * 0.035f;
+    }
+
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation nation)
     {
         if (nation is null || string.IsNullOrEmpty(nation.FormedNationId)) yield break;

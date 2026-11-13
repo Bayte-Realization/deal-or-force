@@ -173,6 +173,8 @@ public partial class DealOrForceGame
         if (battle.WithdrawnAttackers.Count + battle.WithdrawnDefenders.Count > 0)
             _battleDetailControls.AddChild(FactRow(Tr("Withdrawn formations"),
                 $"{battle.WithdrawnAttackers.Count}/{battle.WithdrawnDefenders.Count}", "surface.line_faint", "text.muted"));
+        // Why: the reasons behind the balance, before the facts they come from.
+        AddBattleFactors(battle, playerAttacks);
         SectionRule(_battleDetailControls, "Ground and fire");
         var terrain = _campaign.ProvinceMap?.TerrainAt(battle.ProvinceId);
         // A report that says "19 formations" without saying how many of them are in the line

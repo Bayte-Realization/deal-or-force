@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -64,15 +65,35 @@ public sealed partial class Defines
 /// </summary>
 public static class Consolidation
 {
+    private sealed class Board
+    {
+        public readonly List<Nation> Nations = new();
+    }
+
+    private static readonly ConditionalWeakTable<Campaign, Board> Boards = new();
+    [ThreadStatic] private static List<(Nation Partner, float Score, int Held)> _partnersScratch;
+
     public static void Tick(Campaign c)
     {
-        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(Consolidation))) return;
-        if (c.ProvinceMap is null || c.ProvinceController is null) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same consolidation pass, yielded between batches of countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(Consolidation))) yield break;
+        if (c.ProvinceMap is null || c.ProvinceController is null) yield break;
         var defines = c.Defines;
-        if (c.ElapsedDays < defines.ConsolidationEarliestDay) return;
+        if (c.ElapsedDays < defines.ConsolidationEarliestDay) yield break;
         var every = Math.Max(7, defines.ConsolidationReviewDays);
-        foreach (var nation in c.Nations.ToArray())
+        var nations = Boards.GetOrCreateValue(c).Nations;
+        nations.Clear();
+        nations.AddRange(c.Nations);
+        var ticked = 0;
+        for (var ni = 0; ni < nations.Count; ni++)
         {
+            var nation = nations[ni];
+            if (++ticked % 8 == 0) yield return 0;
             if ((c.ElapsedDays + (long)nation.Id * 7) % every != 0) continue;
             // A player's country pursues a union only when the player has handed diplomacy over.
             if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;
@@ -119,20 +140,30 @@ public static class Consolidation
 
         // Diplomacy pursues a project; only the shared situational policy proclaims it.
         // Do not bypass its fiscal reserve, recovery period or identity comparison here.
-        if (FormableNations.Evaluate(c, founder, definition).CanForm) return;
+        if (FormableNations.CanForm(c, founder, definition)) return;
 
         // The members still outside, the most willing first: one step a month, on the one most
         // likely to give. Not one whose foreign policy another capital holds - it cannot sign.
-        var partners = owners.Keys.Where(mapIndex => mapIndex != founder.MapIndex && mapIndex != 0)
-            .Select(mapIndex => c.Nations.Find(n => n.MapIndex == mapIndex))
-            .Where(n => n is { Population: > 0 } && FormableProclamationAi.EstablishedCountry(n) && !n.Landless &&
-                        !n.AnswersTo(founder.Id) && !founder.AnswersTo(n.Id) &&
-                        !n.IsSubject)
-            .OrderByDescending(n => PeacefulFormation.Willingness(c, founder, n))
-            .ThenByDescending(n => owners[n.MapIndex]).ThenBy(n => n.Id)
-            .ToList();
-        foreach (var partner in partners)
+        var partners = _partnersScratch ??= new List<(Nation Partner, float Score, int Held)>();
+        partners.Clear();
+        foreach (var (mapIndex, held) in owners)
         {
+            if (mapIndex == founder.MapIndex || mapIndex == 0) continue;
+            var n = c.NationByMapIndex(mapIndex);
+            if (n is not { Population: > 0 } || !FormableProclamationAi.EstablishedCountry(n) || n.Landless ||
+                n.AnswersTo(founder.Id) || founder.AnswersTo(n.Id) || n.IsSubject) continue;
+            partners.Add((n, PeacefulFormation.Willingness(c, founder, n), held));
+        }
+        partners.Sort(static (left, right) =>
+        {
+            var cmp = right.Score.CompareTo(left.Score);
+            if (cmp != 0) return cmp;
+            cmp = right.Held.CompareTo(left.Held);
+            return cmp != 0 ? cmp : left.Partner.Id.CompareTo(right.Partner.Id);
+        });
+        for (var pi = 0; pi < partners.Count; pi++)
+        {
+            var (partner, willing, _) = partners[pi];
             var relation = CampaignDiplomacy.Get(c, founder.Id, partner.Id);
             if (relation is null || relation.Stance == DiplomaticStance.AtWar) continue;
             // Kin only. The same people is courted by any government; a kindred people of the same
@@ -142,7 +173,6 @@ public static class Consolidation
             if (kinship < 0.5f) continue;
             if (kinship < 1f && founder.ConsolidationAmbition < c.Defines.ConsolidationCourtingAmbition) continue;
             founder.ConsolidationFocusId = partner.Id;
-            var willing = PeacefulFormation.Willingness(c, founder, partner);
             if (willing >= c.Defines.UnionAiAcceptance && PeacefulFormation.Refusal(c, founder, partner, definition).Length == 0)
             {
                 new InviteFormationCommand { IssuerId = founder.Id, PartnerId = partner.Id, FormableId = definition.Id }.Apply(c);
@@ -177,23 +207,32 @@ public static class Consolidation
     public static (FormableNation Definition, Dictionary<int, int> Owners, int Total)? Project(Campaign c, Nation founder)
     {
         if (c?.ProvinceMap is null || founder is null || !c.FeatureEnabled("formable_nations")) return null;
-        var map = c.ProvinceMap;
+        if (!CanPursueNation(c, founder)) return null;
         (FormableNation, Dictionary<int, int>, int)? best = null;
         var bestShare = 0f;
-        foreach (var definition in FormableNations.All)
+        HashSet<int> founderIdentity = null;
+        var all = FormableNations.AllList;
+        for (var di = 0; di < all.Count; di++)
         {
-            if (!definition.AiFoundation || !definition.PeacefulAccession || !CanPursue(c, founder, definition)) continue;
-            if (c.Nations.Any(n => n.FormedNationId == definition.Id)) continue;
+            var definition = all[di];
+            if (!definition.AiFoundation || !definition.PeacefulAccession || !CanPursueDefinitionFast(c, founder, definition))
+                continue;
+            if (HasFormedNation(c, definition.Id)) continue;
             var (owners, total) = Owners(c, definition);
             if (total == 0) continue;
             var mine = owners.GetValueOrDefault(founder.MapIndex);
             if (mine == 0 || mine == total) continue;
+            founderIdentity ??= FormableNations.CountryIdentity(c, founder);
+            var idSet = string.Equals(founder.FormedNationId, definition.Id, StringComparison.OrdinalIgnoreCase)
+                ? null : founderIdentity;
+            if (FormableNations.SmallerThanCountry(c, founder, definition, idSet)) continue;
+            if (!FormableNations.ReligionMandate(c, founder, definition)) continue;
             // The natural leader only: nobody else who could lead it holds more of it.
             var outranked = false;
             foreach (var (mapIndex, count) in owners)
             {
                 if (mapIndex == founder.MapIndex || count <= mine) continue;
-                var other = c.Nations.Find(n => n.MapIndex == mapIndex);
+                var other = c.NationByMapIndex(mapIndex);
                 if (other is not null && CanPursue(c, other, definition)) { outranked = true; break; }
             }
             if (outranked) continue;
@@ -203,7 +242,7 @@ public static class Consolidation
             foreach (var (mapIndex, count) in owners)
             {
                 if (mapIndex == founder.MapIndex) continue;
-                var other = c.Nations.Find(n => n.MapIndex == mapIndex);
+                var other = c.NationByMapIndex(mapIndex);
                 if (other is null) continue;
                 kinWeight += PeacefulFormation.CulturalAffinity(founder, other) * count;
                 otherCount += count;
@@ -218,32 +257,56 @@ public static class Consolidation
         return best;
     }
 
+    private static bool HasFormedNation(Campaign c, string definitionId)
+    {
+        for (var i = 0; i < c.Nations.Count; i++)
+            if (c.Nations[i].FormedNationId == definitionId) return true;
+        return false;
+    }
+
+    private static bool ContainsIgnoreCase(string[] items, string value)
+    {
+        for (var i = 0; i < items.Length; i++)
+            if (string.Equals(items[i], value, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static bool CanPursueNation(Campaign c, Nation n) => n.Population > 0 && !n.IsSubject &&
+        !n.Landless && !c.Fallen.Contains(n.Id) && c.HasOwnedLand(n) && FormableProclamationAi.EstablishedCountry(n);
+
+    private static bool CanPursueDefinitionFast(Campaign c, Nation n, FormableNation d) =>
+        FormableNations.CompatibleProclamation(n, d) &&
+        (d.RequiredIdeology.Length == 0 || ContainsIgnoreCase(d.RequiredIdeology, n.Ideology)) &&
+        (d.RequiredGovernment.Length == 0 || ContainsIgnoreCase(d.RequiredGovernment, n.Government)) &&
+        FormableNations.Eligible(c, n, d);
+
     // A larger holder only has precedence if it could actually lead this project. A
     // subject or a country with an incompatible prior identity must not freeze it forever.
-    private static bool CanPursue(Campaign c, Nation n, FormableNation d) => n.Population > 0 && !n.IsSubject &&
-        !n.Landless && !c.Fallen.Contains(n.Id) && c.HasOwnedLand(n) && FormableProclamationAi.EstablishedCountry(n) &&
-        FormableNations.Eligible(c, n, d) && FormableNations.CompatibleProclamation(n, d) &&
-        !FormableNations.SmallerThanCountry(c, n, d) &&
+    private static bool CanPursue(Campaign c, Nation n, FormableNation d) =>
+        CanPursueNation(c, n) && CanPursueDefinitionFast(c, n, d) &&
         FormableNations.ReligionMandate(c, n, d) &&
-        (d.RequiredIdeology.Length == 0 || d.RequiredIdeology.Contains(n.Ideology, StringComparer.OrdinalIgnoreCase)) &&
-        (d.RequiredGovernment.Length == 0 || d.RequiredGovernment.Contains(n.Government, StringComparer.OrdinalIgnoreCase));
+        !FormableNations.SmallerThanCountry(c, n, d);
 
-    private static Campaign _ownersFor;
-    private static int _ownersDay = int.MinValue;
-    private static int _ownersRevision = int.MinValue;
-    private static readonly Dictionary<string, (Dictionary<int, int> Owners, int Total)> OwnersCache = new(StringComparer.Ordinal);
+    private sealed class OwnersBoard
+    {
+        public int Revision = int.MinValue;
+        public int StateCount = -1;
+        public readonly Dictionary<string, (Dictionary<int, int> Owners, int Total)> Cache = new(StringComparer.Ordinal);
+    }
 
-    /// <summary>Who holds the union's ground, province by province, by map index. Kept for the day.</summary>
+    private static readonly ConditionalWeakTable<Campaign, OwnersBoard> OwnersBoards = new();
+
+    /// <summary>Who holds the union's ground, province by province, by map index. Kept for the layout.</summary>
     private static (Dictionary<int, int> Owners, int Total) Owners(Campaign c, FormableNation definition)
     {
-        if (!ReferenceEquals(_ownersFor, c) || _ownersRevision != c.MapRevision)
+        var board = OwnersBoards.GetOrCreateValue(c);
+        if (board.Revision != c.OwnershipRevision || board.StateCount != c.States.Count)
         {
-            OwnersCache.Clear();
-            _ownersFor = c;
-            _ownersDay = c.ElapsedDays;
-            _ownersRevision = c.MapRevision;
+            board.Cache.Clear();
+            board.Revision = c.OwnershipRevision;
+            board.StateCount = c.States.Count;
         }
-        if (OwnersCache.TryGetValue(definition.Id, out var cached)) return cached;
+        if (board.Cache.TryGetValue(definition.Id, out var cached)) return cached;
         var map = c.ProvinceMap;
         var owners = new Dictionary<int, int>();
         var total = 0;
@@ -255,7 +318,7 @@ public static class Consolidation
             owners[owner] = owners.GetValueOrDefault(owner) + 1;
             total++;
         }
-        return OwnersCache[definition.Id] = (owners, total);
+        return board.Cache[definition.Id] = (owners, total);
     }
 
     /// <summary>
@@ -271,8 +334,8 @@ public static class Consolidation
         var definition = FormableNations.Find(nation.ConsolidationProject);
         if (definition is null || !definition.AiFoundation || !FormableNations.Eligible(c, nation, definition) ||
             !FormableNations.CompatibleProclamation(nation, definition) || !FormableNations.ReligionMandate(c, nation, definition) ||
-            (definition.RequiredIdeology.Length > 0 && !definition.RequiredIdeology.Contains(nation.Ideology, StringComparer.OrdinalIgnoreCase)) ||
-            (definition.RequiredGovernment.Length > 0 && !definition.RequiredGovernment.Contains(nation.Government, StringComparer.OrdinalIgnoreCase))) return 0f;
+            (definition.RequiredIdeology.Length > 0 && !ContainsIgnoreCase(definition.RequiredIdeology, nation.Ideology)) ||
+            (definition.RequiredGovernment.Length > 0 && !ContainsIgnoreCase(definition.RequiredGovernment, nation.Government))) return 0f;
         var (owners, total) = Owners(c, definition);
         if (total == 0) return 0f;
         var theirs = owners.GetValueOrDefault(other.MapIndex) / (float)total;
@@ -292,8 +355,13 @@ public static class Consolidation
         // A shard is a piece the game's own risings and releases made. A small country of 2024 is
         // a nation, not a shard: counted as one, Switzerland "consolidated" Austria on day 143.
         if (!CultureUnion.BornInPlay(n)) return false;
-        var states = c.StatesOf(n);
-        return states.Length <= c.Defines.ShardMaxStates && n.Population <= c.Defines.ShardMaxPopulation;
+        if (n.Population > c.Defines.ShardMaxPopulation) return false;
+        var maxStates = c.Defines.ShardMaxStates;
+        var count = 0;
+        var states = c.States;
+        for (var i = 0; i < states.Count; i++)
+            if (states[i].NationMapIndex == n.MapIndex && ++count > maxStates) return false;
+        return true;
     }
 
     /// <summary>Checks if nation a shares a direct land border with nation b.</summary>
@@ -319,32 +387,53 @@ public static class Consolidation
         return M.Clamp(opinion * 0.40f + culture * 30f + allied + trade + nonAggression + govMatch + stability + sizeBonus - distance * 25f, 0f, 100f);
     }
 
+    private static bool InLiveWar(Campaign c, int nationId)
+    {
+        var live = Warfare.LiveWars(c);
+        for (var i = 0; i < live.Count; i++)
+        {
+            var war = live[i];
+            if (!war.Ended && war.Involves(nationId)) return true;
+        }
+        return false;
+    }
+
     /// <summary>Reviews adjacent kindred splinters and initiates courting or organic unification.</summary>
     public static void ReviewShardConsolidation(Campaign c, Nation founder)
     {
+        if (c?.ProvinceMap is null || founder is null) return;
         if (c.ElapsedDays < c.Defines.ShardConsolidationEarliestDay) return;
         if (!IsSplinterOrShard(c, founder)) return;
-        if (c.Wars.Any(w => !w.Ended && w.Involves(founder.Id))) return;
+        if (InLiveWar(c, founder.Id)) return;
 
-        var neighbors = c.Nations.Where(other => other.Id != founder.Id &&
-            !c.Fallen.Contains(other.Id) && other.Movement is null && !other.IsSubject &&
-            IsSplinterOrShard(c, other) && !c.Wars.Any(w => !w.Ended && w.Involves(other.Id)) &&
-            PeacefulFormation.CulturalAffinity(founder, other) >= 0.5f &&
-            PoliticsCore.IdeologicalDistance(founder, other) <= 0.65f &&
-            ShareBorder(c, founder, other))
-            .OrderByDescending(other => ShardWillingness(c, founder, other))
-            .ToList();
+        Nation partner = null;
+        var bestWilling = float.NegativeInfinity;
+        foreach (var neighborMapIndex in CampaignDiplomacy.Neighbours(c, founder.MapIndex))
+        {
+            var other = c.NationByMapIndex(neighborMapIndex);
+            if (other is null || other.Id == founder.Id ||
+                c.Fallen.Contains(other.Id) || other.Movement is not null || other.IsSubject ||
+                !IsSplinterOrShard(c, other) || InLiveWar(c, other.Id) ||
+                PeacefulFormation.CulturalAffinity(founder, other) < 0.5f ||
+                PoliticsCore.IdeologicalDistance(founder, other) > 0.65f)
+                continue;
+            var score = ShardWillingness(c, founder, other);
+            if (partner is null || score > bestWilling || (score == bestWilling && other.Id < partner.Id))
+            {
+                partner = other;
+                bestWilling = score;
+            }
+        }
 
-        if (neighbors.Count == 0) return;
+        if (partner is null) return;
 
-        var partner = neighbors[0];
         // If partner is substantially larger than founder and not a rebel tag, let the larger one initiate
         if (partner.Population > founder.Population * 1.5f && !partner.Tag.StartsWith("R_")) return;
 
         var offerKey = "shard_offer/" + founder.Id + "/" + partner.Id;
         if (partner.DecisionAvailableDay.GetValueOrDefault(offerKey) > c.ElapsedDays) return;
 
-        var willing = ShardWillingness(c, founder, partner);
+        var willing = bestWilling;
         if (willing >= c.Defines.ShardConsolidationAcceptance)
         {
             partner.DecisionAvailableDay[offerKey] = c.ElapsedDays + 60;

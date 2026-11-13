@@ -111,6 +111,7 @@ public partial class DealOrForceGame
             _campaign.Defines.DoctrineGeneralSlots.ToString(),
             Loc.Format("Abandoning a book on a shelf costs {0} political points",
                 Fmt.Number(_campaign.Defines.DoctrineRewritePoliticalCost))));
+        PolicyText(rows, TacticalDoctrines.SameShelfStackLine(), "text.caption");
 
         var shelves = new HashSet<string>(DoctrineSlots.All, StringComparer.Ordinal);
         var publishedShelves = TacticalDoctrineCatalog.All.Select(branch => branch.Slot)

@@ -1,4 +1,11 @@
 {
   "Treaty border: {0} provinces · {1} added, {2} released by region rounding.": "Treaty border: {0} provinces · {1} added, {2} released by region rounding.",
-  "Treaty border: {0} provinces, as drawn.": "Treaty border: {0} provinces, as drawn."
+  "Treaty border: {0} provinces, as drawn.": "Treaty border: {0} provinces, as drawn.",
+  "A pocket shut inside the line is kept with this border.": "A pocket shut inside the line is kept with this border.",
+  "A one-province tooth of the occupation was left off this border.": "A one-province tooth of the occupation was left off this border.",
+  "This border keeps the occupation that touches home.": "This border keeps the occupation that touches home.",
+  "This settlement keeps a five-year truce.": "This settlement keeps a five-year truce.",
+  "This settlement keeps a ten-year truce.": "This settlement keeps a ten-year truce.",
+  "This occupied ground stays with the holder.": "This occupied ground stays with the holder.",
+  "The pocket beyond the line goes back.": "The pocket beyond the line goes back."
 }

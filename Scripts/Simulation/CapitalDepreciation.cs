@@ -42,12 +42,14 @@ public static class CapitalDepreciation
         return Productive[kind] = Makes.Count > 0;
     }
 
+    private static readonly List<BuildingKind> WornScratch = new();
+
     public static void Week(Campaign campaign)
     {
         var rate = campaign?.Defines.BuildingDepreciationPerYear ?? 0f;
         if (rate <= 0f || !float.IsFinite(rate) || campaign.ElapsedDays % 7 != 0) return;
         var week = campaign.ElapsedDays / 7;
-        var worn = new List<BuildingKind>();
+        var worn = WornScratch;
         foreach (var state in campaign.States)
         {
             if (state.Buildings.Count == 0) continue;
@@ -60,7 +62,7 @@ public static class CapitalDepreciation
                 var chance = count * rate / 52f;
                 if (Escalation.Roll(campaign.Seed, state.MapIndex, (int)kind, week, 0xDE9) < chance) worn.Add(kind);
             }
-            foreach (var kind in worn) Wear(campaign, nation, state, kind);
+            for (var i = 0; i < worn.Count; i++) Wear(campaign, nation, state, worn[i]);
         }
     }
 

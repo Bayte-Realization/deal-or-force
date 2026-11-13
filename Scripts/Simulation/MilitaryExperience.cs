@@ -83,7 +83,13 @@ public static class MilitaryExperience
 
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || campaign.Nations.Count == 0) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same experience pass, yielded between its tally phases and countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || campaign.Nations.Count == 0) yield break;
         var defines = campaign.Defines;
         var scale = MathF.Max(0f, campaign.TickScale);
 
@@ -91,8 +97,10 @@ public static class MilitaryExperience
         // sixty countries to walk the army list is the mistake the AI tables already fixed once.
         var engaged = Engaged; engaged.Clear();
         var drilling = Drilling; drilling.Clear();
+        var scanned = 0;
         foreach (var army in campaign.Armies)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (army.Training)
             {
                 if (army.InBattle) army.Training = false;   // the order yields to the shooting
@@ -114,8 +122,11 @@ public static class MilitaryExperience
         var political = defines.PoliticalPointsPerWeek / 7f * scale;
         var perStability = defines.PoliticalPointsStabilityWeight / 7f * scale;
         var baseline = MathF.Max(0.0001f, defines.BaselineMilitarySpending);
+        yield return 0;
+        var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++ticked % 16 == 0) yield return 0;
             // Money above what the army costs anyway is what buys training value: a budget at
             // the baseline teaches nobody anything new, and a cut teaches nobody faster.
             var funding = MathF.Max(0f, nation.MilitarySpending / baseline - 1f) *
@@ -140,6 +151,7 @@ public static class MilitaryExperience
         }
 
         // A week's cabinet business, not a daily one: which governments keep their army sharp.
+        yield return 0;
         if (campaign.ElapsedDays % 7 == 0) AiTraining(campaign);
     }
 

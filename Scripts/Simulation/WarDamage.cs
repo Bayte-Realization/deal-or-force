@@ -127,7 +127,7 @@ public sealed class RebuildRegionCommand : ICampaignCommand
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
-        var state = campaign.States.Find(candidate => candidate.MapIndex == StateMapIndex);
+        var state = campaign.StateByMapIndex(StateMapIndex);
         if (nation is null || state is null || WarDamage.RebuildRefusal(campaign, nation, state).Length > 0) return;
         nation.Treasury -= WarDamage.RebuildCost(campaign, nation, state);
         state.RebuildingUntilDay = campaign.ElapsedDays + Math.Max(1, campaign.Defines.WarDamageRebuildDays);
@@ -211,13 +211,25 @@ public static class WarDamage
     /// <summary>The week's rebuilding, and what the ruins cost in the meantime. Runs on the economy's week.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(WarDamage))) return;
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
-        Week(campaign);
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly gate, staged so the frame can pause inside the country pass.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(WarDamage))) yield break;
+        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) yield break;
+        foreach (var _ in WeekStages(campaign)) yield return 0;
     }
 
     /// <summary>One week of it, whatever the day - the bench runs a year of rebuilding without a year of the world.</summary>
     internal static void Week(Campaign campaign)
+    {
+        foreach (var _ in WeekStages(campaign)) { }
+    }
+
+    /// <summary>The same week, yielded between batches of countries.</summary>
+    internal static IEnumerable<int> WeekStages(Campaign campaign)
     {
         var defines = campaign.Defines;
         var ledger = LedgerOf(campaign);
@@ -225,8 +237,10 @@ public static class WarDamage
         HashSet<int> atWar = null;
         var abroad = new List<ScenarioState>();
 
+        var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++ticked % 2 == 0) yield return 0;
             var states = campaign.StatesOf(nation);
             var anyDamage = false;
             var anyDisplaced = false;
@@ -242,9 +256,10 @@ public static class WarDamage
             if (atWar is null)
             {
                 atWar = new HashSet<int>();
-                foreach (var war in campaign.Wars)
+                var liveWars = Warfare.LiveWars(campaign);
+                for (var wi = 0; wi < liveWars.Count; wi++)
                 {
-                    if (war.Ended) continue;
+                    var war = liveWars[wi];
                     foreach (var other in campaign.Nations)
                         if (war.Involves(other.Id)) atWar.Add(other.Id);
                 }
@@ -490,7 +505,7 @@ public static class WarDamage
         into.Clear();
         foreach (var index in CampaignDiplomacy.Neighbours(campaign, nation.MapIndex))
         {
-            var neighbour = campaign.Nations.Find(candidate => candidate.MapIndex == index);
+            var neighbour = campaign.NationByMapIndex(index);
             if (neighbour is null || atWar.Contains(neighbour.Id)) continue;
             into.AddRange(campaign.StatesOf(neighbour));
         }

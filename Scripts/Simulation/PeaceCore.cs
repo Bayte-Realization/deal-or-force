@@ -460,6 +460,7 @@ public static class PeaceNegotiation
             {
                 if (attackingId == defendingId) continue;
                 var relation = CampaignDiplomacy.Get(campaign, attackingId, defendingId);
+                if (relation.Stance == DiplomaticStance.Allied) campaign.NoteAllianceChange();
                 relation.Stance = DiplomaticStance.Truce;
                 relation.TruceUntil = truceUntil;
                 relation.LastActionDay = campaign.ElapsedDays;

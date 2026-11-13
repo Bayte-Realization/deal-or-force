@@ -274,14 +274,14 @@ public static class StateIdentity
     /// faith warms most, the same people warms less, and a difference warms nobody: sharing
     /// nothing is not a grievance, it is just distance.
     /// </summary>
-    public static float Affinity(Campaign campaign, int leftId, int rightId)
+    public static float Affinity(Campaign campaign, int leftId, int rightId) =>
+        campaign is null ? 0f : Affinity(campaign, campaign.NationById(leftId), campaign.NationById(rightId));
+
+    internal static float Affinity(Campaign campaign, Nation left, Nation right)
     {
-        if (campaign is null) return 0f;
+        if (campaign is null || left is null || right is null) return 0f;
         var weight = campaign.Defines.IdentityOpinionWeight;
         if (weight <= 0f) return 0f;
-        var left = campaign.NationById(leftId);
-        var right = campaign.NationById(rightId);
-        if (left is null || right is null) return 0f;
         var total = 0f;
         if (left.DeclaredReligion.Length > 0 &&
             SameFaith(left.DeclaredReligion, right.DeclaredReligion)) total += weight;

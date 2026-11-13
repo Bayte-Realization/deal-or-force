@@ -28,14 +28,28 @@ public static class Occupations
 
     public static int Tick(Campaign campaign)
     {
+        var lifted = 0;
+        foreach (var stage in TickStages(campaign)) lifted = stage;
+        return lifted;
+    }
+
+    /// <summary>The same sweep, yielded between province chunks so a full-map walk does not
+    /// land in one frame. Each yield carries the count lifted so far, so draining the stages
+    /// still answers <see cref="Tick"/>'s question.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
         var map = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
-        if (map is null || controllers is null) return 0;
+        if (map is null || controllers is null) yield break;
 
         Enemies.Clear();
-        foreach (var war in campaign.Wars)
+        // Ground is held for a war that is still going. An ended war stays in the record
+        // and does not keep a province, and a quiet day does not walk it to learn that.
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
-            if (war.Ended) continue;
+            var war = live[index];
+            if (war is null || war.Ended) continue;
             foreach (var attacker in war.Side(true))
                 foreach (var defender in war.Side(false))
                 {
@@ -43,12 +57,14 @@ public static class Occupations
                     Enemies.Add(Pair(defender, attacker));
                 }
         }
+        yield return 0;
 
         var written = false;
         var lifted = 0;
         var last = System.Math.Min(map.ProvinceCount, controllers.Length - 1);
         for (var province = 1; province <= last; province++)
         {
+            if (province % 2048 == 0) { yield return lifted; }
             var owner = map.ProvinceToNation[province];
             var holder = controllers[province];
             if (holder == owner || owner == 0 || map.IsWater(province)) continue;
@@ -78,6 +94,6 @@ public static class Occupations
             campaign.MarkMapChanged();
             DiagnosticLogs.Write("simulation", $"OCCUPATION_LIFTED provinces={lifted} day={campaign.ElapsedDays}");
         }
-        return lifted;
+        yield return lifted;
     }
 }

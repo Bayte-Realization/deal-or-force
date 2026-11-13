@@ -56,7 +56,7 @@ public partial class DealOrForceGame
     /// <summary>
     /// Whether Escape should be answered by the movement card rather than by a window above
     /// it. The card is a HUD dock, not a full-screen page: a dialog opened over it owns Escape
-    /// first, and the map's own selection owns it while a country or region card is standing.
+    /// first, and the map's own selection owns it while a country, region, army or fleet card is standing.
     /// </summary>
     private bool MovementPanelOwnsEscape()
     {
@@ -65,9 +65,11 @@ public partial class DealOrForceGame
         // then hidden by a layer above them.
         static bool Shown(Control control) => control is not null && control.IsVisibleInTree();
         if (!Shown(_movementPanel) || _hudLayer is not { Visible: true }) return false;
-        if (Shown(_sidePanel) || Shown(_armyPanel) || Shown(_countryCard)) return false;
+        if (Shown(_sidePanel) || Shown(_armyPanel) || Shown(_fleetPanel) || Shown(_resourceAtlasPanel) ||
+            Shown(_countryCard) || Shown(_regionCard) || Shown(_provinceCardLayer)) return false;
         return !Shown(_pauseMenuLayer) && !Shown(_settingsLayer) && !Shown(_saveLoadLayer) &&
                !Shown(_networkLayer) && !Shown(_handbookLayer) && !Shown(_peaceLayer) &&
+               !Shown(_defconLayer) &&
                !Shown(_stateAffairsLayer) && !Shown(_sovereignFinanceLayer) &&
                !Shown(_ledgerLayer) && !Shown(_warLedgerLayer) && !Shown(_diplomacyLayer) &&
                !Shown(_conflictsLayer) && !Shown(_policyLayer) && !Shown(_tradeScreenLayer) &&

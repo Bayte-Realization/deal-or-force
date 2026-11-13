@@ -67,6 +67,18 @@ static class CountryMergeTests
         CountryMerges.ResetCatalog();
         Check(CountryMerges.IsMerged("SCR") && CountryMerges.OwnerOf("SCR") == "CHN", "the base table reloads");
         Check(CountryMerges.OwnerOf("CHN") == "CHN", "a tag not in the table is its own owner");
+
+        // Four weeks on: the Siachen Glacier did not go into exile as a "state" with Kashmir for a
+        // homeland, to come back as the Military Command of Kashmir when the region rose.
+        c.IsPaused = false;
+        for (var day = 0; day < 28; day++) c.TickDay();
+        foreach (var tag in CountryMerges.All.Keys)
+        {
+            var gone = c.NationByTag(tag);
+            if (gone is null) continue;
+            Check(gone.Population <= 0 && gone.Movement is null && !c.Homelands.ContainsKey(gone.Id) && !c.HasOwnedLand(gone),
+                $"{tag} has simply ended: no people, no movement, no homeland");
+        }
         Console.WriteLine("country merges: all passed");
     }
 }

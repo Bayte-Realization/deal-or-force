@@ -98,16 +98,31 @@ public static class TradeNetwork
     /// <summary>What a country can still get with no partners at all.</summary>
     private const float GreyMarketAccess = 0.34f;
 
-    // Scratch used atomically within one commodity. There is no yield in RouteOne.
-    // A campaign may yield BETWEEN commodities; everything surviving that yield is
-    // owned by its weak-keyed workspace below, not by another live world's market.
-    private static readonly List<int> SellerIds = new();
-    private static readonly List<float> SellerCapacity = new();
-    private static readonly List<float> SellerScore = new();
-    private static readonly List<int> SellerOrder = new();
-    private static int[] _buyerIds;
-    private static float[] _buyerKeys;
-    private static readonly Dictionary<int, (int States, int Infrastructure, float Ports, int Rails)> Counts = new();
+    // Scratch lives per commodity buffer: a market week may route goods side by side, and
+    // a worker may only touch its own good's lists. Everything surviving a yield is owned
+    // by the weak-keyed workspace below, not by another live world's market.
+    [ThreadStatic] private static Dictionary<int, (int States, int Infrastructure, float Ports, int Rails)> _countsScratch;
+    private static Dictionary<int, (int States, int Infrastructure, float Ports, int Rails)> Counts => _countsScratch ??= new();
+
+    /// <summary>One commodity's week: its own seller and buyer scratch, the routes it
+    /// computed and the pair affinities it looked up. Computed possibly off the main
+    /// thread; merged in catalogue order, so the shared floats see exactly the sequence
+    /// the serial week produced.</summary>
+    internal sealed class CommodityBuffer
+    {
+        internal readonly List<int> SellerIds = new();
+        internal readonly List<float> SellerCapacity = new();
+        internal readonly List<float> SellerScore = new();
+        internal readonly List<int> SellerOrder = new();
+        internal int[] BuyerIds = Array.Empty<int>();
+        internal float[] BuyerKeys = Array.Empty<float>();
+        internal readonly List<TradeDelta> Deltas = new();
+        internal readonly List<TradeRoute> Pool = new();
+        internal readonly Dictionary<long, float> Affinity = new();
+        internal int Used;
+    }
+
+    internal readonly record struct TradeDelta(int SellerId, int BuyerId, float Value, int PoolSlot);
 
     private sealed class TradeWorkspace
     {
@@ -124,6 +139,7 @@ public static class TradeNetwork
         internal bool IndexReady;
         internal int FiledCount;
         internal readonly Dictionary<int, List<TradeRoute>> Touching = new();
+        internal readonly List<CommodityBuffer> CommodityBuffers = new();
         // Each country's customs unions this week: the organisations it belongs to that have
         // chosen a common market (doctrine "common_market").
         internal readonly Dictionary<int, List<int>> CustomsUnions = new();
@@ -140,6 +156,46 @@ public static class TradeNetwork
     /// <summary>The week's routes were filed under the countries that touch them.</summary>
     public static bool IndexReady(Campaign campaign) =>
         campaign is not null && Workspace(campaign).IndexReady;
+
+    /// <summary>
+    /// Fast internal lookup for callers that only iterate the filed route list without a fallback allocation.
+    /// Returns true when the campaign's route index matches <see cref="Campaign.TradeRoutes"/>
+    /// (in which case <paramref name="routes"/> is null if this nation touched no routes).
+    /// Returns false when the index is missing or stale.
+    /// </summary>
+    internal static bool TryGetFiledRoutesTouching(Campaign campaign, int nationId, out List<TradeRoute> routes)
+    {
+        routes = null;
+        if (campaign is null) return false;
+        var work = Workspace(campaign);
+        if (!work.IndexReady || work.FiledCount != campaign.TradeRoutes.Count) return false;
+        work.Touching.TryGetValue(nationId, out routes);
+        return true;
+    }
+
+    /// <summary>
+    /// Index routes restored from a save or snapshot without counting as a new market-week build.
+    /// </summary>
+    internal static void FileLoadedRoutes(Campaign campaign)
+    {
+        if (campaign is null) return;
+        var work = Workspace(campaign);
+        BeginRouteIndex(work);
+        if (campaign.TradeRoutesDay < 0)
+        {
+            work.FiledCount = 0;
+            return;
+        }
+        var routes = campaign.TradeRoutes;
+        for (var i = 0; i < routes.Count; i++)
+        {
+            var route = routes[i];
+            Touch(work, route.SellerId, route);
+            if (route.BuyerId != route.SellerId) Touch(work, route.BuyerId, route);
+        }
+        work.FiledCount = routes.Count;
+        work.IndexReady = true;
+    }
 
     /// <summary>
     /// Routes this country sells or buys. After a finished market week this is the list
@@ -211,10 +267,15 @@ public static class TradeNetwork
             }
         }
 
+        if (!EnsureDistancesUnchanged(campaign, work))
+        {
+            foreach (var _ in EnsureDistancesStages(campaign, work)) yield return 0;
+            yield return 0;
+        }
         using (SimProfiler.Measure("    mkt:trade"))
         {
-            EnsureDistances(campaign, work);
             MeasureReach(campaign, work);
+            CampaignDiplomacy.SharesLandBorder(campaign, 0, 0);
             work.PartnerAffinityScores.Clear();
             work.CustomsUnions.Clear();
             foreach (var organization in campaign.Organizations)
@@ -229,10 +290,54 @@ public static class TradeNetwork
         }
         yield return 0;
 
-        foreach (var commodity in CommodityCatalog.All)
+        var catalog = new List<Commodity>();
+        foreach (var commodity in CommodityCatalog.All) catalog.Add(commodity);
+        while (work.CommodityBuffers.Count < catalog.Count) work.CommodityBuffers.Add(new CommodityBuffer());
+        var parallelTrade = DeterministicParallel.Enabled(campaign) && catalog.Count >= 8 &&
+                            System.Environment.GetEnvironmentVariable("BDOF_NO_PARALLEL_TRADE") != "1";
+        if (parallelTrade)
         {
-            using (SimProfiler.Measure("    mkt:trade")) RouteOne(campaign, commodity, work);
+            // Goods never read each other's quotes: every cell a route writes is keyed by
+            // the good as well as the country. What the goods share - the route list, the
+            // partner totals, the touching index - waits for the merge below, which replays
+            // the goods in catalogue order and therefore the same float sequence the serial
+            // week wrote. Batched with yields so smooth ticks never swallow a 20 ms block.
+            const int batchSize = 6;
+            for (var start = 0; start < catalog.Count; start += batchSize)
+            {
+                var end = Math.Min(catalog.Count, start + batchSize);
+                using (SimProfiler.Measure("    mkt:trade"))
+                    DeterministicParallel.For(campaign, start, end, ci =>
+                        RouteOneCompute(campaign, catalog[ci], work, work.CommodityBuffers[ci]), minItems: 2);
+                yield return 0;
+            }
+            for (var ci = 0; ci < catalog.Count; ci++)
+            {
+                using (SimProfiler.Measure("    mkt:trade"))
+                    MergeCommodity(campaign, work, work.CommodityBuffers[ci]);
+                if ((ci + 1) % 4 == 0 && ci + 1 < catalog.Count) yield return 0;
+            }
             yield return 0;
+        }
+        else
+        {
+            for (var ci = 0; ci < catalog.Count; ci++)
+            {
+                // One good's routing used to be a single 76 ms stage: the heaviest
+                // indivisible piece left in a late week. The seams sit between buyer
+                // batches, so the sellers' capacities still run down in the same order.
+                var buf = work.CommodityBuffers[ci];
+                var buyers = PrepCommodity(campaign, catalog[ci], work, buf);
+                for (var from = 0; from < buyers; from += 8)
+                {
+                    using (SimProfiler.Measure("    mkt:trade"))
+                        RunBuyers(campaign, catalog[ci], work, buf, from, Math.Min(buyers, from + 8));
+                    yield return 0;
+                }
+                using (SimProfiler.Measure("    mkt:trade"))
+                    MergeCommodity(campaign, work, buf);
+                yield return 0;
+            }
         }
         campaign.TradeRoutesDay = campaign.ElapsedDays;
         work.FiledCount = campaign.TradeRoutes.Count;
@@ -240,14 +345,17 @@ public static class TradeNetwork
         ImportIndexBuilds++;
     }
 
-    private static void RouteOne(Campaign campaign, Commodity commodity, TradeWorkspace work)
+    private static int PrepCommodity(Campaign campaign, Commodity commodity, TradeWorkspace work, CommodityBuffer buf)
     {
         var nations = campaign.Nations;
 
         // Who has a surplus, biggest first. Only the top few matter, so the list is
         // trimmed rather than sorted in full.
-        SellerIds.Clear();
-        SellerCapacity.Clear();
+        buf.SellerIds.Clear();
+        buf.SellerCapacity.Clear();
+        buf.Deltas.Clear();
+        buf.Affinity.Clear();
+        buf.Used = 0;
         for (var index = 0; index < nations.Count; index++)
         {
             var nation = nations[index];
@@ -259,12 +367,12 @@ public static class TradeNetwork
                            TradePolicyRules.ExportAccess(nation.TradePolicy) *
                            (1f - M.Clamp01(TradeDesk.ForGood(nation, commodity, TradeDesk.ExportReserve)));
             if (capacity <= 0.0001f) continue;
-            Insert(SellerIds, SellerCapacity, nation.Id, capacity, SellersPerGood);
+            Insert(buf.SellerIds, buf.SellerCapacity, nation.Id, capacity, SellersPerGood);
         }
-        if (SellerIds.Count == 0)
+        if (buf.SellerIds.Count == 0)
         {
             GreyMarketOnly(campaign, commodity);
-            return;
+            return 0;
         }
 
         // Who is short, biggest shortfall first. Order matters - the sellers run out - and
@@ -274,10 +382,10 @@ public static class TradeNetwork
         // eight hundred thousand per market week, which was most of what this pass cost. A
         // sort of two reused arrays does the same job; it is deterministic for identical
         // input, which is what the seed has to be able to rely on.
-        if (_buyerIds is null || _buyerIds.Length < nations.Count)
+        if (buf.BuyerIds.Length < nations.Count)
         {
-            _buyerIds = new int[nations.Count + 32];
-            _buyerKeys = new float[nations.Count + 32];
+            buf.BuyerIds = new int[nations.Count + 32];
+            buf.BuyerKeys = new float[nations.Count + 32];
         }
         var buyers = 0;
         for (var index = 0; index < nations.Count; index++)
@@ -291,21 +399,25 @@ public static class TradeNetwork
                             // on purpose rather than depend on anybody for the rest.
                             M.Clamp01(TradeDesk.ForGood(nation, commodity, TradeDesk.ImportCeiling));
             if (shortfall <= 0.0001f) continue;
-            _buyerIds[buyers] = nation.Id;
+            buf.BuyerIds[buyers] = nation.Id;
             // Ordered by need, weighted by how badly the country says it wants this good.
             // The weight decides the QUEUE and not the amount: a priority of three does not
             // buy three times as much, it is served before somebody equally short who said
             // nothing. What is actually taken is worked out again below from the shortfall
             // itself, so an instruction cannot conjure goods that were never produced.
-            _buyerKeys[buyers] = -shortfall *
+            buf.BuyerKeys[buyers] = -shortfall *
                 MathF.Max(0.0001f, TradeDesk.ForGood(nation, commodity, TradeDesk.ImportPriority));
             buyers++;
         }
-        if (buyers > 1) Array.Sort(_buyerKeys, _buyerIds, 0, buyers);
+        if (buyers > 1) Array.Sort(buf.BuyerKeys, buf.BuyerIds, 0, buyers);
+        return buyers;
+    }
 
-        for (var index = 0; index < buyers; index++)
+    private static void RunBuyers(Campaign campaign, Commodity commodity, TradeWorkspace work, CommodityBuffer buf, int from, int to)
+    {
+        for (var index = from; index < to; index++)
         {
-            var buyer = campaign.NationById(_buyerIds[index]);
+            var buyer = campaign.NationById(buf.BuyerIds[index]);
             if (buyer is null) continue;
             // The true shortfall, not the queue position above.
             if (!buyer.Market.TryGetValue(commodity, out var buyerQuote)) continue;
@@ -316,17 +428,17 @@ public static class TradeNetwork
             if (deficit <= 0.0001f) continue;
 
             // Rank this week's exporters from where the buyer is standing.
-            SellerScore.Clear();
-            SellerOrder.Clear();
+            buf.SellerScore.Clear();
+            buf.SellerOrder.Clear();
             var availableCapacity = 0f;
             var blockedCapacity = 0f;
-            for (var seat = 0; seat < SellerIds.Count; seat++)
+            for (var seat = 0; seat < buf.SellerIds.Count; seat++)
             {
-                var cap = SellerCapacity[seat];
-                if (cap <= 0.0001f || SellerIds[seat] == buyer.Id) continue;
-                var seller = campaign.NationById(SellerIds[seat]);
+                var cap = buf.SellerCapacity[seat];
+                if (cap <= 0.0001f || buf.SellerIds[seat] == buyer.Id) continue;
+                var seller = campaign.NationById(buf.SellerIds[seat]);
                 if (seller is null) continue;
-                var score = Affinity(campaign, buyer, seller, commodity, work);
+                var score = Affinity(campaign, buyer, seller, commodity, work, buf.Affinity);
                 if (score <= 0.0001f)
                 {
                     // If a real exporter is cut off by an embargo or war, track the lost
@@ -343,7 +455,7 @@ public static class TradeNetwork
                     continue;
                 }
                 availableCapacity += cap * score;
-                Insert(SellerOrder, SellerScore, seat, score, int.MaxValue);
+                Insert(buf.SellerOrder, buf.SellerScore, seat, score, int.MaxValue);
             }
 
             if (blockedCapacity > 0.0001f)
@@ -353,24 +465,24 @@ public static class TradeNetwork
             }
             deficit *= DefconSystem.GlobalTradeMultiplier(campaign);
 
-            for (var rank = 0; rank < SellerOrder.Count && deficit > 0.0001f; rank++)
+            for (var rank = 0; rank < buf.SellerOrder.Count && deficit > 0.0001f; rank++)
             {
-                var seat = SellerOrder[rank];
-                var take = MathF.Min(deficit, SellerCapacity[seat]);
+                var seat = buf.SellerOrder[rank];
+                var take = MathF.Min(deficit, buf.SellerCapacity[seat]);
                 if (take <= 0.0001f) continue;
-                var seller = campaign.NationById(SellerIds[seat]);
+                var seller = campaign.NationById(buf.SellerIds[seat]);
                 if (seller is null) continue;
                 // A price either side has refused in advance. The seller's own price is what
-                // a route costs - see Deliver - so this is the same number the deal would be
+                // a route costs - see Record - so this is the same number the deal would be
                 // written at, against the limits the two countries set as multiples of what
                 // the good is worth at base.
                 if (!TradeDesk.PriceIsAcceptable(buyer, seller, commodity,
                         seller.Market.TryGetValue(commodity, out var offer) ? offer.Price : 0f))
                     continue;
 
-                SellerCapacity[seat] -= take;
+                buf.SellerCapacity[seat] -= take;
                 deficit -= take;
-                Deliver(campaign, seller, buyer, commodity, take, work);
+                Record(buf, seller, buyer, commodity, take);
             }
 
             // Whatever no friend would sell. It arrives anyway, thinly and dearly, because
@@ -379,6 +491,66 @@ public static class TradeNetwork
             var quote = buyer.Market[commodity];
             quote.Imports += deficit * GreyMarketAccess * campaign.Defines.WorldMarketAccess;
         }
+    }
+
+    /// <summary>A whole good's week, for one worker: the preparation and every buyer.</summary>
+    private static void RouteOneCompute(Campaign campaign, Commodity commodity, TradeWorkspace work, CommodityBuffer buf)
+    {
+        var buyers = PrepCommodity(campaign, commodity, work, buf);
+        RunBuyers(campaign, commodity, work, buf, 0, buyers);
+    }
+
+    /// <summary>
+    /// The route writes a good's compute, in the order the buyers made them. Everything
+    /// shared between goods - the route list, the partner totals, the touching index - is
+    /// written here, on the calling thread, in catalogue order, so the floats see exactly
+    /// the sequence the serial week produced.
+    /// </summary>
+    private static void MergeCommodity(Campaign campaign, TradeWorkspace work, CommodityBuffer buf)
+    {
+        for (var i = 0; i < buf.Deltas.Count; i++)
+        {
+            var delta = buf.Deltas[i];
+            var route = buf.Pool[delta.PoolSlot];
+            campaign.TradeRoutes.Add(route);
+            Touch(work, delta.SellerId, route);
+            if (delta.BuyerId != delta.SellerId) Touch(work, delta.BuyerId, route);
+            var seller = campaign.NationById(delta.SellerId);
+            var buyer = campaign.NationById(delta.BuyerId);
+            seller.TradePartners[buyer.Id] = seller.TradePartners.GetValueOrDefault(buyer.Id) + delta.Value;
+            buyer.TradePartners[seller.Id] = buyer.TradePartners.GetValueOrDefault(seller.Id) + delta.Value;
+            seller.ExportValue += delta.Value;
+            buyer.ImportValue += delta.Value;
+            if (work.UsedRouteRecords >= work.RouteRecords.Count) work.RouteRecords.Add(route);
+            else work.RouteRecords[work.UsedRouteRecords] = route;
+            work.UsedRouteRecords++;
+        }
+        foreach (var (key, score) in buf.Affinity) work.PartnerAffinityScores.TryAdd(key, score);
+    }
+
+    /// <summary>The good's own cells are written as the routes are computed: a quote cell is
+    /// keyed by country AND good, so no two workers ever touch one.</summary>
+    private static void Record(CommodityBuffer buf, Nation seller, Nation buyer, Commodity commodity, float volume)
+    {
+        var sellerQuote = seller.Market[commodity];
+        var buyerQuote = buyer.Market[commodity];
+        sellerQuote.Exports += volume;
+        buyerQuote.Imports += volume;
+        var slot = buf.Used;
+        TradeRoute route;
+        if (slot < buf.Pool.Count) route = buf.Pool[slot];
+        else
+        {
+            route = new TradeRoute();
+            buf.Pool.Add(route);
+        }
+        buf.Used = slot + 1;
+        route.SellerId = seller.Id;
+        route.BuyerId = buyer.Id;
+        route.Commodity = commodity;
+        route.Volume = volume;
+        route.Value = volume * MathF.Max(0.0001f, sellerQuote.Price);
+        buf.Deltas.Add(new TradeDelta(seller.Id, buyer.Id, route.Value, slot));
     }
 
     /// <summary>Nobody in the world has a surplus of this. Everyone falls back on smuggling.</summary>
@@ -394,46 +566,25 @@ public static class TradeNetwork
         }
     }
 
-    private static void Deliver(Campaign campaign, Nation seller, Nation buyer, Commodity commodity, float volume, TradeWorkspace work)
-    {
-        var sellerQuote = seller.Market[commodity];
-        var buyerQuote = buyer.Market[commodity];
-        sellerQuote.Exports += volume;
-        buyerQuote.Imports += volume;
-
-        var value = volume * MathF.Max(0.0001f, sellerQuote.Price);
-        if (work.UsedRouteRecords >= work.RouteRecords.Count) work.RouteRecords.Add(new TradeRoute());
-        var route = work.RouteRecords[work.UsedRouteRecords++];
-        route.SellerId = seller.Id;
-        route.BuyerId = buyer.Id;
-        route.Commodity = commodity;
-        route.Volume = volume;
-        route.Value = value;
-        campaign.TradeRoutes.Add(route);
-        Touch(work, seller.Id, route);
-        if (buyer.Id != seller.Id) Touch(work, buyer.Id, route);
-
-        seller.TradePartners[buyer.Id] = seller.TradePartners.GetValueOrDefault(buyer.Id) + value;
-        buyer.TradePartners[seller.Id] = buyer.TradePartners.GetValueOrDefault(seller.Id) + value;
-        seller.ExportValue += value;
-        buyer.ImportValue += value;
-    }
-
     /// <summary>
     /// How willing and able these two are to move goods between them, as a multiplier on
     /// nothing in particular - only the ranking matters. Zero means it cannot happen at all.
     /// </summary>
-    private static float Affinity(Campaign campaign, Nation buyer, Nation seller, Commodity commodity, TradeWorkspace work)
+    private static float Affinity(Campaign campaign, Nation buyer, Nation seller, Commodity commodity, TradeWorkspace work) =>
+        Affinity(campaign, buyer, seller, commodity, work, work.PartnerAffinityScores);
+
+    private static float Affinity(Campaign campaign, Nation buyer, Nation seller, Commodity commodity,
+        TradeWorkspace work, Dictionary<long, float> affinity)
     {
         // What the two countries have said about each other, which is an embargo one good
         // wide when it names a good and the ordinary kind when it does not.
         if (TradeDesk.Forbidden(buyer, seller, commodity)) return 0f;
 
         var key = ((long)buyer.Id << 32) | (uint)seller.Id;
-        if (!work.PartnerAffinityScores.TryGetValue(key, out var score))
+        if (!affinity.TryGetValue(key, out var score))
         {
             score = PartnerAffinity(campaign, buyer, seller, work);
-            work.PartnerAffinityScores[key] = score;
+            affinity[key] = score;
         }
         return score * TradePolicyRules.ImportAccess(buyer.TradePolicy) *
                TradePolicyRules.ExportAccess(seller.TradePolicy) *
@@ -563,32 +714,58 @@ public static class TradeNetwork
         return work.DistanceTable[a.Id * count + b.Id];
     }
 
-    private static void EnsureDistances(Campaign campaign, TradeWorkspace work)
+    private static bool EnsureDistancesUnchanged(Campaign campaign, TradeWorkspace work)
     {
         var count = 0;
         foreach (var nation in campaign.Nations) count = Math.Max(count, nation.Id + 1);
         var unchanged = work.DistanceTable is not null && work.DistanceNationCount == count &&
             work.CapitalCoordinates.Count == campaign.Nations.Count;
-        if (unchanged)
-            foreach (var nation in campaign.Nations)
-                if (!work.CapitalCoordinates.TryGetValue(nation.Id, out var coordinates) ||
-                    coordinates != (nation.CapitalLatitude, nation.CapitalLongitude)) { unchanged = false; break; }
-        if (unchanged) return;
-
-        work.DistanceNationCount = count;
-        work.DistanceTable = new float[count * count];
-        work.CapitalCoordinates.Clear();
+        if (!unchanged) return false;
         foreach (var nation in campaign.Nations)
-            work.CapitalCoordinates[nation.Id] = (nation.CapitalLatitude, nation.CapitalLongitude);
-        for (var index = 0; index < work.DistanceTable.Length; index++) work.DistanceTable[index] = 12000f;
-        foreach (var a in campaign.Nations)
-        foreach (var b in campaign.Nations)
+            if (!work.CapitalCoordinates.TryGetValue(nation.Id, out var coordinates) ||
+                coordinates != (nation.CapitalLatitude, nation.CapitalLongitude))
+                return false;
+        return true;
+    }
+
+    private static IEnumerable<int> EnsureDistancesStages(Campaign campaign, TradeWorkspace work)
+    {
+        var count = 0;
+        using (SimProfiler.Measure("    mkt:trade"))
         {
-            if (a.Id < 0 || b.Id < a.Id) continue;
-            var kilometres = GreatCircle(
-                a.CapitalLatitude, a.CapitalLongitude, b.CapitalLatitude, b.CapitalLongitude);
-            work.DistanceTable[a.Id * count + b.Id] = kilometres;
-            work.DistanceTable[b.Id * count + a.Id] = kilometres;
+            foreach (var nation in campaign.Nations) count = Math.Max(count, nation.Id + 1);
+            work.DistanceNationCount = count;
+            work.DistanceTable = new float[count * count];
+            work.CapitalCoordinates.Clear();
+            foreach (var nation in campaign.Nations)
+                work.CapitalCoordinates[nation.Id] = (nation.CapitalLatitude, nation.CapitalLongitude);
+            for (var index = 0; index < work.DistanceTable.Length; index++) work.DistanceTable[index] = 12000f;
+        }
+        yield return 0;
+
+        var nations = campaign.Nations;
+        var i = 0;
+        while (i < nations.Count)
+        {
+            using (SimProfiler.Measure("    mkt:trade"))
+            {
+                var end = Math.Min(nations.Count, i + 24);
+                for (; i < end; i++)
+                {
+                    var a = nations[i];
+                    if (a.Id < 0 || a.Id >= count) continue;
+                    for (var j = 0; j < nations.Count; j++)
+                    {
+                        var b = nations[j];
+                        if (b.Id < a.Id || b.Id >= count) continue;
+                        var kilometres = GreatCircle(
+                            a.CapitalLatitude, a.CapitalLongitude, b.CapitalLatitude, b.CapitalLongitude);
+                        work.DistanceTable[a.Id * count + b.Id] = kilometres;
+                        work.DistanceTable[b.Id * count + a.Id] = kilometres;
+                    }
+                }
+            }
+            if (i < nations.Count) yield return 0;
         }
     }
 

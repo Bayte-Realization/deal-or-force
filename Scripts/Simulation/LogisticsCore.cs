@@ -68,6 +68,8 @@ public static class LogisticsSystem
         public ProvinceTopology LandCounted;
         public readonly HashSet<ushort> Corridors = new();
         public readonly HashSet<ushort> Patrons = new();
+        public readonly List<int> Ports = new();
+        public readonly HashSet<int> OpenBasins = new();
     }
 
     private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
@@ -129,12 +131,18 @@ public static class LogisticsSystem
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(LogisticsSystem))) return;
-        if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same supply pass, yielded inside the province scan and between countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(LogisticsSystem))) yield break;
+        if (campaign.ProvinceMap is null || campaign.ProvinceController is null) yield break;
         // Every third day, and once on it. Without the first half of this a campaign
         // stepping an hour at a time rebuilt the whole supply network twenty-four times on
         // the third day and not at all on the other two.
-        if (!campaign.StepOpensNewDay) return;
+        if (!campaign.StepOpensNewDay) yield break;
         // Every third day the roads are traced again. The days inside a pocket are still
         // days, so the clock below runs on the days the trace sits out as well.
         if (campaign.ElapsedDays <= 1 || campaign.ElapsedDays % 3 == 0)
@@ -147,8 +155,10 @@ public static class LogisticsSystem
         // Who holds what. The lists are kept between ticks and emptied rather than dropped,
         // so the province scan costs the scan and nothing else.
         foreach (var list in board.Controlled.Values) list.Clear();
+        var scanned = 0;
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
+            if (++scanned % 2048 == 0) yield return 0;
             var map = controllers[province];
             if (map == 0) continue;
             if (!board.Controlled.TryGetValue(map, out var list)) board.Controlled[map] = list = new List<int>();
@@ -159,8 +169,10 @@ public static class LogisticsSystem
         // sixty-one nations and fourteen hundred formations that is three hundred and
         // sixty-five thousand comparisons a tick turned into fourteen hundred.
         foreach (var list in board.ArmiesByNation.Values) list.Clear();
+        var indexed = 0;
         foreach (var army in campaign.Armies)
         {
+            if (++indexed % 512 == 0) yield return 0;
             if (!board.ArmiesByNation.TryGetValue(army.NationId, out var list))
                 board.ArmiesByNation[army.NationId] = list = new List<Army>();
             list.Add(army);
@@ -176,13 +188,25 @@ public static class LogisticsSystem
             board.Generation = 0;
         }
 
+        yield return 0;
+        var work = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (!board.ArmiesByNation.TryGetValue(nation.Id, out var armies) || armies.Count == 0) continue;
-            UpdateNation(campaign, nation, armies, board.Controlled.GetValueOrDefault((ushort)nation.MapIndex), board);
+            if (!board.ArmiesByNation.TryGetValue(nation.Id, out var armies) || armies.Count == 0)
+            {
+                if (++work >= 1200) { work = 0; yield return 0; }
+                continue;
+            }
+            board.Controlled.TryGetValue((ushort)nation.MapIndex, out var held);
+            var cost = 8 + (held?.Count ?? 0) + armies.Count * 4;
+            if (work > 0 && work + cost >= 1200) { work = 0; yield return 0; }
+            work += cost;
+            UpdateNation(campaign, nation, armies, held, board);
+            if (work >= 1200) { work = 0; yield return 0; }
         }
         } // The trace above is every third day. The clock below is every day.
 
+        yield return 0;
         AgeCutOff(campaign);
     }
 
@@ -435,11 +459,16 @@ public static class LogisticsSystem
             // formation needs one.
             if (ports is null)
             {
-                ports = new List<int>();
-                foreach (var coast in SeaLanes.CoastalProvinces(topology))
+                ports = board.Ports;
+                ports.Clear();
+                var coasts = SeaLanes.CoastalProvinceArray(topology);
+                for (var ci = 0; ci < coasts.Length; ci++)
+                {
+                    var coast = coasts[ci];
                     if (coast < stamp.Length && stamp[coast] == generation && controllers[coast] == nation.MapIndex &&
                         !board.IsIsolatedHub.GetValueOrDefault(board.Source[coast]))
                         ports.Add(coast);
+                }
             }
 
             var best = -1;
@@ -486,9 +515,17 @@ public static class LogisticsSystem
     private static void CollectCorridors(Campaign campaign, Nation nation, Scratch board)
     {
         board.Corridors.Clear();
+        // A subject's ground is its overlord's road and the overlord's is the subject's, at war and at peace.
+        foreach (var host in campaign.Nations)
+            if (host.Id != nation.Id && host.Population > 0 && host.MapIndex > 0 &&
+                (host.AnswersTo(nation.Id) || nation.AnswersTo(host.Id)) &&
+                !MilitaryAccess.Hostile(campaign, nation.Id, host.Id))
+                board.Corridors.Add((ushort)host.MapIndex);
         var atWar = false;
-        foreach (var war in campaign.Wars)
+        var wars = Warfare.LiveWars(campaign);
+        for (var index = 0; index < wars.Count; index++)
         {
+            var war = wars[index];
             if (war.Ended || !war.Involves(nation.Id)) continue;
             atWar = true;
             foreach (var id in war.Side(war.IsAttacking(nation.Id)))
@@ -513,14 +550,13 @@ public static class LogisticsSystem
         var topology = campaign.ProvinceMap;
         var hq = nation.Movement?.HeadquartersProvinceId ?? 0;
         if (hq > 0 && territory.Contains(hq) && !topology.IsWater(hq)) return hq;
-        var regions = new Dictionary<int, long>();
-        foreach (var state in campaign.States) regions[state.MapIndex] = state.Population;
         var best = 0;
         long most = -1;
-        foreach (var province in territory)
+        for (var i = 0; i < territory.Count; i++)
         {
+            var province = territory[i];
             if (topology.IsWater(province) || campaign.DestroyedProvinces.Contains(province)) continue;
-            var people = regions.GetValueOrDefault(topology.ProvinceToState[province]);
+            var people = campaign.StateByMapIndex(topology.ProvinceToState[province])?.Population ?? 0L;
             if (people <= most) continue;
             most = people;
             best = province;
@@ -601,11 +637,13 @@ public static class LogisticsSystem
             }
         }
 
-        var coasts = SeaLanes.CoastalProvinces(topology);
-        if (coasts.Count == 0) return;
-        var openBasins = new HashSet<int>();
-        foreach (var coast in coasts)
+        var coasts = SeaLanes.CoastalProvinceArray(topology);
+        if (coasts.Length == 0) return;
+        var openBasins = board.OpenBasins;
+        openBasins.Clear();
+        for (var ci = 0; ci < coasts.Length; ci++)
         {
+            var coast = coasts[ci];
             if (reach[coast] == generation && controllers[coast] == nation.MapIndex)
             {
                 var basin = SeaLanes.HarbourBasin(topology, coast);
@@ -613,8 +651,9 @@ public static class LogisticsSystem
             }
         }
         if (openBasins.Count == 0) return;
-        foreach (var coast in coasts)
+        for (var ci = 0; ci < coasts.Length; ci++)
         {
+            var coast = coasts[ci];
             if (reach[coast] != generation && controllers[coast] == nation.MapIndex &&
                 openBasins.Contains(SeaLanes.HarbourBasin(topology, coast)))
             {
@@ -792,7 +831,7 @@ public static class LogisticsSystem
     private static string Road(Campaign campaign, Army army)
     {
         if (campaign is null || army.SupplySourceStateMapIndex < 0 || army.SupplyDistance < 0) return "";
-        var hub = campaign.States.Find(state => state.MapIndex == army.SupplySourceStateMapIndex);
+        var hub = campaign.StateByMapIndex(army.SupplySourceStateMapIndex);
         var name = hub is null || string.IsNullOrEmpty(hub.Name)
             ? army.SupplySourceStateMapIndex.ToString()
             : hub.Name;
@@ -803,7 +842,7 @@ public static class LogisticsSystem
     {
         if (campaign?.ProvinceMap is not { } map || army.ProvinceId <= 0 || army.ProvinceId > map.ProvinceCount)
             return "";
-        var nation = campaign.Nations.Find(candidate => candidate.Id == army.NationId);
+        var nation = campaign.NationById(army.NationId);
         if (nation is null) return "";
         var centre = map.CenterOf(army.ProvinceId);
         if (NavalOperations.BlockadePressure(campaign, nation, centre.Latitude, centre.Longitude) <= 0f) return "";
@@ -843,7 +882,7 @@ public static class LogisticsSystem
         if (campaign is null || army is null || !campaign.Defines.StrategicStockpilesEnabled) return false;
         var floor = campaign.Defines.SupplyAttackCoverageFloor;
         if (!float.IsFinite(floor) || floor <= 0f) return false;
-        var nation = campaign.Nations.Find(candidate => candidate.Id == army.NationId);
+        var nation = campaign.NationById(army.NationId);
         if (nation is null) return false;
         foreach (var good in AttackCoverGoods)
         {
@@ -856,7 +895,7 @@ public static class LogisticsSystem
     /// <summary>The lower recorded ammunition or oil cover, as a whole percent. 100 when neither is recorded.</summary>
     public static int ShortCoverPercent(Campaign campaign, Army army)
     {
-        var nation = campaign?.Nations.Find(candidate => candidate.Id == army?.NationId);
+        var nation = army is null ? null : campaign?.NationById(army.NationId);
         if (nation is null) return 100;
         var lowest = 100;
         var any = false;

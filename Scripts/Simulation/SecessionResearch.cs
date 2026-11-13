@@ -63,15 +63,20 @@ public static class SecessionResearch
 
         // The parent retains its own work. Knowledge is copied, not deducted: the new
         // border did not make books or unfinished experiments disappear on either side.
+        ResearchSystem.BuyerSurvey buyerSurvey = null;
         foreach (var technology in TechnologyCatalog.All)
         {
             if (born.HasTechnology(technology.Id)) continue;
+            var parentKnows = parent.HasTechnology(technology.Id);
+            var parentProgress = parent.ResearchProgress.GetValueOrDefault(technology.Id);
+            if (!parentKnows && parentProgress <= 0f) continue;
+            buyerSurvey ??= ResearchSystem.BuyerSurvey.Take(campaign, born);
             var capacity = Capacity(common, millions, departed, technology.Category);
             var fraction = M.Clamp01(campaign.Defines.ResearchSecessionProgressShare) *
                 M.Clamp(0.20f + capacity * 0.65f, 0.1f, 0.8f);
-            var cost = ResearchSystem.CostFor(campaign, born, technology);
-            var progress = parent.HasTechnology(technology.Id) ? cost * fraction : 0f;
-            progress = MathF.Max(progress, parent.ResearchProgress.GetValueOrDefault(technology.Id) * fraction);
+            var cost = ResearchSystem.CostFor(campaign, buyerSurvey, technology);
+            var progress = parentKnows ? cost * fraction : 0f;
+            progress = MathF.Max(progress, parentProgress * fraction);
             if (progress > 0f) born.ResearchProgress[technology.Id] = MathF.Min(cost * 0.8f, progress);
         }
 

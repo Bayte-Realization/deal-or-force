@@ -1,0 +1,26 @@
+// The battle explained (CombatFactors).
+{
+  "Why it goes this way": "Why it goes this way",
+  "Attacker's fire": "Attacker's fire",
+  "Defender's staying power": "Defender's staying power",
+  "Armour and piercing": "Armour and piercing",
+  "Guns and aircraft": "Guns and aircraft",
+  "Plan prepared": "Plan prepared",
+  "Attack from several sides": "Attack from several sides",
+  "Training and equipment": "Training and equipment",
+  "Commander": "Commander",
+  "Munitions": "Munitions",
+  "Encircled": "Encircled",
+  "Fighting spirit": "Fighting spirit",
+  "Manoeuvre of the day": "Manoeuvre of the day",
+  "Fortune": "Fortune",
+  "Entrenchment": "Entrenchment",
+  "Shelled": "Shelled",
+  "Homeland": "Homeland",
+  "Attacked from one side": "Attacked from one side",
+  "Guerrilla country": "Guerrilla country",
+  "Everything else is even.": "Everything else is even.",
+  "All together ×{0:0.00}": "All together ×{0:0.00}",
+  "The reasons appear after the next round.": "The reasons appear after the next round.",
+  "What multiplies the attacker's fire and the defender's staying power in the last round. Their ratio decides who gives way.": "What multiplies the attacker's fire and the defender's staying power in the last round. Their ratio decides who gives way."
+}

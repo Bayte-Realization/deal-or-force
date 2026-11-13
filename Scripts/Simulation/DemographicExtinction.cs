@@ -72,10 +72,19 @@ public static class DemographicExtinction
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || !campaign.Defines.DemographicExtinctionEnabled) return;
-        if (campaign.ElapsedDays % 7 != 4) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly review, yielded between countries so a dying world does not
+    /// empty every region in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || !campaign.Defines.DemographicExtinctionEnabled) yield break;
+        if (campaign.ElapsedDays % 7 != 4) yield break;
+        var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++scanned % 16 == 0) yield return 0;
             if (nation is null || nation.IsHuman || nation.Movement is not null) continue;
             nation.CollapseReviews = Review(nation, campaign.Defines, (int)nation.Population);
             if (!IsFinal(nation, campaign.Defines)) continue;

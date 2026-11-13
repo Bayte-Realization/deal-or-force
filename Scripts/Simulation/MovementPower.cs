@@ -161,32 +161,38 @@ public static class MovementPower
         return best;
     }
 
-    internal static string Refusal(Campaign c, Nation nation, string action, float? knownMomentum = null)
+    internal static bool CanDo(Campaign c, Nation nation, string action, float? knownMomentum = null) =>
+        CheckRefusal(c, nation, action, knownMomentum, explain: false).Length == 0;
+
+    internal static string Refusal(Campaign c, Nation nation, string action, float? knownMomentum = null) =>
+        CheckRefusal(c, nation, action, knownMomentum, explain: true);
+
+    private static string CheckRefusal(Campaign c, Nation nation, string action, float? knownMomentum, bool explain)
     {
         var defines = c.Defines;
         var momentum = knownMomentum ?? Momentum(c, nation);
         var definition = Movements.DefinitionOf(nation);
-        if (definition?.Has("for_hire") == true) return Loc.Get("A company for hire does not lead a people.");
+        if (definition?.Has("for_hire") == true) return explain ? Loc.Get("A company for hire does not lead a people.") : "-";
         switch (action)
         {
             case "strike":
             {
                 if (momentum < defines.MovementStrikeMomentum)
-                    return Loc.Format("Momentum is {0}; a general strike takes {1}.", Fmt.Percent(momentum), Fmt.Percent(defines.MovementStrikeMomentum));
+                    return explain ? Loc.Format("Momentum is {0}; a general strike takes {1}.", Fmt.Percent(momentum), Fmt.Percent(defines.MovementStrikeMomentum)) : "-";
                 var target = StrikeTarget(c, nation);
-                if (target is null) return Loc.Get("No country holds enough of its following to stop.");
-                if (target.Id == nation.Id) return Loc.Get("A movement does not strike against itself.");
+                if (target is null) return explain ? Loc.Get("No country holds enough of its following to stop.") : "-";
+                if (target.Id == nation.Id) return explain ? Loc.Get("A movement does not strike against itself.") : "-";
                 return "";
             }
             case "march":
             {
                 if (momentum < defines.MovementMarchMomentum)
-                    return Loc.Format("Momentum is {0}; a march on the capital takes {1}.", Fmt.Percent(momentum), Fmt.Percent(defines.MovementMarchMomentum));
+                    return explain ? Loc.Format("Momentum is {0}; a march on the capital takes {1}.", Fmt.Percent(momentum), Fmt.Percent(defines.MovementMarchMomentum)) : "-";
                 var (host, capital, support) = MarchTarget(c, nation);
-                if (host is null || capital is null) return Loc.Get("No capital would follow it into the streets.");
+                if (host is null || capital is null) return explain ? Loc.Get("No capital would follow it into the streets.") : "-";
                 if (support < defines.MovementMarchSupport)
-                    return Loc.Format("Support in {0} is {1}; a march takes {2}.", capital.DisplayName, Fmt.Percent(support), Fmt.Percent(defines.MovementMarchSupport));
-                if (CampaignDiplomacy.AtWar(c, host.Id, nation.Id)) return Loc.Get("It is at war with that government: the streets are not where this is decided.");
+                    return explain ? Loc.Format("Support in {0} is {1}; a march takes {2}.", capital.DisplayName, Fmt.Percent(support), Fmt.Percent(defines.MovementMarchSupport)) : "-";
+                if (CampaignDiplomacy.AtWar(c, host.Id, nation.Id)) return explain ? Loc.Get("It is at war with that government: the streets are not where this is decided.") : "-";
                 return "";
             }
         }
@@ -303,7 +309,7 @@ public static class MovementPower
                 if (!nation.IsHuman)
                     foreach (var action in MarchStrikeActions)
                     {
-                        if (MovementActions.Refusal(c, nation, action, -1, -1, momentum).Length > 0) continue;
+                        if (!MovementActions.CanDo(c, nation, action, -1, -1, momentum)) continue;
                         // A strike or a march is a decision, not a habit: one chance in four a week once possible.
                         if (MovementRules.Roll(c.Seed, nation.Id, c.ElapsedDays, action == "march" ? 4721 : 4722) > 0.25f) continue;
                         new MovementActionCommand { IssuerId = nation.Id, Action = action }.Apply(c);

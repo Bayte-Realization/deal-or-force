@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DealOrForce.Simulation;
@@ -135,27 +136,44 @@ public static class MovementMethods
         public float Identity;
     }
 
-    static MethodPulls PullsOf(Campaign c, Nation movement, MovementDefinition definition)
+    static MethodPulls PullsOf(
+        Campaign c,
+        Nation movement,
+        MovementDefinition definition,
+        Dictionary<int, int> crackdownsByTarget = null,
+        Dictionary<int, int> armsByClient = null)
     {
         var state = movement.Movement;
         float weight = 0f, radical = 0f;
         foreach (var (region, support) in state.Support)
         {
             if (support <= 0.01f) continue;
-            var place = c.States.Find(s => s.MapIndex == region);
+            var place = region > 0 ? c.StateByMapIndex(region) : c.States.Find(s => s.MapIndex == region);
             if (place is null) continue;
             weight += support;
             radical += support * place.Radicalism;
         }
-        var year = c.ElapsedDays - 365;
-        var crackdowns = 0;
-        foreach (var entry in c.Chronicle.Entries)
-            if (entry.Kind == "movement_crackdown" && entry.TargetId == movement.Id && entry.Day >= year)
-                crackdowns++;
-        var arms = 0;
-        foreach (var sponsorship in c.Sponsorships)
-            if (!sponsorship.Ended && sponsorship.ClientId == movement.Id && sponsorship.Level >= 2)
-                arms++;
+        int crackdowns;
+        if (crackdownsByTarget is not null)
+            crackdownsByTarget.TryGetValue(movement.Id, out crackdowns);
+        else
+        {
+            var year = c.ElapsedDays - 365;
+            crackdowns = 0;
+            foreach (var entry in c.Chronicle.Entries)
+                if (entry.Kind == "movement_crackdown" && entry.TargetId == movement.Id && entry.Day >= year)
+                    crackdowns++;
+        }
+        int arms;
+        if (armsByClient is not null)
+            armsByClient.TryGetValue(movement.Id, out arms);
+        else
+        {
+            arms = 0;
+            foreach (var sponsorship in c.Sponsorships)
+                if (!sponsorship.Ended && sponsorship.ClientId == movement.Id && sponsorship.Level >= 2)
+                    arms++;
+        }
         return new MethodPulls
         {
             Temper = weight > 0f ? radical / weight : 0.3f,
@@ -168,19 +186,62 @@ public static class MovementMethods
         };
     }
 
+    static float TargetFromPulls(MethodPulls pulls) =>
+        M.Clamp01(0.2f + pulls.Identity * 0.6f
+                       + (pulls.Temper - 0.3f) * 0.9f
+                       + pulls.Crackdowns * 0.06f
+                       + pulls.Listed * 0.015f
+                       + pulls.Arms * 0.08f
+                       - pulls.Legitimacy * 0.35f
+                       - pulls.Ground);
+
     public static void Tick(Campaign c)
     {
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same weekly militancy pass, yielded between movements.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
         if (c is null || !c.FeatureEnabled("movements") || !c.FeatureEnabled("movement_lifecycle") ||
-            c.ElapsedDays % 7 != 5) return;
+            c.ElapsedDays % 7 != 5) yield break;
+        Dictionary<int, int> crackdownsByTarget = null;
+        if (c.Chronicle.Entries.Count > 0)
+        {
+            var year = c.ElapsedDays - 365;
+            foreach (var entry in c.Chronicle.Entries)
+            {
+                if (entry.Kind != "movement_crackdown" || entry.Day < year) continue;
+                crackdownsByTarget ??= new Dictionary<int, int>();
+                crackdownsByTarget[entry.TargetId] = crackdownsByTarget.GetValueOrDefault(entry.TargetId) + 1;
+            }
+        }
+        crackdownsByTarget ??= new Dictionary<int, int>();
+
+        Dictionary<int, int> armsByClient = null;
+        if (c.Sponsorships.Count > 0)
+        {
+            foreach (var sponsorship in c.Sponsorships)
+            {
+                if (sponsorship.Ended || sponsorship.Level < 2) continue;
+                armsByClient ??= new Dictionary<int, int>();
+                armsByClient[sponsorship.ClientId] = armsByClient.GetValueOrDefault(sponsorship.ClientId) + 1;
+            }
+        }
+        armsByClient ??= new Dictionary<int, int>();
+
+        var ticked = 0;
         foreach (var movement in c.Nations)
         {
             var state = movement.Movement;
             if (state is null || state.Dissolved) continue;
             var definition = Movements.DefinitionOf(movement);
             if (definition is null || definition.Has("for_hire") || definition.Has("humanitarian")) continue;
+            if (++ticked % 4 == 0) yield return 0;
             MovementTraits.Review(c, movement);
             var before = StageOf(c, movement);
-            state.Militancy = M.Clamp01(Of(movement) + (Target(c, movement, definition) - Of(movement)) * c.Defines.MovementMilitancyDrift);
+            var target = TargetFromPulls(PullsOf(c, movement, definition, crackdownsByTarget, armsByClient));
+            state.Militancy = M.Clamp01(Of(movement) + (target - Of(movement)) * c.Defines.MovementMilitancyDrift);
             var after = StageOf(c, movement);
             if (after == before) continue;
             var kind = after > before ? "movement_radicalised" : "movement_moderated";

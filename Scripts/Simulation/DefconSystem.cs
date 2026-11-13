@@ -147,13 +147,15 @@ public static class DefconSystem
 
         var target = 5;
         var holders = new HashSet<int>();
-        foreach (var nation in campaign.Nations)
-            if (Deterrence.TierOf(campaign, nation) >= 1)
-                holders.Add(nation.Id);
+        using (SimProfiler.Measure("    defcon:holders"))
+            foreach (var nation in campaign.Nations)
+                if (Deterrence.TierOf(campaign, nation) >= 1)
+                    holders.Add(nation.Id);
 
         if (holders.Count == 0) return 5;
 
         // 1. Direct wars involving deterrent holders
+        using (SimProfiler.Measure("    defcon:wars"))
         foreach (var war in campaign.Wars)
         {
             if (war.Ended) continue;
@@ -211,6 +213,7 @@ public static class DefconSystem
         }
 
         // 2. Tensions between deterrent holders
+        using (SimProfiler.Measure("    defcon:relations"))
         foreach (var relation in campaign.Relations.Values)
         {
             if (!holders.Contains(relation.A) || !holders.Contains(relation.B)) continue;
@@ -263,16 +266,36 @@ public static class DefconSystem
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || !Enabled(campaign)) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>Staged weekly DEFCON tick so nuclear posture and escalation spread cleanly across frames.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || !Enabled(campaign)) yield break;
 
         campaign.DefconDaysInStage++;
 
         // Weekly review on day remainder 4 (harmonized with Escalation/CrisisLadder)
-        if (campaign.ElapsedDays % 7 != 4) return;
+        if (campaign.ElapsedDays % 7 != 4) yield break;
         // The holders' own week first - their alerts, tests and calls move the target below.
-        NuclearPosture.Week(campaign);
+        using (var posture = NuclearPosture.WeekStages(campaign).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("  defcon:posture-week")) more = posture.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
 
-        var target = EvaluateTarget(campaign, out var hotspot);
+        int target;
+        string hotspot;
+        using (SimProfiler.Measure("  defcon:evaluate"))
+        {
+            target = EvaluateTarget(campaign, out hotspot);
+        }
         var current = campaign.DefconLevel;
 
         if (target < current)

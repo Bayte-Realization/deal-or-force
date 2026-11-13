@@ -246,6 +246,13 @@ public static class PeaceOffers
             if (rest > 0) named.Add($"and {rest:N0} more region(s)");
             lines.Add(demand.ReleaseRegions ? Loc.Format("They require an independent country in {0}.", string.Join(", ", named))
                 : $"They demand {demand.Provinces.Count:N0} province(s): {string.Join(", ", named)}.");
+            if (!demand.ReleaseRegions && beneficiary is not null)
+            {
+                var why = PeaceShape.BorderWhy(campaign, beneficiary, demand.Provinces, war);
+                if (why.Length > 0) lines.Add(why);
+                var transfer = PeaceShape.TransferLine(campaign, beneficiary, demand.Provinces, war);
+                if (transfer.Length > 0) lines.Add(transfer);
+            }
         }
 
         var extras = new List<string>();
@@ -253,7 +260,6 @@ public static class PeaceOffers
         if (demand.TradeConcessions) extras.Add("a trade agreement");
         if (demand.Demilitarise) extras.Add("your army stripped of its equipment");
         if (demand.Humiliate) extras.Add("the terms read out in public");
-        if (demand.LongTruce) extras.Add("a ten-year truce instead of five");
         if (demand.Subjugate.Length > 0)
             extras.Add(demand.BeneficiaryId >= 0 && beneficiary is not null
                 ? Loc.Format("your country to answer to {0} as a {1}", beneficiary.DisplayName,
@@ -262,6 +268,8 @@ public static class PeaceOffers
                   $"{SubjectCatalog.Of(demand.Subjugate)?.Name?.ToLowerInvariant() ?? demand.Subjugate}");
         if (extras.Count > 0) lines.Add($"They also want {string.Join(", ", extras)}.");
         if (lines.Count == 0) lines.Add("They propose an end to the war on the pre-war border.");
+        var truce = PeaceConference.TruceLine(demand);
+        if (truce.Length > 0) lines.Add(truce);
         return $"{name} has put a settlement to you.\n\n{string.Join("\n", lines)}";
     }
 

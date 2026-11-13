@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -69,6 +69,11 @@ public static class SecessionEvents
     /// <summary>Scratch, reused across the week. This runs against every country in the world.</summary>
     private static readonly Dictionary<int, ScenarioState> ByRegion = new();
     private static readonly Dictionary<int, List<int>> Adjacent = new();
+    private static Campaign _adjCampaign;
+    private static ProvinceTopology _adjMap;
+    private static int _adjOwnershipRevision = int.MinValue;
+    private static int _adjStateCount = -1;
+    private static readonly Dictionary<int, List<int>> GlobalAdjacent = new();
 
     /// <summary>
     /// Runs every day and does its work weekly, rather than being called weekly: the
@@ -76,22 +81,30 @@ public static class SecessionEvents
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SecessionEvents))) return;
-        if (campaign?.ProvinceMap is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly secession pass, yielded between batches of nations.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SecessionEvents))) yield break;
+        if (campaign?.ProvinceMap is null) yield break;
         Recent.Clear();
         RecentWorld = campaign;
 
         // The pressure below is authored per week, so it is added once a week whatever the
         // step length - which is the same rule the rest of the day pass follows and the
         // reason a six-hour campaign and a three-day campaign lose the same regions.
-        if (campaign.ElapsedDays % 7 != 0) return;
+        if (campaign.ElapsedDays % 7 != 0) yield break;
         var weights = SecessionCore.Weights;
 
         // Countries are taken as a snapshot because a secession adds one, and a country
         // three seconds old has nothing to secede from it.
         var nations = campaign.Nations.ToArray();
+        var scanned = 0;
         foreach (var nation in nations)
         {
+            if (++scanned % 4 == 0) yield return 0;
             if (nation.Population <= 0) continue;
 
             var ripe = (List<ScenarioState>)null;
@@ -119,18 +132,28 @@ public static class SecessionEvents
             if (ripe is null) continue;
             if (campaign.ElapsedDays - nation.LastSecessionDay < weights.CooldownDays) continue;
 
-            var report = Consider(campaign, nation, ripe);
+            SecessionReport report = null;
+            foreach (var _ in ConsiderStages(campaign, nation, ripe, r => report = r)) yield return 0;
             if (report is not null) Recent.Add(report);
+            yield return 0;
         }
     }
 
     /// <summary>Work out what would leave, and if it is a country, let it.</summary>
     private static SecessionReport Consider(Campaign campaign, Nation parent, List<ScenarioState> ripe)
     {
+        SecessionReport report = null;
+        foreach (var _ in ConsiderStages(campaign, parent, ripe, r => report = r)) { }
+        return report;
+    }
+
+    private static IEnumerable<int> ConsiderStages(Campaign campaign, Nation parent, List<ScenarioState> ripe,
+        Action<SecessionReport> onDone)
+    {
         var weights = SecessionCore.Weights;
         var owned = campaign.StatesOf(parent.MapIndex);
-        if (owned.Length < 2) return null;
-        BuildAdjacency(campaign, owned);
+        if (owned.Length < 2) yield break;
+        foreach (var _ in BuildAdjacencyStages(campaign, owned)) yield return 0;
 
         var core = Core(campaign, parent, ripe, out var culture);
         core = Cap(parent, core);
@@ -140,7 +163,7 @@ public static class SecessionEvents
                 ?? core.OrderByDescending(s => s.Population).First();
             core.Remove(keep);
         }
-        if (core.Count < weights.MinimumRegions) return null;
+        if (core.Count < weights.MinimumRegions) yield break;
 
         var leaving = new List<SecessionPiece>();
         var taken = new HashSet<int>();
@@ -159,7 +182,7 @@ public static class SecessionEvents
                 Population = state.Population
             });
         }
-        if (people < weights.MinimumPopulation) return null;
+        if (people < weights.MinimumPopulation) yield break;
 
         Accrete(campaign, parent, owned, taken, leaving, culture, ref people);
         Trim(parent, leaving, ref people);
@@ -170,9 +193,10 @@ public static class SecessionEvents
             leaving.Remove(drop);
             people -= drop.Population;
         }
-        if (leaving.Count == 0 || people < weights.MinimumPopulation) return null;
+        if (leaving.Count == 0 || people < weights.MinimumPopulation) yield break;
+        yield return 0;
 
-        return Secede(campaign, parent, leaving, culture, people);
+        foreach (var _ in SecedeStages(campaign, parent, leaving, culture, people, onDone)) yield return 0;
     }
 
     /// <summary>
@@ -184,6 +208,37 @@ public static class SecessionEvents
     /// </summary>
     private static void BuildAdjacency(Campaign campaign, ScenarioState[] owned)
     {
+        foreach (var _ in BuildAdjacencyStages(campaign, owned)) { }
+    }
+
+    private static IEnumerable<int> BuildAdjacencyStages(Campaign campaign, ScenarioState[] owned)
+    {
+        var topology = campaign.ProvinceMap;
+        if (!ReferenceEquals(_adjCampaign, campaign) || !ReferenceEquals(_adjMap, topology) ||
+            _adjOwnershipRevision != campaign.OwnershipRevision || _adjStateCount != campaign.States.Count)
+        {
+            foreach (var list in GlobalAdjacent.Values) list.Clear();
+            for (var province = 1; province <= topology.ProvinceCount; province++)
+            {
+                if (province % 4096 == 0) yield return 0;
+                var here = topology.ProvinceToState[province];
+                if (here <= 0) continue;
+                if (!GlobalAdjacent.TryGetValue(here, out var list))
+                    GlobalAdjacent[here] = list = new List<int>();
+                foreach (var next in topology.Neighbors[province])
+                {
+                    var there = topology.ProvinceToState[next];
+                    if (there == here || there <= 0) continue;
+                    if (!list.Contains(there)) list.Add(there);
+                }
+            }
+            _adjCampaign = campaign;
+            _adjMap = topology;
+            _adjOwnershipRevision = campaign.OwnershipRevision;
+            _adjStateCount = campaign.States.Count;
+            yield return 0;
+        }
+
         ByRegion.Clear();
         Adjacent.Clear();
         foreach (var state in owned)
@@ -191,17 +246,14 @@ public static class SecessionEvents
             ByRegion[state.MapIndex] = state;
             Adjacent[state.MapIndex] = new List<int>();
         }
-
-        var topology = campaign.ProvinceMap;
-        for (var province = 1; province <= topology.ProvinceCount; province++)
+        foreach (var state in owned)
         {
-            var here = topology.ProvinceToState[province];
-            if (!Adjacent.TryGetValue(here, out var neighbours)) continue;
-            foreach (var next in topology.Neighbors[province])
+            if (!GlobalAdjacent.TryGetValue(state.MapIndex, out var all)) continue;
+            var neighbours = Adjacent[state.MapIndex];
+            for (var i = 0; i < all.Count; i++)
             {
-                var there = topology.ProvinceToState[next];
-                if (there == here || !ByRegion.ContainsKey(there)) continue;
-                if (!neighbours.Contains(there)) neighbours.Add(there);
+                var there = all[i];
+                if (ByRegion.ContainsKey(there)) neighbours.Add(there);
             }
         }
     }
@@ -457,12 +509,21 @@ public static class SecessionEvents
     /// </summary>
     internal static bool KinNear(Campaign campaign, Nation owner, string culture, IReadOnlyList<ScenarioState> regions)
     {
+        ScenarioState seat = null;
+        if (regions is not null && regions.Count > 0)
+        {
+            seat = regions[0];
+            for (var i = 1; i < regions.Count; i++) if (regions[i].Population > seat.Population) seat = regions[i];
+        }
+        return KinNear(campaign, owner, culture, seat);
+    }
+
+    internal static bool KinNear(Campaign campaign, Nation owner, string culture, ScenarioState seat)
+    {
         var kin = KinState(campaign, owner, culture);
         if (kin is null) return false;
         if (!CampaignDiplomacy.SharesLandBorder(campaign, owner.MapIndex, kin.MapIndex)) return false;
-        if (regions is null || regions.Count == 0) return true;
-        var seat = regions[0];
-        foreach (var region in regions) if (region.Population > seat.Population) seat = region;
+        if (seat is null) return true;
         var (latitude, longitude) = LandAtlas.CentreOf(campaign, seat.MapIndex);
         const float radians = MathF.PI / 180f;
         var dLat = (kin.CapitalLatitude - latitude) * radians;
@@ -568,22 +629,36 @@ public static class SecessionEvents
     public static SecessionReport Force(Campaign campaign, ScenarioState state, string culture = null,
         SecessionCause cause = SecessionCause.Nationality)
     {
-        if (campaign?.ProvinceMap is null || state is null || LakeRegions.IsWaterState(state)) return null;
-        var parent = campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
-        if (parent is null || campaign.StatesOf(parent).Length < 2) return null;
+        SecessionReport report = null;
+        foreach (var _ in ForceStages(campaign, state, result => report = result, culture, cause)) { }
+        return report;
+    }
+
+    internal static IEnumerable<int> ForceStages(Campaign campaign, ScenarioState state,
+        Action<SecessionReport> onDone, string culture = null,
+        SecessionCause cause = SecessionCause.Nationality)
+    {
+        if (campaign?.ProvinceMap is null || state is null || LakeRegions.IsWaterState(state)) yield break;
+        var parent = campaign.NationByMapIndex(state.NationMapIndex);
+        if (parent is null || campaign.StatesOf(parent).Length < 2) yield break;
         if (string.IsNullOrWhiteSpace(culture))
         {
             var byCulture = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
             foreach (var group in state.PopulationGroups)
                 byCulture[group.Culture] = byCulture.GetValueOrDefault(group.Culture) + group.Size;
-            culture = byCulture.Count == 0 ? parent.Tag : byCulture.OrderByDescending(pair => pair.Value).First().Key;
+            string topCulture = null;
+            var topSize = -1L;
+            foreach (var pair in byCulture)
+                if (topCulture is null || pair.Value > topSize) { topCulture = pair.Key; topSize = pair.Value; }
+            culture = topCulture ?? parent.Tag;
         }
         var piece = new SecessionPiece
         {
             MapIndex = state.MapIndex, Name = state.Name,
             Cause = cause, Population = state.Population
         };
-        return Secede(campaign, parent, new List<SecessionPiece> { piece }, culture, state.Population);
+        foreach (var _ in SecedeStages(campaign, parent, new List<SecessionPiece> { piece }, culture, state.Population, onDone))
+            yield return 0;
     }
 
     /// <summary>
@@ -641,16 +716,26 @@ public static class SecessionEvents
         List<SecessionPiece> leaving, string culture, long people, Action<Nation> shape = null, bool fight = false,
         bool countsAsOutbreak = true)
     {
-        if (!RegionalResourcePartition.ValidAccounts(parent)) return null;
+        SecessionReport report = null;
+        foreach (var _ in SecedeStages(campaign, parent, leaving, culture, people, r => report = r, shape, fight, countsAsOutbreak)) { }
+        return report;
+    }
+
+    private static IEnumerable<int> SecedeStages(Campaign campaign, Nation parent,
+        List<SecessionPiece> leaving, string culture, long people, Action<SecessionReport> onDone,
+        Action<Nation> shape = null, bool fight = false, bool countsAsOutbreak = true)
+    {
+        if (!RegionalResourcePartition.ValidAccounts(parent)) yield break;
         leaving = leaving.Where(piece => RevoltRecovery.DaysLeft(campaign, parent,
-            campaign.States.Find(s => s.MapIndex == piece.MapIndex)) == 0).ToList();
-        if (leaving.Count == 0) return null;
+            campaign.StateByMapIndex(piece.MapIndex)) == 0).ToList();
+        if (leaving.Count == 0) yield break;
         // Political succession cannot repaint a third party's military occupation.
         // Do this before creating a tag, transferring accounts, or drawing a response.
         var provinces = RevoltTerritory.Select(campaign, parent, ref leaving);
-        if (provinces.Count == 0 || leaving.Count == 0) return null;
+        if (provinces.Count == 0 || leaving.Count == 0) yield break;
+        yield return 0;
         people = leaving.Sum(piece => piece.Population);
-        if (people <= 0) return null;
+        if (people <= 0) yield break;
         var residentTotal = campaign.StatesOf(parent).Sum(state => (double)state.Population);
         var was = parent.Population;
         var revolt = RevoltKind(parent, leaving, culture, people);
@@ -689,11 +774,12 @@ public static class SecessionEvents
         else
         {
             born = Found(campaign, parent, leaving, culture, people, revolt);
-            if (born is null) return null;
+            if (born is null) yield break;
             born.FoundedInRevolt = revolt;
             born.SecededFromId = parent.Id;
             born.RevoltParentId = parent.Id;
         }
+        yield return 0;
         // The land that left is the new country's homeland from its first minute: without
         // this seed the fall flow (MovementFall.Decide) never sees a secession-born country
         // that later loses everything, and it lingers for ever as a stateless ghost with an
@@ -719,6 +805,7 @@ public static class SecessionEvents
         // Not a conquest. It is standing on the ground it already lived on, and a state born
         // an international pariah for that would be the wrong answer twice over.
         StatePartition.Annex(campaign, provinces, born, asConquest: false);
+        yield return 0;
         RegionalResourcePartition.RecountResidents(campaign, parent, born);
         var departedStates = campaign.StatesOf(born);
         // For a region cut by an occupation, inherit only the residents actually leaving,
@@ -735,22 +822,30 @@ public static class SecessionEvents
         SecessionResearch.Inherit(campaign, parent, born, departedStates, was);
 
         foreach (var piece in leaving)
-            foreach (var state in campaign.States)
-                if (state.MapIndex == piece.MapIndex) { state.SecessionPressure = 0f; break; }
+            if (campaign.StateByMapIndex(piece.MapIndex) is { } pieceState)
+                pieceState.SecessionPressure = 0f;
 
         parent.LastSecessionDay = campaign.ElapsedDays;
         born.LastSecessionDay = campaign.ElapsedDays;
         // The capital stands in the core - the people's own ground - not in whichever region that
         // came along is the most populous: a Dagestani state does not govern from Rostov.
-        var seat = campaign.StatesOf(born).Where(s => coreRegions.Contains(s.MapIndex) || coreRegions.Contains(s.ParentMapIndex))
-                       .OrderByDescending(s => s.Population).FirstOrDefault()
-                   ?? campaign.StatesOf(born).OrderByDescending(s => s.Population).FirstOrDefault();
+        ScenarioState coreSeat = null;
+        ScenarioState anySeat = null;
+        foreach (var s in departedStates)
+        {
+            if (anySeat is null || s.Population > anySeat.Population) anySeat = s;
+            if ((coreRegions.Contains(s.MapIndex) || coreRegions.Contains(s.ParentMapIndex)) &&
+                (coreSeat is null || s.Population > coreSeat.Population))
+                coreSeat = s;
+        }
+        var seat = coreSeat ?? anySeat;
         if (seat is not null)
         {
             CapitalCore.Establish(campaign, born, seat);
             born.CapitalName = seat.Name;
         }
         campaign.LocateCapitals(preserveExisting: true);
+        yield return 0;
         // A revived movement keeps the name it fell with only while that name still describes
         // the ground it has come back on.
         if (matchingMovement is not null) NationNaming.Refit(campaign, born, "revived");
@@ -771,6 +866,7 @@ public static class SecessionEvents
         var outcome = parent.IsHuman && !campaign.ObserverMode
             ? Ask(campaign, parent, born, leaving, people, was, out reason)
             : fight ? SecessionOutcome.Contested : SecessionCore.Response(campaign, parent, leaving, out reason);
+        yield return 0;
         if (outcome == SecessionOutcome.Contested)
         {
             var war = CampaignDiplomacy.DeclareWar(campaign, parent.Id, born.Id,
@@ -786,6 +882,7 @@ public static class SecessionEvents
             }
             else
             {
+                yield return 0;
                 // Part of the garrison standing on the ground goes over: the war is fought by
                 // soldiers who were the state's last week, not by four companies of militia.
                 var defected = Reintegration.Defect(campaign, parent, born, provinces.ToHashSet());
@@ -824,7 +921,7 @@ public static class SecessionEvents
             $"regions={leaving.Count} core={leaving.Count(p => p.Cause == SecessionCause.Nationality)} " +
             $"people={people} militia={raised} revolt={revolt} outcome={outcome} reason={reason}");
 
-        return new SecessionReport
+        onDone?.Invoke(new SecessionReport
         {
             Seceded = born,
             Parent = parent,
@@ -836,7 +933,7 @@ public static class SecessionEvents
             Reason = reason,
             Revolt = revolt,
             Pieces = leaving
-        };
+        });
     }
 
     /// <summary>
@@ -874,8 +971,11 @@ public static class SecessionEvents
         foreach (var piece in leaving)
             if (piece.Cause is SecessionCause.Nationality or SecessionCause.Federal &&
                 (seat is null || piece.Population > seat.Population)) seat = piece;
-        seat ??= leaving[0];
-        var seatState = campaign.States.Find(state => state.MapIndex == seat.MapIndex);
+        // Otherwise the most populous region that left, not whichever was listed first.
+        if (seat is null)
+            foreach (var piece in leaving)
+                if (seat is null || piece.Population > seat.Population) seat = piece;
+        var seatState = campaign.StateByMapIndex(seat.MapIndex);
         var theirs = NamedForItsPeople(campaign, culture, leaving);
 
         var born = campaign.AddNation(new Nation
@@ -1129,6 +1229,8 @@ public static class SecessionEvents
         foreach (var nation in campaign.Nations)
         {
             if (nation.Movement is not { Landless: true }) continue;
+            // A map artefact (common/country_merges) is not anybody's movement.
+            if (CountryMerges.IsMerged(nation.Tag)) continue;
             // Only match a movement if the seceding ground actually overlaps the movement's defined authentic homeland.
             // A temporary exile office / headquarters outside the homeland must NEVER confer ownership of a foreign region!
             var def = Movements.DefinitionOf(nation);

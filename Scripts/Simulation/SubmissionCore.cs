@@ -140,8 +140,8 @@ public static class SubmissionSystem
         if (CampaignDiplomacy.AtWar(campaign, asker.Id, target.Id)) return Loc.Get("They are at war with each other.");
 
         var relation = refreshAssessment ? CampaignDiplomacy.Get(campaign, asker.Id, target.Id)
-            : CampaignDiplomacy.ReadOrNeutral(campaign, asker.Id, target.Id);
-        var since = campaign.ElapsedDays - relation.SubmissionAskedDay;
+            : CampaignDiplomacy.Peek(campaign, asker.Id, target.Id);
+        var since = campaign.ElapsedDays - (relation?.SubmissionAskedDay ?? -9999);
         if (since < campaign.Defines.SubmissionRefusalDays)
             return Loc.Format("They said no {0:N0} day(s) ago; they will not be asked again this year.", since);
 
@@ -238,10 +238,11 @@ public static class SubmissionSystem
         if (campaign is null || target is null || asker is null) return 0f;
         var defines = campaign.Defines;
         var relation = refreshAssessment ? CampaignDiplomacy.Get(campaign, target.Id, asker.Id)
-            : CampaignDiplomacy.ReadOrNeutral(campaign, target.Id, asker.Id);
+            : CampaignDiplomacy.Peek(campaign, target.Id, asker.Id);
 
-        var willingness = relation.Opinion / 100f;
-        why?.Add("How they regard us", relation.Opinion / 100f);
+        var opinion = relation?.Opinion ?? 0f;
+        var willingness = opinion / 100f;
+        why?.Add("How they regard us", opinion / 100f);
 
         // Strength first, because nothing else is worth saying without it.
         var ratio = StrengthRatio(campaign, asker, target, refreshAssessment);
@@ -288,7 +289,7 @@ public static class SubmissionSystem
                     willingness += fear;
                     why?.Add(Loc.Format("They fear {0}", feared?.DisplayName ?? Loc.Get("Somebody")), fear);
                 }
-                if (relation.GuaranteedBy(asker.Id))
+                if (relation is not null && relation.GuaranteedBy(asker.Id))
                 {
                     willingness += 0.15f;
                     why?.Add("We already guarantee them", 0.15f);
@@ -300,7 +301,7 @@ public static class SubmissionSystem
                 willingness += defines.SubmissionEconomicPaymentWeight;
                 why?.Add(Loc.Format("What we pay ({0:0.00})", Cost(campaign, target, route)),
                     defines.SubmissionEconomicPaymentWeight);
-                if (relation.TradeAgreement)
+                if (relation is { TradeAgreement: true })
                 {
                     willingness += 0.15f;
                     why?.Add("They trade with us already", 0.15f);
@@ -420,13 +421,22 @@ public static class SubmissionSystem
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SubmissionSystem))) return;
-        if (campaign is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same monthly pass, yielded between countries and inside the candidate
+    /// walk so one suitor's search of the whole table does not land in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SubmissionSystem))) yield break;
+        if (campaign is null) yield break;
         var defines = campaign.Defines;
-        if (defines.SubmissionAiChancePerMonth <= 0f) return;
+        if (defines.SubmissionAiChancePerMonth <= 0f) yield break;
         var month = campaign.ElapsedDays / 30;
+        var scanned = 0;
         foreach (var asker in campaign.Nations)
         {
+            if (++scanned % 8 == 0) yield return 0;
             if (asker.IsHuman || asker.IsSubject || asker.Population <= 0) continue;
             if (campaign.ElapsedDays % 30 != (Math.Abs(asker.Id) + 11) % 30) continue;
             if (Chance(asker.Id, month) >= defines.SubmissionAiChancePerMonth) continue;
@@ -436,8 +446,10 @@ public static class SubmissionSystem
             Nation best = null;
             var bestRoute = SubmissionRoute.Protection;
             var bestMargin = defines.SubmissionAiMargin;
+            var probed = 0;
             foreach (var target in campaign.Nations)
             {
+                if (++probed % 64 == 0) yield return 0;
                 if (target.Id == asker.Id || target.IsHuman) continue;
                 // Only countries that already like the asker are worth the walk across the room.
                 var relation = CampaignDiplomacy.Peek(campaign, asker.Id, target.Id);

@@ -6,19 +6,26 @@ namespace DealOrForce.Simulation;
 /// <summary>Religious affinity, diplomatic recognition and an actual local following are different things.</summary>
 public static class MovementReach
 {
-    private static ProvinceTopology _map;
-    private static Campaign _campaign;
-    private static int _revision = -1;
-    private static readonly Dictionary<int, (float Latitude, float Longitude)> Centres = new();
+    private sealed class ReachCache
+    {
+        public ProvinceTopology Map;
+        public int Revision = -1;
+        public readonly Dictionary<int, (float Latitude, float Longitude)> Centres = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, ReachCache> ReachCaches = new();
+    [ThreadStatic] private static Dictionary<int, (double Latitude, double X, double Y, int Count)> _centreSums;
 
     private static (float Latitude, float Longitude) Centre(Campaign campaign, ScenarioState region)
     {
         var map = campaign.ProvinceMap;
         if (map is null) return Movements.CentreOf(campaign, region);
-        if (!ReferenceEquals(_map, map) || !ReferenceEquals(_campaign, campaign) || _revision != campaign.MapRevision)
+        var cache = ReachCaches.GetOrCreateValue(campaign);
+        if (!ReferenceEquals(cache.Map, map) || cache.Revision != campaign.OwnershipRevision)
         {
-            _map = map; _campaign = campaign; _revision = campaign.MapRevision; Centres.Clear();
-            var sums = new Dictionary<int, (double Latitude, double X, double Y, int Count)>();
+            cache.Map = map; cache.Revision = campaign.OwnershipRevision; cache.Centres.Clear();
+            var sums = _centreSums ??= new Dictionary<int, (double Latitude, double X, double Y, int Count)>();
+            sums.Clear();
             for (var province = 1; province <= map.ProvinceCount; province++)
             {
                 var id = map.ProvinceToState[province];
@@ -28,9 +35,9 @@ public static class MovementReach
                     old.Y + Math.Sin(longitude * Math.PI / 180), old.Count + 1);
             }
             foreach (var (id, sum) in sums)
-                Centres[id] = ((float)(sum.Latitude / sum.Count), (float)(Math.Atan2(sum.Y, sum.X) * 180 / Math.PI));
+                cache.Centres[id] = ((float)(sum.Latitude / sum.Count), (float)(Math.Atan2(sum.Y, sum.X) * 180 / Math.PI));
         }
-        return Centres.GetValueOrDefault(region.MapIndex);
+        return cache.Centres.GetValueOrDefault(region.MapIndex);
     }
 
     public static bool CanOperate(Campaign campaign, Nation nation, ScenarioState region, MovementDefinition definition,
@@ -53,16 +60,52 @@ public static class MovementReach
         if (definition.Has("humanitarian") && owner is not null && !hostile && movement.RecognisedBy.Contains(owner.Id)) return true;
         var reach = definition.Has("diaspora_lobby") ? definition.DiasporaReachKm : definition.OutreachKm;
         var point = Centre(campaign, region);
+        var open = !definition.Has("humanitarian") || !hostile;
         if (Distance(movement.HeadquartersLatitude, movement.HeadquartersLongitude, point.Latitude, point.Longitude) <= reach)
-            return !definition.Has("humanitarian") || !hostile;
-        foreach (var id in definition.Homeland)
-            if (Movements.StateById(campaign, id) is { } home)
-            {
-                var homePoint = Centre(campaign, home);
-                if (Distance(homePoint.Latitude, homePoint.Longitude, point.Latitude, point.Longitude) <= reach)
-                    return !definition.Has("humanitarian") || !hostile;
-            }
+            return open;
+        // The homeland's place on the map does not move when a region's people do.
+        // Resolving each homeland id, for every region asked, was the walk.
+        var homes = HomelandCentresOf(campaign, definition);
+        for (var i = 0; i < homes.Count; i++)
+        {
+            var home = homes.Points[i];
+            if (Distance(home.Latitude, home.Longitude, point.Latitude, point.Longitude) <= reach)
+                return open;
+        }
         return false;
+    }
+
+    sealed class HomelandCentres
+    {
+        public bool Built;
+        public int Generation = -1;
+        public int Count;
+        public (float Latitude, float Longitude)[] Points = Array.Empty<(float, float)>();
+    }
+
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, Dictionary<MovementDefinition, HomelandCentres>> HomelandCentreCaches = new();
+
+    static HomelandCentres HomelandCentresOf(Campaign campaign, MovementDefinition definition)
+    {
+        var table = HomelandCentreCaches.GetValue(campaign, static _ => new Dictionary<MovementDefinition, HomelandCentres>());
+        if (!table.TryGetValue(definition, out var cached))
+            table[definition] = cached = new HomelandCentres();
+        var generation = Movements.RegionListGeneration(campaign);
+        if (cached.Built && cached.Generation == generation) return cached;
+        var homeland = definition.Homeland;
+        var count = homeland?.Count ?? 0;
+        if (cached.Points.Length < count) cached.Points = new (float, float)[count];
+        var written = 0;
+        for (var i = 0; i < count; i++)
+        {
+            if (Movements.StateById(campaign, homeland[i]) is not { } home) continue;
+            cached.Points[written++] = Centre(campaign, home);
+        }
+        cached.Count = written;
+        cached.Built = true;
+        // StateById may have indexed the list and moved the generation. Read it after.
+        cached.Generation = Movements.RegionListGeneration(campaign);
+        return cached;
     }
 
     public static float SupportCeiling(Campaign campaign, Nation nation, ScenarioState region,

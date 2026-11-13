@@ -18,17 +18,15 @@ public sealed partial class GlobePresentation
         // neighbouring provinces or retain a collision-avoidance surface slot.
         foreach (var marker in _armyStacks.Values)
         {
+            if (marker.Node is null || !IsInstanceValid(marker.Node) || !marker.Node.Visible) continue;
             var pos = ArmyMarkerPosition(marker);
             if (marker.TargetPosition != pos)
             {
                 marker.TargetPosition = pos;
                 OrientSurfaceArmyCard(marker);
             }
-            if (marker.Node.Visible)
-            {
-                SizeSurfaceArmyCounter(marker);
-                RefreshProvinceCounterDisplay(marker, false);
-            }
+            SizeSurfaceArmyCounter(marker);
+            RefreshProvinceCounterDisplay(marker, false);
         }
     }
 }

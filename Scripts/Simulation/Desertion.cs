@@ -50,12 +50,20 @@ public static class Desertion
 
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || campaign.ElapsedDays <= 0 || campaign.ElapsedDays % 7 != 3) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly desertion pass, yielded between batches of armies.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || campaign.ElapsedDays <= 0 || campaign.ElapsedDays % 7 != 3) yield break;
         var defines = campaign.Defines;
         LostThisWeek.Clear();
         Strength.Clear();
+        var scanned = 0;
         foreach (var army in campaign.Armies)
         {
+            if (++scanned % 256 == 0) yield return 0;
             if (army.Personnel <= 0 || army.EmbarkedFleetId >= 0) continue;
             Strength[army.NationId] = Strength.GetValueOrDefault(army.NationId) + army.Personnel;
             var war = WarLosses.WarOf(campaign, army);
@@ -80,6 +88,7 @@ public static class Desertion
             nation.ManpowerReserve += (men - toEnemy) * defines.DesertionHomeReturn;
             WarLosses.Record(war, nation.Id, 0f, 0f, men);
         }
+        yield return 0;
         foreach (var (nationId, lost) in LostThisWeek)
         {
             var nation = campaign.NationById(nationId);

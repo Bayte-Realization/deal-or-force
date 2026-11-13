@@ -23,13 +23,21 @@ public static class HistoricalTimeline
 
     public static void Tick(Campaign campaign)
     {
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same dated sweep, yielded between event definitions so a day with many
+    /// anniversaries does not fire them all in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
         if (campaign is null || !campaign.FeatureEnabled("events") ||
-            !MechanicFeatures.SystemEnabled(campaign, nameof(EventSystem))) return;
-        if (campaign.Date.Year < -9999 || campaign.Date.Year > 9999) return;
+            !MechanicFeatures.SystemEnabled(campaign, nameof(EventSystem))) yield break;
+        if (campaign.Date.Year < -9999 || campaign.Date.Year > 9999) yield break;
         var today = new HistoricalDate(campaign.Date.Year, campaign.Date.Month, campaign.Date.Day);
         foreach (var definition in EventCatalog.All)
         {
             if (!definition.Historical || !Due(definition, today)) continue;
+            yield return 0;
             foreach (var nation in campaign.Nations)
             {
                 if (!definition.Suits(nation) || !definition.Trigger.Matches(campaign, nation)) continue;

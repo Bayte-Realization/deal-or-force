@@ -104,6 +104,10 @@ public partial class DealOrForceGame : Control
             BuildInterface();
             _globe.LoadingInputBlocked = true;
             await LoadingPhase("Creating countries and regions", 30);
+            // Schema discovery is independent of the live world. Await it while loading,
+            // before creating a campaign; it must not become the first autosave's freeze.
+            await System.Threading.Tasks.Task.Run(SaveSystem.WarmSerializationContracts);
+            if (!IsInstanceValid(this) || !IsInsideTree()) return;
             StartCampaign();
             await WaitForMapPresentation();
             // Again, now that there is a map to apply them to. Several preferences reach
@@ -129,6 +133,7 @@ public partial class DealOrForceGame : Control
         // Before anything else in the frame: a machine that cannot hold thirty frames a second
         // has to be allowed to spend less on this frame, not the one after a settings screen.
         MaintainQuality(delta);
+        PaceBackgroundFrames();
         BindStepCompletion();
         RefreshMediaPreview();
         RefreshSoundtrackPlayer(delta);
@@ -139,6 +144,7 @@ public partial class DealOrForceGame : Control
         // knowable after the layout pass rather than when the card is built. See the method.
         SyncCountryFactsHeight();
         TickNuclearAlert(delta);
+        MaintainArmyBar(delta);
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         // The lens and the roll move while a key is held, so the line that reports them
@@ -192,25 +198,54 @@ public partial class DealOrForceGame : Control
         // a slower campaign instead of an unresponsive one.
         //
         // And with smooth time on, a step is not one piece of work either. The day's passes and
-        // the week's economy run as many stages (Campaign.StepFor), as many of them in a frame
-        // as its budget holds, and the clock moves on when the step is done: the same world,
-        // without the frame that stopped for a third of a second every simulated week.
+        // the week's economy run as stages (Campaign.StepFor). Light stages still share a frame
+        // up to its budget. A stage that itself used half of this call's slice ends the call:
+        // the frame does not keep starting the stages after that one until the budget is blown.
+        // The clock moves on when the step is done: the same world, with the heavy stage on its
+        // own frame instead of stacked on the stages that already filled the slice.
         var budget = System.Diagnostics.Stopwatch.StartNew();
-        var slice = _campaign.Defines.FrameSimulationBudgetMs;
+        var baseSlice = _campaign.Defines.FrameSimulationBudgetMs;
+        var fastSlice = _campaign.Defines.FastSpeedSimulationBudgetMs;
+        var smoothFastSlice = _campaign.Defines.SmoothFastSpeedSimulationBudgetMs;
+        var uncheckedFastSlice = _campaign.Defines.UncheckedSpeedSimulationBudgetMs;
         var cap = _campaign.Defines.MaxDaysPerFrame;
         var smooth = SettingsCatalog.Flag("smooth_ticks");
+        var frameBudget = baseSlice <= 0f ? 0f
+            : smooth
+                ? (_speed >= 5 ? System.Math.Max(baseSlice, smoothFastSlice)
+                    : _speed == 4 ? System.Math.Max(baseSlice, System.Math.Min(smoothFastSlice, baseSlice * 1.5f))
+                    : baseSlice)
+                : (_speed >= 5 ? System.Math.Max(fastSlice, uncheckedFastSlice)
+                    : _speed == 4 ? System.Math.Max(baseSlice, fastSlice)
+                    : System.Math.Max(27f, baseSlice * 3f));
         while ((_campaign.MidStep || _dayAccumulator >= secondsPerDay) && days < cap &&
-               (days == 0 || budget.Elapsed.TotalMilliseconds < slice))
+               (days == 0 || budget.Elapsed.TotalMilliseconds < frameBudget))
         {
             if (!_campaign.MidStep) _dayAccumulator -= secondsPerDay;
             if (_networkConnected && _networkIsHost && _networkGameStarted) _applyingNetworkCommand = true;
+            var heavyCall = false;
             try
             {
                 var finished = true;
                 using (SimProfiler.Measure("campaign.day"))
                 {
-                    if (smooth || _campaign.MidStep)
-                        finished = _campaign.StepFor(System.Math.Max(1.0, slice - budget.Elapsed.TotalMilliseconds));
+                    if (baseSlice > 0f)
+                    {
+                        var slice = System.Math.Max(1.0, frameBudget - budget.Elapsed.TotalMilliseconds);
+                        var callStarted = smooth ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
+                        // Half the slice is the heavy ceiling. Smooth time off passes no ceiling,
+                        // so the same budget still runs every stage that fits and the step's result
+                        // is unchanged.
+                        finished = smooth
+                            ? _campaign.StepFor(slice, slice * 0.5)
+                            : _campaign.StepFor(slice);
+                        if (smooth)
+                            heavyCall = System.Diagnostics.Stopwatch.GetElapsedTime(callStarted).TotalMilliseconds >= slice * 0.5;
+                    }
+                    else if (smooth)
+                        finished = _campaign.StepFor(1.0, 0.5);
+                    else if (_campaign.MidStep)
+                        finished = _campaign.StepFor(double.PositiveInfinity);
                     else _campaign.Tick();
                 }
                 // The rest of this step belongs to the next frame.
@@ -232,6 +267,9 @@ public partial class DealOrForceGame : Control
             if (_campaign.SimulationFault.Length > 0) return;
             MaybeAutosave();
             days++;
+            // The step finished on a stage that already took half the slice. Autosave has
+            // seen that boundary. The next step waits for another frame.
+            if (heavyCall) break;
         }
     }
 
@@ -625,6 +663,18 @@ public partial class DealOrForceGame : Control
             if (letter == Key.X && SplitSupportSelection()) { GetViewport().SetInputAsHandled(); return; }
         }
 
+        // B: building icons on the map, on and off - with nothing selected, so a selection keeps its letters.
+        if (inputEvent is InputEventKey { Pressed: true, Echo: false } iconsKey && _hudLayer is { Visible: true } &&
+            _selectedArmies.Count == 0 && Letter(iconsKey) == Key.B && !iconsKey.CtrlPressed && !iconsKey.AltPressed &&
+            !iconsKey.ShiftPressed && !iconsKey.MetaPressed)
+        {
+            SettingsCatalog.Store("map_region_icons", !SettingsCatalog.Flag("map_region_icons"));
+            ApplySetting("map_region_icons");
+            RefreshMapVisualToggles();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
         // Halt, and come off the plan. Two keys because they are two decisions - see
         // HaltSelectedDivisions for what one key cost. Only while formations are selected
         // and only in the campaign, so H stays a letter everywhere else.
@@ -650,6 +700,12 @@ public partial class DealOrForceGame : Control
 
                 case Key.K when Input.IsKeyPressed(Key.Ctrl):
                     ConsolidateSelectedDivisions();
+                    GetViewport().SetInputAsHandled();
+                    return;
+
+                // Delete: send the selection home (asks once more first).
+                case Key.Delete:
+                    DisbandSelectedDivisions();
                     GetViewport().SetInputAsHandled();
                     return;
 
@@ -716,13 +772,24 @@ public partial class DealOrForceGame : Control
             CloseTradeScreen();
         else if (_productionLayer is { Visible: true })
             CloseProductionScreen();
+        // Context menus and HUD docks on the map (province card, fleet inspector, army
+        // roster, resource atlas, movement card, side dossier, country/region selection):
+        // Escape puts them away one layer at a time before ever reaching the pause menu.
+        else if (_provinceCardLayer is not null && IsInstanceValid(_provinceCardLayer) && _provinceCardLayer.Visible)
+            CloseProvinceCard();
+        else if (_fleetPanel is { Visible: true })
+            CloseFleetPanel();
+        else if (_armyPanel is { Visible: true })
+            ClearArmySelectionAndClose();
+        else if (_resourceAtlasPanel is { Visible: true })
+            _globe.SetMapMode(StrategicMapMode.Political);
         else if (_movementPanel is { Visible: true })
             CloseMovementPanel();
         else if (_sidePanel.Visible && _dossierReturnArmyIds is not null)
             ReturnToArmyOrders();
         else if (_sidePanel.Visible)
             CloseSidePanel();
-        else if (MapSelectionShowing)
+        else if (MapSelectionShowing || _regionCard is { Visible: true })
             CloseMapSelection();
         else if (_pickerLayer is { Visible: true })
             ShowMainMenu();
@@ -920,6 +987,8 @@ public partial class DealOrForceGame : Control
         BuildDossierSidePanel();
 
         BuildArmyPanel();
+        // Every army as a card along the bottom of the map (ArmyBarUI).
+        BuildArmyBar();
         BuildFleetPanel(_hudLayer);
 
         // Every screen below is built here, on the first frame of a campaign, whether or not the

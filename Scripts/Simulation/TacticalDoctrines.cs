@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace DealOrForce.Simulation;
@@ -37,6 +38,17 @@ public sealed partial class Defines
     /// One keeps the older rule: a different book on that shelf replaces it.
     /// </summary>
     public int DoctrineBooksPerShelf { get; set; } = 2;
+
+    /// <summary>
+    /// How much of the smaller contribution a second book on the same shelf still adds,
+    /// when both books carry the same modifier. The larger contribution is kept whole.
+    /// Half means the second book matters and does not double the bonus. One adds both
+    /// in full, the way a single shelf used to once the books were simply summed. Zero
+    /// keeps only the larger. Books on different shelves are not touched by this.
+    /// </summary>
+    public const float DefaultDoctrineSameShelfStack = 0.5f;
+
+    public float DoctrineSameShelfStack { get; set; } = DefaultDoctrineSameShelfStack;
 }
 
 /// <summary>
@@ -200,14 +212,25 @@ public static class TacticalDoctrineCatalog
     public static int Revision { get; private set; }
     // Keep sorting out of each country's AI review. The index is private: callers cannot
     // reorder it, and deferred enumeration still reads the catalogue current at MoveNext.
-    public static IEnumerable<DoctrineBranch> All
+    private static readonly Dictionary<string, DoctrineBranch[]> _bySlot = new(StringComparer.Ordinal);
+
+    public static IEnumerable<DoctrineBranch> All => AllDeferred();
+
+    private static IEnumerable<DoctrineBranch> AllDeferred()
     {
-        get
-        {
-            _ordered ??= Entries.Values.OrderBy(branch => branch.Id, StringComparer.Ordinal).ToArray();
-            foreach (var branch in _ordered) yield return branch;
-        }
+        foreach (var branch in OrderedBranches()) yield return branch;
     }
+
+    private static DoctrineBranch[] OrderedBranches()
+    {
+        if (_ordered is not null) return _ordered;
+        var arr = new DoctrineBranch[Entries.Count];
+        var i = 0;
+        foreach (var b in Entries.Values) arr[i++] = b;
+        Array.Sort(arr, static (a, b) => string.CompareOrdinal(a.Id, b.Id));
+        return _ordered = arr;
+    }
+
     public static DoctrineBranch Find(string id) => id is null ? null : Entries.GetValueOrDefault(id);
     public static bool KnowsExperience(string kind) =>
         kind is MilitaryExperience.Army or MilitaryExperience.Air or MilitaryExperience.Navy or MilitaryExperience.Command;
@@ -217,14 +240,28 @@ public static class TacticalDoctrineCatalog
         nodeId is null ? null : ByNode.GetValueOrDefault(nodeId);
 
     /// <summary>Every book on one shelf, in catalogue order.</summary>
-    public static IEnumerable<DoctrineBranch> OnShelf(string slot) =>
-        All.Where(branch => string.Equals(branch.Slot, slot, StringComparison.Ordinal));
+    public static IEnumerable<DoctrineBranch> OnShelf(string slot) => ShelfBranches(slot);
+
+    internal static DoctrineBranch[] ShelfBranches(string slot)
+    {
+        if (slot is null) return Array.Empty<DoctrineBranch>();
+        if (_bySlot.TryGetValue(slot, out var cached)) return cached;
+        var all = OrderedBranches();
+        var count = 0;
+        for (var i = 0; i < all.Length; i++)
+            if (string.Equals(all[i].Slot, slot, StringComparison.Ordinal)) count++;
+        var result = count == 0 ? Array.Empty<DoctrineBranch>() : new DoctrineBranch[count];
+        var idx = 0;
+        for (var i = 0; i < all.Length; i++)
+            if (string.Equals(all[i].Slot, slot, StringComparison.Ordinal)) result[idx++] = all[i];
+        return _bySlot[slot] = result;
+    }
 
     static TacticalDoctrineCatalog() => ResetCatalog();
 
     public static void ResetCatalog()
     {
-        Entries.Clear(); ByNode.Clear(); _ordered = null; Revision++;
+        Entries.Clear(); ByNode.Clear(); _ordered = null; _bySlot.Clear(); Revision++;
         foreach (var doc in GameDataLoader.DataDocuments("common", "tactical_doctrines")) using (doc) Merge(doc.RootElement);
     }
 
@@ -380,6 +417,7 @@ public static class TacticalDoctrineCatalog
                 Entries[entry.Name] = branch;
                 foreach (var node in nodes) ByNode[node.Id] = branch;
                 _ordered = null;
+                _bySlot.Clear();
                 Revision++;
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException)
@@ -786,31 +824,73 @@ public static class TacticalDoctrines
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same doctrine pass, yielded between batches of countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null) yield break;
         var day = campaign.ElapsedDays;
+        var runCourses = campaign.LastTacticalCourseDay != day;
         var runAi = campaign.FeatureEnabled("tactical_doctrines") &&
                     campaign.LastTacticalDoctrineDay != day;
-        if (runAi)
+        if (!runCourses && !runAi) yield break;
+        if (runCourses) campaign.LastTacticalCourseDay = day;
+        if (runAi) campaign.LastTacticalDoctrineDay = day;
+        var ticked = 0;
+        var nations = campaign.Nations;
+        for (var ni = 0; ni < nations.Count; ni++)
         {
-            campaign.LastTacticalDoctrineDay = day;
-        }
-        foreach (var nation in campaign.Nations)
-        {
-            EnsureShelves(nation);
-            var memory = nation.TacticalDoctrine;
-            // FinishCourse edits track fields, legacy mirrors and modifier caches, never
-            // the shelf dictionary. AiStudy may add shelves, but runs AFTER this loop.
-            // Preserve insertion order, including legacy/modded slots, without an hourly
-            // snapshot allocation for every country. No shared scratch buffer is needed.
-            foreach (var track in memory.Tracks.Values)
+            var nation = nations[ni];
+            if (++ticked % 8 == 0) yield return 0;
+            if (runCourses)
             {
-                FinishCourse(campaign, nation, track, day);
-                if (track.Companion is not null) FinishCourse(campaign, nation, track.Companion, day);
+                EnsureShelves(nation);
+                var memory = nation.TacticalDoctrine;
+                // FinishCourse edits track fields, legacy mirrors and modifier caches, never
+                // the shelf dictionary. AiStudy may add shelves, but runs AFTER this loop.
+                // Preserve insertion order, including legacy/modded slots, without an hourly
+                // snapshot allocation for every country. No shared scratch buffer is needed.
+                foreach (var track in memory.Tracks.Values)
+                {
+                    FinishCourse(campaign, nation, track, day);
+                    if (track.Companion is not null) FinishCourse(campaign, nation, track.Companion, day);
+                }
             }
             if (!runAi || !Delegation.RunByAi(nation)) continue;
             if ((day + nation.Id) % 7 != 0) continue;
             AiStudy(campaign, nation);
         }
+    }
+
+    private static bool IsNationAtWar(Campaign campaign, int nationId)
+    {
+        var live = Warfare.LiveWars(campaign);
+        for (var i = 0; i < live.Count; i++)
+            if (!live[i].Ended && live[i].Involves(nationId)) return true;
+        return false;
+    }
+
+    private static DoctrineBranch PickAuthoredBranch(string slot, string character, string excludeId)
+    {
+        var branches = TacticalDoctrineCatalog.ShelfBranches(slot);
+        DoctrineBranch best = null;
+        var bestWeight = 0f;
+        for (var i = 0; i < branches.Length; i++)
+        {
+            var book = branches[i];
+            if (excludeId is not null && string.Equals(book.Id, excludeId, StringComparison.Ordinal)) continue;
+            var weight = book.AiProfiles.GetValueOrDefault(character);
+            if (weight <= 0f) continue;
+            if (best is null || weight > bestWeight ||
+                (weight == bestWeight && string.CompareOrdinal(book.Id, best.Id) < 0))
+            {
+                best = book;
+                bestWeight = weight;
+            }
+        }
+        return best;
     }
 
     /// <summary>
@@ -821,7 +901,7 @@ public static class TacticalDoctrines
     private static void AiStudy(Campaign campaign, Nation nation)
     {
         EnsureShelves(nation);
-        var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
+        var atWar = IsNationAtWar(campaign, nation.Id);
         foreach (var slot in DoctrineSlots.All)
         {
             var track = nation.TacticalDoctrine.Track(slot);
@@ -843,10 +923,7 @@ public static class TacticalDoctrines
                 if (companion is { LearningNode.Length: > 0 }) continue;
                 var additional = companion is { Branch.Length: > 0 }
                     ? TacticalDoctrineCatalog.Find(companion.Branch)
-                    : TacticalDoctrineCatalog.OnShelf(slot)
-                        .Where(book => book.Id != branch.Id && book.AiProfiles.GetValueOrDefault(character) > 0f)
-                        .OrderByDescending(book => book.AiProfiles.GetValueOrDefault(character))
-                        .ThenBy(book => book.Id, StringComparer.Ordinal).FirstOrDefault();
+                    : PickAuthoredBranch(slot, character, branch.Id);
                 if (additional is null) continue;
                 branch = additional;
                 available = Available(nation, branch.Id);
@@ -854,19 +931,36 @@ public static class TacticalDoctrines
             var have = Experience(nation, branch.Experience);
             DoctrineNode choice = null;
             var rush = false;
-            if (available.Any(node => node.AiProfiles.ContainsKey(character)))
+            var hasProfiles = false;
+            for (var i = 0; i < available.Count; i++)
+                if (available[i].AiProfiles.ContainsKey(character)) { hasProfiles = true; break; }
+            if (hasProfiles)
             {
-                choice = available.Where(node => node.AiProfiles.GetValueOrDefault(character, 1f) > 0f &&
-                    have + 0.001f >= node.Cost)
-                    .OrderByDescending(node => node.AiProfiles.GetValueOrDefault(character, 1f))
-                    .ThenBy(node => node.Cost).ThenBy(node => node.Id, StringComparer.Ordinal).FirstOrDefault();
+                var bestWeight = 0f;
+                for (var i = 0; i < available.Count; i++)
+                {
+                    var node = available[i];
+                    var weight = node.AiProfiles.GetValueOrDefault(character, 1f);
+                    if (weight <= 0f || have + 0.001f < node.Cost) continue;
+                    if (choice is null || weight > bestWeight ||
+                        (weight == bestWeight && (node.Cost < choice.Cost ||
+                            (node.Cost == choice.Cost && string.CompareOrdinal(node.Id, choice.Id) < 0))))
+                    {
+                        choice = node;
+                        bestWeight = weight;
+                    }
+                }
                 rush = choice is not null && atWar && have + 0.001f >= choice.RushCost;
             }
-            else foreach (var node in available)
+            else
             {
-                if (atWar && have + 0.001f >= node.RushCost) { choice = node; rush = true; break; }
-                if (have + 0.001f < node.Cost) continue;
-                if (choice is null || node.Cost < choice.Cost) choice = node;
+                for (var i = 0; i < available.Count; i++)
+                {
+                    var node = available[i];
+                    if (atWar && have + 0.001f >= node.RushCost) { choice = node; rush = true; break; }
+                    if (have + 0.001f < node.Cost) continue;
+                    if (choice is null || node.Cost < choice.Cost) choice = node;
+                }
             }
             if (choice is null) continue;
             Study(campaign, nation, branch.Id, choice.Id, rush);
@@ -887,10 +981,7 @@ public static class TacticalDoctrines
             string.Equals(leaning.Slot, slot, StringComparison.Ordinal)) return bias;
         var character = AiStrategyCatalog.Of(campaign, nation).Id;
         // New/modded books opt into character-driven selection; old data keeps its exact fallback.
-        var authored = TacticalDoctrineCatalog.OnShelf(slot)
-            .Where(book => book.AiProfiles.GetValueOrDefault(character) > 0f)
-            .OrderByDescending(book => book.AiProfiles.GetValueOrDefault(character))
-            .ThenBy(book => book.Id, StringComparer.Ordinal).FirstOrDefault();
+        var authored = PickAuthoredBranch(slot, character, null);
         if (authored is not null) return authored.Id;
         var table = slot switch
         {
@@ -902,58 +993,175 @@ public static class TacticalDoctrines
         if (table.TryGetValue(character, out var wanted) &&
             TacticalDoctrineCatalog.Find(wanted) is { } found &&
             string.Equals(found.Slot, slot, StringComparison.Ordinal)) return wanted;
-        return TacticalDoctrineCatalog.OnShelf(slot).FirstOrDefault()?.Id ?? "";
+        var onShelf = TacticalDoctrineCatalog.ShelfBranches(slot);
+        return onShelf.Length > 0 ? onShelf[0].Id : "";
+    }
+
+    /// <summary>The sentence on the doctrine page: a fixed label, not the live fraction.</summary>
+    public const string SameShelfStackSentence =
+        "A second book on the same shelf adds half of a repeated bonus.";
+
+    public static string SameShelfStackLine() => Loc.Get(SameShelfStackSentence);
+
+    // Which campaign a country belongs to, so the shelf ceiling reads that world's define.
+    // Not saved: a load binds again. A country with no home uses the shipped half.
+    private static readonly ConditionalWeakTable<Nation, Campaign> Homes = new();
+
+    internal static void BindHome(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return;
+        Homes.Remove(nation);
+        Homes.Add(nation, campaign);
+    }
+
+    internal static void BindHomes(Campaign campaign)
+    {
+        if (campaign is null) return;
+        foreach (var nation in campaign.Nations) BindHome(campaign, nation);
+    }
+
+    private static float SameShelfFraction(Nation nation)
+    {
+        if (nation is null || !Homes.TryGetValue(nation, out var campaign) || campaign?.Defines is null)
+            return Defines.DefaultDoctrineSameShelfStack;
+        var fraction = campaign.Defines.DoctrineSameShelfStack;
+        return float.IsFinite(fraction) ? fraction : Defines.DefaultDoctrineSameShelfStack;
     }
 
     /// <summary>
-    /// The articles in force, as sources of national modifiers - read by NationalModifiers. One
-    /// source per shelf, so the screens can say which book gave what.
+    /// One book's articles, summed the way they always were. Empty when that side of the
+    /// shelf has nothing learned. The dictionary is the country's own and is refilled in place.
+    /// </summary>
+    private static Dictionary<string, float> BookModifiers(Nation nation, string slot, bool second)
+    {
+        if (nation is null) return null;
+        EnsureShelves(nation);
+        var track = nation.TacticalDoctrine.Tracks.GetValueOrDefault(slot);
+        if (track is null) return null;
+        DoctrineTrack home;
+        DoctrineBranch book;
+        if (!second)
+        {
+            if (track.Branch.Length == 0 || track.Known.Count == 0) return null;
+            book = TacticalDoctrineCatalog.Find(track.Branch);
+            home = track;
+        }
+        else
+        {
+            home = track.Companion;
+            if (home is not { Branch.Length: > 0 } || home.Known.Count == 0) return null;
+            book = TacticalDoctrineCatalog.Find(home.Branch);
+        }
+        if (book is null) return null;
+        var cache = nation.DoctrineModifierCache ??=
+            new Dictionary<string, Dictionary<string, float>>(StringComparer.Ordinal);
+        var key = second ? SecondSlotKey(slot) : slot;
+        if (!cache.TryGetValue(key, out var totals))
+        {
+            totals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            cache[key] = totals;
+        }
+        totals.Clear();
+        for (var i = 0; i < book.Nodes.Count; i++)
+        {
+            var node = book.Nodes[i];
+            if (!home.Known.Contains(node.Id)) continue;
+            if (node.Modifiers is Dictionary<string, float> modDict)
+            {
+                foreach (var effect in modDict)
+                    totals[effect.Key] = totals.GetValueOrDefault(effect.Key) + effect.Value;
+            }
+            else
+            {
+                foreach (var effect in node.Modifiers)
+                    totals[effect.Key] = totals.GetValueOrDefault(effect.Key) + effect.Value;
+            }
+        }
+        return totals.Count == 0 ? null : totals;
+    }
+
+    private static string SecondSlotKey(string slot) => slot switch
+    {
+        DoctrineSlots.Ground => "ground#2",
+        DoctrineSlots.Air => "air#2",
+        DoctrineSlots.Sea => "sea#2",
+        DoctrineSlots.General => "general#2",
+        _ => slot + "#2"
+    };
+
+    static void AddRaw(Dictionary<string, float> totals, Dictionary<string, float> modifiers)
+    {
+        if (modifiers is null || modifiers.Count == 0) return;
+        foreach (var (key, value) in modifiers)
+            totals[key] = totals.GetValueOrDefault(key) + value;
+    }
+
+    /// <summary>
+    /// The articles in force, poured into the national sum. A single book is added as its
+    /// articles already stand. Two books on one shelf that share a key stop at the larger
+    /// contribution plus <see cref="Defines.DoctrineSameShelfStack"/> of the smaller one.
+    /// A key only one of them carries is added whole. Another shelf adds in full, even
+    /// when the key is the same word.
+    /// </summary>
+    internal static void AddTo(Dictionary<string, float> totals, Nation nation)
+    {
+        if (nation is null || totals is null) return;
+        var fraction = SameShelfFraction(nation);
+        foreach (var slot in DoctrineSlots.All)
+        {
+            var primary = BookModifiers(nation, slot, false);
+            var companion = BookModifiers(nation, slot, true);
+            if (companion is null)
+            {
+                AddRaw(totals, primary);
+                continue;
+            }
+            if (primary is null)
+            {
+                AddRaw(totals, companion);
+                continue;
+            }
+            foreach (var (key, left) in primary)
+            {
+                if (!companion.TryGetValue(key, out var right))
+                {
+                    totals[key] = totals.GetValueOrDefault(key) + left;
+                    continue;
+                }
+                if (fraction >= 1f)
+                {
+                    totals[key] = totals.GetValueOrDefault(key) + left;
+                    totals[key] += right;
+                }
+                else if (fraction <= 0f)
+                    totals[key] = totals.GetValueOrDefault(key) + Math.Max(left, right);
+                else
+                    totals[key] = totals.GetValueOrDefault(key) + Math.Max(left, right) + fraction * Math.Min(left, right);
+            }
+            foreach (var (key, right) in companion)
+                if (!primary.ContainsKey(key))
+                    totals[key] = totals.GetValueOrDefault(key) + right;
+        }
+    }
+
+    /// <summary>
+    /// The articles in force, as sources of national modifiers. Each book is named whole,
+    /// so a screen can say which book gave what. The ceiling is applied when those books
+    /// are summed, not by shrinking the book a tooltip is reading.
     /// </summary>
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation nation)
     {
         if (nation is null) yield break;
-        EnsureShelves(nation);
         foreach (var slot in DoctrineSlots.All)
         {
-            var book = BookOn(nation, slot);
-            if (book is null) continue;
-            var track = nation.TacticalDoctrine.Track(slot);
-            if (track.Known.Count == 0) continue;
-            // The dictionaries are the country's own, kept and refilled: asked once a day for
-            // every country with a doctrine, and a fresh one a day was the collector's budget.
-            var cache = nation.DoctrineModifierCache ??=
-                new Dictionary<string, Dictionary<string, float>>(StringComparer.Ordinal);
-            if (!cache.TryGetValue(slot, out var totals))
-            {
-                totals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-                cache[slot] = totals;
-            }
-            totals.Clear();
-            foreach (var node in book.Nodes)
-            {
-                if (!track.Known.Contains(node.Id)) continue;
-                foreach (var effect in node.Modifiers)
-                    totals[effect.Key] = totals.GetValueOrDefault(effect.Key) + effect.Value;
-            }
-            if (totals.Count > 0) yield return (book.Name, totals);
-            var companion = track.Companion;
-            if (companion is not { Branch.Length: > 0 } || companion.Known.Count == 0) continue;
-            var other = TacticalDoctrineCatalog.Find(companion.Branch);
-            if (other is null) continue;
-            var key = slot + "#2";
-            if (!cache.TryGetValue(key, out var secondTotals))
-            {
-                secondTotals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-                cache[key] = secondTotals;
-            }
-            secondTotals.Clear();
-            foreach (var node in other.Nodes)
-            {
-                if (!companion.Known.Contains(node.Id)) continue;
-                foreach (var effect in node.Modifiers)
-                    secondTotals[effect.Key] = secondTotals.GetValueOrDefault(effect.Key) + effect.Value;
-            }
-            if (secondTotals.Count > 0) yield return (other.Name, secondTotals);
+            var primary = BookModifiers(nation, slot, false);
+            if (primary is not null &&
+                TacticalDoctrineCatalog.Find(nation.TacticalDoctrine.Tracks[slot].Branch) is { } book)
+                yield return (book.Name, primary);
+            var extra = BookModifiers(nation, slot, true);
+            if (extra is not null &&
+                TacticalDoctrineCatalog.Find(nation.TacticalDoctrine.Tracks[slot].Companion.Branch) is { } other)
+                yield return (other.Name, extra);
         }
     }
 }

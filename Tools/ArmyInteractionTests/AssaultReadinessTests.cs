@@ -282,8 +282,14 @@ static class AssaultReadinessTests
         // for its new tables (0xDA9F63EBAEB9AEA7) and left this copy behind; same fixture, same value.
         // 2 November: the navy feature registers MergeFleetsCommand and SplitFleetCommand
         // (FleetGroups); the hashed command table moves 0xDA9F63EBAEB9AEA7 -> 0xD2110AF9B5F9FA1A.
-        Check(actual == 0xD2110AF9B5F9FA1AUL,
+        // 10 November: the navy feature binds SeaLiftCommand (SeaLift): 0xD2110AF9B5F9FA1A ->
+        // 0x2158CC78B911DB8A, and removing exactly that binding restores the old value below.
+        Check(actual == 0x2158CC78B911DB8AUL,
             $"default assault floors preserve the current catalogue golden fingerprint (got 0x{actual:X16})");
+        c.Defines.FeatureCommands.Remove("SeaLiftCommand");
+        var beforeSeaLift = CampaignFingerprint.Of(c);
+        Check(beforeSeaLift == 0xD2110AF9B5F9FA1AUL,
+            $"and without the SeaLiftCommand binding it is the previous golden (got 0x{beforeSeaLift:X16})");
         // The older goldens below predate the fleet formation commands.
         c.Defines.FeatureCommands.Remove("MergeFleetsCommand");
         c.Defines.FeatureCommands.Remove("SplitFleetCommand");

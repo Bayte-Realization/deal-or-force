@@ -47,7 +47,7 @@ public static partial class FlagCatalog
 
     private static void AddRegimeFlags(Campaign c, Nation n, List<string> names)
     {
-        if (n.Movement is not null || !string.IsNullOrEmpty(n.FormedNationId) ||
+        if (!KeepsNationalIdentity(n) || !string.IsNullOrEmpty(n.FormedNationId) ||
             !RegimeFlags.TryGetValue(Slug(n.Tag), out var rules)) return;
         foreach (var rule in rules)
             if (rule.Requires.All(term => term.Value.Contains(ValueOf(term.Key, c, n), StringComparer.OrdinalIgnoreCase)))

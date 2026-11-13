@@ -1,0 +1,11 @@
+// Sending formations across the sea by one order (SeaLift).
+{
+  "No formation free to go by sea.": "No formation free to go by sea.",
+  "No coast near there that our formations may land on.": "No coast near there that our formations may land on.",
+  "No port of ours on that sea that these formations can march to.": "No port of ours on that sea that these formations can march to.",
+  "No free fleet of ours on that sea.": "No free fleet of ours on that sea.",
+  "No free fleet can carry {0:0.#} divisions; the largest carries {1:0.#}. Send fewer, or merge fleets.": "No free fleet can carry {0:0.#} divisions; the largest carries {1:0.#}. Send fewer, or merge fleets.",
+  "The fleet cannot reach that port by sea.": "The fleet cannot reach that port by sea.",
+  "By sea: {0:N0} formation(s) march to {1}, where {2} takes them aboard and lands them at {3}.": "By sea: {0:N0} formation(s) march to {1}, where {2} takes them aboard and lands them at {3}.",
+  "Not by sea either:": "Not by sea either:"
+}

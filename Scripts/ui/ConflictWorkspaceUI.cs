@@ -131,14 +131,14 @@ public partial class DealOrForceGame
         var query = _conflictSearch.Text.Trim();
         var found = entries.Where(e => query.Length == 0 || e.Search.Contains(query, StringComparison.OrdinalIgnoreCase) ||
             e.Detail.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
-        var pageCount = Math.Max(1, (found.Count + ConflictPageSize - 1) / ConflictPageSize);
-        _conflictListPage = Math.Clamp(_conflictListPage, 0, pageCount - 1);
-        var visible = found.Skip(_conflictListPage * ConflictPageSize).Take(ConflictPageSize).ToList();
+        var slice = Rules.CatalogueWindow.Plan(found.Count, ConflictPageSize, _conflictListPage);
+        _conflictListPage = slice.Page;
+        var visible = found.GetRange(slice.Start, slice.Count);
         RenderConflictEntries(visible, query.Length > 0 ? "No matching conflicts. Try a country name or tag." :
             _conflictTab == 0 ? "The world is calm." : _conflictTab == 1 ? "Nobody is at war." : "You have no active standoffs, wars or war support.");
-        _conflictPrevious.Disabled = _conflictListPage == 0;
-        _conflictNext.Disabled = _conflictListPage + 1 >= pageCount;
-        _conflictPageReadout.Text = Loc.Format("{0} results · page {1}/{2}", found.Count, _conflictListPage + 1, pageCount);
+        _conflictPrevious.Disabled = slice.Page == 0;
+        _conflictNext.Disabled = slice.Page + 1 >= slice.PageCount;
+        _conflictPageReadout.Text = Loc.Format("{0} results · page {1}/{2}", found.Count, slice.Page + 1, slice.PageCount);
     }
 
     private void RenderConflictEntries(IReadOnlyList<ConflictEntry> visible, string emptyMessage)

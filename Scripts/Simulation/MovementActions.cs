@@ -21,7 +21,7 @@ public sealed class MovementActionCommand : ICampaignCommand
         if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         if (nation?.Movement is null) return;
-        if (MovementActions.Refusal(campaign, nation, Action, StateMapIndex, TargetNationId).Length > 0) return;
+        if (!MovementActions.CanDo(campaign, nation, Action, StateMapIndex, TargetNationId)) return;
         MovementActions.Do(campaign, nation, Action, StateMapIndex, TargetNationId);
     }
 }
@@ -57,7 +57,13 @@ public static class MovementActions
         new("march", "March on the capital", "Fill the streets of a capital whose region follows it. A weak government falls - a political movement takes power, a national one wins the hearing it marched for. A strong one breaks the march up and the movement loses its organisers.", false, false),
     };
 
-    public static Kind Of(string id) => Kinds.FirstOrDefault(kind => string.Equals(kind.Id, id, StringComparison.OrdinalIgnoreCase));
+    public static Kind Of(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return null;
+        for (var i = 0; i < Kinds.Count; i++)
+            if (string.Equals(Kinds[i].Id, id, StringComparison.OrdinalIgnoreCase)) return Kinds[i];
+        return null;
+    }
 
     /// <summary>The actions this movement has: the common ones and its traits' own.</summary>
     public static IEnumerable<Kind> For(Nation nation, Campaign campaign = null)
@@ -101,7 +107,7 @@ public static class MovementActions
     private static float SizeOf(Campaign campaign, int stateMapIndex)
     {
         if (stateMapIndex <= 0) return 1f;
-        var region = campaign.States.Find(state => state.MapIndex == stateMapIndex);
+        var region = campaign.StateByMapIndex(stateMapIndex);
         return region is null ? 1f : MathF.Max(0.3f, MathF.Sqrt(region.Population / 1_000_000f));
     }
 
@@ -139,127 +145,155 @@ public static class MovementActions
         _ => defines.MovementTraitActionDays
     };
 
+    /// <summary>True when this action may be taken now, without building an explanation message.</summary>
+    internal static bool CanDo(Campaign campaign, Nation nation, string action, int stateMapIndex, int targetNationId, float? knownMomentum = null) =>
+        CheckRefusal(campaign, nation, action, stateMapIndex, targetNationId, knownMomentum, explain: false).Length == 0;
+
     /// <summary>Why this cannot be done now; empty when it can.</summary>
-    public static string Refusal(Campaign campaign, Nation nation, string action, int stateMapIndex, int targetNationId, float? knownMomentum = null)
+    public static string Refusal(Campaign campaign, Nation nation, string action, int stateMapIndex, int targetNationId, float? knownMomentum = null) =>
+        CheckRefusal(campaign, nation, action, stateMapIndex, targetNationId, knownMomentum, explain: true);
+
+    private static string CheckRefusal(Campaign campaign, Nation nation, string action, int stateMapIndex, int targetNationId, float? knownMomentum, bool explain)
     {
         var state = nation?.Movement;
         var definition = Movements.DefinitionOf(nation);
         var kind = Of(action);
-        if (state is null || definition is null || kind is null) return Loc.Get("Only a movement can do this.");
-        if (state.Dissolved) return Loc.Get("The movement is no more.");
+        if (state is null || definition is null || kind is null) return explain ? Loc.Get("Only a movement can do this.") : "-";
+        if (state.Dissolved) return explain ? Loc.Get("The movement is no more.") : "-";
         if (action == "rise" && !MovementMethods.WillRise(campaign, nation, definition))
-            return Loc.Get(definition.Has("for_hire") ? "This company takes contracts, not territory." :
-                "The movement has not taken up arms.");
-        if (kind.Trait is not null && !definition.Has(kind.Trait)) return Loc.Get("This movement does not do that.");
+            return explain
+                ? Loc.Get(definition.Has("for_hire") ? "This company takes contracts, not territory." : "The movement has not taken up arms.")
+                : "-";
+        if (kind.Trait is not null && !definition.Has(kind.Trait)) return explain ? Loc.Get("This movement does not do that.") : "-";
         var defines = campaign.Defines;
         // Most actions here are country-wide. Looking up a region and a country before
         // checking whether the action needs either made every march/strike scan all 1,842
         // regions for MapIndex -1 and then discard the answer. Ask only when needed.
-        var region = kind.NeedsRegion ? campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex) : null;
+        var region = kind.NeedsRegion ? campaign.StateByMapIndex(stateMapIndex) : null;
         var target = kind.NeedsNation ? campaign.NationById(targetNationId) : null;
-        if (kind.NeedsRegion && region is null) return Loc.Get("Choose a region first.");
-        if (kind.NeedsNation && target is null) return Loc.Get("Choose a country first.");
+        if (kind.NeedsRegion && region is null) return explain ? Loc.Get("Choose a region first.") : "-";
+        if (kind.NeedsNation && target is null) return explain ? Loc.Get("Choose a country first.") : "-";
 
-        var ready = state.ReadyOnDay.GetValueOrDefault(CooldownKey(action, stateMapIndex, targetNationId), 0);
-        if (campaign.ElapsedDays < ready) return Loc.Format("Not again for {0} days.", ready - campaign.ElapsedDays);
+        var ready = state.ReadyOnDay.Count > 0
+            ? state.ReadyOnDay.GetValueOrDefault(CooldownKey(action, stateMapIndex, targetNationId), 0)
+            : 0;
+        if (campaign.ElapsedDays < ready) return explain ? Loc.Format("Not again for {0} days.", ready - campaign.ElapsedDays) : "-";
         var cost = Cost(campaign, nation, action, stateMapIndex);
-        if (nation.Treasury < cost) return Loc.Format("It needs {0} and has {1}.", Fmt.Money(cost), Fmt.Money(nation.Treasury));
+        if (nation.Treasury < cost) return explain ? Loc.Format("It needs {0} and has {1}.", Fmt.Money(cost), Fmt.Money(nation.Treasury)) : "-";
         if (state.MovingToStateMapIndex >= 0 && action is not ("fundraise" or "recognition" or "appeal" or "lobby"))
-            return Loc.Get("The headquarters is on the move.");
+            return explain ? Loc.Get("The headquarters is on the move.") : "-";
 
         switch (action)
         {
             case "strike":
             case "march":
-                return MovementPower.Refusal(campaign, nation, action, knownMomentum);
-            case "referendum": return CivilIndependence.Refusal(campaign, nation, region);
-            case "restore": return Restoration.Refusal(campaign, nation, region);
+                return explain
+                    ? MovementPower.Refusal(campaign, nation, action, knownMomentum)
+                    : (MovementPower.CanDo(campaign, nation, action, knownMomentum) ? "" : "-");
+            case "referendum":
+            {
+                var r = CivilIndependence.Refusal(campaign, nation, region);
+                return r.Length == 0 ? "" : (explain ? r : "-");
+            }
+            case "restore":
+            {
+                var r = Restoration.Refusal(campaign, nation, region);
+                return r.Length == 0 ? "" : (explain ? r : "-");
+            }
             case "move":
             {
-                if (!state.Landless) return Loc.Get("A country with ground of its own is governed from its capital.");
-                if (region.MapIndex == state.HeadquartersStateMapIndex) return Loc.Get("The headquarters is already here.");
-                var host = campaign.Nations.Find(candidate => candidate.MapIndex == region.NationMapIndex);
-                if (host is null) return Loc.Get("Nobody governs that ground.");
-                if (host.Movement is not null) return Loc.Get("Not in another movement's ground.");
-                if (CampaignDiplomacy.AtWar(campaign, host.Id, nation.Id)) return Loc.Format("It is at war with {0}.", host.DisplayName);
+                if (!state.Landless) return explain ? Loc.Get("A country with ground of its own is governed from its capital.") : "-";
+                if (region.MapIndex == state.HeadquartersStateMapIndex) return explain ? Loc.Get("The headquarters is already here.") : "-";
+                var host = campaign.NationByMapIndex(region.NationMapIndex);
+                if (host is null) return explain ? Loc.Get("Nobody governs that ground.") : "-";
+                if (host.Movement is not null) return explain ? Loc.Get("Not in another movement's ground.") : "-";
+                if (CampaignDiplomacy.AtWar(campaign, host.Id, nation.Id)) return explain ? Loc.Format("It is at war with {0}.", host.DisplayName) : "-";
                 var opinion = CampaignDiplomacy.Peek(campaign, host.Id, nation.Id)?.Opinion ?? 0f;
-                if (state.DesignatedBy.Contains(host.Id)) return Loc.Format("{0} lists it as a terrorist organisation.", host.DisplayName);
+                if (state.DesignatedBy.Contains(host.Id)) return explain ? Loc.Format("{0} lists it as a terrorist organisation.", host.DisplayName) : "-";
                 if (opinion < -25f && !definition.Sponsors.ContainsKey(host.Tag) && !state.InvitedBy.Contains(host.Id))
-                    return Loc.Format("{0} will not have it ({1:0} opinion).", host.DisplayName, opinion);
+                    return explain ? Loc.Format("{0} will not have it ({1:0} opinion).", host.DisplayName, opinion) : "-";
                 return "";
             }
             case "campaign":
             case "services":
             case "hospital":
             {
-                var own = MovementRules.PeopleOf(region, definition, out var faithful);
-                if (action != "hospital" && own + faithful <= 0) return Loc.Get("None of its peoples live there.");
+                if (action != "hospital")
+                {
+                    var own = MovementRules.PeopleOf(region, definition, out var faithful);
+                    if (own + faithful <= 0) return explain ? Loc.Get("None of its peoples live there.") : "-";
+                }
                 if (!MovementReach.CanOperate(campaign, nation, region, definition))
-                    return Loc.Get("There is no local network or permission for this operation.");
+                    return explain ? Loc.Get("There is no local network or permission for this operation.") : "-";
                 if (action == "hospital" && region.WarDamage < .02f && region.StandardOfLiving >= .8f)
-                    return Loc.Get("This region has no urgent need for a field hospital.");
+                    return explain ? Loc.Get("This region has no urgent need for a field hospital.") : "-";
                 return "";
             }
             case "recognition":
             {
-                if (target.Id == nation.Id || target.Movement is not null) return Loc.Get("Only a country can recognise it.");
-                if (state.RecognisedBy.Contains(target.Id)) return Loc.Format("{0} already recognises it.", target.DisplayName);
-                if (state.DesignatedBy.Contains(target.Id)) return Loc.Format("{0} lists it as a terrorist organisation.", target.DisplayName);
+                if (target.Id == nation.Id || target.Movement is not null) return explain ? Loc.Get("Only a country can recognise it.") : "-";
+                if (state.RecognisedBy.Contains(target.Id)) return explain ? Loc.Format("{0} already recognises it.", target.DisplayName) : "-";
+                if (state.DesignatedBy.Contains(target.Id)) return explain ? Loc.Format("{0} lists it as a terrorist organisation.", target.DisplayName) : "-";
                 // The country whose ground it claims, and that country's allies, will not.
                 foreach (var claimed in definition.Homeland)
                 {
                     var claimedRegion = Movements.StateById(campaign, claimed);
-                    var holder = claimedRegion is null ? null : campaign.Nations.Find(n => n.MapIndex == claimedRegion.NationMapIndex);
+                    var holder = claimedRegion is null ? null : campaign.NationByMapIndex(claimedRegion.NationMapIndex);
                     if (holder is null || holder.Id == nation.Id) continue;
                     if (holder.Id == target.Id || CampaignDiplomacy.Peek(campaign, target.Id, holder.Id)?.Stance == DiplomaticStance.Allied)
-                        return Loc.Format("{0} will not recognise a claim on {1}'s ground.", target.DisplayName, holder.DisplayName);
+                        return explain ? Loc.Format("{0} will not recognise a claim on {1}'s ground.", target.DisplayName, holder.DisplayName) : "-";
                 }
                 return "";
             }
             case "rise":
             {
                 var recovery = RevoltRecovery.DaysLeft(campaign, MovementRules.OwnerOf(campaign, region), region);
-                if (recovery > 0) return Loc.Format("This region is recovering from reconquest: {0} days remain.", recovery);
-                if (region.NationMapIndex == nation.MapIndex) return Loc.Get("The region is already its own.");
+                if (recovery > 0) return explain ? Loc.Format("This region is recovering from reconquest: {0} days remain.", recovery) : "-";
+                if (region.NationMapIndex == nation.MapIndex) return explain ? Loc.Get("The region is already its own.") : "-";
                 if (!MovementReach.CanClaimTerritory(campaign, nation, region))
-                    return Loc.Get("Offices and foreign support do not grant a territorial mandate here.");
+                    return explain ? Loc.Get("Offices and foreign support do not grant a territorial mandate here.") : "-";
                 var support = state.Support.GetValueOrDefault(region.MapIndex);
                 if (!float.IsFinite(support) || !float.IsFinite(state.Cadres) || !float.IsFinite(state.Legitimacy) ||
                     !float.IsFinite(region.Stability) || !float.IsFinite(nation.Treasury))
-                    return Loc.Get("The campaign data is damaged, so this cannot be done.");
+                    return explain ? Loc.Get("The campaign data is damaged, so this cannot be done.") : "-";
                 if (!definition.Has("for_hire") && support < defines.MovementUprisingSupport)
-                    return Loc.Format("Support there is {0}; it takes {1}.", Fmt.Percent(support), Fmt.Percent(defines.MovementUprisingSupport));
+                    return explain ? Loc.Format("Support there is {0}; it takes {1}.", Fmt.Percent(support), Fmt.Percent(defines.MovementUprisingSupport)) : "-";
                 if (definition.Has("for_hire") && region.Stability > 0.35f)
-                    return Loc.Format("Stability there is {0}; a company only walks into a region that is falling apart.", Fmt.Percent(region.Stability));
+                    return explain ? Loc.Format("Stability there is {0}; a company only walks into a region that is falling apart.", Fmt.Percent(region.Stability)) : "-";
                 if (state.Cadres < defines.MovementUprisingCadres)
-                    return Loc.Format("It has {0} cadres; it takes {1}.", Fmt.People(state.Cadres), Fmt.People(defines.MovementUprisingCadres));
+                    return explain ? Loc.Format("It has {0} cadres; it takes {1}.", Fmt.People(state.Cadres), Fmt.People(defines.MovementUprisingCadres)) : "-";
                 return "";
             }
             case "infiltrate":
             {
-                if (region.NationMapIndex == nation.MapIndex) return Loc.Get("The region is already its own.");
-                if (state.Support.GetValueOrDefault(region.MapIndex) < 0.1f) return Loc.Get("Nobody there would hide them.");
+                if (region.NationMapIndex == nation.MapIndex) return explain ? Loc.Get("The region is already its own.") : "-";
+                if (state.Support.GetValueOrDefault(region.MapIndex) < 0.1f) return explain ? Loc.Get("Nobody there would hide them.") : "-";
                 if (state.Cadres < defines.MovementInfiltrateFighters * 0.5f)
-                    return Loc.Format("It has {0} cadres; it takes {1}.", Fmt.People(state.Cadres), Fmt.People(defines.MovementInfiltrateFighters * 0.5f));
-                if (state.Landless && state.HeadquartersStateMapIndex < 0) return Loc.Get("It has nowhere to send them from.");
+                    return explain ? Loc.Format("It has {0} cadres; it takes {1}.", Fmt.People(state.Cadres), Fmt.People(defines.MovementInfiltrateFighters * 0.5f)) : "-";
+                if (state.Landless && state.HeadquartersStateMapIndex < 0) return explain ? Loc.Get("It has nowhere to send them from.") : "-";
                 return "";
             }
             case "call_to_arms":
             {
-                if (region.NationMapIndex != nation.MapIndex) return Loc.Get("Only in a region it holds.");
-                if (state.Support.GetValueOrDefault(region.MapIndex) < 0.15f) return Loc.Get("Too few there would answer the call.");
+                if (region.NationMapIndex != nation.MapIndex) return explain ? Loc.Get("Only in a region it holds.") : "-";
+                if (state.Support.GetValueOrDefault(region.MapIndex) < 0.15f) return explain ? Loc.Get("Too few there would answer the call.") : "-";
                 if (state.Cadres < defines.MovementCallToArmsCadres)
-                    return Loc.Format("It has {0} cadres; it takes {1}.", Fmt.People(state.Cadres), Fmt.People(defines.MovementCallToArmsCadres));
+                    return explain ? Loc.Format("It has {0} cadres; it takes {1}.", Fmt.People(state.Cadres), Fmt.People(defines.MovementCallToArmsCadres)) : "-";
                 return "";
             }
             case "contract":
             {
-                if (target.Id == nation.Id || target.Movement is not null) return Loc.Get("Only a country can hire it.");
-                var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(target.Id));
-                if (!atWar) return Loc.Format("{0} is not at war and does not need it.", target.DisplayName);
+                if (target.Id == nation.Id || target.Movement is not null) return explain ? Loc.Get("Only a country can hire it.") : "-";
+                var atWar = false;
+                for (var i = 0; i < campaign.Wars.Count; i++)
+                {
+                    var war = campaign.Wars[i];
+                    if (!war.Ended && war.Involves(target.Id)) { atWar = true; break; }
+                }
+                if (!atWar) return explain ? Loc.Format("{0} is not at war and does not need it.", target.DisplayName) : "-";
                 if (CampaignDiplomacy.Get(campaign, target.Id, nation.Id).Opinion < 0f)
-                    return Loc.Format("{0} will not hire it.", target.DisplayName);
-                if (target.Treasury < 0.5f) return Loc.Format("{0} cannot pay.", target.DisplayName);
+                    return explain ? Loc.Format("{0} will not hire it.", target.DisplayName) : "-";
+                if (target.Treasury < 0.5f) return explain ? Loc.Format("{0} cannot pay.", target.DisplayName) : "-";
                 return "";
             }
         }
@@ -272,7 +306,7 @@ public static class MovementActions
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
         var defines = campaign.Defines;
-        var region = campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex);
+        var region = campaign.StateByMapIndex(stateMapIndex);
         var target = campaign.NationById(targetNationId);
         nation.Treasury -= Cost(campaign, nation, action, stateMapIndex);
         var cooldown = CooldownDays(defines, action);

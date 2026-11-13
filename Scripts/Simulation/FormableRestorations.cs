@@ -46,33 +46,146 @@ public static class FormableRestorations
 
     private static Campaign _cachedFor;
     private static int _cachedDay = int.MinValue;
-    private static int _cachedRevision = int.MinValue;
+    private static int _cachedOwnershipRevision = int.MinValue;
     private static int _cachedMovementRevision = int.MinValue;
     private static int _cachedNationCount = -1;
-    private static readonly List<FormableNation> Cached = new();
+    private static int _cachedFallenCount = -1;
+
+    /// <summary>Refilled while a world is rebuilt; never handed out - see <see cref="_published"/>.</summary>
+    private static readonly List<FormableNation> Building = new();
+    private static readonly HashSet<string> LivingTagScratch = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> FormedIdScratch = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<int, List<ScenarioState>> StatesByRegionScratch = new();
+    private static readonly Stack<List<ScenarioState>> StateListPool = new();
+    private static readonly HashSet<int> BrokenRegionsGateScratch = new();
+    private static readonly HashSet<int> SeenStatesGateScratch = new();
+    [ThreadStatic] private static HashSet<int> _brokenRegionsScratch;
+
+    /// <summary>
+    /// What callers actually get: the finished answer, as an array nobody can rewrite.
+    ///
+    /// The list used to be handed out live. Two things went wrong with that. A second thread
+    /// could read it while it was being refilled, and - worse, and true even on one thread - a
+    /// process can be running a host's world and a client's snapshot at once, and both shared
+    /// one list: whoever rebuilt it last decided what the other one was holding.
+    /// </summary>
+    private static FormableNation[] _published = Array.Empty<FormableNation>();
+
+    private static readonly object Gate = new();
 
     /// <summary>Every restoration open in this campaign today.</summary>
     public static IReadOnlyList<FormableNation> In(Campaign campaign)
     {
         if (campaign is null) return Array.Empty<FormableNation>();
-        if (ReferenceEquals(_cachedFor, campaign) && _cachedDay == campaign.ElapsedDays && _cachedRevision == campaign.MapRevision &&
-            _cachedMovementRevision == campaign.MovementRevision && _cachedNationCount == campaign.Nations.Count)
-            return Cached;
-        _cachedFor = campaign;
-        _cachedDay = campaign.ElapsedDays;
-        _cachedRevision = campaign.MapRevision;
-        _cachedMovementRevision = campaign.MovementRevision;
-        _cachedNationCount = campaign.Nations.Count;
-        Cached.Clear();
-        foreach (var gone in campaign.Nations)
+        lock (Gate)
         {
-            if (!Vanished(campaign, gone)) continue;
-            if (Restoration(campaign, gone) is { } definition) Cached.Add(definition);
+            if (ReferenceEquals(_cachedFor, campaign) && _cachedDay == campaign.ElapsedDays &&
+                _cachedOwnershipRevision == campaign.OwnershipRevision &&
+                _cachedMovementRevision == campaign.MovementRevision &&
+                _cachedNationCount == campaign.Nations.Count &&
+                _cachedFallenCount == campaign.Fallen.Count)
+                return _published;
+            _cachedFor = campaign;
+            _cachedDay = campaign.ElapsedDays;
+            _cachedOwnershipRevision = campaign.OwnershipRevision;
+            _cachedMovementRevision = campaign.MovementRevision;
+            _cachedNationCount = campaign.Nations.Count;
+            _cachedFallenCount = campaign.Fallen.Count;
+            Building.Clear();
+
+            LivingTagScratch.Clear();
+            FormedIdScratch.Clear();
+            var nations = campaign.Nations;
+            for (var i = 0; i < nations.Count; i++)
+            {
+                var other = nations[i];
+                if (!string.IsNullOrEmpty(other.FormedNationId)) FormedIdScratch.Add(other.FormedNationId);
+                if (campaign.HasOwnedLand(other) || other.Movement is { Exile: true, Dissolved: false })
+                {
+                    if (!string.IsNullOrEmpty(other.Tag)) LivingTagScratch.Add(other.Tag);
+                    if (RestoredTag(other.FormedNationId) is { } restored) LivingTagScratch.Add(restored);
+                }
+            }
+
+            for (var i = 0; i < nations.Count; i++)
+            {
+                var gone = nations[i];
+                if (string.IsNullOrEmpty(gone.Tag) || Authored(campaign, gone.Tag).Length == 0 ||
+                    LivingTagScratch.Contains(gone.Tag)) continue;
+                if (Restoration(campaign, gone) is { } definition) Building.Add(definition);
+            }
+
+            if (campaign.ProvinceMap is not null)
+            {
+                foreach (var list in StatesByRegionScratch.Values)
+                {
+                    list.Clear();
+                    StateListPool.Push(list);
+                }
+                StatesByRegionScratch.Clear();
+                var states = campaign.States;
+                for (var i = 0; i < states.Count; i++)
+                {
+                    var s = states[i];
+                    if (!StatesByRegionScratch.TryGetValue(s.MapIndex, out var list))
+                        StatesByRegionScratch[s.MapIndex] = list = StateListPool.Count > 0 ? StateListPool.Pop() : new List<ScenarioState>();
+                    list.Add(s);
+                    if (s.ParentMapIndex > 0 && s.ParentMapIndex != s.MapIndex)
+                    {
+                        if (!StatesByRegionScratch.TryGetValue(s.ParentMapIndex, out var plist))
+                            StatesByRegionScratch[s.ParentMapIndex] = plist = StateListPool.Count > 0 ? StateListPool.Pop() : new List<ScenarioState>();
+                        plist.Add(s);
+                    }
+                }
+
+                var toState = campaign.ProvinceMap.ProvinceToState;
+                var rumpShare = (double)campaign.Defines.ReunionRumpShare;
+                for (var i = 0; i < nations.Count; i++)
+                {
+                    var broken = nations[i];
+                    if (broken.Movement is not null || string.IsNullOrEmpty(broken.Tag)) continue;
+                    if (!campaign.HasOwnedLand(broken)) continue;
+                    if (ContainsReunionFormedId(FormedIdScratch, broken.Tag)) continue;
+                    var authored = Authored(campaign, broken.Tag);
+                    if (authored.Length == 0) continue;
+                    BrokenRegionsGateScratch.Clear();
+                    for (var pi = 0; pi < authored.Length; pi++)
+                    {
+                        var province = authored[pi];
+                        if (province > 0 && province < toState.Length) BrokenRegionsGateScratch.Add(toState[province]);
+                    }
+                    SeenStatesGateScratch.Clear();
+                    long all = 0, own = 0;
+                    foreach (var regionId in BrokenRegionsGateScratch)
+                    {
+                        if (!StatesByRegionScratch.TryGetValue(regionId, out var matched)) continue;
+                        for (var si = 0; si < matched.Count; si++)
+                        {
+                            var state = matched[si];
+                            if (!SeenStatesGateScratch.Add(state.MapIndex)) continue;
+                            all += Math.Max(0L, state.Population);
+                            if (state.NationMapIndex == broken.MapIndex) own += Math.Max(0L, state.Population);
+                        }
+                    }
+                    if (all > 0 && own < all * rumpShare && Restoration(campaign, broken, reunion: true) is { } reunion)
+                        Building.Add(reunion);
+                }
+            }
+            _published = Building.ToArray();
+            return _published;
         }
-        foreach (var broken in campaign.Nations)
-            if (BrokenApart(campaign, broken) && Restoration(campaign, broken, reunion: true) is { } reunion)
-                Cached.Add(reunion);
-        return Cached;
+    }
+
+    private static bool ContainsReunionFormedId(HashSet<string> formedIds, string tag)
+    {
+        foreach (var id in formedIds)
+        {
+            if (id.Length == ReunionPrefix.Length + tag.Length &&
+                id.StartsWith(ReunionPrefix, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(id.Substring(ReunionPrefix.Length), tag, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>One restoration by id, if that country has vanished.</summary>
@@ -106,15 +219,39 @@ public static class FormableRestorations
     /// <summary>Historical proclamations stay in the ledger, not as an eternal veto.
     /// Land or a surviving government in exile keeps the identity alive. Check the restored
     /// tag too, so authored restoration ids cannot create a duplicate of a dynamic one.</summary>
-    public static bool HasLivingIdentity(Campaign campaign, string tag) =>
-        campaign is not null && !string.IsNullOrEmpty(tag) && campaign.Nations.Any(other =>
-            (string.Equals(other.Tag, tag, StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(RestoredTag(other.FormedNationId), tag, StringComparison.OrdinalIgnoreCase)) &&
-            (campaign.HasOwnedLand(other) || other.Movement is { Exile: true, Dissolved: false }));
+    public static bool HasLivingIdentity(Campaign campaign, string tag)
+    {
+        if (campaign is null || string.IsNullOrEmpty(tag)) return false;
+        var nations = campaign.Nations;
+        for (var i = 0; i < nations.Count; i++)
+        {
+            var other = nations[i];
+            if ((string.Equals(other.Tag, tag, StringComparison.OrdinalIgnoreCase) ||
+                 MatchesRestoredTag(other.FormedNationId, tag)) &&
+                (campaign.HasOwnedLand(other) || other.Movement is { Exile: true, Dissolved: false }))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool MatchesRestoredTag(string formableId, string tag)
+    {
+        if (string.IsNullOrEmpty(formableId)) return false;
+        if (FormableNations.Find(formableId) is { Restores.Length: > 0 } authored)
+            return string.Equals(authored.Restores, tag, StringComparison.OrdinalIgnoreCase);
+        if (formableId.StartsWith(ReunionPrefix, StringComparison.OrdinalIgnoreCase))
+            return formableId.AsSpan(ReunionPrefix.Length).Equals(tag.AsSpan(), StringComparison.OrdinalIgnoreCase);
+        if (formableId.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
+            return formableId.AsSpan(Prefix.Length).Equals(tag.AsSpan(), StringComparison.OrdinalIgnoreCase);
+        return false;
+    }
 
     internal static void Invalidate(Campaign campaign)
     {
-        if (ReferenceEquals(_cachedFor, campaign)) _cachedFor = null;
+        lock (Gate)
+        {
+            if (ReferenceEquals(_cachedFor, campaign)) _cachedFor = null;
+        }
     }
 
     /// <summary>
@@ -126,17 +263,31 @@ public static class FormableRestorations
     {
         if (campaign?.ProvinceMap is null || nation is null || nation.Movement is not null || string.IsNullOrEmpty(nation.Tag)) return false;
         if (!campaign.HasOwnedLand(nation)) return false;
-        var id = ReunionPrefix + nation.Tag.ToLowerInvariant();
-        if (campaign.Nations.Any(other => string.Equals(other.FormedNationId, id, StringComparison.OrdinalIgnoreCase))) return false;
+        var nations = campaign.Nations;
+        for (var i = 0; i < nations.Count; i++)
+        {
+            var formedId = nations[i].FormedNationId;
+            if (!string.IsNullOrEmpty(formedId) &&
+                formedId.Length == ReunionPrefix.Length + nation.Tag.Length &&
+                formedId.StartsWith(ReunionPrefix, StringComparison.OrdinalIgnoreCase) &&
+                formedId.AsSpan(ReunionPrefix.Length).Equals(nation.Tag.AsSpan(), StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
         var authored = Authored(campaign, nation.Tag);
         if (authored.Length == 0) return false;
         var toState = campaign.ProvinceMap.ProvinceToState;
-        var regions = new HashSet<int>();
-        foreach (var province in authored)
-            if (province > 0 && province < toState.Length) regions.Add(toState[province]);
-        long all = 0, own = 0;
-        foreach (var state in campaign.States)
+        var regions = _brokenRegionsScratch ??= new HashSet<int>();
+        regions.Clear();
+        for (var i = 0; i < authored.Length; i++)
         {
+            var province = authored[i];
+            if (province > 0 && province < toState.Length) regions.Add(toState[province]);
+        }
+        long all = 0, own = 0;
+        var states = campaign.States;
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
             if (!regions.Contains(state.MapIndex) && !regions.Contains(state.ParentMapIndex)) continue;
             all += Math.Max(0L, state.Population);
             if (state.NationMapIndex == nation.MapIndex) own += Math.Max(0L, state.Population);
@@ -190,6 +341,7 @@ public static class FormableRestorations
                 string.Equals(nation.Color, oldCountry.Color, StringComparison.OrdinalIgnoreCase)) nation.Color = colour;
             nation.FormedNationId = "";
             nation.FormedNationDay = -1;
+            Invalidate(campaign);
             nation.FormedNationHistory.Remove(id);
             nation.Name = name;
             nation.NameProclaimed = false;

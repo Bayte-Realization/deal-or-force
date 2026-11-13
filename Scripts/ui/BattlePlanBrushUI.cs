@@ -344,7 +344,7 @@ public partial class DealOrForceGame
                 armies.Count(a => a.OrderProvinceId > 0 && a.ProvinceId == a.OrderProvinceId), armies.Length);
         var line = OffensivePlanning.Source(_campaign, armies);
         if (line is not { Kind: FrontLineKind.Offensive } || line.Objectives.Count == 0)
-            return Tr("Front: LMB whole border / RMB section. Defend: RMB line on your land. Attack: RMB destination. Shift+RMB adds a phase; Alt+RMB redraws the active one.");
+            return Tr("Pick a tool, then drag with the right button on the map. Hover a tool for what it does.");
         var reached = armies.Count(a => line.Objectives.GetValueOrDefault(a.Id, -1) == a.ProvinceId);
         var executing = armies.Count(a => a.PlanActive);
         var state = Tr(line.OffensiveRegroupDay >= 0 ? "Regrouping"

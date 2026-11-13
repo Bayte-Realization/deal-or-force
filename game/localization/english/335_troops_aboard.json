@@ -1,0 +1,6 @@
+// Troops aboard ships (FleetPanelUI, GlobeSeaLift).
+{
+  "No division of yours is standing at {0}, where the fleet lies. March them there - or select them and right-click across the sea: they will board by themselves.": "No division of yours is standing at {0}, where the fleet lies. March them there - or select them and right-click across the sea: they will board by themselves.",
+  "The fleet is at sea: bring it into port where your divisions stand, or select the divisions and right-click across the sea.": "The fleet is at sea: bring it into port where your divisions stand, or select the divisions and right-click across the sea.",
+  "⚓ {0:N0} aboard": "⚓ {0:N0} aboard"
+}

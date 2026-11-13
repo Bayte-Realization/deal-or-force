@@ -48,13 +48,22 @@ public sealed partial class GlobePresentation
     /// samples is the default because it is the difference between a planet and a jagged circle;
     /// two and off exist for machines where the fill rate matters more than the outline.
     /// </summary>
-    private static Viewport.Msaa MapAntialiasing() =>
-        (Simulation.SettingsCatalog.Chosen("map_antialiasing") ?? "").Trim().ToLowerInvariant() switch
+    private static Viewport.Msaa MapAntialiasing(Simulation.QualityProfile profile = null)
+    {
+        var chosen = (Simulation.SettingsCatalog.Chosen("map_antialiasing") ?? "").Trim().ToLowerInvariant();
+        if (chosen is "off" or "0" or "none") return Viewport.Msaa.Disabled;
+        if (chosen is "2x" or "2")
+            return profile is { EffectiveMsaaSamples: <= 0 } ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa2X;
+        if (chosen is "4x" or "4")
+            return profile is { EffectiveMsaaSamples: <= 0 } ? Viewport.Msaa.Msaa2X : Viewport.Msaa.Msaa4X;
+        var samples = profile?.EffectiveMsaaSamples ?? 2;
+        return samples switch
         {
-            "off" or "0" or "none" => Viewport.Msaa.Disabled,
-            "2x" or "2" => Viewport.Msaa.Msaa2X,
+            <= 0 => Viewport.Msaa.Disabled,
+            <= 2 => Viewport.Msaa.Msaa2X,
             _ => Viewport.Msaa.Msaa4X
         };
+    }
 
     private void ConfigureGlobeGrading()
     {
@@ -70,7 +79,9 @@ public sealed partial class GlobePresentation
         {
             _daySun.LightAngularDistance = 0.9f;
             _daySun.ShadowBias = 0.02f;
-            _daySun.DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel4Splits;
+            _daySun.DirectionalShadowMode = _quality.RenderScale >= 0.99f
+                ? DirectionalLight3D.ShadowMode.Parallel4Splits
+                : DirectionalLight3D.ShadowMode.Parallel2Splits;
             _daySun.DirectionalShadowMaxDistance = 18f;
         }
     }

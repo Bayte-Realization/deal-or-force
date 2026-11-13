@@ -250,9 +250,11 @@ public static class StabilityCore
         // of other people's wars.
         var atWar = false;
         var stake = 0f;
-        foreach (var war in campaign.Wars)
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
-            if (war.Ended || !war.Involves(nation.Id)) continue;
+            var war = live[index];
+            if (!war.Involves(nation.Id)) continue;
             atWar = true;
             stake = Math.Max(stake, war.AttackerId == nation.Id || war.DefenderId == nation.Id ? 1f : M.Clamp01(weights.WarAllyShare));
         }

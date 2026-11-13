@@ -239,6 +239,11 @@ public partial class DealOrForceGame
         Add("build", "ECONOMY", "build agriculture [3]",
             "Queue building work in the selected region, without waiting for the money.",
             ConsoleBuild, "construct");
+        Add("instabuild", "ECONOMY", "instabuild [on|off] [TAG]",
+            "Finish construction at once: whatever a country builds - through the ordinary build menu - " +
+            "is standing the next day, free. No argument toggles it for your country.", ConsoleInstabuild, "instantbuild");
+        Add("research", "ECONOMY", "research [ID|all] [TAG]",
+            "Learn a technology at once, or every one. No argument lists what is still unknown.", ConsoleResearch, "tech");
         Add("buildings", "ECONOMY", "buildings [region]",
             "What stands in a region, and what is being built there.", ConsoleBuildings);
 
@@ -1196,6 +1201,51 @@ public partial class DealOrForceGame
                 IssuerId = _campaign.Player.Id, StateMapIndex = state.MapIndex, Building = kind
             });
         return $"Queued {count} × {kind} in {EscapeBb(state.Name)}. It starts on the next step.";
+    }
+
+    private string ConsoleInstabuild(string argument)
+    {
+        if (_campaign?.Player is null) return "No campaign.";
+        var words = ConsoleWords(argument);
+        var nation = _campaign.Player;
+        bool? wanted = null;
+        foreach (var word in words)
+        {
+            if (word.Equals("on", StringComparison.OrdinalIgnoreCase) || word == "1") wanted = true;
+            else if (word.Equals("off", StringComparison.OrdinalIgnoreCase) || word == "0") wanted = false;
+            else if (ConsoleNation(word) is { } named) nation = named;
+            else return $"No country called {EscapeBb(word)}.";
+        }
+        nation.InstantConstruction = wanted ?? !nation.InstantConstruction;
+        _campaign.MarkStrategicChange();
+        var underway = _campaign.Construction.Count(project => project.NationId == nation.Id);
+        return nation.InstantConstruction
+            ? $"Instant construction ON for {EscapeBb(nation.Name)}: {underway} project(s) under way finish on the next day, and so will anything queued from the build menu."
+            : $"Instant construction OFF for {EscapeBb(nation.Name)}.";
+    }
+
+    private string ConsoleResearch(string argument)
+    {
+        if (_campaign?.Player is null) return "No campaign.";
+        var words = ConsoleWords(argument);
+        var nation = words.Length > 1 ? ConsoleNation(words[1]) : _campaign.Player;
+        if (nation is null) return "No such country.";
+        var unknown = TechnologyCatalog.All.Where(t => !nation.Technologies.Contains(t.Id)).ToList();
+        if (words.Length == 0)
+            return unknown.Count == 0 ? "Everything is known."
+                : $"{unknown.Count} unknown: " + string.Join(", ", unknown.Take(40).Select(t => t.Id)) + (unknown.Count > 40 ? " ..." : "");
+        var learned = words[0].Equals("all", StringComparison.OrdinalIgnoreCase)
+            ? unknown
+            : unknown.Where(t => t.Id.Equals(words[0], StringComparison.OrdinalIgnoreCase)).ToList();
+        if (learned.Count == 0) return $"No unknown technology called {EscapeBb(words[0])}. 'research' lists them.";
+        foreach (var technology in learned)
+        {
+            nation.Technologies.Add(technology.Id);
+            nation.ResearchProgress.Remove(technology.Id);
+            if (nation.CurrentResearch == technology.Id) nation.CurrentResearch = "";
+        }
+        _campaign.MarkStrategicChange();
+        return $"{EscapeBb(nation.Name)} learned {learned.Count} technolog{(learned.Count == 1 ? "y" : "ies")}.";
     }
 
     private string ConsoleBuildings(string argument)

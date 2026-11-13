@@ -952,7 +952,19 @@ public static class EconomySystem
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(EconomySystem))) yield break;
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) yield break;
-        foreach (var _ in MarketSystem.TickStages(campaign)) yield return 0;
+        // The market pass had no top-level scope of its own: a hundred and fifty milliseconds
+        // of a late week vanished into the day's unmeasured remainder instead of naming the
+        // system that spent them.
+        using (var market = MarketSystem.TickStages(campaign).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("market")) more = market.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
         for (var index = 0; index < campaign.Nations.Count; index++)
         {
             if (index > 0 && index % EconomyStageCountries == 0) yield return 0;
@@ -970,7 +982,12 @@ public static class EconomySystem
                 nation.WeeklyTaxIncome = nation.WeeklyExpenses = nation.WeeklyBalance = 0;
                 continue;
             }
-            var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
+            // A country at war is one in a war still being fought. An ended war stays
+            // on the record and does not keep this week's budget or drift.
+            var atWar = false;
+            var live = Warfare.LiveWars(campaign);
+            for (var warIndex = 0; warIndex < live.Count; warIndex++)
+                if (live[warIndex].Involves(nation.Id)) { atWar = true; break; }
             SovereignFinance.Prepare(campaign, nation);
             var weeklyOutput = nation.Gdp / 52f;
             // GDP is total economic activity, not the taxable budget base. Only a
@@ -1011,6 +1028,8 @@ public static class EconomySystem
                 if (line.Charge == BudgetBasis.Debt && line.Side == BudgetSide.Expense)
                     interest += BudgetCore.Amount(nation, line, weeklyOutput, atWar);
             SovereignFinance.Settle(campaign, nation, nation.WeeklyBalance, interest);
+            if (!nation.IsHuman || Delegation.Holds(nation, Delegation.Budget))
+                SovereignFinance.ManageLiquidity(campaign, nation);
 
             // What the week did to prices, before what prices do to the week. Placed here
             // on purpose: the budget has been worked out and paid, so the deficit inflation
@@ -1079,31 +1098,17 @@ public static class EconomySystem
             using var stateScope = SimProfiler.Measure("eco:states");
             // Each region's week reads the country and writes only that region - its households,
             // its births and deaths, its faiths, its living and its anger - so a large country's
-            // regions are worked side by side, to the same bytes in any order. The control tally
-            // the anger reads is built first, here; a small country is not worth the hand-off.
+            // regions are worked side by side, to the same bytes in any order.
             var welfareRadicalism = budget.Radicalism;
             var focusRadicalism = cabinet.Radicalism + government.Radicalism + ideology.Radicalism;
-            void Week(ScenarioState state)
-            {
-                if (campaign.Defines.HouseholdDynamicsEnabled) HouseholdEconomy.Review(campaign, nation, state, annualGrowth);
-                else
-                {
-                    var hospital = state.Buildings.GetValueOrDefault(BuildingKind.Hospital);
-                    var weeklyGrowth = (0.0035f + (state.StandardOfLiving - .5f) * .006f + hospital * .0005f) / 52f;
-                    AdjustStatePopulation(state, (long)Math.Round(state.Population * weeklyGrowth));
-                }
-                state.StandardOfLiving = M.Lerp(state.StandardOfLiving, nation.StandardOfLiving, 0.04f);
-                state.Radicalism += RadicalismCore.WeeklyChange(campaign, nation, state,
-                    atWar, welfareRadicalism, focusRadicalism);
-                MinorityPressure(campaign, nation, state);
-            }
-            if (states.Length >= ParallelRegionsFrom)
-            {
-                if (states.Length > 0) ControlTally.World(campaign, nation.MapIndex, states[0].MapIndex);
-                System.Threading.Tasks.Parallel.For(0, states.Length, RegionWorkers, index => Week(states[index]));
-            }
-            else
-                foreach (var state in states) Week(state);
+            // The tally the anger reads is a shared index of the whole map: it is built here,
+            // on this thread, before any region is handed out, so a worker never builds it.
+            if (states.Length >= DeterministicParallel.MinItems && DeterministicParallel.Enabled(campaign))
+                ControlTally.World(campaign, nation.MapIndex, states[0].MapIndex);
+            // A small country is not worth the hand-off; DeterministicParallel decides that and
+            // keeps the serial and the parallel path to the same bytes.
+            DeterministicParallel.For(campaign, 0, states.Length, index =>
+                WeekState(campaign, nation, annualGrowth, atWar, welfareRadicalism, focusRadicalism, states[index]));
             foreach (var state in states) totalPopulation += state.Population;
             if (states.Length > 0) nation.Population = totalPopulation;
             var focusSol = cabinet.Living + government.Living + ideology.Living;
@@ -1162,8 +1167,24 @@ public static class EconomySystem
         }
     }
 
-    /// <summary>How many countries one stage of the weekly pass settles: about four milliseconds.</summary>
-    private const int EconomyStageCountries = 24;
+    private static void WeekState(Campaign campaign, Nation nation, float annualGrowth, bool atWar,
+        float welfareRadicalism, float focusRadicalism, ScenarioState state)
+    {
+        if (campaign.Defines.HouseholdDynamicsEnabled)
+            HouseholdEconomy.Review(campaign, nation, state, annualGrowth);
+        else
+        {
+            var hospital = state.Buildings.GetValueOrDefault(BuildingKind.Hospital);
+            var weeklyGrowth = (0.0035f + (state.StandardOfLiving - .5f) * .006f + hospital * .0005f) / 52f;
+            AdjustStatePopulation(state, (long)Math.Round(state.Population * weeklyGrowth));
+        }
+        state.StandardOfLiving = M.Lerp(state.StandardOfLiving, nation.StandardOfLiving, 0.04f);
+        state.Radicalism += RadicalismCore.WeeklyChange(campaign, nation, state, atWar, welfareRadicalism, focusRadicalism);
+        MinorityPressure(campaign, nation, state);
+    }
+
+    /// <summary>How many countries one stage of the weekly pass settles.</summary>
+    private const int EconomyStageCountries = 2;
 
     /// <summary>
     /// The share of a region's people who are not of the nation that governs them.
@@ -1174,11 +1195,6 @@ public static class EconomySystem
     /// taken by force is full of people who did not choose it, and it stays restive until
     /// a generation has passed.
     /// </summary>
-    /// <summary>From how many regions a country's weekly regional review is worked side by side.</summary>
-    private const int ParallelRegionsFrom = 16;
-    private static readonly System.Threading.Tasks.ParallelOptions RegionWorkers = new()
-        { MaxDegreeOfParallelism = Math.Max(1, Math.Min(Environment.ProcessorCount - 1, 8)) };
-
     public static float ForeignShare(ScenarioState state, string ownerTag)
     {
         if (state is null || string.IsNullOrEmpty(ownerTag) || state.PopulationGroups.Count == 0) return 0f;
@@ -1201,41 +1217,72 @@ public static class EconomySystem
     private static bool IsOwn(IReadOnlySet<string> primary, PopulationGroup group) =>
         primary is not null && group.Culture is not null && primary.Contains(group.Culture);
 
+    private static readonly SocialClass[] AllSocialClasses = Enum.GetValues<SocialClass>();
+
+    private static string SocialClassName(SocialClass rung) => rung switch
+    {
+        SocialClass.Lower => nameof(SocialClass.Lower),
+        SocialClass.Middle => nameof(SocialClass.Middle),
+        SocialClass.Upper => nameof(SocialClass.Upper),
+        _ => rung.ToString()
+    };
+
+    private static string SectorName(Sector sector) => sector switch
+    {
+        Sector.Agriculture => nameof(Sector.Agriculture),
+        Sector.Industry => nameof(Sector.Industry),
+        Sector.Services => nameof(Sector.Services),
+        Sector.Ownership => nameof(Sector.Ownership),
+        _ => sector.ToString()
+    };
+
     /// <summary>Every people living in a region, largest first.</summary>
     public static IReadOnlyList<(string Culture, long Size)> Cultures(ScenarioState state) =>
-        Tally(state, group => group.Culture);
+        Tally(state, static group => group.Culture);
 
     /// <summary>Every faith held in a region, largest first.</summary>
     public static IReadOnlyList<(string Religion, long Size)> Religions(ScenarioState state) =>
-        Tally(state, group => group.Religion);
+        Tally(state, static group => group.Religion);
 
     /// <summary>Every trade worked in a region, largest first.</summary>
     public static IReadOnlyList<(string Profession, long Size)> Professions(ScenarioState state) =>
-        Tally(state, group => group.Profession);
+        Tally(state, static group => group.Profession);
 
     /// <summary>Every social class in a region, largest first.</summary>
     public static IReadOnlyList<(string Class, long Size)> Classes(ScenarioState state) =>
-        Tally(state, group => group.Class.ToString());
+        Tally(state, static group => SocialClassName(group.Class));
 
     /// <summary>Every sector worked in a region, largest first.</summary>
     public static IReadOnlyList<(string Sector, long Size)> Sectors(ScenarioState state) =>
-        Tally(state, group => group.Sector.ToString());
+        Tally(state, static group => SectorName(group.Sector));
+
+    [ThreadStatic] private static Dictionary<string, long> _techGroupTotals;
+    [ThreadStatic] private static float[] _seedWeights;
 
     private static IReadOnlyList<(string Key, long Size)> Tally(ScenarioState state, Func<PopulationGroup, string> of)
     {
-        if (state is null) return Array.Empty<(string, long)>();
-        var totals = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        foreach (var group in state.PopulationGroups)
+        if (state is null || state.PopulationGroups.Count == 0) return Array.Empty<(string, long)>();
+        var totals = _techGroupTotals ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        totals.Clear();
+        var groups = state.PopulationGroups;
+        for (var i = 0; i < groups.Count; i++)
         {
+            var group = groups[i];
             if (group.Size <= 0) continue;
             var key = of(group);
             if (string.IsNullOrEmpty(key)) key = "?";
             totals[key] = totals.GetValueOrDefault(key) + group.Size;
         }
-        return totals.OrderByDescending(entry => entry.Value)
-            .ThenBy(entry => entry.Key, StringComparer.Ordinal)
-            .Select(entry => (entry.Key, entry.Value))
-            .ToList();
+        if (totals.Count == 0) return Array.Empty<(string, long)>();
+        var result = new List<(string Key, long Size)>(totals.Count);
+        foreach (var entry in totals)
+            result.Add((entry.Key, entry.Value));
+        result.Sort(static (a, b) =>
+        {
+            var cmp = b.Size.CompareTo(a.Size);
+            return cmp != 0 ? cmp : string.CompareOrdinal(a.Key, b.Key);
+        });
+        return result;
     }
 
     /// <summary>
@@ -1396,9 +1443,13 @@ public static class EconomySystem
             // occupations. The economy only needs the ladder, so seed the three rungs
             // directly - and with nobody working at anything there is no sector to report,
             // so they all carry the residual one.
-            foreach (var (culture, share) in composition)
-                foreach (var rung in Enum.GetValues<SocialClass>())
-                    Add(state, culture, "", rung.ToString(), rung, Sector.Services,
+            for (var c = 0; c < composition.Count; c++)
+            {
+                var (culture, share) = composition[c];
+                for (var r = 0; r < AllSocialClasses.Length; r++)
+                {
+                    var rung = AllSocialClasses[r];
+                    Add(state, culture, "", SocialClassName(rung), rung, Sector.Services,
                         (long)(population * share * rung switch
                         {
                             SocialClass.Upper => 0.06f,
@@ -1412,27 +1463,44 @@ public static class EconomySystem
                             SocialClass.Middle => 0.62f,
                             _ => 0.38f
                         });
+                }
+            }
             return;
         }
 
-        var weights = trades.Select(trade => Math.Max(0f, trade.ShareAt(state.Urbanization))).ToArray();
-        var weightTotal = weights.Sum();
+        var weights = _seedWeights is not null && _seedWeights.Length >= trades.Count
+            ? _seedWeights
+            : (_seedWeights = new float[trades.Count]);
+        double weightSum = 0;
+        for (var index = 0; index < trades.Count; index++)
+        {
+            var weight = Math.Max(0f, trades[index].ShareAt(state.Urbanization));
+            weights[index] = weight;
+            weightSum += weight;
+        }
+        var weightTotal = (float)weightSum;
         if (weightTotal <= 0f) return;
         if (farming.Fields != 1f || farming.Town != 1f)
         {
+            weightSum = 0;
             for (var index = 0; index < trades.Count; index++)
-                weights[index] *= trades[index].Sector == Sector.Agriculture
+            {
+                var weight = weights[index] * (trades[index].Sector == Sector.Agriculture
                     ? farming.Fields
-                    : farming.Town;
-            weightTotal = weights.Sum();
+                    : farming.Town);
+                weights[index] = weight;
+                weightSum += weight;
+            }
+            weightTotal = (float)weightSum;
             if (weightTotal <= 0f) return;
         }
 
         var floor = Math.Max(1L, population / 1000);
         long placed = 0;
         PopulationGroup largest = null;
-        foreach (var (culture, share) in composition)
+        for (var c = 0; c < composition.Count; c++)
         {
+            var (culture, share) = composition[c];
             var faith = DemographyCatalog.FaithOf(culture);
             var people = (long)(population * share);
             if (people <= 0) continue;
@@ -1441,8 +1509,9 @@ public static class EconomySystem
                 var trade = trades[index];
                 var ofTrade = (long)(people * (weights[index] / weightTotal));
                 if (ofTrade < floor) continue;
-                foreach (var (religion, faithShare) in faith)
+                for (var f = 0; f < faith.Count; f++)
                 {
+                    var (religion, faithShare) = faith[f];
                     var size = (long)(ofTrade * faithShare);
                     if (size < floor) continue;
                     var group = Add(state, culture, religion, trade.Id, trade.Class,
@@ -1622,7 +1691,7 @@ public static class ConstructionSystem
         // single project used to move: a country with forty-eight sites finished one at a time, so
         // India and China completed what Malta did, a building or two a year, and their real
         // output stood still for a decade. ConstructionSitesInParallel false is the old queue.
-        Working.Clear();
+        foreach (var list in Working.Values) list.Clear();
         foreach (var item in campaign.Construction)
         {
             if (!Working.TryGetValue(item.NationId, out var list)) Working[item.NationId] = list = new List<ConstructionProject>();
@@ -1639,6 +1708,18 @@ public static class ConstructionSystem
             // goes up. Capacity used to scale only the payment, and above one it paid the bill
             // early and finished on the same day - a stat every building raised and nothing read.
             var pace = ConstructionCost.Pace(campaign, nation);
+            // The console's "instabuild": everything this country has under way is finished today, free.
+            if (nation.InstantConstruction)
+            {
+                foreach (var project in sites)
+                {
+                    project.Paid = project.Cost;
+                    project.ProgressDays = project.DurationDays;
+                    Complete(campaign, nation, project);
+                    campaign.Construction.Remove(project);
+                }
+                continue;
+            }
             foreach (var project in sites)
             {
                 if (!float.IsFinite(project.Cost) || project.Cost < 0 ||
@@ -1670,9 +1751,7 @@ public static class ConstructionSystem
 
     private static void Complete(Campaign campaign, Nation nation, ConstructionProject project)
     {
-        ScenarioState state = null;
-        foreach (var candidate in campaign.States)
-            if (candidate.MapIndex == project.StateMapIndex) { state = candidate; break; }
+        var state = campaign.StateByMapIndex(project.StateMapIndex);
         if (state is null) return;
         var definition = BuildingCatalog.Get(project.Building);
         // An inland yard cost what a coastal one cost and is worth a fraction of it. That

@@ -396,22 +396,28 @@ public static class SubjectSystem
     /// one badly - losing wars, losing stability, letting it grow - costs the overlord the
     /// option. That is the whole bargain restated at its end.
     /// </summary>
-    public static bool MayAnnex(Campaign campaign, Nation overlord, Nation subject, out string refusal)
+    public static bool MayAnnex(Campaign campaign, Nation overlord, Nation subject, out string refusal) =>
+        MayAnnexCore(campaign, overlord, subject, formatRefusal: true, out refusal);
+
+    private static bool MayAnnexQuiet(Campaign campaign, Nation overlord, Nation subject) =>
+        MayAnnexCore(campaign, overlord, subject, formatRefusal: false, out _);
+
+    private static bool MayAnnexCore(Campaign campaign, Nation overlord, Nation subject, bool formatRefusal, out string refusal)
     {
         refusal = "";
-        if (campaign is null || overlord is null || subject is null) { refusal = "no such country"; return false; }
+        if (campaign is null || overlord is null || subject is null) { if (formatRefusal) refusal = "no such country"; return false; }
         if (!subject.AnswersTo(overlord.Id))
         {
-            refusal = $"{subject.Tag} does not answer to {overlord.Tag}";
+            if (formatRefusal) refusal = $"{subject.Tag} does not answer to {overlord.Tag}";
             return false;
         }
         var type = SubjectCatalog.Of(subject.SubjectType);
-        if (type is null) { refusal = $"no such kind as '{subject.SubjectType}'"; return false; }
+        if (type is null) { if (formatRefusal) refusal = $"no such kind as '{subject.SubjectType}'"; return false; }
         var wasReleasedByOverlord = subject.ReleasedFromId == overlord.Id || subject.SecededFromId == overlord.Id;
         var integrated = subject.SubjectIntegrationProgress >= 0.999f;
         if (type.AnnexAfterDays < 0 && !wasReleasedByOverlord && !integrated)
         {
-            refusal = $"a {type.Name.ToLowerInvariant()} is not a thing a country absorbs";
+            if (formatRefusal) refusal = $"a {type.Name.ToLowerInvariant()} is not a thing a country absorbs";
             return false;
         }
         var held = campaign.ElapsedDays - subject.SubjectSinceDay;
@@ -420,15 +426,17 @@ public static class SubjectSystem
             : type.AnnexAfterDays;
         if (held < requiredDays)
         {
-            refusal = $"{subject.Tag} has answered for {held / 365.0:0.0} year(s) of the " +
-                      $"{requiredDays / 365.0:0.0} it takes";
+            if (formatRefusal)
+                refusal = $"{subject.Tag} has answered for {held / 365.0:0.0} year(s) of the " +
+                          $"{requiredDays / 365.0:0.0} it takes";
             return false;
         }
         var maxLiberty = type.AnnexBelowLiberty > 0f ? type.AnnexBelowLiberty : 0.55f;
         if (subject.LibertyDesire > maxLiberty)
         {
-            refusal = $"{subject.Tag} wants out {subject.LibertyDesire:P0} of the way, and " +
-                      $"{maxLiberty:P0} is as much as goes quietly";
+            if (formatRefusal)
+                refusal = $"{subject.Tag} wants out {subject.LibertyDesire:P0} of the way, and " +
+                          $"{maxLiberty:P0} is as much as goes quietly";
             return false;
         }
         // A neighbour, or a country whose capital and coast are a strait away - the reach a
@@ -438,8 +446,9 @@ public static class SubjectSystem
         // country with no coast to cross to, stays what it is.
         if (!PeaceShape.Near(campaign, overlord, subject))
         {
-            refusal = $"{subject.Tag} is too far from {overlord.Tag} to be taken in: no border, and no crossing of " +
-                      $"{campaign.Defines.PeaceShapeBridgeheadKm:0} km or less from its coast to its capital";
+            if (formatRefusal)
+                refusal = $"{subject.Tag} is too far from {overlord.Tag} to be taken in: no border, and no crossing of " +
+                          $"{campaign.Defines.PeaceShapeBridgeheadKm:0} km or less from its coast to its capital";
             return false;
         }
         return true;
@@ -553,8 +562,14 @@ public static class SubjectSystem
     /// <summary>The weekly pass: tribute, manpower, and the slow drift towards leaving.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SubjectSystem))) return;
-        if (campaign is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly pass, yielded between subjects.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SubjectSystem))) yield break;
+        if (campaign is null) yield break;
 
         // Collected before anything is changed, because a subject that breaks free inside
         // the loop would otherwise be walked over while the list it is in is being edited.
@@ -566,10 +581,15 @@ public static class SubjectSystem
             nation.TributePaidWeekly = 0f;
             nation.TributeTakenWeekly = 0f;
         }
+        yield return 0;
 
+        var tick = 0;
+        var activeSubjects = 0;
         foreach (var subject in campaign.Nations)
         {
+            if (++tick % 32 == 0) yield return 0;
             if (!subject.IsSubject) continue;
+            if (activeSubjects++ > 0) yield return 0;
             var type = SubjectCatalog.Of(subject.SubjectType);
             var overlord = campaign.NationById(subject.OverlordId);
             if (type is null || overlord is null)
@@ -610,7 +630,8 @@ public static class SubjectSystem
             }
 
             // And what it thinks about all that.
-            SubjectInteractions.TickSubjectWeek(campaign, overlord, subject);
+            using (SimProfiler.Measure("  sub:week"))
+                SubjectInteractions.TickSubjectWeek(campaign, overlord, subject);
             if (!subject.IsSubject) continue;
             // In its grace period a subject does not start wanting out - and what agitation
             // stirred up settles back towards the kind's own level rather than staying for
@@ -639,8 +660,9 @@ public static class SubjectSystem
             var wasReleased = subject.ReleasedFromId == overlord.Id || subject.SecededFromId == overlord.Id;
             var sizeCap = wasReleased ? Math.Max(weights.AnnexSizeLimit, 0.55f) : weights.AnnexSizeLimit;
             if (subject.Population > overlord.Population * sizeCap) continue;
-            if (MayAnnex(campaign, overlord, subject, out _)) absorbing.Add(subject);
+            if (MayAnnexQuiet(campaign, overlord, subject)) absorbing.Add(subject);
         }
+        yield return 0;
 
         foreach (var subject in leaving)
         {
@@ -648,18 +670,34 @@ public static class SubjectSystem
             var overlord = campaign.NationById(subject.OverlordId);
             if (overlord is not null && (subject.SubjectConspiring || subject.SubjectForeignBackers.Count > 0))
             {
-                SubjectInteractions.TriggerSubjectRebellion(campaign, overlord, subject);
+                using (SimProfiler.Measure("  sub:rebel"))
+                    SubjectInteractions.TriggerSubjectRebellion(campaign, overlord, subject);
+                yield return 0;
                 continue;
             }
             var overlordId = subject.OverlordId;
-            Release(campaign, subject, broke: true);
+            using (SimProfiler.Measure("  sub:release"))
+                Release(campaign, subject, broke: true);
             if (overlordId >= 0) campaign.Chronicle.Record(campaign, "subject_broke_free", subject.Id, overlordId);
+            yield return 0;
         }
         foreach (var subject in absorbing)
         {
             var overlord = campaign.NationById(subject.OverlordId);
-            if (overlord is not null) Annex(campaign, overlord, subject, out _);
+            if (overlord is not null)
+                using (SimProfiler.Measure("  sub:annex"))
+                    Annex(campaign, overlord, subject, out _);
+            yield return 0;
         }
-        CountryRelease.TickAi(campaign);
+        using (var release = CountryRelease.TickAiStages(campaign).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("  sub:country_release")) more = release.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
     }
 }

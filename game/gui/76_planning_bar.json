@@ -1,0 +1,27 @@
+// The planning bar over the army bar: where it sits, its colours and sizes.
+{
+  "layout": {
+    "hud.planning_bar": {
+      "anchors": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "offsets": [
+        112,
+        -158,
+        600,
+        -106
+      ]
+    }
+  },
+  "colours": {
+    "planning_bar.background": "#0d1822ee",
+    "planning_bar.border": "#2a3e50"
+  },
+  "metrics": {
+    "planning_bar.button_height": 30,
+    "planning_bar.hint_font": 11
+  }
+}

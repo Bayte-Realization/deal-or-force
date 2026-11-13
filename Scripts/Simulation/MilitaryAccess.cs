@@ -28,8 +28,12 @@ public static class MilitaryAccess
     {
         if (first == second) return false;
         if (CampaignDiplomacy.Peek(c, first, second)?.Stance == DiplomaticStance.AtWar) return true;
-        foreach (var war in c.Wars)
+        var wars = Warfare.LiveWars(c);
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
             if (!war.Ended && war.Opposes(first, second)) return true;
+        }
         return false;
     }
 
@@ -44,8 +48,12 @@ public static class MilitaryAccess
         if (!c.NationsByMapIndex().TryGetValue(controller, out var host) || Hostile(c, guest, host.Id)) return false;
         if (Granted(c, guest, host.Id)) return true;
         if (own.AnswersTo(host.Id) || host.AnswersTo(own.Id)) return true;
-        foreach (var war in c.Wars)
+        var wars = Warfare.LiveWars(c);
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
             if (!war.Ended && WarCoalition.SameSide(war, guest, host.Id)) return true;
+        }
         return false;
     }
 
@@ -63,11 +71,65 @@ public static class MilitaryAccess
             !Hostile(c, own.Id, host.Id) && !CanEnter(c, own.Id, who);
     }
 
+    [ThreadStatic] private static HashSet<int> _controllerHostileIds;
+    [ThreadStatic] private static HashSet<int> _controllerSameSideIds;
+
+    public static void FillControllers(Campaign c, int guest, ISet<ushort> allowed)
+    {
+        if (allowed is null) return;
+        var own = c?.NationById(guest);
+        if (own is null) return;
+
+        var hostile = _controllerHostileIds ??= new HashSet<int>();
+        var sameSide = _controllerSameSideIds ??= new HashSet<int>();
+        hostile.Clear();
+        sameSide.Clear();
+
+        var wars = Warfare.LiveWars(c);
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
+            if (war.Ended) continue;
+            if (war.IsAttacking(guest))
+            {
+                foreach (var id in war.Side(true)) sameSide.Add(id);
+                foreach (var id in war.Side(false)) hostile.Add(id);
+            }
+            else if (war.IsDefending(guest))
+            {
+                foreach (var id in war.Side(false)) sameSide.Add(id);
+                foreach (var id in war.Side(true)) hostile.Add(id);
+            }
+        }
+
+        var byMapIndex = c.NationsByMapIndex();
+        foreach (var pair in byMapIndex)
+        {
+            var mapIndex = pair.Key;
+            if (mapIndex <= 0) continue;
+            var code = (ushort)mapIndex;
+            if (mapIndex == own.MapIndex)
+            {
+                allowed.Add(code);
+                continue;
+            }
+            var host = pair.Value;
+            if (host is null || (host.Id != guest && hostile.Contains(host.Id))) continue;
+            var rel = CampaignDiplomacy.Peek(c, guest, host.Id);
+            if (rel?.Stance == DiplomaticStance.AtWar) continue;
+            if ((rel is not null && rel.GrantsMilitaryAccess(host.Id)) ||
+                own.AnswersTo(host.Id) || host.AnswersTo(guest) ||
+                sameSide.Contains(host.Id))
+            {
+                allowed.Add(code);
+            }
+        }
+    }
+
     public static HashSet<ushort> Controllers(Campaign c, int guest)
     {
         var allowed = new HashSet<ushort>();
-        foreach (var n in c.Nations)
-            if (n.MapIndex > 0 && CanEnter(c, guest, (ushort)n.MapIndex)) allowed.Add((ushort)n.MapIndex);
+        FillControllers(c, guest, allowed);
         return allowed;
     }
 
@@ -92,11 +154,15 @@ public static class MilitaryAccess
         var value = (r?.Opinion ?? 0f) / 100f - MathF.Min(.35f, MathF.Max(0f, guest.Notoriety) * .005f);
         if (r?.Stance == DiplomaticStance.Allied) value += .5f;
         if (r?.Stance == DiplomaticStance.Rival) value -= .6f;
-        foreach (var war in c.Wars)
+        var wars = Warfare.LiveWars(c);
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
             if (!war.Ended && war.Involves(guest.Id))
                 foreach (var enemy in war.EnemiesOf(guest.Id))
                     if (CampaignDiplomacy.Peek(c, host.Id, enemy)?.Stance == DiplomaticStance.Rival)
                         return value + .2f;
+        }
         return value;
     }
 
@@ -129,39 +195,62 @@ public static class MilitaryAccess
     /// </summary>
     public static void Tick(Campaign c)
     {
-        if (!c.StepOpensNewDay) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same daily access pass, yielded between batches of relationships and armies.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (!c.StepOpensNewDay) yield break;
+        var scanned = 0;
         foreach (var r in c.Relations.Values)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (r.MilitaryAccessRequestedBy >= 0 && !Pending(c, r))
             { r.MilitaryAccessRequestedBy = -1; c.DealInboxRevision++; }
             if ((r.MilitaryAccessByA || r.MilitaryAccessByB) && Hostile(c, r.A, r.B))
             { r.MilitaryAccessByA = r.MilitaryAccessByB = false; WarCoalition.InvalidateRoutes(c); Warfare.InvalidateAccessRoutes(c); c.MarkStrategicChange(); }
         }
-        if (c.ProvinceMap is null || c.ProvinceController is null) return;
-        Dictionary<ushort, List<int>> homes = null;
+        if (c.ProvinceMap is null || c.ProvinceController is null) yield break;
+        var map = c.ProvinceMap;
+        var controls = c.ProvinceController;
+        var needing = _repatriationArmies ??= new List<Army>();
+        var homes = _repatriationHomes ??= new Dictionary<ushort, List<int>>();
+        var pool = _repatriationListPool ??= new Stack<List<int>>();
+        needing.Clear();
+        var marched = 0;
         foreach (var army in c.Armies)
         {
+            if (++marched % 256 == 0) yield return 0;
             if (!MustReturn(c, army)) continue;
-            if (army.InBattle && c.Battles.Exists(b => b.Id == army.BattleId && !b.Ended)) continue;
-            if (homes is null)
+            if (army.InBattle && HasActiveBattle(c, army.BattleId)) continue;
+            var owner = c.NationById(army.NationId);
+            if (owner is not null && owner.MapIndex > 0 && !homes.ContainsKey((ushort)owner.MapIndex))
+                homes[(ushort)owner.MapIndex] = pool.Count > 0 ? pool.Pop() : new List<int>();
+            needing.Add(army);
+        }
+        if (homes.Count > 0)
+        {
+            var provToNation = map.ProvinceToNation;
+            var count = Math.Min(map.ProvinceCount, controls.Length - 1);
+            for (var p = 1; p <= count; p++)
             {
-                homes = new();
-                for (var p = 1; p <= c.ProvinceMap.ProvinceCount; p++)
-                {
-                    var owner = c.ProvinceMap.ProvinceToNation[p];
-                    if (owner == 0 || c.ProvinceController[p] != owner || c.ProvinceMap.IsWater(p)) continue;
-                    if (!homes.TryGetValue(owner, out var list)) homes[owner] = list = new();
-                    list.Add(p);
-                }
+                var owner = provToNation[p];
+                if (owner == 0 || controls[p] != owner || map.IsWater(p)) continue;
+                if (homes.TryGetValue(owner, out var list)) list.Add(p);
             }
+        }
+        for (var ai = 0; ai < needing.Count; ai++)
+        {
+            var army = needing[ai];
             var nation = c.NationById(army.NationId);
             var destination = 0;
             var best = float.MaxValue;
-            var origin = c.ProvinceMap.CenterOf(army.ProvinceId);
-            if (homes.TryGetValue((ushort)nation.MapIndex, out var places))
+            var origin = map.CenterOf(army.ProvinceId);
+            if (nation is not null && homes.TryGetValue((ushort)nation.MapIndex, out var places))
                 foreach (var p in places)
                 {
-                    var point = c.ProvinceMap.CenterOf(p);
+                    var point = map.CenterOf(p);
                     var distance = NavalOperations.Distance(origin.Latitude, origin.Longitude, point.Latitude, point.Longitude);
                     if (distance >= best) continue;
                     best = distance; destination = p;
@@ -175,14 +264,24 @@ public static class MilitaryAccess
             foreach (var line in c.FrontLines) line.Posts.Remove(army.Id);
             if (destination <= 0) continue;
             army.BattleId = -1; army.ProvinceId = destination;
-            army.StateMapIndex = c.ProvinceMap.ProvinceToState[destination];
-            (army.Latitude, army.Longitude) = c.ProvinceMap.CenterOf(destination);
+            army.StateMapIndex = map.ProvinceToState[destination];
+            (army.Latitude, army.Longitude) = map.CenterOf(destination);
             army.Entrenchment = army.Planning = 0f;
             army.ReadyDay = Math.Max(army.ReadyDay, c.ElapsedDays + Math.Max(1, c.Defines.MilitaryRepatriationRestDays));
             DiagnosticLogs.Write("orders", $"REPATRIATE army={army.Id} nation={nation.Tag} province={destination} rest_until={army.ReadyDay}");
             c.MarkStrategicChange();
         }
+        needing.Clear();
+        if (homes.Count > 0)
+        {
+            foreach (var list in homes.Values) { list.Clear(); pool.Push(list); }
+            homes.Clear();
+        }
     }
+
+    [ThreadStatic] private static List<Army> _repatriationArmies;
+    [ThreadStatic] private static Dictionary<ushort, List<int>> _repatriationHomes;
+    [ThreadStatic] private static Stack<List<int>> _repatriationListPool;
 
     internal static void Provision(Army army)
     {
@@ -192,19 +291,37 @@ public static class MilitaryAccess
 
     internal static bool TryWarTransit(Campaign c, Nation guest, Nation host)
     {
-        if (Refusal(c, guest, host).Length > 0 ||
+        // Most friendly candidates are distant partners, or have no current war to
+        // provide transit for. Do not inspect permissions for every one of them.
+        // These geographic/war queries are read-only; the real request below still
+        // uses exactly the same refusal and command as a player's request.
+        if (c is null || guest is null || host is null ||
             !CampaignDiplomacy.SharesLandBorder(c, guest.MapIndex, host.MapIndex)) return false;
-        foreach (var war in c.Wars)
+        var wars = Warfare.LiveWars(c);
+        for (var index = 0; index < wars.Count; index++)
         {
+            var war = wars[index];
             if (war.Ended || !war.Involves(guest.Id) || war.Involves(host.Id)) continue;
             foreach (var enemyId in war.EnemiesOf(guest.Id))
                 if (c.NationById(enemyId) is { } enemy &&
                     CampaignDiplomacy.SharesLandBorder(c, host.MapIndex, enemy.MapIndex))
                 {
+                    if (Refusal(c, guest, host).Length > 0) return false;
                     new MilitaryAccessCommand { IssuerId = guest.Id, TargetId = host.Id,
                         Action = MilitaryAccessAction.Request }.Apply(c);
                     return true;
                 }
+        }
+        return false;
+    }
+
+    private static bool HasActiveBattle(Campaign c, int battleId)
+    {
+        var battles = c.Battles;
+        for (var i = 0; i < battles.Count; i++)
+        {
+            var b = battles[i];
+            if (b.Id == battleId && !b.Ended) return true;
         }
         return false;
     }

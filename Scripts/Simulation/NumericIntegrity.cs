@@ -20,6 +20,10 @@ public static class NumericIntegrity
     // army and relation by reflection, boxing each, and built a path string for every object
     // whether or not anything was wrong - twenty milliseconds of one indivisible frame.
     private static readonly ConcurrentDictionary<Type, (FieldInfo Field, Func<object, double> Read)[]> ScalarReaders = new();
+    private static readonly ConcurrentDictionary<Type, (FieldInfo[] Fields, Func<object, int> FirstBad)> ScalarCheckers = new();
+    private static readonly List<DiplomaticRelation> RelationsBuffer = new();
+    private static readonly object RelationsGate = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, List<DiplomaticRelation>> StagedRelationsBuffers = new();
 
     private static (FieldInfo Field, Func<object, double> Read)[] ReadersFor(Type type) =>
         ScalarReaders.GetOrAdd(type, t => ScalarFields.GetOrAdd(t, k => k.GetFields(BindingFlags.Public | BindingFlags.Instance)
@@ -31,6 +35,34 @@ public static class NumericIntegrity
                     System.Linq.Expressions.Expression.Field(System.Linq.Expressions.Expression.Convert(boxed, t), field), typeof(double));
                 return (field, System.Linq.Expressions.Expression.Lambda<Func<object, double>>(read, boxed).Compile());
             }).ToArray());
+
+    private static (FieldInfo[] Fields, Func<object, int> FirstBad) CheckerFor(Type type) =>
+        ScalarCheckers.GetOrAdd(type, t =>
+        {
+            var fields = ScalarFields.GetOrAdd(t, k => k.GetFields(BindingFlags.Public | BindingFlags.Instance)
+                .Where(f => f.FieldType == typeof(float) || f.FieldType == typeof(double)).ToArray());
+            if (fields.Length == 0) return (fields, null);
+            var boxed = System.Linq.Expressions.Expression.Parameter(typeof(object), "value");
+            var typed = System.Linq.Expressions.Expression.Variable(t, "typed");
+            var ret = System.Linq.Expressions.Expression.Label(typeof(int));
+            var isFinite = typeof(double).GetMethod(nameof(double.IsFinite), new[] { typeof(double) })!;
+            var stmts = new List<System.Linq.Expressions.Expression>(fields.Length + 2)
+            {
+                System.Linq.Expressions.Expression.Assign(typed, System.Linq.Expressions.Expression.Convert(boxed, t))
+            };
+            for (var i = 0; i < fields.Length; i++)
+            {
+                var val = System.Linq.Expressions.Expression.Convert(
+                    System.Linq.Expressions.Expression.Field(typed, fields[i]), typeof(double));
+                stmts.Add(System.Linq.Expressions.Expression.IfThen(
+                    System.Linq.Expressions.Expression.Not(System.Linq.Expressions.Expression.Call(isFinite, val)),
+                    System.Linq.Expressions.Expression.Return(ret, System.Linq.Expressions.Expression.Constant(i))));
+            }
+            stmts.Add(System.Linq.Expressions.Expression.Label(ret, System.Linq.Expressions.Expression.Constant(-1)));
+            var checker = System.Linq.Expressions.Expression.Lambda<Func<object, int>>(
+                System.Linq.Expressions.Expression.Block(new[] { typed }, stmts), boxed).Compile();
+            return (fields, checker);
+        });
 
     public static List<string> Inspect(object snapshot, int limit = 24)
     {
@@ -99,35 +131,130 @@ public static class NumericIntegrity
     /// <summary>Cheap weekly checkpoint; a full, nested validation also runs before saving.</summary>
     public static string FirstLiveIssue(Campaign c)
     {
-        foreach (var n in c.Nations)
-        {
-            var issue = ScalarIssue(n, "country ", n.Tag) ?? ScalarIssue(n.Movement, "movement ", n.Tag);
-            if (issue is not null) return issue;
-            foreach (var q in n.Market)
-                if (!float.IsFinite(q.Value.Price) || !float.IsFinite(q.Value.Production) ||
-                    !float.IsFinite(q.Value.Demand)) return "market " + n.Tag + "." + q.Key;
-            if (n.Movement is { } movement)
-                foreach (var support in movement.Support)
-                    if (!float.IsFinite(support.Value)) return "support " + n.Tag + "[" + support.Key + "]";
-        }
+        var nationIssue = FirstInOrder(c.Nations, NationIssue);
+        if (nationIssue is not null) return nationIssue;
         // The regions and their people are most of the walk - two thousand regions, eighty
         // thousand groups, read through reflection - and reading is all it does, so they are read
         // side by side. The answer is the first bad region in list order, exactly as one at a time.
-        var regionIssue = FirstRegionIssue(c.States);
+        var regionIssue = FirstInOrder(c.States, RegionIssue);
         if (regionIssue is not null) return regionIssue;
-        foreach (var a in c.Armies) { var issue = ScalarIssue(a, "army ", a.Id); if (issue is not null) return issue; }
-        foreach (var b in c.Battles) { var issue = ScalarIssue(b, "battle ", b.Id); if (issue is not null) return issue; }
-        foreach (var w in c.Wars) { var issue = ScalarIssue(w, "war ", w.Id); if (issue is not null) return issue; }
-        foreach (var f in c.Fleets) { var issue = ScalarIssue(f, "fleet ", f.Id); if (issue is not null) return issue; }
-        foreach (var f in c.SupportFormations) { var issue = ScalarIssue(f, "support ", f.Id); if (issue is not null) return issue; }
+        var armyIssue = FirstInOrder(c.Armies, a => ScalarIssue(a, "army ", a.Id));
+        if (armyIssue is not null) return armyIssue;
+        var battleIssue = FirstInOrder(c.Battles, b => ScalarIssue(b, "battle ", b.Id));
+        if (battleIssue is not null) return battleIssue;
+        var warIssue = FirstInOrder(c.Wars, w => ScalarIssue(w, "war ", w.Id));
+        if (warIssue is not null) return warIssue;
+        var fleetIssue = FirstInOrder(c.Fleets, f => ScalarIssue(f, "fleet ", f.Id));
+        if (fleetIssue is not null) return fleetIssue;
+        var supportIssue = FirstInOrder(c.SupportFormations, f => ScalarIssue(f, "support ", f.Id));
+        if (supportIssue is not null) return supportIssue;
         if (c.ProvinceOccupation is { } occupation)
             for (var index = 0; index < occupation.Length; index++)
                 if (!float.IsFinite(occupation[index])) return "occupation[" + index + "]";
-        foreach (var relation in c.Relations.Values)
+        // Dictionary values have no stable index; materialising into a reusable buffer keeps "first" meaning
+        // first in enumeration order while avoiding large array allocations on every check.
+        string relationIssue = null;
+        lock (RelationsGate)
         {
-            var issue = ScalarIssue(relation, "relation", "");
-            if (issue is not null) return issue;
+            RelationsBuffer.Clear();
+            foreach (var r in c.Relations.Values) RelationsBuffer.Add(r);
+            relationIssue = FirstInOrder(RelationsBuffer, r => ScalarIssue(r, "relation", ""));
+            RelationsBuffer.Clear();
         }
+        if (relationIssue is not null) return relationIssue;
+        return null;
+    }
+
+    /// <summary>
+    /// Weekly numeric sanity pass spread over small slices so inspecting tens of thousands of
+    /// relations never occupies a full frame, while returning the exact same first defect.
+    /// </summary>
+    public static IEnumerable<int> FirstLiveIssueStages(Campaign c, Action<string> onIssue)
+    {
+        for (var i = 0; i < c.Nations.Count; i++)
+        {
+            if (i > 0 && i % 128 == 0) yield return 0;
+            if (NationIssue(c.Nations[i]) is { } issue) { onIssue(issue); yield break; }
+        }
+        yield return 0;
+        for (var i = 0; i < c.States.Count; i++)
+        {
+            if (i > 0 && i % 192 == 0) yield return 0;
+            if (RegionIssue(c.States[i]) is { } issue) { onIssue(issue); yield break; }
+        }
+        yield return 0;
+        var armyChecker = CheckerFor(typeof(Army));
+        for (var i = 0; i < c.Armies.Count; i++)
+        {
+            if (i > 0 && i % 256 == 0) yield return 0;
+            var a = c.Armies[i];
+            if (ScalarIssue(a, "army ", a.Id, armyChecker) is { } issue) { onIssue(issue); yield break; }
+        }
+        for (var i = 0; i < c.Battles.Count; i++)
+        {
+            if (i > 0 && i % 256 == 0) yield return 0;
+            var b = c.Battles[i];
+            if (ScalarIssue(b, "battle ", b.Id) is { } issue) { onIssue(issue); yield break; }
+        }
+        for (var i = 0; i < c.Wars.Count; i++)
+        {
+            if (i > 0 && i % 256 == 0) yield return 0;
+            var w = c.Wars[i];
+            if (ScalarIssue(w, "war ", w.Id) is { } issue) { onIssue(issue); yield break; }
+        }
+        for (var i = 0; i < c.Fleets.Count; i++)
+        {
+            if (i > 0 && i % 256 == 0) yield return 0;
+            var f = c.Fleets[i];
+            if (ScalarIssue(f, "fleet ", f.Id) is { } issue) { onIssue(issue); yield break; }
+        }
+        for (var i = 0; i < c.SupportFormations.Count; i++)
+        {
+            if (i > 0 && i % 256 == 0) yield return 0;
+            var f = c.SupportFormations[i];
+            if (ScalarIssue(f, "support ", f.Id) is { } issue) { onIssue(issue); yield break; }
+        }
+        if (c.ProvinceOccupation is { } occupation)
+            for (var index = 0; index < occupation.Length; index++)
+            {
+                if (index > 0 && index % 8192 == 0) yield return 0;
+                if (!float.IsFinite(occupation[index])) { onIssue("occupation[" + index + "]"); yield break; }
+            }
+        if (c.Relations.Count == 0) yield break;
+        yield return 0;
+        var relations = StagedRelationsBuffers.GetOrCreateValue(c);
+        try
+        {
+            relations.Clear();
+            foreach (var r in c.Relations.Values) relations.Add(r);
+            yield return 0;
+            var relChecker = CheckerFor(typeof(DiplomaticRelation));
+            for (var i = 0; i < relations.Count; i++)
+            {
+                if (i > 0 && i % 2048 == 0) yield return 0;
+                if (ScalarIssue(relations[i], "relation", "", relChecker) is { } issue)
+                {
+                    onIssue(issue);
+                    yield break;
+                }
+            }
+        }
+        finally
+        {
+            relations.Clear();
+        }
+    }
+
+    private static string NationIssue(Nation n)
+    {
+        var issue = ScalarIssue(n, "country ", n.Tag) ?? ScalarIssue(n.Movement, "movement ", n.Tag);
+        if (issue is not null) return issue;
+        foreach (var q in n.Market)
+            if (!float.IsFinite(q.Value.Price) || !float.IsFinite(q.Value.Production) ||
+                !float.IsFinite(q.Value.Demand)) return "market " + n.Tag + "." + q.Key;
+        if (n.Movement is { } movement)
+            foreach (var support in movement.Support)
+                if (!float.IsFinite(support.Value)) return "support " + n.Tag + "[" + support.Key + "]";
         return null;
     }
 
@@ -141,38 +268,43 @@ public static class NumericIntegrity
         return null;
     }
 
-    private static string FirstRegionIssue(List<ScenarioState> states)
+    /// <summary>The first bad element in list order, read side by side past a small size.</summary>
+    private static string FirstInOrder<T>(IReadOnlyList<T> items, Func<T, string> issue)
     {
-        if (states.Count < 256)
+        if (items.Count < 256)
         {
-            foreach (var s in states) { var issue = RegionIssue(s); if (issue is not null) return issue; }
+            foreach (var item in items) { var found = issue(item); if (found is not null) return found; }
             return null;
         }
         var first = int.MaxValue;
-        string found = null;
+        string foundIssue = null;
         var gate = new object();
-        System.Threading.Tasks.Parallel.For(0, states.Count,
+        System.Threading.Tasks.Parallel.For(0, items.Count,
             new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Math.Min(Environment.ProcessorCount - 1, 8)) },
             index =>
             {
                 if (index > System.Threading.Volatile.Read(ref first)) return;
-                var issue = RegionIssue(states[index]);
-                if (issue is null) return;
-                lock (gate) if (index < first) { first = index; found = issue; }
+                var found = issue(items[index]);
+                if (found is null) return;
+                lock (gate) if (index < first) { first = index; foundIssue = found; }
             });
-        return found;
+        return foundIssue;
     }
 
     /// <summary>The first non-finite number on an object, named by what it is and which one, or null. The name is built only when there is something wrong.</summary>
     private static string ScalarIssue(object value, string kind, object id)
     {
         if (value is null) return null;
-        foreach (var (field, read) in ReadersFor(value.GetType()))
-        {
-            var number = read(value);
-            if (!double.IsFinite(number)) return kind + id + "." + field.Name + " = " + field.GetValue(value);
-        }
-        return null;
+        return ScalarIssue(value, kind, id, CheckerFor(value.GetType()));
+    }
+
+    private static string ScalarIssue(object value, string kind, object id, (FieldInfo[] Fields, Func<object, int> FirstBad) checker)
+    {
+        if (value is null || checker.FirstBad is null) return null;
+        var bad = checker.FirstBad(value);
+        if (bad < 0) return null;
+        var field = checker.Fields[bad];
+        return kind + id + "." + field.Name + " = " + field.GetValue(value);
     }
 }
 

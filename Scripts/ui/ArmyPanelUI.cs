@@ -54,6 +54,55 @@ public partial class DealOrForceGame
         _ => "✕"
     };
 
+    /// <summary>Where a formation is in its sea lift, or empty when it is not on one.</summary>
+    private string SeaLiftCaption(Simulation.Army army)
+    {
+        if (Simulation.SeaLift.Of(_campaign, army) is not { } lift) return "";
+        string Region(int province)
+        {
+            var map = _campaign.ProvinceMap;
+            if (map is null || province <= 0 || province > map.ProvinceCount) return "?";
+            return _campaign.States.Find(s => s.MapIndex == map.ProvinceToState[province])?.DisplayName ?? "?";
+        }
+        var fleet = _campaign.Fleets.Find(f => f.Id == lift.FleetId);
+        var fleetName = fleet is null ? "?" : Simulation.Loc.Get(fleet.Name);
+        if (army.EmbarkedFleetId >= 0) return Simulation.Loc.Format("⚓ aboard {0}, landing at {1}", fleetName, Region(lift.LandingProvinceId));
+        return army.ProvinceId == lift.PortProvinceId
+            ? Simulation.Loc.Format("⚓ waiting at {0} for {1}", Region(lift.PortProvinceId), fleetName)
+            : Simulation.Loc.Format("⚓ marching to {0} to board {1}", Region(lift.PortProvinceId), fleetName);
+    }
+
+    private Button _armyDisbandButton;
+    private ulong _disbandArmedUntil;
+
+    /// <summary>
+    /// Disband the selection: the first press asks, a second within four seconds sends them home.
+    /// </summary>
+    private void DisbandSelectedDivisions()
+    {
+        var mine = SelectedPlayerDivisions();
+        if (mine.Length == 0) return;
+        var now = Time.GetTicksMsec();
+        if (now > _disbandArmedUntil)
+        {
+            _disbandArmedUntil = now + 4000;
+            var men = mine.Sum(army => (long)(army.Personnel * army.Strength));
+            SetArmyFeedback(Simulation.Loc.Format("Disband {0:N0} division(s), {1:N0} men? Press Disband (or Delete) again to confirm.", mine.Length, men));
+            if (IsInstanceValid(_armyDisbandButton)) _armyDisbandButton.Text = Tr("Confirm");
+            return;
+        }
+        _disbandArmedUntil = 0;
+        if (IsInstanceValid(_armyDisbandButton)) _armyDisbandButton.Text = Tr("Disband");
+        var order = new Simulation.DisbandArmiesCommand { IssuerId = _campaign.Player.Id, ArmyIds = mine.Select(army => army.Id).ToArray() };
+        _campaign.Commands.Enqueue(order);
+        _campaign.Commands.ApplyAll(_campaign);
+        var feedback = Simulation.Loc.Format("{0:N0} division(s) sent home.", order.StoodDown) +
+                       (order.Refusal.Length > 0 ? " " + order.Refusal : "");
+        if (_selectedArmies.All(army => !_campaign.Armies.Contains(army))) ClearArmySelectionAndClose();
+        else { _selectedArmies.RemoveAll(army => !_campaign.Armies.Contains(army)); ShowSelectedArmies(); }
+        SetArmyFeedback(feedback);
+    }
+
     private void BuildArmyPanel()
     {
         _armyCaptionIconButtons.Clear();
@@ -87,6 +136,11 @@ public partial class DealOrForceGame
         _armyPanelCount.ClipText = true;
         _armyPanelCount.CustomMinimumSize = new Vector2(84, 0);
         header.AddChild(_armyPanelCount);
+        // Halving the selection by hand as well as by Ctrl+X: half of several formations stay
+        // selected for the next order, and one formation of two or more divisions is cut in two.
+        var halve = ActionButton("½", SplitSelectionInHalf, 32, 28);
+        halve.TooltipText = Ui.Tip(Tr("Split in half (Ctrl+X): of several formations half stay selected for the next order and the rest stay where they stand; one formation of two or more divisions is cut in two."));
+        header.AddChild(halve);
         header.AddChild(HandbookButton("orders"));
         header.AddChild(ActionButton("×", ClearArmySelectionAndClose, 32, 28));
 
@@ -199,58 +253,14 @@ public partial class DealOrForceGame
         AddOrderButton(plans, "army_reserve", ArmyOrder.ReserveFront, "Reserve",
             "Stand behind the contact line, recover faster and reinforce defensive battles nearby.");
 
-        var execution = new HFlowContainer();
-        execution.AddThemeConstantOverride("h_separation", 4);
-        execution.AddThemeConstantOverride("v_separation", 4);
-        plansPage.AddChild(execution);
-        var prepare = ArmyIconButton("Prepare", () => IssuePlanExecution(false), 102, 32, false, "plan_prepare");
-        prepare.TooltipText = Ui.Tip(Tr("Hold offensive formations on their sector so they entrench and accumulate a plan."));
-        execution.AddChild(prepare);
-        var execute = ArmyIconButton("Execute", () => IssuePlanExecution(true), 104, 32, true, "plan_execute");
-        execute.TooltipText = Ui.Tip(Tr("Activate the selected offensive plans. Front-line and reserve orders stay as they are."));
-        execution.AddChild(execute);
-        var autoFront = ArmyIconButton("Auto-deploy", AutoDeployFront, 118, 32, false, "auto_deploy");
-        autoFront.TooltipText = Ui.Tip(Tr("Spread the selection across unique sectors of the active front."));
-        execution.AddChild(autoFront);
+        var autoFront = ArmyIconButton("", AutoDeployFront, 56, 36, false, "auto_deploy");
+        ArmyCommandTip(autoFront, "Auto-deploy", "Spread the selection across unique sectors of the active front.");
+        plans.AddChild(autoFront);
+        // The plan tools themselves - front, offensive, defensive line, eraser, execute - are
+        // on the map in the planning bar (PlanningBarUI), where the plan is drawn.
 
-        // ---- the brush ----------------------------------------------------------------
-        // An order names a role; a drawn line says where. The three buttons pick which
-        // kind of line the brush is drawing, and pressing the same one again commits it.
-        plansPage.AddChild(Title("DRAW ON THE MAP", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
-        // Two columns leave room for translated captions as well as the pictograms.
-        var draw = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        draw.AddThemeConstantOverride("h_separation", 4);
-        draw.AddThemeConstantOverride("v_separation", 4);
-        plansPage.AddChild(draw);
-        // The default way to man a war: one front against everybody at once. A border front
-        // against a single country (the button after it) is still there for a player who
-        // wants a separate army group on each enemy.
-        var wholeFront = ArmyIconButton("Whole front", AssignWholeFront, 118, 30, true, "plan_front");
-        wholeFront.Name = "WholeFront";
-        ArmyCommandTip(wholeFront, "Whole front",
-            "One front along every land border with every country at war with you: all wars, their allies and occupied ground. It grows and shrinks by itself as the line moves and as enemies join the war or make peace, and the selection spreads along all of it. Pressing it for another army group adds that group to the same front.");
-        draw.AddChild(wholeFront);
-        AddDrawButton(draw, "Front", "plan_front", FrontLineKind.Defence, "Front line",
-            "Draw the line to hold. The selection spreads along its length and digs in.");
-        AddDrawButton(draw, "Attack", "plan_attack", FrontLineKind.Offensive, "Offensive line",
-            "Assign ONE front first. RMB-drag the destination line inside its target country; release to save. Shift+RMB adds a later phase (up to 24); Alt+RMB redraws the active phase. Prepare pauses locally; Execute advances through the phases and stops after the final objective.");
-        AddDrawButton(draw, "Defend", "plan_fallback", FrontLineKind.Fallback, "Defensive line",
-            "RMB-drag a connected line on controlled land. Release to distribute divisions evenly and hold immediately, in peace or war. Backtrack to shorten; Alt+RMB redraws the selected line; Esc cancels.");
-        var dropLine = ArmyIconButton("Clear plans", ClearDrawnLine, 96, 30, false, "plan_clear");
-        Tip(dropLine, "Delete the plans of the selected divisions and stop their planned movement. Other plans and ongoing battles remain.");
-        draw.AddChild(dropLine);
-        _planEraserButton = ArmyIconButton("Eraser", TogglePlanEraser, 90, 30, false, "plan_erase");
-        Tip(_planEraserButton, "Click a plan on the map to erase it. An offensive arrow or destination removes only the objective and keeps its departure front. Esc cancels.");
-        plansPage.AddChild(_planEraserButton);
+        // (The brush, its feedback line and its instructions are the planning bar now.)
 
-        _drawFeedback = Title("Pick a line, then drag along the map. Right button rubs out.",
-            11, Ui.Colour("text.muted"));
-        _drawFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        plansPage.AddChild(_drawFeedback);
-        var steps = Title("Defence: select divisions → Defend → right-drag on controlled land and release. Divisions occupy and hold the line immediately.\nOffensive: Front → Attack → Execute. Prepare pauses. Shift + right-drag adds a phase; Alt + right-drag redraws the active phase; Esc cancels drawing.",
-            12, Ui.Colour("text.caption"));
-        steps.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        plansPage.AddChild(steps);
 
         // ---- posture and reinforcement -------------------------------------------------
         doctrinePage.AddChild(Title("POSTURE", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
@@ -314,6 +324,11 @@ public partial class DealOrForceGame
         var dropLead = ActionButton("Drop lead", RemoveLeadFromSelection, 104, 30, false, Icon("drop_lead"));
         dropLead.TooltipText = Ui.Tip(Tr("Remove the lead division from the selection without moving or disbanding it."));
         selection.AddChild(dropLead);
+        // Home: the men go back to the reserve. Asked twice, because there is no undo.
+        var disband = ActionButton("Disband", () => DisbandSelectedDivisions(), 96, 30);
+        disband.TooltipText = Ui.Tip(Tr("Disband (Delete)\nSend the selected divisions home: their men go back to the manpower reserve. Not in battle or aboard a ship. Press twice to confirm."));
+        selection.AddChild(disband);
+        _armyDisbandButton = disband;
         var region = ActionButton("Region info", ShowSelectedArmyRegion, 102, 30, false, Icon("region"));
         region.TooltipText = Ui.Tip(Tr("Open the region dossier for the lead division's position. ← Orders in its header, or Escape, brings the orders back."));
         selection.AddChild(region);
@@ -527,6 +542,8 @@ public partial class DealOrForceGame
                 CommanderCaption(group),
                 divisions.Sum(army => army.Personnel),
                 divisions.Select(army => army.ArmyGroupId).Distinct().Count());
+        // A formation crossing the sea says where in the crossing it is.
+        if (SeaLiftCaption(divisions[0]) is { Length: > 0 } crossing) _armyPanelSubtitle.Text = crossing + " · " + _armyPanelSubtitle.Text;
         _armyPanelSubtitle.TooltipText = Ui.Tip(CommanderCaption(group) + (group is null ? "" :
             "\n" + Tr(Simulation.Generals.Trait(group.CommanderTrait).Description) +
             "\n" + Tr("Every commander, and relieving one: Military → Generals.")));

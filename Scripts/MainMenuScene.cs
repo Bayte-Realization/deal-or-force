@@ -604,6 +604,21 @@ public partial class MainMenuScene : Control
         }
     }
 
+    public override void _Notification(int what)
+    {
+        base._Notification(what);
+        if (what == NotificationApplicationFocusOut)
+        {
+            var chosen = SettingsCatalog.Chosen("background_fps");
+            if (int.TryParse(chosen, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var bgFps) && bgFps > 0)
+                Engine.MaxFps = bgFps;
+        }
+        else if (what == NotificationApplicationFocusIn)
+        {
+            Engine.MaxFps = Math.Max(0, (int)MathF.Round(SettingsCatalog.Number("max_fps")));
+        }
+    }
+
     private void ShowCredits()
     {
         if (_credits is null) return;

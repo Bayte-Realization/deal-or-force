@@ -4,6 +4,9 @@ $version = ([xml](Get-Content -LiteralPath (Join-Path $ProjectRoot 'GameVersion.
 if ($version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw 'Expected a numeric game release version.' }
 $expected = [regex]::Escape($version)
 $checks = @{
+    'Tools/FormableTests/VersionLabelTests.cs' = 'string\.Equals\(version, "' + $expected + '"'
+    "docs/CHANGELOG_${version}_EN.md" = '(?m)^# Deal or Force — EntertAlpha ' + $expected + '\s*$'
+    "docs/CHANGELOG_${version}_RU.md" = '(?m)^# Deal or Force — EntertAlpha ' + $expected + '\s*$'
     'Scripts/Simulation/GameBuildInfo.cs' = 'public const string Version = "' + $expected + '";'
     'Scripts/Simulation/SaveSystem.cs' = 'public const string GameVersion = GameBuildInfo\.Version;'
     'project.godot' = 'config/version="' + $expected + '"'

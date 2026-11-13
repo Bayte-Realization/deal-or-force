@@ -148,9 +148,20 @@ public static partial class Ultimatum
 
     public static void Tick(Campaign c)
     {
-        if (c is null) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same inbox sweep, yielded between papers.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null) yield break;
+        var ticked = 0;
         foreach (var paper in c.UltimatumPapers.Where(candidate => candidate.Pending).ToArray())
+        {
+            if (++ticked % 32 == 0) yield return 0;
             if (paper.ExpiresDay <= c.ElapsedDays) CloseUnread(c, paper);
+        }
+        yield return 0;
         Trim(c);
     }
 

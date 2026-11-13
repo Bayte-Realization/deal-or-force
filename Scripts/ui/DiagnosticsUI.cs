@@ -46,14 +46,14 @@ public partial class DealOrForceGame
     {
         if (!DiagnosticLogs.Enabled) return;
         DiagnosticLogs.SetDay(_campaign.ElapsedDays);
-        _frameReportFrames++;
-        _frameReportAccumulator += delta;
-        if (_frameDurations.Count < 4096) _frameDurations.Add(delta * 1000);
         // Wall time, not delta: the engine caps delta, so every stall longer than 150 ms was
         // written as 150 and the worst hitches - the ones a player calls a freeze - looked alike.
         var now = Time.GetTicksUsec();
         var wall = _lastFrameUsec == 0 ? delta * 1000 : (now - _lastFrameUsec) / 1000.0;
         _lastFrameUsec = now;
+        _frameReportFrames++;
+        _frameReportAccumulator += wall / 1000.0;
+        if (_frameDurations.Count < 4096) _frameDurations.Add(wall);
         if (wall >= 100) DiagnosticLogs.Write("performance", $"FRAME_STALL frame_ms={DiagnosticLogs.N(wall)} speed={_speed} paused={_campaign.IsPaused} pending_seconds={DiagnosticLogs.N(_dayAccumulator)} " +
             $"after={ButtonMotion.LastPressed} {DiagnosticLogs.N((now - ButtonMotion.LastPressedUsec) / 1000.0)}ms_ago");
         if (_frameReportAccumulator < 5) return;

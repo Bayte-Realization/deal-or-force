@@ -70,7 +70,7 @@ public sealed partial class GlobePresentation
         foreach (var marker in _armyStacks.Values)
         {
             var node = marker.Node;
-            if (node is null || !IsInstanceValid(node)) continue;
+            if (node is null || !IsInstanceValid(node) || !node.Visible) continue;
             if (!marker.MotionSettled)
             {
                 // A brand-new counter appears where it belongs. Nothing flies in from nowhere.
@@ -265,6 +265,7 @@ public sealed partial class GlobePresentation
         foreach (var list in _strategicMerges.Values) list.Clear();
         foreach (var marker in _armyStacks.Values)
         {
+            if (marker.Node is null || !IsInstanceValid(marker.Node) || !marker.Node.Visible) continue;
             marker.TargetPosition = ArmyMarkerPosition(marker);
             // The room a counter takes up is the room it is drawn in, which is where the
             // eased position is rather than where the province is - otherwise two counters

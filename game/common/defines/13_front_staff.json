@@ -30,5 +30,10 @@
   // Whether a division of a country at war that serves none of its wars - raised during it, or
   // released when another war ended - is told to hold the line of the nearest front at once,
   // rather than standing where it is until that front next moves.
-  "FrontStaffCallsUpIdle": true
+  "FrontStaffCallsUpIdle": true,
+
+  // One re-posting onto the empty post that reconnects a cut-off formation, from a free
+  // reserve. The formation in the pocket is not disbanded. Off, holes are filled by threat
+  // and this rule does not order that reserve.
+  "FrontStaffRelievesPockets": true
 }

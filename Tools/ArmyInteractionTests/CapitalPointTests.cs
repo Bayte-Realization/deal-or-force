@@ -35,6 +35,12 @@ static class CapitalPointTests
         return 6371.0 * 2 * Math.Asin(Math.Sqrt(h));
     }
 
+    private static bool OnOwnGround(Campaign campaign, Nation nation, CityDefinition city)
+    {
+        var province = CityCatalog.ProvinceUnder(campaign.ProvinceMap, city.Latitude, city.Longitude);
+        return province > 0 && campaign.ProvinceMap.ProvinceToNation[province] == nation.MapIndex;
+    }
+
     public static void Run(Campaign campaign)
     {
         CityCatalog.Reset();
@@ -46,9 +52,11 @@ static class CapitalPointTests
             // Côte d'Ivoire is governed from Abidjan and names Yamoussoukro its capital; the
             // catalogue's point is the government's, which is the one a war is about.
             if (nation.Iso == "CIV" || string.IsNullOrWhiteSpace(nation.CapitalName)) continue;
-            var city = cities.FirstOrDefault(candidate => candidate.Country == nation.Iso &&
-                                                          candidate.Capital is "national" or "seat" &&
-                                                          Plain(candidate.Name) == Plain(nation.CapitalName));
+            // A city no longer says which country it is in - the ground does: a capital of that
+            // name standing on the country's own ground.
+            var city = cities.FirstOrDefault(candidate => candidate.Capital is "national" or "seat" &&
+                                                          Plain(candidate.Name) == Plain(nation.CapitalName) &&
+                                                          OnOwnGround(campaign, nation, candidate));
             if (city is null) continue;
             compared++;
             var distance = Kilometres(nation.CapitalLatitude, nation.CapitalLongitude, city.Latitude, city.Longitude);

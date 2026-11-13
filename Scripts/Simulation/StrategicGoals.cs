@@ -162,9 +162,16 @@ public static class StrategicGoals
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || !campaign.FeatureEnabled("strategic_goals")) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily check, yielded between countries.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || !campaign.FeatureEnabled("strategic_goals")) yield break;
         for (var index = 0; index < campaign.Nations.Count; index++)
         {
+            if (index % 16 == 0) yield return 0;
             var nation = campaign.Nations[index];
             if (nation.Goals.Count == 0) continue;
             for (var slot = nation.Goals.Count - 1; slot >= 0; slot--)

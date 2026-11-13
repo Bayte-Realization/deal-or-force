@@ -63,21 +63,32 @@ public static class AiAdmiralty
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(AiAdmiralty))) return;
-        if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily admiralty pass, yielded between batches of fleets.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(AiAdmiralty))) yield break;
+        if (campaign.ProvinceMap is null || campaign.ProvinceController is null) yield break;
         // Each fleet thinks on its own day (below), so this pass has nothing to do on a step
         // that is not the start of one.
-        if (!campaign.StepOpensNewDay) return;
+        if (!campaign.StepOpensNewDay) yield break;
         ForgetGround();
         if (campaign.ElapsedDays % 7 == 0) Concentrate(campaign);
+        yield return 0;
 
+        var ticked = 0;
         foreach (var fleet in campaign.Fleets)
         {
+            if (++ticked % 16 == 0) yield return 0;
             if (fleet.Hulls <= 0) continue;
             var nation = campaign.NationById(fleet.NationId);
             // A player's navy is the player's - unless they have handed it to the admiralty,
             // which then runs it exactly as it runs everybody else's.
             if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Navy))) continue;
+            // A fleet carrying out a sea lift has its orders already.
+            if (SeaLift.Holds(campaign, fleet)) continue;
 
             // Each fleet thinks on its own day, so two hundred navies do not all think at
             // once.
@@ -144,7 +155,8 @@ public static class AiAdmiralty
         var groups = new Dictionary<(int Nation, int Berth), List<Fleet>>();
         foreach (var fleet in campaign.Fleets)
         {
-            if (fleet.Hulls <= 0 || !fleet.InPort || fleet.IsLoaded || fleet.HasOrder || fleet.HullsOrdered > 0) continue;
+            if (fleet.Hulls <= 0 || !fleet.InPort || fleet.IsLoaded || fleet.HasOrder || fleet.HullsOrdered > 0 ||
+                SeaLift.Holds(campaign, fleet)) continue;
             var key = (fleet.NationId, fleet.BerthProvinceId);
             if (!groups.TryGetValue(key, out var list)) groups[key] = list = new List<Fleet>();
             list.Add(fleet);

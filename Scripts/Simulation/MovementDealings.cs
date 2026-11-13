@@ -110,14 +110,12 @@ public static class MovementDealings
     /// <summary>Whether this country holds ground the movement claims, or is allied to one that does.</summary>
     public static bool HoldsItsClaim(Campaign campaign, Nation country, Nation movement)
     {
-        var definition = Movements.DefinitionOf(movement);
-        if (definition is null) return false;
-        foreach (var id in definition.Homeland)
+        var holders = HomelandHolders(campaign, movement);
+        for (var i = 0; i < holders.Length; i++)
         {
-            var region = Movements.StateById(campaign, id);
-            var holder = region is null ? null : campaign.Nations.Find(nation => nation.MapIndex == region.NationMapIndex);
-            if (holder is null || holder.Id == movement.Id) continue;
-            if (holder.Id == country.Id || CampaignDiplomacy.Peek(campaign, country.Id, holder.Id)?.Stance == DiplomaticStance.Allied) return true;
+            var holder = holders[i];
+            if (holder < 0) continue;
+            if (holder == country.Id || CampaignDiplomacy.Peek(campaign, country.Id, holder)?.Stance == DiplomaticStance.Allied) return true;
         }
         return false;
     }
@@ -129,23 +127,58 @@ public static class MovementDealings
     /// </summary>
     public static Nation RivalHolding(Campaign campaign, Nation country, Nation movement)
     {
-        var definition = Movements.DefinitionOf(movement);
-        if (definition is null || country is null) return null;
+        if (country is null || movement is null) return null;
+        var holders = HomelandHolders(campaign, movement);
         Nation found = null;
-        foreach (var id in definition.Homeland)
+        for (var i = 0; i < holders.Length; i++)
         {
-            var region = Movements.StateById(campaign, id);
-            var holder = region is null ? null : campaign.Nations.Find(nation => nation.MapIndex == region.NationMapIndex);
-            if (holder is null || holder.Id == movement.Id) continue;
+            var holderId = holders[i];
+            if (holderId < 0) continue;
             // Somebody that close is not a rival to be weakened but a side to be on.
-            if (holder.Id == country.Id || CampaignDiplomacy.Peek(campaign, country.Id, holder.Id)?.Stance == DiplomaticStance.Allied)
+            if (holderId == country.Id || CampaignDiplomacy.Peek(campaign, country.Id, holderId)?.Stance == DiplomaticStance.Allied)
                 return null;
             if (found is not null) continue;
-            if (Opinion(campaign, country.Id, holder.Id) <= campaign.Defines.AiIncitementRivalOpinion ||
-                CampaignDiplomacy.AtWar(campaign, country.Id, holder.Id))
-                found = holder;
+            if (Opinion(campaign, country.Id, holderId) <= campaign.Defines.AiIncitementRivalOpinion ||
+                CampaignDiplomacy.AtWar(campaign, country.Id, holderId))
+                found = campaign.NationById(holderId);
         }
         return found;
+    }
+
+    sealed class HolderMemory
+    {
+        public int Revision = int.MinValue;
+        public readonly Dictionary<int, int[]> ByMovement = new();
+    }
+
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, HolderMemory> HolderMemories = new();
+
+    /// <summary>
+    /// Who holds each homeland piece, in list order. -1 when nobody does, or the movement
+    /// itself does. Rebuilt when ownership changes. The weekly order search was resolving
+    /// the same pieces once per country.
+    /// </summary>
+    static int[] HomelandHolders(Campaign campaign, Nation movement)
+    {
+        if (campaign is null || movement is null) return Array.Empty<int>();
+        var memory = HolderMemories.GetValue(campaign, static _ => new HolderMemory());
+        if (memory.Revision != campaign.OwnershipRevision)
+        {
+            memory.Revision = campaign.OwnershipRevision;
+            memory.ByMovement.Clear();
+        }
+        if (memory.ByMovement.TryGetValue(movement.Id, out var cached)) return cached;
+        var homeland = Movements.DefinitionOf(movement)?.Homeland;
+        var count = homeland?.Count ?? 0;
+        var ids = new int[count];
+        for (var i = 0; i < count; i++)
+        {
+            var region = Movements.StateById(campaign, homeland[i]);
+            var holder = region is null ? null : campaign.NationByMapIndex(region.NationMapIndex);
+            ids[i] = holder is null || holder.Id == movement.Id ? -1 : holder.Id;
+        }
+        memory.ByMovement[movement.Id] = ids;
+        return ids;
     }
 
     /// <summary>How many movements this country pays.</summary>
@@ -232,7 +265,7 @@ public static class MovementDealings
             foreach (var id in Movements.DefinitionOf(movement)?.Homeland ?? new List<string>())
             {
                 var region = Movements.StateById(campaign, id);
-                var holder = region is null ? null : campaign.Nations.Find(nation => nation.MapIndex == region.NationMapIndex);
+                var holder = region is null ? null : campaign.NationByMapIndex(region.NationMapIndex);
                 if (holder is null || holder.Id == movement.Id || holder.Id == country.Id) continue;
                 OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, holder.Id, country.Id), reason);
             }
@@ -352,41 +385,78 @@ public static class MovementDealings
     /// </summary>
     // The list of living movements changes only when an uprising founds one, so it is kept
     // for the day: a newborn movement joins its countries' deliberations tomorrow.
-    private static Campaign _movementsFor;
-    private static int _movementsDay = -1;
-    private static readonly List<Nation> LivingMovements = new();
-
     internal static void Ai(Campaign campaign)
     {
-        if (!ReferenceEquals(_movementsFor, campaign) || _movementsDay != campaign.ElapsedDays)
+        foreach (var _ in AiStages(campaign)) { }
+    }
+
+    private static float SumFollowingSupport(Campaign campaign, Nation country, MovementState state)
+    {
+        var states = campaign.StatesOf(country);
+        var total = 0f;
+        for (var i = 0; i < states.Length; i++)
         {
-            LivingMovements.Clear();
-            foreach (var candidate in campaign.Nations) if (candidate.Movement is { Dissolved: false }) LivingMovements.Add(candidate);
-            _movementsFor = campaign;
-            _movementsDay = campaign.ElapsedDays;
+            var mapIndex = states[i].MapIndex;
+            var support = state.Support.GetValueOrDefault(mapIndex);
+            if (support >= 0.05f || state.Infiltrated.ContainsKey(mapIndex))
+                total += support;
         }
-        if (LivingMovements.Count == 0) return;
+        return total;
+    }
+
+    private static bool CheckHoldsClaim(Campaign campaign, Nation country, Nation movement, ref bool known, ref bool cached)
+    {
+        if (!known)
+        {
+            cached = HoldsItsClaim(campaign, country, movement);
+            known = true;
+        }
+        return cached;
+    }
+
+    private static bool TryDealingAction(Campaign campaign, Nation country, Nation movement, string action, ref bool acted)
+    {
+        if (Refusal(campaign, country, movement, action).Length > 0) return false;
+        new MovementDealingCommand { IssuerId = country.Id, MovementId = movement.Id, Action = action }.Apply(campaign);
+        acted = true;
+        return true;
+    }
+
+    internal static IEnumerable<int> AiStages(Campaign campaign)
+    {
+        var movements = new List<Nation>();
+        for (var i = 0; i < campaign.Nations.Count; i++)
+        {
+            var candidate = campaign.Nations[i];
+            if (candidate.Movement is { Dissolved: false }) movements.Add(candidate);
+        }
+        if (movements.Count == 0) yield break;
         // Each country once every four weeks - no country's policy towards a movement is a
         // weekly matter - and on a day of its own, so a twenty-eighth of the world each day
         // rather than a quarter of it on one day in seven.
         var cycle = 4 * Math.Max(1, campaign.Defines.EconomyTickDays);
-        foreach (var country in campaign.Nations)
+        for (var ci = 0; ci < campaign.Nations.Count; ci++)
         {
+            var country = campaign.Nations[ci];
             if (!MovementRules.OnItsDay(campaign, country.Id, cycle)) continue;
             if (country.IsHuman || country.Movement is not null || campaign.StatesOf(country).Length == 0) continue;
+            var fundedCount = -1;
             var acted = false;
-            foreach (var movement in LivingMovements)
+            for (var mi = 0; mi < movements.Count; mi++)
             {
                 if (acted) break;
+                var movement = movements[mi];
                 var state = movement.Movement;
                 // The list is the day's; a movement can win its country or break up within the
                 // day (a carried vote, a rising, a fall), and is not a movement any more.
                 if (state is null || state.Dissolved) continue;
                 // Relations nobody has yet are not made here just to be read: they are neutral.
                 var opinion = Opinion(campaign, country.Id, movement.Id);
-                var claimant = opinion <= -30f || HoldsItsClaim(campaign, country, movement);
+                var holdsClaim = false;
+                var holdsClaimKnown = false;
+                var claimant = opinion <= -30f || CheckHoldsClaim(campaign, country, movement, ref holdsClaimKnown, ref holdsClaim);
                 var hosting = state.Landless && state.HeadquartersStateMapIndex >= 0 && MovementRules.OwnerOf(campaign,
-                    campaign.States.Find(region => region.MapIndex == state.HeadquartersStateMapIndex)) == country;
+                    campaign.StateByMapIndex(state.HeadquartersStateMapIndex)) == country;
                 // The enemy of my enemy: backed for whose ground it claims, not for what it is -
                 // short of a movement that hates this country as much as the rival does.
                 var rival = !claimant && opinion > -20f && !state.DesignatedBy.Contains(country.Id)
@@ -397,43 +467,45 @@ public static class MovementDealings
                 if (!claimant && !hosting && rival is null && opinion < 20f &&
                     !(state.Landless && state.HeadquartersStateMapIndex < 0)) continue;
                 var roll = MovementRules.Roll(campaign.Seed, country.Id, campaign.ElapsedDays, movement.Id);
-                bool Try(string action)
-                {
-                    if (Refusal(campaign, country, movement, action).Length > 0) return false;
-                    new MovementDealingCommand { IssuerId = country.Id, MovementId = movement.Id, Action = action }.Apply(campaign);
-                    acted = true;
-                    return true;
-                }
 
                 if (rival is not null)
                 {
                     var defines = campaign.Defines;
                     if (!state.SponsoredBy.ContainsKey(country.Id) && roll < defines.AiIncitementFundChance &&
-                        Funded(campaign, country) < defines.AiIncitementMaxFunded &&
-                        country.Treasury >= defines.MovementSponsorPerYear * defines.AiIncitementTreasuryYears &&
-                        Try("sponsor"))
+                        country.Treasury >= defines.MovementSponsorPerYear * defines.AiIncitementTreasuryYears)
                     {
-                        DiagnosticLogs.Write("simulation",
-                            $"MOVEMENT_INCITED by={country.Tag} movement={movement.Tag} against={rival.Tag} day={campaign.ElapsedDays}");
-                        continue;
+                        if (fundedCount < 0) fundedCount = Funded(campaign, country);
+                        if (fundedCount < defines.AiIncitementMaxFunded && TryDealingAction(campaign, country, movement, "sponsor", ref acted))
+                        {
+                            DiagnosticLogs.Write("simulation",
+                                $"MOVEMENT_INCITED by={country.Tag} movement={movement.Tag} against={rival.Tag} day={campaign.ElapsedDays}");
+                            continue;
+                        }
                     }
                     if (!state.RecognisedBy.Contains(country.Id) &&
-                        roll >= 1f - defines.AiIncitementRecogniseChance && Try("recognise")) continue;
+                        roll >= 1f - defines.AiIncitementRecogniseChance && TryDealingAction(campaign, country, movement, "recognise", ref acted)) continue;
                 }
 
-                var threatened = HoldsItsClaim(campaign, country, movement) || opinion <= -40f;
+                var threatened = opinion <= -40f || CheckHoldsClaim(campaign, country, movement, ref holdsClaimKnown, ref holdsClaim);
                 if (threatened)
                 {
-                    if (opinion <= -30f && roll < 0.08f && Try("designate")) continue;
-                    var following = FollowingIn(campaign, country, state).Sum(region => state.Support.GetValueOrDefault(region.MapIndex));
-                    if (following >= 0.3f && roll < 0.35f && Try("crack_down")) continue;
+                    if (opinion <= -30f && roll < 0.08f && TryDealingAction(campaign, country, movement, "designate", ref acted)) continue;
+                    var following = SumFollowingSupport(campaign, country, state);
+                    if (following >= 0.3f && roll < 0.35f && TryDealingAction(campaign, country, movement, "crack_down", ref acted)) continue;
                     continue;
                 }
                 if (state.DesignatedBy.Contains(country.Id)) continue;
-                if (opinion >= MovementActions.RecognitionNeeds(campaign.Defines, state) + 25f && roll < 0.03f && Try("recognise")) continue;
-                if (state.Landless && state.HeadquartersStateMapIndex < 0 && opinion >= 20f && roll < 0.25f && Try("offer_asylum")) continue;
-                if (opinion >= 60f && roll < 0.02f && country.Treasury > 5f && Try("sponsor")) continue;
+                if (opinion >= MovementActions.RecognitionNeeds(campaign.Defines, state) + 25f && roll < 0.03f && TryDealingAction(campaign, country, movement, "recognise", ref acted)) continue;
+                if (state.Landless && state.HeadquartersStateMapIndex < 0 && opinion >= 20f && roll < 0.25f && TryDealingAction(campaign, country, movement, "offer_asylum", ref acted)) continue;
+                if (opinion >= 60f && roll < 0.02f && country.Treasury > 5f && TryDealingAction(campaign, country, movement, "sponsor", ref acted)) continue;
             }
+            // One country a stage. The work is per country - every movement the country has an
+            // opinion about - and a country that holds views on many of them was measured
+            // carrying a whole stage of two alone: one stage of two countries reached 23 ms
+            // against a nine millisecond frame. Halving the stage halves the longest one, and
+            // the world does not move: an A/B of this line alone left the fingerprint at
+            // EEABD8D70B342988 both ways.
+            yield return 0;
         }
     }
 }

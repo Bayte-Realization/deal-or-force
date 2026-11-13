@@ -15,6 +15,17 @@
     <RootNamespace>DealOrForce.Tools</RootNamespace>
     <AssemblyName>SimBench</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!--
+      The shipping game runs server GC with a 4 GiB hard limit (DealOrForce.csproj and
+      runtimeconfig.template.json). A bench built without them collects on the workstation
+      collector, so every pause it reports is a pause the player never sees - and the runs that
+      sized the game's GC only matched it by remembering DOTNET_gcServer=1 at the command line.
+      Same collector here, so a number from the bench means the same thing as a number from the
+      game. FormableTests deliberately does the opposite: it is a test host and wants cheap,
+      short-lived runs.
+    -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>

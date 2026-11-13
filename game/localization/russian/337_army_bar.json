@@ -1,0 +1,15 @@
+// The army bar (ArmyBarUI).
+{
+  "Reserve": "Резерв",
+  "At sea": "В море",
+  "In battle": "В бою",
+  "Attacking": "Наступает",
+  "Holding the front": "Держит фронт",
+  "On the march": "На марше",
+  "Idle": "Без дела",
+  "{0:N0} divisions · {1:N0} men": "Дивизий: {0:N0} · {1:N0} чел.",
+  "Click: command this army · double-click: go to it · Ctrl+click: move the selected divisions into it": "Щелчок: командовать армией · двойной щелчок: к ней · Ctrl+щелчок: перевести в неё выбранные дивизии",
+  "+ New army": "+ Новая армия",
+  "Select divisions first: a new army is raised from the selection.": "Сначала выберите дивизии: новая армия формируется из выбранных.",
+  "New army\nRaise a new army headquarters from the selected divisions.": "Новая армия\nСформировать штаб новой армии из выбранных дивизий."
+}

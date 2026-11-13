@@ -328,6 +328,7 @@ public static class WarInterventions
                     if (bond.Stance == DiplomaticStance.Allied)
                     {
                         bond.Stance = DiplomaticStance.Neutral;
+                        c.NoteAllianceChange();
                         OpinionSystem.Forget(c, bond, "alliance");
                     }
                     if (bond.GuaranteedBy(request.DonorId))

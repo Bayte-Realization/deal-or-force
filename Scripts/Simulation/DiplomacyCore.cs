@@ -118,8 +118,12 @@ public static class CampaignDiplomacy
         var high = Math.Max(a, b);
         var key = ((long)low << 32) | (uint)high;
         if (campaign.Relations.TryGetValue(key, out var relation)) return relation;
+        // A sleeping relation (RelationDormancy) wakes when anything means to write to it.
+        if (campaign.DormantRelations.Count > 0 && RelationDormancy.Wake(campaign, key) is { } woken) return woken;
         relation = new DiplomaticRelation { A = low, B = high };
         campaign.Relations[key] = relation;
+        MovementAi.NoteNewRelation(campaign, relation);
+        campaign.RelationInsertSink?.Add(relation);
         return relation;
     }
 
@@ -137,7 +141,9 @@ public static class CampaignDiplomacy
         if (a == b || a < 0 || b < 0) return null;
         var low = Math.Min(a, b);
         var high = Math.Max(a, b);
-        return campaign.Relations.TryGetValue(((long)low << 32) | (uint)high, out var relation)
+        var key = ((long)low << 32) | (uint)high;
+        return campaign.Relations.TryGetValue(key, out var relation) ||
+               campaign.DormantRelations.TryGetValue(key, out relation)
             ? relation
             : null;
     }
@@ -151,42 +157,9 @@ public static class CampaignDiplomacy
         a == b || a < 0 || b < 0 ? null : Peek(campaign, a, b)
             ?? new DiplomaticRelation { A = Math.Min(a, b), B = Math.Max(a, b) };
 
-    private static readonly List<StrategicWar> ActiveWars = new();
-    private static Campaign _activeWarsFor;
-    private static int _activeWarsStamp;
-
-    /// <summary>
-    /// Active wars, rebuilt when the war list's stamp changes, read everywhere. Called from
-    /// pair/third-country loops that run O(countries) times a day over O(wars) each: the
-    /// snapshot costs one filtered copy per war-list change, and each ask stops walking the
-    /// full war list with side-set tests. The stamp is the list's count against the
-    /// campaign's war revision, so a war declared and another ended between two asks still
-    /// reads as a change. Two campaigns in one process each keep their own snapshot.
-    /// </summary>
-    private static List<StrategicWar> ActiveWarsOf(Campaign campaign)
-    {
-        var stamp = campaign.Wars.Count * 1000003 + campaign.WarRevision;
-        if (!ReferenceEquals(_activeWarsFor, campaign) || stamp != _activeWarsStamp || !AllStillActive(ActiveWars))
-        {
-            ActiveWars.Clear();
-            foreach (var war in campaign.Wars)
-                if (!war.Ended) ActiveWars.Add(war);
-            _activeWarsFor = campaign;
-            _activeWarsStamp = stamp;
-        }
-        return ActiveWars;
-    }
-
-    private static bool AllStillActive(List<StrategicWar> wars)
-    {
-        for (var i = 0; i < wars.Count; i++)
-            if (wars[i].Ended) return false;
-        return true;
-    }
-
     public static bool AtWar(Campaign campaign, int a, int b)
     {
-        var wars = ActiveWarsOf(campaign);
+        var wars = Warfare.LiveWars(campaign);
         for (var index = 0; index < wars.Count; index++)
             if (!wars[index].Ended && wars[index].Opposes(a, b)) return true;
         return false;
@@ -195,8 +168,9 @@ public static class CampaignDiplomacy
     /// <summary>The war these two are fighting each other in, or null.</summary>
     public static StrategicWar WarBetween(Campaign campaign, int a, int b)
     {
-        foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Opposes(a, b)) return war;
+        var wars = Warfare.LiveWars(campaign);
+        for (var index = 0; index < wars.Count; index++)
+            if (!wars[index].Ended && wars[index].Opposes(a, b)) return wars[index];
         return null;
     }
 
@@ -233,7 +207,7 @@ public static class CampaignDiplomacy
         if (!reclaiming && relation?.Stance == DiplomaticStance.Allied) { reason = Loc.Get("Break the alliance first."); return false; }
         if (!reclaiming && relation?.NonAggressionPact == true) { reason = Loc.Get("A non-aggression pact is active."); return false; }
         if (!reclaiming && relation?.TruceUntil > campaign.ElapsedDays) { reason = Loc.Format("Truce: {0} days remain.", relation.TruceUntil - campaign.ElapsedDays); return false; }
-        if (!reclaiming && InternationalOrganizations.DefencePartners(campaign, attackerId).Contains(defenderId))
+        if (!reclaiming && InternationalOrganizations.HasDefencePartner(campaign, attackerId, defenderId))
         { reason = Loc.Get("Leave the shared collective-defence organization first."); return false; }
         if (attacker.IsSubject)
         {
@@ -275,6 +249,40 @@ public static class CampaignDiplomacy
         return true;
     }
 
+    internal static bool CanDeclareWarQuiet(Campaign campaign, int attackerId, int defenderId,
+        bool onOwnInitiative = true)
+    {
+        var attacker = campaign.NationById(attackerId);
+        var defender = campaign.NationById(defenderId);
+        if (attacker is null || defender is null || attacker == defender) return false;
+        if (!campaign.HasOwnedLand(attacker) || !campaign.HasOwnedLand(defender)) return false;
+        if (attacker.Landless || defender.Landless) return false;
+        if (AtWar(campaign, attackerId, defenderId)) return false;
+        var relation = Peek(campaign, attackerId, defenderId);
+        var responding = SecessionResponse.CanContest(campaign, attacker, defender);
+        var reclaiming = responding || SecessionResponse.Reclaiming(attacker, defender);
+        if (!reclaiming && relation?.Stance == DiplomaticStance.Allied) return false;
+        if (!reclaiming && relation?.NonAggressionPact == true) return false;
+        if (!reclaiming && relation?.TruceUntil > campaign.ElapsedDays) return false;
+        if (!reclaiming && InternationalOrganizations.HasDefencePartner(campaign, attackerId, defenderId)) return false;
+        if (attacker.IsSubject)
+        {
+            if (attacker.AnswersTo(defenderId)) return false;
+            if (onOwnInitiative && SubjectCatalog.Of(attacker.SubjectType) is { MayDeclareWar: false }) return false;
+        }
+        var newbornUprising = !onOwnInitiative && defender.SecededFromId == attacker.Id &&
+            defender.LastSecessionDay == campaign.ElapsedDays;
+        if (!responding && !newbornUprising && !SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex))
+        {
+            var carriers = 0;
+            var fleets = campaign.Fleets;
+            for (var i = 0; i < fleets.Count; i++)
+                if (fleets[i].NationId == attackerId) carriers += fleets[i].Hulls;
+            if (carriers <= 0) return false;
+        }
+        return true;
+    }
+
     /// <summary>
     /// Who may fight in a civil war besides the two sides: a state that the side answers to, or
     /// one that answers to it. Everybody else backs a side instead (ProxyWars).
@@ -312,6 +320,7 @@ public static class CampaignDiplomacy
         {
             if (enemyId == nationId) continue;
             var relation = Get(campaign, nationId, enemyId);
+            if (relation.Stance == DiplomaticStance.Allied) campaign.NoteAllianceChange();
             relation.Stance = DiplomaticStance.AtWar;
             relation.LastActionDay = campaign.ElapsedDays;
             if (opinionNote is not null) OpinionSystem.Remember(campaign, relation, opinionNote);
@@ -352,6 +361,7 @@ public static class CampaignDiplomacy
             attacker.DecisionAvailableDay.Remove(SecessionResponse.Prefix + defender.Id);
             campaign.PendingEvents.RemoveAll(e => e.NationId == attacker.Id && e.Options.Any(o => o.SecessionTargetId == defender.Id));
         }
+        if (relation.Stance == DiplomaticStance.Allied) campaign.NoteAllianceChange();
         relation.Stance = DiplomaticStance.AtWar;
         OpinionSystem.Remember(campaign, relation, "declared_war_on_us");
         OpinionSystem.Remember(campaign, relation, "fought_a_war");
@@ -528,16 +538,27 @@ public static class CampaignDiplomacy
         campaign.BorderDay = campaign.ElapsedDays;
         campaign.BorderForgetStamp = _borderForgetStamp;
 
+        var lastOwner = 0;
+        var lastOther = 0;
+        HashSet<int> lastSet = null;
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             var owner = controllers[province];
             if (owner == 0) continue;
-            foreach (var neighbour in topology.Neighbors[province])
+            var neighbours = topology.Neighbors[province];
+            for (var ni = 0; ni < neighbours.Length; ni++)
             {
-                var other = controllers[neighbour];
+                var other = controllers[neighbours[ni]];
                 if (other == 0 || other == owner) continue;
-                if (!table.TryGetValue(owner, out var set)) table[owner] = set = new HashSet<int>();
-                set.Add(other);
+                if (owner != lastOwner)
+                {
+                    lastOwner = owner;
+                    lastOther = 0;
+                    if (!table.TryGetValue(owner, out lastSet)) table[owner] = lastSet = new HashSet<int>();
+                }
+                if (other == lastOther) continue;
+                lastSet.Add(other);
+                lastOther = other;
             }
         }
         return table;
@@ -657,8 +678,23 @@ public sealed class GuaranteeCommand : ICampaignCommand
             relation.GuaranteeRequestedBy = -1;
             relation.GuaranteeRequestedDay = -9999;
         }
-        if (Guarantee) OpinionSystem.Remember(campaign, relation, "guaranteed_us");
-        else OpinionSystem.Forget(campaign, relation, "guaranteed_us");
+        if (Guarantee)
+        {
+            // The country that tore the promise up is the one that can stitch it back.
+            // The other side's grievance stays until they do.
+            if (relation.GuaranteeBrokenBy == IssuerId)
+            {
+                relation.GuaranteeBrokenBy = -1;
+                OpinionSystem.Forget(campaign, relation, "withdrew_guarantee");
+            }
+            OpinionSystem.Remember(campaign, relation, "guaranteed_us");
+        }
+        else
+        {
+            relation.GuaranteeBrokenBy = IssuerId;
+            OpinionSystem.Forget(campaign, relation, "guaranteed_us");
+            OpinionSystem.Remember(campaign, relation, "withdrew_guarantee");
+        }
         campaign.MarkStrategicChange();
     }
 }

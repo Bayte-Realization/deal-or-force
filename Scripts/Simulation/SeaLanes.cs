@@ -222,6 +222,9 @@ public static class SeaLanes
 
     public static int BasinCount { get { lock (Gate) return _basins; } }
 
+    internal static int[] CoastalProvinceArray(ProvinceTopology map) =>
+        CoastalProvinces(map) as int[] ?? _coastal;
+
     /// <summary>Forget the sea, so the next question works it out again from the raster.</summary>
     public static void Invalidate()
     {

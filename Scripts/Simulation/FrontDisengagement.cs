@@ -66,7 +66,7 @@ public static class FrontDisengagement
         foreach (var army in candidates ?? c.Armies)
         {
             if (!Eligible(c, nation, war, line, army)) continue;
-            context ??= new SelectionContext(c, war, nation.Id, hole);
+            context ??= SelectionContext.Obtain(c, war, nation.Id, hole);
             var battle = context.Battle(army.BattleId);
             if (battle is null || c.ElapsedDays - battle.StartedDay < Math.Max(0, c.Defines.FrontDisengagementMinimumBattleDays)) continue;
             var attacking = battle.Attackers.Contains(army.Id);
@@ -150,24 +150,27 @@ public static class FrontDisengagement
     /// selection window, not a promise that next hour's battlefield is still the same.</summary>
     internal sealed class SelectionContext : IDisposable
     {
-        private readonly Campaign _campaign;
-        private readonly StrategicWar _war;
-        private readonly int _nation;
-        private readonly ProvinceTopology _map;
-        private readonly ushort[] _controllers;
-        private readonly int _mapRevision;
-        private readonly int _armyCount;
-        private readonly int _battleCount;
-        private readonly int _attacker;
-        private readonly int _defender;
-        private readonly HashSet<int> _attackerAllies;
-        private readonly HashSet<int> _defenderAllies;
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, SelectionContext> Pool = new();
+        private bool _inUse;
+        private Campaign _campaign;
+        private StrategicWar _war;
+        private int _nation;
+        private ProvinceTopology _map;
+        private ushort[] _controllers;
+        private int _mapRevision;
+        private int _armyCount;
+        private int _battleCount;
+        private int _attacker;
+        private int _defender;
+        private readonly HashSet<int> _attackerAllies = new();
+        private readonly HashSet<int> _defenderAllies = new();
         private readonly Dictionary<(int Id, int Battle), Army> _units = new();
         private readonly Dictionary<int, LandBattle> _battles = new();
         private readonly Dictionary<(LandBattle Battle, bool Attacking), SideTotals> _totals = new();
         private readonly HashSet<ushort> _friendly = new();
         private readonly HashSet<ushort> _routeAllowed = new();
         private readonly HashSet<ushort> _hostile = new();
+        private readonly HashSet<ushort> _passage = new();
         private readonly HashSet<int> _unsafe = new();
         private readonly Dictionary<(int From, int Hole), int[]> _holeRoutes = new();
         private readonly Dictionary<(int Army, int Hole), int> _retreats = new();
@@ -178,18 +181,45 @@ public static class FrontDisengagement
         private readonly Dictionary<int, int> _crowding = new();
         private readonly Dictionary<(int Army, int Province), int> _excludedCrowding = new();
         private bool _crowdingReady;
-        private readonly int _ownMapIndex;
+        private int _ownMapIndex;
         private int _hole;
         internal readonly HashSet<int> Occupied = new();
 
-        internal SelectionContext(Campaign c, StrategicWar war, int nation, int hole)
+        internal static SelectionContext Obtain(Campaign c, StrategicWar war, int nation, int hole)
+        {
+            var pooled = Pool.GetValue(c, static _ => new SelectionContext());
+            if (!pooled._inUse)
+            {
+                pooled.Initialize(c, war, nation, hole);
+                return pooled;
+            }
+            var extra = new SelectionContext();
+            extra.Initialize(c, war, nation, hole);
+            return extra;
+        }
+
+        private SelectionContext() { }
+
+        internal SelectionContext(Campaign c, StrategicWar war, int nation, int hole) =>
+            Initialize(c, war, nation, hole);
+
+        private void Initialize(Campaign c, StrategicWar war, int nation, int hole)
         {
             using var measured = SimProfiler.Measure("        disengage:index");
+            _inUse = true;
             _campaign = c; _war = war; _nation = nation; _map = c.ProvinceMap;
             _controllers = c.ProvinceController; _mapRevision = c.MapRevision;
             _armyCount = c.Armies.Count; _battleCount = c.Battles.Count; _hole = hole;
             _attacker = war.AttackerId; _defender = war.DefenderId;
-            _attackerAllies = new(war.AttackerAllies); _defenderAllies = new(war.DefenderAllies);
+            _attackerAllies.Clear();
+            foreach (var id in war.AttackerAllies) _attackerAllies.Add(id);
+            _defenderAllies.Clear();
+            foreach (var id in war.DefenderAllies) _defenderAllies.Add(id);
+            _units.Clear(); _battles.Clear(); _totals.Clear();
+            _friendly.Clear(); _routeAllowed.Clear(); _hostile.Clear(); _passage.Clear(); _unsafe.Clear();
+            _holeRoutes.Clear(); _retreats.Clear();
+            _crowding.Clear(); _excludedCrowding.Clear(); _crowdingReady = false;
+            Occupied.Clear();
             var own = c.NationById(nation);
             _ownMapIndex = own?.MapIndex ?? -1;
             if (own is not null) _friendly.Add((ushort)own.MapIndex);
@@ -203,8 +233,8 @@ public static class FrontDisengagement
                 if (own is not null) _routeAllowed.Add((ushort)own.MapIndex);
             }
             else WarCoalition.FillControllers(c, war, war.IsAttacking(nation), _routeAllowed);
-            var passage = MilitaryAccess.Controllers(c, nation);
-            _friendly.UnionWith(passage); _routeAllowed.UnionWith(passage);
+            MilitaryAccess.FillControllers(c, nation, _passage);
+            _friendly.UnionWith(_passage); _routeAllowed.UnionWith(_passage);
             foreach (var battle in c.Battles)
             {
                 if (battle.Ended) continue;
@@ -292,6 +322,12 @@ public static class FrontDisengagement
             foreach (var search in _searches.Values) search.Dispose();
             _components?.Dispose(); _components = null;
             _searches.Clear(); _searchOrder.Clear(); _holeRoutes.Clear(); _retreats.Clear();
+            _units.Clear(); _battles.Clear(); _totals.Clear();
+            _crowding.Clear(); _excludedCrowding.Clear(); Occupied.Clear();
+            _friendly.Clear(); _routeAllowed.Clear(); _hostile.Clear(); _passage.Clear(); _unsafe.Clear();
+            _attackerAllies.Clear(); _defenderAllies.Clear();
+            _campaign = null; _war = null; _map = null; _controllers = null;
+            _inUse = false;
         }
 
         internal int WithdrawalProvince(Army army)

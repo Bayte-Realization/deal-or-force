@@ -81,11 +81,19 @@ public static class IntelNetworks
 
     public static void Tick(Campaign c)
     {
-        if (c is null || !c.FeatureEnabled("intelligence") || !MechanicFeatures.SystemEnabled(c, nameof(IntelNetworks))) return;
-        if (c.ElapsedDays % 7 != 0) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same weekly network pass, yielded between batches of owners.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !c.FeatureEnabled("intelligence") || !MechanicFeatures.SystemEnabled(c, nameof(IntelNetworks))) yield break;
+        if (c.ElapsedDays % 7 != 0) yield break;
         var defines = c.Defines;
+        var scanned = 0;
         foreach (var owner in c.Nations)
         {
+            if (++scanned % 8 == 0) yield return 0;
             if (owner.IntelNetworks.Count == 0) continue;
             foreach (var targetId in owner.IntelNetworks.Keys.OrderBy(id => id).ToList())
             {
@@ -103,7 +111,8 @@ public static class IntelNetworks
                     strength + defines.IntelNetworkGrowth * (1f - counter));
             }
         }
-        if (c.ElapsedDays % 28 == 0) Ai(c);
+        if (c.ElapsedDays % 28 == 0)
+            foreach (var _ in AiStages(c)) yield return 0;
     }
 
     private static void Expose(Campaign c, Nation owner, Nation target)
@@ -126,10 +135,12 @@ public static class IntelNetworks
     /// with first, then rivals and the most hostile of their neighbours - one at a time, while
     /// the treasury allows and the service has room.
     /// </summary>
-    private static void Ai(Campaign c)
+    private static IEnumerable<int> AiStages(Campaign c)
     {
+        var scanned = 0;
         foreach (var owner in c.Nations)
         {
+            if (++scanned % 4 == 0) yield return 0;
             if (owner.IsHuman || owner.Movement is not null || owner.Population <= 0 || owner.Gdp < 10f) continue;
             // A service grows with the state that pays for it: one network for a small country,
             // the full complement only for the largest economies.

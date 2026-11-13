@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System;
 using System.Linq;
 
@@ -111,13 +112,21 @@ public static class Contractors
 
     public static void Tick(Campaign c)
     {
-        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(Contractors))) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same contractor pass, yielded between batches of armies.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(Contractors))) yield break;
         // The weekly fee, and the end of service: contract over, no war left, or no money left.
         if (c.ElapsedDays % 7 == 0)
         {
             var going = new System.Collections.Generic.List<Army>();
+            var scanned = 0;
             foreach (var army in c.Armies)
             {
+                if (++scanned % 256 == 0) yield return 0;
                 if (army.ContractUntilDay < 0) continue;
                 var nation = c.NationById(army.NationId);
                 if (nation is null || c.ElapsedDays >= army.ContractUntilDay || !AtWar(c, nation.Id)) { going.Add(army); continue; }
@@ -129,6 +138,7 @@ public static class Contractors
                 Attrition.Destroy(c, army, "stood down: contract over", lost: false);
             if (going.Count > 0) c.MarkStrategicChange();
         }
+        yield return 0;
         if (c.ElapsedDays % 30 == 13) Ai(c);
     }
 

@@ -103,9 +103,12 @@ public static class CultureUnion
         if (partner.Population > initiator.Population) (initiator, partner) = (partner, initiator);
         var map = c.ProvinceMap;
         var provinces = new List<int>();
-        for (var province = 1; province <= map.ProvinceCount; province++)
-            if (map.ProvinceToNation[province] == (ushort)partner.MapIndex && !map.IsWater(province))
-                provinces.Add(province);
+        foreach (var state in c.StatesOf(partner))
+        {
+            foreach (var province in map.ProvincesOfState(state.MapIndex))
+                if (map.ProvinceToNation[province] == (ushort)partner.MapIndex && !map.IsWater(province))
+                    provinces.Add(province);
+        }
         if (provinces.Count == 0) return false;
 
         var place = partner.DisplayName;
@@ -131,15 +134,26 @@ public static class CultureUnion
     /// a war or a grudge.</summary>
     public static void Tick(Campaign c)
     {
-        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(CultureUnion))) return;
-        if (c.ProvinceMap is null || c.ElapsedDays < c.Defines.CultureUnionEarliestDay) return;
-        if (c.ElapsedDays % Math.Max(1, c.Defines.CultureUnionReviewDays) != 0) return;
+        foreach (var _ in TickStages(c)) { }
+    }
 
-        foreach (var initiator in Kindred(c).ToArray())
+    /// <summary>The same union pass, yielded between kindred countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(CultureUnion))) yield break;
+        if (c.ProvinceMap is null || c.ElapsedDays < c.Defines.CultureUnionEarliestDay) yield break;
+        if (c.ElapsedDays % Math.Max(1, c.Defines.CultureUnionReviewDays) != 0) yield break;
+
+        var eligible = KindredList(c);
+        var ticked = 0;
+        for (var i = 0; i < eligible.Count; i++)
         {
+            var initiator = eligible[i];
             if (c.Fallen.Contains(initiator.Id)) continue;
-            foreach (var partner in Kindred(c))
+            if (++ticked % 8 == 0) yield return 0;
+            for (var j = 0; j < eligible.Count; j++)
             {
+                var partner = eligible[j];
                 if (partner.Id == initiator.Id || c.Fallen.Contains(partner.Id)) continue;
                 if (partner.Population > initiator.Population) continue;
                 // A state of 2024 does not dissolve itself into a kindred neighbour on its own
@@ -157,10 +171,31 @@ public static class CultureUnion
     }
 
     /// <summary>Independent AI countries, the largest first - the large propose, the small answer.</summary>
-    private static IEnumerable<Nation> Kindred(Campaign c) => c.Nations
-        .Where(n => !n.IsHuman && !n.IsSubject && n.Movement is null && n.Population > 0 &&
-                    !c.Fallen.Contains(n.Id) && !c.Wars.Any(w => !w.Ended && w.Involves(n.Id)))
-        .OrderByDescending(n => n.Population).ThenBy(n => n.Id);
+    private static List<Nation> KindredList(Campaign c)
+    {
+        var atWar = new HashSet<int>();
+        foreach (var w in c.Wars)
+        {
+            if (w.Ended) continue;
+            atWar.Add(w.AttackerId);
+            atWar.Add(w.DefenderId);
+            foreach (var ally in w.AttackerAllies) atWar.Add(ally);
+            foreach (var ally in w.DefenderAllies) atWar.Add(ally);
+        }
+        var list = new List<Nation>();
+        foreach (var n in c.Nations)
+        {
+            if (n.IsHuman || n.IsSubject || n.Movement is not null || n.Population <= 0 ||
+                c.Fallen.Contains(n.Id) || atWar.Contains(n.Id)) continue;
+            list.Add(n);
+        }
+        list.Sort(static (a, b) =>
+        {
+            var cmp = b.Population.CompareTo(a.Population);
+            return cmp != 0 ? cmp : a.Id.CompareTo(b.Id);
+        });
+        return list;
+    }
 }
 
 /// <summary>Propose - or carry out - the union of two kindred countries, by consent.</summary>

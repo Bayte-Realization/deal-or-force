@@ -71,15 +71,29 @@ public sealed class CampaignHistory
         _lastCapturedDay = -1;
     }
 
-    internal Dictionary<int, List<NationHistorySample>> Export() =>
-        _samples.ToDictionary(entry => entry.Key, entry => new List<NationHistorySample>(entry.Value));
+    internal Dictionary<int, List<NationHistorySample>> Export()
+    {
+        var copy = new Dictionary<int, List<NationHistorySample>>(_samples.Count);
+        foreach (var entry in _samples)
+            copy.Add(entry.Key, new List<NationHistorySample>(entry.Value));
+        return copy;
+    }
 
     internal void Restore(Dictionary<int, List<NationHistorySample>> samples)
     {
         _samples.Clear();
         if (samples is not null)
             foreach (var entry in samples)
-                _samples[entry.Key] = entry.Value?.ToList() ?? new List<NationHistorySample>();
+            {
+                if (entry.Value is not { Count: > 0 } src)
+                {
+                    _samples[entry.Key] = new List<NationHistorySample>();
+                    continue;
+                }
+                var copy = new List<NationHistorySample>(src.Count + 16);
+                copy.AddRange(src);
+                _samples[entry.Key] = copy;
+            }
         _lastCapturedDay = _samples.Values.SelectMany(values => values).Select(sample => sample.Day).DefaultIfEmpty(-1).Max();
         // A save from before the thinning keeps all fifteen years of every week; thinned on
         // load, so the file it is saved back into is the smaller one. Against the same yearly
@@ -110,9 +124,14 @@ public sealed class CampaignHistory
         if (_warSupportScratch.Length < nationCount) _warSupportScratch = new float[nationCount];
         var warSupport = _warSupportScratch;
         for (var i = 0; i < nationCount; i++) warSupport[i] = campaign.Nations[i].WarSupport;
-        foreach (var war in campaign.Wars)
+        // Once a week, with the sample itself. This is a country's ledger, not a chart of
+        // finished wars, so the war-support line reads wars still going. The six days
+        // between samples do not walk the record at all.
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
-            if (war.Ended) continue;
+            var war = live[index];
+            if (war is null || war.Ended) continue;
             if (war.AttackerId >= 0 && war.AttackerId < nationCount)
                 warSupport[war.AttackerId] = MathF.Min(warSupport[war.AttackerId], war.AttackerWarSupport);
             if (war.DefenderId >= 0 && war.DefenderId < nationCount)
@@ -180,27 +199,38 @@ public sealed class CampaignHistory
     /// each four-week span back to ten, the first of each quarter back to forty, and none
     /// older. Spans are counted from day zero, so the same sample survives every pass and a
     /// thinned list thinned again is the same list.
+    ///
+    /// Compaction happens in the list itself, write index behind read index. It used to build
+    /// the kept samples in a second list and copy them back, and once a campaign had forty
+    /// years of them that was **19 MB allocated in one frame** - the single largest allocation
+    /// in a day's tick, in the one place that runs once a year and therefore never showed up as
+    /// a weekly cost. The predicate, the order and the surviving samples are exactly what they
+    /// were; only the second list is gone.
     /// </summary>
     internal static void Thin(List<NationHistorySample> values, int today)
     {
         if (values.Count == 0) return;
-        var kept = new List<NationHistorySample>(values.Count);
+        var kept = 0;
         var lastBucket = int.MinValue;
-        foreach (var sample in values)
+        for (var read = 0; read < values.Count; read++)
         {
+            var sample = values[read];
             var age = today - sample.Day;
             if (age > KeptDays) continue;
-            if (age <= WeeklyDays) { kept.Add(sample); lastBucket = int.MinValue; continue; }
+            if (age <= WeeklyDays)
+            {
+                values[kept++] = sample;
+                lastBucket = int.MinValue;
+                continue;
+            }
             var span = age <= MonthlyDays ? 28 : 91;
             // Quarters are numbered below zero so they never meet a four-week span's number.
             var bucket = span == 28 ? sample.Day / 28 : -1 - sample.Day / 91;
             if (bucket == lastBucket) continue;
             lastBucket = bucket;
-            kept.Add(sample);
+            values[kept++] = sample;
         }
-        if (kept.Count == values.Count) return;
-        values.Clear();
-        values.AddRange(kept);
+        if (kept < values.Count) values.RemoveRange(kept, values.Count - kept);
     }
 
     private static float PriceIndex(Nation nation, Commodity commodity)

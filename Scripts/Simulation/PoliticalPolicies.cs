@@ -36,6 +36,9 @@ public sealed partial class Nation
 
 public static class PoliticalPolicies
 {
+    private static float WeeklyModifier(PoliticalPolicy policy, string id) =>
+        policy.Modifiers.TryGetValue(id, out var value) ? value / 7f : 0f;
+
     public static string Slot(PoliticalPolicy p, string targetTag = "", int region = 0) =>
         p.Scope == "foreign" ? p.SlotKey + ":" + targetTag :
         p.Scope == "region" ? p.SlotKey + ":" + region : p.SlotKey;
@@ -73,16 +76,32 @@ public static class PoliticalPolicies
         return wanted is null ? null : PoliticalPolicyCatalog.Find(wanted);
     }
 
+    private static bool OwnsRegion(Campaign c, Nation n, int region)
+    {
+        var states = c.StatesOf(n);
+        for (var i = 0; i < states.Length; i++)
+            if (states[i].MapIndex == region) return true;
+        return false;
+    }
+
+    private static bool InLiveWar(Campaign c, int nationId)
+    {
+        var wars = Warfare.LiveWars(c);
+        for (var i = 0; i < wars.Count; i++)
+            if (!wars[i].Ended && wars[i].Involves(nationId)) return true;
+        return false;
+    }
+
     public static bool CanAdopt(Campaign c, Nation n, PoliticalPolicy p, string target, int region, bool agenda, out string reason)
     {
         var hasNation = n is not null;
         var hasPolicy = p is not null;
         var featureEnabled = c is not null && hasPolicy && c.FeatureEnabled(agenda ? "political_agendas" : "laws");
         var scopeCode = !hasPolicy ? 0 : p.Scope == "region" ? 1 : p.Scope == "foreign" ? 2 : 0;
-        var ownsRegion = scopeCode == 1 && hasNation && c is not null && c.StatesOf(n).Any(s => s.MapIndex == region);
+        var ownsRegion = scopeCode == 1 && hasNation && c is not null && OwnsRegion(c, n, region);
         var validForeignTarget = scopeCode == 2 && hasNation && c is not null &&
             c.NationByTag(target) is { } other && other.Id != n.Id && !c.Fallen.Contains(other.Id);
-        var atWar = hasNation && c is not null && c.Wars.Any(w => !w.Ended && w.Involves(n.Id));
+        var atWar = hasNation && c is not null && InLiveWar(c, n.Id);
         var slot = hasPolicy ? Slot(p, target, region) : "";
         var alreadyEnacted = !agenda && hasNation && hasPolicy && Effective(n, p, target, region)?.Id == p.Id;
         var hasSlotKey = hasNation && hasPolicy && n.Laws.ContainsKey(slot);
@@ -154,7 +173,7 @@ public static class PoliticalPolicies
     {
         var kind = DealOrForce.Rules.PoliticalPolicyRules.GoalKind(a.Goal);
         // Only peace goals inspect wars, preserving the old short-circuit cost.
-        var atWar = kind == 3 && c.Wars.Any(w => !w.Ended && w.Involves(n.Id));
+        var atWar = kind == 3 && InLiveWar(c, n.Id);
         return DealOrForce.Rules.PoliticalPolicyRules.GoalMet(kind,a.GoalValue,n.StandardOfLiving,
             n.PublicDebt,n.Gdp,(int)n.DebtCondition,atWar,n.Stability,(int)DebtCondition.Default);
     }
@@ -178,7 +197,7 @@ public static class PoliticalPolicies
                     n.Ideology == "liberalism" ? "rights_association" :
                     n.Ideology == "social_democracy" ? "labour_corporatist" :
                     n.Ideology == "communism" ? "industry_champions" :
-                    n.Ideology == "fascism" ? c.Wars.Any(w => !w.Ended && w.Involves(n.Id)) ? "service_total_levy" : "service_reserve" :
+                    n.Ideology == "fascism" ? InLiveWar(c, n.Id) ? "service_total_levy" : "service_reserve" :
                     "education_technical";
                 Adopt(c, n, PoliticalPolicyCatalog.Find(desired));
                 // What a state does about its minorities changes with what it believes, and
@@ -189,7 +208,7 @@ public static class PoliticalPolicies
                 if (n.AgendasActive && n.Agenda is not { Completed: false })
                 {
                     var promise = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_recovery" :
-                        n.Stability >= .62f && !c.Wars.Any(w => !w.Ended && w.Involves(n.Id)) ? "peace_dividend" :
+                        n.Stability >= .62f && !InLiveWar(c, n.Id) ? "peace_dividend" :
                         n.StandardOfLiving >= .61f ? "social_compact" : "national_reconciliation";
                     if (n.DebtCondition >= DebtCondition.Stressed || n.Stability >= .56f || n.StandardOfLiving >= .61f)
                         Adopt(c, n, PoliticalPolicyCatalog.Find(promise, true), agenda: true);
@@ -199,12 +218,11 @@ public static class PoliticalPolicies
                 foreach (var law in n.Laws.Values)
                 {
                     if (PoliticalPolicyCatalog.Find(law.Id) is not { Scope: "region" } p) continue;
-                    var region = c.StatesOf(n).FirstOrDefault(s => s.MapIndex == law.Region);
-                    if (region is null) continue; // no effects in lost/foreign territory
-                    float Value(string id) => p.Modifiers.TryGetValue(id, out var v) ? v / 7f : 0;
-                    region.Radicalism = M.Clamp01(region.Radicalism + Value("radicalism_weekly"));
-                    region.StandardOfLiving = M.Clamp01(region.StandardOfLiving + Value("living_weekly"));
-                    region.Stability = M.Clamp01(region.Stability + Value("stability_weekly"));
+                    var region = c.StateByMapIndex(law.Region);
+                    if (region is null || region.NationMapIndex != n.MapIndex) continue; // no effects in lost/foreign territory
+                    region.Radicalism = M.Clamp01(region.Radicalism + WeeklyModifier(p, "radicalism_weekly"));
+                    region.StandardOfLiving = M.Clamp01(region.StandardOfLiving + WeeklyModifier(p, "living_weekly"));
+                    region.Stability = M.Clamp01(region.Stability + WeeklyModifier(p, "stability_weekly"));
                 }
             if (!n.AgendasActive || n.Agenda is not { Completed: false } a) continue;
             a.ElapsedDays++;

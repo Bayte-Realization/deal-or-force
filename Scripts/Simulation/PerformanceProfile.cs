@@ -41,8 +41,15 @@ public sealed class QualityProfile
     public bool TradeTraffic = true;
     public bool Weather = true;
 
+    /// <summary>Edge smoothing samples for the 3D map (0, 2 or 4; -1 infers from tier).</summary>
+    public int MsaaSamples = -1;
+
     /// <summary>A cap, because a strategy game does not need three hundred frames a second. Zero is no cap.</summary>
     public int MaxFps;
+
+    public int EffectiveMsaaSamples => MsaaSamples >= 0
+        ? MsaaSamples
+        : SunShadows ? 4 : (Weather && RenderScale >= 0.99f) ? 2 : 0;
 
     public QualityProfile Clone() => (QualityProfile)MemberwiseClone();
 }
@@ -112,6 +119,7 @@ public static class QualityProfiles
                         CityLabels = Flag(value, "city_labels", true),
                         TradeTraffic = Flag(value, "trade_traffic", true),
                         Weather = Flag(value, "weather", true),
+                        MsaaSamples = value.TryGetProperty("msaa", out _) ? Math.Clamp(Int(value, "msaa", -1), -1, 4) : -1,
                         MaxFps = Math.Clamp(Int(value, "max_fps", 0), 0, 480)
                     });
                 }
@@ -223,15 +231,27 @@ public sealed class FrameRateGovernor
     private double _slowFor;
     private double _fastFor;
     private double _sinceChange;
+    // How long the frame must stay fast before stepping back up: doubled after every step down,
+    // so a machine on the edge settles instead of bouncing between two pictures.
+    private double _stepUpWait = -1;
+    // Seconds of frames seen since the start or since the player changed the setting. The first
+    // twenty are loading - shaders compiling, textures going up - and decide nothing.
+    private double _warmedFor;
+    private const double WarmUpSeconds = 20.0;
 
     public QualityProfile Profile { get; private set; }
 
     /// <summary>False when the player chose a tier by hand, in which case the governor never moves it.</summary>
     public bool Automatic { get; }
 
+    // The layers the starting tier shows. The governor trades pixels and shadows for frames; it
+    // never takes the clouds, the fog's mist, the ships or the city names off the map by itself.
+    private QualityProfile _layers;
+
     public FrameRateGovernor(QualityProfile start, bool automatic, int windowFrames = 120)
     {
         Profile = start ?? throw new ArgumentNullException(nameof(start));
+        _layers = start;
         Automatic = automatic;
         _windowFrames = Math.Clamp(windowFrames, 12, 600);
         _floorOrder = QualityProfiles.AutomaticFloor(start);
@@ -253,6 +273,8 @@ public sealed class FrameRateGovernor
     {
         if (!Automatic || frameMilliseconds <= 0 || double.IsNaN(frameMilliseconds)) return null;
         if (frameMilliseconds > QualityProfiles.SlowFrameMs * 4) return null;
+        _warmedFor += frameMilliseconds / 1000.0;
+        if (_warmedFor < WarmUpSeconds) return null;
         _sinceChange += frameMilliseconds / 1000.0;
         // Counted in frames rather than seconds: a game that is already slow would otherwise
         // take a minute to collect enough frames to admit it.
@@ -277,9 +299,15 @@ public sealed class FrameRateGovernor
             Array.Sort(gpu);
             gpuMedian = gpu[gpu.Length / 2];
         }
-        var cardBound = !gpuKnown || gpuMedian > QualityProfiles.SlowFrameMs * 0.6;
+        // Only a card that is really busy is the card's fault. A slow frame with the card idle, or
+        // with its time unknown, is the simulation or a load on the processor - fewer pixels would
+        // only blur the picture and change nothing.
+        var cardBound = gpuKnown && gpuMedian > QualityProfiles.SlowFrameMs * 0.75;
         var cardIdle = gpuKnown && gpuMedian < QualityProfiles.SlowFrameMs * 0.35;
-
+        // A card that is busy at an acceptable frame rate is a card doing its job. Stepping down
+        // for it ("heat and fan noise") took a mid-range card (RTX 3060, a heavy globe at 60 fps)
+        // from high to low and back every few minutes all game, and the player watched the
+        // clouds, the fog and the ships come and go. Only frames that are actually slow count.
         if (median > QualityProfiles.SlowFrameMs && cardBound)
         {
             _slowFor += windowSeconds;
@@ -300,9 +328,14 @@ public sealed class FrameRateGovernor
         {
             _slowFor = 0;
             var cheaper = QualityProfiles.Next(Profile);
-            if (cheaper is not null && cheaper.Order <= _floorOrder) return Adopt(cheaper);
+            if (cheaper is not null && cheaper.Order <= _floorOrder)
+            {
+                _stepUpWait = Math.Min(300.0, Math.Max(QualityProfiles.StepUpSeconds, _stepUpWait < 0 ? QualityProfiles.StepUpSeconds : _stepUpWait * 2));
+                return Adopt(cheaper);
+            }
         }
-        else if (_fastFor >= QualityProfiles.StepUpSeconds && _sinceChange >= QualityProfiles.StepUpSeconds)
+        else if (_fastFor >= Math.Max(QualityProfiles.StepUpSeconds, _stepUpWait) &&
+                 _sinceChange >= Math.Max(QualityProfiles.StepUpSeconds, _stepUpWait))
         {
             _fastFor = 0;
             var better = QualityProfiles.Previous(Profile);
@@ -315,12 +348,19 @@ public sealed class FrameRateGovernor
     public void Reset(QualityProfile profile)
     {
         Profile = profile;
+        if (profile is not null) _layers = profile;
         _window.Clear();
         _slowFor = _fastFor = _sinceChange = 0;
+        _warmedFor = 0;
     }
 
     private QualityProfile Adopt(QualityProfile profile)
     {
+        // The step's pixels, shadows and frame cap; the starting tier's layers.
+        profile = profile.Clone();
+        profile.CityLabels = _layers.CityLabels;
+        profile.TradeTraffic = _layers.TradeTraffic;
+        profile.Weather = _layers.Weather;
         Profile = profile;
         _window.Clear();
         _sinceChange = 0;

@@ -1,0 +1,19 @@
+// Disbanding divisions and decommissioning fleets (Demobilisation).
+{
+  "Disband": "Disband",
+  "Confirm": "Confirm",
+  "Decommission": "Decommission",
+  "Disband (Delete)\nSend the selected divisions home: their men go back to the manpower reserve. Not in battle or aboard a ship. Press twice to confirm.": "Disband (Delete)\nSend the selected divisions home: their men go back to the manpower reserve. Not in battle or aboard a ship. Press twice to confirm.",
+  "Disband {0:N0} division(s), {1:N0} men? Press Disband (or Delete) again to confirm.": "Disband {0:N0} division(s), {1:N0} men? Press Disband (or Delete) again to confirm.",
+  "{0:N0} division(s) sent home.": "{0:N0} division(s) sent home.",
+  "Decommission\nTake this fleet out of the navy: a share of what its hulls cost comes back and the hulls on its slipways are cancelled. Not in action or with troops aboard. Press twice to confirm.": "Decommission\nTake this fleet out of the navy: a share of what its hulls cost comes back and the hulls on its slipways are cancelled. Not in action or with troops aboard. Press twice to confirm.",
+  "Decommission {0} ({1:N0} hulls)? Press Decommission again to confirm.": "Decommission {0} ({1:N0} hulls)? Press Decommission again to confirm.",
+  "{0} decommissioned; {1} back to the treasury.": "{0} decommissioned; {1} back to the treasury.",
+  "That formation is not yours.": "That formation is not yours.",
+  "{0} is in action.": "{0} is in action.",
+  "{0} is aboard a ship. Put it ashore first.": "{0} is aboard a ship. Put it ashore first.",
+  "{0} is serving abroad as volunteers.": "{0} is serving abroad as volunteers.",
+  "That fleet is not yours.": "That fleet is not yours.",
+  "Troops are aboard. Put them ashore first.": "Troops are aboard. Put them ashore first.",
+  "The fleet is in action.": "The fleet is in action."
+}

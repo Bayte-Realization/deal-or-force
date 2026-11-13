@@ -27,7 +27,7 @@ public static class MovementLifecycle
             if (region is null || region.Population <= 0) continue;
             var owner = MovementRules.OwnerOf(campaign, region);
             if (owner is null || owner.Landless) continue;
-            var people = MovementRules.PeopleOf(campaign, region, definition, out _);
+            var people = MovementRules.PeopleOf(region, definition, out _);
             if (people / (float)region.Population < campaign.Defines.MovementMinimumAudienceShare) continue;
             var grievance = region.Radicalism * .6f + (1f - region.Stability) * .25f;
             if (campaign.Wars.Any(w => !w.Ended && w.Involves(owner.Id))) grievance += .08f;
@@ -40,13 +40,21 @@ public static class MovementLifecycle
 
     public static void Tick(Campaign campaign)
     {
-        if (!campaign.FeatureEnabled("movement_lifecycle") || !campaign.FeatureEnabled("movements")) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!campaign.FeatureEnabled("movement_lifecycle") || !campaign.FeatureEnabled("movements")) yield break;
         var interval = Math.Max(7, campaign.Defines.MovementEmergenceReviewDays);
-        if (campaign.ElapsedDays <= 0 || campaign.ElapsedDays % interval != 0) return;
+        if (campaign.ElapsedDays <= 0 || campaign.ElapsedDays % interval != 0) yield break;
         var created = 0;
+        var reviewed = 0;
         foreach (var definition in MovementCatalog.All)
         {
             if (!definition.CanEmerge || definition.Template) continue;
+            if (reviewed > 0 && reviewed % 4 == 0) yield return 0;
+            reviewed++;
             var nation = campaign.Nations.FirstOrDefault(n => n.Movement?.Id == definition.Id);
             var pressure = Pressure(campaign, definition);
             if (nation?.Movement is { Dissolved: false } state)

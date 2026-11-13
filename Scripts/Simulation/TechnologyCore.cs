@@ -393,6 +393,80 @@ public static partial class ResearchSystem
         DiffusionFor(campaign, nation, technology).EffectiveCost;
 
     /// <summary>
+    /// Diffusion totals precomputed once for a single buyer across all technologies.
+    /// Equivalent bit-for-bit to calling <see cref="CostFor(Campaign, Nation, TechnologyDefinition)"/>
+    /// for each technology, without walking every nation for every technology in the catalogue.
+    /// </summary>
+    internal sealed class BuyerSurvey
+    {
+        public float World;
+        public int BorderCount;
+        public float PartnerWeight;
+        public readonly Dictionary<string, float> KnownOutput = new(StringComparer.OrdinalIgnoreCase);
+        public readonly Dictionary<string, int> BorderHaving = new(StringComparer.OrdinalIgnoreCase);
+        public readonly Dictionary<string, float> PartnerHaving = new(StringComparer.OrdinalIgnoreCase);
+
+        public static BuyerSurvey Take(Campaign campaign, Nation nation)
+        {
+            var survey = new BuyerSurvey();
+            if (campaign is null || nation is null) return survey;
+            var neighbours = CampaignDiplomacy.Neighbours(campaign, nation.MapIndex);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var other in campaign.Nations)
+            {
+                var countsGlobal = other.Gdp > 0f;
+                if (countsGlobal) survey.World += other.Gdp;
+                if (other == nation) continue;
+
+                var isBorder = false;
+                var weight = 0f;
+                if (other.Population > 0 && !other.Landless)
+                {
+                    var relation = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id);
+                    var isolated = relation is { Stance: DiplomaticStance.AtWar or DiplomaticStance.Rival } ||
+                        relation?.EmbargoBy(nation.Id) == true || relation?.EmbargoBy(other.Id) == true;
+                    if (!isolated)
+                    {
+                        isBorder = neighbours is HashSet<int> borderSet
+                            ? borderSet.Contains(other.MapIndex)
+                            : neighbours.Contains(other.MapIndex);
+                        if (isBorder) survey.BorderCount++;
+                        weight = relation is { Stance: DiplomaticStance.Allied } ? 2f
+                            : relation?.TradeAgreement == true ? 1f
+                            : relation?.NonAggressionPact == true ? 0.5f : 0f;
+                        survey.PartnerWeight += weight;
+                    }
+                }
+
+                if (!countsGlobal && !isBorder && weight <= 0f) continue;
+                seen.Clear();
+                foreach (var id in other.Technologies)
+                {
+                    if (id is null || !seen.Add(id)) continue;
+                    if (countsGlobal) survey.KnownOutput[id] = survey.KnownOutput.GetValueOrDefault(id) + other.Gdp;
+                    if (isBorder) survey.BorderHaving[id] = survey.BorderHaving.GetValueOrDefault(id) + 1;
+                    if (weight > 0f) survey.PartnerHaving[id] = survey.PartnerHaving.GetValueOrDefault(id) + weight;
+                }
+            }
+            return survey;
+        }
+    }
+
+    internal static float CostFor(Campaign campaign, BuyerSurvey survey, TechnologyDefinition technology)
+    {
+        if (campaign is null || survey is null || technology is null) return technology?.Cost ?? 0f;
+        var having = survey.KnownOutput.GetValueOrDefault(technology.Id);
+        var borderHaving = survey.BorderHaving.GetValueOrDefault(technology.Id);
+        var partnerHaving = survey.PartnerHaving.GetValueOrDefault(technology.Id);
+        var defines = campaign.Defines;
+        var global = M.Clamp01(defines.ResearchDiffusion) * (survey.World <= 0f ? 0f : having / survey.World);
+        var border = M.Clamp01(defines.ResearchNeighbourDiffusion) * (survey.BorderCount == 0 ? 0f : borderHaving / (float)survey.BorderCount);
+        var partners = M.Clamp01(defines.ResearchPartnerDiffusion) * (survey.PartnerWeight <= 0f ? 0f : partnerHaving / survey.PartnerWeight);
+        var discount = MathF.Min(M.Clamp01(defines.ResearchMaximumDiscount), global + border + partners);
+        return technology.Cost * (1f - discount);
+    }
+
+    /// <summary>
     /// Who knows what, for one research week.
     ///
     /// Pricing a technology asks every other country whether it knows it, what share of the
@@ -564,11 +638,21 @@ public static partial class ResearchSystem
     /// <summary>Once a week, with the economy: every country puts its week into what it is researching.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ResearchSystem))) return;
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % 7 != 0 || TechnologyCatalog.All.Count == 0) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly research, yielded between countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ResearchSystem))) yield break;
+        if (campaign is null || campaign.ElapsedDays == 0 || campaign.ElapsedDays % 7 != 0 || TechnologyCatalog.All.Count == 0) yield break;
         var survey = Survey.Take(campaign);
+        var tick = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++tick % 4 == 0) yield return 0;
+            using (SimProfiler.Measure("research"))
+            {
             if (nation.Population <= 0) continue;
             var current = TechnologyCatalog.Of(nation.CurrentResearch);
             if (current is null || !Available(nation, current))
@@ -589,6 +673,7 @@ public static partial class ResearchSystem
             nation.ResearchProgress.Remove(current.Id);
             nation.CurrentResearch = "";
             if (nation.IsHuman) campaign.MarkStrategicChange();
+            }
         }
     }
 }

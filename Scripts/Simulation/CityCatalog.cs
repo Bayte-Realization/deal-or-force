@@ -11,13 +11,12 @@ public sealed class CityDefinition
     public string Name = "";
     public float Latitude;
     public float Longitude;
+    /// <summary>The urban area's people on the scenario's first day (the source's figure). What it has now is CityCatalog.People.</summary>
     public long Population;
     /// <summary>0 capitals and world cities, seen from far out; 3 towns, seen only close in.</summary>
     public int Tier = 3;
     /// <summary>"national", "seat", "regional" or empty.</summary>
     public string Capital = "";
-    /// <summary>The ISO code the source gives it - information, not ownership.</summary>
-    public string Country = "";
 
     public bool IsNationalCapital => Capital == "national";
 
@@ -185,8 +184,7 @@ public static class CityCatalog
                     city.Tier = rank;
                 if (value.TryGetProperty("capital", out var capital) && capital.ValueKind == JsonValueKind.String)
                     city.Capital = capital.GetString() ?? "";
-                if (value.TryGetProperty("country", out var country) && country.ValueKind == JsonValueKind.String)
-                    city.Country = country.GetString() ?? "";
+                // "country" is not read: a city belongs to the ground it stands on (RegionOf).
             }
         }
         var cities = new List<CityDefinition>(byId.Count);
@@ -205,4 +203,75 @@ public static class CityCatalog
     }
 
     private static List<CityDefinition> Load() => Parse(GameDataLoader.DataDocuments("map_data", "cities"));
+
+    /// <summary>The region a city stands in now, or null off the map.</summary>
+    public static ScenarioState RegionOf(Campaign campaign, int cityIndex)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null) return null;
+        var provinces = ProvincesOf(map);
+        if (cityIndex < 0 || cityIndex >= provinces.Length || provinces[cityIndex] <= 0) return null;
+        var mapIndex = map.ProvinceToState[provinces[cityIndex]];
+        foreach (var state in campaign.States)
+            if (state.MapIndex == mapIndex) return state;
+        return null;
+    }
+
+    /// <summary>
+    /// A city's people now: its first-day figure, moved as its region's urban population has
+    /// moved since (CityLife) - a region that grows grows its cities, a besieged and emptied one
+    /// empties them.
+    /// </summary>
+    public static long People(ScenarioState region, CityDefinition city)
+    {
+        if (city is null) return 0;
+        if (region is null || region.UrbanBaseline <= 0) return city.Population;
+        var urban = CityLife.Urban(region);
+        var ratio = Math.Clamp(urban / (double)region.UrbanBaseline, 0d, 8d);
+        return (long)(city.Population * ratio);
+    }
+
+    /// <summary>The cities of a region, largest first, with the people each has now.</summary>
+    public static List<(CityDefinition City, long People)> CitiesOf(Campaign campaign, ScenarioState region)
+    {
+        var result = new List<(CityDefinition, long)>();
+        var map = campaign?.ProvinceMap;
+        if (map is null || region is null) return result;
+        var cities = All;
+        var provinces = ProvincesOf(map);
+        for (var index = 0; index < cities.Count && index < provinces.Length; index++)
+            if (provinces[index] > 0 && map.ProvinceToState[provinces[index]] == region.MapIndex)
+                result.Add((cities[index], People(region, cities[index])));
+        result.Sort((a, b) => b.Item2.CompareTo(a.Item2));
+        return result;
+    }
+}
+
+public sealed partial class ScenarioState
+{
+    /// <summary>
+    /// The region's urban population when its cities' figures were true - its first week, or the
+    /// day it was carved out - against which they grow and shrink (CityLife). Saved.
+    /// </summary>
+    public long UrbanBaseline;
+}
+
+/// <summary>
+/// The cities' people follow their region's. A city's figure is the source's for the scenario's
+/// first day; the region's urban population that day is remembered once (UrbanBaseline), and a
+/// city now has its figure times how far its region's urban population has moved since. Nothing
+/// is simulated twice: the people are the region's, the cities are where they live.
+/// </summary>
+public static class CityLife
+{
+    public static long Urban(ScenarioState region) =>
+        region is null ? 0 : (long)(region.Population * (double)Math.Clamp(region.Urbanization, 0.02f, 1f));
+
+    /// <summary>Weekly, at the day's start: a region without its baseline yet takes today's.</summary>
+    public static void Note(Campaign campaign)
+    {
+        if (campaign is null || campaign.ElapsedDays % 7 != 0) return;
+        foreach (var region in campaign.States)
+            if (region.UrbanBaseline <= 0 && region.Population > 0) region.UrbanBaseline = Math.Max(1, Urban(region));
+    }
 }

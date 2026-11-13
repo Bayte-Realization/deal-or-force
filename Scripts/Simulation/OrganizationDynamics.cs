@@ -68,15 +68,26 @@ public static class OrganizationDynamics
 {
     public static void Tick(Campaign c)
     {
-        if (c is null || !c.FeatureEnabled("organizations") || !MechanicFeatures.SystemEnabled(c, nameof(OrganizationDynamics))) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same reviews, yielded between organisations so one frame does not carry them all.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !c.FeatureEnabled("organizations") || !MechanicFeatures.SystemEnabled(c, nameof(OrganizationDynamics))) yield break;
         foreach (var org in InternationalOrganizations.Active(c).OrderBy(o => o.Id).ToArray())
         {
             if (InternationalOrganizations.Charter(org.CharterId) is null) continue;
             // Weekly, each organisation on its own day.
             if ((c.ElapsedDays + org.Id * 3) % 7 != 0) continue;
-            Review(c, org);
+            using (SimProfiler.Measure("organization life")) Review(c, org);
+            yield return 0;
         }
-        if (c.ElapsedDays % 30 == 11) ThreatPacts(c);
+        if (c.ElapsedDays % 30 == 11)
+        {
+            using (SimProfiler.Measure("organization life")) ThreatPacts(c);
+            yield return 0;
+        }
     }
 
     /// <summary>What the members are to one another, 0 to 1: the cohesion an organisation drifts towards.</summary>
@@ -406,7 +417,7 @@ public static class OrganizationDynamics
                     var shareOther = InternationalOrganizations.Active(c).Any(o => o.Id != org.Id && !o.Dissolved &&
                         InternationalOrganizations.Charter(o.CharterId)?.Defence == true &&
                         o.Members.Contains(member.Id) && o.Members.Contains(otherId));
-                    if (!shareOther) rel.Stance = DiplomaticStance.Neutral;
+                    if (!shareOther) { rel.Stance = DiplomaticStance.Neutral; c.NoteAllianceChange(); }
                 }
             }
         }
@@ -424,7 +435,7 @@ public static class OrganizationDynamics
             var shareOther = InternationalOrganizations.Active(c).Any(o => o.Id != org.Id && !o.Dissolved &&
                 InternationalOrganizations.Charter(o.CharterId)?.Defence == true &&
                 o.Members.Contains(member.Id) && o.Members.Contains(otherId));
-            if (!shareOther) rel.Stance = DiplomaticStance.Neutral;
+            if (!shareOther) { rel.Stance = DiplomaticStance.Neutral; c.NoteAllianceChange(); }
         }
     }
 
@@ -477,7 +488,7 @@ public static class OrganizationDynamics
                     var shareOther = InternationalOrganizations.Active(c).Any(o => o.Id != org.Id && !o.Dissolved &&
                         InternationalOrganizations.Charter(o.CharterId)?.Defence == true &&
                         o.Members.Contains(members[i].Id) && o.Members.Contains(members[j].Id));
-                    if (!shareOther) rel.Stance = DiplomaticStance.Neutral;
+                    if (!shareOther) { rel.Stance = DiplomaticStance.Neutral; c.NoteAllianceChange(); }
                 }
             }
         }
@@ -522,7 +533,7 @@ public static class OrganizationDynamics
             for (var j = i + 1; j < members.Count; j++)
             {
                 var rel = CampaignDiplomacy.Get(c, members[i].Id, members[j].Id);
-                if (rel.Stance != DiplomaticStance.Allied) rel.Stance = DiplomaticStance.Allied;
+                if (rel.Stance != DiplomaticStance.Allied) { rel.Stance = DiplomaticStance.Allied; c.NoteAllianceChange(); }
             }
         }
         c.Chronicle.Record(c, "organization_founded", founder.Id, second.Id, InternationalOrganizations.DisplayName(c, org));

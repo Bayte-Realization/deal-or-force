@@ -174,9 +174,8 @@ public static class LandArrangementSystem
     }
 
     private static bool AtWar(Campaign c, int a, int b) =>
-        CampaignDiplomacy.Get(c, a, b)?.Stance == DiplomaticStance.AtWar ||
-        c.Wars.Any(w => !w.Ended && ((w.Side(true).Contains(a) && w.Side(false).Contains(b)) ||
-                                     (w.Side(true).Contains(b) && w.Side(false).Contains(a))));
+        CampaignDiplomacy.Peek(c, a, b)?.Stance == DiplomaticStance.AtWar ||
+        CampaignDiplomacy.AtWar(c, a, b);
 
     /// <summary>
     /// The arrangements a campaign opens with, laid on the ground the moment the map is attached -
@@ -247,24 +246,60 @@ public static class LandArrangementSystem
 
     public static void Tick(Campaign c)
     {
-        if (c.ElapsedDays % 7 != 5 || !c.FeatureEnabled("land_arrangements")) return;
-        foreach (var arrangement in c.LandArrangements.ToList())
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    private static readonly List<LandArrangement> TickScratch = new();
+
+    /// <summary>The same weekly arrangements pass, yielded between leases and offers.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c.ElapsedDays % 7 != 5 || !c.FeatureEnabled("land_arrangements")) yield break;
+        TickScratch.Clear();
+        for (var i = 0; i < c.LandArrangements.Count; i++)
+            TickScratch.Add(c.LandArrangements[i]);
+        for (var i = 0; i < TickScratch.Count; i++)
         {
+            if (i > 0 && i % 16 == 0) yield return 0;
+            var arrangement = TickScratch[i];
             var owner = c.NationById(arrangement.OwnerId);
             var holder = c.NationById(arrangement.HolderId);
             if (owner is null || holder is null) continue;
             if (arrangement.Kind == Lease) LeaseWeek(c, arrangement, owner, holder);
             else PresenceWeek(c, arrangement, owner, holder);
         }
-        foreach (var offer in c.LeaseOffers)
+        TickScratch.Clear();
+        for (var i = 0; i < c.LeaseOffers.Count; i++)
+        {
+            var offer = c.LeaseOffers[i];
             if (offer.State == "pending" && offer.ExpiresDay <= c.ElapsedDays)
             {
                 offer.State = "expired";
-                if (offer.Renewal && c.LandArrangements.Find(a => a.Id == offer.ArrangementId) is { } lapsed)
-                    Refuse(c, lapsed);
+                if (offer.Renewal)
+                {
+                    for (var ai = 0; ai < c.LandArrangements.Count; ai++)
+                    {
+                        var candidate = c.LandArrangements[ai];
+                        if (candidate.Id == offer.ArrangementId)
+                        {
+                            Refuse(c, candidate);
+                            break;
+                        }
+                    }
+                }
             }
-        c.LeaseOffers.RemoveAll(offer => offer.State != "pending" && offer.ExpiresDay < c.ElapsedDays - 365);
-        if (c.ElapsedDays % 28 == 5) AiMonth(c);
+        }
+        var cutoff = c.ElapsedDays - 365;
+        for (var i = c.LeaseOffers.Count - 1; i >= 0; i--)
+        {
+            var offer = c.LeaseOffers[i];
+            if (offer.State != "pending" && offer.ExpiresDay < cutoff)
+                c.LeaseOffers.RemoveAt(i);
+        }
+        yield return 0;
+        if (c.ElapsedDays % 28 == 5)
+            foreach (var _ in AiMonthStages(c))
+                yield return 0;
     }
 
     private static void LeaseWeek(Campaign c, LandArrangement lease, Nation owner, Nation holder)
@@ -546,7 +581,7 @@ public static class LandArrangementSystem
         if (AtWar(c, owner.Id, holder.Id)) return Loc.Get("We are at war with them: this is a matter for the army.");
         if (Covering(c, region.MapIndex) is { Kind: Presence }) return Loc.Get("Foreign troops already stand there.");
         if (owner.CapitalStateMapIndex == region.MapIndex) return Loc.Get("A capital is not taken without a war.");
-        if (CampaignDiplomacy.Get(c, holder.Id, owner.Id)?.Stance == DiplomaticStance.Allied) return Loc.Get("Not against an ally.");
+        if (CampaignDiplomacy.Peek(c, holder.Id, owner.Id)?.Stance == DiplomaticStance.Allied) return Loc.Get("Not against an ally.");
         if (owner.AnswersTo(holder.Id) || holder.AnswersTo(owner.Id)) return Loc.Get("Not between an overlord and its subject.");
         var divisions = c.Armies.Where(a => a.NationId == holder.Id).Sum(a => a.Divisions);
         if (divisions < c.Defines.PresenceMinimumDivisions) return Loc.Get("We have too few troops to spare.");
@@ -749,26 +784,29 @@ public static class LandArrangementSystem
         if (map is null || controllers is null || war is null) return frozen;
         var counts = new Dictionary<int, Dictionary<ushort, int>>();
         var totals = new Dictionary<int, int>();
+        var wantedRegions = new HashSet<int>();
         foreach (var province in war.OriginalController.Keys)
             if (province > 0 && province <= map.ProvinceCount && !map.IsWater(province))
             {
                 var region = map.ProvinceToState[province];
-                if (!counts.ContainsKey(region))
-                {
+                if (wantedRegions.Add(region))
                     counts[region] = new Dictionary<ushort, int>();
-                    var all = 0;
-                    for (var p = 1; p <= map.ProvinceCount; p++)
-                        if (!map.IsWater(p) && map.ProvinceToState[p] == region)
-                        {
-                            all++;
-                            counts[region][controllers[p]] = counts[region].GetValueOrDefault(controllers[p]) + 1;
-                        }
-                    totals[region] = all;
-                }
             }
+        if (wantedRegions.Count > 0)
+        {
+            for (var p = 1; p <= map.ProvinceCount; p++)
+            {
+                if (map.IsWater(p)) continue;
+                var region = map.ProvinceToState[p];
+                if (!counts.TryGetValue(region, out var byCtrl)) continue;
+                totals[region] = totals.GetValueOrDefault(region) + 1;
+                var ctrl = controllers[p];
+                byCtrl[ctrl] = byCtrl.GetValueOrDefault(ctrl) + 1;
+            }
+        }
         foreach (var (regionIndex, byController) in counts.OrderBy(pair => pair.Key))
         {
-            var state = c.States.Find(s => s.MapIndex == regionIndex);
+            var state = c.StateByMapIndex(regionIndex);
             var owner = state is null ? null : c.NationByMapIndex(state.NationMapIndex);
             if (owner is null || Covering(c, regionIndex) is not null) continue;
             foreach (var (controller, count) in byController.OrderByDescending(pair => pair.Value).ThenBy(pair => pair.Key))
@@ -801,19 +839,27 @@ public static class LandArrangementSystem
         foreach (var other in c.Nations)
         {
             if (other.Id == owner.Id || other.Id == holder.Id || other.Movement is not null) continue;
-            var tie = CampaignDiplomacy.Get(c, other.Id, owner.Id);
+            var tie = CampaignDiplomacy.Peek(c, other.Id, owner.Id);
             if (tie is null) continue;
             if (tie.Stance == DiplomaticStance.Allied || tie.GuaranteedBy(other.Id)) strength += AiStatecraft.StrengthOf(c, other) * 0.5f;
         }
         return strength;
     }
 
-    private static void AiMonth(Campaign c)
+    private static IEnumerable<int> AiMonthStages(Campaign c)
     {
         var defines = c.Defines;
         // Owners of ground with foreign troops on it: fight, or put up with it.
-        foreach (var presence in c.LandArrangements.Where(a => a.Kind == Presence).ToList())
+        var presences = new List<LandArrangement>();
+        for (var i = 0; i < c.LandArrangements.Count; i++)
         {
+            var a = c.LandArrangements[i];
+            if (a.Kind == Presence) presences.Add(a);
+        }
+        for (var i = 0; i < presences.Count; i++)
+        {
+            if (i > 0) yield return 0;
+            var presence = presences[i];
             var owner = c.NationById(presence.OwnerId);
             var holder = c.NationById(presence.HolderId);
             if (owner is null || holder is null) continue;
@@ -832,27 +878,66 @@ public static class LandArrangementSystem
                 c.Random.NextFloat() < defines.AiPresenceReferendumChance)
             {
                 var ours = WarAims.Cultures(holder);
-                var kin = presence.Regions.Select(r => c.States.Find(s => s.MapIndex == r)).Where(r => r is not null)
-                    .Select(r => WarAims.CultureShare(r, ours)).DefaultIfEmpty(0f).Average();
+                var kinSum = 0f;
+                var kinCount = 0;
+                for (var ri = 0; ri < presence.Regions.Count; ri++)
+                {
+                    var state = c.StateByMapIndex(presence.Regions[ri]);
+                    if (state is null) continue;
+                    kinSum += WarAims.CultureShare(state, ours);
+                    kinCount++;
+                }
+                var kin = kinCount > 0 ? kinSum / kinCount : 0f;
                 if (kin >= defines.PresenceReferendumKinShare || !ProclaimRepublic(c, holder, presence, out _))
                     HoldReferendum(c, holder, presence, out _);
             }
         }
 
+        yield return 0;
         // Governments with a reason and an appetite: troops in.
-        foreach (var holder in c.Nations)
+        var budget = 0;
+        for (var i = 0; i < c.Nations.Count; i++)
         {
+            var holder = c.Nations[i];
             if (holder.IsHuman || holder.Movement is not null || c.StatesOf(holder).Length == 0) continue;
             if (c.Random.NextFloat() >= defines.AiPresenceChance) continue;
             var target = AiPresenceTarget(c, holder);
             if (target is not null) SendTroops(c, holder, target, out _);
+            if (++budget >= 4) { budget = 0; yield return 0; }
         }
 
-        // Great powers asking for bases.
-        var strongest = c.Nations.Where(n => n.Movement is null && c.StatesOf(n).Length > 0)
-            .OrderByDescending(n => AiStatecraft.StrengthOf(c, n)).ThenBy(n => n.Id).Take(8).ToList();
-        foreach (var power in strongest)
+        yield return 0;
+        // Great powers asking for bases: top 8 by strength, id ascending on ties.
+        const int TopCount = 8;
+        var topNations = new Nation[TopCount];
+        var topStrengths = new float[TopCount];
+        var topFound = 0;
+        for (var i = 0; i < c.Nations.Count; i++)
         {
+            var n = c.Nations[i];
+            if (n.Movement is not null || c.StatesOf(n).Length == 0) continue;
+            var s = AiStatecraft.StrengthOf(c, n);
+            var insertAt = topFound;
+            while (insertAt > 0 && (s > topStrengths[insertAt - 1] || (s == topStrengths[insertAt - 1] && n.Id < topNations[insertAt - 1].Id)))
+            {
+                if (insertAt < TopCount)
+                {
+                    topNations[insertAt] = topNations[insertAt - 1];
+                    topStrengths[insertAt] = topStrengths[insertAt - 1];
+                }
+                insertAt--;
+            }
+            if (insertAt < TopCount)
+            {
+                topNations[insertAt] = n;
+                topStrengths[insertAt] = s;
+                if (topFound < TopCount) topFound++;
+            }
+        }
+        for (var i = 0; i < topFound; i++)
+        {
+            if (i > 0) yield return 0;
+            var power = topNations[i];
             if (power.IsHuman || c.Random.NextFloat() >= defines.AiLeaseRequestChance) continue;
             var region = AiBaseTarget(c, power);
             if (region is not null) RequestLease(c, power, region, defines.LeaseDefaultYears, "naval_base", out _);
@@ -871,7 +956,7 @@ public static class LandArrangementSystem
         foreach (var mine in c.StatesOf(holder))
             foreach (var index in TerritorialCoherence.AdjacentRegions(c, mine.MapIndex))
             {
-                var region = c.States.Find(s => s.MapIndex == index);
+                var region = c.StateByMapIndex(index);
                 if (region is null || region.NationMapIndex == holder.MapIndex) continue;
                 // A motive the country's own people would follow: the region is its land by title,
                 // or a clear majority there is its own. A shared language across a border is not one.
@@ -905,17 +990,33 @@ public static class LandArrangementSystem
         foreach (var host in c.Nations)
         {
             if (host.Id == power.Id || host.Movement is not null || host.Population > 20_000_000) continue;
-            var tie = CampaignDiplomacy.Get(c, power.Id, host.Id);
-            if (tie is null || tie.Opinion < bestOpinion || c.LandArrangements.Any(a => a.HolderId == power.Id && a.OwnerId == host.Id)) continue;
-            var port = c.StatesOf(host).Where(r => r.MapIndex != host.CapitalStateMapIndex &&
-                                                   r.Buildings.GetValueOrDefault(BuildingKind.Port) > 0 &&
-                                                   Covering(c, r.MapIndex) is null)
-                .OrderBy(r => r.Population).ThenBy(r => r.MapIndex).FirstOrDefault();
+            var tie = CampaignDiplomacy.Peek(c, power.Id, host.Id);
+            if (tie is null || tie.Opinion < bestOpinion || HasArrangementBetween(c, power.Id, host.Id)) continue;
+            var hostStates = c.StatesOf(host);
+            ScenarioState port = null;
+            for (var si = 0; si < hostStates.Length; si++)
+            {
+                var r = hostStates[si];
+                if (r.MapIndex == host.CapitalStateMapIndex || r.Buildings.GetValueOrDefault(BuildingKind.Port) <= 0 ||
+                    Covering(c, r.MapIndex) is not null) continue;
+                if (port is null || r.Population < port.Population || (r.Population == port.Population && r.MapIndex < port.MapIndex))
+                    port = r;
+            }
             if (port is null) continue;
             bestOpinion = tie.Opinion;
             best = port;
         }
         return best;
+    }
+
+    private static bool HasArrangementBetween(Campaign c, int holderId, int ownerId)
+    {
+        for (var i = 0; i < c.LandArrangements.Count; i++)
+        {
+            var a = c.LandArrangements[i];
+            if (a.HolderId == holderId && a.OwnerId == ownerId) return true;
+        }
+        return false;
     }
 
     // ---- history ----------------------------------------------------------------------------

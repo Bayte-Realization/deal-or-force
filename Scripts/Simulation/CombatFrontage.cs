@@ -7,7 +7,7 @@ namespace DealOrForce.Simulation;
 // formations that are.
 public static partial class Warfare
 {
-    // The line, the reserve and the candidates live on the campaign's battle buckets.
+    // The line, the reserve and the candidates live on this battle's scratch.
     // This split clears and refills those lists; it does not allocate a fresh one per side.
 
     /// <summary>
@@ -27,22 +27,26 @@ public static partial class Warfare
     /// signal/recon initiative and <c>reinforcement_rate</c> doctrine modifiers.
     /// </summary>
     private static void Frontage(IReadOnlyCollection<Army> side, float room, List<Army> line, List<Army> reserve)
-        => FrontageReady(side, room, line, reserve, 0f, null, null, false);
+    {
+        var candidates = new List<Army>();
+        FrontageReady(side, room, line, reserve, 0f, null, null, false, candidates);
+    }
 
     private static void FrontageReady(IReadOnlyCollection<Army> side, float room, List<Army> line,
         List<Army> reserve, float breakOrganisation, Campaign campaign = null, LandBattle battle = null,
-        bool attacker = false)
+        bool attacker = false, List<Army> candidates = null)
     {
         line.Clear();
         reserve.Clear();
         if (side.Count == 0) return;
 
-        LineCandidates.Clear();
-        LineCandidates.AddRange(side);
+        var sorting = candidates ?? LineCandidates;
+        sorting.Clear();
+        sorting.AddRange(side);
         var prevLine = battle is null ? null : attacker ? battle.LastAttackerLine : battle.LastDefenderLine;
         var hasPrevLine = prevLine is { Count: > 0 };
 
-        LineCandidates.Sort((left, right) =>
+        sorting.Sort((left, right) =>
         {
             if (hasPrevLine)
             {
@@ -56,7 +60,7 @@ public static partial class Warfare
 
         var held = 0f;
         var baseChance = campaign?.Defines.CombatReinforceBaseChance ?? 0.55f;
-        foreach (var army in LineCandidates)
+        foreach (var army in sorting)
         {
             if (army.Organisation <= breakOrganisation) { reserve.Add(army); continue; }
             var width = army.Divisions * UnitTypeCatalog.Get(army.TemplateId).CombatWidth;

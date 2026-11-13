@@ -8,7 +8,9 @@ public enum StaffNote : byte
 {
     None = 0,
     EmptyPostFromReserve = 1,
-    ThreatenedHole = 2
+    ThreatenedHole = 2,
+    /// <summary>A free reserve was ordered onto the empty post that reconnects a pocket.</summary>
+    ReopenRoad = 3
 }
 
 /// <summary>
@@ -56,6 +58,7 @@ public static class StaffReasons
         "No path to a supply hub, so the attack does not start." => "No route",
         DepotShortSentence => "Depot short",
         "A free reserve filled the empty post." => "Reserve fill",
+        "A free reserve is reopening the road." => "Reopen road",
         "The hole is already threatened." => "Hole threatened",
         "The spearhead stays concentrated." => "Spear stays",
         "The staff ordered an advance along the front." => "Staff advance",
@@ -72,6 +75,8 @@ public static class StaffReasons
             return "No path to a supply hub, so the attack does not start.";
         if (LogisticsSystem.DepotShortOfAttack(campaign, army))
             return DepotShortSentence;
+        if (army.OrderKind == ArmyOrder.DefendFront && army.StaffNote == StaffNote.ReopenRoad)
+            return "A free reserve is reopening the road.";
         if (army.OrderKind == ArmyOrder.DefendFront && army.StaffNote == StaffNote.EmptyPostFromReserve)
             return "A free reserve filled the empty post.";
         if (army.OrderKind == ArmyOrder.DefendFront && army.StaffNote == StaffNote.ThreatenedHole)

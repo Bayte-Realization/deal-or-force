@@ -65,9 +65,20 @@ static class MovementPowerStagingTests
             MovementPower.Tick(probe);
             if (probe.Chronicle.Read(-1, -1, true)
                 .Any(entry => entry.Kind is "general_strike" or "march_failed" or "march_toppled" or "march_concessions"))
-                return World(day);
+                return ReadyWorld(day);
         }
-        return World(3);
+        return ReadyWorld(3);
+    }
+
+    // The game's day drains the people index inside MovementRules.TickStages, which
+    // SimulationCore orders before MovementPower.TickStages; a warm index adds no seams of
+    // its own to the power review. A fixture that hands over a cold world instead counts
+    // index batches as actor stages and breaks the one-stage-per-due-movement contract.
+    static Campaign ReadyWorld(int day)
+    {
+        var world = World(day);
+        foreach (var _ in MovementRules.EnsurePeopleIndexedStages(world, insideMovRules: false)) { }
+        return world;
     }
 
     static void OriginalOrderAndAmounts()
@@ -120,8 +131,16 @@ static class MovementPowerStagingTests
         for (var day = 0; day < 9; day++)
         {
             eager.Tick();
+            var dayFrames = 0;
+            // Guard each day, like StageBudgetTests. The former cumulative 5000
+            // counted nine days together and rejected a finite sequence of more finely
+            // split passes even though every day's eager/staged fingerprints agree.
             while (!staged.StepFor(0))
-                if (++frames > 5000) throw new Exception("Movement staged fixture did not finish within 5000 stages.");
+            {
+                frames++;
+                if (++dayFrames > 5000) throw new Exception("Movement staged day did not finish within 5000 stages.");
+            }
+            Console.WriteLine($"MOVEMENT_DAY_SLICES day={staged.ElapsedDays} passes={dayFrames + 1} limit=5000");
             Check(eager.ElapsedHours == staged.ElapsedHours && !staged.MidStep &&
                 CampaignFingerprint.Of(eager) == CampaignFingerprint.Of(staged),
                 "public StepFor(0) and Tick agree after day " + staged.ElapsedDays);
@@ -139,7 +158,7 @@ static class MovementPowerStagingTests
                !SimProfiler.All.Any(s => s.Name == "movement power"))
         {
             staged.StepFor(0);
-            if (++frames > 1000) throw new Exception("Could not reach the first movement actor boundary.");
+            if (++frames > 5000) throw new Exception("Could not reach the first movement actor boundary.");
         }
         Check(staged.MidStep && SimProfiler.All.Single(s => s.Name == "movement power").Runs == 1,
             "a public zero-budget frame can stop after exactly one movement has finished its review");

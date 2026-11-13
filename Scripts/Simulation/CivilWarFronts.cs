@@ -28,15 +28,23 @@ public static class CivilWarFronts
 {
     public static void Tick(Campaign c)
     {
-        if (!c.StepOpensNewDay || c.ElapsedDays % 7 != 5 || c.Defines.CivilWarThirdFrontChance <= 0f) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same weekly third-front pass, yielded between its phases.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (!c.StepOpensNewDay || c.ElapsedDays % 7 != 5 || c.Defines.CivilWarThirdFrontChance <= 0f) yield break;
         var map = c.ProvinceMap;
         var controls = c.ProvinceController;
-        if (map is null || controls is null) return;
+        if (map is null || controls is null) yield break;
 
         // The governments with more than one rising against them at once.
         var risings = new Dictionary<int, List<Nation>>();
+        var warsScanned = 0;
         foreach (var war in c.Wars)
         {
+            if (++warsScanned % 16 == 0) yield return 0;
             if (war.Ended || !war.CivilConflict) continue;
             foreach (var (government, rebel) in new[] { (war.AttackerId, war.DefenderId), (war.DefenderId, war.AttackerId) })
             {
@@ -46,11 +54,14 @@ public static class CivilWarFronts
                 if (!list.Contains(side)) list.Add(side);
             }
         }
-        if (!risings.Values.Any(list => list.Count >= 2)) return;
+        if (!risings.Values.Any(list => list.Count >= 2)) yield break;
+        yield return 0;
 
         var byIndex = c.NationsByMapIndex();
+        var governments = 0;
         foreach (var (government, sides) in risings.OrderBy(pair => pair.Key))
         {
+            if (++governments % 2 == 0) yield return 0;
             if (sides.Count < 2) continue;
             var indices = sides.Select(s => (ushort)s.MapIndex).ToHashSet();
             var touching = new HashSet<(int, int)>();

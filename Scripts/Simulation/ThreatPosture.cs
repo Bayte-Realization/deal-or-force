@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -40,32 +41,71 @@ public sealed partial class Defines
 /// </summary>
 public static class ThreatPosture
 {
-    private static readonly Dictionary<ushort, List<int>> Held = new();
-    private static readonly List<(Nation Neighbour, float Threat)> Threats = new();
-    private static readonly List<int> Desired = new();
-    private static readonly HashSet<int> DesiredSet = new();
-    private static readonly List<Army> Free = new();
-    private static int _heldDay = -1;
-    private static Campaign _heldFor;
+    private sealed class Board
+    {
+        public readonly Dictionary<ushort, List<int>> Held = new();
+        public readonly List<(Nation Neighbour, float Threat)> Threats = new();
+        public readonly List<int> Desired = new();
+        public readonly HashSet<int> DesiredSet = new();
+        public readonly List<Army> Free = new();
+        public readonly List<int> BorderScratch = new();
+        public readonly Dictionary<int, int> CoveredScratch = new();
+        public readonly Dictionary<int, List<Army>> ArmiesByNation = new();
+        public readonly Stack<List<Army>> ArmyListPool = new();
+        public readonly HashSet<int> LiveWarNations = new();
+        public readonly Dictionary<ushort, List<int>> BordersByNeighbour = new();
+        public readonly Stack<List<int>> BorderListPool = new();
+        public readonly HashSet<ushort> SeenNeighbours = new();
+        public bool ArmiesIndexed;
+        public int HeldDay = -1;
+    }
+
+    private static readonly ConditionalWeakTable<Campaign, Board> Boards = new();
 
     /// <summary>Moves made since the campaign began, for the bench.</summary>
     public static int Moves { get; private set; }
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ThreatPosture))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>Monthly border posture review, yielding between countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ThreatPosture))) yield break;
         var map = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
-        if (map is null || controllers is null || campaign.ElapsedDays <= 0) return;
+        if (map is null || controllers is null || campaign.ElapsedDays <= 0) yield break;
         var every = Math.Max(1, campaign.Defines.ThreatPostureReviewDays);
+        var board = Boards.GetOrCreateValue(campaign);
 
-        foreach (var nation in campaign.Nations)
+        board.LiveWarNations.Clear();
+        foreach (var war in Warfare.LiveWars(campaign))
         {
-            if ((campaign.ElapsedDays + nation.Id) % every != 0) continue;
-            if (nation.Population <= 0 || nation.Movement is not null || nation.Landless) continue;
-            if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command)) continue;
-            if (AtWar(campaign, nation)) continue;
-            Review(campaign, nation);
+            board.LiveWarNations.Add(war.AttackerId);
+            board.LiveWarNations.Add(war.DefenderId);
+            foreach (var ally in war.AttackerAllies) board.LiveWarNations.Add(ally);
+            foreach (var ally in war.DefenderAllies) board.LiveWarNations.Add(ally);
+        }
+
+        board.ArmiesIndexed = false;
+        try
+        {
+            for (var i = 0; i < campaign.Nations.Count; i++)
+            {
+                var nation = campaign.Nations[i];
+                if ((campaign.ElapsedDays + nation.Id) % every != 0) continue;
+                if (nation.Population <= 0 || nation.Movement is not null || nation.Landless) continue;
+                if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command)) continue;
+                if (board.LiveWarNations.Contains(nation.Id)) continue;
+                Review(campaign, board, nation);
+                yield return 0;
+            }
+        }
+        finally
+        {
+            ClearArmies(board);
         }
     }
 
@@ -92,27 +132,28 @@ public static class ThreatPosture
         return reasons * MathF.Sqrt(M.Clamp(theirs / ours, 0.25f, 3f));
     }
 
-    private static void Review(Campaign campaign, Nation nation)
+    private static void Review(Campaign campaign, Board board, Nation nation)
     {
         var defines = campaign.Defines;
         var map = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
-        IndexHeld(campaign);
-        if (!Held.TryGetValue((ushort)nation.MapIndex, out var ours) || ours.Count == 0) return;
+        IndexHeld(campaign, board);
+        if (!board.Held.TryGetValue((ushort)nation.MapIndex, out var ours) || ours.Count == 0) return;
 
         // Who there is to fear.
-        Threats.Clear();
+        var threats = board.Threats;
+        threats.Clear();
         var total = 0f;
         foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, nation.MapIndex))
         {
-            var neighbour = NationAt(campaign, mapIndex);
+            var neighbour = campaign.NationByMapIndex(mapIndex);
             var threat = ThreatOf(campaign, nation, neighbour);
             if (threat < defines.ThreatPostureMinimum) continue;
-            Threats.Add((neighbour, threat));
+            threats.Add((neighbour, threat));
             total += threat;
         }
-        if (Threats.Count == 0) return;
-        Threats.Sort((left, right) =>
+        if (threats.Count == 0) return;
+        threats.Sort((left, right) =>
         {
             var order = right.Threat.CompareTo(left.Threat);
             return order != 0 ? order : left.Neighbour.Id.CompareTo(right.Neighbour.Id);
@@ -120,32 +161,42 @@ public static class ThreatPosture
 
         // The army it has to move: formations at liberty, not militia, not at sea, not under a
         // player's own hand.
-        Free.Clear();
-        foreach (var army in campaign.Armies)
+        var free = board.Free;
+        free.Clear();
+        var nationArmies = ArmiesOf(campaign, board, nation.Id);
+        for (var i = 0; i < nationArmies.Count; i++)
         {
-            if (army.NationId != nation.Id || army.TemplateId == MilitiaCore.TemplateId) continue;
+            var army = nationArmies[i];
+            if (army.TemplateId == MilitiaCore.TemplateId) continue;
             if (army.InBattle || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0) continue;
             if (army.DirectOrder || army.AssignedWarId >= 0 || army.FrontLineId >= 0 ||
                 army.PlanActive && army.OrderKind != ArmyOrder.Manual) continue;
-            Free.Add(army);
+            free.Add(army);
         }
-        if (Free.Count == 0) return;
+        if (free.Count == 0) return;
 
         var share = M.Clamp(defines.ThreatPostureFloor + total * defines.ThreatPosturePerThreat,
             defines.ThreatPostureFloor, defines.ThreatPostureCeiling);
-        var onBorders = Math.Max(1, (int)MathF.Round(Free.Count * share));
+        var onBorders = Math.Max(1, (int)MathF.Round(free.Count * share));
 
         // Each threat's share of the border army, and its border's posts spread evenly.
-        Desired.Clear();
-        DesiredSet.Clear();
+        var desired = board.Desired;
+        var desiredSet = board.DesiredSet;
+        desired.Clear();
+        desiredSet.Clear();
+        Dictionary<ushort, List<int>> bordersByNeighbour = threats.Count > 1
+            ? BuildThreatBorders(board, map, controllers, ours, threats)
+            : null;
         var given = 0;
-        foreach (var (neighbour, threat) in Threats)
+        foreach (var (neighbour, threat) in threats)
         {
             if (given >= onBorders) break;
             var count = Math.Max(1, (int)MathF.Round(onBorders * threat / total));
             count = Math.Min(count, onBorders - given);
-            var border = BorderWith(map, controllers, ours, (ushort)neighbour.MapIndex);
-            if (border.Count == 0) continue;
+            var border = bordersByNeighbour is not null
+                ? (bordersByNeighbour.TryGetValue((ushort)neighbour.MapIndex, out var cachedBorder) ? cachedBorder : null)
+                : BorderWith(board, map, controllers, ours, (ushort)neighbour.MapIndex);
+            if (border is null || border.Count == 0) continue;
             var strategicPost = -1;
             var importance = 0f;
             if (defines.ExclaveDefenceWeight > 0f)
@@ -159,23 +210,24 @@ public static class ThreatPosture
             {
                 var post = index == 0 && strategicPost > 0 ? strategicPost :
                     border[(int)((index + 0.5f) * border.Count / count) % border.Count];
-                Desired.Add(post);
-                DesiredSet.Add(post);
+                desired.Add(post);
+                desiredSet.Add(post);
             }
             given += count;
         }
-        if (Desired.Count == 0) return;
+        if (desired.Count == 0) return;
 
         // Who is already where they should be.
-        var covered = new Dictionary<int, int>();
-        foreach (var army in Free)
+        var covered = board.CoveredScratch;
+        covered.Clear();
+        foreach (var army in free)
         {
             var at = army.OrderProvinceId > 0 && army.Route.Count > 0 ? army.OrderProvinceId : army.ProvinceId;
-            if (DesiredSet.Contains(at)) covered[at] = covered.GetValueOrDefault(at) + 1;
+            if (desiredSet.Contains(at)) covered[at] = covered.GetValueOrDefault(at) + 1;
         }
 
         var moves = 0;
-        foreach (var post in Desired)
+        foreach (var post in desired)
         {
             if (moves >= defines.ThreatPostureMovesPerLook) break;
             if (covered.TryGetValue(post, out var there) && there > 0)
@@ -187,11 +239,11 @@ public static class ThreatPosture
             Army best = null;
             var bestDistance = float.MaxValue;
             var target = map.CenterOf(post);
-            foreach (var army in Free)
+            foreach (var army in free)
             {
                 if (army.Route.Count > 0 || army.ReadyDay > campaign.ElapsedDays || army.LentById >= 0) continue;
                 var at = army.OrderProvinceId > 0 && army.Route.Count > 0 ? army.OrderProvinceId : army.ProvinceId;
-                if (DesiredSet.Contains(at)) continue;
+                if (desiredSet.Contains(at)) continue;
                 var distance = NavalOperations.Distance(army.Latitude, army.Longitude, target.Latitude, target.Longitude);
                 if (distance >= bestDistance) continue;
                 bestDistance = distance;
@@ -204,50 +256,102 @@ public static class ThreatPosture
             // day a war begins.
             best.DirectOrder = false;
             if (best.OrderProvinceId == post) { moves++; Moves++; }
-            DesiredSet.Add(best.ProvinceId); // never pick it twice in one look
+            desiredSet.Add(best.ProvinceId); // never pick it twice in one look
         }
     }
 
-    private static List<int> BorderWith(ProvinceTopology map, ushort[] controllers, List<int> ours, ushort neighbour)
+    private static Dictionary<ushort, List<int>> BuildThreatBorders(Board board, ProvinceTopology map, ushort[] controllers,
+        List<int> ours, List<(Nation Neighbour, float Threat)> threats)
     {
-        var border = new List<int>();
+        var byNeighbour = board.BordersByNeighbour;
+        foreach (var list in byNeighbour.Values)
+        {
+            list.Clear();
+            board.BorderListPool.Push(list);
+        }
+        byNeighbour.Clear();
+        for (var i = 0; i < threats.Count; i++)
+        {
+            var key = (ushort)threats[i].Neighbour.MapIndex;
+            if (!byNeighbour.ContainsKey(key))
+                byNeighbour[key] = board.BorderListPool.Count > 0 ? board.BorderListPool.Pop() : new List<int>();
+        }
+        var seen = board.SeenNeighbours;
+        var neighbors = map.Neighbors;
+        var water = map.WaterByProvince;
+        for (var i = 0; i < ours.Count; i++)
+        {
+            var province = ours[i];
+            if (province <= 0 || province >= water.Length || water[province]) continue;
+            seen.Clear();
+            var adj = neighbors[province];
+            for (var j = 0; j < adj.Length; j++)
+            {
+                var next = adj[j];
+                if (next < controllers.Length)
+                {
+                    var ctrl = controllers[next];
+                    if (byNeighbour.TryGetValue(ctrl, out var list) && seen.Add(ctrl))
+                        list.Add(province);
+                }
+            }
+        }
+        return byNeighbour;
+    }
+
+    private static List<int> BorderWith(Board board, ProvinceTopology map, ushort[] controllers, List<int> ours, ushort neighbour)
+    {
+        var borderScratch = board.BorderScratch;
+        borderScratch.Clear();
         foreach (var province in ours)
         {
             if (map.IsWater(province)) continue;
             foreach (var next in map.Neighbors[province])
-                if (next < controllers.Length && controllers[next] == neighbour) { border.Add(province); break; }
+                if (next < controllers.Length && controllers[next] == neighbour) { borderScratch.Add(province); break; }
         }
-        return border;
+        return borderScratch;
     }
 
-    private static void IndexHeld(Campaign campaign)
+    private static IReadOnlyList<Army> ArmiesOf(Campaign campaign, Board board, int nationId)
     {
-        if (ReferenceEquals(_heldFor, campaign) && _heldDay == campaign.ElapsedDays) return;
-        _heldFor = campaign;
-        _heldDay = campaign.ElapsedDays;
-        foreach (var list in Held.Values) list.Clear();
+        if (!board.ArmiesIndexed)
+        {
+            ClearArmies(board);
+            foreach (var army in campaign.Armies)
+            {
+                if (!board.ArmiesByNation.TryGetValue(army.NationId, out var list))
+                    board.ArmiesByNation[army.NationId] = list = board.ArmyListPool.Count > 0 ? board.ArmyListPool.Pop() : new List<Army>();
+                list.Add(army);
+            }
+            board.ArmiesIndexed = true;
+        }
+        return board.ArmiesByNation.TryGetValue(nationId, out var owned) ? owned : Array.Empty<Army>();
+    }
+
+    private static void ClearArmies(Board board)
+    {
+        foreach (var list in board.ArmiesByNation.Values)
+        {
+            list.Clear();
+            board.ArmyListPool.Push(list);
+        }
+        board.ArmiesByNation.Clear();
+        board.ArmiesIndexed = false;
+    }
+
+    private static void IndexHeld(Campaign campaign, Board board)
+    {
+        if (board.HeldDay == campaign.ElapsedDays) return;
+        board.HeldDay = campaign.ElapsedDays;
+        foreach (var list in board.Held.Values) list.Clear();
         var map = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         for (var province = 1; province <= map.ProvinceCount && province < controllers.Length; province++)
         {
             var owner = controllers[province];
             if (owner == 0) continue;
-            if (!Held.TryGetValue(owner, out var list)) Held[owner] = list = new List<int>();
+            if (!board.Held.TryGetValue(owner, out var list)) board.Held[owner] = list = new List<int>();
             list.Add(province);
         }
-    }
-
-    private static bool AtWar(Campaign campaign, Nation nation)
-    {
-        foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Involves(nation.Id)) return true;
-        return false;
-    }
-
-    private static Nation NationAt(Campaign campaign, int mapIndex)
-    {
-        foreach (var nation in campaign.Nations)
-            if (nation.MapIndex == mapIndex) return nation;
-        return null;
     }
 }

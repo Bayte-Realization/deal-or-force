@@ -81,23 +81,27 @@ public static class WarLosses
     /// war against whoever holds the ground it is standing on, which for a pocket is the
     /// country that closed it; failing that any war its country is fighting.
     /// </summary>
-    public static StrategicWar WarOf(Campaign campaign, Army army)
+    public static StrategicWar WarOf(Campaign campaign, Army army) =>
+        campaign is null || army is null ? null : WarOf(campaign, army.NationId, army.AssignedWarId, army.ProvinceId);
+
+    internal static StrategicWar WarOf(Campaign campaign, int nationId, int assignedWarId, int provinceId)
     {
-        if (campaign is null || army is null) return null;
+        if (campaign is null) return null;
         StrategicWar fallback = null;
         var holder = -1;
         var controllers = campaign.ProvinceController;
-        if (controllers is not null && army.ProvinceId > 0 && army.ProvinceId < controllers.Length)
+        if (controllers is not null && provinceId > 0 && provinceId < controllers.Length)
         {
-            var map = controllers[army.ProvinceId];
-            foreach (var nation in campaign.Nations)
-                if (nation.MapIndex == map) { holder = nation.Id; break; }
+            var map = controllers[provinceId];
+            if (map > 0 && campaign.NationByMapIndex(map) is { } holderNation)
+                holder = holderNation.Id;
         }
-        foreach (var war in campaign.Wars)
+        for (var i = 0; i < campaign.Wars.Count; i++)
         {
-            if (war.Ended || !war.Involves(army.NationId)) continue;
-            if (war.Id == army.AssignedWarId) return war;
-            if (holder >= 0 && war.Opposes(army.NationId, holder)) fallback = war;
+            var war = campaign.Wars[i];
+            if (war.Ended || !war.Involves(nationId)) continue;
+            if (war.Id == assignedWarId) return war;
+            if (holder >= 0 && war.Opposes(nationId, holder)) fallback = war;
             else fallback ??= war;
         }
         return fallback;

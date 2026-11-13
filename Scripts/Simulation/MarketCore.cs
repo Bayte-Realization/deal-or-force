@@ -37,7 +37,7 @@ public enum Commodity
     Pharmaceuticals
 }
 
-public enum TradePolicy { OpenMarkets, BalancedTrade, StrategicAutarky }
+public enum TradePolicy { OpenMarkets, BalancedTrade, StrategicAutarky, Protectionism }
 
 /// <summary>
 /// How open a country is to the world market, asked of `common/trade_policies` rather than
@@ -418,7 +418,10 @@ public static class MarketSystem
     }
 
     /// <summary>How many countries' balances one stage of the market works out.</summary>
-    private const int BalanceStageCountries = 48;
+    private const int BalanceStageCountries = 16;
+
+    /// <summary>How many goods one stage of the pricing settles. Two keeps each stage under a millisecond.</summary>
+    private const int PricingStageCommodities = 2;
 
     private static IEnumerable<int> RecalculateStages(Campaign campaign, bool adjustPrice)
     {
@@ -436,9 +439,37 @@ public static class MarketSystem
         // named route to a named country - see TradeNetwork.
         foreach (var _ in TradeNetwork.RouteStages(campaign)) yield return 0;
 
-        using var pricing = SimProfiler.Measure("    mkt:prices");
-        foreach (var commodity in CommodityCatalog.All)
+        // Prices, a few goods a stage. Each good's world totals read every country and its
+        // price writes to every country, but no good reads another, so a stage can end
+        // between any two of them. This used to be one block at the end of a market week -
+        // 7,8 ms that a frame had to carry whole, on the week a market week runs.
+        var catalogue = new List<Commodity>();
+        foreach (var commodity in CommodityCatalog.All) catalogue.Add(commodity);
+        for (var firstGood = 0; firstGood < catalogue.Count; firstGood += PricingStageCommodities)
         {
+            var lastGood = Math.Min(firstGood + PricingStageCommodities, catalogue.Count);
+            using (SimProfiler.Measure("    mkt:prices"))
+                SettlePrices(campaign, adjustPrice, catalogue, firstGood, lastGood);
+            yield return 0;
+        }
+
+        // And what each country made of its own week - shortages, output, income, tariffs -
+        // a chunk of countries at a time, in the same order as before: country by country.
+        for (var firstNation = 0; firstNation < campaign.Nations.Count; firstNation += BalanceStageCountries)
+        {
+            var lastNation = Math.Min(campaign.Nations.Count, firstNation + BalanceStageCountries);
+            using (SimProfiler.Measure("    mkt:nations"))
+                SettleNations(campaign, firstNation, lastNation);
+            yield return 0;
+        }
+    }
+
+    /// <summary>Goods <paramref name="from"/> to <paramref name="to"/>: the world's price, and each country's share of it.</summary>
+    private static void SettlePrices(Campaign campaign, bool adjustPrice, List<Commodity> catalogue, int from, int to)
+    {
+        for (var good = from; good < to; good++)
+        {
+            var commodity = catalogue[good];
             var totalDemand = 0f;
             var totalProduction = 0f;
             var wantedImports = 0f;
@@ -475,9 +506,14 @@ public static class MarketSystem
                     : targetPrice;
             }
         }
+    }
 
-        foreach (var nation in campaign.Nations)
+    /// <summary>Countries <paramref name="from"/> to <paramref name="to"/>: what the week left each of them with.</summary>
+    private static void SettleNations(Campaign campaign, int from, int to)
+    {
+        for (var index = from; index < to; index++)
         {
+            var nation = campaign.Nations[index];
             var weight = 0f;
             var shortages = 0f;
             var trade = 0f;
@@ -623,9 +659,10 @@ public static class MarketSystem
                 var current = TallyByNation.GetValueOrDefault(fleet.NationId);
                 TallyByNation[fleet.NationId] = current with { Hulls = current.Hulls + fleet.Hulls };
             }
-            foreach (var war in campaign.Wars)
+            var wars = Warfare.LiveWars(campaign);
+            for (var index = 0; index < wars.Count; index++)
             {
-                if (war.Ended) continue;
+                var war = wars[index];
                 foreach (var side in new[] { war.AttackerId, war.DefenderId })
                 {
                     var current = TallyByNation.GetValueOrDefault(side);

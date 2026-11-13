@@ -1,0 +1,26 @@
+// The battle explained (CombatFactors).
+{
+  "Why it goes this way": "Почему бой идёт так",
+  "Attacker's fire": "Огонь атакующего",
+  "Defender's staying power": "Стойкость обороны",
+  "Armour and piercing": "Броня и бронебойность",
+  "Guns and aircraft": "Артиллерия и авиация",
+  "Plan prepared": "Подготовленный план",
+  "Attack from several sides": "Удар с нескольких сторон",
+  "Training and equipment": "Выучка и снаряжение",
+  "Commander": "Командующий",
+  "Munitions": "Боеприпасы",
+  "Encircled": "В окружении",
+  "Fighting spirit": "Боевой дух",
+  "Manoeuvre of the day": "Манёвр дня",
+  "Fortune": "Удача",
+  "Entrenchment": "Окопы",
+  "Shelled": "Под обстрелом",
+  "Homeland": "Родная земля",
+  "Attacked from one side": "Удар только с одной стороны",
+  "Guerrilla country": "Партизанская местность",
+  "Everything else is even.": "Остальное — без перевеса.",
+  "All together ×{0:0.00}": "Вместе ×{0:0.00}",
+  "The reasons appear after the next round.": "Причины появятся после следующего раунда.",
+  "What multiplies the attacker's fire and the defender's staying power in the last round. Their ratio decides who gives way.": "Что умножает огонь атакующего и стойкость обороняющегося в последнем раунде. Их соотношение решает, кто уступит."
+}

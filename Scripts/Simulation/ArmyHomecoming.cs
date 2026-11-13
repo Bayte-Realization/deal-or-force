@@ -17,9 +17,32 @@ internal static class ArmyHomecoming
     private static readonly HashSet<int> Seen = new();
     private static readonly Dictionary<int, int> Destinations = new();
 
+    internal static bool NeedsReturns(Campaign c, Nation nation, List<Army> free)
+    {
+        if (!c.Defines.ArmyHomecomingEnabled || free.Count == 0) return false;
+        var map = c.ProvinceMap;
+        var controls = c.ProvinceController;
+        for (var i = 0; i < free.Count; i++)
+        {
+            var army = free[i];
+            if (army.LentById < 0 && army.ReadyDay <= c.ElapsedDays &&
+                army.ProvinceId <= map.ProvinceCount && army.ProvinceId < controls.Length &&
+                controls[army.ProvinceId] != nation.MapIndex)
+                return true;
+        }
+        return false;
+    }
+
     internal static int OrderReturns(Campaign c, Nation nation, List<Army> free, int budget)
     {
-        if (!c.Defines.ArmyHomecomingEnabled || budget <= 0) return 0;
+        var total = 0;
+        foreach (var delta in OrderReturnsStages(c, nation, free, budget)) total += delta;
+        return total;
+    }
+
+    internal static IEnumerable<int> OrderReturnsStages(Campaign c, Nation nation, List<Army> free, int budget)
+    {
+        if (!c.Defines.ArmyHomecomingEnabled || budget <= 0) yield break;
         var map = c.ProvinceMap;
         var controls = c.ProvinceController;
         HashSet<ushort> allowed = null;
@@ -34,16 +57,19 @@ internal static class ArmyHomecoming
             allowed ??= MilitaryAccess.Controllers(c, nation.Id);
             if (!allowed.Contains(controls[army.ProvinceId])) continue; // access revocation has its own repatriation rules
             if (!Destinations.TryGetValue(army.ProvinceId, out var destination))
+            {
                 Destinations[army.ProvinceId] = destination = FindHome(c, nation, army.ProvinceId, allowed);
+                if (destination <= 0) { yield return 0; continue; }
+            }
             if (destination <= 0) continue; // no land corridor: do not fake a transport or a border crossing
             var order = new MoveArmyCommand { IssuerId = nation.Id, ArmyId = army.Id, TargetProvinceId = destination };
             order.Apply(c);
-            if (order.Result != ArmyMoveResult.Issued) continue;
+            if (order.Result != ArmyMoveResult.Issued) { yield return 0; continue; }
             army.DirectOrder = false; // normal command validation; autonomous staff ownership
             free.RemoveAt(index--); // no garrison/relief order may turn this column around in the same review
             moves++;
+            yield return 1;
         }
-        return moves;
     }
 
     private static int FindHome(Campaign c, Nation nation, int origin, HashSet<ushort> allowed)

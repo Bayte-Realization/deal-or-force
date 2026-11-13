@@ -208,7 +208,7 @@ public static class MechanicFeatures
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         void Bind(string flag, params string[] commands)
         { foreach (var command in commands) result[command] = flag; }
-        Bind("navy", "SetFleetOrderCommand", "OrderHullsCommand", "CommissionNewFleetCommand", "EmbarkArmiesCommand", "LaunchInvasionCommand",
+        Bind("navy", "SetFleetOrderCommand", "OrderHullsCommand", "CommissionNewFleetCommand", "EmbarkArmiesCommand", "LaunchInvasionCommand", "SeaLiftCommand",
             "MergeFleetsCommand", "SplitFleetCommand");
         Bind("research", "SetResearchCommand");
         Bind("construction", "QueueConstructionCommand", "DemolishBuildingCommand");

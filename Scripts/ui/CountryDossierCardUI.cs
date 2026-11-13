@@ -136,15 +136,11 @@ public partial class DealOrForceGame
         var master = SubjectSystem.OverlordOf(_campaign, nation);
         if (master is not null)
         {
-            CardRow(_countryCardRows, "Answers to", master.DisplayName);
             CardRow(_countryCardRows, "Subject status", Tr(SubjectCatalog.Of(nation.SubjectType)?.Name ?? nation.SubjectType));
             CardRow(_countryCardRows, "Liberty desire", Fmt.Percent(nation.LibertyDesire));
         }
-        var subjects = SubjectSystem.SubjectsOf(_campaign, nation).ToArray();
-        if (subjects.Length > 0)
-            CardRow(_countryCardRows, "Subjects", string.Join(", ", subjects.Select(s => s.DisplayName)));
-        foreach (var war in _campaign.Wars.Where(w => !w.Ended && w.Involves(nation.Id)))
-            CardRow(_countryCardRows, "At war", WarNames.Of(_campaign, war));
+        // Every tie as flags, each a click from that country's card (CountryRelationFlagsUI).
+        AddCountryRelationFlags(nation);
         // The deterrent a country holds is the one fact that redraws every other row here:
         // what it may do, what may be done to it, and what its wars can end in.
         var deterrentTier = Deterrence.TierOf(_campaign, nation);

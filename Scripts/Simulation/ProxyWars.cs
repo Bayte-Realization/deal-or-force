@@ -271,25 +271,36 @@ public static class ProxyWars
 
     public static void Tick(Campaign c)
     {
-        if (c is null || c.ElapsedDays <= 0) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same proxy-war pass, yielded between its phases.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || c.ElapsedDays <= 0) yield break;
         ArmsShipmentRequests.Tick(c);
-        if (!MechanicFeatures.SystemEnabled(c, nameof(ProxyWars))) return;
+        if (!MechanicFeatures.SystemEnabled(c, nameof(ProxyWars))) yield break;
         var defines = c.Defines;
         var every = Math.Max(1, defines.ProxyReviewDays);
-        if (c.ElapsedDays % every == 4 % every) Deliver(c, every);
-        Consider(c);
+        if (c.ElapsedDays % every == 4 % every)
+            foreach (var _ in DeliverStages(c, every)) yield return 0;
+        yield return 0;
+        foreach (var _ in ConsiderStages(c)) yield return 0;
+        yield return 0;
         // A finished record is history, not state: keep the last few hundred.
         if (c.Sponsorships.Count > 400)
             c.Sponsorships.RemoveAll(s => s.Ended && c.ElapsedDays - s.EndedDay > 3650);
     }
 
-    private static void Deliver(Campaign c, int days)
+    private static IEnumerable<int> DeliverStages(Campaign c, int days)
     {
         var defines = c.Defines;
         var arms = new Dictionary<int, float>();
         var backing = new Dictionary<int, int>();
+        var delivered = 0;
         foreach (var s in c.Sponsorships)
         {
+            if (++delivered % 64 == 0) yield return 0;
             if (s.Ended) continue;
             var sponsor = c.NationById(s.SponsorId);
             var client = c.NationById(s.ClientId);
@@ -356,13 +367,15 @@ public static class ProxyWars
     // ------------------------------------------------------------------------- the AI
 
     /// <summary>Each country nobody plays, on its own day of the month, looks at the wars it could back.</summary>
-    private static void Consider(Campaign c)
+    private static IEnumerable<int> ConsiderStages(Campaign c)
     {
         var defines = c.Defines;
         var cycle = Math.Max(1, defines.ProxyAiReviewDays);
         var live = c.Wars.Where(w => !w.Ended).ToArray();
+        var ticked = 0;
         foreach (var sponsor in c.Nations)
         {
+            if (++ticked % 8 == 0) yield return 0;
             if ((sponsor.Id + c.ElapsedDays) % cycle != 0) continue;
             if (sponsor.IsHuman || sponsor.Movement is not null || sponsor.Population <= 0) continue;
             var mine = Active(c).Where(s => s.SponsorId == sponsor.Id).ToList();

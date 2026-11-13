@@ -21,16 +21,23 @@ public sealed partial class Defines
 // Scratch is reused by the single-threaded simulation; no campaign state lives here.
 public static partial class Warfare
 {
-    private static readonly List<int> Candidates = new();
-    private static readonly List<int> Neighbours = new();
-    private static readonly HashSet<int> CoverSeen = new();
-    private static readonly List<int> CoverRing = new();
-    private static readonly List<int> CoverNext = new();
-    private static readonly HashSet<ushort> OpeningEnemyMaps = new();
+    private sealed class SelectionScratch
+    {
+        public readonly List<int> Candidates = new();
+        public readonly List<int> Neighbours = new();
+        public readonly HashSet<int> CoverSeen = new();
+        public List<int> CoverRing = new();
+        public List<int> CoverNext = new();
+        public readonly HashSet<ushort> OpeningEnemyMaps = new();
+    }
 
-    internal static bool CanStartOpenAdvance(Campaign c, StrategicWar war, Army army)
+    [ThreadStatic] private static SelectionScratch _selectionScratch;
+    private static SelectionScratch UseSelectionScratch() => _selectionScratch ??= new SelectionScratch();
+
+    internal static bool CanStartOpenAdvance(Campaign c, StrategicWar war, Army army,
+        HashSet<ushort> prebuiltEnemyMaps = null)
         => army is not null && army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead &&
-            OpenAdvanceTarget(c, war, army) > 0;
+            OpenAdvanceTarget(c, war, army, prebuiltEnemyMaps) > 0;
 
     // An emergency reserve must pass exactly the same visibility, readiness and
     // local cover rules as a planned advance; a direct move is not an AI loophole.
@@ -39,7 +46,8 @@ public static partial class Warfare
         army.FrontLineId < 0 && (army.AssignedWarId < 0 || army.AssignedWarId == war.Id)
             ? OpenAdvanceTarget(c, war, army) : -1;
 
-    private static int OpenAdvanceTarget(Campaign c, StrategicWar war, Army army)
+    private static int OpenAdvanceTarget(Campaign c, StrategicWar war, Army army,
+        HashSet<ushort> prebuiltEnemyMaps = null)
     {
         if (c?.ProvinceMap is null || c.ProvinceController is null || army is null || war is null || war.Ended ||
             !c.Defines.AiStartsUnopposedAdvance || !war.Involves(army.NationId) ||
@@ -53,43 +61,52 @@ public static partial class Warfare
             c.Defines.AutonomousAssaultMinimumOrganisation, c.Defines.AutonomousAssaultMinimumSupply);
         if (!readiness.Ready) return -1;
         EnsureIndexed(c);
-        OpeningEnemyMaps.Clear();
-        WarCoalition.FillControllers(c, war, !war.IsAttacking(army.NationId), OpeningEnemyMaps);
+        var enemyMaps = prebuiltEnemyMaps;
+        if (enemyMaps is null)
+        {
+            enemyMaps = UseSelectionScratch().OpeningEnemyMaps;
+            enemyMaps.Clear();
+            WarCoalition.FillControllers(c, war, !war.IsAttacking(army.NationId), enemyMaps);
+        }
         // Ask the same selector and cover rule the advance will actually use, not
         // a second optimistic forecast. No arbitrary enemy targets or hidden armies.
-        var target = ChooseAssaultTarget(c, c.ProvinceMap, war, army, c.ProvinceController, OpeningEnemyMaps);
+        var target = ChooseAssaultTarget(c, c.ProvinceMap, war, army, c.ProvinceController, enemyMaps);
         if (target <= 0 || !CampaignIntel.CanSeeProvince(c, army.NationId, target)) return -1;
         foreach (var defender in InProvince(target))
             if (war.Opposes(army.NationId, defender.NationId) && defender.Divisions >= .1f) return -1;
         return CoverRefuses(c, c.ProvinceMap, war, army, target) ? -1 : target;
     }
 
-    private static Campaign _coverCampaign;
-    private static long _coverStep = -1;
-    private static int _coverWarId = -1;
-    private static int _coverMapRevision = -1;
-    private static readonly Dictionary<long, (float Power, float Weight)> CoverCache = new();
-
     private static void EnsureCoverCache(Campaign c, StrategicWar war)
     {
-        if (ReferenceEquals(_coverCampaign, c) && _coverStep == c.ElapsedHours &&
-            _coverWarId == war.Id && _coverMapRevision == c.MapRevision) return;
-        CoverCache.Clear();
-        _coverCampaign = c;
-        _coverStep = c.ElapsedHours;
-        _coverWarId = war.Id;
-        _coverMapRevision = c.MapRevision;
+        var index = UseArmyIndex(c);
+        if (index.CoverStep == c.ElapsedHours &&
+            index.CoverWarId == war.Id && index.CoverMapRevision == c.MapRevision) return;
+        index.CoverCache.Clear();
+        index.CoverStep = c.ElapsedHours;
+        index.CoverWarId = war.Id;
+        index.CoverMapRevision = c.MapRevision;
     }
 
-    internal static void InvalidateCoverCache() => _coverMapRevision = -1;
+    internal static void InvalidateCoverCache(Campaign c)
+    {
+        if (IndexOf(c) is { } index) index.CoverMapRevision = -1;
+    }
 
     private static int ChooseAssaultTarget(Campaign campaign, ProvinceTopology topology,
         StrategicWar war, Army army, ushort[] controllers, HashSet<ushort> enemyMaps)
     {
-        Candidates.Clear();
-        foreach (var province in topology.Neighbors[army.ProvinceId])
-            if (enemyMaps.Contains(controllers[province])) Candidates.Add(province);
-        if (Candidates.Count == 0) return -1;
+        var scratch = UseSelectionScratch();
+        var candidates = scratch.Candidates;
+        var neighbours = scratch.Neighbours;
+        candidates.Clear();
+        if (army is null || topology?.Neighbors is null || controllers is null || enemyMaps is null) return -1;
+        if (army.ProvinceId < 0 || army.ProvinceId >= topology.Neighbors.Length) return -1;
+        var armyNeighbors = topology.Neighbors[army.ProvinceId];
+        if (armyNeighbors is null) return -1;
+        foreach (var province in armyNeighbors)
+            if (province >= 0 && province < controllers.Length && enemyMaps.Contains(controllers[province])) candidates.Add(province);
+        if (candidates.Count == 0) return -1;
         // A defender takes back its own before it invades. Until it is clearly winning, a
         // country fighting off an attack advances only onto its own ground - occupied, or its
         // own by right - and not into the attacker's: Ukraine sent half its army into Russia
@@ -99,28 +116,28 @@ public static partial class Warfare
             campaign.NationById(army.NationId) is { } holder)
         {
             var kept = 0;
-            for (var index = 0; index < Candidates.Count; index++)
+            for (var index = 0; index < candidates.Count; index++)
             {
-                var province = Candidates[index];
-                if (OwnGround(campaign, topology, holder, province)) Candidates[kept++] = province;
+                var province = candidates[index];
+                if (OwnGround(campaign, topology, holder, province)) candidates[kept++] = province;
             }
-            Candidates.RemoveRange(kept, Candidates.Count - kept);
-            if (Candidates.Count == 0) return -1;
+            candidates.RemoveRange(kept, candidates.Count - kept);
+            if (candidates.Count == 0) return -1;
         }
-        Neighbours.Clear();
-        Neighbours.AddRange(Candidates);
+        neighbours.Clear();
+        neighbours.AddRange(candidates);
         var pinned = 0;
-        if (army.PlannedRoute.Count > 0 && Candidates.Contains(army.PlannedRoute[0]))
+        if (army.PlannedRoute.Count > 0 && candidates.Contains(army.PlannedRoute[0]))
         {
             var nextPlannedProvince = army.PlannedRoute[0];
-            Candidates.Clear();
-            Candidates.Add(nextPlannedProvince);
+            candidates.Clear();
+            candidates.Add(nextPlannedProvince);
             pinned = nextPlannedProvince;
         }
-        if (army.OrderProvinceId > 0 && Candidates.Contains(army.OrderProvinceId))
+        if (army.OrderProvinceId > 0 && candidates.Contains(army.OrderProvinceId))
         {
-            Candidates.Clear();
-            Candidates.Add(army.OrderProvinceId);
+            candidates.Clear();
+            candidates.Add(army.OrderProvinceId);
             pinned = army.OrderProvinceId;
         }
         if (army.OrderKind == ArmyOrder.Spearhead && army.ObjectiveStateMapIndex >= 0)
@@ -128,13 +145,13 @@ public static partial class Warfare
             // Compacted in place, by index: writing through a list's indexer counts as
             // modifying it, so a foreach over the same list would throw.
             var kept = 0;
-            for (var index = 0; index < Candidates.Count; index++)
+            for (var index = 0; index < candidates.Count; index++)
             {
-                var province = Candidates[index];
+                var province = candidates[index];
                 if (topology.ProvinceToState[province] == army.ObjectiveStateMapIndex)
-                    Candidates[kept++] = province;
+                    candidates[kept++] = province;
             }
-            if (kept > 0) Candidates.RemoveRange(kept, Candidates.Count - kept);
+            if (kept > 0) candidates.RemoveRange(kept, candidates.Count - kept);
         }
         // A pin that the country cannot take today must not fence the army inside itself.
         // An advance whose objective was refused for cover used to keep that objective as
@@ -146,19 +163,19 @@ public static partial class Warfare
         // cover lifts, because the narrowing that made it is still here. A pin issued today -
         // by a player's RMB or a fresh plan - keeps the old strictness: the order is new, and
         // the measure that produced the cover rule was of standing fronts, not fresh aims.
-        if (pinned > 0 && Candidates.Count == 1 && Candidates[0] == pinned && !army.DirectOrder &&
+        if (pinned > 0 && candidates.Count == 1 && candidates[0] == pinned && !army.DirectOrder &&
             campaign.ElapsedDays - army.OrderIssuedDay >= campaign.Defines.OrderSettleDays &&
             CoverRefuses(campaign, topology, war, army, pinned))
         {
-            Candidates.Clear();
-            foreach (var province in Neighbours)
+            candidates.Clear();
+            foreach (var province in neighbours)
             {
                 if (province == pinned) continue;
                 if (army.OrderKind == ArmyOrder.Spearhead && army.ObjectiveStateMapIndex >= 0 &&
                     topology.ProvinceToState[province] != army.ObjectiveStateMapIndex) continue;
-                Candidates.Add(province);
+                candidates.Add(province);
             }
-            if (Candidates.Count == 0) Candidates.Add(pinned);
+            if (candidates.Count == 0) candidates.Add(pinned);
         }
         // The front AI probes weak sectors and prefers dry crossings. Spearheads
         // accept more terrain risk, while regular advances strongly avoid
@@ -167,9 +184,10 @@ public static partial class Warfare
         // choice - lowest score, ties to the lower province id - without the sorter,
         // the key buffer and the enumerator that went with it every single time.
         var terrainWeight = army.OrderKind == ArmyOrder.Spearhead ? 0.38f : 1f;
+        var activeBattles = EnsureActiveBattles(campaign);
         var target = -1;
         var bestScore = 0f;
-        foreach (var province in Candidates)
+        foreach (var province in candidates)
         {
             // Player battle plans and AI orders use the same reconnaissance. Deep
             // hidden formations must not influence which sector the planner probes.
@@ -189,13 +207,7 @@ public static partial class Warfare
             // infantry against mountain/urban fortifications or deep entrenchments
             // when an open or unentrenched sector is available beside it.
             var terrainPenalty = (1f - M.Clamp01(topology.TerrainAt(province).Attack)) * terrainWeight * 0.35f;
-            var multiAxisBonus = 0f;
-            foreach (var candidate in campaign.Battles)
-            {
-                if (candidate.Ended || candidate.WarId != war.Id || candidate.ProvinceId != province) continue;
-                multiAxisBonus = -0.18f;
-                break;
-            }
+            var multiAxisBonus = activeBattles.ContainsKey((war.Id, province)) ? -0.18f : 0f;
             var pocketBonus = 0f;
             var enemyNeighbors = 0;
             foreach (var adj in topology.Neighbors[province])
@@ -220,19 +232,20 @@ public static partial class Warfare
     private static bool OwnGround(Campaign campaign, ProvinceTopology topology, Nation nation, int province)
     {
         if (topology.ProvinceToNation[province] == nation.MapIndex) return true;
-        if (!ReferenceEquals(_regionsOf, campaign) || _regionsCount != campaign.States.Count || _regionsRevision != campaign.MapRevision)
+        var index = UseArmyIndex(campaign);
+        if (index.RegionsCount != campaign.States.Count || index.RegionsRevision != campaign.MapRevision)
         {
-            RegionByIndex.Clear();
-            foreach (var each in campaign.States) RegionByIndex[each.MapIndex] = each;
-            _regionsOf = campaign; _regionsCount = campaign.States.Count; _regionsRevision = campaign.MapRevision;
+            index.RegionByIndex.Clear();
+            foreach (var each in campaign.States) index.RegionByIndex[each.MapIndex] = each;
+            index.RegionsCount = campaign.States.Count;
+            index.RegionsRevision = campaign.MapRevision;
         }
-        return RegionByIndex.TryGetValue(topology.ProvinceToState[province], out var state) &&
-               state.CoreTags.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase);
+        if (!index.RegionByIndex.TryGetValue(topology.ProvinceToState[province], out var state)) return false;
+        var coreTags = state.CoreTags;
+        for (var i = 0; i < coreTags.Count; i++)
+            if (string.Equals(coreTags[i], nation.Tag, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
-
-    private static readonly Dictionary<int, ScenarioState> RegionByIndex = new();
-    private static Campaign _regionsOf;
-    private static int _regionsCount = -1, _regionsRevision = -1;
 
     /// <summary>
     /// The one refusal an autonomous advance meets: a province empty of defenders but so
@@ -268,8 +281,11 @@ public static partial class Warfare
     /// </summary>
     private static float PushingOn(Campaign campaign, ProvinceTopology topology, StrategicWar war, Army army, int target)
     {
+        if (target < 0 || topology?.Neighbors is null || target >= topology.Neighbors.Length) return army?.Power ?? 0f;
         var power = 0f;
-        foreach (var province in topology.Neighbors[target])
+        var neighbors = topology.Neighbors[target];
+        if (neighbors is not null)
+        foreach (var province in neighbors)
             foreach (var other in InProvince(province))
             {
                 if (!WarCoalition.SameSide(war, other.NationId, army.NationId) || other.InBattle || other.IsMoving) continue;
@@ -294,9 +310,10 @@ public static partial class Warfare
         int target, StrategicWar war, int advancingNationId, ref float coveringPower, ref float covering)
     {
         EnsureCoverCache(campaign, war);
+        var coverCache = UseArmyIndex(campaign).CoverCache;
         var sideBit = war.IsAttacking(advancingNationId) ? 1L : 0L;
         var cacheKey = ((long)target << 1) | sideBit;
-        if (CoverCache.TryGetValue(cacheKey, out var cached))
+        if (coverCache.TryGetValue(cacheKey, out var cached))
         {
             coveringPower += cached.Power;
             covering += cached.Weight;
@@ -304,9 +321,10 @@ public static partial class Warfare
         }
         var radius = Math.Max(1, campaign.Defines.FrontCoverageRadius);
         var falloff = M.Clamp01(campaign.Defines.FrontCoverageFalloff);
-        var seen = CoverSeen;
-        var ring = CoverRing;
-        var next = CoverNext;
+        var scratch = UseSelectionScratch();
+        var seen = scratch.CoverSeen;
+        var ring = scratch.CoverRing;
+        var next = scratch.CoverNext;
         seen.Clear();
         seen.Add(target);
         ring.Clear();
@@ -319,22 +337,29 @@ public static partial class Warfare
         {
             next.Clear();
             foreach (var province in ring)
-            foreach (var neighbour in topology.Neighbors[province])
             {
-                if (!seen.Add(neighbour)) continue;
-                next.Add(neighbour);
-                foreach (var other in InProvince(neighbour))
+                if (province < 0 || province >= topology.Neighbors.Length) continue;
+                var neighbors = topology.Neighbors[province];
+                if (neighbors is null) continue;
+                foreach (var neighbour in neighbors)
                 {
-                    if (!war.Opposes(advancingNationId, other.NationId) || other.Divisions < 0.1f) continue;
-                    localPower += M.Max(other.Power,
-                        other.Presence * campaign.Defines.CoveringPresenceFloor) * weight;
-                    localCovering += weight;
+                    if (!seen.Add(neighbour)) continue;
+                    next.Add(neighbour);
+                    foreach (var other in InProvince(neighbour))
+                    {
+                        if (!war.Opposes(advancingNationId, other.NationId) || other.Divisions < 0.1f) continue;
+                        localPower += M.Max(other.Power,
+                            other.Presence * campaign.Defines.CoveringPresenceFloor) * weight;
+                        localCovering += weight;
+                    }
                 }
             }
             (ring, next) = (next, ring);
             weight *= falloff;
         }
-        CoverCache[cacheKey] = (localPower, localCovering);
+        scratch.CoverRing = ring;
+        scratch.CoverNext = next;
+        coverCache[cacheKey] = (localPower, localCovering);
         coveringPower += localPower;
         covering += localCovering;
     }

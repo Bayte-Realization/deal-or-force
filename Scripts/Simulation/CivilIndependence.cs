@@ -48,18 +48,31 @@ public static class CivilIndependence
         return M.Clamp(0.14f + awareness * c.Defines.CivilAwarenessWeight + movement.Legitimacy * 0.24f, 0f, 0.75f);
     }
 
-    public static bool HasClaim(Campaign c, Nation movement, Nation owner) =>
-        Movements.DefinitionOf(movement) is { } d && d.Has("civic_independence") &&
-        d.Homeland.Any(id => Movements.StateById(c, id)?.NationMapIndex == owner.MapIndex);
+    public static bool HasClaim(Campaign c, Nation movement, Nation owner)
+    {
+        var d = Movements.DefinitionOf(movement);
+        if (d is null || !d.Has("civic_independence")) return false;
+        for (var i = 0; i < d.Homeland.Count; i++)
+            if (Movements.StateById(c, d.Homeland[i])?.NationMapIndex == owner.MapIndex)
+                return true;
+        return false;
+    }
 
     public static string ConsentKey(int ownerId) => "referendum_consent:" + ownerId;
 
     public static float StandingTarget(Campaign c, Nation movement)
     {
-        var homes = Movements.DefinitionOf(movement).Homeland.Select(id => Movements.StateById(c, id))
-            .Where(r => r is not null && r.Population > 0).ToArray();
-        var population = homes.Sum(r => (double)r.Population);
-        var support = population > 0 ? homes.Sum(r => r.Population * (double)ResidentSupport(movement, r)) / population : 0;
+        var homeland = Movements.DefinitionOf(movement).Homeland;
+        var population = 0.0;
+        var weighted = 0.0;
+        for (var i = 0; i < homeland.Count; i++)
+        {
+            var r = Movements.StateById(c, homeland[i]);
+            if (r is null || r.Population <= 0) continue;
+            population += r.Population;
+            weighted += r.Population * (double)ResidentSupport(movement, r);
+        }
+        var support = population > 0 ? weighted / population : 0;
         return M.Clamp01(c.Defines.CivilStandingBase + (float)support * c.Defines.CivilStandingSupportWeight);
     }
 
@@ -131,6 +144,7 @@ public static class CivilIndependence
         var taken = MovementRules.TakeZone(c, movement, region, owner, peacefully: true);
         if (taken == 0) return false;
         var relation = CampaignDiplomacy.Get(c, owner.Id, movement.Id);
+        if (relation.Stance == DiplomaticStance.Allied) c.NoteAllianceChange();
         relation.Stance = DiplomaticStance.Truce;
         relation.TruceUntil = c.ElapsedDays + Math.Max(1, c.Defines.CivilReferendumTruceDays);
         relation.NonAggressionPact = true;

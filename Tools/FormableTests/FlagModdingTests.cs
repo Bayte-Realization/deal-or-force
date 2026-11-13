@@ -12,6 +12,9 @@ static class FlagModdingTests
 
     public static void Run()
     {
+        MovementFlagContinuityTests.Run();
+        FlagWarViewTests.Run();
+        FlagSlugTests.Run();
         SpriteCatalog.Load();
         FlagCatalog.ResetCatalog();
         var campaign = Campaign.CreateBootstrap(20260928);

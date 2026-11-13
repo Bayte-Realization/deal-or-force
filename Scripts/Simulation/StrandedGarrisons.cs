@@ -453,6 +453,10 @@ public static class StrandedGarrisons
         return wayHome is { Count: > 0 } && ReliefComing(c, army, wayHome[^1]);
     }
 
+    [ThreadStatic] private static Dictionary<int, int> _reliefNear;
+    [ThreadStatic] private static Dictionary<int, int> _reliefToward;
+    [ThreadStatic] private static Queue<int> _reliefQueue;
+
     private static bool ReliefComing(Campaign c, Army army, int entry)
     {
         var map = c.ProvinceMap;
@@ -463,18 +467,20 @@ public static class StrandedGarrisons
         var allowed = MilitaryAccess.Controllers(c, army.NationId);
         WarCoalition.FillControllers(c, war, true, allowed);
         WarCoalition.FillControllers(c, war, false, allowed);
-        bool Legal(int province) => province > 0 && province <= map.ProvinceCount &&
-            province < map.Neighbors.Length && province < controllers.Length && !map.IsWater(province) &&
-            allowed.Contains(controllers[province]);
-        if (!Legal(army.ProvinceId) || !Legal(entry) ||
+        if (!LegalReliefProvince(map, controllers, allowed, army.ProvinceId) ||
+            !LegalReliefProvince(map, controllers, allowed, entry) ||
             !WarCoalition.FriendlyController(c, war, army.NationId, controllers[entry])) return false;
         var radius = Math.Clamp(c.Defines.PocketReliefRadius, 0, map.ProvinceCount);
-        var near = Distances(entry, radius);
+        var near = _reliefNear ??= new Dictionary<int, int>();
+        FillReliefDistances(map, controllers, allowed, entry, radius, near);
         var depth = (int)Math.Min(map.ProvinceCount,
             (long)Math.Clamp(c.Defines.BreakoutSearchDepth, 1, map.ProvinceCount) + radius + 1L);
-        var towardPocket = Distances(army.ProvinceId, depth);
-        foreach (var other in c.Armies)
+        var towardPocket = _reliefToward ??= new Dictionary<int, int>();
+        FillReliefDistances(map, controllers, allowed, army.ProvinceId, depth, towardPocket);
+        var armies = c.Armies;
+        for (var i = 0; i < armies.Count; i++)
         {
+            var other = armies[i];
             if (other.Id == army.Id || other.CutOff || other.Divisions < .1f || other.Strength <= 0f ||
                 other.EmbarkedFleetId >= 0 || !WarCoalition.SameSide(war, army.NationId, other.NationId) ||
                 !near.ContainsKey(other.ProvinceId) || !towardPocket.TryGetValue(other.ProvinceId, out var from)) continue;
@@ -482,9 +488,17 @@ public static class StrandedGarrisons
             if (other.InBattle)
             {
                 // A nearby defensive fight or a stale BattleId is not a relief assault.
-                var battle = c.Battles.Find(candidate => candidate.Id == other.BattleId && !candidate.Ended &&
-                    candidate.WarId == war.Id && candidate.Attackers.Contains(other.Id));
-                if (battle is not null) next = battle.ProvinceId;
+                var battles = c.Battles;
+                for (var bi = 0; bi < battles.Count; bi++)
+                {
+                    var candidate = battles[bi];
+                    if (candidate.Id == other.BattleId && !candidate.Ended &&
+                        candidate.WarId == war.Id && candidate.Attackers.Contains(other.Id))
+                    {
+                        next = candidate.ProvinceId;
+                        break;
+                    }
+                }
             }
             else if (other.ReadyDay <= c.ElapsedDays)
             {
@@ -494,28 +508,38 @@ public static class StrandedGarrisons
             }
             // Only the immediate legal step counts: a march away from the ring with some
             // distant objective pointing back at it does not keep a hungry pocket waiting.
-            if (Legal(next) && map.Neighbors[other.ProvinceId].Contains(next) &&
+            if (LegalReliefProvince(map, controllers, allowed, next) && map.Neighbors[other.ProvinceId].Contains(next) &&
                 towardPocket.TryGetValue(next, out var to) && to < from) return true;
         }
         return false;
+    }
 
-        Dictionary<int, int> Distances(int start, int limit)
+    private static bool LegalReliefProvince(ProvinceTopology map, ushort[] controllers, HashSet<ushort> allowed, int province) =>
+        province > 0 && province <= map.ProvinceCount &&
+        province < map.Neighbors.Length && province < controllers.Length && !map.IsWater(province) &&
+        allowed.Contains(controllers[province]);
+
+    private static void FillReliefDistances(ProvinceTopology map, ushort[] controllers, HashSet<ushort> allowed,
+        int start, int limit, Dictionary<int, int> distance)
+    {
+        distance.Clear();
+        distance[start] = 0;
+        var frontier = _reliefQueue ??= new Queue<int>();
+        frontier.Clear();
+        frontier.Enqueue(start);
+        while (frontier.Count > 0)
         {
-            var distance = new Dictionary<int, int> { [start] = 0 };
-            var frontier = new Queue<int>();
-            frontier.Enqueue(start);
-            while (frontier.Count > 0)
+            var here = frontier.Dequeue();
+            var step = distance[here];
+            if (step >= limit) continue;
+            var neighbours = map.Neighbors[here];
+            for (var i = 0; i < neighbours.Length; i++)
             {
-                var here = frontier.Dequeue();
-                if (distance[here] >= limit) continue;
-                foreach (var neighbour in map.Neighbors[here])
-                {
-                    if (!Legal(neighbour) || distance.ContainsKey(neighbour)) continue;
-                    distance[neighbour] = distance[here] + 1;
-                    frontier.Enqueue(neighbour);
-                }
+                var neighbour = neighbours[i];
+                if (!LegalReliefProvince(map, controllers, allowed, neighbour) || distance.ContainsKey(neighbour)) continue;
+                distance[neighbour] = step + 1;
+                frontier.Enqueue(neighbour);
             }
-            return distance;
         }
     }
 
@@ -526,11 +550,19 @@ public static class StrandedGarrisons
     /// </summary>
     public static void Tick(Campaign c)
     {
-        if (c?.ProvinceMap is null || !c.StepOpensNewDay || !c.Defines.StrandedGarrisonsEnabled) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same daily surrender pass, yielded between batches of formations.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c?.ProvinceMap is null || !c.StepOpensNewDay || !c.Defines.StrandedGarrisonsEnabled) yield break;
         var d = c.Defines;
         List<Army> giving = null;
+        var scanned = 0;
         foreach (var army in c.Armies)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (!army.CutOff)
             {
                 if (army.HoldoutSinceDay >= 0) Relieved(c, army);
@@ -553,7 +585,8 @@ public static class StrandedGarrisons
             if (Roll(c.Seed, army.Id, army.NationId, c.ElapsedDays, 0x5A11) >= chance) continue;
             (giving ??= new List<Army>()).Add(army);
         }
-        if (giving is null) return;
+        if (giving is null) yield break;
+        yield return 0;
         foreach (var army in giving) Surrender(c, army, giving);
         c.MarkStrategicChange();
     }

@@ -107,33 +107,52 @@ public static class AgreementSystem
             reason = Loc.Get("Invalid target.");
             return false;
         }
-        var relation = preview ? CampaignDiplomacy.ReadOrNeutral(campaign, asking.Id, asked.Id)
+        var relation = preview ? CampaignDiplomacy.Peek(campaign, asking.Id, asked.Id)
             : CampaignDiplomacy.Get(campaign, asking.Id, asked.Id);
-        if (relation.Stance == DiplomaticStance.AtWar) { reason = Loc.Get("Already at war."); return false; }
-        if (Signed(relation, kind)) { reason = Loc.Get("Already signed."); return false; }
-        // An offer on a player's table is a question, not a signature. It blocks a second ask -
-        // from either side, which is what stops a computer and a player asking each other in
-        // circles - and it lapses on its own (AgreementReplyDays).
-        if (OfferPending(campaign, relation))
+        if (relation is not null)
         {
-            reason = relation.AgreementOfferedBy == asking.Id
-                ? Loc.Get("They have not answered the last offer yet.")
-                : Loc.Get("They have an offer on your table; answer that one first.");
-            return false;
+            if (relation.Stance == DiplomaticStance.AtWar) { reason = Loc.Get("Already at war."); return false; }
+            if (Signed(relation, kind)) { reason = Loc.Get("Already signed."); return false; }
+            // An offer on a player's table is a question, not a signature. It blocks a second ask -
+            // from either side, which is what stops a computer and a player asking each other in
+            // circles - and it lapses on its own (AgreementReplyDays).
+            if (OfferPending(campaign, relation))
+            {
+                reason = relation.AgreementOfferedBy == asking.Id
+                    ? Loc.Get("They have not answered the last offer yet.")
+                    : Loc.Get("They have an offer on your table; answer that one first.");
+                return false;
+            }
         }
-        var since = campaign.ElapsedDays - relation.AgreementRefusedDay;
+        var since = campaign.ElapsedDays - (relation?.AgreementRefusedDay ?? -9999);
         if (since < campaign.Defines.AgreementRefusalDays)
         {
             reason = Loc.Format("They said no {0} day(s) ago; they will hear it again in {1}.",
                 since, campaign.Defines.AgreementRefusalDays - since);
             return false;
         }
-        var busy = campaign.ElapsedDays - relation.LastActionDay;
+        var busy = campaign.ElapsedDays - (relation?.LastActionDay ?? -30);
         if (busy < 14)
         {
             reason = Loc.Format("A mission to them is still under way: {0} day(s).", 14 - busy);
             return false;
         }
+        return true;
+    }
+
+    internal static bool CanProposeQuiet(Campaign campaign, Nation asking, Nation asked, AgreementKind kind,
+        bool preview = false)
+    {
+        if (campaign is null || asking is null || asked is null || asking == asked) return false;
+        var relation = preview ? CampaignDiplomacy.Peek(campaign, asking.Id, asked.Id)
+            : CampaignDiplomacy.Get(campaign, asking.Id, asked.Id);
+        if (relation is not null)
+        {
+            if (relation.Stance == DiplomaticStance.AtWar || Signed(relation, kind)) return false;
+            if (OfferPending(campaign, relation)) return false;
+        }
+        if (campaign.ElapsedDays - (relation?.AgreementRefusedDay ?? -9999) < campaign.Defines.AgreementRefusalDays) return false;
+        if (campaign.ElapsedDays - (relation?.LastActionDay ?? -30) < 14) return false;
         return true;
     }
 
@@ -144,13 +163,14 @@ public static class AgreementSystem
         why?.Begin("Whether they would sign", "share");
         if (campaign is null || asked is null || asking is null) return 0f;
         var defines = campaign.Defines;
-        var relation = preview ? CampaignDiplomacy.ReadOrNeutral(campaign, asked.Id, asking.Id)
+        var relation = preview ? CampaignDiplomacy.Peek(campaign, asked.Id, asking.Id)
             : CampaignDiplomacy.Get(campaign, asked.Id, asking.Id);
 
-        var willingness = relation.Opinion / 100f;
-        why?.Add("How they regard us", relation.Opinion / 100f);
+        var opinion = relation?.Opinion ?? 0f;
+        var willingness = opinion / 100f;
+        why?.Add("How they regard us", opinion / 100f);
 
-        if (relation.Stance == DiplomaticStance.Rival)
+        if (relation is { Stance: DiplomaticStance.Rival })
         {
             willingness -= defines.AgreementRivalPenalty;
             why?.Add("We are rivals", -defines.AgreementRivalPenalty);
@@ -176,7 +196,7 @@ public static class AgreementSystem
         }
         else
         {
-            foreach (var war in campaign.Wars)
+            foreach (var war in Warfare.LiveWars(campaign))
             {
                 if (war.Ended || !war.Involves(asked.Id) || war.Involves(asking.Id)) continue;
                 willingness += defines.NonAggressionPactWarBonus;
@@ -301,9 +321,17 @@ public static class AgreementSystem
     /// <summary>Let the unanswered ones lapse. A lapsed offer is not a refusal and costs nobody anything.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same agreement sweep, yielded between batches of relationships.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null) yield break;
+        var scanned = 0;
         foreach (var relation in campaign.Relations.Values)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (relation.AgreementOfferedBy < 0) continue;
             if (OfferPending(campaign, relation)) continue;
             relation.AgreementOfferedBy = -1;
@@ -321,10 +349,10 @@ public static class AgreementSystem
             reason = Loc.Get("Invalid target.");
             return 0f;
         }
-        var relation = preview ? CampaignDiplomacy.ReadOrNeutral(campaign, giving.Id, receiving.Id)
+        var relation = preview ? CampaignDiplomacy.Peek(campaign, giving.Id, receiving.Id)
             : CampaignDiplomacy.Get(campaign, giving.Id, receiving.Id);
-        if (relation.Stance == DiplomaticStance.AtWar) { reason = Loc.Get("Already at war."); return 0f; }
-        var since = campaign.ElapsedDays - relation.AidSentDay;
+        if (relation is { Stance: DiplomaticStance.AtWar }) { reason = Loc.Get("Already at war."); return 0f; }
+        var since = campaign.ElapsedDays - (relation?.AidSentDay ?? -9999);
         if (since < campaign.Defines.AidIntervalDays)
         {
             reason = Loc.Format("The last package arrived {0} day(s) ago; the next can go in {1}.",

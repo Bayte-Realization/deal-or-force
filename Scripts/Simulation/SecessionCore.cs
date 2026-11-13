@@ -238,8 +238,10 @@ public static class SecessionCore
 
         var losing = false;
         var torn = false;
-        foreach (var war in campaign.Wars)
+        var liveWars = Warfare.LiveWars(campaign);
+        for (var i = 0; i < liveWars.Count; i++)
         {
+            var war = liveWars[i];
             if (war.Ended || !war.Involves(owner.Id)) continue;
             // A state fighting a civil war of its own cannot hold its minorities as it did:
             // the centre is busy, the army is split, and every grievance sees its chance.

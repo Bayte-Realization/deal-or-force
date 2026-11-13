@@ -254,6 +254,7 @@ public partial class DealOrForceGame
 
     /// <summary>The save still being written, if one is. Completed when there is none.</summary>
     private System.Threading.Tasks.Task _pendingSave = System.Threading.Tasks.Task.CompletedTask;
+    private bool _waitingForSave;
 
     /// <summary>
     /// Take the save on this frame and write it on a worker.
@@ -265,29 +266,32 @@ public partial class DealOrForceGame
     ///
     /// One write at a time. An autosave that falls due while the last save is still being
     /// written is skipped - the next is a month away - and a save the player asked for waits
-    /// for it, so two writes never race for one file.
+    /// for it asynchronously without blocking the UI frame.
     /// </summary>
     private async void SaveToSlot(string slot, bool autosave = false, string displayName = null)
     {
         if (_campaign?.Player is null) return;
+        if (_waitingForSave) return;
         if (!_pendingSave.IsCompleted)
         {
             if (autosave) return;
-            WaitForPendingSave();
+            await WaitForPendingSaveAsync();
         }
+        if (!IsInstanceValid(this) || !IsInsideTree() || _campaign?.Player is null) return;
 
+        var targetCampaign = _campaign;
         SaveSystem.PreparedSave prepared;
         try
         {
-            prepared = SaveSystem.Prepare(SaveRoot, slot, _campaign, ModFingerprint,
+            prepared = SaveSystem.Prepare(SaveRoot, slot, targetCampaign, ModFingerprint,
                 string.IsNullOrWhiteSpace(displayName)
-                    ? $"{_campaign.Player.DisplayName} · {_campaign.Date.Display()}"
+                    ? $"{targetCampaign.Player.DisplayName} · {targetCampaign.Date.Display()}"
                     : displayName,
                 autosave);
         }
         catch (Exception exception)
         {
-            ReportSaveFailure(exception);
+            ReportSaveFailure(exception, targetCampaign);
             return;
         }
 
@@ -304,11 +308,11 @@ public partial class DealOrForceGame
         }
         catch (Exception exception)
         {
-            ReportSaveFailure(exception);
+            ReportSaveFailure(exception, targetCampaign);
         }
     }
 
-    private void ReportSaveFailure(Exception exception)
+    private void ReportSaveFailure(Exception exception, Simulation.Campaign targetCampaign = null)
     {
         DiagnosticLogs.Write("errors", $"SAVE_EXCEPTION {exception}");
         var message = exception is CampaignIntegrityException
@@ -317,8 +321,9 @@ public partial class DealOrForceGame
         if (IsInstanceValid(_saveStatus)) _saveStatus.Text = message;
         if (exception is CampaignIntegrityException integrity)
         {
-            _campaign.BlockSimulation(integrity.Issue);
-            ShowCampaignFault(message, integrity.DiagnosticPath, integrity.Issue);
+            (targetCampaign ?? _campaign)?.BlockSimulation(integrity.Issue);
+            if (targetCampaign is null || ReferenceEquals(_campaign, targetCampaign))
+                ShowCampaignFault(message, integrity.DiagnosticPath, integrity.Issue);
         }
         GD.PushError(message);
     }
@@ -383,6 +388,21 @@ public partial class DealOrForceGame
         catch (Exception) { /* SaveToSlot has already reported it */ }
     }
 
+    private async System.Threading.Tasks.Task WaitForPendingSaveAsync()
+    {
+        var pending = _pendingSave;
+        if (pending.IsCompleted) return;
+        if (IsInstanceValid(_saveStatus))
+            _saveStatus.Text = Tr("Waiting for the previous save to finish…");
+        _waitingForSave = true;
+        try
+        {
+            await System.Threading.Tasks.Task.WhenAny(pending, System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(30)));
+        }
+        catch (Exception) { /* SaveToSlot has already reported it */ }
+        finally { _waitingForSave = false; }
+    }
+
     private async void LoadFromSlot(string slot)
     {
         var restored = await RunLoadingOperation("Restoring a campaign", async () =>
@@ -402,7 +422,9 @@ public partial class DealOrForceGame
 
     private async System.Threading.Tasks.Task RestoreCampaignFromSlot(string slot)
     {
-        WaitForPendingSave();
+        if (!_pendingSave.IsCompleted)
+            await WaitForPendingSaveAsync();
+        if (!IsInstanceValid(this) || !IsInsideTree()) return;
         // Gzip and the save graph are plain data. Parsing them off this thread lets the
         // loading plate keep drawing; the campaign is swapped in only after the parse returns.
         var provinces = _campaign?.ProvinceMap?.ProvinceCount ?? _globe?.ProvinceCount ?? 0;
@@ -473,9 +495,14 @@ public partial class DealOrForceGame
         Refresh();
     }
 
-    private void DeleteSave(string slot)
+    private async void DeleteSave(string slot)
     {
-        _saveStatus.Text = SaveSystem.Delete(SaveRoot, slot) ? Tr("Save deleted.") : Tr("Slot was already empty.");
+        if (_waitingForSave) return;
+        if (!_pendingSave.IsCompleted)
+            await WaitForPendingSaveAsync();
+        if (!IsInstanceValid(this) || !IsInsideTree()) return;
+        if (IsInstanceValid(_saveStatus))
+            _saveStatus.Text = SaveSystem.Delete(SaveRoot, slot) ? Tr("Save deleted.") : Tr("Slot was already empty.");
         RefreshSaveSlots();
     }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace DealOrForce.Simulation;
 
@@ -113,9 +114,22 @@ public static class MovementRules
         var week = Math.Max(1, campaign.Defines.EconomyTickDays);
         using (SimProfiler.Measure("movements"))
         using (SimProfiler.Measure("  mov:rules"))
-        {
             Movements.RetireDuplicateRepresentations(campaign);
-            MovementLifecycle.Tick(campaign);
+        using (var lifecycle = MovementLifecycle.TickStages(campaign).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("movements"))
+                using (SimProfiler.Measure("  mov:rules"))
+                    more = lifecycle.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
+        using (SimProfiler.Measure("movements"))
+        using (SimProfiler.Measure("  mov:rules"))
+        {
             // What the world decides about who has fallen happens on the week, as it did.
             if (campaign.ElapsedDays % week == 0)
             {
@@ -126,6 +140,12 @@ public static class MovementRules
             }
         }
         yield return 0;
+        var hasActiveMovement = false;
+        for (var id = 0; id < campaign.Nations.Count; id++)
+            if (campaign.Nations[id].Movement is { Dissolved: false }) { hasActiveMovement = true; break; }
+        if (hasActiveMovement)
+            foreach (var _ in EnsurePeopleIndexedStages(campaign, insideMovRules: true))
+                yield return 0;
         // Each movement's own week on a day of its own. They all used to fall on the same
         // day, so their cost did not spread: one frame in seven carried every movement's week
         // at once, the largest hitch in a late campaign at the top speed. Every movement still
@@ -136,13 +156,29 @@ public static class MovementRules
         {
             var nation = campaign.Nations[id];
             if (nation.Movement is not { Dissolved: false } || !OnItsDay(campaign, id, week)) continue;
+            if (NeedsPeopleIndex(campaign))
+                foreach (var _ in EnsurePeopleIndexedStages(campaign, insideMovRules: true))
+                    yield return 0;
+            var first = true;
+            using (var weekPass = WeekStages(campaign, nation).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("movements"))
+                    using (SimProfiler.Measure("  mov:rules"))
+                    {
+                        if (first) { Owners(campaign); first = false; }
+                        using (SimProfiler.Measure("    mov:week")) more = weekPass.MoveNext();
+                    }
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             using (SimProfiler.Measure("movements"))
             using (SimProfiler.Measure("  mov:rules"))
-            {
-                Owners(campaign);
-                using (SimProfiler.Measure("    mov:week")) Week(campaign, nation);
-                using (SimProfiler.Measure("    mov:endure")) MovementFall.Endure(campaign, nation);
-            }
+            using (SimProfiler.Measure("    mov:endure"))
+                MovementFall.Endure(campaign, nation);
             yield return 0;
         }
     }
@@ -157,15 +193,22 @@ public static class MovementRules
     internal static Nation OwnerOf(Campaign campaign, ScenarioState region) =>
         region is not null && campaign != null ? campaign.NationByMapIndex(region.NationMapIndex) : null;
 
-    private static readonly Dictionary<int, bool> OwnStateCache = new();
-    private static readonly HashSet<int> LiveRegions = new();
-    private static readonly List<int> StaleSupport = new();
+    [ThreadStatic] private static Dictionary<int, bool> _ownStateCache;
+    [ThreadStatic] private static HashSet<int> _liveRegions;
+    [ThreadStatic] private static List<int> _staleSupport;
+    [ThreadStatic] private static List<int> _sponsorKeysScratch;
+    [ThreadStatic] private static List<int> _refugeClaimantsScratch;
 
     internal static void Week(Campaign campaign, Nation nation)
     {
+        foreach (var _ in WeekStages(campaign, nation)) { }
+    }
+
+    internal static IEnumerable<int> WeekStages(Campaign campaign, Nation nation)
+    {
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
-        if (state is null || definition is null) return;
+        if (state is null || definition is null) yield break;
         var defines = campaign.Defines;
 
         // Land lost is land lost: a movement that had a country and has had it taken back
@@ -178,7 +221,15 @@ public static class MovementRules
         if (nation.Movement is { Landless: false, Exile: false } && campaign.HasOwnedLand(nation))
             GraduateToStatehood(campaign, nation);
         state = nation.Movement;
-        if (state is null) return;
+        if (state is null) yield break;
+
+        if (NeedsPeopleIndex(campaign))
+        {
+            yield return 0;
+            foreach (var _ in EnsurePeopleIndexedStages(campaign, insideMovRules: true))
+                yield return 0;
+            yield return 0;
+        }
 
         // The headquarters arrives where it was going.
         if (state.MovingToStateMapIndex >= 0 && campaign.ElapsedDays >= state.ArrivesOnDay)
@@ -195,11 +246,14 @@ public static class MovementRules
         // the movement's standing make of it.
         long supporters = 0;
         long believers = 0;
-        OwnStateCache.Clear();
-        LiveRegions.Clear();
         Dictionary<ScenarioState, (long Own, long Faithful)> people;
         using (SimProfiler.Measure("      mov:people"))
             people = PeopleIn(campaign, definition);
+        yield return 0;
+        var ownStateCache = _ownStateCache ??= new Dictionary<int, bool>();
+        ownStateCache.Clear();
+        var liveRegions = _liveRegions ??= new HashSet<int>();
+        liveRegions.Clear();
         // The regions where this movement has people, not every region on the map. The
         // support dictionary is sparse, and the people index already knows its own keys.
         using (SimProfiler.Measure("      mov:support"))
@@ -212,13 +266,13 @@ public static class MovementRules
                 var owner = OwnerOf(campaign, region);
                 var supportCeiling = MovementReach.SupportCeiling(campaign, nation, region, definition, own, faithful, owner);
                 if (supportCeiling <= 0f) continue;
-                LiveRegions.Add(region.MapIndex);
+                liveRegions.Add(region.MapIndex);
                 believers += faithful;
                 var support = state.Support.GetValueOrDefault(region.MapIndex);
                 var foreign = false;
                 if (owner is not null && owner.Id != nation.Id)
                 {
-                    if (!OwnStateCache.TryGetValue(owner.Id, out var theirs)) OwnStateCache[owner.Id] = theirs = OwnState(owner, definition);
+                    if (!ownStateCache.TryGetValue(owner.Id, out var theirs)) ownStateCache[owner.Id] = theirs = OwnState(owner, definition);
                     foreign = !theirs;
                 }
                 var foreignRule = foreign ? 0.12f : 0f;
@@ -231,12 +285,13 @@ public static class MovementRules
                 state.Support[region.MapIndex] = M.Clamp(support, 0f, supportCeiling);
                 supporters += (long)(own * support);
             }
-            if (state.Support.Count > LiveRegions.Count)
+            if (state.Support.Count > liveRegions.Count)
             {
-                StaleSupport.Clear();
+                var staleSupport = _staleSupport ??= new List<int>();
+                staleSupport.Clear();
                 foreach (var key in state.Support.Keys)
-                    if (!LiveRegions.Contains(key)) StaleSupport.Add(key);
-                foreach (var key in StaleSupport) state.Support.Remove(key);
+                    if (!liveRegions.Contains(key)) staleSupport.Add(key);
+                foreach (var key in staleSupport) state.Support.Remove(key);
             }
         }
         var fromFaith = (long)(believers * defines.MovementFaithShare * 0.1f);
@@ -247,17 +302,22 @@ public static class MovementRules
             var journey = state.OnTheWay[index];
             if (journey.ArrivesOnDay > campaign.ElapsedDays) continue;
             state.OnTheWay.RemoveAt(index);
-            var arrived = campaign.States.Find(region => region.MapIndex == journey.Region);
+            var arrived = campaign.StateByMapIndex(journey.Region);
             if (arrived is null || arrived.NationMapIndex == nation.MapIndex) { state.Cadres += journey.Fighters; continue; }
             state.Infiltrated[journey.Region] = state.Infiltrated.GetValueOrDefault(journey.Region) + journey.Fighters;
             state.LastReport = Loc.Format("{0} fighters are in place in {1}.", Fmt.People(journey.Fighters), arrived.DisplayName);
         }
         if (state.Infiltrated.Count > 0)
-        foreach (var region in state.Infiltrated.Keys.ToList())
         {
-            var left = state.Infiltrated[region] * (1f - defines.MovementInfiltrateDecay);
-            if (left < 50f) state.Infiltrated.Remove(region);
-            else state.Infiltrated[region] = left;
+            var keys = InfiltratedScratchKeys();
+            keys.Clear();
+            foreach (var region in state.Infiltrated.Keys) keys.Add(region);
+            foreach (var region in keys)
+            {
+                var left = state.Infiltrated[region] * (1f - defines.MovementInfiltrateDecay);
+                if (left < 50f) state.Infiltrated.Remove(region);
+                else state.Infiltrated[region] = left;
+            }
         }
 
         // Money: donations from its following, and its sponsors while they think well of it.
@@ -271,9 +331,15 @@ public static class MovementRules
         var sponsored = 0f;
         // And the countries that have chosen to fund it pay by the week, while they can and are not at war with it.
         if (state.SponsoredBy.Count > 0)
-        foreach (var (id, perYear) in state.SponsoredBy.ToList())
         {
-            var sponsor = campaign.NationById(id);
+            var sponsorKeys = _sponsorKeysScratch ??= new List<int>();
+            sponsorKeys.Clear();
+            foreach (var key in state.SponsoredBy.Keys) sponsorKeys.Add(key);
+            for (var si = 0; si < sponsorKeys.Count; si++)
+            {
+                var id = sponsorKeys[si];
+                if (!state.SponsoredBy.TryGetValue(id, out var perYear)) continue;
+                var sponsor = campaign.NationById(id);
             if (sponsor is null || sponsor.Movement is not null || CampaignDiplomacy.AtWar(campaign, id, nation.Id) ||
                 campaign.StatesOf(sponsor).Length == 0)
             {
@@ -283,6 +349,7 @@ public static class MovementRules
             var paid = MathF.Min(perYear / 52f, MathF.Max(0f, sponsor.Treasury) * 0.01f);
             sponsor.Treasury -= paid;
             sponsored += paid;
+            }
         }
         foreach (var (tag, perYear) in definition.Sponsors)
         {
@@ -297,7 +364,7 @@ public static class MovementRules
         {
             var client = campaign.NationById(state.ContractNationId);
             if (client is null || campaign.ElapsedDays > state.ContractUntilDay ||
-                !campaign.Wars.Any(war => !war.Ended && war.Involves(client.Id)))
+                !InLiveWar(campaign, client.Id))
             {
                 state.ContractNationId = -1;
                 state.ContractUntilDay = -1;
@@ -339,22 +406,73 @@ public static class MovementRules
     }
 
     /// <summary>Its own peoples in a region, and the believers of its faiths who are not.</summary>
-    // A movement's people in every region of the world, for the day. Its week counts them and
-    // its leadership's week counts them again an hour later - each a walk of every population
-    // group of all eighteen hundred regions, which made movements a sixth of a campaign day.
-    // A day is the right lifetime: the census moves weekly, before either asks, and whatever
-    // else moves people between regions moves a border with them, which clears it.
+    // One index per campaign. It is rebuilt when province ownership moves, or when the
+    // people in a region change. The population stamp is the demography signature taken
+    // while the index is built: culture, faith and size. Not a second census, and not
+    // the object identity of those strings. A later day with the same stamp reuses it.
     internal sealed class MovementPeopleCache
-{
-    public int Day = -1;
-    public int MapRevision = -1;
-    public int States = -1;
-    public readonly Dictionary<MovementDefinition, Dictionary<ScenarioState, (long Own, long Faithful)>> PeopleToday = new();
-    public readonly Dictionary<string, List<PopulationGroupAt>> ByCulture = new(StringComparer.OrdinalIgnoreCase);
-    public readonly Dictionary<string, List<PopulationGroupAt>> ByReligion = new(StringComparer.OrdinalIgnoreCase);
-    public readonly Dictionary<string, Dictionary<ScenarioState, long>> CultureTotals = new(StringComparer.OrdinalIgnoreCase);
-    public bool Indexed;
-}
+    {
+        public int Day = -1;
+        public int MapRevision = -1;
+        public int OwnershipRevision = int.MinValue;
+        public int States = -1;
+        public int IndexBuilds;
+        public readonly Dictionary<MovementDefinition, Dictionary<ScenarioState, (long Own, long Faithful)>> PeopleToday = new();
+        public readonly Dictionary<string, List<PopulationGroupAt>> ByCulture = new(StringComparer.OrdinalIgnoreCase);
+        public readonly Dictionary<string, List<PopulationGroupAt>> ByReligion = new(StringComparer.OrdinalIgnoreCase);
+        public readonly Dictionary<string, Dictionary<ScenarioState, long>> CultureTotals = new(StringComparer.OrdinalIgnoreCase);
+        internal readonly Dictionary<MovementDefinition, Dictionary<ScenarioState, (long Own, long Faithful)>> PeoplePoolByDef = new();
+        internal readonly Stack<Dictionary<ScenarioState, long>> CultureTotalsPool = new();
+        internal readonly Dictionary<string, List<CultureRegionBucket>> ByCultureRegions = new(StringComparer.OrdinalIgnoreCase);
+        internal readonly Dictionary<string, List<ReligionCultureBucket>> ByReligionBuckets = new(StringComparer.OrdinalIgnoreCase);
+        internal readonly Dictionary<string, long> RegionCultures = new(StringComparer.OrdinalIgnoreCase);
+        internal readonly Dictionary<ReligionCultureKey, long> RegionRelCults = new();
+        internal ScenarioState[] SortedStates;
+        internal Campaign SortedStatesCampaign;
+        internal int SortedStatesRevision = int.MinValue;
+        internal int SortedStatesCount = -1;
+        internal bool StrictMapIndexOrder;
+        internal readonly Dictionary<string, (int Id, string Canonical)> CultureIdMap = new(StringComparer.Ordinal);
+        internal readonly Dictionary<string, (int Id, string Canonical)> CultureIdIgnoreCase = new(StringComparer.OrdinalIgnoreCase);
+        internal readonly List<string> CanonicalCultures = new();
+        internal readonly List<List<CultureRegionBucket>> CultureBucketsById = new();
+        internal readonly Dictionary<string, int> ReligionIdMap = new(StringComparer.Ordinal);
+        internal readonly Dictionary<string, int> ReligionIdIgnoreCase = new(StringComparer.OrdinalIgnoreCase);
+        internal readonly List<List<ReligionCultureBucket>> ReligionBucketsById = new();
+        internal int[] CultureStamp = Array.Empty<int>();
+        internal long[] CultureSum = Array.Empty<long>();
+        internal readonly List<int> TouchedCultures = new();
+        internal int CultureStampTick;
+        internal readonly List<(int RelId, int CultId, string RawCulture, long Size)> RegionRelCultList = new();
+        internal readonly Dictionary<long, int> RegionRelCultMap = new();
+        internal ulong[] StateDemographySigs = Array.Empty<ulong>();
+        internal int[][] StateCultIds = Array.Empty<int[]>();
+        internal int[][] StateRelIds = Array.Empty<int[]>();
+        internal readonly List<int> DirtySlots = new();
+        internal bool IncrementalReady;
+        internal int[] NewCultStamp = Array.Empty<int>();
+        internal int[] PatchCultStamp = Array.Empty<int>();
+        internal int[] PatchCultHead = Array.Empty<int>();
+        internal int[] PatchCultTail = Array.Empty<int>();
+        internal readonly List<int> TouchedPatchCults = new();
+        internal int[] NewRelStamp = Array.Empty<int>();
+        internal int[] PatchRelStamp = Array.Empty<int>();
+        internal int[] PatchRelHead = Array.Empty<int>();
+        internal int[] PatchRelTail = Array.Empty<int>();
+        internal readonly List<int> TouchedPatchRels = new();
+        internal int PatchTick;
+        internal readonly List<(int MapIndex, ScenarioState Region, long Size)> ScratchCultOps = new();
+        internal readonly List<int> ScratchCultOpsNext = new();
+        internal readonly List<(int MapIndex, ScenarioState Region, string RawCulture, long Size)> ScratchRelOps = new();
+        internal readonly List<int> ScratchRelOpsNext = new();
+        internal readonly List<int[]> PendingStateCultIds = new();
+        internal readonly List<int[]> PendingStateRelIds = new();
+        internal readonly List<ulong> PendingStateSigs = new();
+        internal readonly List<int> ScratchNewRelIds = new();
+        internal readonly List<CultureRegionBucket> ScratchCultBuckets = new();
+        internal readonly List<ReligionCultureBucket> ScratchRelBuckets = new();
+        public bool Indexed;
+    }
 
     internal readonly record struct PopulationGroupAt(ScenarioState Region, PopulationGroup Group);
 
@@ -386,32 +504,701 @@ public static class MovementRules
         return regions;
     }
 
+    private static void ReturnTodayDictionaries(MovementPeopleCache cache)
+    {
+        if (cache.PeopleToday.Count > 0)
+        {
+            foreach (var kv in cache.PeopleToday)
+            {
+                kv.Value.Clear();
+                cache.PeoplePoolByDef[kv.Key] = kv.Value;
+            }
+            cache.PeopleToday.Clear();
+        }
+        if (cache.CultureTotals.Count > 0)
+        {
+            foreach (var d in cache.CultureTotals.Values) { d.Clear(); cache.CultureTotalsPool.Push(d); }
+            cache.CultureTotals.Clear();
+        }
+    }
+
+    private static IReadOnlyList<ScenarioState> OrderedStatesOf(MovementPeopleCache cache, Campaign campaign)
+    {
+        if (!CanonicalPeopleOrder)
+        {
+            cache.StrictMapIndexOrder = false;
+            return campaign.States;
+        }
+        if (!ReferenceEquals(cache.SortedStatesCampaign, campaign) ||
+            cache.SortedStatesCount != campaign.States.Count ||
+            cache.SortedStatesRevision != campaign.OwnershipRevision ||
+            cache.SortedStates is null)
+        {
+            var arr = new ScenarioState[campaign.States.Count];
+            for (var i = 0; i < arr.Length; i++) arr[i] = campaign.States[i];
+            Array.Sort(arr, static (a, b) => a.MapIndex.CompareTo(b.MapIndex));
+            var strict = true;
+            for (var i = 1; i < arr.Length; i++)
+            {
+                if (arr[i].MapIndex <= arr[i - 1].MapIndex)
+                {
+                    strict = false;
+                    break;
+                }
+            }
+            cache.SortedStates = arr;
+            cache.SortedStatesCampaign = campaign;
+            cache.SortedStatesCount = campaign.States.Count;
+            cache.SortedStatesRevision = campaign.OwnershipRevision;
+            cache.StrictMapIndexOrder = strict;
+            cache.IncrementalReady = false;
+        }
+        return cache.SortedStates;
+    }
+
     private static void EnsurePeopleCache(Campaign campaign)
     {
         var cache = campaign.MovementPeople;
-        // Population can change between weekly movement reviews. Keeping Monday's
-        // counts until next week makes a reloaded campaign (empty cache) see different
-        // people from the running campaign, despite identical serialized state/RNG.
-        // Cache only within the same simulated day; never serialize derived counts.
+        // Derived counts are never saved. A reloaded campaign builds them again from the
+        // people it loaded. Within a run the index stays while the campaign, the ownership
+        // revision and the population stamp are the ones it was built from.
         var day = campaign.ElapsedDays;
-        if (cache.Day == day && cache.MapRevision == campaign.MapRevision &&
-            cache.States == campaign.States.Count)
-        {
+        var ownership = campaign.OwnershipRevision;
+        if (cache.Indexed && cache.Day == day && cache.States == campaign.States.Count &&
+            cache.OwnershipRevision == ownership)
             return;
+
+        var previous = cache.SortedStates;
+        var orderedStates = OrderedStatesOf(cache, campaign);
+        var totalStates = orderedStates.Count;
+        var dirtySlots = cache.DirtySlots;
+        dirtySlots.Clear();
+        // A new day is not itself a reason to throw the index away. A missing index or a
+        // different region list is. Otherwise the stored signatures say whether anyone's
+        // people changed. An ownership revision that still names these same regions, with
+        // the same stamp, keeps the buckets: they do not store the owner.
+        var canCompare = cache.Indexed && cache.States == totalStates && cache.StateDemographySigs.Length == totalStates;
+        if (!canCompare)
+        {
+            ReturnTodayDictionaries(cache);
+            cache.IncrementalReady = false;
+            cache.Indexed = false;
         }
-        cache.PeopleToday.Clear();
-        cache.CultureTotals.Clear();
-        cache.Indexed = false;
+        else
+        {
+            var sameRegions = previous is not null && previous.Length == totalStates;
+            if (sameRegions)
+            {
+                for (var i = 0; i < totalStates; i++)
+                {
+                    if (!ReferenceEquals(previous[i], orderedStates[i])) { sameRegions = false; break; }
+                }
+            }
+            for (var i = 0; i < totalStates; i++)
+            {
+                if (StateDemographySignature(orderedStates[i]) != cache.StateDemographySigs[i])
+                    dirtySlots.Add(i);
+            }
+            if (cache.OwnershipRevision != ownership && !sameRegions)
+            {
+                ReturnTodayDictionaries(cache);
+                dirtySlots.Clear();
+                cache.IncrementalReady = false;
+                cache.Indexed = false;
+            }
+            else if (dirtySlots.Count > 0)
+            {
+                ReturnTodayDictionaries(cache);
+                cache.Indexed = false;
+                if (!CanonicalPeopleOrder || !cache.StrictMapIndexOrder || dirtySlots.Count > Math.Max(64, totalStates / 4))
+                    cache.IncrementalReady = false;
+            }
+            else
+            {
+                cache.OwnershipRevision = ownership;
+                cache.IncrementalReady = cache.StrictMapIndexOrder && CanonicalPeopleOrder;
+            }
+        }
         cache.Day = day;
-        cache.MapRevision = campaign.MapRevision;
-        cache.States = campaign.States.Count;
+        cache.States = totalStates;
+    }
+
+    private static ulong Mix(ulong sig, ulong value) => unchecked((sig ^ value) * 1099511628211UL);
+
+    /// <summary>
+    /// The population stamp for one region: who lives there, not which string object holds
+    /// the name. Empty groups are shells the index already skips.
+    /// </summary>
+    private static ulong StateDemographySignature(ScenarioState state)
+    {
+        if (state is null) return 0UL;
+        ulong sig = Mix(14695981039346656037UL, (ulong)(uint)state.MapIndex);
+        sig = Mix(sig, (ulong)state.Population);
+        var groups = state.PopulationGroups;
+        for (var gi = 0; gi < groups.Count; gi++)
+        {
+            var g = groups[gi];
+            if (g.Size <= 0) continue;
+            sig = Mix(sig, (ulong)g.Size);
+            sig = Mix(sig, (ulong)(uint)(g.Culture is null ? 0 : g.Culture.GetHashCode()));
+            sig = Mix(sig, (ulong)(uint)(g.Religion is null ? 0 : g.Religion.GetHashCode()));
+        }
+        return sig;
+    }
+
+    private static (int Id, string Canonical) ResolveCulture(MovementPeopleCache cache, string raw)
+    {
+        if (cache.CultureIdMap.TryGetValue(raw, out var entry)) return entry;
+        if (!cache.CultureIdIgnoreCase.TryGetValue(raw, out entry))
+        {
+            var id = cache.CanonicalCultures.Count;
+            entry = (id, raw);
+            cache.CanonicalCultures.Add(raw);
+            cache.CultureIdIgnoreCase[raw] = entry;
+            var list = new List<CultureRegionBucket>();
+            cache.ByCultureRegions[raw] = list;
+            cache.CultureBucketsById.Add(list);
+            if (cache.CultureStamp.Length < cache.CanonicalCultures.Count)
+            {
+                var oldLen = cache.CultureStamp.Length;
+                var nextCap = Math.Max(64, cache.CanonicalCultures.Count * 2);
+                Array.Resize(ref cache.CultureStamp, nextCap);
+                Array.Resize(ref cache.CultureSum, nextCap);
+                Array.Resize(ref cache.PatchCultStamp, nextCap);
+                Array.Resize(ref cache.PatchCultHead, nextCap);
+                Array.Resize(ref cache.PatchCultTail, nextCap);
+                Array.Fill(cache.PatchCultHead, -1, oldLen, nextCap - oldLen);
+            }
+        }
+        cache.CultureIdMap[raw] = entry;
+        return entry;
+    }
+
+    private static int ResolveReligion(MovementPeopleCache cache, string raw)
+    {
+        if (cache.ReligionIdMap.TryGetValue(raw, out var id)) return id;
+        if (!cache.ReligionIdIgnoreCase.TryGetValue(raw, out id))
+        {
+            id = cache.ReligionBucketsById.Count;
+            cache.ReligionIdIgnoreCase[raw] = id;
+            var list = new List<ReligionCultureBucket>();
+            cache.ByReligionBuckets[raw] = list;
+            cache.ReligionBucketsById.Add(list);
+            if (cache.NewRelStamp.Length < cache.ReligionBucketsById.Count)
+            {
+                var oldLen = cache.NewRelStamp.Length;
+                var nextCap = Math.Max(64, cache.ReligionBucketsById.Count * 2);
+                Array.Resize(ref cache.NewRelStamp, nextCap);
+                Array.Resize(ref cache.PatchRelStamp, nextCap);
+                Array.Resize(ref cache.PatchRelHead, nextCap);
+                Array.Resize(ref cache.PatchRelTail, nextCap);
+                Array.Fill(cache.PatchRelHead, -1, oldLen, nextCap - oldLen);
+            }
+        }
+        cache.ReligionIdMap[raw] = id;
+        return id;
+    }
+
+    private static int AccumulateRegionScratch(MovementPeopleCache cache, ScenarioState region)
+    {
+        var stamp = ++cache.CultureStampTick;
+        if (stamp == 0)
+        {
+            Array.Clear(cache.CultureStamp);
+            Array.Clear(cache.NewRelStamp);
+            stamp = cache.CultureStampTick = 1;
+        }
+        cache.TouchedCultures.Clear();
+        cache.RegionRelCultList.Clear();
+        cache.ScratchNewRelIds.Clear();
+
+        var groups = region.PopulationGroups;
+        if (groups.Count == 0) return stamp;
+
+        var useMap = groups.Count > 8;
+        if (useMap) cache.RegionRelCultMap.Clear();
+
+        string lastCulture = null;
+        var lastCultId = -1;
+        string lastReligion = null;
+        var lastRelId = -1;
+
+        for (var gi = 0; gi < groups.Count; gi++)
+        {
+            var group = groups[gi];
+            if (group.Size <= 0) continue;
+            var rawCulture = group.Culture ?? "";
+            var rawReligion = group.Religion ?? "";
+            int cultId;
+            if (ReferenceEquals(rawCulture, lastCulture))
+                cultId = lastCultId;
+            else
+            {
+                cultId = ResolveCulture(cache, rawCulture).Id;
+                lastCulture = rawCulture;
+                lastCultId = cultId;
+            }
+            int relId;
+            if (ReferenceEquals(rawReligion, lastReligion))
+                relId = lastRelId;
+            else
+            {
+                relId = ResolveReligion(cache, rawReligion);
+                lastReligion = rawReligion;
+                lastRelId = relId;
+            }
+
+            if (cache.CultureStamp[cultId] != stamp)
+            {
+                cache.CultureStamp[cultId] = stamp;
+                cache.CultureSum[cultId] = group.Size;
+                cache.TouchedCultures.Add(cultId);
+            }
+            else
+            {
+                cache.CultureSum[cultId] += group.Size;
+            }
+
+            if (cache.NewRelStamp[relId] != stamp)
+            {
+                cache.NewRelStamp[relId] = stamp;
+                cache.ScratchNewRelIds.Add(relId);
+            }
+
+            if (!useMap)
+            {
+                var found = -1;
+                for (var k = 0; k < cache.RegionRelCultList.Count; k++)
+                {
+                    var item = cache.RegionRelCultList[k];
+                    if (item.RelId == relId && item.CultId == cultId) { found = k; break; }
+                }
+                if (found >= 0)
+                {
+                    var item = cache.RegionRelCultList[found];
+                    item.Size += group.Size;
+                    cache.RegionRelCultList[found] = item;
+                }
+                else
+                {
+                    cache.RegionRelCultList.Add((relId, cultId, rawCulture, group.Size));
+                }
+            }
+            else
+            {
+                var pairKey = ((long)relId << 32) | (uint)cultId;
+                if (cache.RegionRelCultMap.TryGetValue(pairKey, out var slot))
+                {
+                    var item = cache.RegionRelCultList[slot];
+                    item.Size += group.Size;
+                    cache.RegionRelCultList[slot] = item;
+                }
+                else
+                {
+                    cache.RegionRelCultMap[pairKey] = cache.RegionRelCultList.Count;
+                    cache.RegionRelCultList.Add((relId, cultId, rawCulture, group.Size));
+                }
+            }
+        }
+
+        if (CanonicalPeopleOrder && cache.RegionRelCultList.Count > 1)
+            cache.RegionRelCultList.Sort(static (a, b) => string.CompareOrdinal(a.RawCulture, b.RawCulture));
+        return stamp;
+    }
+
+    private static int[] UpdateIntArray(int[] existing, List<int> source)
+    {
+        if (source.Count == 0) return Array.Empty<int>();
+        var arr = existing is not null && existing.Length == source.Count ? existing : new int[source.Count];
+        for (var i = 0; i < source.Count; i++) arr[i] = source[i];
+        return arr;
+    }
+
+    private static void BuildPeopleIndexBatch(MovementPeopleCache cache, IReadOnlyList<ScenarioState> orderedStates, int start, int end)
+    {
+        for (var idx = start; idx < end; idx++)
+        {
+            var region = orderedStates[idx];
+            cache.StateDemographySigs[idx] = StateDemographySignature(region);
+            if (region is null || region.PopulationGroups.Count == 0)
+            {
+                cache.StateCultIds[idx] = Array.Empty<int>();
+                cache.StateRelIds[idx] = Array.Empty<int>();
+                continue;
+            }
+
+            AccumulateRegionScratch(cache, region);
+
+            for (var ti = 0; ti < cache.TouchedCultures.Count; ti++)
+            {
+                var cultId = cache.TouchedCultures[ti];
+                cache.CultureBucketsById[cultId].Add(new CultureRegionBucket(region, cache.CultureSum[cultId]));
+            }
+
+            for (var ri = 0; ri < cache.RegionRelCultList.Count; ri++)
+            {
+                var item = cache.RegionRelCultList[ri];
+                cache.ReligionBucketsById[item.RelId].Add(new ReligionCultureBucket(region, item.RawCulture, item.Size));
+            }
+
+            cache.StateCultIds[idx] = UpdateIntArray(cache.StateCultIds[idx], cache.TouchedCultures);
+            cache.StateRelIds[idx] = UpdateIntArray(cache.StateRelIds[idx], cache.ScratchNewRelIds);
+        }
+    }
+
+    private static void AddPatchCultOp(MovementPeopleCache cache, int patchTick, int cultId, int mapIndex, ScenarioState region, long size)
+    {
+        if (cache.PatchCultStamp[cultId] != patchTick)
+        {
+            cache.PatchCultStamp[cultId] = patchTick;
+            cache.PatchCultHead[cultId] = -1;
+            cache.PatchCultTail[cultId] = -1;
+            cache.TouchedPatchCults.Add(cultId);
+        }
+        var opIdx = cache.ScratchCultOps.Count;
+        cache.ScratchCultOps.Add((mapIndex, region, size));
+        cache.ScratchCultOpsNext.Add(-1);
+        if (cache.PatchCultHead[cultId] < 0) cache.PatchCultHead[cultId] = opIdx;
+        else cache.ScratchCultOpsNext[cache.PatchCultTail[cultId]] = opIdx;
+        cache.PatchCultTail[cultId] = opIdx;
+    }
+
+    private static void AddPatchRelOp(MovementPeopleCache cache, int patchTick, int relId, int mapIndex, ScenarioState region, string rawCulture, long size)
+    {
+        if (cache.PatchRelStamp[relId] != patchTick)
+        {
+            cache.PatchRelStamp[relId] = patchTick;
+            cache.PatchRelHead[relId] = -1;
+            cache.PatchRelTail[relId] = -1;
+            cache.TouchedPatchRels.Add(relId);
+        }
+        var opIdx = cache.ScratchRelOps.Count;
+        cache.ScratchRelOps.Add((mapIndex, region, rawCulture, size));
+        cache.ScratchRelOpsNext.Add(-1);
+        if (cache.PatchRelHead[relId] < 0) cache.PatchRelHead[relId] = opIdx;
+        else cache.ScratchRelOpsNext[cache.PatchRelTail[relId]] = opIdx;
+        cache.PatchRelTail[relId] = opIdx;
+    }
+
+    private static void AccumulatePatchSlotsBatch(MovementPeopleCache cache, IReadOnlyList<ScenarioState> orderedStates, int patchTick, int start, int end)
+    {
+        for (var di = start; di < end; di++)
+        {
+            var slot = cache.DirtySlots[di];
+            var region = orderedStates[slot];
+            var stamp = AccumulateRegionScratch(cache, region);
+            var mapIndex = region.MapIndex;
+
+            var oldCults = cache.StateCultIds[slot] ?? Array.Empty<int>();
+            for (var oi = 0; oi < oldCults.Length; oi++)
+            {
+                var oldCultId = oldCults[oi];
+                if (cache.CultureStamp[oldCultId] != stamp)
+                    AddPatchCultOp(cache, patchTick, oldCultId, mapIndex, region, 0L);
+            }
+            for (var ti = 0; ti < cache.TouchedCultures.Count; ti++)
+            {
+                var cultId = cache.TouchedCultures[ti];
+                AddPatchCultOp(cache, patchTick, cultId, mapIndex, region, cache.CultureSum[cultId]);
+            }
+
+            for (var ri = 0; ri < cache.RegionRelCultList.Count; ri++)
+            {
+                var item = cache.RegionRelCultList[ri];
+                AddPatchRelOp(cache, patchTick, item.RelId, mapIndex, region, item.RawCulture, item.Size);
+            }
+            var oldRels = cache.StateRelIds[slot] ?? Array.Empty<int>();
+            for (var oi = 0; oi < oldRels.Length; oi++)
+            {
+                var oldRelId = oldRels[oi];
+                if (cache.NewRelStamp[oldRelId] != stamp)
+                    AddPatchRelOp(cache, patchTick, oldRelId, mapIndex, region, null, 0L);
+            }
+
+            cache.StateCultIds[slot] = UpdateIntArray(cache.StateCultIds[slot], cache.TouchedCultures);
+            cache.StateRelIds[slot] = UpdateIntArray(cache.StateRelIds[slot], cache.ScratchNewRelIds);
+            cache.StateDemographySigs[slot] = StateDemographySignature(region);
+        }
+    }
+
+    private static void MergePatchCultBatch(MovementPeopleCache cache, int start, int end)
+    {
+        var scratch = cache.ScratchCultBuckets;
+        for (var ci = start; ci < end; ci++)
+        {
+            var cultId = cache.TouchedPatchCults[ci];
+            var list = cache.CultureBucketsById[cultId];
+            scratch.Clear();
+            var i = 0;
+            var count = list.Count;
+            var op = cache.PatchCultHead[cultId];
+            while (i < count && op >= 0)
+            {
+                var item = list[i];
+                var opData = cache.ScratchCultOps[op];
+                var itemMap = item.Region.MapIndex;
+                var opMap = opData.MapIndex;
+                if (itemMap < opMap)
+                {
+                    scratch.Add(item);
+                    i++;
+                }
+                else if (itemMap == opMap)
+                {
+                    if (opData.Size > 0)
+                        scratch.Add(new CultureRegionBucket(opData.Region, opData.Size));
+                    i++;
+                    op = cache.ScratchCultOpsNext[op];
+                }
+                else
+                {
+                    if (opData.Size > 0)
+                        scratch.Add(new CultureRegionBucket(opData.Region, opData.Size));
+                    op = cache.ScratchCultOpsNext[op];
+                }
+            }
+            while (i < count) scratch.Add(list[i++]);
+            while (op >= 0)
+            {
+                var opData = cache.ScratchCultOps[op];
+                if (opData.Size > 0)
+                    scratch.Add(new CultureRegionBucket(opData.Region, opData.Size));
+                op = cache.ScratchCultOpsNext[op];
+            }
+            list.Clear();
+            if (list.Capacity < scratch.Count) list.Capacity = scratch.Count;
+            for (var si = 0; si < scratch.Count; si++) list.Add(scratch[si]);
+        }
+    }
+
+    private static void MergePatchRelBatch(MovementPeopleCache cache, int start, int end)
+    {
+        var scratch = cache.ScratchRelBuckets;
+        for (var ri = start; ri < end; ri++)
+        {
+            var relId = cache.TouchedPatchRels[ri];
+            var list = cache.ReligionBucketsById[relId];
+            scratch.Clear();
+            var i = 0;
+            var count = list.Count;
+            var op = cache.PatchRelHead[relId];
+            while (i < count && op >= 0)
+            {
+                var item = list[i];
+                var opData = cache.ScratchRelOps[op];
+                var itemMap = item.Region.MapIndex;
+                var opMap = opData.MapIndex;
+                if (itemMap < opMap)
+                {
+                    scratch.Add(item);
+                    i++;
+                }
+                else if (itemMap == opMap)
+                {
+                    while (i < count && list[i].Region.MapIndex == opMap) i++;
+                    while (op >= 0 && cache.ScratchRelOps[op].MapIndex == opMap)
+                    {
+                        var curOp = cache.ScratchRelOps[op];
+                        if (curOp.Size > 0)
+                            scratch.Add(new ReligionCultureBucket(curOp.Region, curOp.RawCulture, curOp.Size));
+                        op = cache.ScratchRelOpsNext[op];
+                    }
+                }
+                else
+                {
+                    while (op >= 0 && cache.ScratchRelOps[op].MapIndex == opMap)
+                    {
+                        var curOp = cache.ScratchRelOps[op];
+                        if (curOp.Size > 0)
+                            scratch.Add(new ReligionCultureBucket(curOp.Region, curOp.RawCulture, curOp.Size));
+                        op = cache.ScratchRelOpsNext[op];
+                    }
+                }
+            }
+            while (i < count) scratch.Add(list[i++]);
+            while (op >= 0)
+            {
+                var curOp = cache.ScratchRelOps[op];
+                if (curOp.Size > 0)
+                    scratch.Add(new ReligionCultureBucket(curOp.Region, curOp.RawCulture, curOp.Size));
+                op = cache.ScratchRelOpsNext[op];
+            }
+            list.Clear();
+            if (list.Capacity < scratch.Count) list.Capacity = scratch.Count;
+            for (var si = 0; si < scratch.Count; si++) list.Add(scratch[si]);
+        }
+    }
+
+    internal static int PeopleIndexBuilds(Campaign campaign) =>
+        campaign is null ? 0 : campaign.MovementPeople.IndexBuilds;
+
+    /// <summary>
+    /// The population stamp the people index already stored: one region's signature per
+    /// slot, folded together. Empty when the index has not been built. Not a second census.
+    /// </summary>
+    internal static ulong PopulationStamp(Campaign campaign)
+    {
+        var cache = campaign?.MovementPeople;
+        if (cache is null || !cache.Indexed) return 0UL;
+        var values = cache.StateDemographySigs;
+        ulong sig = 14695981039346656037UL;
+        sig = Mix(sig, (ulong)values.Length);
+        for (var i = 0; i < values.Length; i++)
+            sig = Mix(sig, values[i]);
+        return sig;
+    }
+
+    internal static bool NeedsPeopleIndex(Campaign campaign)
+    {
+        var cache = campaign.MovementPeople;
+        return !cache.Indexed || cache.Day != campaign.ElapsedDays || cache.States != campaign.States.Count ||
+            cache.OwnershipRevision != campaign.OwnershipRevision;
+    }
+
+    internal static IEnumerable<int> EnsurePeopleIndexedStages(Campaign campaign, bool insideMovRules)
+    {
+        EnsurePeopleCache(campaign);
+        var cache = campaign.MovementPeople;
+        if (cache.Indexed) yield break;
+        cache.IndexBuilds++;
+
+        var orderedStates = OrderedStatesOf(cache, campaign);
+        var totalStates = orderedStates.Count;
+
+        if (cache.IncrementalReady && cache.DirtySlots.Count > 0 && cache.StateDemographySigs.Length == totalStates)
+        {
+            cache.IncrementalReady = false;
+            var patchTick = ++cache.PatchTick;
+            if (patchTick == 0)
+            {
+                Array.Clear(cache.PatchCultStamp);
+                Array.Clear(cache.PatchRelStamp);
+                patchTick = cache.PatchTick = 1;
+            }
+            cache.TouchedPatchCults.Clear();
+            cache.TouchedPatchRels.Clear();
+            cache.ScratchCultOps.Clear();
+            cache.ScratchCultOpsNext.Clear();
+            cache.ScratchRelOps.Clear();
+            cache.ScratchRelOpsNext.Clear();
+
+            var dirtyCount = cache.DirtySlots.Count;
+            var di = 0;
+            while (di < dirtyCount)
+            {
+                var batchEnd = Math.Min(dirtyCount, di + 32);
+                if (insideMovRules)
+                {
+                    using (SimProfiler.Measure("movements"))
+                    using (SimProfiler.Measure("  mov:rules"))
+                    using (SimProfiler.Measure("    mov:people"))
+                    using (SimProfiler.Measure("      mov:people:index"))
+                        AccumulatePatchSlotsBatch(cache, orderedStates, patchTick, di, batchEnd);
+                }
+                else
+                {
+                    using (SimProfiler.Measure("        mov:people:index"))
+                        AccumulatePatchSlotsBatch(cache, orderedStates, patchTick, di, batchEnd);
+                }
+                di = batchEnd;
+                if (di < dirtyCount) yield return 0;
+            }
+
+            var ci = 0;
+            var cultCount = cache.TouchedPatchCults.Count;
+            while (ci < cultCount)
+            {
+                var batchEnd = Math.Min(cultCount, ci + 48);
+                if (insideMovRules)
+                {
+                    using (SimProfiler.Measure("movements"))
+                    using (SimProfiler.Measure("  mov:rules"))
+                    using (SimProfiler.Measure("    mov:people"))
+                    using (SimProfiler.Measure("      mov:people:index"))
+                        MergePatchCultBatch(cache, ci, batchEnd);
+                }
+                else
+                {
+                    using (SimProfiler.Measure("        mov:people:index"))
+                        MergePatchCultBatch(cache, ci, batchEnd);
+                }
+                ci = batchEnd;
+                if (ci < cultCount || cache.TouchedPatchRels.Count > 0) yield return 0;
+            }
+
+            var ri = 0;
+            var relCount = cache.TouchedPatchRels.Count;
+            while (ri < relCount)
+            {
+                var batchEnd = Math.Min(relCount, ri + 32);
+                if (insideMovRules)
+                {
+                    using (SimProfiler.Measure("movements"))
+                    using (SimProfiler.Measure("  mov:rules"))
+                    using (SimProfiler.Measure("    mov:people"))
+                    using (SimProfiler.Measure("      mov:people:index"))
+                        MergePatchRelBatch(cache, ri, batchEnd);
+                }
+                else
+                {
+                    using (SimProfiler.Measure("        mov:people:index"))
+                        MergePatchRelBatch(cache, ri, batchEnd);
+                }
+                ri = batchEnd;
+                if (ri < relCount) yield return 0;
+            }
+
+            cache.DirtySlots.Clear();
+            cache.IncrementalReady = cache.StrictMapIndexOrder && CanonicalPeopleOrder;
+            cache.OwnershipRevision = campaign.OwnershipRevision;
+            cache.Indexed = true;
+            yield return 0;
+            yield break;
+        }
+
+        if (cache.StateDemographySigs.Length != totalStates)
+        {
+            cache.StateDemographySigs = new ulong[totalStates];
+            cache.StateCultIds = new int[totalStates][];
+            cache.StateRelIds = new int[totalStates][];
+        }
+        cache.DirtySlots.Clear();
+        cache.IncrementalReady = false;
+
+        for (var i = 0; i < cache.CultureBucketsById.Count; i++) cache.CultureBucketsById[i].Clear();
+        for (var i = 0; i < cache.ReligionBucketsById.Count; i++) cache.ReligionBucketsById[i].Clear();
+
+        var idx = 0;
+        while (idx < totalStates)
+        {
+            var batchEnd = Math.Min(totalStates, idx + 16);
+            if (insideMovRules)
+            {
+                using (SimProfiler.Measure("movements"))
+                using (SimProfiler.Measure("  mov:rules"))
+                using (SimProfiler.Measure("    mov:people"))
+                using (SimProfiler.Measure("      mov:people:index"))
+                    BuildPeopleIndexBatch(cache, orderedStates, idx, batchEnd);
+            }
+            else
+            {
+                using (SimProfiler.Measure("        mov:people:index"))
+                    BuildPeopleIndexBatch(cache, orderedStates, idx, batchEnd);
+            }
+            idx = batchEnd;
+            if (idx < totalStates) yield return 0;
+        }
+        cache.IncrementalReady = cache.StrictMapIndexOrder && CanonicalPeopleOrder;
+        cache.OwnershipRevision = campaign.OwnershipRevision;
+        cache.Indexed = true;
+        yield return 0;
     }
 
     private static Dictionary<ScenarioState, long> CultureTotalsOf(Campaign campaign, string culture)
     {
         var cache = campaign.MovementPeople;
         if (cache.CultureTotals.TryGetValue(culture, out var totals)) return totals;
-        totals = new Dictionary<ScenarioState, long>();
+        totals = cache.CultureTotalsPool.Count > 0 ? cache.CultureTotalsPool.Pop() : new Dictionary<ScenarioState, long>();
         if (cache.ByCulture.TryGetValue(culture, out var groups))
             foreach (var (region, group) in groups)
                 totals[region] = totals.GetValueOrDefault(region) + group.Size;
@@ -419,40 +1206,48 @@ public static class MovementRules
         return totals;
     }
 
+    /// <summary>
+    /// Set BDOF_NO_CANONICAL_PEOPLE_ORDER=1 to leave the people index in whatever order the
+    /// scratch dictionaries produced. Only attribution runs use it: the canonical order is
+    /// what makes the index independent of Dictionary internals - and of the thread count
+    /// that builds it - so it is the default and the precondition for parallelising the build.
+    /// </summary>
+    private static readonly bool CanonicalPeopleOrder =
+        System.Environment.GetEnvironmentVariable("BDOF_NO_CANONICAL_PEOPLE_ORDER") != "1";
+
     private static Dictionary<ScenarioState, (long Own, long Faithful)> CountPeople(Campaign campaign, MovementDefinition definition)
     {
         var cache = campaign.MovementPeople;
         if (!cache.Indexed)
+            foreach (var _ in EnsurePeopleIndexedStages(campaign, insideMovRules: false)) { }
+        using var countScope = SimProfiler.Measure("        mov:people:count");
+        if (cache.PeoplePoolByDef.TryGetValue(definition, out var pooled))
         {
-            foreach (var list in cache.ByCulture.Values) list.Clear();
-            foreach (var list in cache.ByReligion.Values) list.Clear();
-            foreach (var region in campaign.States)
-                foreach (var group in region.PopulationGroups)
-                {
-                    if (group.Size <= 0) continue;
-                    if (!cache.ByCulture.TryGetValue(group.Culture ?? "", out var cultured))
-                        cache.ByCulture[group.Culture ?? ""] = cultured = new List<PopulationGroupAt>();
-                    cultured.Add(new PopulationGroupAt(region, group));
-                    if (!cache.ByReligion.TryGetValue(group.Religion ?? "", out var believing))
-                        cache.ByReligion[group.Religion ?? ""] = believing = new List<PopulationGroupAt>();
-                    believing.Add(new PopulationGroupAt(region, group));
-                }
-            cache.Indexed = true;
+            cache.PeoplePoolByDef.Remove(definition);
         }
-        var counted = new Dictionary<ScenarioState, (long Own, long Faithful)>();
-        foreach (var people in definition.DistinctPeoples)
-            foreach (var (region, size) in CultureTotalsOf(campaign, people))
-            {
-                var known = counted.GetValueOrDefault(region);
-                counted[region] = (known.Own + size, known.Faithful);
-            }
-        foreach (var faith in definition.DistinctFaiths)
-            if (cache.ByReligion.TryGetValue(faith, out var groups))
-                foreach (var (region, group) in groups)
+        else
+        {
+            pooled = new Dictionary<ScenarioState, (long Own, long Faithful)>();
+        }
+        var counted = pooled;
+        var peoples = definition.DistinctPeoples;
+        for (var pi = 0; pi < peoples.Length; pi++)
+            if (cache.ByCultureRegions.TryGetValue(peoples[pi], out var regions))
+                for (var i = 0; i < regions.Count; i++)
                 {
-                    if (definition.HasPeople(group.Culture)) continue;
-                    var known = counted.GetValueOrDefault(region);
-                    counted[region] = (known.Own, known.Faithful + group.Size);
+                    var bucket = regions[i];
+                    ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(counted, bucket.Region, out _);
+                    entry.Own += bucket.Size;
+                }
+        var faiths = definition.DistinctFaiths;
+        for (var fi = 0; fi < faiths.Length; fi++)
+            if (cache.ByReligionBuckets.TryGetValue(faiths[fi], out var buckets))
+                for (var i = 0; i < buckets.Count; i++)
+                {
+                    var bucket = buckets[i];
+                    if (definition.HasPeople(bucket.Culture)) continue;
+                    ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(counted, bucket.Region, out _);
+                    entry.Faithful += bucket.Size;
                 }
         return counted;
     }
@@ -573,30 +1368,35 @@ public static class MovementRules
     internal static ScenarioState BestRefuge(Campaign campaign, Nation nation, Nation except)
     {
         // Whoever holds what it claims is the enemy whose enemies make it welcome.
-        var claimants = new List<int>();
-        foreach (var id in Movements.DefinitionOf(nation)?.Homeland ?? new List<string>())
-            if (Movements.StateById(campaign, id) is { } claimed && OwnerOf(campaign, claimed) is { } holder && holder.Id != nation.Id)
-                claimants.Add(holder.Id);
+        var claimants = _refugeClaimantsScratch ??= new List<int>();
+        claimants.Clear();
+        var def = Movements.DefinitionOf(nation);
+        var homeland = def?.Homeland;
+        if (homeland is not null)
+        {
+            for (var i = 0; i < homeland.Count; i++)
+                if (Movements.StateById(campaign, homeland[i]) is { } claimed && OwnerOf(campaign, claimed) is { } holder && holder.Id != nation.Id)
+                    claimants.Add(holder.Id);
+        }
         // Where it is from: the middle of the first homeland region, if it has one. A refuge is
         // chosen near that rather than wherever the warmest welcome happens to be - exiles go to
         // the neighbours and to their own part of the world, London and Warsaw, not Havana.
         (float Latitude, float Longitude)? home = null;
-        var homeland = Movements.DefinitionOf(nation)?.Homeland;
         if (homeland is { Count: > 0 } && Movements.StateById(campaign, homeland[0]) is { } homeRegion)
             home = Movements.CentreOf(campaign, homeRegion);
         ScenarioState best = null;
         var bestScore = float.MinValue;
-        foreach (var candidate in campaign.Nations)
+        for (var i = 0; i < campaign.Nations.Count; i++)
         {
+            var candidate = campaign.Nations[i];
             if (candidate == except || candidate.Id == nation.Id || candidate.Movement is not null) continue;
             if (CampaignDiplomacy.AtWar(campaign, candidate.Id, nation.Id)) continue;
-            var states = campaign.StatesOf(candidate);
-            if (states.Length == 0) continue;
+            if (!campaign.HasOwnedLand(candidate)) continue;
             var distancePenalty = home is { } at
                 ? MathF.Min(60f, NavalOperations.Distance(at.Latitude, at.Longitude, candidate.CapitalLatitude, candidate.CapitalLongitude) * 0.9f)
                 : 0f;
             var score = MovementFall.Warmth(campaign, candidate, nation, claimants) - distancePenalty +
-                        (Movements.DefinitionOf(nation)?.Sponsors.ContainsKey(candidate.Tag) == true ? 60f : 0f) +
+                        (def?.Sponsors.ContainsKey(candidate.Tag) == true ? 60f : 0f) +
                         (nation.Movement?.InvitedBy.Contains(candidate.Id) == true ? 40f : 0f);
             if (score <= bestScore) continue;
             bestScore = score;
@@ -682,7 +1482,7 @@ public static class MovementRules
     }
 
     internal static string RegionName(Campaign campaign, int mapIndex) =>
-        campaign.States.Find(state => state.MapIndex == mapIndex)?.DisplayName ?? "";
+        Movements.RegionAt(campaign, mapIndex)?.DisplayName ?? "";
 
     // ------------------------------------------------------------------ uprisings ------
 
@@ -734,7 +1534,7 @@ public static class MovementRules
         var definition = Movements.DefinitionOf(nation);
         if (state is null || definition is null || region is null || !MovementMethods.WillRise(campaign, nation, definition)) return false;
         var defines = campaign.Defines;
-        var occupyingOwner = campaign.Nations.Find(candidate => candidate.MapIndex == region.NationMapIndex);
+        var occupyingOwner = campaign.NationByMapIndex(region.NationMapIndex);
         if (RevoltTerritory.HasForeignOccupation(campaign, occupyingOwner, nation, region))
         {
             state.LastReport = Loc.Get("An uprising cannot displace foreign occupation without fighting.");
@@ -1203,4 +2003,40 @@ public static class MovementRules
         hash ^= hash >> 16;
         return (hash >> 8) * (1f / 16777216f);
     }
+
+    [ThreadStatic] private static List<int> _infiltratedKeys;
+    private static List<int> InfiltratedScratchKeys() => _infiltratedKeys ??= new List<int>();
+
+    private static bool InLiveWar(Campaign campaign, int nationId)
+    {
+        foreach (var war in Warfare.LiveWars(campaign))
+            if (war.Involves(nationId)) return true;
+        return false;
+    }
+}
+
+internal readonly record struct CultureRegionBucket(ScenarioState Region, long Size);
+
+internal readonly record struct ReligionCultureBucket(ScenarioState Region, string Culture, long Size);
+
+internal readonly struct ReligionCultureKey : IEquatable<ReligionCultureKey>
+{
+    public readonly string Religion;
+    public readonly string Culture;
+
+    public ReligionCultureKey(string religion, string culture)
+    {
+        Religion = religion;
+        Culture = culture;
+    }
+
+    public bool Equals(ReligionCultureKey other) =>
+        string.Equals(Religion, other.Religion, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(Culture, other.Culture, StringComparison.OrdinalIgnoreCase);
+
+    public override bool Equals(object obj) => obj is ReligionCultureKey other && Equals(other);
+
+    public override int GetHashCode() => HashCode.Combine(
+        StringComparer.OrdinalIgnoreCase.GetHashCode(Religion),
+        StringComparer.OrdinalIgnoreCase.GetHashCode(Culture));
 }

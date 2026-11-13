@@ -50,6 +50,14 @@ public sealed partial class Defines
     /// closes it with a division taken off an advance when no reserve is free.
     /// </summary>
     public float FrontHoleAdvanceNeed { get; set; } = 3.5f;
+
+    /// <summary>
+    /// Whether one re-posting is spent on the empty post that reconnects a cut-off formation,
+    /// taken from a free reserve before any other hole. Off, a hole is still filled by how
+    /// threatened it is, and this rule does not order the reserve or claim the road is opening.
+    /// A mod sets this false. The 14-day bleed and the dry-out of an attack stay either way.
+    /// </summary>
+    public bool FrontStaffRelievesPockets { get; set; } = true;
 }
 
 /// <summary>
@@ -97,6 +105,12 @@ public static class FrontManager
         public readonly List<DrawnFrontLine> Lines = new();
         public readonly HashSet<int> LineEnemies = new();
         public readonly List<Army> Idle = new();
+        /// <summary>Empty posts this look refused to fill by pulling an attack off the line.</summary>
+        public readonly HashSet<int> ReliefNoAdvance = new();
+        public readonly Dictionary<int, List<Army>> ArmiesByNation = new();
+        public readonly List<StrategicWar> Wars = new();
+        public readonly HashSet<int> WarNations = new();
+        public bool NationIndexActive;
     }
 
     private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
@@ -116,6 +130,37 @@ public static class FrontManager
     private static List<DrawnFrontLine> Lines => Active.Lines;
     private static HashSet<int> LineEnemies => Active.LineEnemies;
     private static List<Army> Idle => Active.Idle;
+    private static HashSet<int> ReliefNoAdvance => Active.ReliefNoAdvance;
+
+    private static void BeginNationArmies(Campaign campaign)
+    {
+        if (Active.NationIndexActive) return;
+        foreach (var list in Active.ArmiesByNation.Values) { list.Clear(); Spare.Push(list); }
+        Active.ArmiesByNation.Clear();
+        for (var i = 0; i < campaign.Armies.Count; i++)
+        {
+            var army = campaign.Armies[i];
+            if (!Active.ArmiesByNation.TryGetValue(army.NationId, out var list))
+                Active.ArmiesByNation[army.NationId] = list = Take();
+            list.Add(army);
+        }
+        Active.NationIndexActive = true;
+    }
+
+    private static void EndNationArmies()
+    {
+        if (!Active.NationIndexActive) return;
+        foreach (var list in Active.ArmiesByNation.Values) { list.Clear(); Spare.Push(list); }
+        Active.ArmiesByNation.Clear();
+        Active.NationIndexActive = false;
+    }
+
+    private static List<Army> NationArmies(Campaign campaign, int nationId) =>
+        Active is not null && Active.NationIndexActive
+            ? (Active.ArmiesByNation.TryGetValue(nationId, out var list) ? list : EmptyArmyList)
+            : campaign.Armies;
+
+    private static readonly List<Army> EmptyArmyList = new();
 
     /// <summary>
     /// Provinces the last staff look posted in this campaign, in the order that look left them.
@@ -142,28 +187,62 @@ public static class FrontManager
     /// <summary>Look at every front in the world.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(FrontManager))) return;
-        if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
-        Active = Boards.GetOrCreateValue(campaign);
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>Look at every front in the world, yielding between wars and drawn lines.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(FrontManager))) yield break;
+        if (campaign.ProvinceMap is null || campaign.ProvinceController is null) yield break;
+        var board = Boards.GetOrCreateValue(campaign);
+        Active = board;
         CallUpIdle(campaign);
-        // Defensive copy to prevent InvalidOperationException if Wars list is modified during iteration.
-        var wars = campaign.Wars.ToList();
-        foreach (var war in wars)
+        yield return 0;
+
+        Active = board;
+        BeginNationArmies(campaign);
+        try
         {
-            if (war.Ended) continue;
-            Balance(campaign, war);
+            // A copy: balancing one front can end a war and rebuild the live list under this look.
+            var live = Warfare.LiveWars(campaign);
+            var wars = board.Wars;
+            wars.Clear();
+            for (var index = 0; index < live.Count; index++)
+            {
+                var war = live[index];
+                if (!war.Ended) wars.Add(war);
+            }
+            for (var wi = 0; wi < wars.Count; wi++)
+            {
+                Active = board;
+                var war = wars[wi];
+                if (war.Ended) continue;
+                Balance(campaign, war);
+                yield return 0;
+            }
+            // A full withdrawal may detach the last formation and prune empty plans.
+            // Walk this look's roster, not the live list that those commands can edit.
+            // The roster stays on this campaign's board until its next look reuses the list.
+            // Another campaign has its own roster and cannot drop these rows.
+            Active = board;
+            Lines.Clear();
+            Lines.AddRange(campaign.FrontLines);
+            for (var li = 0; li < Lines.Count; li++)
+            {
+                Active = board;
+                var line = Lines[li];
+                if (!campaign.FrontLines.Contains(line)) continue;
+                if (line.Kind is FrontLineKind.Defence or FrontLineKind.AreaDefence or FrontLineKind.Offensive) BalanceLine(campaign, line);
+                else if (line.Kind == FrontLineKind.Fallback) DefensivePlanning.Maintain(campaign, line);
+                yield return 0;
+            }
         }
-        // A full withdrawal may detach the last formation and prune empty plans.
-        // Walk this look's roster, not the live list that those commands can edit.
-        // The roster stays on this campaign's board until its next look reuses the list.
-        // Another campaign has its own roster and cannot drop these rows.
-        Lines.Clear();
-        Lines.AddRange(campaign.FrontLines);
-        foreach (var line in Lines)
+        finally
         {
-            if (!campaign.FrontLines.Contains(line)) continue;
-            if (line.Kind is FrontLineKind.Defence or FrontLineKind.AreaDefence or FrontLineKind.Offensive) BalanceLine(campaign, line);
-            else if (line.Kind == FrontLineKind.Fallback) DefensivePlanning.Maintain(campaign, line);
+            Active = board;
+            board.Wars.Clear();
+            EndNationArmies();
         }
     }
 
@@ -196,16 +275,26 @@ public static class FrontManager
             if (army.TemplateId == MilitiaCore.TemplateId || army.FrontLineId >= 0) continue;
             Idle.Add(army);
         }
+        if (Idle.Count == 0) return;
+        var warNations = Active.WarNations;
+        warNations.Clear();
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
+        {
+            var war = live[index];
+            if (war.Ended) continue;
+            warNations.Add(war.AttackerId);
+            warNations.Add(war.DefenderId);
+            foreach (var ally in war.AttackerAllies) warNations.Add(ally);
+            foreach (var ally in war.DefenderAllies) warNations.Add(ally);
+        }
         foreach (var army in Idle)
         {
             var nation = campaign.NationById(army.NationId);
             // A player's divisions stay where they were put, unless the general staff in the
             // field was handed over. Then the same call-up every other country gets applies.
             if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) continue;
-            var atWar = false;
-            foreach (var war in campaign.Wars)
-                if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
-            if (!atWar) continue;
+            if (!warNations.Contains(nation.Id)) continue;
             new SetArmyOrderCommand { IssuerId = nation.Id, ArmyId = army.Id, Order = ArmyOrder.DefendFront }.Apply(campaign);
             FrontPlanner.GiveIdleRole(campaign, army);
             CalledUp++;
@@ -224,29 +313,42 @@ public static class FrontManager
     {
         if (war.Ended || campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
         Active = Boards.GetOrCreateValue(campaign);
-        for (var side = 0; side < 2; side++)
+        var builtIndex = !Active.NationIndexActive;
+        if (builtIndex) BeginNationArmies(campaign);
+        try
         {
-            var attacking = side == 0;
-            // Who is on the other side, and where they stand: the pressure each post is under.
-            EnemyPower.Clear();
-            foreach (var army in campaign.Armies)
+            for (var side = 0; side < 2; side++)
             {
-                if (army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0) continue;
-                if (attacking ? !war.IsDefending(army.NationId) : !war.IsAttacking(army.NationId)) continue;
-                EnemyPower[army.ProvinceId] = EnemyPower.GetValueOrDefault(army.ProvinceId) + army.Power;
+                var attacking = side == 0;
+                // Who is on the other side, and where they stand: the pressure each post is under.
+                EnemyPower.Clear();
+                foreach (var enemyId in war.Side(!attacking))
+                {
+                    var enemyArmies = NationArmies(campaign, enemyId);
+                    for (var i = 0; i < enemyArmies.Count; i++)
+                    {
+                        var army = enemyArmies[i];
+                        if (army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0) continue;
+                        EnemyPower[army.ProvinceId] = EnemyPower.GetValueOrDefault(army.ProvinceId) + army.Power;
+                    }
+                }
+                foreach (var nationId in war.Side(attacking))
+                {
+                    var nation = campaign.NationById(nationId);
+                    if (nation is null) continue;
+                    // Its own sector: a coalition's front runs past every member, and a division
+                    // cannot march through an ally's country to stand on its border.
+                    Posts.Clear();
+                    foreach (var province in war.FriendlyFront(nationId))
+                        if (campaign.ProvinceController[province] == (ushort)nation.MapIndex) Posts.Add(province);
+                    Posts.Sort();
+                    Arrange(campaign, nation, war, null);
+                }
             }
-            foreach (var nationId in war.Side(attacking))
-            {
-                var nation = campaign.NationById(nationId);
-                if (nation is null) continue;
-                // Its own sector: a coalition's front runs past every member, and a division
-                // cannot march through an ally's country to stand on its border.
-                Posts.Clear();
-                foreach (var province in war.FriendlyFront(nationId))
-                    if (campaign.ProvinceController[province] == (ushort)nation.MapIndex) Posts.Add(province);
-                Posts.Sort();
-                Arrange(campaign, nation, war, null);
-            }
+        }
+        finally
+        {
+            if (builtIndex) EndNationArmies();
         }
     }
 
@@ -259,18 +361,61 @@ public static class FrontManager
         // before it is read, as a division asking for its line would.
         if (line.AllEnemies) BorderFronts.Refresh(campaign, line);
         if (line.IsEmpty || line.Cohesion == PlanCohesion.Immobile) return;
-        var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(nation.Id) &&
-            (line.BorderNationId < 0 || candidate.Opposes(nation.Id, line.BorderNationId)));
+        StrategicWar war = null;
+        for (var i = 0; i < campaign.Wars.Count; i++)
+        {
+            var candidate = campaign.Wars[i];
+            if (!candidate.Ended && candidate.Involves(nation.Id) &&
+                (line.BorderNationId < 0 || candidate.Opposes(nation.Id, line.BorderNationId)))
+            {
+                war = candidate;
+                break;
+            }
+        }
         // The whole front is under pressure from everybody it faces, in every war - not only
         // from the other side of whichever war happens to be first in the list.
         if (line.AllEnemies) BorderFronts.FillEnemies(campaign, nation.Id, LineEnemies);
         EnemyPower.Clear();
-        foreach (var army in campaign.Armies)
+        if (Active.NationIndexActive)
         {
-            if (army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0 || army.NationId == nation.Id) continue;
-            if (line.AllEnemies ? !LineEnemies.Contains(army.NationId)
-                : war is null || !war.Opposes(army.NationId, nation.Id)) continue;
-            EnemyPower[army.ProvinceId] = EnemyPower.GetValueOrDefault(army.ProvinceId) + army.Power;
+            if (line.AllEnemies)
+            {
+                foreach (var enemyId in LineEnemies)
+                {
+                    if (enemyId == nation.Id) continue;
+                    var enemyArmies = NationArmies(campaign, enemyId);
+                    for (var i = 0; i < enemyArmies.Count; i++)
+                    {
+                        var army = enemyArmies[i];
+                        if (army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0) continue;
+                        EnemyPower[army.ProvinceId] = EnemyPower.GetValueOrDefault(army.ProvinceId) + army.Power;
+                    }
+                }
+            }
+            else if (war is not null)
+            {
+                foreach (var enemyId in war.Side(!war.IsAttacking(nation.Id)))
+                {
+                    if (enemyId == nation.Id) continue;
+                    var enemyArmies = NationArmies(campaign, enemyId);
+                    for (var i = 0; i < enemyArmies.Count; i++)
+                    {
+                        var army = enemyArmies[i];
+                        if (army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0) continue;
+                        EnemyPower[army.ProvinceId] = EnemyPower.GetValueOrDefault(army.ProvinceId) + army.Power;
+                    }
+                }
+            }
+        }
+        else
+        {
+            foreach (var army in campaign.Armies)
+            {
+                if (army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0 || army.NationId == nation.Id) continue;
+                if (line.AllEnemies ? !LineEnemies.Contains(army.NationId)
+                    : war is null || !war.Opposes(army.NationId, nation.Id)) continue;
+                EnemyPower[army.ProvinceId] = EnemyPower.GetValueOrDefault(army.ProvinceId) + army.Power;
+            }
         }
         Posts.Clear();
         IEnumerable<int> sources = line.Kind == FrontLineKind.Offensive ? line.SourceProvinces : BattlePlanning.Sequence(campaign, line);
@@ -324,9 +469,10 @@ public static class FrontManager
         // Who is holding what: a division counts for the post it is going to, or the post it
         // is standing on when what it is going to is not a post - an advance's objective is
         // the enemy's province, and the ground it attacks from is the post it holds.
+        var ownArmies = NationArmies(campaign, nation.Id);
         var holders = 0;
         var power = 0f;
-        foreach (var army in campaign.Armies)
+        foreach (var army in ownArmies)
         {
             if (FrontDisengagement.Eligible(campaign, nation, war, line, army)) BattleCandidates.Add(army);
             if (!Holds(campaign, army, nation, war, line, defines.FrontStaffMovesAdvances)) continue;
@@ -352,7 +498,7 @@ public static class FrontManager
             // An empty line is precisely when a ready reserve is needed. There may be no
             // defender yet from which to estimate a division's power, so use the available
             // field formations, without counting them as holders until actually posted.
-            foreach (var army in campaign.Armies)
+            foreach (var army in ownArmies)
             {
                 if (!ReadyReserve(campaign, army, nation, war, today, advancesToo: true) &&
                     !FrontDisengagement.Eligible(campaign, nation, war, line, army)) continue;
@@ -381,10 +527,16 @@ public static class FrontManager
         }
 
         var budget = defines.FrontRepostsPerLook + (int)(Posts.Count * defines.FrontRepostsPerPost);
-        var quota = (int)MathF.Ceiling(holders / (float)Posts.Count);
+        var quota = (int)MathF.Ceiling(holders / (float)Math.Max(1, Posts.Count));
+
+        // One re-posting, before the threatened holes: a free reserve onto the empty post that
+        // reconnects a cut-off formation. The pocket itself is left where it is.
+        ReliefNoAdvance.Clear();
+        RelieveCutOff(campaign, nation, war, today, mayBorrow, ref budget, ref holders);
+        quota = (int)MathF.Ceiling(holders / (float)Math.Max(1, Posts.Count));
 
         // First the holes, the most threatened first.
-        Posts.Sort((left, right) =>
+        Posts.Sort(static (left, right) =>
         {
             var order = Need[right].CompareTo(Need[left]);
             return order != 0 ? order : left.CompareTo(right);
@@ -429,7 +581,9 @@ public static class FrontManager
                     // next to may borrow one advance, and only after no reserve could take it.
                     var borrowedAdvance = false;
                     var reserve = NearestReserve(campaign, nation, war, hole, today, advancesToo: false);
-                    if (reserve is null &&
+                    // The post that would reopen a pocket already had its reserve. No attack is
+                    // pulled off the line to stand there. Other holes keep the threatened-hole rule.
+                    if (reserve is null && !ReliefNoAdvance.Contains(hole) &&
                         Need.GetValueOrDefault(hole, 1f) >= campaign.Defines.FrontHoleAdvanceNeed)
                     {
                         reserve = NearestReserve(campaign, nation, war, hole, today, advancesToo: true);
@@ -507,6 +661,104 @@ public static class FrontManager
         }
     }
 
+    /// <summary>
+    /// One existing re-posting onto the empty post that reconnects a cut-off formation.
+    /// The formation in the pocket is not disbanded and is not the one sent. A free reserve
+    /// goes first. If none can reach, the post is marked so this look does not pull an advance
+    /// or a spearhead onto it; a neighbour already holding this war may still walk there by
+    /// the ordinary donor pass. A human who has not handed over command is not given the move.
+    /// </summary>
+    private static void RelieveCutOff(Campaign campaign, Nation nation, StrategicWar war, int today,
+        bool mayBorrow, ref int budget, ref int holders)
+    {
+        if (!mayBorrow || budget <= 0 || war is null || !campaign.Defines.FrontStaffRelievesPockets) return;
+        var pocket = CutOffFormation(campaign, nation, war);
+        if (pocket is null) return;
+        var post = ReconnectingPost(campaign, nation, war, pocket.ProvinceId);
+        if (post < 0 || Count(post) > 0) return;
+        Refused.Clear();
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            var reserve = NearestReserve(campaign, nation, war, post, today, advancesToo: false);
+            if (reserve is null) break;
+            if (reserve.Id == pocket.Id || reserve.DaysCutOff > 0 || reserve.SupplyDistance < 0)
+            {
+                Refused.Add(reserve.Id);
+                continue;
+            }
+            var duty = reserve.OrderKind;
+            reserve.OrderKind = ArmyOrder.DefendFront;
+            if (Repost(campaign, nation, reserve, post))
+            {
+                reserve.StaffNote = StaffNote.ReopenRoad;
+                budget--;
+                holders++;
+                return;
+            }
+            reserve.OrderKind = duty;
+            Refused.Add(reserve.Id);
+        }
+        ReliefNoAdvance.Add(post);
+    }
+
+    /// <summary>
+    /// A formation on this war with <see cref="Army.DaysCutOff"/> already counting, or with no
+    /// supply distance. The most isolated is the one the staff tries to reopen first.
+    /// </summary>
+    private static Army CutOffFormation(Campaign campaign, Nation nation, StrategicWar war)
+    {
+        Army best = null;
+        foreach (var army in NationArmies(campaign, nation.Id))
+        {
+            if (army.NationId != nation.Id || army.Divisions <= 0f || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0)
+                continue;
+            if (army.AssignedWarId != war.Id) continue;
+            if (army.DaysCutOff <= 0 && army.SupplyDistance >= 0) continue;
+            if (best is null || army.DaysCutOff > best.DaysCutOff ||
+                (army.DaysCutOff == best.DaysCutOff && army.SupplyDistance < best.SupplyDistance) ||
+                (army.DaysCutOff == best.DaysCutOff && army.SupplyDistance == best.SupplyDistance && army.Id < best.Id))
+                best = army;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// The empty front post on the near side of the gap: the friendly province the existing
+    /// breakout walk reaches outside the pocket, when that province is an empty post, otherwise
+    /// the empty post beside it. The pocket's own province is not a post to "fill".
+    /// </summary>
+    private static int ReconnectingPost(Campaign campaign, Nation nation, StrategicWar war, int pocketProvince)
+    {
+        var path = PocketBreakout.WayHome(campaign, nation, pocketProvince, war);
+        if (path is not null)
+        {
+            for (var i = path.Count - 1; i >= 0; i--)
+            {
+                var step = path[i];
+                if (step == pocketProvince) continue;
+                if (PostSet.Contains(step) && Count(step) == 0) return step;
+            }
+            if (path.Count > 0)
+            {
+                var beside = EmptyPostBeside(campaign, path[^1], pocketProvince);
+                if (beside > 0) return beside;
+            }
+        }
+        return EmptyPostBeside(campaign, pocketProvince, pocketProvince);
+    }
+
+    private static int EmptyPostBeside(Campaign campaign, int province, int pocketProvince)
+    {
+        if (province <= 0 || province >= campaign.ProvinceMap.Neighbors.Length) return -1;
+        var best = -1;
+        foreach (var next in campaign.ProvinceMap.Neighbors[province])
+        {
+            if (next == pocketProvince || !PostSet.Contains(next) || Count(next) > 0) continue;
+            if (best < 0 || next < best) best = next;
+        }
+        return best;
+    }
+
     private static int Count(int post) => Allocated.TryGetValue(post, out var there) ? there.Count : 0;
 
     /// <summary>
@@ -537,7 +789,7 @@ public static class FrontManager
                 DonorFrontier.Enqueue(next);
             }
         }
-        foreach (var army in campaign.Armies)
+        foreach (var army in NationArmies(campaign, nation.Id))
             if (army.NationId == nation.Id &&
                 (!DonorComponents.TryGetValue(army.ProvinceId, out var source) || source != component))
                 Refused.Add(army.Id);
@@ -562,7 +814,7 @@ public static class FrontManager
         var target = campaign.ProvinceMap.CenterOf(hole);
         Army best = null;
         var bestDistance = float.MaxValue;
-        foreach (var army in campaign.Armies)
+        foreach (var army in NationArmies(campaign, nation.Id))
         {
             if (!ReadyReserve(campaign, army, nation, war, today, advancesToo) || Refused.Contains(army.Id)) continue;
             // A reserve before an advance at the same distance.

@@ -392,9 +392,19 @@ public static partial class AiStatecraft
         // A lease between them: the tenant would lose its base, the owner its rent, and a
         // garrison on the owner's soil is not a border to march across. Guantanamo made the
         // United States a land neighbour of Cuba, and the computer invaded it in the spring.
-        if (campaign.LandArrangements.Count > 0 && campaign.LandArrangements.Any(a => a.Kind == LandArrangementSystem.Lease &&
-                ((a.HolderId == nation.Id && a.OwnerId == other.Id) || (a.HolderId == other.Id && a.OwnerId == nation.Id))))
-            price += Part(parts, "lease", defines.AiLeaseWarCaution);
+        if (campaign.LandArrangements.Count > 0)
+        {
+            for (var i = 0; i < campaign.LandArrangements.Count; i++)
+            {
+                var a = campaign.LandArrangements[i];
+                if (a.Kind == LandArrangementSystem.Lease &&
+                    ((a.HolderId == nation.Id && a.OwnerId == other.Id) || (a.HolderId == other.Id && a.OwnerId == nation.Id)))
+                {
+                    price += Part(parts, "lease", defines.AiLeaseWarCaution);
+                    break;
+                }
+            }
+        }
 
         // And turning on a country we are actually allied to, which is a different thing from
         // overcoming a fondness for one. Not a dislike defeated but a promise broken in public,
@@ -604,12 +614,18 @@ public static partial class AiStatecraft
             foreach (var tag in faction.Patrons)
                 if (campaign.NationByTag(tag) is { Population: > 0 } patron && patron.Id != attacker.Id)
                     help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, patron, refreshAssessment) * campaign.Defines.FactionPatronDeterrence;
-        var partners = InternationalOrganizations.DefencePartners(campaign, target.Id).ToArray();
-        var shared = InternationalOrganizations.DefencePartners(campaign, attacker.Id).ToHashSet();
-        foreach (var id in partners)
+        var partners = InternationalOrganizations.DefencePartners(campaign, target.Id);
+        var attackerPartners = InternationalOrganizations.DefencePartners(campaign, attacker.Id);
+        var shared = _helpSharedPartners ??= new HashSet<int>();
+        shared.Clear();
+        for (var i = 0; i < attackerPartners.Count; i++) shared.Add(attackerPartners[i]);
+        for (var i = 0; i < partners.Count; i++)
+        {
+            var id = partners[i];
             if (id != attacker.Id && !shared.Contains(id) && campaign.NationById(id) is { Population: > 0 } partner)
                 help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, partner, refreshAssessment);
-        IEnumerable<int> friends;
+        }
+        List<int> friends;
         if (refreshAssessment)
         {
             if (!friendsOf.TryGetValue(target.Id, out var cached)) return help;
@@ -619,21 +635,27 @@ public static partial class AiStatecraft
         {
             // Viewing a page must not prime the planner's day cache. A treaty signed
             // later today must be seen by its first real strategic assessment.
-            friends = campaign.Relations.Values.Where(r =>
-                    r.A == target.Id && (r.Stance == DiplomaticStance.Allied || r.GuaranteedBy(r.B)) ||
-                    r.B == target.Id && (r.Stance == DiplomaticStance.Allied || r.GuaranteedBy(r.A)))
-                .Select(r => r.A == target.Id ? r.B : r.A);
+            friends = _helpPreviewFriends ??= new List<int>();
+            friends.Clear();
+            foreach (var r in campaign.Relations.Values)
+            {
+                if (r.A == target.Id && (r.Stance == DiplomaticStance.Allied || r.GuaranteedBy(r.B)))
+                    friends.Add(r.B);
+                else if (r.B == target.Id && (r.Stance == DiplomaticStance.Allied || r.GuaranteedBy(r.A)))
+                    friends.Add(r.A);
+            }
         }
-        foreach (var friendId in friends)
+        for (var i = 0; i < friends.Count; i++)
         {
+            var friendId = friends[i];
             if (friendId == attacker.Id) continue;
-            if (partners.Contains(friendId)) continue;
+            if (ContainsId(partners, friendId)) continue;
             var friend = campaign.NationById(friendId);
             if (friend is null || friend.Population <= 0) continue;
             var theirs = CampaignDiplomacy.Peek(campaign, attacker.Id, friendId);
             if (theirs is { Stance: DiplomaticStance.Allied }) continue;
             var commitment = theirs is { NonAggressionPact: true } ? 0.35f : 1f;
-            if (campaign.Wars.Any(w => !w.Ended && w.CivilConflict && w.Involves(friendId))) commitment *= 0.2f;
+            if (InCivilWar(campaign, friendId)) commitment *= 0.2f;
             if (campaign.FeatureEnabled("public_debt") && friend.DebtCondition >= DebtCondition.Default) commitment *= 0.5f;
             if (friend.Stability < 0.35f) commitment *= 0.5f;
             help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, friend, refreshAssessment) * commitment;
@@ -645,6 +667,24 @@ public static partial class AiStatecraft
             if (!friendsOf.TryGetValue(protectedId, out var list)) friendsOf[protectedId] = list = new List<int>();
             list.Add(friendId);
         }
+    }
+
+    [ThreadStatic] private static HashSet<int> _helpSharedPartners;
+    [ThreadStatic] private static List<int> _helpPreviewFriends;
+
+    private static bool ContainsId(IReadOnlyList<int> ids, int targetId)
+    {
+        for (var i = 0; i < ids.Count; i++)
+            if (ids[i] == targetId) return true;
+        return false;
+    }
+
+    private static bool InCivilWar(Campaign campaign, int nationId)
+    {
+        var wars = Warfare.LiveWars(campaign);
+        for (var i = 0; i < wars.Count; i++)
+            if (!wars[i].Ended && wars[i].CivilConflict && wars[i].Involves(nationId)) return true;
+        return false;
     }
 
     private static bool OnlyCivilWars(Campaign campaign, Nation nation)
@@ -794,18 +834,21 @@ public static partial class AiStatecraft
 
         // Sanctions, if we can stand to lose the trade and they cannot. A country that runs
         // more of its economy through us than we do through it is a country we can squeeze.
-        var theirDependence = rival.TradeDependenceOn(nation.Id) + CommodityLeverage.Calculate(campaign, nation, rival) * 0.5f;
-        var ourDependence = nation.TradeDependenceOn(rival.Id) + CommodityLeverage.Calculate(campaign, rival, nation) * 0.5f;
-        if (!relation.EmbargoBy(nation.Id) && relation.Opinion <= campaign.Defines.AiRivalryThreshold &&
-            theirDependence > ourDependence + campaign.Defines.AiEmbargoLeverage)
+        if (!relation.EmbargoBy(nation.Id) && relation.Opinion <= campaign.Defines.AiRivalryThreshold)
         {
-            new SetEmbargoCommand { IssuerId = nation.Id, TargetId = rival.Id, Embargo = true }.Apply(campaign);
-            Count("embargo_started");
-            return true;
+            var theirDependence = rival.TradeDependenceOn(nation.Id) + CommodityLeverage.Calculate(campaign, nation, rival) * 0.5f;
+            var ourDependence = nation.TradeDependenceOn(rival.Id) + CommodityLeverage.Calculate(campaign, rival, nation) * 0.5f;
+            if (theirDependence > ourDependence + campaign.Defines.AiEmbargoLeverage)
+            {
+                new SetEmbargoCommand { IssuerId = nation.Id, TargetId = rival.Id, Embargo = true }.Apply(campaign);
+                Count("embargo_started");
+                return true;
+            }
         }
 
         // Or shelter whoever is next on their list. A guarantee costs nothing today and is
         // the cheapest way a large country has of making a small one not worth invading.
+        if (Strength(campaign, nation) < CampaignIntel.EstimatedStrength(campaign, nation.Id, rival) * 0.85f) return false;
         Nation shelter = null;
         var mostExposed = 0f;
         foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, rival.MapIndex))
@@ -821,7 +864,6 @@ public static partial class AiStatecraft
             shelter = small;
         }
         if (shelter is null) return false;
-        if (Strength(campaign, nation) < CampaignIntel.EstimatedStrength(campaign, nation.Id, rival) * 0.85f) return false;
 
         new GuaranteeCommand { IssuerId = nation.Id, TargetId = shelter.Id, Guarantee = true }.Apply(campaign);
         Count("guarantee_issued");

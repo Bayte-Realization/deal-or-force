@@ -10,27 +10,143 @@ public static class PeacefulFormation
 {
     public static string ConsentKey(int founder, string formable) => "union_consent/" + founder + "/" + formable;
     private static string OfferKey(int founder, string formable) => "union_offer/" + founder + "/" + formable;
-    public static IEnumerable<int> Territory(Campaign campaign, FormableNation definition) =>
-        definition.RequiredProvinces.Concat(RegionProvinces(campaign, definition)).Concat(definition.RequiredTags.SelectMany(tag =>
-            campaign.ScenarioId == "2024" ? ProvinceOwnership.ProvincesOf(tag) :
-                campaign.ScenarioTerritories.GetValueOrDefault(tag, Array.Empty<int>()))).Distinct();
+
+    private static Campaign _territoryCampaign;
+    private static int _territoryMapRevision = int.MinValue;
+    private static int _territoryStateCount = -1;
+    private static readonly Dictionary<string, int[]> _territoryCache = new();
+    private static readonly Dictionary<string, HashSet<int>> _landTerritoryCache = new();
+    private static readonly HashSet<int> EmptyIntSet = new();
+
+    /// <summary>
+    /// One lock for the territory cache. It is static state shared by every caller, and the
+    /// moment a second thread exists - a worker, a parallel review - a table being refilled must
+    /// not be read by anybody else. Held only while the table is looked up or rebuilt.
+    /// </summary>
+    private static readonly object TerritoryGate = new();
+
+    public static int[] Territory(Campaign campaign, FormableNation definition)
+    {
+        if (campaign?.ProvinceMap is null || definition is null) return Array.Empty<int>();
+        lock (TerritoryGate)
+            return TerritoryUnlocked(campaign, definition);
+    }
+
+    /// <summary>
+    /// Scratch for building a definition's set of provinces. Kept per thread because the gate
+    /// above serialises the build: the set holds a few thousand ints and it used to be allocated
+    /// afresh for every definition on every change of the region layout, which measured as
+    /// 6,4 MB of garbage over twelve days for numbers that are discarded the moment the array is
+    /// published. The array itself is still fresh, because a caller keeps it.
+    /// </summary>
+    [ThreadStatic] private static HashSet<int> _territoryScratch;
+
+    private static int[] TerritoryUnlocked(Campaign campaign, FormableNation definition)
+    {
+        // Keyed on the region layout, not on MapRevision: a formable's ground is its provinces and
+        // the regions a border has carved from its named ones, none of which moves when a province
+        // is merely taken in battle - and MapRevision moves dozens of times a day in any war.
+        if (!ReferenceEquals(_territoryCampaign, campaign) || _territoryMapRevision != campaign.OwnershipRevision || _territoryStateCount != campaign.States.Count)
+        {
+            _territoryCampaign = campaign;
+            _territoryMapRevision = campaign.OwnershipRevision;
+            _territoryStateCount = campaign.States.Count;
+            _territoryCache.Clear();
+            _landTerritoryCache.Clear();
+        }
+        if (_territoryCache.TryGetValue(definition.Id, out var cached)) return cached;
+
+        var set = _territoryScratch ??= new HashSet<int>();
+        set.Clear();
+        foreach (var p in definition.RequiredProvinces) set.Add(p);
+        foreach (var p in RegionProvinces(campaign, definition)) set.Add(p);
+        foreach (var tag in definition.RequiredTags)
+        {
+            var provinces = campaign.ScenarioId == "2024"
+                ? ProvinceOwnership.ProvincesOf(tag)
+                : campaign.ScenarioTerritories.GetValueOrDefault(tag, Array.Empty<int>());
+            foreach (var p in provinces) set.Add(p);
+        }
+        var result = set.ToArray();
+        _territoryCache[definition.Id] = result;
+        return result;
+    }
+
+    internal static HashSet<int> LandTerritory(Campaign campaign, FormableNation definition)
+    {
+        if (campaign?.ProvinceMap is null || definition is null) return EmptyIntSet;
+        lock (TerritoryGate)
+        {
+            var territory = TerritoryUnlocked(campaign, definition);
+            if (_landTerritoryCache.TryGetValue(definition.Id, out var cached)) return cached;
+            var map = campaign.ProvinceMap;
+            var land = new HashSet<int>();
+            for (var i = 0; i < territory.Length; i++)
+            {
+                var p = territory[i];
+                if (p > 0 && p <= map.ProvinceCount && !map.WaterByProvince[p]) land.Add(p);
+            }
+            _landTerritoryCache[definition.Id] = land;
+            return land;
+        }
+    }
 
     /// <summary>The provinces of a formable's named regions, and of the pieces a border has
     /// since cut out of them.</summary>
-    public static IEnumerable<int> RegionProvinces(Campaign campaign, FormableNation definition)
+    public static IEnumerable<int> RegionProvinces(Campaign campaign, FormableNation definition) =>
+        RegionProvinceList(campaign, definition);
+
+    private static Campaign _regionCampaign;
+    private static int _regionRevision = int.MinValue;
+    private static int _regionStateCount = -1;
+    private static readonly Dictionary<string, int[]> _regionCache = new();
+    private static readonly object RegionGate = new();
+
+    /// <summary>
+    /// The same answer, worked out once per region layout instead of once per question.
+    ///
+    /// Evaluating one foundation asks for it, every candidate partner's refusal asks for it, and
+    /// each answer walked every province in the world and built two sets of regions. Keyed and
+    /// invalidated exactly as <see cref="Territory"/> is, so the two cannot disagree.
+    /// </summary>
+    private static int[] RegionProvinceList(Campaign campaign, FormableNation definition)
     {
-        if (definition.RequiredRegions.Length == 0 || campaign?.ProvinceMap is null) yield break;
-        var named = campaign.States.Where(s => definition.RequiredRegions.Contains(s.Id, StringComparer.OrdinalIgnoreCase))
-            .Select(s => s.MapIndex).ToHashSet();
-        var wanted = campaign.States.Where(s => named.Contains(s.MapIndex) || named.Contains(s.ParentMapIndex))
-            .Select(s => s.MapIndex).ToHashSet();
-        var map = campaign.ProvinceMap;
-        for (var p = 1; p <= map.ProvinceCount; p++)
-            if (wanted.Contains(map.ProvinceToState[p])) yield return p;
+        if (definition is null || campaign?.ProvinceMap is null || definition.RequiredRegions.Length == 0)
+            return Array.Empty<int>();
+        lock (RegionGate)
+        {
+            if (!ReferenceEquals(_regionCampaign, campaign) || _regionRevision != campaign.OwnershipRevision ||
+                _regionStateCount != campaign.States.Count)
+            {
+                _regionCampaign = campaign;
+                _regionRevision = campaign.OwnershipRevision;
+                _regionStateCount = campaign.States.Count;
+                _regionCache.Clear();
+            }
+            if (_regionCache.TryGetValue(definition.Id, out var cached)) return cached;
+            var named = campaign.States.Where(s => definition.RequiredRegions.Contains(s.Id, StringComparer.OrdinalIgnoreCase))
+                .Select(s => s.MapIndex).ToHashSet();
+            var wanted = campaign.States.Where(s => named.Contains(s.MapIndex) || named.Contains(s.ParentMapIndex))
+                .Select(s => s.MapIndex).ToHashSet();
+            var map = campaign.ProvinceMap;
+            var provinces = new List<int>();
+            for (var p = 1; p <= map.ProvinceCount; p++)
+                if (wanted.Contains(map.ProvinceToState[p])) provinces.Add(p);
+            var result = provinces.ToArray();
+            _regionCache[definition.Id] = result;
+            return result;
+        }
     }
 
-    private static bool AtPeace(Campaign campaign, Nation nation) =>
-        !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id));
+    private static bool AtPeace(Campaign campaign, Nation nation)
+    {
+        for (var i = 0; i < campaign.Wars.Count; i++)
+        {
+            var w = campaign.Wars[i];
+            if (!w.Ended && w.Involves(nation.Id)) return false;
+        }
+        return true;
+    }
 
     // An observer watches; nobody sits at the country's desk to answer an invitation, so the
     // country answers it the way any government nobody plays would. Asked, it was handed a
@@ -60,10 +176,19 @@ public static class PeacefulFormation
     {
         var ours = DemographyCatalog.PrimaryCultures(founder.Tag);
         var theirs = DemographyCatalog.PrimaryCultures(partner.Tag);
-        if (ours.Any(a => theirs.Contains(a, StringComparer.OrdinalIgnoreCase))) return 1f;
-        var groups = ours.Select(a => DemographyCatalog.Culture(a)?.Group)
-            .Where(g => !string.IsNullOrWhiteSpace(g)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return theirs.Any(a => groups.Contains(DemographyCatalog.Culture(a)?.Group ?? "")) ? .5f : 0f;
+        // Two handfuls of names: walked directly. This was three LINQ pipelines and a HashSet
+        // built per pair, and it is asked once per candidate partner of every foundation.
+        foreach (var a in ours)
+            foreach (var b in theirs)
+                if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase)) return 1f;
+        foreach (var a in ours)
+        {
+            var group = DemographyCatalog.Culture(a)?.Group;
+            if (string.IsNullOrWhiteSpace(group)) continue;
+            foreach (var b in theirs)
+                if (string.Equals(DemographyCatalog.Culture(b)?.Group, group, StringComparison.OrdinalIgnoreCase)) return .5f;
+        }
+        return 0f;
     }
 
     public static float Willingness(Campaign campaign, Nation founder, Nation partner)
@@ -94,11 +219,31 @@ public static class PeacefulFormation
         if (!FormableNations.ReligionMandate(campaign, founder, definition))
             return "The founder lacks the required religious population mandate.";
         var map = campaign.ProvinceMap;
-        if (!Territory(campaign, definition).Any(p => p > 0 && p <= map.ProvinceCount && map.ProvinceToNation[p] == partner.MapIndex))
+        var territory = Territory(campaign, definition);
+        var ownsTerritory = false;
+        for (var i = 0; i < territory.Length; i++)
+        {
+            var p = territory[i];
+            if (p > 0 && p <= map.ProvinceCount && map.ProvinceToNation[p] == partner.MapIndex)
+            {
+                ownsTerritory = true;
+                break;
+            }
+        }
+        if (!ownsTerritory)
             return "The partner owns no territory required for this foundation.";
         if (Consented(campaign, founder, partner, definition)) return "The accession treaty is already signed.";
-        if (campaign.PendingEvents.Any(e => e.NationId == partner.Id && e.Options.Any(o => o.UnionFounderId == founder.Id && o.UnionFormableId == definition.Id)))
-            return "The partner is considering the invitation.";
+        for (var i = 0; i < campaign.PendingEvents.Count; i++)
+        {
+            var e = campaign.PendingEvents[i];
+            if (e.NationId != partner.Id) continue;
+            for (var oi = 0; oi < e.Options.Length; oi++)
+            {
+                var o = e.Options[oi];
+                if (o.UnionFounderId == founder.Id && o.UnionFormableId == definition.Id)
+                    return "The partner is considering the invitation.";
+            }
+        }
         if (partner.DecisionAvailableDay.GetValueOrDefault(OfferKey(founder.Id, definition.Id)) > campaign.ElapsedDays)
             return "This partner was approached recently.";
         if ((CampaignDiplomacy.Peek(campaign, founder.Id, partner.Id)?.Opinion ?? 0f) < campaign.Defines.UnionMinimumOpinion)

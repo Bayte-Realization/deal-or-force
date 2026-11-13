@@ -81,10 +81,20 @@ static class MovementPowerFingerprintTests
         // Pin one current value, not an accumulating allowance of historical goldens.
         var withoutMovement = CampaignFingerprint.Of(Fixture(movement: false));
         // 2 November: MergeFleetsCommand and SplitFleetCommand joined the navy feature table.
-        Check(withoutMovement == 0x69654ABCA8CA3DF6UL,
+        // 10 November: SeaLiftCommand joined it too; removing exactly that binding gives back the
+        // 2 November pair (0x69654ABCA8CA3DF6, 0x22A558E6BC330E2E), checked just below.
+        foreach (var movement in new[] { false, true })
+        {
+            var withoutLift = Fixture(movement);
+            withoutLift.Defines.FeatureCommands.Remove("SeaLiftCommand");
+            var liftless = CampaignFingerprint.Of(withoutLift);
+            Check(liftless == (movement ? 0x22A558E6BC330E2EUL : 0x69654ABCA8CA3DF6UL),
+                $"removing exactly the SeaLiftCommand binding restores the 2 November golden: {movement} (got 0x{liftless:X16})");
+        }
+        Check(withoutMovement == 0xFA0A897F24B60B66UL,
             $"a world without movement state retains the current catalogue golden fingerprint (got 0x{withoutMovement:X16})");
         var withMovement = CampaignFingerprint.Of(Fixture());
-        Check(withMovement == 0x22A558E6BC330E2EUL,
+        Check(withMovement == 0x568E463C8CB67FFEUL,
             $"an empty legacy movement retains the current presence and militancy fingerprint (got 0x{withMovement:X16})");
         MechanicFeatures.BuiltIns.Remove("land_arrangements");
         try
@@ -95,6 +105,7 @@ static class MovementPowerFingerprintTests
             beforeLand.Defines.Features.Remove("land_arrangements");
             beforeLand.Defines.FeatureCommands.Remove("LandArrangementCommand");
             beforeLand.Defines.FeatureCommands.Remove("MergeFleetsCommand"); beforeLand.Defines.FeatureCommands.Remove("SplitFleetCommand");
+            beforeLand.Defines.FeatureCommands.Remove("SeaLiftCommand");
             beforeLand.Defines.FeatureSystems.Remove("LandArrangementSystem");
             var beforeLandPrint = CampaignFingerprint.Of(beforeLand);
             Check(beforeLandPrint == (movement ? 0x6DFF324AB26F9608UL : 0x9FA0DB7DB966B9C4UL),

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DealOrForce.Simulation;
@@ -38,6 +39,7 @@ public static partial class AiStatecraft
         var nuclearEnemy = false;
         foreach (var id in war.Side(true))
             if (campaign.NationById(id) is { } enemy && Simulation.Deterrence.TierOf(campaign, enemy) > 0) { nuclearEnemy = true; break; }
+        var defencePartners = nuclearEnemy ? InternationalOrganizations.DefencePartners(campaign, nation.Id) : null;
         Nation best = null;
         var bestWillingness = float.NegativeInfinity;
         foreach (var donor in campaign.Nations)
@@ -49,7 +51,7 @@ public static partial class AiStatecraft
             // defence charter, an overlord. A guarantor or a worried neighbour sends money and
             // arms instead (ForeignAssistance). Without this a guarantor walked into Russia's war
             // with Ukraine, three great powers made it a world war, and the blocs followed.
-            if (nuclearEnemy && !Sworn(campaign, nation, donor)) continue;
+            if (nuclearEnemy && !Sworn(campaign, nation, donor, defencePartners)) continue;
             var assessment = WarInterventions.CanSubmit(campaign, nation.Id, donor.Id, war.Id);
             if (!assessment.Allowed || assessment.Willingness <= bestWillingness) continue;
             best = donor;
@@ -66,10 +68,10 @@ public static partial class AiStatecraft
     }
 
     /// <summary>Bound to come by more than goodwill: an alliance, a shared defence charter, or rule over us.</summary>
-    private static bool Sworn(Campaign campaign, Nation nation, Nation donor) =>
+    private static bool Sworn(Campaign campaign, Nation nation, Nation donor, IReadOnlyList<int> defencePartners) =>
         nation.AnswersTo(donor.Id) ||
         CampaignDiplomacy.Peek(campaign, nation.Id, donor.Id) is { Stance: DiplomaticStance.Allied } ||
-        InternationalOrganizations.DefencePartners(campaign, nation.Id).Contains(donor.Id);
+        (defencePartners is not null && defencePartners.Contains(donor.Id));
 
     /// <summary>The defending leader, losing ground to a side no weaker than its own, or facing a side plainly stronger.</summary>
     internal static bool InTrouble(Campaign campaign, Nation nation, StrategicWar war)

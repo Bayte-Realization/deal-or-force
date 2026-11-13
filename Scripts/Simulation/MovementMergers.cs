@@ -40,17 +40,29 @@ public static class MovementMergers
 {
     public static void Tick(Campaign c)
     {
-        if (!c.StepOpensNewDay || c.ElapsedDays % 30 != 17 || !c.FeatureEnabled("movements")) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same monthly merge/absorb pass, yielded between its halves.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (!c.StepOpensNewDay || c.ElapsedDays % 30 != 17 || !c.FeatureEnabled("movements")) yield break;
         var active = c.Nations.Where(n => n.Movement is { Dissolved: false, Landless: true, Exile: false } && !n.IsHuman)
             .OrderBy(n => n.Id).ToList();
-        if (c.Defines.MovementMergeChance > 0f) Merge(c, active);
+        if (c.Defines.MovementMergeChance > 0f)
+        {
+            foreach (var _ in MergeStages(c, active)) yield return 0;
+            yield return 0;
+        }
         if (c.Defines.MovementAbsorbChance > 0f) Absorb(c, active.Where(n => n.Movement is { Dissolved: false }).ToList());
     }
 
-    private static void Merge(Campaign c, List<Nation> active)
+    private static IEnumerable<int> MergeStages(Campaign c, List<Nation> active)
     {
         var gone = new HashSet<int>();
         for (var i = 0; i < active.Count; i++)
+        {
+            if (i > 0 && i % 16 == 0) yield return 0;
             for (var j = i + 1; j < active.Count; j++)
             {
                 var a = active[i]; var b = active[j];
@@ -63,6 +75,7 @@ public static class MovementMergers
                 Join(c, big, small);
                 gone.Add(small.Id);
             }
+        }
     }
 
     private static float Weight(Nation n) => n.Movement.Cadres + n.Movement.Support.Values.DefaultIfEmpty(0f).Max() * 100_000f;

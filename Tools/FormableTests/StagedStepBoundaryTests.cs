@@ -88,9 +88,22 @@ static class StagedStepBoundaryTests
         var completed = 0;
         campaign.StepCompleted += _ => completed++;
         campaign.Commands.Enqueue(new SetTaxRateCommand { IssuerId = campaign.Player.Id, Value = .25f });
+        var whole = World();
+        whole.Commands.Enqueue(new SetTaxRateCommand { IssuerId = whole.Player.Id, Value = .25f });
+        whole.Tick();
+        var expected = CampaignFingerprint.Of(whole);
         var frames = 0;
+        // StepFor(0) deliberately executes one yield at a time. This is a finite-work
+        // guard, not a frame-time SLA. Finer diplomatic stages raised this map-attached
+        // fixture from 886 to 1092 yields, also in the pre-reunion-fix assembly. A
+        // separate bounded probe verified the exact whole-step fingerprint in both.
+        // Keep a finite-work guard and exact state comparison, not a budget of frames.
+        const int maxSlices = 2000;
         while (!campaign.StepFor(0))
-            if (++frames > 500) throw new Exception("Staged step did not finish within its bounded passes.");
+            if (++frames > maxSlices) throw new Exception("Staged step did not finish within its bounded passes.");
+        Console.WriteLine($"STAGED_BOUNDARY_SLICES passes={frames + 1} limit={maxSlices}");
+        Check(CampaignFingerprint.Of(campaign) == expected,
+            "the queued staged day has exactly the whole-step world, not only the expected tax");
         Check(completed == 1 && campaign.ElapsedDays == 1 && campaign.AssistanceLastTickDay == 1 && campaign.Player.TaxRate == .25f,
             "an order queued before a staged day applies without reentering or discarding the day");
         campaign.IsPaused = true;

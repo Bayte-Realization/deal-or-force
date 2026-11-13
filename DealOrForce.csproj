@@ -51,6 +51,34 @@
     <DebugType>portable</DebugType>
     <TieredPGO>true</TieredPGO>
     <!--
+      The garbage collector is a frame cost here, not a footnote. A late campaign holds a
+      six-to-eight-hundred megabyte managed heap, and workstation collection pauses it in the
+      middle of a step: measured on a fifty-year save, everything outside the staged passes -
+      collection and the iterator plumbing together - was 200-460 ms of a ~900 ms day, and the
+      player sees those pauses as freezes.
+
+      Server collection is the same work done by every core at once. On the same save, ten days,
+      same build: time outside the passes fell to 79-120 ms a day and the settled day to 763 ms,
+      and over those ten days the collector ran not at all - gen0/gen1/gen2 stayed at zero while
+      the heap grew 746 -> 855 MB.
+
+      That is the trade: pauses nearly gone, memory higher and slowly growing until a rare
+      collection. Accepted deliberately. If a low-memory machine complains, either set
+      GCHeapHardLimit to bound it from above or put this back to false - one line, no other
+      change. See docs/LANGUAGES_AND_PARALLELISM_2026_11_11_RU.md.
+    -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <!--
+      The safety net for the setting above. Server collection with a large gen0 budget spends
+      memory instead of pausing, so the heap is bounded from above by runtimeconfig.template.json
+      (`System.GC.HeapHardLimit`, 4 GiB). The number is deliberately generous: the largest heap
+      ever observed in a player's own log was 1.22 GB, and the ten-day measurement above reached
+      0.86 GB. Four gigabytes cannot be hit in normal play, so it costs nothing; what it buys is
+      that a runaway world collects instead of asking the machine for more until the machine says
+      no. Lower it only with a measurement in hand, and never below the observed peak.
+    -->
+    <!--
       Play from the editor was sitting on "Building C# project" with no end.
       The shared Roslyn server keeps one pipe for every Godot, and a second
       game left running makes the next build wait on that pipe forever.

@@ -92,7 +92,7 @@ public static partial class Corridors
         foreach (var id in regions)
         {
             if (id == nation.CapitalStateMapIndex) return null;
-            var state = c.States.Find(candidate => candidate.MapIndex == id);
+            var state = c.StateByMapIndex(id);
             if (state is not null && TerritorialClaims.TitleOf(c, nation, state) == TerritorialTitle.Homeland) return null;
         }
         return regions;
@@ -112,9 +112,25 @@ public static partial class Corridors
                 around[owner] = around.GetValueOrDefault(owner) + 1;
             }
         if (around.Count == 0) return false;
-        var ordered = around.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).ToArray();
-        if (ordered.Length > 1 && ordered[0].Value == ordered[1].Value) return false;
-        holder = c.Nations.Find(candidate => candidate.MapIndex == ordered[0].Key);
+        var bestKey = -1;
+        var bestCount = -1;
+        var tie = false;
+        foreach (var entry in around)
+        {
+            if (entry.Value > bestCount)
+            {
+                bestCount = entry.Value;
+                bestKey = entry.Key;
+                tie = false;
+            }
+            else if (entry.Value == bestCount)
+            {
+                tie = true;
+                if (entry.Key < bestKey) bestKey = entry.Key;
+            }
+        }
+        if (tie) return false;
+        holder = c.NationByMapIndex(bestKey);
         return holder is not null && holder.Id != nation.Id;
     }
 

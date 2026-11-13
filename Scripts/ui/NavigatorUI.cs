@@ -251,7 +251,12 @@ public partial class DealOrForceGame
         {
             if (++cities > 12) break;
             var captured = city;
-            var country = _campaign.NationByTag(city.Country)?.DisplayName ?? city.Country;
+            // Whose it is now: the holder of the ground under it, and the region it stands in.
+            var province = Simulation.CityCatalog.ProvinceUnder(_campaign.ProvinceMap, city.Latitude, city.Longitude);
+            var holder = province > 0 && province < _campaign.ProvinceController.Length
+                ? _campaign.NationByMapIndex(_campaign.ProvinceController[province]) : null;
+            var region = province > 0 ? _campaign.States.Find(s => s.MapIndex == _campaign.ProvinceMap.ProvinceToState[province]) : null;
+            var country = string.Join(" · ", new[] { region?.DisplayName, holder?.DisplayName }.Where(t => !string.IsNullOrEmpty(t)));
             yield return new NavigatorEntry("Cities", city.DisplayName, country,
                 () => _globe?.FocusOn(captured.Latitude, captured.Longitude, 7f));
         }

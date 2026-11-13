@@ -39,49 +39,27 @@ public sealed partial class Defines
 
 public static partial class AiStatecraft
 {
-    private static readonly List<Nation> FriendlyCandidates = new();
-    private static readonly HashSet<int> TouchingRegions = new();
+    [ThreadStatic] private static List<Nation> _friendlyCandidatesScratch;
+    [ThreadStatic] private static Dictionary<int, float> _friendlyOpinionScratch;
+    [ThreadStatic] private static HashSet<int> _touchingRegionsScratch;
+    [ThreadStatic] private static bool[] _hedgeEligibleScratch;
 
-    /// <summary>
-    /// Which land provinces each country owns, and which region a map index names - built once
-    /// a day rather than rediscovered on every question.
-    ///
-    /// The kindred-land check asks "does any region that touches us belong to somebody else".
-    /// It used to answer by walking all thirty-five thousand provinces and their ninety-two
-    /// thousand edges, for every country, every week, and then searching the region list
-    /// linearly once per bordering region. Measured, that was 784 ms of a 5.5-second thirty-day
-    /// run - a seventh of the whole simulation, spent on a question that only ever concerns the
-    /// asking country's own border. The answer is the same; only the walking is gone.
-    ///
-    /// Keyed on the day and on how many regions the world has, because ownership changes when a
-    /// border does, and a border that moves almost always changes the region list with it. A
-    /// stale entry can only ever cost the check one week's delay, and every later gate in it -
-    /// who owns the region, whether we are at war with them, whether it is their capital - is
-    /// asked fresh.
-    /// </summary>
-    private static Dictionary<int, int[]> _ownedProvinces;
-    private static Dictionary<int, ScenarioState> _stateByMapIndex;
-    private static Campaign _geographyCampaign;
-    private static int _geographyWeek = int.MinValue;
-    private static int _geographyStates = -1;
+    private static List<Nation> FriendlyCandidates => _friendlyCandidatesScratch ??= new();
+    private static Dictionary<int, float> FriendlyOpinion => _friendlyOpinionScratch ??= new();
+    private static HashSet<int> TouchingRegions => _touchingRegionsScratch ??= new();
 
     private static void EnsureGeography(Campaign campaign)
     {
-        // Keyed on the campaign, the week and how many regions the world has. Ownership can
-        // move without the region count changing - a region sold from one country to another
-        // leaves the count alone - and a week's staleness only ever costs this optional
-        // purchase one week's delay. The old day key rebuilt a 35,000 province dictionary
-        // and its owner arrays every morning even when nothing had moved; the same table
-        // answers all week, and every later gate asks fresh who owns the region.
+        var tables = TablesOf(campaign);
         var week = campaign.ElapsedDays / 7;
-        if (ReferenceEquals(_geographyCampaign, campaign) && _geographyWeek == week &&
-            _geographyStates == campaign.States.Count) return;
-        _geographyCampaign = campaign;
-        _geographyWeek = week;
-        _geographyStates = campaign.States.Count;
-        _stateByMapIndex = new Dictionary<int, ScenarioState>(campaign.States.Count);
-        foreach (var state in campaign.States) _stateByMapIndex[state.MapIndex] = state;
-        _ownedProvinces = new Dictionary<int, int[]>();
+        if (tables.GeographyWeek == week && tables.GeographyStates == campaign.States.Count) return;
+        tables.GeographyWeek = week;
+        tables.GeographyStates = campaign.States.Count;
+        var stateByMap = tables.StateByMapIndex ??= new Dictionary<int, ScenarioState>(campaign.States.Count);
+        stateByMap.Clear();
+        foreach (var state in campaign.States) stateByMap[state.MapIndex] = state;
+        var owned = tables.OwnedProvinces ??= new Dictionary<int, int[]>();
+        owned.Clear();
         var map = campaign.ProvinceMap;
         if (map is null || campaign.ProvinceController is null) return;
         var buckets = new Dictionary<int, List<int>>();
@@ -92,20 +70,24 @@ public static partial class AiStatecraft
             if (!buckets.TryGetValue(owner, out var list)) buckets[owner] = list = new List<int>();
             list.Add(province);
         }
-        foreach (var (owner, list) in buckets) _ownedProvinces[owner] = list.ToArray();
+        foreach (var (owner, list) in buckets) owned[owner] = list.ToArray();
     }
 
     /// <summary>Use the same bilateral rules as a player, spending at most one diplomatic move.</summary>
-    internal static bool TryFriendlyMove(Campaign campaign, Nation nation, Nation friend)
+    internal static bool TryFriendlyMove(Campaign campaign, Nation nation, Nation friend,
+        DiplomaticOutreach.OfferScan missionScan = null, AllianceSystem.OfferScan allianceScan = null)
     {
         if (campaign is null || nation is null || friend is null || nation.Id == friend.Id) return false;
-        var relation = CampaignDiplomacy.Get(campaign, nation.Id, friend.Id);
-        if (relation.Stance == DiplomaticStance.AtWar) return false;
+        // The weekly list already kept only countries we have a tie with. Reading it must not
+        // wake or insert another. A move that writes gets its own relation at that command.
+        var relation = CampaignDiplomacy.Peek(campaign, nation.Id, friend.Id);
+        if (relation is null || relation.Stance == DiplomaticStance.AtWar) return false;
         var opinion = relation.Opinion;
         var defines = campaign.Defines;
         // Ask only for a useful bridge to a live opponent, never collect transit treaties
         // around the world. Human neighbours still decide through their inbox.
-        if (opinion >= 0f && MilitaryAccess.TryWarTransit(campaign, nation, friend)) return true;
+        using (SimProfiler.Measure("      dip:transit"))
+            if (opinion >= 0f && MilitaryAccess.TryWarTransit(campaign, nation, friend)) return true;
         // How readily this country reaches out at all. A sociable state offers trade, a pact
         // and an alliance at a lower opinion than a hermit does, and the profile says which it
         // is; the thresholds stay the world's, this only bends them per country.
@@ -151,9 +133,10 @@ public static partial class AiStatecraft
             }
         }
 
+        using (SimProfiler.Measure("      dip:missions"))
         if (campaign.Defines.DiplomaticMissionsEnabled && nation.PoliticalPoints >= 18f && nation.Treasury >= 0.2f &&
             opinion < allianceThreshold && DiplomaticOutreach.Of(relation, nation.Id) is null &&
-            DiplomaticOutreach.Refusal(campaign, nation.Id, friend.Id).Length == 0 &&
+            DiplomaticOutreach.Refusal(campaign, nation.Id, friend.Id, true, missionScan).Length == 0 &&
             (nation.TradeDependenceOn(friend.Id) > 0.02f || CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, friend.MapIndex) || opinion >= 10f))
         {
             var command = new ImproveRelationsCommand { IssuerId = nation.Id, TargetId = friend.Id, Active = true };
@@ -165,16 +148,20 @@ public static partial class AiStatecraft
             }
         }
 
-        if (opinion >= tradeThreshold &&
-            TryAgreement(campaign, nation, friend, AgreementKind.TradeAgreement)) return true;
-        if (opinion >= pactThreshold &&
-            TryAgreement(campaign, nation, friend, AgreementKind.NonAggressionPact)) return true;
+        using (SimProfiler.Measure("      dip:agreements"))
+        {
+            if (opinion >= tradeThreshold &&
+                TryAgreement(campaign, nation, friend, AgreementKind.TradeAgreement)) return true;
+            if (opinion >= pactThreshold &&
+                TryAgreement(campaign, nation, friend, AgreementKind.NonAggressionPact)) return true;
+        }
 
+        using (SimProfiler.Measure("      dip:alliances"))
         if (relation.Stance != DiplomaticStance.Allied && opinion >= allianceThreshold &&
-            !InternationalOrganizations.DefencePartners(campaign, nation.Id).Contains(friend.Id) &&
-            AllianceSystem.CanPropose(campaign, nation, friend, out _) &&
-            AllianceSystem.Willingness(campaign, nation, friend, refreshAssessment: false) > defines.AllianceWillingness &&
-            (friend.IsHuman || AllianceSystem.Willingness(campaign, friend, nation, refreshAssessment: false) > defines.AllianceWillingness))
+            AllianceSystem.CanProposeQuiet(campaign, nation, friend, preview: true) &&
+            !HasId(InternationalOrganizations.DefencePartners(campaign, nation.Id), friend.Id) &&
+            AllianceSystem.Willingness(campaign, nation, friend, null, false, allianceScan) > defines.AllianceWillingness &&
+            (friend.IsHuman || AllianceSystem.Willingness(campaign, friend, nation, null, false, allianceScan) > defines.AllianceWillingness))
         {
             // Ask only when the commitment benefits us and does not duplicate a defence
             // charter. An AI recipient uses the same acceptance score as a player offer;
@@ -184,9 +171,11 @@ public static partial class AiStatecraft
             return true;
         }
 
-        if (TryAid(campaign, nation, friend, relation)) return true;
+        using (SimProfiler.Measure("      dip:aid"))
+            if (TryAid(campaign, nation, friend, relation)) return true;
         // Optional visits and exchanges must not pre-empt the ally's existing
         // reserve-aware aid decision (or spend the operating cash it protects).
+        using (SimProfiler.Measure("      dip:acts"))
         if (opinion >= 15f && relation.Stance != DiplomaticStance.Allied &&
             DiplomaticActs.TryAi(campaign, nation, friend)) return true;
         // Warming a tie into friendship is a real move with a real price, and the price is the
@@ -199,6 +188,7 @@ public static partial class AiStatecraft
         if (!defines.DiplomaticMissionsEnabled && relation.Stance == DiplomaticStance.Neutral &&
             opinion >= 35f && campaign.ElapsedDays - relation.LastActionDay >= 14 && nation.Treasury >= 0.1f)
         {
+            relation = CampaignDiplomacy.Get(campaign, nation.Id, friend.Id);
             nation.Treasury -= 0.1f;
             relation.LastActionDay = campaign.ElapsedDays;
             relation.Stance = DiplomaticStance.Friendly;
@@ -211,7 +201,7 @@ public static partial class AiStatecraft
 
     private static bool TryAgreement(Campaign campaign, Nation asking, Nation asked, AgreementKind kind)
     {
-        if (!AgreementSystem.CanPropose(campaign, asking, asked, kind, out _)) return false;
+        if (!AgreementSystem.CanProposeQuiet(campaign, asking, asked, kind)) return false;
         // A player answers for themselves: the offer goes on their table and waits, and the
         // computer spends its move on it exactly as it does on an offer to another computer. It
         // used to be that the computer never asked a player for anything short of an alliance,
@@ -245,10 +235,22 @@ public static partial class AiStatecraft
         if (relation.Stance != DiplomaticStance.Allied &&
             relation.Opinion < defines.AiAidFriendshipThreshold) return false;
         var fiscal = AiFiscalPolicy.Assess(campaign, giver, defines.AiAidReserveOfGdp);
-        if (!fiscal.CanSpend) { Count("aid_fiscal_" + fiscal.Reason); return false; }
+        if (!fiscal.CanSpend)
+        {
+            Count(fiscal.Reason switch
+            {
+                AiFiscalReason.Ready => "aid_fiscal_Ready",
+                AiFiscalReason.InvalidAccounts => "aid_fiscal_InvalidAccounts",
+                AiFiscalReason.OverdueBills => "aid_fiscal_OverdueBills",
+                AiFiscalReason.DebtWorkout => "aid_fiscal_DebtWorkout",
+                AiFiscalReason.ShortRunway => "aid_fiscal_ShortRunway",
+                _ => "aid_fiscal_" + fiscal.Reason
+            });
+            return false;
+        }
         var crisis = recipient.Treasury < recipient.Gdp * defines.AiAidCrisisTreasuryOfGdp;
         if (!crisis)
-            foreach (var war in campaign.Wars)
+            foreach (var war in Warfare.LiveWars(campaign))
                 if (!war.Ended && war.Involves(recipient.Id) && !war.Involves(giver.Id))
                 {
                     crisis = true;
@@ -281,13 +283,14 @@ public static partial class AiStatecraft
             (!campaign.Homelands.TryGetValue(buyer.Id, out var homes) || homes.Count == 0)) return false;
         EnsureDailyTables(campaign);
         EnsureGeography(campaign);
+        var geoTables = TablesOf(campaign);
         var map = campaign.ProvinceMap;
         // Instance state, reused: this runs for every country with a kindred border, and a
         // fresh HashSet per call was pure garbage for an answer that is consumed immediately.
         TouchingRegions.Clear();
         // Only our own ground, and only its edges. The old walk of every province in the world
         // is gone; what is left is the same question asked of the same provinces.
-        if (!_ownedProvinces.TryGetValue(buyer.MapIndex, out var ours)) return false;
+        if (geoTables.OwnedProvinces is null || !geoTables.OwnedProvinces.TryGetValue(buyer.MapIndex, out var ours)) return false;
         foreach (var province in ours)
         {
             foreach (var next in map.Neighbors[province])
@@ -304,7 +307,7 @@ public static partial class AiStatecraft
         var bestScore = float.NegativeInfinity;
         foreach (var region in TouchingRegions)
         {
-            if (!_stateByMapIndex.TryGetValue(region, out var state)) continue;
+            if (geoTables.StateByMapIndex is null || !geoTables.StateByMapIndex.TryGetValue(region, out var state)) continue;
             if (state is null || state.Population <= 0 || state.NationMapIndex == buyer.MapIndex) continue;
             // The day's own index rather than a linear search of every country in the world for
             // every region on the border.
@@ -313,8 +316,6 @@ public static partial class AiStatecraft
             if (state.MapIndex == owner.CapitalStateMapIndex) continue;
             if (CampaignDiplomacy.AtWar(campaign, buyer.Id, owner.Id)) continue;
             if (!owner.IsHuman && Ultimatum.ProtectsHomelandSale(campaign, owner, state)) continue;
-            var key = "kindred/" + owner.Id;
-            if (buyer.DecisionAvailableDay.GetValueOrDefault(key) > campaign.ElapsedDays) continue;
             long ourPeople = 0;
             foreach (var group in state.PopulationGroups)
                 if (DemographyCatalog.IsPrimary(buyer.Tag, group.Culture)) ourPeople += group.Size;
@@ -324,6 +325,8 @@ public static partial class AiStatecraft
             if (!recovery && share < campaign.Defines.AiKindredShare) continue;
             var score = share + (recovery ? 2f : 0f);
             if (score < bestScore || score == bestScore && best is not null && state.MapIndex > best.MapIndex) continue;
+            if (buyer.DecisionAvailableDay.Count > 0 &&
+                buyer.DecisionAvailableDay.GetValueOrDefault("kindred/" + owner.Id) > campaign.ElapsedDays) continue;
             bestScore = score;
             best = state;
             seller = owner;
@@ -342,6 +345,37 @@ public static partial class AiStatecraft
             return false;
         Count("kindred_land");
         return true;
+    }
+
+    private static readonly string[] SupplyHedgeKeys = BuildSupplyHedgeKeys();
+    private static string[] BuildSupplyHedgeKeys()
+    {
+        var values = (Commodity[])Enum.GetValues(typeof(Commodity));
+        var max = 0;
+        for (var i = 0; i < values.Length; i++)
+            if ((int)values[i] > max) max = (int)values[i];
+        var keys = new string[max + 1];
+        for (var i = 0; i < values.Length; i++)
+        {
+            var v = (int)values[i];
+            if (v >= 0) keys[v] = "supply_hedge/" + v;
+        }
+        return keys;
+    }
+
+    private static readonly Func<Commodity, string> SupplyHedgeKeyLookup = SupplyHedgeKey;
+
+    private static bool HasId(IReadOnlyList<int> ids, int targetId)
+    {
+        for (var i = 0; i < ids.Count; i++)
+            if (ids[i] == targetId) return true;
+        return false;
+    }
+
+    private static string SupplyHedgeKey(Commodity good)
+    {
+        var idx = (int)good;
+        return (uint)idx < (uint)SupplyHedgeKeys.Length ? SupplyHedgeKeys[idx] ?? ("supply_hedge/" + idx) : "supply_hedge/" + idx;
     }
 
     /// <summary>
@@ -368,7 +402,7 @@ public static partial class AiStatecraft
         {
             if (!float.IsFinite(quote.Demand) || quote.Demand <= .001f ||
                 !float.IsFinite(quote.Imports) || quote.Imports <= .001f) continue;
-            if (nation.DecisionAvailableDay.GetValueOrDefault("supply_hedge/" + (int)quote.Commodity) > campaign.ElapsedDays)
+            if (nation.DecisionAvailableDay.GetValueOrDefault(SupplyHedgeKey(quote.Commodity)) > campaign.ElapsedDays)
                 continue;
             if (quote.Satisfaction < shortAt || quote.Imports / quote.Demand >= 0.5f)
             {
@@ -378,43 +412,67 @@ public static partial class AiStatecraft
         }
         if (!anyCandidateGood) return false;
 
-        EconomicExposure.Row chosen = null;
-        foreach (var row in EconomicExposure.Read(campaign, nation))
-        {
-            if (nation.DecisionAvailableDay.GetValueOrDefault("supply_hedge/" + (int)row.Good) > campaign.ElapsedDays)
-                continue;
-            var shortOf = float.IsFinite(row.Satisfaction) && row.Satisfaction < shortAt;
-            var concentrated = row.Suppliers.Length > 0 && row.LargestImportShare + 0.0001f >= line;
-            var unnamed = row.Suppliers.Length == 0 && row.Imports > 0.001f;
-            if (concentrated && (shortOf || row.ImportShare >= 0.5f) || unnamed && shortOf)
-            {
-                if (chosen is null || row.LargestImportShare > chosen.LargestImportShare ||
-                    row.LargestImportShare == chosen.LargestImportShare && (int)row.Good < (int)chosen.Good)
-                    chosen = row;
-            }
-        }
-        if (chosen is null) return false;
+        if (!EconomicExposure.TryPickHedgeCandidate(campaign, nation, line, shortAt,
+                nation.DecisionAvailableDay, campaign.ElapsedDays, SupplyHedgeKeyLookup, out var chosen))
+            return false;
 
-        var dominant = chosen.Suppliers.Length > 0 ? chosen.Suppliers[0].NationId : -1;
-        Nation alternate = null;
-        if (chosen.Suppliers.Length > 1)
-            alternate = campaign.NationById(chosen.Suppliers[1].NationId);
-        if (!CanHedgeWith(campaign, nation, alternate, dominant))
+        var blockedOffers = CollectPendingDealPartners(campaign, nation.Id);
+        var dominant = chosen.TopSupplierId;
+        Nation alternate = chosen.SecondSupplierId >= 0 ? campaign.NationById(chosen.SecondSupplierId) : null;
+        if (!CanHedgeWith(campaign, nation, alternate, dominant, blockedOffers))
         {
             alternate = null;
-            foreach (var other in campaign.Nations)
+            var nations = campaign.Nations;
+            var count = nations.Count;
+            if (count >= DeterministicParallel.MinItems && DeterministicParallel.Enabled(campaign))
             {
-                if (other.Id == nation.Id || other.Id == dominant) continue;
-                if (alternate is not null && other.Id >= alternate.Id) continue;
-                if (!other.Market.TryGetValue(chosen.Good, out var quote)) continue;
-                if (quote.Production - quote.Demand <= 0.0001f) continue;
-                if (!CanHedgeWith(campaign, nation, other, dominant)) continue;
-                alternate = other;
+                campaign.StatesOf(0);
+                Warfare.LiveWars(campaign);
+                campaign.HasOwnedLand(nation);
+                if (_hedgeEligibleScratch is null || _hedgeEligibleScratch.Length < count)
+                    _hedgeEligibleScratch = new bool[Math.Max(count, 64)];
+                var eligible = _hedgeEligibleScratch;
+                var good = chosen.Good;
+                DeterministicParallel.For(campaign, 0, count, i =>
+                {
+                    var other = nations[i];
+                    if (other.Id == nation.Id || other.Id == dominant ||
+                        other.Population <= 0 || other.Movement is not null ||
+                        (blockedOffers is not null && blockedOffers.Contains(other.Id)) ||
+                        !other.Market.TryGetValue(good, out var quote) ||
+                        quote.Production - quote.Demand <= 0.0001f)
+                    {
+                        eligible[i] = false;
+                        return;
+                    }
+                    eligible[i] = CanHedgeWith(campaign, nation, other, dominant, blockedOffers);
+                });
+                for (var i = 0; i < count; i++)
+                {
+                    if (!eligible[i]) continue;
+                    var other = nations[i];
+                    if (alternate is null || other.Id < alternate.Id) alternate = other;
+                }
+            }
+            else
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    var other = nations[i];
+                    if (other.Id == nation.Id || other.Id == dominant) continue;
+                    if (other.Population <= 0 || other.Movement is not null) continue;
+                    if (alternate is not null && other.Id >= alternate.Id) continue;
+                    if (blockedOffers is not null && blockedOffers.Contains(other.Id)) continue;
+                    if (!other.Market.TryGetValue(chosen.Good, out var quote)) continue;
+                    if (quote.Production - quote.Demand <= 0.0001f) continue;
+                    if (!CanHedgeWith(campaign, nation, other, dominant, blockedOffers)) continue;
+                    alternate = other;
+                }
             }
         }
         if (alternate is null) return false;
 
-        var key = "supply_hedge/" + (int)chosen.Good;
+        var key = SupplyHedgeKey(chosen.Good);
         if (alternate.IsHuman)
         {
             if (!campaign.FeatureEnabled("deals") || campaign.ProvinceMap is null) return false;
@@ -430,7 +488,7 @@ public static partial class AiStatecraft
         }
         else
         {
-            if (!AgreementSystem.CanPropose(campaign, nation, alternate, AgreementKind.TradeAgreement, out _))
+            if (!AgreementSystem.CanProposeQuiet(campaign, nation, alternate, AgreementKind.TradeAgreement))
                 return false;
             var offer = new ProposeAgreementCommand
             {
@@ -445,20 +503,45 @@ public static partial class AiStatecraft
         return true;
     }
 
-    private static bool CanHedgeWith(Campaign campaign, Nation buyer, Nation other, int dominantId)
+    [ThreadStatic]
+    private static HashSet<int> _hedgeBlockedPartners;
+
+    private static HashSet<int> CollectPendingDealPartners(Campaign campaign, int buyerId)
+    {
+        var offers = campaign.DealOffers;
+        if (offers.Count == 0) return null;
+        HashSet<int> set = null;
+        var day = campaign.ElapsedDays;
+        for (var i = 0; i < offers.Count; i++)
+        {
+            var offer = offers[i];
+            if (!offer.Pending || offer.ExpiresDay <= day) continue;
+            if (offer.FromId == buyerId)
+            {
+                if (set is null) { set = _hedgeBlockedPartners ??= new HashSet<int>(); set.Clear(); }
+                set.Add(offer.ToId);
+            }
+            else if (offer.ToId == buyerId)
+            {
+                if (set is null) { set = _hedgeBlockedPartners ??= new HashSet<int>(); set.Clear(); }
+                set.Add(offer.FromId);
+            }
+        }
+        return set;
+    }
+
+    private static bool CanHedgeWith(Campaign campaign, Nation buyer, Nation other, int dominantId,
+        HashSet<int> blockedOffers)
     {
         if (other is null || other.Id == buyer.Id || other.Id == dominantId) return false;
         if (other.Population <= 0 || other.Movement is not null) return false;
+        if (blockedOffers is not null && blockedOffers.Contains(other.Id)) return false;
         var relation = CampaignDiplomacy.Peek(campaign, buyer.Id, other.Id);
         if (relation is { Stance: DiplomaticStance.AtWar }) return false;
         if (relation is { EmbargoByA: true } or { EmbargoByB: true }) return false;
         if (relation?.TradeAgreement == true) return false;
-        foreach (var offer in campaign.DealOffers)
-            if (offer.Pending && offer.ExpiresDay > campaign.ElapsedDays &&
-                (offer.FromId == buyer.Id && offer.ToId == other.Id || offer.FromId == other.Id && offer.ToId == buyer.Id))
-                return false;
         if (other.IsHuman) return campaign.FeatureEnabled("deals") && campaign.ProvinceMap is not null;
-        return AgreementSystem.CanPropose(campaign, buyer, other, AgreementKind.TradeAgreement, out _, preview: true) &&
+        return AgreementSystem.CanProposeQuiet(campaign, buyer, other, AgreementKind.TradeAgreement, preview: true) &&
             AgreementSystem.Willingness(campaign, other, buyer, AgreementKind.TradeAgreement, preview: true) >=
             AgreementSystem.Needed(campaign, AgreementKind.TradeAgreement);
     }

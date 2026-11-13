@@ -100,6 +100,12 @@ public static class ControlTally
             tally.SplitRegions, Key(owner, region), out _);
     }
 
+    // The list of live wars is filled on this thread before anything is handed out and then
+    // only read; each war computes its partial into a slot of its own. The "somebody is
+    // already inside" lease that kept two worlds from sharing this walk now lives in
+    // DeterministicParallel, where every other pass reads it too.
+    private static readonly List<int> _liveWarScratch = new();
+
     private static void Refresh(TallyState tally, Campaign campaign)
     {
         var topology = campaign?.ProvinceMap;
@@ -116,19 +122,72 @@ public static class ControlTally
         // about a province's owner without touching the war list again.
         foreach (var flag in tally.HostileTo.Keys) tally.HostileByFlag[flag] = null;
         tally.HostileTo.Clear();
-        foreach (var war in campaign.Wars)
+        using (SimProfiler.Measure("  tally:wars"))
         {
-            if (war.Ended) continue;
-            // By side, not by membership. An ally standing beside you in the same war is
-            // not somebody whose border counts as a threatened one.
-            foreach (var side in campaign.Nations)
+            // Every live war asks, for each of its sides, who among all countries it
+            // opposes: wars times countries squared. Each war's answer is independent, so
+            // the wars compute their own partial tables side by side and the partials fold
+            // in war order - set union has no order of its own, and folding in war order
+            // reproduces even the insertion order the serial walk produced.
+            var live = _liveWarScratch;
+            live.Clear();
+            for (var wi = 0; wi < campaign.Wars.Count; wi++)
+                if (!campaign.Wars[wi].Ended) live.Add(wi);
+            var parallelWars = campaign.Defines.ParallelRegions && live.Count >= 4 &&
+                               System.Environment.GetEnvironmentVariable("BDOF_NO_PARALLEL_TALLY") != "1";
+            if (parallelWars)
             {
-                if (!war.Involves(side.Id)) continue;
-                if (!tally.HostileTo.TryGetValue((ushort)side.MapIndex, out var set))
-                    tally.HostileTo[(ushort)side.MapIndex] = set = new HashSet<ushort>();
-                foreach (var other in campaign.Nations)
-                    if (other.Id != side.Id && war.Opposes(side.Id, other.Id))
-                        set.Add((ushort)other.MapIndex);
+                var partials = new Dictionary<ushort, HashSet<ushort>>[live.Count];
+                var nations = campaign.Nations;
+                var wars = campaign.Wars;
+                // Computed a war per slot, folded in war order. Set union has no order of its
+                // own, and folding in war order reproduces even the insertion order the serial
+                // walk produced - which matters because a later pass walks these sets. Slots
+                // falls back to this same fold on this thread when the machine is busy or a
+                // second loop already holds the lease; the result does not depend on which.
+                DeterministicParallel.Slots(campaign, partials,
+                    slot =>
+                    {
+                        var war = wars[live[slot]];
+                        var partial = new Dictionary<ushort, HashSet<ushort>>();
+                        foreach (var side in nations)
+                        {
+                            if (!war.Involves(side.Id)) continue;
+                            if (!partial.TryGetValue((ushort)side.MapIndex, out var set))
+                                partial[(ushort)side.MapIndex] = set = new HashSet<ushort>();
+                            foreach (var other in nations)
+                                if (other.Id != side.Id && war.Opposes(side.Id, other.Id))
+                                    set.Add((ushort)other.MapIndex);
+                        }
+                        return partial;
+                    },
+                    (slot, partial) =>
+                    {
+                        foreach (var (flag, enemies) in partial)
+                        {
+                            if (!tally.HostileTo.TryGetValue(flag, out var merged))
+                                tally.HostileTo[flag] = merged = new HashSet<ushort>();
+                            foreach (var enemy in enemies) merged.Add(enemy);
+                        }
+                    }, minItems: 4);
+            }
+            else
+            {
+                foreach (var war in campaign.Wars)
+                {
+                    if (war.Ended) continue;
+                    // By side, not by membership. An ally standing beside you in the same war is
+                    // not somebody whose border counts as a threatened one.
+                    foreach (var side in campaign.Nations)
+                    {
+                        if (!war.Involves(side.Id)) continue;
+                        if (!tally.HostileTo.TryGetValue((ushort)side.MapIndex, out var set))
+                            tally.HostileTo[(ushort)side.MapIndex] = set = new HashSet<ushort>();
+                        foreach (var other in campaign.Nations)
+                            if (other.Id != side.Id && war.Opposes(side.Id, other.Id))
+                                set.Add((ushort)other.MapIndex);
+                    }
+                }
             }
         }
 
@@ -145,27 +204,36 @@ public static class ControlTally
         Array.Clear(tally.ByRegion);
         tally.SplitRegions.Clear();
 
-        for (var province = 1; province <= topology.ProvinceCount && province < control.Length; province++)
+        using (SimProfiler.Measure("  tally:walk"))
         {
-            var region = topology.ProvinceToState[province];
-            if (region == 0) continue;
-            var owner = topology.ProvinceToNation[province];
-            if (owner == 0) continue;
-
-            ref var count = ref Slot(tally, owner, region);
-            count.Provinces++;
-            if (control[province] != owner) continue;
-            count.Held++;
-            var enemies = tally.HostileByFlag[owner];
-            if (enemies is null) continue;
-            foreach (var neighbour in topology.Neighbors[province])
+            // The walk stays serial: at ~0.5 ms a day the per-province work is far below
+            // the hand-off cost, and the parallel version measured four times slower
+            // (13.3 ms against 3.2 ms over six rebuilds). The wars loop above is the half
+            // worth threading: its work items are whole wars, not provinces.
             {
-                if (neighbour <= 0 || neighbour >= control.Length) continue;
-                var other = control[neighbour];
-                if (other == 0 || other == owner) continue;
-                if (!enemies.Contains(other)) continue;
-                count.Bordered++;
-                break;
+                for (var province = 1; province <= topology.ProvinceCount && province < control.Length; province++)
+                {
+                    var region = topology.ProvinceToState[province];
+                    if (region == 0) continue;
+                    var owner = topology.ProvinceToNation[province];
+                    if (owner == 0) continue;
+
+                    ref var count = ref Slot(tally, owner, region);
+                    count.Provinces++;
+                    if (control[province] != owner) continue;
+                    count.Held++;
+                    var enemies = tally.HostileByFlag[owner];
+                    if (enemies is null) continue;
+                    foreach (var neighbour in topology.Neighbors[province])
+                    {
+                        if (neighbour <= 0 || neighbour >= control.Length) continue;
+                        var other = control[neighbour];
+                        if (other == 0 || other == owner) continue;
+                        if (!enemies.Contains(other)) continue;
+                        count.Bordered++;
+                        break;
+                    }
+                }
             }
         }
     }

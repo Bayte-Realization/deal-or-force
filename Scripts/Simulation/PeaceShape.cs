@@ -830,11 +830,103 @@ public static class PeaceShape
     /// ground, plus a pore of the enemy shut inside that line, minus a one-province tooth.
     /// A pocket the army holds in the middle of the loser is not a country.
     /// </summary>
-    public static List<int> Compact(Campaign campaign, Nation winner, IEnumerable<int> provinces, StrategicWar war)
+    public static List<int> Compact(Campaign campaign, Nation winner, IEnumerable<int> provinces, StrategicWar war) =>
+        DrawLine(campaign, winner, provinces, war).Provinces;
+
+    /// <summary>
+    /// Why the border on the table looks like this, in one sentence, or empty when none of
+    /// the three facts applies. The facts are the ones <see cref="Compact"/> already uses on
+    /// the occupation the winner is standing on: occupation that still touches home, a pocket
+    /// shut inside that line, a one-province tooth left off. Reading this does not move a
+    /// province and does not sign the peace.
+    /// </summary>
+    public static string BorderWhy(Campaign campaign, Nation winner, IEnumerable<int> shown, StrategicWar war)
     {
+        if (campaign is null || winner is null || shown is null) return "";
+        var shownSet = new HashSet<int>(shown);
+        if (shownSet.Count == 0) return "";
+        var standing = Standing(campaign, winner);
+        if (standing.Count == 0) return "";
+        var line = DrawLine(campaign, winner, standing, war);
+        foreach (var hole in line.Holes)
+            if (shownSet.Contains(hole))
+                return Loc.Get("A pocket shut inside the line is kept with this border.");
+        foreach (var tooth in line.Teeth)
+            if (!shownSet.Contains(tooth))
+                return Loc.Get("A one-province tooth of the occupation was left off this border.");
+        var keeps = false;
+        foreach (var province in line.Kept)
+            if (!line.Teeth.Contains(province) && shownSet.Contains(province)) { keeps = true; break; }
+        if (keeps)
+            foreach (var pocket in line.LeftOut)
+                if (!shownSet.Contains(pocket))
+                    return Loc.Get("This border keeps the occupation that touches home.");
+        return "";
+    }
+
+    /// <summary>
+    /// What this settlement does with the occupation, in one sentence, or empty when it
+    /// does neither. The facts are the ones <see cref="Compact"/> already decides on the
+    /// ground the holder is standing on. Occupied land that still touches home and is on
+    /// the table stays with the holder. Otherwise a pocket beyond that line which the
+    /// table does not keep goes back. A tooth the line already cut off is not a stay, and
+    /// a pocket the table keeps is not a return. Reading this does not move a province
+    /// and does not sign the peace.
+    /// </summary>
+    public static string TransferLine(Campaign campaign, Nation winner, IEnumerable<int> shown, StrategicWar war)
+    {
+        if (campaign is null || winner is null || shown is null) return "";
+        var shownSet = new HashSet<int>(shown);
+        if (shownSet.Count == 0) return "";
+        var standing = Standing(campaign, winner);
+        if (standing.Count == 0) return "";
+        var line = DrawLine(campaign, winner, standing, war);
+        foreach (var province in line.Kept)
+            if (!line.Teeth.Contains(province) && shownSet.Contains(province))
+                return Loc.Get("This occupied ground stays with the holder.");
+        foreach (var pocket in line.LeftOut)
+            if (!shownSet.Contains(pocket))
+                return Loc.Get("The pocket beyond the line goes back.");
+        return "";
+    }
+
+    /// <summary>Enemy ground the winner is standing on. Home it already owns is not occupation.</summary>
+    private static HashSet<int> Standing(Campaign campaign, Nation winner)
+    {
+        var standing = new HashSet<int>();
+        var map = campaign?.ProvinceMap;
+        var control = campaign?.ProvinceController;
+        if (map is null || control is null || winner is null) return standing;
+        var flag = (ushort)winner.MapIndex;
+        var last = Math.Min(map.ProvinceCount, control.Length - 1);
+        for (var province = 1; province <= last; province++)
+        {
+            if (control[province] != flag || map.IsWater(province) || map.ProvinceToNation[province] == flag) continue;
+            standing.Add(province);
+        }
+        return standing;
+    }
+
+    private sealed class LineFacts
+    {
+        public List<int> Provinces = new();
+        public readonly HashSet<int> Holes = new();
+        public readonly HashSet<int> Teeth = new();
+        public readonly HashSet<int> LeftOut = new();
+        public readonly HashSet<int> Kept = new();
+    }
+
+    /// <summary>The same walk as <see cref="Compact"/>, keeping the three facts it already decides.</summary>
+    private static LineFacts DrawLine(Campaign campaign, Nation winner, IEnumerable<int> provinces, StrategicWar war)
+    {
+        var facts = new LineFacts();
         var map = campaign?.ProvinceMap;
         var wanted = new HashSet<int>(provinces ?? Array.Empty<int>());
-        if (map is null || winner is null || wanted.Count == 0) return wanted.ToList();
+        if (map is null || winner is null || wanted.Count == 0)
+        {
+            facts.Provinces = wanted.ToList();
+            return facts;
+        }
         bool Land(int province) => province > 0 && province <= map.ProvinceCount && !map.IsWater(province);
         bool Home(int province) => Land(province) && map.ProvinceToNation[province] == (ushort)winner.MapIndex;
         IEnumerable<int> Beside(int province) => map.Neighbors[province].Where(Land);
@@ -849,6 +941,9 @@ public static class PeaceShape
         while (queue.Count > 0)
             foreach (var next in Beside(queue.Dequeue()))
                 if (wanted.Contains(next) && body.Add(next)) queue.Enqueue(next);
+        foreach (var province in body) facts.Kept.Add(province);
+        foreach (var province in wanted)
+            if (!body.Contains(province)) facts.LeftOut.Add(province);
 
         var losers = new HashSet<ushort>();
         if (war is not null)
@@ -868,7 +963,11 @@ public static class PeaceShape
                 pore.Add(province);
             }
             if (pore.Count == 0) break;
-            foreach (var province in pore) body.Add(province);
+            foreach (var province in pore)
+            {
+                body.Add(province);
+                facts.Holes.Add(province);
+            }
         }
 
         var goal = war?.ClaimedStateMapIndex ?? -1;
@@ -881,9 +980,14 @@ public static class PeaceShape
                 if (Beside(province).Count(Inside) >= 2) continue;
                 teeth.Add(province);
             }
-            foreach (var province in teeth) body.Remove(province);
+            foreach (var province in teeth)
+            {
+                body.Remove(province);
+                facts.Teeth.Add(province);
+            }
         }
-        return body.ToList();
+        facts.Provinces = body.ToList();
+        return facts;
     }
 
     /// <summary>Settle a list of provinces a treaty would move (the enforced peace): whole regions in, a border out.</summary>

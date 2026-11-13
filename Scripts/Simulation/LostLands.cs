@@ -66,15 +66,36 @@ public static class LostLands
     /// judgement: millions of people in it over twelve, at most two and a half - the same scale
     /// as people of ours living across the border.
     /// </summary>
+    internal static bool HasClaimedLand(Campaign campaign, Nation nation, Nation other)
+    {
+        if (campaign is null || nation is null || other is null) return false;
+        if (other.AnswersTo(nation.Id) || nation.AnswersTo(other.Id)) return false;
+        var states = campaign.StatesOf(other);
+        if (states.Length == 0) return false;
+        var claimWeight = Math.Clamp(campaign.Defines.TerritorialClaimWeight, 0f, 1f);
+        for (var i = 0; i < states.Length; i++)
+        {
+            var region = states[i];
+            if (region.Population <= 0) continue;
+            var title = TerritorialClaims.TitleOf(campaign, nation, region);
+            if (title == TerritorialTitle.Homeland || (title == TerritorialTitle.Claim && claimWeight > 0f))
+                return true;
+        }
+        return false;
+    }
+
     public static float Weight(Campaign campaign, Nation nation, Nation other)
     {
         if (campaign is null || nation is null || other is null) return 0f;
         double people = 0;
-        foreach (var region in campaign.StatesOf(other))
+        var states = campaign.StatesOf(other);
+        var claimWeight = Math.Clamp(campaign.Defines.TerritorialClaimWeight, 0, 1);
+        for (var i = 0; i < states.Length; i++)
         {
+            var region = states[i];
             var title = TerritorialClaims.TitleOf(campaign, nation, region);
             if (title == TerritorialTitle.Homeland) people += region.Population;
-            else if (title == TerritorialTitle.Claim) people += region.Population * Math.Clamp(campaign.Defines.TerritorialClaimWeight, 0, 1);
+            else if (title == TerritorialTitle.Claim) people += region.Population * claimWeight;
         }
         if (people <= 0 || other.AnswersTo(nation.Id) || nation.AnswersTo(other.Id)) return 0f;
         // Losing a third of a small country is not negligible next to losing the same
@@ -83,7 +104,12 @@ public static class LostLands
         // substitute for the war judgement's independent readiness/deterrence gates.
         var relative = people / (Math.Max(1, nation.Population) + people);
         var memory = people / 12_000_000 + relative * Math.Max(0, campaign.Defines.AiRevancheRelativeWeight);
-        var distractions = campaign.Wars.Count(w => !w.Ended && w.Involves(other.Id) && !w.Involves(nation.Id));
+        var distractions = 0;
+        for (var i = 0; i < campaign.Wars.Count; i++)
+        {
+            var w = campaign.Wars[i];
+            if (!w.Ended && w.Involves(other.Id) && !w.Involves(nation.Id)) distractions++;
+        }
         var distress = M.Clamp01((.55f - other.Stability) / .55f);
         var opening = Math.Min(1f, distractions * .25f + distress * .75f);
         return M.Clamp((float)(memory * (1 + opening * Math.Max(0, campaign.Defines.AiRevancheOpportunityWeight))), 0f, 2.5f);
@@ -92,11 +118,19 @@ public static class LostLands
     /// <summary>Once a day: each human country on its own day of the cycle.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(LostLands))) return;
-        if (campaign is null || campaign.ObserverMode || campaign.ElapsedDays <= 0) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily pass, yielded between countries.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(LostLands))) yield break;
+        if (campaign is null || campaign.ObserverMode || campaign.ElapsedDays <= 0) yield break;
         var cycle = Math.Max(1, campaign.Defines.LostLandCheckDays);
+        var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++scanned % 16 == 0) yield return 0;
             if (!nation.IsHuman || nation.Population <= 0 || nation.Movement is not null) continue;
             if (!MovementRules.OnItsDay(campaign, nation.Id, cycle)) continue;
             if (campaign.ElapsedDays - nation.LostLandAskedDay < campaign.Defines.LostLandAskCooldownDays) continue;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DealOrForce.Simulation;
@@ -38,10 +39,92 @@ public sealed partial class DiplomaticRelation
 
 public static class DiplomaticOutreach
 {
+    /// <summary>One read-only AI candidate scan, ending at its first successful move.
+    /// The number of missions is the campaign's own census, not a fresh walk of every
+    /// relation for every embassy. A second campaign keeps its own census.</summary>
+    internal sealed class OfferScan
+    {
+        private readonly Campaign _campaign;
+        private readonly int _issuer;
+        private int? _count;
+
+        internal OfferScan(Campaign campaign, int issuer) { _campaign = campaign; _issuer = issuer; }
+
+        internal int Count(Campaign campaign, int issuer) =>
+            ReferenceEquals(campaign, _campaign) && issuer == _issuer
+                ? (_count ??= CountMissions(campaign, issuer))
+                : CountMissions(campaign, issuer);
+    }
+
+    sealed class MissionCensus
+    {
+        internal bool Built;
+        internal readonly Dictionary<int, int> Count = new();
+    }
+
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, MissionCensus> MissionCensuses = new();
+
+    static MissionCensus CensusOf(Campaign campaign) =>
+        MissionCensuses.GetValue(campaign, static _ => new MissionCensus());
+
+    /// <summary>
+    /// How many live missions this country has out. The table is read once per campaign;
+    /// opening, closing, sleeping and waking a mission adjusts that count. A probe that
+    /// only wants the number does not insert a relation.
+    /// </summary>
+    internal static void WarmCensus(Campaign c) => CountMissions(c, 0);
+
+    private static int CountMissions(Campaign c, int issuer)
+    {
+        if (c is null) return 0;
+        var census = CensusOf(c);
+        if (!census.Built)
+        {
+            lock (census)
+            {
+                if (!census.Built)
+                {
+                    foreach (var relation in c.Relations.Values)
+                    {
+                        if (relation.MissionByA is not null) AdjustCensus(census, relation.A, 1);
+                        if (relation.MissionByB is not null) AdjustCensus(census, relation.B, 1);
+                    }
+                    census.Built = true;
+                }
+            }
+        }
+        return census.Count.GetValueOrDefault(issuer);
+    }
+
+    static void NoteIssuer(Campaign c, int issuer, int delta)
+    {
+        if (c is null || delta == 0 || !MissionCensuses.TryGetValue(c, out var census) || !census.Built) return;
+        AdjustCensus(census, issuer, delta);
+    }
+
+    /// <summary>A relation left or rejoined the live table, missions and all.</summary>
+    internal static void NoteMissionTable(Campaign c, DiplomaticRelation relation, int delta)
+    {
+        if (c is null || relation is null || delta == 0 ||
+            !MissionCensuses.TryGetValue(c, out var census) || !census.Built) return;
+        if (relation.MissionByA is not null) AdjustCensus(census, relation.A, delta);
+        if (relation.MissionByB is not null) AdjustCensus(census, relation.B, delta);
+    }
+
+    static void AdjustCensus(MissionCensus census, int issuer, int delta)
+    {
+        var next = census.Count.GetValueOrDefault(issuer) + delta;
+        if (next <= 0) census.Count.Remove(issuer);
+        else census.Count[issuer] = next;
+    }
+
     public static DiplomaticMission Of(DiplomaticRelation relation, int issuer) => relation is null ? null :
         issuer == relation.A ? relation.MissionByA : issuer == relation.B ? relation.MissionByB : null;
 
-    public static string Refusal(Campaign c, int issuer, int target, bool active = true)
+    public static string Refusal(Campaign c, int issuer, int target, bool active = true) =>
+        Refusal(c, issuer, target, active, null);
+
+    internal static string Refusal(Campaign c, int issuer, int target, bool active, OfferScan scan)
     {
         var n = c?.NationById(issuer); var other = c?.NationById(target);
         if (n is null || other is null || n.Id == other.Id || c.Fallen.Contains(issuer) || c.Fallen.Contains(target) ||
@@ -64,7 +147,7 @@ public static class DiplomaticOutreach
             !Valid(d.DiplomaticMissionStartCash) || !Valid(d.DiplomaticMissionWeeklyCash) ||
             !Valid(d.DiplomaticMissionWeeklyOpinion) || !Valid(d.DiplomaticMissionOpinionCap))
             return Loc.Get("The campaign data is damaged, so this cannot be done.");
-        if (c.Relations.Values.Count(r => Of(r, issuer) is not null) >= Math.Clamp(d.DiplomaticMissionLimit, 1, 12))
+        if ((scan?.Count(c, issuer) ?? CountMissions(c, issuer)) >= Math.Clamp(d.DiplomaticMissionLimit, 1, 12))
             return Loc.Get("Recall a diplomatic mission before opening another.");
         if (!float.IsFinite(n.PoliticalPoints) || n.PoliticalPoints < d.DiplomaticMissionPoliticalCost)
             return Loc.Format("Insufficient political credit: need {0:0.##}, available {1:0.##}.", d.DiplomaticMissionPoliticalCost, n.PoliticalPoints);
@@ -96,7 +179,9 @@ public static class DiplomaticOutreach
         var r = CampaignDiplomacy.Get(c, issuer, target); var n = c.NationById(issuer);
         if (!active)
         {
+            var had = Of(r, issuer) is not null;
             if (issuer == r.A) r.MissionByA = null; else r.MissionByB = null;
+            if (had) NoteIssuer(c, issuer, -1);
             c.Chronicle.Record(c, "diplomatic_mission_ended", issuer, target,isPublic:false); c.MarkStrategicChange(); return true;
         }
         var d = c.Defines;
@@ -106,6 +191,7 @@ public static class DiplomaticOutreach
             WeeklyPoliticalCost = d.DiplomaticMissionWeeklyPoliticalCost, WeeklyCash = d.DiplomaticMissionWeeklyCash,
             WeeklyOpinion = d.DiplomaticMissionWeeklyOpinion, OpinionCap = Math.Clamp(d.DiplomaticMissionOpinionCap, 0, 50) };
         if (issuer == r.A) r.MissionByA = mission; else r.MissionByB = mission;
+        NoteIssuer(c, issuer, 1);
         r.LastActionDay = c.ElapsedDays;
         c.Chronicle.Record(c, "diplomatic_mission_started", issuer, target,isPublic:false); c.MarkStrategicChange(); return true;
     }
@@ -114,8 +200,8 @@ public static class DiplomaticOutreach
     // weekly due date; there is no second traversal of the relationship table.
     internal static void Tick(Campaign c, DiplomaticRelation r)
     {
-        if (r.MissionByA is not null && !Advance(c,r,r.A,r.MissionByA)) r.MissionByA = null;
-        if (r.MissionByB is not null && !Advance(c,r,r.B,r.MissionByB)) r.MissionByB = null;
+        if (r.MissionByA is not null && !Advance(c,r,r.A,r.MissionByA)) { r.MissionByA = null; NoteIssuer(c, r.A, -1); }
+        if (r.MissionByB is not null && !Advance(c,r,r.B,r.MissionByB)) { r.MissionByB = null; NoteIssuer(c, r.B, -1); }
     }
 
     private static bool Advance(Campaign c, DiplomaticRelation r, int issuer, DiplomaticMission mission)
