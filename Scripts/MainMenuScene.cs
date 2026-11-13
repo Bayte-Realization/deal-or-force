@@ -168,8 +168,17 @@ public partial class MainMenuScene : Control
         rows.AddChild(MenuCaption("Choose a world. Shape its future.", 15, "text.muted"));
         rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
 
-        rows.AddChild(MenuAction("Singleplayer", () => Enter(MenuIntent.NewCampaign), 46, true));
-        rows.AddChild(MenuAction("Load latest campaign", () => Enter(MenuIntent.LoadLatest), 42));
+        // What a player came for is the first, lit button - and that depends on who they are.
+        // Somebody with a campaign on disk came back to it, so "Continue" leads and a new game
+        // steps down to an ordinary row; somebody with no saves has exactly one thing to do.
+        // The old pair was "Singleplayer" (always lit) and "Load latest campaign" (never lit),
+        // which made a returning player read two labels to find the one they wanted.
+        // Only the names of the files are looked at: reading their headers is the archive's job.
+        var saveRoot = DealOrForceGame.ResolveSaveRoot();
+        var hasSaves = System.IO.Directory.Exists(saveRoot)
+            && System.IO.Directory.EnumerateFiles(saveRoot, "*.bdfsave*").Any();
+        if (hasSaves) rows.AddChild(MenuAction("Continue", () => Enter(MenuIntent.LoadLatest), 46, true));
+        rows.AddChild(MenuAction("New campaign", () => Enter(MenuIntent.NewCampaign), hasSaves ? 42 : 46, !hasSaves));
         rows.AddChild(MenuAction("Load campaign", ShowArchive, 42));
         rows.AddChild(MenuAction("Multiplayer · LAN / IP", () => Enter(MenuIntent.Multiplayer), 42));
         rows.AddChild(MenuAction("Settings", ShowSettings, 42));
@@ -362,8 +371,8 @@ public partial class MainMenuScene : Control
         panel.AnchorTop = panel.AnchorBottom = 0.5f;
         panel.OffsetLeft = -230;
         panel.OffsetRight = 230;
-        panel.OffsetTop = -160;
-        panel.OffsetBottom = 160;
+        panel.OffsetTop = -210;
+        panel.OffsetBottom = 210;
         panel.GrowHorizontal = GrowDirection.Both;
         panel.GrowVertical = GrowDirection.Both;
         AddChild(panel);
@@ -382,6 +391,15 @@ public partial class MainMenuScene : Control
         rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 10) });
         rows.AddChild(MenuCaption("Made by", 13, "text.faint"));
         rows.AddChild(MenuCaption("Bayte Realization (Kamil Suleymanov)", 18, "text.body"));
+
+        // The line the summary above promises, which had gone missing: the screen said who
+        // and never said how. Plain, and in the game itself rather than in a readme.
+        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 6) });
+        rows.AddChild(MenuCaption("How it was made", 13, "text.faint"));
+        var made = MenuCaption("credits.made_with_ai", 13, "text.muted");
+        made.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        made.CustomMinimumSize = new Vector2(380, 0);
+        rows.AddChild(made);
 
         // Expanding, with a floor under it: the expansion pushes the way back to the
         // bottom of the panel, and the floor stops it sitting flush against the last line

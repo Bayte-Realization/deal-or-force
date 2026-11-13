@@ -1,0 +1,13 @@
+{
+  "Click a country on the map, or search for it by name.": "Нажмите на страну на карте или найдите её по названию.",
+  "Continue": "Продолжить",
+  "New campaign": "Новая кампания",
+  "How it was made": "Как сделана игра",
+  "credits.made_with_ai": "Игру делает один человек с помощью ИИ-инструментов. Код и тексты написаны с ИИ-ассистентами, иллюстрации и музыка сгенерированы. Замысел, руководство, проверка и решение о том, что попадает в игру, — за автором.",
+  "Campaign speed {0} (key {0})": "Скорость кампании {0} (клавиша {0})",
+  "Campaign speed {0} (key {0}) · {1:0.#} campaign hours a second, {2} hour(s) a step": "Скорость кампании {0} (клавиша {0}) · {1:0.#} ч кампании в секунду, шаг — {2} ч",
+  "Pause or resume (Space). Keys 1 to 5 set the speed and let time run; plus and minus make it one step faster or slower.": "Пауза и продолжение (пробел). Клавиши 1–5 задают скорость и запускают время; плюс и минус делают её на шаг быстрее или медленнее.",
+  "Handbook  [F1]": "Справочник  [F1]",
+  "Leave without saving? Press again": "Выйти без сохранения? Нажмите ещё раз",
+  "Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping. The first press only asks; the second leaves.": "Покинуть кампанию и вернуться на титульный экран. При выходе ничего не сохраняется — сначала сделайте быстрое сохранение, если кампания того стоит. Первое нажатие только спрашивает, второе — выходит."
+}

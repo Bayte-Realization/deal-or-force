@@ -130,6 +130,8 @@ static class SituationReportTests
         SoundCatalog.Load(); var cue = SoundCatalog.Get("situation_alert");
         Check(cue.Yielding && cue.CooldownMs == 12000 && cue.VolumeDb == -6, "attention sound is quiet, throttled and yields to strategic messages");
         Check(HandbookCatalog.ForScreen("Situation") == "situation_room", "new screen has a moddable handbook entry");
+        // Public debt precedes the overview in the file and used to claim the screen by coming first.
+        Check(HandbookCatalog.ForScreen("Economy") == "economy_overview", "the Economy screen opens its own overview, not the first article that names it");
     }
     private static void Attention()
     {

@@ -13,6 +13,8 @@ public sealed class HandbookArticle
     public int Order;
     /// <summary>The screen the article is about, opened by its "Open" button; empty for none.</summary>
     public string Screen = "";
+    /// <summary>Whether this is the article its screen's "?" opens, when several share the screen.</summary>
+    public bool ScreenDefault;
     /// <summary>Other articles worth reading next.</summary>
     public string[] Related = Array.Empty<string>();
 
@@ -98,6 +100,13 @@ public static class HandbookCatalog
                     case "topic": article.Topic = field.Value.GetString() ?? ""; break;
                     case "order" when field.Value.TryGetInt32(out var order): article.Order = order; break;
                     case "screen": article.Screen = field.Value.GetString() ?? ""; break;
+                    // Several articles may belong to one screen, and the first in file order
+                    // used to be the one its "?" opened - which is how the Economy screen came
+                    // to open on Public debt, an article that merely precedes the overview in
+                    // the file. An article that says so is the screen's front page whatever
+                    // its position, and a mod can move the front page by saying so later.
+                    case "screen_default" when field.Value.ValueKind is JsonValueKind.True or JsonValueKind.False:
+                        article.ScreenDefault = field.Value.GetBoolean(); break;
                     case "related" when field.Value.ValueKind == JsonValueKind.Array:
                         article.Related = field.Value.EnumerateArray().Where(value => value.ValueKind == JsonValueKind.String)
                             .Select(value => value.GetString()).ToArray();
@@ -106,7 +115,8 @@ public static class HandbookCatalog
                 }
             if (article.Topic.Length > 0 && !Topics.ContainsKey(article.Topic))
                 Topics[article.Topic] = new HandbookTopic { Id = article.Topic, Order = 100 };
-            if (article.Screen.Length > 0 && !ScreenArticles.ContainsKey(article.Screen)) ScreenArticles[article.Screen] = article.Id;
+            if (article.Screen.Length > 0 && (article.ScreenDefault || !ScreenArticles.ContainsKey(article.Screen)))
+                ScreenArticles[article.Screen] = article.Id;
         }
     }
 

@@ -35,15 +35,37 @@ public partial class DealOrForceGame
         var watch = ActionButton("Watch the world  [F7]", () => { HidePauseMenu(); ToggleObserverMode(); }, 330, 42);
         watch.TooltipText = Ui.Tip(Tr("Observer mode: no events, nothing stops the clock, and the panels get out of the way. For watching a world run, and for recording one."));
         rows.AddChild(watch);
-        var leave = ActionButton("Return to main menu", ReturnToMainMenu, 330, 42);
-        leave.TooltipText = Ui.Tip(Tr("Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping."));
-        rows.AddChild(leave);
+        // Help was reachable from a small button on the top bar and from F1, and from neither
+        // of the two menus a lost player actually opens.
+        rows.AddChild(ActionButton("Handbook  [F1]", () => { HidePauseMenu(); OpenHandbook(); }, 330, 42));
+        // One click used to throw the campaign away, with the warning hidden in a tooltip that
+        // only a player who paused over the button ever saw. The first press now asks, on the
+        // button itself; the second leaves. Reopening the menu disarms it.
+        _leaveButton = ActionButton("Return to main menu", LeaveCampaignWhenConfirmed, 330, 42);
+        _leaveButton.TooltipText = Ui.Tip(Tr("Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping. The first press only asks; the second leaves."));
+        rows.AddChild(_leaveButton);
         rows.AddChild(ActionButton("Quit to desktop", () => ApplicationExit.Request(this), 330, 42));
+    }
+
+    private Button _leaveButton = null!;
+    private bool _leaveArmed;
+
+    private void LeaveCampaignWhenConfirmed()
+    {
+        if (!_leaveArmed)
+        {
+            _leaveArmed = true;
+            _leaveButton.Text = Tr("Leave without saving? Press again");
+            return;
+        }
+        ReturnToMainMenu();
     }
 
     private void ShowPauseMenu()
     {
         if (!_hudLayer.Visible || _handoverLayer is { Visible: true }) return;
+        _leaveArmed = false;
+        _leaveButton.Text = Tr("Return to main menu");
         _campaign.IsPaused = true;
         _pause.Text = "▶";
         _pauseMenuLayer.Visible = true;

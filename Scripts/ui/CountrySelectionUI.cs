@@ -115,7 +115,7 @@ public partial class DealOrForceGame
         _pickerStats = Title("", 15, Ui.Colour("text.bright"));
         _pickerStats.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_pickerStats);
-        _pickerLocation = Title("Click a region to inspect its tactical province.", 13, Ui.Colour("text.caption"));
+        _pickerLocation = Title("Click a country on the map, or search for it by name.", 13, Ui.Colour("text.caption"));
         _pickerLocation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_pickerLocation);
 
@@ -352,7 +352,7 @@ public partial class DealOrForceGame
                 CapitalName(nation), Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Money(nation.Treasury), states, divisions);
         if (!nation.Landless && _campaign.FeatureEnabled("state_identity"))
             _pickerStats.Text += "\n" + Simulation.StateIdentity.Brief(_campaign, nation);
-        _pickerLocation.Text = Tr("Click the map to inspect a region and its tactical province.");
+        _pickerLocation.Text = Tr("Click a country on the map, or search for it by name.");
         _pickerBegin.Text = _pickerHotseatMode
             ? Simulation.Loc.Format("START HOTSEAT · {0} PLAYERS", _campaign.HumanSeats.Count)
             : Simulation.Loc.Format("BEGIN AS {0}", nation.Tag);

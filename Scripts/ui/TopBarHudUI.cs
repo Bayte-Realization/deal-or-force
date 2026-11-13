@@ -274,7 +274,7 @@ public partial class DealOrForceGame
         StyleHudButton(menu, false);
         speeds.AddChild(menu);
         _pause = ActionButton("II", TogglePause, 32, 28, true);
-        _pause.TooltipText = Ui.Tip(Tr("Pause or resume (Space)."));
+        _pause.TooltipText = Ui.Tip(Tr("Pause or resume (Space). Keys 1 to 5 set the speed and let time run; plus and minus make it one step faster or slower."));
         StyleHudButton(_pause, true);
         speeds.AddChild(_pause);
         _speedButtons.Clear();
@@ -798,18 +798,23 @@ public partial class DealOrForceGame
             stat?.Spark?.Reset();
     }
 
-    /// <summary>The speed the campaign is actually running at, lit so the player can see it.</summary>
+    /// <summary>
+    /// The speed the clock is set to, lit so the player can see it - while paused as well.
+    /// It used to go dark on pause, which was fine when a speed could only be chosen by
+    /// starting the clock; plus and minus now change the pace of a paused game, and a change
+    /// nobody can see is a key that seems broken. Whether time is running is the pause
+    /// button's to say, and it says it by being lit itself.
+    /// </summary>
     private void UpdateSpeedButtons()
     {
-        var running = _campaign is not null && !_campaign.IsPaused;
         for (var index = 0; index < _speedButtons.Count; index++)
         {
             var button = _speedButtons[index];
             if (!GodotObject.IsInstanceValid(button)) continue;
-            StyleHudButton(button, running && index + 1 == _speed);
+            StyleHudButton(button, _campaign is not null && index + 1 == _speed);
             button.TooltipText = Ui.Tip(_campaign is null
-                ? Simulation.Loc.Format("Campaign speed {0}", index + 1)
-                : Simulation.Loc.Format("Campaign speed {0} · {1:0.#} campaign hours a second, {2} hour(s) a step",
+                ? Simulation.Loc.Format("Campaign speed {0} (key {0})", index + 1)
+                : Simulation.Loc.Format("Campaign speed {0} (key {0}) · {1:0.#} campaign hours a second, {2} hour(s) a step",
                     index + 1, 24f / Mathf.Max(0.001f, _campaign.Defines.SecondsForSpeed(index + 1)), _campaign.TickHours));
         }
     }

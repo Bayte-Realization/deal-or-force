@@ -602,6 +602,25 @@ public partial class DealOrForceGame : Control
             return;
         }
         if (key.Keycode == Key.F9) { QuickLoad(); GetViewport().SetInputAsHandled(); return; }
+
+        // The clock, on the keys every game of this kind keeps it on. Until now the most
+        // frequent act in the game - changing how fast time runs - was five 27-pixel buttons
+        // and nothing else. A digit sets that speed and lets time run, exactly as its button
+        // does; plus and minus step the speed and leave a paused clock paused, so a player can
+        // choose the pace before letting go. Not while the pause menu is up (time must not
+        // start behind it), and not with a modifier held, which belongs to other shortcuts.
+        if (_campaign is not null && _hudLayer is { Visible: true } && _pauseMenuLayer is not { Visible: true }
+            && !key.Echo && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed)
+        {
+            var step = SpeedKey(key);
+            if (step is >= 1 and <= 5) { SetSpeed(step); GetViewport().SetInputAsHandled(); return; }
+            if (step != 0)
+            {
+                SetSpeed(_speed + (step > 0 ? 1 : -1), resume: false);
+                GetViewport().SetInputAsHandled();
+                return;
+            }
+        }
         if (key.Keycode != Key.Space && key.PhysicalKeycode != Key.Space) return;
 
         if (_campaign is not null && _hudLayer is { Visible: true })
@@ -1505,7 +1524,28 @@ public partial class DealOrForceGame : Control
         Refresh();
     }
 
-    private void SetSpeed(int speed)
+    /// <summary>
+    /// What a key means to the clock: 1-5 for that speed, 6 for one step faster, -1 for one
+    /// step slower, 0 for nothing. Read by the key's place on the board (the top row and the
+    /// keypad alike), so it is the same key under a Russian layout as under an English one.
+    /// </summary>
+    private static int SpeedKey(InputEventKey key)
+    {
+        var place = key.PhysicalKeycode != Key.None ? key.PhysicalKeycode : key.Keycode;
+        return place switch
+        {
+            Key.Key1 or Key.Kp1 => 1,
+            Key.Key2 or Key.Kp2 => 2,
+            Key.Key3 or Key.Kp3 => 3,
+            Key.Key4 or Key.Kp4 => 4,
+            Key.Key5 or Key.Kp5 => 5,
+            Key.Equal or Key.Plus or Key.KpAdd => 6,
+            Key.Minus or Key.KpSubtract => -1,
+            _ => 0
+        };
+    }
+
+    private void SetSpeed(int speed, bool resume = true)
     {
         if (IsNetworkClient)
         {
@@ -1514,7 +1554,7 @@ public partial class DealOrForceGame : Control
         }
         _speed = Mathf.Clamp(speed, 1, 5);
         _dayAccumulator = 0;
-        if (_campaign.IsPaused)
+        if (_campaign.IsPaused && resume)
         {
             PlayStrategicCue("game_resume");
             _campaign.IsPaused = false;

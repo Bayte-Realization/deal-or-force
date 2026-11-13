@@ -17,7 +17,7 @@ public partial class DealOrForceGame
 
         switch (wanted)
         {
-            case MenuIntent.NewCampaign: OpenScenarioLibrary(); break;
+            case MenuIntent.NewCampaign: OpenNewCampaign(); break;
             case MenuIntent.ModAction:
                 _modLoader.TryRunFrontendAction(modAction, out var modNote);
                 GD.Print("[mod action] " + Tr(modNote));
@@ -38,6 +38,30 @@ public partial class DealOrForceGame
             // that one pauses the campaign, and at this point in the boot there is not one.
             default: _menuLayer.Visible = true; break;
         }
+    }
+
+    /// <summary>
+    /// "New campaign" leads to choosing a country, not to a workshop.
+    ///
+    /// It used to open the scenario library first: a window of editor buttons, developer
+    /// metadata and a list holding exactly one scenario, from which the newcomer had to find
+    /// the one button that starts a game - and then sit through a second build of the world
+    /// that had just been built behind the loading screen. The library earns that step only
+    /// when there is something to choose between. With the built-in scenario alone, the world
+    /// already standing behind the menu IS that scenario, so the picker opens on it directly;
+    /// the library stays one click away on the picker's own bar, and a mod or an authored
+    /// scenario that adds a second entry brings the choice back by existing.
+    /// </summary>
+    private void OpenNewCampaign()
+    {
+        var scenarios = ScenarioLibrary.Discover(ScenarioRoots, System.IO.Path.Combine(AuthorRoot, "scenarios")).ToList();
+        if (scenarios.Count == 1 && scenarios[0].Id == "2024" && scenarios[0].WorldFile.Length == 0)
+        {
+            _pickerScenarioEntry = null;
+            OpenCountryPicker();
+            return;
+        }
+        OpenScenarioLibrary();
     }
 
     private void BuildMainMenu()

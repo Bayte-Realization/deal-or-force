@@ -150,6 +150,14 @@ public static class InterfaceSkin
         ("map.terrain_high",    "#d6c45d"),
         ("map.city_building",   "#394345"),
         ("map.city_roof",       "#808477"),
+        // The lines of the political map, one ink a rank (MapBorderStyle). Mirrors
+        // game/gui/77_map_borders.json, which ships the same values and documents them.
+        ("map.border_country",        "#353f4d"),
+        ("map.border_region",         "#000000"),
+        ("map.border_province",       "#424d55"),
+        ("map.border_province_halo",  "#e5e7e3"),
+        ("map.border_occupation",     "#f6f1db"),
+        ("map.border_occupation_key", "#3c4850"),
         ("resources.none",      "#1c2b35"),
         ("resources.low",       "#304951"),
         ("resources.mid",       "#548677"),
@@ -316,7 +324,7 @@ public static class InterfaceSkin
         ("picker.heading",     new PanelRect(0f, 0f, 0f, 0f,      18f, 18f, 455f, 106f)),
         ("picker.country",     new PanelRect(1f, 0.5f, 1f, 0.5f, -420f, -338f, -18f, 338f)),
         ("picker.actions",     new PanelRect(0f, 1f, 0f, 1f,      18f, -126f, 638f, -18f)),
-        ("modal.pause",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -210f, -245f, 210f, 245f)),
+        ("modal.pause",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -210f, -272f, 210f, 272f)),
         ("modal.event",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -310f, -315f, 310f, 315f)),
         ("modal.peace_offer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -330f, -200f, 330f, 200f)),
         ("modal.ultimatum",    new PanelRect(0.22f, 0.13f, 0.79f, 0.89f, 0f, 0f, 0f, 0f)),
