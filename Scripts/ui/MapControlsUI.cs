@@ -296,6 +296,7 @@ public partial class DealOrForceGame
         StrategicMapMode.Stability => "stability",
         StrategicMapMode.Unrest => "unrest",
         StrategicMapMode.Tension => "war",
+        StrategicMapMode.Religion => "faith",
         _ => "relief"
     });
 
@@ -312,6 +313,7 @@ public partial class DealOrForceGame
         StrategicMapMode.Stability => "Regional stability from unsettled to stable. Instability around the capital can threaten the government. The legend follows your interface palette.",
         StrategicMapMode.Unrest => "Regional radicalism and separatist pressure, from quiet to severe. The legend follows your interface palette.",
         StrategicMapMode.Tension => "Escalation relative to the selected country: friction, crisis, armed clashes and war. Talks in the Conflicts screen can reduce tension.",
+        StrategicMapMode.Religion => "Each region in the colour of its largest denomination; denominations of one family share its hue. Faith mechanics compare families: a Lutheran and a Baptist state are of the same faith.",
         _ => "Height and shade, from the moddable relief layer."
     };
 

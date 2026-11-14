@@ -44,6 +44,10 @@ public sealed class CultureDefinition
     /// Lebanese and pretending otherwise would lose the most interesting thing about them.
     /// </summary>
     public readonly Dictionary<string, float> Religions = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>FaithOf's answer for this people, valid while the faith catalogue is unchanged.</summary>
+    internal (string Religion, float Share)[] FaithCache;
+    internal int FaithCacheVersion = -1;
 }
 
 public sealed class ReligionDefinition
@@ -52,6 +56,38 @@ public sealed class ReligionDefinition
     public string Name = "";
     public string Group = "";
     public string Colour = "#8a8f98";
+
+    /// <summary>
+    /// The family this faith belongs to: what every mechanic asking "the same faith?" compares.
+    /// Empty means the faith is a family of its own - every id that existed before
+    /// denominations did, so "protestant" in a save or a mod still means what it meant.
+    /// A denomination (Lutheran, Zaydi, Haredi) names its family here and is what the map and
+    /// the population screen show; it is never stored on a population group.
+    /// </summary>
+    public string Family = "";
+
+    public string FamilyId => string.IsNullOrEmpty(Family) ? Id : Family;
+    public bool IsDenomination => !string.IsNullOrEmpty(Family) &&
+        !string.Equals(Family, Id, StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// What history/faiths writes for one country, region, or one people inside either: a faith
+/// mix that replaces the people's own where it applies, and how each family divides into
+/// denominations.
+/// </summary>
+public sealed class FaithSetting
+{
+    /// <summary>Families and their shares, normalised; null when the place does not reweight faith.</summary>
+    public (string Religion, float Share)[] Faiths;
+
+    /// <summary>Per family, denominations and their shares of it. May add to less than one:
+    /// the rest is divided by the next place down the chain, and finally kept as the family.</summary>
+    public readonly Dictionary<string, (string Denomination, float Share)[]> Denominations =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The same, for one people living there.</summary>
+    public readonly Dictionary<string, FaithSetting> Peoples = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -274,9 +310,16 @@ public static class DemographyCatalog
         PrimaryByCountry.Clear();
         PrimarySetByCountry.Clear();
         FirstPrimaryByCountry.Clear();
+        FaithByCountry.Clear();
+        FaithByRegion.Clear();
 
         foreach (var document in GameDataLoader.DataDocuments("common", "religions"))
             using (document) MergeReligions(document.RootElement, null);
+        RebuildFamilies();
+        // Where a region or a country believes differently from its peoples' own data, and how
+        // each faith family divides into denominations there (Pew, censuses - cited per file).
+        foreach (var document in GameDataLoader.DataDocuments("history", "faiths"))
+            using (document) MergeFaithSettings(document.RootElement, null);
         foreach (var document in GameDataLoader.DataDocuments("common", "cultures"))
             using (document) MergeCultures(document.RootElement, null);
         foreach (var document in GameDataLoader.DataDocuments("common", "professions"))
@@ -333,7 +376,292 @@ public static class DemographyCatalog
             if (entry.Value.TryGetProperty("name", out var name)) religion.Name = name.GetString() ?? religion.Name;
             if (entry.Value.TryGetProperty("group", out var group)) religion.Group = group.GetString() ?? "";
             if (entry.Value.TryGetProperty("colour", out var colour)) religion.Colour = colour.GetString() ?? religion.Colour;
+            if (entry.Value.TryGetProperty("family", out var family)) religion.Family = family.GetString() ?? "";
         }
+        RebuildFamilies();
+    }
+
+    // ------------------------------------------------------------------ families and denominations
+
+    /// <summary>
+    /// Denomination id to family id, for denominations only: a family is not in it, so asking
+    /// about the ids population groups actually carry is one failed lookup.
+    /// </summary>
+    private static readonly Dictionary<string, string> FamilyByDenomination = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, List<string>> DenominationsByFamily = new(StringComparer.OrdinalIgnoreCase);
+    private static int _faithVersion;
+
+    private static void RebuildFamilies()
+    {
+        FamilyByDenomination.Clear();
+        DenominationsByFamily.Clear();
+        foreach (var religion in ReligionById.Values)
+        {
+            if (!religion.IsDenomination) continue;
+            // A family is one level: a denomination naming another denomination is read as its family's.
+            var family = religion.Family;
+            if (ReligionById.TryGetValue(family, out var parent) && parent.IsDenomination) family = parent.Family;
+            FamilyByDenomination[religion.Id] = family;
+            if (!DenominationsByFamily.TryGetValue(family, out var list))
+                DenominationsByFamily[family] = list = new List<string>();
+            list.Add(religion.Id);
+            // A denomination written without a group takes its family's, so formables'
+            // required_religion_groups see a Lutheran as christian.
+            if (string.IsNullOrEmpty(religion.Group) && ReligionById.TryGetValue(family, out var root))
+                religion.Group = root.Group;
+        }
+        foreach (var list in DenominationsByFamily.Values) list.Sort(StringComparer.Ordinal);
+        _faithVersion++;
+    }
+
+    /// <summary>
+    /// The family a faith id belongs to: itself for a family (and for any id nobody declared),
+    /// the family for a denomination. What every mechanic comparing faiths compares.
+    /// </summary>
+    public static string FamilyOf(string id) =>
+        id is not null && FamilyByDenomination.TryGetValue(id, out var family) ? family : id ?? "";
+
+    public static bool IsDenomination(string id) => id is not null && FamilyByDenomination.ContainsKey(id);
+
+    /// <summary>Every denomination declared under a family, by id.</summary>
+    public static IReadOnlyList<string> DenominationIdsIn(string familyId) =>
+        familyId is not null && DenominationsByFamily.TryGetValue(familyId, out var list) ? list : Array.Empty<string>();
+
+    public static int DenominationCount => FamilyByDenomination.Count;
+
+    private static readonly Dictionary<string, FaithSetting> FaithByCountry = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, FaithSetting> FaithByRegion = new(StringComparer.OrdinalIgnoreCase);
+
+    public static IReadOnlyDictionary<string, FaithSetting> CountryFaithSettings => FaithByCountry;
+    public static IReadOnlyDictionary<string, FaithSetting> RegionFaithSettings => FaithByRegion;
+
+    public static void LoadFaithSettings(string json, List<string> errors) => Read(json, errors, MergeFaithSettings);
+
+    /// <summary>
+    /// history/faiths: { "countries": { "USA": {...} }, "regions": { "us_ut": {...} } }, each
+    /// place { "faiths": { family: share }, "denominations": { family: { denomination: share } },
+    /// "peoples": { culture: { the same two } } }. Later files win place by place.
+    /// </summary>
+    private static void MergeFaithSettings(JsonElement root, List<string> errors)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return;
+        if (root.TryGetProperty("countries", out var countries) && countries.ValueKind == JsonValueKind.Object)
+            foreach (var entry in countries.EnumerateObject())
+                if (!entry.Name.StartsWith("//", StringComparison.Ordinal))
+                    FaithByCountry[entry.Name] = ReadFaithSetting(entry.Value, entry.Name, errors);
+        if (root.TryGetProperty("regions", out var regions) && regions.ValueKind == JsonValueKind.Object)
+            foreach (var entry in regions.EnumerateObject())
+                if (!entry.Name.StartsWith("//", StringComparison.Ordinal))
+                    FaithByRegion[entry.Name] = ReadFaithSetting(entry.Value, entry.Name, errors);
+    }
+
+    private static FaithSetting ReadFaithSetting(JsonElement value, string where, List<string> errors)
+    {
+        var setting = new FaithSetting();
+        if (value.ValueKind != JsonValueKind.Object) return setting;
+        if (value.TryGetProperty("faiths", out var faiths) && faiths.ValueKind == JsonValueKind.Object)
+        {
+            // A denomination written as a faith counts toward its family, which is what a
+            // population group carries; the denomination itself goes into the sub-shares.
+            var byFamily = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            foreach (var share in faiths.EnumerateObject())
+            {
+                if (share.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+                if (!share.Value.TryGetSingle(out var weight) || !(weight > 0f) || !float.IsFinite(weight))
+                {
+                    errors?.Add($"faiths '{where}': share of '{share.Name}' must be a positive number.");
+                    continue;
+                }
+                var family = FamilyOf(share.Name);
+                byFamily[family] = byFamily.GetValueOrDefault(family) + weight;
+                if (IsDenomination(share.Name))
+                {
+                    var list = setting.Denominations.TryGetValue(family, out var known) ? known.ToList() : new List<(string, float)>();
+                    list.Add((share.Name, weight));
+                    setting.Denominations[family] = list.ToArray();
+                }
+            }
+            var total = byFamily.Values.Sum();
+            if (total > 0f)
+            {
+                setting.Faiths = byFamily.OrderByDescending(entry => entry.Value)
+                    .ThenBy(entry => entry.Key, StringComparer.Ordinal)
+                    .Select(entry => (entry.Key, entry.Value / total)).ToArray();
+                // Denominations written among the faiths are shares of the place; as a sub-share
+                // they are of their family.
+                foreach (var family in setting.Denominations.Keys.ToList())
+                    setting.Denominations[family] = setting.Denominations[family]
+                        .Select(entry => (entry.Item1, byFamily[family] > 0f ? entry.Item2 / byFamily[family] : 0f)).ToArray();
+            }
+        }
+        if (value.TryGetProperty("denominations", out var denominations) && denominations.ValueKind == JsonValueKind.Object)
+            foreach (var family in denominations.EnumerateObject())
+            {
+                if (family.Name.StartsWith("//", StringComparison.Ordinal) || family.Value.ValueKind != JsonValueKind.Object) continue;
+                var list = new List<(string, float)>();
+                foreach (var share in family.Value.EnumerateObject())
+                {
+                    if (share.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+                    if (!share.Value.TryGetSingle(out var weight) || weight < 0f || !float.IsFinite(weight))
+                    {
+                        errors?.Add($"faiths '{where}': denomination share '{share.Name}' must be a number from 0 to 1.");
+                        continue;
+                    }
+                    if (weight > 0f) list.Add((share.Name, weight));
+                }
+                var sum = list.Sum(entry => entry.Item2);
+                // Shares of the family; more than the whole is read as proportions of it.
+                if (sum > 1.0001f) list = list.Select(entry => (entry.Item1, entry.Item2 / sum)).ToList();
+                setting.Denominations[family.Name] = list.ToArray();
+            }
+        if (value.TryGetProperty("peoples", out var peoples) && peoples.ValueKind == JsonValueKind.Object)
+            foreach (var people in peoples.EnumerateObject())
+                if (!people.Name.StartsWith("//", StringComparison.Ordinal))
+                    setting.Peoples[people.Name] = ReadFaithSetting(people.Value, $"{where}/{people.Name}", errors);
+        return setting;
+    }
+
+    /// <summary>
+    /// The faith of one people in one place, as at most three families: what history/faiths
+    /// writes for this region or country, where it applies, and otherwise the people's own.
+    ///
+    /// A place's mix written for nobody in particular applies to every people whose own faiths
+    /// all appear in it - Utah's Latter-day Saints reweight the Americans and the Hispanic
+    /// Americans living there, and leave its Jews and its Hindus as they are. Three rather than
+    /// two because the place was written on purpose and from a source; only the handful of
+    /// places written gain a group, and the people's own data still keeps to two.
+    /// </summary>
+    public static IReadOnlyList<(string Religion, float Share)> FaithOf(string cultureId, string regionId, string countryTag)
+    {
+        var own = FaithOf(cultureId);
+        if (FaithByRegion.Count == 0 && FaithByCountry.Count == 0) return own;
+        return Placed(regionId is not null && FaithByRegion.TryGetValue(regionId, out var region) ? region : null)
+            ?? Placed(countryTag is not null && FaithByCountry.TryGetValue(countryTag, out var country) ? country : null)
+            ?? own;
+
+        IReadOnlyList<(string, float)> Placed(FaithSetting place)
+        {
+            if (place is null) return null;
+            if (cultureId is not null && place.Peoples.TryGetValue(cultureId, out var people) && people.Faiths is { Length: > 0 })
+                return Top(people.Faiths);
+            if (place.Faiths is not { Length: > 0 }) return null;
+            foreach (var (religion, _) in own)
+                if (!place.Faiths.Any(entry => string.Equals(entry.Religion, religion, StringComparison.OrdinalIgnoreCase)))
+                    return null;
+            return Top(place.Faiths);
+        }
+
+        static IReadOnlyList<(string, float)> Top((string Religion, float Share)[] mix)
+        {
+            var top = mix.Take(3).ToArray();
+            var kept = top.Sum(entry => entry.Share);
+            return kept <= 0f ? null : top.Select(entry => (entry.Religion, entry.Share / kept)).ToArray();
+        }
+    }
+
+    /// <summary>
+    /// How one family divides into denominations for one people in one region of one country,
+    /// adding to one. Read from the most particular place down - the people in the region, the
+    /// region, the people in the country, the country - each place dividing what the one above
+    /// it left undivided; whatever nobody divides stays the family itself ("Protestant").
+    /// A denomination id is its own single answer. Interface and specific mechanics only: it
+    /// adds no population groups and costs the daily simulation nothing.
+    /// </summary>
+    public static IReadOnlyList<(string Denomination, float Share)> DenominationsOf(
+        string religionId, string regionId, string countryTag, string cultureId)
+    {
+        if (string.IsNullOrEmpty(religionId)) return Array.Empty<(string, float)>();
+        if (IsDenomination(religionId) || !DenominationsByFamily.ContainsKey(religionId))
+            return new[] { (religionId, 1f) };
+        var family = religionId;
+        var result = new List<(string Id, float Share)>();
+        var left = 1f;
+        var region = regionId is not null && FaithByRegion.TryGetValue(regionId, out var r) ? r : null;
+        var country = countryTag is not null && FaithByCountry.TryGetValue(countryTag, out var c) ? c : null;
+        Divide(region is not null && cultureId is not null && region.Peoples.TryGetValue(cultureId, out var rp) ? rp : null);
+        Divide(region);
+        Divide(country is not null && cultureId is not null && country.Peoples.TryGetValue(cultureId, out var cp) ? cp : null);
+        Divide(country);
+        if (left > 0.0001f) Add(family, left);
+        return result.OrderByDescending(entry => entry.Share).ThenBy(entry => entry.Id, StringComparer.Ordinal)
+            .Select(entry => (entry.Id, entry.Share)).ToArray();
+
+        void Divide(FaithSetting place)
+        {
+            if (place is null || left <= 0.0001f || !place.Denominations.TryGetValue(family, out var shares)) return;
+            // What this place says about denominations already placed above is not said twice:
+            // the rest of its table is scaled to the part still undivided.
+            var named = result.Select(entry => entry.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var fresh = shares.Where(entry => !named.Contains(entry.Denomination)).ToArray();
+            var claimed = shares.Where(entry => named.Contains(entry.Denomination)).Sum(entry => entry.Share);
+            var room = 1f - claimed;
+            if (room <= 0.0001f) return;
+            var portion = left;
+            foreach (var (denomination, share) in fresh)
+            {
+                var part = portion * share / room;
+                Add(denomination, part);
+                left -= part;
+            }
+            if (left < 0f) left = 0f;
+        }
+
+        void Add(string id, float share)
+        {
+            if (share <= 0f) return;
+            for (var i = 0; i < result.Count; i++)
+                if (string.Equals(result[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                {
+                    result[i] = (result[i].Id, result[i].Share + share);
+                    return;
+                }
+            result.Add((id, share));
+        }
+    }
+
+    /// <summary>
+    /// Every denomination held in a region, from its population groups, largest first - what
+    /// the population screen and the map show. A family no source divides shows as itself.
+    /// </summary>
+    public static IReadOnlyList<(string Denomination, long Size)> DenominationsIn(ScenarioState state, string countryTag)
+    {
+        if (state is null || state.PopulationGroups.Count == 0) return Array.Empty<(string, long)>();
+        var byPeopleAndFaith = new Dictionary<(string Culture, string Religion), long>();
+        foreach (var group in state.PopulationGroups)
+        {
+            if (group.Size <= 0) continue;
+            var key = (group.Culture ?? "", group.Religion ?? "");
+            byPeopleAndFaith[key] = byPeopleAndFaith.GetValueOrDefault(key) + group.Size;
+        }
+        var totals = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (var ((culture, religion), size) in byPeopleAndFaith)
+            foreach (var (denomination, share) in DenominationsOf(religion, state.Id, countryTag, culture))
+                totals[denomination] = totals.GetValueOrDefault(denomination) + size * (double)share;
+        return totals.Select(entry => (entry.Key, (long)Math.Round(entry.Value)))
+            .Where(entry => entry.Item2 > 0)
+            .OrderByDescending(entry => entry.Item2).ThenBy(entry => entry.Key, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// How many of a region's people hold one particular denomination - for a mechanic that
+    /// cares about the denomination rather than the family. A family id counts the family.
+    /// </summary>
+    public static long DenominationSize(ScenarioState state, string countryTag, string denominationId)
+    {
+        if (state is null || string.IsNullOrEmpty(denominationId)) return 0;
+        var family = FamilyOf(denominationId);
+        var exact = !IsDenomination(denominationId);
+        double total = 0;
+        foreach (var group in state.PopulationGroups)
+        {
+            if (group.Size <= 0 || !string.Equals(FamilyOf(group.Religion), family, StringComparison.OrdinalIgnoreCase)) continue;
+            if (exact) { total += group.Size; continue; }
+            foreach (var (denomination, share) in DenominationsOf(group.Religion, state.Id, countryTag, group.Culture))
+                if (string.Equals(denomination, denominationId, StringComparison.OrdinalIgnoreCase))
+                    total += group.Size * (double)share;
+        }
+        return (long)Math.Round(total);
     }
 
     private static void MergeCultures(JsonElement root, List<string> errors)
@@ -365,6 +693,7 @@ public static class DemographyCatalog
             // "religion": "orthodox", or a split: { "christian": 0.55, "sunni": 0.45 }
             if (!entry.Value.TryGetProperty("religion", out var faith)) continue;
             culture.Religions.Clear();
+            culture.FaithCache = null;
             if (faith.ValueKind == JsonValueKind.String) culture.Religions[faith.GetString() ?? ""] = 1f;
             else if (faith.ValueKind == JsonValueKind.Object)
                 foreach (var share in faith.EnumerateObject())
@@ -578,16 +907,32 @@ public static class DemographyCatalog
     public static IReadOnlyList<(string Religion, float Share)> FaithOf(string cultureId)
     {
         var culture = Culture(cultureId);
-        if (culture is null || culture.Religions.Count == 0) return new[] { ("irreligion", 1f) };
-        var top = culture.Religions
+        if (culture is null || culture.Religions.Count == 0) return NoFaith;
+        // Asked per region by the weekly assimilation pass: worked out once per people and
+        // kept, instead of sorting the people's faiths again every time.
+        var cached = culture.FaithCache;
+        if (cached is not null && culture.FaithCacheVersion == _faithVersion) return cached;
+        // Families, not denominations: a people written as "lutheran" is Protestant to every
+        // mechanic and lives in Protestant population groups.
+        var byFamily = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (religion, weight) in culture.Religions)
+        {
+            var family = FamilyOf(religion);
+            byFamily[family] = byFamily.GetValueOrDefault(family) + weight;
+        }
+        var top = byFamily
             .OrderByDescending(entry => entry.Value)
             .ThenBy(entry => entry.Key, StringComparer.Ordinal)
             .Take(2)
             .ToArray();
         var kept = top.Sum(entry => entry.Value);
-        if (kept <= 0f) return new[] { ("irreligion", 1f) };
-        return top.Select(entry => (entry.Key, entry.Value / kept)).ToArray();
+        cached = kept <= 0f ? NoFaith : top.Select(entry => (entry.Key, entry.Value / kept)).ToArray();
+        culture.FaithCache = cached;
+        culture.FaithCacheVersion = _faithVersion;
+        return cached;
     }
+
+    private static readonly (string, float)[] NoFaith = { ("irreligion", 1f) };
 
     private static string Titled(string id)
     {

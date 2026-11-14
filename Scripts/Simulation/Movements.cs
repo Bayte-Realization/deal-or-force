@@ -31,8 +31,10 @@ public sealed partial class MovementDefinition
     // rather than once for every movement's week.
     internal string[] DistinctPeoples =>
         _distinctPeoples ??= Peoples.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    // Faiths as families: population groups carry the family, so a movement naming a
+    // denomination ("theravada") draws on the believers of its family ("buddhist").
     internal string[] DistinctFaiths =>
-        _distinctFaiths ??= Faiths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        _distinctFaiths ??= Faiths.Select(DemographyCatalog.FamilyOf).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
     /// <summary>
     /// O(1) membership for the walk over every population group in the world.
@@ -46,7 +48,7 @@ public sealed partial class MovementDefinition
         name is not null && (_peopleLookup ??= new HashSet<string>(Peoples, StringComparer.OrdinalIgnoreCase)).Contains(name);
 
     internal bool HasFaith(string name) =>
-        name is not null && (_faithLookup ??= new HashSet<string>(Faiths, StringComparer.OrdinalIgnoreCase)).Contains(name);
+        name is not null && (_faithLookup ??= new HashSet<string>(DistinctFaiths, StringComparer.OrdinalIgnoreCase)).Contains(name);
 
     internal void ForgetLookups()
     {

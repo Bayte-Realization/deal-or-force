@@ -622,7 +622,7 @@ public static class HistoryDataLoader
         var cells = new List<(PopulationGroup Group, double Weight)>();
         foreach (var (culture, share) in shares)
         {
-            var faith = DemographyCatalog.FaithOf(culture);
+            var faith = DemographyCatalog.FaithOf(culture, state.Id, state.NationId);
             foreach (var trade in trades)
             foreach (var (religion, faithShare) in faith)
             {

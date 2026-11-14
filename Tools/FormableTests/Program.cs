@@ -150,6 +150,8 @@ static class Program
         if (args.Length == 0) MoraleTermsTests.Run();
         if (args.Length == 0) ModderExamplesTests.Run();
         if (args.Length == 0) ModScalarAccessTests.Run();
+        if (args.Contains("--religion-only")) { ReligionDenominationTests.Run(); return; }
+        if (args.Length == 0) ReligionDenominationTests.Run();
         if (args.Contains("--beliefs-only")) { BeliefDynamicsTests.Run(); return; }
         if (args.Length == 0) BeliefDynamicsTests.Run();
         if (args.Contains("--law-options-only")) { LawOptionIntegrationTests.Run(); return; }

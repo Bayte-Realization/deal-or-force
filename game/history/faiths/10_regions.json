@@ -1,0 +1,30 @@
+// Regions that believe differently from their country - same shape as 00_countries.json,
+// keyed by region id (history/states). A region's table is read before its country's: what
+// it divides it divides, and what it leaves the country's table divides as before.
+//
+// US states: Pew Research Center, Religious Landscape Study 2023-24, state pages (2025), all
+// adults. The Baptist and Lutheran shares are Pew's family totals (evangelical + mainline +
+// historically Black) divided by the state's Protestant total, both as Pew prints them
+// rounded, so each is good to about two points.
+{
+  "regions": {
+    // Utah: Latter-day Saints 50%, Protestant 8% (evangelical 3, mainline 5, historically
+    // Black under 1), Catholic 4%, unaffiliated 34% (margin of error 7.3 points). Applies to
+    // every people in Utah whose own faiths are among these - Americans, Hispanic Americans,
+    // Irish, Germans... - and leaves its Jews, Hindus and Buddhists as they are. A people gets
+    // the three largest, so Utah's Catholics (4%) are not seeded apart.
+    "us_ut": { "faiths": { "latter_day_saints": 0.50, "irreligion": 0.34, "protestant": 0.08, "catholic": 0.04 } },
+
+    // The Baptist South: Baptist family / Protestant total.
+    "us_al": { "denominations": { "protestant": { "baptist": 0.545 } } },  // 0.36 / 0.66
+    "us_ms": { "denominations": { "protestant": { "baptist": 0.634 } } },  // 0.45 / 0.71
+    "us_tn": { "denominations": { "protestant": { "baptist": 0.476 } } },  // 0.30 / 0.63
+    "us_ga": { "denominations": { "protestant": { "baptist": 0.509 } } },  // 0.29 / 0.57
+
+    // The Lutheran Upper Midwest: Lutheran family / Protestant total.
+    "us_mn": { "denominations": { "protestant": { "lutheran": 0.535 } } }, // 0.23 / 0.43
+    "us_nd": { "denominations": { "protestant": { "lutheran": 0.469 } } }, // 0.23 / 0.49
+    "us_sd": { "denominations": { "protestant": { "lutheran": 0.279 } } }, // 0.17 / 0.61
+    "us_wi": { "denominations": { "protestant": { "lutheran": 0.436 } } }  // 0.17 / 0.39
+  }
+}

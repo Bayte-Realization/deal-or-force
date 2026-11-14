@@ -80,8 +80,18 @@ public static class StateIdentity
     public static bool IsSecular(string id) => !string.IsNullOrWhiteSpace(id) && Secular.Contains(id);
     public static bool IsAtheist(string id) => string.Equals(id, "atheism", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(id, "state_atheism", StringComparison.OrdinalIgnoreCase);
-    public static string CanonicalFaith(string id) => IsAtheist(id) ? "atheism" : id ?? "";
+    /// <summary>
+    /// The faith as every mechanic compares it: its FAMILY. A Lutheran and a Baptist are both
+    /// "protestant", a Zaydi and a Twelver both "shia"; a state that declares a denomination
+    /// declares its family. Ids that were families before denominations existed answer
+    /// themselves, so a save or a mod naming "protestant" reads exactly as before.
+    /// </summary>
+    public static string CanonicalFaith(string id) => IsAtheist(id) ? "atheism" : DemographyCatalog.FamilyOf(id);
+
     public static bool SameFaith(string left, string right) =>
+        // The common case first and free: the ids population groups and declarations carry
+        // are families already, so equal ids need no lookup.
+        string.Equals(left, right, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(CanonicalFaith(left), CanonicalFaith(right), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The name of an identity as the state declares it, not as a census counts it.</summary>

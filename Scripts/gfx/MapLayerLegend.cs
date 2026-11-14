@@ -16,6 +16,7 @@ public sealed partial class GlobePresentation
         StrategicMapMode.Tension => new[] { ("map.legend.crisis", Ui.Colour("state.warning")), ("map.legend.clashes", Ui.Colour("state.critical")), ("map.legend.war", Ui.Colour("map.at_war")) },
         StrategicMapMode.Diplomatic => new[] { ("map.legend.self", Ui.Colour("map.player")), ("map.legend.allied", Ui.Colour("map.allied")), ("map.legend.rival", Ui.Colour("map.rival")), ("map.legend.war", Ui.Colour("map.at_war")) },
         StrategicMapMode.Wars => new[] { ("map.legend.attacker", Ui.Colour("map.war_attacker")), ("map.legend.defender", Ui.Colour("map.war_defender")), ("map.legend.other_belligerent", Ui.Colour("map.war_bystander")) },
+        StrategicMapMode.Religion => _religionLegend,
         _ => System.Array.Empty<(string, Color)>()
     };
 }

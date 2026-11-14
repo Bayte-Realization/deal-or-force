@@ -20,7 +20,9 @@ public enum StrategicMapMode
     // leave in it, and how close the country it is seen from is to shooting with every other.
     Stability,
     Unrest,
-    Tension
+    Tension,
+    // What each region believes: its largest denomination, in a shade of its family's colour.
+    Religion
 }
 
 public sealed partial class GlobePresentation
@@ -502,6 +504,11 @@ public sealed partial class GlobePresentation
             RefreshRegionalPalette(state => UnrestRamp(PoliticalCohorts.UnrestHeat(state)));
             return;
         }
+        if (_mapMode == StrategicMapMode.Religion)
+        {
+            RefreshReligionPalette();
+            return;
+        }
         if (_mapMode is StrategicMapMode.Political or StrategicMapMode.Terrain or StrategicMapMode.Relief)
         {
             _globeMaterial.SetShaderParameter("map_mode", 0f);
@@ -604,6 +611,50 @@ public sealed partial class GlobePresentation
     /// A layer drawn region by region rather than country by country, through the same
     /// per-province palette the resource layer uses. Land nobody owns stays neutral.
     /// </summary>
+    /// <summary>The religion layer's legend, as last drawn: families by their followers on the
+    /// map, each followed by its denominations. Built with the palette, read by the guide.</summary>
+    private static (string Label, Color Colour)[] _religionLegend = Array.Empty<(string, Color)>();
+
+    /// <summary>
+    /// Every region in the colour of its largest denomination - a Lutheran north and a Baptist
+    /// south in two blues that both read as Protestant. Read from the census the population
+    /// screen draws, divided by history/faiths; it costs the simulation nothing.
+    /// </summary>
+    private void RefreshReligionPalette()
+    {
+        var followers = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        RefreshRegionalPalette(state =>
+        {
+            var held = DemographyCatalog.DenominationsIn(state, state.NationId);
+            if (held.Count == 0) return Ui.Colour("map.neutral");
+            foreach (var (denomination, size) in held)
+                followers[denomination] = followers.GetValueOrDefault(denomination) + size;
+            return ReligionColour(held[0].Denomination);
+        });
+
+        // Grouped by family, the largest families first; a few of each, so the guide stays a guide.
+        var families = followers
+            .GroupBy(entry => DemographyCatalog.FamilyOf(entry.Key), StringComparer.OrdinalIgnoreCase)
+            .Select(family => (Family: family.Key, Total: family.Sum(entry => entry.Value),
+                Members: family.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key, StringComparer.Ordinal).ToList()))
+            .OrderByDescending(family => family.Total).ThenBy(family => family.Family, StringComparer.Ordinal)
+            .Take(8);
+        var legend = new List<(string, Color)>();
+        foreach (var (family, _, members) in families)
+            foreach (var (denomination, _) in members.Take(4))
+                legend.Add((string.Equals(denomination, family, StringComparison.OrdinalIgnoreCase)
+                        ? DemographyCatalog.ReligionName(family)
+                        : Loc.Format("{0} · {1}", DemographyCatalog.ReligionName(denomination), DemographyCatalog.ReligionName(family)),
+                    ReligionColour(denomination)));
+        _religionLegend = legend.ToArray();
+    }
+
+    private static Color ReligionColour(string id)
+    {
+        var hex = DemographyCatalog.Religion(id)?.Colour;
+        return !string.IsNullOrWhiteSpace(hex) && Color.HtmlIsValid(hex) ? Color.FromHtml(hex) : Ui.Colour("map.neutral");
+    }
+
     private void RefreshRegionalPalette(Func<ScenarioState, Color> colour)
     {
         var pixels = new byte[256 * 256 * 4];

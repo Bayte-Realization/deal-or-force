@@ -1501,7 +1501,8 @@ public static class EconomySystem
         for (var c = 0; c < composition.Count; c++)
         {
             var (culture, share) = composition[c];
-            var faith = DemographyCatalog.FaithOf(culture);
+            // The people's faith as this region and country believe it (history/faiths), else its own.
+            var faith = DemographyCatalog.FaithOf(culture, state.Id, nation?.Tag);
             var people = (long)(population * share);
             if (people <= 0) continue;
             for (var index = 0; index < trades.Count; index++)
@@ -1527,7 +1528,7 @@ public static class EconomySystem
         if (largest is null)
         {
             var (culture, _) = composition[0];
-            largest = Add(state, culture, DemographyCatalog.FaithOf(culture)[0].Religion,
+            largest = Add(state, culture, DemographyCatalog.FaithOf(culture, state.Id, nation?.Tag)[0].Religion,
                 trades[0].Id, trades[0].Class, trades[0].Sector, 0,
                 trades[0].Employment, trades[0].Wealth);
         }

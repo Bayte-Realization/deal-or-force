@@ -174,9 +174,10 @@ public partial class DealOrForceGame
                 Simulation.Loc.Format("{0} of {1}.",
                     Fmt.PeopleExact(cultures[0].Size), Fmt.PeopleExact(_selectedState.Population)) + " " +
                 Tr("The whole table is under Population."));
-        var faiths = EconomySystem.Religions(_selectedState);
+        // The denomination, not only its family: "Lutheran", "Zaydi", "Latter-day Saints".
+        var faiths = DemographyCatalog.DenominationsIn(_selectedState, _selectedState.NationId);
         if (faiths.Count > 0)
-            DetailRow("Largest faith", DemographyCatalog.ReligionName(faiths[0].Religion),
+            DetailRow("Largest faith", DemographyCatalog.ReligionName(faiths[0].Denomination),
                 Simulation.Loc.Format("{0:P0} of the region.",
                     faiths[0].Size / (double)Math.Max(1, _selectedState.Population)));
 

@@ -381,7 +381,7 @@ public static class FormableProclamationAi
                 people += population.Size;
                 var culture = population.Culture ?? "";
                 if (cultures.Contains(culture) || groups.Contains(DemographyCatalog.Culture(culture)?.Group ?? "") ||
-                    FormableNations.ContainsIgnoreCase(definition.EligibleReligions, population.Religion ?? "")) matching += population.Size;
+                    FormableNations.HasFaith(definition.EligibleReligions, population.Religion ?? "")) matching += population.Size;
             }
             total += Math.Max(Math.Max(0L, state.Population), people) * fraction;
             represented += matching * fraction;

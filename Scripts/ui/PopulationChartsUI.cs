@@ -134,15 +134,37 @@ public partial class DealOrForceGame
         }).ToList();
     }
 
-    private static IReadOnlyList<Slice> ReligionSlices(ScenarioState state) =>
-        EconomySystem.Religions(state).Select(entry =>
+    /// <summary>
+    /// A region's faiths as denominations - Lutheran and Baptist rather than one "Protestant" -
+    /// kept next to the rest of their family, the largest family first, so the family still
+    /// reads at a glance. Every mechanic compares the family, and the tooltip says which it is.
+    /// </summary>
+    private static IReadOnlyList<Slice> ReligionSlices(ScenarioState state)
+    {
+        var held = DemographyCatalog.DenominationsIn(state, state.NationId);
+        var familyTotals = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (denomination, size) in held)
         {
-            var religion = DemographyCatalog.Religion(entry.Religion);
-            var group = string.IsNullOrWhiteSpace(religion?.Group) ? "" : $"{Titled(religion.Group)}\n";
-            return new Slice(DemographyCatalog.ReligionName(entry.Religion), entry.Size,
-                Swatch(religion?.Colour),
-                group + Simulation.Loc.Format("{0} people", Fmt.PeopleExact(entry.Size)));
-        }).ToList();
+            var family = DemographyCatalog.FamilyOf(denomination);
+            familyTotals[family] = familyTotals.GetValueOrDefault(family) + size;
+        }
+        return held
+            .OrderByDescending(entry => familyTotals[DemographyCatalog.FamilyOf(entry.Denomination)])
+            .ThenBy(entry => DemographyCatalog.FamilyOf(entry.Denomination), StringComparer.Ordinal)
+            .ThenByDescending(entry => entry.Size)
+            .Select(entry =>
+            {
+                var religion = DemographyCatalog.Religion(entry.Denomination);
+                var family = DemographyCatalog.FamilyOf(entry.Denomination);
+                var group = string.IsNullOrWhiteSpace(religion?.Group) ? "" : $"{Titled(religion.Group)}\n";
+                var kin = string.Equals(family, entry.Denomination, StringComparison.OrdinalIgnoreCase)
+                    ? ""
+                    : Simulation.Loc.Format("Faith family: {0}", DemographyCatalog.ReligionName(family)) + "\n";
+                return new Slice(DemographyCatalog.ReligionName(entry.Denomination), entry.Size,
+                    Swatch(religion?.Colour),
+                    group + kin + Simulation.Loc.Format("{0} people", Fmt.PeopleExact(entry.Size)));
+            }).ToList();
+    }
 
     /// <summary>
     /// A region's people cut by what they believe rather than by who they are.

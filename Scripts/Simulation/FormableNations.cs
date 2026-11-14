@@ -76,6 +76,19 @@ public static class FormableNations
     /// country of the starting world that has vanished and may be brought back.</summary>
     public static IEnumerable<FormableNation> AvailableIn(Campaign campaign) =>
         All.Concat(FormableRestorations.In(campaign));
+    /// <summary>
+    /// Whether a listed faith is the one a population holds, compared as families: a formable
+    /// naming "lutheran" is met by Protestant population groups, and one naming "protestant"
+    /// by every Protestant denomination.
+    /// </summary>
+    internal static bool HasFaith(string[] items, string religion)
+    {
+        if (items is null || religion is null) return false;
+        for (var i = 0; i < items.Length; i++)
+            if (StateIdentity.SameFaith(items[i], religion)) return true;
+        return false;
+    }
+
     internal static bool ContainsIgnoreCase(string[] items, string value)
     {
         if (items is null || value is null) return false;
@@ -104,7 +117,7 @@ public static class FormableNations
         {
             var faiths = DemographyCatalog.FaithOf(people);
             if (faiths.Count > 0 && faiths[0].Share >= 0.5f &&
-                ContainsIgnoreCase(definition.EligibleReligions, faiths[0].Religion))
+                HasFaith(definition.EligibleReligions, faiths[0].Religion))
                 return true;
         }
         return false;
@@ -166,7 +179,7 @@ public static class FormableNations
             {
                 if (population is null || population.Size <= 0) continue;
                 represented += population.Size;
-                if ((hasReligions && ContainsIgnoreCase(definition.RequiredReligions, population.Religion ?? "")) ||
+                if ((hasReligions && HasFaith(definition.RequiredReligions, population.Religion ?? "")) ||
                     (hasGroups && ContainsIgnoreCase(definition.RequiredReligionGroups, DemographyCatalog.Religion(population.Religion)?.Group ?? "")))
                     matching += population.Size;
             }

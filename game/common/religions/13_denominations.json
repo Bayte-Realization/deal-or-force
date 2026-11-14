@@ -1,0 +1,77 @@
+// Denominations: the churches, branches and streams inside a faith family.
+//
+// Two levels. A FAMILY is what every mechanic that asks "the same faith?" compares - the
+// state church, opinion between states, conversion, rebels, movements, formables. A
+// DENOMINATION names its family with "family" and is what the map and the population screen
+// show. An entry without "family" is a family of its own, which is why every id that existed
+// before this file (protestant, sunni, shia, jewish, buddhist ...) still means exactly what it
+// meant: saves, mods and formables that name "protestant" read as before, and a Lutheran and
+// a Baptist country are one faith to each other, as a Protestant and a Protestant were.
+//
+// A population group is always counted under its family; how a family divides into
+// denominations is a sub-share written in history/faiths/, read by the interface and by any
+// mechanic that asks, so naming a denomination adds no population groups at all.
+//
+// Colours: shades of the family's hue, so a Lutheran region and a Baptist one are told apart
+// and both still read as Protestant on the map.
+//
+// `group` is the wider tradition (christian, muslim ...) that `required_religion_groups` in
+// common/formable_nations matches; a denomination inherits its family's.
+{
+  // ---- Protestant (family "protestant", #5f8fc8)
+  "lutheran": { "name": "Lutheran", "family": "protestant", "group": "christian", "colour": "#3f6fb0" },
+  "anglican": { "name": "Anglican", "family": "protestant", "group": "christian", "colour": "#8fb4e4" },
+  "reformed": { "name": "Reformed", "family": "protestant", "group": "christian", "colour": "#2c5490" },
+  "baptist": { "name": "Baptist", "family": "protestant", "group": "christian", "colour": "#4a86dc" },
+  "methodist": { "name": "Methodist", "family": "protestant", "group": "christian", "colour": "#a4c0e8" },
+  "pentecostal": { "name": "Pentecostal", "family": "protestant", "group": "christian", "colour": "#5aa6f0" },
+  "evangelical": { "name": "Evangelical", "family": "protestant", "group": "christian", "colour": "#6b84b4" },
+  "adventist": { "name": "Adventist", "family": "protestant", "group": "christian", "colour": "#476a94" },
+  "african_initiated": { "name": "African Initiated Churches", "family": "protestant", "group": "christian", "colour": "#7f98bc" },
+
+  // ---- Restorationist churches counted outside Protestantism by Pew and by themselves:
+  // families of their own, so neither is "the same faith" as a Protestant state.
+  "latter_day_saints": { "name": "Latter-day Saints", "group": "christian", "colour": "#2e9fae" },
+  "jehovahs_witnesses": { "name": "Jehovah's Witnesses", "group": "christian", "colour": "#8a7cc6" },
+
+  // ---- Catholic (family "catholic", #c8a93f). Maronite and Chaldean Catholic stay the
+  // families they already were in 11_world_traditions.json: folding them in now would change
+  // who counts as the same faith as Lebanon and Iraq.
+  "ukrainian_greek_catholic": { "name": "Ukrainian Greek Catholic", "family": "catholic", "group": "christian", "colour": "#a8862a" },
+  "syro_malabar": { "name": "Syro-Malabar Catholic", "family": "catholic", "group": "christian", "colour": "#d8bc5c" },
+  "melkite": { "name": "Melkite Greek Catholic", "family": "catholic", "group": "christian", "colour": "#b89a48" },
+
+  // ---- Eastern Orthodox (family "orthodox", #7f5fb0). Two churches of Ukraine, shown only;
+  // both stay "orthodox" to every mechanic, so relations are exactly what they were.
+  "orthodox_church_of_ukraine": { "name": "Orthodox Church of Ukraine", "family": "orthodox", "group": "christian", "colour": "#9c74d4" },
+  "ukrainian_orthodox_moscow": { "name": "Ukrainian Orthodox Church (Moscow Patriarchate)", "family": "orthodox", "group": "christian", "colour": "#5c4490" },
+
+  // ---- Shia (family "shia", #1f6f7f)
+  "twelver": { "name": "Twelver Shia", "family": "shia", "group": "muslim", "colour": "#2b8496" },
+  "zaydi": { "name": "Zaydi", "family": "shia", "group": "muslim", "colour": "#13525e" },
+  "ismaili": { "name": "Ismaili", "family": "shia", "group": "muslim", "colour": "#4f9fae" },
+  "alawite": { "name": "Alawite", "family": "shia", "group": "muslim", "colour": "#0e434c" },
+  // Declared non-Muslim by Pakistan's constitution and Muslim by its own members: a family of
+  // its own in the Muslim group, so it is neither silently Sunni nor outside Islam.
+  "ahmadiyya": { "name": "Ahmadiyya", "group": "muslim", "colour": "#5faf4f" },
+
+  // ---- Judaism (family "jewish", #4f6fc0): Israel's four streams and the American movements.
+  "haredi": { "name": "Haredi Judaism", "family": "jewish", "group": "abrahamic", "colour": "#2c4a94" },
+  "religious_zionist": { "name": "Religious Zionist (Dati)", "family": "jewish", "group": "abrahamic", "colour": "#3a5aac" },
+  "masorti": { "name": "Traditional Jews (Masorti)", "family": "jewish", "group": "abrahamic", "colour": "#6c8cd4" },
+  "secular_jewish": { "name": "Secular Jews", "family": "jewish", "group": "abrahamic", "colour": "#a2b4e4" },
+  "orthodox_judaism": { "name": "Orthodox Judaism", "family": "jewish", "group": "abrahamic", "colour": "#34509e" },
+  "conservative_judaism": { "name": "Conservative Judaism", "family": "jewish", "group": "abrahamic", "colour": "#4866b8" },
+  "reform_judaism": { "name": "Reform Judaism", "family": "jewish", "group": "abrahamic", "colour": "#5f7edc" },
+
+  // ---- Buddhism (family "buddhist", #d4a02f). The three schools already declared in
+  // 11_world_traditions.json become its denominations; no people was counted under them, so
+  // the only thing that changes is a movement naming one (the Arakan Army names Theravada)
+  // now finding the Buddhists it names.
+  "theravada": { "family": "buddhist" },
+  "mahayana": { "family": "buddhist" },
+  "vajrayana": { "family": "buddhist" },
+
+  // ---- Zoroastrian (family "zoroastrian", #bf7f3f)
+  "parsi": { "name": "Parsi Zoroastrian", "family": "zoroastrian", "group": "traditional", "colour": "#a4692a" }
+}

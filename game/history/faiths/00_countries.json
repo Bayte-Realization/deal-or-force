@@ -1,0 +1,140 @@
+// How faith families divide into denominations, country by country, on 1 January 2024 - and
+// where a source says a country's people believe otherwise than their own data, that too.
+//
+//   "countries": { TAG: {
+//       "faiths":        { family: share }        reweights the peoples whose own faiths all
+//                                                 appear here (others keep their own)
+//       "denominations": { family: { denomination: share of that family } }
+//       "peoples":       { culture: { the same two, for that people only } } } }
+//
+// A denomination share is a share OF ITS FAMILY; what a table leaves undivided stays the family
+// ("Protestant"). Denominations are shown on the map and in the population screen and are
+// never stored on population groups: no table here adds a group or changes a mechanic, which
+// compare families (common/religions/13_denominations.json). Only "faiths" changes who lives
+// in a region, and only in campaigns started after it is written.
+//
+// Every number names its source and year. A family no source divides is left whole rather
+// than divided by guess - Germany's Lutheran/Reformed split, Nigeria's Pentecostals, South
+// Korea's churches, Syria's Alawites apart from other Shia, Hindu traditions by state, Japanese
+// Buddhist schools. Regions are in 10_regions.json.
+{
+  "countries": {
+    "USA": {
+      // Pew Research Center, Religious Landscape Study 2014, "Religious Composition of U.S.
+      // Adults" (2015): denominational families as shares of all Protestants (Protestants 46.5%
+      // of adults), summed across the evangelical, mainline and historically Black traditions.
+      // Undivided: Restorationist 4.1%, Holiness 1.5%, Congregationalist 1.1%, other or
+      // nonspecific 11.4%. Pew's 2023-24 study publishes only Baptist (12% of adults) and
+      // nondenominational (7%), so the complete 2014 table is used.
+      "denominations": {
+        "protestant": { "baptist": 0.329, "evangelical": 0.133, "pentecostal": 0.099, "methodist": 0.095,
+                        "lutheran": 0.077, "reformed": 0.047, "anglican": 0.026, "adventist": 0.013 },
+        // Pew Research Center, "Jewish Americans in 2020" (2021): Jewish adults by denomination.
+        // "No denomination" 32% shown as secular and non-denominational; "other" 4% undivided.
+        "jewish": { "reform_judaism": 0.37, "conservative_judaism": 0.17, "orthodox_judaism": 0.09, "secular_jewish": 0.32 }
+      }
+    },
+
+    "GBR": {
+      // NatCen, J. Curtice, "Is there a religious revival in Britain?" (Dec 2025), Table 1,
+      // British Social Attitudes 2024, adults in Britain: Church of England 11%, Roman Catholic
+      // 8%, other Christian 21%, non-Christian 8%, no religion 49%. Applied to the English only:
+      // Scotland's established church is Presbyterian, not Anglican. "Other Christian" is
+      // counted as Protestant (it also holds the Orthodox and the non-denominational).
+      "peoples": {
+        "english": { "faiths": { "irreligion": 0.49, "anglican": 0.11, "protestant": 0.21, "catholic": 0.08 } }
+      }
+    },
+
+    "NLD": {
+      // CBS (Statistics Netherlands), "Alleen in Limburg rekent de meerderheid zich nog tot een
+      // geloof" (2026), population 15+ in 2025: none 58%, Catholic 16%, Protestant 12%
+      // (Muslim 6% and other 7% are other peoples' faiths). CBS gives one Protestant total,
+      // so Dutch Protestants are not divided into Reformed and others.
+      "peoples": {
+        "dutch": { "faiths": { "irreligion": 0.58, "catholic": 0.16, "protestant": 0.12 } }
+      }
+    },
+
+    // Nordic national churches are Lutheran: Church of Sweden 51.4% of the population (end of
+    // 2024), Church of Norway 61.7% (SSB 2024), Folkekirken 72% (Danmarks Statistik, 1 Jan
+    // 2023), Evangelical Lutheran Church of Finland 62.2% (Statistics Finland 2024). No source
+    // gives the free churches' share, so these peoples' Protestants are shown as Lutheran.
+    // Finland: Lutheran 62.2%, Orthodox 1.0%, no religion 34.9% leave at most 1.9% for every
+    // other faith, so Lutherans are at least 0.97 of the country's Protestants.
+    "SWE": { "denominations": { "protestant": { "lutheran": 1.0 } } },
+    "NOR": { "denominations": { "protestant": { "lutheran": 1.0 } } },
+    "DNK": { "denominations": { "protestant": { "lutheran": 1.0 } } },
+    "FIN": { "denominations": { "protestant": { "lutheran": 0.97 } } },
+
+    // IBGE, Censo 2010: evangelicals 60.0% Pentecostal, 18.5% mission (historical) churches,
+    // 21.8% undetermined. The 2022 census has published no subgroups yet.
+    "BRA": { "denominations": { "protestant": { "pentecostal": 0.60 } } },
+
+    // KNBS, 2019 Kenya Population and Housing Census, vol. IV: Protestant 33.4%, Evangelical
+    // churches 20.4%, African Instituted Churches 7.0% of the population (together 60.8%, the
+    // Protestant family here); Catholic 20.6% is its own family.
+    "KEN": { "denominations": { "protestant": { "evangelical": 0.336, "african_initiated": 0.115 } } },
+
+    // Pew Research Center, "Israel's Religiously Divided Society" (2016), Jewish adults:
+    // Haredi 9%, Dati 13%, Masorti 29%, Hiloni 49%.
+    "ISR": { "denominations": { "jewish": { "haredi": 0.09, "religious_zionist": 0.13, "masorti": 0.29, "secular_jewish": 0.49 } } },
+
+    "UKR": {
+      // Razumkov Centre, survey of October 2024, adults in government-controlled Ukraine:
+      // Orthodox Church of Ukraine 35.2%, UOC (Moscow Patriarchate) 5.5%, "just Orthodox"
+      // 13.7% (undivided) - of the Orthodox 54.4%; Greek Catholic 11.9%, Roman Catholic 1.0%.
+      // Both churches stay "orthodox" to every mechanic.
+      "denominations": { "orthodox": { "orthodox_church_of_ukraine": 0.647, "ukrainian_orthodox_moscow": 0.101 } },
+      "peoples": { "ukrainian": { "denominations": { "catholic": { "ukrainian_greek_catholic": 0.922 } } } }
+    },
+
+    // Twelver Shia: Iran's constitution, Art. 12 (Islam "and the Twelver Ja'fari school");
+    // Fanack, "Shia Islam": Twelvers prevail in Iran, Iraq and Bahrain, and Lebanon's Shia
+    // adhere to the same branch.
+    "IRN": { "denominations": { "shia": { "twelver": 1.0 } } },
+    "IRQ": { "denominations": { "shia": { "twelver": 1.0 } } },
+    "BHR": { "denominations": { "shia": { "twelver": 1.0 } } },
+
+    "LBN": {
+      "denominations": { "shia": { "twelver": 1.0 } },
+      // CIA World Factbook (final edition, 2020 est.), Lebanese citizens: Sunni 31.9%, Shia
+      // 31.2%, Christian 32.4%, Druze 4.5%. Maronites (19% here) and Druze are peoples of their
+      // own, so the Arabs keep Sunni and Shia and the Christians left: 32.4 - 19 = 13.4.
+      "peoples": { "arab_levantine": { "faiths": { "sunni": 0.319, "shia": 0.312, "other_christian": 0.134 } } }
+    },
+
+    // US State Department, 2023 Report on International Religious Freedom: Yemen - Zaydi Shia
+    // about 35% of the population (US government estimate), Sunni 65%; Twelver and Ismaili
+    // Shia small, with no figure.
+    "YEM": { "denominations": { "shia": { "zaydi": 1.0 } } },
+
+    // CIA World Factbook (final edition): Sunni 74%, Alawi, Ismaili and Shia 13%, Christian
+    // 10%. Applied to Syria's Arabs (Kurds, Druze, Assyrians and Armenians keep their own);
+    // no source divides the 13% between Alawites, Ismailis and Twelvers, so it stays Shia.
+    "SYR": { "peoples": { "arab_levantine": { "faiths": { "sunni": 0.74, "shia": 0.13, "other_christian": 0.10 } } } },
+
+    // Census of India 2011 counts Zoroastrians as Parsis (57,264).
+    "IND": { "denominations": { "zoroastrian": { "parsi": 1.0 } } },
+
+    // The schools of Buddhism by country: P. Harvey, "An Introduction to Buddhism" (2nd ed.,
+    // 2013), Southern (Theravada), Eastern (Mahayana) and Northern (Vajrayana) Buddhism.
+    // Vietnam's Theravada minority has no figure and is not divided off.
+    "THA": { "denominations": { "buddhist": { "theravada": 1.0 } } },
+    "MMR": { "denominations": { "buddhist": { "theravada": 1.0 } } },
+    "LKA": { "denominations": { "buddhist": { "theravada": 1.0 } } },
+    "KHM": { "denominations": { "buddhist": { "theravada": 1.0 } } },
+    "LAO": { "denominations": { "buddhist": { "theravada": 1.0 } } },
+    "CHN": {
+      "denominations": { "buddhist": { "mahayana": 1.0 } },
+      "peoples": { "tibetan": { "denominations": { "buddhist": { "vajrayana": 1.0 } } },
+                   "mongol": { "denominations": { "buddhist": { "vajrayana": 1.0 } } } }
+    },
+    "TWN": { "denominations": { "buddhist": { "mahayana": 1.0 } } },
+    "VNM": { "denominations": { "buddhist": { "mahayana": 1.0 } } },
+    "KOR": { "denominations": { "buddhist": { "mahayana": 1.0 } } },
+    "JPN": { "denominations": { "buddhist": { "mahayana": 1.0 } } },
+    "BTN": { "denominations": { "buddhist": { "vajrayana": 1.0 } } },
+    "MNG": { "denominations": { "buddhist": { "vajrayana": 1.0 } } }
+  }
+}
