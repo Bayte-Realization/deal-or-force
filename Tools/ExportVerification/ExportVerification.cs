@@ -43,8 +43,16 @@ public partial class ExportVerification : Node
             Check(ProjectSettings.GetSetting("application/config/version").AsString() == GameBuildInfo.Version &&
                 SaveSystem.GameVersion == GameBuildInfo.Version,
                 "project, menu and new-save release versions agree: " + GameBuildInfo.Version);
-            Check(typeof(GameBuildInfo).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version &&
-                typeof(Rules.AssaultRules).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version,
+            // Compared as versions, not as text: an assembly always carries four numbers, so the
+            // release 0.6.6 is 0.6.6.0 inside a DLL, and the text comparison that held for
+            // 0.6.3.1 failed the first three-part release for no fault of the build.
+            static bool Carries(System.Reflection.Assembly assembly, string release) =>
+                assembly.GetName().Version is { } built && System.Version.TryParse(release, out var wanted) &&
+                built.Major == wanted.Major && built.Minor == wanted.Minor &&
+                Math.Max(0, built.Build) == Math.Max(0, wanted.Build) &&
+                Math.Max(0, built.Revision) == Math.Max(0, wanted.Revision);
+            Check(Carries(typeof(GameBuildInfo).Assembly, GameBuildInfo.Version) &&
+                Carries(typeof(Rules.AssaultRules).Assembly, GameBuildInfo.Version),
                 "game and production rules assembly versions agree");
             await Wait(DisplayServer.GetName() == "headless" ? .25 : 6);
             var args = OS.GetCmdlineUserArgs();
