@@ -206,31 +206,66 @@ public static class SocialMemory
     [ThreadStatic] private static Dictionary<string, Nation> _subjectsScratch;
     [ThreadStatic] private static Dictionary<int, Nation> _ownersScratch;
     [ThreadStatic] private static Dictionary<int, Nation> _byIdScratch;
-    [ThreadStatic] private static List<PendingRelationReview> _pendingRelationsScratch;
-    [ThreadStatic] private static RelationReviewResult[] _relationResultsScratch;
 
     private static Dictionary<string, Nation> SubjectsScratch => _subjectsScratch ??= new(StringComparer.Ordinal);
     private static Dictionary<int, Nation> OwnersScratch => _ownersScratch ??= new();
     private static Dictionary<int, Nation> ByIdScratch => _byIdScratch ??= new();
-    private static List<PendingRelationReview> PendingRelationsScratch => _pendingRelationsScratch ??= new();
 
-    private readonly struct PendingRelationReview
+    /// <summary>A relation whose day it is, between two living countries, and where it stands in the table's walk.</summary>
+    private readonly struct DueRelation
     {
         public readonly Nation A;
         public readonly Nation B;
         public readonly DiplomaticRelation Relation;
-        public readonly bool DoAB;
-        public readonly bool DoBA;
+        public readonly int Position;
 
-        public PendingRelationReview(Nation a, Nation b, DiplomaticRelation relation, bool doAB, bool doBA)
+        public DueRelation(Nation a, Nation b, DiplomaticRelation relation, int position)
         {
             A = a;
             B = b;
             Relation = relation;
-            DoAB = doAB;
-            DoBA = doBA;
+            Position = position;
         }
     }
+
+    /// <summary>
+    /// The day's relations and what each side's image of the other is drawn towards, for one
+    /// campaign: filled at the head of the day's review and read until its end, across the
+    /// pauses between stages - so it belongs to the campaign and not to the thread.
+    /// </summary>
+    private sealed class RelationReviewTable
+    {
+        public readonly List<DueRelation> Due = new();
+
+        /// <summary>By the same index as <see cref="Due"/>: what A's image of B and B's of A are drawn towards.</summary>
+        public RelationReviewResult[] Targets = new RelationReviewResult[1024];
+
+        /// <summary>
+        /// Every country with an image to review today, in the order the walk first met it, and
+        /// its reviews in the order the walk met them: twice the index into <see cref="Due"/>,
+        /// plus one when the country is the relation's B.
+        /// </summary>
+        public readonly List<(Nation Audience, List<int> Reviews)> Audiences = new();
+
+        private readonly Dictionary<Nation, List<int>> _lists = new(ReferenceEqualityComparer.Instance);
+
+        public void Begin()
+        {
+            Due.Clear();
+            foreach (var (_, list) in Audiences) list.Clear();
+            Audiences.Clear();
+        }
+
+        /// <summary>This country's list for today; the caller adds to it at once.</summary>
+        public List<int> Of(Nation nation)
+        {
+            if (!_lists.TryGetValue(nation, out var list)) _lists[nation] = list = new List<int>();
+            if (list.Count == 0) Audiences.Add((nation, list));
+            return list;
+        }
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, RelationReviewTable> RelationReviews = new();
 
     private readonly struct RelationReviewResult
     {
@@ -249,7 +284,13 @@ public static class SocialMemory
         foreach (var _ in TickStages(c)) { }
     }
 
-    private const int NationBatchSize = 64;
+    // Countries reviewed side by side in one stage. It was 64, which is over before the thread
+    // pool's workers have woken: with the pool, soc:nations cost 85 ms of the 14 late days and
+    // 55 at 256 - still two stages a day, each a millisecond or two.
+    private const int NationBatchSize = 256;
+
+    // The stretch of the relation table whose images are asked "are you due" together, before
+    // any of them is reviewed (ReviewAudience). Not a batch for the pool any more.
     private const int RelationBatchSize = 2048;
 
     private static void ReviewNation(Campaign c, Nation n, Dictionary<string, Nation> subjects, int interval, bool habits, bool images)
@@ -361,53 +402,116 @@ public static class SocialMemory
         yield return 0;
         if (images)
         {
-            var pending = PendingRelationsScratch;
-            using var relationsEnumerator = c.Relations.Values.GetEnumerator();
-            var hasMore = relationsEnumerator.MoveNext();
-            while (hasMore)
+            // The day's relations, found once, and then two loops long enough to be shared.
+            //
+            // The walk used to take 2,048 relations at a time and hand the three hundred of them
+            // that were due to the thread pool on the spot: 448 small loops in the 14 late days,
+            // each over before the pool's workers had woken, so the work was in effect done on
+            // this thread with the cost of asking added (soc:relations 228 ms, no faster than
+            // with the pool switched off).
+            //
+            // First, what each side's image of the other is drawn towards. A target reads the
+            // relation's reasons, the two countries and a movement's recognitions - nothing a
+            // review of an image writes - so all nine thousand of the day are worked out in one
+            // loop before the first image is touched.
+            //
+            // Six relations in seven are not due today, and the table's key already says which:
+            // it is the two ids (CampaignDiplomacy.Get), so the day's sum is read off the key and
+            // a relation that is not due is never opened.
+            var reviews = RelationReviews.GetValue(c, static _ => new RelationReviewTable());
+            var due = reviews.Due;
+            using (SimProfiler.Measure("  soc:relations"))
             {
+                reviews.Begin();
+                var position = -1;
+                foreach (var entry in c.Relations)
+                {
+                    position++;
+                    if (((c.ElapsedDays + (int)(entry.Key >> 32) + (int)entry.Key) % interval) != 0) continue;
+                    var relation = entry.Value;
+                    if (!byId.TryGetValue(relation.A, out var a) || !byId.TryGetValue(relation.B, out var b)) continue;
+                    var liveA = a.Population > 0 || a.Movement is { Dissolved: false };
+                    var liveB = b.Population > 0 || b.Movement is { Dissolved: false };
+                    if (!liveA || !liveB) continue;
+                    var slot = due.Count;
+                    due.Add(new DueRelation(a, b, relation, position));
+                    reviews.Of(a).Add(slot << 1);
+                    reviews.Of(b).Add((slot << 1) | 1);
+                }
+                if (reviews.Targets.Length < due.Count)
+                    reviews.Targets = new RelationReviewResult[Math.Max(due.Count, reviews.Targets.Length * 2)];
+                var targets = reviews.Targets;
+                DeterministicParallel.For(c, 0, due.Count, i =>
+                {
+                    var item = due[i];
+                    var reasons = 0f;
+                    foreach (var reason in item.Relation.Reasons) reasons += OpinionSystem.Weight(c, reason);
+                    var affinity = PoliticsCore.Affinity(c, item.A.Id, item.B.Id);
+                    targets[i] = new RelationReviewResult(
+                        ComputeForeignTarget(c, item.A, item.B, item.Relation, reasons, affinity),
+                        ComputeForeignTarget(c, item.B, item.A, item.Relation, reasons, affinity));
+                });
+            }
+            yield return 0;
+            // Then the images, a country's at a time and the countries side by side: an image
+            // is kept by the country that holds it, so every review of the day that touches one
+            // country's table is that country's own, and is made here in the order the walk
+            // met them (ReviewAudience).
+            var audiences = reviews.Audiences;
+            for (var start = 0; start < audiences.Count; start += NationBatchSize)
+            {
+                var end = Math.Min(audiences.Count, start + NationBatchSize);
                 using (SimProfiler.Measure("  soc:relations"))
                 {
-                    pending.Clear();
-                    for (var batch = 0; batch < RelationBatchSize && hasMore; batch++)
-                    {
-                        var relation = relationsEnumerator.Current;
-                        hasMore = relationsEnumerator.MoveNext();
-                        if (((c.ElapsedDays + relation.A + relation.B) % interval) != 0) continue;
-                        if (!byId.TryGetValue(relation.A, out var a) || !byId.TryGetValue(relation.B, out var b)) continue;
-                        var liveA = a.Population > 0 || a.Movement is { Dissolved: false };
-                        var liveB = b.Population > 0 || b.Movement is { Dissolved: false };
-                        if (!liveA || !liveB) continue;
-                        var doAB = Due(c.ElapsedDays, a.Id + b.Id, Image(a, NationKey(b))?.LastReviewDay ?? -1, interval);
-                        var doBA = Due(c.ElapsedDays, b.Id + a.Id, Image(b, NationKey(a))?.LastReviewDay ?? -1, interval);
-                        if (doAB || doBA)
-                            pending.Add(new PendingRelationReview(a, b, relation, doAB, doBA));
-                    }
-                    if (pending.Count > 0)
-                    {
-                        if (_relationResultsScratch is null || _relationResultsScratch.Length < pending.Count)
-                            _relationResultsScratch = new RelationReviewResult[Math.Max(pending.Count, 256)];
-                        var results = _relationResultsScratch;
-                        DeterministicParallel.Slots(c, pending.Count, results,
-                            i =>
-                            {
-                                var item = pending[i];
-                                var reasons = 0f;
-                                foreach (var reason in item.Relation.Reasons) reasons += OpinionSystem.Weight(c, reason);
-                                var affinity = PoliticsCore.Affinity(c, item.A.Id, item.B.Id);
-                                var targetAB = item.DoAB ? ComputeForeignTarget(c, item.A, item.B, item.Relation, reasons, affinity) : 0f;
-                                var targetBA = item.DoBA ? ComputeForeignTarget(c, item.B, item.A, item.Relation, reasons, affinity) : 0f;
-                                return new RelationReviewResult(targetAB, targetBA);
-                            },
-                            (i, res) =>
-                            {
-                                var item = pending[i];
-                                if (item.DoAB) ApplyForeignReview(c, item.A, item.B, res.TargetAB);
-                                if (item.DoBA) ApplyForeignReview(c, item.B, item.A, res.TargetBA);
-                            });
-                    }
+                    DeterministicParallel.For(c, start, end,
+                        index => ReviewAudience(c, reviews, audiences[index].Audience, audiences[index].Reviews, interval));
                 }
-                if (hasMore) yield return 0;
+                if (end < audiences.Count) yield return 0;
+            }
+        }
+    }
+
+    [ThreadStatic] private static List<(PublicImage Image, bool Due)> _audienceScanScratch;
+
+    /// <summary>
+    /// One country's reviews of the day, in the order the walk of the relations met them.
+    ///
+    /// The walk asked the relations of one stretch of 2,048 of the table which of their images
+    /// were due, reviewed those, and went on to the next stretch. That order matters to one
+    /// table at a time and to nothing else: two countries under one tag share the image a third
+    /// holds of them, and whether the second finds it already reviewed depends on which stretch
+    /// each stands in. So it is replayed here stretch by stretch for this country's table alone.
+    /// </summary>
+    private static void ReviewAudience(Campaign c, RelationReviewTable reviews, Nation audience, List<int> mine, int interval)
+    {
+        var due = reviews.Due;
+        var targets = reviews.Targets;
+        var scan = _audienceScanScratch ??= new();
+        var next = 0;
+        while (next < mine.Count)
+        {
+            var stretch = due[mine[next] >> 1].Position / RelationBatchSize;
+            var first = next;
+            scan.Clear();
+            for (; next < mine.Count && due[mine[next] >> 1].Position / RelationBatchSize == stretch; next++)
+            {
+                var item = due[mine[next] >> 1];
+                var image = Image(audience, NationKey((mine[next] & 1) == 0 ? item.B : item.A));
+                scan.Add((image, Due(c.ElapsedDays, item.A.Id + item.B.Id, image?.LastReviewDay ?? -1, interval)));
+            }
+            // The image the scan found is the one the review settles, unless a review before it
+            // in this stretch made an image or forgot one - the shared image again - after which
+            // the rest of the stretch looks its own up afresh.
+            var changed = false;
+            for (var index = first; index < next; index++)
+            {
+                var (image, isDue) = scan[index - first];
+                if (!isDue) continue;
+                var slot = mine[index] >> 1;
+                var forward = (mine[index] & 1) == 0;
+                var key = NationKey(forward ? due[slot].B : due[slot].A);
+                changed |= ApplyForeignReview(c, audience, key, changed ? Image(audience, key) : image,
+                    forward ? targets[slot].TargetAB : targets[slot].TargetBA);
             }
         }
     }
@@ -476,25 +580,24 @@ public static class SocialMemory
         return target;
     }
 
-    private static void ApplyForeignReview(Campaign c, Nation audience, Nation subject, float target)
+    /// <summary>Settle one image against its target. True when an image was made or a faded one forgotten.</summary>
+    private static bool ApplyForeignReview(Campaign c, Nation audience, string key, PublicImage image, float target)
     {
-        var key = NationKey(subject);
-        ApplyForeignReview(c, audience, key, Image(audience, key), target);
-    }
-
-    private static void ApplyForeignReview(Campaign c, Nation audience, string key, PublicImage image, float target)
-    {
+        var made = false;
         if (image is null)
         {
-            if (MathF.Abs(target) < 0.02f) return;
+            if (MathF.Abs(target) < 0.02f) return false;
             image = Image(audience, key, true);
+            made = true;
         }
         image.Review(c.ElapsedDays, target, c.Defines);
         if (image.Status == 0 && MathF.Abs(image.Esteem) < 0.01f && MathF.Abs(image.Incident) < 0.01f &&
             MathF.Abs(target) < 0.02f && (image.LastIncidentDay < 0 || c.ElapsedDays - image.LastIncidentDay > 365))
         {
             audience.PublicImages.Remove(key);
+            return true;
         }
+        return made;
     }
 
     [ThreadStatic] private static List<string> _forgottenScratch;

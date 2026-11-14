@@ -84,7 +84,8 @@ public static partial class DomesticCrises
         c.StatesOf(n).Length > 0 &&
         GovernanceEvents.All.Any(t => t.Crisis == "coup" && t.Weight > 0f && GovernanceEvents.Eligible(c, n, t));
 
-    private static void ReviewPressure(Campaign c, Nation nation, int days)
+    /// <summary>True when the review went as far as attempting a transition of government, whether or not one took.</summary>
+    private static bool ReviewPressure(Campaign c, Nation nation, int days)
     {
         var memory = nation.DomesticCrisis;
         var target = PressureTarget(c, nation);
@@ -92,9 +93,9 @@ public static partial class DomesticCrises
         memory.CoupPressure = Move(M.Clamp01(before), target, days * MathF.Max(0f,
             target > before ? c.Defines.CoupPressureRisePerDay : c.Defines.CoupPressureRecoveryPerDay));
         if (target < Threshold(c) || memory.CooldownUntilDay > c.ElapsedDays)
-        { memory.DaysAboveThreshold = 0; return; }
-        if (memory.CoupPressure < Threshold(c)) { memory.DaysAboveThreshold = 0; return; }
-        if (!Eligible(c, nation)) { memory.DaysAboveThreshold = 0; return; }
+        { memory.DaysAboveThreshold = 0; return false; }
+        if (memory.CoupPressure < Threshold(c)) { memory.DaysAboveThreshold = 0; return false; }
+        if (!Eligible(c, nation)) { memory.DaysAboveThreshold = 0; return false; }
         if (before < Threshold(c)) c.Chronicle.Record(c, "institutional_crisis_warning", nation.Id);
         var pressuredDays = days;
         if (before < Threshold(c))
@@ -102,18 +103,19 @@ public static partial class DomesticCrises
                 MathF.Max(.000001f, c.Defines.CoupPressureRisePerDay)) + 1, 0, days);
         var required = Math.Max(1, c.Defines.CoupRequiredPressureDays);
         memory.DaysAboveThreshold = (int)Math.Min(required, (long)Math.Max(0, memory.DaysAboveThreshold) + pressuredDays);
-        if (memory.DaysAboveThreshold < required) return;
+        if (memory.DaysAboveThreshold < required) return false;
         var choices = GovernanceEvents.All.Where(t => t.Crisis == "coup" && t.Weight > 0f &&
             GovernanceEvents.Eligible(c, nation, t)).ToArray();
-        if (choices.Length == 0) return;
+        if (choices.Length == 0) return false;
         var total = choices.Sum(t => t.Weight);
         var roll = c.Random.NextFloat() * total;
         var chosen = choices[^1];
         foreach (var candidate in choices)
         { roll -= candidate.Weight; if (roll <= 0f) { chosen = candidate; break; } }
-        if (!GovernanceEvents.ApplyTransition(c, nation, chosen)) return;
+        if (!GovernanceEvents.ApplyTransition(c, nation, chosen)) return true;
         Coups.RegisterOutcome(c, nation, chosen.Id);
         c.Chronicle.Record(c, "institutional_coup", nation.Id);
         c.MarkStrategicChange();
+        return true;
     }
 }

@@ -300,6 +300,7 @@ public static class InternalMigration
         long moved = 0;
         var groups = from.PopulationGroups;
         var existing = groups.Count;
+        Arrivals arrivals = null;
         for (var index = 0; index < existing && moved < count; index++)
         {
             var group = groups[index];
@@ -310,7 +311,17 @@ public static class InternalMigration
             take = Math.Min(take, Math.Min(group.Size, count - moved));
             if (take <= 0) continue;
             group.Size -= take;
-            Arrive(to, group, take);
+            // Inside a country a group nearly always finds its own kind near the top of the
+            // destination's list, and looking down the list is the cheaper way (internal
+            // migration 37 ms over the 14 late days against 47 with the links). Across a border
+            // it usually finds nobody, having read the whole list to learn it - that is what
+            // the links are for.
+            if (withinCountry) Arrive(to, group, take);
+            else
+            {
+                if (arrivals is null) (arrivals = _arrivals ??= new Arrivals()).Read(to.PopulationGroups);
+                Arrive(to, group, take, arrivals);
+            }
             moved += take;
         }
         from.Population -= moved;
@@ -325,6 +336,126 @@ public static class InternalMigration
 
     private static bool Moves(PopulationGroup group, string culture) =>
         culture is null || string.Equals(group.Culture, culture, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The groups of the region being moved into, threaded by kind - one people of one faith -
+    /// for the length of one move.
+    ///
+    /// Every group that left looked for its own kind down the destination's list, comparing two
+    /// names without regard to case for each group it passed. Emigrants mostly find nobody of
+    /// their kind abroad, so each of them read the whole list of a region that holds hundreds of
+    /// groups: 114 microseconds a move on the late save, 67 ms of the 14 days for the 586 moves
+    /// brain drain made. Now each name is numbered - the same case-blind equality, asked of a
+    /// table a name at a time and remembered by the name object, since a name never changes
+    /// what it spells - and each group of the destination is linked to the next of its kind,
+    /// so an arrival walks only the groups it could join. They are still met in the region's
+    /// own order, so the same group is joined and a new one is added in the same place
+    /// (brain drain 111 -> 76 ms).
+    ///
+    /// One per thread: countries migrate side by side (TickStages). The numbering is kept
+    /// between moves, because it is a fact about names and not about a world; the links are
+    /// made again for every move.
+    /// </summary>
+    private sealed class Arrivals
+    {
+        private readonly Dictionary<string, int> _cultures = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, int> _religions = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, int> _cultureObjects = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<string, int> _religionObjects = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<long, int> _kinds = new();
+        private int[] _first = new int[64];
+        private int[] _last = new int[64];
+        private int[] _next = new int[256];
+        private int _count;
+        private string _lastCulture, _lastReligion;
+        private int _lastCultureNumber, _lastReligionNumber;
+        private bool _cultureRead, _religionRead;
+        private long _lastKey = -1;
+        private int _lastKind;
+
+        /// <summary>Link the destination's groups as they stand.</summary>
+        public void Read(List<PopulationGroup> groups)
+        {
+            // A save that gave every group a name object of its own would grow the object
+            // tables without end; past this they start again, which costs a lookup by spelling.
+            if (_cultureObjects.Count > 8192 || _religionObjects.Count > 8192)
+            {
+                _cultures.Clear();
+                _religions.Clear();
+                _cultureObjects.Clear();
+                _religionObjects.Clear();
+                _cultureRead = _religionRead = false;
+            }
+            _kinds.Clear();
+            _lastKey = -1;
+            _count = 0;
+            if (_next.Length < groups.Count) _next = new int[Math.Max(groups.Count, _next.Length * 2)];
+            for (var i = 0; i < groups.Count; i++) Append(KindOf(groups[i]));
+        }
+
+        /// <summary>The kind this group is: its people and its faith, as one number for this move.</summary>
+        public int KindOf(PopulationGroup group)
+        {
+            var culture = group.Culture;
+            if (!_cultureRead || !ReferenceEquals(culture, _lastCulture))
+            {
+                _cultureRead = true;
+                _lastCulture = culture;
+                _lastCultureNumber = Number(_cultureObjects, _cultures, culture);
+            }
+            var religion = group.Religion;
+            if (!_religionRead || !ReferenceEquals(religion, _lastReligion))
+            {
+                _religionRead = true;
+                _lastReligion = religion;
+                _lastReligionNumber = Number(_religionObjects, _religions, religion);
+            }
+            var key = ((long)_lastCultureNumber << 32) | (uint)_lastReligionNumber;
+            if (key == _lastKey) return _lastKind;
+            if (!_kinds.TryGetValue(key, out var kind))
+            {
+                kind = _kinds.Count;
+                _kinds[key] = kind;
+                if (kind == _first.Length)
+                {
+                    Array.Resize(ref _first, kind * 2);
+                    Array.Resize(ref _last, kind * 2);
+                }
+                _first[kind] = _last[kind] = -1;
+            }
+            _lastKey = key;
+            return _lastKind = kind;
+        }
+
+        /// <summary>The first group of this kind in the destination, or -1.</summary>
+        public int First(int kind) => _first[kind];
+
+        /// <summary>The next group of the same kind after this one, or -1.</summary>
+        public int Next(int group) => _next[group];
+
+        /// <summary>A group of this kind joined the end of the destination's list.</summary>
+        public void Append(int kind)
+        {
+            if (_count == _next.Length) Array.Resize(ref _next, _count * 2);
+            _next[_count] = -1;
+            if (_last[kind] < 0) _first[kind] = _count;
+            else _next[_last[kind]] = _count;
+            _last[kind] = _count;
+            _count++;
+        }
+
+        // No name at all is a kind of its own, equal only to itself (string.Equals).
+        private static int Number(Dictionary<string, int> byObject, Dictionary<string, int> bySpelling, string name)
+        {
+            if (name is null) return 0;
+            if (byObject.TryGetValue(name, out var number)) return number;
+            if (!bySpelling.TryGetValue(name, out number)) bySpelling[name] = number = bySpelling.Count + 1;
+            byObject[name] = number;
+            return number;
+        }
+    }
+
+    [ThreadStatic] private static Arrivals _arrivals;
 
     private static void Arrive(ScenarioState to, PopulationGroup like, long people)
     {
@@ -354,6 +485,38 @@ public static class InternalMigration
             Profession = like.Profession, Size = people, Employment = like.Employment, Wealth = like.Wealth,
             StandardOfLiving = to.StandardOfLiving, Radicalism = like.Radicalism
         });
+    }
+
+    private static void Arrive(ScenarioState to, PopulationGroup like, long people, Arrivals arrivals)
+    {
+        var groups = to.PopulationGroups;
+        var kind = arrivals.KindOf(like);
+        PopulationGroup sameFaithHost = null;
+        var coalesceSmall = people <= 25 && groups.Count >= 16;
+        for (var i = arrivals.First(kind); i >= 0; i = arrivals.Next(i))
+        {
+            var group = groups[i];
+            if (string.Equals(group.Profession, like.Profession, StringComparison.OrdinalIgnoreCase) &&
+                group.Class == like.Class)
+            {
+                group.Size += people;
+                return;
+            }
+            if (coalesceSmall && (sameFaithHost is null || group.Size > sameFaithHost.Size))
+                sameFaithHost = group;
+        }
+        if (sameFaithHost is not null)
+        {
+            sameFaithHost.Size += people;
+            return;
+        }
+        groups.Add(new PopulationGroup
+        {
+            Class = like.Class, Sector = like.Sector, Culture = like.Culture, Religion = like.Religion,
+            Profession = like.Profession, Size = people, Employment = like.Employment, Wealth = like.Wealth,
+            StandardOfLiving = to.StandardOfLiving, Radicalism = like.Radicalism
+        });
+        arrivals.Append(kind);
     }
 
     /// <summary>Every region's centre, once per map: a region's provinces averaged.</summary>

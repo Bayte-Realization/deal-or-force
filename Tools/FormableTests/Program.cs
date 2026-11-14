@@ -18,6 +18,7 @@ static class Program
         if (args.Contains("--relation-table-only")) { RelationTableTests.Run(); return; }
         if (args.Contains("--people-index-reuse-only")) { PeopleIndexReuseTests.Run(); return; }
         if (args.Contains("--people-index-names-only")) { PeopleIndexNamesTests.Run(); return; }
+        if (args.Contains("--society-passes-only")) { SocietyPassTests.Run(); return; }
         if (args.Contains("--battle-occupancy-hold-only")) { BattleOccupancyHoldTests.Run(); return; }
         if (args.Contains("--battle-damage-isolation-only")) { BattleDamageIsolationTests.Run(); return; }
         if (args.Contains("--battle-side-isolation-only")) { BattleSideIsolationTests.Run(); return; }

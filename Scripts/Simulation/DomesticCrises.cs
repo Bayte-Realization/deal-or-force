@@ -152,6 +152,9 @@ public static partial class DomesticCrises
         if (c is null) yield break;
         var awarenessEnabled = c.FeatureEnabled("resident_awareness");
         var crisesEnabled = c.FeatureEnabled("domestic_crises") && c.FeatureEnabled("politics");
+        // Every region's alienation for the day, read side by side before the countries are
+        // taken one at a time (PoliticalCohorts.AlienationTable).
+        var alienation = PoliticalCohorts.ReadAlienation(c);
         var tick = 0;
         foreach (var nation in c.Nations)
         {
@@ -168,12 +171,13 @@ public static partial class DomesticCrises
                     else region.ResidentAwareness = Move(region.ResidentAwareness, ResidentAwareness.Target(c, region),
                         MathF.Max(0f, c.Defines.ResidentAwarenessChangePerDay) * days);
                 }
-            PoliticalCohorts.Review(c, nation, days);
+            PoliticalCohorts.Review(c, nation, days, alienation, tick - 1);
             if (crisesEnabled)
             {
                 ReviewResponse(c, nation, days);
                 ReviewConciliation(c, nation, days);
-                ReviewPressure(c, nation, days);
+                // A coup is the one thing in this review that reaches beyond its own country.
+                if (ReviewPressure(c, nation, days)) alienation?.Spoil();
                 ConsiderConciliation(c, nation);
                 // The street is read weekly: a wave takes days to build, and Read walks every region.
                 if (c.Defines.ProtestsEnabled && (c.ElapsedDays + nation.Id) % 7 == 0) MassProtests.Review(c, nation, Read(c, nation), 7);

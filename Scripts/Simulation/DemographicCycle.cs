@@ -172,8 +172,13 @@ public static class DemographicCycle
         foreach (var _ in Stages(campaign)) { }
     }
 
-    /// <summary>How many regions one stage of the cycle works through before the frame gets its turn back.</summary>
-    private const int StageRegions = 16;
+    /// <summary>
+    /// How many regions one stage of the cycle works through before the frame gets its turn back.
+    /// Sixteen while a region cost a quarter of a millisecond; a region now costs a sixth of
+    /// that (Assimilate), so sixty-four are a shorter stage than sixteen were, and a loop long
+    /// enough for the thread pool's workers to arrive before it is over.
+    /// </summary>
+    private const int StageRegions = 64;
 
     /// <summary>
     /// The cycle in stages: the same regions in the same order, a pause every StageRegions. It was
@@ -200,6 +205,19 @@ public static class DemographicCycle
             if (first > 0) yield return 0;
             if (first >= campaign.States.Count) break;
             var last = Math.Min(first + StageRegions, campaign.States.Count);
+            // Six days in seven no region has had a household review since its cohorts last
+            // moved, and the stage has nothing to do. It used to hand its sixteen regions to
+            // the thread pool all the same, for each to answer "not today": 1,464 of the 1,708
+            // stages of the 14 late days, some ten microseconds of asking apiece. The same
+            // question is asked here first, on this thread.
+            var due = false;
+            for (var index = first; index < last && !due; index++)
+            {
+                var state = campaign.States[index];
+                due = state is not null && !state.Unclaimed && state.Population > 0 &&
+                      state.LastDemographyDay != state.LastHouseholdReviewDay;
+            }
+            if (!due) continue;
             campaign.NationsByMapIndex();
             if (campaign.Nations.Count > 0) campaign.HasOwnedLand(campaign.Nations[0]);
             KinTable(campaign);
@@ -273,27 +291,78 @@ public static class DemographicCycle
     [ThreadStatic] private static Dictionary<string, long> _peopleHere;
     private static Dictionary<string, long> PeopleHere => _peopleHere ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Whether a people has a living state of its own, by owner and culture, for one campaign's one day.</summary>
+    /// <summary>
+    /// Which countries are for which people, for one campaign's one day: every country under the
+    /// first people it is for, in the order of the campaign's list.
+    ///
+    /// "Does this people have a living state of its own" was SecessionEvents.KinState asked once
+    /// per (owner, people) a day and remembered: a walk over all 495 countries, a catalogue lookup
+    /// and a comparison of names for each - 232 of the cycle's 472 ms over the 14 late days on
+    /// one thread, with a closure allocated for every one of the 157,000 groups a review asks
+    /// for. The walk is now over the two or three countries that are for that people; the
+    /// tests that depend on the day's world (alive, not a movement, not fallen, holding land) are
+    /// still made when the question is asked, in the same order, so the answer is KinState's.
+    /// </summary>
     private sealed class KinCache
     {
         public int Day = -1;
-        public readonly System.Collections.Concurrent.ConcurrentDictionary<(int Owner, string Culture), bool> Alive = new();
+        public int Countries = -1;
+        public readonly Dictionary<string, List<Nation>> ByPrimary = new(StringComparer.OrdinalIgnoreCase);
+        public readonly List<List<Nation>> Spare = new();
     }
     // Per campaign, not one static stamped with the last campaign that asked: two worlds in one
     // process took turns clearing it (see KinStatecraft's scan, the same trap).
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, KinCache> KinCaches = new();
 
-    /// <summary>The campaign's kin table for today, emptied when the day has moved. Called on the stage's own thread.</summary>
-    private static System.Collections.Concurrent.ConcurrentDictionary<(int Owner, string Culture), bool> KinTable(Campaign campaign)
+    /// <summary>
+    /// The campaign's kin table for today, built again when the day has moved. Called on the
+    /// stage's own thread before its regions are worked, so the workers only read it. Nothing
+    /// between the stages of one day's cycle founds a country or renames one: orders are carried
+    /// out at the top of the step.
+    /// </summary>
+    private static KinCache KinTable(Campaign campaign)
     {
         var cache = KinCaches.GetValue(campaign, _ => new KinCache());
-        if (cache.Day != campaign.ElapsedDays)
+        if (cache.Day == campaign.ElapsedDays && cache.Countries == campaign.Nations.Count) return cache;
+        cache.Day = campaign.ElapsedDays;
+        cache.Countries = campaign.Nations.Count;
+        foreach (var list in cache.ByPrimary.Values) { list.Clear(); cache.Spare.Add(list); }
+        cache.ByPrimary.Clear();
+        foreach (var nation in campaign.Nations)
         {
-            cache.Alive.Clear();
-            cache.Day = campaign.ElapsedDays;
+            var primary = DemographyCatalog.PrimaryCulture(nation.Tag) ?? "";
+            if (!cache.ByPrimary.TryGetValue(primary, out var list))
+            {
+                if (cache.Spare.Count > 0) { list = cache.Spare[^1]; cache.Spare.RemoveAt(cache.Spare.Count - 1); }
+                else list = new List<Nation>(2);
+                cache.ByPrimary[primary] = list;
+            }
+            list.Add(nation);
         }
-        return cache.Alive;
+        return cache;
     }
+
+    /// <summary>SecessionEvents.KinState(campaign, owner, culture) is not null, read off the day's table.</summary>
+    private static bool HasKinState(Campaign campaign, KinCache kin, Nation owner, string culture)
+    {
+        if (!kin.ByPrimary.TryGetValue(culture, out var list)) return false;
+        for (var i = 0; i < list.Count; i++)
+        {
+            var nation = list[i];
+            if (nation.Id == owner.Id || nation.Population <= 0 || nation.Movement is not null ||
+                campaign.Fallen.Contains(nation.Id) || !campaign.HasOwnedLand(nation)) continue;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>The same answer for a test, which holds it to the walk it replaced: today's table, read now.</summary>
+    internal static bool HasLivingKinState(Campaign campaign, Nation owner, string culture) =>
+        HasKinState(campaign, KinTable(campaign), owner, culture);
+
+    // The groups of the region that are already counted under the people everyone is shifting
+    // towards, in the region's own order. One per thread: regions are worked side by side.
+    [ThreadStatic] private static List<PopulationGroup> _targetGroups;
 
     /// <summary>
     /// Assimilation: a minority adopts the culture around it - the country's own where the
@@ -327,10 +396,22 @@ public static class DemographicCycle
         var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
         var population = Math.Max(1L, state.Population);
 
+        // A region lists its people a people at a time - a hundred groups, a handful of peoples -
+        // and neighbouring groups hold the very same name object, so a run of them is added up
+        // before the table is asked: two case-blind hashes a run instead of two a group. A people
+        // still enters the table where its first group stands, under that group's own spelling.
         PeopleHere.Clear();
+        string run = null;
+        long runPeople = 0;
         foreach (var group in groups)
-            if (group.Size > 0 && !string.IsNullOrEmpty(group.Culture))
-                PeopleHere[group.Culture] = PeopleHere.GetValueOrDefault(group.Culture) + group.Size;
+        {
+            if (group.Size <= 0 || string.IsNullOrEmpty(group.Culture)) continue;
+            if (ReferenceEquals(group.Culture, run)) { runPeople += group.Size; continue; }
+            if (run is not null) PeopleHere[run] = PeopleHere.GetValueOrDefault(run) + runPeople;
+            run = group.Culture;
+            runPeople = group.Size;
+        }
+        if (run is not null) PeopleHere[run] = PeopleHere.GetValueOrDefault(run) + runPeople;
         if (PeopleHere.Count < 2) return;
         string majority = null;
         foreach (var (culture, people) in PeopleHere)
@@ -348,28 +429,75 @@ public static class DemographicCycle
         var calm = Math.Clamp(1f - state.Radicalism, 0.05f, 1f);
         var policy = NationalModifiers.Factor(owner, "assimilation");
 
-        var kinAlive = KinCaches.GetValue(campaign, _ => new KinCache()).Alive;
+        // Built for today by the stage, on its own thread, before the regions were handed out.
+        var kinTable = KinCaches.GetValue(campaign, static _ => new KinCache());
+
+        // Everything below that depends only on which people a group is - whether it shifts at
+        // all, its family, how large a part of the region it is, whether it has a state of its
+        // own - is worked out when the people changes, not for every group: the trades and
+        // classes of one people stand next to each other and hold the same name object. The
+        // same for the faith. The rate is the same product of the same numbers in the same order.
+        string lastCulture = null;
+        var stays = false;
+        float kin = 1f, size = 1f;
+        var hasKin = false;
+        string lastReligion = null;
+        var religionRead = false;
+        var faith = 1f;
+        List<PopulationGroup> targetGroups = null;
 
         var count = groups.Count;
         for (var i = 0; i < count; i++)
         {
             var group = groups[i];
-            if (group.Size <= 0 || string.IsNullOrEmpty(group.Culture) ||
-                string.Equals(group.Culture, target, StringComparison.OrdinalIgnoreCase) ||
-                DemographyCatalog.IsPrimary(owner.Tag, group.Culture)) continue;
-            var family = DemographyCatalog.Culture(group.Culture)?.Group ?? "";
-            var kin = family.Length > 0 && string.Equals(family, targetFamily, StringComparison.OrdinalIgnoreCase) ? 2f : 1f;
-            var faith = SharesFaith(group.Religion, targetFaiths) ? 1f : 0.4f;
-            var size = Math.Clamp(1f - PeopleHere.GetValueOrDefault(group.Culture) / (float)population, 0.2f, 1f);
-            var key = (owner.Id, group.Culture);
-            var hasKin = kinAlive.GetOrAdd(key, k => SecessionEvents.KinState(campaign, owner, k.Culture) is not null);
+            if (group.Size <= 0 || string.IsNullOrEmpty(group.Culture)) continue;
+            if (!ReferenceEquals(group.Culture, lastCulture))
+            {
+                lastCulture = group.Culture;
+                stays = string.Equals(lastCulture, target, StringComparison.OrdinalIgnoreCase) ||
+                        DemographyCatalog.IsPrimary(owner.Tag, lastCulture);
+                if (!stays)
+                {
+                    var family = DemographyCatalog.Culture(lastCulture)?.Group ?? "";
+                    kin = family.Length > 0 && string.Equals(family, targetFamily, StringComparison.OrdinalIgnoreCase) ? 2f : 1f;
+                    size = Math.Clamp(1f - PeopleHere.GetValueOrDefault(lastCulture) / (float)population, 0.2f, 1f);
+                    hasKin = HasKinState(campaign, kinTable, owner, lastCulture);
+                }
+            }
+            if (stays) continue;
+            if (!religionRead || !ReferenceEquals(group.Religion, lastReligion))
+            {
+                religionRead = true;
+                lastReligion = group.Religion;
+                faith = SharesFaith(lastReligion, targetFaiths) ? 1f : 0.4f;
+            }
             var rate = annual * interval * kin * faith * size * schooling * calm * (hasKin ? 0.6f : 1f) * policy;
             var moved = Math.Min(group.Size, (long)Math.Round(group.Size * (double)rate));
             if (moved <= 0 && rate > 0f && group.Size <= 10)
                 moved = Math.Min(group.Size, group.Size <= 3 ? group.Size : 1L);
             if (moved <= 0) continue;
             group.Size -= moved;
-            Counterpart(groups, group, target).Size += moved;
+            if (targetGroups is null)
+            {
+                // Who they join is looked for among the groups already counted under that people
+                // (every one of them, emptied or not, in the region's order) instead of among the
+                // whole region for every group that shifts.
+                targetGroups = _targetGroups ??= new List<PopulationGroup>();
+                targetGroups.Clear();
+                string seen = null;
+                var seenIsTarget = false;
+                foreach (var candidate in groups)
+                {
+                    if (candidate.Culture is null) continue;
+                    if (!ReferenceEquals(candidate.Culture, seen))
+                    {
+                        seen = candidate.Culture;
+                        seenIsTarget = string.Equals(seen, target, StringComparison.OrdinalIgnoreCase);
+                    }
+                    if (seenIsTarget) targetGroups.Add(candidate);
+                }
+            }
+            Counterpart(groups, targetGroups, group, target).Size += moved;
         }
     }
 
@@ -381,12 +509,16 @@ public static class DemographicCycle
         return false;
     }
 
-    /// <summary>The group of the given culture doing what this one does, made if there is none.</summary>
-    private static PopulationGroup Counterpart(List<PopulationGroup> groups, PopulationGroup like, string culture)
+    /// <summary>
+    /// The group of the given culture doing what this one does, made if there is none.
+    /// <paramref name="ofCulture"/> is the region's groups of that culture in the region's order;
+    /// a group made here joins both lists.
+    /// </summary>
+    private static PopulationGroup Counterpart(List<PopulationGroup> groups, List<PopulationGroup> ofCulture,
+        PopulationGroup like, string culture)
     {
-        foreach (var group in groups)
-            if (string.Equals(group.Culture, culture, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(group.Religion, like.Religion, StringComparison.OrdinalIgnoreCase) &&
+        foreach (var group in ofCulture)
+            if (string.Equals(group.Religion, like.Religion, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(group.Profession, like.Profession, StringComparison.OrdinalIgnoreCase) &&
                 group.Class == like.Class && group.Sector == like.Sector) return group;
         var created = new PopulationGroup
@@ -396,6 +528,7 @@ public static class DemographicCycle
             StandardOfLiving = like.StandardOfLiving, Radicalism = like.Radicalism
         };
         groups.Add(created);
+        ofCulture.Add(created);
         return created;
     }
 

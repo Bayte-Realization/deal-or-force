@@ -1061,6 +1061,16 @@ public static class TacticalDoctrines
             totals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             cache[key] = totals;
         }
+        // The sum is asked for every book of every country every day (NationalModifiers) and
+        // changes on the day an article is learned. Making it again looked every article of the
+        // book up in the list of learned ones by comparing names - nine microseconds a country,
+        // 65 ms of the 14 late days. It is kept while the book is the same catalogue object and
+        // the learned list holds the same articles, object for object, which is checked here
+        // rather than trusted to whoever changes the list.
+        var stamps = nation.DoctrineModifierStamps ??= new Dictionary<string, DoctrineBookStamp>(StringComparer.Ordinal);
+        if (!stamps.TryGetValue(key, out var stamp) || !ReferenceEquals(stamp.Sum, totals))
+            stamps[key] = stamp = new DoctrineBookStamp(totals);
+        if (stamp.Holds(book, home.Known)) return totals.Count == 0 ? null : totals;
         totals.Clear();
         for (var i = 0; i < book.Nodes.Count; i++)
         {
@@ -1077,6 +1087,7 @@ public static class TacticalDoctrines
                     totals[effect.Key] = totals.GetValueOrDefault(effect.Key) + effect.Value;
             }
         }
+        stamp.Take(book, home.Known);
         return totals.Count == 0 ? null : totals;
     }
 
@@ -1170,6 +1181,48 @@ public sealed partial class Nation
 {
     /// <summary>What the books of war add, kept between asks. Not saved; refilled from scratch.</summary>
     internal Dictionary<string, Dictionary<string, float>> DoctrineModifierCache;
+
+    /// <summary>What each of those sums was made from, by the same keys. Not saved.</summary>
+    internal Dictionary<string, DoctrineBookStamp> DoctrineModifierStamps;
+}
+
+/// <summary>
+/// What one book's sum of modifiers was made from: the catalogue's book, and the learned
+/// articles one by one. The sum stands while all of it is the very same objects; a reloaded
+/// catalogue, another book on the shelf, a new list or one more article makes it again.
+/// </summary>
+internal sealed class DoctrineBookStamp
+{
+    /// <summary>The dictionary the sum is kept in: a stamp speaks for that one and no other.</summary>
+    public readonly Dictionary<string, float> Sum;
+    public DoctrineBookStamp(Dictionary<string, float> sum) => Sum = sum;
+
+    private DoctrineBranch _book;
+    private int _catalogue = -1;
+    private int _articles;
+    private List<string> _list;
+    private string[] _known = Array.Empty<string>();
+    private int _count = -1;
+
+    public bool Holds(DoctrineBranch book, List<string> known)
+    {
+        if (!ReferenceEquals(book, _book) || _catalogue != TacticalDoctrineCatalog.Revision ||
+            _articles != book.Nodes.Count || !ReferenceEquals(known, _list) || known.Count != _count) return false;
+        for (var i = 0; i < _count; i++)
+            if (!ReferenceEquals(known[i], _known[i])) return false;
+        return true;
+    }
+
+    public void Take(DoctrineBranch book, List<string> known)
+    {
+        _book = book;
+        _catalogue = TacticalDoctrineCatalog.Revision;
+        _articles = book.Nodes.Count;
+        _list = known;
+        _count = known.Count;
+        if (_known.Length < _count) _known = new string[_count];
+        for (var i = 0; i < _count; i++) _known[i] = known[i];
+    }
 }
 
 public sealed class StudyDoctrineCommand : ICampaignCommand

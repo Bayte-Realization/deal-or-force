@@ -340,19 +340,90 @@ public static class OpinionSystem
         foreach (var _ in TickStages(campaign)) { }
     }
 
+    /// <summary>
+    /// How many of the day's relations are settled in one loop on the thread pool. Large on
+    /// purpose: the pool's workers take a few hundred microseconds to arrive, and a loop of a
+    /// thousand settles is over before they do (measured: no faster than one thread). The late
+    /// save's nine thousand a day are one loop of some nine milliseconds' work.
+    /// </summary>
+    private const int SettleBatch = 16384;
+
+    /// <summary>
+    /// The relations of the day that are waiting to be settled, and the loop body that settles
+    /// them, kept per campaign so that the pass allocates nothing for it.
+    /// </summary>
+    private sealed class SettleQueue
+    {
+        public readonly Campaign Campaign;
+        public readonly List<DiplomaticRelation> Waiting = new();
+        public readonly Action<int> SettleOne;
+
+        public SettleQueue(Campaign campaign)
+        {
+            Campaign = campaign;
+            SettleOne = index => Settle(Campaign, Waiting[index]);
+        }
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, SettleQueue> SettleQueues = new();
+
+    /// <summary>
+    /// Settle everything waiting, a relation a worker.
+    ///
+    /// A settle reads the two countries, their images of each other, the catalogue and the
+    /// language tables, and writes one relation: its reasons, its opinion and the lines of its
+    /// panel. No relation reads another, so the order they are settled in cannot be seen, and
+    /// on the calling thread alone it is the order of the table as before. The one thing a
+    /// settle could write outside its relation is a country's remembered social key, so those
+    /// are asked for here first.
+    /// </summary>
+    private static void SettleWaiting(SettleQueue queue)
+    {
+        var waiting = queue.Waiting;
+        if (waiting.Count == 0) return;
+        var campaign = queue.Campaign;
+        for (var index = 0; index < waiting.Count; index++)
+        {
+            if (campaign.NationById(waiting[index].A) is { } left) SocialMemory.NationKey(left);
+            if (campaign.NationById(waiting[index].B) is { } right) SocialMemory.NationKey(right);
+        }
+        DeterministicParallel.For(campaign, 0, waiting.Count, queue.SettleOne);
+        waiting.Clear();
+    }
+
     /// <summary>The same weekly fade, yielded between batches of relationships.</summary>
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(OpinionSystem))) yield break;
         // A seventh of them each day, every relation still once a week. All on one day made
         // that day's frame walk thirty thousand relations at once.
+        //
+        // The day's relations are gathered as the walk meets them and settled together on the
+        // thread pool, not one by one: each costs over a microsecond of fetching scattered
+        // memory - the relation, its reasons, two countries' images - which is work that waits,
+        // and waiting is what several threads do well (opinion 165 -> 92 ms over the 14 late
+        // days). Nothing else in this pass reads what a settle writes, so settling a relation a
+        // little later than the walk met it cannot be seen. A relation with a mission is ticked
+        // and settled where the walk meets it, as before: the mission's week writes that
+        // relation, its sender's purse and a private line of the chronicle, none of which the
+        // relations still waiting read.
+        var queue = SettleQueues.GetValue(campaign, static c => new SettleQueue(c));
+        queue.Waiting.Clear();
         var scanned = 0;
         foreach (var relation in campaign.Relations.Values)
         {
             if (++scanned % 512 == 0) yield return 0;
-            if (relation.MissionByA is not null || relation.MissionByB is not null) DiplomaticOutreach.Tick(campaign, relation);
-            if ((campaign.ElapsedDays + (relation.A + relation.B) % 7) % 7 == 0)
-                Settle(campaign, relation);
+            var due = (campaign.ElapsedDays + (relation.A + relation.B) % 7) % 7 == 0;
+            if (relation.MissionByA is not null || relation.MissionByB is not null)
+            {
+                DiplomaticOutreach.Tick(campaign, relation);
+                if (due) Settle(campaign, relation);
+                continue;
+            }
+            if (!due) continue;
+            queue.Waiting.Add(relation);
+            if (queue.Waiting.Count >= SettleBatch) SettleWaiting(queue);
         }
+        SettleWaiting(queue);
     }
 }

@@ -60,7 +60,14 @@ public readonly record struct CohortMood(float Law, float Government, float Dive
 /// </summary>
 public static class PoliticalCohorts
 {
-    public static void Review(Campaign c, Nation n, int days)
+    public static void Review(Campaign c, Nation n, int days) => Review(c, n, days, null, -1);
+
+    /// <summary>
+    /// The same review for the daily pass, which has had every region's alienation worked out
+    /// beforehand (<see cref="ReadAlienation"/>). <paramref name="place"/> is the country's
+    /// place in the campaign's list, where the table keeps its row.
+    /// </summary>
+    internal static void Review(Campaign c, Nation n, int days, AlienationTable known, int place)
     {
         if (c is null || n is null || !On(c, "political_cohorts")) return;
         var span = Math.Max(0, days);
@@ -71,17 +78,123 @@ public static class PoliticalCohorts
         var shortage = n.ShortageIndex;
         var stability = n.Stability;
         var nationalLiving = n.StandardOfLiving;
-        foreach (var state in c.StatesOf(n))
+        var states = c.StatesOf(n);
+        var row = known is not null && known.Holds(place, n, states) ? known.RowOf(place) : -1;
+        for (var index = 0; index < states.Length; index++)
         {
+            var state = states[index];
             if (state is null || state.Population <= 0) continue;
             var fresh = state.PoliticalDivergence < 0f || state.LawApproval < 0f || state.GovernmentApproval < 0f;
             if (fresh) Seed(n, state);
             if (span == 0 || fresh) continue;
-            var alienation = StateIdentity.RegionAlienation(c, n, state);
+            var alienation = row >= 0 ? known.Values[row + index] : StateIdentity.RegionAlienation(c, n, state);
             Drift(state, step, debt, losing, recentPolitics, shortage, stability, nationalLiving,
                 state.MapIndex == n.CapitalStateMapIndex, alienation);
         }
         if (span > 0) Notice(c, n);
+    }
+
+    /// <summary>
+    /// How far every governed region's people sit outside what their state declares
+    /// (StateIdentity.RegionAlienation), worked out for the whole world at the head of the
+    /// daily review.
+    ///
+    /// The review asked for it a region at a time as it came to each country. The answer is a
+    /// walk over the region's people - a hundred groups scattered through memory, 4.6
+    /// microseconds a region on the late save, 95 ms of the 14 days for nothing but waiting on
+    /// memory - and one region's answer has nothing to do with another's. So they are read
+    /// together, side by side, before the first country is reviewed, and the review takes its
+    /// numbers from here.
+    ///
+    /// A number is used only while it is still the number a fresh walk would give: nothing the
+    /// daily review does to one country changes who lives in another's regions or what another
+    /// state declares - it moves approvals, radicalism, treasuries, memories and the chronicle -
+    /// with the one exception of a coup, after which the table is put aside (Spoil) and every
+    /// later country asks afresh. The row is also refused if the country's list of regions or
+    /// either of its declarations is not the very object that was read.
+    /// </summary>
+    internal sealed class AlienationTable
+    {
+        public float[] Values = new float[2048];
+        private Nation[] _owner = new Nation[2048];
+        private ScenarioState[] _region = new ScenarioState[2048];
+        private int[] _row = new int[512];
+        private ScenarioState[][] _regions = new ScenarioState[512][];
+        private string[] _religion = new string[512];
+        private string[] _culture = new string[512];
+        private Nation[] _nation = new Nation[512];
+        private int _nations;
+        private bool _good;
+
+        public void Read(Campaign c)
+        {
+            _good = false;
+            _nations = c.Nations.Count;
+            if (_row.Length < _nations)
+            {
+                var size = Math.Max(_nations, _row.Length * 2);
+                _row = new int[size];
+                _regions = new ScenarioState[size][];
+                _religion = new string[size];
+                _culture = new string[size];
+                _nation = new Nation[size];
+            }
+            var count = 0;
+            for (var place = 0; place < _nations; place++)
+            {
+                var nation = c.Nations[place];
+                var regions = c.StatesOf(nation);
+                _nation[place] = nation;
+                _regions[place] = regions;
+                _religion[place] = nation.DeclaredReligion;
+                _culture[place] = nation.DeclaredCulture;
+                _row[place] = count;
+                if (_owner.Length < count + regions.Length)
+                {
+                    var size = Math.Max(count + regions.Length, _owner.Length * 2);
+                    Array.Resize(ref _owner, size);
+                    Array.Resize(ref _region, size);
+                    Values = new float[size];
+                }
+                for (var index = 0; index < regions.Length; index++)
+                {
+                    _owner[count] = nation;
+                    _region[count] = regions[index];
+                    count++;
+                }
+            }
+            var values = Values;
+            var owner = _owner;
+            var region = _region;
+            DeterministicParallel.For(c, 0, count,
+                index => values[index] = StateIdentity.RegionAlienation(c, owner[index], region[index]));
+            // The world's regions are not kept alive by a table that has been read.
+            Array.Clear(_owner, 0, count);
+            Array.Clear(_region, 0, count);
+            _good = true;
+        }
+
+        /// <summary>Something happened that could have changed what a walk would find: stop answering.</summary>
+        public void Spoil() => _good = false;
+
+        public bool Holds(int place, Nation nation, ScenarioState[] regions) =>
+            _good && place >= 0 && place < _nations && ReferenceEquals(_nation[place], nation) &&
+            ReferenceEquals(_regions[place], regions) &&
+            ReferenceEquals(_religion[place], nation.DeclaredReligion) &&
+            ReferenceEquals(_culture[place], nation.DeclaredCulture);
+
+        public int RowOf(int place) => _row[place];
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, AlienationTable> AlienationTables = new();
+
+    /// <summary>The campaign's table, read now; null when the mechanic is off and nobody will ask.</summary>
+    internal static AlienationTable ReadAlienation(Campaign c)
+    {
+        if (c is null || !On(c, "political_cohorts")) return null;
+        var table = AlienationTables.GetValue(c, static _ => new AlienationTable());
+        table.Read(c);
+        return table;
     }
 
     /// <summary>
