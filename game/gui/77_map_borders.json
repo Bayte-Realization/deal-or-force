@@ -16,8 +16,10 @@
   // (game/gui/38_flat_map.json does that for the province line, which an atlas sheet wants finer).
   "colours": {
     // Near-black navy: the frontier is the darkest line on the map and must hold against every
-    // country colour, pale or dark.
-    "map.border_country": "#353f4d",
+    // country colour, pale or dark. Darkened from #353f4d when the province line was thinned:
+    // the two were a shade apart, and a frontier a shade darker than a parish boundary is not
+    // a frontier.
+    "map.border_country": "#1c2230",
     // A region line is a shade laid on the ground rather than a stroke, so its ink is black and
     // its opacity (below) is small.
     "map.border_region": "#000000",
@@ -32,8 +34,8 @@
   "metrics": {
     // Solid for most of this width, then a soft shoulder of about as much again. Also the unit
     // the frontier's inner cushion and the selection outlines are measured in.
-    "map.country_border_width": 1.35,
-    "map.country_border_opacity": 0.86,
+    "map.country_border_width": 1.9,
+    "map.country_border_opacity": 0.96,
     // The least of its weight a country border keeps at the world view. Lower, and the frontier
     // between two states becomes a hairline exactly where the strategic map needs it most.
     "map.country_border_far_weight": 0.62,

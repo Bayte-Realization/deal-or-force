@@ -323,14 +323,15 @@ static class BorderRankTests
 
         // The values the shader used to spell as literals. The skin is sRGB hex, so each comes
         // back within a quantisation step of the linear number it replaces.
-        Check(Near(globe.Country.Colour, 0.035f, 0.05f, 0.075f) && Near(globe.Country.Opacity, 0.86f) &&
-              Near(globe.Country.Width, 1.35f) && Near(globe.CountryFarWeight, 0.62f),
-            "country border: the same ink, weight and width the map has always drawn");
+        Check(Near(globe.Country.Colour, 0.0116f, 0.0159f, 0.0296f) && Near(globe.Country.Opacity, 0.96f) &&
+              Near(globe.Country.Width, 1.9f) && Near(globe.CountryFarWeight, 0.62f),
+            "country border: the darkest and widest stroke on the map");
         Check(Near(globe.Province.Colour, 0.055f, 0.075f, 0.09f) && Near(globe.ProvinceHalo, 0.78f, 0.80f, 0.77f) &&
-              Near(globe.Province.Width, 2.0f) && Near(globe.Province.Opacity, 0.85f) && Near(globe.ProvinceHaloOpacity, 0.15f),
-            "province line on the globe: unchanged, at the weight game/gui/24_workshop.json ships");
-        Check(Near(flat.Province.Width, 1.1f) && Near(flat.Province.Opacity, 0.52f) && Near(flat.ProvinceHaloOpacity, 0.025f),
-            "province line on the flat map: the finer line game/gui/38_flat_map.json asks for");
+              Near(globe.Province.Width, 1.0f) && Near(globe.Province.Opacity, 0.36f) && Near(globe.ProvinceHaloOpacity, 0f) &&
+              globe.Province.Width < globe.Country.Width && globe.Province.Opacity < globe.Country.Opacity,
+            "province line on the globe: a hairline under the country border, at the weight game/gui/24_workshop.json ships");
+        Check(Near(flat.Province.Width, 1.0f) && Near(flat.Province.Opacity, 0.36f) && Near(flat.ProvinceHaloOpacity, 0f),
+            "province line on the flat map: the same hairline, as game/gui/38_flat_map.json asks");
         Check(Near(globe.Region.Colour, 0f, 0f, 0f) && Near(globe.Region.Opacity, 0.13f * 0.32f, 0.0001f) &&
               Near(globe.Region.Width, 1.35f * 2.8f, 0.0001f),
             "region line: the shade it was, now a named colour, opacity and reach");

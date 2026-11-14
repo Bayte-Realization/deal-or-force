@@ -152,7 +152,7 @@ public static class InterfaceSkin
         ("map.city_roof",       "#808477"),
         // The lines of the political map, one ink a rank (MapBorderStyle). Mirrors
         // game/gui/77_map_borders.json, which ships the same values and documents them.
-        ("map.border_country",        "#353f4d"),
+        ("map.border_country",        "#1c2230"),
         ("map.border_region",         "#000000"),
         ("map.border_province",       "#424d55"),
         ("map.border_province_halo",  "#e5e7e3"),

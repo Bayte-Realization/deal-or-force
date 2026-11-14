@@ -268,15 +268,19 @@ static class StraitCrossingTests
         var drawn = links.First(link => link.Id == "gibraltar_ferry");
         Check(links.Count == map.Crossings.Count && drawn.Closed && drawn.Contested &&
               drawn.FromProvince == gibraltar.From && drawn.ToProvince == gibraltar.To &&
-              drawn.FromLatitude == map.CenterOf(gibraltar.From).Latitude &&
-              drawn.ToLongitude == map.CenterOf(gibraltar.To).Longitude &&
+              // The line runs from quay to quay as the crossing was authored, not between the two
+              // provinces' centres: centre to centre it lay mostly over land and read as a road.
+              drawn.FromLatitude == gibraltar.FromShoreLatitude &&
+              drawn.ToLongitude == gibraltar.ToShoreLongitude &&
+              (drawn.FromLatitude != map.CenterOf(gibraltar.From).Latitude ||
+               drawn.ToLongitude != map.CenterOf(gibraltar.To).Longitude) &&
               links.Count(link => link.Closed) == 1 &&
               LandCrossings.Links(c, mar.Id, null).All(link => !link.Closed) &&
               LandCrossings.Describe(c, drawn, esp.Id).Contains("Gibraltar ferry") &&
               LandCrossings.Describe(c, drawn, esp.Id).Contains("Closed") &&
               !LandCrossings.Describe(c, drawn, mar.Id).Contains("Closed") &&
               LandCrossings.Legend().Length > 0,
-            "the map's list shows the ferry closed to Spain, open to Morocco, between the two shores' centres");
+            "the map's list shows the ferry closed to Spain, open to Morocco, drawn from shore to shore");
 
         // A bridge under the same guns is marked and stays open.
         squadron.Latitude = kerch.SeaLatitude;

@@ -98,8 +98,8 @@ public static class MapBorderStyles
     // The compiled fallbacks. They are the shader's own former literals, so a content pack that
     // ships no gui/77_map_borders.json draws the map it always drew. Colours fall back through
     // InterfaceSkin's compiled table, which carries the same six tokens.
-    public const float CountryWidth = 1.35f;
-    public const float CountryOpacity = 0.86f;
+    public const float CountryWidth = 1.9f;
+    public const float CountryOpacity = 0.96f;
     public const float CountryFarWeightDefault = 0.62f;
     public const float RegionWidth = 3.78f;
     public const float RegionOpacity = 0.0416f;
@@ -107,7 +107,7 @@ public static class MapBorderStyles
     public const float PlateRegionShade = 0.70f;
     public const float PlateInlandShade = 0.92f;
 
-    private static readonly LinearColour CountryInk = new(0.035f, 0.05f, 0.075f);
+    private static readonly LinearColour CountryInk = new(0.0116f, 0.0159f, 0.0296f);
     private static readonly LinearColour RegionInk = new(0f, 0f, 0f);
     private static readonly LinearColour ProvinceInk = new(0.055f, 0.075f, 0.09f);
     private static readonly LinearColour ProvinceHaloInk = new(0.78f, 0.80f, 0.77f);
@@ -124,10 +124,10 @@ public static class MapBorderStyles
             Math.Clamp(InterfaceSkin.Metric("map.region_border_opacity", RegionOpacity), 0f, 1f),
             Math.Clamp(Projected(flatMap, "region_border_width", RegionWidth, RegionWidth), 0.5f, 12f)),
         new MapLineStyle(Ink("map.border_province", ProvinceInk),
-            Math.Clamp(Projected(flatMap, "province_border_opacity", 0.72f, 0.52f), 0f, 1f),
-            Math.Clamp(Projected(flatMap, "province_border_width", 2.0f, 1.1f), 0.5f, 4f)),
+            Math.Clamp(Projected(flatMap, "province_border_opacity", 0.36f, 0.36f), 0f, 1f),
+            Math.Clamp(Projected(flatMap, "province_border_width", 1.0f, 1.0f), 0.5f, 4f)),
         Ink("map.border_province_halo", ProvinceHaloInk),
-        Math.Clamp(Projected(flatMap, "province_border_halo", 0.15f, 0.025f), 0f, 0.4f),
+        Math.Clamp(Projected(flatMap, "province_border_halo", 0f, 0f), 0f, 0.4f),
         Ink("map.border_occupation", OccupationInk),
         Ink("map.border_occupation_key", OccupationKeyInk),
         PlateShades());

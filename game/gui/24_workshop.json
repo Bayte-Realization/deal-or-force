@@ -5,9 +5,15 @@
   "metrics": {
     "map.country_font_size": 64,
     "map.country_tracking": 0.86,
-    "map.province_border_width": 2.0,
-    "map.province_border_opacity": 0.85,
-    "map.province_border_halo": 0.15,
+    // The province line. It used to be the heaviest stroke on the map - 2 px at 85 % against a
+    // country border of 1.35 px - so every country read as cracked leather and the frontier
+    // drowned in its own parishes. A hairline at about a third lets the relief and the
+    // country's colour carry the picture, leaves a province findable under the cursor, and
+    // puts the ranks in the order the eye expects: country, region shade, province. No pale
+    // shoulder: it doubled every line on light countries.
+    "map.province_border_width": 1.0,
+    "map.province_border_opacity": 0.36,
+    "map.province_border_halo": 0.0,
     "map.city_font_size": 28,
     "map.city_text_pixels": 13,
     "map.city_label_limit": 140,
