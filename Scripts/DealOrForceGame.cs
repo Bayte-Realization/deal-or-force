@@ -147,6 +147,8 @@ public partial class DealOrForceGame : Control
         MaintainArmyBar(delta);
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
+        // Choosing a country is choosing a shape and a colour: mines and factories are noise there.
+        if (_globe is not null) _globe.RegionIconsSuppressed = _pickerLayer is { Visible: true };
         // The lens and the roll move while a key is held, so the line that reports them
         // has to be written every frame rather than when something is pressed.
         if (_freeCameraMode) RefreshFreeCameraReadout();

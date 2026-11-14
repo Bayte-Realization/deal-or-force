@@ -80,19 +80,29 @@ public partial class DealOrForceGame
         // wide, three narrow, wrapping wherever they met. Now a two-column grid of equal cells
         // in a scroll, reading like the country list above it; a long name clips and leaves
         // the full text to the tooltip.
+        //
+        // Folded away until asked for. Open, it put "Alaska", "Ambazonia" and "Bavaria Party"
+        // between the search box and the country a newcomer had just clicked, and nothing on
+        // the screen said what they were. One row now says it - a movement is something you
+        // can play - and the list is a press away for whoever wants it.
         _pickerMovementsBox = new VBoxContainer();
         rows.AddChild(_pickerMovementsBox);
-        var withoutLand = new HBoxContainer();
-        withoutLand.AddThemeConstantOverride("separation", 6);
-        if (Symbol("movement_headquarters", 14, "text.caption") is { } headquarters) withoutLand.AddChild(headquarters);
-        var withoutLandCaption = Title("WITHOUT LAND", 13, Ui.Colour("text.caption"));
-        withoutLandCaption.AutowrapMode = TextServer.AutowrapMode.Off;
-        withoutLand.AddChild(withoutLandCaption);
-        _pickerMovementsBox.AddChild(withoutLand);
-        var movementScroll = new ScrollContainer
+        ScrollContainer movementScroll = null;
+        Button movementFold = null;
+        movementFold = ActionButton("Play a movement without land", () =>
+        {
+            movementScroll.Visible = !movementScroll.Visible;
+            StyleButton(movementFold, movementScroll.Visible);
+        }, 330, 34);
+        movementFold.Name = "PickerMovementsFold";
+        movementFold.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        movementFold.TooltipText = Tr("Parties, fronts and governments in exile: a headquarters and supporters instead of provinces.");
+        _pickerMovementsBox.AddChild(movementFold);
+        movementScroll = new ScrollContainer
         {
             CustomMinimumSize = new Vector2(0, 96),
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            Visible = false
         };
         _pickerMovementsBox.AddChild(movementScroll);
         _pickerMovements = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -153,10 +163,29 @@ public partial class DealOrForceGame
         // BEFORE they pick a country, and until now the only door to them was the pause
         // menu, which does not exist until a campaign is running.
         actionRow.AddChild(ActionButton("Settings", ShowSettings, 120, 38));
+        // Everything below is for the player who came back for it: the two weather switches and
+        // the seed of the world. Shown by default they made the first screen of a first game
+        // ask about clouds, fog and a ten-digit number before it asked which country.
+        var advanced = new VBoxContainer { Name = "PickerAdvanced", Visible = false };
+        advanced.AddThemeConstantOverride("separation", 8);
+        Button advancedFold = null;
+        advancedFold = ActionButton("Advanced", () =>
+        {
+            advanced.Visible = !advanced.Visible;
+            StyleButton(advancedFold, advanced.Visible);
+            QueuePickerActionsLayout();
+        }, 120, 38);
+        advancedFold.Name = "PickerAdvancedFold";
+        advancedFold.TooltipText = Tr("Clouds, mist and the seed the world is built from.");
+        actionRow.AddChild(advancedFold);
+        actionStack.AddChild(advanced);
+        var weatherRow = new HBoxContainer();
+        weatherRow.AddThemeConstantOverride("separation", 8);
+        advanced.AddChild(weatherRow);
         // The globe here is a map being studied for its borders, and clouds are in the way of it.
-        actionRow.AddChild(WeatherToggle("map_clouds", "Clouds", "Clouds over the world. Press to hide or show them - the same option as in the settings.", 96));
+        weatherRow.AddChild(WeatherToggle("map_clouds", "Clouds", "Clouds over the world. Press to hide or show them - the same option as in the settings.", 96));
         var pickerFog = WeatherToggle("map_mist", "FOG", "Hide or show the visual mist. Unseen provinces remain unseen.", 70);
-        pickerFog.Name = "PickerFog"; actionRow.AddChild(pickerFog);
+        pickerFog.Name = "PickerFog"; weatherRow.AddChild(pickerFog);
 
         // The seed the next world is built from. The same seed builds the same world to the
         // digit - which is what a bug report is made of - and a different seed builds a
@@ -164,7 +193,7 @@ public partial class DealOrForceGame
         // than doing one behind the field: a world is not a small thing to replace.
         var seedRow = new HBoxContainer();
         seedRow.AddThemeConstantOverride("separation", 8);
-        actionStack.AddChild(seedRow);
+        advanced.AddChild(seedRow);
         var seedCaption = Title("WORLD SEED", 12, Ui.Colour("text.caption"));
         seedCaption.AutowrapMode = TextServer.AutowrapMode.Off;
         seedCaption.CustomMinimumSize = new Vector2(92, 0);

@@ -73,8 +73,20 @@ public sealed partial class GlobePresentation
     /// <summary>The farthest out region icons are drawn, as a view distance (skin: map.region_icon_distance).</summary>
     private static float RegionIconDistance => InterfaceSkin.Metric("map.region_icon_distance", 8.4f);
 
-    private bool RegionIconsWanted => _regionIconsEnabled && _mapApplied && _campaign is not null &&
+    private bool RegionIconsWanted => _regionIconsEnabled && !_regionIconsSuppressed && _mapApplied && _campaign is not null &&
                                       !CountrySelectionOnly && ViewDistance <= RegionIconDistance;
+
+    /// <summary>
+    /// Switched on by a screen that shows the map for its countries alone - the country picker.
+    /// Not the player's setting: that one is remembered, this one ends when the screen closes.
+    /// </summary>
+    public bool RegionIconsSuppressed
+    {
+        get => _regionIconsSuppressed;
+        set { if (_regionIconsSuppressed == value) return; _regionIconsSuppressed = value; _badgeLayoutDue = true; QueueRedraw(); }
+    }
+
+    private bool _regionIconsSuppressed;
 
     /// <summary>
     /// Every frame: decides when the layout may be redone, fades the badges, and asks for a redraw
