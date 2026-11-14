@@ -69,22 +69,56 @@ public static class AirReconnaissance
         var map = c.ProvinceMap;
         var controllers = c.ProvinceController ?? map.ProvinceToNation;
         HashSet<int> enemies = null;
+        List<int> hidden = null;
         foreach (var formation in formations)
         {
             if (!Flying(c, formation, out var type)) continue;
-            enemies ??= Enemies(c, viewerId);
-            if (enemies.Count == 0) return;
+            if (enemies is null)
+            {
+                enemies = Enemies(c, viewerId);
+                if (enemies.Count == 0) return;
+                // The enemy ground still in the fog, read off the map once for all the flights.
+                // Each flight used to walk all 34,000 provinces asking a hash set whose each
+                // one was - a third of a millisecond a formation, and while a war's flights
+                // were up nearly half of every rebuild of a country's sight (intel.visibility),
+                // which the advance asks for again every hour. What a flight lifts the fog from
+                // is unchanged: a province another flight has already shown is passed over
+                // here as it was passed over there.
+                hidden = HiddenEnemyGround(reach, controllers, enemies);
+            }
             var sight = SightKm(c, formation, type);
             var origin = map.CenterOf(formation.BaseProvinceId);
             // A degree of latitude is 111 km anywhere: most of the map is out of sight by that alone.
             var band = sight / 111f;
-            for (var p = 1; p < reach.Length && p < controllers.Length; p++)
+            for (var i = 0; i < hidden.Count; i++)
             {
-                if (reach[p] > 0 || !enemies.Contains(controllers[p])) continue;
+                var p = hidden[i];
+                if (reach[p] > 0) continue;
                 if (MathF.Abs(map.CenterOf(p).Latitude - origin.Latitude) > band) continue;
                 if (SupportCore.DistanceKm(c, formation.BaseProvinceId, p) <= sight) reach[p] = 1;
             }
         }
+    }
+
+    [ThreadStatic] private static List<int> _hiddenScratch;
+    [ThreadStatic] private static bool[] _enemyMapScratch;
+
+    /// <summary>Every province an enemy controls that the viewer does not yet see, in ascending order.</summary>
+    private static List<int> HiddenEnemyGround(byte[] reach, ushort[] controllers, HashSet<int> enemies)
+    {
+        var hidden = _hiddenScratch ??= new List<int>();
+        hidden.Clear();
+        // A controller is sixteen bits, so the set is a table for the walk. An index outside
+        // that range can control nothing on this map and is left out, as the set left it unmatched.
+        var isEnemy = _enemyMapScratch ??= new bool[ushort.MaxValue + 1];
+        foreach (var index in enemies)
+            if ((uint)index < (uint)isEnemy.Length) isEnemy[index] = true;
+        var end = Math.Min(reach.Length, controllers.Length);
+        for (var p = 1; p < end; p++)
+            if (reach[p] == 0 && isEnemy[controllers[p]]) hidden.Add(p);
+        foreach (var index in enemies)
+            if ((uint)index < (uint)isEnemy.Length) isEnemy[index] = false;
+        return hidden;
     }
 
     /// <summary>

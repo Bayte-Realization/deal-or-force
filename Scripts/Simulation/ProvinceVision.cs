@@ -33,6 +33,8 @@ public static partial class CampaignIntel
         // Provinces grouped by who controls them (ProvincesHeldBy), with what they were built from.
         public int HeldEpoch = -1, HeldRevision = -1;
         public ushort[] HeldSource;
+        /// <summary>The controllers as they stood when the grouping was built.</summary>
+        public ushort[] HeldCopy = Array.Empty<ushort>();
         public int[] HeldStart = Array.Empty<int>(), HeldNext = Array.Empty<int>(), HeldProvinces = Array.Empty<int>();
     }
 
@@ -45,6 +47,19 @@ public static partial class CampaignIntel
     internal static ReadOnlySpan<int> ProvincesHeldBy(Campaign c, ushort[] controllers, int mapIndex)
     {
         var cache = Caches.GetOrCreateValue(c);
+        // The epoch moves at the end of every step, so the grouping was built again every hour
+        // somebody looked - a hundred microseconds, a fifth of every country's sight rebuilt
+        // (intel.visibility) - though it is made of nothing but the controllers. When the stamp
+        // has moved the controllers are compared with the ones it was built from first: the
+        // same controllers are the same grouping, and only a province that really changed
+        // hands builds it again.
+        if ((cache.HeldEpoch != cache.Epoch || cache.HeldRevision != c.MapRevision || !ReferenceEquals(cache.HeldSource, controllers)) &&
+            controllers.AsSpan().SequenceEqual(cache.HeldCopy))
+        {
+            cache.HeldSource = controllers;
+            cache.HeldRevision = c.MapRevision;
+            cache.HeldEpoch = cache.Epoch;
+        }
         if (cache.HeldEpoch != cache.Epoch || cache.HeldRevision != c.MapRevision || !ReferenceEquals(cache.HeldSource, controllers))
         {
             // Rebuilt every time a province changes hands, which in a world at war is hourly:
@@ -62,6 +77,8 @@ public static partial class CampaignIntel
             var provinces = cache.HeldProvinces;
             for (var p = 1; p < controllers.Length; p++) provinces[next[controllers[p]]++] = p;
             cache.HeldSource = controllers;
+            if (cache.HeldCopy.Length != controllers.Length) cache.HeldCopy = new ushort[controllers.Length];
+            Array.Copy(controllers, cache.HeldCopy, controllers.Length);
             cache.HeldRevision = c.MapRevision;
             cache.HeldEpoch = cache.Epoch;
         }

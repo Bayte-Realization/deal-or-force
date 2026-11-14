@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace DealOrForce.Simulation;
@@ -194,6 +195,7 @@ public static class MovementRules
         region is not null && campaign != null ? campaign.NationByMapIndex(region.NationMapIndex) : null;
 
     [ThreadStatic] private static Dictionary<int, bool> _ownStateCache;
+    [ThreadStatic] private static Dictionary<int, bool> _atWarWithCache;
     [ThreadStatic] private static HashSet<int> _liveRegions;
     [ThreadStatic] private static List<int> _staleSupport;
     [ThreadStatic] private static List<int> _sponsorKeysScratch;
@@ -254,6 +256,10 @@ public static class MovementRules
         ownStateCache.Clear();
         var liveRegions = _liveRegions ??= new HashSet<int>();
         liveRegions.Clear();
+        // Which owners it is at war with, remembered for the walk below: nothing in the walk
+        // declares or ends a war, and the answer is the owner's, not the region's.
+        var atWarWith = _atWarWithCache ??= new Dictionary<int, bool>();
+        atWarWith.Clear();
         // The regions where this movement has people, not every region on the map. The
         // support dictionary is sparse, and the people index already knows its own keys.
         using (SimProfiler.Measure("      mov:support"))
@@ -264,7 +270,7 @@ public static class MovementRules
                 var faithful = known.Faithful;
                 if (own <= 0 && faithful <= 0) continue;
                 var owner = OwnerOf(campaign, region);
-                var supportCeiling = MovementReach.SupportCeiling(campaign, nation, region, definition, own, faithful, owner);
+                var supportCeiling = MovementReach.SupportCeiling(campaign, nation, region, definition, own, faithful, owner, atWarWith);
                 if (supportCeiling <= 0f) continue;
                 liveRegions.Add(region.MapIndex);
                 believers += faithful;
@@ -444,7 +450,6 @@ public static class MovementRules
         internal readonly List<int> TouchedCultures = new();
         internal int CultureStampTick;
         internal readonly List<(int RelId, int CultId, string RawCulture, long Size)> RegionRelCultList = new();
-        internal readonly Dictionary<long, int> RegionRelCultMap = new();
         internal ulong[] StateDemographySigs = Array.Empty<ulong>();
         internal int[][] StateCultIds = Array.Empty<int[]>();
         internal int[][] StateRelIds = Array.Empty<int[]>();
@@ -471,7 +476,44 @@ public static class MovementRules
         internal readonly List<int> ScratchNewRelIds = new();
         internal readonly List<CultureRegionBucket> ScratchCultBuckets = new();
         internal readonly List<ReligionCultureBucket> ScratchRelBuckets = new();
+        // The culture and faith names by the string OBJECT that carries them. A late world has
+        // two hundred thousand groups and a few hundred different names. Hashing the text of
+        // two names per group was 12 ms of every day for the population stamp alone and most
+        // of a 60 ms index build. So each different text has one row and one string object
+        // that stands for it; a group met carrying an equal string of its own (a text save
+        // gives every group its own) is handed that object instead (CanonicalRow), and from
+        // then on its names are found by reference, hashed and resolved once. Row 0 is the
+        // null name. RawKeys/RawKeyRows are an open-addressed table of those objects (RawSlot),
+        // RawByText the same rows by text; the Raw* arrays are by row.
+        internal string[] RawKeys = new string[256];
+        internal int[] RawKeyRows = new int[256];
+        internal readonly Dictionary<string, int> RawByText = new(StringComparer.Ordinal);
+        internal int RawCount = 1;
+        internal string[] RawStrings = new string[64];
+        internal int[] RawHash = new int[64];
+        internal int[] RawCultureId = Unresolved(64);
+        internal int[] RawReligionId = Unresolved(64);
+        /// <summary>Where each name stands among the others by ordinal comparison; equal text, equal rank. Current only while RawRanksStale is false.</summary>
+        internal int[] RawRank = new int[64];
+        internal bool RawRanksStale = true;
+        // One region's (faith, culture) rows while its groups are read: the rows of one culture
+        // are chained from CultureRowHead, so finding a group's row is a step or two.
+        internal int[] CultureRowHead = Array.Empty<int>();
+        internal int[] RowRel = new int[64];
+        internal int[] RowCult = new int[64];
+        internal string[] RowRaw = new string[64];
+        internal long[] RowSize = new long[64];
+        internal int[] RowNext = new int[64];
+        internal int[] RowRank = new int[64];
+        internal long[] RowKeys = new long[64];
         public bool Indexed;
+
+        internal static int[] Unresolved(int length)
+        {
+            var ids = new int[length];
+            Array.Fill(ids, -1);
+            return ids;
+        }
     }
 
     internal readonly record struct PopulationGroupAt(ScenarioState Region, PopulationGroup Group);
@@ -596,7 +638,7 @@ public static class MovementRules
             }
             for (var i = 0; i < totalStates; i++)
             {
-                if (StateDemographySignature(orderedStates[i]) != cache.StateDemographySigs[i])
+                if (StateDemographySignature(cache, orderedStates[i]) != cache.StateDemographySigs[i])
                     dirtySlots.Add(i);
             }
             if (cache.OwnershipRevision != ownership && !sameRegions)
@@ -629,21 +671,135 @@ public static class MovementRules
     /// The population stamp for one region: who lives there, not which string object holds
     /// the name. Empty groups are shells the index already skips.
     /// </summary>
-    private static ulong StateDemographySignature(ScenarioState state)
+    private static ulong StateDemographySignature(MovementPeopleCache cache, ScenarioState state)
     {
         if (state is null) return 0UL;
         ulong sig = Mix(14695981039346656037UL, (ulong)(uint)state.MapIndex);
         sig = Mix(sig, (ulong)state.Population);
         var groups = state.PopulationGroups;
+        // The text's own hash (0 for no name), as before - but for a name the index has
+        // already met, taken once and read back by reference, and a group carrying the same
+        // string as the group before it does not even reach the table. A string the index
+        // has not met is hashed here as it always was; this reading changes nothing.
+        string lastCulture = null, lastReligion = null;
+        uint cultureHash = 0, religionHash = 0;
         for (var gi = 0; gi < groups.Count; gi++)
         {
             var g = groups[gi];
             if (g.Size <= 0) continue;
+            if (!ReferenceEquals(g.Culture, lastCulture))
+            {
+                lastCulture = g.Culture;
+                var row = FindRawRow(cache, lastCulture);
+                cultureHash = (uint)(row >= 0 ? cache.RawHash[row] : lastCulture.GetHashCode());
+            }
+            if (!ReferenceEquals(g.Religion, lastReligion))
+            {
+                lastReligion = g.Religion;
+                var row = FindRawRow(cache, lastReligion);
+                religionHash = (uint)(row >= 0 ? cache.RawHash[row] : lastReligion.GetHashCode());
+            }
             sig = Mix(sig, (ulong)g.Size);
-            sig = Mix(sig, (ulong)(uint)(g.Culture is null ? 0 : g.Culture.GetHashCode()));
-            sig = Mix(sig, (ulong)(uint)(g.Religion is null ? 0 : g.Religion.GetHashCode()));
+            sig = Mix(sig, cultureHash);
+            sig = Mix(sig, religionHash);
         }
         return sig;
+    }
+
+    /// <summary>
+    /// Where a string object starts looking for itself in RawKeys: by its identity, not by
+    /// its text - hashing the text is what this table exists to avoid, and the identity
+    /// spreads evenly however alike the names are.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int RawSlot(string value) => RuntimeHelpers.GetHashCode(value);
+
+    /// <summary>The row of this very string object, or -1 if it is not the one that stands for its text. Null is row 0.</summary>
+    private static int FindRawRow(MovementPeopleCache cache, string value)
+    {
+        if (value is null) return 0;
+        var keys = cache.RawKeys;
+        var mask = keys.Length - 1;
+        var at = RawSlot(value) & mask;
+        while (true)
+        {
+            var key = keys[at];
+            if (ReferenceEquals(key, value)) return cache.RawKeyRows[at];
+            if (key is null) return -1;
+            at = (at + 1) & mask;
+        }
+    }
+
+    /// <summary>
+    /// The row of this text, and <paramref name="value"/> made the string object that stands
+    /// for it: the same characters, so nothing that reads the name can tell, and the next
+    /// reading finds it by reference. A text met for the first time is given a row and stands
+    /// for itself.
+    /// </summary>
+    private static int CanonicalRow(MovementPeopleCache cache, ref string value)
+    {
+        if (cache.RawByText.TryGetValue(value, out var met))
+        {
+            value = cache.RawStrings[met];
+            return met;
+        }
+        var row = cache.RawCount++;
+        cache.RawByText[value] = row;
+        if (row == cache.RawStrings.Length)
+        {
+            var capacity = row * 2;
+            Array.Resize(ref cache.RawStrings, capacity);
+            Array.Resize(ref cache.RawHash, capacity);
+            Array.Resize(ref cache.RawRank, capacity);
+            Array.Resize(ref cache.RawCultureId, capacity);
+            Array.Resize(ref cache.RawReligionId, capacity);
+            Array.Fill(cache.RawCultureId, -1, row, capacity - row);
+            Array.Fill(cache.RawReligionId, -1, row, capacity - row);
+        }
+        cache.RawStrings[row] = value;
+        cache.RawHash[row] = value.GetHashCode();
+        cache.RawCultureId[row] = -1;
+        cache.RawReligionId[row] = -1;
+        cache.RawRanksStale = true;
+        if (cache.RawCount * 2 > cache.RawKeys.Length)
+        {
+            // Half full: twice the table, every row put back.
+            cache.RawKeys = new string[cache.RawKeys.Length * 2];
+            cache.RawKeyRows = new int[cache.RawKeys.Length];
+            for (var known = 1; known < row; known++) PlaceRawRow(cache, cache.RawStrings[known], known);
+        }
+        PlaceRawRow(cache, value, row);
+        return row;
+    }
+
+    private static void PlaceRawRow(MovementPeopleCache cache, string value, int row)
+    {
+        var keys = cache.RawKeys;
+        var mask = keys.Length - 1;
+        var at = RawSlot(value) & mask;
+        while (keys[at] is not null) at = (at + 1) & mask;
+        keys[at] = value;
+        cache.RawKeyRows[at] = row;
+    }
+
+    /// <summary>
+    /// Every remembered name's place by ordinal comparison, the null name standing as the
+    /// empty one. A region's rows are then put in order by comparing integers instead of text.
+    /// </summary>
+    private static void RankRawRows(MovementPeopleCache cache)
+    {
+        var count = cache.RawCount;
+        var strings = cache.RawStrings;
+        var order = new int[count];
+        for (var row = 0; row < count; row++) order[row] = row;
+        Array.Sort(order, (a, b) => string.CompareOrdinal(strings[a] ?? "", strings[b] ?? ""));
+        var rank = 0;
+        for (var k = 0; k < count; k++)
+        {
+            if (k > 0 && string.CompareOrdinal(strings[order[k - 1]] ?? "", strings[order[k]] ?? "") != 0) rank++;
+            cache.RawRank[order[k]] = rank;
+        }
+        cache.RawRanksStale = false;
     }
 
     private static (int Id, string Canonical) ResolveCulture(MovementPeopleCache cache, string raw)
@@ -667,6 +823,7 @@ public static class MovementRules
                 Array.Resize(ref cache.PatchCultStamp, nextCap);
                 Array.Resize(ref cache.PatchCultHead, nextCap);
                 Array.Resize(ref cache.PatchCultTail, nextCap);
+                Array.Resize(ref cache.CultureRowHead, nextCap);
                 Array.Fill(cache.PatchCultHead, -1, oldLen, nextCap - oldLen);
             }
         }
@@ -715,11 +872,15 @@ public static class MovementRules
         var groups = region.PopulationGroups;
         if (groups.Count == 0) return stamp;
 
-        var useMap = groups.Count > 8;
-        if (useMap) cache.RegionRelCultMap.Clear();
+        // The ranks order this region's rows only if they are current now and no new name
+        // turns up while it is read; otherwise the rows are compared as text, as they were.
+        var ranked = !cache.RawRanksStale;
+        var rows = 0;
 
         string lastCulture = null;
+        string lastRawCulture = null;
         var lastCultId = -1;
+        var lastCultRank = 0;
         string lastReligion = null;
         var lastRelId = -1;
 
@@ -727,32 +888,41 @@ public static class MovementRules
         {
             var group = groups[gi];
             if (group.Size <= 0) continue;
-            var rawCulture = group.Culture ?? "";
-            var rawReligion = group.Religion ?? "";
-            int cultId;
-            if (ReferenceEquals(rawCulture, lastCulture))
-                cultId = lastCultId;
-            else
+            if (lastCultId < 0 || !ReferenceEquals(group.Culture, lastCulture))
             {
-                cultId = ResolveCulture(cache, rawCulture).Id;
-                lastCulture = rawCulture;
-                lastCultId = cultId;
+                lastCulture = group.Culture;
+                var raw = FindRawRow(cache, lastCulture);
+                if (raw < 0)
+                {
+                    raw = CanonicalRow(cache, ref lastCulture);
+                    group.Culture = lastCulture;
+                }
+                lastRawCulture = lastCulture ?? "";
+                lastCultId = cache.RawCultureId[raw];
+                if (lastCultId < 0) cache.RawCultureId[raw] = lastCultId = ResolveCulture(cache, lastRawCulture).Id;
+                lastCultRank = cache.RawRank[raw];
             }
-            int relId;
-            if (ReferenceEquals(rawReligion, lastReligion))
-                relId = lastRelId;
-            else
+            if (lastRelId < 0 || !ReferenceEquals(group.Religion, lastReligion))
             {
-                relId = ResolveReligion(cache, rawReligion);
-                lastReligion = rawReligion;
-                lastRelId = relId;
+                lastReligion = group.Religion;
+                var raw = FindRawRow(cache, lastReligion);
+                if (raw < 0)
+                {
+                    raw = CanonicalRow(cache, ref lastReligion);
+                    group.Religion = lastReligion;
+                }
+                lastRelId = cache.RawReligionId[raw];
+                if (lastRelId < 0) cache.RawReligionId[raw] = lastRelId = ResolveReligion(cache, lastReligion ?? "");
             }
+            var cultId = lastCultId;
+            var relId = lastRelId;
 
             if (cache.CultureStamp[cultId] != stamp)
             {
                 cache.CultureStamp[cultId] = stamp;
                 cache.CultureSum[cultId] = group.Size;
                 cache.TouchedCultures.Add(cultId);
+                cache.CultureRowHead[cultId] = -1;
             }
             else
             {
@@ -765,44 +935,59 @@ public static class MovementRules
                 cache.ScratchNewRelIds.Add(relId);
             }
 
-            if (!useMap)
+            // This group's (faith, culture) row: one of the few its culture already has here,
+            // or a new one, in the order the pairs are first met.
+            var row = cache.CultureRowHead[cultId];
+            while (row >= 0 && cache.RowRel[row] != relId) row = cache.RowNext[row];
+            if (row >= 0)
             {
-                var found = -1;
-                for (var k = 0; k < cache.RegionRelCultList.Count; k++)
-                {
-                    var item = cache.RegionRelCultList[k];
-                    if (item.RelId == relId && item.CultId == cultId) { found = k; break; }
-                }
-                if (found >= 0)
-                {
-                    var item = cache.RegionRelCultList[found];
-                    item.Size += group.Size;
-                    cache.RegionRelCultList[found] = item;
-                }
-                else
-                {
-                    cache.RegionRelCultList.Add((relId, cultId, rawCulture, group.Size));
-                }
+                cache.RowSize[row] += group.Size;
+                continue;
             }
-            else
+            if (rows == cache.RowRel.Length)
             {
-                var pairKey = ((long)relId << 32) | (uint)cultId;
-                if (cache.RegionRelCultMap.TryGetValue(pairKey, out var slot))
-                {
-                    var item = cache.RegionRelCultList[slot];
-                    item.Size += group.Size;
-                    cache.RegionRelCultList[slot] = item;
-                }
-                else
-                {
-                    cache.RegionRelCultMap[pairKey] = cache.RegionRelCultList.Count;
-                    cache.RegionRelCultList.Add((relId, cultId, rawCulture, group.Size));
-                }
+                var capacity = rows * 2;
+                Array.Resize(ref cache.RowRel, capacity);
+                Array.Resize(ref cache.RowCult, capacity);
+                Array.Resize(ref cache.RowRaw, capacity);
+                Array.Resize(ref cache.RowSize, capacity);
+                Array.Resize(ref cache.RowNext, capacity);
+                Array.Resize(ref cache.RowRank, capacity);
             }
+            row = rows++;
+            cache.RowRel[row] = relId;
+            cache.RowCult[row] = cultId;
+            cache.RowRaw[row] = lastRawCulture;
+            cache.RowSize[row] = group.Size;
+            cache.RowRank[row] = lastCultRank;
+            cache.RowNext[row] = cache.CultureRowHead[cultId];
+            cache.CultureRowHead[cultId] = row;
         }
 
-        if (CanonicalPeopleOrder && cache.RegionRelCultList.Count > 1)
-            cache.RegionRelCultList.Sort(static (a, b) => string.CompareOrdinal(a.RawCulture, b.RawCulture));
+        var list = cache.RegionRelCultList;
+        if (CanonicalPeopleOrder && rows > 1 && ranked && !cache.RawRanksStale)
+        {
+            // By the name's rank, then by the order met. Two rows of one faith never share a
+            // name (one name is one culture, and a faith has one row a culture), so within a
+            // faith - the only order the index keeps - this is the order comparing text gives.
+            if (cache.RowKeys.Length < rows) cache.RowKeys = new long[cache.RowRel.Length];
+            var keys = cache.RowKeys;
+            for (var row = 0; row < rows; row++) keys[row] = ((long)cache.RowRank[row] << 32) | (uint)row;
+            Array.Sort(keys, 0, rows);
+            for (var k = 0; k < rows; k++)
+            {
+                var row = (int)(uint)keys[k];
+                list.Add((cache.RowRel[row], cache.RowCult[row], cache.RowRaw[row], cache.RowSize[row]));
+            }
+        }
+        else
+        {
+            for (var row = 0; row < rows; row++)
+                list.Add((cache.RowRel[row], cache.RowCult[row], cache.RowRaw[row], cache.RowSize[row]));
+            if (CanonicalPeopleOrder && rows > 1)
+                list.Sort(static (a, b) => string.CompareOrdinal(a.RawCulture, b.RawCulture));
+        }
+        Array.Clear(cache.RowRaw, 0, rows);
         return stamp;
     }
 
@@ -816,10 +1001,11 @@ public static class MovementRules
 
     private static void BuildPeopleIndexBatch(MovementPeopleCache cache, IReadOnlyList<ScenarioState> orderedStates, int start, int end)
     {
+        if (cache.RawRanksStale) RankRawRows(cache);
         for (var idx = start; idx < end; idx++)
         {
             var region = orderedStates[idx];
-            cache.StateDemographySigs[idx] = StateDemographySignature(region);
+            cache.StateDemographySigs[idx] = StateDemographySignature(cache, region);
             if (region is null || region.PopulationGroups.Count == 0)
             {
                 cache.StateCultIds[idx] = Array.Empty<int>();
@@ -882,6 +1068,7 @@ public static class MovementRules
 
     private static void AccumulatePatchSlotsBatch(MovementPeopleCache cache, IReadOnlyList<ScenarioState> orderedStates, int patchTick, int start, int end)
     {
+        if (cache.RawRanksStale) RankRawRows(cache);
         for (var di = start; di < end; di++)
         {
             var slot = cache.DirtySlots[di];
@@ -917,7 +1104,7 @@ public static class MovementRules
 
             cache.StateCultIds[slot] = UpdateIntArray(cache.StateCultIds[slot], cache.TouchedCultures);
             cache.StateRelIds[slot] = UpdateIntArray(cache.StateRelIds[slot], cache.ScratchNewRelIds);
-            cache.StateDemographySigs[slot] = StateDemographySignature(region);
+            cache.StateDemographySigs[slot] = StateDemographySignature(cache, region);
         }
     }
 

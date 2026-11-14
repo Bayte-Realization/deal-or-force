@@ -841,12 +841,18 @@ public static partial class Warfare
         foreach (var army in InWar(war.Id))
         {
             if (++seen % 6 == 0) yield return 0;
+            // A formation with nothing to resolve - holding, in reserve, marching, fighting, not
+            // yet ready - is passed before the measuring starts. Two in three are, every hour
+            // (87 thousand of 129 thousand over fourteen late days), and each used to open and
+            // close two profiler scopes to be told so: the scopes were all an idle formation
+            // cost here. The tests are the same ones in the same order; the rest follow inside.
+            if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
+                army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays)
+                continue;
             using (SimProfiler.Measure("  war:advances"))
             using (SimProfiler.Measure("    adv:resolve"))
             {
-            if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
-                army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays ||
-                !war.Involves(army.NationId) || MilitaryAccess.MustReturn(campaign, army))
+            if (!war.Involves(army.NationId) || MilitaryAccess.MustReturn(campaign, army))
                 continue;
             // A cut-off or stranded formation does not begin an attack on its own (StaffReasons),
             // but it still marches into ground nobody holds: that is how a pocket breaks out, and

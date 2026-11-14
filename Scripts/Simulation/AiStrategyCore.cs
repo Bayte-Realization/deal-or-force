@@ -128,7 +128,10 @@ public static class AiStrategyCatalog
     /// </summary>
     private readonly record struct Posture(int Formations, float Organisation, float Supply);
 
-    private static readonly Dictionary<int, Posture> Postures = new();
+    // By nation id, which is the nation's place in the list. It was a dictionary: two hashed
+    // operations for each of two thousand formations at the first question of every hour, which
+    // was most of what "may this division start its advance" (adv:execution) cost each step.
+    private static Posture[] _postures = Array.Empty<Posture>();
     private static Campaign _postureCampaign;
     private static long _postureHour = long.MinValue;
 
@@ -145,18 +148,22 @@ public static class AiStrategyCatalog
         {
             _postureHour = campaign.ElapsedHours;
             _postureCampaign = campaign;
-            Postures.Clear();
+            Array.Clear(_postures);
             foreach (var army in campaign.Armies)
             {
-                var running = Postures.GetValueOrDefault(army.NationId);
-                Postures[army.NationId] = new Posture(running.Formations + 1,
+                var id = army.NationId;
+                // A formation of no country is counted for nobody; nobody asks after it.
+                if (id < 0) continue;
+                if (id >= _postures.Length) Array.Resize(ref _postures, Math.Max(id + 1, Math.Max(campaign.Nations.Count, _postures.Length * 2)));
+                ref var running = ref _postures[id];
+                running = new Posture(running.Formations + 1,
                     running.Organisation + army.Organisation, running.Supply + army.SupplyLevel);
             }
         }
 
         // Totals go in, averages come out - dividing here rather than in a second pass over
         // the table, so the day's work is one walk of the order of battle and nothing else.
-        var summed = Postures.GetValueOrDefault(nation.Id);
+        var summed = (uint)nation.Id < (uint)_postures.Length ? _postures[nation.Id] : default;
         return summed.Formations == 0
             ? summed
             : new Posture(summed.Formations,

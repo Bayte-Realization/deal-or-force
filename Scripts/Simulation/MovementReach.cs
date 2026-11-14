@@ -11,6 +11,8 @@ public static class MovementReach
         public ProvinceTopology Map;
         public int Revision = -1;
         public readonly Dictionary<int, (float Latitude, float Longitude)> Centres = new();
+        /// <summary>Which region each province was in when Centres was worked out.</summary>
+        public ushort[] RegionOfProvince = Array.Empty<ushort>();
     }
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, ReachCache> ReachCaches = new();
@@ -21,9 +23,18 @@ public static class MovementReach
         var map = campaign.ProvinceMap;
         if (map is null) return Movements.CentreOf(campaign, region);
         var cache = ReachCaches.GetOrCreateValue(campaign);
+        // A region's centre is its provinces averaged, so it moves only when a province changes
+        // region. The ownership revision also moves when a region changes country - several
+        // times a week late in a campaign - and each time this walked all 34,000 provinces
+        // with a sine and a cosine apiece, 3 ms, to arrive at the same centres. The province
+        // list is compared first; the walk is for a map that has really been redrawn.
+        if (ReferenceEquals(cache.Map, map) && cache.Revision != campaign.OwnershipRevision &&
+            map.ProvinceToState.AsSpan().SequenceEqual(cache.RegionOfProvince))
+            cache.Revision = campaign.OwnershipRevision;
         if (!ReferenceEquals(cache.Map, map) || cache.Revision != campaign.OwnershipRevision)
         {
             cache.Map = map; cache.Revision = campaign.OwnershipRevision; cache.Centres.Clear();
+            cache.RegionOfProvince = (ushort[])map.ProvinceToState.Clone();
             var sums = _centreSums ??= new Dictionary<int, (double Latitude, double X, double Y, int Count)>();
             sums.Clear();
             for (var province = 1; province <= map.ProvinceCount; province++)
@@ -41,12 +52,28 @@ public static class MovementReach
     }
 
     public static bool CanOperate(Campaign campaign, Nation nation, ScenarioState region, MovementDefinition definition,
-        Nation owner = null)
+        Nation owner = null) => CanOperate(campaign, nation, region, definition, owner, null);
+
+    /// <summary>
+    /// The same question from a caller that asks it of many regions in one breath and changes
+    /// no war while it does: <paramref name="atWarWith"/> is its own memory of which owners the
+    /// movement is at war with, filled here as the owners come up. "At war" walks every live
+    /// war and both sides of each - a microsecond late in a campaign - and the week's support
+    /// drift asked it once per region where once per owner answers: 130 ms of mov:support over
+    /// fourteen late days became 80.
+    /// </summary>
+    internal static bool CanOperate(Campaign campaign, Nation nation, ScenarioState region, MovementDefinition definition,
+        Nation owner, Dictionary<int, bool> atWarWith)
     {
         if (campaign is null || nation?.Movement is not { } movement || region is null || definition is null) return false;
         owner ??= MovementRules.OwnerOf(campaign, region);
-        var hostile = owner is not null && (movement.DesignatedBy.Contains(owner.Id) ||
-            CampaignDiplomacy.AtWar(campaign, nation.Id, owner.Id));
+        var hostile = false;
+        if (owner is not null && !(hostile = movement.DesignatedBy.Contains(owner.Id)))
+        {
+            if (atWarWith is null) hostile = CampaignDiplomacy.AtWar(campaign, nation.Id, owner.Id);
+            else if (!atWarWith.TryGetValue(owner.Id, out hostile))
+                atWarWith[owner.Id] = hostile = CampaignDiplomacy.AtWar(campaign, nation.Id, owner.Id);
+        }
         // A movement that already governs ground can organise anywhere on its own soil;
         // checking its distance from a homeland it has already won is a question with no
         // possible answer but no.
@@ -109,9 +136,14 @@ public static class MovementReach
     }
 
     public static float SupportCeiling(Campaign campaign, Nation nation, ScenarioState region,
-        MovementDefinition definition, long own, long faithful, Nation owner = null)
+        MovementDefinition definition, long own, long faithful, Nation owner = null) =>
+        SupportCeiling(campaign, nation, region, definition, own, faithful, owner, null);
+
+    /// <summary>The ceiling for a caller that keeps the at-war memory <see cref="CanOperate(Campaign, Nation, ScenarioState, MovementDefinition, Nation, Dictionary{int, bool})"/> describes.</summary>
+    internal static float SupportCeiling(Campaign campaign, Nation nation, ScenarioState region,
+        MovementDefinition definition, long own, long faithful, Nation owner, Dictionary<int, bool> atWarWith)
     {
-        if (!CanOperate(campaign, nation, region, definition, owner)) return 0f;
+        if (!CanOperate(campaign, nation, region, definition, owner, atWarWith)) return 0f;
         // A defeated regional insurgency is not a worldwide movement of its culture.
         // Diaspora offices may be hosted abroad, but do not create a territorial following there.
         if (nation.Movement.Id.StartsWith(MovementCatalog.UndergroundPrefix, StringComparison.Ordinal) &&
