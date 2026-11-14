@@ -22,7 +22,7 @@ static class DeskChairTests
         try
         {
             Check(SaveSystem.FormatVersion == 2, "save format stays 2");
-            Check(SaveSystem.MapDataVersion == "2024.11.03-a", "map data stays 2024.11.03-a");
+            Check(SaveSystem.MapDataVersion == "2024.11.09-a", "map data stays 2024.11.09-a");
             QuietWithoutTheFacts();
             UnnamedProgrammeUsesTheSentence();
             ThreeFacts();

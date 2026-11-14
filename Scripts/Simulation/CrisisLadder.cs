@@ -142,6 +142,7 @@ public static class CrisisLadder
             }
             if (mediator is not null && Roll(c.Seed, a.Id, b.Id, c.ElapsedDays, 71) < 0.5f)
             {
+                // At the brink the whole world leans on the two of them (DEFCON 2 and 1).
                 var relief = c.Defines.CrisisMediationRelief * (c.DefconLevel <= 2 ? 2f : 1f);
                 relation.Tension = MathF.Max(0f, relation.Tension - relief);
                 c.Chronicle.Record(c, "crisis_conference", a.Id, b.Id, place: mediator.DisplayName);

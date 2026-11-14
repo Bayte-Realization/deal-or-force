@@ -60,7 +60,6 @@ public sealed class NetworkHeldOrders
     {
         if (apply is not null) _held.Enqueue((hour, apply));
     }
-
     /// <summary>Carry it out now if this world has reached the hour, otherwise hold it. True when it ran now.</summary>
     public bool ApplyOrHold(long hour, long now, Action apply)
     {

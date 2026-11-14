@@ -56,8 +56,8 @@ public partial class DealOrForceGame
     }
 
     /// <summary>
-    /// The flag editor as a workshop window: from the scenario library, from the country editor
-    /// and from the country editor. Campaign cosmetics use a separate command-backed mode.
+    /// The flag editor as a workshop window: from the scenario library or the country editor.
+    /// Campaign cosmetics use a separate command-backed mode.
     /// </summary>
     /// <param name="tag">The country whose flag is edited; empty asks for one.</param>
     /// <param name="back">Where its way out leads; the workshop's own exit when null.</param>
