@@ -155,7 +155,7 @@ public sealed class LauncherCatalog
         Selection.Save(SelectionPath);
     }
 
-    public ProcessStartInfo LaunchInfo(string? godot)
+    public ProcessStartInfo LaunchInfo(string? godot, StartOptions? options = null)
     {
         ProcessStartInfo info;
         if (IsProject)
@@ -170,6 +170,7 @@ public sealed class LauncherCatalog
             if (!File.Exists(exe)) throw new FileNotFoundException(L.T("Deal or Force.exe was not found beside the launcher."));
             info = new(exe);
         }
+        options?.AppendTo(info);
         info.UseShellExecute = false;
         info.WorkingDirectory = Root;
         info.Environment["DOF_CONTENT_SELECTION"] = SelectionPath;

@@ -78,35 +78,7 @@ public static partial class L
     /// it is kept as it was. A file that exists and will not parse is left alone rather than
     /// replaced: the player's settings are worth more than the launcher's convenience.
     /// </summary>
-    public static bool Remember(string profile, string language)
-    {
-        try
-        {
-            // The game reads `settings/settings.json`; the file in the folder's root is what an
-            // install from before the consolidation has. Start from whichever exists, then
-            // write the new place, so a language chosen in the launcher survives either way.
-            var path = SettingsFile(profile);
-            var source = File.Exists(path) ? path : OldSettingsFile(profile);
-            System.Text.Json.Nodes.JsonObject settings;
-            if (File.Exists(source))
-            {
-                var parsed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(source), null,
-                    new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
-                if (parsed is not System.Text.Json.Nodes.JsonObject existing) return false;
-                settings = existing;
-            }
-            else settings = new System.Text.Json.Nodes.JsonObject();
-            settings["language"] = language;
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var temporary = path + ".tmp";
-            File.WriteAllText(temporary, settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            File.Move(temporary, path, true);
-            return true;
-        }
-        catch (IOException) { return false; }
-        catch (JsonException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
-    }
+    public static bool Remember(string profile, string language) => GameSettings.Write(profile, "language", language);
 
     public static string T(string english) =>
         IsRussian && Russian.TryGetValue(english, out var russian) ? russian : english;
@@ -122,20 +94,9 @@ public static partial class L
         ["Snapshot size must be at least 980x660."] = "Размер снимка должен быть не меньше 980x660.",
         // The window
         ["Deal or Force — Launcher"] = "Deal or Force — Лаунчер",
-        ["DEAL OR FORCE  /  LAUNCH CENTRE"] = "DEAL OR FORCE  /  ЦЕНТР ЗАПУСКА",
-        ["LOCAL INSTALLATION"] = "ЛОКАЛЬНАЯ УСТАНОВКА",
         ["PROJECT  /  GODOT .NET"] = "ПРОЕКТ  /  GODOT .NET",
         ["WINDOWS  /  LOCAL INSTALLATION"] = "WINDOWS  /  ЛОКАЛЬНАЯ УСТАНОВКА",
-        ["THE WORLD WILL NOT WAIT."] = "МИР НЕ ЖДЁТ.",
-        ["Strike a deal. Or force one."] = "Договорись. Или заставь.",
-        ["Prepare your version of the world: choose the expansions, set up your mods and begin a campaign."] =
-            "Подготовьте свою версию мира: выберите дополнения, настройте моды и начните кампанию.",
-        ["Base game → DLC → mods. Dependencies load first."] = "Базовая игра → DLC → моды. Зависимости загружаются первыми.",
-        ["BASE GAME"] = "ОСНОВА",
-        ["EXPANSIONS"] = "ДОПОЛНЕНИЯ",
-        ["MODS"] = "МОДЫ",
         ["code"] = "код",
-        ["Game content"] = "Состав игры",
         ["Refresh"] = "Обновить",
         ["Look for mods and DLC again. Changes are saved first."] = "Повторно найти моды и DLC. Изменения сначала сохраняются.",
         ["Mods"] = "Моды",
@@ -144,18 +105,85 @@ public static partial class L
         ["Search mods and expansions"] = "Поиск модов и дополнений",
         ["Search by name or ID…"] = "Поиск по названию или ID…",
         ["Turn on or off for the next launch"] = "Включить / выключить при следующем запуске",
-        ["Choose a mod or expansion to see its description, dependencies and where its files are."] =
-            "Выберите мод или дополнение, чтобы посмотреть описание, зависимости и расположение файлов.",
         ["Open folder"] = "Открыть папку",
         ["↑ Earlier"] = "↑ Раньше",
         ["↓ Later"] = "↓ Позже",
         ["Mod load order. Required dependencies always come first."] = "Порядок загрузки модов. Обязательные зависимости всегда первыми.",
         ["Settings take effect when the game starts."] = "Настройки применяются при запуске игры.",
-        ["Logs and settings"] = "Логи и настройки",
-        ["  /  Choose Godot .NET"] = "  /  Выбрать Godot .NET",
         ["Save"] = "Сохранить",
-        ["PLAY  ▶"] = "ИГРАТЬ  ▶",
-        ["GAME RUNNING"] = "ИГРА ЗАПУЩЕНА",
+
+        // The 0.6.6 window: tabs, start options, help
+        ["What's new"] = "Что нового",
+        ["Start options"] = "Запуск",
+        ["Help"] = "Помощь",
+        ["Play"] = "Играть",
+        ["Game running"] = "Игра запущена",
+        ["Running from the project"] = "Запуск из проекта",
+        ["No build information beside the game"] = "Рядом с игрой нет сведений о сборке",
+        ["Build {0} · {1}"] = "Сборка {0} · {1}",
+        ["The list of changes was not found beside the game. It is published with every release on the game's page."] =
+            "Список изменений рядом с игрой не найден. Он публикуется с каждым выпуском на странице игры.",
+        ["Enabled mods change the same files ({0}):"] = "Включённые моды меняют одни и те же файлы ({0}):",
+        ["{0}: {1} — {2} wins where they disagree."] = "{0}: {1} — где они расходятся, действует {2}.",
+        ["…and {0} more. The full list is in the launcher's log."] = "…и ещё {0}. Полный список — в журнале лаунчера.",
+        ["safe map"] = "безопасная карта",
+        ["mods: {0}"] = "модов: {0}",
+        ["What draws the game"] = "Чем рисуется игра",
+        ["Change it only if the picture is black, flickers or the game does not reach the menu. A choice here is used as it is: the game no longer steps down by itself."] =
+            "Меняйте, только если картинка чёрная, мерцает или игра не доходит до меню. Выбранное здесь используется как есть: сама игра на другой способ уже не переключится.",
+        ["Automatic"] = "Автоматически",
+        ["As chosen in the game's settings; the best the machine has."] = "Как выбрано в настройках игры; лучшее, что есть на компьютере.",
+        ["The full picture on a modern graphics card."] = "Полная картинка на современной видеокарте.",
+        ["The same picture, when Direct3D 12 misbehaves."] = "Та же картинка, если Direct3D 12 сбоит.",
+        ["Compatibility · OpenGL"] = "Совместимость · OpenGL",
+        ["Simpler lighting; draws on nearly anything."] = "Освещение проще; работает почти везде.",
+        ["Compatibility · ANGLE (OpenGL over Direct3D 11)"] = "Совместимость · ANGLE (OpenGL через Direct3D 11)",
+        ["For old or unusual graphics drivers."] = "Для старых или необычных драйверов видеокарты.",
+        ["Window"] = "Окно",
+        ["Borderless"] = "Без рамки",
+        ["Fullscreen"] = "Полный экран",
+        ["Windowed"] = "В окне",
+        ["Written into the game's own settings, so the game's options show the same."] =
+            "Записывается в настройки самой игры, поэтому в игре будет то же самое.",
+        ["Map"] = "Карта",
+        ["Safe map"] = "Безопасная карта",
+        ["A plainer planet without relief and terrain detail, for a graphics card that crashes or draws the map wrong. Borders, owners and map modes stay as they are. Turn it off once the game runs."] =
+            "Упрощённая планета без рельефа и деталей местности — для видеокарты, на которой игра вылетает или карта рисуется неправильно. Границы, владельцы и режимы карты остаются прежними. Когда игра заработает, выключите.",
+        ["Renderer chosen for the next start."] = "Способ отрисовки выбран для следующего запуска.",
+        ["The next start uses the safe map."] = "Следующий запуск — с безопасной картой.",
+        ["The next start uses the full map."] = "Следующий запуск — с полной картой.",
+        ["Window mode saved in the game's settings."] = "Режим окна записан в настройки игры.",
+        ["The game's settings file could not be written; the game keeps its own window mode."] =
+            "Не удалось записать файл настроек игры; игра оставит свой режим окна.",
+        ["Check the game's files"] = "Проверка файлов игры",
+        ["Compares the game, its data and the launcher with the checksums this build was shipped with. A file that differs was damaged in the download or changed since."] =
+            "Сравнивает игру, её данные и лаунчер с контрольными суммами, с которыми вышла эта сборка. Если файл отличается, он повредился при скачивании или был изменён позже.",
+        ["Check files"] = "Проверить файлы",
+        ["{0} files listed in {1}."] = "В {1} записано файлов: {0}.",
+        ["This is the project, not a delivered build: there is nothing to compare with."] =
+            "Это проект, а не готовая сборка: сравнивать не с чем.",
+        ["{0} is missing, so there is nothing to compare with."] = "Нет файла {0}, поэтому сравнивать не с чем.",
+        ["Checking {0}…"] = "Проверяется {0}…",
+        ["intact"] = "цел",
+        ["missing"] = "нет файла",
+        ["differs"] = "отличается",
+        ["All {0} files are as shipped."] = "Все файлы ({0}) такие же, как в сборке.",
+        ["{0} of {1} files differ from the build. Download the game again, or replace those files."] =
+            "Отличаются от сборки: {0} из {1}. Скачайте игру заново или замените эти файлы.",
+        ["Report a problem"] = "Сообщить о проблеме",
+        ["Puts the build, this computer's system and graphics card, the last logs, the settings and the newest save into one zip in the reports folder, and shows it. Nothing is sent anywhere: attach the file where you report the problem."] =
+            "Собирает в один zip-файл в папке reports сведения о сборке, системе и видеокарте, последние логи, настройки и самое свежее сохранение — и показывает его. Ничего никуда не отправляется: приложите файл туда, где сообщаете о проблеме.",
+        ["Write a report"] = "Собрать отчёт",
+        ["Open reports folder"] = "Открыть папку отчётов",
+        ["Writing the report…"] = "Собираю отчёт…",
+        ["The report could not be written: {0}"] = "Не удалось записать отчёт: {0}",
+        ["Report written: {0}"] = "Отчёт готов: {0}",
+        ["Saves, settings and logs"] = "Сохранения, настройки и логи",
+        ["Everything the game writes lives in one folder: {0}"] = "Всё, что записывает игра, лежит в одной папке: {0}",
+        ["Open game folder"] = "Открыть папку игры",
+        ["Choose Godot .NET"] = "Выбрать Godot .NET",
+        ["The game exited with code {0}. If it keeps happening, write a report on the Help tab."] =
+            "Игра завершилась с кодом {0}. Если это повторяется, соберите отчёт на вкладке «Помощь».",
 
         // What the window says as it works
         ["Save the changes to the game's content?"] = "Сохранить изменения состава игры?",
@@ -194,7 +222,6 @@ public static partial class L
             "Игра запускается. Дождитесь главного меню; повторный запуск заблокирован.",
         ["The game has closed. You can change the content for the next campaign."] =
             "Игра закрыта. Можно изменить состав следующей кампании.",
-        ["The game exited with code {0}. Check the game's logs."] = "Игра завершилась с кодом {0}. Проверьте логи игры.",
         ["Deal or Force — error"] = "Deal or Force — ошибка",
 
         // A package's status in the list

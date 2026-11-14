@@ -3,202 +3,358 @@
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:local="clr-namespace:DealOrForce.Launcher"
  Title="Deal or Force — Launcher" Width="1180" Height="760" MinWidth="980" MinHeight="660"
- WindowStartupLocation="CenterScreen" Background="#0C1720" Foreground="#EAE7DE"
+ WindowStartupLocation="CenterScreen" Background="#070B11" Foreground="#E9EEF5"
  FontFamily="Segoe UI" FontSize="14" UseLayoutRounding="True" Icon="App.ico">
  <!--
-   The launcher wears the game's own clothes (2026-10-21): the ink ground and gold rules of the
-   loading screen, one of its illustrations behind the logo, and PLAY where the eye lands - under
-   the picture, not in a corner. The content manager on the right is the same one as before.
+   Ink and paper (2026-11-14), the game's own clothes since 0.6.6: the planet of the main
+   menu behind everything, darkened towards the left where the words are; light headings;
+   quiet ink buttons; one blue button, and it is Play. Every colour below is a token of
+   game/interface/00_skin.json, named here by its token, so a change to the game's palette is
+   a change of one line here too. No gold: the game dropped it.
  -->
  <Window.Resources>
-  <SolidColorBrush x:Key="Ink" Color="#0C1720"/>
-  <SolidColorBrush x:Key="Panel" Color="#13222D"/>
-  <SolidColorBrush x:Key="Rule" Color="#695E44"/>
-  <SolidColorBrush x:Key="Gold" Color="#C9AE6C"/>
-  <SolidColorBrush x:Key="Soft" Color="#A9B8BD"/>
+  <!-- surface.* -->
+  <SolidColorBrush x:Key="SurfaceBackground" Color="#070B11"/>
+  <SolidColorBrush x:Key="SurfaceInset" Color="#0B1118"/>
+  <SolidColorBrush x:Key="SurfacePanel" Color="#E6111923"/>
+  <SolidColorBrush x:Key="SurfaceRaised" Color="#18222D"/>
+  <SolidColorBrush x:Key="SurfaceLine" Color="#34404D"/>
+  <SolidColorBrush x:Key="SurfaceLineFaint" Color="#252F3B"/>
+  <!-- text.* -->
+  <SolidColorBrush x:Key="TextAccent" Color="#EFE4C8"/>
+  <SolidColorBrush x:Key="TextBody" Color="#E9EEF5"/>
+  <SolidColorBrush x:Key="TextSoft" Color="#C8D3E0"/>
+  <SolidColorBrush x:Key="TextMuted" Color="#9DABBC"/>
+  <SolidColorBrush x:Key="TextCaption" Color="#8E9DAF"/>
+  <!-- state.* -->
+  <SolidColorBrush x:Key="StatePositive" Color="#4FB477"/>
+  <SolidColorBrush x:Key="StateNegative" Color="#C94F55"/>
+  <SolidColorBrush x:Key="StateWarning" Color="#E7B058"/>
+  <SolidColorBrush x:Key="StateInfo" Color="#77C9E8"/>
+  <!-- button.primary_* -->
+  <SolidColorBrush x:Key="PrimaryBorder" Color="#6DA7E6"/>
+
+  <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
+  <Style x:Key="Heading" TargetType="TextBlock">
+   <Setter Property="Foreground" Value="{StaticResource TextAccent}"/><Setter Property="FontSize" Value="15"/>
+   <Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Margin" Value="0,0,0,4"/>
+  </Style>
+  <Style x:Key="Note" TargetType="TextBlock">
+   <Setter Property="Foreground" Value="{StaticResource TextMuted}"/><Setter Property="FontSize" Value="12.5"/>
+   <Setter Property="LineHeight" Value="19"/><Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+
+  <!-- The quiet button: button.fill / border / text and their hover and pressed steps. -->
   <Style TargetType="Button">
-   <Setter Property="Background" Value="#1C2E3A"/><Setter Property="Foreground" Value="#EAE7DE"/>
-   <Setter Property="BorderBrush" Value="#4A5A62"/><Setter Property="BorderThickness" Value="1"/>
-   <Setter Property="Padding" Value="14,8"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="Background" Value="#151E28"/><Setter Property="Foreground" Value="#EDF2F7"/>
+   <Setter Property="BorderBrush" Value="#3B4856"/><Setter Property="BorderThickness" Value="1"/>
+   <Setter Property="Padding" Value="14,7"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FontSize" Value="13"/>
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-    <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2">
+    <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3">
      <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
     </Border><ControlTemplate.Triggers>
-     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#D1B776"/></Trigger>
-     <Trigger Property="IsPressed" Value="True"><Setter TargetName="Frame" Property="Opacity" Value="0.8"/></Trigger>
-     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#F5D895"/><Setter TargetName="Frame" Property="BorderThickness" Value="2"/></Trigger>
-     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Frame" Property="Opacity" Value="0.4"/></Trigger>
+     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="Background" Value="#1B2733"/><Setter TargetName="Frame" Property="BorderBrush" Value="#7C8997"/></Trigger>
+     <Trigger Property="IsPressed" Value="True"><Setter TargetName="Frame" Property="Background" Value="#0D141C"/><Setter TargetName="Frame" Property="BorderBrush" Value="#5F97D6"/></Trigger>
+     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#6DA7E6"/><Setter TargetName="Frame" Property="BorderThickness" Value="2"/></Trigger>
+     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Frame" Property="Background" Value="#10161E"/><Setter TargetName="Frame" Property="BorderBrush" Value="#29333D"/><Setter Property="Foreground" Value="#667586"/></Trigger>
     </ControlTemplate.Triggers>
    </ControlTemplate></Setter.Value></Setter>
   </Style>
-  <Style x:Key="Link" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-   <Setter Property="Padding" Value="0"/><Setter Property="Background" Value="Transparent"/>
-   <Setter Property="BorderThickness" Value="0"/><Setter Property="Foreground" Value="#D1B776"/><Setter Property="FontSize" Value="12"/>
+  <!-- The one primary action: button.primary_fill / _hover / _pressed / primary_border. -->
+  <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+   <Setter Property="Background" Value="#1D4477"/><Setter Property="BorderBrush" Value="#6DA7E6"/>
+   <Setter Property="Foreground" Value="#F5F7FA"/><Setter Property="FontSize" Value="20"/><Setter Property="FontWeight" Value="SemiBold"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+    <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="3">
+     <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Border><ControlTemplate.Triggers>
+     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="Background" Value="#27569A"/></Trigger>
+     <Trigger Property="IsPressed" Value="True"><Setter TargetName="Frame" Property="Background" Value="#16335A"/></Trigger>
+     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderThickness" Value="2"/><Setter TargetName="Frame" Property="BorderBrush" Value="#CFE1F7"/></Trigger>
+     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Frame" Property="Background" Value="#16335A"/><Setter TargetName="Frame" Property="BorderBrush" Value="#29333D"/><Setter Property="Foreground" Value="#9DABBC"/></Trigger>
+    </ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
   </Style>
-  <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
-  <!-- A thin ink scroll bar instead of the light system one; only the vertical kind is ever shown. -->
+  <!-- Tabs: light text and a blue rule under the open one. -->
+  <Style x:Key="Tab" TargetType="RadioButton">
+   <Setter Property="Foreground" Value="#9DABBC"/><Setter Property="FontSize" Value="14"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="Margin" Value="0,0,22,0"/><Setter Property="GroupName" Value="Tabs"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
+    <Border x:Name="Rule" Background="Transparent" BorderBrush="Transparent" BorderThickness="0,0,0,2" Padding="0,6,0,8">
+     <ContentPresenter/>
+    </Border><ControlTemplate.Triggers>
+     <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="#E9EEF5"/></Trigger>
+     <Trigger Property="IsChecked" Value="True"><Setter TargetName="Rule" Property="BorderBrush" Value="#6DA7E6"/><Setter Property="Foreground" Value="#EFE4C8"/></Trigger>
+     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Rule" Property="BorderBrush" Value="#5F97D6"/></Trigger>
+    </ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <!-- A choice among several: an ink ring, a blue dot. -->
+  <Style x:Key="Choice" TargetType="RadioButton">
+   <Setter Property="Foreground" Value="#E9EEF5"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Margin" Value="0,0,0,8"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
+    <Grid Background="Transparent"><Grid.ColumnDefinitions><ColumnDefinition Width="26"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+     <Ellipse x:Name="Ring" Width="15" Height="15" Fill="#0B1118" Stroke="#3B4856" StrokeThickness="1.5" VerticalAlignment="Top" Margin="0,2,0,0" HorizontalAlignment="Left"/>
+     <Ellipse x:Name="Dot" Width="7" Height="7" Fill="#6DA7E6" Visibility="Collapsed" VerticalAlignment="Top" Margin="4,6,0,0" HorizontalAlignment="Left"/>
+     <ContentPresenter Grid.Column="1"/>
+    </Grid><ControlTemplate.Triggers>
+     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Ring" Property="Stroke" Value="#7C8997"/></Trigger>
+     <Trigger Property="IsChecked" Value="True"><Setter TargetName="Dot" Property="Visibility" Value="Visible"/><Setter TargetName="Ring" Property="Stroke" Value="#6DA7E6"/></Trigger>
+     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Ring" Property="StrokeThickness" Value="2.5"/></Trigger>
+    </ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style TargetType="CheckBox">
+   <Setter Property="Foreground" Value="#E9EEF5"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+    <Grid Background="Transparent"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+     <Border x:Name="Box" Width="16" Height="16" Background="#0B1118" BorderBrush="#3B4856" BorderThickness="1.5" CornerRadius="2" VerticalAlignment="Top" Margin="0,2,0,0">
+      <Path x:Name="Mark" Data="M 3,8 L 6.5,11.5 L 13,4.5" Stroke="#EFE4C8" StrokeThickness="2" Visibility="Collapsed"/>
+     </Border>
+     <ContentPresenter Grid.Column="1" Margin="10,0,0,0"/>
+    </Grid><ControlTemplate.Triggers>
+     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#7C8997"/></Trigger>
+     <Trigger Property="IsChecked" Value="True"><Setter TargetName="Mark" Property="Visibility" Value="Visible"/><Setter TargetName="Box" Property="Background" Value="#1D4477"/><Setter TargetName="Box" Property="BorderBrush" Value="#6DA7E6"/></Trigger>
+     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#6DA7E6"/></Trigger>
+     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Box" Property="Opacity" Value="0.4"/></Trigger>
+    </ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
   <Style TargetType="ScrollBar">
    <Style.Triggers><Trigger Property="Orientation" Value="Vertical">
     <Setter Property="Width" Value="8"/><Setter Property="MinWidth" Value="8"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar">
      <Track x:Name="PART_Track" IsDirectionReversed="True">
-      <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="#3E505A" CornerRadius="4" Margin="1,2"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+      <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="#3B4856" CornerRadius="4" Margin="1,2"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
      </Track>
     </ControlTemplate></Setter.Value></Setter>
    </Trigger></Style.Triggers>
   </Style>
-  <Style TargetType="CheckBox">
-   <Setter Property="Foreground" Value="#EAE7DE"/><Setter Property="VerticalContentAlignment" Value="Center"/>
-   <Setter Property="Cursor" Value="Hand"/>
-  </Style>
   <Style TargetType="ListBoxItem">
-   <Setter Property="Foreground" Value="#EAE7DE"/>
+   <Setter Property="Foreground" Value="#E9EEF5"/>
    <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="0"/>
-   <Setter Property="Margin" Value="0,0,0,8"/>
+   <Setter Property="Margin" Value="0,0,0,6"/>
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
-    <Border x:Name="Row" BorderBrush="#2C3D48" Background="#15252F" BorderThickness="1" CornerRadius="2"><ContentPresenter/></Border>
+    <Border x:Name="Row" BorderBrush="#252F3B" Background="#18222D" BorderThickness="1" CornerRadius="3"><ContentPresenter/></Border>
     <ControlTemplate.Triggers>
-     <Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="BorderBrush" Value="#C9AE6C"/><Setter TargetName="Row" Property="Background" Value="#1D3040"/></Trigger>
-     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="BorderBrush" Value="#7F8F8E"/></Trigger>
+     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="BorderBrush" Value="#3B4856"/></Trigger>
+     <Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="BorderBrush" Value="#6DA7E6"/><Setter TargetName="Row" Property="Background" Value="#1B2733"/></Trigger>
     </ControlTemplate.Triggers>
    </ControlTemplate></Setter.Value></Setter>
   </Style>
  </Window.Resources>
- <Grid>
-  <Grid.ColumnDefinitions><ColumnDefinition Width="400"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
 
-  <!-- The picture, the name and the button. -->
-  <Grid ClipToBounds="True">
-   <Image x:Name="KeyArt" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-   <Rectangle>
-    <Rectangle.Fill>
-     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-      <GradientStop Color="#990C1720" Offset="0"/>
-      <GradientStop Color="#550C1720" Offset="0.32"/>
-      <GradientStop Color="#D90C1720" Offset="0.62"/>
-      <GradientStop Color="#FA0C1720" Offset="1"/>
-     </LinearGradientBrush>
-    </Rectangle.Fill>
-   </Rectangle>
-   <Rectangle HorizontalAlignment="Right" Width="1" Fill="{StaticResource Rule}"/>
-   <Grid Margin="30,28,30,26">
-    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-    <StackPanel>
-     <DockPanel>
-      <Border DockPanel.Dock="Right" BorderBrush="{StaticResource Gold}" BorderThickness="1" Padding="8,2" VerticalAlignment="Center" Background="#B30C1720">
-       <TextBlock x:Name="VersionChip" FontSize="11" Foreground="#E3CC8E"/>
-      </Border>
-      <TextBlock Text="DEAL OR FORCE  /  LAUNCH CENTRE" FontSize="11" Foreground="#CCB77E" VerticalAlignment="Center"/>
-     </DockPanel>
-     <Border Background="Transparent" Margin="0,22,0,0">
-      <Border.Effect><DropShadowEffect BlurRadius="22" ShadowDepth="0" Opacity="0.55" Color="Black"/></Border.Effect>
-      <Image x:Name="GameLogo" Source="Brand.png" Stretch="Uniform" Height="192"
-             RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="Deal or Force"/>
-     </Border>
-    </StackPanel>
-    <StackPanel Grid.Row="1" VerticalAlignment="Bottom" Margin="0,0,0,18">
-     <TextBlock Text="THE WORLD WILL NOT WAIT." FontSize="27" FontFamily="Georgia" Foreground="#F1EAD8"/>
-     <Rectangle Height="2" Fill="#B19A60" Margin="0,12,150,14" HorizontalAlignment="Stretch"/>
-     <TextBlock Text="Strike a deal. Or force one." FontSize="16" Foreground="#E4DCC8" Margin="0,0,0,8"/>
-     <TextBlock Text="Prepare your version of the world: choose the expansions, set up your mods and begin a campaign." Foreground="{StaticResource Soft}" LineHeight="22"/>
-    </StackPanel>
-    <StackPanel Grid.Row="2">
-     <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,14,0,14">
-      <Grid>
-       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-       <StackPanel><TextBlock Text="BASE GAME" FontSize="10" Foreground="#8EA0A9"/><TextBlock x:Name="BaseCount" Text="1" FontSize="22" Foreground="#F1EAD8" FontFamily="Bahnschrift"/></StackPanel>
-       <StackPanel Grid.Column="1"><TextBlock Text="EXPANSIONS" FontSize="10" Foreground="#8EA0A9"/><TextBlock x:Name="DlcCount" FontSize="22" Foreground="#F1EAD8" FontFamily="Bahnschrift"/></StackPanel>
-       <StackPanel Grid.Column="2"><TextBlock Text="MODS" FontSize="10" Foreground="#8EA0A9"/><TextBlock x:Name="ModCount" FontSize="22" Foreground="#F1EAD8" FontFamily="Bahnschrift"/></StackPanel>
-      </Grid>
-     </Border>
-     <Button x:Name="Play" Content="PLAY  ▶" Click="PlayClick" Height="62" Background="#B39A5C" Foreground="#101A22" BorderBrush="#E2CB92" FontSize="20" FontWeight="Bold">
-      <Button.Effect><DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.45" Color="#C9AE6C"/></Button.Effect>
-     </Button>
-     <TextBlock x:Name="Summary" Margin="0,10,0,0" Foreground="#CDB985" FontSize="12" TextAlignment="Center"/>
-    </StackPanel>
-   </Grid>
-  </Grid>
+ <Grid ClipToBounds="True">
+  <!-- The planet of the main menu, whole, to the right of the words. -->
+  <Image x:Name="Backdrop" Stretch="Uniform" Margin="120,30,-160,10" HorizontalAlignment="Center" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
+  <Rectangle IsHitTestVisible="False">
+   <Rectangle.Fill>
+    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+     <GradientStop Color="#FF070B11" Offset="0"/>
+     <GradientStop Color="#F5070B11" Offset="0.40"/>
+     <GradientStop Color="#A6070B11" Offset="0.53"/>
+     <GradientStop Color="#1A070B11" Offset="0.72"/>
+     <GradientStop Color="#00070B11" Offset="1"/>
+    </LinearGradientBrush>
+   </Rectangle.Fill>
+  </Rectangle>
+  <Rectangle IsHitTestVisible="False" VerticalAlignment="Bottom" Height="200">
+   <Rectangle.Fill>
+    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#00070B11" Offset="0"/><GradientStop Color="#CC070B11" Offset="1"/></LinearGradientBrush>
+   </Rectangle.Fill>
+  </Rectangle>
 
-  <!-- What the next campaign is made of. -->
-  <Grid Grid.Column="1" Margin="30,26,30,22">
+  <Grid Margin="30,22,30,18">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="600"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
    <Grid.RowDefinitions>
-    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/>
-    <RowDefinition Height="132"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
    </Grid.RowDefinitions>
-   <DockPanel Margin="0,0,0,18">
-    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-     <TextBlock x:Name="EnvironmentLabel" Text="LOCAL INSTALLATION" Foreground="#8EA0A9" FontSize="11" VerticalAlignment="Center"/>
-     <Button x:Name="LanguageButton" Click="LanguageClick" Margin="14,0,0,0" Padding="10,4" FontSize="11"
-             ToolTip="Switch the launcher and the game between English and Russian."/>
+
+   <!-- The name, the release, the language. -->
+   <DockPanel Margin="0,0,0,14">
+    <Image x:Name="GameLogo" Source="Brand.png" Height="92" Stretch="Uniform" DockPanel.Dock="Left"
+           RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="Deal or Force">
+     <Image.Effect><DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.6" Color="Black"/></Image.Effect>
+    </Image>
+    <Button x:Name="LanguageButton" DockPanel.Dock="Right" Click="LanguageClick" VerticalAlignment="Top" Padding="10,4" FontSize="12"
+            ToolTip="Switch the launcher and the game between English and Russian."/>
+    <StackPanel Margin="20,6,12,0" VerticalAlignment="Top">
+     <TextBlock x:Name="VersionLabel" FontSize="19" Foreground="{StaticResource TextAccent}" FontFamily="Georgia"/>
+     <TextBlock x:Name="BuildLabel" Style="{StaticResource Note}" Margin="0,4,0,0"/>
+     <TextBlock x:Name="EnvironmentLabel" Style="{StaticResource Note}" FontSize="11" Foreground="{StaticResource TextCaption}" Margin="0,2,0,0"/>
     </StackPanel>
-    <TextBlock Text="Game content" FontSize="28" FontFamily="Georgia" VerticalAlignment="Center"/>
    </DockPanel>
-   <TextBlock Grid.Row="1" Text="Base game → DLC → mods. Dependencies load first." FontSize="12" Foreground="#8EA0A9" Margin="0,-10,0,14"/>
-   <Grid Grid.Row="2" Margin="0,0,0,14">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-    <Button x:Name="ModsTab" Content="Mods" Click="ModsClick" Margin="0,0,6,0" MinWidth="96"/>
-    <Button x:Name="DlcTab" Grid.Column="1" Content="Expansions" Click="DlcClick" Margin="0,0,14,0" MinWidth="96"/>
-    <Grid Grid.Column="2">
-     <TextBox x:Name="Search" Background="#0A141B" Foreground="#EAE7DE" BorderBrush="#3A4A53" Padding="10,7" TextChanged="SearchChanged" VerticalContentAlignment="Center" ToolTip="Search by name or ID" AutomationProperties.Name="Search mods and expansions" CaretBrush="#EAE7DE"/>
-     <TextBlock Text="Search by name or ID…" Foreground="#7D919C" Margin="11,0" VerticalAlignment="Center" IsHitTestVisible="False">
-      <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=Search}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
-     </TextBlock>
-    </Grid>
-    <Button Grid.Column="3" Content="Refresh" Margin="10,0,0,0" Click="RefreshClick" ToolTip="Look for mods and DLC again. Changes are saved first."/>
-   </Grid>
-   <Grid Grid.Row="3" Margin="0,0,0,12">
-    <ListBox x:Name="PackageList" Background="Transparent" BorderThickness="0" SelectionChanged="SelectionChanged"
-     ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto">
-     <ListBox.ItemTemplate><DataTemplate>
-      <Grid Margin="0">
-       <Grid.ColumnDefinitions><ColumnDefinition Width="4"/><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-       <Rectangle x:Name="Stripe" Fill="#5B6A71"/>
-       <CheckBox Grid.Column="1" Margin="12,0,0,0" IsChecked="{Binding Checked, Mode=OneWay}" IsEnabled="{Binding Owned}" Tag="{Binding}" Click="ToggleClick"
-        AutomationProperties.Name="{Binding Name}" ToolTip="{local:T 'Turn on or off for the next launch'}"/>
-       <StackPanel Grid.Column="2" Margin="0,12,12,12">
-        <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextWrapping="NoWrap"
-                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
-        <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
-         <TextBlock x:Name="State" Text="{Binding Status}" Foreground="#9FB0B7" FontSize="12"/>
-         <Border x:Name="CodeChip" Visibility="Collapsed" Margin="10,0,0,0" Padding="6,0" BorderBrush="#B86A4E" BorderThickness="1" CornerRadius="2">
-          <TextBlock Text="{local:T 'code'}" FontSize="11" Foreground="#E09474"/>
-         </Border>
-        </StackPanel>
-       </StackPanel>
-       <TextBlock Grid.Column="3" Text="{Binding Version}" Foreground="#CBB77D" FontSize="12" Margin="0,12,14,0" VerticalAlignment="Top"/>
+
+   <!-- The tabs. -->
+   <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+    <RadioButton x:Name="NewsTab" Style="{StaticResource Tab}" Content="What's new" Checked="TabChecked"/>
+    <RadioButton x:Name="ModsTab" Style="{StaticResource Tab}" Checked="TabChecked">
+     <StackPanel Orientation="Horizontal"><TextBlock Text="Mods"/><TextBlock x:Name="ModCount" Margin="7,0,0,0" Foreground="{StaticResource TextCaption}"/></StackPanel>
+    </RadioButton>
+    <RadioButton x:Name="DlcTab" Style="{StaticResource Tab}" Checked="TabChecked">
+     <StackPanel Orientation="Horizontal"><TextBlock Text="Expansions"/><TextBlock x:Name="DlcCount" Margin="7,0,0,0" Foreground="{StaticResource TextCaption}"/></StackPanel>
+    </RadioButton>
+    <RadioButton x:Name="OptionsTab" Style="{StaticResource Tab}" Content="Start options" Checked="TabChecked"/>
+    <RadioButton x:Name="HelpTab" Style="{StaticResource Tab}" Content="Help" Checked="TabChecked"/>
+   </StackPanel>
+
+   <!-- What each tab shows. -->
+   <Border Grid.Row="2" Background="{StaticResource SurfacePanel}" BorderBrush="{StaticResource SurfaceLine}" BorderThickness="1" CornerRadius="4" Padding="18,16,14,14">
+    <Grid>
+     <!-- What's new -->
+     <Grid x:Name="NewsView">
+      <FlowDocumentScrollViewer x:Name="Notes" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" IsToolBarVisible="False" Focusable="False"/>
+      <TextBlock x:Name="NotesMissing" Style="{StaticResource Note}" Visibility="Collapsed"
+                 Text="The list of changes was not found beside the game. It is published with every release on the game's page."/>
+     </Grid>
+
+     <!-- Mods and expansions: one list, two filters. -->
+     <Grid x:Name="ContentView" Visibility="Collapsed">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="104"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <Grid Margin="0,0,0,10">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <TextBox x:Name="Search" Background="#0B1118" Foreground="#E9EEF5" BorderBrush="#3B4856" Padding="9,6" TextChanged="SearchChanged" VerticalContentAlignment="Center" ToolTip="Search by name or ID" AutomationProperties.Name="Search mods and expansions" CaretBrush="#E9EEF5"/>
+       <TextBlock Text="Search by name or ID…" Foreground="#8797AC" Margin="11,0" VerticalAlignment="Center" IsHitTestVisible="False">
+        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=Search}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+       </TextBlock>
+       <Button Grid.Column="1" Content="Refresh" Margin="10,0,0,0" Click="RefreshClick" ToolTip="Look for mods and DLC again. Changes are saved first."/>
       </Grid>
-      <DataTemplate.Triggers>
-       <DataTrigger Binding="{Binding Kind}" Value="ready"><Setter TargetName="Stripe" Property="Fill" Value="#6FA37A"/><Setter TargetName="State" Property="Foreground" Value="#9CC9A4"/></DataTrigger>
-       <DataTrigger Binding="{Binding Kind}" Value="problem"><Setter TargetName="Stripe" Property="Fill" Value="#C0624B"/><Setter TargetName="State" Property="Foreground" Value="#E8957F"/></DataTrigger>
-       <DataTrigger Binding="{Binding Kind}" Value="locked"><Setter TargetName="Stripe" Property="Fill" Value="#3B4A52"/><Setter TargetName="State" Property="Foreground" Value="#7D8E96"/></DataTrigger>
-       <DataTrigger Binding="{Binding HasCode}" Value="True"><Setter TargetName="CodeChip" Property="Visibility" Value="Visible"/></DataTrigger>
-      </DataTemplate.Triggers>
-     </DataTemplate></ListBox.ItemTemplate>
-    </ListBox>
-    <TextBlock x:Name="EmptyMessage" Text="No mods installed yet.&#10;&#10;Add a mod folder with a manifest.json to mods, then press &quot;Refresh&quot;.&#10;&#10;_templates holds examples for authors; they are not active mods." Foreground="#A6B7C0" LineHeight="24" Margin="14,20" IsHitTestVisible="False"/>
+      <Grid Grid.Row="1">
+       <ListBox x:Name="PackageList" Background="Transparent" BorderThickness="0" SelectionChanged="SelectionChanged"
+        ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto">
+        <ListBox.ItemTemplate><DataTemplate>
+         <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="3"/><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <Rectangle x:Name="Stripe" Fill="#34404D"/>
+          <CheckBox Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" IsChecked="{Binding Checked, Mode=OneWay}" IsEnabled="{Binding Owned}" Tag="{Binding}" Click="ToggleClick"
+           AutomationProperties.Name="{Binding Name}" ToolTip="{local:T 'Turn on or off for the next launch'}"/>
+          <StackPanel Grid.Column="2" Margin="0,9,12,9">
+           <TextBlock Text="{Binding Name}" FontSize="14.5" FontWeight="SemiBold" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+           <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+            <TextBlock x:Name="State" Text="{Binding Status}" Foreground="#9DABBC" FontSize="12"/>
+            <Border x:Name="CodeChip" Visibility="Collapsed" Margin="10,0,0,0" Padding="6,0" BorderBrush="#E7B058" BorderThickness="1" CornerRadius="2">
+             <TextBlock Text="{local:T 'code'}" FontSize="11" Foreground="#E7B058"/>
+            </Border>
+           </StackPanel>
+          </StackPanel>
+          <TextBlock Grid.Column="3" Text="{Binding Version}" Foreground="#8E9DAF" FontSize="12" Margin="0,10,12,0" VerticalAlignment="Top"/>
+         </Grid>
+         <DataTemplate.Triggers>
+          <DataTrigger Binding="{Binding Kind}" Value="ready"><Setter TargetName="Stripe" Property="Fill" Value="#4FB477"/><Setter TargetName="State" Property="Foreground" Value="#4FB477"/></DataTrigger>
+          <DataTrigger Binding="{Binding Kind}" Value="problem"><Setter TargetName="Stripe" Property="Fill" Value="#C94F55"/><Setter TargetName="State" Property="Foreground" Value="#E68A8E"/></DataTrigger>
+          <DataTrigger Binding="{Binding Kind}" Value="locked"><Setter TargetName="Stripe" Property="Fill" Value="#252F3B"/><Setter TargetName="State" Property="Foreground" Value="#7F8FA4"/></DataTrigger>
+          <DataTrigger Binding="{Binding HasCode}" Value="True"><Setter TargetName="CodeChip" Property="Visibility" Value="Visible"/></DataTrigger>
+         </DataTemplate.Triggers>
+        </DataTemplate></ListBox.ItemTemplate>
+       </ListBox>
+       <TextBlock x:Name="EmptyMessage" Style="{StaticResource Note}" FontSize="13" LineHeight="22" Margin="4,8" IsHitTestVisible="False"/>
+      </Grid>
+      <Border x:Name="ConflictBox" Grid.Row="2" Visibility="Collapsed" Margin="0,8,0,0" Padding="12,8" Background="#1AE7B058" BorderBrush="#E7B058" BorderThickness="1,0,0,0">
+       <TextBlock x:Name="ConflictText" Foreground="#F0CF95" FontSize="12.5" LineHeight="19"/>
+      </Border>
+      <Border Grid.Row="3" Background="{StaticResource SurfaceInset}" BorderBrush="{StaticResource SurfaceLineFaint}" BorderThickness="1" Padding="12,9" Margin="0,8,0,10">
+       <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <TextBlock x:Name="Details" Foreground="{StaticResource TextSoft}" FontSize="12" LineHeight="19"/>
+       </ScrollViewer>
+      </Border>
+      <DockPanel Grid.Row="4">
+       <Button DockPanel.Dock="Right" Content="Save" Click="SaveClick" MinWidth="96"/>
+       <WrapPanel>
+        <Button Content="Open folder" Click="OpenPackageFolder" Margin="0,0,8,0"/>
+        <Button x:Name="Earlier" Content="↑ Earlier" Click="EarlierClick" Margin="0,0,8,0" ToolTip="Mod load order. Required dependencies always come first."/>
+        <Button x:Name="Later" Content="↓ Later" Click="LaterClick"/>
+       </WrapPanel>
+      </DockPanel>
+     </Grid>
+
+     <!-- Start options -->
+     <ScrollViewer x:Name="OptionsView" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="0,0,10,0">
+       <TextBlock Style="{StaticResource Heading}" Text="What draws the game"/>
+       <TextBlock Style="{StaticResource Note}" Margin="0,0,0,12" Text="Change it only if the picture is black, flickers or the game does not reach the menu. A choice here is used as it is: the game no longer steps down by itself."/>
+       <StackPanel x:Name="RendererChoices">
+        <RadioButton Style="{StaticResource Choice}" GroupName="Renderer" Tag="auto" Checked="RendererChecked">
+         <StackPanel><TextBlock Text="Automatic"/><TextBlock Style="{StaticResource Note}" Text="As chosen in the game's settings; the best the machine has."/></StackPanel>
+        </RadioButton>
+        <RadioButton Style="{StaticResource Choice}" GroupName="Renderer" Tag="d3d12" Checked="RendererChecked">
+         <StackPanel><TextBlock Text="Forward+ · Direct3D 12"/><TextBlock Style="{StaticResource Note}" Text="The full picture on a modern graphics card."/></StackPanel>
+        </RadioButton>
+        <RadioButton Style="{StaticResource Choice}" GroupName="Renderer" Tag="vulkan" Checked="RendererChecked">
+         <StackPanel><TextBlock Text="Forward+ · Vulkan"/><TextBlock Style="{StaticResource Note}" Text="The same picture, when Direct3D 12 misbehaves."/></StackPanel>
+        </RadioButton>
+        <RadioButton Style="{StaticResource Choice}" GroupName="Renderer" Tag="opengl3" Checked="RendererChecked">
+         <StackPanel><TextBlock Text="Compatibility · OpenGL"/><TextBlock Style="{StaticResource Note}" Text="Simpler lighting; draws on nearly anything."/></StackPanel>
+        </RadioButton>
+        <RadioButton Style="{StaticResource Choice}" GroupName="Renderer" Tag="opengl3_angle" Checked="RendererChecked">
+         <StackPanel><TextBlock Text="Compatibility · ANGLE (OpenGL over Direct3D 11)"/><TextBlock Style="{StaticResource Note}" Text="For old or unusual graphics drivers."/></StackPanel>
+        </RadioButton>
+       </StackPanel>
+
+       <TextBlock Style="{StaticResource Heading}" Text="Window" Margin="0,10,0,8"/>
+       <StackPanel x:Name="WindowChoices" Orientation="Horizontal">
+        <RadioButton Style="{StaticResource Choice}" GroupName="Window" Tag="borderless" Margin="0,0,26,0" Checked="WindowChecked" Content="Borderless"/>
+        <RadioButton Style="{StaticResource Choice}" GroupName="Window" Tag="fullscreen" Margin="0,0,26,0" Checked="WindowChecked" Content="Fullscreen"/>
+        <RadioButton Style="{StaticResource Choice}" GroupName="Window" Tag="windowed" Checked="WindowChecked" Content="Windowed"/>
+       </StackPanel>
+       <TextBlock Style="{StaticResource Note}" Margin="0,0,0,14" Text="Written into the game's own settings, so the game's options show the same."/>
+
+       <TextBlock Style="{StaticResource Heading}" Text="Map" Margin="0,0,0,8"/>
+       <CheckBox x:Name="SafeMap" Click="SafeMapClick">
+        <StackPanel><TextBlock Text="Safe map"/><TextBlock Style="{StaticResource Note}" Text="A plainer planet without relief and terrain detail, for a graphics card that crashes or draws the map wrong. Borders, owners and map modes stay as they are. Turn it off once the game runs."/></StackPanel>
+       </CheckBox>
+      </StackPanel>
+     </ScrollViewer>
+
+     <!-- Help -->
+     <ScrollViewer x:Name="HelpView" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="0,0,10,0">
+       <TextBlock Style="{StaticResource Heading}" Text="Check the game's files"/>
+       <TextBlock Style="{StaticResource Note}" Margin="0,0,0,10" Text="Compares the game, its data and the launcher with the checksums this build was shipped with. A file that differs was damaged in the download or changed since."/>
+       <DockPanel Margin="0,0,0,8">
+        <Button x:Name="CheckButton" Content="Check files" Click="CheckFilesClick" DockPanel.Dock="Left" MinWidth="120"/>
+        <TextBlock x:Name="CheckSummary" Style="{StaticResource Note}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+       </DockPanel>
+       <ItemsControl x:Name="CheckResults" Margin="0,0,0,16">
+        <ItemsControl.ItemTemplate><DataTemplate>
+         <DockPanel Margin="0,2">
+          <TextBlock x:Name="Mark" Text="✓" Width="20" Foreground="#4FB477" DockPanel.Dock="Left"/>
+          <TextBlock x:Name="Verdict" Text="{Binding Verdict}" Foreground="#9DABBC" FontSize="12" DockPanel.Dock="Right" Margin="10,0,0,0"/>
+          <TextBlock Text="{Binding File}" FontSize="12.5" Foreground="#C8D3E0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+         </DockPanel>
+         <DataTemplate.Triggers>
+          <DataTrigger Binding="{Binding Matches}" Value="False"><Setter TargetName="Mark" Property="Text" Value="✗"/><Setter TargetName="Mark" Property="Foreground" Value="#C94F55"/><Setter TargetName="Verdict" Property="Foreground" Value="#E68A8E"/></DataTrigger>
+         </DataTemplate.Triggers>
+        </DataTemplate></ItemsControl.ItemTemplate>
+       </ItemsControl>
+
+       <TextBlock Style="{StaticResource Heading}" Text="Report a problem"/>
+       <TextBlock Style="{StaticResource Note}" Margin="0,0,0,10" Text="Puts the build, this computer's system and graphics card, the last logs, the settings and the newest save into one zip in the reports folder, and shows it. Nothing is sent anywhere: attach the file where you report the problem."/>
+       <WrapPanel Margin="0,0,0,16">
+        <Button x:Name="ReportButton" Content="Write a report" Click="ReportClick" Margin="0,0,8,0"/>
+        <Button Content="Open reports folder" Click="OpenReports"/>
+       </WrapPanel>
+
+       <TextBlock Style="{StaticResource Heading}" Text="Saves, settings and logs"/>
+       <TextBlock x:Name="ProfileNote" Style="{StaticResource Note}" Margin="0,0,0,10"/>
+       <WrapPanel>
+        <Button Content="Open game folder" Click="OpenProfile" Margin="0,0,8,0"/>
+        <Button x:Name="EngineButton" Content="Choose Godot .NET" Click="ChooseEngine"/>
+       </WrapPanel>
+      </StackPanel>
+     </ScrollViewer>
+    </Grid>
+   </Border>
+
+   <!-- Play. -->
+   <Grid Grid.Row="3" Margin="0,16,0,0">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="240"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <Button x:Name="Play" Style="{StaticResource Primary}" Content="Play" Click="PlayClick" Height="58"/>
+    <StackPanel Grid.Column="1" Margin="18,0,0,0" VerticalAlignment="Center">
+     <TextBlock x:Name="Summary" Foreground="{StaticResource TextAccent}" FontSize="14"/>
+     <TextBlock x:Name="StartLine" Style="{StaticResource Note}" Margin="0,3,0,0"/>
+    </StackPanel>
    </Grid>
-   <Border Grid.Row="4" Background="#0A141B" BorderBrush="#2E3E48" BorderThickness="1" Padding="14" Margin="0,0,0,12">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-     <TextBlock x:Name="Details" Foreground="#B7C5CC" FontSize="12" LineHeight="21" Text="Choose a mod or expansion to see its description, dependencies and where its files are."/>
-    </ScrollViewer>
-   </Border>
-   <DockPanel Grid.Row="5">
-    <Button DockPanel.Dock="Right" Content="Save" Click="SaveClick" MinWidth="110"/>
-    <WrapPanel>
-     <Button Content="Open folder" Click="OpenPackageFolder" Margin="0,0,8,0"/>
-     <Button x:Name="Earlier" Content="↑ Earlier" Click="EarlierClick" Margin="0,0,8,0" ToolTip="Mod load order. Required dependencies always come first."/>
-     <Button x:Name="Later" Content="↓ Later" Click="LaterClick"/>
-    </WrapPanel>
-   </DockPanel>
-   <Border Grid.Row="6" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Margin="0,16,0,0" Padding="0,12,0,0">
-    <DockPanel>
-     <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center">
-      <Button x:Name="ProfileButton" Content="Logs and settings" Click="OpenProfile" Style="{StaticResource Link}"/>
-      <Button x:Name="EngineButton" Content="  /  Choose Godot .NET" Click="ChooseEngine" Style="{StaticResource Link}"/>
-     </WrapPanel>
-     <TextBlock x:Name="Status" Text="Settings take effect when the game starts." FontSize="12" Foreground="#B4C4CB" VerticalAlignment="Center" Margin="0,0,16,0"/>
-    </DockPanel>
-   </Border>
+   <TextBlock x:Name="Status" Grid.Row="4" Margin="0,12,0,0" Style="{StaticResource Note}" FontSize="12" Text="Settings take effect when the game starts."/>
   </Grid>
  </Grid>
 </Window>

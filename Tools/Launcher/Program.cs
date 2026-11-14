@@ -35,6 +35,8 @@ internal static class Program
             if (!first) { MessageBox.Show(L.T("The launcher is already open. Switch to its window."), "Deal or Force"); return 0; }
             var app = new Application();
             var window = new MainWindow(new LauncherCatalog(root, profile), Option("--godot"));
+            // --tab news|mods|dlc|options|help: open on that tab (and photograph it with --snapshot).
+            if (Option("--tab") is { } tab) window.ShowTab(tab);
             if (snapshot is not null)
             {
                 if (Option("--snapshot-size") is { } requestedSize)
