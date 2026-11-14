@@ -711,9 +711,7 @@ public static class MarketSystem
             demandedJobs += JobsDemanded(state);
             availableWorkers += WorkersAvailable(state);
         }
-        nation.EmployedShare = demandedJobs <= 0.001f
-            ? 1f
-            : M.Clamp(availableWorkers / demandedJobs, 0.25f, 1f);
+        nation.EmployedShare = StaffingShare(demandedJobs, availableWorkers);
         // The jobs per worker it is measured against from now on: its first market's
         // (CapitalReturns), and a country born later starts from its own.
         if (nation.CapitalIntensityReference <= 0f && demandedJobs > 0.001f && availableWorkers > 0.001f)
@@ -761,7 +759,9 @@ public static class MarketSystem
     /// stopped a rich country compounding: labour never bound, and the United States
     /// multiplied its real output by half in eight years. Against the country's own start,
     /// because the jobs a region's buildings ask for are a coarse count - the median country
-    /// asks for 0.95 workers per worker it has and Greenland for 130 - not a census.
+    /// asks for 0.95 workers per worker it has and Greenland for 130 - not a census. Counted on
+    /// the plant the country can staff: a building with nobody to work it is EmployedShare's
+    /// business, and adds nothing rather than taking output away.
     /// </summary>
     /// <summary>
     /// How much of its rated output a country's plant gives this week: the share of the jobs it
@@ -795,12 +795,22 @@ public static class MarketSystem
                WarDamage.OutputFactor(campaign, nation, state) * HeldRegions.WorkedAt(campaign, nation, state);
     }
 
+    /// <summary>The share of the jobs its buildings ask for that a country can staff (Nation.EmployedShare).</summary>
+    internal static float StaffingShare(float demandedJobs, float availableWorkers) =>
+        demandedJobs <= 0.001f ? 1f : M.Clamp(availableWorkers / demandedJobs, 0.25f, 1f);
+
     internal static float CapitalReturns(Campaign campaign, Nation nation, float demandedJobs, float availableWorkers)
     {
         var headroom = campaign.Defines.CapitalDeepeningHeadroom;
         var reference = nation.CapitalIntensityReference;
         if (headroom <= 0f || reference <= 0f || availableWorkers <= 0.001f || demandedJobs <= 0.001f) return 1f;
-        var deepening = demandedJobs / availableWorkers / (reference * headroom);
+        // Measured on the plant the country can staff. Past full employment EmployedShare already
+        // spreads the workers thinner over every building, so a building nobody can work adds
+        // nothing; counting the unstaffed plant here as well made it take output away - output
+        // went as workers x (jobs/workers)^(share-1), falling with every building, and a peaceful
+        // Switzerland that built 29 plants for the workers of 11 halved its GDP in ten years.
+        var staffed = MathF.Min(demandedJobs, availableWorkers);
+        var deepening = staffed / availableWorkers / (reference * headroom);
         if (!float.IsFinite(deepening) || deepening <= 1f) return 1f;
         var share = M.Clamp01(campaign.Defines.CapitalDeepeningShare);
         return M.Clamp(MathF.Pow(deepening, share - 1f), 0.1f, 1f);

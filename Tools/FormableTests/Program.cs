@@ -11,6 +11,8 @@ static class Program
     static void Main(string[] args)
     {
         if (args.Contains("--non-countries-only")) { NonCountriesTests.Run(); return; }
+        if (args.Contains("--capital-returns-only")) { CapitalReturnsTests.Run(); return; }
+        if (args.Length == 0) CapitalReturnsTests.Run();
         if (args.Contains("--recognition-index-only")) { RecognitionIndexTests.Run(); return; }
         if (args.Contains("--region-id-walk-only")) { RegionIdWalkTests.Run(); return; }
         if (args.Contains("--movement-quiet-think-only")) { MovementQuietThinkTests.Run(); return; }

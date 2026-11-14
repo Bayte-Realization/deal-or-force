@@ -332,6 +332,7 @@ public static class Program
         if (Array.IndexOf(args, "--wars") >= 0) return mapped ? WarStuckReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
         if (Array.IndexOf(args, "--fiscal-pulse") >= 0) return FiscalPulseReport.Run(campaign, days);
+        if (Array.IndexOf(args, "--gdp-watch") >= 0) return GdpWatchReport.Run(campaign, days, args);
         var snapshotAt = Array.IndexOf(args, "--diagnose-snapshot");
         if (snapshotAt >= 0 && snapshotAt + 1 < args.Length)
             return NanTrapReport.RunSnapshot(campaign, args[snapshotAt + 1],
