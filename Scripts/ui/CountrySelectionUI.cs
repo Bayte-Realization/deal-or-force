@@ -158,6 +158,11 @@ public partial class DealOrForceGame
         actionStack.AddChild(actionRow);
         actionRow.AddChild(ActionButton("Back", ShowMainMenu, 100, 38));
         actionRow.AddChild(ActionButton("Random nation", PickRandomNation, 150, 38));
+        // Watching without a country: players asked for it, and before it the only way in was
+        // to start as somebody and press F7, which still left that country the player's.
+        var watch = ActionButton("Watch the world", BeginObserving, 170, 38);
+        watch.TooltipText = Ui.Tip(Tr("Start without a country: the computer runs every nation and nothing stops the clock. F7 shows the controls."));
+        actionRow.AddChild(watch);
         actionRow.AddChild(ActionButton("Scenarios / editor", OpenScenarioLibrary, 170, 38));
         // The language, the step length and the sound are all decisions a player makes
         // BEFORE they pick a country, and until now the only door to them was the pause
@@ -496,6 +501,23 @@ public partial class DealOrForceGame
         }
         _campaignInProgress = true;
         BeginSession();
+    }
+
+    /// <summary>
+    /// The world with nobody steering it: every nation goes to the computer (the console's
+    /// "observe" does the same), the session begins, and observer mode takes the controls out
+    /// of the way and starts the clock.
+    /// </summary>
+    private void BeginObserving()
+    {
+        if (_campaign is null) return;
+        foreach (var nation in _campaign.Nations) nation.IsHuman = false;
+        _campaign.HumanSeats.Clear();
+        Simulation.FrontPlanner.AssignAi(_campaign);
+        _campaignInProgress = true;
+        BeginSession();
+        _identityTag.Text = Tr("Observer mode");
+        SetObserverMode(true);
     }
 
     private async void OpenLocalMultiplayer()
