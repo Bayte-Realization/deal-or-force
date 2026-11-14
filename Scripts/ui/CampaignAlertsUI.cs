@@ -17,6 +17,52 @@ public partial class DealOrForceGame
     private readonly Dictionary<CampaignAlertGroup, HBoxContainer> _campaignAlertClusters = new();
     private readonly Dictionary<string, Button> _campaignAlertIcons = new();
     private readonly CampaignAlertSnoozes _campaignAlertSnoozes = new();
+
+    // The next step: one lit line under the hint strip.
+    //
+    // The strip above it is twelve pictures and four counters, and a new player's first words
+    // about this screen were "I am a little lost". Everything the line needs was already here -
+    // the hints are sorted into must, should, can and news - so it adds no rule and no data:
+    // it names the first hint that is not hidden, in words, and pressing it goes where that
+    // hint goes. With nothing left it says so and offers the one thing that is always left to
+    // do in a paused game, which is to let time run. It is the only lit control on the map.
+    private Button _campaignBrief;
+    private string _campaignBriefAlert = "";
+
+    private static int BriefRank(CampaignAlertGroup group) => group switch
+    {
+        CampaignAlertGroup.Must => 0, CampaignAlertGroup.Should => 1, CampaignAlertGroup.Important => 2, _ => 3
+    };
+
+    private void RefreshCampaignBrief()
+    {
+        if (_campaignBrief is null) return;
+        var next = _campaignAlertStrip.Visible
+            ? _campaignAlerts.Where(a => !_campaignAlertSnoozes.Hidden(a, _campaign.ElapsedDays))
+                .OrderBy(a => BriefRank(a.Group)).FirstOrDefault()
+            : null;
+        _campaignBriefAlert = next?.Id ?? "";
+        if (next is not null)
+        {
+            _campaignBrief.Text = Loc.Format("Next: {0}  →", next.Title);
+            _campaignBrief.TooltipText = Ui.Tip(next.Summary + "\n" + Tr("Press to go there. The pictures above list everything else that is waiting."));
+            _campaignBrief.Visible = true;
+        }
+        else if (_campaignAlertStrip.Visible && _campaign.IsPaused)
+        {
+            _campaignBrief.Text = Tr("Nothing is waiting for you. Let time run  [Space]");
+            _campaignBrief.TooltipText = Ui.Tip(Tr("The game is paused. Press to let time run; press Space to stop it again."));
+            _campaignBrief.Visible = true;
+        }
+        else _campaignBrief.Visible = false;
+    }
+
+    private void FollowCampaignBrief()
+    {
+        if (_campaignBriefAlert.Length > 0) FollowCampaignAlert(_campaignBriefAlert);
+        else if (_campaign is { IsPaused: true }) TogglePause();
+        RefreshSituationRoom(force: true);
+    }
     private IReadOnlyList<CampaignAlert> _campaignAlerts = Array.Empty<CampaignAlert>();
     private Campaign _campaignAlertsWorld;
     private int _campaignAlertsSeat = -1;
@@ -50,6 +96,11 @@ public partial class DealOrForceGame
             button.AddThemeColorOverride("font_color", Ui.Colour(AlertColour(group)));
             cluster.AddChild(button); _campaignAlertGroups[group] = button;
         }
+        _campaignBrief = new Button { Name = "CampaignBrief", ClipText = true, Visible = false, FocusMode = FocusModeEnum.None };
+        StyleButton(_campaignBrief, true);
+        _campaignBrief.AddThemeFontSizeOverride("font_size", 14);
+        _campaignBrief.Pressed += FollowCampaignBrief;
+        _hudLayer.AddChild(_campaignBrief);
         _campaignAlertPopup = new PanelContainer { Name = "CampaignAlertPopup", Visible = false };
         _campaignAlertPopup.AddThemeStyleboxOverride("panel", ShellPanelStyle()); _hudLayer.AddChild(_campaignAlertPopup);
         var body = new VBoxContainer(); body.AddThemeConstantOverride("separation", 5); _campaignAlertPopup.AddChild(body);
@@ -76,7 +127,14 @@ public partial class DealOrForceGame
         var width = MathF.Min(820, MathF.Min(MathF.Max(400,Size.X-440), 196+iconCount*46));
         _campaignAlertStrip.Position = new((Size.X - width) * .5f, _hudTopPanel.OffsetBottom + 6);
         _campaignAlertStrip.Size = new(width, 46);
-        _campaignAlertPopup.Position = _campaignAlertStrip.Position + new Vector2(0, 50);
+        var briefShown = _campaignBrief is { Visible: true };
+        if (_campaignBrief is not null)
+        {
+            var briefWidth = MathF.Min(640, MathF.Max(320, Size.X - 440));
+            _campaignBrief.Position = new((Size.X - briefWidth) * .5f, _campaignAlertStrip.Position.Y + 50);
+            _campaignBrief.Size = new(briefWidth, 34);
+        }
+        _campaignAlertPopup.Position = _campaignAlertStrip.Position + new Vector2(0, briefShown ? 88 : 50);
         _campaignAlertPopup.Size = new(MathF.Min(width, 570), MathF.Min(355, MathF.Max(260, Size.Y - _campaignAlertPopup.Position.Y - 70)));
     }
 
@@ -103,6 +161,7 @@ public partial class DealOrForceGame
             StyleButton(button, _campaignAlertPopup.Visible && _campaignAlertGroup == group);
         }
         RefreshCampaignAlertIcons();
+        RefreshCampaignBrief();
         LayoutCampaignAlerts();
         if (_campaignAlertPopup.Visible) RefreshCampaignAlertRows();
     }

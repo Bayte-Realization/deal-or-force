@@ -3,5 +3,9 @@
   "Play a movement without land": "Play a movement without land",
   "Parties, fronts and governments in exile: a headquarters and supporters instead of provinces.": "Parties, fronts and governments in exile: a headquarters and supporters instead of provinces.",
   "Clouds, mist and the seed the world is built from.": "Clouds, mist and the seed the world is built from.",
-  "Advanced": "Advanced"
+  "Advanced": "Advanced",
+  "Press to go there. The pictures above list everything else that is waiting.": "Press to go there. The pictures above list everything else that is waiting.",
+  "Nothing is waiting for you. Let time run  [Space]": "Nothing is waiting for you. Let time run  [Space]",
+  "The game is paused. Press to let time run; press Space to stop it again.": "The game is paused. Press to let time run; press Space to stop it again.",
+  "Next: {0}  →": "Next: {0}  →"
 }

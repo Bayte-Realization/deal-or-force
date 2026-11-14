@@ -13,5 +13,9 @@
   "Play a movement without land": "Играть за движение без земли",
   "Parties, fronts and governments in exile: a headquarters and supporters instead of provinces.": "Партии, фронты и правительства в изгнании: штаб и сторонники вместо провинций.",
   "Clouds, mist and the seed the world is built from.": "Облака, дымка и зерно, из которого строится мир.",
-  "Advanced": "Дополнительно"
+  "Advanced": "Дополнительно",
+  "Press to go there. The pictures above list everything else that is waiting.": "Нажмите, чтобы перейти. Значки выше перечисляют всё остальное, что ждёт решения.",
+  "Nothing is waiting for you. Let time run  [Space]": "Ничто не ждёт вашего решения. Пустите время  [Пробел]",
+  "The game is paused. Press to let time run; press Space to stop it again.": "Игра на паузе. Нажмите, чтобы пустить время; пробел остановит его снова.",
+  "Next: {0}  →": "Дальше: {0}  →"
 }
