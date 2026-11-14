@@ -63,10 +63,15 @@ public partial class LoadingScreen : Control
         var plain = Plain();
         _scene = new TextureRect
         {
-            Name = "LoadingScene", Texture = plain ? null : NextScene(), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            // Plain does not mean empty. Without the illustrations the screen was a logo on a
+            // blank chart for the half-minute a world takes to build; it now shows the same
+            // picture of the game's own globe the menu stands on, so the menu, the wait and the
+            // map are one place. The illustrations, when they are switched on, still come first.
+            Name = "LoadingScene", Texture = plain ? WorldPicture() : NextScene(), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered, MouseFilter = MouseFilterEnum.Ignore,
-            SelfModulate = new Color(.78f, .80f, .84f)
+            SelfModulate = plain ? new Color(.62f, .64f, .70f) : new Color(.78f, .80f, .84f)
         };
+        var pictured = _scene.Texture is not null;
         AddChild(_scene);
         _scene.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         // Darker towards the edges and the foot, where the footer stands.
@@ -88,7 +93,7 @@ public partial class LoadingScreen : Control
         };
         AddChild(_shade);
         _shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _shade.Visible = !plain;
+        _shade.Visible = pictured;
         if (_scene.Texture is not null)
         {
             // A slow drift, not a slideshow. No fade-in: a loading stage can hold the frame for
@@ -113,17 +118,17 @@ public partial class LoadingScreen : Control
         _card = new Panel { Name = "DossierCard", MouseFilter = MouseFilterEnum.Ignore };
         _card.AddThemeStyleboxOverride("panel", new StyleBoxFlat
         {
-            BgColor = ink with { A = .80f }, BorderColor = new Color("695e44"),
+            BgColor = ink with { A = .80f }, BorderColor = Ui.Colour("surface.line"),
             BorderWidthTop = 1, BorderWidthBottom = 1, BorderWidthLeft = 1, BorderWidthRight = 1,
             ShadowColor = new Color(0, 0, 0, .35f), ShadowSize = 18
         });
         AddChild(_card);
         // The dark card is there so the words read over a picture; the plain chart needs none.
-        _card.Visible = !plain;
+        _card.Visible = pictured;
         _body = new VBoxContainer { Name = "Dossier", MouseFilter = MouseFilterEnum.Ignore };
         _body.AddThemeConstantOverride("separation", 20);
         AddChild(_body);
-        _caption = Text("STRATEGIC DOSSIER", 13, "b7a36d");
+        _caption = Text("STRATEGIC DOSSIER", 13, Ui.Colour("text.accent_dim"));
         _caption.HorizontalAlignment = HorizontalAlignment.Center;
         _body.AddChild(_caption);
         _logoPlate = new Panel { MouseFilter = MouseFilterEnum.Ignore };
@@ -138,9 +143,9 @@ public partial class LoadingScreen : Control
         };
         _logoPlate.AddChild(_logo);
         _logo.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _heading = Text("Preparing the world", 28, "eee8d9");
+        _heading = Text("Preparing the world", 28, Ui.Colour("text.bright"));
         _body.AddChild(_heading);
-        _stage = Text("Opening the archive", 17, "ceba80");
+        _stage = Text("Opening the archive", 17, Ui.Colour("text.accent"));
         _body.AddChild(_stage);
         _progress = new ProgressBar
         {
@@ -150,14 +155,14 @@ public partial class LoadingScreen : Control
         _progress.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = new Color("293642") });
         _progress.AddThemeStyleboxOverride("fill", new StyleBoxFlat
         {
-            BgColor = new Color("c2a868"), ContentMarginTop = 2, ContentMarginBottom = 2
+            BgColor = Ui.Colour("button.primary_border"), ContentMarginTop = 2, ContentMarginBottom = 2
         });
         _body.AddChild(_progress);
-        _detail = Text("", 14, "9caab5");
+        _detail = Text("", 14, Ui.Colour("text.muted"));
         _body.AddChild(_detail);
         _dismiss = new Button { Name = "LoadingDismiss", Visible = false, CustomMinimumSize = new Vector2(0, 44) };
         _body.AddChild(_dismiss);
-        _footer = Text(Loc.Get(Motto), 14, "7c8b97");
+        _footer = Text(Loc.Get(Motto), 14, Ui.Colour("text.caption"));
         _footer.Name = "LoadingMotto";
         _footer.HorizontalAlignment = HorizontalAlignment.Center;
         AddChild(_footer);
@@ -166,12 +171,19 @@ public partial class LoadingScreen : Control
         Layout();
     }
 
-    private static Label Text(string text, int size, string color)
+    /// <summary>The menu's picture of the world, or nothing if a mod removed it.</summary>
+    private static Texture2D WorldPicture()
+    {
+        var path = SpriteCatalog.TextureOf("menu_world", MenuWorld.ShippedPath);
+        return !string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
+    }
+
+    private static Label Text(string text, int size, Color color)
     {
         var label = new Label { Text = Loc.Get(text), AutowrapMode = TextServer.AutowrapMode.WordSmart,
             MouseFilter = MouseFilterEnum.Ignore };
         label.AddThemeFontSizeOverride("font_size", size);
-        label.AddThemeColorOverride("font_color", new Color(color));
+        label.AddThemeColorOverride("font_color", color);
         return label;
     }
 
@@ -269,14 +281,14 @@ public partial class LoadingScreen : Control
     /// <summary>The gold frame and the cartographic seal, drawn over the picture.</summary>
     private void DrawFrame()
     {
-        var frame = new Color("695e44");
+        var frame = Ui.Colour("surface.line");
         _frame.DrawRect(new Rect2(new Vector2(26, 26), Size - new Vector2(52, 52)), frame, false, 1);
         foreach (var corner in new[] { new Vector2(26, 26), new Vector2(Size.X - 26, 26),
                      new Vector2(26, Size.Y - 26), Size - new Vector2(26, 26) })
         {
             var direction = new Vector2(corner.X < Size.X / 2 ? 1 : -1, corner.Y < Size.Y / 2 ? 1 : -1);
-            _frame.DrawLine(corner, corner + new Vector2(36 * direction.X, 0), new Color("b8a169"), 2);
-            _frame.DrawLine(corner, corner + new Vector2(0, 36 * direction.Y), new Color("b8a169"), 2);
+            _frame.DrawLine(corner, corner + new Vector2(36 * direction.X, 0), Ui.Colour("text.accent_dim"), 2);
+            _frame.DrawLine(corner, corner + new Vector2(0, 36 * direction.Y), Ui.Colour("text.accent_dim"), 2);
         }
         // A quiet cartographic seal, not a shader or another rendered 3D scene.
         var center = new Vector2(Size.X * 0.87f, Size.Y * 0.47f);
