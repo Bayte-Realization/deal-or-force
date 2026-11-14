@@ -146,7 +146,11 @@ public static class SocialMemory
         return image;
     }
     public static float Esteem(Campaign c, Nation audience, Nation subject) => ImagesEnabled(c) && subject is not null
-        ? (audience == subject ? subject.DomesticImage?.Esteem ?? 0f : Image(audience, NationKey(subject))?.Esteem ?? 0f) : 0f;
+        ? EsteemOf(audience, subject) : 0f;
+
+    /// <summary>The same number for a caller that has already read the switch and holds both countries.</summary>
+    private static float EsteemOf(Nation audience, Nation subject) =>
+        audience == subject ? subject.DomesticImage?.Esteem ?? 0f : Image(audience, NationKey(subject))?.Esteem ?? 0f;
 
     public static float OpinionEffect(Campaign c, DiplomaticRelation r)
     {
@@ -157,7 +161,11 @@ public static class SocialMemory
     internal static float OpinionEffect(Campaign c, Nation a, Nation b)
     {
         if (!ImagesEnabled(c) || a is null || b is null) return 0f;
-        return (Esteem(c, a, b) + Esteem(c, b, a)) * 0.5f * c.Defines.SocialOpinionWeight;
+        // The switch is read once. Each Esteem call read it again - four case-insensitive
+        // string lookups apiece - and this is asked for every relation the opinion pass settles
+        // and every pair the weekly diplomacy scan compares: the two extra reads were a third
+        // of a microsecond on a path walked sixty thousand times a fortnight.
+        return (EsteemOf(a, b) + EsteemOf(b, a)) * 0.5f * c.Defines.SocialOpinionWeight;
     }
     public static float StabilityEffect(Campaign c, Nation n)
     {

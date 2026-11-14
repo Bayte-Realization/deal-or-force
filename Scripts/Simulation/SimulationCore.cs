@@ -544,7 +544,7 @@ public sealed partial class Campaign
             return true;
         }
     }
-    public readonly Dictionary<long, DiplomaticRelation> Relations = new();
+    public readonly Dictionary<long, DiplomaticRelation> Relations = new(PairKeyComparer.Instance);
     public readonly List<int> HumanSeats = new();
     public readonly CampaignCommandQueue Commands;
     public readonly CampaignHistory History = new();

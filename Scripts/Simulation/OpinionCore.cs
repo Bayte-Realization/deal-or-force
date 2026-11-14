@@ -216,8 +216,19 @@ public static class OpinionSystem
     /// is the thing this replaced - the player used to read a number with no story behind
     /// it and no way to find one.
     /// </summary>
-    public static void Settle(Campaign campaign, DiplomaticRelation relation)
+    public static void Settle(Campaign campaign, DiplomaticRelation relation) =>
+        Settle(campaign, relation, out _, out _, out _);
+
+    /// <summary>
+    /// The same settle, handing back the three terms it read from the two countries as they
+    /// stand - politics, declared identity, public reputation. The weekly diplomacy scan
+    /// stamps each pair with exactly these, and used to work all three out a second time
+    /// the moment this returned.
+    /// </summary>
+    internal static void Settle(Campaign campaign, DiplomaticRelation relation,
+        out float politics, out float identity, out float social)
     {
+        politics = identity = social = 0f;
         if (relation is null) return;
         for (var index = relation.Reasons.Count - 1; index >= 0; index--)
         {
@@ -225,11 +236,16 @@ public static class OpinionSystem
             if (reason.ExpiresDay > 0 && reason.ExpiresDay <= campaign.ElapsedDays)
                 relation.Reasons.RemoveAt(index);
         }
-        Explain(campaign, relation, updateOpinion: true);
+        Explain(campaign, relation, true, out politics, out identity, out social);
     }
 
-    public static void Explain(Campaign campaign, DiplomaticRelation relation, bool updateOpinion = false)
+    public static void Explain(Campaign campaign, DiplomaticRelation relation, bool updateOpinion = false) =>
+        Explain(campaign, relation, updateOpinion, out _, out _, out _);
+
+    private static void Explain(Campaign campaign, DiplomaticRelation relation, bool updateOpinion,
+        out float politics, out float declared, out float reputation)
     {
+        politics = declared = reputation = 0f;
         if (relation is null) return;
         relation.OpinionDrivers.Begin("Opinion", "share");
         var total = 0f;
@@ -282,6 +298,7 @@ public static class OpinionSystem
         // right now. A reason would have to be issued on every change by every observer,
         // and would be wrong for everybody who was not watching.
         var affinity = PoliticsCore.Affinity(campaign, leftNation, rightNation);
+        politics = affinity;
         if (MathF.Abs(affinity) >= 0.05f)
         {
             total += affinity;
@@ -293,6 +310,7 @@ public static class OpinionSystem
         // or one declared people, read from both countries as they stand. Continuous, like
         // the politics above - a declaration made yesterday is already in today's number.
         var identity = StateIdentity.Affinity(campaign, leftNation, rightNation);
+        declared = identity;
         if (identity >= 0.05f)
         {
             total += identity;
@@ -300,6 +318,7 @@ public static class OpinionSystem
         }
 
         var memory = SocialMemory.OpinionEffect(campaign, leftNation, rightNation);
+        reputation = memory;
         if (MathF.Abs(memory) >= 0.05f)
         {
             total += memory;

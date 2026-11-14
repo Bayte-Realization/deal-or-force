@@ -12,7 +12,7 @@ public static partial class AiStatecraft
     sealed class WeeklyScanMemory
     {
         internal int Walks;
-        internal readonly Dictionary<long, WeeklyStamp> Stamps = new();
+        internal readonly Dictionary<long, WeeklyStamp> Stamps = new(PairKeyComparer.Instance);
     }
 
     struct WeeklyStamp
@@ -61,9 +61,23 @@ public static partial class AiStatecraft
     {
         if (campaign is null || nation is null || other is null || nation.Id == other.Id) return false;
         var peeked = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id);
+        return UnchangedWeeklyPair(campaign, nation, other, peeked, borders, myStrength, identityOn);
+    }
+
+    /// <summary>
+    /// The same question over a relation already in hand. The stamp is read once and passed
+    /// down: the three remembered facts and the three standing terms sit in one entry, and
+    /// the pass used to fetch the memory of the campaign and that entry twice for every pair
+    /// it left alone.
+    /// </summary>
+    static bool UnchangedWeeklyPair(Campaign campaign, Nation nation, Nation other, DiplomaticRelation peeked,
+        bool borders, float myStrength, bool identityOn)
+    {
         if (peeked is null) return false;
-        if (!SameWeeklyPair(campaign, nation.Id, other.Id, borders, peeked.Opinion, peeked.Stance)) return false;
-        return !WeeklyPassWouldWrite(campaign, nation, other, peeked, borders, myStrength, identityOn);
+        if (!WeeklyScans.TryGetValue(campaign, out var memory) ||
+            !memory.Stamps.TryGetValue(WeeklyPairKey(nation.Id, other.Id), out var stamp)) return false;
+        if (stamp.Borders != borders || stamp.Opinion != peeked.Opinion || stamp.Stance != peeked.Stance) return false;
+        return !WeeklyPassWouldWrite(campaign, nation, other, peeked, borders, myStrength, identityOn, stamp);
     }
 
     /// <summary>
@@ -78,17 +92,22 @@ public static partial class AiStatecraft
     {
         relation = null;
         if (campaign is null || nation is null || other is null || nation.Id == other.Id) return false;
-        if (UnchangedWeeklyPair(campaign, nation, other, borders, myStrength, identityOn))
+        // One lookup of the pair for both halves. An awake relation is what Get returns for
+        // the walk; only a sleeping one, or none at all, still goes through Get - which is
+        // where a relation is woken or opened, at the same moment it always was.
+        var peeked = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id, out var awake);
+        if (UnchangedWeeklyPair(campaign, nation, other, peeked, borders, myStrength, identityOn))
         {
-            relation = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id);
+            relation = peeked;
             return false;
         }
 
-        relation = CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
+        relation = awake ? peeked : CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
         if (relation is null) return false;
         if (relation.Stance == DiplomaticStance.AtWar)
         {
-            RememberWeeklyPair(campaign, nation.Id, other.Id, borders, relation);
+            WeeklyAdditives(campaign, relation, out var warPolitics, out var warIdentity, out var warSocial);
+            RememberWeeklyPair(campaign, nation.Id, other.Id, borders, relation, warPolitics, warIdentity, warSocial);
             return true;
         }
 
@@ -124,15 +143,18 @@ public static partial class AiStatecraft
         // reason flickered on and off the diplomacy page.
         if (fear > 0.05f) OpinionSystem.Remember(campaign, relation, "fear_of_strength", fear, settle: false);
         else if (strength >= 0.95f) OpinionSystem.Forget(campaign, relation, "fear_of_strength", settle: false);
-        OpinionSystem.Settle(campaign, relation);
-        RememberWeeklyPair(campaign, nation.Id, other.Id, borders, relation);
+        // The settle reads politics, identity and reputation from the two countries as they
+        // stand, and the stamp records the same three: taken from the settle rather than
+        // worked out again straight after it, which was a third of what a walk cost.
+        OpinionSystem.Settle(campaign, relation, out var politics, out var identity, out var social);
+        RememberWeeklyPair(campaign, nation.Id, other.Id, borders, relation, politics, identity, social);
         return true;
     }
 
-    static void RememberWeeklyPair(Campaign campaign, int a, int b, bool borders, DiplomaticRelation relation)
+    static void RememberWeeklyPair(Campaign campaign, int a, int b, bool borders, DiplomaticRelation relation,
+        float politics, float identity, float social)
     {
         var memory = WeeklyScanOf(campaign);
-        WeeklyAdditives(campaign, relation, out var politics, out var identity, out var social);
         memory.Stamps[WeeklyPairKey(a, b)] = new WeeklyStamp
         {
             Borders = borders,
@@ -151,7 +173,7 @@ public static partial class AiStatecraft
     /// still match while one of those is due.
     /// </summary>
     static bool WeeklyPassWouldWrite(Campaign campaign, Nation nation, Nation other, DiplomaticRelation relation,
-        bool borders, float myStrength, bool identityOn)
+        bool borders, float myStrength, bool identityOn, in WeeklyStamp stamp)
     {
         if (relation.Stance == DiplomaticStance.AtWar) return false;
         if (StandingWouldWrite(relation, "shared_border", borders, 1f)) return true;
@@ -180,9 +202,6 @@ public static partial class AiStatecraft
             if (definition.Decays && definition.Days > 0 && reason.ExpiresDay > 0) return true;
         }
 
-        if (!WeeklyScans.TryGetValue(campaign, out var memory) ||
-            !memory.Stamps.TryGetValue(WeeklyPairKey(nation.Id, other.Id), out var stamp))
-            return true;
         WeeklyAdditives(campaign, relation, out var politics, out var identity, out var social);
         return stamp.Politics != politics || stamp.Identity != identity || stamp.Social != social;
     }

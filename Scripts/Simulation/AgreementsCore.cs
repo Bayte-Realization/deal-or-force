@@ -146,6 +146,17 @@ public static class AgreementSystem
         if (campaign is null || asking is null || asked is null || asking == asked) return false;
         var relation = preview ? CampaignDiplomacy.Peek(campaign, asking.Id, asked.Id)
             : CampaignDiplomacy.Get(campaign, asking.Id, asked.Id);
+        return CanProposeQuietWith(campaign, relation, kind);
+    }
+
+    /// <summary>
+    /// The same answer for a caller that already holds the pair's relation (or knows there is
+    /// none). The supply hedge asks this of every country with a surplus, and looking the same
+    /// pair up three times - here, in the willingness, and in its own gate - was most of what
+    /// that scan cost on a late save with sixty-four thousand relations.
+    /// </summary>
+    internal static bool CanProposeQuietWith(Campaign campaign, DiplomaticRelation relation, AgreementKind kind)
+    {
         if (relation is not null)
         {
             if (relation.Stance == DiplomaticStance.AtWar || Signed(relation, kind)) return false;
@@ -162,9 +173,19 @@ public static class AgreementSystem
     {
         why?.Begin("Whether they would sign", "share");
         if (campaign is null || asked is null || asking is null) return 0f;
-        var defines = campaign.Defines;
         var relation = preview ? CampaignDiplomacy.Peek(campaign, asked.Id, asking.Id)
             : CampaignDiplomacy.Get(campaign, asked.Id, asking.Id);
+        return WillingnessWith(campaign, asked, asking, kind, relation, why);
+    }
+
+    /// <summary>
+    /// The same sum over a relation the caller already looked up. Nothing here opens one:
+    /// a read-only scan passes what <see cref="CampaignDiplomacy.Peek"/> gave it, null included.
+    /// </summary>
+    internal static float WillingnessWith(Campaign campaign, Nation asked, Nation asking, AgreementKind kind,
+        DiplomaticRelation relation, Breakdown why = null)
+    {
+        var defines = campaign.Defines;
 
         var opinion = relation?.Opinion ?? 0f;
         var willingness = opinion / 100f;

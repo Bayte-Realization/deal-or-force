@@ -15,6 +15,7 @@ static class Program
         if (args.Contains("--region-id-walk-only")) { RegionIdWalkTests.Run(); return; }
         if (args.Contains("--movement-quiet-think-only")) { MovementQuietThinkTests.Run(); return; }
         if (args.Contains("--weekly-diplomacy-scan-only")) { WeeklyDiplomacyScanTests.Run(); return; }
+        if (args.Contains("--relation-table-only")) { RelationTableTests.Run(); return; }
         if (args.Contains("--people-index-reuse-only")) { PeopleIndexReuseTests.Run(); return; }
         if (args.Contains("--battle-occupancy-hold-only")) { BattleOccupancyHoldTests.Run(); return; }
         if (args.Contains("--battle-damage-isolation-only")) { BattleDamageIsolationTests.Run(); return; }

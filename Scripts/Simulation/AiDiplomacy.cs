@@ -42,7 +42,6 @@ public static partial class AiStatecraft
     [ThreadStatic] private static List<Nation> _friendlyCandidatesScratch;
     [ThreadStatic] private static Dictionary<int, float> _friendlyOpinionScratch;
     [ThreadStatic] private static HashSet<int> _touchingRegionsScratch;
-    [ThreadStatic] private static bool[] _hedgeEligibleScratch;
 
     private static List<Nation> FriendlyCandidates => _friendlyCandidatesScratch ??= new();
     private static Dictionary<int, float> FriendlyOpinion => _friendlyOpinionScratch ??= new();
@@ -422,52 +421,25 @@ public static partial class AiStatecraft
         if (!CanHedgeWith(campaign, nation, alternate, dominant, blockedOffers))
         {
             alternate = null;
+            // One pass on this thread, lowest id wins. This scan used to be spread over the
+            // workers once a week for every country: 494 fan-outs in fourteen late days, and on
+            // a machine with anything else to do each cost 0.33 ms against 0.26 ms for the same
+            // scan left on one thread - the body is a few dictionary reads, and waking eight
+            // threads for it cost more than it saved. The serial walk also stops asking once a
+            // lower id has already qualified.
             var nations = campaign.Nations;
             var count = nations.Count;
-            if (count >= DeterministicParallel.MinItems && DeterministicParallel.Enabled(campaign))
+            for (var i = 0; i < count; i++)
             {
-                campaign.StatesOf(0);
-                Warfare.LiveWars(campaign);
-                campaign.HasOwnedLand(nation);
-                if (_hedgeEligibleScratch is null || _hedgeEligibleScratch.Length < count)
-                    _hedgeEligibleScratch = new bool[Math.Max(count, 64)];
-                var eligible = _hedgeEligibleScratch;
-                var good = chosen.Good;
-                DeterministicParallel.For(campaign, 0, count, i =>
-                {
-                    var other = nations[i];
-                    if (other.Id == nation.Id || other.Id == dominant ||
-                        other.Population <= 0 || other.Movement is not null ||
-                        (blockedOffers is not null && blockedOffers.Contains(other.Id)) ||
-                        !other.Market.TryGetValue(good, out var quote) ||
-                        quote.Production - quote.Demand <= 0.0001f)
-                    {
-                        eligible[i] = false;
-                        return;
-                    }
-                    eligible[i] = CanHedgeWith(campaign, nation, other, dominant, blockedOffers);
-                });
-                for (var i = 0; i < count; i++)
-                {
-                    if (!eligible[i]) continue;
-                    var other = nations[i];
-                    if (alternate is null || other.Id < alternate.Id) alternate = other;
-                }
-            }
-            else
-            {
-                for (var i = 0; i < count; i++)
-                {
-                    var other = nations[i];
-                    if (other.Id == nation.Id || other.Id == dominant) continue;
-                    if (other.Population <= 0 || other.Movement is not null) continue;
-                    if (alternate is not null && other.Id >= alternate.Id) continue;
-                    if (blockedOffers is not null && blockedOffers.Contains(other.Id)) continue;
-                    if (!other.Market.TryGetValue(chosen.Good, out var quote)) continue;
-                    if (quote.Production - quote.Demand <= 0.0001f) continue;
-                    if (!CanHedgeWith(campaign, nation, other, dominant, blockedOffers)) continue;
-                    alternate = other;
-                }
+                var other = nations[i];
+                if (other.Id == nation.Id || other.Id == dominant) continue;
+                if (other.Population <= 0 || other.Movement is not null) continue;
+                if (alternate is not null && other.Id >= alternate.Id) continue;
+                if (blockedOffers is not null && blockedOffers.Contains(other.Id)) continue;
+                if (!other.Market.TryGetValue(chosen.Good, out var quote)) continue;
+                if (quote.Production - quote.Demand <= 0.0001f) continue;
+                if (!CanHedgeWith(campaign, nation, other, dominant, blockedOffers)) continue;
+                alternate = other;
             }
         }
         if (alternate is null) return false;
@@ -541,8 +513,10 @@ public static partial class AiStatecraft
         if (relation is { EmbargoByA: true } or { EmbargoByB: true }) return false;
         if (relation?.TradeAgreement == true) return false;
         if (other.IsHuman) return campaign.FeatureEnabled("deals") && campaign.ProvinceMap is not null;
-        return AgreementSystem.CanProposeQuiet(campaign, buyer, other, AgreementKind.TradeAgreement, preview: true) &&
-            AgreementSystem.Willingness(campaign, other, buyer, AgreementKind.TradeAgreement, preview: true) >=
+        // The relation read above is the one both questions are about. Asking each of them to
+        // look the pair up again made three lookups of one fact for every country with a surplus.
+        return AgreementSystem.CanProposeQuietWith(campaign, relation, AgreementKind.TradeAgreement) &&
+            AgreementSystem.WillingnessWith(campaign, other, buyer, AgreementKind.TradeAgreement, relation) >=
             AgreementSystem.Needed(campaign, AgreementKind.TradeAgreement);
     }
 }

@@ -16,7 +16,7 @@ public sealed partial class Campaign
     /// the table every daily system walks (RelationDormancy). Read through CampaignDiplomacy.Peek;
     /// CampaignDiplomacy.Get wakes one.
     /// </summary>
-    public readonly Dictionary<long, DiplomaticRelation> DormantRelations = new();
+    public readonly Dictionary<long, DiplomaticRelation> DormantRelations = new(PairKeyComparer.Instance);
 }
 
 public sealed partial class Defines

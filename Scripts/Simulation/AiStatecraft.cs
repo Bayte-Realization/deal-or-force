@@ -752,12 +752,39 @@ public static partial class AiStatecraft
         if (!defines.AiCrisisGrants || !campaign.FeatureEnabled("deals")) return false;
         if (!float.IsFinite(nation.Stability) || nation.Stability < defines.CivilWarStabilityThreshold) return false;
 
+        // Whether a client is failing is a fact about the client, and almost no country is.
+        // It is asked first, and of a table of who is in a civil war: the pass used to look
+        // every country in the world up among sixty-four thousand relations before asking it,
+        // and then walk every live war for each - 0.12 ms a call, 62 ms over fourteen late
+        // days, for a grant that is offered a few times a year. Both questions only read, so
+        // their order is not part of the answer.
+        var civilWars = _civilWarScratch ??= new List<StrategicWar>();
+        civilWars.Clear();
+        var nationCount = campaign.Nations.Count;
+        if (_civilWarPartyScratch is null || _civilWarPartyScratch.Length < nationCount)
+            _civilWarPartyScratch = new bool[nationCount + 64];
+        var inCivilWar = _civilWarPartyScratch;
+        Array.Clear(inCivilWar, 0, inCivilWar.Length);
+        var liveWars = Warfare.LiveWars(campaign);
+        for (var index = 0; index < liveWars.Count; index++)
+        {
+            var war = liveWars[index];
+            if (war.Ended || !war.CivilConflict) continue;
+            civilWars.Add(war);
+            // Everybody StrategicWar.Involves answers yes for, marked once, so the walk below
+            // asks an array instead of every civil war for every country.
+            MarkCivilWarParty(inCivilWar, war.AttackerId);
+            MarkCivilWarParty(inCivilWar, war.DefenderId);
+            foreach (var ally in war.AttackerAllies) MarkCivilWarParty(inCivilWar, ally);
+            foreach (var ally in war.DefenderAllies) MarkCivilWarParty(inCivilWar, ally);
+        }
+
         Nation client = null;
         var worst = float.MaxValue;
         foreach (var other in campaign.Nations)
         {
             if (other.Id == nation.Id || other.Movement is not null || other.Population <= 0 || other.IsSubject) continue;
-            if (!StandsBehind(campaign, nation, other) || !InstitutionsFailing(campaign, other)) continue;
+            if (!InstitutionsFailing(campaign, other, civilWars, inCivilWar) || !StandsBehind(campaign, nation, other)) continue;
             if (CampaignDiplomacy.AtWar(campaign, nation.Id, other.Id)) continue;
             if (nation.DecisionAvailableDay.GetValueOrDefault("crisis_grant/" + other.Id) > campaign.ElapsedDays) continue;
             if (other.Stability < worst || (other.Stability == worst && client is not null && other.Id < client.Id))
@@ -790,6 +817,17 @@ public static partial class AiStatecraft
         return true;
     }
 
+    /// <summary>The live civil wars, gathered once for a pass that asks every country about them.</summary>
+    [ThreadStatic] private static List<StrategicWar> _civilWarScratch;
+
+    /// <summary>The same wars as a yes or no for each country id, for the same pass.</summary>
+    [ThreadStatic] private static bool[] _civilWarPartyScratch;
+
+    private static void MarkCivilWarParty(bool[] parties, int nationId)
+    {
+        if ((uint)nationId < (uint)parties.Length) parties[nationId] = true;
+    }
+
     private static bool StandsBehind(Campaign campaign, Nation patron, Nation client)
     {
         var relation = CampaignDiplomacy.Peek(campaign, patron.Id, client.Id);
@@ -801,14 +839,19 @@ public static partial class AiStatecraft
     /// The same strain a civil war reads, including in a player's country when random
     /// outbreaks are switched off. A subject is somebody else's crisis.
     /// </summary>
-    private static bool InstitutionsFailing(Campaign campaign, Nation client)
+    private static bool InstitutionsFailing(Campaign campaign, Nation client, List<StrategicWar> civilWars,
+        bool[] inCivilWar)
     {
         if (client.IsSubject || campaign.Fallen.Contains(client.Id) || client.Population <= 0) return false;
-        var civil = Warfare.LiveWars(campaign);
-        for (var index = 0; index < civil.Count; index++)
+        if ((uint)client.Id < (uint)inCivilWar.Length)
         {
-            var war = civil[index];
-            if (!war.Ended && war.CivilConflict && war.Involves(client.Id)) return true;
+            if (inCivilWar[client.Id]) return true;
+        }
+        else
+        {
+            // An id the array has no place for is asked the long way.
+            for (var index = 0; index < civilWars.Count; index++)
+                if (civilWars[index].Involves(client.Id)) return true;
         }
         var defines = campaign.Defines;
         if (!float.IsFinite(client.Stability) || client.Stability >= defines.CivilWarStabilityThreshold) return false;
