@@ -483,17 +483,31 @@ hot reload does not change these simulation settings.
 
 Copyable, inactive example: `mods/_templates/production-programme/`.
 
-### Gold PNG reference colours
+### Icon ink and reference colours
 
-The latest minimal commodity and army-command PNGs are authored in gold
-`#e7bd69`, not white. `gfx/interface/icons/minimal_palette.json` declares
-`source_colour` for these sprites. Their UI tint compensates for the reference
-before applying theme colours, preserving flat facet shading without double tint.
-PNG filename overrides and explicit replacement textures clear this reference,
-so old white-mask mods remain compatible. To theme-tint a gold replacement,
-declare e.g. `{"icon_good_steel":{"source_colour":"#e7bd69"}}` in the mod's
-`gfx/` JSON. Empty means white; explicit `#RRGGBB` references require nonzero
-channels. A metadata-only overlay inherits the texture and other sprite fields.
+The interface icons are painted in one near-white ink, `#f2eee4`, with the
+alpha channel and the picture's own light and dark kept. A near-white picture
+takes whatever tint the interface gives it, so the palette in
+`interface/` decides what colour an icon is - a reskin no longer has to repaint
+two hundred files to stop them being gold. (They were gold, in several shades,
+until 14 November 2026.)
+
+`Tools/reink-icons.py` is the tool that did it and it works on a mod's folder
+too: `python Tools/reink-icons.py --root <mod>/gfx/interface/icons --ink
+"#f2eee4" --apply`. It rewrites only pictures that are mostly gold, leaves
+flags and multi-colour art alone, and changes nothing on a second run. Any ink
+may be given; a mod that wants its icons gold again runs it with `--ink
+"#e7bd69"`.
+
+`gfx/interface/icons/minimal_palette.json` and
+`gfx/interface/56_governance_palette.json` declare `source_colour` for the
+sprites whose tint is compensated for the ink they were painted in, so the
+theme colour arrives exact. PNG filename overrides and explicit replacement
+textures clear this reference, so white-mask mods remain compatible. To
+theme-tint a replacement painted in another colour, declare e.g.
+`{"icon_good_steel":{"source_colour":"#e7bd69"}}` in the mod's `gfx/` JSON.
+Empty means white; explicit `#RRGGBB` references require nonzero channels. A
+metadata-only overlay inherits the texture and other sprite fields.
 
 ## Buildings
 

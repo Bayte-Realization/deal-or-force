@@ -31,6 +31,22 @@ right instead of the left.
 
 `skin hud.` in the console lists every panel with its current rectangle.
 
+## Pictures a reskin usually wants
+
+- **Icons** are one near-white ink and take the skin's tint, so most reskins need no new
+  icon files. To repaint a set of your own in one ink:
+  `python Tools/reink-icons.py --root <your mod>/gfx/interface/icons --ink "#f2eee4" --apply`.
+- **The world behind the main menu and the loading screen** is the sprite `menu_world`
+  (`gfx/interface/brand/menu_world.png`, 16:9). Put a file of that name anywhere in your
+  mod's `gfx/` tree.
+- **The light edge of unit counters, fleet chips and building badges on the map** is the
+  token `map.counter_rim`.
+- **Map lines** - country border, region shade, province hairline - are tokens and metrics
+  in `gui/77_map_borders.json` and `gui/24_workshop.json` (`map.border_country`,
+  `map.country_border_width`, `map.province_border_opacity` and the rest).
+- **A map switch whose word is too long in your language** takes a caption of its own:
+  `map.toggle.TRADE`, `map.toggle.NAMES` and so on in a localisation file.
+
 ## What is still not moddable
 
 What goes *inside* a panel. A layout file can move, resize or hide the screens the base
