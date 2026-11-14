@@ -75,7 +75,10 @@ public partial class DealOrForceGame
         var column = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };
         column.AddThemeConstantOverride("separation", 2); column.AddChild(flag);
         var badge = ActionButton("", () => OpenCountryRankings(nation()?.Id ?? -1), 48, 24);
-        badge.Name = name; badge.ClipText = true;
+        // Never clipped: a 48-pixel badge cut "#156" to "#1", and a player of Albania read that
+        // his country led the world. It grows with the number instead; three digits get a
+        // slightly smaller face so the badge stays under the flag.
+        badge.Name = name; badge.ClipText = false;
         badge.AddThemeFontSizeOverride("font_size", 16);
         column.AddChild(badge); _countryRankBadges.Add((badge, nation));
         return column;
@@ -89,6 +92,7 @@ public partial class DealOrForceGame
             var n = nation();
             var row = n is null ? null : _countryRankingSnapshot.FirstOrDefault(r => r.NationId == n.Id);
             button.Text = row is null ? "—" : "#" + row.OverallRank;
+            button.AddThemeFontSizeOverride("font_size", row is { OverallRank: >= 100 } ? 13 : 16);
             button.TooltipText = row is null ? Tr("Country rankings · no visible territorial statistics")
                 : n.DisplayName + "\n" + Loc.Format("Overall rank #{0} · index {1}/100", row.OverallRank, row.Overall.ToString("0.0")) +
                     "\n" + Tr("Open the full country rankings");
