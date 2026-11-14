@@ -172,14 +172,41 @@ async function decide({ question, options, criteria, files, model }) {
 // The answer is read strictly: a refusal, a missing key or an answer of another type is
 // "not answered", and the caller is told so instead of being handed a default. A gate that
 // quietly passes when the judge said nothing is worse than no gate.
-async function judge({ state, files, questions, model }) {
+// Pictures for the judge to look at: a screenshot, an icon sheet, a generated asset beside its
+// reference. Project files only, like text attachments, and small enough to be worth sending -
+// a judge asked about a 40 MB texture is being asked the wrong way.
+const IMAGE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
+const MAX_IMAGE_BYTES = 6_000_000;
+
+function pictures(images) {
+  const parts = [];
+  const notes = [];
+  for (const asked of images ?? []) {
+    const full = resolve(project, asked);
+    if (!(full === project || full.startsWith(project + sep))) { notes.push(`refused (outside the project): ${asked}`); continue; }
+    const type = IMAGE_TYPES[full.slice(full.lastIndexOf('.')).toLowerCase()];
+    if (!type) { notes.push(`not a png, jpg or webp: ${asked}`); continue; }
+    if (!existsSync(full) || !statSync(full).isFile()) { notes.push(`not a file: ${asked}`); continue; }
+    if (statSync(full).size > MAX_IMAGE_BYTES) { notes.push(`left out (over ${MAX_IMAGE_BYTES / 1_000_000} MB): ${asked}`); continue; }
+    const name = relative(project, full).split(sep).join('/');
+    parts.push(`Image: ${name}`);
+    parts.push({ type: 'image_url', image_url: { url: `data:${type};base64,${readFileSync(full).toString('base64')}` } });
+  }
+  return { parts, notes, count: parts.length / 2 };
+}
+
+async function judge({ state, files, images, questions, model }) {
   if (!questions || typeof questions !== 'object' || !Object.keys(questions).length) {
     throw new Error('questions is required: { key: { type, instructions, criteria? } }');
   }
   const attached = attach(files);
+  const shown = pictures(images);
+  attached.notes.push(...shown.notes);
   const text = [String(state ?? '').trim(), attached.text].filter(Boolean).join('\n\n');
-  if (!text) throw new Error('state or files is required: the material the questions are about');
-  const json = await request('/decisions', { model: model ?? MODEL_DECISION, state: text, questions }, 180_000, DECISIONS_API);
+  if (!text && !shown.count) throw new Error('state, files or images is required: the material the questions are about');
+  // With pictures the state is a list of parts, text first; without, the plain string it always was.
+  const material = shown.count ? [...(text ? [text] : []), ...shown.parts] : text;
+  const json = await request('/decisions', { model: model ?? MODEL_DECISION, state: material, questions }, 180_000, DECISIONS_API);
   const percent = (value) => (value === undefined || value === null ? '?' : `${Math.round(Number(value) * 100)}%`);
   const lines = [];
   for (const [key, spec] of Object.entries(questions)) {
@@ -206,6 +233,7 @@ async function judge({ state, files, questions, model }) {
   const footer = [
     `model ${json?.model ?? model ?? MODEL_DECISION}`,
     `files ${attached.count}`,
+    shown.count ? `images ${shown.count}` : null,
     `tokens in ${usage.input_tokens ?? '?'}`,
     usage.cost !== undefined ? `cost $${Number(usage.cost).toFixed(5)}` : null
   ].filter(Boolean).join(' | ');
@@ -294,6 +322,7 @@ const tools = [
       properties: {
         state: { type: 'string', description: 'The material the questions are about: a finding, a diff, a log, a description of an action.' },
         files: fileList,
+        images: { type: 'array', items: { type: 'string' }, description: 'Project-relative png, jpg or webp files for the judge to look at (a screenshot, an asset, an asset beside its reference), up to 6 MB each.' },
         questions: {
           type: 'object',
           description: 'Map of question key to { type: "noul" | "choice" | "score", instructions: "<the question>", criteria?: for noul {true, false}; for choice {option: meaning}; for score [lowest ... highest] }.',
@@ -337,7 +366,7 @@ if (argv.length) {
     const stateFile = value('--state-file');
     job = judge({
       state: stateFile ? readFileSync(resolve(stateFile), 'utf8') : value('--state'),
-      files: all('--file'), model: value('--model'),
+      files: all('--file'), images: all('--image'), model: value('--model'),
       questions: JSON.parse(readFileSync(resolve(value('--judge')), 'utf8'))
     });
   } else if (argv.includes('--ask')) {
@@ -349,7 +378,7 @@ if (argv.length) {
       bulk: argv.includes('--bulk'), reasoning: value('--reasoning'),
       max_tokens: value('--max-tokens') ? Number(value('--max-tokens')) : undefined
     });
-  } else job = Promise.reject(new Error('usage: --status | --models [filter] | --judge <questions.json> [--state "<text>" | --state-file f] [--file path]... | --ask "<prompt>" [--prompt-file f] [--file path]... [--stance review|decide|critique|read|none] [--bulk] [--model id] [--reasoning low|medium|high]'));
+  } else job = Promise.reject(new Error('usage: --status | --models [filter] | --judge <questions.json> [--state "<text>" | --state-file f] [--file path]... [--image path]... | --ask "<prompt>" [--prompt-file f] [--file path]... [--stance review|decide|critique|read|none] [--bulk] [--model id] [--reasoning low|medium|high]'));
   job.then((text) => { process.stdout.write(text + '\n'); process.exit(0); }, (error) => { process.stderr.write(String(error?.message ?? error) + '\n'); process.exit(1); });
 } else {
   // -------------------------------------------------------------- MCP stdio transport
