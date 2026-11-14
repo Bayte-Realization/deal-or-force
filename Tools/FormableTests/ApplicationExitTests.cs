@@ -34,13 +34,19 @@ static class ApplicationExitTests
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Scripts/MainMenuScene.cs")))
             directory = directory.Parent;
         var root = directory?.FullName ?? throw new Exception("Game sources not found above test output");
+        // The menus' "Quit to desktop" asks first (LeaveConfirmation), and the dialog then quits
+        // through the same production cleanup; the loading screen and the console quit directly.
         foreach (var file in new[] { "Scripts/MainMenuScene.cs", "Scripts/ui/MainMenuUI.cs", "Scripts/ui/PauseMenuUI.cs",
             "Scripts/ui/LoadingScreenUI.cs", "Scripts/ui/DeveloperConsoleExtras.cs" })
         {
             var text = File.ReadAllText(Path.Combine(root, file));
-            Check(text.Contains("ApplicationExit.Request(this)") && !text.Contains("GetTree().Quit("),
+            Check((text.Contains("ApplicationExit.Request(this)") || text.Contains("LeaveConfirmation.QuitToDesktop(this")) &&
+                  !text.Contains("GetTree().Quit("),
                 "player-facing quit route uses production cleanup: " + file);
         }
+        var confirmation = File.ReadAllText(Path.Combine(root, "Scripts/ui/LeaveConfirmation.cs"));
+        Check(confirmation.Contains("ApplicationExit.Request(host)") && !confirmation.Contains("GetTree().Quit("),
+            "the leave confirmation quits through production cleanup");
         foreach (var file in new[] { "Scripts/MainMenuScene.cs", "Scripts/DealOrForceGame.cs" })
             Check(File.ReadAllText(Path.Combine(root, file)).Contains("ApplicationExit.Ensure(this)"),
                 "window close is wired in either entry scene: " + file);
