@@ -166,6 +166,12 @@ public partial class DealOrForceGame
     // authored ledger rectangle follows the stretched canvas. Reserve its actual
     // footprint, not the reference-resolution width. Reapply the mod's rectangle
     // before clamping so repeated opening/resizing never accumulates an inset.
+    //
+    // Every workspace, not three of them. The rail is as wide as its longest caption, and in
+    // Russian ("ГОСУДАРСТВЕННЫЕ ДЕЛА") that is sixty pixels wider than in English: the Production
+    // screen, placed for the English rail, slid its title and its left column under the rail -
+    // a Russian player saw "ИЗВОДСТВО" and asked how to drag the window out. A shade marked
+    // "rail_shade" starts where the rail ends, so the rail is never half dimmed either.
     private void FitWorkspaceNavigationInset(Control layer)
     {
         if (layer is not { Visible: true } || _hudNavigationPanel is null) return;
@@ -173,9 +179,14 @@ public partial class DealOrForceGame
         var railEnd = local * (_hudNavigationPanel.GetGlobalTransformWithCanvas() * _hudNavigationPanel.Size);
         foreach (var child in layer.GetChildren())
         {
+            if (child is Control shade && shade.HasMeta("rail_shade"))
+            {
+                shade.OffsetLeft = MathF.Max(0, railEnd.X);
+                continue;
+            }
             if (child is not PanelContainer panel || !panel.HasMeta("skin_layout")) continue;
             var key = panel.GetMeta("skin_layout").AsString();
-            if (key is not ("modal.ledger" or "modal.diplomacy" or "hud.support_panel")) continue;
+            if (!key.StartsWith("modal.", StringComparison.Ordinal) && key != "hud.support_panel") continue;
             Ui.Place(panel, key);
             var gutter = 12f;
             if (key == "modal.diplomacy")

@@ -51,6 +51,9 @@ public partial class DealOrForceGame
         var shade = new ColorRect { Color = Ui.Colour("surface.overlay"), MouseFilter = MouseFilterEnum.Stop };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         shade.OffsetLeft = InterfaceSkin.Metric("shell.navigation_size", 82);
+        // Moved to where the rail really ends when the screen opens (FitWorkspaceNavigationInset):
+        // the rail is wider in Russian than this metric, and was left half under the shade.
+        shade.SetMeta("rail_shade", true);
         _doctrineLayer.AddChild(shade);
         var panel = TexturedPanel(_doctrineLayer);
         _doctrineScreenPanel = panel; panel.Name = "DoctrineWorkbench";
