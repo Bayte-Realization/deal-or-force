@@ -400,9 +400,15 @@ public static class NavalOperations
         for (var anySea = 0; anySea < 2 && best <= 0; anySea++)
         foreach (var province in SeaLanes.CoastalProvinces(map))
         {
-            if (anySea == 0 && basin >= 0 && SeaLanes.HarbourBasin(map, province) != basin) continue;
+            // Whose the port is, before which sea it is on. Both are plain questions and a
+            // port must pass both, so the order changes nothing but the price: the holder
+            // is one array read, the basin a lookup under the sea table's lock. A fleet of
+            // a country that has lost its coast asks this every morning about every harbour
+            // in the world, twice - 0.39 ms a fleet a day on a save from 2050, a third of
+            // the whole naval pass - and nearly every harbour fails on the holder.
             var holder = HolderOf(campaign, province);
             if (holder is null || holder.Id != nation.Id) continue;
+            if (anySea == 0 && basin >= 0 && SeaLanes.HarbourBasin(map, province) != basin) continue;
             if (!SeaLanes.TryHarbourPoint(map, province, out var latitude, out var longitude)) continue;
             var distance = Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
             if (distance >= bestDistance) continue;
@@ -768,6 +774,42 @@ public static class NavalOperations
         if (Reaches.Count > 4096) Reaches.Clear();
         Reaches[key] = (fleet.Latitude, fleet.Longitude, week, reach);
         return reach;
+    }
+
+    /// <summary>
+    /// The fleets that could be blockading this country anywhere: on that mission, afloat,
+    /// somebody else's and at war with it - in the order of the campaign's fleet list. The
+    /// half of <see cref="BlockadePressure(Campaign,Nation,float,float)"/> that does not
+    /// depend on where the coast is, for a caller that asks about many places of one
+    /// country in one go (the supply trace asks once per formation).
+    /// </summary>
+    internal static void Blockaders(Campaign campaign, Nation owner, List<Fleet> into)
+    {
+        into.Clear();
+        if (!campaign.FeatureEnabled("navy")) return;
+        foreach (var fleet in campaign.Fleets)
+        {
+            if (fleet.Hulls <= 0 || fleet.Mission != FleetMission.Blockade) continue;
+            if (fleet.NationId == owner.Id || !AtWar(campaign, owner.Id, fleet.NationId)) continue;
+            into.Add(fleet);
+        }
+    }
+
+    /// <summary>
+    /// The other half: the pressure those fleets put on one point of the coast. The same
+    /// fleets in the same order as the whole question, so the same sum to the bit.
+    /// </summary>
+    internal static float BlockadePressure(Campaign campaign, List<Fleet> blockaders, float latitude, float longitude)
+    {
+        var defines = campaign.Defines;
+        var pressure = 0f;
+        foreach (var fleet in blockaders)
+        {
+            if (Distance(fleet.Latitude, fleet.Longitude, latitude, longitude) > defines.FleetBlockadeRangeDegrees)
+                continue;
+            pressure += fleet.Presence * defines.FleetBlockadeValue;
+        }
+        return M.Clamp01(pressure);
     }
 
     /// <summary>Whether a province's coast is being sat on, for the supply that reaches it.</summary>

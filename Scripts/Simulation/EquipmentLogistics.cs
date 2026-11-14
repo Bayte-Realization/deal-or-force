@@ -80,6 +80,10 @@ public static class EquipmentLogistics
         var byNation = new Dictionary<int, List<Request>>();
         var blocked = 0;
         var blockedReason = "";
+        // The trace switch is the process's environment, read once for the pass: asked per
+        // formation it was a system call for every division that needed nothing that day,
+        // which is nearly all two thousand of them, every day.
+        var trace = Environment.GetEnvironmentVariable("DOF_TRACE_EQUIP") == "1";
         foreach (var army in c.Armies)
         {
             var limit = DailyLimit(c, army);
@@ -87,7 +91,7 @@ public static class EquipmentLogistics
             {
                 // One line a day, per nation, on demand: why a funded army at 0.2 equipment
                 // with full depots is not being refilled. The first blocker names the class.
-                if (Environment.GetEnvironmentVariable("DOF_TRACE_EQUIP") == "1" &&
+                if (trace &&
                     army.Equipment < 0.95f && blockedReason.Length == 0)
                 {
                     blocked++;
@@ -136,7 +140,7 @@ public static class EquipmentLogistics
                 for (var g = 0; g < Goods.Length; g++) stock[g] = Math.Max(0, stock[g] - spent[g]);
                 if (progress <= 1e-10) break;
             }
-            if (Environment.GetEnvironmentVariable("DOF_TRACE_EQUIP") == "1" && requests.Count > 0)
+            if (trace && requests.Count > 0)
             {
                 var delivered = 0d; foreach (var r in requests) delivered += r.Given;
                 Console.WriteLine($"EQUIPMENT_REFILL_RESULT nation={n.Tag} requests={requests.Count} delivered={delivered:0.0000} firstArmy={requests[0].Army.Id} firstEq={requests[0].Army.Equipment:0.00}");

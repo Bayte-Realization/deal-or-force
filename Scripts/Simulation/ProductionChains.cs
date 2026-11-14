@@ -485,7 +485,79 @@ public static class ProductionChains
     /// products over that table, which is the same arithmetic the compiled version did in
     /// the same order, through one level of indirection.
     /// </summary>
-    public static void RunRegion(Nation nation, ScenarioState state, float outputFactor, ProductionAllocation allocation = null)
+    public static void RunRegion(Nation nation, ScenarioState state, float outputFactor, ProductionAllocation allocation = null) =>
+        RunRegion(nation, state, outputFactor, allocation, null);
+
+    /// <summary>
+    /// What every region of one country multiplies its recipes by, worked out once for the
+    /// country instead of once for each of its regions: which quote a recipe's good has, how
+    /// well each need turned up, what the price says about making more, and each shortfall.
+    ///
+    /// None of it is the region's. It is read from the country's quotes - last week's price
+    /// and satisfaction, which the balance pass does not write (it writes production and
+    /// demand) - and yet every recipe looked it all up again for every region: a quote by
+    /// good, one more quote per need, a base price and a power for the supply response. Ten
+    /// microseconds a region, 1,937 regions, and 90 ms of a market fortnight's 130 on a save
+    /// from 2050. The factors are kept in the order OutputOf multiplies them in, so a region's
+    /// output is the same product of the same numbers.
+    ///
+    /// Good for one country, between one <see cref="PrepareRegions"/> and the next, while
+    /// nobody writes that country's prices or satisfaction. Scratch of the thread.
+    /// </summary>
+    internal sealed class RegionFactors
+    {
+        internal Nation Nation;
+        internal int Recipes;
+        internal MarketQuote[] Quote = Array.Empty<MarketQuote>();
+        /// <summary>Recipe i multiplies its output by Factor[First[i]] .. Factor[First[i + 1] - 1], in that order.</summary>
+        internal int[] First = Array.Empty<int>();
+        internal float[] Factor = Array.Empty<float>();
+    }
+
+    [ThreadStatic] private static RegionFactors _regionFactors;
+
+    /// <summary>The country's factors for every regional recipe, as this week's quotes stand.</summary>
+    internal static RegionFactors PrepareRegions(Nation nation)
+    {
+        var prepared = _regionFactors ??= new RegionFactors();
+        prepared.Nation = null;
+        if (nation is null) return prepared;
+        var count = Regional.Count;
+        // Each table by its own length. First has one place more than there are recipes, for
+        // the end of the last one, and it is written even when there are none: a catalogue a
+        // mod has moved wholly to the country's scope has no regional recipe, and sized
+        // together with Quote the two would both stay empty and the write below would fall
+        // off the end - where RunRegion has always just returned.
+        if (prepared.Quote.Length < count) prepared.Quote = new MarketQuote[count];
+        if (prepared.First.Length < count + 1) prepared.First = new int[count + 1];
+        var used = 0;
+        for (var index = 0; index < count; index++)
+        {
+            var recipe = Regional[index];
+            prepared.First[index] = used;
+            if (!nation.Market.TryGetValue(recipe.Good, out var quote)) { prepared.Quote[index] = null; continue; }
+            prepared.Quote[index] = quote;
+            if (recipe.Output.Length == 0) continue;
+            var room = used + recipe.Needs.Length + recipe.Shortfall.Length + 1;
+            if (prepared.Factor.Length < room) Array.Resize(ref prepared.Factor, Math.Max(room + 64, prepared.Factor.Length * 2));
+            // The order of OutputOf: needs, then the supply response, then shortfalls.
+            foreach (var need in recipe.Needs) prepared.Factor[used++] = Supplied(nation, need.Good, need.Floor);
+            if (recipe.Shortfall.Length == 0) prepared.Factor[used++] = SupplyResponse(nation, quote);
+            foreach (var lack in recipe.Shortfall) prepared.Factor[used++] = Supplied(nation, lack.Good, lack.Floor) - 1f;
+        }
+        prepared.First[count] = used;
+        prepared.Recipes = count;
+        prepared.Nation = nation;
+        return prepared;
+    }
+
+    /// <summary>
+    /// The same pass for a caller that runs every region of one country in a row and has asked
+    /// <see cref="PrepareRegions"/> for that country first. A row prepared for somebody else,
+    /// or for another catalogue, is not used.
+    /// </summary>
+    internal static void RunRegion(Nation nation, ScenarioState state, float outputFactor, ProductionAllocation allocation,
+        RegionFactors prepared)
     {
         if (Regional.Count == 0) return;
         var slots = Slots;
@@ -511,7 +583,9 @@ public static class ProductionChains
                 civilian * (allocation.ConvertedMilitary / (float)allocation.RawCivilian);
         }
 
-        state.RegionalOutputValue = Run(Regional, nation, slots, allocation);
+        if (prepared is not null && (!ReferenceEquals(prepared.Nation, nation) || prepared.Recipes != Regional.Count))
+            prepared = null;
+        state.RegionalOutputValue = Run(Regional, nation, slots, allocation, prepared);
     }
 
     /// <summary>
@@ -637,7 +711,8 @@ public static class ProductionChains
         Run(National, nation, slots);
     }
 
-    private static float Run(List<Recipe> recipes, Nation nation, float[] slots, ProductionAllocation allocation = null)
+    private static float Run(List<Recipe> recipes, Nation nation, float[] slots, ProductionAllocation allocation = null,
+        RegionFactors prepared = null)
     {
         // Production lines, worked out here because this is the one place every recipe of a
         // pass goes through. A line scales its pool's factory term of its own good's
@@ -652,9 +727,16 @@ public static class ProductionChains
         var militaryBase = applyLines ? slots[militarySlot] : 0f;
         var grossValue = 0f;
 
-        foreach (var recipe in recipes)
+        for (var index = 0; index < recipes.Count; index++)
         {
-            if (!nation.Market.TryGetValue(recipe.Good, out var quote)) continue;
+            var recipe = recipes[index];
+            MarketQuote quote;
+            if (prepared is not null)
+            {
+                quote = prepared.Quote[index];
+                if (quote is null) continue;
+            }
+            else if (!nation.Market.TryGetValue(recipe.Good, out quote)) continue;
 
             if (applyLines)
             {
@@ -664,7 +746,16 @@ public static class ProductionChains
 
             if (recipe.Output.Length > 0)
             {
-                var output = OutputOf(recipe, nation, quote, slots);
+                float output;
+                if (prepared is not null)
+                {
+                    // OutputOf, with its factors read from the country's row instead of looked up.
+                    output = recipe.Sum(recipe.Output, slots);
+                    for (var factor = prepared.First[index]; factor < prepared.First[index + 1]; factor++)
+                        output *= prepared.Factor[factor];
+                    if (recipe.Shortfall.Length == 0) output = MathF.Max(0f, output);
+                }
+                else output = OutputOf(recipe, nation, quote, slots);
                 quote.Production += output;
                 grossValue += output * MathF.Max(0f, quote.Price);
             }

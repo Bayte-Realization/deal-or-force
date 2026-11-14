@@ -226,9 +226,17 @@ public static class StrategicStockpiles
         return MathF.Max(0f, nation.Stockpiles.GetValueOrDefault(goodId));
     }
 
-    public static float Capacity(Campaign campaign, Nation nation, string goodId)
+    public static float Capacity(Campaign campaign, Nation nation, string goodId) =>
+        nation is null ? 10f : Capacity(BaseCapacity(campaign, nation), goodId);
+
+    /// <summary>
+    /// What the country's depots hold before the good is named: its barracks, arms plants,
+    /// ports and roads and the size of its economy. The same number for every good, so the
+    /// daily pass asks for it once per country - it used to walk every region of the country
+    /// again for each of the twelve goods, most of the pass's 6 ms a day on a save from 2050.
+    /// </summary>
+    private static float BaseCapacity(Campaign campaign, Nation nation)
     {
-        if (nation is null) return 10f;
         var barracks = 0;
         var ports = 0;
         var infra = 0;
@@ -241,7 +249,11 @@ public static class StrategicStockpiles
                 infra += st.Buildings.GetValueOrDefault(BuildingKind.Infrastructure);
                 armsPlants += st.Buildings.GetValueOrDefault(BuildingKind.ArmsIndustry);
             }
-        var baseCap = 12f + barracks * 6f + armsPlants * 10f + ports * 4f + infra * 2.5f + MathF.Sqrt(MathF.Max(1f, nation.Gdp)) * 3.5f;
+        return 12f + barracks * 6f + armsPlants * 10f + ports * 4f + infra * 2.5f + MathF.Sqrt(MathF.Max(1f, nation.Gdp)) * 3.5f;
+    }
+
+    private static float Capacity(float baseCap, string goodId)
+    {
         return goodId switch
         {
             "Ammunition" or "Food" => baseCap * 1.35f,
@@ -438,10 +450,12 @@ public static class StrategicStockpiles
 
             // 1. Refill from national production and imports (1/7th of weekly output + war industry bonus)
             var plants = PlantsOf(campaign, nation);
+            // Nothing in the loop below builds or grows anything: one base for all the goods.
+            var baseCap = BaseCapacity(campaign, nation);
 
             foreach (var goodId in TrackedGoods)
             {
-                var cap = Capacity(campaign, nation, goodId);
+                var cap = Capacity(baseCap, goodId);
                 var current = Get(campaign, nation, goodId);
                 var gain = Intake(campaign, nation, goodId, plants);
 

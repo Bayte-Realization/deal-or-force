@@ -70,6 +70,8 @@ public static class LogisticsSystem
         public readonly HashSet<ushort> Patrons = new();
         public readonly List<int> Ports = new();
         public readonly HashSet<int> OpenBasins = new();
+        // The fleets blockading the country being traced, found once for all its formations.
+        public readonly List<Fleet> Blockaders = new();
     }
 
     private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
@@ -329,6 +331,13 @@ public static class LogisticsSystem
                 UnitTypeCatalog.Get(army.TemplateId).SupplyUse;
         }
 
+        // Who is blockading this country is the same answer for every formation of it, and
+        // finding it out is a walk of the fleets with a walk of the war record for each one
+        // on that mission. Asked per formation it was 2.3 microseconds each - 115 ms of the
+        // trace's 580 over seventy-seven days of a save from 2050, more than the network
+        // walk itself. Asked once, on the first formation that needs it; the loop below
+        // writes formations and nothing a blockade is made of.
+        var blockadersKnown = false;
         foreach (var army in armies)
         {
             if (ProvisionVisitor(campaign, nation, army)) continue;
@@ -372,7 +381,12 @@ public static class LogisticsSystem
             // A fleet sitting off the coast takes what arrives by sea. This is the one
             // thing a navy does that a land player feels immediately: an army on a
             // blockaded shore stops being supplied, and stops being able to attack.
-            var blockade = NavalOperations.BlockadePressure(campaign, nation, centre.Latitude, centre.Longitude);
+            if (!blockadersKnown)
+            {
+                NavalOperations.Blockaders(campaign, nation, board.Blockaders);
+                blockadersKnown = true;
+            }
+            var blockade = NavalOperations.BlockadePressure(campaign, board.Blockaders, centre.Latitude, centre.Longitude);
             var blockadeFactor = 1f - blockade * campaign.Defines.FleetBlockadeSupplyPenalty;
             var target = M.Clamp01(congestion * distanceFactor * lakeMultiplier * blockadeFactor *
                                    topology.TerrainAt(province).Supply * NationalModifiers.Factor(nation, "supply"));

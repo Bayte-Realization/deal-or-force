@@ -118,7 +118,14 @@ public static class TradeNetwork
         internal float[] BuyerKeys = Array.Empty<float>();
         internal readonly List<TradeDelta> Deltas = new();
         internal readonly List<TradeRoute> Pool = new();
-        internal readonly Dictionary<long, float> Affinity = new();
+        // Keyed by (buyer << 32) | seller, and a long's own hash is the XOR of its halves:
+        // five hundred countries are a quarter of a million pairs under 511 codes. Every
+        // lookup walked a chain of other pairs, and folding a good's scores into the week's
+        // table (MergeCommodity) walked a longer one - 80 ms of the trade week's 190 over
+        // fourteen days of a save from 2050. PairKeyComparer spreads the two ids over the
+        // whole code; a dictionary lists its entries in the order they were added whatever
+        // the hash, so the fold below is in the order it always was.
+        internal readonly Dictionary<long, float> Affinity = new(PairKeyComparer.Instance);
         internal int Used;
     }
 
@@ -127,7 +134,7 @@ public static class TradeNetwork
     private sealed class TradeWorkspace
     {
         internal readonly Dictionary<int, float> TransportReach = new();
-        internal readonly Dictionary<long, float> PartnerAffinityScores = new();
+        internal readonly Dictionary<long, float> PartnerAffinityScores = new(PairKeyComparer.Instance);
         internal readonly List<TradeRoute> RouteRecords = new();
         internal int UsedRouteRecords;
         internal float[] DistanceTable;

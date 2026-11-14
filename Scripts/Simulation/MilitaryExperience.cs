@@ -138,13 +138,16 @@ public static class MilitaryExperience
             // The grand strategy's hand on learning: a cadre drills its experience up in peace, a
             // war of attrition learns it in the line, and a country that has chosen no course
             // learns exactly as it always did.
+            // One look at the strategy for its four multipliers: each of the four accessors
+            // looked the same strategy up again by name, every hour, for every country.
+            var strategy = StrategicDoctrines.Of(nation);
             nation.ArmyExperience += peacetime + funding +
-                battle * defines.ArmyExperiencePerDivisionDay * scale * StrategicDoctrines.BattleExperience(nation) +
-                drills * defines.TrainingExperiencePerDivisionDay * scale * StrategicDoctrines.DrillExperience(nation);
+                battle * defines.ArmyExperiencePerDivisionDay * scale * (strategy?.BattleExperience ?? 1f) +
+                drills * defines.TrainingExperiencePerDivisionDay * scale * (strategy?.DrillExperience ?? 1f);
             nation.AirExperience += peacetime +
-                missions * defines.AirExperiencePerMissionDay * scale * StrategicDoctrines.AirExperience(nation);
+                missions * defines.AirExperiencePerMissionDay * scale * (strategy?.AirExperience ?? 1f);
             nation.NavalExperience += peacetime +
-                hulls * defines.NavalExperiencePerHullDay * scale * StrategicDoctrines.NavalExperience(nation);
+                hulls * defines.NavalExperiencePerHullDay * scale * (strategy?.NavalExperience ?? 1f);
             nation.PoliticalPoints += political + perStability * M.Clamp01(nation.Stability);
             if (drills > 0)
                 nation.Treasury -= drills * defines.TrainingCostPerDivisionWeek / 7f * scale;
@@ -153,6 +156,65 @@ public static class MilitaryExperience
         // A week's cabinet business, not a daily one: which governments keep their army sharp.
         yield return 0;
         if (campaign.ElapsedDays % 7 == 0) AiTraining(campaign);
+    }
+
+    /// <summary>
+    /// The two questions the weekly cabinet asked of the whole world once per country, answered
+    /// for every country in one walk each: who is in a war that has not ended, and which
+    /// formations are whose (kept in the order of the campaign's list, so a country's own are
+    /// met in the order they always were).
+    ///
+    /// The cabinet's day is the seventh, and the pass runs on every hour of it. Each run asked
+    /// each of five hundred countries about each of three hundred wars - nine in ten of them
+    /// long ended - and then walked two thousand formations for every country that was at war
+    /// or had room to drill: 0.73 ms a run, 35 ms over fourteen days of a save from 2050.
+    /// Nothing the cabinet does here declares or ends a war or raises, disbands or hands over
+    /// a formation (it sets the drill flag, and its two commands spend experience on a course
+    /// or on one formation), so one walk stands for the whole run. Scratch of the thread.
+    /// </summary>
+    private sealed class TrainingScratch
+    {
+        public bool[] AtWar = Array.Empty<bool>();
+        public int[] Start = Array.Empty<int>();
+        public int[] Next = Array.Empty<int>();
+        public Army[] Formations = Array.Empty<Army>();
+    }
+
+    [ThreadStatic] private static TrainingScratch _training;
+
+    private static TrainingScratch IndexForTraining(Campaign campaign)
+    {
+        var scratch = _training ??= new TrainingScratch();
+        var nations = campaign.Nations.Count;
+        if (scratch.AtWar.Length < nations)
+        {
+            scratch.AtWar = new bool[nations];
+            scratch.Start = new int[nations + 1];
+            scratch.Next = new int[nations];
+        }
+        Array.Clear(scratch.AtWar, 0, nations);
+        Array.Clear(scratch.Start, 0, nations + 1);
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended) continue;
+            if ((uint)war.AttackerId < (uint)nations) scratch.AtWar[war.AttackerId] = true;
+            if ((uint)war.DefenderId < (uint)nations) scratch.AtWar[war.DefenderId] = true;
+            foreach (var ally in war.AttackerAllies) if ((uint)ally < (uint)nations) scratch.AtWar[ally] = true;
+            foreach (var ally in war.DefenderAllies) if ((uint)ally < (uint)nations) scratch.AtWar[ally] = true;
+        }
+
+        var armies = campaign.Armies;
+        if (scratch.Formations.Length < armies.Count) scratch.Formations = new Army[armies.Count + 64];
+        foreach (var army in armies)
+            if ((uint)army.NationId < (uint)nations) scratch.Start[army.NationId + 1]++;
+        for (var index = 0; index < nations; index++)
+        {
+            scratch.Start[index + 1] += scratch.Start[index];
+            scratch.Next[index] = scratch.Start[index];
+        }
+        foreach (var army in armies)
+            if ((uint)army.NationId < (uint)nations) scratch.Formations[scratch.Next[army.NationId]++] = army;
+        return scratch;
     }
 
     /// <summary>
@@ -171,18 +233,31 @@ public static class MilitaryExperience
             foreach (var army in campaign.Armies)
                 if (army.Training && !army.InBattle)
                     drilled[army.NationId] = drilled.GetValueOrDefault(army.NationId) + 1;
+        var world = IndexForTraining(campaign);
+        var indexedNations = campaign.Nations.Count;
         foreach (var nation in campaign.Nations)
         {
             if (!Delegation.RunByAi(nation)) continue;
             var limit = Math.Max(0, (int)MathF.Round(baseLimit * StrategicDoctrines.TrainingSlots(nation)));
+            // The two tables are kept by id, as the walks they stand for matched by id; a
+            // country whose id is outside them is asked the long way.
+            var indexed = (uint)nation.Id < (uint)indexedNations;
             var atWar = false;
-            foreach (var war in campaign.Wars)
-                if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
+            if (indexed) atWar = world.AtWar[nation.Id];
+            else
+                foreach (var war in campaign.Wars)
+                    if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
             if (atWar)
             {
-                for (var index = 0; index < campaign.Armies.Count; index++)
-                    if (campaign.Armies[index].NationId == nation.Id && campaign.Armies[index].Training)
-                        campaign.Armies[index].Training = false;
+                if (indexed)
+                {
+                    for (var at = world.Start[nation.Id]; at < world.Start[nation.Id + 1]; at++)
+                        if (world.Formations[at].Training) world.Formations[at].Training = false;
+                }
+                else
+                    for (var index = 0; index < campaign.Armies.Count; index++)
+                        if (campaign.Armies[index].NationId == nation.Id && campaign.Armies[index].Training)
+                            campaign.Armies[index].Training = false;
                 continue;
             }
             if (limit == 0 || drilled.GetValueOrDefault(nation.Id) >= limit) continue;
@@ -190,8 +265,17 @@ public static class MilitaryExperience
             var room = limit - drilled.GetValueOrDefault(nation.Id);
             // The least organised divisions first among the country's own formations.
             var own = new List<Army>();
-            foreach (var army in campaign.Armies)
-                if (army.NationId == nation.Id && !army.Training && !army.InBattle) own.Add(army);
+            if (indexed)
+            {
+                for (var at = world.Start[nation.Id]; at < world.Start[nation.Id + 1]; at++)
+                {
+                    var army = world.Formations[at];
+                    if (!army.Training && !army.InBattle) own.Add(army);
+                }
+            }
+            else
+                foreach (var army in campaign.Armies)
+                    if (army.NationId == nation.Id && !army.Training && !army.InBattle) own.Add(army);
             own.Sort((left, right) =>
             {
                 var cmp = left.Organisation.CompareTo(right.Organisation);

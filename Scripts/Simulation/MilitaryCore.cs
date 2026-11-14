@@ -646,6 +646,110 @@ public static class MilitaryOperations
     internal static Action<Campaign, Army, string> MarchProbe;
     internal static int MarchProbeArmyId = -1;
 
+    /// <summary>
+    /// What a country's formations all share in the march loop: its organisation recovery and
+    /// entrenchment modifiers, and its alert's readiness multiplier.
+    ///
+    /// The loop asked for these once per formation per hour. On a save from 2050 (2,062
+    /// formations, 336 steps in fourteen days) the readiness multiplier - a feature switch
+    /// read by name, the deterrent tier asked twice with the research bonus under it - was
+    /// about 210 ns a formation and the two modifier sums another 85: close to half of the
+    /// whole "military" pass, 438 ms over those fourteen days. They are properties of the
+    /// country, so each answer is kept per country, for exactly as long as it can be shown to
+    /// be the answer the question would give.
+    ///
+    /// The two modifiers are kept while the country's sums are the sums they were read from:
+    /// the same country object, the same table, the same build of it
+    /// (<see cref="Nation.ModifierTotalsVersion"/>), and not marked for rebuilding. Anything
+    /// else asks NationalModifiers again, which rebuilds exactly when it always did.
+    ///
+    /// The readiness multiplier has no such token - it reads a feature switch, the world's
+    /// alert, the country's posture, its tag and its technologies - so it is kept for one
+    /// batch only, and the switch, which is one answer for every country, is asked once in
+    /// it. An entry counts only if it carries the current stamp, and the stamp moves on every
+    /// time the loop comes back from a yield (a frame may have passed, and with it an order)
+    /// and after every formation that resumed a battle order or had its march halted: the two
+    /// places the loop issues a command, which is code that is not about the formation alone.
+    /// Between those the loop only reads the map, returns wounded, hands out replacements and
+    /// moves the formation along its route, none of which touches the alert, a posture, a
+    /// deterrent or a feature switch. Formations of one country are scattered through the
+    /// list, so a batch of sixty-four still asks for most of its countries; the modifiers,
+    /// which are not tied to the batch, are where most of the saving is.
+    ///
+    /// Per campaign, never saved.
+    /// </summary>
+    private sealed class NationFactors
+    {
+        private Nation[] _owner = Array.Empty<Nation>();
+        private Dictionary<string, float>[] _totals = Array.Empty<Dictionary<string, float>>();
+        private int[] _version = Array.Empty<int>();
+        public float[] Recovery = Array.Empty<float>();
+        public float[] Entrenchment = Array.Empty<float>();
+
+        private int _stamp = 1;
+        private int[] _stamps = Array.Empty<int>();
+        private float[] _readiness = Array.Empty<float>();
+        // Whether the alert ladder is switched on, asked once a batch: 0 not asked, 1 on, 2 off.
+        private int _ladder;
+
+        /// <summary>A new batch: the readiness answers of the last one are not trusted.</summary>
+        public void Close(int nations)
+        {
+            _ladder = 0;
+            if (_stamps.Length < nations)
+            {
+                _owner = new Nation[nations];
+                _totals = new Dictionary<string, float>[nations];
+                _version = new int[nations];
+                Recovery = new float[nations];
+                Entrenchment = new float[nations];
+                _stamps = new int[nations];
+                _readiness = new float[nations];
+                _stamp = 1;
+                return;
+            }
+            if (_stamp == int.MaxValue) { Array.Clear(_stamps); _stamp = 0; }
+            _stamp++;
+        }
+
+        /// <summary>
+        /// The country's row with both modifiers as NationalModifiers would give them now;
+        /// -1 for a formation whose country is not in the list, which asks the long way.
+        /// </summary>
+        public int Row(Campaign campaign, int nationId)
+        {
+            if ((uint)nationId >= (uint)_stamps.Length || nationId >= campaign.Nations.Count) return -1;
+            var nation = campaign.Nations[nationId];
+            if (nation is null) return -1;
+            var totals = nation.ModifierTotals;
+            if (totals is null || !ReferenceEquals(_totals[nationId], totals) || !ReferenceEquals(_owner[nationId], nation) ||
+                _version[nationId] != nation.ModifierTotalsVersion ||
+                System.Threading.Volatile.Read(ref nation.ModifierTotalsDirty))
+            {
+                Recovery[nationId] = NationalModifiers.Factor(nation, "organisation_recovery");
+                Entrenchment[nationId] = NationalModifiers.Factor(nation, "entrenchment_speed");
+                _owner[nationId] = nation;
+                _totals[nationId] = nation.ModifierTotals;
+                _version[nationId] = nation.ModifierTotalsVersion;
+            }
+            return nationId;
+        }
+
+        /// <summary>The readiness multiplier of the country in this row, asked once a batch.</summary>
+        public float Readiness(Campaign campaign, int row)
+        {
+            if (_stamps[row] != _stamp)
+            {
+                if (_ladder == 0) _ladder = DefconSystem.Enabled(campaign) ? 1 : 2;
+                _readiness[row] = _ladder == 1 ? DefconSystem.ReadinessRecoveryWhenEnabled(campaign, row) : 1f;
+                _stamps[row] = _stamp;
+            }
+            return _readiness[row];
+        }
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, NationFactors> StepFactors = new();
+
     public static void Tick(Campaign campaign)
     {
         foreach (var _ in TickStages(campaign)) { }
@@ -676,10 +780,16 @@ public static class MilitaryOperations
                                                        ReinforcementDoctrine.Weight(formation.ReinforcementPriority);
         }
         yield return 0;
+        var factors = StepFactors.GetOrCreateValue(campaign);
+        factors.Close(campaign.Nations.Count);
         var marched = 0;
         foreach (var army in campaign.Armies)
         {
-            if (++marched % 64 == 0) yield return 0;
+            if (++marched % 64 == 0)
+            {
+                yield return 0;
+                factors.Close(campaign.Nations.Count);
+            }
             army.LastReinforced = 0f;
             // Interned on neutral ground with no safe home left: no offensive orders or
             // starvation. The repatriation pass will send it back once a home exists.
@@ -688,11 +798,16 @@ public static class MilitaryOperations
             ReturnWounded(campaign, army);
             if (!army.InBattle)
             {
+                // The same two factors in the same places of the same product; only where
+                // they are read from differs (NationFactors).
+                var row = factors.Row(campaign, army.NationId);
                 var recovery = campaign.Defines.OrganisationRecoveryPerDay * campaign.TickScale *
                     MilitaryDoctrine.Recovery(army.Stance) *
                     M.Clamp(0.20f + army.SupplyLevel * 0.80f, 0.15f, 1f) *
-                    NationalModifiers.Factor(campaign.NationById(army.NationId), "organisation_recovery") *
-                    DefconSystem.ReadinessRecoveryMultiplier(campaign, army.NationId);
+                    (row >= 0 ? factors.Recovery[row]
+                        : NationalModifiers.Factor(campaign.NationById(army.NationId), "organisation_recovery")) *
+                    (row >= 0 ? factors.Readiness(campaign, row)
+                        : DefconSystem.ReadinessRecoveryMultiplier(campaign, army.NationId));
                 if (army.OrderKind == ArmyOrder.ReserveFront) recovery *= 1.25f;
                 // A closed pocket is living on what it carried. Rest would put the day's
                 // organisation straight back, and the dry-out would never arrive.
@@ -721,15 +836,18 @@ public static class MilitaryOperations
             {
                 if (army.ReadyDay > campaign.ElapsedDays) continue;
                 BattleMovementOrders.Resume(campaign, army);
+                factors.Close(campaign.Nations.Count);
             }
 
             if (topology is null || army.Route.Count == 0)
             {
                 if (!army.InBattle)
                 {
+                    var row = factors.Row(campaign, army.NationId);
                     army.Entrenchment = M.Clamp01(army.Entrenchment + campaign.Defines.EntrenchmentPerDay * campaign.TickScale *
                         MilitaryDoctrine.Entrenchment(army.Stance) *
-                        NationalModifiers.Factor(campaign.NationById(army.NationId), "entrenchment_speed"));
+                        (row >= 0 ? factors.Entrenchment[row]
+                            : NationalModifiers.Factor(campaign.NationById(army.NationId), "entrenchment_speed")));
                     if (army.AssignedWarId >= 0 &&
                         (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead))
                         army.Planning = M.Clamp01(army.Planning + campaign.Defines.PlanningGainPerDay * campaign.TickScale *
@@ -747,6 +865,7 @@ public static class MilitaryOperations
                     WarCoalition.AssignedWar(campaign, army), army.NationId, controllers[nextProvince])))
             {
                 StepBlocked(campaign, topology, controllers, army, nation, nextProvince);
+                factors.Close(campaign.Nations.Count);
                 continue;
             }
             // A ferry does not sail under an enemy squadron's guns. The formation keeps its

@@ -340,13 +340,31 @@ public static class DefconSystem
     /// <summary>
     /// Military readiness organization recovery bonus factor.
     /// </summary>
-    public static float ReadinessRecoveryMultiplier(Campaign campaign, int nationId)
+    public static float ReadinessRecoveryMultiplier(Campaign campaign, int nationId) =>
+        campaign is null || !Enabled(campaign) ? 1f : ReadinessRecoveryWhenEnabled(campaign, nationId);
+
+    /// <summary>
+    /// The same multiplier, for a caller that has asked <see cref="Enabled"/> itself and got
+    /// yes: the march loop asks for every formation every hour, and the switch is one answer
+    /// for all of them.
+    ///
+    /// NuclearPosture.Effective is written out here with what is already known. The ladder is
+    /// on, so the world's level is the campaign's own; whether the country is a holder is the
+    /// tier read below. Asking Effective asked both again - the switch by name, the tier with
+    /// the research sum under it - which made this 210 ns a formation, the largest single
+    /// piece of the military step on a save from 2050. And when the world stands at four or
+    /// five and so does the country's own posture, its forces stand at four or five whether it
+    /// holds a deterrent or not, and the answer is one without asking.
+    /// </summary>
+    internal static float ReadinessRecoveryWhenEnabled(Campaign campaign, int nationId)
     {
-        if (campaign is null || !Enabled(campaign)) return 1f;
         var nation = campaign.NationById(nationId);
+        var world = Math.Clamp(campaign.DefconLevel, 1, 5);
+        if (nation is not null && world >= 4 && Math.Clamp(nation.NuclearPosture, 1, 5) >= 4) return 1f;
         var isHolder = nation is not null && Deterrence.TierOf(campaign, nation) >= 1;
         // A holder's forces stand at its own alert when that is higher than the world's.
-        var level = nation is null ? campaign.DefconLevel : NuclearPosture.Effective(campaign, nation);
+        var level = nation is null ? campaign.DefconLevel
+            : isHolder ? Math.Min(world, Math.Clamp(nation.NuclearPosture, 1, 5)) : world;
         if (level >= 4) return 1f;
 
         return level switch

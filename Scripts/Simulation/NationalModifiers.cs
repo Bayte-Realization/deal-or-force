@@ -98,6 +98,7 @@ public static class NationalModifiers
         Fill(next, nation);
         nation._modifierSwap = nation.ModifierTotals;
         nation.ModifierTotals = next;
+        unchecked { nation.ModifierTotalsVersion++; }
         System.Threading.Volatile.Write(ref nation.ModifierTotalsDirty, false);
         return next;
     }
@@ -146,6 +147,7 @@ public static class NationalModifiers
         var totals = nation.ModifierTotals ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         totals.Clear();
         Fill(totals, nation);
+        unchecked { nation.ModifierTotalsVersion++; }
         System.Threading.Volatile.Write(ref nation.ModifierTotalsDirty, false);
         return totals;
     }
@@ -298,6 +300,15 @@ public sealed partial class Nation
     internal Dictionary<string, float> ModifierTotals;
     internal Dictionary<string, float> _modifierSwap;
     internal bool ModifierTotalsDirty;
+
+    /// <summary>
+    /// Counts the fills of <see cref="ModifierTotals"/>, both the daily one in place and the
+    /// aside one that swaps the two tables. The two tables alternate, so the table's identity
+    /// alone does not say its contents are the ones somebody read; identity and this number
+    /// together do. For a reader that keeps a sum it looked up (the march loop keeps two) and
+    /// must know when to look again. Not saved.
+    /// </summary>
+    internal int ModifierTotalsVersion;
 
     /// <summary>
     /// Serialises the aside build a parallel region can reach first. The fill keeps-and-refills
