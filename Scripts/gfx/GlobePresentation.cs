@@ -783,6 +783,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 _globeMaterial.SetShaderParameter("political_map", _plateTexture);
                 PlateApplied(result.PlateSource, result.PlateOwners);
                 result.PoliticalPixels = null;
+                _frontierAuthored = result.FrontierAuthored;
+                ApplyFrontier(result.Frontier);
+                result.Frontier = null;
                 break;
             }
             case 1:
@@ -2288,6 +2291,19 @@ uniform vec3 country_border_color = vec3(0.035, 0.05, 0.075);
 uniform float country_border_opacity = 0.86;
 // The least of its weight a country line keeps as the camera pulls back to the world view.
 uniform float country_border_far_weight = 0.62;
+// How far each cell is from the nearest frontier, in cells over FrontierField.Cap, smoothed and
+// mipmapped (Simulation.FrontierField). From the middle zoom out the country line is drawn off
+// this rather than off the per-pixel rebuild, which there is a staircase a pixel high.
+uniform sampler2D frontier_field : filter_linear_mipmap, repeat_enable;
+uniform float frontier_ready = 0.0;
+uniform float frontier_cap = 8.0;
+// The smoothed field never quite reaches nought: what it holds at the frontier itself.
+uniform float frontier_offset = 0.6;
+// How far from the frontier, in cells, the field still counts as standing on it. The rebuild it
+// stands in for sees a block of four by four cells and never anything further, so this is the
+// same reach: without it the inner cushion and glow, drawn by pixel widths meant for close in,
+// spread eight cells into every country from the middle zoom out and the frontiers went dark and fat.
+uniform float frontier_reach = 1.5;
 uniform float region_border_pixels = 3.78;
 uniform vec3 region_border_color = vec3(0.0, 0.0, 0.0);
 uniform float region_border_opacity = 0.0416;
@@ -3282,8 +3298,29 @@ void fragment() {
     // - which is what makes it read as a drawn border and not as an artefact of the data.
     float nation_edge_pixels = nation_reach / nation_aa;
     float has_nation_border = step(0.5, abs(near_nation - other_nation)) * step(0.5, near_nation);
+    // From the middle zoom out, where a cell is a pixel or two and the rebuild above is asked at
+    // one point a pixel, the frontier is read from the filtered distance field instead: an even
+    // stroke where the rebuild gives the raster's staircase. Both say the same thing where they
+    // meet - the edge between two holders - so the change is a blend over a short span of zoom,
+    // and everything drawn off these two numbers (the stroke, the cushion, the rim, the outline
+    // of a picked country) changes with it.
+    // Only where the rebuild would alias: a cell under about two pixels. Closer in, where a cell
+    // is two pixels or more, the rebuild is sharper than any filtered field.
+    float frontier_weight = frontier_ready * smoothstep(0.62, 0.85, id_span);
+    if (frontier_weight > 0.001) {
+        float frontier_cells = texture(frontier_field, UV).r * frontier_cap;
+        float frontier_pixels = max(frontier_cells - frontier_offset, 0.0) / id_aa;
+        float frontier_near = 1.0 - smoothstep(frontier_reach - 0.3, frontier_reach + 0.3, frontier_cells);
+        nation_edge_pixels = mix(nation_edge_pixels, frontier_pixels, frontier_weight);
+        has_nation_border = mix(has_nation_border, frontier_near, frontier_weight);
+    }
     float country_edge = 1.0 - smoothstep(border_pixels * 0.85, border_pixels * 2.05, nation_edge_pixels);
-    country_edge *= has_nation_border * clamp(2.4 - pixel_texels, 0.0, 1.0);
+    // Off the field the line can be kept to the world view: it is filtered, so it thins rather
+    // than breaking into dots. Off the rebuild it has to fade once a pixel holds more than a
+    // cell and a half, or it would.
+    float far_line = mix(clamp(2.4 - pixel_texels, 0.0, 1.0),
+                         clamp(1.15 - (pixel_texels - 1.5) * 0.09, 0.5, 1.0), frontier_weight);
+    country_edge *= has_nation_border * far_line;
     // The highest rank wins. Where the province boundary under this pixel IS the country
     // boundary - the same edge, reconstructed twice from the same block of ids, so the two
     // reaches agree - only the country border is drawn: no province line and pale shoulder
@@ -5508,6 +5545,13 @@ void fragment() {
             hydrology.AuthoredRivers ? null : Simulation.HydrologyCatalog.RiverFeatures,
             widthReach: Simulation.TerrainCatalog.Water.RiverWidthReach));
         var labelAnchors = anchorWork.GetAwaiter().GetResult();
+        // The frontier field (Simulation.FrontierField) for the owners the raster was drawn
+        // with: on a core of its own, and made into a mipmapped picture there, so the main
+        // thread only uploads it. The control grid is kept by reference for the repaints that
+        // follow a moving border - the source data lets its own copy go once the map is up.
+        var frontierAuthored = control;
+        var frontierWork = Task.Run(() => FrontierImage(frontierAuthored, provinces,
+            provinces.ProvinceToNation, provinces.ProvinceToNation));
 
         for (var y = 0; y < MapHeight; y++)
         {
@@ -5592,6 +5636,8 @@ void fragment() {
             PoliticalPixels = political,
             PlateSource = plateSource,
             PlateOwners = plateOwners,
+            FrontierAuthored = frontierAuthored,
+            Frontier = FrontierImageOrNull(frontierWork),
             RegionIds = regionIds,
             ProvinceIds = provinceIds,
             NationIds = nationIds,
@@ -5625,6 +5671,8 @@ void fragment() {
         public byte[] PoliticalPixels;
         public Simulation.PoliticalPlateSource PlateSource;
         public ushort[] PlateOwners;
+        public ushort[] FrontierAuthored;
+        public Image Frontier;
         public byte[] RegionIds;
         public byte[] ProvinceIds;
         public byte[] NationIds;

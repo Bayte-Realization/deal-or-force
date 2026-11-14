@@ -39,7 +39,10 @@ public sealed partial class GlobePresentation
     /// <summary>A country changed colour since the plate on screen was painted.</summary>
     private bool _plateColoursStale;
     private bool _plateFailureReported;
-    private Task<Image> _plateWork;
+    private Task<(Image Plate, Image Frontier)> _plateWork;
+    private ImageTexture _frontierTexture;
+    /// <summary>The authored holder of every raster cell, kept for the frontier field's repaints.</summary>
+    private ushort[] _frontierAuthored;
     private ulong _plateRequestedMsec;
     private bool _platePending;
 
@@ -83,13 +86,63 @@ public sealed partial class GlobePresentation
         var source = _plateSource;
         var shades = Simulation.MapBorderStyles.PlateShades();
         // The picture and its mipmaps are made on the worker too: the main thread only uploads.
+        // The frontier field follows the same owners in the same task, so the far stroke and
+        // the far colours always change together.
+        var frontierAuthored = _frontierAuthored;
         _plateWork = Task.Run(() =>
         {
             var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8,
                 Simulation.PoliticalPlate.Paint(source, owners, authoredOwners, colors, shades));
             image.GenerateMipmaps();
-            return image;
+            var frontier = frontierAuthored is null ? null
+                : FrontierImage(frontierAuthored, topology, owners, authoredOwners);
+            return (image, frontier);
         });
+    }
+
+    /// <summary>
+    /// The frontier field as a mipmapped one-byte picture, made where it is called - on a worker.
+    /// Null when the grids do not match the topology, which leaves the shader on the per-pixel
+    /// rebuild at every zoom rather than drawing a stroke in the wrong place.
+    /// </summary>
+    private static Image FrontierImage(ushort[] authored, Simulation.ProvinceTopology topology,
+        ushort[] owners, ushort[] authoredOwners)
+    {
+        if (authored is null || topology?.CellToProvince is null) return null;
+        var width = topology.Width;
+        var height = topology.Height;
+        if (authored.Length < width * height || topology.CellToProvince.Length < width * height) return null;
+        var image = Image.CreateFromData(width, height, false, Image.Format.R8,
+            Simulation.FrontierField.Build(authored, topology.CellToProvince, width, height, owners, authoredOwners));
+        image.GenerateMipmaps();
+        return image;
+    }
+
+    private static Image FrontierImageOrNull(Task<Image> work)
+    {
+        try { return work.GetAwaiter().GetResult(); }
+        catch (Exception exception)
+        {
+            GD.PushWarning($"[dof] frontier field not built, far borders use the per-pixel rebuild: {exception.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Upload a frontier field and switch the far stroke onto it. Null leaves things as they are.</summary>
+    private void ApplyFrontier(Image frontier)
+    {
+        if (frontier is null || _globeMaterial is null) { frontier?.Dispose(); return; }
+        if (_frontierTexture is not null && _frontierTexture.GetWidth() == frontier.GetWidth() &&
+            _frontierTexture.GetHeight() == frontier.GetHeight())
+            _frontierTexture.Update(frontier);
+        else
+        {
+            _frontierTexture = ImageTexture.CreateFromImage(frontier);
+            _globeMaterial.SetShaderParameter("frontier_field", _frontierTexture);
+            _globeMaterial.SetShaderParameter("frontier_cap", Simulation.FrontierField.Cap);
+        }
+        frontier.Dispose();
+        _globeMaterial.SetShaderParameter("frontier_ready", 1f);
     }
 
     /// <summary>Called every frame: swaps a finished plate in, and starts a waiting one.</summary>
@@ -98,10 +151,11 @@ public sealed partial class GlobePresentation
         if (_plateWork is { IsCompleted: true } done)
         {
             _plateWork = null;
-            if (done.IsCompletedSuccessfully && done.Result is { } image)
+            if (done.IsCompletedSuccessfully && done.Result.Plate is { } image)
             {
                 if (_plateTexture is not null) _plateTexture.Update(image);
                 image.Dispose();
+                ApplyFrontier(done.Result.Frontier);
                 _plateShownOwners = _plateWorkOwners;
                 // The plate has caught up: the stopgap table has nothing left to say about
                 // the provinces this repaint covered.

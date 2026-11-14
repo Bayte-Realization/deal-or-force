@@ -38,6 +38,12 @@ public static class PackedMapShader
         foreach (var name in Lookups) source = RemoveUniform(source, name);
         foreach (var name in Ids) source = RemoveUniform(source, name);
         source = RemoveUniform(RemoveUniform(source, "lake_surface"), "river_surface");
+        // Twelve texture units is the whole budget here, and the frontier field would be a
+        // thirteenth: the compatibility map keeps the per-pixel rebuild at every zoom. The read
+        // answers "inland" everywhere, and frontier_ready stays nought, so the branch is never
+        // taken.
+        source = RemoveUniform(source, "frontier_field")
+            .Replace("texture(frontier_field, UV)", "vec4(1.0)", StringComparison.Ordinal);
 
         source = source.Replace("sampler2D map_texture", "float map_texture", StringComparison.Ordinal)
             .Replace("sampler2D ids", "float ids", StringComparison.Ordinal)
