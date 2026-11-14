@@ -1,0 +1,50 @@
+name: Bug report / Сообщить об ошибке
+description: Something in the game is broken, wrong or absurd. / Что-то в игре сломано, неверно или абсурдно.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. The fastest way to a fix is the game's own report: **Settings → Report a problem**
+        (or the console command `report`). It writes `DealOrForce-report-….zip` into
+        `Documents\Bayte Realization\Deal or Force\reports\` with the build, the last logs, your
+        settings and the newest save. Attach that zip below.
+
+        Спасибо. Быстрее всего к исправлению ведёт отчёт самой игры: **Настройки → Сообщить о
+        проблеме** (или команда консоли `report`). Он кладёт `DealOrForce-report-….zip` в
+        `Документы\Bayte Realization\Deal or Force\reports\`: там сборка, последние логи, настройки
+        и последнее сохранение. Приложите этот архив ниже.
+  - type: input
+    id: version
+    attributes:
+      label: Version / Версия
+      description: Shown at the bottom of the main menu. / Внизу главного меню.
+      placeholder: EntertAlpha 0.6.6.0
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened / Что случилось
+      description: What you saw, and what you expected instead. Screenshots help. / Что вы увидели и что ожидали. Скриншоты помогают.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to get there / Как до этого дойти
+      description: Country, date in the campaign, what you clicked. / Страна, дата в кампании, что вы нажимали.
+      placeholder: |
+        1. Played Russia, 2024-03-12
+        2. Opened Production
+        3. …
+  - type: textarea
+    id: report
+    attributes:
+      label: Report zip, save or log / Архив отчёта, сохранение или лог
+      description: Drag the files here. / Перетащите файлы сюда.
+  - type: input
+    id: machine
+    attributes:
+      label: Machine / Компьютер
+      description: Windows version and graphics card, if it is about drawing or start-up. / Версия Windows и видеокарта, если дело в отрисовке или запуске.

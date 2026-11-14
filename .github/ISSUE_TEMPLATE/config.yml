@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ideas and questions / Идеи и вопросы
+    url: https://github.com/Bayte-Realization/deal-or-force/discussions
+    about: Talk about the game, mods and plans. / Обсуждение игры, модов и планов.
+  - name: Download the game / Скачать игру
+    url: https://bayte-realization.itch.io/deal-or-force
+    about: Windows builds of every release. / Сборки для Windows каждой версии.

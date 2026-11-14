@@ -2,16 +2,57 @@
 
 # Deal or Force
 
-A grand strategy game about the whole world, on Godot 4.8 (.NET build) and .NET 10. Version **0.6.6.0** — **EntertAlpha 0.6.6.0**.
+**A grand strategy game about the whole world, from the morning of 1 January 2024.**
+Every country on the map is yours to play, and every one of them is simulated the same way.
 
-[Changelog](https://github.com/Bayte-Realization/deal-or-force/blob/EntertAlpha/docs/CHANGELOG_0.6.6.0_EN.md)
+[![Release](https://img.shields.io/badge/release-EntertAlpha%200.6.6.0-2f6fb3)](docs/CHANGELOG_0.6.6.0_EN.md)
+[![Engine](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED.md)
+[![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED.md)
+[![Licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-3a7f3a)](LICENSE)
+[![itch.io](https://img.shields.io/badge/play-itch.io-fa5c5c?logo=itchdotio&logoColor=white)](https://bayte-realization.itch.io/deal-or-force)
 
-> **[LanguageKit](LanguageKit/README.md)** — the Godot 4.8 Beta1 language kit: source integrations
-> for Luau, F#, Nim, Odin, Rust and Kotlin, with build recipes, probes and a workbench
-> ([guide](LanguageKit/GUIDE.md)).
+![The main menu: a live planet wearing the game's own map](docs/screenshots/0.6.6/menu-planet.jpg)
 
-World rendering scripts now live in
-[`Scripts/gfx`](Scripts/gfx/README.md), separately from UI and simulation rules.
+| | |
+|---|---|
+| ![The campaign map from afar](docs/screenshots/0.6.6/map-globe.jpg) | ![The country picker](docs/screenshots/0.6.6/country-picker.jpg) |
+| ![The flat map](docs/screenshots/0.6.6/map-flat.jpg) | ![A campaign](docs/screenshots/0.6.6/campaign.jpg) |
+
+## Play it
+
+- **Windows builds** (64-bit, English and Russian) are on
+  [itch.io](https://bayte-realization.itch.io/deal-or-force), every release since 0.5.2.2.
+  Extract the whole archive and run `Deal or Force Launcher.exe`.
+- **From source** — see [Building and running](#building-and-running) below.
+- It is EntertAlpha: a lot works, and a lot is still being rebuilt. What is not done yet is
+  written down at the end of every [changelog](docs/CHANGELOG_0.6.6.0_EN.md), not hidden.
+- It is built by one person, openly with the help of AI.
+
+Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
+[X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
+[Telegram](https://t.me/+39SNXyA92aBmYzhi) · [devlog](https://bayte-realization.itch.io/deal-or-force/devlog)
+
+## New in 0.6.6.0
+
+- **A late game twice as fast** — a real 2050 save went from 533 to about 240 ms a simulated
+  day, with the world after the run identical bit for bit.
+- **A truthful map** — no made-up "countries" left over from the source map, 34 strait
+  crossings (the Gibraltar ferry, the Crimean Bridge…), one colour per country, the country
+  border as the leading line.
+- **A live planet behind the menu**, wearing the game's own first-day map, which you can spin.
+- **A first session that explains itself** — straight to the country picker, and a "Next"
+  line that names the first thing not yet done and opens it.
+- **Ink and paper** instead of brown and gold; 113 more strings in Russian.
+
+Since the release, on this branch: smooth country borders at every distance; movements
+without land shown only close up, and governments in exile only for countries that had a
+government; 864 more strings in Russian; a building nobody can staff no longer makes a
+country poorer; a subject integrated to 100% joins instead of walking out; army cards that
+answer a click; "Are you sure?" before leaving; cities under their 2024 names (Astana, not
+Nur-Sultan). Every change is described in the
+[commit history](https://github.com/Bayte-Realization/deal-or-force/commits/EntertAlpha).
+
+## The game
 
 It opens on 1 January 2024 with hundreds of countries and movements, thousands of regions
 and 35 295 provinces. Authored history sets the starting conditions; simulation rules and
@@ -53,7 +94,7 @@ a panel beside the map; they reach into the battles within their range and pay f
 they fly over a defended front. Seventy-one technologies spread from the countries that know
 them to their neighbours and partners.
 
-The map reads like an atlas: five and a half thousand cities that never print over each other,
+The map reads like an atlas: more than seven thousand cities that never print over each other,
 relief lit from the north-west, a sea with shelves and a floor, and coasts and borders drawn as
 the lines they were digitised from rather than as the texel staircase they are stored as.
 
@@ -161,6 +202,9 @@ Everything below exists in English and in Russian; a `_RU` suffix is the Russian
 
 | | |
 |---|---|
+| [Changelog 0.6.6.0](docs/CHANGELOG_0.6.6.0_EN.md) | **what changed in the current release, how it was checked, what is not done** |
+| [Overhaul programme](docs/OVERHAUL_PROGRAMME_2026_11_14_RU.md) | the fifteen fronts of the rework and what "done" means for each (Russian) |
+| [Deal rework](docs/DEALS_REWORK_2026_11_14_RU.md) | what is wrong with deals today and the plan for them, step by step (Russian) |
 | [TUTORIAL](docs/TUTORIAL.md) | **your first campaign, hand held** |
 | [MODDING_QUICKSTART](docs/MODDING_QUICKSTART.md) | **your first mod in fifteen minutes** |
 | [GETTING_STARTED](docs/GETTING_STARTED.md) | how to run and build it |
@@ -177,6 +221,14 @@ Everything below exists in English and in Russian; a `_RU` suffix is the Russian
 | [Institutions](docs/INTERNATIONAL_ORGANIZATIONS_RU.md) | organizational charters, fund, votes and defence (Russian) |
 | [Territory and independence](docs/TERRITORY_AND_RELEASE_RU.md) | homeland titles, treaty releases and Bir Tawil (Russian) |
 | [Households](docs/HOUSEHOLD_ECONOMY_RU.md) | employment, basic needs and demographic dynamics (Russian) |
+
+## Found a bug?
+
+Press **Settings → Report a problem** in the game (or type `report` in the console). It writes
+`DealOrForce-report-….zip` into `Documents\Bayte Realization\Deal or Force\reports\` with the
+build, the last logs, your settings and the newest save - attach it to a
+[bug report](https://github.com/Bayte-Realization/deal-or-force/issues/new?template=bug_report.yml).
+Ideas and questions go to [Discussions](https://github.com/Bayte-Realization/deal-or-force/discussions).
 
 ## Known debts
 
