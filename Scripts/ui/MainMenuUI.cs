@@ -135,7 +135,7 @@ public partial class DealOrForceGame
         _languageButton = ActionButton(LanguageButtonLabel(), CycleLanguage, 330, 42);
         _languageButton.TooltipText = Ui.Tip(Tr("Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder."));
         rows.AddChild(_languageButton);
-        rows.AddChild(ActionButton("Quit to desktop", () => ApplicationExit.Request(this), 330, 42));
+        rows.AddChild(ActionButton("Quit to desktop", () => LeaveConfirmation.QuitToDesktop(this, inCampaign: false), 330, 42));
 
         _navigationHint = Title("Right-drag to turn the globe · wheel to zoom · WASD to move.", 13,
             Ui.Colour("text.hint"));

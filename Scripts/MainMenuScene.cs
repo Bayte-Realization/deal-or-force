@@ -194,7 +194,7 @@ public partial class MainMenuScene : Control
                      MenuAction("Settings", ShowSettings, 36),
                      _language,
                      MenuAction("Credits", ShowCredits, 36),
-                     MenuAction("Quit to desktop", () => ApplicationExit.Request(this), 36)
+                     MenuAction("Quit to desktop", () => LeaveConfirmation.QuitToDesktop(this, inCampaign: false), 36)
                  })
         {
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
