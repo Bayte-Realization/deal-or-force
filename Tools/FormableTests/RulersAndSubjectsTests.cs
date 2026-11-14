@@ -495,5 +495,45 @@ static class RulersAndSubjectsTests
         Check(conqueror.DecisionAvailableDay.GetValueOrDefault(
                   SubjectBlocs.MergeKey(mergeKeep, mergeAbsorb)) > c.ElapsedDays,
             "subject consolidation stamps a cooldown on the merged pair");
+
+        // 7g. Integration binds instead of chafing to the end. A player integrated Northern Cyprus
+        // to 100% and it "broke free amid the crisis of the metropolis": integration only ever
+        // added resentment, and a player's subject at 100% waited for a click it never got.
+        var weights = SubjectCatalog.Weights;
+        var bound = mergeKeep;
+        bound.SubjectConspiring = false;
+        bound.SubjectForeignBackers.Clear();
+        conqueror.Stability = 0.10f; // an overlord in crisis
+        bound.SubjectIntegrating = true;
+        bound.SubjectIntegrationProgress = 0f;
+        var atStart = SubjectSystem.LibertyDesireOf(c, bound);
+        bound.SubjectIntegrationProgress = 0.5f;
+        var halfway = SubjectSystem.LibertyDesireOf(c, bound);
+        bound.SubjectIntegrationProgress = 1f;
+        var done = SubjectSystem.LibertyDesireOf(c, bound);
+        Check(halfway < atStart && done < halfway,
+            $"integration resentment fades and turns into a hold as the work is done ({atStart:0.00} -> {halfway:0.00} -> {done:0.00})");
+        Check(atStart - done >= weights.IntegrationPull + weights.IntegrationHold - 0.001f,
+            "a hundred per cent integrated subject wants out by pull + hold less than one just begun");
+        bound.SubjectIntegrating = false;
+        var paused = SubjectSystem.LibertyDesireOf(c, bound);
+        Check(paused < atStart, "what integration built still holds a subject when the work is paused");
+
+        // A player's overlord: at a hundred per cent the annexation happens by itself, unless the
+        // subject would answer it with a war - that one waits for the player's own click.
+        bound.SubjectIntegrating = true;
+        bound.SubjectIntegrationProgress = 1f;
+        bound.LibertyDesire = c.Defines.SubjectAnnexationRevoltThreshold + 0.05f;
+        conqueror.IsHuman = true;
+        conqueror.Treasury = 100f;
+        var warsBefore = c.Wars.Count;
+        SubjectInteractions.TickSubjectWeek(c, conqueror, bound);
+        Check(bound.IsSubject && c.Wars.Count == warsBefore,
+            "a player's fully integrated but restive subject is not annexed into a war without the player's click");
+        bound.LibertyDesire = 0.20f;
+        SubjectInteractions.TickSubjectWeek(c, conqueror, bound);
+        Check(!bound.IsSubject && !c.HasOwnedLand(bound),
+            "a player's subject integrated to a hundred per cent is annexed without a second click");
+        conqueror.IsHuman = false;
     }
 }

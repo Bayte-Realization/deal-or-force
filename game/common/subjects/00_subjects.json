@@ -60,7 +60,17 @@
     // How large a subject an overlord will absorb without asking, against its own size. A
     // small province quietly becomes part of the country holding it; a dependency a third
     // its size is a country, and swallowing one is a decision rather than a formality.
-    "annex_size_limit": 0.25
+    "annex_size_limit": 0.25,
+
+    // Integration chafes while it is new: this much liberty desire at its start, fading to
+    // nothing as the work is done.
+    "integration_pull": 0.14,
+
+    // And binds once it is done: this much less liberty desire at a hundred per cent, in
+    // proportion before that, kept when the integration is paused. Enough that a subject
+    // integrated to the end does not walk out because its overlord had a bad year; a war of
+    // independence (a conspiracy, a foreign backer) is still possible.
+    "integration_hold": 0.45
   },
 
   "protectorate": {

@@ -177,6 +177,19 @@ public sealed class SubjectWeights
     public float BreakJitter = 0.12f;
     public float DriftPerWeek = 0.02f;
     public float AnnexSizeLimit = 0.25f;
+    /// <summary>
+    /// How much a subject resents being integrated while it has only just begun. It fades as
+    /// the work is done: at the start a dependency sees its institutions taken over, at the end
+    /// it is governed as part of the country.
+    /// </summary>
+    public float IntegrationPull = 0.14f;
+    /// <summary>
+    /// How much finished integration holds a subject, at a hundred per cent. It used to be the
+    /// other way: integration only ever added resentment, so a player who integrated Northern
+    /// Cyprus to a hundred per cent watched it walk out "amid the crisis of the metropolis"
+    /// the next time Turkey had a bad month.
+    /// </summary>
+    public float IntegrationHold = 0.45f;
 }
 
 /// <summary>
@@ -230,7 +243,9 @@ public static class SubjectCatalog
                 Read(entry.Value, "break_at", value => weights.BreakAt = value);
                 Read(entry.Value, "break_jitter", value => weights.BreakJitter = value);
                 Read(entry.Value, "drift_per_week", value => weights.DriftPerWeek = value);
-            Read(entry.Value, "annex_size_limit", value => weights.AnnexSizeLimit = M.Clamp01(value));
+                Read(entry.Value, "annex_size_limit", value => weights.AnnexSizeLimit = M.Clamp01(value));
+                Read(entry.Value, "integration_pull", value => weights.IntegrationPull = value);
+                Read(entry.Value, "integration_hold", value => weights.IntegrationHold = value);
                 continue;
             }
 
@@ -534,8 +549,13 @@ public static class SubjectSystem
             want += weights.OverlordInstabilityPull * 0.65f;
         if (overlord.ImperialOverstretch > 0.05f)
             want += overlord.ImperialOverstretch * 0.35f;
+        // Integration chafes while it is new and binds once it is done: the resentment fades with
+        // the work, and what has been built - offices, roads, a shared budget - holds the subject
+        // even when the integration is paused.
+        var integrated = M.Clamp01(subject.SubjectIntegrationProgress);
         if (subject.SubjectIntegrating)
-            want += 0.14f;
+            want += weights.IntegrationPull * (1f - integrated);
+        want -= weights.IntegrationHold * integrated;
 
         // Foreign powers actively agitating or sponsoring this subject's independence.
         if (subject.SubjectForeignBackers.Count > 0)
@@ -651,7 +671,13 @@ public static class SubjectSystem
 
             var breakAt = weights.BreakAt + weights.BreakJitter *
                 (2f * Escalation.Roll(campaign.Seed, subject.Id, overlord.Id, 0, 0xB7E) - 1f);
-            if (subject.LibertyDesire >= breakAt) { leaving.Add(subject); continue; }
+            // A subject integrated to the end is governed as part of the country: it does not
+            // drift out of it in a bad month. It can still rise in arms (a conspiracy or a foreign
+            // backer turns leaving into a war, below), but a quiet "breaks free amid the crisis of
+            // the metropolis" a week before the annexation is signed is not something it can do.
+            var bound = subject.SubjectIntegrationProgress >= 0.999f &&
+                        !subject.SubjectConspiring && subject.SubjectForeignBackers.Count == 0;
+            if (subject.LibertyDesire >= breakAt && !bound) { leaving.Add(subject); continue; }
 
             // And the other ending. A country steering itself decides this for itself; the
             // rest take the option when they have it and the subject is small enough that

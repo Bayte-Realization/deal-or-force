@@ -792,9 +792,20 @@ public static class SubjectInteractions
                 subject.SubjectIntegrationProgress = M.Clamp01(subject.SubjectIntegrationProgress + weeklyGain);
                 var wasReleased = subject.ReleasedFromId == overlord.Id || subject.SecededFromId == overlord.Id;
                 var popLimit = wasReleased ? overlord.Population * 0.65f : overlord.Population * 0.45f;
-                if (subject.SubjectIntegrationProgress >= 1f && !overlord.IsHuman &&
-                    subject.Population <= popLimit &&
-                    PeaceShape.Near(campaign, overlord, subject))
+                // Finished integration ends in annexation for every overlord. A player used to have
+                // to come back and press "Complete annexation", and in the weeks between a hundred
+                // per cent and the click the subject could walk out. A computer overlord still
+                // weighs the size of what it takes in; a player chose to integrate and is not asked
+                // twice. The annexation's own checks apply to both. Its revolt does not start itself
+                // for a player: a subject that would answer annexation with a war waits for the
+                // player's click (it cannot drift away meanwhile - SubjectCore binds it at 100%).
+                var wouldRevolt = subject.LibertyDesire >= campaign.Defines.SubjectAnnexationRevoltThreshold ||
+                                  (subject.SubjectConspiring && subject.LibertyDesire >= 0.45f);
+                if (subject.SubjectIntegrationProgress >= 1f &&
+                    (overlord.IsHuman
+                        ? !wouldRevolt
+                        : subject.Population <= popLimit && PeaceShape.Near(campaign, overlord, subject)) &&
+                    CanInteract(campaign, overlord, subject, SubjectInteractionKind.CompleteAnnexation, out _))
                 {
                     Execute(campaign, overlord, subject, SubjectInteractionKind.CompleteAnnexation, out _);
                     return;
