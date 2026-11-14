@@ -20,8 +20,13 @@ namespace DealOrForce;
 /// top of each other. Names remain visible with their headquarters, without camera-dependent
 /// collision hiding or displacement.
 ///
-/// A headquarters is the one place such a country is, so it is drawn at every distance, where
-/// a capital is only drawn close up.
+/// Drawn only as close as the armies are, and never as a crowd. They used to be drawn at every
+/// distance, every one of them: by the late game a city like London held fifteen offices, the row
+/// they were fanned into ran out over the Atlantic, and on the flat map every one carried its name
+/// under it, so the middle of the world was a wall of flags and overlapping words - the
+/// "spam of movements without land" a player complained of. Now a city shows at most
+/// <see cref="MovementLayer.MaxInRow"/> of them and a "+N" for the rest, from the regional view in,
+/// with names only from the close view in. Every office is still in the movement lists and panels.
 /// </summary>
 public sealed partial class GlobePresentation
 {
@@ -50,7 +55,15 @@ public sealed partial class GlobePresentation
         private const float Spacing = 138f;
         private const float LabelPixelSize = 0.00021f;
         /// <summary>How close the camera has to be before headquarters carry their names.</summary>
-        private const float LabelDistance = 7.5f;
+        private const float LabelDistance = 4.2f;
+        /// <summary>
+        /// How close before headquarters are drawn at all: the regional view and in. Closer than
+        /// division counters (10.8 on the globe), because an office is a lesser thing than an army;
+        /// at the continental view they were a field of flags over every capital.
+        /// </summary>
+        private const float MedallionDistance = 7.5f;
+        /// <summary>Offices drawn side by side in one city; the rest are a "+N".</summary>
+        internal const int MaxInRow = 3;
         /// <summary>Headquarters this close, in degrees of arc, share one row.</summary>
         private const float RowDegrees = 1.6f;
         private const float LabelLine = 40f;
@@ -122,7 +135,7 @@ public sealed partial class GlobePresentation
                 if (!IsInstanceValid(marker.Node)) continue;
                 var state = marker.Nation.Movement;
                 // A headquarters out on the street, or one that is no more, is nowhere on the map.
-                var shown = Standing(state);
+                var shown = Standing(state) && _globe.ViewDistance <= MedallionDistance;
                 if (shown)
                 {
                     // FixedSize uses half the orthographic height on the flat map, versus
@@ -189,14 +202,18 @@ public sealed partial class GlobePresentation
                 // A translation must not rearrange offices sharing the same headquarters.
                 var members = group.OrderBy(nation => nation.Tag, StringComparer.Ordinal).ToList();
                 var anchor = group[0].Movement;
-                for (var index = 0; index < members.Count; index++)
+                // At most a few side by side; the rest are counted on a chip beside the last.
+                var drawn = Math.Min(members.Count, MaxInRow);
+                var hidden = members.Count - drawn;
+                var slots = drawn + (hidden > 0 ? 1 : 0);
+                for (var index = 0; index < drawn; index++)
                 {
                     var nation = members[index];
-                    var offset = (index - (members.Count - 1) / 2f) * Spacing;
+                    var offset = (index - (slots - 1) / 2f) * Spacing;
                     // In a row, every other name stands a line lower: two long names side by side -
                     // the Mejlis and Ichkeria in Kyiv - were one unreadable line. Both under the
                     // medallions, never over them, where the city's own star and name are.
-                    var drop = members.Count > 1 && index % 2 == 1 ? LabelDrop + LabelLine * 0.95f : LabelDrop;
+                    var drop = drawn > 1 && index % 2 == 1 ? LabelDrop + LabelLine * 0.95f : LabelDrop;
                     var colour = Color.FromHtml(string.IsNullOrWhiteSpace(nation.Color) ? "#808080" : nation.Color);
                     var node = new Node3D { Name = $"Headquarters_{nation.Tag}" };
                     var roundel = Roundel(nation);
@@ -221,6 +238,25 @@ public sealed partial class GlobePresentation
                         Offset = new Vector2(offset * PixelSize / LabelPixelSize, -drop - RowSink * PixelSize / LabelPixelSize)
                     };
                     node.AddChild(label);
+                    if (hidden > 0 && index == drawn - 1)
+                    {
+                        var chipOffset = offset + Spacing;
+                        node.AddChild(Medallion(_disc, PixelSize * 0.8f, Ui.Colour("surface.overlay", 0.94f), 20, chipOffset / 0.8f));
+                        node.AddChild(Medallion(_ring, PixelSize * 0.8f, Ui.Colour("surface.line"), 22, chipOffset / 0.8f));
+                        node.AddChild(new Label3D
+                        {
+                            Text = "+" + hidden.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                            FixedSize = true,
+                            PixelSize = LabelPixelSize,
+                            FontSize = 40,
+                            OutlineSize = 0,
+                            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                            NoDepthTest = true,
+                            RenderPriority = 24,
+                            Modulate = Ui.Colour("globe.label"),
+                            Offset = new Vector2(chipOffset * PixelSize / LabelPixelSize, -RowSink * PixelSize / LabelPixelSize)
+                        });
+                    }
                     AddChild(node);
                     _markers.Add(new Marker
                     {
