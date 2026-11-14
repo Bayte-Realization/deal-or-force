@@ -34,7 +34,7 @@
   "metrics": {
     // Solid for most of this width, then a soft shoulder of about as much again. Also the unit
     // the frontier's inner cushion and the selection outlines are measured in.
-    "map.country_border_width": 1.9,
+    "map.country_border_width": 1.15,
     "map.country_border_opacity": 0.96,
     // The least of its weight a country border keeps at the world view. Lower, and the frontier
     // between two states becomes a hairline exactly where the strategic map needs it most.

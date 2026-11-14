@@ -98,7 +98,7 @@ public static class MapBorderStyles
     // The compiled fallbacks. They are the shader's own former literals, so a content pack that
     // ships no gui/77_map_borders.json draws the map it always drew. Colours fall back through
     // InterfaceSkin's compiled table, which carries the same six tokens.
-    public const float CountryWidth = 1.9f;
+    public const float CountryWidth = 1.15f;
     public const float CountryOpacity = 0.96f;
     public const float CountryFarWeightDefault = 0.62f;
     public const float RegionWidth = 3.78f;

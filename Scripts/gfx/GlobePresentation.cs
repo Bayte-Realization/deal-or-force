@@ -3065,10 +3065,15 @@ void fragment() {
         ground = mix(ground, relief_tint, relief_color_opacity);
         // Political tint is an albedo blend, not transparent 3D geometry.
         // Keep surface detail while preserving recognisable controller colours.
-        float ground_light = clamp(dot(ground, vec3(0.2126, 0.7152, 0.0722)) * 1.4 + 0.50, 0.62, 1.1);
-        // On the flat sheet the ground's brightness moves the colour within a narrower band, and
-        // the colour covers more of the ground: the relief shows through the hillshade below.
-        ground_light = mix(ground_light, clamp(ground_light, 0.84, 1.03), flat_projection);
+        // How far the kind of ground may move a country's colour. It used to be allowed from
+        // 0.62 to 1.1 on the globe and 0.84 to 1.03 on the flat sheet, and since kinds of ground
+        // meet along the raster's own cells, a country at the middle zoom was two tones of its
+        // colour laid out in squares - the map looked pixelated inside every border. The hills
+        // are the hillshade's job (below), which is smooth; the tile only tints.
+        float ground_light = clamp(dot(ground, vec3(0.2126, 0.7152, 0.0722)) * 1.4 + 0.50, 0.84, 1.06);
+        // On the flat sheet the band is narrower still, and the colour covers more of the
+        // ground: the relief shows through the hillshade below.
+        ground_light = mix(ground_light, clamp(ground_light, 0.93, 1.02), flat_projection);
         float colour_cover = mix(political_opacity, min(0.93, political_opacity + 0.17), flat_projection);
         vec3 colored_ground = mix(ground, political.rgb * ground_light, colour_cover);
         vec3 land_surface = terrain_mode > 1.5 ? relief_tint : (terrain_mode > 0.5 ? ground : colored_ground);

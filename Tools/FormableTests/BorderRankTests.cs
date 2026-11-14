@@ -324,7 +324,7 @@ static class BorderRankTests
         // The values the shader used to spell as literals. The skin is sRGB hex, so each comes
         // back within a quantisation step of the linear number it replaces.
         Check(Near(globe.Country.Colour, 0.0116f, 0.0159f, 0.0296f) && Near(globe.Country.Opacity, 0.96f) &&
-              Near(globe.Country.Width, 1.9f) && Near(globe.CountryFarWeight, 0.62f),
+              Near(globe.Country.Width, 1.15f) && Near(globe.CountryFarWeight, 0.62f),
             "country border: the darkest and widest stroke on the map");
         Check(Near(globe.Province.Colour, 0.055f, 0.075f, 0.09f) && Near(globe.ProvinceHalo, 0.78f, 0.80f, 0.77f) &&
               Near(globe.Province.Width, 1.0f) && Near(globe.Province.Opacity, 0.36f) && Near(globe.ProvinceHaloOpacity, 0f) &&
