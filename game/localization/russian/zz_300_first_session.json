@@ -17,5 +17,11 @@
   "Press to go there. The pictures above list everything else that is waiting.": "Нажмите, чтобы перейти. Значки выше перечисляют всё остальное, что ждёт решения.",
   "Nothing is waiting for you. Let time run  [Space]": "Ничто не ждёт вашего решения. Пустите время  [Пробел]",
   "The game is paused. Press to let time run; press Space to stop it again.": "Игра на паузе. Нажмите, чтобы пустить время; пробел остановит его снова.",
-  "Next: {0}  →": "Дальше: {0}  →"
+  "Next: {0}  →": "Дальше: {0}  →",
+  "Shortage: {0}": "Дефицит: {0}",
+  "Situation room · {0}": "Обстановка · {0}",
+  "map.toggle.TRADE": "ТОРГ",
+  "map.toggle.NAMES": "ИМЕНА",
+  "map.toggle.BUILDING": "ЗДАНИЯ",
+  "map.toggle.CITIES": "ГОРОДА"
 }

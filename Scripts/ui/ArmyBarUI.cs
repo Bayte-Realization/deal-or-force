@@ -79,7 +79,9 @@ public partial class DealOrForceGame
         if (float.IsNaN(_armyBarBaseLeft)) _armyBarBaseLeft = _armyBar.OffsetLeft;
         var left = _armyBarBaseLeft;
         var origin = _hudLayer.GetGlobalRect().Position.X;
-        foreach (var panel in new Control[] { _armyPanel, _sidePanel })
+        // The rail too: it is as wide as its longest caption, which in Russian ("ГОСУДАРСТВЕННЫЕ
+        // ДЕЛА") put it sixty pixels past the bar's authored edge and the first card over "Reports".
+        foreach (var panel in new Control[] { _armyPanel, _sidePanel, _hudNavigationPanel })
             // Only what stands on the left half: a panel on the right is not in the bar's way.
             if (IsInstanceValid(panel) && panel.Visible && panel.GetGlobalRect().Position.X - origin < _hudLayer.Size.X * 0.5f)
                 left = MathF.Max(left, panel.GetGlobalRect().End.X - origin + Ui.Gap(8));

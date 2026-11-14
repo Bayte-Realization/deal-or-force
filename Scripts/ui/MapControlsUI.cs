@@ -224,7 +224,11 @@ public partial class DealOrForceGame
 
     private Button MapVisualToggle(string setting, string caption, string help, float width)
     {
-        var button = ActionButton(caption, () =>
+        // "TRADE" is also the name of a screen, and a language whose word for it is long
+        // ("ТОРГОВЛЯ") had it cut off here at the button's edge. The switch may have a caption of
+        // its own - map.toggle.<CAPTION> - and falls back to the shared word.
+        var ownCaption = "map.toggle." + caption;
+        var button = ActionButton(Simulation.Loc.Has(ownCaption) ? ownCaption : caption, () =>
         {
             SettingsCatalog.Store(setting, !SettingsCatalog.Flag(setting)); ApplySetting(setting); RefreshMapVisualToggles();
         }, MathF.Max(width, ToggleWidth), 34);
