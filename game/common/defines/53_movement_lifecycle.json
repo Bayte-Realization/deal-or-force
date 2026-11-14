@@ -4,5 +4,15 @@
   "MovementQuietDissolutionDays": 240,
   "MovementEmergencePerReview": 2,
   "MovementMinimumAudienceShare": 0.08,
+  // A government in exile or an underground fades when its legitimacy is under this, no country
+  // both recognises it and pays for it, and it has no real strength at home (a following and
+  // fighters above the crushed thresholds, or an army). An unrecognised movement drifts to 0.1
+  // and one terror listing alone settles it near 0.06: 0.05 takes two or more listings that
+  // recognition does not offset, or its own violence, and it climbs back once those stop.
+  "MovementExileFadeLegitimacy": 0.05,
+  // How long it may fade before it is gone (MovementFall.Endure): three years, enough to outlive
+  // a bad spell or find a new patron, too short to keep an office nobody recognises for decades.
+  // 0 turns the rule off.
+  "MovementExileFadeDays": 1095,
   "Features": { "movement_lifecycle": true }
 }

@@ -14,6 +14,8 @@ static class Program
         if (args.Contains("--capital-returns-only")) { CapitalReturnsTests.Run(); return; }
         if (args.Length == 0) CapitalReturnsTests.Run();
         if (args.Contains("--recognition-index-only")) { RecognitionIndexTests.Run(); return; }
+        if (args.Contains("--exile-origin-only")) { ExileOriginTests.Run(); return; }
+        if (args.Length == 0) ExileOriginTests.Run();
         if (args.Contains("--region-id-walk-only")) { RegionIdWalkTests.Run(); return; }
         if (args.Contains("--movement-quiet-think-only")) { MovementQuietThinkTests.Run(); return; }
         if (args.Contains("--weekly-diplomacy-scan-only")) { WeeklyDiplomacyScanTests.Run(); return; }

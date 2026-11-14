@@ -746,8 +746,15 @@ public static class SecessionEvents
         if (matchingMovement is not null)
         {
             born = matchingMovement;
-            born.FoundedInRevolt = revolt;
-            born.SecededFromId = parent.Id;
+            // A government in exile coming home is that country restored, not a rising born today:
+            // its birth record stays what it was, or the next time it lost its ground it would be
+            // read as never having had a government (MovementFall.HadGovernment). The war's live
+            // link to the state it rose against is written below by SecessionResponse.Begin.
+            if (!(MovementFall.GovernmentInExile(born.Movement) && MovementFall.HadGovernment(campaign, born)))
+            {
+                born.FoundedInRevolt = revolt;
+                born.SecededFromId = parent.Id;
+            }
             // Permanent: the live link may be cleared by a later peace, and this one may not.
             born.RevoltParentId = parent.Id;
             var movementStateName = MovementCatalog.Of(matchingMovement.Movement?.Id)?.StateName;

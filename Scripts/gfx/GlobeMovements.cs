@@ -153,8 +153,13 @@ public sealed partial class GlobePresentation
             Spread(camera);
         }
 
+        // A beaten rising gone underground has no office anyone could point to: its fighters are
+        // hidden among its own people (MovementFall.GoUnderground). The region it works from is
+        // kept for the simulation, and the movement stays in the lists and panels, but there is
+        // no headquarters on the map to draw.
         private static bool Standing(MovementState state) =>
-            state is { Landless: true, Dissolved: false } && state.HeadquartersStateMapIndex >= 0;
+            state is { Landless: true, Dissolved: false } && state.HeadquartersStateMapIndex >= 0 &&
+            !state.Id.StartsWith(Simulation.MovementCatalog.UndergroundPrefix, StringComparison.Ordinal);
 
         internal bool TryPickAt(Vector2 position, out Simulation.Nation best)
         {
