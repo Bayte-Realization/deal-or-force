@@ -17,7 +17,7 @@
   "Lines claim {0:P0} of the industry · the rest of the economy runs at {1:P0}": "Линии заняли {0:P0} промышленности · остальная экономика работает на {1:P0}",
   "made {0:0.0} · wanted {1:0.0} · supplied {2:P0}": "произведено {0:0.0} · нужно {1:0.0} · покрытие {2:P0}",
   "What this line claims of the whole industry. Everything not on a line makes do with what the lines leave, so a share given here is taken from the rest of the economy.": "Какую долю всей промышленности занимает эта линия. Всё, что не на линии, обходится остатком — доля, отданная здесь, берётся у остальной экономики.",
-  "Nothing the economy is short of this week.": "На этой неделе экономике ничего не не хватает.",
+  "Nothing the economy is short of this week.": "На этой неделе экономике всего хватает.",
   "{0} · supplied {1:P0} · made {2:0.0}, wanted {3:0.0}, bought in {4:0.0}": "{0} · покрытие {1:P0} · произведено {2:0.0}, нужно {3:0.0}, ввезено {4:0.0}",
   "War industry, production lines and the goods they make.": "Военная промышленность, производственные линии и то, что они выпускают.",
   "DIPLOMACY": "ДИПЛОМАТИЯ",
