@@ -1,0 +1,18 @@
+// The planet behind the main menu (Scripts/MenuGlobe.cs).
+//
+// Three small shaders: the ball, the air outside its edge, and the dark with its stars. The
+// two pictures the ball wears are ordinary sprites, found by file name like every other:
+//
+//   menu_globe          the world, 2:1, longitude -180 at the left edge (interface/brand)
+//   menu_globe_lights   where its lights are at night, greyscale, the same projection
+//
+// Both are baked from the game's own map by Tools/bake-menu-globe.py. A mod that wants its
+// own world behind the menu ships pictures with those names; a mod that wants a different
+// kind of planet - rings, two suns, no air - names its own shaders here.
+{
+  "shaders": {
+    "menu_globe": "res://game/gfx/interface/shaders/menu_globe.gdshader",
+    "menu_globe_air": "res://game/gfx/interface/shaders/menu_globe_air.gdshader",
+    "menu_globe_sky": "res://game/gfx/interface/shaders/menu_globe_sky.gdshader"
+  }
+}

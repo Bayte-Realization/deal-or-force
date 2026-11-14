@@ -138,6 +138,9 @@
 
     // How bright the illustrations behind the main menu are (MenuIllustrations): 1 as painted,
     // lower to sink them under the grid and the logo.
-    "menu.backdrop_brightness": 0.42
+    "menu.backdrop_brightness": 0.42,
+    // How bright the planet behind the main menu is (MenuGlobe): 1 as baked, lower for a
+    // skin whose menu wants the world further back.
+    "menu.globe_brightness": 1.0
   }
 }

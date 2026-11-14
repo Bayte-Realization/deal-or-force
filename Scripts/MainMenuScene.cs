@@ -39,10 +39,11 @@ public enum MenuIntent
 /// world is built when a player asks for one. What they came for travels across the scene
 /// change as a <see cref="MenuIntent"/>, which the campaign reads once on the way up.
 ///
-/// The backdrop is drawn rather than painted: a graticule on a dark ground, drifting very
-/// slowly, and the limb of a globe behind the panel. No image file, nothing to load, and it
-/// is the one thing on screen while the player decides - so it is strict, quiet and does not
-/// compete with the logo.
+/// Behind the column of buttons stands a small live planet (<see cref="MenuGlobe"/>): one ball
+/// and one picture of the world baked from the game's own map, turning slowly and answering
+/// the hand. It is not the campaign's globe and loads none of its rasters. Where its pictures
+/// are missing the menu falls back to a still, and where that is missing too, to a drawn
+/// graticule (<see cref="AtlasBackdrop"/>) that needs no file at all.
 /// </summary>
 public partial class MainMenuScene : Control
 {
@@ -114,12 +115,18 @@ public partial class MainMenuScene : Control
         if (MusicCatalog.Count == 0) MusicCatalog.Load();
         MusicDirector.Ensure(this).FollowScene(this, () => MusicCatalog.Moment.Menu);
 
-        AddChild(new AtlasBackdrop { MouseFilter = MouseFilterEnum.Ignore });
-        // The world itself, behind everything: the game's own globe as the game draws it at the
-        // start of 2024, photographed from the running game with the names off so the picture
-        // reads the same in every language. The menu used to be a column of eight equal buttons
-        // on a black sheet, which says nothing about what is being started; this says it before
-        // a word is read. A mod replaces the sprite `menu_world` and nothing else.
+        // The frame limit the player chose. It used to be applied only when the setting was
+        // changed or the window lost focus, so a menu opened fresh ran uncapped - harmless over
+        // a still picture, a hot graphics card over a turning planet.
+        Engine.MaxFps = Math.Max(0, (int)MathF.Round(SettingsCatalog.Number("max_fps")));
+
+        // The world itself, behind everything: a live planet wearing the game's own map as it
+        // stands on the first day - no badges, no stars, no names, so it reads the same in
+        // every language. The menu used to be a column of eight equal buttons on a black
+        // sheet, which says nothing about what is being started; this says it before a word is
+        // read. The drawn graticule is only laid when there is no planet to cover it: under an
+        // opaque world it was redrawn every frame for nobody.
+        if (!MenuGlobe.Available()) AddChild(new AtlasBackdrop { MouseFilter = MouseFilterEnum.Ignore });
         AddChild(new MenuWorld());
         // The illustrations over the drawn ground, dimmed so the grid and the logo still lead.
         AddChild(new MenuIllustrations());
@@ -785,14 +792,14 @@ public partial class MainMenuScene : Control
 }
 
 /// <summary>
-/// The world behind the menu: one photograph of the game's own globe, darkened towards the
-/// side the menu stands on.
+/// The world behind the menu, darkened towards the side the menu stands on.
 ///
-/// A picture rather than the live map on purpose. The menu exists so that nobody waits for
-/// thirty-eight thousand provinces before they can press "Settings"; a raster costs one
-/// texture and is there on the first frame. It drifts a few per cent over a minute and a half
-/// so the screen is not a still, and the shade over it is drawn from the skin's own ground
-/// colour, so a reskin darkens it in its own hue.
+/// A live planet when its pictures are there (<see cref="MenuGlobe"/>), and otherwise the
+/// still it replaced: one picture of the world, which is also what the plain loading screen
+/// shows (<see cref="ShippedPath"/>). Never the campaign's map - the menu exists so that
+/// nobody waits for thirty-eight thousand provinces before they can press "Settings". The
+/// shade over either is drawn from the skin's own ground colour, so a reskin darkens it in
+/// its own hue.
 /// </summary>
 public partial class MenuWorld : Control
 {
@@ -811,6 +818,16 @@ public partial class MenuWorld : Control
         MouseFilter = MouseFilterEnum.Ignore;
         ClipContents = true;
 
+        if (MenuGlobe.Available())
+        {
+            AddChild(new MenuGlobe());
+            // The planet stands clear of the column on a wide screen, so the shade is only a
+            // breath there; on a narrow one the planet runs under the buttons and the shade is
+            // what keeps them readable.
+            AddChild(Shade(0.62f, 0.34f, 0f, 0f));
+            return;
+        }
+
         var path = SpriteCatalog.TextureOf("menu_world", ShippedPath);
         if (string.IsNullOrWhiteSpace(path) || !ResourceLoader.Exists(path)) return;
         _picture = new TextureRect
@@ -824,25 +841,35 @@ public partial class MenuWorld : Control
         _picture.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(_picture);
 
-        // Dark where the menu column stands, clear where the world is: one gradient, left to right.
+        AddChild(Shade(0.94f, 0.82f, 0.08f, 0.16f));
+    }
+
+    /// <summary>
+    /// Dark where the menu column stands, clear where the world is: one gradient, left to
+    /// right, in the skin's ground colour. The four numbers are how much of it lies at the
+    /// left edge, at a quarter, past the middle and at the right edge.
+    /// </summary>
+    private static TextureRect Shade(float edge, float column, float world, float far)
+    {
         var ground = Ui.Colour("surface.background");
         var gradient = new Gradient
         {
             Offsets = new[] { 0f, 0.26f, 0.58f, 1f },
             Colors = new[]
             {
-                new Color(ground, 0.94f), new Color(ground, 0.82f), new Color(ground, 0.08f), new Color(ground, 0.16f)
+                new Color(ground, edge), new Color(ground, column), new Color(ground, world), new Color(ground, far)
             }
         };
         var shade = new TextureRect
         {
+            Name = "MenuWorldShade",
             Texture = new GradientTexture2D { Gradient = gradient, Width = 256, Height = 4 },
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.Scale,
             MouseFilter = MouseFilterEnum.Ignore
         };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        AddChild(shade);
+        return shade;
     }
 
     public override void _Process(double delta)
