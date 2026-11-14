@@ -21,6 +21,22 @@ public static class BattleMovementOrders
         army.PostBattleSupportAttack = false;
     }
 
+    /// <summary>
+    /// Whether a right-click on the province a fighting formation stands in takes it out of
+    /// its battle. Only an attack is broken off that way: an attacker stands in the province
+    /// it attacks from, so stopping leaves it exactly where it is. A defender stands in the
+    /// province being fought for, and the same withdrawal would march it out and hand the
+    /// ground to the enemy - a player who clicks the province his army holds means "hold
+    /// it", so the defence stays and the click only clears queued orders (MoveArmyCommand).
+    /// Giving ground up is H or Leave battle, behind the last-defender warning.
+    /// </summary>
+    public static bool OwnProvinceClickBreaksOff(Campaign campaign, Army army, int provinceId)
+    {
+        if (campaign is null || army is null || !army.InBattle || army.ProvinceId != provinceId) return false;
+        var battle = campaign.Battles.Find(candidate => candidate.Id == army.BattleId && !candidate.Ended);
+        return battle is not null && battle.ProvinceId != provinceId && battle.Attackers.Contains(army.Id);
+    }
+
     internal static void Resume(Campaign campaign, Army army)
     {
         if (army.InBattle || army.ReadyDay > campaign.ElapsedDays || army.PostBattleWaypoints.Count == 0) return;

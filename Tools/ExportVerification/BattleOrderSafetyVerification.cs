@@ -127,14 +127,29 @@ public partial class ExportVerification
                 if (ownTile) game.VerificationQueueBattleOrder(selected, selected.ProvinceId);
                 else BattleH();
                 var label = $"{language}{size.X} {(defending ? "defender" : "attacker")} {(ownTile ? "own-tile RMB" : "H")}";
-                Check(!selected.InBattle && battle.Ended && selected.PostBattleWaypoints.Count == 0 &&
-                    !game.GetChildren().OfType<ConfirmationDialog>().Any(d => d.Visible),
-                    "quick exit leaves battle immediately without confirmation: " + label);
-                Check(selected.Organisation == organisation && selected.Equipment == equipment &&
-                    selected.Personnel == personnel && c.ElapsedHours == hours && c.IsPaused &&
-                    (defending ? selected.ProvinceId != source && selected.ReadyDay > c.ElapsedDays :
-                        selected.ProvinceId == front && c.ProvinceController[source] == own.MapIndex),
-                    "quick exit uses normal retreat without healing or skipping time: " + label);
+                if (defending && ownTile)
+                {
+                    // Right-clicking the province one's army is defending means "hold it":
+                    // the queue is cleared and nobody retreats out of the clicked province.
+                    Check(selected.InBattle && !battle.Ended && selected.ProvinceId == source &&
+                        selected.PostBattleWaypoints.Count == 0 && c.ProvinceController[source] == own.MapIndex &&
+                        !game.GetChildren().OfType<ConfirmationDialog>().Any(d => d.Visible),
+                        "own-tile RMB holds a defence instead of retreating out of it: " + label);
+                    Check(selected.Organisation == organisation && selected.Equipment == equipment &&
+                        selected.Personnel == personnel && c.ElapsedHours == hours && c.IsPaused,
+                        "holding the defence changes nothing else: " + label);
+                }
+                else
+                {
+                    Check(!selected.InBattle && battle.Ended && selected.PostBattleWaypoints.Count == 0 &&
+                        !game.GetChildren().OfType<ConfirmationDialog>().Any(d => d.Visible),
+                        "quick exit leaves battle immediately without confirmation: " + label);
+                    Check(selected.Organisation == organisation && selected.Equipment == equipment &&
+                        selected.Personnel == personnel && c.ElapsedHours == hours && c.IsPaused &&
+                        (defending ? selected.ProvinceId != source && selected.ReadyDay > c.ElapsedDays :
+                            selected.ProvinceId == front && c.ProvinceController[source] == own.MapIndex),
+                        "quick exit uses normal retreat without healing or skipping time: " + label);
+                }
                 game.VerificationShowOrderBattle(battle);
                 await Wait(.15);
                 await Capture("battle-quick-exit-" + language + "-" + size.X + "-" + (defending ? "defender" : "attacker") +

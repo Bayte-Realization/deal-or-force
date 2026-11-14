@@ -20,6 +20,8 @@ static class Program
         if (args.Contains("--people-index-names-only")) { PeopleIndexNamesTests.Run(); return; }
         if (args.Contains("--society-passes-only")) { SocietyPassTests.Run(); return; }
         if (args.Contains("--battle-occupancy-hold-only")) { BattleOccupancyHoldTests.Run(); return; }
+        if (args.Contains("--own-province-click-only")) { OwnProvinceClickTests.Run(); return; }
+        if (args.Length == 0) OwnProvinceClickTests.Run();
         if (args.Contains("--battle-damage-isolation-only")) { BattleDamageIsolationTests.Run(); return; }
         if (args.Contains("--battle-side-isolation-only")) { BattleSideIsolationTests.Run(); return; }
         if (args.Contains("--smooth-heavy-yield-only")) { SmoothHeavyYieldTests.Run(); return; }

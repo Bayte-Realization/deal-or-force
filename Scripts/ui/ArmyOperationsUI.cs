@@ -75,7 +75,7 @@ public partial class DealOrForceGame
         _selectedNation = _campaign.NationById(army.NationId);
         _globe.SelectArmy(army.Id);
         ShowSelectedArmy();
-        SetArmyFeedback((army.InBattle ? Tr("In combat: H or RMB on the formation's current province leaves battle immediately. Other map orders wait; Alt+H cancels only the queue.") + " " : "") + Tr("RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
+        SetArmyFeedback((army.InBattle ? Tr("In combat: H leaves battle immediately. RMB on the formation's current province breaks off an attack and holds a defence. Other map orders wait; Alt+H cancels only the queue.") + " " : "") + Tr("RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
               "the ground · Shift+click adds a division, Ctrl+click removes one.  " +
               "H halt · Ctrl+H off the plan · Shift+H back on it · Ctrl+B rail them there · Ctrl+K consolidate · " +
               "Ctrl+G guard an area · Ctrl+F plan cohesion."));
@@ -370,12 +370,15 @@ public partial class DealOrForceGame
         var supporting = Input.IsKeyPressed(Key.Ctrl) && !append;
         var railing = _redeploymentArmed && !append && !supporting;
         var withdrawalFeedback = "";
-        // Returning an order to the formation's own position is an explicit stop, like
-        // H, not a new destination. Only the selected formations on that tile leave;
-        // ordinary orders elsewhere still wait for combat to finish.
+        // Returning an order to the formation's own position is an explicit stop, not a
+        // new destination. An attack is broken off at once and the attacker stays where
+        // it stands; a defence is held - it used to retreat out of the very province the
+        // player had clicked to keep (BattleMovementOrders.OwnProvinceClickBreaksOff).
+        // Ordinary orders elsewhere still wait for combat to finish.
         if (!append && !supporting && !railing)
         {
-            var leaving = targets.Where(army => army.InBattle && army.ProvinceId == pick.ProvinceId)
+            var leaving = targets.Where(army =>
+                    Simulation.BattleMovementOrders.OwnProvinceClickBreaksOff(_campaign, army, pick.ProvinceId))
                 .Select(army => army.Id).ToHashSet();
             if (leaving.Count > 0)
             {

@@ -238,7 +238,7 @@ public partial class DealOrForceGame
         plans.AddThemeConstantOverride("v_separation", 4);
         plansPage.AddChild(plans);
         AddOrderButton(plans, "army_halt", ArmyOrder.Manual, "Halt",
-            "H: stop movement or leave battle immediately. RMB on the formation's current province does the same. Alt+H cancels only queued post-battle orders.");
+            "H: stop movement or leave battle immediately. RMB on the formation's current province stops a march or breaks off an attack, and holds a defence. Alt+H cancels only queued post-battle orders.");
         var leaveBattle = ArmyIconButton("Leave battle", WithdrawSelectedDivisions, 110, 36, false, "army_withdraw");
         _withdrawSelectedButton = leaveBattle;
         leaveBattle.Name = "WithdrawSelectedDivisions";
