@@ -583,7 +583,7 @@ public sealed partial class GlobePresentation
         var w = width * s;
         var h = height * s;
         var national = nation is not null ? new Color(nation.Color) : accent;
-        var brass = new Color(0.84f, 0.72f, 0.44f);
+        var brass = Ui.Colour("map.counter_rim");
         var line = selected ? Ui.Colour("text.accent") : national.Lightened(0.28f);
         var ink = new Color(0.025f, 0.035f, 0.045f, 0.99f);
         var topBg = new Color(0.13f, 0.165f, 0.20f, 0.96f);

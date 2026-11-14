@@ -388,7 +388,7 @@ public sealed partial class GlobePresentation
             point += badge.Offset;
             var box = new Rect2(point.X - badge.Width / 2f, point.Y - iconSize / 2f, badge.Width, iconSize);
             DrawRect(box.Grow(2f), new Color(0.03f, 0.05f, 0.08f, 0.82f * a), true);
-            DrawRect(box.Grow(2f), new Color(0.88f, 0.76f, 0.46f, 0.9f * a), false, 1f);
+            DrawRect(box.Grow(2f), Ui.Colour("map.counter_rim", 0.55f * a), false, 1f);
             var x = box.Position.X + 2f;
             var main = badge.Main is { } kind ? RegionIcon(DealOrForceGame.BuildingIconName(kind)) : badge.Ground is not null ? RegionIcon(badge.Ground) : null;
             if (main is not null)

@@ -4682,7 +4682,7 @@ void fragment() {
         var image = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
         var outerDark = new Color(0.03f, 0.06f, 0.09f, 0.98f);
         var frameTeal = new Color(0.24f, 0.46f, 0.56f, 0.98f);
-        var brassRim = new Color(0.84f, 0.72f, 0.42f, 0.96f);
+        var brassRim = Ui.Colour("map.counter_rim", 0.96f);
         var bodyTop = new Color(0.09f, 0.17f, 0.24f, 0.96f);
         var bodyBot = new Color(0.05f, 0.10f, 0.15f, 0.96f);
         var bayFill = new Color(0.03f, 0.07f, 0.11f, 0.96f);

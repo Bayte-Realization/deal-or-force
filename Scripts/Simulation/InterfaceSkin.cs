@@ -44,9 +44,9 @@ public static class InterfaceSkin
     {
         // Text - a five-step ramp from the brightest figure to the faintest footnote,
         // plus the gold that marks a heading and the caption grey above a control.
-        ("text.accent",         "#ddc17a"),
-        ("text.accent_dim",     "#c2ad76"),
-        ("icon.commodity",      "#b48732"),
+        ("text.accent",         "#efe4c8"),
+        ("text.accent_dim",     "#c9c0a8"),
+        ("icon.commodity",      "#d8cfb8"),
         ("text.bright",         "#eef4fb"),
         ("text.body",           "#e9eef5"),
         ("text.body_soft",      "#c8d3e0"),
@@ -116,7 +116,7 @@ public static class InterfaceSkin
         // Buttons
         ("button.text",             "#edf2f7"),
         ("button.text_hover",       "#f5f7fa"),
-        ("button.text_pressed",     "#d8c48c"),
+        ("button.text_pressed",     "#cfe1f7"),
         ("button.text_disabled",    "#667586"),
         ("button.fill",             "#151e28"),
         ("button.fill_hover",       "#1b2733"),
@@ -124,14 +124,18 @@ public static class InterfaceSkin
         ("button.fill_disabled",    "#10161e"),
         ("button.border",           "#3b4856"),
         ("button.border_hover",     "#7c8997"),
-        ("button.border_pressed",   "#a89058"),
+        ("button.border_pressed",   "#5f97d6"),
         ("button.border_disabled",  "#29333d"),
-        ("button.primary_fill",         "#3d321f"),
-        ("button.primary_fill_hover",   "#514326"),
-        ("button.primary_fill_pressed", "#292216"),
-        ("button.primary_border",       "#c8ab63"),
+        ("button.primary_fill",         "#1d4477"),
+        ("button.primary_fill_hover",   "#27569a"),
+        ("button.primary_fill_pressed", "#16335a"),
+        ("button.primary_border",       "#6da7e6"),
 
         // Map modes. A total conversion repainting the political map does it here.
+        // The light edge of everything that stands on the map: unit counters, fleet chips, the
+        // building badge. It was six separate brass literals in the drawing code, which is why a
+        // reskin could change every panel and the map still wore gold trim.
+        ("map.counter_rim",     "#c9c0a8"),
         ("map.player",          "#4fb477"),
         ("map.at_war",          "#c94f55"),
         ("map.allied",          "#4e83c7"),
@@ -224,8 +228,8 @@ public static class InterfaceSkin
 
         // Charts
         ("chart.tick",      "#687a8c"),
-        ("chart.hover",     "#f3d46fcc"),
-        ("chart.row_hover", "#fff0b0"),
+        ("chart.hover",     "#9cc4f0cc"),
+        ("chart.row_hover", "#dfeeff"),
 
         // Goods and buildings. Content colours, so a mod adding a good picks its own.
         ("goods.industrial_materials", "#aeb8c2"),

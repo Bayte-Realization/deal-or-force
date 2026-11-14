@@ -50,7 +50,7 @@ public sealed partial class GlobePresentation
         var h = height * s;
         var pixels = new byte[w * h * 4];
         var national = new Color(nation.Color);
-        var brass = new Color(0.84f, 0.72f, 0.44f);
+        var brass = Ui.Colour("map.counter_rim");
         var rimLight = national.Lightened(0.36f).Lerp(brass, 0.22f);
         var rimBase = national.Lightened(0.18f);
         var rimDark = national.Darkened(0.24f);
@@ -396,7 +396,7 @@ public sealed partial class GlobePresentation
         var cw = Math.Max(2, (int)MathF.Round(chipWidth));
         var ch = Math.Max(2, (int)MathF.Round(chipHeight));
         var outerShadow = new Color(0.015f, 0.022f, 0.030f, 0.98f);
-        var brassRim = new Color(0.88f, 0.76f, 0.46f, 0.96f);
+        var brassRim = Ui.Colour("map.counter_rim", 0.96f);
         for (var y = -2; y <= ch + 1; y++)
         for (var x = -2; x <= cw + 1; x++)
         {

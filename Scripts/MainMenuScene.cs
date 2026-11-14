@@ -115,58 +115,48 @@ public partial class MainMenuScene : Control
         MusicDirector.Ensure(this).FollowScene(this, () => MusicCatalog.Moment.Menu);
 
         AddChild(new AtlasBackdrop { MouseFilter = MouseFilterEnum.Ignore });
+        // The world itself, behind everything: the game's own globe as the game draws it at the
+        // start of 2024, photographed from the running game with the names off so the picture
+        // reads the same in every language. The menu used to be a column of eight equal buttons
+        // on a black sheet, which says nothing about what is being started; this says it before
+        // a word is read. A mod replaces the sprite `menu_world` and nothing else.
+        AddChild(new MenuWorld());
         // The illustrations over the drawn ground, dimmed so the grid and the logo still lead.
         AddChild(new MenuIllustrations());
 
+        // One column on the left, anchored to the screen's edge and its middle rather than to
+        // pixel positions, so it sits the same on a wide monitor and on a phone held sideways.
         var panel = new PanelContainer();
-        panel.AddThemeStyleboxOverride("panel", MenuPanelStyle());
-        panel.SetAnchorsPreset(LayoutPreset.Center);
-        panel.AnchorLeft = 0.5f;
-        panel.AnchorRight = 0.5f;
+        panel.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
+        panel.AnchorLeft = 0f;
+        panel.AnchorRight = 0f;
         panel.AnchorTop = 0.5f;
         panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = -230;
-        panel.OffsetRight = 230;
-        panel.OffsetTop = -300;
-        panel.OffsetBottom = 300;
-        panel.GrowHorizontal = GrowDirection.Both;
+        panel.OffsetLeft = 88;
+        panel.OffsetRight = 88 + 430;
+        panel.OffsetTop = -330;
+        panel.OffsetBottom = 330;
         panel.GrowVertical = GrowDirection.Both;
         AddChild(panel);
         _menu = panel;
 
-        var margin = new MarginContainer();
-        foreach (var side in new[] { "left", "right" }) margin.AddThemeConstantOverride("margin_" + side, 30);
-        foreach (var side in new[] { "top", "bottom" }) margin.AddThemeConstantOverride("margin_" + side, 26);
-        panel.AddChild(margin);
-
-        var rows = new VBoxContainer();
+        var rows = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         rows.AddThemeConstantOverride("separation", 9);
-        margin.AddChild(rows);
+        panel.AddChild(rows);
 
         // The thumbnail's parchment plaque supplies its own edge. Do not put a second
         // rectangular paper/gold frame behind its transparent worn perimeter.
-        var logoPlate = new PanelContainer { MouseFilter = MouseFilterEnum.Ignore };
-        var plateStyle = new StyleBoxFlat
-        {
-            BgColor = Colors.Transparent,
-            BorderColor = Colors.Transparent,
-            CornerRadiusTopLeft = 3, CornerRadiusTopRight = 3,
-            CornerRadiusBottomLeft = 3, CornerRadiusBottomRight = 3
-        };
-        plateStyle.SetBorderWidthAll(1);
-        logoPlate.AddThemeStyleboxOverride("panel", plateStyle);
-        logoPlate.AddChild(new TextureRect
+        rows.AddChild(new TextureRect
         {
             Name = "MenuGameLogo", Texture = BrandAssets.GamePlaque(),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            CustomMinimumSize = new Vector2(0, 200),
+            CustomMinimumSize = new Vector2(0, 214),
             MouseFilter = MouseFilterEnum.Ignore
         });
-        rows.AddChild(logoPlate);
 
-        rows.AddChild(MenuCaption("Choose a world. Shape its future.", 15, "text.muted"));
-        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
+        rows.AddChild(MenuCaption("Choose a world. Shape its future.", 15, "text.body_soft"));
+        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 14) });
 
         // What a player came for is the first, lit button - and that depends on who they are.
         // Somebody with a campaign on disk came back to it, so "Continue" leads and a new game
@@ -174,18 +164,37 @@ public partial class MainMenuScene : Control
         // The old pair was "Singleplayer" (always lit) and "Load latest campaign" (never lit),
         // which made a returning player read two labels to find the one they wanted.
         // Only the names of the files are looked at: reading their headers is the archive's job.
+        //
+        // Three weights, because eight equal rows made the player read all eight: the one lit
+        // action, then the other ways into a game, then - smaller and two to a row - the things
+        // that are not playing.
         var saveRoot = DealOrForceGame.ResolveSaveRoot();
         var hasSaves = System.IO.Directory.Exists(saveRoot)
             && System.IO.Directory.EnumerateFiles(saveRoot, "*.bdfsave*").Any();
-        if (hasSaves) rows.AddChild(MenuAction("Continue", () => Enter(MenuIntent.LoadLatest), 46, true));
-        rows.AddChild(MenuAction("New campaign", () => Enter(MenuIntent.NewCampaign), hasSaves ? 42 : 46, !hasSaves));
-        rows.AddChild(MenuAction("Load campaign", ShowArchive, 42));
-        rows.AddChild(MenuAction("Multiplayer · LAN / IP", () => Enter(MenuIntent.Multiplayer), 42));
-        rows.AddChild(MenuAction("Settings", ShowSettings, 42));
-        _language = MenuAction(LanguageLabel(), CycleLanguage, 42);
-        rows.AddChild(_language);
-        rows.AddChild(MenuAction("Credits", ShowCredits, 42));
-        rows.AddChild(MenuAction("Quit to desktop", () => ApplicationExit.Request(this), 42));
+        if (hasSaves) rows.AddChild(MenuAction("Continue", () => Enter(MenuIntent.LoadLatest), 56, true));
+        rows.AddChild(MenuAction("New campaign", () => Enter(MenuIntent.NewCampaign), hasSaves ? 44 : 56, !hasSaves));
+        rows.AddChild(MenuAction("Load campaign", ShowArchive, 44));
+        rows.AddChild(MenuAction("Multiplayer · LAN / IP", () => Enter(MenuIntent.Multiplayer), 44));
+
+        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 10) });
+        var quiet = new GridContainer { Columns = 2 };
+        quiet.AddThemeConstantOverride("h_separation", 9);
+        quiet.AddThemeConstantOverride("v_separation", 9);
+        rows.AddChild(quiet);
+        _language = MenuAction(LanguageLabel(), CycleLanguage, 36);
+        foreach (var button in new[]
+                 {
+                     MenuAction("Settings", ShowSettings, 36),
+                     _language,
+                     MenuAction("Credits", ShowCredits, 36),
+                     MenuAction("Quit to desktop", () => ApplicationExit.Request(this), 36)
+                 })
+        {
+            button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            button.AddThemeFontSizeOverride("font_size", 13);
+            button.ClipText = true;
+            quiet.AddChild(button);
+        }
 
         RefreshModFrontendMenu();
         _modActions = ModFrontendMenu.Create(_menuMods.FrontendActions, id =>
@@ -757,7 +766,7 @@ public partial class MainMenuScene : Control
         };
         button.SetMeta(SourceMeta, text);
         DealOrForceGame.StyleButton(button, primary);
-        button.AddThemeFontSizeOverride("font_size", height >= 46 ? 16 : 14);
+        button.AddThemeFontSizeOverride("font_size", height >= 56 ? 19 : height >= 46 ? 16 : 14);
         button.Pressed += pressed;
         return button;
     }
@@ -772,6 +781,79 @@ public partial class MainMenuScene : Control
         };
         box.SetBorderWidthAll(1);
         return box;
+    }
+}
+
+/// <summary>
+/// The world behind the menu: one photograph of the game's own globe, darkened towards the
+/// side the menu stands on.
+///
+/// A picture rather than the live map on purpose. The menu exists so that nobody waits for
+/// thirty-eight thousand provinces before they can press "Settings"; a raster costs one
+/// texture and is there on the first frame. It drifts a few per cent over a minute and a half
+/// so the screen is not a still, and the shade over it is drawn from the skin's own ground
+/// colour, so a reskin darkens it in its own hue.
+/// </summary>
+public partial class MenuWorld : Control
+{
+    public const string ShippedPath = "res://game/gfx/interface/brand/menu_world.png";
+
+    /// <summary>How much of the picture's light survives. The menu must lead, not the map.</summary>
+    private const float Brightness = 0.92f;
+
+    private TextureRect _picture;
+    private double _time;
+
+    public override void _Ready()
+    {
+        Name = "MenuWorld";
+        SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        MouseFilter = MouseFilterEnum.Ignore;
+        ClipContents = true;
+
+        var path = SpriteCatalog.TextureOf("menu_world", ShippedPath);
+        if (string.IsNullOrWhiteSpace(path) || !ResourceLoader.Exists(path)) return;
+        _picture = new TextureRect
+        {
+            Texture = GD.Load<Texture2D>(path),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+            Modulate = new Color(Brightness, Brightness, Brightness * 1.04f),
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        _picture.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(_picture);
+
+        // Dark where the menu column stands, clear where the world is: one gradient, left to right.
+        var ground = Ui.Colour("surface.background");
+        var gradient = new Gradient
+        {
+            Offsets = new[] { 0f, 0.26f, 0.58f, 1f },
+            Colors = new[]
+            {
+                new Color(ground, 0.94f), new Color(ground, 0.82f), new Color(ground, 0.08f), new Color(ground, 0.16f)
+            }
+        };
+        var shade = new TextureRect
+        {
+            Texture = new GradientTexture2D { Gradient = gradient, Width = 256, Height = 4 },
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.Scale,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(shade);
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_picture is null) return;
+        _time += delta;
+        // 1.00 to 1.05 and back over ninety seconds, about the centre: slow enough not to be
+        // noticed as motion, enough for the screen not to be a photograph.
+        var scale = 1.025f + 0.025f * Mathf.Sin((float)(_time * Mathf.Tau / 90.0));
+        _picture.PivotOffset = Size * new Vector2(0.62f, 0.5f);
+        _picture.Scale = new Vector2(scale, scale);
     }
 }
 

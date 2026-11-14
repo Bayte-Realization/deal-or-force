@@ -28,7 +28,7 @@ public sealed partial class GlobePresentation
         // Sample the full plate's rim and header national color
         var rim = source.GetPixel(Math.Min(3, source.GetWidth() - 1), source.GetHeight() / 2);
         var headerCol = source.GetPixel(Math.Min(20, source.GetWidth() - 1), Math.Min(12, source.GetHeight() - 1));
-        var brass = new Color(0.85f, 0.75f, 0.45f, 0.95f);
+        var brass = Ui.Colour("map.counter_rim", 0.95f);
 
         // 1. Draw outer rim in national color with subtle inner glow
         for (var y = 0; y < cardH; y++)
