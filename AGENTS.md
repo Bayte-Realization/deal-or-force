@@ -202,9 +202,12 @@ All of these are deliberately plain: no SDK, no installed package, nothing to ke
 
 Long runs do not survive a shell that is killed at 30 seconds. `Start-Process` children die
 with the shell that made them; a detached process created through WMI does not:
-`Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine='cmd.exe /c <script.bat>'}`.
+`Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine='cmd.exe /c <script.bat>'; ProcessStartupInformation=(New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ShowWindow=[uint16]0})}`.
 That is how a build, a test suite, or a 1825-day SimBench run is started here, with the
-output written to a log and read afterwards.
+output written to a log and read afterwards. **Always pass the hidden `ShowWindow=0` startup
+information.** Without it every run opens a visible Windows Terminal window, and Windows Terminal
+keeps the window open after a run that exits with an error - on 15 November 2026 the owner found
+46 of them on his desktop. Hidden runs open none (measured: 46 windows before and during one).
 
 The game's own release gate is `Tools/build.ps1` → `Tools/verify-build.ps1`, which runs the
 in-game `ExportVerification` probe inside the exported executable. That probe is game code and
