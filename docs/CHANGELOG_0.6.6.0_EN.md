@@ -1,13 +1,13 @@
-# Deal or Force — EntertAlpha 0.6.6
+# Deal or Force — EntertAlpha 0.6.6.0
 
 14 November 2026 · late-game speed, a truthful map, a new main menu, the first session
 
 A large release on top of 0.6.3.1. Below: what changed for the player, how it was checked,
 and what is still not done.
 
-## Release number 0.6.6
+## Release number 0.6.6.0
 
-- **0.6.6** is the same in the main menu, new save metadata, the game, the rules library,
+- **0.6.6.0** is the same in the main menu, new save metadata, the game, the rules library,
   the launcher and the Windows EXE, the Godot and export settings, the README, the build
   instructions and this changelog.
 - The save format, the map version and the network protocol are unchanged. Loading saves
