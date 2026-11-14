@@ -455,7 +455,8 @@ public partial class DealOrForceGame
         _stability?.Spark?.Push(day, player.Stability);
         _manpower?.Spark?.Push(day, player.ManpowerReserve);
         _inflation?.Spark?.Push(day, player.Inflation);
-        WriteMovementTopBar(player);
+        if (_observerMode) WriteObserverTopBar();
+        else WriteMovementTopBar(player);
         foreach (var stat in _hudStats) FitHudStat(stat);
         NoteFigureTips();
 

@@ -31,7 +31,9 @@ public static class HeadlinePopups
     public static (HeadlineTie Tie, Nation Through) Judge(Campaign campaign, NewsFeed.Line line)
     {
         var player = campaign?.Player;
-        if (player is null || line is null) return (HeadlineTie.World, null);
+        // Watching the world, nobody's country is "yours": the last country the picker showed is
+        // run by the computer like every other, and its news is the world's.
+        if (player is null || !player.IsHuman || line is null) return (HeadlineTie.World, null);
         var actor = campaign.NationById(line.ActorId);
         var target = campaign.NationById(line.TargetId);
         if (line.ActorId == player.Id || line.TargetId == player.Id)

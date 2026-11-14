@@ -1,0 +1,17 @@
+// The observer's top bar and situation report (Scripts/ui/ObserverTopBarUI.cs).
+{
+  "Nobody is steering: the computer runs every country.": "Nobody is steering: the computer runs every country.",
+  "What every country on the map produces in a year, added up.": "What every country on the map produces in a year, added up.",
+  "Wars being fought right now, between states and inside them.": "Wars being fought right now, between states and inside them.",
+  "Countries holding ground of their own.": "Countries holding ground of their own.",
+  "Everyone living in the world's countries.": "Everyone living in the world's countries.",
+  "How settled the world's people are on average: each country weighed by how many live in it.": "How settled the world's people are on average: each country weighed by how many live in it.",
+  "Divisions standing in the world's armies.": "Divisions standing in the world's armies.",
+  "{0} wars under way": "{0} wars under way",
+  "{0} countries hold ground": "{0} countries hold ground",
+  "{0} divisions": "{0} divisions",
+  "World GDP": "World GDP",
+  "World population": "World population",
+  "Average stability": "Average stability",
+  "a year": "a year"
+}

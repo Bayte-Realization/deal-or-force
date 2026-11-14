@@ -141,6 +141,14 @@ public partial class DealOrForceGame
             Callable.From(FitOutliner).CallDeferred();
             return;
         }
+        // Nobody's country is being run: the report is about the world, not the last country the
+        // picker happened to show (ObserverTopBarUI).
+        if (_observerMode)
+        {
+            DrawObserverOutliner();
+            Callable.From(FitOutliner).CallDeferred();
+            return;
+        }
 
         var armies = _campaign.Armies.Where(army => army.NationId == player.Id).ToArray();
         var lowSupply = armies.Count(army => army.SupplyLevel < StrategicHudBrief.LowSupply || army.CutOff);

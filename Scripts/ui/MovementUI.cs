@@ -861,6 +861,12 @@ public partial class DealOrForceGame
             "movement_support" => "Support",
             "movement_heat" => "Host's temper",
             "movement_uprising" => "Uprising",
+            "world_gdp" => "World GDP",
+            "world_wars" => "Wars",
+            "world_countries" => "Countries",
+            "world_population" => "World population",
+            "world_stability" => "Average stability",
+            "world_divisions" => "Divisions",
             _ => stat.CountryCaption
         });
         if (glyph is not null && SpriteCatalog.Has("icon_" + icon))
@@ -871,6 +877,7 @@ public partial class DealOrForceGame
     {
         if (!_topBarShowsMovement) return;
         _topBarShowsMovement = false;
+        RestoreObserverHidden();
         foreach (var (stat, country) in _topBarAsCountry)
         {
             if (stat?.Value?.GetParent() is not ExplainedStat box) continue;

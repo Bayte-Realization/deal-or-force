@@ -1,0 +1,17 @@
+// Верхняя полоса и сводка наблюдателя (Scripts/ui/ObserverTopBarUI.cs).
+{
+  "Nobody is steering: the computer runs every country.": "Никто не правит: всеми странами управляет компьютер.",
+  "What every country on the map produces in a year, added up.": "Сколько за год производят все страны на карте вместе.",
+  "Wars being fought right now, between states and inside them.": "Войны, которые идут прямо сейчас, — между государствами и внутри них.",
+  "Countries holding ground of their own.": "Страны, у которых есть своя земля.",
+  "Everyone living in the world's countries.": "Все, кто живёт в странах мира.",
+  "How settled the world's people are on average: each country weighed by how many live in it.": "Насколько спокойно в мире в среднем: каждая страна весит столько, сколько в ней живёт людей.",
+  "Divisions standing in the world's armies.": "Дивизии во всех армиях мира.",
+  "{0} wars under way": "Идёт войн: {0}",
+  "{0} countries hold ground": "Стран со своей землёй: {0}",
+  "{0} divisions": "Дивизий: {0}",
+  "World GDP": "ВВП мира",
+  "World population": "Население мира",
+  "Average stability": "Средняя стабильность",
+  "a year": "в год"
+}
