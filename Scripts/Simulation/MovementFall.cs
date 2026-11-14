@@ -154,6 +154,9 @@ public static class MovementFall
         {
             var owner = MovementRules.OwnerOf(campaign, region);
             if (owner is null || owner.Movement is not null || campaign.Homelands.ContainsKey(owner.Id)) continue;
+            // A map artefact (common/country_merges) carried by an old save is not a people's state:
+            // no homeland to return to.
+            if (CountryMerges.IsMerged(owner.Tag)) continue;
             held ??= new Dictionary<int, List<int>>();
             if (!held.TryGetValue(owner.Id, out var list)) held[owner.Id] = list = new List<int>();
             list.Add(region.MapIndex);
@@ -181,9 +184,12 @@ public static class MovementFall
             // has no government to send abroad. Nothing the world is built from is one any more
             // (the map source's glaciers and base areas are read past, CountryMerges); what
             // still arrives here is a country a mod or an old save left without a homeland.
-            if (!campaign.Homelands.TryGetValue(nation.Id, out var held) || held.Count == 0)
+            // So is an entry of the merge table an old save still carries, whatever was remembered
+            // for it: no exile, no underground, nothing for a later rising to revive.
+            if (!campaign.Homelands.TryGetValue(nation.Id, out var held) || held.Count == 0 || CountryMerges.IsMerged(nation.Tag))
             {
                 nation.Population = 0;
+                if (CountryMerges.IsMerged(nation.Tag)) campaign.Homelands.Remove(nation.Id);
                 nation.PublicImages.Clear();
                 continue;
             }

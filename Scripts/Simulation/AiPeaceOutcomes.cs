@@ -84,8 +84,8 @@ public sealed partial class Defines
 ///    Державы с ядерным оружием (Deterrence.TierOf >= 1) не могут аннексировать
 ///    территорию друг друга. Порог победы снижается пропорционально фактору грани фола
 ///    (brink), а условия мира ограничиваются освобождением оккупированных земель и
-///    репарациями. При DEFCON 2 и 1 это правило автоматически распространяется на
-///    все межгосударственные конфликты.
+///    репарациями. При DEFCON 2 и 1 это правило распространяется и на межгосударственные
+///    конфликты с участием одной ядерной державы, но не на все войны мира.
 ///
 /// 4. ОТРАЖЁННАЯ АГРЕССИЯ (Repelled Aggression):
 ///    Если обороняющийся успешно отразил вторжение и ведёт по очкам (AiPeaceRepelledScore),
@@ -200,7 +200,6 @@ public static partial class AiStatecraft
                 PeaceConference.Tally.TryGetValue("capitulation:subject_" + kind.Id, out var n) ? n + 1 : 1;
     }
 
-
     /// <summary>
     /// Drafts a decisive settlement treaty (unconditional capitulation, nuclear limited peace,
     /// repelled aggression settlement, or subjugation client state) before spending war score budget.
@@ -270,7 +269,9 @@ public static partial class AiStatecraft
         // settlement is liberation and money, never the aggressor's homeland on the map.
         var brink = global::DealOrForce.Simulation.Deterrence.Brinkmanship(campaign, war);
         // At DEFCON 2 and 1 a war a nuclear power is fighting is settled in the shadow too, not
-        // only one between two of them. Not every war on earth (NuclearPosture commit).
+        // only one between two of them. Not every war on earth: applied to all of them, one
+        // standoff between India and Pakistan ended the Sahel's wars as well, and a ten-year world
+        // had half the wars and a third of the new states.
         if (campaign.DefconLevel <= 2 && !absorbing && !war.CivilConflict &&
             war.Side(true).Concat(war.Side(false)).Any(id => NuclearPosture.IsHolder(campaign, campaign.NationById(id))))
             brink = MathF.Max(brink, (3 - campaign.DefconLevel) * 1.5f);

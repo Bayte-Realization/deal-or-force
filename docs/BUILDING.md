@@ -231,11 +231,8 @@ every pack on disk as owned, which is for testing and should stay `false` anywhe
 - **A signature.** Windows SmartScreen will warn about an unsigned `.exe` from the internet,
   and the tester will have to press "More info → Run anyway". Warn them in advance or half of
   them simply will not start it.
-- **Size.** The map rasters currently land in the build twice: Godot imports all 319 pngs into
-  the `.pck`, and the same files are placed beside it as ordinary files, because some of the
-  code reads them directly. For a test that is a few dozen wasted megabytes and nothing more;
-  they can be separated with export filters, but that is worth doing with a working build in
-  hand rather than before one.
+- **Size.** The package includes the managed runtime and loose game content. Map rasters
+  ship once, outside the `.pck`; the pack inspection rejects duplicate map resources.
 - **Windows only.** There is one preset. Linux is a second preset and the same templates.
 - **Native adapters.** Editor add-ons are excluded. The experimental editor Luau DLL is
   omitted by default: a 4.8 dev7 release-template test found heap corruption on shutdown.
@@ -258,3 +255,13 @@ frozen source/staging copy. It rejects a missing executable, a different Windows
 version and `-ReplaceExistingOutput`. A matching version alone does **not** establish source
 identity: retain the source snapshot and export logs. Never run it against an export that
 is still being written. Ordinary builds do not enable this recovery path.
+
+## Full doctrine release gate
+
+Use `Tools/build.ps1 -Godot <matching-engine.exe> -VerifyRenderers -VerifyDoctrines`.
+The ordinary executable probe already requires all 18 vanilla books, at least 16 articles
+in each and their advanced choices. `-VerifyDoctrines` additionally runs the real exported
+UI: mouse study/rush actions on pause, exclusive choices, four service filters and retained
+EN/RU screenshots at 1920×1080 and 1280×720. Inspect the screenshots as well as the exit code.
+Evidence remains outside the player package. The expected vanilla catalogue line is
+`DOCTRINE_CONTENT books=18 articles=288 advanced=144`; an old eight-article export is rejected.

@@ -233,14 +233,13 @@ public static class TreasuryDynamics
             if (nation.Movement is not null || nation.Population <= 0 || nation.Gdp <= 0f) continue;
             Erode(c, nation);
             SpendDown(c, nation);
-            if (c.DefconLevel < 5)
+            // National alert can exceed the world's alert: do not gate this cost on
+            // DefconLevel alone. UpkeepMultiplier reads the country's effective posture.
+            var upkeep = DefconSystem.UpkeepMultiplier(c, nation);
+            if (upkeep > 1f)
             {
-                var upkeepMult = DefconSystem.UpkeepMultiplier(c, nation);
-                if (upkeepMult > 1f)
-                {
-                    var alertDrain = nation.Gdp * (upkeepMult - 1f) * 0.002f;
-                    nation.Treasury = MathF.Max(0f, nation.Treasury - alertDrain);
-                }
+                var alertDrain = nation.Gdp * (upkeep - 1f) * 0.002f;
+                nation.Treasury = MathF.Max(0f, nation.Treasury - alertDrain);
             }
             if (nation.RecessionDepth > 0f && c.ElapsedDays >= nation.RecessionUntilDay) nation.RecessionDepth = 0f;
         }

@@ -69,6 +69,15 @@ static class YamlWorkbenchTests
         foreach (var path in new[] { "manifest.yaml", "scenarios/test/scenario.yaml", "scenarios/test/world.yml", "common/../escape.yaml", "gui/test.yaml.bak", "gui/test.txt" })
             Check(!ContentWorkbench.IsEditable(path), "editor does not promise an unsupported or unsafe path: " + path);
 
+        // YAML authoring and the province table editor must coexist after integration:
+        // a table is editable raw source, not a JSON/YAML document to normalise.
+        const string ownership = "province;owner;controller\n1;RUS;UKR\n2;UKR\n";
+        Check(ContentWorkbench.IsEditable("history/provinces/2024.csv"), "province ownership tables remain discoverable alongside YAML");
+        ContentWorkbench.Validate("history/provinces/2024.csv", ownership);
+        Reject(() => ContentWorkbench.Validate("history/provinces/2024.csv", "not-a-province;RUS;UKR"),
+            "ownership tables still reject malformed rows");
+        Check(!ContentWorkbench.IsEditable("gui/test.csv") && !ContentWorkbench.IsEditable("history/../escape.csv"),
+            "CSV support does not widen the editor beyond safe ownership tables");
         const string draft = "# keep this comment\n\"a/b\": [1, 2]\nother: \"001\"\n";
         var changed = ContentWorkbench.SetValue(draft, "/a~1b/0", "42", "common/test.YML");
         changed = ContentWorkbench.AddValue(changed, "/a~1b", "", "true", "common/test.YML");
@@ -90,6 +99,8 @@ static class YamlWorkbenchTests
         Directory.CreateDirectory(directory);
         try
         {
+            var ownershipPath = ContentWorkbench.Write(directory, "history/provinces/2024.csv", ownership, null);
+            Check(File.ReadAllText(ownershipPath) == ownership, "transactional writer preserves province CSV verbatim");
             var relative = "gui/50_editor.yaml";
             var path = ContentWorkbench.Write(directory, relative, draft, null);
             Check(File.ReadAllText(path) == draft, "raw source save preserves comments and formatting");
