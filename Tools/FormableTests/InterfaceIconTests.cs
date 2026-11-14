@@ -157,10 +157,14 @@ static class InterfaceIconTests
             "editable geometry defines eighty distinct PNG assets");
         Check(CommodityCatalog.All.All(good => authored.Contains(CommodityCatalog.IconNameOf(good))),
             "every good has editable artwork, the arsenal and the newer strategic goods included");
-        Check(authored.All(name => SpriteCatalog.Get("icon_" + name).SourceColour ==
-            (name.StartsWith("good_", StringComparison.Ordinal) ? "#b48732" : "#e7bd69")),
-            "all commodity PNGs declare bronze while command artwork keeps its gold palette");
-        Check(InterfaceSkin.Colour("icon.commodity") == "#b48732", "commodity token uses the requested darker gold");
+        // One ink for every drawn icon, and the interface colours it: since 14 November 2026 the
+        // icon PNGs are near-white (Tools/reink-icons.py) and the skin decides what a good or a
+        // command looks like. Before that the goods were drawn in bronze (#b48732) and the
+        // commands in gold (#e7bd69), and this test pinned those two - the owner's earlier
+        // choice. If the gold comes back, re-ink with `--ink` and put the two values back here.
+        Check(authored.All(name => SpriteCatalog.Get("icon_" + name).SourceColour == "#f2eee4"),
+            "every authored icon declares the one ink it is drawn in");
+        Check(InterfaceSkin.Colour("icon.commodity") == "#d8cfb8", "the commodity token is the skin's, not the drawing's");
         errors.Clear();
         var commandColour = InterfaceSkin.Colour("text.accent_dim");
         InterfaceSkin.Merge("{\"colours\":{\"icon.commodity\":\"#997733\"}}", "commodity-palette-test", errors);
@@ -191,8 +195,8 @@ static class InterfaceIconTests
             File.Copy(Path.Combine(root, "gfx/interface/icons/icon_good_steel.png"), Path.Combine(fixture, "icon_good_steel.png"));
             SpriteCatalog.LoadTree(fixture, "test", errors);
             Check(errors.Count == 0 && SpriteCatalog.Get("icon_good_steel").SourceColour == "" &&
-                SpriteCatalog.Get("icon_good_arms").SourceColour == "#b48732",
-                "drop-in PNG override clears only its own reference, preserving unrelated bronze sprites");
+                SpriteCatalog.Get("icon_good_arms").SourceColour == "#f2eee4",
+                "drop-in PNG override clears only its own reference, preserving the reference of unrelated sprites");
             SpriteCatalog.Merge("{\"icon_good_steel\":{\"source_colour\":\"#e7bd69\"}}", "test", "test", errors);
             Check(errors.Count == 0 && SpriteCatalog.Get("icon_good_steel").SourceColour == "#e7bd69",
                 "gold replacement can opt into compensation after a filename scan");
