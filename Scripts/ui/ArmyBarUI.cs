@@ -88,7 +88,10 @@ public partial class DealOrForceGame
         if (Math.Abs(_armyBar.OffsetLeft - left) > 0.5f) _armyBar.OffsetLeft = left;
 
         var groups = ArmyBarGroups();
-        var fingerprint = HashCode.Combine(groups.Count, _selectedArmies.Count, _selectedArmies.Count == 0 ? -1 : _selectedArmies[0].Id);
+        // The campaign itself is part of it: a new campaign or a loaded save brings new Army objects
+        // in the same numbers, and cards built for the old ones answered every click with nothing.
+        var fingerprint = HashCode.Combine(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(_campaign),
+            groups.Count, _selectedArmies.Count, _selectedArmies.Count == 0 ? -1 : _selectedArmies[0].Id);
         foreach (var (id, divisions) in groups)
         {
             fingerprint = HashCode.Combine(fingerprint, id, divisions.Count, (int)StatusOf(divisions),
@@ -260,7 +263,10 @@ public partial class DealOrForceGame
     {
         if (input is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } click) return;
         GetViewport().SetInputAsHandled();
-        var live = divisions.Where(army => _campaign.Armies.Contains(army)).ToList();
+        // The army as it is now, not as the card was built: a card outlives the Army objects it was
+        // drawn from (a new campaign, a load, divisions merged or destroyed), and filtering the old
+        // list against the campaign left a player clicking an army that did nothing at all.
+        var live = ArmyBarGroups().FirstOrDefault(group => group.Id == id).Divisions ?? new List<Army>();
         if (click.CtrlPressed)
         {
             // Ctrl+click: the selection joins this army (the Reserve: leaves its army).
