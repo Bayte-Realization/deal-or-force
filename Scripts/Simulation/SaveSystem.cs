@@ -311,6 +311,28 @@ public static partial class SaveSystem
             campaign.Defines.SaveCompressionThorough);
     }
 
+    /// <summary>
+    /// A diagnostic snapshot back as a campaign - for a bench, never for play.
+    ///
+    /// The snapshot is what the game writes when the weekly integrity check stops a campaign:
+    /// the whole world as it stood, bad numbers included. It is not a save and the game will
+    /// not load it. A tool can: `SimBench --diagnose-snapshot` reads one this way, puts
+    /// finite numbers where the bad ones are and runs the world on under a trap, which is how
+    /// the stage that made the bad number is found in the player's own world rather than in
+    /// one that merely shares its seed.
+    /// </summary>
+    public static Campaign ReadDiagnosticSnapshot(string path)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+        var body = document.RootElement.GetProperty("Campaign");
+        if (body.TryGetProperty("StringTable", out var table) && table.ValueKind == JsonValueKind.Array)
+            SaveStringTable.Use(table.EnumerateArray().Select(entry => entry.GetString() ?? "").ToArray());
+        var options = new JsonSerializerOptions(JsonOptions)
+        { NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals };
+        var payload = body.Deserialize<CampaignSave>(options);
+        return payload?.Restore();
+    }
+
     /// <summary>Never a loadable save and never an overwrite of the last good slot.</summary>
     public static string WriteDiagnosticSnapshot(string root, Campaign campaign, string issue)
     {

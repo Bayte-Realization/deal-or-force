@@ -332,6 +332,11 @@ public static class Program
         if (Array.IndexOf(args, "--wars") >= 0) return mapped ? WarStuckReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
         if (Array.IndexOf(args, "--fiscal-pulse") >= 0) return FiscalPulseReport.Run(campaign, days);
+        var snapshotAt = Array.IndexOf(args, "--diagnose-snapshot");
+        if (snapshotAt >= 0 && snapshotAt + 1 < args.Length)
+            return NanTrapReport.RunSnapshot(campaign, args[snapshotAt + 1],
+                snapshotAt + 2 < args.Length && int.TryParse(args[snapshotAt + 2], out var snapshotDays) ? snapshotDays : 28);
+        if (Array.IndexOf(args, "--nan-trap") >= 0) return NanTrapReport.Run(campaign, days);
         if (Array.IndexOf(args, "--aging") >= 0) return mapped ? AgingReport.Run(campaign, days) : 2;
         // `--opinion [days] [--provoke TAG]`: how negative the world gets, and which reasons carry it.
         if (Array.IndexOf(args, "--opinion") >= 0)

@@ -108,7 +108,11 @@ public static class MovementActions
     {
         if (stateMapIndex <= 0) return 1f;
         var region = campaign.StateByMapIndex(stateMapIndex);
-        return region is null ? 1f : MathF.Max(0.3f, MathF.Sqrt(region.Population / 1_000_000f));
+        // Never the root of fewer than no people. A region whose head count had been corrupted
+        // into the negative (Siachen, a save of 2034) made this NaN, MathF.Max passed the NaN
+        // on, the campaign's price was NaN and the movement that paid it had a NaN treasury -
+        // which is what the weekly integrity check then stopped the whole world for.
+        return region is null ? 1f : MathF.Max(0.3f, MathF.Sqrt(MathF.Max(0f, region.Population) / 1_000_000f));
     }
 
     private static float RecruitThousands(Nation nation) => 2f;
