@@ -491,6 +491,15 @@ public sealed partial class Defines
 	/// <summary>Share of a shortfall a country can cover by importing from the world market.</summary>
 	public float WorldMarketAccess { get; set; } = 0.80f;
 
+	/// <summary>
+	/// The transport reach (TradeNetwork.ReachOf: infrastructure, ports, railways) at which a country,
+	/// under WorldMarketAccess, can bring in its whole shortfall. The import ceiling is
+	/// WorldMarketAccess x reach / this, within 0.30 and 1.05. At 1.0 it is the old formula, which no
+	/// 2024 country could reach: reach ran 0.45-0.72, so every country imported 36-58 % of what it
+	/// lacked while the exporters sat on unsold surplus - "a shortage of everything" from day one.
+	/// </summary>
+	public float ImportReachReference { get; set; } = 0.50f;
+
 	/// <summary>Markup paid on imports from the world market.</summary>
 	public float ImportMarkup { get; set; } = 1.06f;
 

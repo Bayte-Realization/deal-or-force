@@ -66,6 +66,11 @@
   "PopulationPerAreaUnit": 320000,
   "PriceAdjustSpeed": 0.25,
   "WorldMarketAccess": 0.80,
+  // The transport reach at which a country can import its whole shortfall (with WorldMarketAccess).
+  // 2024 reach runs 0.45 (no ports, no railways) to about 0.72; at 0.50 a well-connected country
+  // imports all it lacks and one with nothing but roads about three quarters. 1.0 is the old rule,
+  // under which nobody could import more than 58 %.
+  "ImportReachReference": 0.50,
   "ImportMarkup": 1.06,
   "MarketTreasuryTradeShare": 0.08,
   // Households buy more as the country's real output per head rises above where it began: demand

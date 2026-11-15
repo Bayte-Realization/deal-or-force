@@ -490,6 +490,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--movement-representation-only")) { MovementRepresentationTests.Run(); return; }
         if (args.Contains("--war-stalemate-only")) { WarStalemateTests.Run(); return; }
         if (args.Contains("--coalition-advance-only")) { CoalitionAdvanceTests.Run(); return; }
+        if (args.Contains("--market-shortage-only")) { MarketShortageTests.Run(); return; }
         if (args.Contains("--yaml-only")) { StructuredDataTests.Run(); return; }
         if (args.Contains("--yaml-twin-only")) { YamlTwinTests.Run(); return; }
         if (args.Contains("--army-localization-only")) { ArmyCommandLocalizationTests.Run(); return; }
@@ -546,6 +547,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         MovementRepresentationTests.Run();
         WarStalemateTests.Run();
         CoalitionAdvanceTests.Run();
+        MarketShortageTests.Run();
         MovementPowerStateTests.Run();
         MovementPowerFingerprintTests.Run();
         PoliticalPolicyTests.Run();

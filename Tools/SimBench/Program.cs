@@ -866,6 +866,8 @@ public static class Program
         // world output, the eight largest exporters with their share of world exports and the
         // eight largest importers. Without a list, every good. What the deposits in
         // history/states and the recipes in common/production add up to, read before tuning them.
+        var tradeWhyAt = Array.IndexOf(args, "--trade-why");
+        if (tradeWhyAt >= 0) return TradeWhyReport.Run(campaign, args, tradeWhyAt);
         var probeGoodsAt = Array.IndexOf(args, "--goods-probe");
         if (probeGoodsAt >= 0)
         {

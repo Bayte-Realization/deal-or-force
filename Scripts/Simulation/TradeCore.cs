@@ -127,7 +127,35 @@ public static class TradeNetwork
         // the hash, so the fold below is in the order it always was.
         internal readonly Dictionary<long, float> Affinity = new(PairKeyComparer.Instance);
         internal int Used;
+        // For the trace only: the good, every exporter's surplus before the pool kept the
+        // largest few, and what the pool held before the buyers ran it down.
+        internal Commodity Good;
+        internal float SurplusOfAllSellers, PoolCapacityAtStart;
+        // The share of its weighted shortfall each buyer may take when the pool is short
+        // (PrepCommodity); infinity when there is enough for everyone.
+        internal float RationPerWeight = float.PositiveInfinity;
     }
+
+    /// <summary>
+    /// One buyer's week for one good, step by step: what it lacked, every factor that cut the
+    /// amount it went looking for, what the exporters gave it and what the grey market added.
+    /// Written only when a diagnostic (SimBench --trade-why) sets <see cref="BuyerTraceSink"/>;
+    /// otherwise nothing is built. The sink may be called from several threads at once.
+    /// </summary>
+    public sealed class BuyerTrace
+    {
+        public int NationId;
+        public Commodity Good;
+        public float Shortfall, ImportAccess, Ceiling, DeskCeiling, Sought, BlockedFactor, DefconFactor;
+        public float Bought, PriceRefused, GreyImported, Rationed;
+        public int SellersInPool, SellersReachable;
+    }
+
+    /// <summary>One good's exporters for the week: their whole surplus, what entered the pool and what was left unsold.</summary>
+    public readonly record struct PoolTrace(Commodity Good, float SurplusOfAllSellers, float PoolCapacity, float Unsold, int Sellers);
+
+    public static Action<BuyerTrace> BuyerTraceSink;
+    public static Action<PoolTrace> PoolTraceSink;
 
     internal readonly record struct TradeDelta(int SellerId, int BuyerId, float Value, int PoolSlot);
 
@@ -363,6 +391,7 @@ public static class TradeNetwork
         buf.Deltas.Clear();
         buf.Affinity.Clear();
         buf.Used = 0;
+        buf.SurplusOfAllSellers = 0f;
         for (var index = 0; index < nations.Count; index++)
         {
             var nation = nations[index];
@@ -373,8 +402,15 @@ public static class TradeNetwork
             var capacity = (quote.Production - quote.Demand) *
                            TradePolicyRules.ExportAccess(nation.TradePolicy) *
                            (1f - M.Clamp01(TradeDesk.ForGood(nation, commodity, TradeDesk.ExportReserve)));
+            if (PoolTraceSink is not null && quote.Production > quote.Demand) buf.SurplusOfAllSellers += quote.Production - quote.Demand;
             if (capacity <= 0.0001f) continue;
             Insert(buf.SellerIds, buf.SellerCapacity, nation.Id, capacity, SellersPerGood);
+        }
+        if (PoolTraceSink is not null)
+        {
+            buf.Good = commodity;
+            buf.PoolCapacityAtStart = 0f;
+            foreach (var capacity in buf.SellerCapacity) buf.PoolCapacityAtStart += capacity;
         }
         if (buf.SellerIds.Count == 0)
         {
@@ -416,6 +452,17 @@ public static class TradeNetwork
                 MathF.Max(0.0001f, TradeDesk.ForGood(nation, commodity, TradeDesk.ImportPriority));
             buyers++;
         }
+        // When the exporters cannot cover everybody, everybody gets the same share of what it
+        // lacks, weighed by its priority - not the largest buyer all of it and the smallest
+        // none. Served strictly in order, the giants emptied the pool and Brunei, the Maldives
+        // and the Bahamas, whose grain needs are a rounding error, got a quarter of them from the
+        // grey market and a famine alert. The weight is the queue key itself, so a country (or
+        // its ministry) that raises an import priority still gets more of a scarce good.
+        var weighted = 0f;
+        for (var i = 0; i < buyers; i++) weighted -= buf.BuyerKeys[i];
+        var pool = 0f;
+        foreach (var capacity in buf.SellerCapacity) pool += capacity;
+        buf.RationPerWeight = weighted > pool && weighted > 0.0001f ? pool / weighted : float.PositiveInfinity;
         if (buyers > 1) Array.Sort(buf.BuyerKeys, buf.BuyerIds, 0, buyers);
         return buyers;
     }
@@ -433,6 +480,13 @@ public static class TradeNetwork
                           Ceiling(campaign, buyer, work) *
                           M.Clamp01(TradeDesk.ForGood(buyer, commodity, TradeDesk.ImportCeiling));
             if (deficit <= 0.0001f) continue;
+            var trace = BuyerTraceSink is null ? null : new BuyerTrace
+            {
+                NationId = buyer.Id, Good = commodity, Shortfall = buyerQuote.Demand - buyerQuote.Production,
+                ImportAccess = TradePolicyRules.ImportAccess(buyer.TradePolicy), Ceiling = Ceiling(campaign, buyer, work),
+                DeskCeiling = M.Clamp01(TradeDesk.ForGood(buyer, commodity, TradeDesk.ImportCeiling)), Sought = deficit,
+                SellersInPool = buf.SellerIds.Count
+            };
 
             // Rank this week's exporters from where the buyer is standing.
             buf.SellerScore.Clear();
@@ -465,12 +519,23 @@ public static class TradeNetwork
                 Insert(buf.SellerOrder, buf.SellerScore, seat, score, int.MaxValue);
             }
 
+            if (trace is not null) trace.SellersReachable = buf.SellerOrder.Count;
             if (blockedCapacity > 0.0001f)
             {
                 var blockedShare = blockedCapacity / MathF.Max(0.0001f, availableCapacity + blockedCapacity);
                 deficit *= 1f - 0.35f * M.Clamp01(blockedShare);
+                if (trace is not null) trace.BlockedFactor = 1f - 0.35f * M.Clamp01(blockedShare);
             }
+            else if (trace is not null) trace.BlockedFactor = 1f;
             deficit *= DefconSystem.GlobalTradeMultiplier(campaign);
+            if (trace is not null) trace.DefconFactor = DefconSystem.GlobalTradeMultiplier(campaign);
+            // What the grey market sees: the whole unmet need, rationing included.
+            var unrationed = deficit;
+            if (float.IsFinite(buf.RationPerWeight))
+                deficit = MathF.Min(deficit, deficit * MathF.Max(0.0001f,
+                    TradeDesk.ForGood(buyer, commodity, TradeDesk.ImportPriority)) * buf.RationPerWeight);
+            if (trace is not null) trace.Rationed = unrationed - deficit;
+            var askedFromSellers = deficit;
 
             for (var rank = 0; rank < buf.SellerOrder.Count && deficit > 0.0001f; rank++)
             {
@@ -485,18 +550,30 @@ public static class TradeNetwork
                 // the good is worth at base.
                 if (!TradeDesk.PriceIsAcceptable(buyer, seller, commodity,
                         seller.Market.TryGetValue(commodity, out var offer) ? offer.Price : 0f))
+                {
+                    if (trace is not null) trace.PriceRefused += take;
                     continue;
+                }
 
                 buf.SellerCapacity[seat] -= take;
                 deficit -= take;
+                if (trace is not null) trace.Bought += take;
                 Record(buf, seller, buyer, commodity, take);
             }
 
             // Whatever no friend would sell. It arrives anyway, thinly and dearly, because
             // a country with no partners should be poor rather than dead on the same day.
-            if (deficit <= 0.0001f) continue;
+            // The grey market sees everything still unmet: what the sellers could not give, and
+            // what rationing held back.
+            deficit = MathF.Max(0f, unrationed - (askedFromSellers - deficit));
+            if (deficit <= 0.0001f) { if (trace is not null) BuyerTraceSink?.Invoke(trace); continue; }
             var quote = buyer.Market[commodity];
             quote.Imports += deficit * GreyMarketAccess * campaign.Defines.WorldMarketAccess;
+            if (trace is not null)
+            {
+                trace.GreyImported = deficit * GreyMarketAccess * campaign.Defines.WorldMarketAccess;
+                BuyerTraceSink?.Invoke(trace);
+            }
         }
     }
 
@@ -515,6 +592,12 @@ public static class TradeNetwork
     /// </summary>
     private static void MergeCommodity(Campaign campaign, TradeWorkspace work, CommodityBuffer buf)
     {
+        if (PoolTraceSink is not null && buf.SellerIds.Count > 0)
+        {
+            var unsold = 0f;
+            foreach (var left in buf.SellerCapacity) unsold += MathF.Max(0f, left);
+            PoolTraceSink(new PoolTrace(buf.Good, buf.SurplusOfAllSellers, buf.PoolCapacityAtStart, unsold, buf.SellerIds.Count));
+        }
         for (var i = 0; i < buf.Deltas.Count; i++)
         {
             var delta = buf.Deltas[i];
@@ -657,7 +740,8 @@ public static class TradeNetwork
     /// it, by building.
     /// </summary>
     private static float Ceiling(Campaign campaign, Nation nation, TradeWorkspace work) =>
-        M.Clamp(campaign.Defines.WorldMarketAccess * work.TransportReach.GetValueOrDefault(nation.Id, 0.5f), 0.30f, 1.05f);
+        M.Clamp(campaign.Defines.WorldMarketAccess * work.TransportReach.GetValueOrDefault(nation.Id, 0.5f) /
+                MathF.Max(0.05f, campaign.Defines.ImportReachReference), 0.30f, 1.05f);
 
     /// <summary>
     /// How far every country's goods travel, in one pass over the world's regions.

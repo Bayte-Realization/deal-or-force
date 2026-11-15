@@ -18,7 +18,7 @@
   // productivity - and at what war leaves of a region - plus every farm on ordinary land
   // (deposit:Food is the fertility every region has). Needs fertiliser and diesel. Eaten as
   // bread and rice and fed to animals: richer countries eat more of it through their meat.
-  "grain_farming": {"good": "Grain", "output": {"deposit:Grain*output_factor": 20.12914, "deposit:Grain*Agriculture": 0.02626, "deposit:Food*Agriculture": 0.00088}, "demand": {"population": 0.0985, "population*urbanization*income": 0.2955, "Agriculture": 0.22162}, "needs": {"Fertiliser": 0.75, "Fuel": 0.85}},
+  "grain_farming": {"good": "Grain", "output": {"deposit:Grain*output_factor": 26.7076, "deposit:Grain*Agriculture": 0.03484, "deposit:Food*Agriculture": 0.00116}, "demand": {"population": 0.09064, "population*urbanization*income": 0.27192, "Agriculture": 0.20394}, "needs": {"Fertiliser": 0.75, "Fuel": 0.85}},
 
   // What a country short of grain does not eat. Zero while grain arrives; a shortage takes bread
   // off the table in proportion - Cairo's subsidised loaf is made of Ukrainian and Russian wheat.
