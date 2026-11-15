@@ -30,7 +30,7 @@ static class CapitalReturnsTests
     {
         var c = new Campaign(20261114) { ScenarioId = "capital_returns_fixture" };
         // A Swiss start: 0.75 jobs for every worker, so the diminishing return begins at
-        // 0.75 x 1.3 = 0.975 jobs per worker, just short of full employment.
+        // 0.75 x CapitalDeepeningHeadroom jobs per worker (0.75 with the shipped 1.0), short of full employment.
         var n = new Nation { Tag = "CHE", CapitalIntensityReference = 0.75f };
         const float Workers = 5.3f;
         Check(c.Defines.CapitalDeepeningHeadroom > 0f && c.Defines.CapitalDeepeningShare < 1f,
@@ -38,7 +38,7 @@ static class CapitalReturnsTests
 
         // With workers to spare, past the headroom, more plant still makes more - but less than
         // in proportion: the reason the return exists (a rich country compounding) still holds.
-        // (A start of half a job per worker, so the headroom ends at 0.65 and there is room past it.)
+        // (A start of half a job per worker, so the headroom ends at 0.5 x CapitalDeepeningHeadroom and there is room past it.)
         var roomy = new Nation { Tag = "USA", CapitalIntensityReference = 0.5f };
         var slackLow = Output(c, roomy, 4.0f, 6.0f);
         var slackHigh = Output(c, roomy, 5.5f, 6.0f);

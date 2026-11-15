@@ -105,7 +105,7 @@ public sealed partial class Defines
     /// these bounds. Below one, as consumption is: a country twice as rich does not eat twice as
     /// much, but it buys a good deal more of almost everything else.
     /// </summary>
-    public float IncomeDemandElasticity { get; set; } = 0.85f;
+    public float IncomeDemandElasticity { get; set; } = 0.6f;
     public float IncomeFactorMinimum { get; set; } = 0.5f;
     public float IncomeFactorMaximum { get; set; } = 3f;
 
@@ -114,8 +114,8 @@ public sealed partial class Defines
     /// add less, and the power its plant yields at past that (MarketSystem.CapitalReturns):
     /// diminishing returns to capital. 0 turns them off.
     /// </summary>
-    public float CapitalDeepeningHeadroom { get; set; } = 1.3f;
-    public float CapitalDeepeningShare { get; set; } = 0.4f;
+    public float CapitalDeepeningHeadroom { get; set; } = 1.0f;
+    public float CapitalDeepeningShare { get; set; } = 0.3f;
 
     /// <summary>
     /// How producers answer the price (ProductionChains.SupplyResponse): output scales as last
