@@ -32,6 +32,7 @@ public partial class DealOrForceGame
                 else LoadFromSlot(slot);
                 break;
             case MenuIntent.Multiplayer: OpenNetworkMultiplayer(); break;
+            case MenuIntent.Scenarios: OpenScenarioLibrary(); break;
             case MenuIntent.Settings: ShowSettings(); break;
             // Opened directly - from the editor, or by a scene reload - so there is nothing
             // to act on. Only the layer is shown, not the whole hide-everything routine:

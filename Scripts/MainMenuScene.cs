@@ -24,7 +24,10 @@ public enum MenuIntent
     LoadSlot,
     Multiplayer,
     Settings,
-    ModAction
+    ModAction,
+
+    /// <summary>The scenario library and its editors, straight from the front door.</summary>
+    Scenarios
 }
 
 /// <summary>
@@ -181,6 +184,10 @@ public partial class MainMenuScene : Control
         if (hasSaves) rows.AddChild(MenuAction("Continue", () => Enter(MenuIntent.LoadLatest), 56, true));
         rows.AddChild(MenuAction("New campaign", () => Enter(MenuIntent.NewCampaign), hasSaves ? 44 : 56, !hasSaves));
         rows.AddChild(MenuAction("Load campaign", ShowArchive, 44));
+        // Scenarios and their editors are what this game is built on; "New campaign" goes
+        // straight to the country picker (one built-in scenario), so they get their own door
+        // here instead of hiding behind a button on the picker's bar.
+        rows.AddChild(MenuAction("Scenarios / editor", () => Enter(MenuIntent.Scenarios), 44));
         rows.AddChild(MenuAction("Multiplayer · LAN / IP", () => Enter(MenuIntent.Multiplayer), 44));
 
         rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 10) });
