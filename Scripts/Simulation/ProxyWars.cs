@@ -389,7 +389,16 @@ public static class ProxyWars
                 var enemy = c.NationById(war.EnemyLeaderOf(client.Id));
                 if (enemy is null) continue;
                 if (c.ElapsedDays < s.CommittedUntilDay) continue;
-                if (Interest(c, sponsor, client, enemy, war) < defines.ProxyAiStopInterest) End(c, s, "lost interest");
+                if (Interest(c, sponsor, client, enemy, war) < defines.ProxyAiStopInterest) { End(c, s, "lost interest"); continue; }
+                // Past its commitment, a backing the service cannot carry within its allowance
+                // (CovertBudget) is scaled down a step a month, and the last step ended. Rwanda,
+                // Burundi and Uganda paid 22-46 % of their income for history's backings, each at
+                // the 0.01-a-week floor that is nothing to a large sponsor.
+                if (CovertBudget.Free(c, sponsor) < 0f)
+                {
+                    if (s.Level > 1) s.Level--;
+                    else End(c, s, "could not pay");
+                }
             }
 
             if (sponsor.Gdp < defines.ProxyAiMinimumGdp || sponsor.Stability < 0.3f) continue;
@@ -426,6 +435,9 @@ public static class ProxyWars
             if (IsRebel(bestClient, c.NationById(bestWar.EnemyLeaderOf(bestClient.Id))))
                 level = Math.Min(level, Math.Max(1, c.Defines.ProxyRebelMaximumLevel));
             while (level > 1 && Block(c, sponsor, bestWar, bestClient, level).Length > 0) level--;
+            // Within what the service may spend a week, after the proxy wars it already pays for.
+            while (level > 0 && !CovertBudget.AiMayCommit(c, sponsor, WeeklyCost(c, sponsor, level))) level--;
+            if (level <= 0) continue;
             Sponsor(c, sponsor, bestWar, bestClient, level);
         }
     }

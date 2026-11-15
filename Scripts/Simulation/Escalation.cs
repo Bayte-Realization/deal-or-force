@@ -1118,15 +1118,22 @@ public static class Escalation
         if (c.ElapsedDays - relation.LastTalksDay < c.Defines.TalksCooldownDays)
             return Loc.Format("The last round ended too recently: {0} days to wait.",
                 c.Defines.TalksCooldownDays - (c.ElapsedDays - relation.LastTalksDay));
-        if (by.Treasury < c.Defines.TalksCost) return Loc.Get("Not enough money in the treasury.");
+        if (by.Treasury < TalksPrice(c, by)) return Loc.Get("Not enough money in the treasury.");
         return "";
     }
+
+    /// <summary>What a round of talks costs this country: TalksCost scaled to its income (DiplomacyPrice).</summary>
+    public static float TalksPrice(Campaign c, Nation by) => DiplomacyPrice.Of(c, by, c?.Defines?.TalksCost ?? 0f);
+
+    /// <summary>What offering mediation costs this power: CrisisMediationCost scaled to its income.</summary>
+    public static float MediationPrice(Campaign c, Nation mediator) =>
+        DiplomacyPrice.Of(c, mediator, c?.Defines?.CrisisMediationCost ?? 0f);
 
     public static bool StartTalks(Campaign c, Nation by, Nation with)
     {
         if (TalksBlock(c, by, with).Length > 0) return false;
         var relation = CampaignDiplomacy.Get(c, by.Id, with.Id);
-        { var ledgerBefore = by.Treasury; by.Treasury -= c.Defines.TalksCost; MoneyLedger.Book(by, MoneyFlow.Diplomacy, by.Treasury - ledgerBefore); }
+        { var ledgerBefore = by.Treasury; by.Treasury -= TalksPrice(c, by); MoneyLedger.Book(by, MoneyFlow.Diplomacy, by.Treasury - ledgerBefore); }
         relation.TalksBy = by.Id;
         relation.TalksUntilDay = c.ElapsedDays + Math.Max(7, c.Defines.TalksDays);
         relation.LastTalksDay = c.ElapsedDays;
@@ -1158,7 +1165,7 @@ public static class Escalation
         if (c.ElapsedDays - relation.LastMediationDay < c.Defines.CrisisMediationCooldownDays)
             return Loc.Format("The last mediation ended too recently: {0} days to wait.",
                 c.Defines.CrisisMediationCooldownDays - (c.ElapsedDays - relation.LastMediationDay));
-        if (mediator.Treasury < c.Defines.CrisisMediationCost)
+        if (mediator.Treasury < MediationPrice(c, mediator))
             return Loc.Get("Not enough money in the treasury.");
         return "";
     }
@@ -1167,7 +1174,7 @@ public static class Escalation
     {
         if (MediationBlock(c, mediator, a, b).Length > 0) return false;
         var relation = CampaignDiplomacy.Get(c, a.Id, b.Id);
-        { var ledgerBefore = mediator.Treasury; mediator.Treasury -= c.Defines.CrisisMediationCost; MoneyLedger.Book(mediator, MoneyFlow.Diplomacy, mediator.Treasury - ledgerBefore); }
+        { var ledgerBefore = mediator.Treasury; mediator.Treasury -= MediationPrice(c, mediator); MoneyLedger.Book(mediator, MoneyFlow.Diplomacy, mediator.Treasury - ledgerBefore); }
         relation.MediatorId = mediator.Id;
         relation.LastMediationDay = c.ElapsedDays;
         relation.TalksBy = mediator.Id;

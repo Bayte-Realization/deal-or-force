@@ -1,0 +1,35 @@
+// Where the treasuries went (Scripts/Simulation/MoneyDrains.cs, DefconSystem.WeeklyUpkeep).
+//
+// A friend's report, 15 November 2026: the money "flies away". The construction rework put the
+// building sites on their own ledger line and found they were 2-6 % of a large state's payouts.
+// SimBench 365 --construction, seeds 1/7/42, summed over the year against budget income:
+// raised alert upkeep 22-38 % of the world's income (United States 32-56 %, China 41-71 %),
+// diplomacy 30 % (the median country 85 %, Poland 80 %, the United States 2.6 %), covert work 7 %
+// (the United States 15.5 %). docs/MONEY_DRAINS_2026_11_15_RU.md has the before and after.
+{
+  // Every diplomatic price in the defines (an act, a subsidy, a gesture's cash, a mission, talks,
+  // mediation) is what a country with this weekly budget income pays; one with half the income
+  // pays half. 20 is the United States' income at the start of 2024, so the largest economy pays
+  // what the prices always were, and the computer's seventy acts a year cost every country about
+  // the same 2-3 % of its income instead of 85 % of the median one's. 0 = the listed price for all.
+  "DiplomacyReferenceIncome": 20.0,
+  // The smallest and largest multiple of a listed price anybody pays (a treasury with no income
+  // yet pays the smallest). The floor sits below the smallest territories' own income (Sint
+  // Maarten, the Turks and Caicos: about 0.001 a week): at 0.0005 they still paid 20-24 %.
+  "DiplomacyPriceMinimumScale": 0.00002,
+  "DiplomacyPriceMaximumScale": 2.0,
+
+  // A computer-run government spends at most this share of its weekly budget income on its secret
+  // service: networks, operations, proxy wars, kin statecraft. A proxy war's weekly payment is
+  // taken off the top; a purchase is earned back from what is left before the next one. 0 = no cap.
+  // The player is never capped.
+  "CovertAiIncomeShare": 0.05,
+  // The longest one purchase may hold the computer's service back.
+  "CovertAiLongestPause": 365,
+
+  // A raised alert's surcharge (DefconUpkeepMultiplier* in 25_defcon.json, minus one) applies to
+  // this share of the armed forces' weekly pay. It used to be 0.2 % of the whole economy per step,
+  // charged to every country at the world's level: a holder at DEFCON 2 paid three quarters of its
+  // budget income for an alert somebody else had raised.
+  "AlertUpkeepArmyShare": 1.0
+}

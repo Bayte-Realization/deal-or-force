@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -130,11 +133,28 @@ public static class MoneyLedger
     }
 
     /// <summary>Book a signed amount (income positive, spending negative) on one country's open week.</summary>
-    public static void Book(Nation nation, MoneyFlow flow, float amount)
+    public static void Book(Nation nation, MoneyFlow flow, float amount,
+        [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
     {
         if (nation is null || !float.IsFinite(amount) || amount == 0f) return;
         var week = Week(nation);
         week[amount > 0f ? (int)flow : FlowCount + (int)flow] += amount;
+        if (Sources is not null) Trace(nation, flow, amount, file, line);
+    }
+
+    /// <summary>
+    /// Off (null) in the game. A bench run switches it on to learn which line of code a ledger line's
+    /// money actually comes from: "Diplomacy" is a dozen places, and the one that empties a small
+    /// country's treasury is not the one its name suggests. Keyed by country, flow and file:line.
+    /// </summary>
+    public static Dictionary<(int Nation, MoneyFlow Flow, string Site), double> Sources;
+
+    private static readonly object SourcesLock = new();
+
+    private static void Trace(Nation nation, MoneyFlow flow, float amount, string file, int line)
+    {
+        var key = (nation.Id, flow, Path.GetFileName(file) + ":" + line);
+        lock (SourcesLock) Sources[key] = Sources.GetValueOrDefault(key) + amount;
     }
 
     /// <summary>The last closed week's money in on one line (positive or nought).</summary>
@@ -152,10 +172,11 @@ public static class MoneyLedger
     }
 
     /// <summary>The same amount leaving one treasury and arriving in another.</summary>
-    public static void Transfer(Nation from, Nation to, MoneyFlow flow, float amount)
+    public static void Transfer(Nation from, Nation to, MoneyFlow flow, float amount,
+        [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
     {
-        Book(from, flow, -amount);
-        Book(to, flow, amount);
+        Book(from, flow, -amount, file, line);
+        Book(to, flow, amount, file, line);
     }
 
     /// <summary>The array the budget writes its lines into this week, sized to the budget.</summary>

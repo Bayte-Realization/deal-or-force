@@ -103,8 +103,9 @@ public partial class ExportVerification
             fp = CampaignFingerprint.Of(c); game.Call("RefreshConflictsScreen", true);
             Check(CampaignFingerprint.Of(c) == fp, "foreign crisis inspection is read-only");
             money = power.Treasury; clock = c.ElapsedHours;
+            var price = Escalation.MediationPrice(c, power);
             Press("MediateForeignCrisis");
-            Check(relation.MediatorId == power.Id && power.Treasury == money - c.Defines.CrisisMediationCost &&
+            Check(relation.MediatorId == power.Id && power.Treasury == money - price &&
                 c.IsPaused && c.ElapsedHours == clock, "actual mediation button charges the acting player immediately on pause");
             Check(Button("MediateForeignCrisis") is { Disabled: true }, "running talks disable repeat mediation");
             // Mediation has de-escalated this fixture below the crisis threshold.

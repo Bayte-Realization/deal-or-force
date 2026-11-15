@@ -717,6 +717,8 @@ public static class KinStatecraft
             if (!MovementRules.OnItsDay(campaign, country.Id, cycle)) continue;
             var annual = MathF.Max(0.01f, country.WeeklyTaxIncome * 52f);
             if (country.Treasury < defines.AiKinTreasuryYears * annual) continue;
+            if (!CovertBudget.AiMaySpend(campaign, country)) continue;
+            var treasuryBefore = country.Treasury;
             foreach (var candidate in list)
             {
                 var tie = CampaignDiplomacy.Peek(campaign, country.Id, candidate.Host.Id);
@@ -744,6 +746,8 @@ public static class KinStatecraft
                     Refusal(campaign, country, candidate.Region, "agitate").Length == 0)
                     Do(campaign, country, candidate.Region, "agitate");
             }
+            // What the month's kin work took is earned back from the covert allowance like any purchase.
+            CovertBudget.AiSpent(campaign, country, treasuryBefore - country.Treasury);
             }
             yield return 0;
         }

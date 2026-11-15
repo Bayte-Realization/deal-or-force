@@ -141,6 +141,8 @@ static class DiplomaticActTests
         relation.Opinion = 60f;
         var askerCash = asker.Treasury;
         var askedCash = asked.Treasury;
+        // A subsidy is priced to the giver's income (DiplomacyPrice).
+        var subsidy = DiplomaticActs.Cost(campaign, asker, DiplomaticAct.Subsidy);
         var command = new DiplomaticActCommand
         {
             IssuerId = asker.Id, TargetId = asked.Id, Act = DiplomaticAct.Subsidy, Step = DiplomaticActStep.Propose
@@ -157,8 +159,7 @@ static class DiplomaticActTests
         answer.Apply(campaign);
         Check(answer.Result == "Signed." && relation.DiplomaticActBy < 0,
             "the human signature closes the paper");
-        Check(asker.Treasury == askerCash - campaign.Defines.DiplomaticSubsidy &&
-              asked.Treasury == askedCash + campaign.Defines.DiplomaticSubsidy,
+        Check(subsidy > 0f && asker.Treasury == askerCash - subsidy && asked.Treasury == askedCash + subsidy,
             "the subsidy moves only when it is signed");
     }
 

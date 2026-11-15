@@ -158,6 +158,8 @@ static class DiplomaticParticipationTests
     static void CrisisCommands()
     {
         var c = Crisis(); var treasury = c.Nations[2].Treasury;
+        // Priced to the mediator's income (DiplomacyPrice), read before anything moves.
+        var price = Escalation.MediationPrice(c, c.Nations[2]);
         var fp = CampaignFingerprint.Of(c); var random = c.Random.State;
         Check(Escalation.MediationBlock(c, c.Nations[2], c.Nations[0], c.Nations[1]).Length == 0 &&
             CampaignFingerprint.Of(c) == fp && c.Random.State == random, "crisis action preview is read-only");
@@ -165,7 +167,7 @@ static class DiplomaticParticipationTests
         Check(CampaignFingerprint.Of(c) == fp, "issuer cannot spend another Great Power's treasury through a forged mediator ID");
         var mediation = new MediateCrisisCommand { IssuerId = 2, MediatorId = 2, TargetAId = 0, TargetBId = 1 };
         Apply(c, mediation);
-        Check(mediation.Mediated && c.IsPaused && c.ElapsedDays == 0 && c.Nations[2].Treasury == treasury - c.Defines.CrisisMediationCost,
+        Check(mediation.Mediated && c.IsPaused && c.ElapsedDays == 0 && c.Nations[2].Treasury == treasury - price,
             "player mediation pays its cost immediately without advancing or unpausing");
         Check(CampaignDiplomacy.Peek(c, 0, 1).MediatorId == 2 && c.Wars.Count == 0, "mediation records the real actor without starting a war");
         treasury = c.Nations[2].Treasury; Apply(c, mediation);

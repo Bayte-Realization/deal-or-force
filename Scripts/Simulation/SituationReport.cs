@@ -262,7 +262,7 @@ public static class SituationReport
                     new[] { T("Prolonged armed clashes can become a border war. Talks can reduce tension; success is not guaranteed.") },
                     facts.ToArray(),
                     canTalk || observer ? SituationRoute.Conflict : SituationRoute.Inbox,
-                    canTalk ? Loc.Format("Hold talks ({0})", Fmt.Money(c.Defines.TalksCost))
+                    canTalk ? Loc.Format("Hold talks ({0})", Fmt.Money(Escalation.TalksPrice(c, n)))
                         : observer ? T("Inspect escalation and talks") : T("Open the deal inbox"),
                     rival.Id, DeadlineDay: deadline));
             }

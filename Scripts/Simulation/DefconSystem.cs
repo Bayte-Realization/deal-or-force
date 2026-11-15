@@ -28,6 +28,9 @@ public sealed partial class Defines
     /// <summary>Whether the global DEFCON readiness ladder monitors nuclear tensions.</summary>
     public bool DefconEnabled { get; set; } = true;
 
+    /// <summary>The share of the armed forces' weekly pay a raised alert's surcharge applies to (DefconSystem.WeeklyUpkeep).</summary>
+    public float AlertUpkeepArmyShare { get; set; } = 1f;
+
     /// <summary>Minimum days at calm before DEFCON can de-escalate by one level.</summary>
     public int DefconDeescalationDays { get; set; } = 21;
 
@@ -107,8 +110,9 @@ public sealed partial class Defines
 /// 2. СИСТЕМНАЯ СВЯЗКА (COUPLING WITH SIMULATION SYSTEMS):
 ///    • MilitaryCore: ReadinessRecoveryMultiplier() ускоряет восстановление боевого духа
 ///      и организации дивизий (+8%..+25% для ядерных держав, +4%..+15% для остальных).
-///    • TreasuryDynamics: UpkeepMultiplier() переводится в еженедельный налог на ВВП
-///      (alertDrain = nation.Gdp * (upkeepMult - 1f) * 0.002f) при DEFCON < 5.
+///    • TreasuryDynamics: WeeklyUpkeep() — надбавка (upkeepMult - 1) к недельному жалованью армии
+///      (строка бюджета armed_forces). Ядерная держава платит за свою готовность (NuclearPosture),
+///      остальные — часть мировой, только пока сами воюют (с 15.11.2026; раньше — доля ВВП для всех).
 ///    • TradeCore: GlobalTradeMultiplier() масштабирует мировой товарооборот (0.85 при
 ///      DEFCON 2, 0.70 при DEFCON 1).
 ///    • CrisisLadder: при DefconLevel <= 2 великие державы-посредники удваивают силу
@@ -376,16 +380,62 @@ public static class DefconSystem
         };
     }
 
+    private static bool AtWar(Campaign campaign, Nation nation)
+    {
+        foreach (var war in campaign.Wars)
+            if (!war.Ended && war.Involves(nation.Id)) return true;
+        return false;
+    }
+
     /// <summary>
-    /// Readiness upkeep multiplier on standing forces and alert infrastructure.
+    /// What a raised alert costs this country a week: its armed forces' weekly pay (the budget line
+    /// "armed_forces", last closed week) times the surcharge, times AlertUpkeepArmyShare. The panel
+    /// has always called it "readiness maintenance burden +N %": now it is N % of the army's pay, as
+    /// it says, rather than a share of the whole economy that cost a holder at DEFCON 2 three
+    /// quarters of its budget income. A country with no army pays nothing to keep it on alert.
+    /// </summary>
+    public static float WeeklyUpkeep(Campaign campaign, Nation nation)
+    {
+        var surcharge = UpkeepMultiplier(campaign, nation) - 1f;
+        if (!(surcharge > 0f)) return 0f;
+        var share = campaign.Defines.AlertUpkeepArmyShare;
+        if (!float.IsFinite(share) || share <= 0f) return 0f;
+        var pay = ArmedForcesWeekly(nation);
+        return float.IsFinite(pay) && pay > 0f ? surcharge * share * pay : 0f;
+    }
+
+    /// <summary>The armed forces' pay in the last closed week; before the first, the budget as it stands.</summary>
+    internal static float ArmedForcesWeekly(Nation nation)
+    {
+        var lines = BudgetCore.All;
+        var closed = nation?.LedgerBudgetLastWeek;
+        for (var index = 0; index < lines.Count; index++)
+        {
+            if (lines[index].Store != BudgetStore.MilitarySpending) continue;
+            if (closed is not null && closed.Length == lines.Count) return MathF.Max(0f, -closed[index]);
+            return MathF.Max(0f, BudgetCore.Amount(nation, lines[index], nation.Gdp / 52f, false));
+        }
+        return 0f;
+    }
+
+    /// <summary>
+    /// Readiness upkeep multiplier on the country's armed forces (see <see cref="WeeklyUpkeep"/>).
+    ///
+    /// Each country pays for its own alert. A holder pays for the posture it ordered
+    /// (<see cref="Nation.NuclearPosture"/>), which a computer raises for a war or a standoff of its
+    /// own and stands down two months after; a country without the weapon pays a part of the world's
+    /// alert only while it is itself at war. Until 15 November 2026 every holder paid the world's
+    /// level and every other country 40 % of it, whoever had raised it: one standoff between two
+    /// holders put the whole world on a war footing, and SimBench showed the United States paying
+    /// 32-56 % of its income for an alert it never ordered, China 41-71 %.
     /// </summary>
     public static float UpkeepMultiplier(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null || !Enabled(campaign)) return 1f;
-        var level = NuclearPosture.Effective(campaign, nation);
-        if (level >= 5) return 1f;
-
         var isHolder = Deterrence.TierOf(campaign, nation) >= 1;
+        var level = isHolder ? Math.Clamp(nation.NuclearPosture, 1, 5) : CurrentLevel(campaign);
+        if (level >= 5) return 1f;
+        if (!isHolder && !AtWar(campaign, nation)) return 1f;
         var defines = campaign.Defines;
 
         if (isHolder)

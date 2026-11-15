@@ -151,7 +151,7 @@ public static class DiplomaticOutreach
             return Loc.Get("Recall a diplomatic mission before opening another.");
         if (!float.IsFinite(n.PoliticalPoints) || n.PoliticalPoints < d.DiplomaticMissionPoliticalCost)
             return Loc.Format("Insufficient political credit: need {0:0.##}, available {1:0.##}.", d.DiplomaticMissionPoliticalCost, n.PoliticalPoints);
-        if (!float.IsFinite(n.Treasury) || n.Treasury < d.DiplomaticMissionStartCash)
+        if (!float.IsFinite(n.Treasury) || n.Treasury < DiplomacyPrice.Of(c, n, d.DiplomaticMissionStartCash))
             return Loc.Get("Insufficient treasury for a diplomatic mission.");
         return "";
     }
@@ -166,9 +166,10 @@ public static class DiplomaticOutreach
             Math.Max(0, mission.EndsDay - c.ElapsedDays), mission.PaidWeeks, mission.WeeklyPoliticalCost, Fmt.Money(mission.WeeklyCash));
         if (!c.Defines.DiplomaticMissionsEnabled) return Loc.Get("Legacy diplomacy: an immediate treasury-funded overture.");
         var d = c.Defines;
+        var payer = c.NationById(issuer);
         return Loc.Format("A {0}-day mission, not an instant opinion boost. Start: {1:0.##} political credit and {2}. Weekly: {3:0.##} political credit and {4}. Goodwill ceiling: +{5:0.#}; tension and political distance slow progress. At most {6} concurrent missions.",
-            Math.Clamp(d.DiplomaticMissionDays, 14, 730), d.DiplomaticMissionPoliticalCost, Fmt.Money(d.DiplomaticMissionStartCash),
-            d.DiplomaticMissionWeeklyPoliticalCost, Fmt.Money(d.DiplomaticMissionWeeklyCash), d.DiplomaticMissionOpinionCap,
+            Math.Clamp(d.DiplomaticMissionDays, 14, 730), d.DiplomaticMissionPoliticalCost, Fmt.Money(DiplomacyPrice.Of(c, payer, d.DiplomaticMissionStartCash)),
+            d.DiplomaticMissionWeeklyPoliticalCost, Fmt.Money(DiplomacyPrice.Of(c, payer, d.DiplomaticMissionWeeklyCash)), d.DiplomaticMissionOpinionCap,
             Math.Clamp(d.DiplomaticMissionLimit, 1, 12)) + " " +
             Loc.Get("Every week it also wears down old grievances between us, most of all those held over other countries' quarrels.");
     }
@@ -185,10 +186,10 @@ public static class DiplomaticOutreach
             c.Chronicle.Record(c, "diplomatic_mission_ended", issuer, target,isPublic:false); c.MarkStrategicChange(); return true;
         }
         var d = c.Defines;
-        { var ledgerBefore = n.Treasury; n.PoliticalPoints -= d.DiplomaticMissionPoliticalCost; n.Treasury -= d.DiplomaticMissionStartCash; MoneyLedger.Book(n, MoneyFlow.Diplomacy, n.Treasury - ledgerBefore); }
+        { var ledgerBefore = n.Treasury; n.PoliticalPoints -= d.DiplomaticMissionPoliticalCost; n.Treasury -= DiplomacyPrice.Of(c, n, d.DiplomaticMissionStartCash); MoneyLedger.Book(n, MoneyFlow.Diplomacy, n.Treasury - ledgerBefore); }
         var mission = new DiplomaticMission { StartedDay = c.ElapsedDays, LastPaidDay = c.ElapsedDays,
             EndsDay = c.ElapsedDays + Math.Clamp(d.DiplomaticMissionDays, 14, 730),
-            WeeklyPoliticalCost = d.DiplomaticMissionWeeklyPoliticalCost, WeeklyCash = d.DiplomaticMissionWeeklyCash,
+            WeeklyPoliticalCost = d.DiplomaticMissionWeeklyPoliticalCost, WeeklyCash = DiplomacyPrice.Of(c, n, d.DiplomaticMissionWeeklyCash),
             WeeklyOpinion = d.DiplomaticMissionWeeklyOpinion, OpinionCap = Math.Clamp(d.DiplomaticMissionOpinionCap, 0, 50) };
         if (issuer == r.A) r.MissionByA = mission; else r.MissionByB = mission;
         NoteIssuer(c, issuer, 1);

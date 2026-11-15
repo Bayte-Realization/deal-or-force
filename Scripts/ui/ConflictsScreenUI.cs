@@ -376,7 +376,7 @@ public partial class DealOrForceGame
             var other = player.Id == a.Id ? b : a;
             _conflictsPage.AddChild(Caption("WHAT YOU CAN DO"));
             var block = Escalation.TalksBlock(_campaign, player, other);
-            var talks = ActionButton(Simulation.Loc.Format("Hold talks ({0})", Fmt.Money(_campaign.Defines.TalksCost)), () =>
+            var talks = ActionButton(Simulation.Loc.Format("Hold talks ({0})", Fmt.Money(Escalation.TalksPrice(_campaign, player))), () =>
             {
                 Submit(new HoldTalksCommand { IssuerId = player.Id, TargetId = other.Id });
                 _conflictsFeedback.Text = Tr("Talks opened. They take tension off every week while they last.");

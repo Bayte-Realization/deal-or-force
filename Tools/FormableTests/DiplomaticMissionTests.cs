@@ -33,7 +33,10 @@ static class DiplomaticMissionTests
         Check(!poor.Changed && poor.Refusal.Length>0 && CampaignFingerprint.Of(c)==fp,"political shortage is an atomic refusal before creating a relation");
         n.PoliticalPoints=100;
         var r=CampaignDiplomacy.Get(c,n.Id,other.Id); OpinionSystem.Settle(c,r); var opinion=r.Opinion; var cash=n.Treasury;
-        Check(Start(c,n,other).Changed && n.PoliticalPoints==92 && Math.Abs(n.Treasury-(cash-.1f))<.0001f,"dispatch pays the displayed up-front political and cash prices");
+        // The cash is the listed start price scaled to the issuer's income (DiplomacyPrice), as the preview shows it.
+        var price=DiplomacyPrice.Of(c,n,c.Defines.DiplomaticMissionStartCash);
+        Check(price>0f && DiplomaticOutreach.Description(c,n.Id,other.Id).Contains(Fmt.Money(price)),"the preview shows the issuer's own start price");
+        Check(Start(c,n,other).Changed && n.PoliticalPoints==92 && Math.Abs(n.Treasury-(cash-price))<.0001f,"dispatch pays the displayed up-front political and cash prices");
         Check(r.Opinion==opinion && !OpinionSystem.Has(r,"diplomatic_outreach"),"dispatch never adds an instant opinion boost");
         fp=CampaignFingerprint.Of(c); Check(!Start(c,n,other).Changed && CampaignFingerprint.Of(c)==fp,"repeated button press cannot stack or charge an existing mission");
         Days(c,1,6); Check(n.PoliticalPoints==92,"less than a week earns no shortcut and incurs no weekly bill");

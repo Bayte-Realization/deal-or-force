@@ -594,6 +594,7 @@ public static class CovertOperations
             if (owner.IsHuman || owner.Movement is not null || owner.Population <= 0 || owner.IntelNetworks.Count == 0) continue;
             if (owner.CovertOperations.Count >= Math.Max(1, defines.CovertOperationLimit)) continue;
             if (MovementRules.Roll(c.Seed, owner.Id, c.ElapsedDays, 4621) >= defines.CovertAiChance) continue;
+            if (!CovertBudget.AiMaySpend(c, owner)) continue;
             var authoritarian = PoliticsCore.IdeologyOf(owner).Authority > 0.5f;
             CovertOperationDefinition bestKind = null;
             Nation bestTarget = null;
@@ -637,10 +638,12 @@ public static class CovertOperations
                 }
             }
             if (bestKind is null) continue;
+            var before = owner.Treasury;
             new CovertOperationCommand
             {
                 IssuerId = owner.Id, TargetId = bestTarget.Id, OperationId = bestKind.Id, RegionMapIndex = bestRegion?.MapIndex ?? -1
             }.Apply(c);
+            CovertBudget.AiSpent(c, owner, before - owner.Treasury);
         }
     }
 

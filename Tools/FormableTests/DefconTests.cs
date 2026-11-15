@@ -82,7 +82,12 @@ static class DefconTests
         DefconSystem.Tick(c);
         Check(c.DefconLevel == 3, "escalates to DEFCON 3");
         Check(DefconSystem.ReadinessRecoveryMultiplier(c, us.Id) > 1.0f, "DEFCON 3 boosts military readiness recovery");
-        Check(DefconSystem.UpkeepMultiplier(c, us) > 1.10f, "DEFCON 3 increases military alert upkeep");
+        // Each holder pays for the alert it ordered, not for the world's (15 November 2026).
+        Check(MathF.Abs(DefconSystem.UpkeepMultiplier(c, us) - 1.0f) < 0.001f,
+            "a world at DEFCON 3 does not bill a holder that kept its own forces at routine readiness");
+        us.NuclearPosture = 3;
+        Check(DefconSystem.UpkeepMultiplier(c, us) > 1.10f, "a holder's own DEFCON 3 increases its military alert upkeep");
+        us.NuclearPosture = 5;
 
         // Direct hot war
         var war = new StrategicWar

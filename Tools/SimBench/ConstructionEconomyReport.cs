@@ -39,9 +39,12 @@ internal static class ConstructionEconomyReport
         double waitingSum = 0;
         var failure = "";
         var next = 0;
+        var drains = new Drains();
+        MoneyLedger.Sources = new();
         while (true)
         {
             var day = campaign.ElapsedDays - start;
+            drains.Collect(campaign);
             if (day >= next || day >= days)
             {
                 var s = Sample(campaign, startBuildings, day);
@@ -67,7 +70,85 @@ internal static class ConstructionEconomyReport
             $"inflation_median={inflation:P1} defaults={defaults} built={built} built/yr={built / years:0} " +
             $"drain_mean={(drainSamples > 0 ? drainSum / drainSamples : 0):P1} frozen_mean={(frozenSamples > 0 ? frozenSum / frozenSamples : 0):0.0} " +
             $"waiting_mean={(frozenSamples > 0 ? waitingSum / frozenSamples : 0):P1} site/rev_median={siteToRevenue:P1}"));
+        drains.Print(campaign);
+        MoneyLedger.Sources = null;
         return 0;
+    }
+
+    /// <summary>
+    /// Covert operations, diplomacy and the upkeep of a raised alert, summed over every closed week
+    /// of the run against the budget income of the same weeks. One week's snapshot misleads for
+    /// payments that come in lumps (an operation is paid in full the day it is ordered), so the
+    /// share is the run's total over the run's income. Found while doing the construction rework:
+    /// these three, not the building sites, were what emptied the large treasuries.
+    /// </summary>
+    private sealed class Drains
+    {
+        private static readonly MoneyFlow[] Flows = { MoneyFlow.Covert, MoneyFlow.Diplomacy, MoneyFlow.AlertUpkeep };
+        private readonly Dictionary<int, int> _seen = new();
+        private readonly Dictionary<int, double> _income = new();
+        private readonly Dictionary<int, double[]> _out = new();
+        private readonly Dictionary<int, double[]> _in = new();
+
+        public void Collect(Campaign campaign)
+        {
+            foreach (var nation in World(campaign))
+            {
+                if (nation.LedgerLastWeek is null || nation.LedgerClosedDay < 0) continue;
+                if (_seen.TryGetValue(nation.Id, out var day) && day == nation.LedgerClosedDay) continue;
+                _seen[nation.Id] = nation.LedgerClosedDay;
+                _income[nation.Id] = _income.GetValueOrDefault(nation.Id) + Income(nation);
+                if (!_out.TryGetValue(nation.Id, out var spent)) _out[nation.Id] = spent = new double[Flows.Length];
+                if (!_in.TryGetValue(nation.Id, out var received)) _in[nation.Id] = received = new double[Flows.Length];
+                for (var i = 0; i < Flows.Length; i++)
+                {
+                    spent[i] -= MoneyLedger.LastOut(nation, Flows[i]);
+                    received[i] += MoneyLedger.LastIn(nation, Flows[i]);
+                }
+            }
+        }
+
+        public void Print(Campaign campaign)
+        {
+            Console.WriteLine("Money drains over the run (paid out, share of the same weeks' budget income):");
+            foreach (var tag in Reference)
+            {
+                var nation = campaign.Nations.FirstOrDefault(n => string.Equals(n.Tag, tag, StringComparison.OrdinalIgnoreCase));
+                if (nation is null || !_income.TryGetValue(nation.Id, out var income) || income <= 0) continue;
+                var spent = _out[nation.Id];
+                Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                    $"  {tag,-4} income {income,9:0.00}  covert {spent[0],8:0.00} ({spent[0] / income,6:P1})  diplomacy {spent[1],7:0.000} ({spent[1] / income,6:P1})  alert {spent[2],7:0.00} ({spent[2] / income,6:P1})  treasury {nation.Treasury,8:0.0}"));
+            }
+            var ids = _income.Where(p => p.Value > 0).Select(p => p.Key).ToArray();
+            var totalIncome = ids.Sum(id => _income[id]);
+            double Total(int flow) => ids.Sum(id => _out[id][flow]);
+            double MedianShare(int flow) => Median(ids.Select(id => _out[id][flow] / _income[id]));
+            int Above(int flow, double share) => ids.Count(id => _out[id][flow] / _income[id] > share);
+            var line = string.Create(CultureInfo.InvariantCulture,
+                $"MONEY_DRAINS countries={ids.Length} covert/income={Total(0) / totalIncome:P2} diplomacy/income={Total(1) / totalIncome:P2} alert/income={Total(2) / totalIncome:P2} " +
+                $"covert_median={MedianShare(0):P2} diplomacy_median={MedianShare(1):P2} alert_median={MedianShare(2):P2} " +
+                $"covert>20%={Above(0, 0.20)} diplomacy>10%={Above(1, 0.10)} alert>10%={Above(2, 0.10)}");
+            Console.WriteLine(line);
+            // The worst payers, each with the line of code most of its money left by.
+            string Site(int id, MoneyFlow flow) => MoneyLedger.Sources?.Where(p => p.Key.Nation == id && p.Key.Flow == flow && p.Value < 0)
+                .OrderBy(p => p.Value).Select(p => " " + p.Key.Site).FirstOrDefault() ?? "";
+            string Worst(int flow, double share) => string.Join(", ", ids.Where(id => _out[id][flow] / _income[id] > share)
+                .OrderByDescending(id => _out[id][flow] / _income[id]).Take(8)
+                .Select(id => string.Create(CultureInfo.InvariantCulture, $"{campaign.NationById(id)?.Tag} {_out[id][flow] / _income[id]:P0}") + Site(id, Flows[flow])));
+            Console.WriteLine("  covert>20%: " + Worst(0, 0.20));
+            Console.WriteLine("  diplomacy>10%: " + Worst(1, 0.10));
+            Console.WriteLine("  alert>10%: " + Worst(2, 0.10));
+            if (MoneyLedger.Sources is not { } sources) return;
+            // Which line of code the money left by, summed over the world: the place to change.
+            foreach (var flow in Flows)
+            {
+                var top = sources.Where(p => p.Key.Flow == flow && p.Value < 0)
+                    .GroupBy(p => p.Key.Site).Select(g => (Site: g.Key, Paid: -g.Sum(p => p.Value)))
+                    .OrderByDescending(p => p.Paid).Take(6)
+                    .Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.Site} {p.Paid:0.0}"));
+                Console.WriteLine($"  {flow} paid by: " + string.Join("; ", top));
+            }
+        }
     }
 
     private readonly record struct Snapshot(double Drain, int Frozen, double WaitingShare);
@@ -101,6 +182,15 @@ internal static class ConstructionEconomyReport
                 .OrderBy(r => r.Weekly).Take(4).Select(r => string.Create(CultureInfo.InvariantCulture, $"{r.Caption} {r.Weekly:0.000}"));
             Console.WriteLine($"    {tag} out: " + string.Join("; ", top));
         }
+        // Who keeps its forces on a raised alert, at what posture, and against whom: an alert with no
+        // war behind it is the one that empties a treasury for nothing.
+        var alerted = campaign.Nations.Where(n => n.Population > 0 && n.Movement is null && DefconSystem.UpkeepMultiplier(campaign, n) > 1f)
+            .OrderByDescending(n => DefconSystem.WeeklyUpkeep(campaign, n)).Take(6)
+            .Select(n => string.Create(CultureInfo.InvariantCulture,
+                $"{n.Tag} posture {n.NuclearPosture} paid {DefconSystem.WeeklyUpkeep(campaign, n):0.00} at war with ") +
+                string.Join(",", campaign.Wars.Where(w => !w.Ended && w.Involves(n.Id)).SelectMany(w => w.EnemiesOf(n.Id))
+                    .Select(id => campaign.NationById(id)?.Tag).Distinct())).ToArray();
+        Console.WriteLine($"    alert (world DEFCON {DefconSystem.CurrentLevel(campaign)}): " + (alerted.Length > 0 ? string.Join("; ", alerted) : "nobody pays"));
         var economies = World(campaign);
         var drains = economies.Select(Drain).Where(double.IsFinite).ToArray();
         var meanDrain = drains.Length > 0 ? drains.Average() : 0;

@@ -154,7 +154,7 @@ public static class DiplomaticActs
         if (!validActors) return Loc.Get("Invalid target.");
         var relation = CampaignDiplomacy.Peek(campaign, asking.Id, asked.Id);
         var key = CooldownKey(act, asked.Id);
-        var price = Price(campaign, act);
+        var price = Price(campaign, asking, act);
         var code = DealOrForce.Rules.DiplomaticActRules.EvaluateRefusal(
             true,
             relation?.Stance == DiplomaticStance.AtWar,
@@ -222,11 +222,14 @@ public static class DiplomaticActs
         var hasCooldowns = asking.DecisionAvailableDay.Count > 0;
         var minWillingness = campaign.Defines.DiplomaticActWillingness;
         var elapsedDays = campaign.ElapsedDays;
+        // Once per asker, not once per act: the scale reads the budget's week.
+        var scale = DiplomacyPrice.Scale(campaign, asking);
 
         for (var i = 0; i < All.Length; i++)
         {
             var act = All[i];
-            var price = Price(campaign, act);
+            var price = DealOrForce.Rules.DiplomaticActRules.Price(
+                (int)act, campaign.Defines.DiplomaticActCost, campaign.Defines.DiplomaticSubsidy) * scale;
             if (DealOrForce.Rules.DiplomaticActRules.EvaluateRefusal(
                     true,
                     false,
@@ -293,17 +296,26 @@ public static class DiplomaticActs
 
     /// <summary>What this act costs the asking treasury. Public because the diplomacy list shows
     /// the price before it is asked, and a price nobody can see is not a choice.</summary>
-    public static float Cost(Campaign campaign, DiplomaticAct act) => Price(campaign, act);
+    public static float Cost(Campaign campaign, Nation asking, DiplomaticAct act) => Price(campaign, asking, act);
 
-    private static float Price(Campaign campaign, DiplomaticAct act) =>
+    /// <summary>What the act costs the player, for a list that has no asker in hand.</summary>
+    public static float Cost(Campaign campaign, DiplomaticAct act) => Price(campaign, campaign?.Player, act);
+
+    /// <summary>
+    /// The listed price (DiplomaticActCost, DiplomaticSubsidy) scaled to the asker's income
+    /// (DiplomacyPrice): the same act costs Poland what it costs the United States in proportion,
+    /// not in billions. A subsidy is scaled to the giver, as a gift is measured by who gives it.
+    /// </summary>
+    private static float Price(Campaign campaign, Nation asking, DiplomaticAct act) =>
         DealOrForce.Rules.DiplomaticActRules.Price(
-            (int)act, campaign.Defines.DiplomaticActCost, campaign.Defines.DiplomaticSubsidy);
+            (int)act, campaign.Defines.DiplomaticActCost, campaign.Defines.DiplomaticSubsidy) *
+        DiplomacyPrice.Scale(campaign, asking);
 
     private static string CooldownKey(DiplomaticAct act, int targetId) => "diplomatic_act/" + act + "/" + targetId;
 
     internal static bool Accept(Campaign campaign, DiplomaticRelation relation, Nation asking, Nation asked, DiplomaticAct act)
     {
-        var price = Price(campaign, act);
+        var price = Price(campaign, asking, act);
         if (asking.Treasury + 0.001f < price) return false;
         { var ledgerBefore = asking.Treasury; asking.Treasury -= price; MoneyLedger.Book(asking, MoneyFlow.Diplomacy, asking.Treasury - ledgerBefore); }
         switch (act)

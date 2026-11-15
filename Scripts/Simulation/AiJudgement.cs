@@ -767,8 +767,10 @@ public static partial class AiStatecraft
             if (worked >= reach) return;
             var ours = CampaignDiplomacy.Get(campaign, nation.Id, friend.Id);
             if (campaign.ElapsedDays - ours.LastActionDay < 14) continue;
-            if (nation.Treasury < 0.1f) return;
-            { var ledgerBefore = nation.Treasury; nation.Treasury -= 0.1f; MoneyLedger.Book(nation, MoneyFlow.Diplomacy, nation.Treasury - ledgerBefore); }
+            // A courting visit priced like the rest of diplomacy: 0.1 at the reference income.
+            var visit = DiplomacyPrice.Of(campaign, nation, 0.1f);
+            if (nation.Treasury < visit) return;
+            { var ledgerBefore = nation.Treasury; nation.Treasury -= visit; MoneyLedger.Book(nation, MoneyFlow.Diplomacy, nation.Treasury - ledgerBefore); }
             OpinionSystem.Remember(campaign, ours, "improved_relations");
             ours.LastActionDay = campaign.ElapsedDays;
             var targetBond = CampaignDiplomacy.Peek(campaign, target.Id, friend.Id);

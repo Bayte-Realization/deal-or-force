@@ -275,15 +275,15 @@ public partial class DealOrForceGame
         var description = gesture switch
         {
             "state_visit" => Simulation.Loc.Format("A visit by our head of state: {0:0.##} political credit and {1}. Opinion +20 for four years; a friend of a neutral.",
-                d.StateVisitPoliticalCost, Fmt.Money(d.StateVisitCash)),
+                d.StateVisitPoliticalCost, Fmt.Money(DiplomaticGestures.Cash(_campaign, player, "state_visit"))),
             "show_of_force" => Simulation.Loc.Format("Manoeuvres on their border: {0}. Their opinion -15 and a grievance against us; our war support rises, and theirs a little.",
-                Fmt.Money(d.ShowOfForceCash)),
+                Fmt.Money(DiplomaticGestures.Cash(_campaign, player, "show_of_force"))),
             "mediate" => Simulation.Loc.Format("Offer to mediate the {0}: {1:0.##} political credit. If both sides are ready, a ceasefire, and both remember who brought it.",
                 war is null ? "" : WarNames.Of(_campaign, war), d.MediationPoliticalCost),
             "loan" => Simulation.Loc.Format("Lend them {0} for their development, repaid with {1:0}% interest over {2} weeks. Opinion +15; a default costs them our trust for ten years.",
                 Fmt.Money(DiplomaticGestures.LoanSize(_campaign, player, target)), d.LoanInterest * 100f, d.LoanWeeks),
             "joint_exercises" => Simulation.Loc.Format("Exercises with them: {0:0.##} political credit and {1}. Opinion between us +15; every rival we share hears the message - tension with both of us rises.",
-                d.ExercisesPoliticalCost, Fmt.Money(d.ExercisesCash)),
+                d.ExercisesPoliticalCost, Fmt.Money(DiplomaticGestures.Cash(_campaign, player, "joint_exercises"))),
             "expel_diplomats" => Simulation.Loc.Get("Expel their diplomats: free, and loud. Their opinion -25 and a grievance, tension between us up; the hawks at home applaud."),
             "apology" => Simulation.Loc.Format("A formal apology with {0} in compensation and {1:0.##} political credit. Every fading grievance between us is halved, those over other countries' quarrels cut to a quarter; opinion +10 for three years. Standing conditions - an embargo, a border, fear of our strength - are untouched.",
                 Fmt.Money(DiplomaticGestures.ApologyCost(_campaign, player)), d.ApologyPoliticalCost),

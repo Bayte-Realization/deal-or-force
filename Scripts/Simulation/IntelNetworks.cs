@@ -147,6 +147,7 @@ public static class IntelNetworks
             var room = Math.Clamp(1 + (int)(owner.Gdp / 400f), 1, Math.Max(1, c.Defines.IntelNetworkLimit));
             if (owner.IntelNetworks.Count >= room) continue;
             if (owner.Treasury < Cost(c, owner) * 4f) continue;
+            if (!CovertBudget.AiMaySpend(c, owner)) continue;
             Nation best = null;
             var bestScore = 0f;
             foreach (var relation in c.Relations.Values)
@@ -166,7 +167,9 @@ public static class IntelNetworks
                 best = other;
             }
             if (best is null || bestScore < 25f) continue;
+            var before = owner.Treasury;
             new IntelNetworkCommand { IssuerId = owner.Id, TargetId = best.Id, Action = "found" }.Apply(c);
+            CovertBudget.AiSpent(c, owner, before - owner.Treasury);
         }
     }
 

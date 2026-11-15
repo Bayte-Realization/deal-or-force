@@ -27,7 +27,7 @@ public partial class DealOrForceGame
             _conflictsPage.AddChild(button);
             if (refusal.Length > 0) _conflictsPage.AddChild(WrappedUltimatumText(refusal, 12));
         }
-        Add(Loc.Format("Offer mediation ({0})", Fmt.Money(_campaign.Defines.CrisisMediationCost)), "MediateForeignCrisis",
+        Add(Loc.Format("Offer mediation ({0})", Fmt.Money(Escalation.MediationPrice(_campaign, player))), "MediateForeignCrisis",
             () => Escalation.MediationBlock(_campaign, player, a, b),
             () => new MediateCrisisCommand { IssuerId = player.Id, MediatorId = player.Id, TargetAId = a.Id, TargetBId = b.Id },
             order => ((MediateCrisisCommand)order).Mediated, "Mediation opened. Its cost was paid and tensions were reduced.");

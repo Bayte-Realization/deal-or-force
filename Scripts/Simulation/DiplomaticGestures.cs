@@ -112,13 +112,13 @@ public static class DiplomaticGestures
                 if (relation is not null && relation.Opinion < -30f) return Loc.Get("Relations are too poor for a visit to be received.");
                 if (issuer.PoliticalPoints < d.StateVisitPoliticalCost)
                     return Loc.Format("Insufficient political credit: need {0:0.##}, available {1:0.##}.", d.StateVisitPoliticalCost, issuer.PoliticalPoints);
-                return issuer.Treasury < d.StateVisitCash ? Loc.Get("The treasury cannot pay for it.") : "";
+                return issuer.Treasury < Cash(c, issuer, "state_visit") ? Loc.Get("The treasury cannot pay for it.") : "";
             case "show_of_force":
                 if (atWar) return Loc.Get("We are already at war with them.");
                 if (relation is { Stance: DiplomaticStance.Allied }) return Loc.Get("Not against an ally.");
                 if (!CampaignDiplomacy.SharesLandBorder(c, issuer.MapIndex, target.MapIndex))
                     return Loc.Get("Only on a border we share with them.");
-                return issuer.Treasury < d.ShowOfForceCash ? Loc.Get("The treasury cannot pay for it.") : "";
+                return issuer.Treasury < Cash(c, issuer, "show_of_force") ? Loc.Get("The treasury cannot pay for it.") : "";
             case "mediate":
                 var war = MediableWar(c, issuer, target);
                 if (war is null) return Loc.Get("They are not at war with anybody we are not fighting ourselves.");
@@ -144,7 +144,7 @@ public static class DiplomaticGestures
                     return Loc.Get("Only with an ally or a friend who thinks well of us.");
                 if (issuer.PoliticalPoints < d.ExercisesPoliticalCost)
                     return Loc.Format("Insufficient political credit: need {0:0.##}, available {1:0.##}.", d.ExercisesPoliticalCost, issuer.PoliticalPoints);
-                return issuer.Treasury < d.ExercisesCash ? Loc.Get("The treasury cannot pay for it.") : "";
+                return issuer.Treasury < Cash(c, issuer, "joint_exercises") ? Loc.Get("The treasury cannot pay for it.") : "";
             case "apology":
                 // Unlike a visit, an apology is for exactly the relationship too poor to receive
                 // one: no opinion is needed, only something to apologise for and the means to pay.
@@ -252,6 +252,24 @@ public static class DiplomaticGestures
     }
 
     /// <summary>What a development loan from this lender to this borrower would be, in billions.</summary>
+    /// <summary>
+    /// What a gesture's cash costs this issuer: the listed StateVisitCash, ShowOfForceCash or
+    /// ExercisesCash scaled to its income (DiplomacyPrice). Nought for a gesture with no cash price.
+    /// </summary>
+    public static float Cash(Campaign c, Nation issuer, string gesture)
+    {
+        var d = c?.Defines;
+        if (d is null) return 0f;
+        var listed = gesture switch
+        {
+            "state_visit" => d.StateVisitCash,
+            "show_of_force" => d.ShowOfForceCash,
+            "joint_exercises" => d.ExercisesCash,
+            _ => 0f
+        };
+        return DiplomacyPrice.Of(c, issuer, listed);
+    }
+
     public static float LoanSize(Campaign c, Nation lender, Nation borrower)
     {
         var amount = MathF.Max(0f, lender.Gdp) * MathF.Max(0f, c.Defines.LoanShareOfGdp);
@@ -272,7 +290,7 @@ public static class DiplomaticGestures
         {
             case "state_visit":
                 issuer.PoliticalPoints -= d.StateVisitPoliticalCost;
-                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= d.StateVisitCash; MoneyLedger.Book(issuer, MoneyFlow.Diplomacy, issuer.Treasury - ledgerBefore); }
+                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= Cash(c, issuer, "state_visit"); MoneyLedger.Book(issuer, MoneyFlow.Diplomacy, issuer.Treasury - ledgerBefore); }
                 OpinionSystem.Remember(c, relation, "state_visit");
                 if (relation.Opinion >= 35f && relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Rival)
                     relation.Stance = DiplomaticStance.Friendly;
@@ -280,7 +298,7 @@ public static class DiplomaticGestures
                 cooldown = d.StateVisitCooldownDays;
                 break;
             case "show_of_force":
-                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= d.ShowOfForceCash; MoneyLedger.Book(issuer, MoneyFlow.Diplomacy, issuer.Treasury - ledgerBefore); }
+                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= Cash(c, issuer, "show_of_force"); MoneyLedger.Book(issuer, MoneyFlow.Diplomacy, issuer.Treasury - ledgerBefore); }
                 OpinionSystem.Remember(c, relation, "show_of_force");
                 if (relation.A == targetId) relation.GrievanceA = MathF.Min(100f, relation.GrievanceA + d.ShowOfForceGrievance);
                 else relation.GrievanceB = MathF.Min(100f, relation.GrievanceB + d.ShowOfForceGrievance);
@@ -333,7 +351,7 @@ public static class DiplomaticGestures
                 break;
             case "joint_exercises":
                 issuer.PoliticalPoints -= d.ExercisesPoliticalCost;
-                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= d.ExercisesCash; MoneyLedger.Book(issuer, MoneyFlow.Diplomacy, issuer.Treasury - ledgerBefore); }
+                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= Cash(c, issuer, "joint_exercises"); MoneyLedger.Book(issuer, MoneyFlow.Diplomacy, issuer.Treasury - ledgerBefore); }
                 OpinionSystem.Remember(c, relation, "joint_exercises");
                 // A message to whoever both of them stand against: it is heard, and remembered.
                 var rivals = CommonRivals(c, issuer, target);

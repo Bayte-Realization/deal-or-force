@@ -17,6 +17,8 @@ static class Program
         if (args.Contains("--construction-capacity-only")) { ConstructionCapacityTests.Run(); return; }
         if (args.Length == 0) IndustryFixTests.Run();
         if (args.Length == 0) ConstructionCapacityTests.Run();
+        if (args.Contains("--money-drains-only")) { MoneyDrainsTests.Run(); return; }
+        if (args.Length == 0) MoneyDrainsTests.Run();
         if (args.Contains("--recognition-index-only")) { RecognitionIndexTests.Run(); return; }
         if (args.Contains("--exile-origin-only")) { ExileOriginTests.Run(); return; }
         if (args.Length == 0) ExileOriginTests.Run();
