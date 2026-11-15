@@ -810,7 +810,10 @@ public static partial class AiStatecraft
             var offer = campaign.DealOffers[i];
             if (offer.Pending && offer.FromId == nation.Id && offer.ToId == client.Id) { pending = true; break; }
         }
-        if (!outcome.Accepted && !pending) return false;
+        // Answered at once by the client player's standing rule: the grant was offered, so the
+        // patron waits as it would after any answer instead of offering it again every week.
+        if (!outcome.Accepted && !pending && !DealNegotiations.AnsweredByRuleToday(campaign, nation.Id, client.Id))
+            return false;
         nation.DecisionAvailableDay["crisis_grant/" + client.Id] =
             campaign.ElapsedDays + Math.Max(30, defines.AiCrisisGrantRetryDays);
         Count("crisis_grant");
@@ -1840,6 +1843,7 @@ public static partial class AiStatecraft
         if (!Ultimatum.CanNegotiateDeal(campaign, buyer, seller, out _)) return false;
         var relation = CampaignDiplomacy.Peek(campaign, buyer.Id, seller.Id);
         if (relation is null || relation.NonAggressionPact || relation.Stance == DiplomaticStance.AtWar) return false;
+        if (buyer.DecisionAvailableDay.GetValueOrDefault(BuyPeaceKey(seller.Id)) > campaign.ElapsedDays) return false;
 
         // The strong side does not buy what it could take for free: the offer only makes
         // sense from the weaker chair, and only while something is still worth defending.
@@ -1861,12 +1865,24 @@ public static partial class AiStatecraft
             Count("peace_offered");
             return true; // This week's action was delivery, not a signed pact.
         }
-        if (!command.Outcome.Accepted) return false;
+        if (!command.Outcome.Accepted)
+        {
+            // A player's standing rule answered it at delivery. A waiting paper kept the buyer from
+            // asking again for as long as it lay on the table; an answer at once must keep it as
+            // long, or the same cheque goes out and is turned down every week.
+            if (!DealNegotiations.AnsweredByRuleToday(campaign, buyer.Id, seller.Id)) return false;
+            buyer.DecisionAvailableDay[BuyPeaceKey(seller.Id)] =
+                campaign.ElapsedDays + Math.Clamp(campaign.Defines.DealOfferDays, 1, 365);
+            Count("peace_offered");
+            return true;
+        }
         Count("peace_bought");
         DiagnosticLogs.Write("simulation",
             $"DEAL {buyer.Tag} buys a pact from {seller.Tag} for {offer:0} day={campaign.ElapsedDays}");
         return true;
     }
+
+    internal static string BuyPeaceKey(int sellerId) => "buy_peace/" + sellerId;
 
     internal static bool Threatened(Campaign campaign, Nation nation)
     {

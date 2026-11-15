@@ -1270,7 +1270,7 @@ public partial class DealOrForceGame
         // The same courtesy for the two offers that used to have no direction but one.
         if (AgreementSystem.OfferedBy(_campaign, player, nation.Id, out var pendingKind))
             Pact(pendingKind == AgreementKind.TradeAgreement ? Tr("Trade agreement") : Tr("Non-aggression pact"),
-                Tr("they have offered; answer it here"), "state.info");
+                Tr("they have offered; answer it here, or decline it in the diplomatic inbox"), "state.info");
         if (relation.GuaranteeRequestedBy == nation.Id && Guarantee.Pending(_campaign, relation))
             Pact(Tr("Guarantee"), Tr("they have asked you to stand behind them"), "state.warning");
         if (relation.NonAggressionPact)

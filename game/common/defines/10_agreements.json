@@ -19,6 +19,12 @@
   "AgreementNotorietyCap": 0.3,
   "AgreementRefusalDays": 180,
 
+  // An offer left unanswered on a player's table lapses after AgreementReplyDays (30). The same
+  // asker then waits this long before putting it there again - half a refusal's silence, because
+  // silence is not a no, but long enough that one ignored offer is not back every month.
+  // 0 turns the wait off.
+  "AgreementLapseCooldownDays": 90,
+
   // Breaking a promise not to attack is never free.
   "NonAggressionPactBreakNotoriety": 8,
 

@@ -11,5 +11,21 @@
   "DealOfferDays": 30,
   "DealInboxLimit": 8,
   "DealHistoryLimit": 128,
-  "DealCounterLimit": 4
+  "DealCounterLimit": 4,
+
+  // Standing answers (Scripts/Simulation/DealAnswer.cs, kinds in common/deals).
+  // "Sign the beneficial ones" signs a deal only when the game's own count - the same figure the
+  // inbox shows on every offer - puts it at least this many diplomatic points in the player's
+  // favour. 5 is a third of the grudge penalty above: a deal that merely breaks even, or is only
+  // a rounding error ahead, still waits for the player. A government's own answer is unchanged
+  // (it signs at 0 and above); this margin is for the player's rule only.
+  "AutoAcceptMargin": 5.0,
+
+  // How many waiting papers the rules may close in one day, oldest first. A rule switched on
+  // with a full inbox works through it over a few days instead of in one silent morning.
+  // An inbox holds at most DealInboxLimit (8) papers per player, so 32 clears four full inboxes.
+  "AutoAnswerDailyBatch": 32,
+
+  // How many answers given under a rule each country keeps for its player to read.
+  "AutoAnswerLogLimit": 50
 }

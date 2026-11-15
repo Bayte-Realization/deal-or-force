@@ -1,0 +1,43 @@
+// Kinds of incoming offer a player can leave a standing answer for (Scripts/Simulation/DealAnswer.cs).
+//
+// A deal belongs to the matching kind with the highest priority, judged by its terms - never by
+// which template the sender used. A deal no kind matches always waits for the player.
+//
+// match conditions (all named ones must hold):
+//   recipient_gives_any  - the addressed country is asked for at least one of these terms
+//   proposer_gives_any   - the sender puts at least one of these on the table
+//   only                 - every term on the table, on either side, is one of these
+//   recipient_gives_none - the addressed country is asked for nothing at all
+// term ids: regions, release_regions, cash, lift_embargo, non_aggression, trade_agreement
+//           (lease_region and cash_stream are accepted for terms the table does not have yet)
+//
+// modes: ask (the paper waits), beneficial (signed when the game's own count puts it at least
+// AutoAcceptMargin points in the player's favour - defines/58_deals.json), decline.
+// "beneficial" is refused at load for any kind that could make the player give up land, and the
+// rule checks the terms again when it answers: no rule ever gives land away.
+// A mod adds a kind by id, changes one by repeating its id, or removes one with "remove": true.
+{
+  "answer_kinds": [
+    // Any deal in which we give up or release a region. Strictest first: a pact with a region
+    // attached is a land deal.
+    { "id": "land", "priority": 100,
+      "match": { "recipient_gives_any": ["regions", "release_regions", "lease_region"] },
+      "modes": ["ask", "decline"], "default": "ask" },
+    // We sign a treaty or lift our embargo, and they pay for it (the computer buying peace).
+    { "id": "treaty_for_money", "priority": 60,
+      "match": { "recipient_gives_any": ["non_aggression", "trade_agreement", "lift_embargo"], "proposer_gives_any": ["cash", "cash_stream"] },
+      "modes": ["ask", "beneficial", "decline"], "default": "ask" },
+    // A non-aggression pact and nothing else, whoever writes it.
+    { "id": "non_aggression", "priority": 40,
+      "match": { "only": ["non_aggression"] },
+      "modes": ["ask", "beneficial", "decline"], "default": "ask" },
+    // A trade agreement and nothing else - a paper in the inbox or an offer from a country page.
+    { "id": "trade_agreement", "priority": 40,
+      "match": { "only": ["trade_agreement"] },
+      "modes": ["ask", "beneficial", "decline"], "default": "ask" },
+    // They give money or a promise and ask nothing back (help in a crisis).
+    { "id": "gift", "priority": 10,
+      "match": { "recipient_gives_none": true },
+      "modes": ["ask", "beneficial", "decline"], "default": "ask" }
+  ]
+}

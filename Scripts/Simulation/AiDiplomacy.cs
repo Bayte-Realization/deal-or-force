@@ -212,7 +212,8 @@ public static partial class AiStatecraft
                 IssuerId = asking.Id, TargetId = asked.Id, Kind = kind
             };
             request.Apply(campaign);
-            if (request.Result != AgreementResult.Offered) return false;
+            // A player's standing rule may sign it on the spot; that is the move spent well.
+            if (request.Result != AgreementResult.Offered && request.Result != AgreementResult.Signed) return false;
             Count("agreement_offered");
             return true;
         }
@@ -449,14 +450,18 @@ public static partial class AiStatecraft
         {
             if (!campaign.FeatureEnabled("deals") || campaign.ProvinceMap is null) return false;
             var deal = new Ultimatum.Deal(new Ultimatum.Side { TradeAgreement = true }, new Ultimatum.Side());
-            DealNegotiations.Submit(campaign, nation, alternate, deal);
+            var submitted = DealNegotiations.Submit(campaign, nation, alternate, deal);
             var pending = false;
             foreach (var offer in campaign.DealOffers)
                 if (offer.Pending && offer.FromId == nation.Id && offer.ToId == alternate.Id &&
                     offer.From.TradeAgreement && offer.From.Cash == 0f && (offer.From.Regions?.Length ?? 0) == 0 &&
                     (offer.To.Regions?.Length ?? 0) == 0)
                     pending = true;
-            if (!pending) return false;
+            // Answered at once by the player's standing rule, either way: the question was put,
+            // and asking again tomorrow would only fill their ministry's ledger.
+            var answeredByRule = !pending && campaign.DealOffers.Any(offer => offer.ByRule &&
+                offer.FromId == nation.Id && offer.ToId == alternate.Id && offer.ClosedDay == campaign.ElapsedDays);
+            if (!pending && !answeredByRule && !submitted.Accepted) return false;
         }
         else
         {

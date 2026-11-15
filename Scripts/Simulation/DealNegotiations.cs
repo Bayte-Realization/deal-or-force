@@ -26,6 +26,8 @@ public sealed class DealOffer
     public int[] FromProvinces = Array.Empty<int>(), ToProvinces = Array.Empty<int>();
     public DealOfferState State;
     public string Reason = "";
+    /// <summary>Answered by the addressed player's standing rule (DealAnswer), not by the player's own hand.</summary>
+    public bool ByRule;
     [JsonIgnore] public Ultimatum.Deal Terms => new(From, To);
     [JsonIgnore] public bool Pending => State == DealOfferState.Pending;
 }
@@ -60,7 +62,7 @@ public static class DealNegotiations
         Id = offer.Id, FromId = offer.FromId, ToId = offer.ToId,
         CreatedDay = offer.CreatedDay, ExpiresDay = offer.ExpiresDay, ClosedDay = offer.ClosedDay,
         ParentOfferId = offer.ParentOfferId, CounterDepth = offer.CounterDepth,
-        From = Copy(offer.From), To = Copy(offer.To), State = offer.State, Reason = offer.Reason ?? "",
+        From = Copy(offer.From), To = Copy(offer.To), State = offer.State, Reason = offer.Reason ?? "", ByRule = offer.ByRule,
         FromProvinces = (offer.FromProvinces ?? Array.Empty<int>()).ToArray(),
         ToProvinces = (offer.ToProvinces ?? Array.Empty<int>()).ToArray()
     };
@@ -88,7 +90,8 @@ public static class DealNegotiations
         // Counterproposals to governments still use the same current AI assessment.
         // A refusal keeps the original paper on the table.
         var assessment = Ultimatum.AssessNegotiatedDeal(c, from, to, terms);
-        if (!to.IsHuman && !assessment.Acceptable) return new(false, assessment.Reason);
+        if (!to.IsHuman && DealAnswer.Decide(c, to, from, terms, assessment).Verdict != DealVerdict.Accept)
+            return new(false, assessment.Reason);
         var paper = new DealOffer
         {
             Id = c.NextDealOfferId++, FromId = from.Id, ToId = to.Id,
@@ -103,7 +106,12 @@ public static class DealNegotiations
         CampaignDiplomacy.Get(c, from.Id, to.Id).LastActionDay = c.ElapsedDays;
         c.MarkStrategicChange();
         TrimHistory(c);
-        if (to.IsHuman) return new(false, Loc.Get("Offer delivered; awaiting a reply."), paper.Id);
+        if (to.IsHuman)
+        {
+            // A player's standing rule answers at delivery, by the same assessment.
+            if (DealAnswer.HasStandingRules(to) && AnswerByRule(c, paper, assessment) is { } ruled) return ruled;
+            return new(false, Loc.Get("Offer delivered; awaiting a reply."), paper.Id);
+        }
         var result = Ultimatum.ResolveAgreedDeal(c, from, to, paper.Terms);
         Close(c, paper, result.Accepted ? DealOfferState.Accepted : DealOfferState.Invalidated,
             result.Accepted ? "The bargain is signed" : result.Note);
@@ -169,7 +177,93 @@ public static class DealNegotiations
                 Close(c, paper, DealOfferState.Invalidated, "The addressed country is no longer controlled by a player.");
         }
         yield return 0;
+        // Papers that waited before a standing rule was set: oldest first, a batch a day. Only a
+        // country a player answers for has a paper waiting at all, so a world without players
+        // never gets past the first test.
+        if (c.FeatureEnabled("deals") && c.Nations.Any(n => n.IsHuman && DealAnswer.HasStandingRules(n)))
+        {
+            var batch = Math.Clamp(c.Defines.AutoAnswerDailyBatch, 0, 1024);
+            var closed = 0;
+            foreach (var paper in c.DealOffers.Where(o => o.Pending && o.ExpiresDay > c.ElapsedDays)
+                         .OrderBy(o => o.Id).ToArray())
+            {
+                if (closed >= batch) break;
+                var to = c.NationById(paper.ToId);
+                if (to?.IsHuman != true || !DealAnswer.HasStandingRules(to)) continue;
+                if (DealAnswer.ModeFor(to, DealAnswerKinds.Classify(paper.Terms)) == AutoAnswerMode.Ask) continue;
+                AnswerByRule(c, paper);
+                if (!paper.Pending) closed++;
+                yield return 0;
+            }
+        }
         TrimHistory(c);
+    }
+
+    /// <summary>
+    /// One waiting paper answered by its addressee's standing rule, or null when the rule leaves
+    /// it to the player. Acceptance goes the way a player's own does - live funds, territory and
+    /// treaties checked again, then <see cref="Ultimatum.ResolveAgreedDeal"/>.
+    /// </summary>
+    internal static Ultimatum.DealOutcome AnswerByRule(Campaign c, DealOffer paper, Ultimatum.DealAssessment known = null)
+    {
+        if (c is null || paper is null || !paper.Pending || paper.ExpiresDay <= c.ElapsedDays) return null;
+        var from = c.NationById(paper.FromId);
+        var to = c.NationById(paper.ToId);
+        if (from is null || to?.IsHuman != true) return null;
+        var decision = DealAnswer.Decide(c, to, from, paper.Terms, known);
+        if (decision.Verdict == DealVerdict.Wait) return null;
+        Ultimatum.DealOutcome result;
+        if (decision.Verdict == DealVerdict.Decline)
+        {
+            paper.ByRule = true;
+            Close(c, paper, DealOfferState.Declined, decision.Reason);
+            result = new(false, Loc.Get(paper.Reason));
+        }
+        else
+        {
+            // The same consent boundary RespondDealCommand passes for a signature.
+            if (!MechanicFeatures.Allows(c, new RespondDealCommand { IssuerId = to.Id, OfferId = paper.Id, Reply = DealReply.Accept }))
+                return null;
+            paper.ByRule = true;
+            if (!Ultimatum.ValidateNegotiatedDeal(c, from, to, paper.Terms, out var refusal))
+            {
+                Close(c, paper, DealOfferState.Invalidated, refusal);
+                result = new(false, refusal);
+            }
+            else if (!SameGround(c, paper))
+            {
+                Close(c, paper, DealOfferState.Invalidated, "The selected regions changed shape. Send a new offer for the current territory.");
+                result = new(false, Loc.Get(paper.Reason));
+            }
+            else
+            {
+                var signed = Ultimatum.ResolveAgreedDeal(c, from, to, paper.Terms);
+                Close(c, paper, signed.Accepted ? DealOfferState.Accepted : DealOfferState.Invalidated,
+                    signed.Accepted ? decision.Reason : signed.Note);
+                result = signed;
+            }
+        }
+        DealAnswer.Remember(c, to, new AutoAnswerNote
+        {
+            Day = c.ElapsedDays, ProposerId = from.Id, OfferId = paper.Id, Kind = decision.Kind?.Id ?? "",
+            Mode = decision.Mode, Accepted = paper.State == DealOfferState.Accepted, Benefit = decision.Benefit
+        });
+        return result;
+    }
+
+    /// <summary>
+    /// Whether the latest paper from one country to another was answered today by the addressee's
+    /// standing rule. Submit then returns neither a waiting paper nor a signature, which a proposer
+    /// would otherwise read as "never asked" and ask again next week: the question was put and
+    /// answered, so it waits as it would after any other answer.
+    /// </summary>
+    public static bool AnsweredByRuleToday(Campaign c, int fromId, int toId)
+    {
+        if (c is null) return false;
+        DealOffer latest = null;
+        foreach (var paper in c.DealOffers)
+            if (paper.FromId == fromId && paper.ToId == toId && (latest is null || paper.Id > latest.Id)) latest = paper;
+        return latest is { ByRule: true, Pending: false } && latest.ClosedDay == c.ElapsedDays;
     }
 
     private static void Close(Campaign c, DealOffer paper, DealOfferState state, string reason)

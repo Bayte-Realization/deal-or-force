@@ -15,6 +15,10 @@ public partial class DealOrForceGame
     private int _dealInboxSelected = -1, _dealInboxConfirm = -1, _ultimatumInboxSelected = -1, _ultimatumInboxConfirm = -1;
     private string _dealInboxKey = "", _dealInboxConfirmKey = "", _dealInboxMessage = "";
     private int _dealNoticeViewer = -1;
+    // Whose standing answers the strip last showed: an armed "sign if beneficial" is the press of
+    // that player in that campaign, never a step another seat or another save inherits.
+    private int _dealAnswerSeat = -1;
+    private WeakReference<Campaign> _dealAnswerCampaign;
     private bool _dealNoticeObserver;
     private System.Collections.Generic.HashSet<int> _dealNoticeIds = new();
     private System.Collections.Generic.HashSet<int> _ultimatumNoticeIds = new();
@@ -25,7 +29,7 @@ public partial class DealOrForceGame
         var demand = _campaign.UltimatumPapers.FirstOrDefault(candidate => candidate.Id == _ultimatumInboxSelected);
         return $"{Loc.Language}|{_campaign.Player.Id}|{_campaign.ElapsedDays}|{_campaign.MapRevision}|" +
             $"{_campaign.DealInboxRevision}|{_campaign.NationById(paper?.FromId ?? -1)?.Treasury:R}|" +
-            $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}|u:{_ultimatumInboxSelected}|{demand?.State}|{demand?.ExpiresDay}|{AssistanceInboxKey()}|{ArmsInboxKey()}|{LeaseInboxKey()}";
+            $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}|u:{_ultimatumInboxSelected}|{demand?.State}|{demand?.ExpiresDay}|{AssistanceInboxKey()}|{ArmsInboxKey()}|{LeaseInboxKey()}|{DealAnswerKey()}";
     }
 
     private void RefreshNegotiationNotifications()
@@ -37,7 +41,8 @@ public partial class DealOrForceGame
             + MilitaryAccess.Incoming(_campaign, _campaign.Player.Id)
             + LeaseOffersIncoming()
             + DiplomaticActs.Incoming(_campaign, _campaign.Player.Id)
-            + AllyRivalShift.Incoming(_campaign, _campaign.Player.Id);
+            + AllyRivalShift.Incoming(_campaign, _campaign.Player.Id)
+            + AgreementSystem.OfferedTo(_campaign, _campaign.Player).Count;
         var incoming = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.DealOffers
             .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
         var ultimatums = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.UltimatumPapers
@@ -74,7 +79,7 @@ public partial class DealOrForceGame
         CloseUltimatumComposer();
         _dealReturnFocus = GetViewport().GuiGetFocusOwner();
         _dealInboxVisible = true;
-        _dealInboxKey = ""; _dealInboxMessage = ""; _dealInboxConfirm = -1;
+        _dealInboxKey = ""; _dealInboxMessage = ""; _dealInboxConfirm = -1; _dealAnswerConfirmKind = "";
         _dealComposer = FullLayer("DiplomaticInbox");
         _hudLayer.AddChild(_dealComposer);
         var shade = new ColorRect { Color = Ui.Colour("surface.overlay"), MouseFilter = MouseFilterEnum.Stop };
@@ -85,6 +90,7 @@ public partial class DealOrForceGame
         ScreenHeader(rows, "DIPLOMATIC INBOX",
             "Diplomatic letters await your decision. Reading is not consent; review the live terms before approving any transfer.",
             false, HandbookButton("deals"), ActionButton("×", CloseDealComposer, 38, 32));
+        BuildDealAnswerStrip(rows);
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 16); rows.AddChild(body);
         var listFrame = new PanelContainer { Name = "OfferListFrame", CustomMinimumSize = new(290, 0) };
@@ -134,9 +140,29 @@ public partial class DealOrForceGame
         _ => "Counterproposal sent"
     };
 
+    /// <summary>
+    /// The answer to a press. A rebuild for a changed key clears the message with every armed
+    /// confirmation, and the press itself changed the key, so the message is set after that rebuild.
+    /// </summary>
+    private void ShowDealInboxOutcome(string message)
+    {
+        if (_dealInboxVisible && IsInstanceValid(_dealInboxRows) && DealInboxKey() != _dealInboxKey)
+            RefreshDealInbox(force: true);
+        _dealInboxMessage = message;
+        RefreshDealInbox(force: true);
+    }
+
     private void RefreshDealInbox(bool force = false)
     {
         if (!_dealInboxVisible || !IsInstanceValid(_dealInboxRows)) return;
+        // Before the key, which holds the armed kind: the other player's strip starts unarmed.
+        if (_dealAnswerSeat != _campaign.Player.Id || _dealAnswerCampaign is null ||
+            !_dealAnswerCampaign.TryGetTarget(out var shown) || !ReferenceEquals(shown, _campaign))
+        {
+            _dealAnswerConfirmKind = "";
+            _dealAnswerSeat = _campaign.Player.Id;
+            _dealAnswerCampaign = new WeakReference<Campaign>(_campaign);
+        }
         var key = DealInboxKey();
         if (!force && (key == _dealInboxKey || InterfaceInteractionGuard.Busy(_dealComposer))) return;
         if (key != _dealInboxKey) { _dealInboxConfirm = -1; _ultimatumInboxConfirm = -1; _dealInboxMessage = ""; }
@@ -147,22 +173,28 @@ public partial class DealOrForceGame
         foreach (var child in _dealInboxActions.GetChildren()) { _dealInboxActions.RemoveChild(child); child.QueueFree(); }
         _dealInboxActions.Visible = false;
         var player = _campaign.Player;
+        RefreshDealAnswerStrip();
         AddMilitaryAccessInboxRows();
         AddAllyRivalInboxRows();
         AddDiplomaticActInboxRows();
+        AddAgreementInboxRows();
         var papers = _campaign.DealOffers.Where(o => o.FromId == player.Id || o.ToId == player.Id)
             .OrderBy(o => !o.Pending).ThenBy(o => o.Pending ? o.ExpiresDay : -o.Id).ToArray();
         foreach (var paper in papers)
         {
             var counterpart = _campaign.NationById(paper.FromId == player.Id ? paper.ToId : paper.FromId);
             var id = paper.Id;
+            var worth = DealWorthLine(paper);
+            var state = Tr(OfferStateKey(paper));
+            if (paper.ByRule) state = Loc.Format("{0} by rule", state);
+            if (worth.Length > 0) state += "\n" + worth;
             var row = ActionButton(Loc.Format("{0} · {1}\n{2}", paper.ToId == player.Id ? Tr("Incoming") : Tr("Outgoing"),
-                counterpart?.DisplayName ?? "?", Tr(OfferStateKey(paper))), () =>
+                counterpart?.DisplayName ?? "?", state), () =>
             {
                 _dealInboxSelected = id; _ultimatumInboxSelected = -1; _assistanceInboxSelected = -1; ClearArmsInboxSelection();
                 _dealInboxMessage = ""; _dealInboxConfirm = -1;
                 RefreshDealInbox(force: true);
-            }, 0, 54, id == _dealInboxSelected && _ultimatumInboxSelected < 0);
+            }, 0, worth.Length > 0 ? 76 : 54, id == _dealInboxSelected && _ultimatumInboxSelected < 0);
             row.Name = $"DiplomaticOffer_{id}"; row.TooltipText = Loc.Format("Offer #{0}", id);
             _dealInboxRows.AddChild(row);
         }
@@ -240,6 +272,7 @@ public partial class DealOrForceGame
             _dealInboxDetail.AddChild(WrappedUltimatumText(Loc.Format("Treasury after signing\nYou: {0}\nPartner: {1}",
                 Fmt.Money(selected.FromId == player.Id ? assessment.FromTreasuryAfter : assessment.ToTreasuryAfter),
                 Fmt.Money(selected.FromId == player.Id ? assessment.ToTreasuryAfter : assessment.FromTreasuryAfter)), 15));
+            AddDealWorth(selected, from, to);
         }
         var actions = _dealInboxActions;
         actions.Visible = selected.Pending;
@@ -253,18 +286,18 @@ public partial class DealOrForceGame
                     RefreshDealInbox(force: true); return;
                 }
                 ReplyToDeal(selected.Id, DealReply.Accept);
-            }, 180, 36, true);
+            }, 180, DealAnswerTouch, true);
             accept.Name = "AcceptDiplomaticOffer"; accept.Disabled = !legal || remaining == 0;
             accept.TooltipText = Ui.Tip(!legal ? refusal : Tr("Press twice to sign."));
             actions.AddChild(accept);
-            actions.AddChild(ActionButton("Decline", () => ReplyToDeal(selected.Id, DealReply.Decline), 120, 36));
-            var counter = ActionButton("Counterproposal", () => CounterDeal(selected), 170, 36);
+            actions.AddChild(ActionButton("Decline", () => ReplyToDeal(selected.Id, DealReply.Decline), 120, DealAnswerTouch));
+            var counter = ActionButton("Counterproposal", () => CounterDeal(selected), 170, DealAnswerTouch);
             counter.Name = "CounterDiplomaticOffer"; counter.Disabled = remaining == 0 || !_campaign.FeatureEnabled("deals");
             counter.TooltipText = Ui.Tip(Tr("Swap the sides into an editable draft. A refused counterproposal leaves the original offer available."));
             actions.AddChild(counter);
         }
         else if (selected.Pending && selected.FromId == player.Id)
-            actions.AddChild(ActionButton("Withdraw offer", () => ReplyToDeal(selected.Id, DealReply.Withdraw), 170, 36));
+            actions.AddChild(ActionButton("Withdraw offer", () => ReplyToDeal(selected.Id, DealReply.Withdraw), 170, DealAnswerTouch));
         if (_dealInboxMessage.Length > 0) _dealInboxDetail.AddChild(WrappedUltimatumText(_dealInboxMessage, 14));
     }
 

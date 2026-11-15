@@ -361,6 +361,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Length == 0) RevoltOccupationTests.Run();
         if (args.Length == 0) TerritorialDealProtectionTests.Run();
         if (args.Contains("--negotiations-only")) { DealNegotiationTests.Run(); return; }
+        if (args.Contains("--deal-autoanswer-only")) { DealAutoAnswerTests.Run(); return; }
         if (args.Contains("--situation-only")) { SituationReportTests.Run(); return; }
         if (args.Contains("--situation-standoff-only")) { SituationStandoffTests.Run(); return; }
         if (args.Length == 0) SituationStandoffTests.Run();
@@ -569,6 +570,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         UltimatumTests.Run();
         DealTests.Run();
         DealNegotiationTests.Run();
+        DealAutoAnswerTests.Run();
         SituationReportTests.Run();
         GovernmentPromiseTests.Run();
         AiPromiseTests.Run();

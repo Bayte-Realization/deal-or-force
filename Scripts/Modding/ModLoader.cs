@@ -411,6 +411,8 @@ public sealed class ModLoader
         ("social_memory", () => SocialIncidentCatalog.ResetCatalog(), SocialIncidentCatalog.Merge),
         ("public_outreach", () => OutreachCatalog.ResetCatalog(), OutreachCatalog.Merge),
         ("alliance_programs", () => AllianceProgramCatalog.ResetCatalog(), AllianceProgramCatalog.Merge),
+        // Kinds of incoming offer a player can leave a standing answer for (DealAnswer).
+        ("deals", () => DealAnswerKinds.ResetCatalog(), DealAnswerKinds.Merge),
         ("laws", () => PoliticalPolicyCatalog.ResetCatalog(), PoliticalPolicyCatalog.MergeLaws),
         ("agendas", () => { }, PoliticalPolicyCatalog.MergeAgendas),
         ("national_courses", () => NationalCourseCatalog.ResetCatalog(), NationalCourseCatalog.Merge),

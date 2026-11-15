@@ -90,6 +90,15 @@ public sealed partial class DiplomaticRelation
     public AgreementKind AgreementOfferedKind = AgreementKind.TradeAgreement;
     public int AgreementOfferedDay = -9999;
 
+    /// <summary>
+    /// Whose agreement offer last lapsed on the other's table unanswered, and when - -1 is
+    /// nobody. That asker waits AgreementLapseCooldownDays before asking again (AgreementSystem),
+    /// so an ignored offer does not return every thirty days. Only a player's table holds an offer
+    /// long enough to lapse.
+    /// </summary>
+    public int AgreementLapsedBy = -1;
+    public int AgreementLapsedDay = -9999;
+
     /// <summary>When the last aid package went between the two.</summary>
     public int AidSentDay = -9999;
 

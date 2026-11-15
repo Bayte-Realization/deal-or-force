@@ -131,6 +131,12 @@ public static class AgreementSystem
                 since, campaign.Defines.AgreementRefusalDays - since);
             return false;
         }
+        var lapsed = LapseWait(campaign, relation, asking.Id);
+        if (lapsed > 0)
+        {
+            reason = Loc.Format("Our last offer to them lapsed unanswered; it can be made again in {0} day(s).", lapsed);
+            return false;
+        }
         var busy = campaign.ElapsedDays - (relation?.LastActionDay ?? -30);
         if (busy < 14)
         {
@@ -146,7 +152,19 @@ public static class AgreementSystem
         if (campaign is null || asking is null || asked is null || asking == asked) return false;
         var relation = preview ? CampaignDiplomacy.Peek(campaign, asking.Id, asked.Id)
             : CampaignDiplomacy.Get(campaign, asking.Id, asked.Id);
-        return CanProposeQuietWith(campaign, relation, kind);
+        return CanProposeQuietWith(campaign, relation, kind) && LapseWait(campaign, relation, asking.Id) <= 0;
+    }
+
+    /// <summary>
+    /// Days this asker still waits because its last offer lapsed unanswered, or 0. Read only for
+    /// the country that asked: the one who let it lapse may still ask for itself.
+    /// </summary>
+    internal static int LapseWait(Campaign campaign, DiplomaticRelation relation, int askingId)
+    {
+        if (relation is null || relation.AgreementLapsedBy < 0 || relation.AgreementLapsedBy != askingId) return 0;
+        var since = (long)campaign.ElapsedDays - relation.AgreementLapsedDay;
+        var wait = Math.Clamp(campaign.Defines.AgreementLapseCooldownDays, 0, 3650);
+        return since < wait ? (int)(wait - since) : 0;
     }
 
     /// <summary>
@@ -355,10 +373,19 @@ public static class AgreementSystem
             if (++scanned % 512 == 0) yield return 0;
             if (relation.AgreementOfferedBy < 0) continue;
             if (OfferPending(campaign, relation)) continue;
+            // Not a refusal, so no grudge and no refusal date - but the same asker does not put
+            // the same question on the table again the next morning.
+            if (campaign.Defines.AgreementLapseCooldownDays > 0)
+            {
+                relation.AgreementLapsedBy = relation.AgreementOfferedBy;
+                relation.AgreementLapsedDay = campaign.ElapsedDays;
+            }
             relation.AgreementOfferedBy = -1;
             relation.AgreementOfferedKind = AgreementKind.TradeAgreement;
             relation.AgreementOfferedDay = -9999;
         }
+        // Offers that waited before a player set a standing answer (DealAnswer).
+        foreach (var step in DealAnswer.TickAgreements(campaign)) yield return step;
     }
 
     /// <summary>What an aid package from this country to that one would be worth, or zero if it cannot be sent.</summary>
@@ -426,9 +453,16 @@ public sealed class ProposeAgreementCommand : ICampaignCommand
             Reason = Loc.Format("{0} will consider it.", asked.DisplayName);
             DiagnosticLogs.Write("simulation",
                 $"AGREEMENT_OFFER from={asking.Tag} to={asked.Tag} kind={Kind} day={campaign.ElapsedDays}");
+            // The player's standing answer, if one is set, answers at once - as a deal paper's does.
+            var ruled = DealAnswer.AnswerAgreementByRule(campaign, asked, asking, Kind, out var answer);
+            if (ruled != AgreementResult.Offered)
+            {
+                Result = ruled;
+                Reason = answer;
+            }
             return;
         }
-        if (AgreementSystem.Willingness(campaign, asked, asking, Kind) >= AgreementSystem.Needed(campaign, Kind))
+        if (DealAnswer.GovernmentSignsAgreement(campaign, asked, asking, Kind))
         {
             AgreementSystem.Sign(campaign, relation, Kind);
             Result = AgreementResult.Signed;

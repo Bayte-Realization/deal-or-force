@@ -448,7 +448,7 @@ public static partial class Ultimatum
     private static DealOutcome ResolveDealCore(Campaign c, Nation from, Nation to, Deal deal, bool explicitConsent)
     {
         var assessment = AssessDealCore(c, from, to, deal, explicitConsent);
-        if (!assessment.Valid || (!explicitConsent && !assessment.Acceptable)) return new(false, assessment.Reason);
+        if (!assessment.Valid || (!explicitConsent && !DealAnswer.GovernmentAccepts(assessment))) return new(false, assessment.Reason);
         var summary = DealSummary(c, from, to, deal);
         // Capture both halves before any annex can reunify or renumber a split region.
         // Otherwise the first cession can erase the ID of the second promised region.
@@ -557,7 +557,8 @@ public sealed class ProposeDealCommand : ICampaignCommand
             return;
         }
         var assessment = Ultimatum.AssessDeal(campaign, from, to, deal);
-        if (!assessment.Acceptable) { Outcome = new(false, assessment.Reason); return; }
+        if (DealAnswer.Decide(campaign, to, from, deal, assessment).Verdict != DealVerdict.Accept)
+        { Outcome = new(false, assessment.Reason); return; }
         Outcome = Ultimatum.ResolveDeal(campaign, from, to, deal);
     }
 }

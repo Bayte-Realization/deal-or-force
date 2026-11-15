@@ -330,6 +330,7 @@ public static class CampaignFingerprint
                 Mix(paper.Id); Mix(paper.FromId); Mix(paper.ToId); Mix(paper.CreatedDay); Mix(paper.ExpiresDay);
                 // Reason is presentation text; locale must not diverge authoritative state.
                 Mix(paper.ClosedDay); Mix(paper.ParentOfferId); Mix(paper.CounterDepth); Mix((int)paper.State);
+                if (paper.ByRule) Mix(-104);
                 foreach (var province in paper.FromProvinces ?? Array.Empty<int>()) Mix(province);
                 Mix(-102);
                 foreach (var province in paper.ToProvinces ?? Array.Empty<int>()) Mix(province);
@@ -441,6 +442,11 @@ public static class CampaignFingerprint
                 MixText("agreement_offer_v1");
                 Mix(r.AgreementOfferedBy); Mix((int)r.AgreementOfferedKind); Mix(r.AgreementOfferedDay);
             }
+            if (r.AgreementLapsedBy >= 0)
+            {
+                MixText("agreement_lapse_v1");
+                Mix(r.AgreementLapsedBy); Mix(r.AgreementLapsedDay);
+            }
             if (r.DiplomaticActBy >= 0)
             {
                 MixText("diplomatic_act_v1");
@@ -551,6 +557,22 @@ public static class CampaignFingerprint
             {
                 MixText("staff_portfolios_v1"); Mix(nation.ArmyByHand ? 1 : 0); Mix(nation.Delegated.Count);
                 foreach (var portfolio in nation.Delegated.OrderBy(p => p, StringComparer.Ordinal)) MixText(portfolio);
+            }
+            // Standing answers (DealAnswer): empty for every country nobody set them for, so a
+            // world without them keeps the fingerprint it had.
+            if (nation.AutoAnswer.Count > 0)
+            {
+                MixText("auto_answer_v1"); Mix(nation.AutoAnswer.Count);
+                foreach (var (kind, mode) in nation.AutoAnswer.OrderBy(p => p.Key, StringComparer.Ordinal)) { MixText(kind); Mix(mode); }
+            }
+            if (nation.AutoAnswerLog.Count > 0)
+            {
+                MixText("auto_answer_log_v1"); Mix(nation.AutoAnswerLog.Count);
+                foreach (var note in nation.AutoAnswerLog)
+                {
+                    Mix(note.Day); Mix(note.ProposerId); Mix(note.OfferId); Mix(note.Agreement); MixText(note.Kind ?? "");
+                    Mix((int)note.Mode); Mix(note.Accepted ? 1 : 0); Mix(note.Counted ? 1 : 0); MixFloat(note.Benefit);
+                }
             }
             Mix(nation.Id);
             foreach (var character in nation.FormedNationId ?? "") Mix(character);
