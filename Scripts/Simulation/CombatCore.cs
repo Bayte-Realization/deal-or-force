@@ -94,6 +94,11 @@ public static partial class Warfare
         public long CoverStep = -1;
         public int CoverWarId = -1;
         public int CoverMapRevision = -1;
+        // Whether a war's enemy holds a defending country's own ground, per war and country,
+        // for one step (CombatOpportunitySelection.GroundToTakeBack).
+        public readonly Dictionary<long, bool> LostGround = new();
+        public long LostGroundStep = -1;
+        public int LostGroundRevision = -1;
         public readonly Dictionary<int, ScenarioState> RegionByIndex = new();
         public int RegionsCount = -1;
         public int RegionsRevision = -1;

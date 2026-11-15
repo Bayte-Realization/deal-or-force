@@ -331,6 +331,12 @@ public static class Program
         if (Array.IndexOf(args, "--kin") >= 0) return mapped ? KinBenchReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--exiles") >= 0) return mapped ? ExileReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--wars") >= 0) return mapped ? WarStuckReport.Run(campaign, days) : 2;
+        // `--border-probe A B`: one border of a war, every fifteen days (BorderProbeReport).
+        var borderAt = Array.IndexOf(args, "--border-probe");
+        if (borderAt >= 0 && borderAt + 2 < args.Length)
+            return mapped ? BorderProbeReport.Run(campaign, args[borderAt + 1], args[borderAt + 2], days,
+                Array.IndexOf(args, "--join") is var joinAt and >= 0 && joinAt + 1 < args.Length ? args[joinAt + 1] : null,
+                Array.IndexOf(args, "--war-of") is var ofAt and >= 0 && ofAt + 1 < args.Length ? args[ofAt + 1] : null) : 2;
         if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
         if (Array.IndexOf(args, "--fiscal-pulse") >= 0) return FiscalPulseReport.Run(campaign, days);
         if (Array.IndexOf(args, "--gdp-watch") >= 0) return GdpWatchReport.Run(campaign, days, args);

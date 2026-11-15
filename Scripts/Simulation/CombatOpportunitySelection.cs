@@ -15,6 +15,16 @@ public sealed partial class Defines
     /// attacker's own ground rather than only taking back its own.
     /// </summary>
     public float AiDefenderInvadesFromScore { get; set; } = 15f;
+
+    /// <summary>
+    /// Whether the rule above holds a defending country only while the enemy stands on some of
+    /// its own ground - or, for a formation standing in a partner's country, on the partner's.
+    /// On, an ally whose land nobody has touched advances into the enemy's empty provinces by
+    /// the ordinary cover rule, as an attacker would, and an expeditionary corps retakes the
+    /// partner's ground before it invades. Off, every country on the defending side is held to
+    /// its own ground alone until the war is won, allies included.
+    /// </summary>
+    public bool AiDefenderFenceNeedsLostGround { get; set; } = true;
 }
 
 // Target selection and local cover share the same indexed army view as combat.
@@ -116,18 +126,46 @@ public static partial class Warfare
         // country fighting off an attack advances only onto its own ground - occupied, or its
         // own by right - and not into the attacker's: Ukraine sent half its army into Russia
         // proper, out of its trenches, and lost the whole front to the first counter-blow.
+        //
+        // ...and only a country that has something of its own to take back. The rule was read
+        // for every country on the defending side, so the allies who answered the call - whose
+        // own land nobody had touched - had every target struck off and nothing left: Poland,
+        // Lithuania, Latvia and Estonia in Ukraine's war stood twenty divisions deep on the
+        // Belarusian border for half a year, ordered to advance, beside provinces with nobody
+        // in them, and took none of them (0 of 7 empty provinces on the Lithuanian border in
+        // 180 days). Those allies now advance by the same cover rule as everybody else.
+        //
+        // An ally standing in a partner's country that has lost ground is that partner's
+        // defence, and takes back the partner's ground - or its own - before it invades: the
+        // American corps on the Ukrainian front was fenced to American soil, so it could not
+        // even retake an empty Ukrainian district, and lifting the fence for it alone sent it
+        // from Ukraine into Russia proper, the very move this rule was written against.
         if (!war.IsAttacking(army.NationId) && !army.DirectOrder &&
             -war.WarScore < campaign.Defines.AiDefenderInvadesFromScore &&
             campaign.NationById(army.NationId) is { } holder)
         {
-            var kept = 0;
+            var guarded = campaign.Defines.AiDefenderFenceNeedsLostGround ? Host(campaign, topology, war, army, holder) : null;
+            var allowed = 0;
             for (var index = 0; index < candidates.Count; index++)
             {
                 var province = candidates[index];
-                if (OwnGround(campaign, topology, holder, province)) candidates[kept++] = province;
+                if (OwnGround(campaign, topology, holder, province) ||
+                    guarded is not null && OwnGround(campaign, topology, guarded, province)) allowed++;
             }
-            candidates.RemoveRange(kept, candidates.Count - kept);
-            if (candidates.Count == 0) return -1;
+            if (allowed < candidates.Count &&
+                (GroundToTakeBack(campaign, topology, war, holder, controllers, enemyMaps) ||
+                 guarded is not null && GroundToTakeBack(campaign, topology, war, guarded, controllers, enemyMaps)))
+            {
+                var kept = 0;
+                for (var index = 0; index < candidates.Count; index++)
+                {
+                    var province = candidates[index];
+                    if (OwnGround(campaign, topology, holder, province) ||
+                        guarded is not null && OwnGround(campaign, topology, guarded, province)) candidates[kept++] = province;
+                }
+                candidates.RemoveRange(kept, candidates.Count - kept);
+                if (candidates.Count == 0) return -1;
+            }
         }
         neighbours.Clear();
         neighbours.AddRange(candidates);
@@ -234,6 +272,55 @@ public static partial class Warfare
             target = province;
         }
         return target;
+    }
+
+    /// <summary>
+    /// Whether the other side of this war stands on any of a defending country's own ground -
+    /// the ground the take-back-first rule is about. Read off the enemy's half of the front,
+    /// where an occupation meets the country, and only provinces the enemy still controls:
+    /// the front is redrawn every few days and may still list one retaken since. Kept for
+    /// one simulation step per war and country, so every formation of the country asks once.
+    /// With <see cref="Defines.AiDefenderFenceNeedsLostGround"/> off, every defender is held
+    /// to its own ground as before.
+    /// </summary>
+    private static bool GroundToTakeBack(Campaign campaign, ProvinceTopology topology, StrategicWar war,
+        Nation holder, ushort[] controllers, HashSet<ushort> enemyMaps)
+    {
+        if (!campaign.Defines.AiDefenderFenceNeedsLostGround) return true;
+        var index = UseArmyIndex(campaign);
+        if (index.LostGroundStep != campaign.ElapsedHours || index.LostGroundRevision != campaign.MapRevision)
+        {
+            index.LostGround.Clear();
+            index.LostGroundStep = campaign.ElapsedHours;
+            index.LostGroundRevision = campaign.MapRevision;
+        }
+        var key = ((long)war.Id << 32) | (uint)holder.Id;
+        if (index.LostGround.TryGetValue(key, out var known)) return known;
+        var enemyFront = war.IsAttacking(holder.Id) ? war.DefenderFront : war.AttackerFront;
+        var lost = false;
+        foreach (var province in enemyFront)
+        {
+            if (province <= 0 || province >= controllers.Length || !enemyMaps.Contains(controllers[province])) continue;
+            if (!OwnGround(campaign, topology, holder, province)) continue;
+            lost = true;
+            break;
+        }
+        index.LostGround[key] = lost;
+        return lost;
+    }
+
+    /// <summary>
+    /// The partner a formation is standing in: the country that owns the province, when that is
+    /// another country on the formation's side of this war. Null on its own soil, on the enemy's,
+    /// and on a bystander's.
+    /// </summary>
+    private static Nation Host(Campaign campaign, ProvinceTopology topology, StrategicWar war, Army army, Nation holder)
+    {
+        if (army.ProvinceId <= 0 || army.ProvinceId >= topology.ProvinceToNation.Length) return null;
+        var owner = topology.ProvinceToNation[army.ProvinceId];
+        if (owner == 0 || owner == holder.MapIndex) return null;
+        var host = campaign.NationByMapIndex(owner);
+        return host is not null && host.Id != holder.Id && WarCoalition.SameSide(war, host.Id, holder.Id) ? host : null;
     }
 
     /// <summary>Whether a province is a country's own ground: held on the map as its own, or its core.</summary>
