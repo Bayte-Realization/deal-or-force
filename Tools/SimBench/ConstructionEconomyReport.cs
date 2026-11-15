@@ -70,6 +70,14 @@ internal static class ConstructionEconomyReport
             $"inflation_median={inflation:P1} defaults={defaults} built={built} built/yr={built / years:0} " +
             $"drain_mean={(drainSamples > 0 ? drainSum / drainSamples : 0):P1} frozen_mean={(frozenSamples > 0 ? frozenSum / frozenSamples : 0):0.0} " +
             $"waiting_mean={(frozenSamples > 0 ? waitingSum / frozenSamples : 0):P1} site/rev_median={siteToRevenue:P1}"));
+        // Who is in default at the end, with debt and treasury against GDP: the count alone moves by
+        // a handful between seeds, and two runs are only comparable by who defaulted and why.
+        var defaulted = economies
+            .Where(n => n.DebtCondition is DebtCondition.Default or DebtCondition.Insolvent or DebtCondition.Restructuring)
+            .OrderByDescending(n => n.Gdp)
+            .Select(n => string.Create(CultureInfo.InvariantCulture,
+                $"{n.Tag}({n.DebtCondition},gdp={n.Gdp:0.#},debt={(n.Gdp > 0 ? n.PublicDebt / n.Gdp : 0):P0})"));
+        Console.WriteLine("DEFAULTED " + string.Join(" ", defaulted));
         drains.Print(campaign);
         MoneyLedger.Sources = null;
         return 0;
