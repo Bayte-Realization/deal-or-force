@@ -4,8 +4,9 @@
 
 **A grand strategy game about the whole world, from the morning of 1 January 2024.**
 Every country on the map is yours to play, and every one of them is simulated the same way.
+Version **0.7.1.2** (EntertAlpha).
 
-[![Release](https://img.shields.io/badge/release-EntertAlpha%200.6.6.0-2f6fb3)](docs/CHANGELOG_0.6.6.0_EN.md)
+[![Release](https://img.shields.io/badge/release-EntertAlpha%200.7.1.2-2f6fb3)](docs/CHANGELOG_0.7.1.2_EN.md)
 [![Engine](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED.md)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED.md)
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-3a7f3a)](LICENSE)
@@ -25,32 +26,28 @@ Every country on the map is yours to play, and every one of them is simulated th
   Extract the whole archive and run `Deal or Force Launcher.exe`.
 - **From source** — see [Building and running](#building-and-running) below.
 - It is EntertAlpha: a lot works, and a lot is still being rebuilt. What is not done yet is
-  written down at the end of every [changelog](docs/CHANGELOG_0.6.6.0_EN.md), not hidden.
+  written down at the end of every [changelog](docs/CHANGELOG_0.7.1.2_EN.md), not hidden.
 - It is built by one person, openly with the help of AI.
 
 Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 [X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
 [Telegram](https://t.me/+39SNXyA92aBmYzhi) · [devlog](https://bayte-realization.itch.io/deal-or-force/devlog)
 
-## New in 0.6.6.0
+## New in 0.7.1.2
 
-- **A late game twice as fast** — a real 2050 save went from 533 to about 240 ms a simulated
-  day, with the world after the run identical bit for bit.
-- **A truthful map** — no made-up "countries" left over from the source map, 34 strait
-  crossings (the Gibraltar ferry, the Crimean Bridge…), one colour per country, the country
-  border as the leading line.
-- **A live planet behind the menu**, wearing the game's own first-day map, which you can spin.
-- **A first session that explains itself** — straight to the country picker, and a "Next"
-  line that names the first thing not yet done and opens it.
-- **Ink and paper** instead of brown and gold; 113 more strings in Russian.
+- **See where the money goes** — a ledger of every income and expense for a country, a movement
+  and an organisation; crises and disasters cut income for a time instead of taking the treasury.
+- **No more "shortage of everything"** — countries import what they lack (it used to be about
+  half), the world grows enough grain, and a scarce good is shared instead of going to the giants.
+- **Factories produce, construction moves** — a built factory makes goods; several sites at once,
+  cheaper and faster, with its own line in the ledger.
+- **Watch the world** — a campaign with no country, the world's figures across the top.
+- **Deals by standing orders** — the ministry signs, refuses or brings each kind of paper as told.
+- **A new top bar** — the flag on its plaque and all twelve figures with the week's change; the bad
+  ones turn red by themselves. "Scenarios / editor" is back in the main menu.
 
-Since the release, on this branch: smooth country borders at every distance; movements
-without land shown only close up, and governments in exile only for countries that had a
-government; 864 more strings in Russian; a building nobody can staff no longer makes a
-country poorer; a subject integrated to 100% joins instead of walking out; army cards that
-answer a click; "Are you sure?" before leaving; cities under their 2024 names (Astana, not
-Nur-Sultan). Every change is described in the
-[commit history](https://github.com/Bayte-Realization/deal-or-force/commits/EntertAlpha).
+Everything item by item, with how it was checked and what is not done, is in the
+[changelog](docs/CHANGELOG_0.7.1.2_EN.md).
 
 ## The game
 
@@ -202,7 +199,7 @@ Everything below exists in English and in Russian; a `_RU` suffix is the Russian
 
 | | |
 |---|---|
-| [Changelog 0.6.6.0](docs/CHANGELOG_0.6.6.0_EN.md) | **what changed in the current release, how it was checked, what is not done** |
+| [Changelog 0.7.1.2](docs/CHANGELOG_0.7.1.2_EN.md) · [0.6.6.0](docs/CHANGELOG_0.6.6.0_EN.md) | **what changed in the current release, how it was checked, what is not done** |
 | [Overhaul programme](docs/OVERHAUL_PROGRAMME_2026_11_14_RU.md) | the fifteen fronts of the rework and what "done" means for each (Russian) |
 | [Deal rework](docs/DEALS_REWORK_2026_11_14_RU.md) | what is wrong with deals today and the plan for them, step by step (Russian) |
 | [TUTORIAL](docs/TUTORIAL.md) | **your first campaign, hand held** |
