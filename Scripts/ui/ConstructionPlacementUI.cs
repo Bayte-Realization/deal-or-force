@@ -136,9 +136,12 @@ public partial class DealOrForceGame
         _selectedState = pick.State; _selectedProvinceId = pick.ProvinceId;
         _constructionPreviewHour = -1;
         RefreshConstructionTerms(); RefreshConstructionPreview(pick.State);
+        // The estimate is the queue's, not the building's own time: behind the sites already open it
+        // may not start for years (ConstructionQueue.Schedule).
+        var queued = accepted ? ConstructionQueue.Schedule(_campaign, player).LastOrDefault() : default;
         _constructionPlacementFeedback.Text = accepted
-            ? Simulation.Loc.Format("Queued in {0}. Contract: {1}; estimated {2} days. Click another region or finish placement.",
-                pick.State.DisplayName, Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), ConstructionCost.ExpectedDays(_campaign, player, kind))
+            ? Simulation.Loc.Format("Queued in {0}. Contract: {1}; {2}. Click another region or finish placement.",
+                pick.State.DisplayName, Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), ConstructionQueue.When(queued))
             : Tr("Order submitted. The host will validate the construction site.");
         PlayStrategicCue("ui_select");
         return true;

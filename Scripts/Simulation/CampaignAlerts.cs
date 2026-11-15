@@ -80,6 +80,11 @@ public static class CampaignAlerts
         if (strained is not null)
             result.Add(new("alliance_strained", CampaignAlertGroup.Should, Loc.Get("Alliance cohesion strained"),
                 Loc.Get("An alliance is nearing its breaking point. Reaffirm mutual commitments to prevent collapse."), CampaignAlertRoute.Situation));
+        // Every site stopped because the first cannot be paid: the queue does not move until money comes.
+        if (ConstructionQueue.FrozenForMoney(c, n))
+            result.Add(new("construction_frozen", CampaignAlertGroup.Must, Loc.Get("All construction has stopped"),
+                Loc.Format("The treasury cannot pay the oldest site, so none of the {0} sites is being built. Raise income, cut spending or cancel sites.",
+                    ConstructionQueue.Sites(c, n).Count), CampaignAlertRoute.Situation));
         if (c.FeatureEnabled("public_debt") && n.DebtCondition is DebtCondition.Stressed or DebtCondition.Insolvent or DebtCondition.Default)
             result.Add(new("debt_distress", CampaignAlertGroup.Must, Loc.Get("Sovereign debt distress"),
                 Loc.Get("Interest and bond payments are severely straining the state budget."), CampaignAlertRoute.Situation));

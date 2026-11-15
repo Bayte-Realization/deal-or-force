@@ -114,6 +114,12 @@ public sealed class ConstructionProject
     /// 1 November 2026, which reads back as the same number of days.
     /// </summary>
     public float ProgressDays;
+    /// <summary>What the site did on the last construction day, and why not (ConstructionQueue codes; "" before its first).</summary>
+    public string Waiting = "";
+    /// <summary>The site a waiting one is queued behind, or -1.</summary>
+    public int WaitingBehind = -1;
+    /// <summary>The day the treasury first failed to pay it, while it still cannot be paid; -1 otherwise.</summary>
+    public int StalledSinceDay = -1;
     public float Progress => M.Clamp01(Math.Min(
         DurationDays <= 0 ? 1f : ProgressDays / DurationDays,
         Cost <= 0f ? 1f : Paid / Cost));
@@ -1728,12 +1734,14 @@ public static class ConstructionSystem
                 }
                 continue;
             }
+            ConstructionQueue.Reset(sites);
             foreach (var project in sites)
             {
                 if (!float.IsFinite(project.Cost) || project.Cost < 0 ||
                     !float.IsFinite(project.Paid) || project.Paid < 0 ||
                     !float.IsFinite(project.ProgressDays) ||
-                    !float.IsFinite(nation.Treasury) || !float.IsFinite(nation.ConstructionCapacity)) break;
+                    !float.IsFinite(nation.Treasury) || !float.IsFinite(nation.ConstructionCapacity))
+                { project.Waiting = ConstructionQueue.Invalid; break; }
                 var required = project.Cost / Math.Max(1, project.DurationDays);
                 var outstanding = Math.Max(0f, project.Cost - project.Paid);
                 var paid = Math.Min(outstanding, Math.Min(required * pace, Math.Max(0f, nation.Treasury)));
@@ -1741,10 +1749,11 @@ public static class ConstructionSystem
                 // modded zero-price works) keeps working without fresh cash. Never charge beyond
                 // the contract; old overpayments are not refunded or rewritten here. A site the
                 // treasury cannot pay today waits, and so does every newer one.
-                if (outstanding > 0f && paid <= 0f) break;
-                nation.Treasury -= paid;
+                if (outstanding > 0f && paid <= 0f) { project.Waiting = ConstructionQueue.Treasury; break; }
+                { var ledgerBefore = nation.Treasury; nation.Treasury -= paid; MoneyLedger.Book(nation, MoneyFlow.Construction, nation.Treasury - ledgerBefore); }
                 project.Paid += paid;
                 project.ProgressDays += pace;
+                project.Waiting = ConstructionQueue.Working;
                 if (project.Progress >= 0.999f)
                 {
                     Complete(campaign, nation, project);
@@ -1752,6 +1761,7 @@ public static class ConstructionSystem
                 }
                 if (--working <= 0) break;
             }
+            ConstructionQueue.Settle(campaign, sites);
         }
     }
 

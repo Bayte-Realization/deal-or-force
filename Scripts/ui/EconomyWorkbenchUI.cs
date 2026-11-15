@@ -297,10 +297,12 @@ public partial class DealOrForceGame
     {
         if (_constructionQueueRows is null) return;
         ClearRuntimeChildren(_constructionQueueRows);
-        var queue = _campaign.Construction.Where(p => p.NationId == _campaign.Player.Id).OrderBy(p => p.Id).ToArray();
-        _constructionQueueRows.GetParent<Control>().Visible = queue.Length > 0;
-        foreach (var project in queue)
+        // Each site with what it did today and a queue-aware start and finish (ConstructionQueue).
+        var queue = ConstructionQueue.Schedule(_campaign, _campaign.Player);
+        _constructionQueueRows.GetParent<Control>().Visible = queue.Count > 0;
+        foreach (var estimate in queue)
         {
+            var project = estimate.Project;
             var region = _campaign.States.FirstOrDefault(s => s.MapIndex == project.StateMapIndex);
             var card = WorkbenchCard(_constructionQueueRows);
             var title = Title(Simulation.Loc.Format("{0} — {1}", Tr(BuildingCatalog.Get(project.Building).Name), region?.DisplayName ?? "—"), 13, Ui.Colour("text.bright"));
@@ -321,6 +323,10 @@ public partial class DealOrForceGame
                 "Cancel only this project. Spent: {0} (not refunded). Remaining: {1} (will not be charged).",
                 Fmt.Money(project.Paid), Fmt.Money(Math.Max(0, project.Cost - project.Paid))));
             row.AddChild(cancel);
+            var status = Title(ConstructionQueue.Describe(_campaign, project) + " · " + ConstructionQueue.When(estimate), 12,
+                Ui.Colour(project.Waiting == ConstructionQueue.Treasury || !estimate.Funded ? "state.negative" : "text.caption"));
+            status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            card.AddChild(status);
         }
     }
 

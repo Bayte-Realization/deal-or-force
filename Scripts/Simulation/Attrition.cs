@@ -433,7 +433,13 @@ public static class Attrition
             if (strength >= target) continue;
             // At war it borrows for the army it needs, as far as a country at war may.
             var mayBorrow = (overrun || shortOfFront) && nation.Treasury > -nation.Gdp * defines.WarDebtLimitShare;
-            if (nation.Treasury < defines.ArmyRebuildCost && !mayBorrow) continue;
+            // What a division really costs this country (recruitment_cost and the depot bill), and the
+            // weeks of queued construction the builders are owed. The check used to be the flat
+            // ArmyRebuildCost (0.18) for a 0.60 division: Albania's staff spent 1.2 of a 1.53 treasury
+            // on two divisions in five weeks and its only factory site stopped for the rest of the year.
+            var reserve = mayBorrow ? 0f : ConstructionQueue.Bill(campaign, nation, defines.ArmyStaffConstructionReserveWeeks);
+            var price = MathF.Max(defines.ArmyRebuildCost, StaffDivisionCost(campaign, nation) + reserve);
+            if (nation.Treasury < price && !mayBorrow) continue;
 
             var home = HomeState(campaign, nation);
             if (home < 0) continue;
@@ -445,14 +451,22 @@ public static class Attrition
                 if (nation.ManpowerReserve < MilitaryBootstrap.DivisionSize) break;
                 // The reserve that refills the formations already in the field is not spent on new ones.
                 if (!WarWeariness.MayRaise(campaign, nation)) break;
-                if (nation.Treasury < defines.ArmyRebuildCost && !mayBorrow) break;
-                new RaiseArmyCommand
+                if (nation.Treasury < price && !mayBorrow) break;
+                var paidFrom = nation.Treasury;
+                var order = new RaiseArmyCommand
                 {
                     IssuerId = nation.Id,
                     StateMapIndex = home,
                     Divisions = 1f,
                     AllowDeficit = mayBorrow
-                }.Apply(campaign);
+                };
+                order.Apply(campaign);
+                // The staff acting for a player who delegated the army says so, with the bill: a
+                // division raised on the player's money used to leave no line anywhere.
+                if (nation.IsHuman && order.FailureReason.Length == 0)
+                    campaign.Chronicle.Record(campaign, "army_raised_by_staff", nation.Id,
+                        subject: Fmt.Money(MathF.Max(0f, paidFrom - nation.Treasury)),
+                        place: campaign.StateByMapIndex(home)?.Name ?? "", isPublic: false);
                 strength += 1f;
             }
             if (mayBorrow) SovereignFinance.NormalizeAccounts(campaign, nation);
@@ -532,6 +546,14 @@ public static class Attrition
     }
 
     /// <summary>Where a country raises troops: the most populous region it still holds.</summary>
+    /// <summary>What one division of the staff's template costs this country, as RaiseArmyCommand will charge it.</summary>
+    private static float StaffDivisionCost(Campaign campaign, Nation nation)
+    {
+        var template = UnitTypeCatalog.Get(new RaiseArmyCommand().TemplateId);
+        return template is null ? campaign.Defines.ArmyRebuildCost
+            : RecruitmentSystem.TotalBatchCost(campaign, nation, template, 1, MobilisationMode.Standard, out _);
+    }
+
     private static int HomeState(Campaign campaign, Nation nation)
     {
         var best = -1;

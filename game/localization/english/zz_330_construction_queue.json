@@ -1,0 +1,21 @@
+// What each construction site did today and when it should start and finish (Scripts/Simulation/ConstructionQueue.cs),
+// the alert for a queue frozen for money, the army staff's line in the chronicle, and the Production screen's empty pools.
+{
+  "Working": "Working",
+  "Stopped: the treasury cannot pay it": "Stopped: the treasury cannot pay it",
+  "Stopped: its accounts are invalid": "Stopped: its accounts are invalid",
+  "Waiting: the treasury cannot pay {0} ahead of it": "Waiting: the treasury cannot pay {0} ahead of it",
+  "Waiting for a free site": "Waiting for a free site",
+  "Waiting for a free site, behind {0}": "Waiting for a free site, behind {0}",
+  "Starts on the next construction day": "Starts on the next construction day",
+  "No date while the treasury is empty": "No date while the treasury is empty",
+  "Done in about {0} days": "Done in about {0} days",
+  "Starts in about {0} days, done in about {1}": "Starts in about {0} days, done in about {1}",
+  "All construction has stopped": "All construction has stopped",
+  "The treasury cannot pay the oldest site, so none of the {0} sites is being built. Raise income, cut spending or cancel sites.": "The treasury cannot pay the oldest site, so none of the {0} sites is being built. Raise income, cut spending or cancel sites.",
+  "chronicle.army_raised_by_staff": "{0}: the army staff raised a division in {3} for {2} from the treasury.",
+  "Queued in {0}. Contract: {1}; {2}. Click another region or finish placement.": "Queued in {0}. Contract: {1}; {2}. Click another region or finish placement.",
+  "A line reserves factory units for one good. It also keeps every unit nobody has claimed, so opening a line never lowers that good's output; it only takes units away from the other goods of its pool.": "A line reserves factory units for one good. It also keeps every unit nobody has claimed, so opening a line never lowers that good's output; it only takes units away from the other goods of its pool.",
+  "No factories yet. Build {0} on the Economy screen: about {1} days each here, longer behind other sites.": "No factories yet. Build {0} on the Economy screen: about {1} days each here, longer behind other sites.",
+  "All {0} civilian units are converted to military. Convert some back to open a civilian line.": "All {0} civilian units are converted to military. Convert some back to open a civilian line."
+}

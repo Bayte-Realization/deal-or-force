@@ -646,6 +646,9 @@ public static class MarketSystem
 
             foreach (var project in campaign.Construction)
             {
+                // Materials are bought for the sites worked, not for every site open: twelve sites in
+                // Albania, one worked at a time, bought ten times the industrial materials it used.
+                if (!ConstructionQueue.WorkedToday(project)) continue;
                 var current = TallyByNation.GetValueOrDefault(project.NationId);
                 TallyByNation[project.NationId] = current with { Projects = current.Projects + 1 };
             }

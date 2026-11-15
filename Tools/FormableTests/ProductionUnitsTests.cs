@@ -38,22 +38,24 @@ static class ProductionUnitsTests
         // Suppress the population component to measure only assigned factory output.
         s.Population = 0;
         Produce();
-        Check(Near(n.Market[Commodity.ConsumerGoods].Production, 3), "five units make exactly half a civilian factory's output");
-        Check(Near(n.Market[Commodity.Arms].Production, 2.04f), "military line scales arms factories separately from civilian workshops");
+        // A line keeps its own units and the pool's unclaimed capacity (ProductionAllocation.Fraction): five
+        // units plus the five nobody claimed are half the pool, one whole civilian factory's output.
+        Check(Near(n.Market[Commodity.ConsumerGoods].Production, 6), "five units and the free five make half the civilian pool's output");
+        Check(Near(n.Market[Commodity.Arms].Production, 4.74f), "an arms line keeps the free military units; civilian workshops scale by the civilian pool");
         // Two civilian factories at the coal recipe's CivilianIndustry weight (1.302 since the
         // 28 October recalibration), whatever the production lines say.
         Check(Near(n.Market[Commodity.Coal].Demand, 2.604f), "coal input demand is not incorrectly scaled as a coal production line");
         s.Buildings[BuildingKind.CivilianIndustry] = 3; Produce();
-        Check(A().Assigned(Commodity.ConsumerGoods) == 5 && Near(n.Market[Commodity.ConsumerGoods].Production, 3),
-            "new factories add free capacity, not hidden assignments or extra output to existing lines");
+        Check(A().Assigned(Commodity.ConsumerGoods) == 5 && Near(n.Market[Commodity.ConsumerGoods].Production, 12),
+            "new factories add free capacity, not hidden assignments; a lined good shares the free capacity");
         s.Buildings[BuildingKind.CivilianIndustry] = 1;
         Check(A().Assigned(Commodity.ConsumerGoods) == 5 && A().Assigned(Commodity.Machinery) == 5 && n.ProductionLines[1].Units == 10,
             "factory loss suspends lower-priority capacity without destroying saved requests");
         s.Buildings[BuildingKind.CivilianIndustry] = 2;
         Check(A().Assigned(Commodity.Machinery) == 10, "rebuilding restores suspended units");
         Set(new ProductionLine { Good = Commodity.ConsumerGoods, Units = 0 }); Produce();
-        Check(n.ProductionLines.Count == 1 && n.Market[Commodity.ConsumerGoods].Production == 0 && A().CivilianUsed == 0,
-            "zero-unit lines persist and suppress their factory output");
+        Check(n.ProductionLines.Count == 1 && Near(n.Market[Commodity.ConsumerGoods].Production, 12) && A().CivilianUsed == 0,
+            "zero-unit lines persist and no longer switch their own factories off");
         Set(); Produce();
         Check(Near(n.Market[Commodity.ConsumerGoods].Production, 12), "closing a line returns factories to automatic economy");
         Set(new() { Good = Commodity.ConsumerGoods, Units = int.MaxValue }, new() { Good = Commodity.ConsumerGoods, Units = 2 },

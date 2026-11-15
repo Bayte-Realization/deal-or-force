@@ -41,12 +41,21 @@ public sealed class ProductionAllocation
         if (ProductionProgramme.PoolOf(good) == ProductionPool.Civilian) CivilianUsed += units;
         else MilitaryUsed += units;
     }
+    /// <summary>
+    /// The share of a pool's factory term a good's recipes run on. A good with a line keeps its own
+    /// units AND the capacity nobody has claimed: a line only ever takes capacity away from the
+    /// OTHER goods of its pool, never from its own. It used to get its units alone, so a line
+    /// opened while the pool was empty (0 units) switched the first factory built for it off -
+    /// Kazakhstan's new arms plant made no arms at all - and any line short of the whole pool
+    /// made its own good less than having no line.
+    /// </summary>
     public float Fraction(Commodity good, ProductionPool pool)
     {
         var capacity = Capacity(pool);
         if (capacity <= 0) return 0f;
-        return (ProductionProgramme.PoolOf(good) == pool && _assigned.TryGetValue(good, out var units)
-            ? units : Free(pool)) / (float)capacity;
+        var free = Math.Max(0, Free(pool));
+        return Math.Min(capacity, (ProductionProgramme.PoolOf(good) == pool && _assigned.TryGetValue(good, out var units)
+            ? units + free : free)) / (float)capacity;
     }
 }
 

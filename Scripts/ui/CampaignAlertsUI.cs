@@ -311,6 +311,9 @@ public partial class DealOrForceGame
         _campaignAlertPopup.Hide();
         switch (alert.Route)
         {
+            case CampaignAlertRoute.Situation when id == "construction_frozen":
+                OpenScreen("Economy"); // the construction queue and the budget are both there
+                break;
             case CampaignAlertRoute.Situation:
                 if (_situationLayer is null) BuildSituationRoom();
                 if (alert.Situation is null) { OpenSituationRoom(); break; }

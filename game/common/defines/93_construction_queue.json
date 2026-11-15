@@ -1,0 +1,13 @@
+// What the army staff leaves the builders (Scripts/Simulation/ConstructionQueue.cs, Attrition.RebuildTheLost).
+{
+  // When the staff raises a division for a government - the computer's, or a player's who left the
+  // army to the staff - it first leaves this many weeks of the construction bill in the treasury: what
+  // the sites the country works at once are paid a day, times seven, times this, never more than the
+  // sites still owe. A division costs 0.60; Albania's staff spent 1.20 of a 1.53 treasury on two of them
+  // in the first five weeks of 2024 and its factory site stood still for the rest of the year. Four
+  // weeks is one monthly budget cycle: long enough for a falling treasury to show in the budget before
+  // the builders stop, short enough that a country with a long queue still keeps an army. At war,
+  // when a country may borrow for its army, no reserve is kept. 0 keeps none in peace either (the staff
+  // still checks the division's real price).
+  "ArmyStaffConstructionReserveWeeks": 4.0
+}

@@ -100,6 +100,7 @@ public partial class DealOrForceGame
         add.AddChild(_productionLinePicker);
         _productionAddLineButton = ActionButton("Open a line", OnProductionAddLine, 140, 34, true);
         _productionAddLineButton.Name = "AddProductionLine";
+        _productionAddLineButton.TooltipText = Ui.Tip(Tr("A line reserves factory units for one good. It also keeps every unit nobody has claimed, so opening a line never lowers that good's output; it only takes units away from the other goods of its pool."));
         add.AddChild(_productionAddLineButton);
         var legend = new HBoxContainer();
         legend.AddThemeConstantOverride("separation", 16);
@@ -252,8 +253,10 @@ public partial class DealOrForceGame
             card.Count.Text = $"{used} / {a.Capacity(pool)}";
             card.Free.Text = Simulation.Loc.Format("{0} free", a.Free(pool));
             card.Usage.Value = 100.0 * used / Math.Max(1, a.Capacity(pool));
-            card.Factories.Text = Simulation.Loc.Format("{0} factories · {1} units each",
-                pool == ProductionPool.Civilian ? a.CivilianFactories : a.MilitaryFactories, ProductionProgramme.UnitsPerFactory);
+            card.Factories.Text = a.Capacity(pool) <= 0 ? ProductionEmptyPool(a, pool)
+                : Simulation.Loc.Format("{0} factories · {1} units each",
+                    pool == ProductionPool.Civilian ? a.CivilianFactories : a.MilitaryFactories, ProductionProgramme.UnitsPerFactory);
+            card.Factories.TooltipText = card.Factories.Text;
         }
         _productionFocusReadout.Text = Simulation.Loc.Format("Conversion: {0} civilian → {1} military units · efficiency {2:P0}",
             a.Converted, a.ConvertedMilitary, ProductionProgramme.ConversionEfficiency);
@@ -495,8 +498,30 @@ public partial class DealOrForceGame
         var lines = CopyProductionLines();
         if (lines.Any(l => l.Good == good)) return;
         var a = ProductionProgramme.Allocate(_campaign, _campaign.Player);
-        lines.Add(new ProductionLine { Good = good, Units = Math.Min(1, a.Free(ProductionProgramme.PoolOf(good))) });
+        var pool = ProductionProgramme.PoolOf(good);
+        // An empty pool: a line now would hold nothing, and says nothing about why the pool is
+        // empty. Say that instead.
+        if (a.Capacity(pool) <= 0) { _productionSummary.Text = ProductionEmptyPool(a, pool); return; }
+        lines.Add(new ProductionLine { Good = good, Units = Math.Min(1, a.Free(pool)) });
         CommitProductionProgramme(a.Converted, lines);
+    }
+
+    /// <summary>
+    /// Why a pool is empty. Civilian capacity is what conversion leaves, so a country that converted
+    /// every civilian unit to military has factories and an empty pool: telling it to build more would
+    /// send it to the wrong screen - the fix is converting units back.
+    /// </summary>
+    private string ProductionEmptyPool(ProductionAllocation a, ProductionPool pool) =>
+        pool == ProductionPool.Civilian && a.RawCivilian > 0
+            ? Simulation.Loc.Format("All {0} civilian units are converted to military. Convert some back to open a civilian line.", a.RawCivilian)
+            : ProductionNoFactories(pool);
+
+    /// <summary>Where a pool's factories come from and how long one takes here, for a pool with no factories.</summary>
+    private string ProductionNoFactories(ProductionPool pool)
+    {
+        var kind = pool == ProductionPool.Civilian ? BuildingKind.CivilianIndustry : BuildingKind.ArmsIndustry;
+        return Simulation.Loc.Format("No factories yet. Build {0} on the Economy screen: about {1} days each here, longer behind other sites.",
+            Simulation.Loc.Get(BuildingCatalog.Get(kind).Name), ConstructionCost.ExpectedDays(_campaign, _campaign.Player, kind));
     }
     private void RefreshProductionLinePicker()
     {

@@ -605,17 +605,27 @@ public partial class DealOrForceGame
         _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of {1} sites open · {2} worked at a time",
             projects.Count, ConstructionCost.Limit(_campaign, nation, _campaign.Defines.MaxConstructionProjects),
             ConstructionCost.WorkingSites(_campaign, nation));
-        foreach (var project in projects.OrderByDescending(project => project.Progress))
+        // In the order the sites work, each with what it did today and when it should start and end
+        // (ConstructionQueue): sorted by progress, a queue frozen for money read as a list of percentages.
+        foreach (var estimate in ConstructionQueue.Schedule(_campaign, nation))
         {
+            var project = estimate.Project;
             var place = _campaign.States.FirstOrDefault(state => state.MapIndex == project.StateMapIndex);
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 6);
             _stateConstructionRows.AddChild(row);
+            var lines = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            lines.AddThemeConstantOverride("separation", 0);
+            row.AddChild(lines);
             var text = Title(Simulation.Loc.Format("{0} in {1} {2:P0}",
                 Simulation.Loc.Get(BuildingCatalog.Get(project.Building).Name),
                 place?.Name ?? "?", project.Progress), 12, Ui.Colour("text.body_soft"));
             text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            row.AddChild(text);
+            lines.AddChild(text);
+            var status = Title(ConstructionQueue.Describe(_campaign, project) + " · " + ConstructionQueue.When(estimate), 11,
+                Ui.Colour(project.Waiting == ConstructionQueue.Treasury || !estimate.Funded ? "state.negative" : "text.caption"));
+            status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            lines.AddChild(status);
             var captured = project.Id;
             var drop = ActionButton("×", () => CancelConstruction(captured), 30, 24);
             drop.TooltipText = Ui.Tip(Tr("Call this site off. What has already been spent stays spent; the rest is never taken."));

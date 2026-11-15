@@ -1,0 +1,21 @@
+// Что каждая стройка делала сегодня и когда она начнётся и закончится (Scripts/Simulation/ConstructionQueue.cs),
+// тревога о стройке, вставшей без денег, строка штаба армии в хронике и пустые пулы на экране производства.
+{
+  "Working": "Идёт работа",
+  "Stopped: the treasury cannot pay it": "Стоит: казна не может её оплатить",
+  "Stopped: its accounts are invalid": "Стоит: в её счетах ошибка",
+  "Waiting: the treasury cannot pay {0} ahead of it": "Ждёт: казна не может оплатить стройку перед ней ({0})",
+  "Waiting for a free site": "Ждёт свободной бригады",
+  "Waiting for a free site, behind {0}": "Ждёт свободной бригады, в очереди за стройкой «{0}»",
+  "Starts on the next construction day": "Начнётся в следующий строительный день",
+  "No date while the treasury is empty": "Сроков нет, пока казна пуста",
+  "Done in about {0} days": "Будет готово примерно через {0} дн.",
+  "Starts in about {0} days, done in about {1}": "Начнётся примерно через {0} дн., будет готово примерно через {1} дн.",
+  "All construction has stopped": "Вся стройка встала",
+  "The treasury cannot pay the oldest site, so none of the {0} sites is being built. Raise income, cut spending or cancel sites.": "Казна не может оплатить самую старую стройку, поэтому ни одна из {0} не строится. Поднимите доходы, урежьте расходы или отмените часть строек.",
+  "chronicle.army_raised_by_staff": "{0}: штаб армии сформировал дивизию в регионе {3}, из казны потрачено {2}.",
+  "Queued in {0}. Contract: {1}; {2}. Click another region or finish placement.": "Поставлено в очередь: {0}. Контракт: {1}; {2}. Выберите другой регион или завершите размещение.",
+  "A line reserves factory units for one good. It also keeps every unit nobody has claimed, so opening a line never lowers that good's output; it only takes units away from the other goods of its pool.": "Линия закрепляет заводские единицы за одним товаром. Она получает и все никем не занятые единицы, поэтому открытая линия никогда не снижает выпуск своего товара — она лишь забирает единицы у других товаров того же пула.",
+  "No factories yet. Build {0} on the Economy screen: about {1} days each here, longer behind other sites.": "Заводов пока нет. Постройте «{0}» на экране экономики: здесь около {1} дн. на каждый, дольше, если впереди другие стройки.",
+  "All {0} civilian units are converted to military. Convert some back to open a civilian line.": "Все гражданские единицы ({0}) переведены на военное производство. Верните часть, чтобы открыть гражданскую линию."
+}
