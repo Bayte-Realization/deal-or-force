@@ -1,7 +1,10 @@
 // Campaign workbench: map-first docks. Later mod layout files can override each role.
 {
   "layout": {
-    "hud.top": { "anchors": [0,0,1,0], "offsets": [96,6,-8,80] },
+    "hud.top": { "anchors": [0,0,1,0], "offsets": [96,6,-370,80] },
+    // The date plate (Scripts/ui/DatePlateUI.cs): date, slower / pause / faster, the speed marks and
+    // "Menu". hud.top stops before it; on a two-row bar the second row runs on below it.
+    "hud.date_plate": { "anchors": [1,0,1,0], "offsets": [-362,6,-8,80], "material": "plate" },
     "hud.navigation": { "anchors": [0,0,0,1], "offsets": [8,90,98,-60] },
     "hud.side_panel": { "anchors": [0,0,0,1], "offsets": [106,90,548,-60] },
     "hud.army_panel": { "anchors": [0,0,0,1], "offsets": [106,90,612,-60] },
@@ -13,5 +16,9 @@
     "hud.outliner": { "anchors": [1,0,1,0], "offsets": [-316,90,-20,620] },
     "hud.hotseat": { "anchors": [0,1,0,1], "offsets": [106,-54,365,-6] },
     "hud.network": { "anchors": [0,1,0,1], "offsets": [106,-54,425,-6] }
+  },
+  "metrics": {
+    // Each of the five speed marks on the date plate, in pixels (they rise to about twice that).
+    "hud.speed_pips": 11
   }
 }

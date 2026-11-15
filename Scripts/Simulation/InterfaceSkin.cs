@@ -313,7 +313,9 @@ public static class InterfaceSkin
         // the defaults were never brought along. Data wins at runtime, so the player saw
         // the new arrangement and only a modder copying the defaults would have met the
         // old one. They are the shipped numbers now.
-        ("hud.top",            new PanelRect(0f, 0f, 1f, 0f,      96f, 6f, -8f, 80f)),
+        ("hud.top",            new PanelRect(0f, 0f, 1f, 0f,      96f, 6f, -370f, 80f)),
+        // The date plate at the top right; the bar above stops before it (step 3 of the interface plan).
+        ("hud.date_plate",     new PanelRect(1f, 0f, 1f, 0f,    -362f, 6f, -8f, 80f)),
         ("hud.flag_mount",     new PanelRect(0f, 0f, 0f, 0f,       8f, 6f, 88f, 82f)),
         ("hud.navigation",     new PanelRect(0f, 0f, 0f, 1f,       8f, 90f, 98f, -60f)),
         ("hud.side_panel",     new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 548f, -60f)),

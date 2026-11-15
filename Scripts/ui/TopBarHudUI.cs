@@ -216,21 +216,6 @@ public partial class DealOrForceGame
             }
         BuildResourcePlate();
 
-        var clock = new StructuredMetricCell { CustomMinimumSize = new Vector2(224, 0), AccentToken = "button.primary_border" };
-        _hudClockBox = clock;
-        clock.AddThemeConstantOverride("separation", 2);
-        row.AddChild(clock);
-        _date = Title("1 January 2024", 15, Ui.Colour("text.accent"));
-        _date.AddThemeFontOverride("font", Ui.NumberFont);
-        _date.AutowrapMode = TextServer.AutowrapMode.Off;
-        _date.ClipText = true;
-        _date.HorizontalAlignment = HorizontalAlignment.Right;
-        clock.AddChild(_date);
-
-        var speeds = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
-        speeds.AddThemeConstantOverride("separation", 4);
-        clock.AddChild(speeds);
-
         // Short captions, or the week's sentence under each figure. The tooltip names
         // which form the click opens. Reading either form does not write the campaign.
         // It stands at the end of the figures it changes, not among the clock's buttons, where a
@@ -241,48 +226,10 @@ public partial class DealOrForceGame
         StyleHudButton(_hudFiguresButton, false);
         _hudStatRow.AddChild(_hudFiguresButton);
 
-        // Labelled rather than drawn. This was a hamburger glyph, and the one tester who
-        // plays grand strategy for an audience reported that the game had no way out to the
-        // main menu - it had two, Escape and this, and neither of them said so.
-        var handbook = ActionButton("Handbook", () => OpenHandbook(), 0, 28);
-        handbook.Name = "OpenHandbook";
-        handbook.TooltipText = Ui.Tip(Tr("What every screen is for and what its figures mean (F1)."));
-        StyleHudButton(handbook, false);
-        speeds.AddChild(handbook);
-
-        // The index of everywhere, next to the handbook and for the same reason: a key nobody
-        // is told about is a key nobody uses. Ctrl+K is printed on the button's own tooltip.
-        var find = ActionButton("Find", ToggleNavigator, 0, 28);
-        find.Name = "OpenNavigator";
-        find.TooltipText = Ui.Tip(Tr("Every screen in the campaign, searchable (Ctrl+K)."));
-        StyleHudButton(find, false);
-        speeds.AddChild(find);
-        _dealInboxHudButton = ActionButton("Deals", OpenDealInbox, 0, 28);
-        _dealInboxHudButton.Name = "PendingDiplomaticOffers";
-        _dealInboxHudButton.Visible = false;
-        StyleHudButton(_dealInboxHudButton, false);
-        speeds.AddChild(_dealInboxHudButton);
-        var menu = ActionButton("Menu", ShowPauseMenu, 62, 28);
-        menu.TooltipText = Ui.Tip(Tr("Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera."));
-        StyleHudButton(menu, false);
-        speeds.AddChild(menu);
-        _pause = ActionButton("II", TogglePause, 32, 28, true);
-        _pause.TooltipText = Ui.Tip(Tr("Pause or resume (Space). Keys 1 to 5 set the speed and let time run; plus and minus make it one step faster or slower."));
-        StyleHudButton(_pause, true);
-        speeds.AddChild(_pause);
-        _speedButtons.Clear();
-        for (var speed = 1; speed <= 5; speed++)
-        {
-            var captured = speed;
-            var button = ActionButton(speed.ToString(), () => SetSpeed(captured), 27, 28);
-            _speedButtons.Add(button);
-            speeds.AddChild(button);
-        }
-        UpdateSpeedButtons();
-
-        _mediaButton = MusicShortcut();
-        StyleHudButton(_mediaButton, false);
-        speeds.AddChild(_mediaButton);
+        // The clock and its buttons have a plate of their own at the top right (DatePlateUI, step 3
+        // of the interface plan). This bar now carries the country and its figures and nothing else,
+        // which is what lets all twelve stand in one row at 1920.
+        BuildDatePlate();
         var window = GetWindow();
         window.SizeChanged += LayoutCampaignShell;
         TreeExiting += () => window.SizeChanged -= LayoutCampaignShell;
@@ -325,16 +272,7 @@ public partial class DealOrForceGame
                 }
             }
         }
-        // The clock, whenever the campaign is running on something shorter than a day. At a
-        // whole-day step the hour is always midnight and printing it would be noise; below
-        // that it is the whole point, and it moves.
-        var season = Simulation.WaterConditions.SeasonCaption(_campaign, player.CapitalLatitude);
-        var date = _campaign.Date.Display(_campaign.TickHours < 24);
-        _date.Text = season.Length == 0 ? date : date + " · " + Tr(season);
-        _date.TooltipText = Ui.Tip(season.Length == 0
-            ? "The calendar. Seasons are switched off, so the roads do not care what month it is."
-            : "The season follows the calendar and this capital's latitude. Winter slows roads away from the equator.");
-        _date.MouseFilter = MouseFilterEnum.Stop;
+        RefreshDatePlate(player);
 
         if (_defconBadge is not null && _campaign is not null)
         {
@@ -837,27 +775,6 @@ public partial class DealOrForceGame
         foreach (var stat in new[] { _treasury, _gdp, _population, _balance, _stability, _manpower, _inflation,
                      _politicalPoints, _publicDebt })
             stat?.Spark?.Reset();
-    }
-
-    /// <summary>
-    /// The speed the clock is set to, lit so the player can see it - while paused as well.
-    /// It used to go dark on pause, which was fine when a speed could only be chosen by
-    /// starting the clock; plus and minus now change the pace of a paused game, and a change
-    /// nobody can see is a key that seems broken. Whether time is running is the pause
-    /// button's to say, and it says it by being lit itself.
-    /// </summary>
-    private void UpdateSpeedButtons()
-    {
-        for (var index = 0; index < _speedButtons.Count; index++)
-        {
-            var button = _speedButtons[index];
-            if (!GodotObject.IsInstanceValid(button)) continue;
-            StyleHudButton(button, _campaign is not null && index + 1 == _speed);
-            button.TooltipText = Ui.Tip(_campaign is null
-                ? Simulation.Loc.Format("Campaign speed {0} (key {0})", index + 1)
-                : Simulation.Loc.Format("Campaign speed {0} (key {0}) · {1:0.#} campaign hours a second, {2} hour(s) a step",
-                    index + 1, 24f / Mathf.Max(0.001f, _campaign.Defines.SecondsForSpeed(index + 1)), _campaign.TickHours));
-        }
     }
 
     /// <summary>The screen currently open, highlighted in the navigation rail.</summary>

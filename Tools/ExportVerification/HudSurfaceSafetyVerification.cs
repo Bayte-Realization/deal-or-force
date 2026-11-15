@@ -19,12 +19,29 @@ public partial class ExportVerification
             "right report is below the instrument strip");
         Check(report is not null && tab is not null && report.GetGlobalRect().Encloses(tab.GetGlobalRect()),
             "folded desk button is laid out inside the report header");
-        // Step 2 of the interface plan: five figures stand on the plate, the rest wait in the
-        // drawer behind "…" (HudMoreFigures) and are not on screen until it opens.
-        var stats = game.FindChildren("HudStat_*", "Control", true, false).OfType<Control>().Where(s => s.IsVisibleInTree()).ToArray();
+        // Step 2 of the interface plan: on a desktop all twelve figures stand on the plate; on a
+        // phone-narrow screen five do and the rest wait in the drawer behind "…" (HudMoreFigures).
+        var all = game.FindChildren("HudStat_*", "Control", true, false).OfType<Control>().ToArray();
+        var stats = all.Where(s => s.IsVisibleInTree()).ToArray();
         Check(stats.Length >= 5 && stats.All(s => top.GetGlobalRect().Encloses(s.GetGlobalRect())), "all telemetry cells on the plate remain inside the top bar");
-        Check(game.FindChild("HudMoreFigures", true, false) is Control { Visible: true } more && top.GetGlobalRect().Encloses(more.GetGlobalRect()),
-            "the other figures are reachable through \"…\" inside the top bar");
+        var more = game.FindChild("HudMoreFigures", true, false) as Control;
+        Check(stats.Length == all.Length || (more is { Visible: true } && top.GetGlobalRect().Encloses(more.GetGlobalRect())),
+            "every figure is on the plate, or the rest are reachable through \"…\" inside the top bar");
+        // Step 3: the clock has its own plate at the top right. It stays on screen, holds its
+        // buttons, and covers neither a figure nor the report under it.
+        var plate = game.FindChild("DatePlate", true, false) as Control;
+        CheckFits(plate, "date plate " + language + " " + size.X);
+        Check(plate is not null && stats.All(s => !plate.GetGlobalRect().Intersects(s.GetGlobalRect())),
+            "the date plate covers no figure " + language + " " + size.X);
+        Check(plate is not null && report is not null && !plate.GetGlobalRect().Intersects(report.GetGlobalRect()),
+            "the report starts below the date plate " + language + " " + size.X);
+        foreach (var name in new[] { "DatePlatePause", "DatePlateSlower", "DatePlateFaster", "DatePlateSpeed", "OpenPauseMenu" })
+            Check(game.FindChild(name, true, false) is Control { Visible: true } part && plate is not null &&
+                plate.GetGlobalRect().Encloses(part.GetGlobalRect()), name + " stands on the date plate " + language + " " + size.X);
+        // At 1920 the bar is one row and ends before the plate; narrower windows take a second row
+        // that runs on below it.
+        if (size.X >= 1920)
+            Check(plate is not null && !plate.GetGlobalRect().Intersects(top.GetGlobalRect()), "at 1920 the figures stand in one row beside the date plate");
         for (var i = 1; i < stats.Length; i++)
             Check(!stats[i - 1].GetGlobalRect().Intersects(stats[i].GetGlobalRect()), "adjacent telemetry cells do not overlap " + i);
         var meters = game.FindChildren("DossierShareTrack", "ProgressBar", true, false).OfType<ProgressBar>().Where(m => m.IsVisibleInTree()).ToArray();

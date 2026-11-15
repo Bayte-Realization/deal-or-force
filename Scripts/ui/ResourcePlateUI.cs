@@ -90,6 +90,13 @@ public partial class DealOrForceGame
     {
         if (_hudTopPanel is null) return;
         Ui.Place(_hudTopPanel, "hud.top");
+        // Beside the date plate (step 3): on one row the bar stops short of it, whatever width the
+        // plate has grown to; on two rows the second runs on below it, to its right end - at 1280
+        // the twelve figures need the whole width, and the first row has nothing on its right.
+        if (DatePlateSpan(out var plateLeft, out var plateRight, out _))
+            _hudTopPanel.OffsetRight = _hudSecondRow
+                ? Mathf.Max(_hudTopPanel.OffsetRight, plateRight)
+                : Mathf.Min(_hudTopPanel.OffsetRight, plateLeft - DatePlateGap);
         if (InterfaceSkin.LayoutMaterial("hud.top") is null &&
             InterfaceSkin.Metric(InterfaceSkin.MaterialSwitch, 0f) >= .5f)
             MaterialStyles.Dress(_hudTopPanel, "plate.strip");

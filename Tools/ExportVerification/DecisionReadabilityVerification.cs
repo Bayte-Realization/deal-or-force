@@ -25,7 +25,9 @@ public partial class ExportVerification
             Loc.Language = language; GetTree().Root.Size = new(sample.Width, sample.Height);
             SettingsCatalog.Store("interface_scale", sample.Scale); game.Call("ApplySetting", "interface_scale");
             game.Call("RefreshLocalisedText"); await Wait(.3);
-            var opener = game.FindChild("OpenMediaLibrary", true, false) as Button;
+            // Any visible HUD button the player had focused will do; the music note that used to be
+            // here lives in the pause menu since step 3 of the interface plan.
+            var opener = game.FindChild("OpenPauseMenu", true, false) as Button;
             foreach (var kind in new[] { "War", "Deal", "Ultimatum" })
             {
                 opener?.GrabFocus();

@@ -11,9 +11,13 @@ public partial class ExportVerification
         // before testing a mouse click on the music shortcut behind that workspace.
         game.Call("CloseDiplomacyScreen");
         await Wait(.2);
+        // The soundtrack entry is "Music" in the pause menu since step 3 of the interface plan (the
+        // clock row it stood in became the date plate). The player opens the menu, then the music.
+        game.Call("ShowPauseMenu");
+        await Wait(.2);
         var note = game.FindChild("OpenMediaLibrary", true, false) as Button;
-        Check(note is not null, "music focus proof finds the real HUD shortcut");
-        if (note is null) return;
+        Check(note is { Visible: true } && note.IsVisibleInTree(), "music focus proof finds the real soundtrack entry in the pause menu");
+        if (note is null) { game.Call("HidePauseMenu"); return; }
         await ClickAllianceControl(note, "open music by mouse");
         Check(game.FindChild("MediaLibrary", true, false) is Control { Visible: true }, "mouse shortcut opens music");
         var close = game.FindChild("CloseMediaLibrary", true, false) as Button;
@@ -36,6 +40,8 @@ public partial class ExportVerification
         await Wait(.1);
         Check(GetViewport().GuiGetFocusOwner() == note && note.GetThemeStylebox("focus") is not StyleBoxEmpty,
             "pointer movement alone does not erase keyboard focus: " + language + width);
+        game.Call("HidePauseMenu");
+        await Wait(.1);
     }
 }
 

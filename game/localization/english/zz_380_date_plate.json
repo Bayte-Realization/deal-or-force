@@ -1,0 +1,15 @@
+// The date plate at the top right (Scripts/ui/DatePlateUI.cs), and the places the top bar's
+// buttons moved to: the pause menu and the navigation rail's search (step 3 of the interface plan).
+{
+  "Slower": "Slower",
+  "Faster": "Faster",
+  "One step slower (minus key). A paused clock stays paused.": "One step slower (minus key). A paused clock stays paused.",
+  "One step faster (plus key). A paused clock stays paused.": "One step faster (plus key). A paused clock stays paused.",
+  "Keys 1 to 5, or a click on a mark, set the speed and let time run; plus and minus step it.": "Keys 1 to 5, or a click on a mark, set the speed and let time run; plus and minus step it.",
+  "Pause menu (Esc): save, load, settings, the handbook, the index of every screen, the music and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera.": "Pause menu (Esc): save, load, settings, the handbook, the index of every screen, the music and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera.",
+  "Find  [Ctrl+K]": "Find  [Ctrl+K]",
+  "layout.panel.hud.date_plate": "Date and speed",
+  "Find all": "Find all",
+  "Type to filter the navigation rail. Enter searches every screen and place in the campaign for the same words (Ctrl+K).": "Type to filter the navigation rail. Enter searches every screen and place in the campaign for the same words (Ctrl+K).",
+  "Find all: every screen and place in the campaign, searchable (Ctrl+K). Enter in the field opens it with what you typed.": "Find all: every screen and place in the campaign, searchable (Ctrl+K). Enter in the field opens it with what you typed."
+}

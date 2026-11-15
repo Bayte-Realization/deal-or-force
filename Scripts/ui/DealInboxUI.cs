@@ -67,6 +67,9 @@ public partial class DealOrForceGame
             _dealInboxHudButton.TooltipText = Ui.Tip(Tr("Incoming offers await your choice. Opening the inbox never signs or spends anything."));
             if (visibilityChanged) Callable.From(LayoutCampaignShell).CallDeferred();
         }
+        // The chip on the date plate says the same, where it is seen without opening anything.
+        // It keeps the plate's width (DatePlateUI), so its coming and going moves nothing else.
+        RefreshDatePlateDeals(count);
         if (IsInstanceValid(_diplomacyInboxButton))
             _diplomacyInboxButton.Text = count > 0 ? Loc.Format("Diplomatic inbox ({0})", count) : Tr("Diplomatic inbox");
         if (_dealInboxVisible && IsInstanceValid(_dealComposer)) RefreshDealInbox();

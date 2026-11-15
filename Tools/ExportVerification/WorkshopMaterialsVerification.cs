@@ -94,6 +94,9 @@ public partial class ExportVerification
             var musicButton = game.FindChild("OpenMediaLibrary", true, false) as Button;
             Check(musicButton?.TooltipText == Ui.Tip(Loc.Get("Soundtrack player: choose a recording, pause or skip. Music continues when this window closes.")) &&
                 musicButton.AccessibilityName == Loc.Get("Soundtrack player"), "music shortcut tooltip and accessibility follow live language switch");
+            // "Music" is in the pause menu since step 3 of the interface plan: open the menu first,
+            // as a player does, so the clicks below land on a button on screen.
+            game.Call("ShowPauseMenu"); await Wait(.1);
             var music = MusicDirector.Ensure(game);
             // Establish a user-owned recording/pause, rather than racing the first
             // menu-to-campaign automatic crossfade after BeginSession above.
@@ -116,6 +119,7 @@ public partial class ExportVerification
             Check(music.CurrentTrackId == musicTrack && music.Paused == musicPaused && music.Manual,
                 "closing the player changes neither soundtrack selection nor pause");
             await Capture("materials-music-closed-" + language + "-" + size.X);
+            game.Call("HidePauseMenu"); await Wait(.1);
             var formation = c.SupportFormations.FirstOrDefault(f => f.NationId == c.Player.Id && SupportCore.Enabled(c, f.TypeId));
             Check(formation is not null, "player has a declared formation for reserve presentation");
             if (formation is not null)

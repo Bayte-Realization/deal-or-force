@@ -20,8 +20,10 @@ public partial class LayoutPreview : Control
     public bool IsDragging => _dragging;
     private Vector2 _start;
     private InterfaceSkin.PanelRect _original, _draft;
-    private static readonly string[] HudContext = { "hud.top", "hud.navigation", "hud.side_panel", "hud.outliner", "hud.map_controls", "hud.alerts" };
-    private static readonly string[] MapSelectionContext = { "hud.top", "hud.navigation", "hud.country_card", "hud.region_card", "hud.outliner", "hud.map_controls" };
+    // The date plate stands beside the top bar, which stops before it: a modder moving either one
+    // sees the other.
+    private static readonly string[] HudContext = { "hud.top", "hud.date_plate", "hud.navigation", "hud.side_panel", "hud.outliner", "hud.map_controls", "hud.alerts" };
+    private static readonly string[] MapSelectionContext = { "hud.top", "hud.date_plate", "hud.navigation", "hud.country_card", "hud.region_card", "hud.outliner", "hud.map_controls" };
     public static string PanelName(string id) => Loc.GetOr("layout.panel." + id, id);
 
     public override void _Ready()

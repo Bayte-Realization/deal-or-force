@@ -842,6 +842,9 @@ public partial class DealOrForceGame
         _campaign.IsPaused = paused;
         _speed = Math.Clamp(speed, 1, 5);
         _pause.Text = paused ? "▶" : "II";
+        // The host's pace and pause, onto the date plate's marks and the reach of "−" and "+":
+        // a paused client takes no day steps, so no refresh would carry them there otherwise.
+        UpdateSpeedButtons();
         RefreshNetworkClientStatus();
     }
 

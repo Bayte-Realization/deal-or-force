@@ -1,0 +1,15 @@
+// Плита даты справа вверху (Scripts/ui/DatePlateUI.cs) и новые места кнопок верхней полосы:
+// меню паузы и поиск в левой колонке (шаг 3 плана интерфейса).
+{
+  "Slower": "Медленнее",
+  "Faster": "Быстрее",
+  "One step slower (minus key). A paused clock stays paused.": "На шаг медленнее (клавиша «минус»). Время на паузе так и остаётся на паузе.",
+  "One step faster (plus key). A paused clock stays paused.": "На шаг быстрее (клавиша «плюс»). Время на паузе так и остаётся на паузе.",
+  "Keys 1 to 5, or a click on a mark, set the speed and let time run; plus and minus step it.": "Клавиши 1–5 или щелчок по риске задают скорость и пускают время; плюс и минус меняют её на шаг.",
+  "Pause menu (Esc): save, load, settings, the handbook, the index of every screen, the music and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera.": "Меню паузы (Esc): сохранение, загрузка, настройки, справочник, указатель всех экранов, музыка и выход в главное меню. F5 — быстрое сохранение, F9 — загрузка, F10 — свободная камера.",
+  "Find  [Ctrl+K]": "Найти  [Ctrl+K]",
+  "layout.panel.hud.date_plate": "Дата и скорость",
+  "Find all": "Найти всё",
+  "Type to filter the navigation rail. Enter searches every screen and place in the campaign for the same words (Ctrl+K).": "Введите слово, чтобы отфильтровать колонку. Enter ищет те же слова по всем экранам и местам кампании (Ctrl+K).",
+  "Find all: every screen and place in the campaign, searchable (Ctrl+K). Enter in the field opens it with what you typed.": "Найти всё: все экраны и места кампании, с поиском (Ctrl+K). Enter в поле открывает его с уже введёнными словами."
+}

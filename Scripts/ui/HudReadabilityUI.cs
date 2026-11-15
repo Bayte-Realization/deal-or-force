@@ -7,7 +7,6 @@ public partial class DealOrForceGame
     private PanelContainer _hudTopPanel, _hudNavigationPanel;
     private VBoxContainer _hudTopStack, _hudIdentityBox;
     private HBoxContainer _hudTopRow, _hudStatRow;
-    private VBoxContainer _hudClockBox;
     private Button _mediaButton = null!;
     private Button _hudFiguresButton;
     private float _hudHeaderExtra;
@@ -29,14 +28,22 @@ public partial class DealOrForceGame
     private bool ResolveHudFigures()
     {
         if (_hudTopPanel is null || _hudStatRow is null || _hudTopRow is null) return false;
-        // Canvas stretching can keep Size.X at 1920 in a 1280px window. The plan uses the
-        // real window as well, or the second row never appears and the long sentences clip.
-        var windowWidth = GetWindow()?.Size.X ?? Size.X;
+        // The canvas the bar is laid out on, not the window's pixels. The project stretches a
+        // 1920x1080 canvas (canvas_items, expand), so a 1280x720 window at the default interface
+        // size still has 1920 to lay out: the twelve figures fit one row there exactly as at 1920.
+        // Gating on the window's 1280 put them on a second row of the same width, under a first
+        // row the date plate made tall and left nearly empty - map height lost for nothing. A
+        // canvas really 1280 wide (interface size 150 %, a phone) is below hud.two_row_below and
+        // takes the second row as before.
+        var windowWidth = Size.X;
         ApplyHudFigureForm(true);
         var longWidth = MeasuredClockWidth();
         ApplyHudFigureForm(false);
         var briefWidth = MeasuredClockWidth();
-        var available = _hudTopPanel.Size.X > 1 ? _hudTopPanel.Size.X : Size.X - 16;
+        // The room is the layout's, not the panel's current width: on a second row the bar runs on
+        // under the date plate (PlaceTopPlate), and measuring that would put the figures back on one
+        // row the next pass and flip between the two forever.
+        var available = TopPlateRoom(false);
         var plan = Simulation.ResponsiveHudLayout.Clock(
             System.Math.Min(available, windowWidth), windowWidth, longWidth, briefWidth,
             _hudAskLong, _hudAskBrief,
@@ -55,15 +62,18 @@ public partial class DealOrForceGame
         {
             ApplyHudFigureForm(true);
             _hudStatRow.UpdateMinimumSize();
-            if (_hudStatRow.GetCombinedMinimumSize().X + 24 <= available)
+            if (_hudStatRow.GetCombinedMinimumSize().X + 24 <= TopPlateRoom(true))
                 plan = new Simulation.ResponsiveHudLayout.ClockPlan(false, true, Ui.Metric("hud.second_row_height", 52));
         }
+        ApplyHudFigureForm(!plan.Brief);
+        // A second row starts below the date plate, which stands over the right end of the first,
+        // so the bar is as much taller as that takes (measured in the form just applied).
+        if (plan.SecondRow) plan = plan with { HeaderExtra = System.Math.Max(plan.HeaderExtra, SecondRowHeaderExtra()) };
         var changed = _hudBriefActive != plan.Brief || _hudSecondRow != plan.SecondRow ||
                       System.Math.Abs(_hudHeaderExtra - plan.HeaderExtra) > 0.5f;
         _hudBriefActive = plan.Brief;
         _hudSecondRow = plan.SecondRow;
         _hudHeaderExtra = plan.HeaderExtra;
-        ApplyHudFigureForm(!plan.Brief);
         PaintFigureButton();
         return changed;
     }
@@ -71,6 +81,7 @@ public partial class DealOrForceGame
     private void PlaceHudChrome()
     {
         if (_hudTopPanel is null || _hudStatRow is null || _hudTopRow is null) return;
+        PlaceDatePlate();
         PlaceTopPlate();
         _hudTopPanel.OffsetBottom += _hudHeaderExtra;
         if (_hudSecondRow && _hudStatRow.GetParent() != _hudTopStack)
@@ -81,10 +92,10 @@ public partial class DealOrForceGame
             var idx = _hudIdentityBox is not null ? _hudIdentityBox.GetIndex() + 1 : 2;
             _hudTopRow.MoveChild(_hudStatRow, idx);
         }
-        if (_hudClockBox is not null)
-            _hudClockBox.SizeFlagsHorizontal = _hudSecondRow ? SizeFlags.ExpandFill : SizeFlags.Fill;
-        if (_hudIdentityBox is not null)
-            _hudIdentityBox.SizeFlagsHorizontal = _hudSecondRow ? SizeFlags.ExpandFill : SizeFlags.Fill;
+        // The first row keeps the country to the left on a second-row bar: stretched, it pushed
+        // DEFCON to the right end, which is under the date plate now.
+        if (_hudIdentityBox is not null) _hudIdentityBox.SizeFlagsHorizontal = SizeFlags.Fill;
+        _hudTopRow.CustomMinimumSize = new Vector2(0, _hudSecondRow ? SecondRowClearance() : 0);
         foreach (var panel in new Control[] { _hudNavigationPanel, _sidePanel, _movementPanel, _armyPanel, _supportLayer is PanelContainer ? _supportLayer : null,
                      _fleetPanel, _resourceAtlasPanel, _deskPanel })
             ShiftHudDock(panel);

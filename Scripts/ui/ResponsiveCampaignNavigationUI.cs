@@ -15,6 +15,7 @@ public partial class DealOrForceGame
     private (float Height, float Preferred, string Language, string Filter) _navigationLayoutKey;
     private bool _navigationLayoutApplied;
     private LineEdit _campaignNavigationSearch = null!;
+    private Button _campaignNavigationFind;
     private string _campaignNavigationFilter = "";
 
     private void BuildCampaignNavigation()
@@ -35,13 +36,28 @@ public partial class DealOrForceGame
         {
             Name = "NavigationSearch", SizeFlagsHorizontal = SizeFlags.ExpandFill,
             CustomMinimumSize = new(0, 28), ClearButtonEnabled = true,
-            TooltipText = Ui.Tip(Tr("Type to filter the navigation rail. Clearing it shows every destination again.")),
             AccessibilityName = Tr("Navigation search")
         }, "Search");
+        Tip(_campaignNavigationSearch, "Type to filter the navigation rail. Enter searches every screen and place in the campaign for the same words (Ctrl+K).");
         _campaignNavigationSearch.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.body", 12));
         _campaignNavigationSearch.TextChanged += text =>
         { _campaignNavigationFilter = text.Trim(); LayoutCampaignNavigation(); };
-        stack.AddChild(_campaignNavigationSearch);
+        // Find left the top bar with step 3 of the interface plan; its way in is here now, where a
+        // player already looks for a screen: Enter in the field, or the magnifier beside it. Beside,
+        // not under: a row of its own pushed the rail's last entry off the bottom at 1080 px.
+        _campaignNavigationSearch.TextSubmitted += _ => OpenNavigatorFromRail();
+        var searchRow = new HBoxContainer { Name = "NavigationSearchRow" };
+        searchRow.AddThemeConstantOverride("separation", 4);
+        stack.AddChild(searchRow);
+        searchRow.AddChild(_campaignNavigationSearch);
+        _campaignNavigationFind = ActionButton("", OpenNavigatorFromRail, 28, 28, false,
+            SpriteCatalog.TextureOf("icon_search", "res://game/gfx/interface/icons/icon_search.png"));
+        _campaignNavigationFind.Name = "RailOpenNavigator";
+        _campaignNavigationFind.ExpandIcon = true;
+        _campaignNavigationFind.AccessibilityName = Tr("Find all");
+        Tip(_campaignNavigationFind, "Find all: every screen and place in the campaign, searchable (Ctrl+K). Enter in the field opens it with what you typed.");
+        StyleHudButton(_campaignNavigationFind, false);
+        searchRow.AddChild(_campaignNavigationFind);
         _campaignNavigationScroll = new ScrollContainer
         {
             Name = "CampaignNavigationScroll", HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
@@ -96,7 +112,10 @@ public partial class DealOrForceGame
     {
         if (_campaignNavigationRows is null || _hudNavigationPanel is null) return;
         var preferred = Math.Clamp(InterfaceSkin.Metric("shell.navigation_height", 50), 42, 96);
-        var room = Math.Max(0, _hudNavigationPanel.Size.Y - _campaignNavigationSearch.GetCombinedMinimumSize().Y - 22);
+        // The search field and the magnifier share one row.
+        var head = Math.Max(_campaignNavigationSearch.GetCombinedMinimumSize().Y,
+            _campaignNavigationFind is { Visible: true } ? _campaignNavigationFind.GetCombinedMinimumSize().Y : 0);
+        var room = Math.Max(0, _hudNavigationPanel.Size.Y - head - 22);
         var key = (room, preferred, Loc.Language, _campaignNavigationFilter);
         if (_navigationLayoutApplied && _navigationLayoutKey == key) return;
         _navigationLayoutKey = key; _navigationLayoutApplied = true;
@@ -116,6 +135,17 @@ public partial class DealOrForceGame
             StyleCampaignNavigationButton(entry.Button, entry.Button.HasMeta("skin_button_primary") && entry.Button.GetMeta("skin_button_primary").AsBool());
         }
         UpdateScreenButtons();
+    }
+
+    /// <summary>The index of every screen and place, opened with whatever the rail's field holds.</summary>
+    private void OpenNavigatorFromRail()
+    {
+        var words = _campaignNavigationSearch?.Text.Trim() ?? "";
+        OpenNavigator();
+        if (words.Length == 0 || _navigatorSearch is null) return;
+        _navigatorSearch.Text = words;
+        _navigatorSearch.CaretColumn = words.Length;
+        FillNavigator();
     }
 
     private bool NavigationDestinationVisible(string screen)

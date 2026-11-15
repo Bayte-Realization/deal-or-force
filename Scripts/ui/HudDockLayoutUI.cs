@@ -40,15 +40,18 @@ public partial class DealOrForceGame
         FitOutliner();
     }
 
-    private Button MusicShortcut()
+    /// <summary>
+    /// The soundtrack player's one entry: "Music" with its note, in the pause menu beside Settings
+    /// since the clock row it stood in at the end of the top bar became the date plate (step 3 of
+    /// the interface plan). A word as well as the note: a lone glyph is a button a player has to
+    /// hover before they know what it does.
+    /// </summary>
+    private Button MusicShortcut(float width, float height)
     {
-        var button = ActionButton("", OpenSoundtrackLibrary, 44, 32);
+        var button = ActionButton("Music", OpenSoundtrackLibrary, width, height);
         button.Name = "OpenMediaLibrary";
         button.Icon = AtlasSurfaceSkin.MusicGlyph();
-        button.SetMeta("atlas_round_button", true);
         button.SetMeta("atlas_music_button", true);
-        button.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
-        button.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         button.ExpandIcon = true;
         button.AddThemeConstantOverride("icon_max_width", 20);
         Tip(button, "Soundtrack player: choose a recording, pause or skip. Music continues when this window closes.");

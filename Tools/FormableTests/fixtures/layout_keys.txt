@@ -4,6 +4,7 @@ hud.alerts
 hud.army_bar
 hud.army_panel
 hud.country_card
+hud.date_plate
 hud.desk_left
 hud.desk_right
 hud.desk_tab_left

@@ -31,13 +31,34 @@ public partial class DealOrForceGame
         rows.AddChild(ActionButton("Resume campaign", HidePauseMenu, 330, 46, true));
         rows.AddChild(ActionButton("Quick save  [F5]", QuickSave, 330, 42));
         rows.AddChild(ActionButton("Save / load campaign", ShowSaveLoadInterface, 330, 42));
-        rows.AddChild(ActionButton("Settings", ShowSettings, 330, 42));
+        // Settings and the music side by side: both are about how the game sounds and looks, and the
+        // panel has to stay within 720 pixels with the two entries the top bar gave up (step 3 of
+        // the interface plan). The music button is the game's one soundtrack entry; it opens the
+        // player over this menu and hands focus back here when it closes.
+        var settingsRow = PauseMenuPair(rows);
+        var settings = ActionButton("Settings", ShowSettings, 0, 42);
+        settings.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        settingsRow.AddChild(settings);
+        _mediaButton = MusicShortcut(0, 42);
+        _mediaButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        settingsRow.AddChild(_mediaButton);
         var watch = ActionButton("Watch the world  [F7]", () => { HidePauseMenu(); ToggleObserverMode(); }, 330, 42);
         watch.TooltipText = Ui.Tip(Tr("Observer mode: no events, nothing stops the clock, and the panels get out of the way. For watching a world run, and for recording one."));
         rows.AddChild(watch);
         // Help was reachable from a small button on the top bar and from F1, and from neither
-        // of the two menus a lost player actually opens.
-        rows.AddChild(ActionButton("Handbook  [F1]", () => { HidePauseMenu(); OpenHandbook(); }, 330, 42));
+        // of the two menus a lost player actually opens. The top bar's Handbook and Find have
+        // moved here (and onto F1 and Ctrl+K, which never changed), side by side.
+        var helpRow = PauseMenuPair(rows);
+        var handbook = ActionButton("Handbook  [F1]", () => { HidePauseMenu(); OpenHandbook(); }, 0, 42);
+        handbook.Name = "PauseOpenHandbook";
+        handbook.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        Tip(handbook, "What every screen is for and what its figures mean (F1).");
+        helpRow.AddChild(handbook);
+        var find = ActionButton("Find  [Ctrl+K]", () => { HidePauseMenu(); OpenNavigator(); }, 0, 42);
+        find.Name = "PauseOpenNavigator";
+        find.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        Tip(find, "Every screen in the campaign, searchable (Ctrl+K).");
+        helpRow.AddChild(find);
         // One click used to throw the campaign away. Leaving now asks a plain "Are you sure?"
         // (LeaveConfirmation), and so does quitting to the desktop, which used not to ask at all.
         _leaveButton = ActionButton("Return to main menu", () => LeaveConfirmation.ReturnToMainMenu(this, ReturnToMainMenu), 330, 42);
@@ -48,12 +69,22 @@ public partial class DealOrForceGame
 
     private Button _leaveButton = null!;
 
+    /// <summary>A row of two equal buttons, as wide as the menu's single ones.</summary>
+    private static HBoxContainer PauseMenuPair(VBoxContainer rows)
+    {
+        var pair = new HBoxContainer { CustomMinimumSize = new Vector2(330, 0) };
+        pair.AddThemeConstantOverride("separation", 10);
+        rows.AddChild(pair);
+        return pair;
+    }
+
     private void ShowPauseMenu()
     {
         if (!_hudLayer.Visible || _handoverLayer is { Visible: true }) return;
         _leaveButton.Text = Tr("Return to main menu");
         _campaign.IsPaused = true;
         _pause.Text = "▶";
+        UpdateSpeedButtons();
         _pauseMenuLayer.Visible = true;
         _pauseMenuLayer.MoveToFront();
     }
