@@ -302,6 +302,7 @@ public partial class DealOrForceGame
 
         _stateConstructionQueue = Title("", 11, Ui.Colour("text.body_soft"));
         _stateConstructionQueue.CustomMinimumSize = new Vector2(0, 18);
+        _stateConstructionQueue.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         construction.AddChild(_stateConstructionQueue);
 
         // One row per site, each with a way out of it. The queue used to be a single line
@@ -604,7 +605,7 @@ public partial class DealOrForceGame
         // (ConstructionCost.WorkingSites) and the rest wait, oldest first.
         _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of {1} sites open · {2} worked at a time",
             projects.Count, ConstructionCost.Limit(_campaign, nation, _campaign.Defines.MaxConstructionProjects),
-            ConstructionCost.WorkingSites(_campaign, nation));
+            ConstructionCost.WorkingSites(_campaign, nation)) + "\n" + ConstructionQueue.Summary(_campaign, nation);
         // In the order the sites work, each with what it did today and when it should start and end
         // (ConstructionQueue): sorted by progress, a queue frozen for money read as a list of percentages.
         foreach (var estimate in ConstructionQueue.Schedule(_campaign, nation))

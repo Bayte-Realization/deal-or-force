@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
@@ -28,12 +29,6 @@ public sealed partial class Defines
     /// </summary>
     public bool ConstructionSitesInParallel { get; set; } = true;
 
-    /// <summary>
-    /// How many sites work at once, per economy of the reference size (ConstructionCost.Size); at
-    /// least one. All of them at once made the world grow ten per cent a year - nothing wears
-    /// out and labour never runs short, so capacity compounded without limit.
-    /// </summary>
-    public float ConstructionParallelPerEconomy { get; set; } = 0.7f;
 
     /// <summary>
     /// The fastest a country's construction capacity can make its sites work, as days of work
@@ -107,10 +102,44 @@ public static class ConstructionCost
         return M.Clamp(level, defines.ConstructionPriceFloor, MathF.Max(defines.ConstructionPriceFloor, defines.ConstructionPriceCeiling));
     }
 
-    /// <summary>What this building costs this country now: catalogue price, price level, modifiers.</summary>
+    /// <summary>
+    /// What this building costs this country now: catalogue price, the world's construction price
+    /// scale (ConstructionCostScale), price level, modifiers.
+    /// </summary>
     public static float Of(Campaign campaign, Nation nation, BuildingKind kind) =>
-        BuildingCatalog.Get(kind).Cost * PriceLevel(campaign, nation) *
+        BuildingCatalog.Get(kind).Cost * CostScale(campaign) * PriceLevel(campaign, nation) *
         (nation is null ? 1f : NationalModifiers.Factor(nation, "construction_cost"));
+
+    /// <summary>The catalogue price scale (ConstructionCostScale), 1 when unset or not a positive number.</summary>
+    public static float CostScale(Campaign campaign)
+    {
+        var scale = campaign?.Defines?.ConstructionCostScale ?? 1f;
+        return float.IsFinite(scale) && scale > 0f ? scale : 1f;
+    }
+
+    /// <summary>
+    /// The days of work a new site of this kind is contracted for in this country: the catalogue
+    /// time, scaled by ConstructionTimeScale and shortened by the construction_speed modifier. What
+    /// QueueConstructionCommand writes on the site, what the AI's fiscal check prices, and what
+    /// ExpectedDays divides by the pace - one rule, so the number on the list is the number built.
+    /// </summary>
+    public static int WorkDays(Campaign campaign, Nation nation, BuildingKind kind)
+    {
+        var definition = BuildingCatalog.Get(kind);
+        var speed = nation is null ? 1f : NationalModifiers.Factor(nation, "construction_speed");
+        if (!float.IsFinite(speed) || speed <= 0f) speed = 1f;
+        var scale = campaign?.Defines?.ConstructionTimeScale ?? 1f;
+        if (!float.IsFinite(scale) || scale <= 0f) scale = 1f;
+        return Math.Max(1, (int)MathF.Round(definition.Days * scale / speed));
+    }
+
+    /// <summary>
+    /// What one new site of this kind will draw from the treasury a week at this country's pace:
+    /// its price over its work days, times the days of work it does a day, times seven. The figure
+    /// the build list puts beside the price, so a player sees the weekly bill before queuing.
+    /// </summary>
+    public static float WeeklyPayment(Campaign campaign, Nation nation, BuildingKind kind) =>
+        Of(campaign, nation, kind) / WorkDays(campaign, nation, kind) * Pace(campaign, nation) * 7f;
 
     /// <summary>How many economies of the reference size this one is, at least 1.</summary>
     public static float Size(Campaign campaign, Nation nation)
@@ -121,15 +150,40 @@ public static class ConstructionCost
         return float.IsFinite(size) ? M.Clamp(size, 1f, MathF.Max(1f, defines.ConstructionSizeCap)) : 1f;
     }
 
-    /// <summary>A per-country project limit, scaled to the size of the economy.</summary>
-    /// <summary>How many of a country's open sites work each day.</summary>
+    /// <summary>
+    /// How many of a country's open sites work each day: ConstructionSitesBase, plus one for every
+    /// so many civilian factories it has standing (ConstructionSitesPerCivilianIndustry), never more
+    /// than ConstructionSitesMax. The civilian factories are the country's contractors - the cement,
+    /// the cranes, the firms that bid for public works - as civilian factories are construction
+    /// capacity in Hearts of Iron: a country builds as much at once as its industry can carry.
+    ///
+    /// Until 15 November 2026 this was the size of the economy times 0.7, rounded, which gave one
+    /// site to every economy under 17 units of weekly output: Italy, France, Germany and Poland built
+    /// one thing at a time and seventy per cent of the world's open sites stood in line. Every country
+    /// is counted by the same rule; who plays it does not enter.
+    /// </summary>
     public static int WorkingSites(Campaign campaign, Nation nation)
     {
         var defines = campaign?.Defines;
-        if (defines is null || !defines.ConstructionSitesInParallel) return 1;
-        return Math.Max(1, (int)MathF.Round(Size(campaign, nation) * MathF.Max(0f, defines.ConstructionParallelPerEconomy)));
+        if (defines is null || !defines.ConstructionSitesInParallel || nation is null) return 1;
+        var perFactory = float.IsFinite(defines.ConstructionSitesPerCivilianIndustry) ? MathF.Max(0f, defines.ConstructionSitesPerCivilianIndustry) : 0f;
+        var sites = (float.IsFinite(defines.ConstructionSitesBase) ? defines.ConstructionSitesBase : 1f) +
+                    CivilianIndustry(campaign, nation) * perFactory;
+        var ceiling = Math.Max(1, defines.ConstructionSitesMax);
+        return Math.Clamp((int)MathF.Floor(sites + 0.0001f), 1, ceiling);
     }
 
+    /// <summary>The civilian factories standing in a country's own regions.</summary>
+    public static int CivilianIndustry(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return 0;
+        var total = 0;
+        foreach (var state in campaign.StatesOf(nation))
+            total += state.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry);
+        return total;
+    }
+
+    /// <summary>A per-country project limit, scaled to the size of the economy.</summary>
     public static int Limit(Campaign campaign, Nation nation, int perEconomy) =>
         Math.Max(perEconomy, (int)MathF.Round(perEconomy * Size(campaign, nation)));
 
@@ -170,17 +224,10 @@ public static class ConstructionCost
         nation is null ? 1f : Pace(campaign?.Defines, nation.ConstructionCapacity);
 
     /// <summary>
-    /// The calendar days a new building of this kind would take this country at today's pace: the
-    /// catalogue time, shortened by the construction_speed modifier as a queued site is
-    /// (QueueConstructionCommand), then divided by Pace. What the build list says, so the number a
+    /// The calendar days a new building of this kind would take this country at today's pace: its
+    /// work days (WorkDays, as a queued site is contracted), divided by Pace. What the build list says, so the number a
     /// player reads is the number the site will actually take while capacity stays where it is.
     /// </summary>
-    public static int ExpectedDays(Campaign campaign, Nation nation, BuildingKind kind)
-    {
-        var definition = BuildingCatalog.Get(kind);
-        var speed = nation is null ? 1f : NationalModifiers.Factor(nation, "construction_speed");
-        if (!float.IsFinite(speed) || speed <= 0f) speed = 1f;
-        var work = Math.Max(1, (int)MathF.Round(definition.Days / speed));
-        return Math.Max(1, (int)MathF.Ceiling(work / Pace(campaign, nation) - 0.001f));
-    }
+    public static int ExpectedDays(Campaign campaign, Nation nation, BuildingKind kind) =>
+        Math.Max(1, (int)MathF.Ceiling(WorkDays(campaign, nation, kind) / Pace(campaign, nation) - 0.001f));
 }

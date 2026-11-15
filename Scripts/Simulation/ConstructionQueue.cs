@@ -10,6 +10,38 @@ public sealed partial class Defines
     /// division on a government's behalf (Attrition.RebuildTheLost). See common/defines/93_construction_queue.json.
     /// </summary>
     public float ArmyStaffConstructionReserveWeeks { get; set; } = 4f;
+
+    /// <summary>Sites every country works at once however little industry it has (ConstructionCost.WorkingSites).</summary>
+    public float ConstructionSitesBase { get; set; } = 2f;
+
+    /// <summary>More sites worked at once for each civilian factory standing: 0.25 is one more per four.</summary>
+    public float ConstructionSitesPerCivilianIndustry { get; set; } = 0.25f;
+
+    /// <summary>The most sites any country works at once.</summary>
+    public int ConstructionSitesMax { get; set; } = 30;
+
+    /// <summary>Every catalogue price times this (ConstructionCost.Of). 1 is the catalogue as written; 0.6 since 15 November 2026.</summary>
+    public float ConstructionCostScale { get; set; } = 0.6f;
+
+    /// <summary>Every catalogue build time times this (ConstructionCost.WorkDays). 1 is the catalogue as written; 0.75 since 15 November 2026.</summary>
+    public float ConstructionTimeScale { get; set; } = 0.75f;
+
+    /// <summary>
+    /// The most construction may draw from the treasury in a week, as a share of the week's budget
+    /// income (ConstructionQueue.WeeklyCeiling). Sites past it wait for the next day's money and say
+    /// so. 0 or less: no ceiling, construction is paid until the treasury is empty. The first slice
+    /// of the budget's planned "Construction" slider (docs/CONSTRUCTION_ECONOMY_REWORK_RU.md).
+    /// </summary>
+    public float ConstructionBudgetShare { get; set; } = 0.35f;
+
+    /// <summary>
+    /// The ceiling also lets construction draw on savings: this many weeks to spend the treasury,
+    /// so a week may take one part in this many of it on top of the income share. A country with
+    /// money in the bank builds with it - Albania's 0.75 at 35 % of a 0.014 income alone built an
+    /// arms plant at a seventh of its speed - and, a fraction of what is left each week, the
+    /// ceiling can never empty the treasury. 0: the income share alone.
+    /// </summary>
+    public float ConstructionTreasuryDrawWeeks { get; set; } = 26f;
 }
 
 /// <summary>
@@ -32,6 +64,11 @@ public static class ConstructionQueue
     public const string Queued = "queued";
     /// <summary>A site whose accounts are not numbers; nothing behind it works.</summary>
     public const string Invalid = "invalid";
+    /// <summary>
+    /// One of the sites worked at once, but today's share of the week's construction ceiling
+    /// (ConstructionBudgetShare) was spent on the older sites: it waits for tomorrow's money.
+    /// </summary>
+    public const string Budget = "budget";
 
     /// <summary>Called by ConstructionSystem before a country's sites work: every site waits until the pass says otherwise.</summary>
     internal static void Reset(List<ConstructionProject> sites)
@@ -52,7 +89,7 @@ public static class ConstructionQueue
             }
             else if (site.Waiting == Working) site.StalledSinceDay = -1;
             else if (site.Waiting == Queued) site.WaitingBehind = (blocked ?? ahead)?.Id ?? -1;
-            if (site.Waiting is Working or Treasury) ahead = site;
+            if (site.Waiting is Working or Treasury or Budget) ahead = site;
         }
     }
 
@@ -92,12 +129,22 @@ public static class ConstructionQueue
 
     /// <summary>
     /// What the sites the country works at once will be paid over the next <paramref name="weeks"/>
-    /// weeks, at today's pace: the reserve the army staff leaves the builders. Never more than the
-    /// sites still owe.
+    /// weeks, at today's pace and within the weekly ceiling: the reserve the army staff leaves the
+    /// builders. Never more than the sites still owe.
     /// </summary>
     public static float Bill(Campaign campaign, Nation nation, float weeks)
     {
         if (campaign is null || nation is null || !(weeks > 0f)) return 0f;
+        return MathF.Min(Outstanding(campaign, nation), WeeklyBill(campaign, nation) * weeks);
+    }
+
+    /// <summary>
+    /// What the sites worked at once cost a week at today's pace, before the ceiling. Only sites
+    /// with money still owed count.
+    /// </summary>
+    public static float WeeklyDue(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return 0f;
         var sites = Sites(campaign, nation);
         var slots = ConstructionCost.WorkingSites(campaign, nation);
         var pace = ConstructionCost.Pace(campaign, nation);
@@ -105,10 +152,62 @@ public static class ConstructionQueue
         for (var i = 0; i < sites.Count && i < slots; i++)
         {
             var site = sites[i];
-            if (!float.IsFinite(site.Cost) || site.Cost <= 0f) continue;
+            if (!float.IsFinite(site.Cost) || site.Cost <= 0f || !float.IsFinite(site.Paid) || site.Paid >= site.Cost) continue;
             daily += site.Cost / Math.Max(1, site.DurationDays) * pace;
         }
-        return MathF.Min(Outstanding(campaign, nation), daily * 7f * weeks);
+        return daily * 7f;
+    }
+
+    /// <summary>What the sites worked at once will draw a week: their cost, held to the ceiling.</summary>
+    public static float WeeklyBill(Campaign campaign, Nation nation) =>
+        MathF.Min(WeeklyDue(campaign, nation), WeeklyCeiling(campaign, nation));
+
+    /// <summary>
+    /// What the budget lines raised in the last closed week - taxes and the other revenue lines, the
+    /// income the ledger shows. Before the first week closes, the budget as it stands today.
+    /// </summary>
+    public static float WeeklyIncome(Campaign campaign, Nation nation)
+    {
+        if (nation is null) return 0f;
+        var income = 0f;
+        var lines = BudgetCore.All;
+        var closed = nation.LedgerBudgetLastWeek;
+        if (closed is not null && closed.Length == lines.Count)
+        {
+            foreach (var amount in closed) if (amount > 0f && float.IsFinite(amount)) income += amount;
+            return income;
+        }
+        foreach (var line in lines)
+        {
+            if (line.Side != BudgetSide.Revenue) continue;
+            var amount = BudgetCore.Amount(nation, line, nation.Gdp / 52f, false);
+            if (amount > 0f && float.IsFinite(amount)) income += amount;
+        }
+        return income;
+    }
+
+    /// <summary>
+    /// The most construction may draw in a week: ConstructionBudgetShare of the week's income, plus
+    /// one part in ConstructionTreasuryDrawWeeks of the treasury. Infinity when there is no ceiling:
+    /// the share is 0 or less, or the country has no budget income to take a share of (a movement,
+    /// a test fixture, a state whose books are not yet drawn up) - then the treasury alone decides,
+    /// and an empty one still stops the sites.
+    /// </summary>
+    public static float WeeklyCeiling(Campaign campaign, Nation nation)
+    {
+        var share = campaign?.Defines?.ConstructionBudgetShare ?? 0f;
+        if (!float.IsFinite(share) || share <= 0f || nation is null) return float.PositiveInfinity;
+        var income = WeeklyIncome(campaign, nation);
+        if (!(income > 0f) || !float.IsFinite(income)) return float.PositiveInfinity;
+        return share * income + SavingsDraw(campaign, nation);
+    }
+
+    /// <summary>What the ceiling lets construction take from savings this week (ConstructionTreasuryDrawWeeks).</summary>
+    public static float SavingsDraw(Campaign campaign, Nation nation)
+    {
+        var weeks = campaign?.Defines?.ConstructionTreasuryDrawWeeks ?? 0f;
+        if (nation is null || !float.IsFinite(weeks) || weeks <= 0f || !float.IsFinite(nation.Treasury)) return 0f;
+        return MathF.Max(0f, nation.Treasury) / weeks;
     }
 
     /// <summary>A country's open sites, oldest first - the order they work in.</summary>
@@ -136,7 +235,12 @@ public static class ConstructionQueue
         var sites = Sites(campaign, nation);
         if (sites.Count == 0) return result;
         var funded = !FrozenForMoney(campaign, nation);
-        var pace = MathF.Max(0.01f, ConstructionCost.Pace(campaign, nation));
+        // A ceiling below what the worked sites cost slows them all by the same share: an estimate,
+        // where the system pays the oldest first in full and the newest last.
+        var due = WeeklyDue(campaign, nation);
+        var ceiling = WeeklyCeiling(campaign, nation);
+        var paid = due > 0f && ceiling < due ? MathF.Max(0.02f, ceiling / due) : 1f;
+        var pace = MathF.Max(0.01f, ConstructionCost.Pace(campaign, nation) * paid);
         var slots = new float[Math.Max(1, ConstructionCost.WorkingSites(campaign, nation))];
         foreach (var site in sites)
         {
@@ -160,6 +264,7 @@ public static class ConstructionQueue
             case Working: return Loc.Get("Working");
             case Treasury: return Loc.Get("Stopped: the treasury cannot pay it");
             case Invalid: return Loc.Get("Stopped: its accounts are invalid");
+            case Budget: return Loc.Get("Waiting: this week's construction budget went to the older sites");
             case Queued:
                 var ahead = campaign?.Construction.Find(other => other.Id == project.WaitingBehind);
                 if (ahead?.Waiting == Treasury)
@@ -175,6 +280,30 @@ public static class ConstructionQueue
                     ? Loc.Format("Waiting: the treasury cannot pay {0} ahead of it", Loc.Get(BuildingCatalog.Get(unpaid.Building).Name))
                     : Loc.Get("Starts on the next construction day");
         }
+    }
+
+    /// <summary>
+    /// The country's building in one line, for the head of every list where sites are queued: how
+    /// many it works at once, what they cost a week, and that against the week's income.
+    /// </summary>
+    public static string Summary(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return "";
+        var slots = ConstructionCost.WorkingSites(campaign, nation);
+        var open = 0;
+        foreach (var project in campaign.Construction) if (project.NationId == nation.Id) open++;
+        var bill = WeeklyBill(campaign, nation);
+        var income = WeeklyIncome(campaign, nation);
+        var ceiling = WeeklyCeiling(campaign, nation);
+        var text = Loc.Format("Building now: {0} a week, {1} of income · {2} of {3} open sites worked at once",
+            Fmt.Money(bill), income > 0f ? Fmt.Percent(bill / income) : "—", Math.Min(open, slots), open);
+        if (float.IsFinite(ceiling))
+            text += " · " + (campaign.Defines.ConstructionTreasuryDrawWeeks > 0f
+                ? Loc.Format("ceiling {0} a week: {1} of income and 1/{2} of the treasury", Fmt.Money(ceiling),
+                    Fmt.Percent(campaign.Defines.ConstructionBudgetShare), MathF.Round(campaign.Defines.ConstructionTreasuryDrawWeeks))
+                : Loc.Format("ceiling {0} a week ({1} of income)", Fmt.Money(ceiling),
+                    Fmt.Percent(campaign.Defines.ConstructionBudgetShare)));
+        return text;
     }
 
     /// <summary>The estimate in a sentence, for the lists.</summary>

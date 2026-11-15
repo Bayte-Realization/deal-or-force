@@ -1,0 +1,17 @@
+// Parallel building sites, the weekly construction bill and its ceiling, and the ledger's own line
+// for building sites (Scripts/Simulation/ConstructionCost.cs, ConstructionQueue.cs, MoneyLedgerView.cs).
+{
+  "Waiting: this week's construction budget went to the older sites": "Waiting: this week's construction budget went to the older sites",
+  "Building now: {0} a week, {1} of income · {2} of {3} open sites worked at once": "Building now: {0} a week, {1} of income · {2} of {3} open sites worked at once",
+  "ceiling {0} a week ({1} of income)": "ceiling {0} a week ({1} of income)",
+  "ceiling {0} a week: {1} of income and 1/{2} of the treasury": "ceiling {0} a week: {1} of income and 1/{2} of the treasury",
+  "Building sites": "Building sites",
+  "Demolition scrap": "Demolition scrap",
+  "Rebuilding and resettlement": "Rebuilding and resettlement",
+  "War damage rebuilt, a capital moved, land settled. A demolition returns part of a building's price as scrap. The building sites themselves have their own line.": "War damage rebuilt, a capital moved, land settled. A demolition returns part of a building's price as scrap. The building sites themselves have their own line.",
+  "The sites under construction, paid a day at a time as they progress. A site costs its price spread over its working days; more sites worked at once cost more a week and finish sooner.": "The sites under construction, paid a day at a time as they progress. A site costs its price spread over its working days; more sites worked at once cost more a week and finish sooner.",
+  "The construction queue": "The construction queue",
+  "Sites worked at once: {0} plus one for every {1} civilian factories ({2} standing), at most {3}.": "Sites worked at once: {0} plus one for every {1} civilian factories ({2} standing), at most {3}.",
+  "{0} · {1} days · {2} a week": "{0} · {1} days · {2} a week",
+  "This site: {0} a week while it is built.": "This site: {0} a week while it is built."
+}

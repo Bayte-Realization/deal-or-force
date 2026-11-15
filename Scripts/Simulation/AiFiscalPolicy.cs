@@ -79,11 +79,9 @@ public static class AiFiscalPolicy
     public static bool CanStartProject(Campaign c, Nation n, BuildingKind kind, AiFiscalAssessment assessment)
     {
         if (!assessment.CanSpend) return false;
-        var definition = BuildingCatalog.Get(kind);
         var cost = ConstructionCost.Of(c, n, kind);
-        var speed = NationalModifiers.Factor(n, "construction_speed");
-        if (!float.IsFinite(cost) || cost < 0 || !float.IsFinite(speed) || speed <= 0) return false;
-        var days = Math.Max(1, (int)MathF.Round(definition.Days / speed));
+        if (!float.IsFinite(cost) || cost < 0) return false;
+        var days = ConstructionCost.WorkDays(c, n, kind);
         var payment = PaymentsWithin(c, n, cost, 0, days, Math.Clamp(c.Defines.AiFiscalReserveWeeks, 0, 104));
         return assessment.DiscretionaryCash >= Math.Max(Math.Min(.05d, cost), payment);
     }

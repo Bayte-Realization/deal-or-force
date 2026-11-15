@@ -80,7 +80,9 @@ public partial class DealOrForceGame
         var running = _campaign.Construction.Count(p => p.NationId == player.Id);
         _constructionPlacementTerms.Text = Loc.Format("Contract {0} · {1} working days · sites {2}/{3}",
             Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), ConstructionCost.ExpectedDays(_campaign, player, kind),
-            running, ConstructionCost.Limit(_campaign, player, _campaign.Defines.MaxConstructionProjects));
+            running, ConstructionCost.Limit(_campaign, player, _campaign.Defines.MaxConstructionProjects)) + "\n" +
+            Loc.Format("This site: {0} a week while it is built.", Fmt.Money(ConstructionCost.WeeklyPayment(_campaign, player, kind))) +
+            "\n" + ConstructionQueue.Summary(_campaign, player);
         Tip(_constructionPlacementTerms, "The contract is paid over time. Working days exclude waiting for a free site or funding; materials and future conditions can change the result.");
     }
 

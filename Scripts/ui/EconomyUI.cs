@@ -143,9 +143,13 @@ public partial class DealOrForceGame
 
         // Regional demographics live in the Region dossier, not the national budget.
 
+        // What the queue costs a week against the week's income, at the head of the list a player
+        // queues from: a friend watched the treasury fall and could not see that it was the sites.
         _constructionStatus.Text = queue.Length == 0
             ? Tr("No active construction. Choose a building below.")
-            : Simulation.Loc.Format("Active construction: {0}. Each project can be cancelled separately.", queue.Length);
+            : Simulation.Loc.Format("Active construction: {0}. Each project can be cancelled separately.", queue.Length) +
+              "\n" + ConstructionQueue.Summary(_campaign, player);
+        _constructionStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 
         RefreshEconomyWorkbench();
         ApplyDossierTab();

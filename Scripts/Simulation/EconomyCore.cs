@@ -398,7 +398,6 @@ public sealed class QueueConstructionCommand : ICampaignCommand
             if (project.Id > highest) highest = project.Id;
         }
 
-        var definition = BuildingCatalog.Get(Building);
         var cost = ConstructionCost.Of(campaign, nation, Building);
         campaign.Construction.Add(new ConstructionProject
         {
@@ -409,7 +408,7 @@ public sealed class QueueConstructionCommand : ICampaignCommand
             // What building costs in this country (ConstructionCost), and what its modifiers make
             // of it: cheaper, and quicker, while a construction drive or a war economy lasts.
             Cost = cost,
-            DurationDays = Math.Max(1, (int)MathF.Round(definition.Days / NationalModifiers.Factor(nation, "construction_speed")))
+            DurationDays = ConstructionCost.WorkDays(campaign, nation, Building)
         });
         campaign.MarkStrategicChange();
     }
@@ -1735,6 +1734,10 @@ public static class ConstructionSystem
                 continue;
             }
             ConstructionQueue.Reset(sites);
+            // Today's share of the week's construction ceiling (ConstructionBudgetShare): the older
+            // sites are paid from it first, and those it no longer reaches wait for tomorrow's and
+            // say so. Infinity when the country has no ceiling.
+            var allowance = ConstructionQueue.WeeklyCeiling(campaign, nation) / 7f;
             foreach (var project in sites)
             {
                 if (!float.IsFinite(project.Cost) || project.Cost < 0 ||
@@ -1744,15 +1747,28 @@ public static class ConstructionSystem
                 { project.Waiting = ConstructionQueue.Invalid; break; }
                 var required = project.Cost / Math.Max(1, project.DurationDays);
                 var outstanding = Math.Max(0f, project.Cost - project.Paid);
-                var paid = Math.Min(outstanding, Math.Min(required * pace, Math.Max(0f, nation.Treasury)));
+                var due = Math.Min(outstanding, required * pace);
+                // The ceiling is spent: this site keeps its place among those worked at once and
+                // waits for tomorrow's money; the treasury is not touched.
+                if (due > 0f && !(allowance > 1e-7f))
+                {
+                    project.Waiting = ConstructionQueue.Budget;
+                    if (--working <= 0) break;
+                    continue;
+                }
+                var paid = Math.Min(due, Math.Min(allowance, Math.Max(0f, nation.Treasury)));
                 // A site already paid for (an old save that paid ahead under the former rule, or a
                 // modded zero-price works) keeps working without fresh cash. Never charge beyond
                 // the contract; old overpayments are not refunded or rewritten here. A site the
                 // treasury cannot pay today waits, and so does every newer one.
                 if (outstanding > 0f && paid <= 0f) { project.Waiting = ConstructionQueue.Treasury; break; }
-                { var ledgerBefore = nation.Treasury; nation.Treasury -= paid; MoneyLedger.Book(nation, MoneyFlow.Construction, nation.Treasury - ledgerBefore); }
+                { var ledgerBefore = nation.Treasury; nation.Treasury -= paid; MoneyLedger.Book(nation, MoneyFlow.BuildingSites, nation.Treasury - ledgerBefore); }
+                allowance -= paid;
                 project.Paid += paid;
-                project.ProgressDays += pace;
+                // The work follows the money: a site paid part of its day (the treasury or the ceiling
+                // ran short) does that part of a day's work, so its finishing date is not promised
+                // early. A site with nothing owed works a full day.
+                project.ProgressDays += due > 0f ? pace * MathF.Min(1f, paid / due) : pace;
                 project.Waiting = ConstructionQueue.Working;
                 if (project.Progress >= 0.999f)
                 {

@@ -43,7 +43,7 @@ public enum MoneyFlow
     StateLoans = 14,
     /// <summary>Reparations and peace payments.</summary>
     Reparations = 15,
-    /// <summary>Construction paid, rebuilding, a capital moved, land colonised, demolition refunds.</summary>
+    /// <summary>Rebuilding, a capital moved, land colonised, demolition refunds (sites: <see cref="BuildingSites"/>).</summary>
     Construction = 16,
     /// <summary>Recruiting, ships, equipment, training, drills, militias - and refunds.</summary>
     Military = 17,
@@ -59,6 +59,12 @@ public enum MoneyFlow
     LandLeases = 22,
     /// <summary>Everything the treasury did that no line above recorded: the remainder.</summary>
     Other = 23,
+    /// <summary>
+    /// The building sites the country works, paid day by day as they progress (ConstructionSystem).
+    /// Its own line since 15 November 2026: inside <see cref="Construction"/> it was one figure among
+    /// rebuilding, capital moves and settlement, and nobody could tell what the sites themselves took.
+    /// </summary>
+    BuildingSites = 24,
 }
 
 public sealed partial class Nation

@@ -327,6 +327,8 @@ public static class Program
             var output = outputAt >= 0 && outputAt + 1 < args.Length ? args[outputAt + 1] : null;
             return WorldSoakReport.Run(campaign, days, seed, output);
         }
+        // `--construction`: what building costs against revenue, and how much of the money it takes.
+        if (Array.IndexOf(args, "--construction") >= 0) return mapped ? ConstructionEconomyReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
         if (Array.IndexOf(args, "--kin") >= 0) return mapped ? KinBenchReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--exiles") >= 0) return mapped ? ExileReport.Run(campaign, days) : 2;

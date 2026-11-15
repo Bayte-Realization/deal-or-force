@@ -1,0 +1,17 @@
+// Параллельные стройки, недельный счёт за стройку и его потолок, отдельная строка строек в ведомости
+// (Scripts/Simulation/ConstructionCost.cs, ConstructionQueue.cs, MoneyLedgerView.cs).
+{
+  "Waiting: this week's construction budget went to the older sites": "Ждёт: строительный бюджет недели ушёл на более старые стройки",
+  "Building now: {0} a week, {1} of income · {2} of {3} open sites worked at once": "Стройка сейчас: {0} в неделю, {1} дохода · одновременно идут {2} из {3} открытых строек",
+  "ceiling {0} a week ({1} of income)": "потолок {0} в неделю ({1} дохода)",
+  "ceiling {0} a week: {1} of income and 1/{2} of the treasury": "потолок {0} в неделю: {1} дохода и 1/{2} казны",
+  "Building sites": "Стройки",
+  "Demolition scrap": "Лом от сноса",
+  "Rebuilding and resettlement": "Восстановление и переселение",
+  "War damage rebuilt, a capital moved, land settled. A demolition returns part of a building's price as scrap. The building sites themselves have their own line.": "Восстановление после войны, перенос столицы, освоение земель. Снос возвращает часть цены здания как лом. Сами стройки идут отдельной строкой.",
+  "The sites under construction, paid a day at a time as they progress. A site costs its price spread over its working days; more sites worked at once cost more a week and finish sooner.": "Идущие стройки, оплачиваемые каждый день по мере работ. Цена стройки разложена на её рабочие дни: чем больше строек идёт одновременно, тем дороже неделя и тем раньше они закончатся.",
+  "The construction queue": "Очередь строек",
+  "Sites worked at once: {0} plus one for every {1} civilian factories ({2} standing), at most {3}.": "Одновременно идут стройки: {0} и ещё одна на каждые {1} гражданских заводов (сейчас их {2}), не больше {3}.",
+  "{0} · {1} days · {2} a week": "{0} · {1} дн. · {2} в неделю",
+  "This site: {0} a week while it is built.": "Эта стройка: {0} в неделю, пока строится."
+}

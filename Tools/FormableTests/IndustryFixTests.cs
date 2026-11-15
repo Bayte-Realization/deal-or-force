@@ -130,10 +130,15 @@ static class IndustryFixTests
         c.States.Add(new ScenarioState { Id = "queue", MapIndex = 1, NationMapIndex = 1, Population = 1_000_000 });
         c.InvalidateStateIndex();
         c.ConfigureSinglePlayer(n.Id);
+        // One site at a time, as this queue was written for; how many work at once is pinned in
+        // ConstructionCapacityTests.
+        c.Defines.ConstructionSitesBase = 1f;
+        c.Defines.ConstructionSitesPerCivilianIndustry = 0f;
+        c.Defines.ConstructionBudgetShare = 0f;
         for (var id = 1; id <= 3; id++)
             c.Construction.Add(new ConstructionProject { Id = id, NationId = n.Id, StateMapIndex = 1,
                 Building = BuildingKind.Agriculture, Cost = 1f, DurationDays = 100 });
-        Check(ConstructionCost.WorkingSites(c, n) == 1, "a small economy works one site at a time");
+        Check(ConstructionCost.WorkingSites(c, n) == 1, "a queue of one site at a time works one site");
         ConstructionSystem.Tick(c);
         var sites = ConstructionQueue.Sites(c, n);
         Check(sites[0].Waiting == ConstructionQueue.Working && sites[1].Waiting == ConstructionQueue.Queued &&
@@ -210,7 +215,10 @@ static class IndustryFixTests
         Check(world.Construction.Count(p => p.NationId == albania.Id) == 12, "twelve sites open");
         for (var day = 0; day < 14; day++) world.Tick();
         var wanted = albania.Market[Commodity.IndustrialMaterials].Demand;
-        Check(wanted < 12f, $"twelve open sites, one worked, buy materials for one ({wanted:0.0} a week)");
+        // About 5.4 a week a site (64.97 for twelve): materials for the sites worked, not the twelve open.
+        var worked = ConstructionCost.WorkingSites(world, albania);
+        Check(worked < 12 && wanted < 6.5f * worked + 1.5f,
+            $"twelve open sites, {worked} worked, buy materials for {worked} ({wanted:0.0} a week)");
         // The staff raised a division on the player's money in these two weeks (day 11): it says so.
         var raised = world.Chronicle.Entries.Where(e => e.Kind == "army_raised_by_staff" && e.ActorId == albania.Id).ToArray();
         Check(raised.Length > 0 && raised.All(e => e.Subject.Length > 0),
@@ -233,7 +241,9 @@ static class IndustryFixTests
             seen = now;
         }
         var site = lean.Construction.FirstOrDefault(p => p.NationId == leanAlbania.Id);
-        Check(site is not null && site.Waiting == ConstructionQueue.Working && site.ProgressDays >= 29f,
+        // At least 85 % of full speed: the weekly construction ceiling (35 % of income plus a
+        // twenty-sixth of the treasury) slows a site a little as a small treasury runs down.
+        Check(site is not null && site.Waiting == ConstructionQueue.Working && site.ProgressDays >= 30f * 0.85f,
             $"the arms plant is still being built on day 30 ({site?.Waiting} {site?.ProgressDays:0}/{site?.DurationDays}, treasury {leanAlbania.Treasury:0.000})");
     }
 }

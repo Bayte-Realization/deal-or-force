@@ -9,5 +9,30 @@
   // the builders stop, short enough that a country with a long queue still keeps an army. At war,
   // when a country may borrow for its army, no reserve is kept. 0 keeps none in peace either (the staff
   // still checks the division's real price).
-  "ArmyStaffConstructionReserveWeeks": 4.0
+  "ArmyStaffConstructionReserveWeeks": 4.0,
+
+  // How many sites a country works at once (ConstructionCost.WorkingSites): this base, plus one per
+  // so many civilian factories standing in its regions, never more than the maximum. The factories
+  // are its contractors, as civilian factories are construction capacity in Hearts of Iron. The old
+  // rule (economy size x 0.7, rounded) gave one site to every economy under 17 units of weekly
+  // output - Italy, France, Germany, Poland - and left 70 % of the world's sites standing in line.
+  // SimBench --construction, 15 November 2026: Italy 1 -> 2, France and Germany 1 -> 3, China 8 -> 21.
+  "ConstructionSitesBase": 2.0,
+  "ConstructionSitesPerCivilianIndustry": 0.25,
+  "ConstructionSitesMax": 30,
+
+  // Every catalogue price and build time times these (common/buildings stays as written, so the
+  // ratios between buildings hold and a mod moves one number). A civilian factory: 240 -> 180 days.
+  "ConstructionCostScale": 0.6,
+  "ConstructionTimeScale": 0.75,
+
+  // The most construction may draw from the treasury in a week, as a share of the week's budget
+  // income; sites past it wait for the next day's money and say so. 0 = no ceiling (the treasury
+  // alone decides). Three-year A/B over seeds 1, 7, 42 (docs/CONSTRUCTION_ECONOMY_REWORK_RU.md):
+  // with it, half as many countries sit with every site frozen for lack of money.
+  "ConstructionBudgetShare": 0.35,
+  // ...plus one part in this many of the treasury a week, so savings are built with (Albania's 0.75
+  // at 35 % of a 0.014 income alone built an arms plant at a seventh of its speed) and the ceiling,
+  // a fraction of what is left each week, can never empty the treasury. 0: income share alone.
+  "ConstructionTreasuryDrawWeeks": 26
 }

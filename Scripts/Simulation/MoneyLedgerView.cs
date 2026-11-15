@@ -41,6 +41,7 @@ public static class MoneyLedgerView
 
     public const string GroupIncome = "Income";
     public const string GroupSpending = "Spending";
+    public const string GroupConstruction = "Building sites";
     public const string GroupPenalties = "Income penalties";
     public const string GroupBetweenStates = "Between states";
     public const string GroupProgrammes = "Government programmes";
@@ -52,7 +53,7 @@ public static class MoneyLedgerView
     /// <summary>The order the groups appear in.</summary>
     public static readonly string[] GroupOrder =
     {
-        GroupIncome, GroupSpending, GroupPenalties, GroupBetweenStates, GroupProgrammes,
+        GroupIncome, GroupSpending, GroupConstruction, GroupPenalties, GroupBetweenStates, GroupProgrammes,
         GroupReserves, GroupDebt, GroupOther, GroupTotal
     };
 
@@ -90,8 +91,10 @@ public static class MoneyLedgerView
             "Repayments of loans one state made to another."),
         [MoneyFlow.Reparations] = new(GroupBetweenStates, "Reparations received", "Reparations paid",
             "Money a peace treaty or an accepted ultimatum moves from the loser to the winner."),
-        [MoneyFlow.Construction] = new(GroupProgrammes, "Construction refunds", "Construction",
-            "Building sites paid as they progress, war damage rebuilt, a capital moved, land settled. A demolition returns part of the cost."),
+        [MoneyFlow.Construction] = new(GroupProgrammes, "Demolition scrap", "Rebuilding and resettlement",
+            "War damage rebuilt, a capital moved, land settled. A demolition returns part of a building's price as scrap. The building sites themselves have their own line."),
+        [MoneyFlow.BuildingSites] = new(GroupConstruction, "Building sites", "Building sites",
+            "The sites under construction, paid a day at a time as they progress. A site costs its price spread over its working days; more sites worked at once cost more a week and finish sooner."),
         [MoneyFlow.Military] = new(GroupProgrammes, "Military refunds", "Military purchases",
             "Recruiting, ships and equipment, training and drills, militias. A cancelled order returns part of its price."),
         [MoneyFlow.Covert] = new(GroupProgrammes, "Covert income", "Covert operations",
@@ -169,6 +172,25 @@ public static class MoneyLedgerView
                         Note = true
                     });
             }
+        }
+
+        // ---- building sites: what the queue costs a week, and why it is that much --------------
+        if (!movement)
+        {
+            var open = 0;
+            foreach (var project in campaign.Construction) if (project.NationId == nation.Id) open++;
+            if (open > 0 || MoneyLedger.LastOut(nation, MoneyFlow.BuildingSites) != 0f)
+                rows.Add(new MoneyLedgerLine
+                {
+                    Group = GroupConstruction, Caption = Loc.Get("The construction queue"), Note = true,
+                    Weekly = -ConstructionQueue.WeeklyBill(campaign, nation),
+                    Explanation = ConstructionQueue.Summary(campaign, nation) + ". " +
+                        Loc.Format("Sites worked at once: {0} plus one for every {1} civilian factories ({2} standing), at most {3}.",
+                            campaign.Defines.ConstructionSitesBase,
+                            campaign.Defines.ConstructionSitesPerCivilianIndustry > 0f
+                                ? MathF.Round(1f / campaign.Defines.ConstructionSitesPerCivilianIndustry, 1) : 0f,
+                            ConstructionCost.CivilianIndustry(campaign, nation), campaign.Defines.ConstructionSitesMax)
+                });
         }
 
         // ---- everything outside the budget ----------------------------------------------------

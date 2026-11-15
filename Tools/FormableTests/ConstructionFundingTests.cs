@@ -77,9 +77,11 @@ static class ConstructionFundingTests
         ConstructionSystem.Tick(c);
         Check(project.ProgressDays == 0 && project.Paid == 0 && c.Construction.Count == 1,
             "an unpaid cashless site remains suspended");
+        // Since 15 November 2026 the work follows the money: half a day's payment is half a day's
+        // work, so a queue held to a weekly ceiling is not promised a date it cannot keep.
         n.Treasury = .1f; ConstructionSystem.Tick(c);
-        Check(project.ProgressDays == 1 && MathF.Abs(project.Paid - .1f) < .000001f && n.Treasury == 0,
-            "partial daily funding keeps its existing real-money work semantics");
+        Check(MathF.Abs(project.ProgressDays - .5f) < .000001f && MathF.Abs(project.Paid - .1f) < .000001f && n.Treasury == 0,
+            "partial daily funding buys that part of a day's work");
 
         (c, n, project) = Fixture(1, 0, 0);
         for (var day = 0; day < 20; day++) ConstructionSystem.Tick(c);
