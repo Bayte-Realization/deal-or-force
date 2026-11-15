@@ -1,0 +1,88 @@
+// The top left of the campaign (docs/INTERFACE_BUILD_PLAN_2026_11_15_RU.md, step 2): the flag on its
+// mount and one plate of resources. Read by Scripts/ui/ResourcePlateUI.cs and HudResourcePlate.cs.
+//
+// Mods: the plate is `hud.top`, which used to run the whole width from x = 8; it now starts right of
+// the mount. A mod that stretches `hud.top` over the mount gets the plate drawn under the flag.
+{
+  "layout": {
+    // A plain rounded plaque, not a shield: the base game belongs to no era. An overlay puts the
+    // flag on a shield by naming another role here ("material": "flag.mount") or by giving
+    // `flag.plaque` another shape.
+    "hud.flag_mount": { "anchors": [0, 0, 0, 0], "offsets": [8, 6, 88, 82], "material": "flag.plaque" }
+  },
+
+  "materials": {
+    // `rect` with rounded corners is the plaque; the bevel is a pixel deeper than a plate's.
+    "flag.plaque": { "inherits": "plate", "shape": "rect", "corner_radius": 5, "bevel": 2,
+                     "content_margin": [1, 1, 1, 1] }
+  },
+
+  "metrics": {
+    // How many figures stand on the plate of their own. On a desktop that is all of them: the drawer
+    // behind "…" was judged fine for a phone and poor everywhere else. A screen narrower than
+    // `hud.resource_drawer_below` logical pixels keeps the first `hud.resource_slots_narrow` and
+    // the rest wait behind "…" at the plate's edge.
+    "hud.resource_slots": 12,
+    "hud.resource_slots_narrow": 5,
+    "hud.resource_drawer_below": 1100,
+    // The half-year thread under each figure, in pixels.
+    "hud.spark_height": 6,
+    // The flag's height on its mount; a very wide flag is drawn lower so the mount keeps its width.
+    "hud.flag_mount_size": 40,
+    // The widest a flag may be, in heights, before it is drawn lower: 1.6 keeps a 2:1 flag inside the mount.
+    "hud.flag_mount_widest": 1.6,
+    // A leader's portrait beside the plate: 0 keeps the slot hidden (portraits are left to mods).
+    "hud.portrait_slot": 0,
+    // One cell of the plate, with its week and thread, and in the brief form.
+    "hud.resource_cell_width": 82,
+    "hud.resource_cell_width_brief": 88,
+    // 1: a figure behind "…" that turns bad comes up onto the plate by itself until it recovers.
+    "hud.promote_bad_stats": 1,
+    // The second row the figures move to on a narrow screen, tall enough for the week and the thread.
+    "hud.second_row_height": 64,
+
+    // The plate's own figures and their order, 1 first (campaign.top_stats lists all twelve; a
+    // figure with no place here waits behind "…"). The treasury's line is the weekly balance.
+    "hud.top_stats.primary.TREASURY": 1,
+    "hud.top_stats.primary.GDP": 2,
+    "hud.top_stats.primary.STABILITY": 3,
+    "hud.top_stats.primary.MANPOWER": 4,
+    "hud.top_stats.primary.POLITICAL CAPITAL": 5,
+    "hud.top_stats.primary.DEBT": 6,
+    "hud.top_stats.primary.BALANCE": 7,
+    "hud.top_stats.primary.INFLATION": 8,
+    "hud.top_stats.primary.POPULATION": 9,
+    "hud.top_stats.primary.ARMY XP": 10,
+    "hud.top_stats.primary.AIR XP": 11,
+    "hud.top_stats.primary.NAVY XP": 12,
+
+    // When a figure is in trouble: `warn` turns it amber (state.warning), `bad` red (state.negative).
+    // `bad` below `warn` means low is bad, above it high is bad; reaching a threshold is enough.
+    // `per_gdp` / `per_population` compare the figure as a share of the country's GDP or people.
+    // A figure with no thresholds (GDP, population, experience, political capital) has no state:
+    // a size is not a trouble. A healthy country in January 2024 starts with none of these lit.
+    //
+    // Cash: below 2 % of a year's output is thin, none at all (or an overdraft) is bad.
+    "hud.stat_state.TREASURY.warn": 0.02,
+    "hud.stat_state.TREASURY.bad": 0.0,
+    "hud.stat_state.TREASURY.per_gdp": 1,
+    // Borrowing, as a share of GDP.
+    "hud.stat_state.DEBT.warn": 0.9,
+    "hud.stat_state.DEBT.bad": 1.3,
+    "hud.stat_state.DEBT.per_gdp": 1,
+    // The weekly balance, judged as a year of it against GDP: a deficit of 4 % is a warning, 8 % bad.
+    "hud.stat_state.BALANCE.warn": -0.04,
+    "hud.stat_state.BALANCE.bad": -0.08,
+    "hud.stat_state.BALANCE.per_gdp": 1,
+    // Prices a year: InflationCore's comfortable rate is 4.5 %.
+    "hud.stat_state.INFLATION.warn": 0.08,
+    "hud.stat_state.INFLATION.bad": 0.2,
+    "hud.stat_state.STABILITY.warn": 0.5,
+    "hud.stat_state.STABILITY.bad": 0.35,
+    // People left to put in uniform, as a share of the population. A country starts near its
+    // mobilisation base, 6 %; a quarter of that left is a warning, a tenth is a war that is ending.
+    "hud.stat_state.MANPOWER.warn": 0.015,
+    "hud.stat_state.MANPOWER.bad": 0.006,
+    "hud.stat_state.MANPOWER.per_population": 1
+  }
+}

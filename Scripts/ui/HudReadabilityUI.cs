@@ -43,6 +43,21 @@ public partial class DealOrForceGame
             Ui.Metric("hud.two_row_below", 1600),
             Ui.Metric("hud.second_row_height", 52),
             Ui.Metric("hud.brief_row_height", 32));
+        // Figures that have a row of their own have the bar's whole width: they keep the long form,
+        // the week's change and the half-year thread, unless the player asked for the brief one. At
+        // 1280 pixels this is the difference between a plate that shows which way things are going
+        // and one that only shows where they are. That holds as well when the brief form would just
+        // fit one row (a 1366 or 1440 window, five cells): the plan would then shed the week and the
+        // thread to save a row, and a figure promoted onto the plate later would flip the bar into
+        // two rows mid-game. So whenever the long form does not fit one row, the plate takes its
+        // second row up front.
+        if (plan.Brief && !_hudAskBrief)
+        {
+            ApplyHudFigureForm(true);
+            _hudStatRow.UpdateMinimumSize();
+            if (_hudStatRow.GetCombinedMinimumSize().X + 24 <= available)
+                plan = new Simulation.ResponsiveHudLayout.ClockPlan(false, true, Ui.Metric("hud.second_row_height", 52));
+        }
         var changed = _hudBriefActive != plan.Brief || _hudSecondRow != plan.SecondRow ||
                       System.Math.Abs(_hudHeaderExtra - plan.HeaderExtra) > 0.5f;
         _hudBriefActive = plan.Brief;
@@ -56,7 +71,7 @@ public partial class DealOrForceGame
     private void PlaceHudChrome()
     {
         if (_hudTopPanel is null || _hudStatRow is null || _hudTopRow is null) return;
-        Ui.Place(_hudTopPanel, "hud.top");
+        PlaceTopPlate();
         _hudTopPanel.OffsetBottom += _hudHeaderExtra;
         if (_hudSecondRow && _hudStatRow.GetParent() != _hudTopStack)
             _hudStatRow.Reparent(_hudTopStack);
@@ -137,7 +152,7 @@ public partial class DealOrForceGame
             if (longForm)
             {
                 if (movement is not null) movement.Visible = true;
-                stat.Box.CustomMinimumSize = new Vector2(68, 0);
+                stat.Box.CustomMinimumSize = new Vector2(ResourceCellWidth(false), 0);
                 if (stat.Value is not null && stat.Exact.Length > 0)
                     stat.Value.TooltipText = Ui.Tip(stat.Exact);
                 if (stat.Delta is not null)
@@ -152,7 +167,7 @@ public partial class DealOrForceGame
                 continue;
             }
             if (movement is not null) movement.Visible = false;
-            stat.Box.CustomMinimumSize = new Vector2(56, 0);
+            stat.Box.CustomMinimumSize = new Vector2(ResourceCellWidth(true), 0);
             if (!stat.Box.HasMeta("hud_saved_tip"))
                 stat.Box.SetMeta("hud_saved_tip", stat.Box.TooltipText ?? "");
             stat.Box.SetMeta("hud_tip_is_brief", true);

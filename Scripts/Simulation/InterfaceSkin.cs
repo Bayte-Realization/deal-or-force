@@ -313,10 +313,11 @@ public static class InterfaceSkin
         // the defaults were never brought along. Data wins at runtime, so the player saw
         // the new arrangement and only a modder copying the defaults would have met the
         // old one. They are the shipped numbers now.
-        ("hud.top",            new PanelRect(0f, 0f, 1f, 0f,       8f, 6f, -8f, 80f)),
+        ("hud.top",            new PanelRect(0f, 0f, 1f, 0f,      96f, 6f, -8f, 80f)),
+        ("hud.flag_mount",     new PanelRect(0f, 0f, 0f, 0f,       8f, 6f, 88f, 82f)),
         ("hud.navigation",     new PanelRect(0f, 0f, 0f, 1f,       8f, 90f, 98f, -60f)),
         ("hud.side_panel",     new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 548f, -60f)),
-        ("hud.map_controls",   new PanelRect(1f, 1f, 1f, 1f,    -720f, -52f, -8f, -8f)),
+        ("hud.map_controls",   new PanelRect(1f, 1f, 1f, 1f,    -720f, -74f, -8f, -30f)),
         ("hud.resource_atlas", new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 536f, -62f)),
         ("hud.alerts",         new PanelRect(0.5f, 0f, 0.5f, 0f, -390f, 110f, 390f, 168f)),
         ("hud.outliner",       new PanelRect(1f, 0f, 1f, 0f,    -316f, 90f, -20f, 620f)),

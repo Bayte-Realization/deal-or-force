@@ -87,7 +87,8 @@ public partial class DealOrForceGame
     {
         if ((_hudStatRow.GetParent() == _hudTopStack) != compact) return "wrong row layout";
         var panel = _hudTopPanel.GetGlobalRect();
-        foreach (var stat in _hudStats)
+        // A figure waiting in the drawer behind "…" is not on the plate (step 2 of the interface plan).
+        foreach (var stat in _hudStats.Where(stat => stat.Box.IsVisibleInTree()))
         foreach (var label in new[] { stat.Caption, stat.Value, stat.Delta })
         {
             if (!label.Visible || label.Text.Length == 0) continue;

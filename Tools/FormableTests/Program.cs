@@ -283,6 +283,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--interface-materials-only")) { InterfaceMaterialTests.Run(); return; }
         if (args.Contains("--skin-overlay-only")) { SkinOverlayTests.Run(); return; }
         if (args.Contains("--icon-categories-only")) { IconCategoryTests.Run(); return; }
+        if (args.Contains("--hud-resources-only")) { HudResourceTests.Run(); return; }
         if (args.Contains("--research-route-only")) { ResearchRouteTests.Run(); return; }
         if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); ResearchRouteTests.Run(); return; }
         if (args.Contains("--regional-demography-only")) { RegionalDemographyTests.Run(); return; }
@@ -652,6 +653,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         InterfaceMaterialTests.Run();
         SkinOverlayTests.Run();
         IconCategoryTests.Run();
+        HudResourceTests.Run();
         DiplomacyPreviewTests.Run();
         ProductionUnitsTests.Run();
         InterfaceIconTests.Run();

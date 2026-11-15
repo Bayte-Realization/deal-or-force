@@ -797,12 +797,24 @@ public partial class ExportVerification : Node
             GetTree().Root.Size = size; game.Call("Refresh"); await Wait(.2); game.Call("Refresh"); await Wait(.1);
             var debt = game.FindChild("HudStat_DEBT", true, false) as Control;
             Check(debt is { Visible: true, FocusMode: Control.FocusModeEnum.All }, "public debt headline is visible and keyboard reachable");
-            CheckFits(game.FindChild("CampaignTopBar", true, false) as Control, "eight-metric top bar " + size.X);
+            CheckFits(game.FindChild("CampaignTopBar", true, false) as Control, "resource plate " + size.X);
+            // The debt waits behind "…" unless it is in trouble; either way it must be on screen once reached.
+            var opened = await OpenFiguresDrawerFor(game, debt);
             if (debt is not null)
                 Check(GetTree().Root.GetVisibleRect().Encloses(debt.GetGlobalRect()), "debt amount stays on screen at " + size.X);
+            if (opened) (game.FindChild("HudResourceDrawer", true, false) as Control)?.Hide();
             await Capture("debt-hud-" + size.X);
         }
         var headline = game.FindChild("HudStat_DEBT", true, false) as Control;
+        if (!headline.IsVisibleInTree())
+        {
+            // The keyboard path a player has: focus "…", Enter, and the drawer hands focus to its first figure.
+            (game.FindChild("HudMoreFigures", true, false) as Control)?.GrabFocus();
+            Input.ParseInputEvent(new InputEventKey { Keycode = Key.Enter, Pressed = true });
+            Input.ParseInputEvent(new InputEventKey { Keycode = Key.Enter, Pressed = false }); await Wait(.15);
+            Check(headline.IsVisibleInTree() && GetViewport().GuiGetFocusOwner() is Control focused &&
+                  focused.GetParent() == headline.GetParent(), "Enter on \"…\" opens the drawer with focus on its figures");
+        }
         headline.GrabFocus();
         Input.ParseInputEvent(new InputEventKey { Keycode = Key.Enter, Pressed = true }); await Wait(.15);
         Check((game.FindChild("SovereignFinanceWorkspace", true, false) as Control)?.Visible == true,

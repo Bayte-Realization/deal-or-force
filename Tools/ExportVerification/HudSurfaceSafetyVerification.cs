@@ -19,8 +19,12 @@ public partial class ExportVerification
             "right report is below the instrument strip");
         Check(report is not null && tab is not null && report.GetGlobalRect().Encloses(tab.GetGlobalRect()),
             "folded desk button is laid out inside the report header");
-        var stats = game.FindChildren("HudStat_*", "Control", true, false).OfType<Control>().ToArray();
-        Check(stats.Length > 8 && stats.All(s => top.GetGlobalRect().Encloses(s.GetGlobalRect())), "all telemetry cells remain inside the top bar");
+        // Step 2 of the interface plan: five figures stand on the plate, the rest wait in the
+        // drawer behind "…" (HudMoreFigures) and are not on screen until it opens.
+        var stats = game.FindChildren("HudStat_*", "Control", true, false).OfType<Control>().Where(s => s.IsVisibleInTree()).ToArray();
+        Check(stats.Length >= 5 && stats.All(s => top.GetGlobalRect().Encloses(s.GetGlobalRect())), "all telemetry cells on the plate remain inside the top bar");
+        Check(game.FindChild("HudMoreFigures", true, false) is Control { Visible: true } more && top.GetGlobalRect().Encloses(more.GetGlobalRect()),
+            "the other figures are reachable through \"…\" inside the top bar");
         for (var i = 1; i < stats.Length; i++)
             Check(!stats[i - 1].GetGlobalRect().Intersects(stats[i].GetGlobalRect()), "adjacent telemetry cells do not overlap " + i);
         var meters = game.FindChildren("DossierShareTrack", "ProgressBar", true, false).OfType<ProgressBar>().Where(m => m.IsVisibleInTree()).ToArray();
@@ -44,5 +48,17 @@ public partial class ExportVerification
         game.Call("SetDeskSide", true); await Wait(.1);
         Check(!desk.Visible && report.Visible, "left desk yields to the open country dossier");
         game.Call("SetDeskOpen", false); game.Call("SetDeskSide", false);
+    }
+
+    /// <summary>
+    /// Open the drawer behind "…" when the given figure waits in it (step 2 of the interface plan);
+    /// true when it had to be opened. A figure on the plate needs nothing.
+    /// </summary>
+    private async System.Threading.Tasks.Task<bool> OpenFiguresDrawerFor(DealOrForceGame game, Control cell)
+    {
+        if (cell is null || cell.IsVisibleInTree()) return false;
+        (game.FindChild("HudMoreFigures", true, false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed);
+        await Wait(.1);
+        return cell.IsVisibleInTree();
     }
 }

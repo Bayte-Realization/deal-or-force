@@ -90,13 +90,14 @@ public partial class DealOrForceGame
 
     private void BuildTopBar()
     {
+        BuildFlagMount();
         var top = TexturedPanel(_hudLayer, PanelSurface.CommandStrip);
         _hudTopPanel = top;
         top.Name = "CampaignTopBar";
         ApplyHudFrame(top);
-        Ui.Place(top, "hud.top");
+        PlaceTopPlate();
 
-        var margin = Margin(top, 12, 6);
+        var margin = Margin(top, 12, 4);
         _hudTopStack = new VBoxContainer(); _hudTopStack.AddThemeConstantOverride("separation", 4);
         margin.AddChild(_hudTopStack);
         var row = new HBoxContainer();
@@ -104,23 +105,10 @@ public partial class DealOrForceGame
         row.AddThemeConstantOverride("separation", 12);
         _hudTopStack.AddChild(row);
 
-        // Whose war this is, said in the one way that needs no reading.
-        _identityFlag = FlagBadge(_campaign?.Player?.Tag ?? "", 34);
-        // The flag takes the map home: the capital, framed - what a player reaches for after
-        // a long look at the other side of the world (also the Home key).
-        _identityFlag.MouseFilter = MouseFilterEnum.Stop;
-        _identityFlag.MouseDefaultCursorShape = CursorShape.PointingHand;
-        _identityFlag.TooltipText = Ui.Tip(Tr("Show my capital on the map (Home)."));
-        _identityFlag.GuiInput += input =>
-        {
-            if (input is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) return;
-            PlayStrategicCue("ui_select");
-            FocusOwnCapital();
-            _identityFlag.AcceptEvent();
-        };
-        row.AddChild(RankedFlag(_identityFlag, "HudCountryRank", () => _campaign?.Player));
-
+        // A leader's face is left to modders for now: the slot is kept and shown only when a
+        // skin asks for it (hud.portrait_slot), so a mod with portraits needs no code.
         _identityPortraitSlot = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        _identityPortraitSlot.Visible = Ui.Metric("hud.portrait_slot", 0f) > 0f;
         row.AddChild(_identityPortraitSlot);
 
         var identityBox = new StructuredMetricCell { CustomMinimumSize = new Vector2(158, 0), AccentToken = "text.accent" };
@@ -163,10 +151,12 @@ public partial class DealOrForceGame
         StyleHudButton(_defconBadge, false);
         row.AddChild(_defconBadge);
 
-        var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        // The resource plate: the figures that matter most, one row, and "…" at its edge for the
+        // rest (BuildResourcePlate). Every figure is built here; the plate arranges them.
+        var stats = new HBoxContainer { Name = "ResourcePlate", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _hudStatRow = stats;
         _hudStats.Clear();
-        stats.AddThemeConstantOverride("separation", 8);
+        stats.AddThemeConstantOverride("separation", 6);
         row.AddChild(stats);
         foreach (var field in CampaignUiCatalog.TopStats)
             switch (field)
@@ -224,6 +214,7 @@ public partial class DealOrForceGame
                     BindStatShortcut(_inflation, () => OpenScreen("State Affairs"));
                     break;
             }
+        BuildResourcePlate();
 
         var clock = new StructuredMetricCell { CustomMinimumSize = new Vector2(224, 0), AccentToken = "button.primary_border" };
         _hudClockBox = clock;
@@ -242,12 +233,13 @@ public partial class DealOrForceGame
 
         // Short captions, or the week's sentence under each figure. The tooltip names
         // which form the click opens. Reading either form does not write the campaign.
+        // It stands at the end of the figures it changes, not among the clock's buttons, where a
+        // clipped caption left a thin empty button the owner kept asking about.
         _hudFiguresButton = ActionButton("hud.figures.brief", ToggleHudFigures, 0, 28);
         _hudFiguresButton.Name = "HudFiguresForm";
-        _hudFiguresButton.ClipText = true;
-        _hudFiguresButton.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _hudFiguresButton.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         StyleHudButton(_hudFiguresButton, false);
-        speeds.AddChild(_hudFiguresButton);
+        _hudStatRow.AddChild(_hudFiguresButton);
 
         // Labelled rather than drawn. This was a hamburger glyph, and the one tester who
         // plays grand strategy for an audience reported that the game had no way out to the
@@ -316,9 +308,9 @@ public partial class DealOrForceGame
         _identityTag.TooltipText = _observerMode ? "" : Ui.Tip($"{Tr(leader.Title)}: {leader.Name}\n{Tr("Trait")}: {Tr(leader.TraitName)}\n" +
             Loc.Format("Country code (saves and mods): {0}", player.Tag));
         _identity.TooltipText = Ui.Tip(player.DisplayName + "\n" + Loc.Format("Country code (saves and mods): {0}", player.Tag));
-        SetFlag(_identityFlag, player.Tag, 34);
+        SetFlag(_identityFlag, player.Tag, MountFlagHeight(player.Tag));
         RefreshCountryRankBadges();
-        if (_identityPortraitSlot is not null)
+        if (_identityPortraitSlot is { Visible: true })
         {
             var portraitKey = _observerMode ? "obs" : $"{player.Tag}:{leader.Name}:{leader.Age}:{player.Color}";
             if (portraitKey != _identityPortraitLeaderKey)
@@ -355,13 +347,32 @@ public partial class DealOrForceGame
             _defconBadge.AddThemeColorOverride("font_color", Ui.Colour(DefconSystem.LevelColourToken(defcon)));
         }
 
+        // The week and the half-year behind the figures belong to one country. A hotseat pass or a
+        // network seat change hands the bar to another on the same day, and without this the
+        // "week's change" would be country B today minus country A last week.
+        if (!ReferenceEquals(_trendsNation, player))
+        {
+            ResetTrends();
+            _trendsNation = player;
+        }
         var day = _campaign.ElapsedDays;
         _treasuryTrend.Sample(day, player.Treasury);
         _gdpTrend.Sample(day, player.Gdp);
         _populationTrend.Sample(day, player.Population);
+        _stabilityTrend.Sample(day, player.Stability);
+        _manpowerTrend.Sample(day, player.ManpowerReserve);
 
-        WriteStat(_treasury, Fmt.Money(player.Treasury), Fmt.MoneyExact(player.Treasury),
-            Fmt.MoneyDelta((float)_treasuryTrend.Delta), Fmt.Direction(_treasuryTrend.Delta, 0.005d));
+        // The treasury's line is what the week does to it - the weekly balance, the number a player
+        // acts on - and the bare movement of the last seven days only until the first week has closed.
+        var balanced = player.Budget.HasEntries;
+        if (balanced)
+            WriteStat(_treasury, Fmt.Money(player.Treasury), Fmt.MoneyExact(player.Treasury),
+                Simulation.Loc.Format("{0} a week", Fmt.MoneyDelta(player.WeeklyBalance)),
+                Fmt.Direction(player.WeeklyBalance, 0.005d),
+                Simulation.Loc.Format("{0}/week", Fmt.MoneyDelta(player.WeeklyBalance)));
+        else
+            WriteStat(_treasury, Fmt.Money(player.Treasury), Fmt.MoneyExact(player.Treasury),
+                Fmt.MoneyDelta((float)_treasuryTrend.Delta), Fmt.Direction(_treasuryTrend.Delta, 0.005d));
         RefreshDebtHeadline(player);
         WriteStat(_gdp, Fmt.Money(player.Gdp), Fmt.MoneyExact(player.Gdp),
             Fmt.MoneyDelta((float)_gdpTrend.Delta), Fmt.Direction(_gdpTrend.Delta, 0.005d));
@@ -384,7 +395,6 @@ public partial class DealOrForceGame
 
         // A stock without its flow is half a number: a treasury that reads the same two
         // weeks running is a very different country depending on which way it is heading.
-        var balanced = player.Budget.HasEntries;
         WriteStat(_balance,
             balanced ? Fmt.MoneyDelta(player.WeeklyBalance) : "—",
             balanced
@@ -400,13 +410,30 @@ public partial class DealOrForceGame
                 ? ""
                 : Simulation.Loc.Format("war support {0}", Fmt.Percent(player.WarSupport)) + "\n" + rear;
         }
-        WriteStat(_stability, Fmt.Percent(player.Stability),
-            Simulation.Loc.Format("Stability {0:P1}", player.Stability),
-            player.WarSupport > 0f
-                ? Simulation.Loc.Format("war support {0}", Fmt.Percent(player.WarSupport))
-                : "", 0, Simulation.Loc.Format("War sup. {0}", Fmt.Percent(player.WarSupport)));
-        WriteStat(_manpower, Fmt.People(player.ManpowerReserve), Fmt.PeopleExact((long)player.ManpowerReserve),
-            Simulation.Loc.Format("{0}/day", Fmt.People(player.ReinforcementCapacity)), 0);
+        // Under stability and manpower, the week's change first - the plate's line is the week -
+        // and what the line used to say (war support, the daily replacements) after it while the
+        // long form has the room; the short form keeps the week alone.
+        var settling = (float)_stabilityTrend.Delta;
+        var support = player.WarSupport > 0f ? Simulation.Loc.Format("war support {0}", Fmt.Percent(player.WarSupport)) : "";
+        if (MathF.Abs(settling) >= 0.0005f)
+            WriteStat(_stability, Fmt.Percent(player.Stability),
+                Simulation.Loc.Format("Stability {0:P1}", player.Stability),
+                Simulation.Loc.Format("{0} a week", Fmt.PercentDelta(settling)) + (support.Length > 0 ? " · " + support : ""),
+                Fmt.Direction(settling, 0.0005d),
+                Simulation.Loc.Format("{0}/week", Fmt.PercentDelta(settling)));
+        else
+            WriteStat(_stability, Fmt.Percent(player.Stability),
+                Simulation.Loc.Format("Stability {0:P1}", player.Stability),
+                support, 0, Simulation.Loc.Format("War sup. {0}", Fmt.Percent(player.WarSupport)));
+        var drafted = _manpowerTrend.Delta;
+        var replacements = Simulation.Loc.Format("{0}/day", Fmt.People(player.ReinforcementCapacity));
+        if (Math.Abs(drafted) >= 1d)
+            WriteStat(_manpower, Fmt.People(player.ManpowerReserve), Fmt.PeopleExact((long)player.ManpowerReserve),
+                Simulation.Loc.Format("{0} a week", Fmt.PeopleDelta(drafted)) + " · " + replacements,
+                Fmt.Direction(drafted, 1d), Simulation.Loc.Format("{0}/week", Fmt.PeopleDelta(drafted)));
+        else
+            WriteStat(_manpower, Fmt.People(player.ManpowerReserve), Fmt.PeopleExact((long)player.ManpowerReserve),
+                replacements, 0);
 
         // The four currencies the doctrines are paid in. A stock without its flow is half a
         // number here too: the army's line is the price of the next article open to it, the
@@ -455,8 +482,15 @@ public partial class DealOrForceGame
         _stability?.Spark?.Push(day, player.Stability);
         _manpower?.Spark?.Push(day, player.ManpowerReserve);
         _inflation?.Spark?.Push(day, player.Inflation);
+        _politicalPoints?.Spark?.Push(day, player.PoliticalPoints);
+        _publicDebt?.Spark?.Push(day, SovereignFinance.Outstanding(player));
         if (_observerMode) WriteObserverTopBar();
         else WriteMovementTopBar(player);
+        // After the modes have borrowed their places: a figure saying something else has no state,
+        // and a borrowed figure has to stand on the plate whatever the data put there.
+        PaintResourceStates(player);
+        ArrangeResourcePlate();
+        if (_hudFlagMount is not null) _hudFlagMount.Visible = _identityFlag is { Visible: true };
         foreach (var stat in _hudStats) FitHudStat(stat);
         NoteFigureTips();
 
@@ -492,6 +526,8 @@ public partial class DealOrForceGame
         internal ExplainedStat Box;
         /// <summary>Half a year of the figure under it (Sparkline).</summary>
         internal Sparkline Spark;
+        /// <summary>Where the figure stands against its thresholds (HudResourcePlate), painted on number and thread.</summary>
+        internal HudResourcePlate.State State;
     }
 
     /// <summary>
@@ -588,8 +624,10 @@ public partial class DealOrForceGame
         var box = new ExplainedStat
         {
             Name = "HudStat_" + caption.Replace(' ', '_'),
-            CustomMinimumSize = new Vector2(68, 0),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            // One width for every cell of the plate, so the plate is a row of equal instruments
+            // rather than a strip stretched to whatever room the bar has left.
+            CustomMinimumSize = new Vector2(ResourceCellWidth(false), 0),
+            SizeFlagsHorizontal = SizeFlags.Fill,
             ClipContents = true,
             Explain = explain,
             Plain = explain is null ? "" : Tr(tooltip)
@@ -597,7 +635,7 @@ public partial class DealOrForceGame
         // The caption is in the tooltip now rather than gone: a symbol a player has not
         // learned yet has to be able to say what it is.
         Tip(box, Tr(caption) + " \u00b7 " + Tr(tooltip));
-        box.AddThemeConstantOverride("separation", 2);
+        box.AddThemeConstantOverride("separation", 1);
         box.MouseFilter = MouseFilterEnum.Stop;
         parent.AddChild(box);
         // Keep a short label beside the symbol: unfamiliar icons must not hide meaning.
@@ -656,14 +694,20 @@ public partial class DealOrForceGame
         readout.Value.AddThemeFontOverride("font", PresentationFonts.Tabular());
         readout.Delta.AddThemeFontOverride("font", PresentationFonts.Tabular());
         box.AddChild(readout.Value);
-        // The week's movement and, beside it, the half-year it belongs to.
-        var movement = new HBoxContainer { Name = "StatMovement", MouseFilter = MouseFilterEnum.Ignore };
-        movement.AddThemeConstantOverride("separation", 4);
-        readout.Spark = new Sparkline { Name = "StatSpark", Flash = readout.Value,
-            HigherIsBetter = caption is not ("INFLATION" or "DEBT") };
-        movement.AddChild(readout.Spark);
+        // The week's movement and, under it, the half-year it belongs to: a thread the width of
+        // the cell, in the colour of the figure's state. It keeps its room before it has a
+        // history, so the plate does not grow a line taller in the second week.
+        var movement = new VBoxContainer { Name = "StatMovement", MouseFilter = MouseFilterEnum.Ignore };
+        movement.AddThemeConstantOverride("separation", 1);
         readout.Delta.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         movement.AddChild(readout.Delta);
+        readout.Spark = new Sparkline { Name = "StatSpark", Flash = readout.Value,
+            HigherIsBetter = caption is not ("INFLATION" or "DEBT"), KeepRoom = true,
+            StateColour = Ui.Colour("text.muted") };
+        readout.Spark.CustomMinimumSize = new Vector2(0, Mathf.Clamp(Ui.Metric("hud.spark_height", 6f), 4f, 24f));
+        readout.Spark.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        readout.Spark.SizeFlagsVertical = SizeFlags.Fill;
+        movement.AddChild(readout.Spark);
         box.AddChild(movement);
         _hudStats.Add(readout);
         readout.Value.Resized += () => FitHudStat(readout);
@@ -710,34 +754,25 @@ public partial class DealOrForceGame
         FitHudStat(stat);
     }
 
-    // Text has priority over the optional history thread. Choose using the whole
-    // cell width, not the previous layout's delta width, to avoid resize oscillation.
+    // The number first: it shrinks before anything is cut. The week's line chooses its long or
+    // short form from the whole cell width, not the previous layout's, to avoid resize
+    // oscillation. The half-year thread has a line of its own under it and competes with nothing.
     private static void FitHudStat(StatReadout stat)
     {
         if (stat?.Box is null || !GodotObject.IsInstanceValid(stat.Box)) return;
-        var width = stat.Box.Size.X;
+        var width = stat.Box.Size.X - 4; // the cell's recessed well is drawn two pixels in on each side
         if (width <= 1) return; // Resized runs again after the first real layout.
         var caption = Tr(stat.CaptionKey);
         var shortKey = "hud.stat.short." + stat.CaptionKey;
         var shortCaption = Simulation.Loc.Has(shortKey) ? Tr(shortKey) : caption;
         var headingWidth = width - (stat.Glyph is { Visible: true } ? 21 : 0);
         FitHudLine(stat.Caption, caption, shortCaption, headingWidth, 10, 10);
-        FitHudLine(stat.Value, stat.Value.Text, stat.Value.Text, width, 18, 12);
+        FitHudLine(stat.Value, stat.Value.Text, stat.Value.Text, width, 18, 11);
         var full = stat.FullDelta;
-        var shorter = stat.ShortDelta;
         var font = stat.Delta.GetThemeFont("font");
-        var fullWidth = font.GetStringSize(full, HorizontalAlignment.Left, -1, 11).X;
-        var shortWidth = font.GetStringSize(shorter, HorizontalAlignment.Left, -1, 11).X;
-        var graphWidth = stat.Spark.GetCombinedMinimumSize().X + 4;
-        var graph = stat.Spark.HasHistory && fullWidth + graphWidth <= width;
-        var shown = full;
-        if (fullWidth > width)
-        {
-            shown = shorter;
-            graph = stat.Spark.HasHistory && shortWidth + graphWidth <= width;
-        }
-        stat.Spark.AllowLayout(graph);
-        FitHudLine(stat.Delta, shown, shown, width - (graph ? graphWidth : 0), 11, 10);
+        var shown = font.GetStringSize(full, HorizontalAlignment.Left, -1, 11).X <= width ? full : stat.ShortDelta;
+        stat.Spark.AllowLayout(true);
+        FitHudLine(stat.Delta, shown, shown, width, 11, 10);
         stat.Delta.TooltipText = Ui.Tip(string.IsNullOrEmpty(stat.DeltaHover) ? full : stat.DeltaHover);
         stat.Caption.TooltipText = Ui.Tip(caption);
         stat.Caption.MouseFilter = MouseFilterEnum.Stop;
@@ -797,7 +832,10 @@ public partial class DealOrForceGame
         _treasuryTrend.Reset();
         _gdpTrend.Reset();
         _populationTrend.Reset();
-        foreach (var stat in new[] { _treasury, _gdp, _population, _balance, _stability, _manpower, _inflation })
+        _stabilityTrend.Reset();
+        _manpowerTrend.Reset();
+        foreach (var stat in new[] { _treasury, _gdp, _population, _balance, _stability, _manpower, _inflation,
+                     _politicalPoints, _publicDebt })
             stat?.Spark?.Reset();
     }
 

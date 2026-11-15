@@ -8,6 +8,7 @@ hud.desk_left
 hud.desk_right
 hud.desk_tab_left
 hud.desk_tab_right
+hud.flag_mount
 hud.fleet_panel
 hud.hotseat
 hud.map_controls

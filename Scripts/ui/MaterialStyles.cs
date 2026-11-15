@@ -124,18 +124,30 @@ internal static class MaterialStyles
     {
         if (control is not (PanelContainer or Panel)) return;
         var role = InterfaceSkin.LayoutMaterial(key);
-        if (role is null)
-        {
-            if (!control.HasMeta(MaterialMeta)) return;
-            control.RemoveMeta(MaterialMeta);
-            if (control.HasMeta(OriginalMeta) && control.GetMeta(OriginalMeta).AsGodotObject() is StyleBox original)
-                control.AddThemeStyleboxOverride("panel", original);
-            else control.RemoveThemeStyleboxOverride("panel");
-            if (control.HasMeta(OriginalMeta)) control.RemoveMeta(OriginalMeta);
-            Redraw(control);
-            return;
-        }
+        if (role is null) Undress(control);
+        else Dress(control, role);
+    }
 
+    /// <summary>Give a dressed panel back the style its own code gave it; nothing for one never dressed.</summary>
+    internal static void Undress(Control control)
+    {
+        if (control is not (PanelContainer or Panel) || !control.HasMeta(MaterialMeta)) return;
+        control.RemoveMeta(MaterialMeta);
+        if (control.HasMeta(OriginalMeta) && control.GetMeta(OriginalMeta).AsGodotObject() is StyleBox original)
+            control.AddThemeStyleboxOverride("panel", original);
+        else control.RemoveThemeStyleboxOverride("panel");
+        if (control.HasMeta(OriginalMeta)) control.RemoveMeta(OriginalMeta);
+        Redraw(control);
+    }
+
+    /// <summary>
+    /// Dress a panel in one role, keeping its own style to give back when materials are switched
+    /// off - the same bookkeeping as a layout key's material, for a panel that takes its role from
+    /// code (the top bar while its key cannot declare one; see TopBarHudUI.PlaceTopPlate).
+    /// </summary>
+    internal static void Dress(Control control, string role)
+    {
+        if (control is not (PanelContainer or Panel) || string.IsNullOrEmpty(role)) return;
         var surface = Surface(role);
         var current = control.HasThemeStyleboxOverride("panel") ? control.GetThemeStylebox("panel") : null;
         if (ReferenceEquals(current, surface) && control.HasMeta(MaterialMeta)) return;

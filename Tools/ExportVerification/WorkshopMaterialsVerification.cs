@@ -72,6 +72,8 @@ public partial class ExportVerification
                 if (cell is null) continue;
                 foreach (var local in new[] { new Vector2(.08f, .1f), new Vector2(.5f, .5f), new Vector2(.9f, .9f) })
                 {
+                    // Balance and debt wait behind "…": open the drawer first, as a player would.
+                    await OpenFiguresDrawerFor(game, cell);
                     var position = cell.GetGlobalTransformWithCanvas() * (cell.Size * local);
                     GetViewport().PushInput(new InputEventMouseMotion { Position = position }, true);
                     Check(GetViewport().GuiGetHoveredControl() == cell, "whole metric cell receives mouse at " + local + ": " + metric);

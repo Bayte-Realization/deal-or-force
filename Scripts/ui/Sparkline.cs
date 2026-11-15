@@ -26,8 +26,22 @@ public sealed partial class Sparkline : Control
     internal void AllowLayout(bool allowed)
     {
         _layoutAllows = allowed;
-        Visible = allowed && HasHistory;
+        Visible = Shown;
     }
+
+    /// <summary>
+    /// Keep the line's room before there is anything to draw, so the figure above it does not
+    /// change height in the second week (the resource plate gives the thread a line of its own).
+    /// </summary>
+    public bool KeepRoom;
+
+    /// <summary>
+    /// The colour of the figure's state (HudResourcePlate); when set it replaces the colour of the
+    /// direction, so the thread says whether the figure is in trouble rather than which way it moved.
+    /// </summary>
+    public Color? StateColour;
+
+    private bool Shown => _layoutAllows && (HasHistory || KeepRoom);
 
     /// <summary>The label to flash when the figure turns.</summary>
     public Label Flash;
@@ -49,7 +63,7 @@ public sealed partial class Sparkline : Control
         _values.Clear();
         _lastDay = int.MinValue;
         _lastDirection = 0;
-        Visible = false;
+        Visible = Shown;
         QueueRedraw();
     }
 
@@ -68,7 +82,7 @@ public sealed partial class Sparkline : Control
             while (_values.Count > Weeks) _values.RemoveAt(0);
             Turned();
         }
-        if (Visible != (_layoutAllows && HasHistory)) Visible = _layoutAllows && HasHistory;
+        if (Visible != Shown) Visible = Shown;
         QueueRedraw();
     }
 
@@ -89,7 +103,7 @@ public sealed partial class Sparkline : Control
     public override void _Draw()
     {
         var size = Size;
-        if (_values.Count < 2 || size.X < 4 || size.Y < 4) return;
+        if (_values.Count < 2 || size.X < 4 || size.Y < 3) return;
         double low = double.MaxValue, high = double.MinValue;
         foreach (var value in _values) { low = Math.Min(low, value); high = Math.Max(high, value); }
         var span = high - low;
@@ -97,12 +111,14 @@ public sealed partial class Sparkline : Control
         var rising = _values[^1] >= _values[0];
         var good = rising == HigherIsBetter;
         var flat = Math.Abs(_values[^1] - _values[0]) <= span * 0.05;
-        var colour = flat ? Ui.Colour("text.faint") : good ? Ui.Colour("state.positive") : Ui.Colour("state.negative");
+        var colour = StateColour ?? (flat ? Ui.Colour("text.faint") : good ? Ui.Colour("state.positive") : Ui.Colour("state.negative"));
+        // A thread a few pixels tall cannot spare two of them above and below: it keeps half a pixel.
+        var inset = size.Y < 10f ? 0.5f : 2f;
         var points = new Vector2[_values.Count];
         for (var i = 0; i < _values.Count; i++)
         {
             var x = i * (size.X - 3f) / (Weeks - 1) + (Weeks - _values.Count) * (size.X - 3f) / (Weeks - 1);
-            var y = (float)(size.Y - 2f - (_values[i] - low) / span * (size.Y - 4f));
+            var y = (float)(size.Y - inset - (_values[i] - low) / span * (size.Y - 2f * inset));
             points[i] = new Vector2(x + 1f, y);
         }
         // A faint floor, the thread, and the latest week as a point.
