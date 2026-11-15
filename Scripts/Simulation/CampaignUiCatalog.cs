@@ -24,6 +24,17 @@ public static class CampaignUiCatalog
     private static readonly List<Navigation> NavigationRows = new();
     private static readonly Dictionary<string, string> Icons = new(StringComparer.Ordinal);
     public static string Icon(string role, string fallback) => Icons.GetValueOrDefault(role, fallback);
+    /// <summary>Every icon role the data has named, for the bench.</summary>
+    public static IEnumerable<string> IconRoles => Icons.Keys;
+    /// <summary>
+    /// The family an icon role belongs to - economy, military, diplomacy, society, state - from
+    /// `campaign.icon_categories`. Its colour is the skin token `icon.category.&lt;family&gt;`, so the
+    /// icons stay white masks and an era overlay retints a whole family at once.
+    /// </summary>
+    public static string IconCategory(string role) => role is null ? "" : IconCategories.GetValueOrDefault(role, "");
+    public static string IconCategoryToken(string role) => IconCategory(role) is { Length: > 0 } family ? "icon.category." + family : "";
+    public static IEnumerable<KeyValuePair<string, string>> IconCategoryEntries => IconCategories;
+    private static readonly Dictionary<string, string> IconCategories = new(StringComparer.Ordinal);
     /// <summary>Explicit data-bound button icons; numeric/editor controls are never guessed.</summary>
     public static string ActionIcon(string caption)
     {
@@ -57,7 +68,7 @@ public static class CampaignUiCatalog
         ["Decisions"] = new[] { "Decisions", "Formables", "Opportunities" }
     };
     public static Screen For(string screen) => Screens.GetValueOrDefault(screen) ?? new Screen(Array.Empty<Tab>(), Array.Empty<Link>());
-    public static void Reset() { NavigationRows.Clear(); Icons.Clear(); Screens.Clear(); DetailOrders.Clear(); HiddenDetails.Clear(); DetailLabels.Clear(); TopStats = Array.Empty<string>(); OutlinerOrder = Array.Empty<string>(); HiddenOutliner = Array.Empty<string>(); }
+    public static void Reset() { NavigationRows.Clear(); Icons.Clear(); IconCategories.Clear(); Screens.Clear(); DetailOrders.Clear(); HiddenDetails.Clear(); DetailLabels.Clear(); TopStats = Array.Empty<string>(); OutlinerOrder = Array.Empty<string>(); HiddenOutliner = Array.Empty<string>(); }
     private static string Text(JsonElement e, string key, string fallback = "") =>
         e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : fallback;
     private static string[] Strings(JsonElement e, string key) => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Array
@@ -77,6 +88,16 @@ public static class CampaignUiCatalog
                 if (entry.Value.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(entry.Value.GetString()))
                 { errors?.Add($"campaign.icons.{entry.Name}: expected non-empty sprite name"); continue; }
                 Icons[entry.Name] = entry.Value.GetString().Trim();
+            }
+        }
+        if (root.TryGetProperty("icon_categories", out var families))
+        {
+            if (families.ValueKind != JsonValueKind.Object) errors?.Add("campaign.icon_categories: expected object");
+            else foreach (var entry in families.EnumerateObject())
+            {
+                if (entry.Value.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(entry.Value.GetString()))
+                { errors?.Add($"campaign.icon_categories.{entry.Name}: expected a category name"); continue; }
+                IconCategories[entry.Name] = entry.Value.GetString().Trim();
             }
         }
         if (root.TryGetProperty("top_stats", out _)) TopStats = Strings(root, "top_stats");

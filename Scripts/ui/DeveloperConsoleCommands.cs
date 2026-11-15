@@ -1666,7 +1666,11 @@ public partial class DealOrForceGame
     {
         if (_campaign is null) return "No campaign.";
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        var errors = PresentationReload.Reload(_modLoader.Packages.Select(package => package.PhysicalRoot));
+        var errors = PresentationReload.Reload(_modLoader.Packages.Select(package => package.PhysicalRoot)).ToList();
+        // The reload rebuilt base plus mods and so took the era overlay off (SkinOverlays.MarkBase);
+        // the campaign still wears it, so it goes back on the same way a campaign start puts it on,
+        // and its own file errors join the report the modder reads.
+        ApplySkinOverlay(errors);
         clock.Stop();
         RepaintPresentation(this);
         RefreshLocalisedText();
@@ -1712,6 +1716,8 @@ public partial class DealOrForceGame
             // (DealOrForceGame.TexturedPanel).
             if (!inCampaign && panel.GetNodeOrNull<Panel>("ShellEdge") is { } edge)
                 edge.AddThemeStyleboxOverride("panel", ShellEdgeStyle());
+            // The material, if the panel's layout key names one, goes back on top of the code style.
+            if (node.HasMeta("skin_layout")) MaterialStyles.ApplyLayout(panel, node.GetMeta("skin_layout").AsString());
         }
         if (node is Button button && node.HasMeta("skin_button_primary"))
         {

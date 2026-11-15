@@ -19,6 +19,7 @@ public partial class DealOrForceGame
     private void BindCampaignMods()
     {
         _modLoader.ApplyCampaignData(_campaign);
+        ApplySkinOverlay();
         MarketSystem.Seed(_campaign);
         _campaign.History.Reset();
         _campaign.History.Capture(_campaign, true);

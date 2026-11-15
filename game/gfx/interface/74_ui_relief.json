@@ -1,0 +1,5 @@
+{
+  "shaders": {
+    "ui_relief": "res://game/gfx/interface/shaders/ui_relief.gdshader"
+  }
+}

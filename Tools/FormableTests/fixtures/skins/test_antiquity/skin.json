@@ -1,0 +1,3 @@
+// A test overlay (SkinOverlayTests). Not shipped: it proves an era overlay swaps tokens,
+// materials, icon roles and pictures - and nothing else.
+{ "id": "test_antiquity", "name": "Test antiquity", "description": "Bench fixture.", "inherits": "" }

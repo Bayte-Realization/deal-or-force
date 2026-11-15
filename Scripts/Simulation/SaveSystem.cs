@@ -1084,6 +1084,7 @@ public static partial class SaveSystem
         /// still receive the percentage-to-units migration.</summary>
         public bool ProductionUnitsSaved;
         public string ScenarioId = "2024";
+        public string SkinOverlay = "";
         /// <summary>
         /// The culture, religion and profession ids used by this save's population rows.
         ///
@@ -1257,6 +1258,7 @@ public static partial class SaveSystem
             Seed = campaign.Seed,
             ProductionUnitsSaved = true,
             ScenarioId = campaign.ScenarioId,
+            SkinOverlay = campaign.SkinOverlay ?? "",
             StringTable = SaveStringTable.BuildForStates(campaign.States),
             ScenarioRules = campaign.ScenarioId != "2024" ? campaign.Defines : null,
             ScenarioTerritories = new Dictionary<string, int[]>(campaign.ScenarioTerritories),
@@ -1468,7 +1470,7 @@ public static partial class SaveSystem
 
         public Campaign Restore()
         {
-            var campaign = new Campaign(Seed, ScenarioRules) { ScenarioId = ScenarioId,
+            var campaign = new Campaign(Seed, ScenarioRules) { ScenarioId = ScenarioId, SkinOverlay = SkinOverlay ?? "",
                 ScenarioTerritories = new Dictionary<string, int[]>(ScenarioTerritories, StringComparer.OrdinalIgnoreCase) };
             Replace(campaign.Nations, Nations);
             if (FeatureDefaults is not null) campaign.Defines.Features = new(FeatureDefaults, StringComparer.OrdinalIgnoreCase);

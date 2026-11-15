@@ -440,6 +440,7 @@ public partial class DealOrForceGame
         _loadingCanReturn = false;
         if (_campaign is not null) _campaign.Changed -= Refresh;
         _campaign = result.Campaign;
+        ApplySkinOverlay();
         _pickerScenarioEntry = null;
         _campaignSeed = _campaign.Seed;
         if (_pickerSeed is not null) _pickerSeed.Text = _campaignSeed.ToString();

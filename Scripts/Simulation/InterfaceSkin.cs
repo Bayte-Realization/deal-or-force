@@ -258,6 +258,20 @@ public static class InterfaceSkin
         ("portrait.anonymous_foreground", "#f7f7f7"),
         ("war.wounded",           "#cf9446"),
         ("war.captured",          "#7e93aa"),
+
+        // What panels are made of (InterfaceMaterials). Mirrors game/interface/10_materials.json,
+        // which ships the same values and the roles that use them.
+        ("material.plate.top",     "#2a2520"),
+        ("material.plate.bottom",  "#1c1916"),
+        ("material.plate.border",  "#0e0c0a"),
+        ("material.plate.engrave", "#3a332b"),
+        ("material.well.fill",     "#15130f"),
+        ("accent.primary",         "#6da7e6"),
+        ("icon.category.economy",   "#c9a65a"),
+        ("icon.category.military",  "#9aa8b6"),
+        ("icon.category.diplomacy", "#5fb3a6"),
+        ("icon.category.society",   "#8cb06e"),
+        ("icon.category.state",     "#a596cf"),
     };
 
     private static readonly (string Key, float Value)[] DefaultMetrics =
@@ -400,6 +414,26 @@ public static class InterfaceSkin
 
     public static bool HasLayout(string key) => key is not null && Layouts.ContainsKey(key);
 
+    private static readonly Dictionary<string, string> LayoutMaterials = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The metric that switches panel materials on. Off in the shipped data while the new surfaces
+    /// are built panel by panel, so a key that declares a material changes nothing on screen until
+    /// this is 1 (game/interface/10_materials.json, or `reload` after a skin sets it).
+    /// </summary>
+    public const string MaterialSwitch = "ui.materials";
+
+    /// <summary>
+    /// The material role a panel is drawn in, or null for the panel's own code-built style - which
+    /// is every panel that has not opted in, and every panel while <see cref="MaterialSwitch"/> is off.
+    /// </summary>
+    public static string LayoutMaterial(string key) =>
+        Metric(MaterialSwitch, 0f) >= .5f ? DeclaredLayoutMaterial(key) : null;
+
+    /// <summary>The role a layout key names, whether or not materials are switched on.</summary>
+    public static string DeclaredLayoutMaterial(string key) =>
+        key is not null && LayoutMaterials.TryGetValue(key, out var role) ? role : null;
+
     /// <summary>Every panel name and its rectangle, for the console and for a drift check.</summary>
     public static IEnumerable<(string Key, PanelRect Rect)> Panels =>
         Layouts.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => (pair.Key, pair.Value));
@@ -437,9 +471,22 @@ public static class InterfaceSkin
             var current = Layout(entry.Name);
             var anchors = Numbers(entry.Value, "anchors");
             var offsets = Numbers(entry.Value, "offsets");
+            // A panel may also name the material it is drawn in (InterfaceMaterials). Optional, and
+            // on its own it is enough: a skin that only re-dresses a panel does not have to repeat
+            // where the panel sits. An empty string takes the opt-in away again.
+            var material = entry.Value.TryGetProperty("material", out var named) ? named : default;
+            if (material.ValueKind == JsonValueKind.String)
+            {
+                var role = material.GetString()?.Trim() ?? "";
+                if (role.Length == 0) LayoutMaterials.Remove(entry.Name);
+                else LayoutMaterials[entry.Name] = role;
+            }
+            else if (material.ValueKind != JsonValueKind.Undefined)
+                errors?.Add($"{context}: panel '{entry.Name}' material must be a role name such as \"plate\".");
             if (anchors is null && offsets is null)
             {
-                errors?.Add($"{context}: panel '{entry.Name}' sets neither anchors nor offsets.");
+                if (material.ValueKind == JsonValueKind.Undefined)
+                    errors?.Add($"{context}: panel '{entry.Name}' sets neither anchors nor offsets.");
                 continue;
             }
 
@@ -469,6 +516,9 @@ public static class InterfaceSkin
     public static void ResetCatalog(List<string> errors = null)
     {
         CampaignUiCatalog.Reset();
+        InterfaceMaterials.Reset();
+        SkinOverlays.MarkBase();
+        LayoutMaterials.Clear();
         Colours.Clear();
         Metrics.Clear();
         foreach (var (key, value) in DefaultColours) Colours[key] = value;
@@ -549,6 +599,18 @@ public static class InterfaceSkin
             MergeLayouts(layout, context, errors);
         }
 
+        if (root.TryGetProperty("lighting", out var lighting))
+        {
+            sectioned = true;
+            InterfaceMaterials.MergeLighting(lighting, context, errors);
+        }
+
+        if (root.TryGetProperty("materials", out var materials))
+        {
+            sectioned = true;
+            InterfaceMaterials.MergeMaterials(materials, context, errors);
+        }
+
         if (!sectioned) MergeColours(root, context, errors);
     }
 
@@ -560,6 +622,7 @@ public static class InterfaceSkin
             if (entry.Value.ValueKind == JsonValueKind.Number)
             {
                 Metrics[entry.Name] = (float)entry.Value.GetDouble();
+                InterfaceMaterials.ForgetResolved();
                 continue;
             }
             if (entry.Value.ValueKind != JsonValueKind.String)
@@ -596,6 +659,8 @@ public static class InterfaceSkin
             }
             Metrics[entry.Name] = value;
         }
+        // Materials bake button.corner_radius, button.border_width and panel.texture_margin in.
+        InterfaceMaterials.ForgetResolved();
     }
 
     /// <summary>

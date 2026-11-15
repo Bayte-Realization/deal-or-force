@@ -844,7 +844,7 @@ public partial class DealOrForceGame : Control
         if (_campaign is not null)
             _campaign.Changed -= Refresh;
 
-        _campaign = Campaign.CreateBootstrap(_campaignSeed);
+        _campaign = Campaign.CreateBootstrap(_campaignSeed, ScenarioRoots);
         ResetTrends();
         _lastAutosaveDay = -1;
         _campaignInProgress = false;
@@ -1768,6 +1768,8 @@ public partial class DealOrForceGame : Control
         panel.Draw += () =>
         {
             if (panel.Size.X <= 8f) return;
+            // A panel in a material carries its own light (MaterialStyles); one light, applied once.
+            if (panel.HasMeta(MaterialStyles.MaterialMeta)) return;
             var modal = surface == PanelSurface.Modal;
             // Depth rather than a flat fill: a faint light falling from the top edge and fading out
             // by mid-panel, the way every engine's default window reads as a lit surface. One quad,

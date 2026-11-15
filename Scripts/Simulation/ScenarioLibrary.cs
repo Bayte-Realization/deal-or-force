@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
-public sealed record ScenarioEntry(string Id, string Name, string Description, string WorldFile, string ManifestFile = "");
+public sealed record ScenarioEntry(string Id, string Name, string Description, string WorldFile, string ManifestFile = "", string Skin = "");
 
 public static class ScenarioLibrary
 {
@@ -27,7 +27,8 @@ public static class ScenarioLibrary
                     if (string.IsNullOrWhiteSpace(id)) continue;
                     var path = r.TryGetProperty("world", out var w) ? SafePath(Path.GetDirectoryName(file), w.GetString()) : "";
                     if (id != "2024" && !File.Exists(path)) continue;
-                    found[id] = new(id, r.GetProperty("name").GetString(), r.TryGetProperty("description", out var d) ? d.GetString() : "", path, file);
+                    found[id] = new(id, r.GetProperty("name").GetString(), r.TryGetProperty("description", out var d) ? d.GetString() : "", path, file,
+                        r.TryGetProperty("skin", out var skin) && skin.ValueKind == JsonValueKind.String ? skin.GetString()?.Trim() ?? "" : "");
                 }
                 catch (Exception e) { DiagnosticLogs.Write("errors", $"SCENARIO_REJECTED {file}: {e.Message}"); }
             }
@@ -35,8 +36,23 @@ public static class ScenarioLibrary
         return found.Values.OrderBy(e => e.Id == "2024" ? "" : e.Name).ToArray();
     }
 
-    public static Campaign Create(ScenarioEntry entry, int seed, int expectedProvinceCount = 0) => entry.Id == "2024" && entry.WorldFile.Length == 0
-        ? ScenarioCatalog.CreateBaseCampaign(seed, entry.ManifestFile) : SaveSystem.ImportScenarioJson(File.ReadAllText(entry.WorldFile), entry.Id, expectedProvinceCount, seed);
+    /// <summary>
+    /// The era overlay scenario <paramref name="id"/> asks for, read from the manifest the picker
+    /// would use: the base game's, unless a package ships one with the same id. Empty when the
+    /// scenario names none or is not found.
+    /// </summary>
+    public static string SkinOf(string id, IEnumerable<string> packageRoots, string localRoot = null) =>
+        Discover(packageRoots ?? Array.Empty<string>(), localRoot)
+            .FirstOrDefault(entry => string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase))?.Skin ?? "";
+
+    public static Campaign Create(ScenarioEntry entry, int seed, int expectedProvinceCount = 0)
+    {
+        var campaign = entry.Id == "2024" && entry.WorldFile.Length == 0
+            ? ScenarioCatalog.CreateBaseCampaign(seed, entry.ManifestFile) : SaveSystem.ImportScenarioJson(File.ReadAllText(entry.WorldFile), entry.Id, expectedProvinceCount, seed);
+        // The look the scenario asks for travels with the campaign and its saves (SkinOverlays).
+        campaign.SkinOverlay = entry.Skin ?? "";
+        return campaign;
+    }
 
     public static string SafePath(string root, string relative)
     {

@@ -277,6 +277,10 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Length == 0) AgendaWorkspaceTests.Run();
         if (args.Contains("--diplomacy-preview-only")) { DiplomacyPreviewTests.Run(); return; }
         if (args.Contains("--atlas-surfaces-only")) { AtlasSurfaceTests.Run(); return; }
+        if (args.Contains("--layout-keys-only")) { LayoutKeyPinTests.Run(); return; }
+        if (args.Contains("--interface-materials-only")) { InterfaceMaterialTests.Run(); return; }
+        if (args.Contains("--skin-overlay-only")) { SkinOverlayTests.Run(); return; }
+        if (args.Contains("--icon-categories-only")) { IconCategoryTests.Run(); return; }
         if (args.Contains("--research-route-only")) { ResearchRouteTests.Run(); return; }
         if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); ResearchRouteTests.Run(); return; }
         if (args.Contains("--regional-demography-only")) { RegionalDemographyTests.Run(); return; }
@@ -638,6 +642,10 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         ResearchWorkspaceTests.Run();
         ResearchRouteTests.Run();
         AtlasSurfaceTests.Run();
+        LayoutKeyPinTests.Run();
+        InterfaceMaterialTests.Run();
+        SkinOverlayTests.Run();
+        IconCategoryTests.Run();
         DiplomacyPreviewTests.Run();
         ProductionUnitsTests.Run();
         InterfaceIconTests.Run();

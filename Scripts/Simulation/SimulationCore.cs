@@ -554,6 +554,8 @@ public sealed partial class Campaign
     public int Seed { get; }
     public GameDate Date;
     public string ScenarioId = "2024";
+    /// <summary>The era overlay the scenario chose (SkinOverlays); empty for the base look. Saved, never simulated.</summary>
+    public string SkinOverlay = "";
     public Dictionary<string, int[]> ScenarioTerritories = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
     /// Hours since the campaign began. The authoritative clock.
@@ -665,8 +667,18 @@ public sealed partial class Campaign
         CrashEnvelope.Track(this);
     }
 
-    /// <summary>Builds the current-world base scenario from the source catalogue.</summary>
-    public static Campaign CreateBootstrap(int seed) => ScenarioCatalog.CreateBaseCampaign(seed);
+    /// <summary>
+    /// Builds the current-world base scenario from the source catalogue. The default new game is
+    /// the 2024 scenario started without its picker, so it wears the look that scenario's manifest
+    /// names - a mod's override of the manifest included, found in <paramref name="scenarioRoots"/>
+    /// the way the scenario picker finds it - and not the base look by omission.
+    /// </summary>
+    public static Campaign CreateBootstrap(int seed, IEnumerable<string> scenarioRoots = null)
+    {
+        var campaign = ScenarioCatalog.CreateBaseCampaign(seed);
+        campaign.SkinOverlay = ScenarioLibrary.SkinOf(campaign.ScenarioId, scenarioRoots);
+        return campaign;
+    }
 
     /// <summary>
     /// States indexed by the nation that owns them, built once and reused.

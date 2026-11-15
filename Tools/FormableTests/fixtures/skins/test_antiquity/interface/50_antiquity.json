@@ -1,0 +1,5 @@
+{
+  "colors": { "material.plate.top": "#5a4a36" },
+  "materials": { "plate": { "engrave_inset": 3 } },
+  "campaign": { "icons": { "nav.army": "army_spear" } }
+}

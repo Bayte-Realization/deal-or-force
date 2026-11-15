@@ -1,0 +1,75 @@
+// What panels are made of (Scripts/Simulation/InterfaceMaterials.cs).
+//
+// A panel names a ROLE - plate, well, button, chip, round, token - and the role is described
+// here: two colours for the face, a border, a thin engraved line a few pixels inside the edge,
+// a bevel, a drop shadow or an inner one, a little grain, cut corners. Nothing in the base set
+// belongs to an era: no rivets, seams, leather, wood or blued steel. A plate reads as stone,
+// bronze, wood or a starship panel depending on what an era overlay (game/skins/<id>) paints it
+// with - and that overlay changes these tokens and roles, never the code.
+//
+// Every number is clamped to a safe range when it is read: bevel 0..4, shadows 0..24,
+// engrave_inset 0..12, corner_radius 0..12, grain 0..2 (a multiple of lighting.grain, which is
+// itself held to 0..0.05). An unknown role draws as `plate`. A later file may change one field
+// of one material and inherit the rest.
+//
+// `button` takes its corner radius and border width from the metrics `button.corner_radius` and
+// `button.border_width`, and every nine-slice takes `panel.texture_margin`, unless a role here
+// says otherwise.
+{
+  "lighting": {
+    // Where the light comes FROM, x right and y down: upper left. One light for every surface,
+    // the baked panels and the relief shader alike.
+    "direction": [-0.7, -0.7],
+    "highlight": 0.10, "shade": 0.18, "grain": 0.018,
+    "inner_shadow_alpha": 0.35, "drop_shadow_alpha": 0.45
+  },
+
+  "colors": {
+    "material.plate.top": "#2a2520",
+    "material.plate.bottom": "#1c1916",
+    "material.plate.border": "#0e0c0a",
+    "material.plate.engrave": "#3a332b",
+    "material.well.fill": "#15130f",
+    "accent.primary": "#6da7e6",
+
+    // The five families an icon belongs to (campaign.icon_categories in gui/30_icon_roles.json).
+    // Icons stay white masks; these are the tones the relief shader gives them.
+    "icon.category.economy": "#c9a65a",
+    "icon.category.military": "#9aa8b6",
+    "icon.category.diplomacy": "#5fb3a6",
+    "icon.category.society": "#8cb06e",
+    "icon.category.state": "#a596cf"
+  },
+
+  "metrics": {
+    // Panels that name a material in their layout key are drawn in it only while this is 1.
+    // Off while the new surfaces are built one panel at a time: with it at 0 no panel changes.
+    "ui.materials": 0
+  },
+
+  "layout": {
+    // The first opt-in, a proof that the factory draws: the situation report under the date.
+    // Seen only with ui.materials at 1.
+    "hud.outliner": { "material": "plate" }
+  },
+
+  "materials": {
+    "plate":          { "top": "material.plate.top", "bottom": "material.plate.bottom",
+                        "border": "material.plate.border", "engrave": "material.plate.engrave",
+                        "engrave_inset": 4, "bevel": 1, "corner_radius": 3, "border_width": 1,
+                        "drop_shadow": 6, "grain": 1.0, "notches": 0,
+                        "texture": "", "content_margin": [10, 8, 10, 8] },
+    "plate.header":   { "inherits": "plate", "notches": 5 },
+    "plate.strip":    { "inherits": "plate", "content_margin": [6, 4, 6, 4] },
+    "plate.modal":    { "inherits": "plate", "drop_shadow": 12 },
+    "well":           { "inherits": "plate", "inset": true, "inner_shadow": 4, "drop_shadow": 0,
+                        "top": "material.well.fill", "bottom": "material.well.fill" },
+    "button":         { "inherits": "plate", "drop_shadow": 2 },
+    "button.primary": { "inherits": "button", "border": "accent.primary" },
+    "chip":           { "inherits": "button", "corner_radius": 8 },
+    "round":          { "inherits": "button", "shape": "circle" },
+    "flag.mount":     { "inherits": "plate", "shape": "shield" },
+    "tooltip":        { "inherits": "plate.modal" },
+    "token":          { "inherits": "plate", "drop_shadow": 4 }
+  }
+}

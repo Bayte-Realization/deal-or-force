@@ -9,7 +9,6 @@ namespace DealOrForce;
 internal static class AtlasSurfaceSkin
 {
     internal enum Level { Instrument, Document, Inset, Raised }
-    private static readonly Dictionary<string, StyleBoxTexture> Buttons = new();
     private static readonly Dictionary<string, StyleBox> SpecialButtons = new();
     private static readonly Dictionary<string, Texture2D> Panels = new();
     private static Texture2D _grain;
@@ -17,7 +16,6 @@ internal static class AtlasSurfaceSkin
     private static Texture2D _musicGlyph;
     static AtlasSurfaceSkin() => InterfaceSkin.Changed += () =>
     {
-        Buttons.Clear();
         SpecialButtons.Clear();
         Panels.Clear();
         _grain = null;
@@ -26,103 +24,6 @@ internal static class AtlasSurfaceSkin
     };
 
     internal static float Relief => AtlasSurfaceLighting.Relief(Ui.Metric("atlas.relief", .65f));
-
-    internal static StyleBoxTexture Button(bool primary, int state, bool iconOnly, bool narrow, bool rounded = false)
-    {
-        var key = $"{primary}|{state}|{iconOnly}|{narrow}|{rounded}";
-        if (Buttons.TryGetValue(key, out var cached)) return cached;
-        var baseFill = Ui.Colour(state switch
-        {
-            1 => primary ? "button.primary_fill_hover" : "button.fill_hover",
-            2 => primary ? "button.primary_fill_pressed" : "button.fill_pressed",
-            3 => primary ? "button.primary_fill" : "button.fill_disabled",
-            _ => primary ? "button.primary_fill" : "button.fill"
-        });
-        var obsidian = Ui.Colour("surface.inset");
-        // Blend primary buttons with deep obsidian so they read as dark architectural slate
-        // lit by warm brass rather than a flat brown rectangle.
-        var fill = primary && state != 3 ? obsidian.Lerp(baseFill, state == 1 ? 0.68f : 0.56f) : baseFill;
-        var edge = Ui.Colour(state switch
-        {
-            1 => "button.border_hover",
-            2 => "button.border_pressed",
-            3 => primary ? "button.primary_border" : "button.border_disabled",
-            _ => primary ? "button.primary_border" : "button.border"
-        });
-        var accent = Ui.Colour("text.accent");
-        var bright = Ui.Colour("text.bright");
-        var shadow = Ui.Colour("surface.background");
-        const int width = 64, height = 48;
-        var image = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
-        var relief = Relief * (state == 3 ? .25f : 1f);
-        for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
-        {
-            var u = x / (float)(width - 1);
-            var v = y / (float)(height - 1);
-            // Smooth vertical studio gradient + subtle directional relief for tactile volume.
-            var verticalBias = state == 2 ? (v - 0.5f) * 0.14f : (0.45f - v) * 0.16f;
-            var directional = AtlasSurfaceLighting.Light(u, v, state == 2) * 0.45f;
-            var light = (verticalBias + directional) * relief;
-            var colour = light >= 0 ? fill.Lightened(light) : fill.Darkened(-light);
-            if (primary && state != 2)
-            {
-                var topWarmth = MathF.Max(0f, 1f - v * 2.2f) * (state == 1 ? 0.14f : 0.09f) * relief;
-                colour = colour.Lerp(accent, topWarmth);
-            }
-
-            var distX = Math.Min(x, width - 1 - x);
-            var distY = Math.Min(y, height - 1 - y);
-            var distance = Math.Min(distX, distY);
-            if (distance == 0)
-            {
-                colour = edge.Darkened(y > height / 2 ? .22f * relief : 0f);
-                if (primary && y <= 1 && state != 3)
-                    colour = accent.Lightened(state == 1 ? 0.12f : 0.02f);
-            }
-            else if (primary && y == 1 && x >= 1 && x <= width - 2 && state != 2)
-            {
-                // Crisp 2px warm brass top accent bar on primary/active controls.
-                colour = edge.Lerp(accent, state == 1 ? 0.65f : 0.42f);
-            }
-            else if (y == 1)
-            {
-                colour = state == 2
-                    ? shadow.Lerp(fill, .45f)
-                    : colour.Lerp(bright, (state == 1 ? .18f : .11f) * relief);
-            }
-            else if (y == height - 2)
-            {
-                colour = state == 2
-                    ? fill.Lightened(.06f * relief)
-                    : colour.Lerp(shadow, .62f * relief);
-            }
-            else if (distX == 1)
-            {
-                colour = colour.Lightened((state == 1 ? .06f : .03f) * relief);
-            }
-
-            var radius = rounded ? 8 : 3;
-            var cornerX = Math.Max(0, radius - distX);
-            var cornerY = Math.Max(0, radius - distY);
-            colour.A *= Math.Clamp(radius + 1.25f - MathF.Sqrt(cornerX * cornerX + cornerY * cornerY), 0, 1);
-            image.SetPixel(x, y, colour);
-        }
-        var style = new StyleBoxTexture
-        {
-            Texture = ImageTexture.CreateFromImage(image),
-            TextureMarginLeft = rounded ? 10 : 6,
-            TextureMarginRight = rounded ? 10 : 6,
-            TextureMarginTop = rounded ? 10 : 6,
-            TextureMarginBottom = rounded ? 10 : 6,
-            ContentMarginLeft = narrow ? 3 : 10,
-            ContentMarginRight = narrow ? 3 : 10,
-            ContentMarginTop = iconOnly ? (state == 2 ? 9 : 7) : (state == 2 ? 7 : 6),
-            ContentMarginBottom = iconOnly ? (state == 2 ? 5 : 7) : (state == 2 ? 5 : 8)
-        };
-        Buttons[key] = style;
-        return style;
-    }
 
     /// <summary>
     /// Architectural left-rail navigation tile: dark obsidian-slate face, subtle 1px structural
@@ -490,6 +391,9 @@ public partial class AtlasPanelFinish : Node2D
     }
     public override void _Draw()
     {
+        // A panel that opted into a material (MaterialStyles) brings its own face, frame and light;
+        // drawing this one as well would light it twice.
+        if (_panel is not null && _panel.HasMeta(MaterialStyles.MaterialMeta)) return;
         var size = _panel?.Size ?? Vector2.Zero;
         if (size.X <= 0 || size.Y <= 0) return;
         var w = size.X;

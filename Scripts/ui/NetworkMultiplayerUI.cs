@@ -524,6 +524,7 @@ public partial class DealOrForceGame
     {
         if (_campaign is not null) _campaign.Changed -= Refresh;
         _campaign = campaign;
+        ApplySkinOverlay();
         BindStepCompletion();
         _campaignSeed = campaign.Seed;
         _pickerScenarioEntry = null;

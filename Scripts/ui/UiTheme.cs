@@ -201,8 +201,16 @@ internal static class Ui
         control.OffsetTop = rect.OffsetTop;
         control.OffsetRight = rect.OffsetRight;
         control.OffsetBottom = rect.OffsetBottom;
+        // A key may also name the material the panel is drawn in (game/interface/10_materials.json).
+        // Keys that do not - every panel today - are left exactly as their own code styled them.
+        MaterialStyles.ApplyLayout(control, key);
         return control;
     }
+
+    /// <summary>A material role's surface: `plate`, `well`, `button.primary`... (MaterialStyles).</summary>
+    internal static StyleBox Surface(string role,
+        InterfaceMaterials.SurfaceState state = InterfaceMaterials.SurfaceState.Normal) =>
+        MaterialStyles.Surface(role, state);
 
     internal static string ColourToken(Color colour)
     {

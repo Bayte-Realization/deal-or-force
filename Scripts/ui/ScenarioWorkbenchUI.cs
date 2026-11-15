@@ -334,6 +334,7 @@ public partial class DealOrForceGame
             await LoadingPhase("Preparing map", 60);
             _campaign.Changed -= Refresh;
             _campaign = next;
+            ApplySkinOverlay();
             _pickerScenarioEntry = entry.Id == "2024" && entry.WorldFile.Length == 0 ? null : entry;
             _campaignSeed = next.Seed;
             if (_pickerSeed is not null) _pickerSeed.Text = _campaignSeed.ToString();

@@ -1,0 +1,7 @@
+// Настройка слоя эпохи (game/common/settings/45_skin_overlay.json, Scripts/Simulation/SkinOverlays.cs).
+{
+  "Era overlay": "Облик эпохи",
+  "Some scenarios and mods dress the interface for their era. As the scenario chooses: use the look the scenario names. Base look always: keep the neutral interface. Applies to the next campaign you start or load.": "Некоторые сценарии и моды одевают интерфейс под свою эпоху. «Как в сценарии»: облик, который выбрал сценарий. «Всегда базовый»: нейтральный интерфейс. Действует со следующей начатой или загруженной кампании.",
+  "As the scenario chooses": "Как в сценарии",
+  "Base look always": "Всегда базовый"
+}

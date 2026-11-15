@@ -16,6 +16,21 @@
       "map.Economy": "gdp",
       "map.Terrain": "terrain",
       "map.Relief": "relief"
+    },
+    // The family each icon role belongs to. Its tone is the skin token icon.category.<family>
+    // (game/interface/10_materials.json); the icon itself stays a white mask. nav.<Screen> is the
+    // screen rail's button for that screen (navigation in 20_campaign_structure.json).
+    "icon_categories": {
+      "hud.TREASURY": "economy", "hud.BALANCE": "economy", "hud.GDP": "economy",
+      "hud.INFLATION": "economy", "hud.POPULATION": "society", "hud.STABILITY": "state",
+      "hud.MANPOWER": "military",
+      "nav.Situation": "state", "nav.Nation": "state", "nav.State Affairs": "state",
+      "nav.Laws": "state", "nav.Decisions": "state",
+      "nav.Economy": "economy", "nav.Trade": "economy", "nav.Production": "economy",
+      "nav.Research": "society",
+      "nav.Military": "military", "nav.Support": "military", "nav.Doctrines": "military",
+      "nav.Wars": "military",
+      "nav.Diplomacy": "diplomacy", "nav.Conflicts": "diplomacy", "nav.Ledger": "state"
     }
   }
 }

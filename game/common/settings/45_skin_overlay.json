@@ -1,0 +1,13 @@
+// The era overlay (Scripts/Simulation/SkinOverlays.cs). A scenario or a mod may dress the
+// interface for its time - game/skins/<id> - and this is the player's way to keep the base,
+// era-neutral look whatever a scenario asks for. A mod may add its own overlay ids to `values`.
+{
+  "skin_overlay": {
+    "category": "interface", "order": 237, "kind": "choice",
+    "name": "Era overlay",
+    "description": "Some scenarios and mods dress the interface for their era. As the scenario chooses: use the look the scenario names. Base look always: keep the neutral interface. Applies to the next campaign you start or load.",
+    "values": ["scenario", "none"],
+    "labels": ["As the scenario chooses", "Base look always"],
+    "default": "scenario"
+  }
+}

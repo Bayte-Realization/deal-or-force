@@ -8,9 +8,14 @@
 //   player_country   who the scenario hands the player before they have chosen anybody.
 //                    Any tag in map_data works, and the country picker can still change it:
 //                    this is the seat the campaign opens on, not a restriction.
+//
+//   skin             the era overlay the interface wears (game/skins/<id>, or a mod's
+//                    skins/<id>). Empty is the base, era-neutral look. The player can always
+//                    override it with the "Era overlay" setting.
 {
   "id": "2024",
   "name": "The world in 2024",
   "description": "1 January 2024. Russia and Ukraine are two years into the largest war in Europe since 1945; Gaza is burning; Sudan, Myanmar and the Sahel are coming apart. The United States leads an order China is learning to contest, and India, Turkey, Brazil and the Gulf want a seat of their own. Every country on the map can be played.",
-  "player_country": "KOR"
+  "player_country": "KOR",
+  "skin": ""
 }
