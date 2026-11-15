@@ -24,6 +24,7 @@ public partial class DealOrForceGame
         navigation.Resized += LayoutCampaignNavigation;
         navigation.Resized += LayoutCampaignDossier;
         navigation.Resized += LayoutMapSelectionCards;
+        navigation.Resized += DockBesideRail;
         navigation.Name = "CampaignNavigation";
         ApplyHudFrame(navigation);
         Ui.Place(navigation, "hud.navigation");

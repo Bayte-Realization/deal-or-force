@@ -194,5 +194,43 @@ public partial class DealOrForceGame
         Ui.Place(panel, key);
         if (panel.AnchorTop == 0) panel.OffsetTop += _hudHeaderExtra;
         if (panel.AnchorBottom == 0) panel.OffsetBottom += _hudHeaderExtra;
+        ClearOfRail(panel);
+    }
+
+    /// <summary>
+    /// A panel docked at the left edge starts where the navigation rail really ends, not where
+    /// the skin says it ends. The rail grows to fit its captions ("ГОСУДАРСТВЕННЫЕ ДЕЛА" is wider
+    /// than the 90 pixels the layout gives it), and every panel authored at x = 96..106 then
+    /// opened underneath it: the agenda and the division panel lost their first letters to the
+    /// rail. Only the dossier and the country card used to measure the rail; now every left dock
+    /// does, and moves whole, so a panel at its content minimum is not widened on the way.
+    /// </summary>
+    private void ClearOfRail(Control panel)
+    {
+        if (panel is null || _hudNavigationPanel is null || panel == _hudNavigationPanel) return;
+        if (!_hudNavigationPanel.Visible || panel.AnchorLeft != 0 || panel.AnchorRight != 0) return;
+        if (panel.GetParent() is not CanvasItem parent) return;
+        var local = parent.GetGlobalTransformWithCanvas().AffineInverse();
+        var railTransform = _hudNavigationPanel.GetGlobalTransformWithCanvas();
+        var railStart = local * railTransform.Origin;
+        var railEnd = local * (railTransform * _hudNavigationPanel.Size);
+        // A panel that sits left of the rail on purpose (a mod moved the rail) is not ours to move.
+        if (panel.Position.X < railStart.X) return;
+        var gap = Mathf.Clamp(Ui.Metric("hud.dock_gap", 8), 4, 24);
+        var shift = Mathf.Max(0, railEnd.X + gap - panel.Position.X);
+        if (shift > 0) panel.Position += new Vector2(shift, 0);
+    }
+
+    /// <summary>Every left dock, placed again after the rail changed width.</summary>
+    private void DockBesideRail()
+    {
+        var support = _supportLayer?.GetNodeOrNull<Control>("SupportForcesPanel");
+        foreach (var panel in new Control[] { _movementPanel, _armyPanel, support, _fleetPanel, _resourceAtlasPanel,
+                     _hotseatHud, _networkHud })
+            ShiftHudDock(panel);
+        // The desk also fits its height to its rows; its own fitter re-docks it first.
+        if (_deskPanel is { Visible: true }) FitSituationDesk();
+        else ShiftHudDock(_deskPanel);
+        if (_deskTab is not null && _deskTab.GetParent() is not Container) ClearOfRail(_deskTab);
     }
 }
