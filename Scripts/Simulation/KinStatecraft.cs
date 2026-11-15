@@ -406,7 +406,7 @@ public static class KinStatecraft
         {
             case "agitate":
             {
-                country.Treasury -= cost;
+                { var ledgerBefore = country.Treasury; country.Treasury -= cost; MoneyLedger.Book(country, MoneyFlow.Covert, country.Treasury - ledgerBefore); }
                 // Unrest is what the secession and rising rules read, so working a people is a
                 // real danger to the country that holds them rather than a number kept aside.
                 var gain = campaign.Defines.KinAgitationRadicalism * (0.5f + share * 0.5f);
@@ -428,7 +428,7 @@ public static class KinStatecraft
                 var movement = KinMovement(campaign, country, region);
                 if (movement?.Movement is null) return false;
                 var men = Volunteers(campaign, country, region);
-                country.Treasury -= cost;
+                { var ledgerBefore = country.Treasury; country.Treasury -= cost; MoneyLedger.Book(country, MoneyFlow.Covert, country.Treasury - ledgerBefore); }
                 country.ManpowerReserve = MathF.Max(0f, country.ManpowerReserve - men);
                 // Into the fighters the region already hides, which is the number an uprising is
                 // called from - and the number a crackdown finds, which is the risk being taken.
@@ -452,7 +452,7 @@ public static class KinStatecraft
             {
                 var born = FoundProxy(campaign, country, host, region);
                 if (born is null) return false;
-                country.Treasury -= cost;
+                { var ledgerBefore = country.Treasury; country.Treasury -= cost; MoneyLedger.Book(country, MoneyFlow.Covert, country.Treasury - ledgerBefore); }
                 country.PoliticalPoints = MathF.Max(0f, country.PoliticalPoints - campaign.Defines.KinProxyPoliticalCost);
                 AddGrievance(tie, host.Id,
                     campaign.Defines.KinProxyGrievance * (0.5f + share) +

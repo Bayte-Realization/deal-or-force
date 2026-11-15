@@ -1126,7 +1126,7 @@ public static class Escalation
     {
         if (TalksBlock(c, by, with).Length > 0) return false;
         var relation = CampaignDiplomacy.Get(c, by.Id, with.Id);
-        by.Treasury -= c.Defines.TalksCost;
+        { var ledgerBefore = by.Treasury; by.Treasury -= c.Defines.TalksCost; MoneyLedger.Book(by, MoneyFlow.Diplomacy, by.Treasury - ledgerBefore); }
         relation.TalksBy = by.Id;
         relation.TalksUntilDay = c.ElapsedDays + Math.Max(7, c.Defines.TalksDays);
         relation.LastTalksDay = c.ElapsedDays;
@@ -1167,7 +1167,7 @@ public static class Escalation
     {
         if (MediationBlock(c, mediator, a, b).Length > 0) return false;
         var relation = CampaignDiplomacy.Get(c, a.Id, b.Id);
-        mediator.Treasury -= c.Defines.CrisisMediationCost;
+        { var ledgerBefore = mediator.Treasury; mediator.Treasury -= c.Defines.CrisisMediationCost; MoneyLedger.Book(mediator, MoneyFlow.Diplomacy, mediator.Treasury - ledgerBefore); }
         relation.MediatorId = mediator.Id;
         relation.LastMediationDay = c.ElapsedDays;
         relation.TalksBy = mediator.Id;

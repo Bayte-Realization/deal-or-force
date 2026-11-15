@@ -242,7 +242,7 @@ public sealed class TakeDecisionCommand : ICampaignCommand
 
         var item = definition.Value;
         DecisionResources.Spend(nation, item);
-        nation.Treasury -= DecisionCatalog.Cost(nation, item);
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= DecisionCatalog.Cost(nation, item); MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, nation.Treasury - ledgerBefore); }
         nation.DecisionAvailableDay[item.Id] = campaign.ElapsedDays + item.CooldownDays;
         campaign.Chronicle.Record(campaign, "decision_taken", nation.Id, subject: item.Name, isPublic: false);
         switch (item.Kind)

@@ -301,8 +301,8 @@ public static class PeaceNegotiation
             {
                 var share = terms == PeaceTerms.TradeConcessions ? 0.015f : 0.03f;
                 var payment = MathF.Min(MathF.Max(0f, payer.Treasury), MathF.Max(0.10f, payer.Gdp * share));
-                payer.Treasury -= payment;
-                receiver.Treasury += payment;
+                { var ledgerBefore = payer.Treasury; payer.Treasury -= payment; MoneyLedger.Book(payer, MoneyFlow.Reparations, payer.Treasury - ledgerBefore); }
+                { var ledgerBefore = receiver.Treasury; receiver.Treasury += payment; MoneyLedger.Book(receiver, MoneyFlow.Reparations, receiver.Treasury - ledgerBefore); }
                 war.Reparations = payment;
             }
         }

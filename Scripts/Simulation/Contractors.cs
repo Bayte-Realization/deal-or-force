@@ -89,7 +89,7 @@ public static class Contractors
         var map = c.ProvinceMap;
         var position = map.CenterOf(province);
         var cost = SigningCost(c, nation) * formations;
-        nation.Treasury -= cost;
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= cost; MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, nation.Treasury - ledgerBefore); }
         var id = c.Armies.Count == 0 ? 1 : c.Armies.Max(a => a.Id) + 1;
         var serial = c.Armies.Count(a => a.NationId == nation.Id && a.ContractUntilDay >= 0) + 1;
         var until = c.ElapsedDays + Math.Max(30, c.Defines.ContractorDays);
@@ -132,7 +132,7 @@ public static class Contractors
                 if (nation is null || c.ElapsedDays >= army.ContractUntilDay || !AtWar(c, nation.Id)) { going.Add(army); continue; }
                 var fee = SigningCost(c, nation) * MathF.Max(0f, c.Defines.ContractorWeeklyShare) * army.Personnel / (float)Math.Max(1, army.MaxPersonnel);
                 if (nation.Treasury < fee) { going.Add(army); continue; }
-                nation.Treasury -= fee;
+                { var ledgerBefore = nation.Treasury; nation.Treasury -= fee; MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, nation.Treasury - ledgerBefore); }
             }
             foreach (var army in going)
                 Attrition.Destroy(c, army, "stood down: contract over", lost: false);

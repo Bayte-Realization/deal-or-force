@@ -22,7 +22,7 @@
       {
         "title": "Defend the old order",
         "consequence": "The crown keeps its authority and inherits a revolution.",
-        "effects": { "stability": -0.075, "state.radicalism": 0.065, "treasury_percent": -0.02 }
+        "effects": { "stability": -0.075, "state.radicalism": 0.065, "income_penalty": { "share": 0.05, "days": 120 } }
       }
     ]
   },
@@ -48,7 +48,7 @@
     "date": "1914-07-28",
     "window_days": 21,
     "trigger": { "tags": ["AUT", "RUS", "GER", "FRA", "GBR"] },
-    "effects": { "stability": -0.05, "war_support": 0.04, "treasury_percent": -0.02 }
+    "effects": { "stability": -0.05, "war_support": 0.04, "income_penalty": { "share": 0.05, "days": 120 } }
   },
   "russian_revolution_1917": {
     "title": "The Russian Revolution",
@@ -63,7 +63,7 @@
     "description": "A collapse that began in one market has become a world of closed factories and frightened banks. Every government is asked what it will sacrifice to keep its people employed.",
     "date": "1929-10-29",
     "window_days": 60,
-    "effects": { "gdp_percent": -0.05, "treasury_percent": -0.03, "stability": -0.04, "state.radicalism": 0.02, "credit_confidence": -0.08 }
+    "effects": { "gdp_percent": -0.05, "income_penalty": { "share": 0.05, "days": 180 }, "stability": -0.04, "state.radicalism": 0.02, "credit_confidence": -0.08 }
   },
   "united_nations_1945": {
     "title": "The United Nations",
@@ -79,14 +79,14 @@
     "date": "1960-01-01",
     "window_days": 90,
     "trigger": { "tags": ["GBR", "FRA", "BEL", "NLD", "POR"] },
-    "effects": { "treasury_percent": -0.02, "stability": -0.02, "political_points": 5 }
+    "effects": { "income_penalty": { "share": 0.05, "days": 120 }, "stability": -0.02, "political_points": 5 }
   },
   "oil_shock_1973": {
     "title": "The oil shock",
     "description": "An embargo turns a cheap input into a strategic weapon. Inflation and unemployment rise together, and the old assumption that energy would always be cheap dies in a single quarter.",
     "date": "1973-10-17",
     "window_days": 45,
-    "effects": { "inflation": 0.03, "gdp_percent": -0.025, "treasury_percent": -0.02, "stability": -0.015 }
+    "effects": { "inflation": 0.03, "gdp_percent": -0.025, "income_penalty": { "share": 0.04, "days": 150 }, "stability": -0.015 }
   },
   "berlin_wall_1989": {
     "title": "The Berlin Wall opens",
@@ -109,14 +109,14 @@
     "description": "A credit market that everyone believed was safe stops clearing. Governments discover that the bill for a global balance sheet arrives in national treasuries.",
     "date": "2008-09-15",
     "window_days": 45,
-    "effects": { "gdp_percent": -0.04, "credit_confidence": -0.08, "treasury_percent": -0.03, "stability": -0.015 }
+    "effects": { "gdp_percent": -0.04, "credit_confidence": -0.08, "income_penalty": { "share": 0.05, "days": 180 }, "stability": -0.015 }
   },
   "pandemic_2020": {
     "title": "The pandemic",
     "description": "A new virus closes borders, shops and schools in the same week. The state is asked to do things it had forgotten were part of governing: buy time, pay wages and count the dead.",
     "date": "2020-03-11",
     "window_days": 60,
-    "effects": { "gdp_percent": -0.035, "treasury_percent": -0.04, "stability": -0.02, "standard_of_living": -0.01, "state.radicalism": 0.01 }
+    "effects": { "gdp_percent": -0.035, "income_penalty": { "share": 0.06, "days": 200 }, "stability": -0.02, "standard_of_living": -0.01, "state.radicalism": 0.01 }
   },
   "ukraine_war_2022": {
     "title": "The war in Ukraine",
@@ -124,6 +124,6 @@
     "date": "2022-02-24",
     "window_days": 45,
     "trigger": { "tags": ["RUS", "UKR"] },
-    "effects": { "stability": -0.04, "war_support": 0.04, "treasury_percent": -0.02 }
+    "effects": { "stability": -0.04, "war_support": 0.04, "income_penalty": { "share": 0.05, "days": 120 } }
   }
 }

@@ -135,8 +135,10 @@ public sealed class BudgetLine
 public readonly struct BudgetOutcome
 {
     public BudgetOutcome(float revenue, float taxation, float expenses,
-        float growth, float living, float literacy, float radicalism, float stability)
+        float growth, float living, float literacy, float radicalism, float stability,
+        float incomePenalty = 0f)
     {
+        IncomePenalty = incomePenalty;
         Revenue = revenue;
         Taxation = taxation;
         Expenses = expenses;
@@ -147,8 +149,14 @@ public readonly struct BudgetOutcome
         Stability = stability;
     }
 
-    /// <summary>Everything that came in, tariffs and the trade balance included.</summary>
+    /// <summary>Everything that came in, tariffs and the trade balance included, after any income penalty.</summary>
     public readonly float Revenue;
+
+    /// <summary>What timed income penalties (IncomePenalties) took off the gross revenue this week.</summary>
+    public readonly float IncomePenalty;
+
+    /// <summary>Revenue before the penalties: what the budget lines raised.</summary>
+    public readonly float GrossRevenue => Revenue + IncomePenalty;
 
     /// <summary>Only what was actually levied - what a finance minister would call taxation.</summary>
     public readonly float Taxation;
@@ -678,7 +686,15 @@ public static class BudgetCore
     /// One country's week: what it raised, what it spent, and what all of that is doing to
     /// the country beyond the money.
     /// </summary>
-    public static BudgetOutcome Evaluate(Nation nation, float weeklyOutput, bool atWar)
+    public static BudgetOutcome Evaluate(Nation nation, float weeklyOutput, bool atWar) =>
+        Evaluate(nation, weeklyOutput, atWar, null);
+
+    /// <summary>
+    /// The same week, with each line's signed amount written into <paramref name="perLine"/>
+    /// (index = position in <see cref="All"/>; revenue positive, expenses negative) for the
+    /// ledger. The array is the caller's and is not cleared: the ledger adds a week into it.
+    /// </summary>
+    public static BudgetOutcome Evaluate(Nation nation, float weeklyOutput, bool atWar, float[] perLine)
     {
         if (nation is null) return default;
         FillSlots(nation, atWar);
@@ -688,10 +704,13 @@ public static class BudgetCore
 
         float revenue = 0f, taxation = 0f, expenses = 0f;
         float growth = 0f, living = 0f, literacy = 0f, radicalism = 0f, stability = 0f;
+        var record = perLine is not null && perLine.Length >= Lines.Count;
 
-        foreach (var line in Lines)
+        for (var lineIndex = 0; lineIndex < Lines.Count; lineIndex++)
         {
+            var line = Lines[lineIndex];
             var amount = AmountFromSlots(nation, line, weeklyOutput, compliance);
+            if (record) perLine[lineIndex] += line.Side == BudgetSide.Expense ? -amount : amount;
             if (line.Side == BudgetSide.Revenue)
             {
                 revenue += amount;
@@ -718,8 +737,13 @@ public static class BudgetCore
             radicalism += resented * line.ResentedRadicalism;
         }
 
+        // The one place a timed income penalty (IncomePenalties) touches money: a share of the
+        // gross revenue, never of the expenses, and never below nothing.
+        var penalty = IncomePenalties.Share(nation) * MathF.Max(0f, revenue);
+        revenue -= penalty;
+
         return new BudgetOutcome(revenue, taxation, expenses,
-            growth, living, literacy, radicalism, stability);
+            growth, living, literacy, radicalism, stability, penalty);
     }
 
     /// <summary>
@@ -735,12 +759,16 @@ public static class BudgetCore
         FillSlots(nation, atWar);
         var compliance = Compliance(nation, weeklyOutput);
         nation.Budget.Begin(Loc.Get("Weekly balance"), "money");
+        var revenue = 0f;
         foreach (var line in Lines)
         {
             var amount = AmountFromSlots(nation, line, weeklyOutput, compliance);
             var sign = line.Side == BudgetSide.Expense ? -1f : 1f;
+            if (line.Side == BudgetSide.Revenue) revenue += amount;
             nation.Budget.Add(Label(nation, line), sign * amount);
         }
+        var penalty = IncomePenalties.Share(nation) * MathF.Max(0f, revenue);
+        if (penalty > 0f) nation.Budget.Add(Loc.Get("Income penalties"), -penalty);
     }
 
     /// <summary>

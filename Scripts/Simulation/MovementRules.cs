@@ -353,7 +353,7 @@ public static class MovementRules
                 continue;
             }
             var paid = MathF.Min(perYear / 52f, MathF.Max(0f, sponsor.Treasury) * 0.01f);
-            sponsor.Treasury -= paid;
+            { var ledgerBefore = sponsor.Treasury; sponsor.Treasury -= paid; MoneyLedger.Book(sponsor, MoneyFlow.Movements, sponsor.Treasury - ledgerBefore); }
             sponsored += paid;
             }
         }
@@ -378,14 +378,14 @@ public static class MovementRules
             else
             {
                 var fee = MathF.Min(client.Treasury * 0.002f, 0.01f);
-                client.Treasury -= fee;
+                { var ledgerBefore = client.Treasury; client.Treasury -= fee; MoneyLedger.Book(client, MoneyFlow.Movements, client.Treasury - ledgerBefore); }
                 sponsored += fee;
             }
         }
         state.DonationsWeekly = donations;
         state.SponsorsWeekly = sponsored;
         state.IncomeWeekly = donations + sponsored;
-        nation.Treasury += state.IncomeWeekly;
+        { var ledgerBefore = nation.Treasury; nation.Treasury += state.IncomeWeekly; MoneyLedger.Book(nation, MoneyFlow.Movements, nation.Treasury - ledgerBefore); }
 
         // Cadres come from the following, up to what the following can give.
         var recruiting = supporters * defines.MovementRecruitPerSupporter * (definition.Has("refugee_camps") ? 2f : 1f);
@@ -1732,7 +1732,7 @@ public static class MovementRules
             nation.Treasury < defines.MovementUprisingCost) return false;
         var roll = Roll(campaign.Seed, nation.Id, campaign.ElapsedDays, region.MapIndex);
         var owner = campaign.Nations.Find(candidate => candidate.MapIndex == region.NationMapIndex);
-        nation.Treasury -= defines.MovementUprisingCost;
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= defines.MovementUprisingCost; MoneyLedger.Book(nation, MoneyFlow.Movements, nation.Treasury - ledgerBefore); }
         state.Heat = M.Clamp01(state.Heat + 0.25f);
 
         if (roll >= chance)

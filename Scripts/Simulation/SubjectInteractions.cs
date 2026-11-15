@@ -142,7 +142,7 @@ public static class SubjectInteractions
             return false;
         var overlord = campaign.NationById(subject.OverlordId);
         var cost = AgitationCost(campaign, sponsor, subject);
-        sponsor.Treasury -= cost;
+        { var ledgerBefore = sponsor.Treasury; sponsor.Treasury -= cost; MoneyLedger.Book(sponsor, MoneyFlow.Tribute, sponsor.Treasury - ledgerBefore); }
         if (!subject.SubjectForeignBackers.Contains(sponsor.Id))
             subject.SubjectForeignBackers.Add(sponsor.Id);
         subject.LastForeignAgitationDay = campaign.ElapsedDays;
@@ -294,8 +294,8 @@ public static class SubjectInteractions
             var gift = MathF.Min(MathF.Max(0f, backer.Treasury) * 0.05f, 0.50f);
             if (gift > 0.01f)
             {
-                backer.Treasury -= gift;
-                subject.Treasury += gift;
+                { var ledgerBefore = backer.Treasury; backer.Treasury -= gift; MoneyLedger.Book(backer, MoneyFlow.Tribute, backer.Treasury - ledgerBefore); }
+                { var ledgerBefore = subject.Treasury; subject.Treasury += gift; MoneyLedger.Book(subject, MoneyFlow.Tribute, subject.Treasury - ledgerBefore); }
             }
         }
 
@@ -503,7 +503,7 @@ public static class SubjectInteractions
             case SubjectInteractionKind.BreakConspiracy:
             {
                 var purgeCost = SubsidyCost(campaign, subject) * 0.5f;
-                overlord.Treasury -= purgeCost;
+                { var ledgerBefore = overlord.Treasury; overlord.Treasury -= purgeCost; MoneyLedger.Book(overlord, MoneyFlow.Tribute, overlord.Treasury - ledgerBefore); }
                 overlord.Stability = M.Clamp01(overlord.Stability - 0.015f);
                 if (subject.LibertyDesire >= campaign.Defines.SubjectRebellionThreshold)
                 {
@@ -582,8 +582,8 @@ public static class SubjectInteractions
             case SubjectInteractionKind.GrantSubsidies:
             {
                 var cost = SubsidyCost(campaign, subject);
-                overlord.Treasury -= cost;
-                subject.Treasury += cost;
+                { var ledgerBefore = overlord.Treasury; overlord.Treasury -= cost; MoneyLedger.Book(overlord, MoneyFlow.Tribute, overlord.Treasury - ledgerBefore); }
+                { var ledgerBefore = subject.Treasury; subject.Treasury += cost; MoneyLedger.Book(subject, MoneyFlow.Tribute, subject.Treasury - ledgerBefore); }
                 subject.SubjectLibertyModifier = MathF.Max(-0.55f, subject.SubjectLibertyModifier - 0.16f);
                 subject.LibertyDesire = MathF.Max(0f, subject.LibertyDesire - 0.16f);
                 if (subject.LibertyDesire < 0.30f) subject.SubjectConspiring = false;
@@ -653,7 +653,7 @@ public static class SubjectInteractions
             case SubjectInteractionKind.ReplaceGovernor:
             {
                 var cost = SubsidyCost(campaign, subject) * 0.75f;
-                overlord.Treasury -= cost;
+                { var ledgerBefore = overlord.Treasury; overlord.Treasury -= cost; MoneyLedger.Book(overlord, MoneyFlow.Tribute, overlord.Treasury - ledgerBefore); }
                 subject.Government = overlord.Government;
                 subject.Ideology = overlord.Ideology;
                 Rulers.ReplaceHeadOfState(campaign, subject, "");
@@ -668,8 +668,8 @@ public static class SubjectInteractions
             case SubjectInteractionKind.SiphonTreasury:
             {
                 var amount = SiphonGain(subject);
-                subject.Treasury -= amount;
-                overlord.Treasury += amount;
+                { var ledgerBefore = subject.Treasury; subject.Treasury -= amount; MoneyLedger.Book(subject, MoneyFlow.Tribute, subject.Treasury - ledgerBefore); }
+                { var ledgerBefore = overlord.Treasury; overlord.Treasury += amount; MoneyLedger.Book(overlord, MoneyFlow.Tribute, overlord.Treasury - ledgerBefore); }
                 subject.SubjectLibertyModifier = MathF.Min(0.85f, subject.SubjectLibertyModifier + 0.18f);
                 subject.LibertyDesire = M.Clamp01(subject.LibertyDesire + 0.20f);
                 OpinionSystem.Remember(campaign, relation, "denounced_us");
@@ -788,7 +788,7 @@ public static class SubjectInteractions
                 var sizeFactor = M.Clamp(1f / MathF.Max(0.25f, 1f + subject.Population / (float)Math.Max(1L, overlord.Population) * 4f), 0.25f, 1.2f);
                 var weeklyGain = campaign.Defines.SubjectIntegrationDailyBase * 7f * sizeFactor;
                 var weeklyCost = MathF.Max(0.01f, subject.Gdp * campaign.Defines.SubjectIntegrationTreasuryWeeklyShare);
-                overlord.Treasury -= weeklyCost;
+                { var ledgerBefore = overlord.Treasury; overlord.Treasury -= weeklyCost; MoneyLedger.Book(overlord, MoneyFlow.Tribute, overlord.Treasury - ledgerBefore); }
                 subject.SubjectIntegrationProgress = M.Clamp01(subject.SubjectIntegrationProgress + weeklyGain);
                 var wasReleased = subject.ReleasedFromId == overlord.Id || subject.SecededFromId == overlord.Id;
                 var popLimit = wasReleased ? overlord.Population * 0.65f : overlord.Population * 0.45f;

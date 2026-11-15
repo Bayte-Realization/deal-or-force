@@ -270,7 +270,7 @@ public static class MovementDealings
                 OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, holder.Id, country.Id), reason);
             }
         }
-        country.Treasury -= Cost(campaign, action);
+        { var ledgerBefore = country.Treasury; country.Treasury -= Cost(campaign, action); MoneyLedger.Book(country, MoneyFlow.Movements, country.Treasury - ledgerBefore); }
 
         switch (action)
         {

@@ -320,11 +320,11 @@ public static class ProxyWars
                 continue;
             }
             s.UnpaidWeeks = 0;
-            sponsor.Treasury -= cost;
+            { var ledgerBefore = sponsor.Treasury; sponsor.Treasury -= cost; MoneyLedger.Book(sponsor, MoneyFlow.Covert, sponsor.Treasury - ledgerBefore); }
             s.Delivered += cost;
             s.LastWeekCost = cost;
             s.LastPaidDay = c.ElapsedDays;
-            client.Treasury += cost * defines.ProxyMoneyShare;
+            { var ledgerBefore = client.Treasury; client.Treasury += cost * defines.ProxyMoneyShare; MoneyLedger.Book(client, MoneyFlow.Covert, client.Treasury - ledgerBefore); }
             arms[client.Id] = arms.GetValueOrDefault(client.Id) + cost * (1f - defines.ProxyMoneyShare);
             backing[client.Id] = backing.GetValueOrDefault(client.Id) + s.Level;
             // And from the backer's own depots, the shells and the guns themselves.

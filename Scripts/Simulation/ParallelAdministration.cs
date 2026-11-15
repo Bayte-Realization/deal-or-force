@@ -194,7 +194,7 @@ public static class ParallelAdministration
         region.AdministrationExposed = false;
         region.AdministrationTaken = 0f;
         region.AdministrationProvinces.Clear(); region.AdministrationPopulationShare = 1f;
-        country.Treasury -= OpenCost(campaign, country, region);
+        { var ledgerBefore = country.Treasury; country.Treasury -= OpenCost(campaign, country, region); MoneyLedger.Book(country, MoneyFlow.Movements, country.Treasury - ledgerBefore); }
         country.PoliticalPoints = MathF.Max(0f, country.PoliticalPoints - campaign.Defines.KinAdminPoliticalCost);
         var host = KinStatecraft.HostOf(campaign, region);
         if (host is not null)
@@ -287,8 +287,8 @@ public static class ParallelAdministration
             var groundShare = host.Population <= 0 ? 0f : M.Clamp01(region.Population / (float)host.Population);
             var levy = MathF.Max(0f, host.WeeklyTaxIncome) * groundShare * share * defines.KinAdminLevy * Coverage(region);
             var upkeep = WeeklyUpkeep(campaign, admin, region);
-            host.Treasury -= levy;
-            admin.Treasury = MathF.Max(0f, admin.Treasury + levy - upkeep);
+            { var ledgerBefore = host.Treasury; host.Treasury -= levy; MoneyLedger.Book(host, MoneyFlow.Movements, host.Treasury - ledgerBefore); }
+            { var ledgerBefore = admin.Treasury; admin.Treasury = MathF.Max(0f, admin.Treasury + levy - upkeep); MoneyLedger.Book(admin, MoneyFlow.Movements, admin.Treasury - ledgerBefore); }
             region.AdministrationTaken += levy;
             region.Radicalism = M.Clamp01(region.Radicalism + defines.KinAdminRadicalism * (0.5f + share) * Coverage(region));
 

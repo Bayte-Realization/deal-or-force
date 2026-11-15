@@ -214,7 +214,7 @@ public static class ColonisationCore
     public static bool Start(Campaign campaign, Nation nation, ScenarioState state)
     {
         if (Refusal(campaign, nation, state).Length > 0) return false;
-        nation.Treasury -= CostFor(campaign, nation, state);
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= CostFor(campaign, nation, state); MoneyLedger.Book(nation, MoneyFlow.Construction, nation.Treasury - ledgerBefore); }
         state.ColonistMapIndex = nation.MapIndex;
         state.ColonisationProgress = 0f;
         // Every other country that claims it hears of it the day the ships sail.

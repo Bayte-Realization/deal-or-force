@@ -129,7 +129,7 @@ public sealed class RebuildRegionCommand : ICampaignCommand
         var nation = campaign.NationById(IssuerId);
         var state = campaign.StateByMapIndex(StateMapIndex);
         if (nation is null || state is null || WarDamage.RebuildRefusal(campaign, nation, state).Length > 0) return;
-        nation.Treasury -= WarDamage.RebuildCost(campaign, nation, state);
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= WarDamage.RebuildCost(campaign, nation, state); MoneyLedger.Book(nation, MoneyFlow.Construction, nation.Treasury - ledgerBefore); }
         state.RebuildingUntilDay = campaign.ElapsedDays + Math.Max(1, campaign.Defines.WarDamageRebuildDays);
     }
 }

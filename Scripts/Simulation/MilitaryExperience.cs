@@ -150,7 +150,7 @@ public static class MilitaryExperience
                 hulls * defines.NavalExperiencePerHullDay * scale * (strategy?.NavalExperience ?? 1f);
             nation.PoliticalPoints += political + perStability * M.Clamp01(nation.Stability);
             if (drills > 0)
-                nation.Treasury -= drills * defines.TrainingCostPerDivisionWeek / 7f * scale;
+                { var ledgerBefore = nation.Treasury; nation.Treasury -= drills * defines.TrainingCostPerDivisionWeek / 7f * scale; MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
         }
 
         // A week's cabinet business, not a daily one: which governments keep their army sharp.

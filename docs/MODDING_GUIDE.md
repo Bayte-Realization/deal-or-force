@@ -1230,6 +1230,17 @@ The rules of the effects language:
   `fleet.supply`); `research` puts points on the technology being researched;
 - `"add_modifier": { "<spirit>": days }` hangs a national spirit on the country, and
   `"remove_modifier"` takes one or a list off (see *National modifiers*);
+- `"income_penalty": { "share": 0.08, "days": 120 }` is a **timed income penalty**: for 120 days
+  the country's *gross* budget revenue (what its taxes, tariffs and trade raise, before any
+  expense) is cut by 8 %. Expenses are untouched, so a government that keeps spending through it
+  borrows or cuts. Penalties add up; their sum is capped by `IncomePenaltyCap` (0.5) in
+  `common/defines/93_income_penalties.json`. `share` must be above 0 and at most 1, `days` from 1
+  to 3650. It applies to every country alike, played or not, and the ledger in the economy screen
+  lists each one with what it takes and how many days it has left. Prefer it to a negative
+  `treasury_percent` for a *consequence* (a crisis, a disaster, a sanction); keep `treasury` /
+  `treasury_percent` for a *price* the country chooses to pay, or a lump that really is one (a
+  seized shipment, a fine paid once). The base game converts with `share × days ≈ 300 × t`, where
+  `t` is the old `treasury_percent` magnitude — the reasoning is in that defines file;
 - an unknown key does not break the file: it is written to the log with the list of permitted
   keys, and the rest of the mod goes on loading.
 

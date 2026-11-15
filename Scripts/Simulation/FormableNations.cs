@@ -782,7 +782,7 @@ public sealed class FormNationCommand : ICampaignCommand
         var d = FormableNations.Find(campaign, FormableId);
         var status = FormableNations.Evaluate(campaign, nation, d);
         if (!status.CanForm) return;
-        nation.Treasury -= status.Cost;
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= status.Cost; MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, nation.Treasury - ledgerBefore); }
         PeacefulFormation.Integrate(campaign, nation, d);
         if (!string.IsNullOrEmpty(nation.FormedNationId)) nation.FormedNationHistory.Add(nation.FormedNationId);
         nation.FormedNationHistory.Add(d.Id);

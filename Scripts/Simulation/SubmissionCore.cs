@@ -374,7 +374,7 @@ public static class SubmissionSystem
         // Backing a government is paid for up front, and noticed whatever comes of it.
         if (route == SubmissionRoute.Political)
         {
-            asker.Treasury -= cost;
+            { var ledgerBefore = asker.Treasury; asker.Treasury -= cost; MoneyLedger.Book(asker, MoneyFlow.Diplomacy, asker.Treasury - ledgerBefore); }
             asker.Notoriety += defines.SubmissionPoliticalNotoriety;
         }
 
@@ -394,11 +394,11 @@ public static class SubmissionSystem
 
         if (route == SubmissionRoute.Economic)
         {
-            asker.Treasury -= cost;
-            target.Treasury += cost;
+            { var ledgerBefore = asker.Treasury; asker.Treasury -= cost; MoneyLedger.Book(asker, MoneyFlow.Diplomacy, asker.Treasury - ledgerBefore); }
+            { var ledgerBefore = target.Treasury; target.Treasury += cost; MoneyLedger.Book(target, MoneyFlow.Diplomacy, target.Treasury - ledgerBefore); }
         }
         else if (route == SubmissionRoute.Political)
-            target.Treasury += cost;
+            { var ledgerBefore = target.Treasury; target.Treasury += cost; MoneyLedger.Book(target, MoneyFlow.Diplomacy, target.Treasury - ledgerBefore); }
 
         if (!SubjectSystem.Subjugate(campaign, asker, target, kind, out var refusal))
         {

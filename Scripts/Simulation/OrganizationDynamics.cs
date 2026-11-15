@@ -467,7 +467,8 @@ public static class OrganizationDynamics
         var gdp = members.Sum(n => MathF.Max(0f, n.Gdp));
         if (org.Budget > 0f && members.Count > 0)
             foreach (var member in members)
-                member.Treasury += org.Budget * (gdp > 0f ? MathF.Max(0f, member.Gdp) / gdp : 1f / members.Count);
+                { var ledgerBefore = member.Treasury; member.Treasury += org.Budget * (gdp > 0f ? MathF.Max(0f, member.Gdp) / gdp : 1f / members.Count); MoneyLedger.Book(member, MoneyFlow.Organizations, member.Treasury - ledgerBefore); }
+        if (org.Budget > 0f && members.Count > 0) OrganizationLedger.Book(org, OrganizationFlow.Returned, -org.Budget);
         org.Budget = 0f;
         org.Motion = null;
         org.Invitations.Clear();

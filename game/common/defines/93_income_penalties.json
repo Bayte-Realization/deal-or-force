@@ -1,0 +1,42 @@
+// Deal or Force - timed income penalties (IncomePenalties.cs).
+//
+// A consequence - a crisis, a disaster, a sanction, a historical shock - no longer takes a lump
+// out of the treasury. It takes a share of the country's GROSS budget revenue (revenue before
+// any expense) for a number of days. Expenses are untouched: a government that keeps spending
+// through it borrows or cuts. It hurts the economy that earns, not whoever happened to save.
+//
+// Content writes it as  "income_penalty": { "share": 0.08, "days": 120 }.
+//
+// THE CONVERSION RULE (how an old one-off loss became a share and a length):
+//   expected loss = share x gross daily revenue x days, and gross revenue in this model is about
+//   six per cent of GDP a year (measured on the ten-year soak: 4.8 % at the start, 10 % a decade
+//   on). Event files charged a share t of the TREASURY, and a treasury runs about five per cent
+//   of GDP across a campaign (ten at the start, two to six later), so
+//       share x days  ~=  t x 0.05 x 364 / 0.06  ~=  300 x t
+//   e.g. treasury_percent -0.02 became share 0.05 for 120 days (6.0 ~= 300 x 0.02).
+//   Hard-coded crises charged a share of GDP; they convert at run time against the country's own
+//   last gross week (IncomePenalties.FromLoss), so the expected loss matches the old lump for
+//   that country, held at IncomePenaltySingleMax and stretched in time instead, up to
+//   IncomePenaltyMaxDays; anything beyond three years is forgiven rather than charged at once.
+{
+  // All penalties together never take more than half a week's gross revenue: a country under
+  // three disasters and a crisis still collects something, and the cap is what keeps stacking
+  // from becoming a death spiral into default.
+  "IncomePenaltyCap": 0.5,
+  // One converted shock never takes more than a quarter; a bigger bill runs longer instead.
+  "IncomePenaltySingleMax": 0.25,
+  // A converted penalty runs at least four weeks (shorter is a lump with extra steps) and at most
+  // three years (longer outlives the government that caused it).
+  "IncomePenaltyMinDays": 28,
+  "IncomePenaltyMaxDays": 1095,
+  // Penalties one country carries at once; a further one joins the longest-running entry.
+  "IncomePenaltyMaxEntries": 16,
+  // Gross revenue as a share of GDP for a country whose first budget week has not closed.
+  "IncomePenaltyReferenceRevenueShare": 0.06,
+  // Over how many days the hard-coded crises spread their cost: a financial crisis over its
+  // slump (CrisisRecessionDays), a pandemic over its year, a disaster over the half-year it takes
+  // to reopen what it wrecked.
+  "CrisisIncomePenaltyDays": 540,
+  "PandemicIncomePenaltyDays": 365,
+  "DisasterIncomePenaltyDays": 180
+}

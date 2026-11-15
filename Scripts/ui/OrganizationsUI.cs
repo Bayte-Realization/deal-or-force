@@ -168,6 +168,9 @@ public partial class DealOrForceGame
         _conflictsPage.AddChild(WrappedUltimatumText(Loc.Format("Common fund: {0} · institutional cohesion: {1}%", Fmt.Money(o.Budget), (o.Cohesion * 100).ToString("0")), 16));
         _conflictsPage.AddChild(Gauge(o.Cohesion * 100, Ui.Colour("text.accent"), 200));
         _conflictsPage.AddChild(WrappedUltimatumText("Members pay dues every week. Arrears erode cohesion, and below 25% the collective defence no longer holds.", 13));
+        // The common fund's week, line by line (MoneyLedgerView).
+        _conflictsPage.AddChild(Title("COMMON FUND: MONEY IN AND OUT", 14, Ui.Colour("text.accent")));
+        AddMoneyLedgerRows(_conflictsPage, MoneyLedgerView.ForOrganization(_campaign, o));
         if (InternationalOrganizations.Leader(_campaign, o) is { } leader)
         {
             var challenger = InternationalOrganizations.Challenger(_campaign, o);

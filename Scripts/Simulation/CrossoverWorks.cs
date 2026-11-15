@@ -169,7 +169,7 @@ public sealed partial class Campaign
         if(s is null || n is null) return "This land has no active region or country.";
         var def=BuildingCatalog.Get(building);
         if(n.Treasury<def.Cost) return $"{n.Name} needs ${def.Cost:0.00}B treasury to commission this site.";
-        n.Treasury-=def.Cost;
+        { var ledgerBefore = n.Treasury; n.Treasury-=def.Cost; MoneyLedger.Book(n, MoneyFlow.EventsAndDecisions, n.Treasury - ledgerBefore); }
         s.Buildings[building]=s.Buildings.GetValueOrDefault(building)+1;
         // No GDP step: the market counts the building's output from next week (ConstructionSystem.Complete).
         n.ConstructionCapacity+=def.CapacityGain;

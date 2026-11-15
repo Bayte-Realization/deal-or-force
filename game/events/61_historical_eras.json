@@ -5,7 +5,7 @@
     "date": "1783-09-03",
     "window_days": 45,
     "trigger": { "tags": ["GBR", "USA", "FRA", "SPA"] },
-    "effects": { "stability": 0.02, "political_points": 6, "treasury_percent": -0.015 }
+    "effects": { "stability": 0.02, "political_points": 6, "income_penalty": { "share": 0.03, "days": 150 } }
   },
   "crimean_war_1853": {
     "title": "The Eastern Question",
@@ -13,7 +13,7 @@
     "date": "1853-10-16",
     "window_days": 45,
     "trigger": { "tags": ["RUS", "TUR", "GBR", "FRA"] },
-    "effects": { "war_support": 0.035, "stability": -0.025, "treasury_percent": -0.02 }
+    "effects": { "war_support": 0.035, "stability": -0.025, "income_penalty": { "share": 0.05, "days": 120 } }
   },
   "meiji_restoration_1868": {
     "title": "The Meiji Restoration",

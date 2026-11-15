@@ -312,7 +312,7 @@ public static class MovementActions
         var defines = campaign.Defines;
         var region = campaign.StateByMapIndex(stateMapIndex);
         var target = campaign.NationById(targetNationId);
-        nation.Treasury -= Cost(campaign, nation, action, stateMapIndex);
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= Cost(campaign, nation, action, stateMapIndex); MoneyLedger.Book(nation, MoneyFlow.Movements, nation.Treasury - ledgerBefore); }
         var cooldown = CooldownDays(defines, action);
         if (cooldown > 0) state.ReadyOnDay[CooldownKey(action, stateMapIndex, targetNationId)] = campaign.ElapsedDays + cooldown;
         var host = Movements.HostOf(campaign, nation);
@@ -354,7 +354,7 @@ public static class MovementActions
             case "fundraise":
             {
                 var raised = state.DonationsWeekly * defines.MovementFundraiseWeeks;
-                nation.Treasury += raised;
+                { var ledgerBefore = nation.Treasury; nation.Treasury += raised; MoneyLedger.Book(nation, MoneyFlow.Movements, nation.Treasury - ledgerBefore); }
                 state.Legitimacy = M.Clamp01(state.Legitimacy - 0.01f);
                 state.LastReport = Loc.Format("The following gave {0}.", Fmt.Money(raised));
                 break;

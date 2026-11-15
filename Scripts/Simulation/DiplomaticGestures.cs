@@ -272,7 +272,7 @@ public static class DiplomaticGestures
         {
             case "state_visit":
                 issuer.PoliticalPoints -= d.StateVisitPoliticalCost;
-                issuer.Treasury -= d.StateVisitCash;
+                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= d.StateVisitCash; MoneyLedger.Book(issuer, MoneyFlow.Diplomacy, issuer.Treasury - ledgerBefore); }
                 OpinionSystem.Remember(c, relation, "state_visit");
                 if (relation.Opinion >= 35f && relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Rival)
                     relation.Stance = DiplomaticStance.Friendly;
@@ -280,7 +280,7 @@ public static class DiplomaticGestures
                 cooldown = d.StateVisitCooldownDays;
                 break;
             case "show_of_force":
-                issuer.Treasury -= d.ShowOfForceCash;
+                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= d.ShowOfForceCash; MoneyLedger.Book(issuer, MoneyFlow.Diplomacy, issuer.Treasury - ledgerBefore); }
                 OpinionSystem.Remember(c, relation, "show_of_force");
                 if (relation.A == targetId) relation.GrievanceA = MathF.Min(100f, relation.GrievanceA + d.ShowOfForceGrievance);
                 else relation.GrievanceB = MathF.Min(100f, relation.GrievanceB + d.ShowOfForceGrievance);
@@ -310,8 +310,8 @@ public static class DiplomaticGestures
                 return true;
             case "loan":
                 var amount = LoanSize(c, issuer, target);
-                issuer.Treasury -= amount;
-                target.Treasury += amount;
+                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= amount; MoneyLedger.Book(issuer, MoneyFlow.ForeignAid, issuer.Treasury - ledgerBefore); }
+                { var ledgerBefore = target.Treasury; target.Treasury += amount; MoneyLedger.Book(target, MoneyFlow.ForeignAid, target.Treasury - ledgerBefore); }
                 relation.LoanLender = issuerId;
                 relation.LoanOutstanding = MathF.Round(amount * (1f + MathF.Max(0f, d.LoanInterest)), 4);
                 relation.LoanWeekly = relation.LoanOutstanding / Math.Max(1, d.LoanWeeks);
@@ -333,7 +333,7 @@ public static class DiplomaticGestures
                 break;
             case "joint_exercises":
                 issuer.PoliticalPoints -= d.ExercisesPoliticalCost;
-                issuer.Treasury -= d.ExercisesCash;
+                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= d.ExercisesCash; MoneyLedger.Book(issuer, MoneyFlow.Diplomacy, issuer.Treasury - ledgerBefore); }
                 OpinionSystem.Remember(c, relation, "joint_exercises");
                 // A message to whoever both of them stand against: it is heard, and remembered.
                 var rivals = CommonRivals(c, issuer, target);
@@ -365,8 +365,8 @@ public static class DiplomaticGestures
                 // memories, and an apology does not touch them: they end when the condition does.
                 var compensation = ApologyCost(c, issuer);
                 issuer.PoliticalPoints -= d.ApologyPoliticalCost;
-                issuer.Treasury -= compensation;
-                target.Treasury += compensation;
+                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= compensation; MoneyLedger.Book(issuer, MoneyFlow.ForeignAid, issuer.Treasury - ledgerBefore); }
+                { var ledgerBefore = target.Treasury; target.Treasury += compensation; MoneyLedger.Book(target, MoneyFlow.ForeignAid, target.Treasury - ledgerBefore); }
                 OpinionWitnesses.Forgive(c, relation, d.ApologyForgiveness, d.ApologyThirdPartyForgiveness);
                 OpinionSystem.Remember(c, relation, "apology_accepted");
                 if (relation.A == targetId) relation.GrievanceA = MathF.Max(0f, relation.GrievanceA - d.ApologyGrievanceRelief);
@@ -380,8 +380,8 @@ public static class DiplomaticGestures
                 // grievances they hold as a bystander - our bad name, a test, a coup they disliked -
                 // count for a little less once our help has arrived.
                 var aid = HumanitarianAidSize(c, issuer, target);
-                issuer.Treasury -= aid;
-                target.Treasury += aid;
+                { var ledgerBefore = issuer.Treasury; issuer.Treasury -= aid; MoneyLedger.Book(issuer, MoneyFlow.ForeignAid, issuer.Treasury - ledgerBefore); }
+                { var ledgerBefore = target.Treasury; target.Treasury += aid; MoneyLedger.Book(target, MoneyFlow.ForeignAid, target.Treasury - ledgerBefore); }
                 OpinionSystem.Remember(c, relation, "humanitarian_aid");
                 OpinionWitnesses.Forgive(c, relation, 0f, d.HumanitarianAidThirdPartyForgiveness);
                 c.Chronicle.Record(c, "humanitarian_aid", issuerId, targetId, Fmt.Money(aid));
@@ -425,8 +425,8 @@ public static class DiplomaticGestures
             var due = MathF.Min(relation.LoanWeekly, relation.LoanOutstanding);
             if (borrower.Treasury >= due)
             {
-                borrower.Treasury -= due;
-                lender.Treasury += due;
+                { var ledgerBefore = borrower.Treasury; borrower.Treasury -= due; MoneyLedger.Book(borrower, MoneyFlow.StateLoans, borrower.Treasury - ledgerBefore); }
+                { var ledgerBefore = lender.Treasury; lender.Treasury += due; MoneyLedger.Book(lender, MoneyFlow.StateLoans, lender.Treasury - ledgerBefore); }
                 relation.LoanOutstanding = MathF.Max(0f, relation.LoanOutstanding - due);
                 relation.LoanMissedWeeks = 0;
                 if (relation.LoanOutstanding <= 0.0001f) { relation.LoanLender = -1; relation.LoanOutstanding = 0f; relation.LoanWeekly = 0f; }

@@ -768,7 +768,7 @@ public static partial class AiStatecraft
             var ours = CampaignDiplomacy.Get(campaign, nation.Id, friend.Id);
             if (campaign.ElapsedDays - ours.LastActionDay < 14) continue;
             if (nation.Treasury < 0.1f) return;
-            nation.Treasury -= 0.1f;
+            { var ledgerBefore = nation.Treasury; nation.Treasury -= 0.1f; MoneyLedger.Book(nation, MoneyFlow.Diplomacy, nation.Treasury - ledgerBefore); }
             OpinionSystem.Remember(campaign, ours, "improved_relations");
             ours.LastActionDay = campaign.ElapsedDays;
             var targetBond = CampaignDiplomacy.Peek(campaign, target.Id, friend.Id);

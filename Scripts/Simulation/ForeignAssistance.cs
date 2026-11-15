@@ -383,8 +383,8 @@ public static partial class ForeignAssistance
     private static ForeignAssistanceOutcome Grant(Campaign c, ForeignAssistanceRequest request, ForeignAssistanceAssessment assessment)
     {
         var donor = c.NationById(request.DonorId); var requester = c.NationById(request.RequesterId);
-        donor.Treasury = (float)((double)donor.Treasury - assessment.PayableAmount);
-        requester.Treasury = (float)((double)requester.Treasury + assessment.PayableAmount);
+        { var ledgerBefore = donor.Treasury; donor.Treasury = (float)((double)donor.Treasury - assessment.PayableAmount); MoneyLedger.Book(donor, MoneyFlow.ForeignAid, donor.Treasury - ledgerBefore); }
+        { var ledgerBefore = requester.Treasury; requester.Treasury = (float)((double)requester.Treasury + assessment.PayableAmount); MoneyLedger.Book(requester, MoneyFlow.ForeignAid, requester.Treasury - ledgerBefore); }
         var relationship = CampaignDiplomacy.Get(c, request.RequesterId, request.DonorId);
         relationship.AidSentDay = c.ElapsedDays;
         var full = Math.Max(.0001, (double)requester.Gdp * c.Defines.AidShareOfRecipientGdp);

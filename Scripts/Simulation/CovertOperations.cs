@@ -475,7 +475,7 @@ public static class CovertOperations
                 // The money goes to whoever has most of the country's people behind them.
                 var movement = StrongestMovementIn(c, target);
                 if (movement is not null)
-                    movement.Treasury += MathF.Min(spent * M.Clamp01(d.CovertOppositionFunding), MathF.Max(0f, target.Gdp) * MathF.Max(0f, d.CovertOppositionFundingCap));
+                    { var ledgerBefore = movement.Treasury; movement.Treasury += MathF.Min(spent * M.Clamp01(d.CovertOppositionFunding), MathF.Max(0f, target.Gdp) * MathF.Max(0f, d.CovertOppositionFundingCap)); MoneyLedger.Book(movement, MoneyFlow.Movements, movement.Treasury - ledgerBefore); }
                 return definition.Name;
             }
             case "coup":
@@ -526,7 +526,7 @@ public static class CovertOperations
                 var movement = StrongestMovementIn(c, target);
                 if (movement is not null)
                 {
-                    movement.Treasury += MathF.Min(spent * 0.6f, MathF.Max(0f, target.Gdp) * 0.003f);
+                    { var ledgerBefore = movement.Treasury; movement.Treasury += MathF.Min(spent * 0.6f, MathF.Max(0f, target.Gdp) * 0.003f); MoneyLedger.Book(movement, MoneyFlow.Movements, movement.Treasury - ledgerBefore); }
                     if (movement.Movement is not null)
                     {
                         movement.Movement.Militancy = M.Clamp01(MathF.Max(0f, movement.Movement.Militancy) + 0.15f * power);
@@ -737,7 +737,7 @@ public sealed class CovertOperationCommand : ICampaignCommand
         Refusal = CovertOperations.Refusal(campaign, owner, target, definition, region);
         if (Refusal.Length > 0) return;
         var cost = CovertOperations.Cost(campaign, owner, definition);
-        owner.Treasury -= cost;
+        { var ledgerBefore = owner.Treasury; owner.Treasury -= cost; MoneyLedger.Book(owner, MoneyFlow.Covert, owner.Treasury - ledgerBefore); }
         owner.CovertOperations.Add(new CovertOperation
         {
             Kind = definition.Id, TargetId = target.Id, RegionMapIndex = definition.Regional ? region.MapIndex : -1,

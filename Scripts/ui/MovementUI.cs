@@ -367,6 +367,11 @@ public partial class DealOrForceGame
         if (!string.IsNullOrWhiteSpace(state.LastReport))
             _movementRows.AddChild(MovementNotice("alert_event", state.LastReport, "text.body"));
 
+        // ---- its money ------------------------------------------------------------------
+        // Every income and expense of the movement's last week (MoneyLedgerView).
+        _movementRows.AddChild(MovementHeading("MONEY IN AND OUT"));
+        AddMoneyLedgerRows(_movementRows, MoneyLedgerView.ForNation(_campaign, nation));
+
         // ---- what it can do -----------------------------------------------------------
         if (!mine)
         {

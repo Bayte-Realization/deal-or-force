@@ -63,7 +63,7 @@ public static class Demobilisation
     public static float Decommission(Campaign campaign, Nation nation, Fleet fleet)
     {
         var refund = MathF.Max(0f, fleet.Hulls * campaign.Defines.HullCost * MathF.Max(0f, campaign.Defines.FleetDecommissionRefund));
-        nation.Treasury += refund;
+        { var ledgerBefore = nation.Treasury; nation.Treasury += refund; MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
         campaign.SeaLifts.RemoveAll(lift => lift.FleetId == fleet.Id);
         campaign.Fleets.Remove(fleet);
         DiagnosticLogs.Write("simulation", $"DECOMMISSION nation={nation.Tag} fleet={fleet.Id} hulls={fleet.Hulls} refund={refund:0.000} day={campaign.ElapsedDays}");

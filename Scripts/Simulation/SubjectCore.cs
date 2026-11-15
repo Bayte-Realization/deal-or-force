@@ -628,8 +628,8 @@ public static class SubjectSystem
                 : Math.Max(0f, subject.WeeklyTaxIncome) * type.Tribute;
             if (tribute > 0f)
             {
-                subject.Treasury -= tribute;
-                overlord.Treasury += tribute;
+                { var ledgerBefore = subject.Treasury; subject.Treasury -= tribute; MoneyLedger.Book(subject, MoneyFlow.Tribute, subject.Treasury - ledgerBefore); }
+                { var ledgerBefore = overlord.Treasury; overlord.Treasury += tribute; MoneyLedger.Book(overlord, MoneyFlow.Tribute, overlord.Treasury - ledgerBefore); }
                 subject.TributePaidWeekly += tribute;
                 overlord.TributeTakenWeekly += tribute;
             }

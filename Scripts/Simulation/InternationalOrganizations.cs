@@ -400,10 +400,11 @@ public static class InternationalOrganizations
         if (cmd.Action == "create")
         {
             var deposit = Math.Max(0, c.Defines.OrganizationFoundingDeposit);
-            n.Treasury -= deposit;
+            { var ledgerBefore = n.Treasury; n.Treasury -= deposit; MoneyLedger.Book(n, MoneyFlow.Organizations, n.Treasury - ledgerBefore); }
             n.PoliticalPoints -= FoundingPoliticalCost(c);
             c.Organizations.Add(new InternationalOrganization { Id = c.NextOrganizationId++, FounderId = n.Id,
                 Name = cmd.Name.Trim(), CharterId = cmd.CharterId, FoundedDay = c.ElapsedDays, Members = new() { n.Id }, Budget = deposit });
+            OrganizationLedger.Book(c.Organizations[^1], OrganizationFlow.FoundingDeposit, deposit);
             c.Chronicle.Record(c, "organization_founded", n.Id, -1, DisplayName(c, c.Organizations.Last()));
         }
         else
@@ -432,7 +433,7 @@ public static class InternationalOrganizations
                     }
                     org.Members.Remove(n.Id); org.UnpaidWeeks.Remove(n.Id); org.Motion?.Votes.Remove(n.Id);
                     org.Cohesion = Math.Max(0, org.Cohesion - .05f);
-                    if (org.Members.Count == 0) { n.Treasury += org.Budget; org.Budget = 0; org.Dissolved = true; org.Motion = null; }
+                    if (org.Members.Count == 0) { n.Treasury += org.Budget; MoneyLedger.Book(n, MoneyFlow.Organizations, org.Budget); OrganizationLedger.Book(org, OrganizationFlow.Returned, -org.Budget); org.Budget = 0; org.Dissolved = true; org.Motion = null; }
                     break;
                 case "vote": org.Motion.Votes[n.Id] = cmd.Yes; break;
                 case "demand_terms": OrganizationCrises.Demand(c, org, n); break;
@@ -512,6 +513,8 @@ public static class InternationalOrganizations
                     new OrganizationCommand { IssuerId = id, OrganizationId = org.Id, Action = WouldJoin(c, org, target) ? "join" : "decline" }.Apply(c);
             if (c.ElapsedDays > org.FoundedDay && (c.ElapsedDays - org.FoundedDay) % 7 == 0)
             {
+                // The fund's week closes where its dues are collected, before this week's dues.
+                OrganizationLedger.Close(c, org);
                 var unpaid = false;
                 foreach (var id in org.Members.ToArray())
                 {
@@ -521,7 +524,7 @@ public static class InternationalOrganizations
                     var dues = Dues(c, org, n);
                     if (!float.IsFinite(dues) || n.Treasury < dues) { org.UnpaidWeeks[id] = org.UnpaidWeeks.GetValueOrDefault(id) + 1; unpaid = true; continue; }
                     if (!float.IsFinite(n.Treasury) || !float.IsFinite(org.Budget + dues)) { unpaid = true; continue; }
-                    n.Treasury -= dues; org.Budget += dues; org.UnpaidWeeks[id] = 0;
+                    { var ledgerBefore = n.Treasury; n.Treasury -= dues; org.Budget += dues; OrganizationLedger.Book(org, OrganizationFlow.Dues, dues); org.UnpaidWeeks[id] = 0; MoneyLedger.Book(n, MoneyFlow.Organizations, n.Treasury - ledgerBefore); }
                 }
                 // What members at war with each other do to it is part of where its cohesion is
                 // heading (OrganizationDynamics.Target), not a second toll on top.
@@ -556,7 +559,7 @@ public static class InternationalOrganizations
                 if (m.Kind == "admission" && !org.Members.Contains(m.TargetId) &&
                     !org.Members.Any(id => CampaignDiplomacy.AtWar(c, id, m.TargetId))) org.Invitations.Add(m.TargetId);
                 else if (m.Kind == "grant" && org.Members.Contains(m.TargetId) && m.Amount <= org.Budget && float.IsFinite(targetNation.Treasury + m.Amount))
-                { org.Budget -= m.Amount; targetNation.Treasury += m.Amount; }
+                { org.Budget -= m.Amount; targetNation.Treasury += m.Amount; OrganizationLedger.Book(org, OrganizationFlow.Grants, -m.Amount); MoneyLedger.Book(targetNation, MoneyFlow.Organizations, m.Amount); }
                 else if (m.Kind == "sanction" && !org.Members.Contains(m.TargetId))
                 {
                     foreach (var id in org.Members)

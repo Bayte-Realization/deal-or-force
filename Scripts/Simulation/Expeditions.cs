@@ -111,7 +111,7 @@ public static class Expeditions
     {
         if (AirliftRefusal(c, n, army, province).Length > 0) return false;
         var (days, cost) = Quote(c, army, province);
-        n.Treasury -= cost;
+        { var ledgerBefore = n.Treasury; n.Treasury -= cost; MoneyLedger.Book(n, MoneyFlow.EventsAndDecisions, n.Treasury - ledgerBefore); }
         Place(c, army, province, days);
         DiagnosticLogs.Write("orders", $"AIRLIFT army={army.Id} nation={n.Tag} province={province} days={days} cost={cost:0.###}");
         return true;
@@ -124,7 +124,7 @@ public static class Expeditions
         if (arrival <= 0 || army.InBattle || army.EmbarkedFleetId >= 0 || army.CutOff) return false;
         var (days, cost) = Quote(c, army, arrival);
         sponsor.PoliticalPoints -= c.Defines.VolunteerPoliticalCost;
-        sponsor.Treasury -= cost;
+        { var ledgerBefore = sponsor.Treasury; sponsor.Treasury -= cost; MoneyLedger.Book(sponsor, MoneyFlow.EventsAndDecisions, sponsor.Treasury - ledgerBefore); }
         army.LentById = sponsor.Id;
         army.LentDay = c.ElapsedDays;
         army.NationId = host.Id;

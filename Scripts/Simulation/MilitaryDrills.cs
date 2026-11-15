@@ -30,7 +30,7 @@ public sealed class ConductMilitaryExerciseCommand : ICampaignCommand
             return;
         }
         nation.ArmyExperience -= 25f;
-        nation.Treasury -= 0.05f;
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= 0.05f; MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
         ModifierSystem.Grant(campaign, nation, "intensive_field_course", 240);
         Succeeded = true;
         campaign.Chronicle.Record(campaign, "military_exercises_conducted", IssuerId, -1);

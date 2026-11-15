@@ -305,7 +305,7 @@ public static class DiplomaticActs
     {
         var price = Price(campaign, act);
         if (asking.Treasury + 0.001f < price) return false;
-        asking.Treasury -= price;
+        { var ledgerBefore = asking.Treasury; asking.Treasury -= price; MoneyLedger.Book(asking, MoneyFlow.Diplomacy, asking.Treasury - ledgerBefore); }
         switch (act)
         {
             case DiplomaticAct.CulturalCooperation:
@@ -334,7 +334,7 @@ public static class DiplomaticActs
                 OpinionSystem.Remember(campaign, relation, "embargo_lifted");
                 break;
             case DiplomaticAct.Subsidy:
-                asked.Treasury += price;
+                { var ledgerBefore = asked.Treasury; asked.Treasury += price; MoneyLedger.Book(asked, MoneyFlow.Diplomacy, asked.Treasury - ledgerBefore); }
                 OpinionSystem.Remember(campaign, relation, "subsidy_paid");
                 break;
             case DiplomaticAct.StaffTalks:
@@ -376,14 +376,14 @@ public static class DiplomaticActs
             case DiplomaticAct.DisasterRelief:
                 // Money that leaves the sender and arrives: the asking side pays the price as
                 // for every other act, and the asked side receives it, which is the whole point.
-                asked.Treasury += price;
+                { var ledgerBefore = asked.Treasury; asked.Treasury += price; MoneyLedger.Book(asked, MoneyFlow.Diplomacy, asked.Treasury - ledgerBefore); }
                 asked.Stability = Math.Clamp(asked.Stability + 0.01f, 0f, 1f);
                 OpinionSystem.Remember(campaign, relation, "disaster_relief");
                 break;
             case DiplomaticAct.TechnologyLicence:
                 // The fee is the act's own price, and it is paid to the country that owns the
                 // drawings: nothing is created, and nothing is charged twice.
-                asked.Treasury += price;
+                { var ledgerBefore = asked.Treasury; asked.Treasury += price; MoneyLedger.Book(asked, MoneyFlow.Diplomacy, asked.Treasury - ledgerBefore); }
                 ModifierSystem.Grant(campaign, asking, "technology_licence", campaign.Defines.DiplomaticActDays);
                 OpinionSystem.Remember(campaign, relation, "technology_licence");
                 break;

@@ -40,7 +40,7 @@
     "options": [
       { "title": "Repair it and say nothing",
         "consequence": "The gas returns and the question does not.",
-        "effects": { "treasury_percent": -0.025, "construction_capacity": 0.02, "stability": -0.004 } },
+        "effects": { "income_penalty": { "share": 0.05, "days": 150 }, "construction_capacity": 0.02, "stability": -0.004 } },
       { "title": "Name the neighbour publicly",
         "consequence": "A useful grievance, and a harder border.",
         "effects": { "war_support": 0.018, "stability": 0.006, "market_access": -0.02 } },

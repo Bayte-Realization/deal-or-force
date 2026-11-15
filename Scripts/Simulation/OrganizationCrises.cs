@@ -131,8 +131,8 @@ public static class OrganizationCrises
         if (ConcedeRefusal(c, org, giver).Length > 0) return;
         var member = c.NationById(org.CrisisMemberId);
         var cost = ConcessionCost(c, member);
-        giver.Treasury -= cost;
-        member.Treasury += cost;
+        { var ledgerBefore = giver.Treasury; giver.Treasury -= cost; MoneyLedger.Book(giver, MoneyFlow.ForeignAid, giver.Treasury - ledgerBefore); }
+        { var ledgerBefore = member.Treasury; member.Treasury += cost; MoneyLedger.Book(member, MoneyFlow.ForeignAid, member.Treasury - ledgerBefore); }
         member.OrganizationConcessions[org.Id] = c.ElapsedDays;
         if (CampaignDiplomacy.Get(c, member.Id, giver.Id) is { } relation) OpinionSystem.Remember(c, relation, "bought_us_back");
         org.CrisisMemberId = -1;

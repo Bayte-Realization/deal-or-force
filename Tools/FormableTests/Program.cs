@@ -450,6 +450,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--alliances-only")) { DynamicAllianceTests.Run(); return; }
         if (args.Contains("--finance-only")) { SovereignFinanceTests.Run(); return; }
         if (args.Contains("--ai-fiscal-only")) { AiFiscalPolicyTests.Run(); return; }
+        if (args.Contains("--income-penalty-only")) { IncomePenaltyTests.Run(); return; }
         if (args.Contains("--construction-funding-only")) { ConstructionFundingTests.Run(); return; }
         if (args.Contains("--methods-only")) { MovementMethodsTests.Run(); return; }
         if (args.Contains("--kin-only")) { KinStatecraftTests.Run(); return; }
@@ -528,6 +529,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         FederalFractureOutcomeTests.Run();
         SovereignFinanceTests.Run();
         AiFiscalPolicyTests.Run();
+        IncomePenaltyTests.Run();
         ConstructionFundingTests.Run();
         MovementMethodsTests.Run();
         KinStatecraftTests.Run();

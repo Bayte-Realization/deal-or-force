@@ -131,7 +131,7 @@ public sealed class StartCrisisResponseCommand : ICampaignCommand
         var n = c.NationById(IssuerId);
         if (DomesticCrises.Refusal(c, n, ActionId).Length > 0) return;
         var memory = n.DomesticCrisis ??= new();
-        n.Treasury -= DomesticCrises.Cost(c, n, ActionId);
+        { var ledgerBefore = n.Treasury; n.Treasury -= DomesticCrises.Cost(c, n, ActionId); MoneyLedger.Book(n, MoneyFlow.EventsAndDecisions, n.Treasury - ledgerBefore); }
         memory.ResponseId = ActionId;
         memory.ResponseUntilDay = c.ElapsedDays + Math.Max(1, c.Defines.CrisisResponseDurationDays);
         memory.ResponseCooldownUntilDay = memory.ResponseUntilDay + Math.Max(0, c.Defines.CrisisResponseCooldownDays);
@@ -157,7 +157,7 @@ public sealed class ConciliateRegionCommand : ICampaignCommand
         var region = c.States.Find(state => state.MapIndex == StateMapIndex);
         if (DomesticCrises.ConciliationRefusal(c, nation, region).Length > 0) return;
         var memory = nation.DomesticCrisis ??= new();
-        nation.Treasury -= DomesticCrises.ConciliationCost(c, nation, region);
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= DomesticCrises.ConciliationCost(c, nation, region); MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, nation.Treasury - ledgerBefore); }
         memory.ConciliationRegion = region.MapIndex;
         memory.ConciliationUntilDay = c.ElapsedDays + Math.Max(1, c.Defines.CrisisConciliationDays);
         c.Chronicle.Record(c, "conciliation_started", nation.Id, 0, region.MapIndex.ToString());

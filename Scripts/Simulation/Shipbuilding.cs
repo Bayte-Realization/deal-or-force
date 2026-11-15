@@ -154,7 +154,7 @@ public static class Shipbuilding
             // A yard is paid as it works. One the treasury cannot pay stops for the day rather
             // than building on credit the country never voted.
             if (nation.Treasury < cost) continue;
-            nation.Treasury -= cost;
+            { var ledgerBefore = nation.Treasury; nation.Treasury -= cost; MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
 
             // The slipways go to the fleets in the order they were raised, as a navy's
             // yards go to whatever squadron was first to ask.
@@ -494,7 +494,7 @@ public sealed class CommissionNewFleetCommand : ICampaignCommand
             Refusal = Loc.Format("Requires {0} in treasury to commission a new squadron.", Fmt.Money(upFrontCost));
             return;
         }
-        nation.Treasury -= upFrontCost;
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= upFrontCost; MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
         var bill = StrategicStockpiles.HullMaterialBill(atOnce, Mode);
         StrategicStockpiles.ConsumeBill(campaign, nation, bill);
         if (Mode == MobilisationMode.TotalMobilisation)

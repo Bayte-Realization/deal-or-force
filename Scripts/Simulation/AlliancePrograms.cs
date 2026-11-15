@@ -179,9 +179,9 @@ public static class AlliancePrograms
     }
     private static void Pay(Campaign c, DiplomaticRelation r, Nation sponsor)
     {
-        sponsor.Treasury -= r.AllianceProgramWeeklyCost;
+        { var ledgerBefore = sponsor.Treasury; sponsor.Treasury -= r.AllianceProgramWeeklyCost; MoneyLedger.Book(sponsor, MoneyFlow.ForeignAid, sponsor.Treasury - ledgerBefore); }
         if (r.AllianceProgramRelief && c.NationById(r.Other(sponsor.Id)) is { } recipient)
-            recipient.Treasury += r.AllianceProgramWeeklyCost;
+            { var ledgerBefore = recipient.Treasury; recipient.Treasury += r.AllianceProgramWeeklyCost; MoneyLedger.Book(recipient, MoneyFlow.ForeignAid, recipient.Treasury - ledgerBefore); }
     }
     private static void Fail(Campaign c, DiplomaticRelation r, Nation sponsor)
     {

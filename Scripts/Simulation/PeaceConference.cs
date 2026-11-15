@@ -439,8 +439,8 @@ public static class PeaceConference
         {
             var share = demand.Reparations ? 0.03f : 0.015f;
             var payment = MathF.Min(MathF.Max(0f, loser.Treasury), MathF.Max(0.10f, loser.Gdp * share));
-            loser.Treasury -= payment;
-            beneficiary.Treasury += payment;
+            { var ledgerBefore = loser.Treasury; loser.Treasury -= payment; MoneyLedger.Book(loser, MoneyFlow.Reparations, loser.Treasury - ledgerBefore); }
+            { var ledgerBefore = beneficiary.Treasury; beneficiary.Treasury += payment; MoneyLedger.Book(beneficiary, MoneyFlow.Reparations, beneficiary.Treasury - ledgerBefore); }
             war.Reparations = payment;
         }
 

@@ -310,8 +310,8 @@ public static class LandArrangementSystem
             var due = lease.RentPerYear / 52f;
             if (holder.Treasury >= due)
             {
-                holder.Treasury -= due;
-                owner.Treasury += due;
+                { var ledgerBefore = holder.Treasury; holder.Treasury -= due; MoneyLedger.Book(holder, MoneyFlow.LandLeases, holder.Treasury - ledgerBefore); }
+                { var ledgerBefore = owner.Treasury; owner.Treasury += due; MoneyLedger.Book(owner, MoneyFlow.LandLeases, owner.Treasury - ledgerBefore); }
                 lease.UnpaidWeeks = 0;
             }
             else if (++lease.UnpaidWeeks >= Math.Max(1, c.Defines.LeaseUnpaidWeeks))

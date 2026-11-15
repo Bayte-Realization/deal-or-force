@@ -686,7 +686,7 @@
         "title": "Close everything at once",
         "consequence": "Fewer graves, and a very expensive quarter.",
         "effects": {
-          "treasury_percent": -0.08,
+          "income_penalty": { "share": 0.12, "days": 200 },
           "productivity": -0.016,
           "state.standard_of_living": -0.004,
           "stability": 0.008
@@ -743,7 +743,7 @@
         "title": "Relief now, rebuilding later",
         "consequence": "Nobody is abandoned and nothing is fixed.",
         "effects": {
-          "treasury_percent": -0.04,
+          "income_penalty": { "share": 0.08, "days": 150 },
           "state.standard_of_living": -0.004
         }
       },
@@ -1114,7 +1114,7 @@
         "title": "Find other buyers",
         "consequence": "There is always somebody who will buy. They set the price.",
         "effects": {
-          "treasury_percent": -0.02
+          "income_penalty": { "share": 0.04, "days": 150 }
         },
         "modifiers": [
           {

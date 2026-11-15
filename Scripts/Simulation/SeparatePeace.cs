@@ -283,8 +283,8 @@ public static class SeparatePeace
             var receiver = terms == SeparatePeaceTerms.Indemnity ? enemyLeader : member;
             var share = terms == SeparatePeaceTerms.Indemnity ? d.SeparatePeaceIndemnityShare : d.SeparatePeaceBribeShare;
             var payment = MathF.Min(MathF.Max(0f, payer.Treasury), MathF.Max(0.05f, payer.Gdp * share));
-            payer.Treasury -= payment;
-            receiver.Treasury += payment;
+            { var ledgerBefore = payer.Treasury; payer.Treasury -= payment; MoneyLedger.Book(payer, MoneyFlow.Reparations, payer.Treasury - ledgerBefore); }
+            { var ledgerBefore = receiver.Treasury; receiver.Treasury += payment; MoneyLedger.Book(receiver, MoneyFlow.Reparations, receiver.Treasury - ledgerBefore); }
             record.Payment = payment;
         }
 
@@ -380,8 +380,8 @@ public static class SeparatePeace
         if (member.DecisionAvailableDay.GetValueOrDefault(key) > c.ElapsedDays) return Loc.Get("Paid recently.");
         var amount = MathF.Max(0.05f, payer.Gdp * c.Defines.SeparatePeaceSubsidyShare);
         if (payer.Treasury < amount) return Loc.Get("Not enough money in the treasury.");
-        payer.Treasury -= amount;
-        member.Treasury += amount;
+        { var ledgerBefore = payer.Treasury; payer.Treasury -= amount; MoneyLedger.Book(payer, MoneyFlow.Reparations, payer.Treasury - ledgerBefore); }
+        { var ledgerBefore = member.Treasury; member.Treasury += amount; MoneyLedger.Book(member, MoneyFlow.Reparations, member.Treasury - ledgerBefore); }
         member.WarSupport = Math.Clamp(member.WarSupport + c.Defines.SeparatePeaceSubsidySupport, 0f, 1f);
         member.DecisionAvailableDay[key] = c.ElapsedDays + 90;
         OpinionSystem.Remember(c, CampaignDiplomacy.Get(c, payerId, memberId), "kept_us_in_the_war");

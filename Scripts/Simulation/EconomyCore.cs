@@ -449,7 +449,7 @@ public sealed class DemolishBuildingCommand : ICampaignCommand
 
         // GDP falls on its own as the building's output leaves the market; nothing to take back.
         nation.ConstructionCapacity = MathF.Max(0f, nation.ConstructionCapacity - definition.CapacityGain * yield);
-        nation.Treasury += ConstructionCost.Of(campaign, nation, Building) * campaign.Defines.DemolitionRefund;
+        { var ledgerBefore = nation.Treasury; nation.Treasury += ConstructionCost.Of(campaign, nation, Building) * campaign.Defines.DemolitionRefund; MoneyLedger.Book(nation, MoneyFlow.Construction, nation.Treasury - ledgerBefore); }
 
         if (Building == BuildingKind.University)
         {
@@ -970,6 +970,10 @@ public static class EconomySystem
             if (index > 0 && index % EconomyStageCountries == 0) yield return 0;
             using var stage = SimProfiler.Measure("economy");
             var nation = campaign.Nations[index];
+            // The money ledger's week closes here, before this week's budget is booked, so each
+            // closed week holds exactly one budget; and penalties that have run out go first.
+            MoneyLedger.Close(campaign, nation);
+            IncomePenalties.Expire(campaign, nation);
             // Empty map entities (e.g. the unclaimed Antarctic mask) are not economies.
             // Their nominal placeholder GDP used to finance imaginary arms output forever.
             // Fallen countries (all ground lost, the fall flow has ruled) are not economies:
@@ -1008,10 +1012,13 @@ public static class EconomySystem
             // An ideology living in a form of government it has no business in. Not
             // forbidden - it is a real arrangement - but it costs every week it lasts.
             var mismatch = PoliticsCore.IsMismatched(nation) ? ideology.MismatchStability : 0f;
-            var budget = BudgetCore.Evaluate(nation, weeklyOutput, atWar);
+            var budget = BudgetCore.Evaluate(nation, weeklyOutput, atWar, MoneyLedger.BudgetWeek(nation));
             nation.WeeklyTaxIncome = budget.Taxation;
             nation.WeeklyExpenses = budget.Expenses;
             nation.WeeklyBalance = budget.Balance;
+            nation.WeeklyGrossIncome = budget.GrossRevenue;
+            nation.WeeklyIncomePenalty = budget.IncomePenalty;
+            MoneyLedger.BookPenalty(nation, budget.IncomePenalty);
 
             // Itemised for whoever is going to read it, which is a human. The labels that
             // carry a rate have to be composed fresh every week, and composing them for the

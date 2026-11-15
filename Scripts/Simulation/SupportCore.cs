@@ -918,7 +918,7 @@ public sealed class RaiseSupportCommand : ICampaignCommand
         var type = SupportTypeCatalog.Get(TypeId);
         var days = SupportCore.BuildDaysOf(nation, type);
         var cost = SupportCore.CostOf(nation, type);
-        nation.Treasury -= cost;
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= cost; MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
         nation.ManpowerReserve -= type.Personnel;
         var id = 1;
         foreach (var order in campaign.SupportOrders) id = Math.Max(id, order.Id + 1);
@@ -948,7 +948,7 @@ public sealed class CancelSupportOrderCommand : ICampaignCommand
         {
             // The same refund a cancelled division batch gets: what is left of the money,
             // and the men whole - they have not been issued anything yet.
-            nation.Treasury += order.PaidCost * 0.75f * (1f - order.TrainedDays / (float)order.DurationDays);
+            { var ledgerBefore = nation.Treasury; nation.Treasury += order.PaidCost * 0.75f * (1f - order.TrainedDays / (float)order.DurationDays); MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
             nation.ManpowerReserve += order.Personnel;
         }
         campaign.SupportOrders.Remove(order);

@@ -249,7 +249,7 @@ public sealed class CancelRecruitmentCommand : ICampaignCommand
         var nation = c.NationById(IssuerId);
         if (order is null || nation is null) return;
         nation.ManpowerReserve += order.PersonnelPerDivision * order.Count;
-        nation.Treasury += order.PaidCost * 0.75f * (1f - order.TrainedDays / (float)Math.Max(1, order.DurationDays));
+        { var ledgerBefore = nation.Treasury; nation.Treasury += order.PaidCost * 0.75f * (1f - order.TrainedDays / (float)Math.Max(1, order.DurationDays)); MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
         c.Recruitment.Remove(order);
         c.MarkStrategicChange();
     }

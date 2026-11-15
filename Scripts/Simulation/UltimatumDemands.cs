@@ -353,8 +353,8 @@ public static partial class Ultimatum
             var provinces = Enumerable.Range(1, c.ProvinceMap.ProvinceCount).Where(p =>
                 ids.Contains(c.ProvinceMap.ProvinceToState[p]) && c.ProvinceMap.ProvinceToNation[p] == target.MapIndex).ToArray();
             if (provinces.Length > 0) StatePartition.Annex(c, provinces, demander, asConquest: false);
-            target.Treasury -= demand.Reparations;
-            demander.Treasury += demand.Reparations;
+            { var ledgerBefore = target.Treasury; target.Treasury -= demand.Reparations; MoneyLedger.Book(target, MoneyFlow.Reparations, target.Treasury - ledgerBefore); }
+            { var ledgerBefore = demander.Treasury; demander.Treasury += demand.Reparations; MoneyLedger.Book(demander, MoneyFlow.Reparations, demander.Treasury - ledgerBefore); }
             if (demand.LiftEmbargo)
             {
                 if (relation.A == target.Id) relation.EmbargoByA = false;

@@ -538,7 +538,7 @@ public sealed class RaiseArmyCommand : ICampaignCommand
         if (FailureReason.Length > 0) return;
         var template = UnitTypeCatalog.Get(TemplateId);
         var cost = RecruitmentSystem.TotalBatchCost(campaign, nation, template, count, Mode, out _);
-        nation.Treasury -= cost;
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= cost; MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
         nation.ManpowerReserve -= template.RecruitmentPersonnel * count;
 
         // Quoting is read-only. Successful admission is where every posture initializes

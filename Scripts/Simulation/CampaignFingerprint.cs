@@ -566,6 +566,14 @@ public static class CampaignFingerprint
             MixFloat(nation.DebtIssuedWeekly); MixFloat(nation.DebtInterestWeekly);
             Mix(nation.DebtMissedWeeks); Mix(nation.DebtCrisisWeeks); Mix((int)nation.DebtCondition);
             Mix(nation.DebtRestructuringProgress); Mix(nation.DebtRestructuringLastDay);
+            // Timed income penalties (IncomePenalties). A country carrying none adds no bytes, so
+            // every campaign without one keeps the fingerprint it had before they existed.
+            if (nation.IncomePenalties is { Count: > 0 } incomePenalties)
+            {
+                Mix(-0x1C0);
+                foreach (var penalty in incomePenalties)
+                { MixFloat(penalty.Share); Mix(penalty.StartDay); Mix(penalty.UntilDay); MixText(penalty.Source); }
+            }
             Mix(nation.LawsActive ? 1 : 0); Mix(nation.AgendasActive ? 1 : 0); Mix(nation.LastPolicyReviewDay);
             foreach (var law in nation.Laws.OrderBy(p => p.Key, StringComparer.Ordinal))
             { MixText(law.Key); MixText(law.Value.Id); MixText(law.Value.TargetTag); Mix(law.Value.Region); Mix(law.Value.AdoptedDay); }

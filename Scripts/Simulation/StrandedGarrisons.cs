@@ -293,7 +293,7 @@ public static class StrandedGarrisons
         }
         var (_, cost) = Expeditions.Quote(c, army, home);
         if (parent.Treasury < cost) return false;
-        parent.Treasury -= cost;
+        { var ledgerBefore = parent.Treasury; parent.Treasury -= cost; MoneyLedger.Book(parent, MoneyFlow.Military, parent.Treasury - ledgerBefore); }
         Expeditions.Evacuate(c, army, home, c.Defines.GarrisonEvacuationStrengthLoss,
             c.Defines.GarrisonEvacuationEquipmentLoss);
         return true;

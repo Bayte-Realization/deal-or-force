@@ -336,12 +336,12 @@ public static class MovementPower
             var output = MathF.Max(0f, host.Gdp) * region.Population / MathF.Max(1f, host.Population);
             var take = output * M.Clamp01(defines.MovementParallelLevy);
             if (take <= 0f || host.Treasury < take) continue;
-            host.Treasury -= take;
+            { var ledgerBefore = host.Treasury; host.Treasury -= take; MoneyLedger.Book(host, MoneyFlow.Movements, host.Treasury - ledgerBefore); }
             levy += take;
             region.Stability = M.Clamp01(region.Stability - 0.002f);
         }
         if (levy <= 0f) return;
-        nation.Treasury += levy;
+        { var ledgerBefore = nation.Treasury; nation.Treasury += levy; MoneyLedger.Book(nation, MoneyFlow.Movements, nation.Treasury - ledgerBefore); }
         state.IncomeWeekly += levy;
     }
 }

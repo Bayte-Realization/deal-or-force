@@ -239,7 +239,7 @@ public static class TreasuryDynamics
             if (upkeep > 1f)
             {
                 var alertDrain = nation.Gdp * (upkeep - 1f) * 0.002f;
-                nation.Treasury = MathF.Max(0f, nation.Treasury - alertDrain);
+                { var ledgerBefore = nation.Treasury; nation.Treasury = MathF.Max(0f, nation.Treasury - alertDrain); MoneyLedger.Book(nation, MoneyFlow.AlertUpkeep, nation.Treasury - ledgerBefore); }
             }
             if (nation.RecessionDepth > 0f && c.ElapsedDays >= nation.RecessionUntilDay) nation.RecessionDepth = 0f;
         }
@@ -255,7 +255,7 @@ public static class TreasuryDynamics
         if (nation.Treasury <= 0f) return;
         var rate = M.Clamp(nation.Inflation - c.Defines.ReserveYield, 0f, 2f);
         var loss = nation.Treasury * rate / 52f;
-        nation.Treasury -= loss;
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= loss; MoneyLedger.Book(nation, MoneyFlow.ReserveErosion, nation.Treasury - ledgerBefore); }
         Eroded += loss;
     }
 
@@ -268,7 +268,7 @@ public static class TreasuryDynamics
         var accountability = M.Clamp01(AiStatecraft.Restraint(c, nation));
         var spent = excess * d.TreasurySpendingRate * (0.4f + 0.6f * accountability) / 52f;
         var leaked = excess * d.TreasuryCorruptionRate * (1f - accountability) / 52f;
-        nation.Treasury -= spent + leaked;
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= spent + leaked; MoneyLedger.Book(nation, MoneyFlow.SurplusSpending, nation.Treasury - ledgerBefore); }
         nation.Stability = M.Clamp01(nation.Stability + MathF.Min(d.TreasurySpendingStabilityWeeklyMax,
             spent / MathF.Max(0.01f, nation.Gdp) * d.TreasurySpendingStability));
         Spent += spent;
@@ -322,7 +322,10 @@ public static class TreasuryDynamics
     {
         var d = c.Defines;
         severity = M.Clamp01(severity);
-        nation.Treasury -= nation.Gdp * d.CrisisBailoutShare * severity * (origin ? 1f : 0.6f);
+        // The bailout is no longer a lump out of the reserves: the crisis takes the same order of
+        // money as a timed cut to the country's income (IncomePenalties), spread over the slump.
+        IncomePenalties.FromLoss(c, nation, nation.Gdp * d.CrisisBailoutShare * severity * (origin ? 1f : 0.6f),
+            d.CrisisIncomePenaltyDays, "Financial crisis");
         var depth = d.CrisisRecessionDepth * severity;
         // A second blow on a country already down deepens and lengthens it rather than resetting it.
         if (nation.RecessionDepth > 0f && c.ElapsedDays < nation.RecessionUntilDay)
@@ -397,7 +400,10 @@ public static class TreasuryDynamics
             foreach (var nation in c.Nations)
             {
                 if (nation.Movement is not null || nation.Gdp <= 0f || nation.Population <= 0) continue;
-                nation.Treasury -= nation.Gdp * d.PandemicCostShare * (0.7f + 0.6f * c.Random.NextFloat());
+                // Its bill as a year of lost revenue rather than a lump (IncomePenalties); the draw
+                // is kept so the world's random sequence does not move.
+                IncomePenalties.FromLoss(c, nation, nation.Gdp * d.PandemicCostShare * (0.7f + 0.6f * c.Random.NextFloat()),
+                    d.PandemicIncomePenaltyDays, "Pandemic");
                 var depth = d.PandemicDepth * (0.6f + 0.8f * c.Random.NextFloat());
                 if (nation.RecessionDepth <= 0f || c.ElapsedDays >= nation.RecessionUntilDay)
                 {
@@ -423,7 +429,9 @@ public static class TreasuryDynamics
                 if (regions.Length == 0) break;
                 var region = PickByPopulation(c, regions);
                 var cost = nation.Gdp * (shock.CostMin + (shock.CostMax - shock.CostMin) * c.Random.NextFloat());
-                nation.Treasury -= cost;
+                // A disaster costs the country the income of what it wrecked, for months, instead
+                // of a lump out of the reserves (IncomePenalties).
+                IncomePenalties.FromLoss(c, nation, cost, d.DisasterIncomePenaltyDays, shock.Name);
                 if (shock.Damage > 0f) region.WarDamage = MathF.Min(0.8f, MathF.Max(region.WarDamage, region.WarDamage + shock.Damage));
                 if (shock.Deaths > 0f && region.Population > 0)
                     EconomySystem.AdjustStatePopulation(region, -(long)(region.Population * shock.Deaths));

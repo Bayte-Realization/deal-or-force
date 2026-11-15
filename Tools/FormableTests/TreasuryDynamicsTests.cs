@@ -43,7 +43,12 @@ static class TreasuryDynamicsTests
         crisis.Defines.ContagionStrength = 10f;
         crisis.Defines.ContagionFloor = 0f;
         TreasuryDynamics.Strike(crisis, crisis.Nations[0], 1f, true);
-        Check(crisis.Nations[0].Treasury < 10f && crisis.Nations[0].RecessionDepth > 0f, "the struck country pays the bailout and falls into recession");
+        // The bailout is a timed cut to the struck country's income now (IncomePenalties), not a lump
+        // out of its reserves: it still pays, over the slump, and nobody else pays for it.
+        Check(crisis.Nations[0].Treasury == 10f && crisis.Nations[0].IncomePenalties is { Count: 1 } &&
+              crisis.Nations[0].IncomePenalties[0].Source == "Financial crisis" && crisis.Nations[0].RecessionDepth > 0f,
+            "the struck country pays the bailout out of its income for a time and falls into recession");
+        Check(crisis.Nations[2].IncomePenalties is null, "a bystander pays none of it");
         Week(crisis, 2);
         Check(TreasuryDynamics.OutputFactor(crisis, crisis.Nations[0]) < 1f, "and its output is down");
         typeof(TreasuryDynamics).GetMethod("Spread", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!

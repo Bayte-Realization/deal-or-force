@@ -66,7 +66,7 @@ public static class CivilWarPersistence
                 {
                     if (!MilitiaCore.Found(c, nation, region)) continue;
                     nation.ManpowerReserve -= MilitiaCore.Weights.Formation;
-                    nation.Treasury -= Math.Max(0f, c.Defines.CivilWarReserveCost);
+                    { var ledgerBefore = nation.Treasury; nation.Treasury -= Math.Max(0f, c.Defines.CivilWarReserveCost); MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
                     raised++;
                     break;
                 }

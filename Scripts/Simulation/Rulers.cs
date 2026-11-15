@@ -1034,7 +1034,7 @@ public sealed class AppointMinisterCommand : ICampaignCommand
         if (PromoteToLeader)
         {
             if (!PoliticalAppointments.MayPromoteMinister(campaign, nation, PortfolioId, out var cost, out _)) return;
-            nation.Treasury -= cost;
+            { var ledgerBefore = nation.Treasury; nation.Treasury -= cost; MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, nation.Treasury - ledgerBefore); }
             var ministerName = Rulers.MinisterPersonName(nation, PortfolioId);
             var ministerBirthYear = Rulers.MinisterBirthYear(campaign, nation, PortfolioId);
             nation.CabinetPeople.TryGetValue(PortfolioId, out var knownPerson);
@@ -1070,7 +1070,7 @@ public sealed class AppointMinisterCommand : ICampaignCommand
 
         if (!Rulers.CanAppointMinister(campaign, nation, PortfolioId, OptionId, out _)) return;
         var price = Rulers.CabinetAppointmentCost(campaign, nation);
-        nation.Treasury -= price;
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= price; MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, nation.Treasury - ledgerBefore); }
         var hadMinister = nation.CabinetPeople.ContainsKey(PortfolioId);
         nation.Cabinet[PortfolioId] = OptionId;
         var authoredMin = !hadMinister ? Rulers.AuthoredMinister(nation.Tag, PortfolioId) : null;
@@ -1114,7 +1114,7 @@ public sealed class RecruitPoliticianCommand : ICampaignCommand
         {
             var refreshPrice = baseCost * 0.5f;
             if (nation.Treasury < refreshPrice) return;
-            nation.Treasury -= refreshPrice;
+            { var ledgerBefore = nation.Treasury; nation.Treasury -= refreshPrice; MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, nation.Treasury - ledgerBefore); }
             nation.RulerGeneration++;
             campaign.MarkStrategicChange();
             return;
@@ -1122,7 +1122,7 @@ public sealed class RecruitPoliticianCommand : ICampaignCommand
         if (!PoliticalAppointments.MayRecruit(campaign, nation, CandidateSlot, AsNationalLeader,
             out var candidate, out var price, out _)) return;
         if (!string.IsNullOrEmpty(ExpectedName) && ExpectedName != candidate.Name) return;
-        nation.Treasury -= price;
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= price; MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, nation.Treasury - ledgerBefore); }
         if (AsNationalLeader)
         {
             if (Rulers.HasDualExecutive(nation))

@@ -110,6 +110,9 @@ public partial class DealOrForceGame
         DetailRow("Treasury", Fmt.Money(player.Treasury), Fmt.MoneyExact(player.Treasury),
             player.Treasury < 0f ? "state.negative" : "text.bright");
 
+        // Every income and expense, written out (MoneyLedgerView).
+        ShowMoneyLedger(player);
+
         DetailHeading("OUTPUT");
         DetailRow("GDP", Fmt.Money(player.Gdp),
             "The current GDP model follows sold production, worker productivity, staffing, supply and demand, with a scenario calibration. It is not yet a full value-added national account. Buildings add capacity, not a guaranteed instant GDP bonus.");

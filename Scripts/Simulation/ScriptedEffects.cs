@@ -41,6 +41,9 @@ namespace DealOrForce.Simulation;
 ///   FLEET:  fleet.readiness, fleet.supply
 ///   OTHER:  research, construction_capacity, weekly_balance, market_access
 ///           (add_modifier / remove_modifier for spirits; use — a scripted trigger)
+///   INCOME: "income_penalty": { "share": 0.08, "days": 120 } — a timed cut of 8% to the
+///           country's gross budget revenue (not its expenses) for 120 days. Penalties add up,
+///           capped by IncomePenaltyCap (common/defines/93_income_penalties.json).
 ///
 /// UNKNOWN KEYS: never fail silently. They are reported at load with the list of
 /// valid keys, so a typo says so on the first launch, not in a campaign a week in.
@@ -74,6 +77,7 @@ public static class ScriptedEffects
     }
 
     private static readonly Dictionary<string, Field> Fields = new(StringComparer.OrdinalIgnoreCase);
+    private static Field TreasuryField;
     // Это явный список доступных записываемых полей, не reflection по всему Nation.
     // Для нового поля задайте единицы, Min/Max и Help; затем проверьте подпись в
     // Labels/Fractions, preview и реальное применение. Одной новой подписи недостаточно.
@@ -89,6 +93,7 @@ public static class ScriptedEffects
     {
         NationField("treasury", n => n.Treasury, (n, v) => n.Treasury = v, float.NegativeInfinity, float.PositiveInfinity,
             "Cash on hand. An overdrawn balance is imported into sovereign principal after the complete scripted effect.");
+        TreasuryField = Fields["treasury"];
         NationField("public_debt", n => n.PublicDebt, (n, v) => n.PublicDebt = v, 0f, float.PositiveInfinity,
             "Outstanding sovereign principal, separate from cash. Changing this does not issue cash.");
         NationField("credit_confidence", n => n.CreditConfidence, (n, v) => n.CreditConfidence = v, 0f, 1f,
@@ -240,7 +245,8 @@ public static class ScriptedEffects
     /// <summary>Every key content may write to, for documentation and console help.</summary>
     public static IEnumerable<(string Key, string Help)> Vocabulary =>
         Fields.Values.OrderBy(entry => entry.Name, StringComparer.Ordinal).Select(entry => (entry.Name, entry.Help))
-            .Concat(new[] { ("reputation.culture.ID", "Audience-scoped cultural narrative impulse, -1 to 1. Also reputation.nation.TAG and reputation.coalition.TARGET:DAY; suffixes work as usual.") });
+            .Concat(new[] { ("reputation.culture.ID", "Audience-scoped cultural narrative impulse, -1 to 1. Also reputation.nation.TAG and reputation.coalition.TARGET:DAY; suffixes work as usual."),
+                ("income_penalty", "{ \"share\": 0.08, \"days\": 120 }: cut gross budget revenue (not expenses) by a share for a number of days; penalties add up to IncomePenaltyCap.") });
 
     private static bool FeatureEffect(string key, out string id)
     {
@@ -310,8 +316,13 @@ public static class ScriptedEffects
         private readonly List<(string Id, int Days)> _grants = new();
         private readonly List<string> _revokes = new();
         private readonly List<OfficeholderEffect> _people = new();
+        private List<(float Share, int Days, string Source)> _incomePenalties;
 
         public IReadOnlyList<Entry> Entries => _entries;
+
+        /// <summary>Timed income penalties the effect imposes (IncomePenalties): share of gross revenue, days, source.</summary>
+        public IReadOnlyList<(float Share, int Days, string Source)> IncomePenalties =>
+            (IReadOnlyList<(float Share, int Days, string Source)>)_incomePenalties ?? Array.Empty<(float, int, string)>();
 
         /// <summary>National spirits the effect hangs on the country, and for how long (0: their own length).</summary>
         public IReadOnlyList<(string Id, int Days)> Grants => _grants;
@@ -320,12 +331,15 @@ public static class ScriptedEffects
         public IReadOnlyList<string> Revokes => _revokes;
         public IReadOnlyList<OfficeholderEffect> People => _people;
 
-        public bool IsEmpty => _entries.Count == 0 && _grants.Count == 0 && _revokes.Count == 0 && _people.Count == 0;
+        public bool IsEmpty => _entries.Count == 0 && _grants.Count == 0 && _revokes.Count == 0 && _people.Count == 0 &&
+            (_incomePenalties is null || _incomePenalties.Count == 0);
 
         internal void Add(string key, float value) => _entries.Add(new Entry(key, value));
         internal void Grant(string id, int days) => _grants.Add((id, days));
         internal void Revoke(string id) => _revokes.Add(id);
         internal void Person(OfficeholderEffect person) => _people.Add(person);
+        internal void IncomePenalty(float share, int days, string source) =>
+            (_incomePenalties ??= new List<(float, int, string)>(1)).Add((share, days, source ?? ""));
 
         public void Apply(Campaign campaign, Nation nation)
         {
@@ -367,7 +381,11 @@ public static class ScriptedEffects
 
                 if (field.SetNation is not null)
                 {
-                    field.SetNation(nation, Combine(field.GetNation(nation), entry.Value, operation, field));
+                    var before = field.GetNation(nation);
+                    var after = Combine(before, entry.Value, operation, field);
+                    field.SetNation(nation, after);
+                    // What an event or a decision does to the treasury is written in the ledger.
+                    if (ReferenceEquals(field, TreasuryField)) MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, after - before);
                     continue;
                 }
                 if (field.SetArmy is not null)
@@ -392,6 +410,9 @@ public static class ScriptedEffects
             // Officeholder changes follow the numeric effects. They use the same
             // persistence/preview path as a pending event's other consequences.
             foreach (var person in _people) person.Apply(campaign, nation);
+            if (_incomePenalties is not null)
+                foreach (var (share, days, source) in _incomePenalties)
+                    Simulation.IncomePenalties.Add(campaign, nation, share, days, source);
             // Keep compound scripts ordered: charges and refunds in one effect cancel
             // before legacy overdrafts are imported. This is a balance-sheet adjustment,
             // not an ordinary bond issue and not a weekly settlement.
@@ -425,7 +446,7 @@ public static class ScriptedEffects
             {
                 var sign = entry.Value >= 0f ? "+" : "";
                 return $"{entry.Key} {sign}{entry.Value.ToString("0.###", CultureInfo.InvariantCulture)}";
-            }).Concat(ScriptedEffects.SpiritLines(_grants))
+            }).Concat(ScriptedEffects.IncomePenaltyLines(this)).Concat(ScriptedEffects.SpiritLines(_grants))
                 .Concat(_revokes.Select(id => Loc.Format("Loses «{0}»", Loc.Get(ModifierCatalog.Get(id)?.Name ?? id))))
                 .Concat(_people.Select(person => person.Describe())));
         }
@@ -458,6 +479,13 @@ public static class ScriptedEffects
             if (root.TryGetProperty("Revokes", out var revokes) && revokes.ValueKind == JsonValueKind.Array)
                 foreach (var revoke in revokes.EnumerateArray())
                     if (revoke.ValueKind == JsonValueKind.String) effect.Revoke(revoke.GetString() ?? "");
+            if (root.TryGetProperty("IncomePenalties", out var penalties) && penalties.ValueKind == JsonValueKind.Array)
+                foreach (var penalty in penalties.EnumerateArray())
+                    if (penalty.ValueKind == JsonValueKind.Object &&
+                        penalty.TryGetProperty("Share", out var share) && share.TryGetSingle(out var shareValue) &&
+                        penalty.TryGetProperty("Days", out var length) && length.TryGetInt32(out var lengthValue))
+                        effect.IncomePenalty(shareValue, lengthValue,
+                            penalty.TryGetProperty("Source", out var origin) ? origin.GetString() : "");
             if (root.TryGetProperty("People", out var people) && people.ValueKind == JsonValueKind.Array)
                 foreach (var person in people.EnumerateArray())
                     if (person.ValueKind == JsonValueKind.Object && JsonSerializer.Deserialize<OfficeholderEffect>(person.GetRawText(), options) is { } restored)
@@ -490,6 +518,20 @@ public static class ScriptedEffects
             writer.WriteEndArray();
             writer.WritePropertyName("Revokes");
             JsonSerializer.Serialize(writer, value.Revokes, options);
+            if (value.IncomePenalties.Count > 0)
+            {
+                writer.WritePropertyName("IncomePenalties");
+                writer.WriteStartArray();
+                foreach (var (share, days, source) in value.IncomePenalties)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteNumber("Share", share);
+                    writer.WriteNumber("Days", days);
+                    writer.WriteString("Source", source ?? "");
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+            }
             if (value.People.Count > 0)
             {
                 writer.WritePropertyName("People");
@@ -533,6 +575,7 @@ public static class ScriptedEffects
                     foreach (var (id, days) in borrowed.Grants) effect.Grant(id, days);
                     foreach (var id in borrowed.Revokes) effect.Revoke(id);
                     foreach (var person in borrowed.People) effect.Person(person);
+                    foreach (var (share, days, _) in borrowed.IncomePenalties) effect.IncomePenalty(share, days, context);
                 }
                 continue;
             }
@@ -574,6 +617,24 @@ public static class ScriptedEffects
                 }
                 continue;
             }
+            // A timed cut to gross income: { "income_penalty": { "share": 0.08, "days": 120 } }.
+            if (property.Name.Equals("income_penalty", StringComparison.OrdinalIgnoreCase))
+            {
+                if (property.Value.ValueKind != JsonValueKind.Object ||
+                    !property.Value.TryGetProperty("share", out var shareElement) || !shareElement.TryGetSingle(out var penaltyShare) ||
+                    !property.Value.TryGetProperty("days", out var daysElement) || !daysElement.TryGetInt32(out var penaltyDays))
+                {
+                    errors?.Add($"{context}: income_penalty takes {{ \"share\": 0.08, \"days\": 120 }}.");
+                    continue;
+                }
+                if (!float.IsFinite(penaltyShare) || penaltyShare <= 0f || penaltyShare > 1f || penaltyDays <= 0 || penaltyDays > 3650)
+                {
+                    errors?.Add($"{context}: income_penalty needs a share above 0 and at most 1, and days from 1 to 3650.");
+                    continue;
+                }
+                effect.IncomePenalty(penaltyShare, penaltyDays, context);
+                continue;
+            }
             if (property.Name.Equals("remove_modifier", StringComparison.OrdinalIgnoreCase))
             {
                 foreach (var name in ScriptReferences.Names(property.Value)) effect.Revoke(name);
@@ -612,6 +673,7 @@ public static class ScriptedEffects
         if (effect is null) return lines;
         // The spirits first: they are usually the point of the option.
         lines.AddRange(SpiritLines(effect.Grants));
+        lines.AddRange(IncomePenaltyLines(effect));
         lines.AddRange(effect.People.Select(person => person.Describe()));
         foreach (var id in effect.Revokes)
             if (ModifierCatalog.Get(id) is { } spirit)
@@ -651,6 +713,15 @@ public static class ScriptedEffects
             lines.Add(Loc.Format("{0}: {1}", label, value));
         }
         return lines;
+    }
+
+    /// <summary>"Income: −8% for 120 days" for each timed income penalty an effect imposes.</summary>
+    public static IEnumerable<string> IncomePenaltyLines(Effect effect)
+    {
+        if (effect is null) yield break;
+        foreach (var (share, days, _) in effect.IncomePenalties)
+            yield return Loc.Format("Income: −{0}% for {1} days",
+                (share * 100f).ToString("0.#", CultureInfo.CurrentCulture), days);
     }
 
     /// <summary>
@@ -698,6 +769,12 @@ public static class ScriptedEffects
         }
         if (effect is null) return lines;
         lines.AddRange(SpiritLines(effect.Grants));
+        foreach (var (share, days, _) in effect.IncomePenalties)
+        {
+            var weekly = Simulation.IncomePenalties.WeeklyBase(campaign, nation) * share;
+            lines.Add(Loc.Format("Income: −{0}% for {1} days (about {2} a week)",
+                (share * 100f).ToString("0.#", CultureInfo.CurrentCulture), days, Fmt.Money(weekly)));
+        }
         lines.AddRange(effect.People.Select(person => person.Describe()));
         foreach (var id in effect.Revokes)
             if (ModifierCatalog.Get(id) is { } spirit)

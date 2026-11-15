@@ -159,6 +159,25 @@ internal static class WorldSoakReport
                           $"wars={wars.Length} oldest={snapshot.OldestWarDays}d " +
                           $"quiet={snapshot.QuietWarsOverSixMonths} deficits={severeDeficits} " +
                           $"inflation>25%={highInflation} {msPerDay:0.0}ms/day {kbPerDay:0}kB/day");
+        // The money of the world in one line, so a change to how countries earn and lose it can be
+        // compared before and after: treasuries, public debt, countries in default, and what the
+        // budget raises against what the economy makes. That revenue is gross - before any income
+        // penalty (nation.WeeklyGrossIncome), annualised - because it is the figure
+        // IncomePenaltyReferenceRevenueShare and the lump-to-penalty conversion are calibrated on;
+        // balance plus expenses is the revenue after penalties and reads low in a world of crises.
+        {
+            var economies = c.Nations.Where(n => n.Movement is null && n.Gdp > 1f && float.IsFinite(n.Gdp)).ToArray();
+            var treasury = economies.Sum(n => (double)(float.IsFinite(n.Treasury) ? n.Treasury : 0f));
+            var debt = economies.Sum(n => (double)(float.IsFinite(n.PublicDebt) ? n.PublicDebt : 0f));
+            var revenue = economies.Sum(n => (double)(float.IsFinite(n.WeeklyGrossIncome) ? n.WeeklyGrossIncome : 0f) * 52d);
+            var gdp = economies.Sum(n => (double)n.Gdp);
+            var defaults = economies.Count(n => n.DebtCondition is DebtCondition.Default or DebtCondition.Insolvent or DebtCondition.Restructuring);
+            var stressed = economies.Count(n => n.DebtCondition == DebtCondition.Stressed);
+            var negative = economies.Count(n => n.Treasury < 0f);
+            Console.WriteLine($"  money: treasury={treasury:0}B ({(gdp > 0 ? treasury / gdp : 0):P1} of GDP) debt={debt:0}B " +
+                              $"({(gdp > 0 ? debt / gdp : 0):P1}) revenue/GDP={(gdp > 0 ? revenue / gdp : 0):P2} " +
+                              $"defaults={defaults} stressed={stressed} overdrawn={negative}");
+        }
         if (snapshot.OldestWarDays >= 365)
             Console.WriteLine("  oldest: " + string.Join("; ", snapshot.OldestWars));
         foreach (var quiet in snapshot.QuietWars) Console.WriteLine("  quiet: " + quiet);

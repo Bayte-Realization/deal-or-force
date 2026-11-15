@@ -174,7 +174,7 @@ public static class PublicOutreachActions
         var action = OutreachCatalog.Find(actionId);
         if (Blocked(c, actor, target, action).Length > 0) return false;
         var cost = Cost(actor, action);
-        actor.Treasury -= cost;
+        { var ledgerBefore = actor.Treasury; actor.Treasury -= cost; MoneyLedger.Book(actor, MoneyFlow.EventsAndDecisions, actor.Treasury - ledgerBefore); }
         actor.Outreach[target.Tag] = new PublicOutreach
         {
             ActionId = action.Id, TargetTag = target.Tag, StartedDay = c.ElapsedDays, LastReviewDay = c.ElapsedDays,

@@ -301,7 +301,7 @@ public static class CentralBank
         var printing = M.Clamp(nation.MoneyPrinting, 0f, EmissionRange());
         nation.MoneyPrinting = printing;
 
-        if (printing > 0f && weeklyOutput > 0f) nation.Treasury += weeklyOutput * printing;
+        { var ledgerBefore = nation.Treasury; if (printing > 0f && weeklyOutput > 0f) nation.Treasury += weeklyOutput * printing; MoneyLedger.Book(nation, MoneyFlow.MoneyPrinting, nation.Treasury - ledgerBefore); }
 
         // Belief follows the press up quickly and comes back down slowly.
         nation.EmissionMemory = printing > nation.EmissionMemory

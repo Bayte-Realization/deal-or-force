@@ -185,7 +185,7 @@ public static class DiplomaticOutreach
             c.Chronicle.Record(c, "diplomatic_mission_ended", issuer, target,isPublic:false); c.MarkStrategicChange(); return true;
         }
         var d = c.Defines;
-        n.PoliticalPoints -= d.DiplomaticMissionPoliticalCost; n.Treasury -= d.DiplomaticMissionStartCash;
+        { var ledgerBefore = n.Treasury; n.PoliticalPoints -= d.DiplomaticMissionPoliticalCost; n.Treasury -= d.DiplomaticMissionStartCash; MoneyLedger.Book(n, MoneyFlow.Diplomacy, n.Treasury - ledgerBefore); }
         var mission = new DiplomaticMission { StartedDay = c.ElapsedDays, LastPaidDay = c.ElapsedDays,
             EndsDay = c.ElapsedDays + Math.Clamp(d.DiplomaticMissionDays, 14, 730),
             WeeklyPoliticalCost = d.DiplomaticMissionWeeklyPoliticalCost, WeeklyCash = d.DiplomaticMissionWeeklyCash,
@@ -217,7 +217,7 @@ public static class DiplomaticOutreach
             !Valid(mission.WeeklyPoliticalCost) || !Valid(mission.WeeklyCash) || !Valid(mission.WeeklyOpinion) || !Valid(mission.OpinionCap);
         if (ended)
         { c.Chronicle.Record(c,"diplomatic_mission_ended",issuer,r.Other(issuer),isPublic:false); c.MarkStrategicChange(); return false; }
-        n.PoliticalPoints -= mission.WeeklyPoliticalCost; n.Treasury -= mission.WeeklyCash;
+        { var ledgerBefore = n.Treasury; n.PoliticalPoints -= mission.WeeklyPoliticalCost; n.Treasury -= mission.WeeklyCash; MoneyLedger.Book(n, MoneyFlow.Diplomacy, n.Treasury - ledgerBefore); }
         mission.LastPaidDay = c.ElapsedDays; mission.PaidWeeks++;
         var friction = (1 - Math.Clamp(PoliticsCore.IdeologicalDistance(n,other),0,1) * .65f) *
             (1 - Math.Clamp(r.Tension / 100f,0,1) * .6f);

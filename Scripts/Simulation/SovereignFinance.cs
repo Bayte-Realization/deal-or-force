@@ -53,6 +53,7 @@ public static class SovereignFinance
         if (n.Treasury < 0 && float.IsFinite(n.Treasury) &&
             float.IsFinite(n.PublicDebt) && float.IsFinite(n.PublicDebt - n.Treasury))
         {
+            MoneyLedger.Book(n, MoneyFlow.OverdraftFunded, -n.Treasury);
             n.PublicDebt -= n.Treasury;
             n.Treasury = 0;
         }
@@ -108,6 +109,7 @@ public static class SovereignFinance
         NormalizeAccounts(c, n);
         var raised = MathF.Min(requested, AvailableCredit(c, n));
         n.PublicDebt += raised; n.Treasury += raised; n.DebtIssuedWeekly += raised;
+        MoneyLedger.Book(n, MoneyFlow.Borrowing, raised);
         return raised;
     }
 
@@ -127,6 +129,7 @@ public static class SovereignFinance
         }
         var unpaid = MathF.Max(0, -n.Treasury);
         n.Treasury = MathF.Max(0, n.Treasury);
+        MoneyLedger.Book(n, MoneyFlow.BillsDeferred, unpaid);
         // Essential primary spending has priority; any unfunded interest becomes contractual arrears.
         var missedInterest = MathF.Min(unpaid, n.DebtInterestWeekly);
         n.DebtArrears += missedInterest;
@@ -147,6 +150,7 @@ public static class SovereignFinance
             if (n.Treasury >= fee && balance + interest >= -revenue * .15f)
             {
                 n.Treasury -= fee;
+                MoneyLedger.Book(n, MoneyFlow.RestructuringFee, -fee);
                 n.DebtRestructuringProgress++;
             }
             if (n.DebtRestructuringProgress >= Math.Clamp(c.Defines.DebtRestructuringWeeks, 4, 260))
@@ -214,6 +218,7 @@ public static class SovereignFinance
         if (!float.IsFinite(requested) || requested <= 0) return 0;
         var paid = MathF.Min(requested, MathF.Min(MathF.Max(0, n.Treasury), MathF.Max(0, n.PublicDebt)));
         n.PublicDebt -= paid; n.Treasury -= paid;
+        MoneyLedger.Book(n, MoneyFlow.DebtRepayment, -paid);
         return paid;
     }
 
@@ -226,6 +231,7 @@ public static class SovereignFinance
         var bills = MathF.Min(available - interest, MathF.Max(0, n.PaymentArrears));
         var paid = interest + bills;
         n.DebtArrears -= interest; n.PaymentArrears -= bills; n.Treasury -= paid;
+        MoneyLedger.Book(n, MoneyFlow.ArrearsPaid, -paid);
         return paid;
     }
 

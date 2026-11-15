@@ -150,7 +150,7 @@ public static class PoliticalPolicies
     public static bool Adopt(Campaign c, Nation n, PoliticalPolicy p, string target, int region, bool agenda, out string reason)
     {
         if (!CanAdopt(c, n, p, target, region, agenda, out reason)) return false;
-        n.Treasury -= MathF.Max(0, n.Gdp * p.CostShare);
+        { var ledgerBefore = n.Treasury; n.Treasury -= MathF.Max(0, n.Gdp * p.CostShare); MoneyLedger.Book(n, MoneyFlow.EventsAndDecisions, n.Treasury - ledgerBefore); }
         n.PolicyReadyOnDay[agenda ? "agenda" : Slot(p, target, region)] = c.ElapsedDays + p.CooldownDays;
         if (agenda) n.Agenda = new PoliticalAgenda { Id = p.Id, DurationDays = p.DurationDays, Goal = p.Goal, GoalValue = p.GoalValue };
         else n.Laws[Slot(p, target, region)] = new AdoptedLaw { Id = p.Id, TargetTag = target, Region = region, AdoptedDay = c.ElapsedDays };

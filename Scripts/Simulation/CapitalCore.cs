@@ -88,7 +88,7 @@ public static class CapitalCore
     public static bool Move(Campaign campaign, Nation nation, ScenarioState state)
     {
         if (Refusal(campaign, nation, state).Length > 0) return false;
-        nation.Treasury -= Cost(campaign, nation);
+        { var ledgerBefore = nation.Treasury; nation.Treasury -= Cost(campaign, nation); MoneyLedger.Book(nation, MoneyFlow.Construction, nation.Treasury - ledgerBefore); }
         var limit = StabilityCore.Weights.GovernanceLimit;
         nation.StabilityGovernance = M.Clamp(
             nation.StabilityGovernance - campaign.Defines.CapitalMoveStabilityCost, -limit, limit);

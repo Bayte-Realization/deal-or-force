@@ -233,7 +233,7 @@ public sealed class IntelNetworkCommand : ICampaignCommand
         }
         Refusal = IntelNetworks.Refusal(campaign, owner, target);
         if (Refusal.Length > 0) return;
-        owner.Treasury -= IntelNetworks.Cost(campaign, owner);
+        { var ledgerBefore = owner.Treasury; owner.Treasury -= IntelNetworks.Cost(campaign, owner); MoneyLedger.Book(owner, MoneyFlow.Covert, owner.Treasury - ledgerBefore); }
         owner.IntelNetworks[target.Id] = 0.02f;
         campaign.MarkStrategicChange();
     }
