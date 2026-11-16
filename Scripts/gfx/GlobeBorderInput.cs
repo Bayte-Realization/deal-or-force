@@ -10,7 +10,10 @@ public sealed partial class GlobePresentation
     public event Action<GlobePick, bool, bool, bool> BorderStrokeStarted;
     public event Action<GlobePick> BorderStrokeMoved;
     public event Action BorderStrokeFinished;
+    /// <summary>The front tool is in hand and the pointer came over another province, no button down.</summary>
+    public event Action<GlobePick> BorderHovered;
     private bool _borderPainting;
+    private int _borderHoverProvince = -1;
 
     private bool HandleBorderInput(InputEvent input)
     {
@@ -40,6 +43,15 @@ public sealed partial class GlobePresentation
             if (TryPick(motion.Position, out var pick, updateSelection: false)) BorderStrokeMoved?.Invoke(pick);
             AcceptEvent();
             return true;
+        }
+        // Before any button: say which border a click would take. Once a province, not once a
+        // pixel - the answer is a walk along a border and the pointer crosses a province in
+        // dozens of events. The camera keeps its own handling of the motion.
+        if (input is InputEventMouseMotion hover && !_dragging && BorderHovered is not null &&
+            TryPick(hover.Position, out var under, updateSelection: false) && under.ProvinceId != _borderHoverProvince)
+        {
+            _borderHoverProvince = under.ProvinceId;
+            BorderHovered.Invoke(under);
         }
         // Middle-drag pans while the front tool owns RMB; wheel zoom remains available.
         if (input is InputEventMouseButton middle && middle.ButtonIndex == MouseButton.Middle)

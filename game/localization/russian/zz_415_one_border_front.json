@@ -1,0 +1,12 @@
+// Постоянный фронт по одной границе (Scripts/ui/PlanningBarUI.cs, BattlePlanBrushUI.cs).
+{
+  "One border": "Одна граница",
+  "Front on one border": "Фронт по одной границе",
+  "Click a land border with a country: the selection takes that whole border, digs in, and keeps to it as the border moves - and to no other country. Or hold the right button and drag to take only a stretch of it.": "Щёлкните по сухопутной границе со страной: выбранные дивизии займут всю эту границу, окопаются и будут держаться её, когда она сдвинется, — и только её, без границ с другими странами. Или зажмите правую кнопку и проведите, чтобы занять лишь участок.",
+  "Standing front on the whole border with {0}: {1:N0} divisions on {2:N0} provinces. It follows that border as it moves and takes no other.": "Постоянный фронт по всей границе: {0}. Дивизий: {1:N0}, провинций: {2:N0}. Он следует за этой границей, когда она сдвигается, и других границ не занимает.",
+  "One border: click a border - a standing front along all of it. RMB-drag - one stretch. Esc cancels.": "Одна граница: щелчок по границе — постоянный фронт по всей. Протяжка ПКМ — участок. Esc — отмена.",
+  "Click: standing front on the whole border with {0} ({1:N0} posts). RMB-drag: one stretch.": "Щелчок — постоянный фронт по всей границе: {0} (постов: {1:N0}). Протяжка ПКМ — участок.",
+  "Whole front: every border with an enemy · {0:N0} posts.": "Весь фронт: все границы с противником · постов: {0:N0}.",
+  "Standing front: the whole border with {0} · {1:N0} posts · follows that border, takes no other.": "Постоянный фронт: вся граница, {0} · постов: {1:N0} · следует за этой границей, других не занимает.",
+  "Front: a stretch of the border with {0} · {1:N0} posts.": "Фронт: участок границы, {0} · постов: {1:N0}."
+}

@@ -51,8 +51,10 @@ public partial class DealOrForceGame
         ArmyCommandTip(wholeFront, "Whole front",
             "One front along every land border with every country at war with you. It grows and shrinks by itself as the line moves and as enemies join or leave the war; the selection spreads along all of it.");
         row.AddChild(wholeFront);
-        AddDrawButton(row, "Front", "plan_front", FrontLineKind.Defence, "Front line",
-            "Drag with the right button along a border: the selection spreads along that stretch and digs in.");
+        // One border, and only that one: the order players asked to have back. A click takes the
+        // whole border with one country; a drag takes a stretch of it.
+        AddDrawButton(row, "One border", "plan_front", FrontLineKind.Defence, "Front on one border",
+            "Click a land border with a country: the selection takes that whole border, digs in, and keeps to it as the border moves - and to no other country. Or hold the right button and drag to take only a stretch of it.");
         AddDrawButton(row, "Attack", "plan_attack", FrontLineKind.Offensive, "Offensive",
             "With the selection on one front: drag with the right button where it should get to, inside the enemy's country. Shift+drag adds a later phase, Alt+drag redraws the current one.");
         AddDrawButton(row, "Defend", "plan_fallback", FrontLineKind.Fallback, "Defensive line",
