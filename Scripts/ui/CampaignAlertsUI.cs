@@ -6,108 +6,117 @@ using Godot;
 
 namespace DealOrForce;
 
+/// <summary>
+/// The alert list under the date plate (docs/INTERFACE_BUILD_PLAN_2026_11_15_RU.md, step 4).
+///
+/// The owner's rule for this screen is that a problem is seen without hovering or clicking. The
+/// hints used to be a strip of twelve pictures with four counters in the middle of the map and a
+/// blue "Next" bar under it: what was wrong had to be hovered to be read. Now it is a short column
+/// of words, always on screen, in the place the eye already goes for the date: the next step first
+/// in the accent, then each alert as an icon, its caption with its count and a dot for how bad it is
+/// (red must, amber should, green can, blue news), worst first. DEFCON and world tension are rows
+/// like any other while their mechanics run, so DEFCON left the resource plate. What does not fit
+/// is "+N more", one click to the whole list. A row opens what the hint opened before, and a right
+/// click hides it for a while (CampaignAlertSnoozes), as before.
+///
+/// The ordering, the dots and the cut are AlertListRules, which the tests check without the engine.
+/// The panel is `hud.alerts` (game/gui/10_campaign_shell.json); the situation report docks under it.
+/// </summary>
 public partial class DealOrForceGame
 {
-    private PanelContainer _campaignAlertStrip, _campaignAlertPopup;
-    private VBoxContainer _campaignAlertList;
+    private PanelContainer _alertListPanel, _campaignAlertPopup;
+    private VBoxContainer _alertListRows, _campaignAlertList;
+    private CampaignHintButton _alertNext;
+    private Button _alertMore;
     private Label _campaignAlertHeading, _campaignAlertEmpty;
     private Button _campaignAlertRestore;
-    private readonly Dictionary<CampaignAlertGroup, Button> _campaignAlertGroups = new();
-    private readonly Dictionary<string, Button> _campaignAlertRows = new();
-    private readonly Dictionary<CampaignAlertGroup, HBoxContainer> _campaignAlertClusters = new();
-    private readonly Dictionary<string, Button> _campaignAlertIcons = new();
+    private readonly Dictionary<string, CampaignHintButton> _alertListButtons = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CampaignHintButton> _campaignAlertRows = new(StringComparer.Ordinal);
     private readonly CampaignAlertSnoozes _campaignAlertSnoozes = new();
-
-    // The next step: one lit line under the hint strip.
-    //
-    // The strip above it is twelve pictures and four counters, and a new player's first words
-    // about this screen were "I am a little lost". Everything the line needs was already here -
-    // the hints are sorted into must, should, can and news - so it adds no rule and no data:
-    // it names the first hint that is not hidden, in words, and pressing it goes where that
-    // hint goes. With nothing left it says so and offers the one thing that is always left to
-    // do in a paused game, which is to let time run. It is the only lit control on the map.
-    private Button _campaignBrief;
-    private string _campaignBriefAlert = "";
-
-    private static int BriefRank(CampaignAlertGroup group) => group switch
-    {
-        CampaignAlertGroup.Must => 0, CampaignAlertGroup.Should => 1, CampaignAlertGroup.Important => 2, _ => 3
-    };
-
-    private void RefreshCampaignBrief()
-    {
-        if (_campaignBrief is null) return;
-        var next = _campaignAlertStrip.Visible
-            ? _campaignAlerts.Where(a => !_campaignAlertSnoozes.Hidden(a, _campaign.ElapsedDays))
-                .OrderBy(a => BriefRank(a.Group)).FirstOrDefault()
-            : null;
-        _campaignBriefAlert = next?.Id ?? "";
-        if (next is not null)
-        {
-            _campaignBrief.Text = Loc.Format("Next: {0}  →", next.Title);
-            _campaignBrief.TooltipText = Ui.Tip(next.Summary + "\n" + Tr("Press to go there. The pictures above list everything else that is waiting."));
-            _campaignBrief.Visible = true;
-        }
-        else if (_campaignAlertStrip.Visible && _campaign.IsPaused)
-        {
-            _campaignBrief.Text = Tr("Nothing is waiting for you. Let time run  [Space]");
-            _campaignBrief.TooltipText = Ui.Tip(Tr("The game is paused. Press to let time run; press Space to stop it again."));
-            _campaignBrief.Visible = true;
-        }
-        else _campaignBrief.Visible = false;
-    }
-
-    private void FollowCampaignBrief()
-    {
-        if (_campaignBriefAlert.Length > 0) FollowCampaignAlert(_campaignBriefAlert);
-        else if (_campaign is { IsPaused: true }) TogglePause();
-        RefreshSituationRoom(force: true);
-    }
     private IReadOnlyList<CampaignAlert> _campaignAlerts = Array.Empty<CampaignAlert>();
+    private List<AlertLine> _alertLines = new();
+    private AlertLine _alertNextLine;
     private Campaign _campaignAlertsWorld;
     private int _campaignAlertsSeat = -1;
-    private CampaignAlertGroup _campaignAlertGroup;
+    private bool _campaignAlertsShown;
+    private (Campaign World, int Day, int Revision, float Tension) _worldTensionToday = (null, -1, -1, 0f);
 
-    private static string AlertColour(CampaignAlertGroup group) => group switch
+    /// <summary>
+    /// One line of the list: a hint of the player's own (CampaignAlerts), or a line about the world
+    /// (DEFCON, world tension) that cannot be hidden and is never "Next" - it is not a thing to do.
+    /// </summary>
+    private sealed class AlertLine
     {
-        CampaignAlertGroup.Must => "state.negative", CampaignAlertGroup.Should => "state.warning",
-        CampaignAlertGroup.Could => "state.positive", _ => "state.info"
-    };
+        public string Id = "", Caption = "", Category = "", Body = "", Glyph = "", Dot = "state.info";
+        public int Rank;
+        public bool World, Calm;
+        public CampaignAlert Alert;
+    }
+
+    private static float AlertRowHeight => Mathf.Clamp(Ui.Metric("hud.alerts.row_height", 28f), 22f, 44f);
+
+    private CampaignHintButton NewAlertRow(string name)
+    {
+        var row = new CampaignHintButton
+        {
+            Name = name, GlyphOnLeft = true, GlyphBox = 20, GlyphInset = 6, ClipText = true,
+            Alignment = HorizontalAlignment.Left, SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, FocusMode = FocusModeEnum.None,
+            CustomMinimumSize = new Vector2(0, AlertRowHeight), MouseDefaultCursorShape = CursorShape.PointingHand
+        };
+        row.AddThemeFontSizeOverride("font_size", 13);
+        return row;
+    }
 
     private void BuildCampaignAlerts()
     {
-        _campaignAlertStrip = new PanelContainer { Name = "CampaignAlerts", MouseFilter = MouseFilterEnum.Stop };
-        _campaignAlertStrip.AddThemeStyleboxOverride("panel", ShellPanelStyle()); _hudLayer.AddChild(_campaignAlertStrip);
-        var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 3); _campaignAlertStrip.AddChild(row);
-        foreach (var group in Enum.GetValues<CampaignAlertGroup>())
+        _alertListPanel = new PanelContainer { Name = "CampaignAlerts", MouseFilter = MouseFilterEnum.Stop, Visible = false };
+        _hudLayer.AddChild(_alertListPanel);
+        // The HUD frame first, so the list looks like its neighbours with materials off; the layout
+        // key may then dress it as a plate when ui.materials is on.
+        ApplyHudFrame(_alertListPanel);
+        Ui.Place(_alertListPanel, "hud.alerts");
+        _alertListPanel.GrowHorizontal = GrowDirection.Begin;
+        var margin = Margin(_alertListPanel, 5, 4);
+        _alertListRows = new VBoxContainer { Name = "CampaignAlertRows" };
+        _alertListRows.AddThemeConstantOverride("separation", 2);
+        margin.AddChild(_alertListRows);
+
+        _alertNext = NewAlertRow("CampaignAlertNext");
+        _alertNext.Pressed += FollowCampaignBrief;
+        _alertNext.GuiInput += input =>
         {
-            var cluster = new HBoxContainer { Name = "HintCluster" + group, SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            cluster.AddThemeConstantOverride("separation", 3); row.AddChild(cluster); _campaignAlertClusters[group] = cluster;
-            var captured = group;
-            var button = new CampaignHintButton { CustomMinimumSize = new(42,42) };
-            button.Pressed += () =>
-            {
-                var same = _campaignAlertGroup == captured && _campaignAlertPopup.Visible;
-                _campaignAlertGroup = captured; _campaignAlertPopup.Visible = !same;
-                RefreshCampaignAlertRows(); LayoutCampaignAlerts();
-            };
-            button.Name = "CampaignAlertGroup" + group; button.ClipText = true;
-            button.AddThemeFontSizeOverride("font_size", 12);
-            button.AddThemeColorOverride("font_color", Ui.Colour(AlertColour(group)));
-            cluster.AddChild(button); _campaignAlertGroups[group] = button;
-        }
-        _campaignBrief = new Button { Name = "CampaignBrief", ClipText = true, Visible = false, FocusMode = FocusModeEnum.None };
-        StyleButton(_campaignBrief, true);
-        _campaignBrief.AddThemeFontSizeOverride("font_size", 14);
-        _campaignBrief.Pressed += FollowCampaignBrief;
-        _hudLayer.AddChild(_campaignBrief);
+            if (input is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right }) return;
+            _alertNext.AcceptEvent();
+            if (_alertNextLine is { World: false } line) HideCampaignAlert(line.Id);
+        };
+        _alertListRows.AddChild(_alertNext);
+
+        // A plain button, not ActionButton: its caption is a count rewritten on every refresh, and a
+        // language change must not put a stale translation of an empty string on it in between.
+        _alertMore = new Button
+        {
+            Name = "CampaignAlertMore", ClipText = true, FocusMode = FocusModeEnum.None,
+            Alignment = HorizontalAlignment.Center, CustomMinimumSize = new Vector2(0, 22),
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+        };
+        StyleHudButton(_alertMore, false, true);
+        _alertMore.AddThemeFontSizeOverride("font_size", 12);
+        _alertMore.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
+        _alertMore.Pressed += ToggleCampaignAlertList;
+        _alertListRows.AddChild(_alertMore);
+
+        // The whole list: every alert, nothing cut, and the way back for hidden ones.
         _campaignAlertPopup = new PanelContainer { Name = "CampaignAlertPopup", Visible = false };
         _campaignAlertPopup.AddThemeStyleboxOverride("panel", ShellPanelStyle()); _hudLayer.AddChild(_campaignAlertPopup);
         var body = new VBoxContainer(); body.AddThemeConstantOverride("separation", 5); _campaignAlertPopup.AddChild(body);
         var head = new HBoxContainer(); body.AddChild(head);
         _campaignAlertHeading = Title("", 15, Ui.Colour("text.accent"));
         _campaignAlertHeading.SizeFlagsHorizontal = SizeFlags.ExpandFill; head.AddChild(_campaignAlertHeading);
-        head.AddChild(ActionButton("×", () => _campaignAlertPopup.Hide(), 32, 28));
+        var close = ActionButton("×", () => _campaignAlertPopup.Hide(), 32, 28);
+        close.Name = "CloseCampaignAlertList";
+        close.TooltipText = Ui.Tip(Tr("Close the full list."));
+        head.AddChild(close);
         var scroll = new ScrollContainer { Name = "CampaignAlertsScroll", CustomMinimumSize = new(0, 220),
             SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
         body.AddChild(scroll);
@@ -119,28 +128,56 @@ public partial class DealOrForceGame
         _campaignAlertRestore.Name = "RestoreCampaignAlerts"; body.AddChild(_campaignAlertRestore);
     }
 
+    /// <summary>
+    /// Where the data puts the list (`hud.alerts`), pushed below the date plate and below a top bar
+    /// that took a second row, as wide as the plate has grown, and as tall as its rows.
+    /// </summary>
     private void LayoutCampaignAlerts()
     {
-        if (_campaignAlertStrip is null) return;
-        var iconCount = Enum.GetValues<CampaignAlertGroup>().Sum(g => Math.Min(3,
-            _campaignAlerts.Count(a => a.Group == g && !_campaignAlertSnoozes.Hidden(a,_campaign.ElapsedDays))));
-        var width = MathF.Min(820, MathF.Min(MathF.Max(400,Size.X-440), 196+iconCount*46));
-        _campaignAlertStrip.Position = new((Size.X - width) * .5f, _hudTopPanel.OffsetBottom + 6);
-        _campaignAlertStrip.Size = new(width, 46);
-        var briefShown = _campaignBrief is { Visible: true };
-        if (_campaignBrief is not null)
+        if (_alertListPanel is null) return;
+        Ui.Place(_alertListPanel, "hud.alerts");
+        if (_alertListPanel.AnchorTop == 0f)
         {
-            var briefWidth = MathF.Min(640, MathF.Max(320, Size.X - 440));
-            _campaignBrief.Position = new((Size.X - briefWidth) * .5f, _campaignAlertStrip.Position.Y + 50);
-            _campaignBrief.Size = new(briefWidth, 34);
+            _alertListPanel.OffsetTop += _hudHeaderExtra;
+            if (DatePlateSpan(out var plateLeft, out var plateRight, out var plateBottom) && _alertListPanel.AnchorLeft == 1f)
+            {
+                // Under the plate and as wide as it is: a longer date or a deals chip in another
+                // language widens the plate leftwards, and the list follows its edge.
+                _alertListPanel.OffsetTop = Mathf.Max(_alertListPanel.OffsetTop, plateBottom + DatePlateGap);
+                _alertListPanel.OffsetLeft = Mathf.Min(_alertListPanel.OffsetLeft, plateLeft);
+                _alertListPanel.OffsetRight = Mathf.Max(_alertListPanel.OffsetRight, plateRight);
+            }
+            _alertListPanel.AnchorBottom = 0f;
+            _alertListPanel.OffsetBottom = _alertListPanel.OffsetTop + _alertListPanel.GetCombinedMinimumSize().Y;
         }
-        _campaignAlertPopup.Position = _campaignAlertStrip.Position + new Vector2(0, briefShown ? 88 : 50);
-        _campaignAlertPopup.Size = new(MathF.Min(width, 570), MathF.Min(355, MathF.Max(260, Size.Y - _campaignAlertPopup.Position.Y - 70)));
+        if (_campaignAlertPopup is null) return;
+        // The full list opens beside the short one, to its left, top-aligned: under it is the report.
+        var width = MathF.Min(440f, MathF.Max(300f, _alertListPanel.Position.X - 120f));
+        var x = MathF.Max(8f, _alertListPanel.Position.X - DatePlateGap - width);
+        _campaignAlertPopup.Position = new Vector2(x, _alertListPanel.Position.Y);
+        _campaignAlertPopup.Size = new Vector2(width, MathF.Min(460f, MathF.Max(260f, Size.Y - _campaignAlertPopup.Position.Y - 70f)));
+    }
+
+    /// <summary>
+    /// A right-hand panel in the list's column starts under it: the situation report, and the desk
+    /// when it is docked on the right. Its top follows the list's real bottom, so a short list gives
+    /// the room back to the report; with the list hidden it starts where the list would.
+    /// </summary>
+    private void DockUnderAlertList(Control panel)
+    {
+        if (panel is null || _alertListPanel is null || !GodotObject.IsInstanceValid(panel) || panel.AnchorTop != 0f) return;
+        var list = _alertListPanel.GetRect();
+        var mine = panel.GetRect();
+        if (mine.End.X <= list.Position.X || mine.Position.X >= list.End.X) return;
+        var top = (_alertListPanel.Visible ? list.End.Y : list.Position.Y - DatePlateGap) + DatePlateGap;
+        var height = panel.OffsetBottom - panel.OffsetTop;
+        panel.OffsetTop = top;
+        if (panel.AnchorBottom == 0f) panel.OffsetBottom = top + Mathf.Max(0f, height);
     }
 
     private void RefreshCampaignAlerts(IReadOnlyList<SituationItem> report)
     {
-        if (_campaignAlertStrip is null) BuildCampaignAlerts();
+        if (_alertListPanel is null) BuildCampaignAlerts();
         if (_campaignAlertsWorld != _campaign || _campaignAlertsSeat != _campaign.Player.Id)
         {
             _campaignAlertSnoozes.Clear(); _campaignAlertPopup.Hide();
@@ -149,21 +186,268 @@ public partial class DealOrForceGame
         }
         _campaignAlerts = CampaignAlerts.Read(_campaign, _campaign.Player, report, _observerMode);
         _campaignAlertSnoozes.Reconcile(_campaignAlerts, _campaign.ElapsedDays);
+        _campaignAlertsShown = !_observerMode && _campaign.Defines.CampaignAlertsEnabled;
         AnnounceCampaignAlertChanges();
-        _campaignAlertStrip.Visible = !_observerMode && _campaign.Defines.CampaignAlertsEnabled;
-        if (!_campaignAlertStrip.Visible) _campaignAlertPopup.Hide();
-        foreach (var (group, button) in _campaignAlertGroups)
-        {
-            var count = _campaignAlerts.Count(a => a.Group == group && !_campaignAlertSnoozes.Hidden(a, _campaign.ElapsedDays));
-            ((CampaignHintButton)button).Present(CampaignHintArt.Of(group.ToString().ToLowerInvariant()), Ui.Colour(AlertColour(group)), count.ToString());
-            button.Text = "";
-            button.TooltipText = Ui.Tip(Tr(CampaignAlerts.GroupName(group)) + "\n" + Tr("Left-click a hint to open its destination. Right-click a hint to hide it temporarily."));
-            StyleButton(button, _campaignAlertPopup.Visible && _campaignAlertGroup == group);
-        }
-        RefreshCampaignAlertIcons();
-        RefreshCampaignBrief();
+
+        _alertLines = AlertLines();
+        var (next, rows, more) = AlertListRules.Arrange(_alertLines, line => line.Rank, line => !line.World,
+            AlertListRules.MaxRows(Ui.Metric("hud.alerts.max_rows", 6f)));
+        _alertNextLine = next;
+        var nextShown = RefreshAlertNext(next);
+        RefreshAlertListRows(rows);
+        var hidden = _campaignAlertSnoozes.Count;
+        _alertMore.Visible = more > 0 || hidden > 0;
+        _alertMore.Text = more > 0 ? Loc.Format("+{0} more", more) : Loc.Format("{0} hidden · show all", hidden);
+        _alertMore.TooltipText = Ui.Tip(Tr("Open the full list of alerts, with the hidden ones and the way to bring them back."));
+        _alertListRows.MoveChild(_alertMore, _alertListRows.GetChildCount() - 1);
+
+        // Nothing to say is no plate at all, rather than an empty frame over the map.
+        var wasShown = _alertListPanel.Visible;
+        var bottom = _alertListPanel.GetRect().End.Y;
+        // An observer has no hints but keeps the world's lines (DEFCON, tension), so the list stays.
+        _alertListPanel.Visible = nextShown || rows.Length > 0 || _alertMore.Visible;
+        if (!_alertListPanel.Visible && hidden == 0) _campaignAlertPopup.Hide();
         LayoutCampaignAlerts();
         if (_campaignAlertPopup.Visible) RefreshCampaignAlertRows();
+        // The report under the list follows its bottom; it is placed again only when that moved.
+        if (wasShown != _alertListPanel.Visible || !Mathf.IsEqualApprox(bottom, _alertListPanel.GetRect().End.Y))
+            Callable.From(LayoutCampaignShell).CallDeferred();
+    }
+
+    /// <summary>
+    /// The lines of the list: the world's first, then the player's visible hints, most urgent first.
+    /// A rank keeps the order its lines come in, so the world's lines lead their rank: DEFCON 2 heads
+    /// the must rows instead of trailing every offer, where "+N more" would cut it in exactly the
+    /// crisis it reports. An observer gets the world's lines alone - the badge they replace was shown
+    /// to observers too, and the world is what an observer is watching.
+    /// </summary>
+    private List<AlertLine> AlertLines()
+    {
+        var lines = new List<AlertLine>();
+        // DEFCON stays a row even at 5: the badge it replaces was the only door to the ladder's own
+        // screen, and a calm row at the foot of the list costs one line and says the world is quiet.
+        if (DefconSystem.Enabled(_campaign))
+        {
+            var level = DefconSystem.CurrentLevel(_campaign);
+            var rank = AlertListRules.DefconRank(level);
+            lines.Add(new AlertLine
+            {
+                Id = "world:defcon", World = true, Calm = rank == AlertListRules.Calm, Rank = rank,
+                Caption = Tr(DefconSystem.LevelBadge(level)), Category = Tr("The world"),
+                Body = DefconSystem.FormatSummary(_campaign) + "\n\n" + Tr("Click for the ladder, the nuclear powers and our posture."),
+                Glyph = "alert_battle", Dot = DefconSystem.LevelColourToken(level)
+            });
+        }
+        // World tension only once it is worth a line: a calm number every day would be a row that
+        // means nothing. The figure is the conflicts screen's ("The world" tab), where the row goes.
+        if (MechanicFeatures.SystemEnabled(_campaign, nameof(WorldWar)))
+        {
+            var tension = WorldTensionToday();
+            var rank = AlertListRules.TensionRank(tension);
+            if (rank >= 0)
+                lines.Add(new AlertLine
+                {
+                    Id = "world:tension", World = true, Rank = rank,
+                    Caption = Loc.Format("World tension {0} · {1}", Mathf.RoundToInt(tension),
+                        Tr(tension >= 80f ? "on the brink" : tension >= 60f ? "dangerous" : "tense")),
+                    Category = Tr("The world"),
+                    Body = Tr("How close the great powers are to war with one another. The worst rivalry counts in full, the next two in part. When it runs high, incidents between the blocs become likelier.") +
+                           "\n\n" + Tr("Click for the great powers' rivalries."),
+                    Glyph = "organisations", Dot = AlertListRules.TensionDot(tension)
+                });
+        }
+        if (_campaignAlertsShown)
+            // The reader sorts a group by id; the urgency puts a strike or a stopped treasury above
+            // three trade offers, and the offer that expires first above the rest.
+            foreach (var alert in _campaignAlerts.Where(a => !_campaignAlertSnoozes.Hidden(a, _campaign.ElapsedDays))
+                         .OrderBy(a => AlertListRules.Urgency(a)))
+            {
+                var explanation = alert.Situation is { } situation
+                    ? "\n\n" + string.Join("\n", situation.Facts.Take(3).Select(f => f.Label + ": " + f.Value)) +
+                      "\n\n" + string.Join("\n", situation.Consequences.Take(1))
+                    : "";
+                lines.Add(new AlertLine
+                {
+                    Id = alert.Id, Alert = alert, Caption = AlertCaption(alert), Category = Tr(CampaignAlerts.GroupName(alert.Group)),
+                    Body = alert.Summary + explanation, Glyph = CampaignHintIcon(alert),
+                    Rank = AlertListRules.Rank(alert.Group), Dot = AlertListRules.Dot(alert.Group)
+                });
+            }
+        return lines;
+    }
+
+    /// <summary>
+    /// What a row says. A war is named: three rows reading "War in progress" told a country at
+    /// war with three neighbours nothing about which row was which.
+    /// </summary>
+    private string AlertCaption(CampaignAlert alert)
+    {
+        if (alert.Route != CampaignAlertRoute.War) return alert.Title;
+        var war = _campaign.Wars.FirstOrDefault(w => w.Id == alert.TargetId);
+        var name = war is null ? "" : WarNames.Of(_campaign, war);
+        return string.IsNullOrWhiteSpace(name) ? alert.Title : name;
+    }
+
+    /// <summary>
+    /// World tension is read off every pair of great powers; once a day is often enough for a row.
+    /// The world is part of the key: a quick-load on the same day and map revision is another world.
+    /// </summary>
+    private float WorldTensionToday()
+    {
+        if (_worldTensionToday.World != _campaign || _worldTensionToday.Day != _campaign.ElapsedDays ||
+            _worldTensionToday.Revision != _campaign.MapRevision)
+            _worldTensionToday = (_campaign, _campaign.ElapsedDays, _campaign.MapRevision, WorldWar.Tension(_campaign));
+        return _worldTensionToday.Tension;
+    }
+
+    private string AlertTip(AlertLine line, bool lead = false) =>
+        line.Category + "\n" + line.Caption + "\n\n" + line.Body + "\n\n" +
+        (lead ? Tr("This is the most pressing thing waiting. Press to go there; the rows below list the rest.") + "\n" : "") +
+        (line.World ? Tr("Left-click: open.") : Tr("Left-click: open. Right-click: hide temporarily (urgent hints return tomorrow)."));
+
+    /// <summary>
+    /// The first row: the most pressing hint, in words, in the accent. With nothing waiting on a
+    /// paused game it offers the one thing that is always left to do, which is to let time run.
+    /// </summary>
+    private bool RefreshAlertNext(AlertLine next)
+    {
+        if (next is not null)
+        {
+            _alertNext.Text = Loc.Format("Next: {0}  →", next.Caption);
+            _alertNext.TooltipText = Ui.Tip(AlertTip(next, lead: true));
+            _alertNext.AccessibilityName = next.Caption + ". " + next.Body;
+            _alertNext.Present(CampaignHintArt.Of(next.Glyph), Ui.Colour("button.primary_border"));
+            _alertNext.Mark(Ui.Colour(next.Dot));
+        }
+        else if (_campaignAlertsShown && _campaign.IsPaused)
+        {
+            _alertNext.Text = Tr("Nothing is waiting for you. Let time run  [Space]");
+            _alertNext.TooltipText = Ui.Tip(Tr("The game is paused. Press to let time run; press Space to stop it again."));
+            _alertNext.AccessibilityName = _alertNext.Text;
+            _alertNext.Present(null, Ui.Colour("button.primary_border"));
+            _alertNext.Mark(Colors.Transparent);
+        }
+        else
+        {
+            _alertNext.Visible = false;
+            return false;
+        }
+        StyleAlertRow(_alertNext, "button.primary_border", lead: true, glyph: _alertNext.Glyph is not null);
+        _alertNext.Visible = true;
+        _alertListRows.MoveChild(_alertNext, 0);
+        return true;
+    }
+
+    /// <summary>
+    /// The ids a row may be kept for: every hint the country has today, hidden or not, and the world
+    /// lines. A hidden or cut row is kept and hidden, so it comes back as the same control.
+    /// </summary>
+    private HashSet<string> AlertIdsAlive()
+    {
+        var alive = _campaignAlerts.Select(a => a.Id).ToHashSet(StringComparer.Ordinal);
+        alive.UnionWith(_alertLines.Select(line => line.Id));
+        return alive;
+    }
+
+    private void RefreshAlertListRows(AlertLine[] rows)
+    {
+        var alive = AlertIdsAlive();
+        foreach (var id in _alertListButtons.Keys.Where(id => !alive.Contains(id)).ToArray())
+        {
+            var old = _alertListButtons[id];
+            _alertListRows.RemoveChild(old); old.QueueFree(); _alertListButtons.Remove(id);
+        }
+        foreach (var old in _alertListButtons.Values) old.Visible = false;
+        var index = 1;
+        foreach (var line in rows)
+        {
+            if (!_alertListButtons.TryGetValue(line.Id, out var button))
+            {
+                var id = line.Id;
+                button = NewAlertRow("CampaignAlertRow_" + id.Replace(':', '_'));
+                button.Pressed += () => FollowAlertLine(id);
+                button.GuiInput += input =>
+                {
+                    if (input is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right }) return;
+                    button.AcceptEvent();
+                    if (!id.StartsWith("world:", StringComparison.Ordinal)) HideCampaignAlert(id);
+                };
+                _alertListButtons[id] = button;
+                _alertListRows.AddChild(button);
+            }
+            button.Text = line.Caption;
+            button.TooltipText = Ui.Tip(AlertTip(line));
+            button.AccessibilityName = line.Caption + ". " + line.Body;
+            button.Present(CampaignHintArt.Of(line.Glyph), Ui.Colour(line.Dot));
+            button.Mark(Ui.Colour(line.Dot));
+            StyleAlertRow(button, line.Dot, calm: line.Calm);
+            button.Visible = true;
+            _alertListRows.MoveChild(button, index++);
+        }
+    }
+
+    /// <summary>
+    /// A row is a quiet line until the pointer is on it; the dot carries the severity. The lead row
+    /// ("Next") is the one accented control: an ink-blue edge and a stripe down its left side.
+    /// </summary>
+    private static void StyleAlertRow(Button button, string token, bool lead = false, bool calm = false, bool glyph = true)
+    {
+        var key = token + (lead ? "|lead" : "") + (calm ? "|calm" : "") + (glyph ? "|glyph" : "");
+        if (button.HasMeta("alert_row_style") && button.GetMeta("alert_row_style").AsString() == key) return;
+        button.SetMeta("alert_row_style", key);
+        // Room for the 20-pixel glyph that starts 6 from the edge, or just a margin without one.
+        var glyphRoom = glyph ? 32 : 10;
+        foreach (var state in new[] { "normal", "hover", "pressed", "focus", "hover_pressed" })
+        {
+            var resting = state is "normal" or "focus";
+            var style = new StyleBoxFlat
+            {
+                BgColor = lead ? Ui.Colour("button.primary_fill", resting ? .55f : .85f)
+                    : Ui.Colour(resting ? "surface.inset" : "war.card", resting ? .55f : .9f),
+                BorderColor = lead ? Ui.Colour("button.primary_border", resting ? .85f : 1f)
+                    : Ui.Colour(resting ? "surface.line_faint" : token, resting ? .5f : .9f),
+                BorderWidthLeft = lead ? 3 : 1, BorderWidthRight = 1, BorderWidthTop = 1, BorderWidthBottom = 1,
+                ContentMarginLeft = glyphRoom, ContentMarginRight = 22, ContentMarginTop = 2, ContentMarginBottom = 2
+            };
+            style.SetCornerRadiusAll(3);
+            button.AddThemeStyleboxOverride(state, style);
+        }
+        var text = Ui.Colour(lead ? "text.accent" : calm ? "text.muted" : "text.body");
+        button.AddThemeColorOverride("font_color", text);
+        button.AddThemeColorOverride("font_hover_color", Ui.Colour("text.bright"));
+        button.AddThemeColorOverride("font_pressed_color", text);
+        button.AddThemeColorOverride("font_focus_color", text);
+    }
+
+    private void FollowCampaignBrief()
+    {
+        if (_alertNextLine is { } line) FollowAlertLine(line.Id);
+        else if (_campaign is { IsPaused: true }) TogglePause();
+        RefreshSituationRoom(force: true);
+    }
+
+    /// <summary>A world line opens its own screen; a hint goes where it always went.</summary>
+    private void FollowAlertLine(string id)
+    {
+        _campaignAlertPopup.Hide();
+        switch (id)
+        {
+            case "world:defcon": OpenDefconOverview(); UpdateScreenButtons(); return;
+            // The world's page, not the last rivalry looked at: closing the screen keeps the
+            // selection, and on tab 5 a remembered pair would open that pair's page instead.
+            case "world:tension": _conflictTab = 5; _conflictPair = -1; _conflictWar = -1; OpenConflictsScreen(); UpdateScreenButtons(); return;
+            default: FollowCampaignAlert(id); return;
+        }
+    }
+
+    /// <summary>"+N more": the full list beside the short one, and the same button closes it.</summary>
+    private void ToggleCampaignAlertList()
+    {
+        if (_campaignAlertPopup.Visible) { _campaignAlertPopup.Hide(); return; }
+        _campaignAlertPopup.Show();
+        RefreshCampaignAlertRows();
+        LayoutCampaignAlerts();
+        _campaignAlertPopup.MoveToFront();
     }
 
     private static string CampaignHintIcon(CampaignAlert a) => a.Situation?.Good is { } good ? CommodityCatalog.IconNameOf(good) : a.Route switch
@@ -195,7 +479,7 @@ public partial class DealOrForceGame
 
     private void AnnounceCampaignAlertChanges()
     {
-        if (!_campaignAlertStrip.Visible) { _campaignAlertAnnounced.Clear(); _campaignAlertAnnouncementsArmed = false; return; }
+        if (!_campaignAlertsShown) { _campaignAlertAnnounced.Clear(); _campaignAlertAnnouncementsArmed = false; return; }
         var seen = _campaignAlertAnnounced;
         seen.IntersectWith(_campaignAlerts.Select(a=>a.Id));
         string urgent = null, advisory = null;
@@ -217,87 +501,60 @@ public partial class DealOrForceGame
         else if (advisory is not null) PlayStrategicCue("deal_received");
     }
 
-    private void RefreshCampaignAlertIcons()
-    {
-        foreach (var id in _campaignAlertIcons.Keys.Where(id => !_campaignAlerts.Any(a => a.Id == id)).ToArray())
-        { var old = _campaignAlertIcons[id]; old.GetParent().RemoveChild(old); old.QueueFree(); _campaignAlertIcons.Remove(id); }
-        foreach (var old in _campaignAlertIcons.Values) old.Hide();
-        foreach (var group in Enum.GetValues<CampaignAlertGroup>())
-        foreach (var alert in _campaignAlerts.Where(a => a.Group == group && !_campaignAlertSnoozes.Hidden(a,_campaign.ElapsedDays)).Take(3))
-        {
-            if (!_campaignAlertIcons.TryGetValue(alert.Id,out var button))
-            {
-                var id = alert.Id;
-                button = new CampaignHintButton { Name="CampaignIcon_"+id.Replace(':','_'), CustomMinimumSize=new(42,42) };
-                button.Pressed += () => FollowCampaignAlert(id);
-                button.GuiInput += input =>
-                {
-                    if (input is not InputEventMouseButton { Pressed:true,ButtonIndex:MouseButton.Right }) return;
-                    button.AcceptEvent(); HideCampaignAlert(id);
-                };
-                _campaignAlertClusters[group].AddChild(button); _campaignAlertIcons[id]=button;
-            }
-            if (button.GetParent()!=_campaignAlertClusters[group]) button.Reparent(_campaignAlertClusters[group]);
-            var explanation=alert.Situation is { } situation ? "\n\n"+string.Join("\n",situation.Facts.Take(3).Select(f=>f.Label+": "+f.Value))+
-                "\n\n"+string.Join("\n",situation.Consequences.Take(1)) : "";
-            button.TooltipText = Tr(CampaignAlerts.GroupName(group))+"\n"+alert.Title+"\n\n"+alert.Summary+explanation+"\n\n"+
-                Tr("Left-click: open. Right-click: hide temporarily (urgent hints return tomorrow).");
-            button.AccessibilityName=alert.Title+". "+alert.Summary;
-            ((CampaignHintButton)button).Present(CampaignHintArt.Of(CampaignHintIcon(alert)), Ui.Colour(AlertColour(group)));
-            StyleCampaignHint(button, group); button.Visible=true;
-        }
-    }
-
+    /// <summary>The full list: every line, worst first, nothing cut; hidden hints come back from here.</summary>
     private void RefreshCampaignAlertRows()
     {
-        _campaignAlertHeading.Text = Tr(CampaignAlerts.GroupName(_campaignAlertGroup));
-        var live = _campaignAlerts.ToDictionary(a => a.Id, StringComparer.Ordinal);
-        foreach (var id in _campaignAlertRows.Keys.Where(id => !live.ContainsKey(id)).ToArray())
+        var all = AlertListRules.Arrange(_alertLines, line => line.Rank, _ => false, int.MaxValue).Rows;
+        _campaignAlertHeading.Text = Loc.Format("All alerts ({0})", all.Length);
+        var alive = AlertIdsAlive();
+        foreach (var id in _campaignAlertRows.Keys.Where(id => !alive.Contains(id)).ToArray())
         { var old = _campaignAlertRows[id]; _campaignAlertList.RemoveChild(old); old.QueueFree(); _campaignAlertRows.Remove(id); }
         foreach (var old in _campaignAlertRows.Values) old.Hide();
         var index = 0;
-        foreach (var alert in _campaignAlerts.Where(a => a.Group == _campaignAlertGroup && !_campaignAlertSnoozes.Hidden(a, _campaign.ElapsedDays)))
+        foreach (var line in all)
         {
-            if (!_campaignAlertRows.TryGetValue(alert.Id, out var button))
+            if (!_campaignAlertRows.TryGetValue(line.Id, out var button))
             {
-                var id = alert.Id;
+                var id = line.Id;
                 button = new CampaignHintButton { CustomMinimumSize = new(0,48), GlyphOnLeft = true };
-                button.Pressed += () => FollowCampaignAlert(id);
+                button.Pressed += () => FollowAlertLine(id);
                 button.Name = "CampaignHint_" + id.Replace(':', '_');
                 button.SizeFlagsHorizontal = SizeFlags.ExpandFill; button.Alignment = HorizontalAlignment.Left;
                 button.ClipText = true;
+                button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
                 button.GuiInput += input =>
                 {
                     if (input is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right }) return;
-                    button.AcceptEvent(); HideCampaignAlert(id);
+                    button.AcceptEvent();
+                    if (!id.StartsWith("world:", StringComparison.Ordinal)) HideCampaignAlert(id);
                 };
                 _campaignAlertRows.Add(id, button); _campaignAlertList.AddChild(button);
             }
-            button.Text = alert.Title; button.AccessibilityName = alert.Title + ". " + alert.Summary;
-            button.TooltipText = Ui.Tip(alert.Title + "\n" + alert.Summary + "\n\n" +
-                Tr("Left-click: open. Right-click: hide temporarily (urgent hints return tomorrow)."));
-            ((CampaignHintButton)button).Present(CampaignHintArt.Of(CampaignHintIcon(alert)), Ui.Colour(AlertColour(alert.Group)));
-            StyleCampaignHint(button, alert.Group, row: true);
+            button.Text = line.Caption; button.AccessibilityName = line.Caption + ". " + line.Body;
+            button.TooltipText = Ui.Tip(AlertTip(line));
+            button.Present(CampaignHintArt.Of(line.Glyph), Ui.Colour(line.Dot));
+            button.Mark(Ui.Colour(line.Dot));
+            StyleCampaignHint(button, line.Dot);
             button.Visible = true; _campaignAlertList.MoveChild(button, index++);
         }
-        _campaignAlertEmpty.Text = Tr("No visible hints in this group."); _campaignAlertEmpty.Visible = index == 0;
+        _campaignAlertEmpty.Text = Tr("No alerts are showing. Hidden ones come back below."); _campaignAlertEmpty.Visible = index == 0;
         _campaignAlertList.MoveChild(_campaignAlertEmpty, index);
         _campaignAlertRestore.Text = Loc.Format("Show hidden hints · {0}", _campaignAlertSnoozes.Count);
         _campaignAlertRestore.Disabled = _campaignAlertSnoozes.Count == 0;
     }
 
-    private static void StyleCampaignHint(Button button, CampaignAlertGroup group, bool row = false)
+    private static void StyleCampaignHint(Button button, string token)
     {
         if (button.GetThemeStylebox("normal") is StyleBoxFlat current &&
-            current.BorderColor == Ui.Colour(AlertColour(group),.65f) && current.BgColor == Ui.Colour("shell.background") &&
-            current.ContentMarginLeft == (row ? 50 : 5)) return;
+            current.BorderColor == Ui.Colour(token,.65f) && current.BgColor == Ui.Colour("shell.background") &&
+            current.ContentMarginLeft == 50) return;
         foreach (var state in new[] { "normal", "hover", "pressed", "focus" })
         {
             var style = new StyleBoxFlat { BgColor = Ui.Colour(state == "normal" ? "shell.background" : "war.card"),
-                BorderColor = Ui.Colour(AlertColour(group), state == "normal" ? .65f : 1),
+                BorderColor = Ui.Colour(token, state == "normal" ? .65f : 1),
                 BorderWidthLeft = 1, BorderWidthRight = 1, BorderWidthTop = state == "normal" ? 1 : 2, BorderWidthBottom = 2 };
             style.SetCornerRadiusAll(4); style.SetContentMarginAll(5);
-            if (row) style.ContentMarginLeft = 50;
+            style.ContentMarginLeft = 50; style.ContentMarginRight = 24;
             button.AddThemeStyleboxOverride(state, style);
         }
     }

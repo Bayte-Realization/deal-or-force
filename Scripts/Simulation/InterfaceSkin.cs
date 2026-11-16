@@ -321,8 +321,9 @@ public static class InterfaceSkin
         ("hud.side_panel",     new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 548f, -60f)),
         ("hud.map_controls",   new PanelRect(1f, 1f, 1f, 1f,    -720f, -74f, -8f, -30f)),
         ("hud.resource_atlas", new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 536f, -62f)),
-        ("hud.alerts",         new PanelRect(0.5f, 0f, 0.5f, 0f, -390f, 110f, 390f, 168f)),
-        ("hud.outliner",       new PanelRect(1f, 0f, 1f, 0f,    -316f, 90f, -20f, 620f)),
+        // The alert list under the date plate, and the report docked under a full one (step 4 of the interface plan).
+        ("hud.alerts",         new PanelRect(1f, 0f, 1f, 0f,    -362f, 88f, -8f, 332f)),
+        ("hud.outliner",       new PanelRect(1f, 0f, 1f, 0f,    -316f, 340f, -20f, 640f)),
         ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 612f, -60f)),
         // Top-anchored and as tall as what it holds, rather than stretched to the bottom of
         // the screen: a fleet panel is a dozen lines, and the rest of the column was empty.

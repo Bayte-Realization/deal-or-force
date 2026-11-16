@@ -130,9 +130,8 @@ public partial class DealOrForceGame
         _teletypeBand.TooltipText = Ui.Tip((facts.Length > 0 ? facts + "\n" : "") + Tr("Show it on the map."));
         _teletypeMarkets.Text = TeletypeMarketLine();
 
-        // The band takes the hints strip's slot for its seconds; two announcements must
-        // not fight over one place on the screen.
-        if (_campaignAlertStrip is { Visible: true }) _campaignAlertStrip.Hide();
+        // The band used to borrow the hints strip's slot in the middle; the alerts are a list
+        // under the date plate now (step 4), so the band only keeps clear of it (LayoutTeletype).
         _teletypeBand.MoveToFront();
         _teletypeBand.Visible = true;
         LayoutTeletype();
@@ -178,19 +177,24 @@ public partial class DealOrForceGame
     {
         if (_teletypeBand is not null) _teletypeBand.Visible = false;
         _teletypeShowing = null;
-        // The strip's own refresh sets the same condition; this is only the give-back after
-        // the band borrowed its slot, so it must not invent a different verdict.
-        if (_campaignAlertStrip is not null && _campaign is not null && !_observerMode &&
-            _campaign.Defines.CampaignAlertsEnabled)
-            _campaignAlertStrip.Show();
     }
 
-    /// <summary>The hints strip's slot: centred under the top bar, as wide as it needs and no wider.</summary>
+    /// <summary>
+    /// Centred under the top bar, as wide as it needs and no wider - and clear of the alert list
+    /// under the date plate, which on a narrow canvas reaches towards the middle.
+    /// </summary>
     private void LayoutTeletype()
     {
         if (_teletypeBand is not { Visible: true }) return;
         var width = MathF.Min(700f, MathF.Max(360f, Size.X - 180f));
-        _teletypeBand.Position = new((Size.X - width) * 0.5f, _hudTopPanel.OffsetBottom + 6f);
+        var x = (Size.X - width) * 0.5f;
+        if (_alertListPanel is { Visible: true } list)
+        {
+            var right = list.Position.X - DatePlateGap;
+            width = MathF.Min(width, MathF.Max(320f, right - 110f));
+            x = MathF.Max(8f, MathF.Min(x, right - width));
+        }
+        _teletypeBand.Position = new(x, _hudTopPanel.OffsetBottom + 6f);
         _teletypeBand.Size = new(width, 0f);
     }
 }

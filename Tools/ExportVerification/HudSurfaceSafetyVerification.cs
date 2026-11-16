@@ -38,6 +38,20 @@ public partial class ExportVerification
         foreach (var name in new[] { "DatePlatePause", "DatePlateSlower", "DatePlateFaster", "DatePlateSpeed", "OpenPauseMenu" })
             Check(game.FindChild(name, true, false) is Control { Visible: true } part && plate is not null &&
                 plate.GetGlobalRect().Encloses(part.GetGlobalRect()), name + " stands on the date plate " + language + " " + size.X);
+        // Step 4: the alert list stands under the date plate, the report docks under the list, and
+        // the report's own inbox button is gone (the plate's "Deals (N)" chip is the one way there).
+        var alerts = game.FindChild("CampaignAlerts", true, false) as Control;
+        if (alerts is { Visible: true })
+        {
+            CheckFits(alerts, "alert list " + language + " " + size.X);
+            Check(plate is not null && !alerts.GetGlobalRect().Intersects(plate.GetGlobalRect()) &&
+                alerts.GetGlobalRect().Position.Y >= plate.GetGlobalRect().End.Y - .5f, "the alert list starts under the date plate " + language + " " + size.X);
+            Check(report is not { Visible: true } || !alerts.GetGlobalRect().Intersects(report.GetGlobalRect()),
+                "the report docks under the alert list " + language + " " + size.X);
+            Check(stats.All(s => !alerts.GetGlobalRect().Intersects(s.GetGlobalRect())), "the alert list covers no figure " + language + " " + size.X);
+        }
+        Check(game.FindChild("OpenDiplomaticInbox", true, false) is null && game.FindChild("HudDefconBadge", true, false) is null,
+            "the report has no inbox button and the plate no DEFCON badge: both live elsewhere now " + language + " " + size.X);
         // At 1920 the bar is one row and ends before the plate; narrower windows take a second row
         // that runs on below it.
         if (size.X >= 1920)
@@ -61,6 +75,8 @@ public partial class ExportVerification
         Check(desk is { Visible: true } && report is { Visible: false }, "open right desk replaces the report, not overlays it");
         CheckFits(desk, "open desk " + language + " " + size.X);
         Check(!desk.GetGlobalRect().Intersects(top.GetGlobalRect()), "desk is below the instrument strip");
+        Check(alerts is not { Visible: true } || !desk.GetGlobalRect().Intersects(alerts.GetGlobalRect()),
+            "the open desk docks under the alert list " + language + " " + size.X);
         await Capture("hud-desk-" + language + "-" + size.X);
         game.Call("SetDeskSide", true); await Wait(.1);
         Check(!desk.Visible && report.Visible, "left desk yields to the open country dossier");

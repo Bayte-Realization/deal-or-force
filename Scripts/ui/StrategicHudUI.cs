@@ -55,13 +55,9 @@ public partial class DealOrForceGame
         _situationRailButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         StyleHudButton(_situationRailButton, false);
         column.AddChild(_situationRailButton);
-        _dealInboxHudButton = ActionButton("Diplomatic inbox", OpenDealInbox, 0, 32);
-        _dealInboxHudButton.Name = "OpenDiplomaticInbox";
-        _dealInboxHudButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _dealInboxHudButton.ClipText = true;
-        _dealInboxHudButton.Visible = false;
-        StyleHudButton(_dealInboxHudButton, false);
-        column.AddChild(_dealInboxHudButton);
+        // The report had its own "Diplomatic inbox (N)" here. The date plate's "Deals (N)" chip says
+        // the same thing where the eye goes for the date (DatePlateUI), so there is one way to the
+        // inbox on screen while offers wait, not two (step 4 of the interface plan).
         var scroll = new ScrollContainer
         {
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,

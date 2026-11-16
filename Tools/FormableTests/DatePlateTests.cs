@@ -342,7 +342,7 @@ static class DatePlateTests
     }
 
     /// <summary>
-    /// The reason for the step: with the clock gone from the bar, the country, DEFCON, the twelve
+    /// The reason for the step: with the clock gone from the bar, the country (and DEFCON until step 4), the twelve
     /// figures at their long width and the "Brief" toggle stand in one row at 1920. The numbers are
     /// read from the source and the data, so a wider cell or a new control on the bar fails here.
     /// </summary>
@@ -350,12 +350,14 @@ static class DatePlateTests
     {
         var bar = Source("Scripts/ui/TopBarHudUI.cs");
         var identity = Number(bar, @"identityBox = new StructuredMetricCell \{ CustomMinimumSize = new Vector2\((\d+), 0\)");
-        var defcon = Number(bar, @"ActionButton\(""DEFCON 5"", OpenDefconOverview, (\d+), 28\)");
+        // DEFCON left the bar in step 4: it is a row of the alert list under the date plate
+        // (AlertListTests), so the bar holds the country and the figures. Nothing is counted for it.
+        Check(!bar.Contains("OpenDefconOverview", StringComparison.Ordinal), "the bar no longer carries the DEFCON badge (step 4)");
         var cellGap = Number(bar, @"stats\.AddThemeConstantOverride\(""separation"", (\d+)\)");
         var rowGap = Number(bar, @"row\.AddThemeConstantOverride\(""separation"", (\d+)\)");
         var margin = Number(bar, @"Margin\(top, (\d+), 4\)");
-        Check(identity > 0 && defcon > 0 && cellGap > 0 && rowGap > 0 && margin > 0,
-            $"the bar's sizes are read from the source: country {identity}, DEFCON {defcon}, gaps {cellGap}/{rowGap}, margin {margin}");
+        Check(identity > 0 && cellGap > 0 && rowGap > 0 && margin > 0,
+            $"the bar's sizes are read from the source: country {identity}, gaps {cellGap}/{rowGap}, margin {margin}");
         var cells = InterfaceSkin.Metric("hud.resource_slots", 0f);
         var cell = InterfaceSkin.Metric("hud.resource_cell_width", 0f);
         Check(cells == 12 && cell > 0, $"twelve figures stand on a desktop plate, {cell:0} px each");
@@ -364,12 +366,12 @@ static class DatePlateTests
         const float toggle = 76f;
         const float frame = 2f;
         var figures = cells * cell + cells * cellGap + toggle;
-        var oneRow = frame + 2 * margin + identity + rowGap + defcon + rowGap + figures;
+        var oneRow = frame + 2 * margin + identity + rowGap + figures;
 
         var top = InterfaceSkin.Layout("hud.top");
         var plate = InterfaceSkin.Layout("hud.date_plate");
         var room1920 = (1920 + top.OffsetRight) - top.OffsetLeft;
-        Check(oneRow <= room1920, $"at 1920 the country, DEFCON and all twelve figures need {oneRow:0} px and the bar has {room1920:0}: one row");
+        Check(oneRow <= room1920, $"at 1920 the country and all twelve figures need {oneRow:0} px and the bar has {room1920:0}: one row");
         Check(InterfaceSkin.Metric("hud.two_row_below", 1600f) <= 1920f, "and 1920 is wide enough for the one-row form at all");
 
         // The bar is laid out on the canvas, not the window. The project stretches a 1920x1080
@@ -400,7 +402,7 @@ static class DatePlateTests
         Check(figuresRow <= secondRow, $"on a 1280 canvas the second row needs {figuresRow:0} px and has {secondRow:0}");
         Check(InterfaceSkin.Metric("hud.resource_drawer_below", 1100f) <= 1280f, "and keeps all twelve: the drawer behind \"…\" is for phone widths only");
         var first = (1280 + top.OffsetRight) - top.OffsetLeft;
-        Check(frame + 2 * margin + identity + rowGap + defcon <= first, $"the first row on a 1280 canvas holds the country and DEFCON left of the date plate ({first:0} px)");
+        Check(frame + 2 * margin + identity <= first, $"the first row on a 1280 canvas holds the country left of the date plate ({first:0} px)");
 
         // The fallback is code that measures; it has to exist where the plan says.
         var fit = Source("Scripts/ui/HudReadabilityUI.cs");

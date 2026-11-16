@@ -1,0 +1,12 @@
+// The alert list under the date plate (Scripts/ui/CampaignAlertsUI.cs, step 4 of the interface plan).
+{
+  "{0} hidden · show all": "{0} hidden · show all",
+  "Open the full list of alerts, with the hidden ones and the way to bring them back.": "Open the full list of alerts, with the hidden ones and the way to bring them back.",
+  "All alerts ({0})": "All alerts ({0})",
+  "Close the full list.": "Close the full list.",
+  "No alerts are showing. Hidden ones come back below.": "No alerts are showing. Hidden ones come back below.",
+  "This is the most pressing thing waiting. Press to go there; the rows below list the rest.": "This is the most pressing thing waiting. Press to go there; the rows below list the rest.",
+  "Left-click: open.": "Left-click: open.",
+  "World tension {0} · {1}": "World tension {0} · {1}",
+  "Click for the great powers' rivalries.": "Click for the great powers' rivalries."
+}

@@ -1,0 +1,12 @@
+// Список тревог под плитой даты (Scripts/ui/CampaignAlertsUI.cs, шаг 4 плана интерфейса).
+{
+  "{0} hidden · show all": "скрыто: {0} · показать все",
+  "Open the full list of alerts, with the hidden ones and the way to bring them back.": "Открыть полный список тревог: со скрытыми и с кнопкой, которая их возвращает.",
+  "All alerts ({0})": "Все тревоги ({0})",
+  "Close the full list.": "Закрыть полный список.",
+  "No alerts are showing. Hidden ones come back below.": "Видимых тревог нет. Скрытые возвращаются кнопкой ниже.",
+  "This is the most pressing thing waiting. Press to go there; the rows below list the rest.": "Самое срочное из того, что ждёт. Нажмите, чтобы перейти туда; остальное — в строках ниже.",
+  "Left-click: open.": "ЛКМ — открыть.",
+  "World tension {0} · {1}": "Мировая напряжённость {0} · {1}",
+  "Click for the great powers' rivalries.": "Щелчок — соперничество великих держав."
+}

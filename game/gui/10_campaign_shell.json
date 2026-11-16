@@ -13,12 +13,20 @@
     "hud.country_card": { "anchors": [0,0,0,1], "offsets": [106,90,548,-60] },
     "hud.region_card": { "anchors": [0,1,1,1], "offsets": [552,-262,-8,-8] },
     "hud.map_controls": { "anchors": [1,1,1,1], "offsets": [-720,-74,-8,-30] },
-    "hud.outliner": { "anchors": [1,0,1,0], "offsets": [-316,90,-20,620] },
+    // The alert list (Scripts/ui/CampaignAlertsUI.cs): always visible under the date plate and as
+    // wide as it, as tall as its rows (the bottom here is the height of a full list). The report
+    // below docks under whatever height the list has today; these offsets are where it stands
+    // under a full one.
+    "hud.alerts": { "anchors": [1,0,1,0], "offsets": [-362,88,-8,332], "material": "plate" },
+    "hud.outliner": { "anchors": [1,0,1,0], "offsets": [-316,340,-20,640] },
     "hud.hotseat": { "anchors": [0,1,0,1], "offsets": [106,-54,365,-6] },
     "hud.network": { "anchors": [0,1,0,1], "offsets": [106,-54,425,-6] }
   },
   "metrics": {
     // Each of the five speed marks on the date plate, in pixels (they rise to about twice that).
-    "hud.speed_pips": 11
+    "hud.speed_pips": 11,
+    // The alert list: rows under "Next" before the rest wait behind "+N more", and a row's height.
+    "hud.alerts.max_rows": 6,
+    "hud.alerts.row_height": 28
   }
 }

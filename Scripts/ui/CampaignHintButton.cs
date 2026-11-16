@@ -8,9 +8,18 @@ public partial class CampaignHintButton : Button
     public Texture2D Glyph { get; private set; }
     public string Badge { get; private set; } = "";
     public bool GlyphOnLeft { get; set; }
+    /// <summary>The square a glyph on the left is fitted into, and how far that square starts from the left edge.
+    /// The full list's rows keep 28 from 12; the always-visible list under the date plate is a
+    /// row of 28 pixels and draws a smaller glyph closer to the edge.</summary>
+    public float GlyphBox { get; set; } = 28;
+    public float GlyphInset { get; set; } = 12;
     public Color Accent { get; private set; }
+    /// <summary>The severity dot at the right end of a list row; transparent draws none.</summary>
+    public Color Dot { get; private set; } = Colors.Transparent;
     public Rect2 GlyphRect => Glyph is null ? default : CampaignHintArt.CenteredRect(
-        GlyphOnLeft ? new Vector2(26, Size.Y * .5f) : Size * .5f, Glyph.GetSize(), GlyphOnLeft ? 28 : 29);
+        GlyphOnLeft ? new Vector2(GlyphInset + GlyphBox * .5f, Size.Y * .5f) : Size * .5f, Glyph.GetSize(), GlyphOnLeft ? GlyphBox : 29);
+    /// <summary>Where the dot is drawn: a small circle, centred on the row's height, clear of the right edge.</summary>
+    public Vector2 DotCentre => new(Size.X - 11f, Size.Y * .5f);
 
     public void Present(Texture2D glyph, Color accent, string badge = "")
     {
@@ -18,9 +27,21 @@ public partial class CampaignHintButton : Button
         Glyph = glyph; Accent = accent; Badge = badge; QueueRedraw();
     }
 
+    public void Mark(Color dot)
+    {
+        if (Dot == dot) return;
+        Dot = dot; QueueRedraw();
+    }
+
     public override void _Draw()
     {
         if (Glyph is not null) DrawTextureRect(Glyph, GlyphRect, false);
+        if (Dot.A > 0f)
+        {
+            // A dark ring under the colour, so a green or amber dot reads on any plate.
+            DrawCircle(DotCentre, 5.5f, Ui.Colour("shell.background"));
+            DrawCircle(DotCentre, 4f, Dot);
+        }
         if (Badge.Length == 0) return;
         var font = GetThemeFont("font");
         var textSize = font.GetStringSize(Badge, fontSize: 10);

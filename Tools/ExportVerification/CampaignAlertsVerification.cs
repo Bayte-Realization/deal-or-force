@@ -22,36 +22,56 @@ public partial class ExportVerification
             Loc.Language=lang; GetTree().Root.Size=new(width,height); game.Call("RefreshLocalisedText");
             game.Call("RefreshSituationRoom",true); await Wait(.4);
             var fp=CampaignFingerprint.Of(world);
-            var strip=game.FindChild("CampaignAlerts",true,false) as Control;
-            var icons=strip.FindChildren("CampaignIcon_*","Button",true,false).OfType<Button>().Where(b=>b.Visible).ToArray();
-            Check(strip.IsVisibleInTree() && icons.Length>0 && icons.All(b=>b is CampaignHintButton { Glyph:not null }),"top hints use the generated atlas: "+lang+width);
-            Check(icons.Cast<CampaignHintButton>().All(b => b.GlyphRect.GetCenter().DistanceTo(b.Size*.5f)<.001f),
-                "every visible glyph's alpha-cropped rectangle is exactly centred");
+            // Step 4 of the interface plan: the hints are a list of words under the date plate,
+            // placed by hud.alerts; the first row is "Next", the rest carry a severity dot.
+            var list=game.FindChild("CampaignAlerts",true,false) as Control;
+            var next=game.FindChild("CampaignAlertNext",true,false) as CampaignHintButton;
+            var rows=list.FindChildren("CampaignAlertRow_*","Button",true,false).OfType<CampaignHintButton>().Where(b=>b.Visible).ToArray();
+            Check(list is not null && list.HasMeta("skin_layout") && list.GetMeta("skin_layout").AsString()=="hud.alerts",
+                "the alert list is placed by its layout key hud.alerts: "+lang+width);
+            Check(list.IsVisibleInTree() && next is { Visible:true } && next.GetIndex()==0 && next.Text.Length>0,
+                "the alert list is on screen and \"Next\" is its first row: "+lang+width);
+            Check(rows.Length>0 && rows.Length<=(int)Ui.Metric("hud.alerts.max_rows",6) && rows.All(b=>b.Glyph is not null && b.Dot.A>0),
+                "every row has its glyph and severity dot, and no more rows than hud.alerts.max_rows: "+lang+width);
+            Check(new[]{ next }.Concat(rows).All(b=>b.Glyph is null || new Rect2(Vector2.Zero,b.Size).Grow(.5f).Encloses(b.GlyphRect)),
+                "every row's glyph sits inside its row");
+            Check(new[]{ next }.Concat(rows).All(b=>b.GetGlobalRect().Size.Y>=22 && b.Text.Length>0),
+                "rows are captioned and tall enough to hit");
+            var plate=game.FindChild("DatePlate",true,false) as Control;
+            var report=game.FindChild("StrategicOutliner",true,false) as Control;
+            Check(plate is not null && list.GetGlobalRect().Position.Y>=plate.GetGlobalRect().End.Y-.5f,"the list starts under the date plate");
+            Check(report is not { Visible:true } || !report.GetGlobalRect().Intersects(list.GetGlobalRect()),"the situation report docks under the list");
+            Check(list.GetGlobalRect().End.X<=game.Size.X && list.GetGlobalRect().Position.Y>0,"alert list fits viewport");
+            Check(game.FindChild("HintClusterMust",true,false) is null && game.FindChild("CampaignBrief",true,false) is null,
+                "the old strip of pictures and the blue Next bar are gone");
+            Check(rows.Where(b=>!b.Name.ToString().StartsWith("CampaignAlertRow_world_")).All(b=>!string.IsNullOrEmpty(b.TooltipText) &&
+                b.TooltipText.Contains(Loc.Get("Left-click: open. Right-click: hide temporarily (urgent hints return tomorrow)."))),"all hint rows explain both mouse buttons");
             Check(new[] { "must", "should", "could", "important", "treasury", "good_food", "materials", "good_energy",
                 "good_ammunition", "good_copper", "good_lithium", "good_sulfur", "research", "elections", "decision", "personnel",
                 "alert_construction", "alert_supply", "diplomacy", "organisations", "wars", "alert_battle", "unrest", "alert_event" }
                 .All(key => CampaignHintArt.Of(key) is AtlasTexture { Region.Size.X: > 0, Region.Size.Y: > 0 }),
                 "all 24 generated symbols have nonempty cropped atlas regions");
-            Check(icons.All(b=>b.GetGlobalRect().Size.X>=30 && b.GetGlobalRect().Size.Y>=30),"hint hit areas remain usable");
-            Check(strip.GetGlobalRect().End.X<=game.Size.X && strip.GetGlobalRect().Position.Y>0,"hint strip fits viewport");
-            Check(icons.All(b=>!string.IsNullOrEmpty(b.TooltipText) && b.TooltipText.Contains(Loc.Get("Left-click: open. Right-click: hide temporarily (urgent hints return tomorrow)."))),"all icon hover cards explain both mouse buttons");
-            await Capture("top-hints-"+lang+"-"+width);
-            var hovered=icons.First();
+            await Capture("alert-list-"+lang+"-"+width);
+            var hovered=rows.First();
             GetViewport().NotifyMouseExited(); GetViewport().NotifyMouseEntered();
             // The responsive HUD lives in a scaled CanvasLayer. GlobalRect is in
             // canvas coordinates; input belongs to the viewport, including that scale.
             var mousePoint=hovered.GetGlobalTransformWithCanvas()*(hovered.Size*.5f);
             GetViewport().PushInput(new InputEventMouseMotion { Position=mousePoint },true); await Wait(.9);
-            Check(GetViewport().GuiGetHoveredControl()==hovered,"real viewport mouse motion reaches hint icon");
-            await Capture("hint-hover-"+lang+"-"+width);
+            Check(GetViewport().GuiGetHoveredControl()==hovered,"real viewport mouse motion reaches an alert row");
+            await Capture("alert-hover-"+lang+"-"+width);
             GetViewport().PushInput(new InputEventMouseMotion { Position=new Vector2(300,300) },true);
-            (game.FindChild("CampaignAlertGroupMust",true,false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed);
-            await Wait(.2); await Capture("hints-expanded-"+lang+"-"+width);
-            Check(CampaignFingerprint.Of(world)==fp,"opening hint list is read-only");
-            (game.FindChild("CampaignAlertGroupMust",true,false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed);
+            game.Call("ToggleCampaignAlertList");
+            await Wait(.2);
+            var popup=game.FindChild("CampaignAlertPopup",true,false) as Control;
+            Check(popup is { Visible:true } && !popup.GetGlobalRect().Intersects(list.GetGlobalRect()),"the full list opens beside the short one");
+            await Capture("alerts-expanded-"+lang+"-"+width);
+            Check(CampaignFingerprint.Of(world)==fp,"opening the alert list is read-only");
+            game.Call("ToggleCampaignAlertList");
         }
-        var hint=game.FindChild("CampaignIcon_shortage_Food",true,false) as Button;
-        Check(hint is { Visible:true },"precise food warning has a top icon");
+        game.Call("ToggleCampaignAlertList"); await Wait(.2);
+        var hint=game.FindChild("CampaignHint_shortage_Food",true,false) as Button;
+        Check(hint is { Visible:true },"precise food warning is on the alert list");
         var fingerprint=CampaignFingerprint.Of(world);
         hint?.EmitSignal(Control.SignalName.GuiInput,new InputEventMouseButton { ButtonIndex=MouseButton.Right,Pressed=true });
         Check(hint is { Visible:false } && CampaignFingerprint.Of(world)==fingerprint,"actual RMB hides hint without changing campaign");

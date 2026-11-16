@@ -220,12 +220,14 @@ public partial class DealOrForceGame
                      _productionLayer, _researchLayer, _conflictsLayer, _recruitmentLayer })
             FitWorkspaceNavigationInset(layer);
         // Baseline rectangles remain moddable in game/gui. Only the short outliner is
-        // clamped to available height; it must not cover the map toolbar at 720p.
+        // clamped to available height; it must not cover the map toolbar at 720p. In the alert
+        // list's column it docks under the list (step 4), wherever the list ends today.
         if (_outliner is not null)
         {
             Ui.Place(_outliner, "hud.outliner");
             _outliner.OffsetTop += _hudHeaderExtra;
             _outliner.AnchorBottom = 0;
+            DockUnderAlertList(_outliner);
             FitOutliner();
         }
     }

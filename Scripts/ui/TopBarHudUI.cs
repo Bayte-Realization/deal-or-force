@@ -8,7 +8,6 @@ namespace DealOrForce;
 public partial class DealOrForceGame
 {
     private readonly List<StatReadout> _hudStats = new();
-    private Button _defconBadge;
     private VBoxContainer _identityPortraitSlot;
     private string _identityPortraitLeaderKey = "";
 
@@ -142,14 +141,9 @@ public partial class DealOrForceGame
         _identityTag.MouseFilter = MouseFilterEnum.Pass;
         identityBox.AddChild(_identityTag);
 
-        // The world's nuclear alert, and the door to its screen (DefconOverviewUI).
-        _defconBadge = ActionButton("DEFCON 5", OpenDefconOverview, 84, 28);
-        _defconBadge.Name = "HudDefconBadge";
-        _defconBadge.ClipText = true;
-        _defconBadge.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        _defconBadge.TooltipText = Ui.Tip(Tr("Global Defense Readiness Condition (DEFCON). Click to inspect nuclear posture, active hotspots and readiness effects."));
-        StyleHudButton(_defconBadge, false);
-        row.AddChild(_defconBadge);
+        // DEFCON was a badge here, the door to its screen (DefconOverviewUI). It is a row of the
+        // alert list under the date plate now (CampaignAlertsUI, step 4 of the interface plan),
+        // ranked with the other alerts, and the plate keeps its room for the figures.
 
         // The resource plate: the figures that matter most, one row, and "…" at its edge for the
         // rest (BuildResourcePlate). Every figure is built here; the plate arranges them.
@@ -273,17 +267,6 @@ public partial class DealOrForceGame
             }
         }
         RefreshDatePlate(player);
-
-        if (_defconBadge is not null && _campaign is not null)
-        {
-            // A scenario without the nuclear age shows no ladder at all, not a DEFCON 5 nobody can change.
-            _defconBadge.Visible = DefconSystem.Enabled(_campaign);
-            var defcon = DefconSystem.CurrentLevel(_campaign);
-            _defconBadge.Text = $"DEFCON {defcon}";
-            _defconBadge.TooltipText = Ui.Tip(DefconSystem.FormatSummary(_campaign) + "\n\n" +
-                Tr("Click for the ladder, the nuclear powers and our posture."));
-            _defconBadge.AddThemeColorOverride("font_color", Ui.Colour(DefconSystem.LevelColourToken(defcon)));
-        }
 
         // The week and the half-year behind the figures belong to one country. A hotseat pass or a
         // network seat change hands the bar to another on the same day, and without this the

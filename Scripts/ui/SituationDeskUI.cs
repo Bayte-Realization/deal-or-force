@@ -305,6 +305,9 @@ public partial class DealOrForceGame
         // Reset from the authored dock so closing a card restores the full height. Never
         // subtract from yesterday's clamped rectangle (which would progressively shrink it).
         ShiftHudDock(_deskPanel);
+        // Docked on the right, the desk takes the report's place, and that place is under the
+        // alert list now (step 4): its data top (150) is inside the list's column.
+        DockUnderAlertList(_deskPanel);
         ClampAboveMapBar(_deskPanel);
 
         // A desk with one line on it must not hold half the column. The rows ask for the height

@@ -7,7 +7,7 @@ namespace DealOrForce;
 
 public partial class DealOrForceGame
 {
-    private Button _dealInboxHudButton, _diplomacyInboxButton;
+    private Button _diplomacyInboxButton;
     private VBoxContainer _dealInboxRows, _dealInboxDetail;
     private ScrollContainer _dealInboxScroll;
     private HFlowContainer _dealInboxActions;
@@ -59,16 +59,10 @@ public partial class DealOrForceGame
         _assistanceNoticeIds = assistance;
         _armsNoticeIds = armsPapers;
         _dealNoticeViewer = _campaign.Player.Id; _dealNoticeObserver = _observerMode; _dealNoticeIds = incoming;
-        if (IsInstanceValid(_dealInboxHudButton))
-        {
-            var visibilityChanged = _dealInboxHudButton.Visible != (count > 0);
-            _dealInboxHudButton.Visible = count > 0;
-            _dealInboxHudButton.Text = Loc.Format("Diplomatic inbox ({0})", count);
-            _dealInboxHudButton.TooltipText = Ui.Tip(Tr("Incoming offers await your choice. Opening the inbox never signs or spends anything."));
-            if (visibilityChanged) Callable.From(LayoutCampaignShell).CallDeferred();
-        }
-        // The chip on the date plate says the same, where it is seen without opening anything.
-        // It keeps the plate's width (DatePlateUI), so its coming and going moves nothing else.
+        // The one way to the inbox on the campaign screen while offers wait: the chip on the date
+        // plate, seen without opening anything. The report's own inbox button said the same and
+        // went in step 4 of the interface plan. The chip keeps the plate's width (DatePlateUI), so
+        // its coming and going moves nothing else.
         RefreshDatePlateDeals(count);
         if (IsInstanceValid(_diplomacyInboxButton))
             _diplomacyInboxButton.Text = count > 0 ? Loc.Format("Diplomatic inbox ({0})", count) : Tr("Diplomatic inbox");
