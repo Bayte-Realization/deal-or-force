@@ -1,0 +1,7 @@
+// Each country's losses in a war (Scripts/ui/WarLedgerUI.cs, WarLosses.ByCountry).
+{
+  "{0} and allies": "{0} and allies",
+  "a country that is gone": "a country that is gone",
+  "Earlier, not recorded by country": "Earlier, not recorded by country",
+  "Lost before this campaign began keeping each country's losses apart. They are in the side's total.": "Lost before this campaign began keeping each country's losses apart. They are in the side's total."
+}

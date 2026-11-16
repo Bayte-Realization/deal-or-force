@@ -39,9 +39,14 @@ public partial class DealOrForceGame
         ApplyHudFrame(plate);
         PlaceDatePlate();
         var margin = Margin(plate, 8, 4);
+        // The clock and the menu, and under them the state of the world (WorldStripUI).
+        var stack = new VBoxContainer { Name = "DatePlateStack" };
+        stack.AddThemeConstantOverride("separation", 4);
+        margin.AddChild(stack);
         var row = new HBoxContainer { Name = "DatePlateRow" };
         row.AddThemeConstantOverride("separation", 8);
-        margin.AddChild(row);
+        stack.AddChild(row);
+        BuildWorldStrip(stack);
 
         var column = new VBoxContainer
         {

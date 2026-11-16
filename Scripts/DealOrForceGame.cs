@@ -145,7 +145,9 @@ public partial class DealOrForceGame : Control
         SyncCountryFactsHeight();
         TickNuclearAlert(delta);
         MaintainArmyBar(delta);
-        if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
+        if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible)
+            // Nobody's eyes: an observer of the whole world sees the whole world. Watching one country, he sees what it sees.
+            && !WatchingWorld;
         if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         // Choosing a country is choosing a shape and a colour: mines and factories are noise there.
         if (_globe is not null) _globe.RegionIconsSuppressed = _pickerLayer is { Visible: true };
@@ -229,6 +231,7 @@ public partial class DealOrForceGame : Control
             try
             {
                 var finished = true;
+                _simulating = true;
                 using (SimProfiler.Measure("campaign.day"))
                 {
                     if (baseSlice > 0f)
@@ -250,11 +253,13 @@ public partial class DealOrForceGame : Control
                         finished = _campaign.StepFor(double.PositiveInfinity);
                     else _campaign.Tick();
                 }
+                _simulating = false;
                 // The rest of this step belongs to the next frame.
                 if (!finished) { _applyingNetworkCommand = false; break; }
             }
             catch (System.Exception exception) when (exception is not System.OutOfMemoryException && exception is not System.AccessViolationException)
             {
+                _simulating = false;
                 _applyingNetworkCommand = false;
                 _dayAccumulator = 0;
                 _campaign.BlockSimulation(exception.Message, exception);
@@ -540,6 +545,10 @@ public partial class DealOrForceGame : Control
         // Watching rather than playing. F7 rather than F8 for the same reason F10 is not F8:
         // the editor takes that one to stop the running project.
         if (key.Keycode == Key.F7) { ToggleObserverMode(); GetViewport().SetInputAsHandled(); return; }
+        // Back from a watched country to the world's own figures.
+        if (key.Keycode == Key.F4 && _observerMode) { WatchWorld(); GetViewport().SetInputAsHandled(); return; }
+        // The map and nothing else, as genre players know it from Ctrl+F9.
+        if (key.Keycode == Key.F9 && key.CtrlPressed) { ToggleInterfaceHidden(); GetViewport().SetInputAsHandled(); return; }
 
         // Everything the flying camera does that is a switch rather than a movement. They
         // are read here rather than polled with the rest because holding G down should not
@@ -1485,6 +1494,8 @@ public partial class DealOrForceGame : Control
             return;
         }
         if (!_hudLayer.Visible) return;
+        // An observer who clicks a country is now watching that country.
+        if (_observerMode && pick.Nation is not null) WatchCountry(pick.Nation);
         // The long-range forces panel takes a click on the map for itself: where the selected
         // formations are rebased, or the base a new one is raised into.
         if (TrySupportMapPick(pick)) return;
@@ -1583,6 +1594,8 @@ public partial class DealOrForceGame : Control
     {
         if (_campaign?.Player is null) return;
         _globe?.RefreshCountryNames();
+        SyncObserverCommandGate();
+        RefreshWorldStrip();
 
         var player = _campaign.Player;
         RefreshTopBar(player);

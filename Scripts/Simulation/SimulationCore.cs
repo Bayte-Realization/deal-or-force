@@ -2168,6 +2168,16 @@ public sealed partial class Campaign
         return false;
     }
 
+    /// <summary>
+    /// Look at the world through one country without sitting in its chair: nobody becomes human,
+    /// no seat is taken and the computer keeps running it. What an observer's interface reads.
+    /// </summary>
+    public void ViewAs(int nationId)
+    {
+        var nation = NationById(nationId);
+        if (nation is not null) Player = nation;
+    }
+
     public void SetPlayer(int nationId)
     {
         foreach (var nation in Nations) nation.IsPlayer = false;

@@ -288,6 +288,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--hud-resources-only")) { HudResourceTests.Run(); return; }
         if (args.Contains("--date-plate-only")) { DatePlateTests.Run(); return; }
         if (args.Contains("--alert-list-only")) { AlertListTests.Run(); return; }
+        if (args.Contains("--war-toll-only")) { WarTollTests.Run(); return; }
         if (args.Contains("--research-route-only")) { ResearchRouteTests.Run(); return; }
         if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); ResearchRouteTests.Run(); return; }
         if (args.Contains("--regional-demography-only")) { RegionalDemographyTests.Run(); return; }
@@ -660,6 +661,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         HudResourceTests.Run();
         DatePlateTests.Run();
         AlertListTests.Run();
+        WarTollTests.Run();
         DiplomacyPreviewTests.Run();
         ProductionUnitsTests.Run();
         InterfaceIconTests.Run();

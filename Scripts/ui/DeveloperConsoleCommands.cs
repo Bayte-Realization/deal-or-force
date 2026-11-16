@@ -605,7 +605,9 @@ public partial class DealOrForceGame
         // for ever, and a developer console is exactly where that would first happen.
         var steps = 0;
         var ceiling = days * 24 + 64;
-        while (_campaign.ElapsedDays - from < days && steps++ < ceiling) _campaign.Tick();
+        _simulating = true;
+        try { while (_campaign.ElapsedDays - from < days && steps++ < ceiling) _campaign.Tick(); }
+        finally { _simulating = false; }
         clock.Stop();
         _campaign.IsPaused = paused;
         Refresh();

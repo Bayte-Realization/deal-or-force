@@ -139,7 +139,7 @@ public partial class DealOrForceGame
         }
         // Nobody's country is being run: the report is about the world, not the last country the
         // picker happened to show (ObserverTopBarUI).
-        if (_observerMode)
+        if (WatchingWorld)
         {
             DrawObserverOutliner();
             Callable.From(FitOutliner).CallDeferred();

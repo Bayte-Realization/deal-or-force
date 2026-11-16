@@ -53,6 +53,13 @@ internal static class AlertListRules
     /// </summary>
     internal static int TensionRank(float tension) => tension >= 80f ? 0 : tension >= 60f ? 1 : tension >= 40f ? 2 : -1;
 
+    /// <summary>
+    /// The alert level and world tension are read at the foot of the date plate, always. They take
+    /// a row among the alerts only when they are news to act on: DEFCON 3 and worse, tension from
+    /// "dangerous" (60) - ranks 0 and 1.
+    /// </summary>
+    internal static bool WorldRow(int rank) => rank is >= 0 and <= 1;
+
     /// <summary>The tension row's dot, in the conflicts screen's colours for the same thresholds.</summary>
     internal static string TensionDot(float tension) => tension >= 80f ? "state.critical" : tension >= 60f ? "state.warning" : "state.info";
 

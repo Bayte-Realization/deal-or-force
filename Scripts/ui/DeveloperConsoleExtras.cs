@@ -175,7 +175,9 @@ public partial class DealOrForceGame
         var paused = _campaign.IsPaused;
         _campaign.IsPaused = false;
         var before = _campaign.ElapsedDays;
-        for (var day = 0; day < days; day++) _campaign.TickDay();
+        _simulating = true;
+        try { for (var day = 0; day < days; day++) _campaign.TickDay(); }
+        finally { _simulating = false; }
         _campaign.IsPaused = paused;
         return $"Advanced {_campaign.ElapsedDays - before:N0} day(s) to {_campaign.Date}. The clock is " +
                (paused ? "still stopped." : "still running.");

@@ -1,0 +1,11 @@
+// Watching a country as an observer, and hiding the interface (Scripts/ui/ObserverModeUI.cs).
+{
+  "Click a country to watch it, then F7 takes control of it.": "Click a country to watch it, then F7 takes control of it.",
+  "Observing · F7 returns the controls · Ctrl+F9 hides the interface": "Observing · F7 returns the controls · Ctrl+F9 hides the interface",
+  "Observing the world · click a country to watch it · Ctrl+F9 hides the interface": "Observing the world · click a country to watch it · Ctrl+F9 hides the interface",
+  "Watching {0} · F4 back to the world · F7 takes control · Ctrl+F9 hides the interface": "Watching {0} · F4 back to the world · F7 takes control · Ctrl+F9 hides the interface",
+  "Watching · {0}": "Watching · {0}",
+  "run by the computer": "run by the computer",
+  "Tension {0}": "Tension {0}",
+  "Run by the computer · you are watching": "Run by the computer · you are watching"
+}

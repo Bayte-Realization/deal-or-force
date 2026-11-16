@@ -931,7 +931,9 @@ public partial class DealOrForceGame
         void SideCost(Nation leader, float losses, float killed, float wounded, float captured)
         {
             var head = new HBoxContainer();
-            head.AddChild(Yielding(Body(leader?.DisplayName ?? Tr("nobody"), 13, Ui.Colour("text.bright"))));
+            var coalition = leader is not null && WarLosses.ByCountry(war, war.IsAttacking(leader.Id)).Countries.Any(entry => entry.NationId != leader.Id);
+            head.AddChild(Yielding(Body(leader is null ? Tr("nobody")
+                : coalition ? Simulation.Loc.Format("{0} and allies", leader.DisplayName) : leader.DisplayName, 13, Ui.Colour("text.bright"))));
             var total = Body(Fmt.People(losses), 15, Ui.Colour("text.bright"));
             total.HorizontalAlignment = HorizontalAlignment.Right;
             head.AddChild(total);
@@ -949,8 +951,50 @@ public partial class DealOrForceGame
                     Fmt.People(killed), Fmt.People(wounded), Fmt.People(captured)), 11, Ui.Colour("text.muted")));
             cost.AddChild(new Control { CustomMinimumSize = new Vector2(0, 2) });
         }
+        // Under each side's total, every country that bore part of it, heaviest first: a
+        // coalition's losses are not its leader's. One country alone is its side's total already.
+        void CountryCosts(bool attacking)
+        {
+            var (countries, unattributed) = WarLosses.ByCountry(war, attacking);
+            var alone = countries.Count == 1 && countries[0].NationId == (attacking ? war.AttackerId : war.DefenderId);
+            if (countries.Count == 0 || (alone && unattributed < 1f)) return;
+            void Line(Control mark, string name, float men, string tip, (float Killed, float Wounded, float Captured)? parts)
+            {
+                var line = new HBoxContainer { TooltipText = tip, MouseFilter = MouseFilterEnum.Stop };
+                line.AddThemeConstantOverride("separation", 6);
+                line.AddChild(mark);
+                line.AddChild(Yielding(Body(name, 12, Ui.Colour("text.body_soft"))));
+                var bar = Bar(6, 70);
+                if (parts is { } p)
+                    bar.Shares((p.Killed / heaviest, killedColour), (p.Wounded / heaviest, woundedColour), (p.Captured / heaviest, capturedColour));
+                else
+                    bar.Shares((men / heaviest, Ui.Colour("text.muted")));
+                line.AddChild(bar);
+                var figure = Body(Fmt.People(men), 12, Ui.Colour("text.bright"));
+                figure.HorizontalAlignment = HorizontalAlignment.Right;
+                figure.CustomMinimumSize = new Vector2(58, 0);
+                line.AddChild(figure);
+                cost.AddChild(line);
+            }
+            foreach (var (id, toll) in countries)
+            {
+                var member = _campaign.NationById(id);
+                var name = member?.DisplayName ?? Tr("a country that is gone");
+                Line(member is null ? new Control { CustomMinimumSize = new Vector2(20, 12) } : FlagBadge(member.Tag, 12, name),
+                    name, toll.Total,
+                    name + "\n" + Simulation.Loc.Format("{0} killed · {1} wounded · {2} captured",
+                        Fmt.People(toll.Killed), Fmt.People(toll.Wounded), Fmt.People(toll.Captured)),
+                    (toll.Killed, toll.Wounded, toll.Captured));
+            }
+            if (unattributed >= 1f)
+                Line(new Control { CustomMinimumSize = new Vector2(20, 12) }, Tr("Earlier, not recorded by country"), unattributed,
+                    Tr("Lost before this campaign began keeping each country's losses apart. They are in the side's total."), null);
+            cost.AddChild(new Control { CustomMinimumSize = new Vector2(0, 4) });
+        }
         SideCost(attacker, war.AttackerLosses, war.AttackerKilled, war.AttackerWounded, war.AttackerCaptured);
+        CountryCosts(true);
         SideCost(defender, war.DefenderLosses, war.DefenderKilled, war.DefenderWounded, war.DefenderCaptured);
+        CountryCosts(false);
 
         var key = new HBoxContainer();
         key.AddThemeConstantOverride("separation", 12);

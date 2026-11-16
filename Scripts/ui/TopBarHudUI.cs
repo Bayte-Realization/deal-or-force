@@ -240,8 +240,10 @@ public partial class DealOrForceGame
         _identity.AddThemeFontSizeOverride("font_size", identitySize);
         // No tag for nobody: "OBS" read in Russian as "НАБ", a word nobody could place.
         var leader = Rulers.HeadOfState(_campaign, player);
-        _identityTag.Text = _observerMode
+        _identityTag.Text = WatchingWorld
             ? Tr("Observer mode")
+            : _observerMode
+                ? Loc.Format("Watching · {0}", string.IsNullOrEmpty(leader.Name) ? Tr("run by the computer") : leader.Name)
             : !string.IsNullOrEmpty(leader.Name)
                 ? leader.Name
                 : Tr("player nation");
@@ -405,7 +407,7 @@ public partial class DealOrForceGame
         _inflation?.Spark?.Push(day, player.Inflation);
         _politicalPoints?.Spark?.Push(day, player.PoliticalPoints);
         _publicDebt?.Spark?.Push(day, SovereignFinance.Outstanding(player));
-        if (_observerMode) WriteObserverTopBar();
+        if (WatchingWorld) WriteObserverTopBar();
         else WriteMovementTopBar(player);
         // After the modes have borrowed their places: a figure saying something else has no state,
         // and a borrowed figure has to stand on the plate whatever the data put there.

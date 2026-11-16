@@ -23,8 +23,55 @@ namespace DealOrForce.Simulation;
 /// The totals on the war keep their meaning - the war score and home support read them - so
 /// what has changed there is only that a pocket now puts its losses in.
 /// </summary>
+public sealed partial class StrategicWar
+{
+    /// <summary>
+    /// The war's losses once more, by the country that bore them. The side totals say what the
+    /// war cost "the attackers"; a coalition war is fought by a dozen countries, and the one that
+    /// sent an expedition and the one that lost its army are not the same line. A country that
+    /// made a separate peace keeps its line. Empty for the part of a war that was fought before
+    /// this record was kept (saves older than 16 November 2026).
+    /// </summary>
+    public readonly Dictionary<int, WarToll> Toll = new();
+}
+
+/// <summary>What one country has lost in one war, and which side it lost them on.</summary>
+public sealed class WarToll
+{
+    public bool Attacking;
+    public float Killed;
+    public float Wounded;
+    public float Captured;
+
+    public float Total => Killed + Wounded + Captured;
+}
+
 public static class WarLosses
 {
+    /// <summary>
+    /// Every country with losses in this war on one side, heaviest first, and what the side lost
+    /// before losses were kept by country (zero in a war begun after 16 November 2026).
+    /// </summary>
+    public static (List<(int NationId, WarToll Toll)> Countries, float Unattributed) ByCountry(StrategicWar war, bool attacking)
+    {
+        var countries = new List<(int NationId, WarToll Toll)>();
+        if (war is null) return (countries, 0f);
+        var named = 0f;
+        foreach (var (id, toll) in war.Toll)
+        {
+            if (toll.Attacking != attacking || toll.Total < 0.5f) continue;
+            countries.Add((id, toll));
+            named += toll.Total;
+        }
+        countries.Sort((left, right) =>
+        {
+            var byLoss = right.Toll.Total.CompareTo(left.Toll.Total);
+            return byLoss != 0 ? byLoss : left.NationId.CompareTo(right.NationId);
+        });
+        var side = attacking ? war.AttackerLosses : war.DefenderLosses;
+        return (countries, MathF.Max(0f, side - named));
+    }
+
     /// <summary>Formations that surrendered whole, this process: a bench counter, not campaign state.</summary>
     public static int SurrenderedFormations;
 
@@ -53,6 +100,12 @@ public static class WarLosses
             war.DefenderCaptured += captured;
         }
         if (captured > 0f) war.Prisoners[nationId] = war.Prisoners.GetValueOrDefault(nationId) + captured;
+
+        if (!war.Toll.TryGetValue(nationId, out var toll))
+            war.Toll[nationId] = toll = new WarToll { Attacking = war.IsAttacking(nationId) };
+        toll.Killed += killed;
+        toll.Wounded += wounded;
+        toll.Captured += captured;
     }
 
     /// <summary>
@@ -73,6 +126,12 @@ public static class WarLosses
             men = MathF.Min(men, war.DefenderWounded);
             war.DefenderWounded -= men;
             war.DefenderKilled += men;
+        }
+        if (war.Toll.TryGetValue(nationId, out var toll))
+        {
+            var own = MathF.Min(men, toll.Wounded);
+            toll.Wounded -= own;
+            toll.Killed += own;
         }
     }
 

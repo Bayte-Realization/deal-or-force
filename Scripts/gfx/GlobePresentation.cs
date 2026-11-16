@@ -235,6 +235,14 @@ public sealed partial class GlobePresentation : SubViewportContainer
         set { _mapLayerDrawerInputBlocked = value; if (value) DismissMapTooltips(); }
     }
 
+    private bool _interfaceHidden;
+    /// <summary>The interface is off the screen (Ctrl+F9): the map says nothing under the pointer either.</summary>
+    public bool InterfaceHidden
+    {
+        get => _interfaceHidden;
+        set { _interfaceHidden = value; if (value) DismissMapTooltips(); }
+    }
+
     private void DismissMapTooltips()
     {
         // Most tooltips are owned by the persistent keeper at the root, not by
@@ -2002,7 +2010,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override string _GetTooltip(Vector2 atPosition)
     {
-        if (LoadingInputBlocked || MediaLibraryInputBlocked || MapLayerDrawerInputBlocked) return "";
+        if (LoadingInputBlocked || MediaLibraryInputBlocked || MapLayerDrawerInputBlocked || InterfaceHidden) return "";
         var badgeTip = RegionBadgeTooltip(atPosition);
         if (badgeTip.Length > 0) return badgeTip;
         var supportTip = SupportMapTooltip(atPosition);

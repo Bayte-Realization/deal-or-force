@@ -75,6 +75,8 @@ static class AlertListTests
 
     internal static int TensionRank(float tension) => tension >= 80f ? 0 : tension >= 60f ? 1 : tension >= 40f ? 2 : -1;
 
+    internal static bool WorldRow(int rank) => rank is >= 0 and <= 1;
+
     internal static string TensionDot(float tension) => tension >= 80f ? "state.critical" : tension >= 60f ? "state.warning" : "state.info";
 
     internal static int MaxRows(float metric) => float.IsFinite(metric) ? Math.Clamp((int)MathF.Round(metric), 1, 12) : 6;
@@ -99,6 +101,7 @@ static class AlertListTests
         foreach (var member in new[] { "const int Calm", "int Rank(CampaignAlertGroup group)", "(int Tier, int Deadline) Urgency(CampaignAlert alert)",
                      "string Dot(CampaignAlertGroup group)",
                      "int DefconRank(int level)", "int TensionRank(float tension)", "string TensionDot(float tension)",
+                     "bool WorldRow(int rank)",
                      "int MaxRows(float metric)", "(T Next, T[] Rows, int More) Arrange<T>(" })
         {
             var game = HudResourceTests.MemberText(rules, member);
@@ -108,7 +111,7 @@ static class AlertListTests
         // A rule the game does not call is a test of the test's own copy.
         var ui = Source("Scripts/ui/CampaignAlertsUI.cs");
         var members = Regex.Matches(rules, @"internal static [\w\(\), \[\]]+? (\w+)(<T>)?\(").Select(match => match.Groups[1].Value).ToList();
-        Check(members.Count == 8, $"the rules have the eight members copied above ({string.Join(", ", members)})");
+        Check(members.Count == 9, $"the rules have the nine members copied above ({string.Join(", ", members)})");
         foreach (var name in members)
             Check(ui.Contains("AlertListRules." + name + "(", StringComparison.Ordinal), $"the game calls AlertListRules.{name}");
         Check(ui.Contains("AlertListRules.Calm"), "and tells a calm world line by AlertListRules.Calm");
@@ -271,12 +274,21 @@ static class AlertListTests
             "its dot follows the conflicts screen's colours");
 
         var lines = HudResourceTests.MemberText(Source("Scripts/ui/CampaignAlertsUI.cs"), "List<AlertLine> AlertLines()");
-        var guard = lines.IndexOf("if (DefconSystem.Enabled(_campaign))", StringComparison.Ordinal);
+        Check(!WorldRow(DefconRank(5)) && !WorldRow(DefconRank(4)) && WorldRow(DefconRank(3)) && WorldRow(DefconRank(1)) &&
+              !WorldRow(TensionRank(20f)) && !WorldRow(TensionRank(45f)) && WorldRow(TensionRank(60f)) && WorldRow(TensionRank(90f)),
+            "the world takes a row among the alerts only from DEFCON 3 and from \"dangerous\" tension; calmer readings live on the date plate");
+        var strip = Source("Scripts/ui/WorldStripUI.cs");
+        var plate = Source("Scripts/ui/DatePlateUI.cs");
+        Check(plate.Contains("BuildWorldStrip(stack);") && strip.Contains("OpenDefconOverview();") && strip.Contains("OpenConflictsScreen();") &&
+              strip.Contains("_worldDefcon.Visible = defcon;") && strip.Contains("_worldTension.Visible = tension;") &&
+              strip.Contains("DefconSystem.Enabled(_campaign)") && strip.Contains("MechanicFeatures.SystemEnabled(_campaign, nameof(WorldWar))"),
+            "DEFCON and world tension have a fixed place at the foot of the date plate, each a door to its screen, each absent with its mechanic");
+        var guard = lines.IndexOf("if (DefconSystem.Enabled(_campaign) && AlertListRules.WorldRow(", StringComparison.Ordinal);
         var defcon = lines.IndexOf("Id = \"world:defcon\"", StringComparison.Ordinal);
         var tensionGuard = lines.IndexOf("if (MechanicFeatures.SystemEnabled(_campaign, nameof(WorldWar)))", StringComparison.Ordinal);
         var tension = lines.IndexOf("Id = \"world:tension\"", StringComparison.Ordinal);
-        Check(guard >= 0 && defcon > guard && tensionGuard > defcon && tension > tensionGuard && lines.Contains("if (rank >= 0)"),
-            "the DEFCON row is built only inside DefconSystem.Enabled, the tension row only inside its system and from \"tense\"");
+        Check(guard >= 0 && defcon > guard && tensionGuard > defcon && tension > tensionGuard && lines.Contains("if (AlertListRules.WorldRow(rank))"),
+            "the DEFCON row is built only inside DefconSystem.Enabled, the tension row only inside its system, each only when WorldRow says so");
         Check(lines.Contains("DefconSystem.LevelColourToken(level)") && lines.Contains("Glyph = \"alert_battle\""),
             "the DEFCON row's dot is the ladder's own colour");
 

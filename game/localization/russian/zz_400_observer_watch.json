@@ -1,0 +1,11 @@
+// Наблюдение за страной и скрытие интерфейса (Scripts/ui/ObserverModeUI.cs).
+{
+  "Click a country to watch it, then F7 takes control of it.": "Нажмите на страну, чтобы наблюдать за ней; затем F7 — взять её под управление.",
+  "Observing · F7 returns the controls · Ctrl+F9 hides the interface": "Наблюдение · F7 возвращает управление · Ctrl+F9 скрывает интерфейс",
+  "Observing the world · click a country to watch it · Ctrl+F9 hides the interface": "Наблюдение за миром · нажмите на страну, чтобы следить за ней · Ctrl+F9 скрывает интерфейс",
+  "Watching {0} · F4 back to the world · F7 takes control · Ctrl+F9 hides the interface": "Наблюдение: {0} · F4 — обратно к миру · F7 — взять управление · Ctrl+F9 скрывает интерфейс",
+  "Watching · {0}": "Наблюдение · {0}",
+  "run by the computer": "управляется компьютером",
+  "Tension {0}": "Напряжённость {0}",
+  "Run by the computer · you are watching": "Управляется компьютером · вы наблюдаете"
+}

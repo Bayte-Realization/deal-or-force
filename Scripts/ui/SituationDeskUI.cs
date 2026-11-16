@@ -207,13 +207,15 @@ public partial class DealOrForceGame
     private void SyncDeskDock()
     {
         if (_deskPanel is null || !GodotObject.IsInstanceValid(_deskPanel)) return;
-        if (!_deskPanel.Visible && _deskOpen && !_deskRefreshing && !_observerMode && !DeskCovered())
+        if (!_deskPanel.Visible && _deskOpen && !_deskRefreshing && !WatchingWorld && !DeskCovered())
         {
             _deskOpen = false;
             if (_campaign is not null) _campaign.Settings["desk.open"] = "0";
         }
-        if (_outliner is not null) _outliner.Visible = !_observerMode && (!_deskPanel.Visible || _deskOnLeft);
-        if (_deskTab is not null) _deskTab.Visible = !_deskOpen && !_observerMode;
+        // The desk is one country's desk: it waits while an observer looks at the whole world and
+        // comes back with the country he clicks. The report beside it is drawn for either.
+        if (_outliner is not null) _outliner.Visible = !_deskPanel.Visible || _deskOnLeft;
+        if (_deskTab is not null) _deskTab.Visible = !_deskOpen && !WatchingWorld;
     }
 
     private void SetDeskSide(bool left)
@@ -262,9 +264,9 @@ public partial class DealOrForceGame
         if (_campaign.Settings.TryGetValue("desk.open", out var open)) _deskOpen = open != "0";
 
         _deskRefreshing = true;
-        _deskPanel.Visible = _deskOpen && !DeskCovered() && !_observerMode;
+        _deskPanel.Visible = _deskOpen && !DeskCovered() && !WatchingWorld;
         _deskRefreshing = false;
-        _deskTab.Visible = !_deskOpen && !_observerMode;
+        _deskTab.Visible = !_deskOpen && !WatchingWorld;
         // One right-hand dock, not two independent floating panels. The folded command is
         // part of the report's real header layout; the open desk replaces the report.
         if (_outliner is not null) _outliner.Visible = !_deskPanel.Visible || _deskOnLeft;

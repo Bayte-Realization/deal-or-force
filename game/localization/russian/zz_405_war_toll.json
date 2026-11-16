@@ -1,0 +1,7 @@
+// Потери каждой страны в войне (Scripts/ui/WarLedgerUI.cs, WarLosses.ByCountry).
+{
+  "{0} and allies": "{0} и союзники",
+  "a country that is gone": "страна, которой больше нет",
+  "Earlier, not recorded by country": "Раньше, без разбивки по странам",
+  "Lost before this campaign began keeping each country's losses apart. They are in the side's total.": "Потеряно до того, как кампания начала вести счёт потерь каждой страны отдельно. В общий итог стороны они входят."
+}

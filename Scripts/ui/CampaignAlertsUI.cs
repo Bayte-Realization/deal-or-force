@@ -226,7 +226,9 @@ public partial class DealOrForceGame
         var lines = new List<AlertLine>();
         // DEFCON stays a row even at 5: the badge it replaces was the only door to the ladder's own
         // screen, and a calm row at the foot of the list costs one line and says the world is quiet.
-        if (DefconSystem.Enabled(_campaign))
+        // The level's own place is the foot of the date plate (WorldStripUI); here it is a row only
+        // while it is news a government must act on: DEFCON 3 and worse.
+        if (DefconSystem.Enabled(_campaign) && AlertListRules.WorldRow(AlertListRules.DefconRank(DefconSystem.CurrentLevel(_campaign))))
         {
             var level = DefconSystem.CurrentLevel(_campaign);
             var rank = AlertListRules.DefconRank(level);
@@ -244,7 +246,8 @@ public partial class DealOrForceGame
         {
             var tension = WorldTensionToday();
             var rank = AlertListRules.TensionRank(tension);
-            if (rank >= 0)
+            // The figure itself stands on the date plate; a row only from "dangerous" up.
+            if (AlertListRules.WorldRow(rank))
                 lines.Add(new AlertLine
                 {
                     Id = "world:tension", World = true, Rank = rank,

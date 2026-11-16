@@ -389,7 +389,8 @@ public partial class DealOrForceGame
 
         if (own)
         {
-            _countryCardStanding.Text = Tr("Your country");
+            // An observer's own country is nobody's: the card says who runs it.
+            _countryCardStanding.Text = _observerMode && _campaign.HumanSeats.Count == 0 ? Tr("Run by the computer · you are watching") : Tr("Your country");
             _countryCardStanding.AddThemeColorOverride("font_color", Ui.Colour("text.accent"));
             _countryCardStanding.TooltipText = "";
             if (_countryDossierTab == "Overview")
