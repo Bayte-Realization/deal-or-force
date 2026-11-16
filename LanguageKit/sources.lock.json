@@ -11,6 +11,8 @@
     "rust": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
     "zig": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
     "go": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
+    "fsharp": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-11-14", "note": "adapters/fsharp build.ps1 + probe.ps1: LANGUAGE_KIT_PASS exit 0; projects/AllSix combined_probe.gd -- fsharp: LANGUAGE_WORKBENCH_PASS failures=0 exit 0; GodotSharp 4.8.0-beta.2 (cafc17a19). See reports/fsharp-beta2-2026-11-14.md" },
+    "luau": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-11-14", "note": "adapters/luau build.ps1 (bindings from the Beta2 API dump, editor + template_release) + workbench/verify-beta2.ps1 -Languages luau: debug and exported-release LANGUAGE_KIT_PASS, exit 0. Game flavor -Suffixes lua-and-luau also passed the EngineScriptMod hook sequence on mods/_templates/luau_engine. See adapters/luau/README.md" },
     "python": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "failed-teardown", "date": "2026-10-29", "note": "py4godot 4.7-alpha21 executes small integers, but fails the 64-bit boundary and leaks registered classes/resources; not approved" }
   },
   "sources": [

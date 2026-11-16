@@ -1,0 +1,13 @@
+diff --git a/bindgen/luau_api_generator.py b/bindgen/luau_api_generator.py
+index 8cc2e88..da83b2c 100644
+--- a/bindgen/luau_api_generator.py
++++ b/bindgen/luau_api_generator.py
+@@ -249,7 +249,7 @@ def get_class_methods(g_class, g_class_settings):
+ 
+         # Not of any concern to Luau
+         if "arguments" in method and (
+-            True in [arg["type"] == "const void*" for arg in method["arguments"]]
++            True in [arg["type"].endswith("*") for arg in method["arguments"]]
+         ):
+             return True
+ 

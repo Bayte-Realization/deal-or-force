@@ -1,7 +1,7 @@
 param(
     [string]$EngineDirectory='C:/GodotEngineNet 4.8-Beta2',
     [string]$ArtifactDirectory=(Join-Path (Split-Path -Parent $PSScriptRoot) '.cache/verified-beta2'),
-    [ValidateSet('rust','zig','go','python-release')][string[]]$Languages=@('rust','zig','go')
+    [ValidateSet('rust','zig','go','python-release','luau')][string[]]$Languages=@('rust','zig','go')
 )
 $ErrorActionPreference='Stop'
 $kit=Split-Path -Parent $PSScriptRoot
@@ -16,7 +16,11 @@ foreach($language in ($Languages | Select-Object -Unique)){
     $log=Join-Path $logs ($language+'.log')
     $passed=$false; $reason=''
     try {
-        if($language -eq 'python-release'){
+        if($language -eq 'luau'){
+            # Needs <ArtifactDirectory>/luau/addon from adapters/luau/build.ps1; checks the editor DLL
+            # by --script and the template_release DLL through an exported build.
+            & (Join-Path $kit 'adapters/luau/probe.ps1') -GodotExecutable $engine.Executable -OutputDirectory $output -Release *>&1 | Tee-Object -FilePath $log | Out-Host
+        } elseif($language -eq 'python-release'){
             Test-KitScalarAdapter $engine.Executable $output 'PYTHON' *>&1 | Tee-Object -FilePath $log | Out-Host
         } else {
             & (Join-Path $kit "adapters/$language/probe.ps1") -GodotExecutable $engine.Executable -OutputDirectory $output *>&1 | Tee-Object -FilePath $log | Out-Host

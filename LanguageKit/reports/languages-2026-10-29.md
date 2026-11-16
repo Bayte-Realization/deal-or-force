@@ -16,7 +16,7 @@ Two kinds of statement live in this kit, and they are not interchangeable:
 | Track | Upstream / licence | Pin (date) | Integration | Toolchain | Status |
 |---|---|---|---|---|---|
 | luau | [godot-luau-script](https://github.com/Fumohouse/godot-luau-script) MIT (archived) | `7942ce6` | ScriptLanguageExtension | C++ build | verified on Beta1 |
-| fsharp | included template + C# bridge | — | managed library | .NET SDK | verified on Beta1 |
+| fsharp | included template + C# bridge | — | managed library | .NET SDK | **runtime-smoke verified on Beta2, 14 Nov** ([fsharp-beta2-2026-11-14.md](fsharp-beta2-2026-11-14.md)) |
 | nim | [gdext-nim](https://github.com/godot-nim/gdext-nim) MIT | `15b69a9` | GDExtension | Nim 2.2 | verified on Beta1 |
 | odin | [odin-godot](https://github.com/dresswithpockets/odin-godot) Apache-2.0 | `9339590` | GDExtension | Odin dev-2026-10 | verified on Beta1 |
 | rust | [gdext](https://github.com/godot-rust/gdext) MPL-2.0, release **v0.5.5** | `0b680b4` | GDExtension | Rust 1.94+ | verified on Beta1; **veto lifted 29 Oct** |

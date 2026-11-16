@@ -106,8 +106,9 @@ Optional ключи `lua` и `sandbox` не обязательны для шес
 
 - Nim: Windows runtime/allocator инициализируются до первого Nim callback;
   добавлен `stdint.h`, отключён захват глобальных signal handlers.
-- Luau: `.luau`/`.mod.luau`, правка vararg Callable. Upstream архивирован,
-  поверхность API старая; только проверенные editor/debug mapping.
+- Luau: `.luau`/`.mod.luau` (или `-Suffixes lua-and-luau` для игры), правка vararg
+  Callable. Upstream архивирован. С 14 ноября 2026 привязки собираются из API Beta2,
+  есть editor и template_release; release проверен экспортом (`adapters/luau/README.md`).
 - Lua: `LuaTable.get/set` заменены на `get_value/set_value`, чтобы не затенять
   унаследованные методы Object, с обновлением документации.
 - Sandbox: отдельные `sandbox_*` alias и ранняя регистрация языков. Пройден

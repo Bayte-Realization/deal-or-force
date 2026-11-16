@@ -8,6 +8,12 @@ through ordinary strongly typed .NET references. No native engine fork is needed
 Tested: official Godot `4.8.beta2.mono.official.cafc17a19`, Windows x86_64,
 .NET SDK 10, `net10.0`, Godot.NET.Sdk `4.8.0-beta.2`. On 29 October 2026 the
 template built and the headless probe printed `LANGUAGE_KIT_PASS language=fsharp`.
+Rechecked on 14 November 2026 from a fresh output folder (0 warnings, probe exit 0),
+together with the shared workbench `projects/AllSix` (`combined_probe.gd -- fsharp`:
+`LANGUAGE_WORKBENCH_PASS languages=fsharp failures=0`), whose `LanguageKitFSharp.csproj`
+now pins `Godot.NET.Sdk/4.8.0-beta.2` as well. Recorded in `sources.lock.json`
+(`verification.fsharp`) and `reports/fsharp-beta2-2026-11-14.md`; Doctor prints
+`RUNTIME-SMOKE-VERIFIED`.
 
 ```powershell
 ./build.ps1 -GodotExecutable 'C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe' -OutputDirectory C:/Temp/fsharp-probe

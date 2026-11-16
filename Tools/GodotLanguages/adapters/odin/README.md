@@ -16,3 +16,46 @@ Build emits `project/addons/dof_odin` and prints `ADDON_ROOT`. Copy it into a pr
 The upstream README calls the complete toolkit WIP and documents Godot 4.4, with Godin explicitly incomplete. Its pinned Temple generator does not compile with Odin 2026-10 (`filepath.walk`, `os.Errno` and other removed APIs). Therefore this kit does **not** advertise full generated 4.8 wrappers, attachable `.odin` scene scripts, Godin, editor completion, or reload support. The smaller direct ABI path is independently verified on Godot 4.8 Beta1.
 
 Verified: editor import, class construction, negative-input method call returning 20, zero input returning 0, exit 0 and no Godot errors, including teardown. No full upstream suite, export-template, performance or cross-platform claim.
+
+## Godot 4.8-beta2 status (14 November 2026)
+
+Status: **runs, cannot be rebuilt here**. The DLL that runs is the Beta1 build of 16 October 2026
+(`projects/AllSix/addons/dof_odin/dof_odin.dll`, 123 904 bytes,
+SHA-256 `A241BCEEB3FAD50E848DC5DD06DA090408A9600C32A6C756A60A38B8230FECB3`).
+
+Verified on `Godot_v4.8-beta2_mono_win64_console.exe` (`v4.8.beta2.mono.official.cafc17a19`), headless,
+in a scratch project with its own copy of the DLL (`tmp_logs/languages/odin-beta2/probe` in the game
+repository), never in the game project:
+
+- `--import` exit 0, then `--headless --verbose --script res://probe_beta2.gd` exit 0, printing
+  `ODIN_PROBE_BETA2 PASS vector=20,0,-20,4294967297,6*2^40 call=ok callv=ok instances=10000`:
+  `weighted_sum3` gives 20, 0 and -20, carries a full int64 (4294967297 and 6·2^40) without truncation,
+  answers through both the direct method path and the Variant `call`/`callv` path, and survives
+  10 000 instance create/free cycles. The verbose log has no error, leak or orphan line through teardown.
+- The extension's interface needs against the Beta2 header (`--dump-gdextension-interface`, 179
+  functions): of the interface names the DLL requests from `get_proc_address`, 170 exist on Beta2.
+  All 13 functions `src/kernel.odin` actually calls are present. Four of them are deprecated but still
+  served: `classdb_construct_object` (4.4, use `classdb_construct_object3`), `mem_alloc`/`mem_free`
+  (4.6, use `mem_alloc2`/`mem_free2`) and `classdb_register_extension_class2` (4.3, use
+  `classdb_register_extension_class6`). The upstream `gdext` loader also asks for `array_ref`, which
+  Beta2 marks "removed from interface"; the kernel never calls it.
+
+Not done on Beta2, and why: there is no Odin compiler on this machine and `toolchains.windows.lock.json`
+names none (it locks only `go-1.27.3`, `zig-0.17.0` and `rust`), and the pinned odin-godot source
+(`9339590`) is not in `.cache/sources-beta2`. So the adapter has not been recompiled, no packed-array
+method exists to probe, and neither `kernels/raster_overlay/odin` nor `kernels/ownership/odin` has a
+DLL: the game's `FormableTests --raster-kernel-only <dir>` and `--ownership-native-only` with
+`DOF_EXPERIMENTAL_KERNEL=odin` are wired and waiting for one. The next step needs the owner's approval
+to add an `odin-dev-*` asset (official odin-lang release zip, its SHA-256, `odin.exe`) to the lock file;
+after that: rebuild with `build.ps1`, move the four deprecated calls to their current replacements,
+add a `PackedInt64Array` method to the probe, and build both C-ABI kernels for the parity and
+alternating A/B timing runs.
+
+Reproduce (paths relative to the game repository):
+
+```powershell
+$g = 'C:\GodotEngineNet 4.8-Beta2\Godot_v4.8-beta2_mono_win64_console.exe'
+& $g --headless --path tmp_logs/languages/odin-beta2/probe --import
+& $g --headless --verbose --path tmp_logs/languages/odin-beta2/probe --script res://probe_beta2.gd
+python -I tmp_logs/languages/odin-beta2/check_interface.py tmp_logs/languages/odin-beta2/probe/addons/dof_odin/dof_odin.dll tmp_logs/languages/odin-beta2/api/gdextension_interface.h
+```

@@ -1,0 +1,55 @@
+diff --git a/binding_generator.py b/binding_generator.py
+index 103214e..22612e0 100644
+--- a/binding_generator.py
++++ b/binding_generator.py
+@@ -293,7 +293,21 @@ def generate_bindings(api_filepath, use_template_get_node, bits="64", precision=
+     _generate_bindings(api, use_template_get_node, bits, precision, output_dir)
+ 
+ 
++def _strip_required_meta(node):
++    # 4.8 marks non-null object arguments and results with "meta": "required". This
++    # godot-cpp predates RequiredParam/RequiredResult; the ABI is the plain object pointer.
++    if isinstance(node, dict):
++        if node.get("meta") == "required":
++            del node["meta"]
++        for value in node.values():
++            _strip_required_meta(value)
++    elif isinstance(node, list):
++        for value in node:
++            _strip_required_meta(value)
++
++
+ def _generate_bindings(api, use_template_get_node, bits="64", precision="single", output_dir="."):
++    _strip_required_meta(api)
+     target_dir = Path(output_dir) / "gen"
+ 
+     shutil.rmtree(target_dir, ignore_errors=True)
+@@ -1365,7 +1379,7 @@ def generate_engine_classes_bindings(api, output_dir, use_template_get_node):
+                                         fully_used_classes.add(dict_type_name)
+                                     else:
+                                         used_classes.add(dict_type_name)
+-                                dict_type_name = dict_type_names[2]
++                                dict_type_name = dict_type_names[1]
+                                 if dict_type_name.endswith("*"):
+                                     dict_type_name = dict_type_name[:-1]
+                                 if is_included(dict_type_name, class_name):
+@@ -1420,7 +1434,7 @@ def generate_engine_classes_bindings(api, output_dir, use_template_get_node):
+                                     fully_used_classes.add(dict_type_name)
+                                 else:
+                                     used_classes.add(dict_type_name)
+-                            dict_type_name = dict_type_names[2]
++                            dict_type_name = dict_type_names[1]
+                             if dict_type_name.endswith("*"):
+                                 dict_type_name = dict_type_name[:-1]
+                             if is_included(dict_type_name, class_name):
+@@ -2057,6 +2071,10 @@ def generate_global_constants(api, output_dir):
+ 
+     if len(api["global_constants"]) > 0:
+         for constant in api["global_constants"]:
++            # 4.8 exposes the integer limits (INT32_MAX, UINT8_MAX, ...) as global constants;
++            # those names are <cstdint> macros in C++ and already mean the same values.
++            if re.fullmatch(r"U?INT(8|16|32|64)_(MIN|MAX)", constant["name"]):
++                continue
+             header.append(f'const int64_t {escape_identifier(constant["name"])} = {constant["value"]};')
+ 
+         header.append("")

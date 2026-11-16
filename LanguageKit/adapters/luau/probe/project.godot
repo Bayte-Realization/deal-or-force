@@ -2,6 +2,7 @@ config_version=5
 
 [application]
 config/name="Luau LanguageKit smoke test"
+run/main_scene="res://release_main.tscn"
 
 [rendering]
 renderer/rendering_method="gl_compatibility"

@@ -1,0 +1,15 @@
+diff --git a/src/core/extension_api.cpp b/src/core/extension_api.cpp
+index 6ea2b06..725d28f 100644
+--- a/src/core/extension_api.cpp
++++ b/src/core/extension_api.cpp
+@@ -535,7 +535,9 @@ const ExtensionApi &get_extension_api() {
+ 				StringName singleton_name = read_string(idx);
+ 				if (!singleton_name.is_empty()) {
+ 					// Special cases - avoid invalid access
+-					if (!nb::Engine::get_singleton_nb()->is_editor_hint() && singleton_name == StringName("EditorInterface"))
++					// 4.8 also lists the editor-only GDScriptLanguageProtocol among singletons.
++					if (!nb::Engine::get_singleton_nb()->is_editor_hint() &&
++							(singleton_name == StringName("EditorInterface") || singleton_name == StringName("GDScriptLanguageProtocol")))
+ 						continue;
+ 
+ 					new_class.singleton = internal::gdextension_interface_global_get_singleton(&singleton_name);

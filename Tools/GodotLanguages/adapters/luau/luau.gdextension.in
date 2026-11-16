@@ -1,7 +1,8 @@
 [configuration]
 entry_symbol = "luau_script_init"
-compatibility_minimum = "4.4"
+compatibility_minimum = "4.8"
 reloadable = false
 
 [libraries]
 windows.debug.x86_64 = "./bin/libluau-script.windows.editor.x86_64.dll"
+windows.release.x86_64 = "./bin/libluau-script.windows.template_release.x86_64.dll"
