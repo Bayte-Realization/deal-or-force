@@ -122,6 +122,12 @@ public static class Attrition
 
     /// <summary>Formations buried while cut off, this process: a bench counter, not campaign state.</summary>
     public static int StarvedInPockets;
+
+    /// <summary>
+    /// A bench's ear on every formation that leaves the world through <see cref="Destroy"/>, and
+    /// the reason given. Null in the game; it reads and decides nothing (SimBench --pockets).
+    /// </summary>
+    public static Action<Campaign, Army, string, bool> Witness;
     private static readonly Dictionary<int, float> Standing = new();
 
     public static void Tick(Campaign campaign)
@@ -263,6 +269,7 @@ public static class Attrition
     public static void Destroy(Campaign campaign, Army army, string reason, bool lost = true)
     {
         if (campaign is null || army is null) return;
+        Witness?.Invoke(campaign, army, reason, lost);
         campaign.Armies.Remove(army);
         var owner = campaign.NationById(army.NationId);
         // A formation stood down is not a formation lost. The ledger, the attrition report

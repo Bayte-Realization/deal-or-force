@@ -509,6 +509,9 @@ public static class Program
                 secessionAt + 2 < args.Length && !args[secessionAt + 2].StartsWith("--") ? args[secessionAt + 2] : "");
         // `--factions`: the de facto powers of 2024 at the start and after the run (FactionReport).
         if (Array.IndexOf(args, "--factions") >= 0) return mapped ? FactionReport.Run(campaign, days) : 2;
+        // `--pockets`: what becomes of cut-off formations and of the forces of risings and
+        // factions - who starved untouched, who was broken, how long each pocket lasted (PocketReport).
+        if (Array.IndexOf(args, "--pockets") >= 0) return mapped ? PocketReport.Run(campaign, days) : 2;
         // `--world-stability`: every five years, the spread of stability and living standards of
         // the countries of a million people or more - the drift a century can hide.
         if (Array.IndexOf(args, "--world-stability") >= 0 && mapped)
