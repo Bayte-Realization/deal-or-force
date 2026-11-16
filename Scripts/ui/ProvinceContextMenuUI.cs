@@ -233,16 +233,19 @@ public partial class DealOrForceGame
                         Fmt.Money(DomesticCrises.ConciliationCost(_campaign, player, region)),
                         _campaign.Defines.CrisisConciliationDays));
                 }
-                var capitalRefusal = CapitalCore.Refusal(_campaign, player, region);
+                // Into a city, and the one nearest the province that was clicked: a capital is a
+                // city, and a click beside Gatchina means Gatchina, not the first city on the list.
+                var capitalCity = NearestCapitalChoice(player, region, pick.ProvinceId);
+                var capitalRefusal = CapitalCore.Refusal(_campaign, player, region, capitalCity?.Id);
                 if (capitalRefusal.Length == 0 || capitalArmed)
                     Action("nation", capitalArmed
-                            ? Simulation.Loc.Format("Confirm: move the capital here ({0})", Fmt.Money(CapitalCore.Cost(_campaign, player)))
-                            : "Move the capital here",
+                            ? Simulation.Loc.Format("Confirm: move the capital to {0} ({1})", capitalCity?.DisplayName ?? region.DisplayName, Fmt.Money(CapitalCore.Cost(_campaign, player)))
+                            : Simulation.Loc.Format("Move the capital to {0}", capitalCity?.DisplayName ?? region.DisplayName),
                         () =>
                         {
                             // The second press confirms: a capital is not moved by a slip of the hand.
                             if (!capitalArmed) { BuildProvinceCard(pick, owner, controller, at, capitalArmed: true); return; }
-                            _campaign.Commands.Enqueue(new MoveCapitalCommand { IssuerId = player.Id, StateMapIndex = region.MapIndex });
+                            _campaign.Commands.Enqueue(new MoveCapitalCommand { IssuerId = player.Id, StateMapIndex = region.MapIndex, CityId = capitalCity?.Id ?? "" });
                             _campaign.Commands.ApplyAll(_campaign);
                             CloseProvinceCard();
                         }, capitalRefusal.Length > 0 ? Tr(capitalRefusal) : "",

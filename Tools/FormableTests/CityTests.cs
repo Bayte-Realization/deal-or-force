@@ -319,6 +319,35 @@ static class CityTests
         Check(CapitalCore.SeatCity(c, c.NationByTag("FRA"))?.Id == c.NationByTag("FRA").CapitalCityId,
             "a country that has not moved keeps its mark on its own city");
 
+        // ---- and the player says which city (owner, 16 November: "moved straight into a city")
+        var choices = CapitalCore.Candidates(c, rus, urals);
+        Check(choices.Count == uralCities.Count - 1 && choices.All(city => city.Id != seat.Id),
+            $"from the capital's own region the government may go to any of its other {choices.Count} cities, not to the one it sits in");
+        Check(CapitalCore.Refusal(c, rus, urals) == "The capital is already here." &&
+              CapitalCore.Refusal(c, rus, urals, seat.Id) == "The capital is already here.",
+            "an order that names no city, or names the capital itself, is still refused in the capital's own region");
+        var second = choices[^1];
+        Check(CapitalCore.Refusal(c, rus, urals, second.Id).Contains("moved recently"),
+            "a second move straight after the first waits like any other");
+        rus.CapitalMovedDay = -100_000;
+        Check(CapitalCore.Refusal(c, rus, urals, second.Id) == "", $"a year on, {second.Name} can take the capital");
+        var moscowRegion = c.States.First(state => CityCatalog.CitiesOf(c, state).Any(city => city.Id == "moscow_rus" || city.Name == "Moscow") && state.NationMapIndex == rus.MapIndex);
+        Check(CapitalCore.Refusal(c, rus, moscowRegion, second.Id) == "That city does not stand on ground we govern in this region.",
+            "a city is only taken with its own region: naming a Urals city for another region is refused");
+        var treasuryBefore = rus.Treasury;
+        var byName = new MoveCapitalCommand { IssuerId = rus.Id, StateMapIndex = urals.MapIndex, CityId = second.Id };
+        byName.Apply(c);
+        Check(byName.Moved && CapitalCore.City(rus)?.Id == second.Id && rus.CapitalName == second.Name &&
+              rus.CapitalProvinceId == under[CityCatalog.IndexOf(second.Id)] && rus.CapitalStateMapIndex == urals.MapIndex,
+            $"the order names {second.Name} and the capital is {CapitalCore.City(rus)?.Name}: its ground, its name, the same region");
+        Check(rus.Treasury < treasuryBefore && CapitalCore.SeatCity(c, rus)?.Id == second.Id,
+            "the move within a region is paid for like any other, and the map's mark follows");
+        rus.CapitalMovedDay = -100_000;
+        var back = new MoveCapitalCommand { IssuerId = rus.Id, StateMapIndex = urals.MapIndex, CityId = seat.Id };
+        back.Apply(c);
+        Check(back.Moved && CapitalCore.City(rus)?.Id == seat.Id, $"and back to {seat.Name} by name");
+        seat = CapitalCore.City(rus);
+
         // ---- by necessity too: the region is ceded and the government goes to a city of another
         void Cede(ScenarioState state, Nation to)
         {

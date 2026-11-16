@@ -524,7 +524,10 @@ public partial class DealOrForceGame
     {
         if (_moveCapitalButton is null || _selectedState is null || _campaign?.Player is null) return;
         var player = _campaign.Player;
-        var refusal = CapitalCore.Refusal(_campaign, player, _selectedState);
+        SyncCapitalCityChooser();
+        // A capital moves into a city: one usable city here and the button names it, several and
+        // it opens the list (CapitalCityChooserUI).
+        var refusal = CapitalMoveRefusal();
         _moveCapitalButton.Disabled = refusal.Length > 0;
         _moveCapitalButton.TooltipText = Ui.Tip(refusal.Length > 0
             ? Tr(refusal)
@@ -532,7 +535,7 @@ public partial class DealOrForceGame
                 "Move the government to {0}. It costs {1} from the treasury and {2} of the country's stability, " +
                 "which fades the way any upheaval does, and the government cannot move again for {3} day(s). " +
                 "The capital's region weighs far more in the country's stability than its size.",
-                _selectedState.DisplayName, Fmt.Money(CapitalCore.Cost(_campaign, player)),
+                CapitalMoveTarget(), Fmt.Money(CapitalCore.Cost(_campaign, player)),
                 _campaign.Defines.CapitalMoveStabilityCost.ToString("P0"),
                 _campaign.Defines.CapitalMoveIntervalDays.ToString("N0")));
     }
@@ -540,13 +543,7 @@ public partial class DealOrForceGame
     private void MoveCapitalHere()
     {
         if (_selectedState is null || _campaign?.Player is null) return;
-        var command = new MoveCapitalCommand { IssuerId = _campaign.Player.Id, StateMapIndex = _selectedState.MapIndex };
-        _campaign.Commands.Enqueue(command);
-        _campaign.Commands.ApplyAll(_campaign);
-        _regionActionFeedback.Text = command.Moved
-            ? Simulation.Loc.Format("The government has moved to {0}.", _selectedState.DisplayName)
-            : Tr(CapitalCore.Refusal(_campaign, _campaign.Player, _selectedState));
-        RefreshRegionViews();
+        ChooseCapitalCity();
     }
 
     private void RaiseRegionalArmy()

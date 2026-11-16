@@ -55,6 +55,40 @@ public partial class DealOrForceGame
         BuildPlanningBar();
     }
 
+    /// <summary>
+    /// The rule, not a list of names: the bar never lies over a panel. Three panels were named
+    /// above and the fourth - the country card - was not, so the army cards sat on its "Nation /
+    /// Economy / Cabinet" row (owner, 16 November). Whatever stands on the left of the screen and
+    /// reaches down into the bar's strip moves the bar to its right; panels are taken left to
+    /// right, so a card beside a card is cleared too. A panel wider than half the screen is a
+    /// screen, not a side panel, and is not something to stand beside.
+    /// </summary>
+    private float ClearOfLeftPanels(float left, float origin)
+    {
+        var strip = _armyBar.GetGlobalRect();
+        if (strip.Size.Y <= 0f) return left;
+        var half = _hudLayer.Size.X * 0.5f;
+        _armyBarObstacles.Clear();
+        foreach (var child in _hudLayer.GetChildren())
+        {
+            if (child is not Control panel || !panel.Visible || ReferenceEquals(panel, _armyBar) || ReferenceEquals(panel, _planningBar)) continue;
+            if (panel.MouseFilter == Control.MouseFilterEnum.Ignore) continue;
+            var rect = panel.GetGlobalRect();
+            if (rect.Size.X <= 0f || rect.Size.X > half || rect.Position.X - origin >= half) continue;
+            // Not in the strip's rows at all: above it, or below.
+            if (rect.End.Y <= strip.Position.Y + 1f || rect.Position.Y >= strip.End.Y - 1f) continue;
+            _armyBarObstacles.Add(rect);
+        }
+        _armyBarObstacles.Sort((a, b) => a.Position.X.CompareTo(b.Position.X));
+        foreach (var rect in _armyBarObstacles)
+            // Only one the bar would touch: a panel that begins to the right of where the bar's
+            // first card stands leaves it room, and the bar's own scroll takes care of the rest.
+            if (rect.Position.X - origin < left + Ui.Gap(120) && rect.End.X - origin + Ui.Gap(8) > left)
+                left = rect.End.X - origin + Ui.Gap(8);
+        return left;
+    }
+    private readonly System.Collections.Generic.List<Rect2> _armyBarObstacles = new();
+
     /// <summary>A few times a second: cheap unless an army, its state or the selection changed.</summary>
     private void MaintainArmyBar(double delta)
     {
@@ -85,6 +119,7 @@ public partial class DealOrForceGame
             // Only what stands on the left half: a panel on the right is not in the bar's way.
             if (IsInstanceValid(panel) && panel.Visible && panel.GetGlobalRect().Position.X - origin < _hudLayer.Size.X * 0.5f)
                 left = MathF.Max(left, panel.GetGlobalRect().End.X - origin + Ui.Gap(8));
+        left = ClearOfLeftPanels(left, origin);
         if (Math.Abs(_armyBar.OffsetLeft - left) > 0.5f) _armyBar.OffsetLeft = left;
 
         var groups = ArmyBarGroups();

@@ -393,12 +393,61 @@ public static class CapitalCore
     public static float Cost(Campaign campaign, Nation nation) =>
         MathF.Max(campaign.Defines.CapitalMoveCostFloor, nation.Gdp * campaign.Defines.CapitalMoveCostShare);
 
-    /// <summary>Why the capital cannot move here now, or empty when it can.</summary>
-    public static string Refusal(Campaign campaign, Nation nation, ScenarioState state)
+    /// <summary>
+    /// The cities of a region the government could move into today: those standing on ground the
+    /// country owns and holds, in the order the map writes them, without the city it sits in now.
+    /// A capital is moved into a city, and this is the list the player chooses from.
+    /// </summary>
+    public static List<CityDefinition> Candidates(Campaign campaign, Nation nation, ScenarioState state)
+    {
+        var found = new List<CityDefinition>();
+        var map = campaign?.ProvinceMap;
+        if (nation is null || state is null || state.NationMapIndex != nation.MapIndex || !HasCities(map)) return found;
+        var cities = CityCatalog.All;
+        var under = CityCatalog.ProvincesOf(map);
+        for (var index = 0; index < under.Length && index < cities.Count; index++)
+        {
+            var province = under[index];
+            if (province <= 0 || map.ProvinceToState[province] != state.MapIndex) continue;
+            if (string.Equals(cities[index].Id, nation.CapitalCityId, StringComparison.OrdinalIgnoreCase)) continue;
+            if (GroundAvailable(campaign, nation, province)) found.Add(cities[index]);
+        }
+        return found;
+    }
+
+    private static int IndexOf(Campaign campaign, Nation nation, ScenarioState state, string cityId)
+    {
+        var map = campaign?.ProvinceMap;
+        if (string.IsNullOrWhiteSpace(cityId) || nation is null || state is null || !HasCities(map)) return -1;
+        var cities = CityCatalog.All;
+        var under = CityCatalog.ProvincesOf(map);
+        for (var index = 0; index < under.Length && index < cities.Count; index++)
+        {
+            if (!string.Equals(cities[index].Id, cityId, StringComparison.OrdinalIgnoreCase)) continue;
+            var province = under[index];
+            return province > 0 && map.ProvinceToState[province] == state.MapIndex && GroundAvailable(campaign, nation, province)
+                ? index : -1;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Why the capital cannot move here now, or empty when it can. With a city named, the move is
+    /// into that city - which may stand in the capital's own region: Saint Petersburg to
+    /// Gatchina is a move like any other. With none, it is the region's first city, and the
+    /// capital's own region is refused, as it always was (which is also what keeps a computer
+    /// from paying to move next door).
+    /// </summary>
+    public static string Refusal(Campaign campaign, Nation nation, ScenarioState state, string cityId = null)
     {
         if (campaign is null || nation is null || state is null) return "Choose a region.";
         if (state.NationMapIndex != nation.MapIndex) return "Only a region we own can hold the capital.";
-        if (state.MapIndex == nation.CapitalStateMapIndex) return "The capital is already here.";
+        if (!string.IsNullOrWhiteSpace(cityId))
+        {
+            if (string.Equals(cityId, nation.CapitalCityId, StringComparison.OrdinalIgnoreCase)) return "The capital is already here.";
+            if (IndexOf(campaign, nation, state, cityId) < 0) return "That city does not stand on ground we govern in this region.";
+        }
+        else if (state.MapIndex == nation.CapitalStateMapIndex) return "The capital is already here.";
         if (campaign.ProvinceMap is not null && Seat(campaign, nation, state) <= 0)
             return "None of this region's ground is ours to govern from.";
         if (StabilityCore.OccupiedShare(campaign, state, nation) > 0.5f)
@@ -412,17 +461,27 @@ public static class CapitalCore
     }
 
     /// <summary>Move the government by choice: paid for, and felt.</summary>
-    public static bool Move(Campaign campaign, Nation nation, ScenarioState state)
+    public static bool Move(Campaign campaign, Nation nation, ScenarioState state, string cityId = null)
     {
-        if (Refusal(campaign, nation, state).Length > 0) return false;
+        if (Refusal(campaign, nation, state, cityId).Length > 0) return false;
         { var ledgerBefore = nation.Treasury; nation.Treasury -= Cost(campaign, nation); MoneyLedger.Book(nation, MoneyFlow.Construction, nation.Treasury - ledgerBefore); }
         var limit = StabilityCore.Weights.GovernanceLimit;
         nation.StabilityGovernance = M.Clamp(
             nation.StabilityGovernance - campaign.Defines.CapitalMoveStabilityCost, -limit, limit);
         nation.CapitalMovedDay = campaign.ElapsedDays;
-        Place(campaign, nation, state, Seat(campaign, nation, state));
+        var chosen = IndexOf(campaign, nation, state, cityId);
+        if (chosen >= 0)
+        {
+            // Into the city that was named: its ground, its point and its name.
+            nation.GovernmentSeatProvinceId = 0;
+            var at = CityCatalog.All[chosen];
+            Bind(campaign, nation, chosen, CityCatalog.AnchorOnLand(campaign.ProvinceMap, at.Latitude, at.Longitude));
+            campaign.CapitalRevision++;
+            campaign.MarkStrategicChange();
+        }
+        else Place(campaign, nation, state, Seat(campaign, nation, state));
         DiagnosticLogs.Write("simulation",
-            $"CAPITAL_MOVED nation={nation.Tag} to={state.Id} day={campaign.ElapsedDays} by=choice");
+            $"CAPITAL_MOVED nation={nation.Tag} to={state.Id} city={nation.CapitalCityId} day={campaign.ElapsedDays} by=choice");
         return true;
     }
 
@@ -834,6 +893,8 @@ public sealed class MoveCapitalCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }
     public int StateMapIndex { get; init; }
+    /// <summary>The city of that region to move into (its key), or empty for the region's first.</summary>
+    public string CityId { get; init; } = "";
     public bool Moved { get; private set; }
 
     public void Apply(Campaign campaign)
@@ -841,6 +902,6 @@ public sealed class MoveCapitalCommand : ICampaignCommand
         if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         var state = campaign.States.Find(candidate => candidate.MapIndex == StateMapIndex);
-        Moved = CapitalCore.Move(campaign, nation, state);
+        Moved = CapitalCore.Move(campaign, nation, state, string.IsNullOrWhiteSpace(CityId) ? null : CityId);
     }
 }

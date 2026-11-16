@@ -1,0 +1,11 @@
+// Выбор города при переносе столицы (Scripts/ui/CapitalCityChooserUI.cs, CapitalCore.Candidates).
+// Название города подставляется после двоеточия, чтобы не склонять его.
+{
+  "a city of {0} that you choose": "город по вашему выбору, регион {0}",
+  "Move the capital to a city of {0}": "Перенос столицы. Регион: {0}",
+  "{0} from the treasury · {1} of stability": "{0} из казны · {1} стабильности",
+  "Move the government to {0}.": "Перенести правительство: {0}.",
+  "That city does not stand on ground we govern in this region.": "Этот город стоит не на земле, которой мы управляем в этом регионе.",
+  "Move the capital to {0}": "Перенести столицу: {0}",
+  "Confirm: move the capital to {0} ({1})": "Подтвердить перенос столицы: {0} ({1})"
+}

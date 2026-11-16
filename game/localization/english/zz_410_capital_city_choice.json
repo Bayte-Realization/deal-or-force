@@ -1,0 +1,10 @@
+// Choosing the city a capital moves to (Scripts/ui/CapitalCityChooserUI.cs, CapitalCore.Candidates).
+{
+  "a city of {0} that you choose": "a city of {0} that you choose",
+  "Move the capital to a city of {0}": "Move the capital to a city of {0}",
+  "{0} from the treasury · {1} of stability": "{0} from the treasury · {1} of stability",
+  "Move the government to {0}.": "Move the government to {0}.",
+  "That city does not stand on ground we govern in this region.": "That city does not stand on ground we govern in this region.",
+  "Move the capital to {0}": "Move the capital to {0}",
+  "Confirm: move the capital to {0} ({1})": "Confirm: move the capital to {0} ({1})"
+}
