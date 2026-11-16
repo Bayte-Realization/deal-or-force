@@ -17,11 +17,19 @@
 // ferry run), and links that are announced and not built (Qatar-Bahrain, Tiran).
 //
 // Also not here, because this map draws no water there at all and the two shores are
-// already neighbours or one province: the Bosphorus and the Dardanelles, the Little Belt
-// and the Storstrøm, Rügen, Öland, the Menai Strait and the Solent, Chalkis (Evia), the
-// Suez Canal, Djerba, Johor-Singapore, the Bali Strait, Suramadu, Phuket, San Juanico,
-// Long Island, the Strait of Canso, the Chacao Channel and the Strait of Magellan.
+// already neighbours or one province: the Little Belt and the Storstrøm, Rügen, Öland, the
+// Menai Strait and the Solent, Chalkis (Evia), the Suez Canal, Djerba, Johor-Singapore, the
+// Bali Strait, Suramadu, Phuket, San Juanico, Long Island, the Strait of Canso, the Chacao
+// Channel and the Strait of Magellan.
 // An entry for one of those is refused when the map is read, and the log says so.
+//
+// The Bosphorus and the Dardanelles are the same case with water in it. Since 16 November
+// 2026 the map draws both as sea, a pixel wide (docs/MAP_STRAITS_2026_11_16_RU.md), and one
+// province still stands on both shores of each - Istanbul's, and the one that holds the
+// Gallipoli peninsula and Lapseki - as the real provinces of Istanbul and Çanakkale do. An
+// army crosses inside that province, over the bridges that are really there, and an entry
+// here would be refused: both its shores are one province. Whoever gives the Asian shore a
+// province of its own gives the strait an entry in the same breath, or Thrace is an island.
 //
 // AN ENTRY
 //   "from", "to"   [latitude, longitude] of each shore. Each becomes the land province
