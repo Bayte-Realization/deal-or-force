@@ -296,6 +296,10 @@ public static class StatePartition
     /// border province of Lebanon's three that the map gave to Israel took a third of Lebanon's
     /// people with it, and the half of a city's oblast a front line cut off was as populous as
     /// the half with the city in it.
+    ///
+    /// Where the townspeople are is the map's own table, province by province
+    /// (<see cref="Townspeople"/>). It is not a property of the cities - they are a name and a
+    /// place - and a map without the table counts each city standing in a province as one.
     /// </summary>
     internal static float PeopleShare(Campaign campaign, ProvinceTopology topology, ScenarioState state,
         IReadOnlyCollection<int> piece, IReadOnlyCollection<int> whole)
@@ -305,12 +309,7 @@ public static class StatePartition
             var cells = new int[map.ProvinceCount + 1];
             foreach (var province in map.CellToProvince)
                 if (province > 0 && province <= map.ProvinceCount) cells[province]++;
-            var towns = new long[map.ProvinceCount + 1];
-            var cities = CityCatalog.All;
-            var under = CityCatalog.ProvincesOf(map);
-            for (var index = 0; index < cities.Count && index < under.Length; index++)
-                if (under[index] > 0 && under[index] <= map.ProvinceCount) towns[under[index]] += Math.Max(0, cities[index].Population);
-            return Tuple.Create(cells, towns);
+            return Tuple.Create(cells, Townspeople(map));
         });
         long Sum(IEnumerable<int> provinces, long[] values) { long total = 0; foreach (var p in provinces) total += values[p]; return total; }
         long Count(IEnumerable<int> provinces) { long total = 0; foreach (var p in provinces) total += weights.Item1[p]; return total; }
@@ -321,6 +320,87 @@ public static class StatePartition
         var townShare = Sum(piece, weights.Item2) / (double)town;
         var urban = Math.Clamp(state.Urbanization, 0f, 1f);
         return (float)Math.Clamp(urban * townShare + (1 - urban) * groundShare, 0, 1);
+    }
+
+    /// <summary>
+    /// How a region's townspeople are spread over its provinces: a weight for each province,
+    /// from game/map_data/townspeople. Only shares within one region are ever taken of it, so
+    /// the unit does not matter; the shipped table is in people.
+    ///
+    /// The table is measured on one map, and says which by its number of provinces: a file
+    /// measured on another map is passed over rather than read against the wrong provinces. A
+    /// total conversion ships its own (its map_data/townspeople files are laid over these,
+    /// <see cref="MergeTownspeople"/>) or none. With none, every city standing in a province
+    /// counts as one - cruder (a metropolis weighs what a market town does), but it needs nothing
+    /// the cities do not already say.
+    /// </summary>
+    internal static long[] Townspeople(ProvinceTopology map)
+    {
+        var weights = new long[map.ProvinceCount + 1];
+        var measured = false;
+        void Read(System.Text.Json.JsonElement root)
+        {
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !root.TryGetProperty("provinces", out var count) || !count.TryGetInt32(out var provinces) ||
+                provinces != map.ProvinceCount ||
+                !root.TryGetProperty("townspeople", out var table) || table.ValueKind != System.Text.Json.JsonValueKind.Object)
+                return;
+            measured = true;
+            foreach (var entry in table.EnumerateObject())
+                if (int.TryParse(entry.Name, out var province) && province > 0 && province <= map.ProvinceCount &&
+                    entry.Value.TryGetInt64(out var people))
+                    weights[province] = Math.Max(0, people);
+        }
+        foreach (var document in GameDataLoader.DataDocuments("map_data", "townspeople"))
+            using (document) Read(document.RootElement);
+        string[] added;
+        lock (AddedTownspeople) added = AddedTownspeople.ToArray();
+        foreach (var json in added)
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(json, TownspeopleJson);
+            Read(document.RootElement);
+        }
+        if (measured) return weights;
+        var under = CityCatalog.ProvincesOf(map);
+        foreach (var province in under)
+            if (province > 0 && province <= map.ProvinceCount) weights[province] += 1;
+        return weights;
+    }
+
+    private static readonly List<string> AddedTownspeople = new();
+    private static readonly System.Text.Json.JsonDocumentOptions TownspeopleJson = new()
+    {
+        AllowTrailingCommas = true,
+        CommentHandling = System.Text.Json.JsonCommentHandling.Skip
+    };
+
+    /// <summary>
+    /// A mod's map_data/townspeople file, laid over the base game's table province by province
+    /// (ModLoader). Only the base folder used to be read, so the table a total conversion was
+    /// told to ship was never opened.
+    /// </summary>
+    public static void MergeTownspeople(string json, List<string> errors)
+    {
+        using (var document = System.Text.Json.JsonDocument.Parse(json, TownspeopleJson))
+        {
+            var root = document.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !root.TryGetProperty("provinces", out var count) || !count.TryGetInt32(out _) ||
+                !root.TryGetProperty("townspeople", out var table) || table.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                errors?.Add("A townspeople file needs \"provinces\" - how many provinces the map had when it was measured - and a \"townspeople\" table of province id to weight.");
+                return;
+            }
+        }
+        lock (AddedTownspeople) AddedTownspeople.Add(json);
+        Weights.Clear();
+    }
+
+    /// <summary>Forget the mods' tables and what was worked out from them, before a campaign's mods are read.</summary>
+    public static void ResetTownspeople()
+    {
+        lock (AddedTownspeople) AddedTownspeople.Clear();
+        Weights.Clear();
     }
 
     /// <summary>
@@ -638,12 +718,6 @@ public static class StatePartition
         carved.Claims.AddRange(parent.Claims);
         var population = (long)MathF.Round(parent.Population * share);
         carved.Population = Math.Min(population, parent.Population);
-        // Its cities keep their size across the cut: the piece takes its share of the baseline.
-        if (parent.UrbanBaseline > 0)
-        {
-            carved.UrbanBaseline = Math.Max(1, (long)(parent.UrbanBaseline * (double)share));
-            parent.UrbanBaseline = Math.Max(1, parent.UrbanBaseline - carved.UrbanBaseline);
-        }
         parent.Population -= carved.Population;
 
         foreach (var group in parent.PopulationGroups)

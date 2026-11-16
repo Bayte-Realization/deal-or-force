@@ -9,12 +9,17 @@ namespace DealOrForce;
 /// The cities on the map (item 91): a dot and a name, the way Hearts of Iron marks its cities and
 /// Age of History its provinces.
 ///
-/// There are five and a half thousand of them and a screen has room for a hundred and fifty
-/// names, so the map does what an atlas editor does: it takes the cities in order of importance -
-/// capitals and world cities first, then by population - and sets each name only if it has room,
-/// never over another. Which cities are candidates at all follows the zoom: from far out only the
-/// capitals and the great cities, closer in the regional centres, and the towns only on a region's
-/// own screen.
+/// Every city is drawn the same way: one dot, one lettering. There are seven thousand of them
+/// and a screen has room for a hundred and fifty names, so the map does what an atlas editor
+/// does: it takes the cities in order - the ones that are some country's capital today first,
+/// then the rest as the data writes them, which is from the most prominent place down - and sets
+/// each name only if it has room, never over another. How many of them are candidates at all
+/// follows the zoom (map.city_band*_count): from far out only the leading few hundred, closer in
+/// more, and all of them only on a region's own screen.
+///
+/// A capital has its own mark and colour, and those belong to whichever city is a capital at
+/// the moment: when a government moves, the mark moves with it and the city it left is a city
+/// like any other.
 ///
 /// Nothing is built per city. A fixed pool of pins is handed out again whenever the camera has
 /// moved, at most every tenth of a second, so a map of any size costs the same.
@@ -41,8 +46,11 @@ public sealed partial class GlobePresentation
     private string _cityWidthLanguage = "";
     private readonly Dictionary<string, float> _cityTextWidths = new(StringComparer.Ordinal);
     private ImageTexture _cityDotTexture;
-    private ImageTexture _cityRegionalTexture;
     private ImageTexture _cityCapitalTexture;
+    /// <summary>Which cities are some country's capital today, city for city. Rebuilt with the stars.</summary>
+    private bool[] _cityIsCapital = Array.Empty<bool>();
+    /// <summary>The same cities as a list, in the order of the catalogue: the first to be lettered.</summary>
+    private readonly List<int> _cityCapitals = new();
 
     /// <summary>Whether cities are drawn at all - the player's setting.</summary>
     public bool CityLabelsEnabled
@@ -86,28 +94,55 @@ public sealed partial class GlobePresentation
     {
         _cityRoot = new Node3D { Name = "Cities" };
         world.AddChild(_cityRoot);
-        _cityDotTexture = CityDotTexture(false, false);
-        _cityRegionalTexture = CityDotTexture(true, false);
-        _cityCapitalTexture = CityDotTexture(true, true);
+        _cityDotTexture = CityDotTexture(false);
+        _cityCapitalTexture = CityDotTexture(true);
+        AdoptCities();
+    }
+
+    private bool _citiesUnreadable;
+
+    /// <summary>
+    /// Take the catalogue's cities as they are now. The catalogue is read again for every
+    /// campaign and a mod's cities are laid over it then (ModLoader, CityCatalog.Merge), so the
+    /// list this layer was built on may no longer be the list: every index kept here - a pin's
+    /// city, which cities are capitals, where each one's anchor is - is an index into the list
+    /// it was taken from, and all of them are dropped with it.
+    /// </summary>
+    private void AdoptCities()
+    {
+        if (_citiesUnreadable) return;
+        IReadOnlyList<CityDefinition> cities;
         try
         {
-            _cities = CityCatalog.All;
+            cities = CityCatalog.All;
         }
         catch (Exception exception)
         {
             GD.PushWarning($"[dof] cities not loaded: {exception.Message}");
-            _cities = Array.Empty<CityDefinition>();
+            _citiesUnreadable = true;
+            return;
         }
-        _cityNormals = new Vector3[_cities.Count];
-        for (var index = 0; index < _cities.Count; index++)
-            _cityNormals[index] = SurfacePoint(_cities[index].Latitude, _cities[index].Longitude, 1f).Normalized();
+        if (ReferenceEquals(cities, _cities)) return;
+        _cities = cities;
+        _cityNormals = new Vector3[cities.Count];
+        // Until the map places them (UpdateCityLabels), each city stands at its own point.
+        _cityAnchors = new CityCatalog.MapAnchor[cities.Count];
+        for (var index = 0; index < cities.Count; index++)
+        {
+            _cityNormals[index] = SurfacePoint(cities[index].Latitude, cities[index].Longitude, 1f).Normalized();
+            _cityAnchors[index] = new CityCatalog.MapAnchor(0, cities[index].Latitude, cities[index].Longitude);
+        }
+        _cityAnchorMap = null;
+        _starNamesBuilt = (-1, -1, 0);
+        _settlementCountedFor = default;
+        InvalidateCities();
     }
 
     /// <summary>
-    /// A dot drawn once: a pale disc in a dark ring for a town, a ringed bullseye for a regional
-    /// capital, and a golden compass-star roundel for a seat of government.
+    /// A mark drawn once. There are two: a pale disc in a dark ring, which is every city, and a
+    /// golden compass-star roundel, which is a seat of government for as long as it is one.
     /// </summary>
-    private static ImageTexture CityDotTexture(bool ringed, bool capital)
+    private static ImageTexture CityDotTexture(bool capital)
     {
         const int size = 32;
         const int scale = 2;
@@ -118,7 +153,7 @@ public sealed partial class GlobePresentation
         var ivory = new Color(0.95f, 0.97f, 0.99f);
         var fill = capital ? gold : ivory;
         var ink = new Color(0.03f, 0.05f, 0.08f, 0.96f);
-        var outerRadius = (ringed ? 14.8f : 11.2f) * scale;
+        var outerRadius = (capital ? 14.8f : 11.2f) * scale;
         for (var y = 0; y < s; y++)
         for (var x = 0; x < s; x++)
         {
@@ -138,12 +173,6 @@ public sealed partial class GlobePresentation
                 else if (distance >= 10.2f * scale && distance <= 12.8f * scale) colour = gold.Darkened(0.08f);
                 else colour = ink;
             }
-            else if (ringed)
-            {
-                if (distance <= 6.2f * scale) colour = fill.Lerp(Colors.White, (1f - distance / (6.2f * scale)) * 0.25f);
-                else if (distance >= 9.6f * scale && distance <= 12.4f * scale) colour = fill.Darkened(0.08f);
-                else colour = ink;
-            }
             else
             {
                 if (distance <= 7.2f * scale) colour = fill.Lerp(Colors.White, (1f - distance / (7.2f * scale)) * 0.25f);
@@ -158,8 +187,12 @@ public sealed partial class GlobePresentation
         return ImageTexture.CreateFromImage(image);
     }
 
-    /// <summary>The farthest out each tier of city is drawn, as a view distance.</summary>
-    private static float CityTierDistance(int tier) => tier switch
+    /// <summary>
+    /// The farthest out each zoom band begins, as a view distance: band 0 from where cities are
+    /// drawn at all, band 3 the closest. (The metrics keep the names they had when the bands were
+    /// a rank written on each city.)
+    /// </summary>
+    private static float CityTierDistance(int band) => band switch
     {
         0 => InterfaceSkin.Metric("map.city_tier0_distance", 15.0f),
         1 => InterfaceSkin.Metric("map.city_tier1_distance", 11.0f),
@@ -167,10 +200,24 @@ public sealed partial class GlobePresentation
         _ => InterfaceSkin.Metric("map.city_tier3_distance", 6.6f)
     };
 
+    /// <summary>
+    /// How many cities are lettered in a zoom band: that many from the head of the catalogue,
+    /// beside the capitals, which always are. The closest band takes every city. The defaults are
+    /// how many places each of the old ranks held, so the map shows what it showed.
+    /// </summary>
+    private int CityBandCount(int band) => band switch
+    {
+        0 => Math.Clamp((int)InterfaceSkin.Metric("map.city_band0_count", 330f), 0, _cities.Count),
+        1 => Math.Clamp((int)InterfaceSkin.Metric("map.city_band1_count", 1142f), 0, _cities.Count),
+        2 => Math.Clamp((int)InterfaceSkin.Metric("map.city_band2_count", 2448f), 0, _cities.Count),
+        _ => _cities.Count
+    };
+
     private void UpdateCityLabels(double delta)
     {
         if (!IsInstanceValid(_cityRoot) || !IsInstanceValid(_camera)) return;
         if (!Simulation.WorldLayers.On("city_labels")) { _cityRoot.Visible = false; return; }
+        AdoptCities();
         var map = _campaign?.ProvinceMap;
         if (map is not null && (!ReferenceEquals(map, _cityAnchorMap) || _cityAnchors.Length != _cities.Count))
         {
@@ -254,7 +301,10 @@ public sealed partial class GlobePresentation
         public int FontSize;
         public float TextPixels;
         public Font Font;
-        public int Tiers;
+        /// <summary>How many cities from the head of the catalogue are lettered at this zoom.</summary>
+        public int Candidates;
+        public float DotPixels;
+        public float CapitalMarkPixels;
         public float FixedPixel;
         public float FlatPixel;
         public Vector3 CameraNormal;
@@ -293,12 +343,14 @@ public sealed partial class GlobePresentation
         var textPixels = Math.Clamp(InterfaceSkin.Metric(_flatMap ? "map.flat_city_text_pixels" : "map.city_text_pixels", _flatMap ? 12f : 13f), 8f, 28f);
         var font = PresentationFonts.For("map.cities");
         var distance = ViewDistance;
-        var tiers = 0;
+        var band = 0;
         if (_flatMap)
-            while (tiers < 3 && _flatZoom <= InterfaceSkin.Metric($"map.flat_city_tier{tiers + 1}_zoom",
-                tiers switch { 0 => 3.2f, 1 => 1.5f, _ => .8f })) tiers++;
+            while (band < 3 && _flatZoom <= InterfaceSkin.Metric($"map.flat_city_tier{band + 1}_zoom",
+                band switch { 0 => 3.2f, 1 => 1.5f, _ => .8f })) band++;
         else
-            while (tiers < 3 && distance <= CityTierDistance(tiers + 1)) tiers++;
+            while (band < 3 && distance <= CityTierDistance(band + 1)) band++;
+        var candidates = CityBandCount(band);
+        var leading = Math.Min(candidates, CityBandCount(0));
 
         // World units per screen pixel: on the flat map the camera's own height over the
         // viewport; on the globe, a fixed-size label's pixel size for the field of view.
@@ -334,11 +386,10 @@ public sealed partial class GlobePresentation
             if (screen is { } point) _starMarks.Add((point, city));
         }
 
-        // The stars no drawn city stands beside - Yaren, which the catalogue has no town for;
-        // Guam's, whose town is drawn only close in; the seat of a country born this year - are
-        // named at the star, by the name the country gives it. After the great capitals and
-        // world cities, before the rest: a territory of fifty thousand people does not take the
-        // room Santo Domingo's name needs.
+        // The stars no drawn city stands beside - a capital the map has no city for, the seat of
+        // a country too small for the raster - are named at the star, by the name the country
+        // gives it. After the capitals and the leading cities, before the rest: a territory of
+        // fifty thousand people does not take the room Santo Domingo's name needs.
         var pass = new CityPassContext
         {
             Viewport = viewport,
@@ -346,7 +397,9 @@ public sealed partial class GlobePresentation
             FontSize = fontSize,
             TextPixels = textPixels,
             Font = font,
-            Tiers = tiers,
+            Candidates = candidates,
+            DotPixels = Math.Clamp(InterfaceSkin.Metric("map.city_dot_pixels", 8f), 3f, 24f),
+            CapitalMarkPixels = Math.Clamp(InterfaceSkin.Metric("map.city_capital_mark_pixels", 10f), 3f, 32f),
             FixedPixel = fixedPixel,
             FlatPixel = flatPixel,
             CameraNormal = cameraNormal,
@@ -366,21 +419,24 @@ public sealed partial class GlobePresentation
         _movementLayer?.AddNames(_cityTaken);
         _capitalNameBoxes.Clear();
         _cityDone.Clear();
-        for (var index = 0; index < _cities.Count && pass.Used < limit; index++)
+        // The capitals first - whichever cities those are today (RefreshStarNames) - at any zoom.
+        foreach (var index in _cityCapitals)
         {
-            if (_cities[index].Tier > 0) break;
-            if (!_cities[index].IsNationalCapital) continue;
+            if (pass.Used >= limit) break;
             _cityDone.Add(index);
             if (PlaceCity(index, ref pass, out var room)) _capitalNameBoxes.Add(room);
         }
-        var examined = 0;
-        for (var index = 0; index < _cities.Count && pass.Used < limit; index++)
+        // Every candidate is looked at, to the end of the list. The walk used to stop after four
+        // thousand cities whether or not they were on the screen, so on a region's own screen -
+        // the one zoom at which all of them are candidates - the cities written after about the
+        // 4,200th were never drawn anywhere: Zahle, and every town added by hand after the
+        // generated list. A city off the screen costs a projection and nothing else, and the
+        // ones on it are bounded by the label limit.
+        for (var index = 0; index < candidates && pass.Used < limit; index++)
         {
-            if (_cities[index].Tier > tiers) break;
-            if (_cities[index].Tier > 0 && !pass.StarsNamed) NameStars(ref pass);
+            if (index >= leading && !pass.StarsNamed) NameStars(ref pass);
             if (pass.Used >= limit) break;
             if (_cityDone.Contains(index)) continue;
-            if (++examined > 4000) break;
             PlaceCity(index, ref pass, out _);
         }
         if (!pass.StarsNamed) NameStars(ref pass);
@@ -395,13 +451,14 @@ public sealed partial class GlobePresentation
         {
             var (marker, normal, city, nation) = _starNames[star];
             if (_starScreens[star] is not { } screen) continue;
-            if (city >= 0 && _cities[city].Tier <= pass.Tiers) continue;
+            // The city the star stands on letters it, when that city is drawn at this zoom.
+            if (city >= 0 && (city < pass.Candidates || IsCapitalNow(city))) continue;
             if (!_flatMap && (pass.RootBasis * normal).Dot(pass.CameraNormal) < pass.Horizon) continue;
             var name = StarCapitalName(nation);
             if (string.IsNullOrWhiteSpace(name) && city >= 0) name = _cities[city].DisplayName;
             if (string.IsNullOrWhiteSpace(name)) continue;
 
-            var tierPixels = pass.TextPixels * 1.22f;
+            var tierPixels = pass.TextPixels;
             var textWidth = CityTextWidth(pass.Font, pass.FontSize, name) * tierPixels / pass.FontSize;
             const float starSize = 12f;
             var side = TakeLabelRoom(screen, starSize, textWidth, tierPixels, city, out _);
@@ -444,10 +501,13 @@ public sealed partial class GlobePresentation
         var screen = _camera.UnprojectPosition(world);
         if (screen.X < -40f || screen.Y < -20f || screen.X > pass.Viewport.X + 40f || screen.Y > pass.Viewport.Y + 20f) return false;
 
-        var tierPixels = pass.TextPixels * (city.Tier switch { 0 => 1.22f, 1 => 1.08f, _ => 1f });
+        // One lettering and one dot for every city. A capital differs by its mark and its colour,
+        // and only for as long as it is one.
+        var capital = IsCapitalNow(index);
+        var tierPixels = pass.TextPixels;
         var name = city.DisplayName;
         var textWidth = CityTextWidth(pass.Font, pass.FontSize, name) * tierPixels / pass.FontSize;
-        var dot = city.Tier == 0 ? 9f : 7f;
+        var dot = capital ? pass.CapitalMarkPixels : pass.DotPixels;
         var side = TakeLabelRoom(screen, dot, textWidth, tierPixels, index, out room);
         var pin = CityPinAt(pass.Used++);
         if (pin.City != index || pin.Name.Text != name) SetUpCityPin(pin, index, name, pass.Font, pass.FontSize);
@@ -461,8 +521,10 @@ public sealed partial class GlobePresentation
         pin.Name.Visible = side != 0;
         if (side != 0) SetLabelSide(pin, side, dot, pass.FontSize, tierPixels);
         pin.Dot.PixelSize = pixel * dot / 32f;
-        pin.Dot.Visible = !(city.IsNationalCapital && NearCapitalMarker(index)) && !StarStandsOn(index);
-        pin.Name.Modulate = city.IsNationalCapital ? pass.CapitalColor : pass.CityColor;
+        var mark = capital ? _cityCapitalTexture : _cityDotTexture;
+        if (pin.Dot.Texture != mark) pin.Dot.Texture = mark;
+        pin.Dot.Visible = !(capital && NearCapitalMarker(index)) && !StarStandsOn(index);
+        pin.Name.Modulate = capital ? pass.CapitalColor : pass.CityColor;
         pin.Dot.Modulate = Colors.White;
         pin.Node.Visible = true;
         // A crowded name may be omitted, but its geographical point must remain.
@@ -606,10 +668,10 @@ public sealed partial class GlobePresentation
         pin.Name.OutlineSize = Math.Max(4, fontSize / 4);
         pin.Name.FixedSize = !_flatMap;
         pin.Dot.FixedSize = !_flatMap;
-        pin.Name.Modulate = city.IsNationalCapital ? Ui.Colour("globe.city_capital") : Ui.Colour("globe.city");
+        // The colour and the mark are set on every placement (PlaceCity): they follow the capitals.
+        pin.Name.Modulate = Ui.Colour("globe.city");
         pin.Name.OutlineModulate = Ui.Colour("globe.city_outline");
-        pin.Dot.Texture = city.IsNationalCapital ? _cityCapitalTexture
-            : city.Capital == "regional" ? _cityRegionalTexture : _cityDotTexture;
+        pin.Dot.Texture = _cityDotTexture;
     }
 
     /// <summary>
@@ -642,9 +704,11 @@ public sealed partial class GlobePresentation
     }
 
     /// <summary>
-    /// Which city each capital's star stands on: a capital city within the distance a star hides
-    /// a dot at if there is one, else the nearest city there at all. Only when the stars have been
-    /// rebuilt - a new campaign, a capital moved or a country born - and then once over the list.
+    /// Which cities are capitals today, and which city each capital's star stands on: the city
+    /// the country's government sits in (CapitalCore.SeatCity) - and, for a capital the map has
+    /// no city for, the nearest city within the distance a star hides a dot at, if any. Only when
+    /// the stars have been rebuilt - a new campaign, a capital moved or a country born - and then
+    /// once over the list.
     /// </summary>
     private void RefreshStarNames()
     {
@@ -655,40 +719,53 @@ public sealed partial class GlobePresentation
         _starNamesBuilt = key;
         _starNames.Clear();
         const float beside = 0.99995f;
-        var capitals = new List<(Nation Nation, Vector3 Normal)>();
+        if (_cityIsCapital.Length != _cities.Count) _cityIsCapital = new bool[_cities.Count];
+        else Array.Clear(_cityIsCapital);
+        _cityCapitals.Clear();
+        var capitals = new List<(Nation Nation, Vector3 Normal, int City)>();
         if (_campaign is not null)
             foreach (var nation in _campaign.Nations)
-                if (CapitalCore.HasSeat(_campaign, nation))
-                    capitals.Add((nation, SurfacePoint(CapitalCore.EffectiveLatitude(_campaign, nation),
-                        CapitalCore.EffectiveLongitude(_campaign, nation), 1f).Normalized()));
+            {
+                if (!CapitalCore.HasSeat(_campaign, nation)) continue;
+                var seat = CapitalCore.SeatCity(_campaign, nation) is { } city ? CityCatalog.IndexOf(city.Id) : -1;
+                if (seat >= _cities.Count) seat = -1;
+                if (seat >= 0 && !_cityIsCapital[seat])
+                {
+                    _cityIsCapital[seat] = true;
+                    _cityCapitals.Add(seat);
+                }
+                capitals.Add((nation, SurfacePoint(CapitalCore.EffectiveLatitude(_campaign, nation),
+                    CapitalCore.EffectiveLongitude(_campaign, nation), 1f).Normalized(), seat));
+            }
+        _cityCapitals.Sort();
         foreach (var (marker, normal) in _capitalMarkers)
         {
             if (!IsInstanceValid(marker)) continue;
-            int capital = -1, nearest = -1;
-            float capitalCloseness = beside, nearestCloseness = beside;
-            for (var index = 0; index < _cityNormals.Length; index++)
-            {
-                var closeness = _cityNormals[index].Dot(normal);
-                if (closeness <= beside) continue;
-                if (closeness > nearestCloseness) { nearestCloseness = closeness; nearest = index; }
-                if (_cities[index].Capital is "national" or "seat" && closeness > capitalCloseness)
-                {
-                    capitalCloseness = closeness;
-                    capital = index;
-                }
-            }
             // Whose star: the one country whose capital is at that point. Not by the node's name,
             // which the rebuild cannot keep - the old stars are still there, only queued to go.
             Nation owner = null;
+            var standsOn = -1;
             var ownerCloseness = 0.9999f;
-            foreach (var (nation, capitalNormal) in capitals)
+            foreach (var (nation, capitalNormal, seat) in capitals)
             {
                 var closeness = capitalNormal.Dot(normal);
-                if (closeness > ownerCloseness) { ownerCloseness = closeness; owner = nation; }
+                if (closeness > ownerCloseness) { ownerCloseness = closeness; owner = nation; standsOn = seat; }
             }
-            _starNames.Add((marker, normal, capital >= 0 ? capital : nearest, owner));
+            if (standsOn < 0)
+            {
+                var nearestCloseness = beside;
+                for (var index = 0; index < _cityNormals.Length; index++)
+                {
+                    var closeness = _cityNormals[index].Dot(normal);
+                    if (closeness > nearestCloseness) { nearestCloseness = closeness; standsOn = index; }
+                }
+            }
+            _starNames.Add((marker, normal, standsOn, owner));
         }
     }
+
+    /// <summary>Whether a city is some country's seat of government today.</summary>
+    private bool IsCapitalNow(int city) => city >= 0 && city < _cityIsCapital.Length && _cityIsCapital[city];
 
     /// <summary>What the country calls its capital, as the country picker says it.</summary>
     private string StarCapitalName(Nation nation)

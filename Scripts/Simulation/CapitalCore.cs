@@ -17,6 +17,19 @@ public sealed partial class Nation
     public int CapitalProvinceId;
 
     /// <summary>
+    /// The city the capital is: a key of the cities on the map (CityCatalog). Saved.
+    ///
+    /// A capital is a city, not a region and not a point: the province it stands in is the
+    /// province under that city, its name is the city's, and when the government moves it moves
+    /// into another city and this changes with it. Empty when the capital stands where the map
+    /// has no city of the country's own (then it goes by its region's name). Null - which is what
+    /// a save written before capitals were cities reads back as, and what a country made in play
+    /// starts with - means nobody has looked yet: the first time the map places the capital it
+    /// finds the city (Campaign.LocateCapitals).
+    /// </summary>
+    public string CapitalCityId;
+
+    /// <summary>
     /// The temporary wartime government seat; 0 uses the legal capital, -1 means none is
     /// usable. Occupation must not move the legal capital a war or civil-war victory is about.
     /// </summary>
@@ -50,9 +63,323 @@ public sealed partial class Campaign
 ///
 /// What a capital is FOR is unchanged: StabilityCore weighs its region far above its size,
 /// and that is exactly what makes moving it a decision rather than a formality.
+///
+/// And a capital is a city. It was a point and a name, and after any move the name was the
+/// region's - "the capital of Ukraine: Lviv Oblast". Now the country carries the city's key
+/// (Nation.CapitalCityId): it names one in its data, every move goes into a city of the region
+/// chosen - the first written of those standing on ground the government can use - and the
+/// province, the point and the name all follow the city. Only where the map has no city on the
+/// country's own ground does the capital fall back to its region's name.
 /// </summary>
 public static class CapitalCore
 {
+    /// <summary>
+    /// How far a capital's point may stand from the city it is said to be and still be that
+    /// city. The point is the older truth and code that knows nothing of cities still writes it
+    /// (a faction taking a fallen state's capital, a mod moving one by its coordinates); when
+    /// the two disagree by more than this, the city is found again from the point.
+    /// </summary>
+    private const float CityAgreesKm = 60f;
+
+    /// <summary>
+    /// Whether the map is one the cities stand on. They are the world's: real places by latitude
+    /// and longitude. A raster too small to be a map of the world - the eight-province boards
+    /// the simulation is tried on - has no cities for a government to sit in, though every one
+    /// of the world's would fall somewhere on it. The same line ProvinceTopology draws between
+    /// a world and a board.
+    /// </summary>
+    private static bool HasCities(ProvinceTopology map) => map is not null && map.Width >= ProvinceTopology.WorldRasterWidth;
+
+    /// <summary>The city a country's capital is, or null when it has none on the map.</summary>
+    public static CityDefinition City(Nation nation) => CityCatalog.Find(nation?.CapitalCityId);
+
+    /// <summary>
+    /// The city the government sits in today: the capital's while it sits there, the city under
+    /// its temporary seat while it does not, null when it has no seat or sits where there is no
+    /// city. This is the city the map marks as a capital.
+    /// </summary>
+    public static CityDefinition SeatCity(Campaign campaign, Nation nation)
+    {
+        var province = EffectiveProvinceId(campaign, nation);
+        if (province <= 0) return null;
+        if (province == nation.CapitalProvinceId) return City(nation);
+        return HasCities(campaign.ProvinceMap) ? CityCatalog.CityIn(campaign.ProvinceMap, province) : null;
+    }
+
+    /// <summary>
+    /// The name a country's data gives its capital over the city's own, or null when it gives
+    /// none. A file that restates "capital_name" for a country without naming a city - a mod
+    /// that calls London "Londinium" - renames the capital, not the city: the capital is still
+    /// that city, governed from it and marked on it, and reads by the name it was given for as
+    /// long as it stands there. A move into another city takes that city's name (Bind).
+    /// </summary>
+    public static string OwnName(Nation nation) =>
+        City(nation) is { } city && !string.IsNullOrWhiteSpace(nation.CapitalName) &&
+        !string.Equals(nation.CapitalName, city.Name, StringComparison.OrdinalIgnoreCase) ? nation.CapitalName : null;
+
+    /// <summary>
+    /// The capital's name as a key, for a name that is made once and read in any language - an
+    /// organisation founded in play is "the pact of this capital and that one". The city's own
+    /// row (city.&lt;id&gt;.name) when the capital is a city that has one, so the organisation says
+    /// what the map says; otherwise the name the capital goes by, which the capitals' table and
+    /// the plain key translate as they always did. The raw city name is not a key in either
+    /// language: the Russian reader was shown "København".
+    /// </summary>
+    public static string NameKey(Nation nation)
+    {
+        if (nation is null) return "";
+        if (City(nation) is { } city && OwnName(nation) is null && Loc.Has($"city.{city.Id}.name"))
+            return $"city.{city.Id}.name";
+        return nation.CapitalName ?? "";
+    }
+
+    /// <summary>
+    /// A country's data names its capital city (common/countries, "capital_city"; a mod's
+    /// country file the same). The name and the point follow at once, so that everything that
+    /// still reads those two - and the check that the point agrees with the city - sees the city.
+    /// A key no city has is kept as written and simply never binds.
+    /// </summary>
+    public static void Author(Nation nation, string cityId)
+    {
+        if (nation is null) return;
+        nation.CapitalCityId = cityId?.Trim() ?? "";
+        if (CityCatalog.Find(nation.CapitalCityId) is not { } city) return;
+        nation.CapitalName = city.Name;
+        nation.CapitalLatitude = city.Latitude;
+        nation.CapitalLongitude = city.Longitude;
+    }
+
+    /// <summary>
+    /// How near its own ground a city must stand to be a country's capital when the city's very
+    /// point is somebody else's, in cells of the map. Rome's centre falls in the Vatican's
+    /// province, N'Djamena's on the Cameroonian bank of the Chari, Nicosia's on the Green Line -
+    /// and all three are the capitals they are named after. The government then sits on its own
+    /// ground at the city's edge.
+    /// </summary>
+    private const int CityEdgeCells = 3;
+
+    /// <summary>
+    /// Bind a capital that has no province yet to its city, at the start of a campaign or when
+    /// a country comes to hold ground (see <see cref="CityAt"/> for which city). False when the
+    /// country has no city there at all: the caller then places the capital on the nearest
+    /// province and it goes by a name, as it always did.
+    /// </summary>
+    /// <param name="nearest">The country's own province nearest the capital's point.</param>
+    internal static bool BindAtPoint(Campaign campaign, Nation nation, int nearest)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null || nation is null) return false;
+        var region = nearest > 0 && nearest <= map.ProvinceCount ? map.ProvinceToState[nearest] : 0;
+        if (!CityAt(campaign, nation, region, heldOnly: false, out var city, out var anchor)) return false;
+        Bind(campaign, nation, city, anchor);
+        return true;
+    }
+
+    /// <summary>
+    /// A capital placed before capitals were cities - a save from an older build - is given its
+    /// city once, when the save is loaded: the same search, in the region the capital already
+    /// stands in, and on ground the country holds if it holds the capital. Loading a save must
+    /// not put a government under occupation that was not.
+    /// </summary>
+    internal static void BindLoaded(Campaign campaign, Nation nation)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null || nation is null || nation.CapitalCityId is not null) return;
+        // A capital the map never placed has nothing to bind and stays unlooked-at: it is found
+        // when the country comes to hold ground (LocateCapitals), as it would be in a new world.
+        var province = nation.CapitalProvinceId;
+        if (province <= 0 || province > map.ProvinceCount) return;
+        nation.CapitalCityId = "";
+        if (!OwnedLand(campaign, nation, province)) return;
+        var held = GroundAvailable(campaign, nation, province);
+        if (!CityAt(campaign, nation, map.ProvinceToState[province], held, out var city, out var anchor)) return;
+        Bind(campaign, nation, city, anchor);
+        campaign.CapitalRevision++;
+    }
+
+    /// <summary>
+    /// Which city a capital is, from what the country says about it. In order:
+    ///
+    /// the city it names by key, if the country's own ground is at it and the capital's name
+    /// and point are that city's (or no point was ever given);
+    ///
+    /// the city at its point: one of the capital's own name first, then - for a capital with a
+    /// name of its own - the nearest with the country's own ground at it (or, when no point was
+    /// ever given, the first written city of that name). The city named by key is one of these
+    /// like any other, so a file that only renames the capital keeps it (it is the nearest: the
+    /// point is its own), and a file that restates the name and the point without a city - the
+    /// older way to move a capital, and what the country editor writes - moves it even to a
+    /// city next door: The Hague is 52 km from Amsterdam and Tel Aviv 54 from Jerusalem, and
+    /// the key the base game wrote used to win both;
+    ///
+    /// and otherwise a city of the region: the one nearest the point, or - for a capital that was
+    /// only ever named after its region, which is what a move or a country's birth in play used
+    /// to leave - the region's first.
+    /// </summary>
+    private static bool CityAt(Campaign campaign, Nation nation, int region, bool heldOnly,
+        out int found, out CityCatalog.MapAnchor anchor)
+    {
+        var map = campaign.ProvinceMap;
+        found = -1;
+        anchor = default;
+        if (!HasCities(map)) return false;
+        var cities = CityCatalog.All;
+        var pointed = nation.CapitalLatitude != 0f || nation.CapitalLongitude != 0f;
+        float Apart(int index) => Kilometres(cities[index].Latitude, cities[index].Longitude,
+            nation.CapitalLatitude, nation.CapitalLongitude);
+
+        var regional = NamedAfter(nation, region > 0 ? campaign.StateByMapIndex(region) : null);
+        bool Bears(int index) => string.Equals(cities[index].Name, nation.CapitalName, StringComparison.OrdinalIgnoreCase);
+        // The key decides at once where nothing says otherwise: the capital bears that city's
+        // name, or no name at all, and stands where the city does - or was never given a point,
+        // and the key is all there is to go by. Of two cities of one name within reach of the
+        // point it is the one meant, however near the other.
+        var keyed = CityCatalog.IndexOf(nation.CapitalCityId);
+        found = keyed;
+        if (keyed >= 0 && (!pointed || (string.IsNullOrWhiteSpace(nation.CapitalName) || Bears(keyed)) &&
+                Apart(keyed) <= CityAgreesKm) &&
+            OwnAnchor(campaign, nation, cities[keyed], heldOnly, out anchor)) return true;
+
+        if (pointed)
+        {
+            // The few cities within reach of the point: one that bears the capital's name before
+            // any other - a capital's point and its city's are seldom the same point, and a
+            // suburb may be the nearer - then the nearest; of two equally near, the earlier
+            // written. A capital that goes by its region's name takes only a city of that very
+            // name here (Kharkiv in the Kharkiv region); a town that merely happens to be near
+            // the middle of the region is not what it was named for.
+            // A degree of latitude is 111 km, so most cities are dismissed at a glance.
+            var near = new List<(bool Other, float Distance, int Index)>();
+            var band = CityAgreesKm / 110f;
+            for (var index = 0; index < cities.Count; index++)
+            {
+                if (MathF.Abs(cities[index].Latitude - nation.CapitalLatitude) > band) continue;
+                var distance = Apart(index);
+                if (distance > CityAgreesKm) continue;
+                near.Add((!Bears(index), distance, index));
+            }
+            near.Sort();
+            foreach (var (other, _, index) in near)
+            {
+                // (The city the country names by key is no such town: it was written down.)
+                if (other && regional && index != keyed) continue;
+                if (OwnAnchor(campaign, nation, cities[index], heldOnly, out anchor)) { found = index; return true; }
+            }
+        }
+        else if (!regional)
+        {
+            for (var index = 0; index < cities.Count; index++)
+                if (string.Equals(cities[index].Name, nation.CapitalName, StringComparison.OrdinalIgnoreCase) &&
+                    OwnAnchor(campaign, nation, cities[index], heldOnly, out anchor)) { found = index; return true; }
+        }
+
+        anchor = default;
+        found = region <= 0 ? -1 : regional
+            ? FirstCity(campaign, nation, region, heldOnly)
+            : NearestCity(campaign, nation, region, nation.CapitalLatitude, nation.CapitalLongitude, heldOnly);
+        if (found < 0) return false;
+        anchor = CityCatalog.AnchorOnLand(map, cities[found].Latitude, cities[found].Longitude);
+        return true;
+    }
+
+    /// <summary>
+    /// Where a country governs from when this city is its capital: the ground under the city if
+    /// that is the country's own, else its own ground at the city's edge. False when it has none
+    /// within <see cref="CityEdgeCells"/>.
+    /// </summary>
+    private static bool OwnAnchor(Campaign campaign, Nation nation, CityDefinition city, bool heldOnly,
+        out CityCatalog.MapAnchor anchor)
+    {
+        var map = campaign.ProvinceMap;
+        bool Ours(int province) => heldOnly ? GroundAvailable(campaign, nation, province) : OwnedLand(campaign, nation, province);
+        anchor = CityCatalog.AnchorOnLand(map, city.Latitude, city.Longitude);
+        if (Ours(anchor.ProvinceId)) return true;
+        anchor = CityCatalog.AnchorNear(map, city.Latitude, city.Longitude, CityEdgeCells, Ours);
+        return anchor.ProvinceId > 0;
+    }
+
+    /// <summary>
+    /// Whether a capital has no name but its region's: one the game placed there, by a move or
+    /// at a country's birth, rather than a town somebody wrote down.
+    /// </summary>
+    private static bool NamedAfter(Nation nation, ScenarioState region) =>
+        string.IsNullOrWhiteSpace(nation.CapitalName) ||
+        region is not null && (string.Equals(nation.CapitalName, region.Name, StringComparison.OrdinalIgnoreCase) ||
+                               string.Equals(nation.CapitalName, region.DisplayName, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The capital is this city: its key and its name, governed from that ground. One name is
+    /// kept: the one the country's data gave this very city (<see cref="OwnName"/>) - the
+    /// country already named the city by key and calls it something else. A capital that
+    /// becomes a different city, by a move or because the old way of writing it found one,
+    /// takes the city's name.
+    /// </summary>
+    private static void Bind(Campaign campaign, Nation nation, int cityIndex, CityCatalog.MapAnchor anchor)
+    {
+        var city = CityCatalog.All[cityIndex];
+        if (string.IsNullOrWhiteSpace(nation.CapitalName) ||
+            !string.Equals(nation.CapitalCityId, city.Id, StringComparison.OrdinalIgnoreCase))
+            nation.CapitalName = city.Name;
+        nation.CapitalCityId = city.Id;
+        nation.CapitalLatitude = anchor.Latitude;
+        nation.CapitalLongitude = anchor.Longitude;
+        nation.CapitalProvinceId = anchor.ProvinceId;
+        nation.CapitalStateMapIndex = campaign.ProvinceMap.ProvinceToState[anchor.ProvinceId];
+    }
+
+    /// <summary>
+    /// The first city written that stands in a region on the country's own ground (and ground
+    /// it holds, when that is asked), as an index into the cities, or -1.
+    /// </summary>
+    private static int FirstCity(Campaign campaign, Nation nation, int region, bool controlledOnly)
+    {
+        var map = campaign.ProvinceMap;
+        if (!HasCities(map)) return -1;
+        var under = CityCatalog.ProvincesOf(map);
+        for (var index = 0; index < under.Length; index++)
+        {
+            var province = under[index];
+            if (province <= 0 || map.ProvinceToState[province] != region) continue;
+            if (controlledOnly ? GroundAvailable(campaign, nation, province) : OwnedLand(campaign, nation, province))
+                return index;
+        }
+        return -1;
+    }
+
+    /// <summary>The same, but the city nearest a point; of two equally near, the earlier written.</summary>
+    private static int NearestCity(Campaign campaign, Nation nation, int region, float latitude, float longitude,
+        bool controlledOnly)
+    {
+        var map = campaign.ProvinceMap;
+        if (!HasCities(map)) return -1;
+        var cities = CityCatalog.All;
+        var under = CityCatalog.ProvincesOf(map);
+        var best = -1;
+        var bestDistance = float.MaxValue;
+        for (var index = 0; index < under.Length; index++)
+        {
+            var province = under[index];
+            if (province <= 0 || map.ProvinceToState[province] != region) continue;
+            if (!(controlledOnly ? GroundAvailable(campaign, nation, province) : OwnedLand(campaign, nation, province)))
+                continue;
+            var distance = Kilometres(cities[index].Latitude, cities[index].Longitude, latitude, longitude);
+            if (distance >= bestDistance) continue;
+            bestDistance = distance;
+            best = index;
+        }
+        return best;
+    }
+
+    private static float Kilometres(float latitudeA, float longitudeA, float latitudeB, float longitudeB)
+    {
+        const double radians = Math.PI / 180.0;
+        var dLat = (latitudeB - latitudeA) * radians;
+        var dLon = (longitudeB - longitudeA) * radians;
+        var h = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(latitudeA * radians) * Math.Cos(latitudeB * radians) * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        return (float)(6371.0 * 2.0 * Math.Asin(Math.Min(1.0, Math.Sqrt(h))));
+    }
+
     /// <summary>A landless government returning home needs a new seat, not its old overseas office.</summary>
     internal static void Establish(Campaign campaign, Nation nation, ScenarioState state)
     {
@@ -292,11 +619,17 @@ public static class CapitalCore
         return seat;
     }
 
-    /// <summary>The effective seat's localized city or region name, or empty when there is no usable seat.</summary>
+    /// <summary>
+    /// The effective seat's name in the reader's language, or empty when there is no usable seat:
+    /// the city the government sits in, and only where it sits in no city the name the capital
+    /// goes by, or its region's.
+    /// </summary>
     public static string EffectiveName(Campaign campaign, Nation nation)
     {
         var province = EffectiveProvinceId(campaign, nation);
         if (province <= 0) return "";
+        if (SeatCity(campaign, nation) is { } city)
+            return province == nation.CapitalProvinceId ? CountryNames.CapitalCityName(nation, city) : city.DisplayName;
         if (province == nation.CapitalProvinceId && !SeatNameLost(campaign, nation)) return CountryNames.Capital(nation);
         return campaign.StateByMapIndex(campaign.ProvinceMap.ProvinceToState[province])?.DisplayName ?? "";
     }
@@ -312,6 +645,8 @@ public static class CapitalCore
     {
         var map = campaign?.ProvinceMap;
         if (map is null || nation is null || nation.CapitalProvinceId <= 0) return false;
+        // A capital bound to a city is named after the city it stands in, by construction.
+        if (City(nation) is not null) return false;
         var named = CityCatalog.AnchorOnLand(map, nation.CapitalLatitude, nation.CapitalLongitude).ProvinceId;
         // Far away, not merely across a line: Rome's centre falls in the Vatican's province and
         // Nicosia's on the Green Line, and both are still the capitals they are named after.
@@ -319,18 +654,26 @@ public static class CapitalCore
                SupportCore.DistanceKm(campaign, named, nation.CapitalProvinceId) > SeatNameLostKm;
     }
 
-    public static float EffectiveLatitude(Campaign campaign, Nation nation)
-    {
-        var province = EffectiveProvinceId(campaign, nation);
-        return province <= 0 ? 0f : province == nation.CapitalProvinceId ? nation.CapitalLatitude :
-            campaign.ProvinceMap.CenterOf(province).Latitude;
-    }
+    public static float EffectiveLatitude(Campaign campaign, Nation nation) => EffectivePoint(campaign, nation).Latitude;
 
-    public static float EffectiveLongitude(Campaign campaign, Nation nation)
+    public static float EffectiveLongitude(Campaign campaign, Nation nation) => EffectivePoint(campaign, nation).Longitude;
+
+    /// <summary>
+    /// Where the government's mark is drawn: the capital's own point, or for a temporary seat the
+    /// city it sits in - on the city's dot, not in the middle of the province around it.
+    /// </summary>
+    private static (float Latitude, float Longitude) EffectivePoint(Campaign campaign, Nation nation)
     {
         var province = EffectiveProvinceId(campaign, nation);
-        return province <= 0 ? 0f : province == nation.CapitalProvinceId ? nation.CapitalLongitude :
-            campaign.ProvinceMap.CenterOf(province).Longitude;
+        if (province <= 0) return (0f, 0f);
+        if (province == nation.CapitalProvinceId) return (nation.CapitalLatitude, nation.CapitalLongitude);
+        var map = campaign.ProvinceMap;
+        if (HasCities(map) && CityCatalog.CityIn(map, province) is { } city)
+        {
+            var anchor = CityCatalog.AnchorOnLand(map, city.Latitude, city.Longitude);
+            return (anchor.Latitude, anchor.Longitude);
+        }
+        return map.CenterOf(province);
     }
 
     private static void SetGovernmentSeat(Campaign campaign, Nation nation, int province)
@@ -405,14 +748,17 @@ public static class CapitalCore
     }
 
     /// <summary>
-    /// Where in a region a government would sit: the country's own province nearest the
-    /// region's middle, so the point is inside the region whatever its shape. 0 when none of
-    /// the region is the country's.
+    /// Where in a region a government would sit: in a city - the first written of the region's
+    /// cities standing on ground the country owns and holds. Only a region with no such city
+    /// seats it on the country's own province nearest the region's middle, so the point is
+    /// inside the region whatever its shape. 0 when none of the region is the country's.
     /// </summary>
     private static int Seat(Campaign campaign, Nation nation, ScenarioState state)
     {
         var topology = campaign.ProvinceMap;
         if (topology is null || !UsableRegion(state)) return 0;
+        var city = FirstCity(campaign, nation, state.MapIndex, controlledOnly: true);
+        if (city >= 0) return CityCatalog.ProvincesOf(topology)[city];
         // The middle, averaged on the circle so a region across the date line does not average
         // to the far side of the world.
         double latitude = 0, x = 0, y = 0;
@@ -451,19 +797,33 @@ public static class CapitalCore
         return seat;
     }
 
-    /// <summary>Put the capital there, named after its region - the name the tables know it by.</summary>
+    /// <summary>
+    /// Put the capital there: into the city <see cref="Seat"/> chose, which it then is - its key,
+    /// its name, its point. A region with no city the country can use takes the capital on the
+    /// seat province under the region's own name, the one case a capital is not a city.
+    /// </summary>
     private static void Place(Campaign campaign, Nation nation, ScenarioState state, int seat)
     {
-        nation.CapitalStateMapIndex = state.MapIndex;
-        nation.CapitalName = state.Name;
         nation.GovernmentSeatProvinceId = 0;
         var topology = campaign.ProvinceMap;
-        if (topology is not null && seat > 0)
+        var city = topology is null ? -1 : FirstCity(campaign, nation, state.MapIndex, controlledOnly: true);
+        if (city >= 0 && CityCatalog.ProvincesOf(topology)[city] == seat)
         {
-            var centre = topology.CenterOf(seat);
-            nation.CapitalLatitude = centre.Latitude;
-            nation.CapitalLongitude = centre.Longitude;
-            nation.CapitalProvinceId = seat;
+            var at = CityCatalog.All[city];
+            Bind(campaign, nation, city, CityCatalog.AnchorOnLand(topology, at.Latitude, at.Longitude));
+        }
+        else
+        {
+            nation.CapitalStateMapIndex = state.MapIndex;
+            nation.CapitalName = state.Name;
+            nation.CapitalCityId = "";
+            if (topology is not null && seat > 0)
+            {
+                var centre = topology.CenterOf(seat);
+                nation.CapitalLatitude = centre.Latitude;
+                nation.CapitalLongitude = centre.Longitude;
+                nation.CapitalProvinceId = seat;
+            }
         }
         campaign.CapitalRevision++;
         campaign.MarkStrategicChange();

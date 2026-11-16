@@ -11,6 +11,9 @@ public sealed partial class GlobePresentation
     private const int SettlementLimit = 96;
     private const int SettlementCapacity = SettlementLimit * SettlementSilhouette.MaximumBlocks;
     private readonly Dictionary<int, SettlementSilhouette.Block[]> _settlementShapes = new();
+    /// <summary>How many cities stand in each region (by its map index), for sharing its townspeople out.</summary>
+    private readonly Dictionary<int, int> _settlementCitiesInRegion = new();
+    private (ProvinceTopology Map, int Revision) _settlementCountedFor;
     private MultiMeshInstance3D _settlementBuildings, _settlementRoofs;
     private double _settlementClock;
     private readonly (float Latitude,float Longitude,float Width,float Depth,float LongitudeScale)[] _settlementFootprints =
@@ -64,13 +67,16 @@ public sealed partial class GlobePresentation
             var index=pin.City;
             if (!pin.Node.Visible || index < 0 || index >= _cities.Count) continue;
             var city=_cities[index];
-            if (city.Population < 150_000 && !city.IsNationalCapital) continue;
+            // A city has no head count of its own: its region's townspeople are shared equally
+            // among the cities standing in it. Big enough to draw from 150 000, or a capital.
+            var people=SettlementPeople(index);
+            if (people < 150_000 && !IsCapitalNow(index)) continue;
             var anchor=_cityAnchors[index];
             if (TerrainGone(anchor.Latitude,anchor.Longitude)) continue;
             if (!_settlementShapes.TryGetValue(index,out var blocks))
             {
                 if (_settlementShapes.Count >= 256) _settlementShapes.Clear();
-                _settlementShapes[index]=blocks=SettlementSilhouette.Build(city.Id,city.Population);
+                _settlementShapes[index]=blocks=SettlementSilhouette.Build(city.Id,people);
             }
             var before=count;
             var latitudeScale=Math.Max(.12f,Mathf.Cos(Mathf.DegToRad(anchor.Latitude)));
@@ -103,6 +109,35 @@ public sealed partial class GlobePresentation
         }
         _settlementBuildings.Multimesh.VisibleInstanceCount=count;
         _settlementRoofs.Multimesh.VisibleInstanceCount=count;
+    }
+
+    /// <summary>
+    /// The townspeople a city's silhouette is sized for: its region's urban population as it is
+    /// today, divided equally among the cities of the region. Live, so a region that empties
+    /// shrinks its cities; counted again when the map changes hands or a region is cut.
+    /// </summary>
+    private long SettlementPeople(int index)
+    {
+        var map=_campaign?.ProvinceMap;
+        if (map is null || index < 0 || index >= _cityAnchors.Length) return 0;
+        if (!ReferenceEquals(_settlementCountedFor.Map,map) || _settlementCountedFor.Revision != _campaign.MapRevision)
+        {
+            _settlementCountedFor=(map,_campaign.MapRevision);
+            _settlementCitiesInRegion.Clear();
+            _settlementShapes.Clear();
+            foreach (var anchor in _cityAnchors)
+            {
+                if (anchor.ProvinceId <= 0 || anchor.ProvinceId > map.ProvinceCount) continue;
+                var region=map.ProvinceToState[anchor.ProvinceId];
+                _settlementCitiesInRegion[region]=_settlementCitiesInRegion.GetValueOrDefault(region)+1;
+            }
+        }
+        var province=_cityAnchors[index].ProvinceId;
+        if (province <= 0 || province > map.ProvinceCount) return 0;
+        var mapIndex=map.ProvinceToState[province];
+        var state=_campaign.StateByMapIndex(mapIndex);
+        var sharing=_settlementCitiesInRegion.GetValueOrDefault(mapIndex);
+        return state is null || sharing <= 0 ? 0 : CityLife.Urban(state)/sharing;
     }
 
     private bool SettlementOnLand(float latitude,float longitude,float width,float depth,float longitudeScale)

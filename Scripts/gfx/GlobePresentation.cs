@@ -5118,6 +5118,10 @@ void fragment() {
             _capitalMarkers.Add((marker, normal));
             PlaceCapitalMarker(marker, normal);
         }
+        // Which cities carry the capital's mark and colour is decided when the cities are placed,
+        // and with the camera at rest they are not placed again: the star moved to Yekaterinburg
+        // and Moscow kept a golden name with no dot under it.
+        _cityDirty = true;
     }
 
     /// <summary>The campaign's capital revision the markers were last built for.</summary>

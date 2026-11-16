@@ -240,7 +240,7 @@ public partial class DealOrForceGame
             if (++countries > 12) break;
             var captured = nation;
             yield return new NavigatorEntry("Countries", nation.DisplayName,
-                Loc.Format("{0} · capital {1}", nation.Tag, string.IsNullOrWhiteSpace(nation.CapitalName) ? "—" : nation.CapitalName.Replace("|", " ")),
+                Loc.Format("{0} · capital {1}", nation.Tag, NavigatorCapital(captured)),
                 () => FocusNation(captured));
         }
         var cities = 0;
@@ -260,6 +260,13 @@ public partial class DealOrForceGame
             yield return new NavigatorEntry("Cities", city.DisplayName, country,
                 () => _globe?.FocusOn(captured.Latitude, captured.Longitude, 7f));
         }
+    }
+
+    /// <summary>A country's capital as the map letters it: the city's name, in the reader's language.</summary>
+    private string NavigatorCapital(Nation nation)
+    {
+        var capital = CapitalCore.HasSeat(_campaign, nation) ? CountryNames.Capital(nation, _campaign) : CountryNames.Capital(nation);
+        return string.IsNullOrWhiteSpace(capital) ? "—" : capital;
     }
 
     /// <summary>Frame a country's capital and select it, as a click on it would.</summary>

@@ -7,8 +7,9 @@ using DealOrForce.Simulation;
 /// <summary>
 /// A capital stands in its capital. CapitalCatalog had the middle of the country for some -
 /// Pakistan was governed from central Punjab, Venezuela from its savannah, Myanmar from Mandalay
-/// - and the starting capital region is the one nearest that point. Every capital that the map's
-/// cities also know by name must be where that city is.
+/// - and the starting capital region was the one nearest that point. A capital is a city of the
+/// map now (Nation.CapitalCityId): every country that names one must be governed from where
+/// that city is, under that city's name.
 /// </summary>
 static class CapitalPointTests
 {
@@ -16,15 +17,6 @@ static class CapitalPointTests
     {
         if (!condition) throw new Exception("FAIL capitals: " + name);
         Console.WriteLine("PASS capitals: " + name);
-    }
-
-    static string Plain(string text)
-    {
-        var builder = new StringBuilder();
-        foreach (var letter in text.Normalize(NormalizationForm.FormD))
-            if (char.IsLetter(letter) && CharUnicodeInfo.GetUnicodeCategory(letter) != UnicodeCategory.NonSpacingMark)
-                builder.Append(char.ToLowerInvariant(letter));
-        return builder.ToString();
     }
 
     static double Kilometres(double latA, double lonA, double latB, double lonB)
@@ -35,35 +27,23 @@ static class CapitalPointTests
         return 6371.0 * 2 * Math.Asin(Math.Sqrt(h));
     }
 
-    private static bool OnOwnGround(Campaign campaign, Nation nation, CityDefinition city)
-    {
-        var province = CityCatalog.ProvinceUnder(campaign.ProvinceMap, city.Latitude, city.Longitude);
-        return province > 0 && campaign.ProvinceMap.ProvinceToNation[province] == nation.MapIndex;
-    }
-
     public static void Run(Campaign campaign)
     {
         CityCatalog.Reset();
-        var cities = CityCatalog.All;
         var compared = 0;
         var far = new StringBuilder();
         foreach (var nation in campaign.Nations)
         {
-            // Côte d'Ivoire is governed from Abidjan and names Yamoussoukro its capital; the
-            // catalogue's point is the government's, which is the one a war is about.
-            if (nation.Iso == "CIV" || string.IsNullOrWhiteSpace(nation.CapitalName)) continue;
-            // A city no longer says which country it is in - the ground does: a capital of that
-            // name standing on the country's own ground.
-            var city = cities.FirstOrDefault(candidate => candidate.Capital is "national" or "seat" &&
-                                                          Plain(candidate.Name) == Plain(nation.CapitalName) &&
-                                                          OnOwnGround(campaign, nation, candidate));
-            if (city is null) continue;
+            // A city does not say whose capital it is - the country does, by the city's key - and
+            // a country with no ground has no capital to place.
+            if (nation.CapitalProvinceId <= 0 || CapitalCore.City(nation) is not { } city) continue;
             compared++;
             var distance = Kilometres(nation.CapitalLatitude, nation.CapitalLongitude, city.Latitude, city.Longitude);
             if (distance > 30) far.Append($" {nation.Iso} {nation.CapitalName} {distance:0} km;");
+            if (nation.CapitalName != city.Name) far.Append($" {nation.Iso} is called {nation.CapitalName}, its city {city.Name};");
         }
-        Check(compared > 150, $"{compared} capitals have a city of the same name to compare with");
-        Check(far.Length == 0, "every one stands within 30 km of it" + (far.Length > 0 ? ":" + far : ""));
+        Check(compared > 200, $"{compared} countries are governed from a city of the map");
+        Check(far.Length == 0, "every one stands within 30 km of it and goes by its name" + (far.Length > 0 ? ":" + far : ""));
 
         // And the region it is governed from follows: the capital province is the country's
         // own province nearest the point.

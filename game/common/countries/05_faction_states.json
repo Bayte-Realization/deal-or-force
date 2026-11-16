@@ -3,21 +3,25 @@
   "HTH": {
     "name": "Ansar Allah",
     "color": "#4e7d3a",
-    "capital_name": "Sanaa"
+    "capital_name": "Sanaa",
+    "capital_city": "sanaa_yem"
   },
   "SIG": {
     "name": "Syrian Interim Government",
     "color": "#2e7d32",
-    "capital_name": "Azaz"
+    "capital_name": "Azaz",
+    "capital_city": "izaz_syr"
   },
   "HTS": {
     "name": "Syrian Salvation Government",
     "color": "#d8d8d0",
-    "capital_name": "Idlib"
+    "capital_name": "Idlib",
+    "capital_city": "idlib_syr"
   },
   "SDF": {
     "name": "North and East Syria",
     "color": "#f2c94c",
-    "capital_name": "Raqqa"
+    "capital_name": "Raqqa",
+    "capital_city": "ar_raqqah_syr"
   }
 }

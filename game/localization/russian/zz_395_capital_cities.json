@@ -1,0 +1,46 @@
+// Столицы - это города карты (Scripts/Simulation/CapitalCore.cs), поэтому столица называется
+// именем своего города: city.<ключ>.name, той же строкой, которой город подписан на карте.
+//
+// Здесь города из game/map_data/cities/10_capitals_added.json, которых нет в Natural Earth:
+// столицы малых территорий и резиденции фактических администраций 2024 года.
+//
+// Восемь строк после них повторяют 24_cities.json без изменений: в английском файле у этих
+// городов поправлено написание, а набор ключей в двух языках должен совпадать. Последняя строка -
+// подпись на карточке столичного региона: какой из его городов столица.
+{
+  "city.the_valley_aia.name": "Валли",
+  "city.gustavia_blm.name": "Густавия",
+  "city.saint_peter_port_ggy.name": "Сент-Питер-Порт",
+  "city.saint_helier_jey.name": "Сент-Хелиер",
+  "city.marigot_maf.name": "Мариго",
+  "city.brades_msr.name": "Брейдс",
+  "city.kingston_nfk.name": "Кингстон",
+  "city.yaren_nru.name": "Ярен",
+  "city.jamestown_shn.name": "Джеймстаун",
+  "city.saint_pierre_spm.name": "Сен-Пьер",
+  "city.philipsburg_sxm.name": "Филипсбург",
+  "city.road_town_vgb.name": "Род-Таун",
+  "city.charlotte_amalie_vir.name": "Шарлотта-Амалия",
+  "city.mata_utu_wlf.name": "Мата-Уту",
+  "city.kanbalu_mmr.name": "Канбалу",
+  "city.kyauktaw_mmr.name": "Чаутто",
+  "city.laiza_mmr.name": "Лайза",
+  "city.pangkham_mmr.name": "Пангкам",
+  "city.laukkai_mmr.name": "Лаукай",
+  "city.namhsan_mmr.name": "Намсан",
+  "city.jilib_som.name": "Джилиб",
+  "city.bunagana_cod.name": "Бунагана",
+  "city.mwalika_cod.name": "Мвалика",
+  "city.fataki_cod.name": "Фатаки",
+  "city.minembwe_cod.name": "Минембве",
+  "city.kauda_sdn.name": "Кауда",
+  "city.kbenhavn_dnk.name": "Копенгаген",
+  "city.washington_d_c_usa.name": "Вашингтон",
+  "city.andorra_and.name": "Андорра-ла-Велья",
+  "city.irbil_irq.name": "Эрбиль",
+  "city.banghazi_lby.name": "Бенгази",
+  "city.garoowe_som.name": "Гароуэ",
+  "city.ar_raqqah_syr.name": "Эр-Ракка",
+  "city.izaz_syr.name": "Аазаз",
+  "the capital: {0}": "столица: {0}"
+}

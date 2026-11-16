@@ -4,21 +4,17 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
-/// <summary>One city on the map: a name and a dot, and how important a place it is.</summary>
+/// <summary>
+/// One city on the map: a name and a place, and nothing else. No city is more of a city than
+/// another in the data - which one is a capital is the countries' business (Nation.CapitalCityId)
+/// and changes as they move.
+/// </summary>
 public sealed class CityDefinition
 {
     public string Id = "";
     public string Name = "";
     public float Latitude;
     public float Longitude;
-    /// <summary>The urban area's people on the scenario's first day (the source's figure). What it has now is CityCatalog.People.</summary>
-    public long Population;
-    /// <summary>0 capitals and world cities, seen from far out; 3 towns, seen only close in.</summary>
-    public int Tier = 3;
-    /// <summary>"national", "seat", "regional" or empty.</summary>
-    public string Capital = "";
-
-    public bool IsNationalCapital => Capital == "national";
 
     /// <summary>What the map calls it: city.&lt;id&gt;.name when the language has it, else the name.</summary>
     public string DisplayName => Loc.Has($"city.{Id}.name") ? Loc.Get($"city.{Id}.name") : Name;
@@ -29,20 +25,30 @@ public sealed class CityDefinition
 ///
 /// Nothing about a city is simulated: it is geography, like a river. It exists so the map reads
 /// like a map - Kharkiv and Donetsk where the war is, Kunming and Chengdu across a Chinese
-/// province - and so a front has places to be named after. The region and province a city
-/// stands in come from the map, never from the file, so it changes hands with its ground.
+/// province - so a front has places to be named after, and so a government has somewhere to
+/// sit: a country's capital is one of these cities (CapitalCore). The region and province a
+/// city stands in come from the map, never from the file, so it changes hands with its ground.
 ///
-/// Every file in the folder is read in name order and later files win key by key: a mod adds
-/// a city under a key of its own, moves or renames one by naming its key again, and removes
-/// one with "tier": -1.
+/// Every file in the folder is read in name order and later files win key by key, and a mod's
+/// own map_data/cities files are laid over the base game's the same way when a campaign is set
+/// up (<see cref="Merge"/>, called by ModLoader): a mod adds a city under a key of its own, moves
+/// or renames one by naming its key again, and removes one with "removed": true. A file written
+/// for the older shape - "population", "tier", "capital" - still loads: those keys are not read
+/// (a "tier" of -1 was how a city used to be removed, and still is).
+///
+/// The cities keep the order they are written in, and that order means one thing: the earlier
+/// a city stands, the sooner it is chosen when only one can be - the map letters it first when
+/// there is no room for every name, and a government, a militia or a base that needs "a city of
+/// this region" takes the first that stands there.
 /// </summary>
 public static class CityCatalog
 {
     public readonly record struct MapAnchor(int ProvinceId, float Latitude, float Longitude);
     private static List<CityDefinition> _all;
+    private static Dictionary<string, int> _indexById;
     private static readonly object Gate = new();
 
-    /// <summary>Every city, most important first: by tier, then by population.</summary>
+    /// <summary>Every city, in the order the files give them.</summary>
     public static IReadOnlyList<CityDefinition> All
     {
         get
@@ -56,12 +62,46 @@ public static class CityCatalog
         lock (Gate)
         {
             _all = null;
+            _indexById = null;
             _provinces = null;
+            _firstInProvince = null;
         }
     }
 
+    /// <summary>Where a city stands in <see cref="All"/>, or -1 when no city has that key.</summary>
+    public static int IndexOf(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return -1;
+        var cities = All;
+        lock (Gate)
+        {
+            if (_indexById is null)
+            {
+                _indexById = new Dictionary<string, int>(cities.Count, StringComparer.OrdinalIgnoreCase);
+                for (var index = 0; index < cities.Count; index++) _indexById[cities[index].Id] = index;
+            }
+            return _indexById.TryGetValue(id, out var found) ? found : -1;
+        }
+    }
+
+    /// <summary>The city of that key, or null.</summary>
+    public static CityDefinition Find(string id)
+    {
+        var index = IndexOf(id);
+        return index < 0 ? null : All[index];
+    }
+
+    /// <summary>
+    /// How many of the first cities count as places an office or a base is put in: the leading
+    /// third of the list. A long-range base and a movement's headquarters go to a city of some
+    /// standing, not to the nearest hamlet, and with every city equal in the data the only
+    /// standing there is is the order they are written in.
+    /// </summary>
+    public static int LeadingCount => (All.Count + 2) / 3;
+
     private static int[] _provinces;
     private static ProvinceTopology _provincesOf;
+    private static Dictionary<int, int> _firstInProvince;
 
     /// <summary>
     /// The town a place on the map is known by: the nearest city of the same region to a
@@ -111,9 +151,34 @@ public static class CityCatalog
                 for (var index = 0; index < cities.Count; index++)
                     _provinces[index] = AnchorOnLand(topology, cities[index].Latitude, cities[index].Longitude).ProvinceId;
                 _provincesOf = topology;
+                _firstInProvince = null;
             }
             return _provinces;
         }
+    }
+
+    /// <summary>The first city standing in a province, as an index into <see cref="All"/>, or -1.</summary>
+    public static int IndexIn(ProvinceTopology topology, int province)
+    {
+        if (topology is null || province <= 0) return -1;
+        var provinces = ProvincesOf(topology);
+        lock (Gate)
+        {
+            if (_firstInProvince is null)
+            {
+                _firstInProvince = new Dictionary<int, int>();
+                for (var index = 0; index < provinces.Length; index++)
+                    if (provinces[index] > 0) _firstInProvince.TryAdd(provinces[index], index);
+            }
+            return _firstInProvince.TryGetValue(province, out var found) ? found : -1;
+        }
+    }
+
+    /// <summary>The first city standing in a province, or null.</summary>
+    public static CityDefinition CityIn(ProvinceTopology topology, int province)
+    {
+        var index = IndexIn(topology, province);
+        return index < 0 ? null : All[index];
     }
 
     /// <summary>The province under a point of the globe, or 0 for none.</summary>
@@ -160,9 +225,89 @@ public static class CityCatalog
         return result;
     }
 
-    public static List<CityDefinition> Parse(IEnumerable<JsonDocument> documents)
+    /// <summary>
+    /// The nearest cell to a point, no further than <paramref name="reach"/> cells off, whose
+    /// province the caller accepts - "the country's own ground at the edge of this city" - or
+    /// province 0 when there is none.
+    /// </summary>
+    public static MapAnchor AnchorNear(ProvinceTopology topology, float latitude, float longitude, int reach,
+        Func<int, bool> accept)
     {
+        var none = new MapAnchor(0, latitude, longitude);
+        if (topology is null || topology.Width < 1 || topology.Height < 1 || accept is null) return none;
+        var px = (longitude + 180f) / 360f * topology.Width;
+        var py = (90f - latitude) / 180f * topology.Height;
+        var x = (int)MathF.Floor(px); var y = (int)MathF.Floor(py);
+        var best = float.MaxValue; var result = none;
+        var scale = MathF.Max(.05f, MathF.Cos(latitude * MathF.PI / 180f));
+        for (var dy = -reach; dy <= reach; dy++)
+        for (var dx = -reach; dx <= reach; dx++)
+        {
+            var cy = y + dy;
+            if (cy < 0 || cy >= topology.Height) continue;
+            var cx = ((x + dx) % topology.Width + topology.Width) % topology.Width;
+            var candidate = topology.CellToProvince[cy * topology.Width + cx];
+            if (candidate <= 0 || candidate > topology.ProvinceCount || topology.IsWater(candidate)) continue;
+            var north = cy + .5f - py;
+            var east = (x + dx + .5f - px) * scale;
+            var distance = north * north + east * east;
+            if (distance >= best || !accept(candidate)) continue;
+            best = distance;
+            result = new(candidate, 90f - (cy + .5f) / topology.Height * 180f,
+                (cx + .5f) / topology.Width * 360f - 180f);
+        }
+        return result;
+    }
+
+    public static List<CityDefinition> Parse(IEnumerable<JsonDocument> documents) => Parse(documents, null, null);
+
+    /// <summary>
+    /// Lay one more cities file over the cities already read: a mod's, after the base game's and
+    /// after any mod before it. The same rules as a later file of the base folder. Until this was
+    /// called by anybody, only game/map_data/cities was ever read: a mod's cities file was handed
+    /// to the region overrides, which found nothing in it, and a country that named a mod's city
+    /// as its capital named a key no city had.
+    ///
+    /// The result is a new list, and everything that holds an index into the old one finds out by
+    /// that (the province cache here, the pins on the globe).
+    /// </summary>
+    public static void Merge(string json, List<string> errors)
+    {
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip
+        });
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            errors?.Add("A cities file is one object: each city under its key.");
+            return;
+        }
+        lock (Gate)
+        {
+            _all = Parse(new[] { document }, _all ??= Load(), errors);
+            _indexById = null;
+            _provinces = null;
+            _firstInProvince = null;
+        }
+    }
+
+    private static List<CityDefinition> Parse(IEnumerable<JsonDocument> documents, IReadOnlyList<CityDefinition> onto,
+        List<string> errors)
+    {
+        // In the order first written: a later file that names a key again changes the city where
+        // it already stands, and a new key goes to the end.
+        var order = new List<CityDefinition>();
         var byId = new Dictionary<string, CityDefinition>(StringComparer.OrdinalIgnoreCase);
+        var removed = new HashSet<CityDefinition>();
+        // Copies, so whoever still holds the list being laid over holds it as it was.
+        if (onto is not null)
+            foreach (var before in onto)
+            {
+                var copy = new CityDefinition { Id = before.Id, Name = before.Name, Latitude = before.Latitude, Longitude = before.Longitude };
+                byId[copy.Id] = copy;
+                order.Add(copy);
+            }
         foreach (var document in documents)
         {
             if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
@@ -171,35 +316,45 @@ public static class CityCatalog
                 if (entry.Value.ValueKind != JsonValueKind.Object) continue;
                 var value = entry.Value;
                 if (!byId.TryGetValue(entry.Name, out var city))
+                {
+                    // A key nobody has, with no place given, is not a new city at the equator:
+                    // it is a change to a city that is not there - one another mod removed, or a
+                    // key from an older list. It adds nothing.
+                    if (!value.TryGetProperty("latitude", out _) && !value.TryGetProperty("longitude", out _))
+                    {
+                        // Taking off a city that is already off is no mistake worth a line.
+                        var takesOff = value.TryGetProperty("removed", out var off) && off.ValueKind == JsonValueKind.True ||
+                                       value.TryGetProperty("tier", out var low) && low.TryGetInt32(out var below) && below < 0;
+                        if (!takesOff)
+                            errors?.Add($"City '{entry.Name}' is not on the map and the file gives it no latitude and longitude, so it was not added.");
+                        continue;
+                    }
                     byId[entry.Name] = city = new CityDefinition { Id = entry.Name, Name = entry.Name };
+                    order.Add(city);
+                }
                 if (value.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String)
                     city.Name = name.GetString() ?? city.Name;
                 if (value.TryGetProperty("latitude", out var latitude) && latitude.TryGetSingle(out var lat))
                     city.Latitude = Math.Clamp(lat, -90f, 90f);
                 if (value.TryGetProperty("longitude", out var longitude) && longitude.TryGetSingle(out var lon))
                     city.Longitude = lon;
-                if (value.TryGetProperty("population", out var population) && population.TryGetInt64(out var people))
-                    city.Population = Math.Max(0, people);
+                // Files written before cities were made equal carry "population", "capital" and
+                // "tier". None of them is read, except that a tier below zero was how a mod took a
+                // city off the map, and a mod that says so still means it.
                 if (value.TryGetProperty("tier", out var tier) && tier.TryGetInt32(out var rank))
-                    city.Tier = rank;
-                if (value.TryGetProperty("capital", out var capital) && capital.ValueKind == JsonValueKind.String)
-                    city.Capital = capital.GetString() ?? "";
-                // "country" is not read: a city belongs to the ground it stands on (RegionOf).
+                {
+                    if (rank < 0) removed.Add(city); else removed.Remove(city);
+                }
+                if (value.TryGetProperty("removed", out var gone) &&
+                    gone.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                {
+                    if (gone.GetBoolean()) removed.Add(city); else removed.Remove(city);
+                }
+                // "country" is not read either: a city belongs to the ground it stands on (RegionOf).
             }
         }
-        var cities = new List<CityDefinition>(byId.Count);
-        foreach (var city in byId.Values)
-            if (city.Tier >= 0) cities.Add(city);
-        cities.Sort((a, b) =>
-        {
-            var byTier = a.Tier.CompareTo(b.Tier);
-            if (byTier != 0) return byTier;
-            var byCapital = b.IsNationalCapital.CompareTo(a.IsNationalCapital);
-            if (byCapital != 0) return byCapital;
-            var byPeople = b.Population.CompareTo(a.Population);
-            return byPeople != 0 ? byPeople : string.CompareOrdinal(a.Id, b.Id);
-        });
-        return cities;
+        if (removed.Count > 0) order.RemoveAll(removed.Contains);
+        return order;
     }
 
     private static List<CityDefinition> Load() => Parse(GameDataLoader.DataDocuments("map_data", "cities"));
@@ -217,32 +372,17 @@ public static class CityCatalog
         return null;
     }
 
-    /// <summary>
-    /// A city's people now: its first-day figure, moved as its region's urban population has
-    /// moved since (CityLife) - a region that grows grows its cities, a besieged and emptied one
-    /// empties them.
-    /// </summary>
-    public static long People(ScenarioState region, CityDefinition city)
+    /// <summary>The cities of a region, in the order of the list.</summary>
+    public static List<CityDefinition> CitiesOf(Campaign campaign, ScenarioState region)
     {
-        if (city is null) return 0;
-        if (region is null || region.UrbanBaseline <= 0) return city.Population;
-        var urban = CityLife.Urban(region);
-        var ratio = Math.Clamp(urban / (double)region.UrbanBaseline, 0d, 8d);
-        return (long)(city.Population * ratio);
-    }
-
-    /// <summary>The cities of a region, largest first, with the people each has now.</summary>
-    public static List<(CityDefinition City, long People)> CitiesOf(Campaign campaign, ScenarioState region)
-    {
-        var result = new List<(CityDefinition, long)>();
+        var result = new List<CityDefinition>();
         var map = campaign?.ProvinceMap;
         if (map is null || region is null) return result;
         var cities = All;
         var provinces = ProvincesOf(map);
         for (var index = 0; index < cities.Count && index < provinces.Length; index++)
             if (provinces[index] > 0 && map.ProvinceToState[provinces[index]] == region.MapIndex)
-                result.Add((cities[index], People(region, cities[index])));
-        result.Sort((a, b) => b.Item2.CompareTo(a.Item2));
+                result.Add(cities[index]);
         return result;
     }
 }
@@ -250,28 +390,19 @@ public static class CityCatalog
 public sealed partial class ScenarioState
 {
     /// <summary>
-    /// The region's urban population when its cities' figures were true - its first week, or the
-    /// day it was carved out - against which they grow and shrink (CityLife). Saved.
+    /// Not used any more. Cities had head counts of their own once, and this was the region's
+    /// urban population on the day those were true. It stays so that a save written then still
+    /// loads; nothing reads it and nothing sets it.
     /// </summary>
     public long UrbanBaseline;
 }
 
 /// <summary>
-/// The cities' people follow their region's. A city's figure is the source's for the scenario's
-/// first day; the region's urban population that day is remembered once (UrbanBaseline), and a
-/// city now has its figure times how far its region's urban population has moved since. Nothing
-/// is simulated twice: the people are the region's, the cities are where they live.
+/// A region's townspeople. Cities carry no people of their own: the people are the region's,
+/// and its cities are where they live.
 /// </summary>
 public static class CityLife
 {
     public static long Urban(ScenarioState region) =>
         region is null ? 0 : (long)(region.Population * (double)Math.Clamp(region.Urbanization, 0.02f, 1f));
-
-    /// <summary>Weekly, at the day's start: a region without its baseline yet takes today's.</summary>
-    public static void Note(Campaign campaign)
-    {
-        if (campaign is null || campaign.ElapsedDays % 7 != 0) return;
-        foreach (var region in campaign.States)
-            if (region.UrbanBaseline <= 0 && region.Population > 0) region.UrbanBaseline = Math.Max(1, Urban(region));
-    }
 }

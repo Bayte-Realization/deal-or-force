@@ -17,9 +17,21 @@
     "map.city_font_size": 28,
     "map.city_text_pixels": 13,
     "map.city_label_limit": 140,
+    // Every city is drawn alike: one dot, one lettering. A city that is a country's capital at
+    // the moment has the capital's mark (and globe.city_capital for its name) instead.
+    "map.city_dot_pixels": 8,
+    "map.city_capital_mark_pixels": 10,
+    // The zoom bands. From how far out each begins (a view distance), and how many cities are
+    // lettered in it: that many from the head of map_data/cities, whose order runs from the
+    // most to the least prominent place. Capitals are lettered in every band, whichever cities
+    // they are today; the closest band (tier3) letters every city. The counts are how many
+    // places each of the old ranks held, so the map shows what it did.
     "map.city_tier0_distance": 15.0,
     "map.city_tier1_distance": 11.0,
     "map.city_tier2_distance": 8.4,
-    "map.city_tier3_distance": 6.6
+    "map.city_tier3_distance": 6.6,
+    "map.city_band0_count": 330,
+    "map.city_band1_count": 1142,
+    "map.city_band2_count": 2448
   }
 }

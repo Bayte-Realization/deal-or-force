@@ -455,11 +455,13 @@ public static class SupportCore
             }
             if (run.Count > ground.Count) ground = run;
         }
-        var cities = CityCatalog.All;
+        // The first city written that stands on that ground, among the leading cities of the
+        // list: a base is put in a city of some standing, not in the nearest hamlet.
         var under = CityCatalog.ProvincesOf(map);
         var onGround = new HashSet<int>(ground);
-        for (var index = 0; index < cities.Count && index < under.Length; index++)
-            if (onGround.Contains(under[index]) && cities[index].Tier <= 2) return under[index];
+        var leading = Math.Min(under.Length, CityCatalog.LeadingCount);
+        for (var index = 0; index < leading; index++)
+            if (onGround.Contains(under[index])) return under[index];
         var centre = Vector3.Zero;
         foreach (var province in ground) centre += BaseDirection(map.CenterOf(province));
         var best = -1;

@@ -43,9 +43,11 @@ static class CountryDefinitionTests
         // should stop the suite and make somebody say what the field is for. A key nothing reads is
         // invisible from the modder's side - no error, no effect, no clue - which is how a colour
         // ended up written into history/countries twice in one week.
+        // "capital_city" (16 November 2026): the capital is a city of the map, named by its key in
+        // map_data/cities. It brings the city's name and point with it (CapitalCore.Author).
         var accepted = new HashSet<string>(StringComparer.Ordinal)
         {
-            "name", "color", "capital_name", "capital_latitude", "capital_longitude"
+            "name", "color", "capital_city", "capital_name", "capital_latitude", "capital_longitude"
         };
         var strangers = new List<string>();
 
@@ -62,11 +64,15 @@ static class CountryDefinitionTests
             if (Text(entry.Value, "color") is { Length: > 0 } colour &&
                 !string.Equals(nation.Color, colour, StringComparison.OrdinalIgnoreCase))
                 mismatched.Add($"{entry.Name} colour '{nation.Color}' != '{colour}'");
-            if (Text(entry.Value, "capital_name") is { Length: > 0 } capital && nation.CapitalName != capital)
+            // An entry that names a city of the map ("capital_city") opens under that city's own
+            // name: "capital_name" beside it is what the capital is called on a map with no such
+            // city, and "Copenhagen" over the city the file spells "København" is not a mismatch.
+            var seated = CityCatalog.Find(Text(entry.Value, "capital_city"));
+            if ((seated?.Name ?? Text(entry.Value, "capital_name")) is { Length: > 0 } capital && nation.CapitalName != capital)
                 mismatched.Add($"{entry.Name} capital '{nation.CapitalName}' != '{capital}'");
             // Named but not seated: the definitions give it a colour and no city, so whatever the
             // compiled catalogue had is still what the world opens with.
-            if (Text(entry.Value, "capital_name") is null && nation.CapitalName.Length > 0)
+            if (seated is null && Text(entry.Value, "capital_name") is null && nation.CapitalName.Length > 0)
                 backedByCatalogue.Add(entry.Name);
         }
 

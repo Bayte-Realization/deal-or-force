@@ -851,7 +851,10 @@ public static class SecessionEvents
         if (seat is not null)
         {
             CapitalCore.Establish(campaign, born, seat);
-            born.CapitalName = seat.Name;
+            // Its capital is the city Establish put it in, under that city's name. Only a
+            // country that got no city goes by its seat region's name - written over the city's,
+            // the region's name was what its organisations and its exported definition said.
+            if (CapitalCore.City(born) is null) born.CapitalName = seat.Name;
         }
         campaign.LocateCapitals(preserveExisting: true);
         yield return 0;

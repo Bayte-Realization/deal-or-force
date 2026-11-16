@@ -600,8 +600,11 @@ public partial class DealOrForceGame
         if (owner is not null) SetFlag(_regionCardFlag, owner.Tag, 20);
         _regionCardTitle.Text = state?.DisplayName ?? Tr("Unmapped land");
         var isCapital = owner is not null && state.MapIndex == owner.CapitalStateMapIndex;
+        // A capital is a city, so the capital's region says which of its cities that is.
+        var capitalCity = isCapital ? CapitalCore.City(owner) : null;
         _regionCardCaption.Text = state is null ? "" :
-            RegionOfCaption(state, owner) + (isCapital ? " · " + Tr("the capital") : "");
+            RegionOfCaption(state, owner) + (!isCapital ? "" : " · " + (capitalCity is null
+                ? Tr("the capital") : Simulation.Loc.Format("the capital: {0}", CountryNames.CapitalCityName(owner, capitalCity))));
 
         // ---- the region: the same fog rule as the dossier, so the two never disagree.
         var visible = state is not null && (!_campaign.Defines.FogHidesRegionStatistics || owner is null ||
@@ -609,13 +612,14 @@ public partial class DealOrForceGame
         if (state is not null)
         {
             CardRow(_regionCardRegionRows, "Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
-            // Its cities, with the people they have now: they are where the region's people live.
+            // Its cities, by name: they are where the region's people live, and the people are
+            // the region's - a city has no head count of its own.
             var towns = Simulation.CityCatalog.CitiesOf(_campaign, state);
             if (towns.Count > 0)
                 CardRow(_regionCardRegionRows, "Cities",
-                    string.Join(", ", towns.Take(3).Select(t => $"{t.City.DisplayName} {Fmt.People(t.People)}")) +
+                    string.Join(", ", towns.Take(3).Select(town => town.DisplayName)) +
                     (towns.Count > 3 ? Simulation.Loc.Format(" +{0}", towns.Count - 3) : ""),
-                    string.Join("\n", towns.Take(12).Select(t => $"{t.City.DisplayName}: {Fmt.PeopleExact(t.People)}")));
+                    string.Join("\n", towns.Take(12).Select(town => town.DisplayName)));
             CardRow(_regionCardRegionRows, "GDP (estimate)", Fmt.Money(RegionalStatistics.EstimatedGdp(_campaign, state)),
                 Tr(RegionalStatistics.GdpExplanation));
             // A half-state: owned by one country, held by another by lease or by troops without a war.

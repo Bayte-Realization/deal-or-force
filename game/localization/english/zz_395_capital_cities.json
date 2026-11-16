@@ -1,0 +1,44 @@
+// Capitals are cities of the map (Scripts/Simulation/CapitalCore.cs), so a capital reads as its
+// city's name: city.<key>.name, the same row the map letters.
+//
+// First the towns of game/map_data/cities/10_capitals_added.json, which Natural Earth has no
+// place for. Then eight capitals whose names in 24_cities.json are Natural Earth's own spelling
+// rather than the one an English reader knows the city by; this file is read later and wins.
+// Last, what the capital's region says on its card: which of its cities the capital is.
+{
+  "city.the_valley_aia.name": "The Valley",
+  "city.gustavia_blm.name": "Gustavia",
+  "city.saint_peter_port_ggy.name": "Saint Peter Port",
+  "city.saint_helier_jey.name": "Saint Helier",
+  "city.marigot_maf.name": "Marigot",
+  "city.brades_msr.name": "Brades",
+  "city.kingston_nfk.name": "Kingston",
+  "city.yaren_nru.name": "Yaren",
+  "city.jamestown_shn.name": "Jamestown",
+  "city.saint_pierre_spm.name": "Saint-Pierre",
+  "city.philipsburg_sxm.name": "Philipsburg",
+  "city.road_town_vgb.name": "Road Town",
+  "city.charlotte_amalie_vir.name": "Charlotte Amalie",
+  "city.mata_utu_wlf.name": "Mata-Utu",
+  "city.kanbalu_mmr.name": "Kanbalu",
+  "city.kyauktaw_mmr.name": "Kyauktaw",
+  "city.laiza_mmr.name": "Laiza",
+  "city.pangkham_mmr.name": "Pangkham",
+  "city.laukkai_mmr.name": "Laukkai",
+  "city.namhsan_mmr.name": "Namhsan",
+  "city.jilib_som.name": "Jilib",
+  "city.bunagana_cod.name": "Bunagana",
+  "city.mwalika_cod.name": "Mwalika",
+  "city.fataki_cod.name": "Fataki",
+  "city.minembwe_cod.name": "Minembwe",
+  "city.kauda_sdn.name": "Kauda",
+  "city.kbenhavn_dnk.name": "Copenhagen",
+  "city.washington_d_c_usa.name": "Washington, D.C.",
+  "city.andorra_and.name": "Andorra la Vella",
+  "city.irbil_irq.name": "Erbil",
+  "city.banghazi_lby.name": "Benghazi",
+  "city.garoowe_som.name": "Garowe",
+  "city.ar_raqqah_syr.name": "Raqqa",
+  "city.izaz_syr.name": "Azaz",
+  "the capital: {0}": "the capital: {0}"
+}

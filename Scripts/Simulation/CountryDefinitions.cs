@@ -46,7 +46,15 @@ public static class CountryDefinitions
             if (nation is null) continue;
             Read(entry.Value, "name", text => nation.Name = text);
             Read(entry.Value, "color", text => nation.Color = text);
+            // The capital is a city of the map (map_data/cities), named by its key, and the key
+            // brings the city's name and point with it. So in one entry the city wins over
+            // "capital_name", which is only what the capital is called where the map has no such
+            // city: read the other way round, "Washington D.C." or "Copenhagen" stood over the
+            // names the cities themselves have. A later file that gives "capital_name" alone
+            // renames the capital and keeps the city (CapitalCore.OwnName); one that restates the
+            // point below without a city moves it, into the city at that point (CapitalCore.CityAt).
             Read(entry.Value, "capital_name", text => nation.CapitalName = text);
+            Read(entry.Value, "capital_city", text => CapitalCore.Author(nation, text));
             // Where that city is. Renaming a capital and moving one are different jobs - a mod
             // renaming a city has no business restating its coordinates, and one laying out a
             // different map has no name to keep - so both are optional and neither clears the
@@ -114,6 +122,8 @@ public static class CountryDefinitions
                 .Append(", \"color\": ").Append(Quote(nation.Color));
             if (!string.IsNullOrWhiteSpace(nation.CapitalName))
                 builder.Append(", \"capital_name\": ").Append(Quote(nation.CapitalName));
+            if (!string.IsNullOrWhiteSpace(nation.CapitalCityId))
+                builder.Append(", \"capital_city\": ").Append(Quote(nation.CapitalCityId));
             builder.Append(" }");
             if (index < nations.Count - 1) builder.Append(',');
             builder.AppendLine();

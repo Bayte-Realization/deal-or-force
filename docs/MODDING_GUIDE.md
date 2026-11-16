@@ -186,7 +186,7 @@ Files in `common/countries` contain an object keyed by country tags:
   "KOR": {
     "name": "Republic of Korea",
     "color": "#4d8fd1",
-    "capital_name": "Seoul",
+    "capital_city": "seoul_kor",
     "population": 52000000,
     "treasury": 190000000000.0,
     "gdp": 1800000000000.0,
@@ -197,6 +197,31 @@ Files in `common/countries` contain an object keyed by country tags:
   }
 }
 ```
+
+A capital is a city of the map. `capital_city` is the city's key in `map_data/cities` (see
+[Cities](#cities)): the country is governed from the province under that city, and its capital
+reads as that city's name - `city.<key>.name` in the reader's language - on the country card,
+in the picker, on the map, in the navigator and in the name of an organisation the country
+founds. To move a country's capital, name another city. To rename the city for everybody, rename
+the city (its `name` in a cities file of your mod, or `city.<key>.name` in a localisation file).
+
+Three older ways of writing a capital still work, and each means one thing:
+
+- `capital_name` alone, in a file later than the one that names the city, **renames the
+  capital and keeps the city**: `"GBR": { "capital_name": "Londinium" }` leaves the capital in
+  London - same province, same mark on the map - and the country card, the picker and the
+  navigator read "Londinium" (translated by a `Londinium` or `capital.Londinium` row if your mod
+  ships one). The city itself is still lettered "London" on the map; rename the city to change
+  that. The name lasts while the capital stands in that city: a government that moves takes the
+  name of the city it moves into.
+- `capital_name` with `capital_latitude` and `capital_longitude` and no `capital_city` **moves
+  the capital** into the city standing at that point: a city of that name within 60 km first,
+  otherwise the nearest one on the country's own ground - however near that is to the city the
+  base game names (The Hague is 52 km from Amsterdam). The capital then goes by that city's name.
+  This is also what the country editor writes.
+- `capital_name` and `capital_city` in one entry: the city wins, and `capital_name` is only what
+  the capital is called if the map has no such city. Every row of the base game's file is
+  written this way.
 
 `common/countries` changes the parameters of registered countries, while a full scenario
 layer can add a country through the base country/history registry and a territorial rule with
@@ -1170,6 +1195,66 @@ A mod that changes provinces must ship both `provinces.png` and `definition.csv`
 one of the pair is refused. `rivers.png` and `lakes.png` can be replaced independently. The full
 palette with RGB codes is in `game/map_data/RASTER_PALETTE.md`.
 
+### Cities
+
+`map_data/cities/*.json` are the cities on the map. A city is a name and a place and nothing
+else - every city is equal in the data:
+
+```json
+{
+  "kharkiv_ukr": { "name": "Kharkiv", "latitude": 50.0019, "longitude": 36.2481 },
+  "my_new_town": { "name": "New Town", "latitude": 48.61, "longitude": 35.12 },
+  "kupyansk_ukr": { "removed": true }
+}
+```
+
+- There is no population, no rank and no "capital" on a city. Which city is a capital is said
+  by the country (`capital_city` in `common/countries`) and changes as governments move; the map
+  gives the capital's mark and colour to whichever city is a capital at the moment, and draws
+  every other city with one dot and one lettering.
+- A city has no country either. It belongs to the region and province it stands in, which are
+  found from the map, so it changes hands with its ground.
+- Files are read in name order and later files win key by key, and your mod's own
+  `map_data/cities/*.json` are laid over the base game's in the same way when a campaign is set
+  up. A new key adds a city (it needs a `latitude` and a `longitude`; a key that is no city and
+  gives no place is reported and adds nothing); naming a key again moves or renames that city;
+  `"removed": true` takes it off the map. A country may then name your city as its capital
+  (`"capital_city": "my_new_town"`).
+- **The order matters, and it is the only thing that does.** The cities go from the most to the
+  least prominent place, and whenever the game cannot take every city it takes the earlier ones:
+  the map letters them first when there is no room for every name, and a government, a militia
+  or a long-range base that needs "a city of this region" takes the first written that stands
+  there. A city you rename or move keeps its place in the order; a city you add goes after
+  every city already written. To put your own cities first, ship a file that sorts before
+  `00_cities.json` - and remember that the keys of the base game's cities are then added after
+  yours.
+- A file in the older shape still loads. `population`, `tier`, `capital` and `country` are
+  ignored, except that `"tier": -1` - how a city used to be removed - still removes it. So
+  `"kharkiv_ukr": { "tier": 0 }`, which used to make a city show from further out, now changes
+  nothing: how soon a city is lettered is its place in the order. (The template
+  `mods/_templates/cities_and_militia` is still written in the older shape and still says
+  otherwise in its comments; it loads, and its new town appears.)
+- The name shown is `city.<key>.name` from the localisation tables, falling back to `name`.
+
+How many names the map tries at each zoom is in `game/gui/24_workshop.json`:
+`map.city_band0_count`, `map.city_band1_count` and `map.city_band2_count` are how many cities
+from the head of the list are candidates in the three outer zoom bands (the closest band takes
+all of them), and `map.city_tier0_distance` … `map.city_tier3_distance` are where the bands
+begin. Capitals are candidates in every band.
+
+When a capital has to be found - a government moves by choice or is driven out, a country is
+born in play, a save from an older build is loaded - it goes into a city: the first written of
+the chosen region's cities standing on ground the country owns and holds. Only a region with no
+such city takes the capital under the region's own name.
+
+`map_data/townspeople/*.json` is a separate table and belongs to the map, not to the cities: a
+weight for each province, used for one thing - sharing a region's townspeople between the two
+sides when the region is divided between holders. It says how many provinces the map it was
+measured on had (`"provinces"`), and a file measured on another map is not read; a map with no
+table counts every city standing in a province as one. A mod's own `map_data/townspeople/*.json`
+are laid over the base game's province by province, so a total conversion with its own
+`provinces.png` ships its own table or none.
+
 ### Hydrography
 
 During play, `rivers.png` and `lakes.png` are authoritative. `rivers.png` has four permitted
@@ -1998,7 +2083,8 @@ for the same federal reasons - and may take some neighbours with it (`common/sec
 - The core alone is the new country's homeland. A movement's rising takes the part of its homeland
   that connects to the flashpoint, and a landless movement is revived by a secession only when
   half the people leaving live in its homeland.
-- The capital is the most populous region of the core.
+- The capital is in the most populous region of the core: the first city written
+  (`map_data/cities`) that stands there on the new country's ground.
 - A founded state's name is checked monthly. When less than `Defines.NameHoldMinimum` (0.30) of
   its people live on what the name is for - its people, its land, its region - it is renamed from
   the ground it holds (the lands in `common/naming`). The form of state follows a government that

@@ -464,7 +464,12 @@ public static partial class Movements
             // In a city, where offices are: the region's own main city, or the great city the
             // region surrounds - the Mejlis and Ichkeria sat in a field south-west of Kyiv, at
             // the middle of Kyiv oblast, with Kyiv itself twenty kilometres away.
-            var city = HeadquartersCity(campaign, region, latitude, longitude);
+            // And where the seat is the host's own capital, in that capital: an office in Beirut is
+            // in Beirut, though Damascus is a greater city and not a hundred kilometres away.
+            var host = NationOwning(campaign, region.NationMapIndex);
+            var city = host is not null && seat > 0 && seat == host.CapitalProvinceId && CapitalCore.City(host) is { } capital
+                ? capital
+                : HeadquartersCity(campaign, region, latitude, longitude);
             if (city is not null)
             {
                 (latitude, longitude) = (city.Latitude, city.Longitude);
@@ -476,6 +481,9 @@ public static partial class Movements
             nation.CapitalLatitude = latitude;
             nation.CapitalLongitude = longitude;
             nation.CapitalName = city?.Name ?? region.DisplayName;
+            // The office is in that city, and if the movement ever comes to hold the ground the
+            // city stands on, that city is its capital.
+            nation.CapitalCityId = city?.Id ?? "";
         }
         campaign.MovementRevision++;
     }
@@ -674,32 +682,34 @@ public static partial class Movements
 
     /// <summary>The province a headquarters in this region stands on: the host's capital if it is here, else the one nearest the middle.</summary>
     /// <summary>
-    /// The city a headquarters in this region stands in: the largest town of the region, or a
-    /// greater city just outside it that the region surrounds - weighed so that Kyiv beats Bila
-    /// Tserkva for an office "in Kyiv oblast". Nothing when the map has no city near.
+    /// The city a headquarters in this region stands in: the first city written of those about
+    /// the region's seat - the region's own, or one just outside it that the region surrounds.
+    /// Kyiv is not in Kyiv oblast, stands twenty kilometres from its middle and is written long
+    /// before Bila Tserkva, so an office "in Kyiv oblast" is in Kyiv. Only the leading cities of
+    /// the list are looked at (CityCatalog.LeadingCount): an office is opened in a city of some
+    /// standing. Nothing when the map has no such city near. (Where the seat is the host
+    /// country's own capital the office is in that capital, and this is not asked: see Place.)
     /// </summary>
     internal static CityDefinition HeadquartersCity(Campaign campaign, ScenarioState region, float latitude, float longitude)
     {
         var topology = campaign.ProvinceMap;
         if (topology is null || region is null) return null;
-        CityDefinition best = null;
-        var bestScore = 0.0;
-        foreach (var city in CityCatalog.All)
+        var cities = CityCatalog.All;
+        var leading = Math.Min(cities.Count, CityCatalog.LeadingCount);
+        for (var index = 0; index < leading; index++)
         {
-            if (city.Tier > 2) continue;
+            var city = cities[index];
             var dLat = city.Latitude - latitude;
+            if (MathF.Abs(dLat) > 1.6f) continue;
             var dLon = (city.Longitude - longitude) * MathF.Cos(latitude * MathF.PI / 180f);
             var distance = MathF.Sqrt(dLat * dLat + dLon * dLon);
             if (distance > 1.6f) continue;
             var province = CityCatalog.ProvinceUnder(topology, city.Latitude, city.Longitude);
             var inside = province > 0 && topology.ProvinceToState[province] == region.MapIndex;
             if (!inside && distance > 0.9f) continue;
-            var score = Math.Max(1L, city.Population) * (inside ? 1.0 : 0.6) / (1.0 + distance);
-            if (score <= bestScore) continue;
-            bestScore = score;
-            best = city;
+            return city;
         }
-        return best;
+        return null;
     }
 
     internal static int SeatOf(Campaign campaign, ScenarioState region)

@@ -656,7 +656,11 @@ public static class OrganizationDynamics
         return $"org.name.{kind}|{CapitalOf(founder)}|{CapitalOf(second)}";
     }
 
-    public static string CapitalOf(Nation nation) => string.IsNullOrWhiteSpace(nation.CapitalName) ? nation.Tag : nation.CapitalName.Replace("|", " ");
+    // By the capital city's key, not its raw name: the name is read back in the player's language
+    // (InternationalOrganizations.DisplayName), and a city's name as its file spells it is a row
+    // in neither.
+    public static string CapitalOf(Nation nation) =>
+        CapitalCore.NameKey(nation) is var capital && !string.IsNullOrWhiteSpace(capital) ? capital.Replace("|", " ") : nation.Tag;
 
     /// <summary>
     /// The neighbours of a great power that frightens them all sign a pact against it: once a

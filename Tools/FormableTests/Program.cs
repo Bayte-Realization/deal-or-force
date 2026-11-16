@@ -341,6 +341,8 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--overrun-war-only")) { OverrunWarTests.Run(); return; }
         if (args.Contains("--generals-only")) { GeneralsTests.Run(); return; }
         if (args.Length == 0) GeneralsTests.Run();
+        if (args.Contains("--cities-only")) { CityTests.Run(); return; }
+        if (args.Length == 0) CityTests.Run();
         if (args.Contains("--desertion-only")) { DesertionTests.Run(); return; }
         if (args.Length == 0) DesertionTests.Run();
         if (args.Contains("--coup-war-only")) { CoupCivilWarTests.Run(); return; }

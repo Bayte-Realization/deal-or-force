@@ -1,0 +1,39 @@
+// Deal or Force - towns that are somebody's capital and that Natural Earth has no place for.
+//
+// Written by hand, in the same shape as 00_cities.json: a name and a place, nothing else. The
+// capitals of the smallest territories (The Valley, Yaren, Mata-Utu ...) and the seats of the
+// de facto administrations of 2024 (Laiza, Pangkham, Minembwe ...), so that every capital is a
+// city of the map like any other. They come after every city of 00_cities.json in the order,
+// which is where towns of their size belong; the map still marks them, as it marks any city
+// that is a capital at the moment. Their names in each language are city.<key>.name in
+// localization/*/zz_395_capital_cities.json.
+//
+// Tools/CityCompiler does not write this file and a regeneration of 00_cities.json leaves it be.
+{
+  "the_valley_aia": {"name": "The Valley", "latitude": 18.217, "longitude": -63.0578},
+  "gustavia_blm": {"name": "Gustavia", "latitude": 17.8962, "longitude": -62.8498},
+  "saint_peter_port_ggy": {"name": "Saint Peter Port", "latitude": 49.4555, "longitude": -2.5368},
+  "saint_helier_jey": {"name": "Saint Helier", "latitude": 49.1869, "longitude": -2.1069},
+  "marigot_maf": {"name": "Marigot", "latitude": 18.0706, "longitude": -63.0847},
+  "brades_msr": {"name": "Brades", "latitude": 16.7928, "longitude": -62.2106},
+  "kingston_nfk": {"name": "Kingston", "latitude": -29.0545, "longitude": 167.9619},
+  "yaren_nru": {"name": "Yaren", "latitude": -0.5477, "longitude": 166.9209},
+  "jamestown_shn": {"name": "Jamestown", "latitude": -15.9251, "longitude": -5.718},
+  "saint_pierre_spm": {"name": "Saint-Pierre", "latitude": 46.7784, "longitude": -56.1773},
+  "philipsburg_sxm": {"name": "Philipsburg", "latitude": 18.0255, "longitude": -63.045},
+  "road_town_vgb": {"name": "Road Town", "latitude": 18.4314, "longitude": -64.6231},
+  "charlotte_amalie_vir": {"name": "Charlotte Amalie", "latitude": 18.3358, "longitude": -64.8963},
+  "mata_utu_wlf": {"name": "Mata-Utu", "latitude": -13.2825, "longitude": -176.1745},
+  "kanbalu_mmr": {"name": "Kanbalu", "latitude": 23.2, "longitude": 95.51},
+  "kyauktaw_mmr": {"name": "Kyauktaw", "latitude": 20.85, "longitude": 92.95},
+  "laiza_mmr": {"name": "Laiza", "latitude": 24.77, "longitude": 97.55},
+  "pangkham_mmr": {"name": "Pangkham", "latitude": 22.17, "longitude": 99.17},
+  "laukkai_mmr": {"name": "Laukkai", "latitude": 23.69, "longitude": 98.76},
+  "namhsan_mmr": {"name": "Namhsan", "latitude": 22.75, "longitude": 97.16},
+  "jilib_som": {"name": "Jilib", "latitude": 0.49, "longitude": 42.77},
+  "bunagana_cod": {"name": "Bunagana", "latitude": -1.28, "longitude": 29.6},
+  "mwalika_cod": {"name": "Mwalika", "latitude": 0.62, "longitude": 29.62},
+  "fataki_cod": {"name": "Fataki", "latitude": 1.95, "longitude": 30.2},
+  "minembwe_cod": {"name": "Minembwe", "latitude": -3.55, "longitude": 28.88},
+  "kauda_sdn": {"name": "Kauda", "latitude": 11.08, "longitude": 30.52}
+}

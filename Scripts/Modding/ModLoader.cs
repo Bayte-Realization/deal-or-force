@@ -210,6 +210,10 @@ public sealed class ModLoader
         HydrologyCatalog.ResetCatalog();
         MapRasterCatalog.ResetCatalog();
         TerrainCatalog.ResetCatalog();
+        // The cities and the townspeople table are map data a mod lays its own files over
+        // (ApplyMapData), so they start again from the base game's like the rest.
+        CityCatalog.Reset();
+        StatePartition.ResetTownspeople();
         Loc.ResetCatalog();
         InterfaceSkin.ResetCatalog();
         SpriteCatalog.Load();
@@ -509,7 +513,13 @@ public sealed class ModLoader
         try
         {
             var json = StructuredData.ReadJson(path);
-            if (HydrologyCatalog.LooksLikeGeoJson(json)) HydrologyCatalog.LoadGeoJson(json, package.Errors);
+            // Two folders of map_data have catalogues of their own. Their files used to fall
+            // through to the region overrides, which found nothing in them: a mod's cities and
+            // its townspeople table were read and dropped.
+            var folder = Path.GetFileName(Path.GetDirectoryName(path)) ?? "";
+            if (folder.Equals("cities", StringComparison.OrdinalIgnoreCase)) CityCatalog.Merge(json, package.Errors);
+            else if (folder.Equals("townspeople", StringComparison.OrdinalIgnoreCase)) StatePartition.MergeTownspeople(json, package.Errors);
+            else if (HydrologyCatalog.LooksLikeGeoJson(json)) HydrologyCatalog.LoadGeoJson(json, package.Errors);
             else TerritorialTopology.LoadOverrides(json, package.Errors);
         }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
@@ -974,6 +984,7 @@ public sealed class ModLoader
         {
             case "name" when value.ValueKind == JsonValueKind.String: nation.Name = value.GetString() ?? nation.Name; return true;
             case "color" when value.ValueKind == JsonValueKind.String: nation.Color = value.GetString() ?? nation.Color; return true;
+            case "capitalcity" when value.ValueKind == JsonValueKind.String: CapitalCore.Author(nation, value.GetString()); return true;
             case "capitalname" when value.ValueKind == JsonValueKind.String: nation.CapitalName = value.GetString() ?? nation.CapitalName; return true;
             // The base game's common/countries reads these two (CountryDefinitions); a mod's copy
             // of the same folder reported them as unknown fields and dropped them, so a mod could

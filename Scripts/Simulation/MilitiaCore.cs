@@ -387,7 +387,8 @@ public static class MilitiaCore
     }
 
     /// <summary>
-    /// Where a region's militia forms up: its largest town the country still holds.
+    /// Where a region's militia forms up: its first town the country still holds - the first
+    /// as the cities are written, which is from the most prominent place down.
     ///
     /// It used to be whichever of the region's provinces the map compiler happened to number
     /// first, which put militia on offshore islands, in marshes and in the corner of the region
@@ -399,21 +400,21 @@ public static class MilitiaCore
         ushort flag, ushort region)
     {
         if (topology is null || control is null) return (-1, null);
-        CityDefinition town = null;
-        var seat = -1;
-        foreach (var city in CityCatalog.All)
+        // The province under each city is worked out once per map (CityCatalog), so this is a
+        // walk down a list of numbers rather than seven thousand look-ups on the raster.
+        var cities = CityCatalog.All;
+        var under = CityCatalog.ProvincesOf(topology);
+        for (var index = 0; index < under.Length; index++)
         {
-            if (town is not null && city.Population <= town.Population) continue;
-            var province = ProvinceAt(topology, city.Latitude, city.Longitude);
-            if (province <= 0 || province >= control.Length || topology.IsWater(province)) continue;
+            var province = under[index];
+            if (province <= 0 || province >= control.Length) continue;
             if (topology.ProvinceToState[province] != region || control[province] != flag) continue;
-            town = city;
-            seat = province;
+            return (province, cities[index]);
         }
-        if (town is not null) return (seat, town);
 
         // The middle of what is still held, as a direction from the centre of the Earth, so a
         // region across the date line does not average to the far side of the planet.
+        var seat = -1;
         double x = 0, y = 0, z = 0;
         for (var province = 1; province <= topology.ProvinceCount && province < control.Length; province++)
         {
@@ -443,17 +444,6 @@ public static class MilitiaCore
         var phi = latitude * Math.PI / 180.0;
         var lambda = longitude * Math.PI / 180.0;
         return (Math.Cos(phi) * Math.Cos(lambda), Math.Cos(phi) * Math.Sin(lambda), Math.Sin(phi));
-    }
-
-    /// <summary>The province under a point of the globe, or 0 for none.</summary>
-    private static int ProvinceAt(ProvinceTopology topology, float latitude, float longitude)
-    {
-        if (topology.Width <= 0 || topology.Height <= 0) return 0;
-        var x = (int)MathF.Floor((longitude + 180f) / 360f * topology.Width);
-        var y = (int)MathF.Floor((90f - latitude) / 180f * topology.Height);
-        x = ((x % topology.Width) + topology.Width) % topology.Width;
-        y = Math.Clamp(y, 0, topology.Height - 1);
-        return topology.CellToProvince[y * topology.Width + x];
     }
 
     /// <summary>

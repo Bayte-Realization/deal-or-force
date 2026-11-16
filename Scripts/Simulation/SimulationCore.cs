@@ -2121,7 +2121,6 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("reunion")) StatePartition.Reunify(this);
             // The relations of countries with nobody left go to sleep; a restored country's wake.
             using (SimProfiler.Measure("relation dormancy")) RelationDormancy.Sweep(this);
-            using (SimProfiler.Measure("city life")) CityLife.Note(this);
 
             // And last, where each government now sits: a region ceded today takes its
             // capital with it, and the country moves to what it has left.
@@ -2372,6 +2371,10 @@ public sealed partial class Campaign
         // the map: a capital is a place on the globe rather than a region a scenario names,
         // and the regions under it can be redrawn by a war.
         LocateCapitals(preserveExisting: true);
+        // A save from before capitals were cities has them placed and not yet bound to a city.
+        // Here and only here: this is where a loaded world meets its map, and nothing that
+        // happens later in a campaign should find a placed capital and quietly move it.
+        foreach (var nation in Nations) CapitalCore.BindLoaded(this, nation);
         // Only ever from the authored world. Whether that has happened is read from the
         // world rather than remembered in a field, because a multiplayer client adopts a
         // campaign it did not create: a flag in memory says "not yet" about a world that was
@@ -2470,9 +2473,12 @@ public sealed partial class Campaign
     }
 
     /// <summary>
-    /// Find the region each capital stands in. Nearest province of the country's own ground
-    /// to the capital's coordinates, which is also how the deployment planner finds it -
-    /// a capital that has been overrun still points at the region it is in.
+    /// Find where each capital stands. A capital is a city (CapitalCore): the one the country
+    /// names when that stands on its own ground, else the city of its own nearest the capital's
+    /// coordinates - and its province and region are the ones under that city. Only where the
+    /// map has no city of the country's there does it fall back to the nearest province of the
+    /// country's own ground, which is also how the deployment planner finds it - a capital that
+    /// has been overrun still points at the region it is in.
     /// </summary>
     public void LocateCapitals(bool preserveExisting = false)
     {
@@ -2546,6 +2552,10 @@ public sealed partial class Campaign
                 bestDistance = distance;
                 best = province;
             }
+            // Into its city, which then decides the province, the point and the name.
+            if (CapitalCore.BindAtPoint(this, nation, best)) continue;
+            // No city of its own there: the nearest province, under the name it was given.
+            nation.CapitalCityId = "";
             nation.CapitalStateMapIndex = topology.ProvinceToState[best];
             nation.CapitalProvinceId = best;
             // A capital's name is a city ("Port Sudan", "Seoul"), not a region, so a name that is

@@ -277,24 +277,47 @@ public static class CountryNames
     private static IReadOnlyList<CityDefinition> _citiesFrom;
 
     /// <summary>
-    /// A country's capital in the reader's language: its own row ("capital.&lt;name&gt;"), else the
-    /// city of that name, whose translation the map already reads (city.&lt;id&gt;.name), else the
-    /// name as a key. The dossier said "Warsaw" under a map that said "Варшава", and the capital
-    /// of Guernsey stood on the Russian map as "Saint Peter Port".
+    /// A country's capital in the reader's language. A capital is a city, so this is that city's
+    /// name exactly as the map letters it (city.&lt;id&gt;.name) - the dossier said "Warsaw" under a
+    /// map that said "Варшава", and after a government had moved it said the name of a region.
+    /// With a campaign it is the city the government sits in today, which in a war may be a
+    /// temporary one. Only a capital the map has no city for goes by a name: see
+    /// <see cref="CapitalByName"/>.
     /// </summary>
     public static string Capital(Nation nation, Campaign campaign = null)
     {
         if (nation is null) return "";
-        var name = campaign is null ? nation.CapitalName : CapitalCore.EffectiveName(campaign, nation);
-        if (string.IsNullOrWhiteSpace(name)) return campaign is null ? "" : Loc.Get("No government seat");
+        if (campaign is null)
+            return CapitalCore.City(nation) is { } city ? CapitalCityName(nation, city) : CapitalByName(nation.CapitalName);
+        var seat = CapitalCore.EffectiveName(campaign, nation);
+        return string.IsNullOrWhiteSpace(seat) ? Loc.Get("No government seat") : seat;
+    }
+
+    /// <summary>
+    /// What a country calls the city its capital is: the city's name as the map letters it,
+    /// unless the country's data gave the capital a name of its own (CapitalCore.OwnName - a
+    /// mod's "capital_name": "Londinium" over London), which is then read the way a capital's
+    /// name always was.
+    /// </summary>
+    public static string CapitalCityName(Nation nation, CityDefinition city) =>
+        CapitalCore.OwnName(nation) is { } own ? CapitalByName(own) : city?.DisplayName ?? "";
+
+    /// <summary>
+    /// A capital that is not one of the map's cities, in the reader's language: its own row
+    /// ("capital.&lt;name&gt;"), else a city of that name, whose translation the map already reads,
+    /// else the name as a key. The capital of Guernsey stood on the Russian map as "Saint Peter
+    /// Port".
+    /// </summary>
+    private static string CapitalByName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "";
         if (Loc.Has("capital." + name)) return Loc.Get("capital." + name);
         var cities = CityCatalog.All;
         if (!ReferenceEquals(cities, _citiesFrom) || _citiesByName is null)
         {
+            // The first written of a name: the cities go from the most to the least prominent.
             var byName = new Dictionary<string, CityDefinition>(StringComparer.OrdinalIgnoreCase);
-            foreach (var city in cities)
-                if (!byName.TryGetValue(city.Name, out var known) || !known.IsNationalCapital && city.IsNationalCapital)
-                    byName[city.Name] = city;
+            foreach (var city in cities) byName.TryAdd(city.Name, city);
             _citiesByName = byName;
             _citiesFrom = cities;
         }
