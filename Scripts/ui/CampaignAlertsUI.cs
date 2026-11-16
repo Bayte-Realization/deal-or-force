@@ -276,7 +276,48 @@ public partial class DealOrForceGame
                     Rank = AlertListRules.Rank(alert.Group), Dot = AlertListRules.Dot(alert.Group)
                 });
             }
-        return lines;
+        return FoldAlike(lines);
+    }
+
+    /// <summary>
+    /// Two or more rows of one kind (AlertListRules.GroupKey) become one, standing where the first
+    /// of them stood: how many, and the first three by name. The full list still has each of them,
+    /// and that is where a click on the folded row goes.
+    /// </summary>
+    private List<AlertLine> FoldAlike(List<AlertLine> lines)
+    {
+        var groups = new Dictionary<string, List<AlertLine>>();
+        foreach (var line in lines)
+        {
+            var key = AlertListRules.GroupKey(line.Id, line.Rank);
+            if (key.Length == 0) continue;
+            if (!groups.TryGetValue(key, out var members)) groups[key] = members = new List<AlertLine>();
+            members.Add(line);
+        }
+        if (groups.Values.All(members => members.Count < 2)) return lines;
+
+        static string Name(AlertLine member)
+        {
+            var at = member.Caption.IndexOf(": ", StringComparison.Ordinal);
+            return at >= 0 ? member.Caption[(at + 2)..] : member.Caption;
+        }
+        var folded = new List<AlertLine>(lines.Count);
+        var done = new HashSet<string>();
+        foreach (var line in lines)
+        {
+            var key = AlertListRules.GroupKey(line.Id, line.Rank);
+            if (key.Length == 0 || groups[key].Count < 2) { folded.Add(line); continue; }
+            if (!done.Add(key)) continue;
+            var members = groups[key];
+            folded.Add(new AlertLine
+            {
+                Id = key, Category = members[0].Category, Glyph = members[0].Glyph, Rank = members[0].Rank, Dot = members[0].Dot,
+                Caption = Loc.Format("Shortages · {0}: {1}", members.Count,
+                    string.Join(", ", members.Take(3).Select(Name)) + (members.Count > 3 ? " …" : "")),
+                Body = string.Join("\n", members.Select(member => member.Caption)) + "\n\n" + Tr("Click for each of them.")
+            });
+        }
+        return folded;
     }
 
     /// <summary>
@@ -439,6 +480,8 @@ public partial class DealOrForceGame
             // The world's page, not the last rivalry looked at: closing the screen keeps the
             // selection, and on tab 5 a remembered pair would open that pair's page instead.
             case "world:tension": _conflictTab = 5; _conflictPair = -1; _conflictWar = -1; OpenConflictsScreen(); UpdateScreenButtons(); return;
+            // A folded row stands for several alerts: the full list has each of them.
+            case var group when group.StartsWith("group:", StringComparison.Ordinal): ToggleCampaignAlertList(); return;
             default: FollowCampaignAlert(id); return;
         }
     }

@@ -8,5 +8,7 @@
   "This is the most pressing thing waiting. Press to go there; the rows below list the rest.": "Самое срочное из того, что ждёт. Нажмите, чтобы перейти туда; остальное — в строках ниже.",
   "Left-click: open.": "ЛКМ — открыть.",
   "World tension {0} · {1}": "Мировая напряжённость {0} · {1}",
-  "Click for the great powers' rivalries.": "Щелчок — соперничество великих держав."
+  "Click for the great powers' rivalries.": "Щелчок — соперничество великих держав.",
+  "Shortages · {0}: {1}": "Дефициты · {0}: {1}",
+  "Click for each of them.": "Нажмите, чтобы увидеть каждый."
 }

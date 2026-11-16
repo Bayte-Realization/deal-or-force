@@ -77,6 +77,9 @@ static class AlertListTests
 
     internal static bool WorldRow(int rank) => rank is >= 0 and <= 1;
 
+    internal static string GroupKey(string id, int rank) =>
+        id is not null && id.StartsWith("shortage:", StringComparison.Ordinal) ? "group:shortage:" + rank : "";
+
     internal static string TensionDot(float tension) => tension >= 80f ? "state.critical" : tension >= 60f ? "state.warning" : "state.info";
 
     internal static int MaxRows(float metric) => float.IsFinite(metric) ? Math.Clamp((int)MathF.Round(metric), 1, 12) : 6;
@@ -101,7 +104,7 @@ static class AlertListTests
         foreach (var member in new[] { "const int Calm", "int Rank(CampaignAlertGroup group)", "(int Tier, int Deadline) Urgency(CampaignAlert alert)",
                      "string Dot(CampaignAlertGroup group)",
                      "int DefconRank(int level)", "int TensionRank(float tension)", "string TensionDot(float tension)",
-                     "bool WorldRow(int rank)",
+                     "bool WorldRow(int rank)", "string GroupKey(string id, int rank)",
                      "int MaxRows(float metric)", "(T Next, T[] Rows, int More) Arrange<T>(" })
         {
             var game = HudResourceTests.MemberText(rules, member);
@@ -111,7 +114,7 @@ static class AlertListTests
         // A rule the game does not call is a test of the test's own copy.
         var ui = Source("Scripts/ui/CampaignAlertsUI.cs");
         var members = Regex.Matches(rules, @"internal static [\w\(\), \[\]]+? (\w+)(<T>)?\(").Select(match => match.Groups[1].Value).ToList();
-        Check(members.Count == 9, $"the rules have the nine members copied above ({string.Join(", ", members)})");
+        Check(members.Count == 10, $"the rules have the ten members copied above ({string.Join(", ", members)})");
         foreach (var name in members)
             Check(ui.Contains("AlertListRules." + name + "(", StringComparison.Ordinal), $"the game calls AlertListRules.{name}");
         Check(ui.Contains("AlertListRules.Calm"), "and tells a calm world line by AlertListRules.Calm");
@@ -277,6 +280,13 @@ static class AlertListTests
         Check(!WorldRow(DefconRank(5)) && !WorldRow(DefconRank(4)) && WorldRow(DefconRank(3)) && WorldRow(DefconRank(1)) &&
               !WorldRow(TensionRank(20f)) && !WorldRow(TensionRank(45f)) && WorldRow(TensionRank(60f)) && WorldRow(TensionRank(90f)),
             "the world takes a row among the alerts only from DEFCON 3 and from \"dangerous\" tension; calmer readings live on the date plate");
+        Check(GroupKey("shortage:Lithium", 1) == GroupKey("shortage:Rubber", 1) && GroupKey("shortage:Lithium", 1).Length > 0 &&
+              GroupKey("shortage:Lithium", 0) != GroupKey("shortage:Rubber", 1) && GroupKey("war:3", 1) == "" && GroupKey("world:defcon", 0) == "" &&
+              GroupKey(null, 0) == "",
+            "shortages of one urgency are one kind of row; an urgent one is not folded into the mild, and nothing else is folded");
+        Check(lines.Contains("return FoldAlike(lines);") &&
+              Source("Scripts/ui/CampaignAlertsUI.cs").Contains("case var group when group.StartsWith(\"group:\", StringComparison.Ordinal): ToggleCampaignAlertList(); return;"),
+            "the list folds rows of one kind into one, and a click on the folded row opens the full list where each still stands");
         var strip = Source("Scripts/ui/WorldStripUI.cs");
         var plate = Source("Scripts/ui/DatePlateUI.cs");
         Check(plate.Contains("BuildWorldStrip(stack);") && strip.Contains("OpenDefconOverview();") && strip.Contains("OpenConflictsScreen();") &&
