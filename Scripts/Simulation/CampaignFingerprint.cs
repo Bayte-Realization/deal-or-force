@@ -1050,6 +1050,16 @@ public static class CampaignFingerprint
             }
             Mix(state.RememberedOwner); Mix(state.SettledBorderDays); Mix(state.LastBorderReviewDay);
             MixFloat(state.BorderHabit);
+            // What conquered ground has come to accept and how its last rising ended, and whether it
+            // governs itself (ConquestAcceptance, RisingAftermath, RegionalAutonomy). Mixed only when
+            // set, so a save from before they existed hashes as it did.
+            if (state.Acceptance != 0f || state.ExhaustedUntilDay != -1 || state.AutonomousSinceDay != -1 ||
+                state.AutonomyRevokedDay != -1)
+            {
+                MixText("conquest_aftermath");
+                MixFloat(state.Acceptance); Mix(state.ExhaustedUntilDay);
+                Mix(state.AutonomousSinceDay); Mix(state.AutonomyRevokedDay);
+            }
             // The age structure is authoritative, not decoration: the young share sets how many of
             // the country's own children are born, the old share how many of them die, and both
             // decide who arrives and which culture a region ends up counted under (DemographicCycle).

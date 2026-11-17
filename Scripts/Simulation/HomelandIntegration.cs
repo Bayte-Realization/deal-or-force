@@ -61,7 +61,7 @@ public static class HomelandIntegration
     {
         if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(HomelandIntegration))) yield break;
         var d = c.Defines;
-        if (d.HomelandIntegrationYears <= 0 && d.HomelandFadeYears <= 0) yield break;
+        if (d.HomelandIntegrationYears <= 0 && d.HomelandFadeYears <= 0 && d.AcceptanceWeekly <= 0f) yield break;
         var owners = c.NationsByMapIndex();
         var scanned = 0;
         foreach (var region in c.States)
@@ -90,11 +90,14 @@ public static class HomelandIntegration
     private static void Integrate(Campaign c, Nation owner, ScenarioState region, int heldDays)
     {
         var d = c.Defines;
-        if (d.HomelandIntegrationYears <= 0 || heldDays < d.HomelandIntegrationYears * 365) return;
+        // A region whose people have fully accepted the state (ConquestAcceptance) is home whatever
+        // the calendar says: acceptance is the years of quiet, counted where they actually passed.
+        var accepted = region.Acceptance >= 1f;
+        if (!accepted && (d.HomelandIntegrationYears <= 0 || heldDays < d.HomelandIntegrationYears * 365)) return;
         if (TerritorialClaims.TitleOf(c, owner, region) == TerritorialTitle.Homeland) return;
         if (owner.RenouncedTerritoryOrigins.Contains(TerritorialClaims.Origin(region))) return;
         var own = 1f - EconomySystem.ForeignShare(region, owner.Tag);
-        var settled = own >= d.HomelandIntegrationOwnShare ||
+        var settled = accepted || own >= d.HomelandIntegrationOwnShare ||
                       heldDays >= 2 * d.HomelandIntegrationYears * 365 && region.Radicalism < d.HomelandIntegrationCalmRadicalism;
         if (!settled) return;
         if (!c.Homelands.TryGetValue(owner.Id, out var home)) c.Homelands[owner.Id] = home = new List<int>();

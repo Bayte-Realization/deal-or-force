@@ -112,7 +112,7 @@ public static class CultureUnion
         if (provinces.Count == 0) return false;
 
         var place = partner.DisplayName;
-        StatePartition.Annex(c, provinces, initiator, asConquest: false);
+        StatePartition.Annex(c, provinces, initiator, asConquest: false, byConsent: true);
         c.Fallen.Add(partner.Id);
         partner.DecisionAvailableDay.Clear();
         initiator.DecisionAvailableDay.Remove(CooldownKey(initiator.Id));

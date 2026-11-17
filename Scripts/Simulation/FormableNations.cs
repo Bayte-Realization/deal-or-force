@@ -440,6 +440,62 @@ public static class FormableNations
         return people;
     }
 
+    /// <summary>
+    /// A proclaimed union owns the peoples it unites.
+    ///
+    /// Proclaiming Yugoslavia over land taken by war left Croats, Bosniaks, Slovenes and Macedonians
+    /// minorities of it - the catalogue still said Serbia was for Serbs - so every one of their regions
+    /// was foreign ground, strained the empire, and fed its radicalism; a union only ever made its
+    /// peoples its own when partners joined it peacefully (PeacefulFormation). The union's peoples
+    /// are the ones it names (EligibleCultures), or else the peoples of the countries it requires;
+    /// of those, each that is the largest people of at least one region the state holds inside the
+    /// union's territory is declared its own, and those regions become its homeland. A people the
+    /// union does not name - Bulgarians, Albanians for Yugoslavia - stays foreign, and so does its
+    /// ground: proclaiming a state does not make conquest of a third country home.
+    /// </summary>
+    internal static void DeclareUnionPeoples(Campaign campaign, Nation nation, FormableNation d)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null || nation is null || d is null) return;
+        var union = new List<string>();
+        void Name(string culture)
+        {
+            if (!string.IsNullOrWhiteSpace(culture) && !ContainsIgnoreCase(union, culture)) union.Add(culture);
+        }
+        if (d.EligibleCultures.Length > 0) foreach (var culture in d.EligibleCultures) Name(culture);
+        else foreach (var tag in d.RequiredTags) foreach (var culture in DemographyCatalog.PrimaryCultures(tag)) Name(culture);
+        if (union.Count == 0) return;
+        // The regions the state holds inside the territory, in map order so every machine agrees.
+        var regions = new SortedDictionary<int, ScenarioState>();
+        foreach (var province in Land(campaign, nation, d))
+        {
+            var index = map.ProvinceToState[province];
+            if (index == 0 || regions.ContainsKey(index)) continue;
+            if (campaign.StateByMapIndex(index) is { } region && region.NationMapIndex == nation.MapIndex &&
+                !region.Unclaimed && region.Population > 0)
+                regions[index] = region;
+        }
+        if (nation.FoundedCultures.Count == 0) nation.FoundedCultures.AddRange(DemographyCatalog.PrimaryCultures(nation.Tag));
+        foreach (var region in regions.Values)
+        {
+            var cultures = EconomySystem.Cultures(region);
+            if (cultures.Count == 0) continue;
+            var majority = cultures[0].Culture;
+            if (ContainsIgnoreCase(union, majority) && !ContainsIgnoreCase(nation.FoundedCultures, majority))
+                nation.FoundedCultures.Add(majority);
+        }
+        if (nation.FoundedCultures.Count > 0) DemographyCatalog.Declare(nation.Tag, nation.FoundedCultures);
+        if (!campaign.Homelands.TryGetValue(nation.Id, out var home)) campaign.Homelands[nation.Id] = home = new List<int>();
+        foreach (var region in regions.Values)
+        {
+            var cultures = EconomySystem.Cultures(region);
+            if (cultures.Count == 0 || !DemographyCatalog.IsPrimary(nation.Tag, cultures[0].Culture)) continue;
+            if (TerritorialClaims.TitleOf(campaign, nation, region) == TerritorialTitle.Homeland) continue;
+            home.Add(region.MapIndex);
+            campaign.HomelandChanges++;
+        }
+    }
+
     /// <summary>The land provinces of a formable's foundation territory, for the map.</summary>
     public static int[] Land(Campaign campaign, Nation nation, FormableNation d)
     {
@@ -789,6 +845,8 @@ public sealed class FormNationCommand : ICampaignCommand
         nation.FormedNationId = d.Id;
         nation.FormedNationDay = campaign.ElapsedDays;
         FormableRestorations.Invalidate(campaign);
+        // A union is for the peoples it unites, before its cohesion is reckoned from them.
+        if (string.IsNullOrEmpty(d.Restores)) FormableNations.DeclareUnionPeoples(campaign, nation, d);
         // How well the proclaimed state holds together starts here: one people is one country, and
         // every people after that is a promise to be kept (UnionCohesion).
         nation.UnionCohesion = UnionCohesion.Start(campaign, nation, d);

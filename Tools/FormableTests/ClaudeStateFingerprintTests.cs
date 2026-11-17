@@ -119,14 +119,25 @@ public static class ClaudeStateFingerprintTests
         // 2 November: MergeFleetsCommand and SplitFleetCommand joined the navy feature table.
         // 10 November: SeaLiftCommand joined it too (0xD2110AF9B5F9FA1A -> 0x2158CC78B911DB8A);
         // removing exactly that binding restores the previous value.
-        Check(fixture == 0x2158CC78B911DB8AUL,
+        // 17 November: GrantRegionalAutonomyCommand and RevokeRegionalAutonomyCommand joined the
+        // domestic_crises feature table (0x2158CC78B911DB8A -> 0x340561118E3ACD50). The regional
+        // fields the same slice added (acceptance, exhaustion, autonomy) are mixed only when set, and
+        // this fixture has no regions; removing exactly the two bindings restores the 10 November value.
+        Check(fixture == 0x340561118E3ACD50UL,
             $"registered land arrangement metadata retains the recorded golden fingerprint (got 0x{fixture:X16})");
+        var withoutAutonomy = Fixture();
+        WithoutAutonomy(withoutAutonomy);
+        var withoutAutonomyPrint = CampaignFingerprint.Of(withoutAutonomy);
+        Check(withoutAutonomyPrint == 0x2158CC78B911DB8AUL,
+            $"and without the two regional autonomy bindings it is the 10 November golden (got 0x{withoutAutonomyPrint:X16})");
         var withoutSeaLift = Fixture();
+        WithoutAutonomy(withoutSeaLift);
         withoutSeaLift.Defines.FeatureCommands.Remove("SeaLiftCommand");
         var withoutSeaLiftPrint = CampaignFingerprint.Of(withoutSeaLift);
         Check(withoutSeaLiftPrint == 0xD2110AF9B5F9FA1AUL,
             $"and without the SeaLiftCommand binding it is the previous golden (got 0x{withoutSeaLiftPrint:X16})");
         var beforeLand = Fixture();
+        WithoutAutonomy(beforeLand);
         beforeLand.Defines.Features.Remove("land_arrangements");
         beforeLand.Defines.FeatureCommands.Remove("LandArrangementCommand");
         beforeLand.Defines.FeatureCommands.Remove("MergeFleetsCommand"); beforeLand.Defines.FeatureCommands.Remove("SplitFleetCommand");
@@ -140,6 +151,7 @@ public static class ClaudeStateFingerprintTests
         Check(beforeLandPrint == 0xE72B66556F67D038UL,
             $"removing exactly the land arrangement registrations restores the golden without them (got 0x{beforeLandPrint:X16})");
         var legacyMetadata = Fixture();
+        WithoutAutonomy(legacyMetadata);
         legacyMetadata.Defines.Features.Remove("land_arrangements");
         legacyMetadata.Defines.FeatureCommands.Remove("LandArrangementCommand");
         legacyMetadata.Defines.FeatureCommands.Remove("MergeFleetsCommand"); legacyMetadata.Defines.FeatureCommands.Remove("SplitFleetCommand");
@@ -158,6 +170,12 @@ public static class ClaudeStateFingerprintTests
         DictionaryOrderIsNotAuthoritative();
         CompactPersistenceRetainsState();
         HashingDoesNotConsumeRandomness();
+    }
+
+    private static void WithoutAutonomy(Campaign campaign)
+    {
+        campaign.Defines.FeatureCommands.Remove("GrantRegionalAutonomyCommand");
+        campaign.Defines.FeatureCommands.Remove("RevokeRegionalAutonomyCommand");
     }
 
     private static void ExistingStateValuesAreNotJustPresenceFlags()

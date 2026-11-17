@@ -68,6 +68,8 @@ public enum MoneyFlow
     /// rebuilding, capital moves and settlement, and nobody could tell what the sites themselves took.
     /// </summary>
     BuildingSites = 24,
+    /// <summary>The share of their own taxes self-governing regions keep (RegionalAutonomy).</summary>
+    RegionalAutonomy = 25,
 }
 
 public sealed partial class Nation

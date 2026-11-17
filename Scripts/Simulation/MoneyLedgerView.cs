@@ -107,6 +107,8 @@ public static class MoneyLedgerView
             "What events, decisions, policies, crisis responses and a ruler's purchases cost or brought in."),
         [MoneyFlow.LandLeases] = new(GroupBetweenStates, "Land rent received", "Land rent paid",
             "Rent for land held under a lease."),
+        [MoneyFlow.RegionalAutonomy] = new(GroupProgrammes, "", "Regional autonomy",
+            "The share of their own taxes self-governing regions keep. It ends when their autonomy is taken back."),
         [MoneyFlow.Other] = new(GroupOther, "Other receipts", "Other payments",
             "Money the treasury gained or lost this week that no line above records: a deal, a transfer, what goes with a new state."),
     };

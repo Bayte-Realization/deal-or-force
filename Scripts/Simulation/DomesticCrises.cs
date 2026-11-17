@@ -179,6 +179,8 @@ public static partial class DomesticCrises
                 // A coup is the one thing in this review that reaches beyond its own country.
                 if (ReviewPressure(c, nation, days)) alienation?.Spoil();
                 ConsiderConciliation(c, nation);
+                // The longer lever beside the season's payment: a region that runs itself.
+                RegionalAutonomy.ConsiderGrant(c, nation);
                 // The street is read weekly: a wave takes days to build, and Read walks every region.
                 if (c.Defines.ProtestsEnabled && (c.ElapsedDays + nation.Id) % 7 == 0) MassProtests.Review(c, nation, Read(c, nation), 7);
             }

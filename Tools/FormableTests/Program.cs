@@ -194,6 +194,9 @@ static class Program
         if (args.Contains("--revolt-save")) { RebellionRecoveryTests.InspectSave(args); return; }
         if (args.Contains("--revolt-recovery-only")) { RebellionRecoveryTests.Run(); return; }
         if (args.Length == 0) RebellionRecoveryTests.Run();
+        // Conquered ground, crushed risings and regional autonomy (docs/design/gameplay-2026-11-17).
+        if (args.Contains("--conquest-aftermath-only")) { ConquestAftermathTests.Run(); return; }
+        if (args.Length == 0) ConquestAftermathTests.Run();
         if (args.Contains("--paused-doctrines-only")) { PausedDoctrineTests.Run(); return; }
         if (args.Contains("--battle-orders-only")) { BattleOrderTests.Run(); return; }
         if (args.Contains("--interface-type-only")) { InterfaceTypeTests.Run(); return; }
