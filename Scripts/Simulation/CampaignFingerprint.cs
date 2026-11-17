@@ -1090,6 +1090,7 @@ public static class CampaignFingerprint
             if (group.CommandersRelieved != 0) { MixText("relieved"); Mix(group.CommandersRelieved); }
             if (group.StaffedDay >= 0) { MixText("staffed"); Mix(group.StaffedDay); }
         }
+        if (campaign.NextArmyGroupId > 0) { MixText("next_army_group"); Mix(campaign.NextArmyGroupId); }
         foreach (var army in Ordered(campaign.Armies, army => army.Id))
         {
             Mix(army.Id);

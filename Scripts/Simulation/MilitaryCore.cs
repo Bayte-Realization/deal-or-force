@@ -243,8 +243,9 @@ public sealed class CreateArmyGroupCommand : ICampaignCommand
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
         if (campaign.NationById(IssuerId) is null) return;
-        var id = campaign.ArmyGroups.Count == 0 ? 1 : campaign.ArmyGroups.Max(group => group.Id) + 1;
-        var number = campaign.ArmyGroups.Count(group => group.NationId == IssuerId) + 1;
+        // Never an id or a number a struck-off group had (Generals.NewGroupId, NextGroupNumber).
+        var number = Generals.NextGroupNumber(campaign, IssuerId);
+        var id = Generals.NewGroupId(campaign);
         campaign.ArmyGroups.Add(new ArmyGroup
         {
             Id = id,

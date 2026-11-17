@@ -154,5 +154,147 @@ static class ArmyGroupTidyTests
         }
         Check(one.ArmyGroups.Select(g => g.Id).SequenceEqual(two.ArmyGroups.Select(g => g.Id)) &&
               CampaignFingerprint.Of(one) == CampaignFingerprint.Of(two), "deterministic");
+
+        RecruitsKeepTheirHeadquarters(grace);
+        StruckIdsAreNotHandedOutAgain(grace);
+    }
+
+    /// <summary>
+    /// A country rebuilding in peace keeps the headquarters its recruits will join. Nothing puts a
+    /// new formation under a group the day it is raised - recruitment, militia, contractors and
+    /// defectors all start in none, and GroupOf runs only in battle - so before the fix the review
+    /// struck off the veteran group thirty days after its last original division died, and the
+    /// recruits' first battle founded a new "Army 1" with a fresh commander: 80 groups with a
+    /// record of victories lost that way in the owner's campaign.
+    /// </summary>
+    static void RecruitsKeepTheirHeadquarters(int grace)
+    {
+        var c = Campaign.CreateBootstrap(20261123);
+        var x = c.Nations.Where(n => !n.IsHuman && c.ArmyGroups.Count(g => g.NationId == n.Id) >= 2)
+            .OrderByDescending(n => c.Armies.Count(a => a.NationId == n.Id)).First();
+        var groups = c.ArmyGroups.Where(g => g.NationId == x.Id).OrderBy(g => g.Id).ToArray();
+        var veteran = groups[0];
+        var other = groups[1];
+        // Every division of the veteran group lost; the rest of the country's in its other group.
+        c.Armies.RemoveAll(a => a.NationId == x.Id && a.ArmyGroupId == veteran.Id);
+        foreach (var a in c.Armies.Where(a => a.NationId == x.Id)) a.ArmyGroupId = other.Id;
+        foreach (var a in c.Armies.Where(a => a.NationId != x.Id && a.ArmyGroupId == veteran.Id)) a.ArmyGroupId = -1;
+        veteran.Victories = 5;
+        var skill = veteran.StaffSkill;
+        var commander = veteran.Commander;
+        // Raised the way Recruitment raises it: answering to no group.
+        var recruit = new Army { Id = c.Armies.Max(a => a.Id) + 1, NationId = x.Id, Name = "Test recruit", Divisions = 1f };
+        Check(recruit.ArmyGroupId == -1, "a recruit is raised answering to no group");
+        c.Armies.Add(recruit);
+        var first = Review(7);
+        for (var day = first; day <= first + grace * 3; day += 7)
+        {
+            SetDay(c, day);
+            Generals.Tidy(c);
+        }
+        Check(c.ArmyGroups.Contains(veteran), $"{grace * 3} days with a recruit waiting: the veteran group is kept for it");
+        Check(Generals.GroupOf(c, recruit) == veteran && veteran.Victories == 5 && veteran.StaffSkill == skill &&
+              veteran.Commander == commander,
+            $"and the recruit's first battle puts it under {veteran.Name}, its commander and five victories intact");
+        // With nobody waiting for it any more, it goes like any empty group.
+        c.Armies.Remove(recruit);
+        var last = c.ElapsedDays;
+        for (var day = Review(last + 1); day <= last + grace + 14; day += 7)
+        {
+            SetDay(c, day);
+            Generals.Tidy(c);
+        }
+        Check(!c.ArmyGroups.Contains(veteran) && c.ArmyGroups.Contains(other),
+            "with no formation waiting, the empty group is struck off after the grace and the staffed one stays");
+
+        // A group the player made and never filled is not made a filled one by being next in line.
+        var player = c.Player;
+        // His only group, so it is the one his waiting divisions would join.
+        c.ArmyGroups.RemoveAll(g => g.NationId == player.Id);
+        foreach (var a in c.Armies.Where(a => a.NationId == player.Id)) a.ArmyGroupId = -1;
+        new CreateArmyGroupCommand { IssuerId = player.Id, Name = "Reserve" }.Apply(c);
+        var reserve = c.ArmyGroups.Last();
+        SetDay(c, Review(c.ElapsedDays + 1));
+        Generals.Tidy(c);
+        Check(c.ArmyGroups.Contains(reserve) && reserve.StaffedDay == -1,
+            "the player's unfilled group, held for his waiting divisions, still counts as never filled");
+    }
+
+    /// <summary>
+    /// An id or a name a struck-off group had is not handed out again. Ids were the highest
+    /// standing plus one: striking off the group with the highest id let the next group take it -
+    /// and with it the first commander the id draws, and any order queued for the old group. The
+    /// player's default names counted his groups, so striking one in the middle named the next
+    /// after one still standing.
+    /// </summary>
+    static void StruckIdsAreNotHandedOutAgain(int grace)
+    {
+        var c = Campaign.CreateBootstrap(20261124);
+        MapRasterCatalog.ResetCatalog(); TerrainCatalog.ResetCatalog();
+        Check(MapRasterCatalog.TryBuildProvinceTopology(WorldMapSource.States, WorldMapSource.Control,
+            WorldMapSource.Width, WorldMapSource.Height, out var map, out var message), message);
+        c.AttachProvinceTopology(map);
+        Check(c.NextArmyGroupId == 0, "a world that has struck nothing off keeps no counter");
+        var highest = c.ArmyGroups.OrderByDescending(g => g.Id).First();
+        var y = c.NationById(highest.NationId);
+        Check(!y.IsHuman, $"the highest id ({highest.Id}) is a computer country's group ({y.Tag})");
+        var struckId = highest.Id;
+        var struckCommander = highest.Commander;
+        var yGroups = c.ArmyGroups.Where(g => g.NationId == y.Id).Select(g => g.Id).ToHashSet();
+        // Its armies all destroyed: every one of its groups empties and is struck off.
+        c.Armies.RemoveAll(a => a.NationId == y.Id);
+        foreach (var a in c.Armies.Where(a => yGroups.Contains(a.ArmyGroupId))) a.ArmyGroupId = -1;
+        for (var day = Review(7); day <= Review(7) + grace + 14; day += 7) { SetDay(c, day); Generals.Tidy(c); }
+        Check(!c.ArmyGroups.Any(g => g.NationId == y.Id), $"{y.Tag}'s groups are struck off");
+        Check(c.NextArmyGroupId > struckId, $"and the counter stands past the highest id that stood ({c.NextArmyGroupId} > {struckId})");
+        // It raises an army and fights: GroupOf founds a group.
+        var raised = new Army { Id = c.Armies.Max(a => a.Id) + 1, NationId = y.Id, Name = "Raised again", Divisions = 1f };
+        c.Armies.Add(raised);
+        var founded = Generals.GroupOf(c, raised);
+        Generals.EnsureCommander(c, founded);
+        Check(founded.Id > struckId, $"the group founded for it takes a new id ({founded.Id}), not the struck-off {struckId}");
+        Check(founded.Commander != struckCommander, $"so a new officer leads it ({founded.Commander}, not {struckCommander})");
+
+        // The player's default names: the lowest number he does not have.
+        var player = c.Player;
+        for (var i = 0; i < 3; i++) new CreateArmyGroupCommand { IssuerId = player.Id }.Apply(c);
+        var made = c.ArmyGroups.Where(g => g.NationId == player.Id && g.Name.StartsWith("Army Group ")).OrderBy(g => g.Id).ToArray();
+        Check(made.Select(g => g.Name).SequenceEqual(new[] { "Army Group 1", "Army Group 2", "Army Group 3" }),
+            "three new groups are Army Group 1, 2 and 3");
+        var divisions = c.Armies.Where(a => a.NationId == player.Id).Take(3).ToArray();
+        for (var i = 0; i < 3; i++)
+            new AssignArmyGroupCommand { IssuerId = player.Id, ArmyId = divisions[i].Id, ArmyGroupId = made[i].Id }.Apply(c);
+        foreach (var a in c.Armies.Where(a => a.NationId == player.Id && a.ArmyGroupId < 0)) a.ArmyGroupId = made[0].Id;
+        var filled = Review(c.ElapsedDays + 1);
+        SetDay(c, filled); Generals.Tidy(c);
+        c.Armies.Remove(divisions[1]);
+        for (var day = Review(filled + 1); day <= filled + grace + 14; day += 7) { SetDay(c, day); Generals.Tidy(c); }
+        Check(!c.ArmyGroups.Contains(made[1]) && c.ArmyGroups.Contains(made[0]) && c.ArmyGroups.Contains(made[2]),
+            "Army Group 2 emptied and is struck off; 1 and 3 stand");
+        // An order queued for the struck-off group finds nothing; it does not land on a new one.
+        var queued = new AssignArmyGroupCommand { IssuerId = player.Id, ArmyId = divisions[0].Id, ArmyGroupId = made[1].Id };
+        new CreateArmyGroupCommand { IssuerId = player.Id }.Apply(c);
+        var next = c.ArmyGroups.Last();
+        Check(next.Name == "Army Group 2" && c.ArmyGroups.Count(g => g.NationId == player.Id && g.Name == "Army Group 3") == 1,
+            $"the next new group is named {next.Name}, not a second Army Group 3");
+        Check(next.Id != made[1].Id, "and it does not take the struck-off group's id");
+        queued.Apply(c);
+        Check(divisions[0].ArmyGroupId == made[0].Id, "an order queued for the struck-off group is refused, not applied to the new one");
+
+        // The counter is saved and fingerprinted.
+        var print = CampaignFingerprint.Of(c);
+        c.NextArmyGroupId++;
+        Check(CampaignFingerprint.Of(c) != print, "the next army group id is in the fingerprint");
+        c.NextArmyGroupId--;
+        var folder = Path.Combine(Path.GetTempPath(), "dof-army-group-ids-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            SaveSystem.Save(folder, "ids", c, "");
+            var loaded = SaveSystem.Load(folder, "ids", "");
+            Check(loaded.Success && loaded.Campaign.NextArmyGroupId == c.NextArmyGroupId,
+                $"the counter survives the save ({loaded.Campaign?.NextArmyGroupId})");
+        }
+        finally { try { Directory.Delete(folder, true); } catch { } }
     }
 }

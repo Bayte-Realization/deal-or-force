@@ -501,6 +501,14 @@ public sealed partial class Campaign
     public readonly List<ScenarioState> States = new();
     public readonly List<Army> Armies = new();
     public readonly List<ArmyGroup> ArmyGroups = new();
+    /// <summary>
+    /// The id the next army group is founded under, once one has been struck off (Generals.NewGroupId).
+    /// 0 until then: an id is the highest standing one plus one, which is all a world that only ever
+    /// adds groups needs. Kept because a group that is struck off can be the one with the highest id,
+    /// and its id handed out again would give the new group the old one's first commander (the draw
+    /// is seeded by the id) and pass it any order still queued for the old one.
+    /// </summary>
+    public int NextArmyGroupId;
     public readonly List<Fleet> Fleets = new();
     public readonly List<StrategicWar> Wars = new();
 
