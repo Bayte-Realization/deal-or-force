@@ -1,0 +1,19 @@
+// Pockets that weaken instead of dying, and fighters among their own people (StrandedGarrisons.FateLine, StoresBadge, SelectionLine; Partisans; the army panel).
+{
+  "In an enclave at peace: it is fed through the neighbour and does not go hungry": "В анклаве в мирное время: снабжается через соседа и не голодает",
+  "At today's draw the stores last {0} days.": "При нынешнем расходе запасов хватит на {0} дн.",
+  "Its country is at peace: the stores are not drawn and nothing here can destroy it.": "Страна ни с кем не воюет: запасы не тратятся, и ничто здесь её не уничтожит.",
+  "While the stores last it keeps its strength. When they run out it weakens, down to {0:P0} of its men and {1:P0} morale, and can no longer attack.": "Пока есть запасы, она не теряет сил. Когда запасы кончатся, начнёт слабеть — до {0:P0} людей и {1:P0} боевого духа — и наступать уже не сможет.",
+  "Hunger alone never destroys it: it is destroyed when an attack drives its morale to zero with no road to retreat along.": "Сам голод её не уничтожит: она погибнет, только когда противник в бою доведёт её боевой дух до нуля, а отступать будет некуда.",
+  "Going hungry: in {0} day(s) it will be too weak to attack. It weakens down to {1:P0} of its men and {2:P0} morale, and no further.": "Голодает: через {0} дн. не сможет наступать. Слабеет до {1:P0} людей и {2:P0} боевого духа, но не ниже.",
+  "Starved to its floor ({0:P0} of its men, {1:P0} morale): it defends and cannot attack, and its men are slowly deserting.": "Истощена до предела ({0:P0} людей, {1:P0} боевого духа): обороняется, наступать не может, люди понемногу разбегаются.",
+  "In a pocket: stores for {0} days": "В котле: запасов на {0} дн.",
+  "In a pocket: the stores are gone": "В котле: запасы кончились",
+  "Living off the land: the people of {0} feed {1:0.#} division(s); {2:0.#} stand here.": "Живёт за счёт населения: {0} кормит {1:0.#} див., здесь стоит {2:0.#}.",
+  "No road reaches it, and it is not cut off. Food and cartridges, no replacement equipment.": "Дороги к ней нет, но она не отрезана. Еда и патроны есть, новой техники нет.",
+  "Living off the land: food and cartridges reach it, replacement equipment does not.": "Живёт за счёт населения: еда и патроны доходят, новая техника — нет.",
+  "chronicle.fighters_went_to_ground": "{0}: разбиты, отступать некуда — {3}. {2} бойцов спрятали оружие и разошлись по домам. В плен они не попали.",
+  "chronicle.enemy_went_to_ground": "{0}: бойцы стороны «{1}» разбиты ({3}), но около {2} из них не сдались, а растворились среди населения.",
+  "chronicle.fighters_came_back": "{0}: {2} бойцов, ушедших в подполье ({3}), снова взялись за оружие.",
+  "chronicle.enemy_came_back": "{0}: бойцы стороны «{1}» снова в поле ({3}) — {2} человек, там, где не стояло охраны."
+}

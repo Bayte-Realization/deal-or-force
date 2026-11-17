@@ -133,6 +133,9 @@ public static partial class Warfare
             // counted and reported rather than quietly left in place.
             if (retreat <= 0)
             {
+                // Unless it is a rising's formation among its own people. That one has
+                // somewhere to go that is not on the map: home (Partisans.TryGoToGround).
+                if (Partisans.TryGoToGround(campaign, war, army, provinceId)) continue;
                 DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={provinceId} war={war.Id} reason=no_line_of_retreat");
                 WarLosses.Surrender(campaign, army);
                 Attrition.Destroy(campaign, army, "destroyed: cut off with no line of retreat");

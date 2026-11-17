@@ -1603,6 +1603,18 @@ public sealed partial class Campaign
                     yield return 0;
                 }
             }
+            // Fighters of a rising who scattered after a lost battle: weekly, they drift home
+            // or take the field again where nobody is standing (Partisans).
+            using (var partisans = Partisans.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("partisans")) more = partisans.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
             using (var coups = Coups.TickStages(this).GetEnumerator())
             {

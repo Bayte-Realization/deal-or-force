@@ -647,7 +647,9 @@ public static class Factions
             if (rebelStates.Any(s => TerritorialClaims.TitleOf(campaign, rebel, s) == TerritorialTitle.Homeland) &&
                 !rebelStates.Any(s => TerritorialClaims.TitleOf(campaign, parent, s) == TerritorialTitle.Homeland)) continue;
 
-            var hasDivisions = campaign.Armies.Any(a => a.NationId == rebel.Id && a.Strength > 0.05f);
+            // Nobody in the field and nobody in hiding who could take it again (Partisans).
+            var hasDivisions = campaign.Armies.Any(a => a.NationId == rebel.Id && a.Strength > 0.05f) ||
+                               Partisans.DetachmentsInHiding(campaign, rebel) > 0;
             if (hasDivisions) continue;
 
             var foreignWars = campaign.Wars.Any(w => !w.Ended && w.Involves(rebel.Id) && !w.Involves(parent.Id));
@@ -698,11 +700,22 @@ public static class Factions
         if (Of(faction) is not { Insurgency: true } &&
             !(campaign.Defines.RisingsFightOn && (faction.SecededFromId >= 0 || !string.IsNullOrEmpty(faction.FoundedInRevolt) ||
                                                   faction.Name.StartsWith("rising:", StringComparison.Ordinal)))) return false;
-        if (held >= 0.999f && faction.WarSupport <= campaign.Defines.FactionFightOnSupport * 2f) return false;
-        if (faction.WarSupport <= campaign.Defines.FactionFightOnSupport) return false;
-        var standing = 0;
+        // Its formations in the field, and the detachments it could still field from hiding: a
+        // rising whose last formation scattered into the villages this week has not given up.
+        var standing = Partisans.DetachmentsInHiding(campaign, faction);
         foreach (var army in campaign.Armies)
             if (army.NationId == faction.Id && army.Strength > 0f) standing++;
+        var enough = Math.Max(1, campaign.Defines.FactionFightOnFormations);
+        // A side that holds none of its own ground needs twice the conviction to go on - when it
+        // is down to its last two or three formations. With twice the least it fights on with,
+        // in the field or in hiding, the ordinary bar is enough: that is how a war of the weak
+        // goes on when the strong hold the towns. Under this clause alone the Arakan Army gave up
+        // with fifty-five thousand men in hiding, the ADF with seven formations in the field and
+        // HTS with eleven, each with a third of its people still for the war (SimBench --pockets,
+        // November 2026).
+        if (held >= 0.999f && standing < 2 * enough &&
+            faction.WarSupport <= campaign.Defines.FactionFightOnSupport * 2f) return false;
+        if (faction.WarSupport <= campaign.Defines.FactionFightOnSupport) return false;
         return standing >= campaign.Defines.FactionFightOnFormations;
     }
 

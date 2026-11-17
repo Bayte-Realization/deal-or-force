@@ -70,6 +70,13 @@ internal static class PocketReport
         // and ground under it did not lose a war, it lost a signature.
         public int LastFormations, LastHeld;
         public readonly Dictionary<int, (int Formations, int Held)> At = new();
+        // How each of its wars ended and what it had the day before: a side that signs a
+        // "line of contact" with an army in the field and is gone the next week did not lose
+        // a war, and the fate column alone cannot tell the two apart.
+        public int YesterdayFormations, YesterdayHeld;
+        public float YesterdaySupport;
+        public readonly HashSet<int> EndedWars = new();
+        public readonly List<string> WarEnds = new();
     }
 
     private static readonly int[] Marks = { 1, 30, 60, 180, 365, 730 };
@@ -85,7 +92,8 @@ internal static class PocketReport
         var said = new Dictionary<Army, (string Reason, bool Lost)>(ReferenceEqualityComparer.Instance);
         var held = new Dictionary<int, int>();
         var formations = new Dictionary<int, int>();
-        long cutOffDays = 0, cutOffBattleDays = 0, cutOffHungryDays = 0, armyDays = 0;
+        long cutOffDays = 0, cutOffBattleDays = 0, cutOffHungryDays = 0, armyDays = 0, forageDays = 0;
+        var foragers = new HashSet<Army>(ReferenceEqualityComparer.Instance);
 
         string KindOf(Nation nation) =>
             nation is null ? "regular" :
@@ -153,6 +161,7 @@ internal static class PocketReport
                     life.LastStrength = army.Strength;
                     life.LastOrganisation = army.Organisation;
                     armyDays++;
+                    if (army.LivingOffLand) { forageDays++; foragers.Add(army); }
 
                     var nation = c.NationById(army.NationId);
                     var onHeld = nation is not null && controllers is not null && army.ProvinceId > 0 &&
@@ -222,6 +231,19 @@ internal static class PocketReport
                     var age = c.ElapsedDays - side.BornDay;
                     var count = formations.GetValueOrDefault(nation.Id);
                     var ground = held.GetValueOrDefault(nation.MapIndex);
+                    foreach (var war in c.Wars)
+                    {
+                        if (!war.Ended || !war.Involves(nation.Id) || !side.EndedWars.Add(war.Id)) continue;
+                        var enemy = c.NationById(war.EnemyLeaderOf(nation.Id));
+                        var winner = c.NationById(war.WinnerId);
+                        side.WarEnds.Add($"war with {enemy?.Tag ?? "?"} ended day {age} ({(winner is null ? "no winner" : "won by " + winner.Tag)}; " +
+                                         $"{(war.PeaceSummary.Length > 0 ? war.PeaceSummary : war.LastNegotiation)}) " +
+                                         $"had {side.YesterdayFormations}f/{side.YesterdayHeld}p, has {count}f/{ground}p, in hiding {Partisans.Hidden(nation):N0}, " +
+                                         $"war support {nation.WarSupport:0.00} (yesterday {side.YesterdaySupport:0.00})");
+                    }
+                    side.YesterdaySupport = nation.WarSupport;
+                    side.YesterdayFormations = count;
+                    side.YesterdayHeld = ground;
                     if (Array.IndexOf(Marks, age) >= 0) side.At[age] = (count, ground);
                     if (side.FallenDay < 0 && c.Fallen.Contains(nation.Id)) side.FallenDay = age;
                     if (side.FallenDay < 0) { side.LastFormations = count; side.LastHeld = ground; }
@@ -238,6 +260,26 @@ internal static class PocketReport
                           $"were spent in a battle and {Share(cutOffHungryDays, cutOffDays)} with the stores gone");
         Console.WriteLine($"POCKETS counters: starved in pockets {Attrition.StarvedInPockets}, surrendered formations {WarLosses.SurrenderedFormations}; " +
                           string.Join(", ", StrandedGarrisons.Tally.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key} {p.Value}")));
+        // The pocket and partisan rules of 16 November 2026: who was fed by the land instead of
+        // being cut off, who scattered instead of surrendering and how many of those came back,
+        // and the pockets nobody has dealt with (a number that says the AI must learn to reduce them).
+        var old = episodes.Where(e => e.End < 0).ToList();
+        Console.WriteLine($"PARTISANS living off the land: {forageDays:N0} formation-days by {foragers.Count} formations; " +
+                          $"went to ground {Partisans.Tally.GetValueOrDefault("went_to_ground")}, came back {Partisans.Tally.GetValueOrDefault("came_back")} " +
+                          $"({Partisans.Tally.GetValueOrDefault("came_back_on_enemy_ground")} of them on ground the enemy held); " +
+                          $"in hiding at the end {c.Nations.Sum(n => (double)Partisans.Hidden(n)):N0} men of {c.Nations.Count(n => n.FightersGoneToGround.Count > 0)} sides");
+        Console.WriteLine($"POCKETS still closed at the end: {old.Count}, older than 180 days {old.Count(e => end - e.Start > 180)}, " +
+                          $"older than a year {old.Count(e => end - e.Start > 365)}; hungry among them {old.Count(e => e.HungryDays > 0)}");
+        // Whose they are and where: a pocket of a country at war is one somebody should be
+        // reducing; one of a country at peace is an enclave or a column stranded by a peace.
+        var stuck = c.Armies.Where(a => a.CutOff).GroupBy(a =>
+        {
+            var owner = c.NationById(a.NationId);
+            var flag = c.ProvinceController is { } control && a.ProvinceId > 0 && a.ProvinceId < control.Length ? control[a.ProvinceId] : (ushort)0;
+            var host = c.NationByMapIndex(flag);
+            return $"{owner?.Tag ?? "?"} {(LogisticsSystem.Besieged(c, a.NationId) ? "at war" : "at peace")} on {(host is null ? "nobody's" : host.Id == a.NationId ? "own" : host.Tag)} ground";
+        }).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).Take(8);
+        Console.WriteLine("POCKETS cut off at the end, by whose and where: " + string.Join("; ", stuck.Select(g => $"{g.Key} {g.Count()}")));
 
         Console.WriteLine("POCKETS deaths by cause (regular / rising / faction):");
         foreach (var group in all.Where(l => l.GoneDay >= 0).GroupBy(l => l.Cause).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal))
@@ -267,7 +309,11 @@ internal static class PocketReport
                               $"cut off inside 30 days {Share(cohort.Count(l => l.FirstCutDay >= 0 && l.FirstCutDay - l.BornDay <= 30), cohort.Count)}; " +
                               $"ever {Share(cut.Count, cohort.Count)}; first cut off on ground their side held {Share(cut.Count(l => l.FirstCutOnHeldGround), cut.Count)}");
             Console.WriteLine($"   of the {old60.Count} that had sixty days to live: gone by day 30 {Share(old60.Count(l => Gone(l, 30)), old60.Count)}, " +
-                              $"by day 60 {Share(old60.Count(l => Gone(l, 60)), old60.Count)}");
+                              $"by day 60 {Share(old60.Count(l => Gone(l, 60)), old60.Count)}; " +
+                              // Going to ground takes a formation off the map with six in ten of its
+                              // men alive and coming back: counted apart, so "gone" can be read both ways.
+                              $"of those by day 60, went to ground {old60.Count(l => Gone(l, 60) && l.Cause == Partisans.WentToGround)}, " +
+                              $"fell with their country {old60.Count(l => Gone(l, 60) && l.Cause == "destroyed: its country ceased to exist")}");
             var early = cohort.Where(l => l.CutAtFirstTrace).GroupBy(l => l.Tag).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).ToList();
             if (early.Count > 0)
                 Console.WriteLine("   cut off at the first trace, by side: " + string.Join(", ", early.Select(g => $"{g.Key} {g.Count()} ({g.Count(l => l.FirstCutOnHeldGround)} on its own ground)")));
@@ -316,7 +362,9 @@ internal static class PocketReport
                    side.NoGroundDay >= 0 ? $"no ground from day {side.NoGroundDay}" :
                    side.NoArmyDay >= 0 ? $"no formation from day {side.NoArmyDay}" : "standing";
         return $"{nation.Tag,-5} born {side.BornDay,4}{(side.BornFighting ? " at war" : "")} parent={parent?.Tag ?? "-",-4} {marks} {now} {fate} (age {end - side.BornDay}) {nation.Name}" +
-               (causes.Length > 0 ? $" [{causes}]" : "");
+               (causes.Length > 0 ? $" [{causes}]" : "") +
+               (Partisans.Hidden(nation) >= 1f ? $" in hiding {Partisans.Hidden(nation):N0}" : "") +
+               string.Concat(side.WarEnds.Select(line => "\n         " + line));
     }
 
     private static string Short(string cause) => cause switch
@@ -328,6 +376,9 @@ internal static class PocketReport
         "starved in a pocket under attack" => "starved under attack",
         "surrendered: a pocket out of stores" => "gave up hungry",
         "destroyed: broken in the field" => "broken in the field",
+        Attrition.BrokenInAPocket => "ground down in a pocket under attack",
+        Attrition.DesertedInAPocket => "deserted in a pocket",
+        Partisans.WentToGround => "went to ground",
         _ => cause.StartsWith("militia gone home", StringComparison.Ordinal) ? "militia home"
             : cause.StartsWith("left the list", StringComparison.Ordinal) ? "merged" : cause
     };

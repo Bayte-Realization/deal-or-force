@@ -12,10 +12,11 @@ using DealOrForce.Simulation;
 /// region (Corsica) is the case with no road home: those who leave go by sea.
 ///
 /// --pocket-stores-only: a Russian formation holding a province deep inside Ukraine. It lives off
-/// the region's stores before it starves; more roads and longer on the ground mean more stores;
-/// an air bridge stretches them; with the stores gone and nobody coming it surrenders and the
-/// ground goes back; a pocket the computer runs breaks out toward friendly ground when its
-/// stores run low, and holds while relief is fighting its way toward it.
+/// the region's stores before it goes hungry; more roads and longer on the ground mean more
+/// stores; an air bridge stretches them; with the stores gone it weakens and stays (it gives up
+/// by a roll only under a mod's rule, and then the ground goes back); a pocket the computer runs
+/// breaks out toward friendly ground when its stores run low, and holds while relief is fighting
+/// its way toward it.
 /// </summary>
 static class StrandedGarrisonTests
 {
@@ -276,7 +277,18 @@ static class StrandedGarrisonTests
         Check(!hungryWhileStored, "while the stores last the formation neither goes hungry nor wastes away");
         Check(days >= (int)stores - 1 && held.PocketStores == 0f, "the stores last about as long as they were counted");
         for (var extra = 0; extra < 4; extra++) { SetDay(c, ++days); LogisticsSystem.Tick(c); Attrition.Tick(c); }
-        Check(held.DaysCutOff > 0 && held.Strength < strengthBefore, "once they are gone it starts to starve");
+        Check(held.DaysCutOff > 0 && held.Strength < strengthBefore, "once they are gone it starts to go hungry and weaken");
+        // To a floor, and no further (the rule of 16 November 2026).
+        var floorDay = days;
+        var probe = new Army { Strength = held.Strength, Organisation = held.Organisation, DaysCutOff = held.DaysCutOff };
+        for (var extra = 0; extra < 150; extra++) { SetDay(c, ++days); LogisticsSystem.Tick(c); Attrition.Tick(c); }
+        Console.WriteLine($"  150 more hungry days: strength {probe.Strength:0.00} -> {held.Strength:0.00}, morale {held.Organisation:0.00}, supply {held.SupplyLevel:0.00}");
+        Check(c.Armies.Contains(held) && MathF.Abs(held.Strength - c.Defines.PocketHungerStrengthFloor) < 0.001f &&
+              held.Organisation >= c.Defines.PocketHungerOrganisationFloor - 0.001f &&
+              MathF.Abs(held.SupplyLevel - c.Defines.PocketHungerSupplyFloor) < 0.001f,
+            "hunger takes it down to its floor and leaves it standing there");
+        held.Strength = strengthBefore - 0.1f; held.Organisation = 1f; held.SupplyLevel = 0.75f; held.DaysCutOff = 0;
+        days = floorDay;
 
         // --- an air bridge stretches them
         held.PocketStores = 10f; held.DaysCutOff = 0;
@@ -295,10 +307,23 @@ static class StrandedGarrisonTests
         }
         else Check(false, "an air formation type with the reach to fly to the pocket exists");
 
-        // --- with the stores gone and nobody coming, it surrenders and the ground goes back
+        // --- with the stores gone and nobody coming it does NOT give up of its own accord: the
+        // shipped chance is nothing (a pocket "dying by itself" is what the rule was changed to
+        // stop, 16 November 2026). Sixty days of the surrender pass leave it standing.
         held.PocketStores = 0f; held.DaysCutOff = c.Defines.PocketSurrenderHungryDays; held.ReliefDistance = -1;
         held.Strength = 0.8f;
         var surrendered = WarLosses.SurrenderedFormations;
+        for (var quiet = 0; quiet < 60; quiet++)
+        {
+            SetDay(c, ++days);
+            held.DaysCutOff++;
+            StrandedGarrisons.Tick(c);
+        }
+        Check(c.Armies.Contains(held) && WarLosses.SurrenderedFormations == surrendered && ctrl[deep] == rus.MapIndex,
+            "a pocket out of stores with nobody coming does not surrender by itself, and keeps its ground");
+        // --- under a mod's rule that restores the roll, it surrenders and the ground goes back
+        c.Defines.PocketSurrenderDailyChance = 0.12f;
+        held.DaysCutOff = c.Defines.PocketSurrenderHungryDays;
         var waited = 0;
         while (c.Armies.Contains(held) && waited < 60)
         {
@@ -308,8 +333,9 @@ static class StrandedGarrisonTests
         }
         Console.WriteLine($"  out of stores: surrendered after {waited} more days");
         Check(!c.Armies.Contains(held) && WarLosses.SurrenderedFormations == surrendered + 1,
-            "a pocket out of stores with nobody coming surrenders");
+            "with the surrender roll switched back on, a pocket out of stores with nobody coming surrenders");
         Check(ctrl[deep] == ukr.MapIndex, "and the province it held goes back to Ukraine");
+        c.Defines.PocketSurrenderDailyChance = 0f;
 
         // --- breakout toward friends, and holding while relief is on its way. Russia's own
         // formations at the front are taken off so that "relief is coming" is the case's to set.

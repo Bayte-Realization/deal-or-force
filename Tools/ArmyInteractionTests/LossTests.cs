@@ -58,15 +58,25 @@ static class LossTests
         Check(Captured() > 0f && Killed() > 0f && WarLosses.HeldFrom(war, rus.Id) > 0f,
             "a starving pocket's losses are split into killed and captured, and the captured are held");
 
-        // --- B: the pocket collapses, and what is left of it surrenders --------------------
+        // --- B: hunger does not finish a pocket; the enemy does, and takes what is left ----
+        // Until 16 November 2026 this case let a pocket starve from just over the burial
+        // threshold to under it and checked that it was removed. Hunger now stops at a floor
+        // (PocketHungerStrengthFloor), so the same two days cost such a remnant nothing - and
+        // the prisoners this case is really about are counted when a battle grinds it down.
         army.Strength = c.Defines.DivisionBrokenStrength + 0.0005f;
         army.Recovering = 1500f;
         if (russiaAttacks) war.AttackerWounded += 1500f; else war.DefenderWounded += 1500f;
         var heldBefore = WarLosses.HeldFrom(war, rus.Id);
+        var remnant = army.Strength;
+        for (var hour = 0; hour < 48 && c.Armies.Contains(army); hour++) Attrition.Tick(c);
+        Check(c.Armies.Contains(army) && army.Strength == remnant && WarLosses.HeldFrom(war, rus.Id) == heldBefore,
+            "hunger alone does not finish off a pocket that is already under its hunger floor");
+        army.BattleId = 424242; // under attack: the fire that takes it under the threshold is the enemy's
+        army.Strength = c.Defines.DivisionBrokenStrength - 0.0005f;
         for (var hour = 0; hour < 48 && c.Armies.Contains(army); hour++) Attrition.Tick(c);
         var surrendered = WarLosses.HeldFrom(war, rus.Id) - heldBefore;
-        Console.WriteLine($"  the pocket collapsed: {surrendered:N0} more prisoners (its wounded among them)");
-        Check(!c.Armies.Contains(army), "a pocket that starves down to nothing is removed");
+        Console.WriteLine($"  the pocket was ground down in a battle: {surrendered:N0} more prisoners (its wounded among them)");
+        Check(!c.Armies.Contains(army), "a pocket ground down to nothing in a battle is removed");
         Check(surrendered >= 1500f, "a collapsed pocket's survivors and its wounded are taken prisoner, not lost from the count");
 
         // --- C: an exchange, one for one ---------------------------------------------------

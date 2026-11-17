@@ -1487,6 +1487,10 @@ public static partial class AiStatecraft
         var side = new HashSet<int>(war.Side(attackers));
         foreach (var army in campaign.Armies)
             if (side.Contains(army.NationId)) return false;
+        // Nor fighters who scattered and can still take the field (Partisans): a rising with
+        // no formation on the map and a detachment's worth of rifles hidden is not overrun.
+        foreach (var id in side)
+            if (Partisans.DetachmentsInHiding(campaign, campaign.NationById(id)) > 0) return false;
         for (var province = 1; province < control.Length; province++)
             if (control[province] == own) return false;
         return true;

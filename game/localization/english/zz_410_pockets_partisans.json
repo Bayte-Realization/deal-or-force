@@ -1,0 +1,19 @@
+// Pockets that weaken instead of dying, and fighters among their own people (StrandedGarrisons.FateLine, StoresBadge, SelectionLine; Partisans; the army panel).
+{
+  "In an enclave at peace: it is fed through the neighbour and does not go hungry": "In an enclave at peace: it is fed through the neighbour and does not go hungry",
+  "At today's draw the stores last {0} days.": "At today's draw the stores last {0} days.",
+  "Its country is at peace: the stores are not drawn and nothing here can destroy it.": "Its country is at peace: the stores are not drawn and nothing here can destroy it.",
+  "While the stores last it keeps its strength. When they run out it weakens, down to {0:P0} of its men and {1:P0} morale, and can no longer attack.": "While the stores last it keeps its strength. When they run out it weakens, down to {0:P0} of its men and {1:P0} morale, and can no longer attack.",
+  "Hunger alone never destroys it: it is destroyed when an attack drives its morale to zero with no road to retreat along.": "Hunger alone never destroys it: it is destroyed when an attack drives its morale to zero with no road to retreat along.",
+  "Going hungry: in {0} day(s) it will be too weak to attack. It weakens down to {1:P0} of its men and {2:P0} morale, and no further.": "Going hungry: in {0} day(s) it will be too weak to attack. It weakens down to {1:P0} of its men and {2:P0} morale, and no further.",
+  "Starved to its floor ({0:P0} of its men, {1:P0} morale): it defends and cannot attack, and its men are slowly deserting.": "Starved to its floor ({0:P0} of its men, {1:P0} morale): it defends and cannot attack, and its men are slowly deserting.",
+  "In a pocket: stores for {0} days": "In a pocket: stores for {0} days",
+  "In a pocket: the stores are gone": "In a pocket: the stores are gone",
+  "Living off the land: the people of {0} feed {1:0.#} division(s); {2:0.#} stand here.": "Living off the land: the people of {0} feed {1:0.#} division(s); {2:0.#} stand here.",
+  "No road reaches it, and it is not cut off. Food and cartridges, no replacement equipment.": "No road reaches it, and it is not cut off. Food and cartridges, no replacement equipment.",
+  "Living off the land: food and cartridges reach it, replacement equipment does not.": "Living off the land: food and cartridges reach it, replacement equipment does not.",
+  "chronicle.fighters_went_to_ground": "{0}: beaten in {3} with no road out, {2} fighters hid their rifles and went home. They are nobody's prisoners.",
+  "chronicle.enemy_went_to_ground": "{0}: the fighters of {1} were beaten in {3} - and about {2} of them scattered among the people instead of surrendering.",
+  "chronicle.fighters_came_back": "{0}: {2} fighters who had gone to ground in {3} have taken up arms again.",
+  "chronicle.enemy_came_back": "{0}: the fighters of {1} are in the field again in {3} - {2} of them, where nobody was standing guard."
+}

@@ -1112,9 +1112,13 @@ public static partial class Warfare
                 if (army.Organisation <= 0.005f &&
                     WarCoalition.SpreadRetreatProvince(campaign, war, army, battle.ProvinceId, beaten: true) <= 0)
                 {
-                    DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
-                    WarLosses.Surrender(campaign, army);
-                    Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
+                    // A rising's formation among its own people scatters instead (Partisans).
+                    if (!Partisans.TryGoToGround(campaign, war, army, battle.ProvinceId))
+                    {
+                        DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
+                        WarLosses.Surrender(campaign, army);
+                        Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
+                    }
                     defending.RemoveAt(i);
                     battle.Defenders.Remove(army.Id);
                 }
@@ -1504,9 +1508,12 @@ public static partial class Warfare
                 if (army.Organisation <= 0.005f &&
                     WarCoalition.SpreadRetreatProvince(campaign, war, army, battle.ProvinceId, beaten: true) <= 0)
                 {
-                    DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
-                    WarLosses.Surrender(campaign, army);
-                    Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
+                    if (!Partisans.TryGoToGround(campaign, war, army, battle.ProvinceId))
+                    {
+                        DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
+                        WarLosses.Surrender(campaign, army);
+                        Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
+                    }
                     defending.RemoveAt(i);
                     battle.Defenders.Remove(army.Id);
                     DefenderLine.Remove(army);

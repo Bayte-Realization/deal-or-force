@@ -90,11 +90,45 @@ public sealed partial class Defines
     public int PocketReliefRadius { get; set; } = 2;
 
     /// <summary>
-    /// When a pocket gives up: after this many days with the stores gone, a formation with no
-    /// relief coming surrenders at this chance a day, rising each further week.
+    /// When a pocket gives up of its own accord: after this many days with the stores gone, a
+    /// formation with no relief coming surrenders at this chance a day, rising each further week.
+    /// The chance is nothing as shipped. A roll that removes a formation nobody has attacked is
+    /// the pocket "dying by itself" a player objected to (16 November 2026); the pass stays for a
+    /// mod that wants garrisons to give up, and for a negotiated surrender to be built on.
     /// </summary>
     public int PocketSurrenderHungryDays { get; set; } = 10;
-    public float PocketSurrenderDailyChance { get; set; } = 0.12f;
+    public float PocketSurrenderDailyChance { get; set; } = 0f;
+
+    /// <summary>
+    /// How far hunger can take a pocket, and no further: the strength, the organisation and the
+    /// supply a formation with no stores left settles at. Below these only an enemy takes it -
+    /// a battle spends its organisation to nothing and it is destroyed where it stands - or,
+    /// over years, its own men walking away (<see cref="PocketHungerDesertionWeekly"/>).
+    ///
+    /// The strength floor sits above PocketResistanceMinStrength, so a starved pocket still has
+    /// the right to fight to the end, and far above DivisionBrokenStrength, where a formation is
+    /// buried. The supply floor is what is found, bartered and taken from the dead: under the
+    /// 0.20 an assault needs (AssaultReadiness), so a hungry pocket defends and does not attack.
+    /// </summary>
+    public float PocketHungerStrengthFloor { get; set; } = 0.35f;
+    public float PocketHungerOrganisationFloor { get; set; } = 0.25f;
+    public float PocketHungerSupplyFloor { get; set; } = 0.15f;
+
+    /// <summary>
+    /// How much of an ordinary day's rest a cut-off formation gets: with stores it comes round
+    /// after a beaten-off assault at half the pace of a supplied one, without them at a quarter,
+    /// and never above the ceiling its hungry days have set (LogisticsSystem.HoldCauldron).
+    /// </summary>
+    public float PocketRecoveryWithStores { get; set; } = 0.5f;
+    public float PocketRecoveryHungry { get; set; } = 0.25f;
+
+    /// <summary>
+    /// The share of its men a pocket on the hunger floor loses each week on top of ordinary
+    /// desertion, with no floor of its own. It is not how a pocket is beaten - from the floor to
+    /// nothing takes about two years, and wars end sooner - it is what keeps a pocket everybody
+    /// forgot from standing on the map for ever.
+    /// </summary>
+    public float PocketHungerDesertionWeekly { get; set; } = 0.015f;
 
     /// <summary>
     /// Forward depots (LogisticsSystem.ForwardDepot): the share of an enemy region's land a
@@ -148,8 +182,10 @@ public sealed partial class Army
 /// or air when none does, with men and heavy equipment lost on the way. The rest dig in and hold
 /// their province as a pocket of resistance. A pocket lives off what was stockpiled in the
 /// region - weeks, more for a region with roads, barracks and towns - stretched by an air bridge
-/// and by a held port or town; it can be relieved, it can break out, and when the stores are gone
-/// and nobody is coming it surrenders. The same rules for every country, played or not.
+/// and by a held port or town; it can be relieved and it can break out. When the stores are gone
+/// it goes hungry and weakens, to a floor (PocketHunger*Floor); it does not give up by a roll of
+/// the dice and it does not waste to nothing. A pocket ends when it is relieved, when it walks
+/// out, or when somebody attacks it and wins. The same rules for every country, played or not.
 /// </summary>
 public static class StrandedGarrisons
 {
@@ -547,6 +583,8 @@ public static class StrandedGarrisons
     /// Daily: a pocket whose stores are gone, with nobody coming and no road it is taking home,
     /// surrenders - sooner the longer it has gone hungry, the more shaken it is and while it is
     /// being attacked. Only at war; a formation stranded in peacetime has nobody to give up to.
+    /// With <see cref="Defines.PocketSurrenderDailyChance"/> at nothing, as shipped, no roll is
+    /// ever under the chance and nobody gives up here; the relieved holdouts are still released.
     /// </summary>
     public static void Tick(Campaign c)
     {
@@ -636,7 +674,10 @@ public static class StrandedGarrisons
     {
         if (army is null || !army.CutOff || c is not null && !c.Defines.StrandedGarrisonsEnabled) return "";
         string head;
-        if (army.PocketStores > 0f)
+        var atPeace = c is not null && !LogisticsSystem.Besieged(c, army.NationId);
+        if (atPeace)
+            head = Loc.Get("In an enclave at peace: it is fed through the neighbour and does not go hungry");
+        else if (army.PocketStores > 0f)
             head = Loc.Format("In a pocket: {0} days of stores left", (int)MathF.Ceiling(army.PocketStores));
         else if (army.PocketStores == 0f)
             head = Loc.Format("In a pocket: the stores are gone, {0} days hungry", army.DaysCutOff);
@@ -648,10 +689,89 @@ public static class StrandedGarrisons
                 ? Loc.Get(", cut off together with a large part of the country.")
                 : Loc.Get(", no friendly ground within reach.");
         var line = head + relief;
+        // The stores are counted in quiet days. A day of fighting eats nearly two and an air
+        // bridge stretches them, so when the two numbers part the one that matters is said.
+        if (c is not null && !atPeace && army.PocketStores > 0f && StoresDaysLeft(c, army) is var left &&
+            left != (int)MathF.Ceiling(army.PocketStores))
+            line += " " + Loc.Format("At today's draw the stores last {0} days.", left);
         if (army.HoldoutSinceDay >= 0)
             line = Loc.Get("Holding out behind the rising's lines.") + " " + line;
         if (army.BreakingOut) line += " " + Loc.Get("Breaking out toward friendly ground.");
         return line;
+    }
+
+    /// <summary>
+    /// Days the stores will last at what the formation is drawing today: fewer in a battle,
+    /// more under an air bridge or beside a held port or town. Nothing when there are none. A read.
+    /// </summary>
+    public static int StoresDaysLeft(Campaign c, Army army)
+    {
+        if (c is null || army is null || !army.CutOff || army.PocketStores <= 0f) return 0;
+        return Math.Max(1, (int)MathF.Ceiling(army.PocketStores / MathF.Max(0.05f, DailyDraw(c, army))));
+    }
+
+    /// <summary>How loudly a stores badge speaks: not at all, a warning, or the worst there is.</summary>
+    public const int BadgeNone = 0, BadgeWarning = 1, BadgeNegative = 2;
+
+    /// <summary>
+    /// The number beside a cut-off division's mark in the roster: the days its stores will last
+    /// at today's draw, and a plain nought, in the colour of bad news, once they are gone.
+    /// Empty for a formation that is not cut off. The stores were always counted; nobody could
+    /// see them, so a pocket read as a formation that might vanish on any morning. A read.
+    /// </summary>
+    public static (string Text, int Severity) StoresBadge(Campaign c, Army army)
+    {
+        if (army is null || !army.CutOff) return ("", BadgeNone);
+        if (army.PocketStores > 0f)
+            return (StoresDaysLeft(c, army).ToString(System.Globalization.CultureInfo.InvariantCulture), BadgeWarning);
+        // Not counted yet (the ring closed this morning) reads as a warning without a number.
+        return army.PocketStores == 0f ? ("0", BadgeNegative) : ("", BadgeWarning);
+    }
+
+    /// <summary>
+    /// What comes next for a formation in a pocket and what would end it, in plain words: the
+    /// stores run out, it weakens to a floor, and it is destroyed by an assault - never by the
+    /// calendar. A read.
+    /// </summary>
+    public static string FateLine(Campaign c, Army army)
+    {
+        if (c is null || army is null || !army.CutOff) return "";
+        var d = c.Defines;
+        var men = M.Clamp01(d.PocketHungerStrengthFloor);
+        var morale = M.Clamp01(d.PocketHungerOrganisationFloor);
+        const string end = "Hunger alone never destroys it: it is destroyed when an attack drives its morale to zero with no road to retreat along.";
+        if (!LogisticsSystem.Besieged(c, army.NationId))
+            return Loc.Get("Its country is at peace: the stores are not drawn and nothing here can destroy it.");
+        if (army.PocketStores > 0f)
+            return Loc.Format("While the stores last it keeps its strength. When they run out it weakens, down to {0:P0} of its men and {1:P0} morale, and can no longer attack.", men, morale) +
+                   " " + Loc.Get(end);
+        var span = Math.Max(1, d.SupplyCutoffDays);
+        if (army.DaysCutOff < span)
+            return Loc.Format("Going hungry: in {0} day(s) it will be too weak to attack. It weakens down to {1:P0} of its men and {2:P0} morale, and no further.",
+                       span - army.DaysCutOff, men, morale) + " " + Loc.Get(end);
+        return Loc.Format("Starved to its floor ({0:P0} of its men, {1:P0} morale): it defends and cannot attack, and its men are slowly deserting.", men, morale) +
+               " " + Loc.Get(end);
+    }
+
+    /// <summary>
+    /// One line for a whole selection of formations, when any of them is in a pocket: the
+    /// shortest stores among them. Empty otherwise - the army panel is crowded enough without
+    /// a row that is nearly always blank. A read.
+    /// </summary>
+    public static string SelectionLine(Campaign c, IReadOnlyList<Army> armies)
+    {
+        if (c is null || armies is null) return "";
+        var worst = int.MaxValue;
+        for (var index = 0; index < armies.Count; index++)
+        {
+            var army = armies[index];
+            if (army is null || !army.CutOff || !LogisticsSystem.Besieged(c, army.NationId)) continue;
+            worst = Math.Min(worst, StoresDaysLeft(c, army));
+        }
+        if (worst == int.MaxValue) return "";
+        return worst > 0
+            ? Loc.Format("In a pocket: stores for {0} days", worst)
+            : Loc.Get("In a pocket: the stores are gone");
     }
 
     /// <summary>What stretches the stores today, for the supply tooltip. A read.</summary>
