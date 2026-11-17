@@ -7,10 +7,11 @@ namespace DealOrForce.Simulation;
 
 public sealed partial class Defines
 {
-    /// <summary>The share of a militia formation's establishment its home region sends back
-    /// each day - the wounded returning, the village volunteering - while the formation
-    /// holds ground the nation controls. Without it a militia drained by the line it held
-    /// stays a muster roll of zeroes, and the bench counts the zeroes as nobody at home.</summary>
+    /// <summary>The share of a militia formation's establishment its home region sends it
+    /// each day as new volunteers, while the formation holds ground the nation controls.
+    /// Without it a militia drained by the line it held stays a muster roll of zeroes, and
+    /// the bench counts the zeroes as nobody at home. Its wounded are not these: they walk
+    /// back by the rule every formation has (MilitaryOperations.ReturnWounded).</summary>
     public float MilitiaVolunteerSharePerDay { get; set; } = 0.02f;
 }
 
@@ -244,14 +245,30 @@ public static class MilitiaCore
             if (army.Personnel < army.MaxPersonnel && army.Personnel >= 0 &&
                 campaign.NationById(army.NationId) is { } home)
             {
+                // "Its ground is held" is the province's controller against the country's flag
+                // on the map. It was compared with the country's place in the list of nations -
+                // a different number, counted from nought where flags count from one - so the
+                // two never met and no militia anywhere was ever refilled (found 16 November
+                // 2026, reading for the partisan rules).
                 var controls = campaign.ProvinceController;
                 if (controls is not null && army.ProvinceId > 0 && army.ProvinceId < controls.Length &&
                     controls[army.ProvinceId] == (ushort)home.MapIndex)
                 {
-                    var room = army.MaxPersonnel - army.Personnel;
-                    var gain = (int)MathF.Min(room, MathF.Max(1f, army.MaxPersonnel * campaign.Defines.MilitiaVolunteerSharePerDay));
-                    army.Personnel += gain;
-                    army.Recovering = MathF.Max(0f, army.Recovering - gain);
+                    // A volunteer is a new man with a rifle: he is on the roll and he is fighting
+                    // strength, both, the way a returning wounded man is (ReturnWounded). This took
+                    // its men out of the wounded and left strength where it was, so a beaten
+                    // militia read full on the roll and fought at half - and was paid back at
+                    // half when stood down, and deserted against a roll it did not have. The
+                    // wounded keep their places: they are coming back by their own road.
+                    var establishment = (float)army.MaxPersonnel;
+                    var room = MathF.Min(establishment - army.Personnel - MathF.Max(0f, army.Recovering),
+                        establishment * (1f - M.Clamp01(army.Strength)));
+                    var gain = (int)MathF.Min(room, MathF.Max(1f, establishment * campaign.Defines.MilitiaVolunteerSharePerDay));
+                    if (gain > 0)
+                    {
+                        army.Personnel += gain;
+                        army.Strength = M.Clamp01(army.Strength + gain / establishment);
+                    }
                 }
             }
         }
@@ -342,11 +359,37 @@ public static class MilitiaCore
 
         var (province, town) = Seat(topology, control, flag, (ushort)state.MapIndex);
         // A region entirely under the enemy raises nobody: the people are there, the ground
-        // to form up on is not. That is what a partisan rule would be for, and it is not
-        // this one.
+        // to form up on is not. That is what the partisan rule is for (Partisans), and it is
+        // not this one.
         if (province <= 0) return false;
 
         var men = (int)Weights.Formation;
+        var place = town?.Name ?? state.Name;
+        if (FoundAt(campaign, nation, state, province, men, 0.45f, town) is null) return false;
+        DiagnosticLogs.Write("simulation",
+            $"MILITIA_RAISED nation={nation.Tag} region={state.Name} town={place} province={province} men={men}");
+        // In the country's own chronicle: a town taking up arms is news to the people whose
+        // town it is, and forty of them across a world war are noise to everybody else.
+        campaign.Chronicle.Record(campaign, "militia_raised", nation.Id,
+            place: town is null ? state.Name : $"city.{town.Id}.name", isPublic: false);
+        campaign.MarkStrategicChange();
+        return true;
+    }
+
+    /// <summary>
+    /// Put one militia formation on the map in a given province, with so many men and so much
+    /// organisation. The daily rules stand a full one up where the region's town is; fighters
+    /// coming out of hiding stand a thin one up wherever no enemy is looking (Partisans). It
+    /// says nothing to anybody: who announces it, and how, is the caller's business.
+    /// </summary>
+    internal static Army FoundAt(Campaign campaign, Nation nation, ScenarioState state, int province, int men,
+        float organisation, CityDefinition town = null)
+    {
+        var topology = campaign?.ProvinceMap;
+        if (topology is null || nation is null || state is null || province <= 0 || province > topology.ProvinceCount ||
+            men <= 0) return null;
+        var establishment = (int)Weights.Formation;
+        men = Math.Min(men, establishment);
         var position = topology.CenterOf(province);
         // Named for the town it stood up in - "1. Kharkiv Militia" - because that is what it
         // is; a region without a town on the map lends its own name.
@@ -361,7 +404,7 @@ public static class MilitiaCore
                 army.Name.EndsWith(suffix, StringComparison.Ordinal)) serial++;
         }
 
-        campaign.Armies.Add(new Army
+        var raised = new Army
         {
             Id = id + 1,
             NationId = nation.Id,
@@ -371,11 +414,11 @@ public static class MilitiaCore
             TemplateId = TemplateId,
             Divisions = 1,
             Personnel = men,
-            MaxPersonnel = men,
+            MaxPersonnel = establishment,
             // It is not a trained formation and does not pretend to be. What it has is that
             // it is already where it is needed and it is not going anywhere.
-            Organisation = 0.45f,
-            Strength = 1,
+            Organisation = M.Clamp01(organisation),
+            Strength = M.Clamp01(men / (float)establishment),
             Equipment = 0.40f,
             Experience = 0f,
             Cohesion = 0.55f,
@@ -385,15 +428,9 @@ public static class MilitiaCore
             PlanActive = false,
             Latitude = position.Latitude,
             Longitude = position.Longitude
-        });
-        DiagnosticLogs.Write("simulation",
-            $"MILITIA_RAISED nation={nation.Tag} region={state.Name} town={place} province={province} men={men}");
-        // In the country's own chronicle: a town taking up arms is news to the people whose
-        // town it is, and forty of them across a world war are noise to everybody else.
-        campaign.Chronicle.Record(campaign, "militia_raised", nation.Id,
-            place: town is null ? state.Name : $"city.{town.Id}.name", isPublic: false);
-        campaign.MarkStrategicChange();
-        return true;
+        };
+        campaign.Armies.Add(raised);
+        return raised;
     }
 
     /// <summary>

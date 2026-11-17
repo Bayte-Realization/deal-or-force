@@ -50,6 +50,9 @@ public static class IsolatedDepotTests
             TemplateId = "line_infantry", Divisions = 1, Personnel = 10000, MaxPersonnel = 10000,
             Strength = 1f, Equipment = .2f, SupplyLevel = 1f, Organisation = .8f });
         foreach (var good in StrategicStockpiles.TrackedGoods) c.Nations[0].Stockpiles[good] = 100f;
+        // The enemy holding the corridor is an enemy at war. Since 16 November 2026 the hunger
+        // clock runs only for a country somebody is fighting: an enclave at peace is not besieged.
+        c.Wars.Add(new StrategicWar { Id = 720, AttackerId = 1, DefenderId = 0 });
         return c;
     }
 
@@ -105,8 +108,12 @@ public static class IsolatedDepotTests
             StateMapIndex = 1000 + atProvince, TemplateId = "line_infantry", Divisions = 1,
             Personnel = 10000, MaxPersonnel = 10000, Strength = 1f, Equipment = .2f,
             SupplyLevel = 1f, Organisation = .8f });
+        // At war with the other shore, for the same reason as above.
+        c.Wars.Add(new StrategicWar { Id = 721, AttackerId = 1, DefenderId = 0 });
         return c;
     }
+
+    private static bool Near(float value, float target) => MathF.Abs(value - target) < 0.0005f;
 
     public static void Run()
     {
@@ -141,10 +148,14 @@ public static class IsolatedDepotTests
             "legacy armies without a reserve clock keep the zero default");
 
         for (var day = 7; day < c.Defines.SupplyCutoffDays; day++) Morning(c, day);
-        Check(a.DaysCutOff == 14 && a.SupplyLevel == 0f && a.Organisation <= c.Defines.BattleBreakOrganisation,
-            "an isolated depot runs dry at the same defined deadline as any other pocket");
+        // "Dry" was nothing at all, and organisation on the rout threshold. A pocket now runs
+        // down to its hunger floors and rests there (PocketHungerSupplyFloor,
+        // PocketHungerOrganisationFloor): weak, unable to attack, and still a formation.
+        Check(a.DaysCutOff == 14 && Near(a.SupplyLevel, c.Defines.PocketHungerSupplyFloor) &&
+              Near(a.Organisation, c.Defines.PocketHungerOrganisationFloor),
+            "an isolated depot runs down to the hunger floor at the same defined deadline as any other pocket");
         Morning(c, 15);
-        Check(a.CutOff && a.SupplyLevel == 0f && a.DaysCutOff == 15,
+        Check(a.CutOff && Near(a.SupplyLevel, c.Defines.PocketHungerSupplyFloor) && a.DaysCutOff == 15,
             "another network rebuild cannot refill an exhausted emergency depot");
         Check(a.Personnel == 10000 && a.Strength == 1f && a.Equipment == .2f,
             "reserve exhaustion does not erase personnel or durable equipment");
@@ -171,8 +182,15 @@ public static class IsolatedDepotTests
         c.Defines.SupplyCutoffDays = 7;
         c.Nations[0].IsHuman = true;
         for (var day = 0; day < 7; day++) Morning(c, day);
-        Check(c.Armies[0].CutOff && c.Armies[0].DaysCutOff == 7 && c.Armies[0].SupplyLevel == 0f,
+        Check(c.Armies[0].CutOff && c.Armies[0].DaysCutOff == 7 &&
+              Near(c.Armies[0].SupplyLevel, c.Defines.PocketHungerSupplyFloor),
             "the configured deadline also applies to human-owned emergency depots");
+        // And without a war the same enclave is not a siege: nobody goes hungry in it.
+        c = World(false);
+        c.Wars.Clear(); c.MarkWarsChanged();
+        for (var day = 0; day < 20; day++) Morning(c, day);
+        Check(c.Armies[0].CutOff && c.Armies[0].DaysCutOff == 0 && c.Armies[0].SupplyLevel > .7f,
+            "an enclave of a country at peace is cut off from its roads and does not starve");
 
         c = SeaWorld(false);
         Morning(c, 0);

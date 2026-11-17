@@ -4,5 +4,8 @@
   // Losses, stores and hunger still use their existing systems and daily rates.
   "PocketResistanceEnabled": true,
   "PocketResistanceMinStrength": 0.25,
-  "PocketResistanceMinSupply": 0.10
+  // Was 0.10: a pocket whose stores had run out folded at the rout threshold. Now it fights to
+  // the end hungry as well as fed - what destroys a pocket is the assault, not the day its
+  // stores ran out (107_pockets_partisans.json). A mod that wants starved garrisons to fold raises it.
+  "PocketResistanceMinSupply": 0.0
 }

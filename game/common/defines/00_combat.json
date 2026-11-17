@@ -94,14 +94,18 @@
   "AirSuppressionPerPoint": 0.02,
   "SupportRegenPerDay": 0.005,
 
-  // Pockets. A formation cut off from supply loses strength and organisation every day it
-  // stays cut off - faster while it is also being attacked - and takes more from the same
-  // fire, because nothing reaches it and it has nowhere to fall back to. Of what a starving
-  // pocket loses, EncircledLossCapturedShare surrender and the rest die. When it breaks,
+  // Pockets. A formation cut off from supply, once its stores are gone, loses strength and
+  // organisation every day - faster while it is also being attacked - down to the hunger
+  // floors in 107_pockets_partisans.json and no further, and takes more from the same fire,
+  // because nothing reaches it and it has nowhere to fall back to. Of what a starving
+  // pocket loses, EncircledLossCapturedShare surrender and the rest die. When it is beaten,
   // what is left of it surrenders: SurrenderKilledShare of them die in the last of it, the
   // rest are taken, and so are the wounded it was carrying.
+  // EncircledStrengthLoss was 0.022, which with the acceleration emptied a division in three
+  // weeks; at 0.010 it is on its floor about a month after the stores ran out. Hunger
+  // weakens a pocket, it does not mow it down (16 November 2026).
   "DivisionBrokenStrength": 0.06,
-  "EncircledStrengthLoss": 0.022,
+  "EncircledStrengthLoss": 0.010,
   "EncircledOrganisationLoss": 0.035,
   "EncircledUnderAttack": 1.8,
   "EncircledCasualtyMultiplier": 1.5,
