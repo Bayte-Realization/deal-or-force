@@ -40,7 +40,58 @@ from Git does not change the licences of locally installed plugins. Godot is MIT
 The optional native Luau adapter has its own notices in `game/extensions/luau/LICENSE.txt`;
 release builds omit the experimental native adapter unless explicitly requested.
 
+## Profiling tools (development builds only)
+
+None of these are in a release build. The Tracy binding is compiled in only when a build is
+made with `-p:DofTracy=true` (see `Scripts/Simulation/StructuredData.Dependencies.props` and
+`docs/PROFILING_2026_11_17_RU.md`); a build made that way and handed to anyone must carry the
+two notices below.
+
+| Component | Version | Licence | Source | Where it is used |
+| --- | --- | --- | --- | --- |
+| Tracy-CSharp (C# binding, NuGet `Tracy-CSharp`) | 0.13.1 | MIT, © 2022 clibequilibrium — [LICENSE](https://github.com/clibequilibrium/Tracy-CSharp/blob/main/LICENSE) | [nuget.org](https://www.nuget.org/packages/Tracy-CSharp/0.13.1), [GitHub](https://github.com/clibequilibrium/Tracy-CSharp) | `Tracy.dll` in profiling builds only |
+| Tracy Profiler client (`TracyClient.dll` inside the package above) and viewer | 0.13.1 | BSD 3-Clause, © 2017-2026 Bartosz Taudul — [LICENSE](https://github.com/wolfpld/tracy/blob/master/LICENSE) | [GitHub release v0.13.1](https://github.com/wolfpld/tracy/releases/tag/v0.13.1) | Native client in profiling builds; the viewer lives outside the repository in `deal-or-force-tools/tracy/0.13.1` |
+| dotnet-trace, dotnet-counters | 10.0.750501 | MIT, © .NET Foundation and Contributors — [LICENSE](https://github.com/dotnet/diagnostics/blob/main/LICENSE.TXT) | [nuget.org](https://www.nuget.org/packages/dotnet-trace), [GitHub](https://github.com/dotnet/diagnostics) | Global .NET tools on the developer's machine; nothing is shipped |
+
+Благодарности: Bartosz Taudul and the Tracy contributors; clibequilibrium for Tracy-CSharp;
+the .NET diagnostics team for dotnet-trace and dotnet-counters.
+
 ## Development tools (not shipped with the game)
+
+`Tools/KernelBench` (the data-layout and native-code benchmark of 17 November 2026) restores
+these packages from nuget.org for the benchmark only. None of them is referenced by
+`DealOrForce.csproj` or exported with the game. Licences were read from each package's
+licence expression on nuget.org and the repository's `LICENSE` file on 17 November 2026.
+
+| Package | Version | Licence | Source |
+| --- | --- | --- | --- |
+| Friflo.Engine.ECS | 3.6.0 | MIT | <https://github.com/friflo/Friflo.Engine.ECS/blob/main/LICENSE> |
+| Friflo.Json.Fliox, Friflo.Json.Burst, Friflo.Json.Fliox.Annotation (pulled in by Friflo.Engine.ECS) | 1.0.4 | **LGPL-3.0-only** | <https://github.com/friflo/Friflo.Json.Fliox/blob/main/LICENSE> |
+| Arch | 2.1.0 | Apache-2.0 | <https://github.com/genaray/Arch/blob/master/LICENSE.MD> |
+| Arch.LowLevel | 1.1.5 | Apache-2.0 | nuget.org licence expression |
+| ZeroAllocJobScheduler | 1.1.2 | Apache-2.0 | nuget.org licence expression |
+| Collections.Pooled | 2.0.0-preview.27 | MIT | <https://github.com/jtmueller/Collections.Pooled/blob/master/LICENSE.txt> |
+| CommunityToolkit.HighPerformance | 8.2.2 | MIT | nuget.org licence expression |
+| Microsoft.Extensions.ObjectPool | 7.0.0 | MIT | nuget.org licence expression |
+| System.Runtime.CompilerServices.Unsafe | 6.0.0 / 6.1.0 | MIT | nuget.org licence expression |
+
+Friflo.Engine.ECS itself is MIT, but its three Friflo.Json dependencies are LGPL-3.0-only.
+That is acceptable in a benchmark nobody receives; it is **not cleared for the game**, and in
+particular not for an ahead-of-time compiled build (Android), where the library would be linked
+into the binary. Do not add Friflo.Engine.ECS to the game without resolving that first.
+
+The Rust kernel in `Tools/KernelBench/native` uses no crates. It was built with the official
+Rust toolchain 1.100.0 (stable, minimal profile) installed by rustup 1.29.3 (`rustup-init.exe` from
+<https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe>,
+SHA-256 38027d51d69a5d05493627a0634dbea52d6cd793c8f072d2373d3f4163eec7db, checked against the
+published `.sha256`), into a git-ignored folder without changing PATH. Rust, rustup and the
+standard library linked into the DLL are MIT OR Apache-2.0
+(<https://github.com/rust-lang/rust/blob/master/COPYRIGHT>). The DLL is not shipped.
+
+Благодарности: Ullrich Praetz (Friflo.Engine.ECS), genaray и участникам Arch, проекту Rust
+и команде rustup, Joel Mueller (Collections.Pooled), команде .NET Community Toolkit.
+
+### Save-format measurement (`Tools/SaveFormatBench`)
 
 `Tools/SaveFormatBench` (save-format measurement, 17 November 2026) restores these NuGet
 packages for the tool only. The game's own project does not reference them, so no build

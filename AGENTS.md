@@ -83,6 +83,13 @@ instead of re-deriving the commands.
   scratch directories out of `res://`, or give them a `.gdignore` on the same day they appear.
   Closing Godot before opening the editor also matters: a second editor on the same project and
   the `godot-ai` daemons left over from earlier sessions compete for the same files.
+- **`Tools/profile-tracy.ps1 -Save <copy.bdfsave> -Days 30`** — a Tracy timeline of a save, headless:
+  builds SimBench with `-p:DofTracy=true` into `tmp_logs\tracy`, records through `tracy-capture`
+  (0.13.1, in `deal-or-force-tools\tracy\0.13.1`; the viewer must match the packaged client) and
+  writes zone tables. Every `SimProfiler.Measure` scope is a zone; a finished day is a `sim day`
+  frame. Tracy exists only in builds made with `-p:DofTracy=true`, and records only with
+  `DOF_TRACY=1` and a viewer attached. `dotnet-trace`/`dotnet-counters` and how to read them:
+  `docs/PROFILING_2026_11_17_RU.md`.
 - **`Tools/editor-doctor.ps1`** — the same answer as numbers: how many files each top folder puts
   in front of the editor, how large `.godot/imported` has grown, whether the C# assembly is older
   than the newest `.cs` (the editor then compiles on start), and which editors are running.
