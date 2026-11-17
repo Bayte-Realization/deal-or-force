@@ -984,9 +984,14 @@ public static class EconomySystem
             // Fallen countries (all ground lost, the fall flow has ruled) are not economies:
             // their books close the day the fall is decided, instead of a stateless remnant
             // financing a phantom army for months.
-            if (nation.Movement is null && (!campaign.HasOwnedLand(nation) || campaign.Fallen.Contains(nation.Id)))
+            // The list alone is not proof of a fall, though: a country on it that holds a region
+            // of its own is a list that was not kept (MovementFall.ReturnTheLanded), and emptying
+            // its regions' people on the strength of it is how 41 countries in one long campaign
+            // stood on the map with nobody in them. Ground decides; the list only confirms.
+            var fallen = campaign.Fallen.Contains(nation.Id) && campaign.StatesOf(nation).Length == 0;
+            if (nation.Movement is null && (!campaign.HasOwnedLand(nation) || fallen))
             {
-                nation.Population = campaign.Fallen.Contains(nation.Id) ? 0 : nation.Population;
+                nation.Population = fallen ? 0 : nation.Population;
                 nation.Gdp = nation.GrossOutput = 0;
                 nation.WeeklyTaxIncome = nation.WeeklyExpenses = nation.WeeklyBalance = 0;
                 continue;

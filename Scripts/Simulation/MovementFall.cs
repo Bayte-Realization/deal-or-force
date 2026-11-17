@@ -165,6 +165,55 @@ public static class MovementFall
         foreach (var (id, regions) in held) campaign.Homelands[id] = regions;
     }
 
+    /// <summary>
+    /// The fall undone by the map: a country the weekly review ruled fallen, that holds ground of
+    /// its own again, is a country again.
+    ///
+    /// The review puts a country on the list the week it is found with no ground, and four paths
+    /// took it off - a restoration, a movement graduating, a release that revives the tag, a
+    /// movement re-founded under it. Every other road back to the map did not: a status quo peace
+    /// that leaves a fallen country's surviving divisions holding what they occupied, a coalition
+    /// that hands a beaten ally its land back, a civil war returning ground to its parent. All of
+    /// them go through StatePartition.Annex and end at MarkMapChanged, and none of them knew the
+    /// list existed. So the country stood on the map with its regions and its people in them,
+    /// while everything that reads the list took it for dead - the economy most of all, which
+    /// emptied it every week: 41 of them in a 107-year campaign, 360 countries with ground and
+    /// only 320 with anybody in them.
+    ///
+    /// The rule is the review's own, run backwards: the review rules a country fallen when it
+    /// holds no region (StatesOf), and a country holding one is not. Only a country without a
+    /// movement - an exile or an underground that takes ground back is settled by its own path
+    /// (MovementRules.SynchroniseTerritory, Restoration.RestoreExiledNation). Its people are
+    /// counted again on the spot rather than at the economy's next week, because a week of a
+    /// country with ground and nobody in it is what the player saw. Walked over the nation list,
+    /// in order, so the day it happens is the same in every replay.
+    /// </summary>
+    internal static int ReturnTheLanded(Campaign campaign)
+    {
+        if (campaign is null || campaign.Fallen.Count == 0) return 0;
+        var returned = 0;
+        for (var id = 0; id < campaign.Nations.Count; id++)
+        {
+            var nation = campaign.Nations[id];
+            if (nation.Movement is not null || !campaign.Fallen.Contains(nation.Id)) continue;
+            var held = campaign.StatesOf(nation);
+            if (held.Length == 0) continue;
+            campaign.Fallen.Remove(nation.Id);
+            long people = 0;
+            foreach (var region in held) people += Math.Max(0L, region.Population);
+            nation.Population = people;
+            returned++;
+            DiagnosticLogs.Write("simulation",
+                $"FALLEN_RETURNED nation={nation.Tag} regions={held.Length} people={people} day={campaign.ElapsedDays}");
+        }
+        if (returned > 0)
+        {
+            campaign.MovementRevision++;
+            campaign.MarkStrategicChange();
+        }
+        return returned;
+    }
+
     /// <summary>Every country found with no ground this week has its fall decided, once.</summary>
     internal static void Decide(Campaign campaign)
     {

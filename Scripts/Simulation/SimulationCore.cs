@@ -2668,6 +2668,9 @@ public sealed partial class Campaign
         if (ProvinceMap is not null)
             foreach (var n in Nations)
                 if (n.Movement is not null) MovementRules.SynchroniseTerritory(this, n);
+        // And the same for the fallen list: a country back on the map is not fallen, by
+        // whichever road its ground came back (MovementFall.ReturnTheLanded).
+        MovementFall.ReturnTheLanded(this);
         InterfaceDirty = true;
     }
 

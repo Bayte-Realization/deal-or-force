@@ -370,6 +370,8 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--gestures-only")) { DiplomaticGestureTests.Run(); return; }
         if (args.Length == 0) DiplomaticGestureTests.Run();
         if (args.Length == 0) OverrunWarTests.Run();
+        if (args.Contains("--fallen-ground-only")) { FallenGroundTests.Run(); return; }
+        if (args.Length == 0) FallenGroundTests.Run();
         if (args.Contains("--territorial-front-only")) { TerritorialFrontTests.Run(); return; }
         if (args.Length == 0) TerritorialFrontTests.Run();
         if (args.Length == 0) RevoltOccupationTests.Run();
