@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Save-format bench: the owner's real campaign written and read back by today's JSON paths
+    and by the candidate libraries, measured on the same CampaignSave object graph the game
+    writes. It compiles Scripts/Simulation like SimBench, so "the way the game does" is the
+    game's own code and not a re-creation of it.
+
+    The four packages below exist only in this tool. The game's own project does not reference
+    them; whether it ever should is what docs/SAVE_FORMAT_BENCH_2026_11_17_RU.md decides.
+    Licences were read from each repository's LICENSE file before adding (all MIT) and are
+    recorded in THIRD_PARTY_NOTICES.md.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- The game targets net10.0; a serializer measured on another runtime would be measuring
+         that runtime's JIT and GC, not the one players have. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <RootNamespace>DealOrForce.Tools</RootNamespace>
+    <AssemblyName>SaveFormatBench</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Same collector as the shipping game (DealOrForce.csproj), so a pause or a peak here
+         is one the player would see. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <NoWarn>$(NoWarn);CS0618;CS8981;MsgPack003;MsgPack004;MsgPack005;MsgPack010;MsgPack013</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Scripts\Simulation\**\*.cs" />
+    <Compile Include="..\..\Scripts\Modding\ModOperations.cs" />
+    <Compile Include="..\..\Scripts\Modding\ModContracts.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- MIT, https://github.com/MessagePack-CSharp/MessagePack-CSharp -->
+    <PackageReference Include="MessagePack" Version="3.1.12" />
+    <!-- MIT, https://github.com/Cysharp/MemoryPack -->
+    <PackageReference Include="MemoryPack" Version="1.22.0" />
+    <!-- MIT, https://github.com/MiloszKrajewski/K4os.Compression.LZ4 -->
+    <PackageReference Include="K4os.Compression.LZ4" Version="1.3.8" />
+    <!-- MIT (port of zstd, which is BSD-3-Clause OR GPL-2.0; used under BSD), https://github.com/oleg-st/ZstdSharp -->
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
+  </ItemGroup>
+
+  <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />
+</Project>

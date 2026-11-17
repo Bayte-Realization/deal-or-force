@@ -40,6 +40,23 @@ from Git does not change the licences of locally installed plugins. Godot is MIT
 The optional native Luau adapter has its own notices in `game/extensions/luau/LICENSE.txt`;
 release builds omit the experimental native adapter unless explicitly requested.
 
+## Development tools (not shipped with the game)
+
+`Tools/SaveFormatBench` (save-format measurement, 17 November 2026) restores these NuGet
+packages for the tool only. The game's own project does not reference them, so no build
+of the game redistributes them. Each licence was read from the repository's `LICENSE`
+file and the package's NuGet licence expression before the package was added.
+
+| Package | Version | Licence | Copyright | Source |
+| --- | --- | --- | --- | --- |
+| MessagePack (MessagePack-CSharp) | 3.1.12 | MIT; its `LICENSE` also carries the BSD-2-Clause notice of lz4net and an Apache-2.0 notice for `BufferWriter.cs` | © 2017 Yoshifumi Kawai and contributors | [LICENSE](https://github.com/MessagePack-CSharp/MessagePack-CSharp/blob/master/LICENSE), [nuget.org](https://www.nuget.org/packages/MessagePack/3.1.12) |
+| MemoryPack | 1.22.0 | MIT | © 2022 Cysharp, Inc. | [LICENSE](https://github.com/Cysharp/MemoryPack/blob/main/LICENSE), [nuget.org](https://www.nuget.org/packages/MemoryPack/1.22.0) |
+| K4os.Compression.LZ4 | 1.3.8 | MIT | © 2017 Milosz Krajewski | [LICENSE](https://github.com/MiloszKrajewski/K4os.Compression.LZ4/blob/master/LICENSE), [nuget.org](https://www.nuget.org/packages/K4os.Compression.LZ4/1.3.8) |
+| ZstdSharp.Port | 0.8.8 | MIT for the port. It is a C# port of Zstandard, whose upstream code is BSD-3-Clause OR GPL-2.0; if it is ever shipped, take it under the BSD-3-Clause option and ship that notice (© Meta Platforms, Inc.) too | © 2021 Oleg Stepanischev | [LICENSE](https://github.com/oleg-st/ZstdSharp/blob/master/LICENSE), [nuget.org](https://www.nuget.org/packages/ZstdSharp.Port/0.8.8) |
+
+If any of them is later referenced by `DealOrForce.csproj`, move its row to the section
+above and ship its licence text with the game.
+
 ## Packaging
 
 Ship this register, `game/gfx/CREDITS.md`, `LICENSE` and `LICENSE-EXCEPTIONS.md` with the
