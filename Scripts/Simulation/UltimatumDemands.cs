@@ -415,7 +415,10 @@ public static partial class Ultimatum
                 OpinionSystem.Remember(c, relation, "imposed_our_government");
             }
             if (demand.TradeAgreement)
+            {
                 AgreementSystem.Sign(c, relation, AgreementKind.TradeAgreement);
+                DealTally.Count("trade_agreement.source.ultimatum");
+            }
             if (demand.EmbargoThird)
                 new SetEmbargoCommand { IssuerId = target.Id, TargetId = demand.EmbargoOnId, Embargo = true }.Apply(c);
             if (demand.CancelGuarantee)

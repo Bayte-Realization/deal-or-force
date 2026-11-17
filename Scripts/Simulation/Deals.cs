@@ -557,8 +557,12 @@ public sealed class ProposeDealCommand : ICampaignCommand
             return;
         }
         var assessment = Ultimatum.AssessDeal(campaign, from, to, deal);
+        // Counted for the bench (DealTally), never read by the world.
+        var tallyKey = $"deal.{DealTally.KindOf(deal)}.{DealTally.Seat(from)}>{DealTally.Seat(to)}";
+        DealTally.Count(tallyKey + ".put");
         if (DealAnswer.Decide(campaign, to, from, deal, assessment).Verdict != DealVerdict.Accept)
-        { Outcome = new(false, assessment.Reason); return; }
+        { Outcome = new(false, assessment.Reason); DealTally.Count(tallyKey + ".declined"); return; }
         Outcome = Ultimatum.ResolveDeal(campaign, from, to, deal);
+        DealTally.Count(tallyKey + (Outcome.Accepted ? ".signed" : ".invalid"));
     }
 }

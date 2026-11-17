@@ -90,8 +90,14 @@ public static class DealNegotiations
         // Counterproposals to governments still use the same current AI assessment.
         // A refusal keeps the original paper on the table.
         var assessment = Ultimatum.AssessNegotiatedDeal(c, from, to, terms);
+        // Counted for the bench (DealTally), never read by the world.
+        var tallyKey = $"deal.{DealTally.KindOf(terms)}.{DealTally.Seat(from)}>{DealTally.Seat(to)}";
+        DealTally.Count(tallyKey + ".put");
         if (!to.IsHuman && DealAnswer.Decide(c, to, from, terms, assessment).Verdict != DealVerdict.Accept)
+        {
+            DealTally.Count(tallyKey + ".declined");
             return new(false, assessment.Reason);
+        }
         var paper = new DealOffer
         {
             Id = c.NextDealOfferId++, FromId = from.Id, ToId = to.Id,
@@ -115,6 +121,7 @@ public static class DealNegotiations
         var result = Ultimatum.ResolveAgreedDeal(c, from, to, paper.Terms);
         Close(c, paper, result.Accepted ? DealOfferState.Accepted : DealOfferState.Invalidated,
             result.Accepted ? "The bargain is signed" : result.Note);
+        DealTally.Count(tallyKey + (result.Accepted ? ".signed" : ".invalid"));
         return result;
     }
 

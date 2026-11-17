@@ -186,6 +186,7 @@ public static class Consolidation
             }
             if (!relation.TradeAgreement)
             {
+                DealTally.Count("trade_agreement.asked.union_courting");
                 new ProposeAgreementCommand { IssuerId = founder.Id, TargetId = partner.Id, Kind = AgreementKind.TradeAgreement }.Apply(c);
                 return;
             }
@@ -482,6 +483,7 @@ public static class Consolidation
         }
         if (!relation.TradeAgreement)
         {
+            DealTally.Count("trade_agreement.asked.union_courting");
             new ProposeAgreementCommand { IssuerId = founder.Id, TargetId = partner.Id, Kind = AgreementKind.TradeAgreement }.Apply(c);
             return;
         }

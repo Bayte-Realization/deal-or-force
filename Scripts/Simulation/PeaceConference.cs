@@ -445,7 +445,10 @@ public static class PeaceConference
         }
 
         if (demand.TradeConcessions)
+        {
             CampaignDiplomacy.Get(campaign, beneficiary.Id, loser.Id).TradeAgreement = true;
+            DealTally.Count("trade_agreement.source.peace_conference");
+        }
 
         if (demand.Demilitarise)
             foreach (var division in campaign.Armies.Where(division => division.NationId == loser.Id))

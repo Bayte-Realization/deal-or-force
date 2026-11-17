@@ -226,6 +226,7 @@ public static partial class AiStatecraft
         offer.Apply(campaign);
         if (offer.Result != AgreementResult.Signed) return false;
         Count(kind == AgreementKind.TradeAgreement ? "trade_signed" : "pact_signed");
+        DealTally.Count(kind == AgreementKind.TradeAgreement ? "trade_agreement.source.friendship" : "pact.source.friendship");
         return true;
     }
 
@@ -477,6 +478,7 @@ public static partial class AiStatecraft
 
         nation.DecisionAvailableDay[key] = campaign.ElapsedDays + Math.Max(30, defines.AiSupplyHedgeRetryDays);
         Count("supply_hedge");
+        DealTally.Count("trade_agreement.source.supply_hedge");
         return true;
     }
 

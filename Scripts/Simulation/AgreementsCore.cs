@@ -437,6 +437,7 @@ public sealed class ProposeAgreementCommand : ICampaignCommand
         {
             Result = AgreementResult.NotAllowed;
             Reason = refusal;
+            Tally(asking, asked);
             return;
         }
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
@@ -460,19 +461,26 @@ public sealed class ProposeAgreementCommand : ICampaignCommand
                 Result = ruled;
                 Reason = answer;
             }
+            Tally(asking, asked);
             return;
         }
         if (DealAnswer.GovernmentSignsAgreement(campaign, asked, asking, Kind))
         {
             AgreementSystem.Sign(campaign, relation, Kind);
             Result = AgreementResult.Signed;
+            Tally(asking, asked);
             return;
         }
         // Asked and refused: remembered as a date rather than a grudge. Asking is not an insult.
         relation.AgreementRefusedDay = campaign.ElapsedDays;
         relation.LastActionDay = campaign.ElapsedDays;
         Result = AgreementResult.Refused;
+        Tally(asking, asked);
     }
+
+    // Counted for the bench (DealTally), never read by the world.
+    private void Tally(Nation asking, Nation asked) =>
+        DealTally.Count($"agreement.{Kind}.{DealTally.Seat(asking)}>{DealTally.Seat(asked)}.{Result}");
 }
 
 /// <summary>Answer an offer that is on your table. Nothing is signed until somebody says yes.</summary>
@@ -526,6 +534,7 @@ public sealed class CancelAgreementCommand : ICampaignCommand
         }
         relation.LastActionDay = campaign.ElapsedDays;
         Cancelled = true;
+        DealTally.Count($"agreement.{Kind}.{DealTally.Seat(issuer)}.cancelled");
         campaign.MarkStrategicChange();
     }
 }
