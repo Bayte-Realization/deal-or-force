@@ -4,4 +4,30 @@
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
     <ProjectReference Include="$(MSBuildThisFileDirectory)../Rules/DealOrForce.Rules.fsproj" />
   </ItemGroup>
+
+  <!--
+    Tracy, the frame profiler (docs/PROFILING_2026_11_17_RU.md). Off unless a build asks for it
+    with `-p:DofTracy=true`, and even then silent unless the process is started with DOF_TRACY=1.
+
+    Two switches, because they guard against two different things. The build switch keeps the
+    binding and its native TracyClient.dll out of every ordinary and release build: a player
+    never carries a profiler, and the shipped assembly holds no Tracy code - only an empty
+    TracyBridge class whose calls the compiler removes. The environment switch is for a
+    profiling build that is run normally: the native client opens a listening port and
+    announces itself on the local network the moment it is loaded, and a build made for one
+    measurement should not do that on every start.
+
+    Imported here, beside the simulation's other dependencies, because every project that
+    compiles Scripts/Simulation imports this file - so the DOF_TRACY symbol and the package
+    always arrive together, and no project can see one without the other.
+  -->
+  <PropertyGroup Condition="'$(DofTracy)' == 'true'">
+    <DefineConstants>$(DefineConstants);DOF_TRACY</DefineConstants>
+    <!-- Tracy's source locations are native structs that must outlive every zone. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(DofTracy)' == 'true'">
+    <!-- MIT, https://github.com/clibequilibrium/Tracy-CSharp; client protocol of Tracy 0.13.1. -->
+    <PackageReference Include="Tracy-CSharp" Version="0.13.1" />
+  </ItemGroup>
 </Project>

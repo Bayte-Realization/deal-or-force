@@ -40,6 +40,22 @@ from Git does not change the licences of locally installed plugins. Godot is MIT
 The optional native Luau adapter has its own notices in `game/extensions/luau/LICENSE.txt`;
 release builds omit the experimental native adapter unless explicitly requested.
 
+## Profiling tools (development builds only)
+
+None of these are in a release build. The Tracy binding is compiled in only when a build is
+made with `-p:DofTracy=true` (see `Scripts/Simulation/StructuredData.Dependencies.props` and
+`docs/PROFILING_2026_11_17_RU.md`); a build made that way and handed to anyone must carry the
+two notices below.
+
+| Component | Version | Licence | Source | Where it is used |
+| --- | --- | --- | --- | --- |
+| Tracy-CSharp (C# binding, NuGet `Tracy-CSharp`) | 0.13.1 | MIT, © 2022 clibequilibrium — [LICENSE](https://github.com/clibequilibrium/Tracy-CSharp/blob/main/LICENSE) | [nuget.org](https://www.nuget.org/packages/Tracy-CSharp/0.13.1), [GitHub](https://github.com/clibequilibrium/Tracy-CSharp) | `Tracy.dll` in profiling builds only |
+| Tracy Profiler client (`TracyClient.dll` inside the package above) and viewer | 0.13.1 | BSD 3-Clause, © 2017-2026 Bartosz Taudul — [LICENSE](https://github.com/wolfpld/tracy/blob/master/LICENSE) | [GitHub release v0.13.1](https://github.com/wolfpld/tracy/releases/tag/v0.13.1) | Native client in profiling builds; the viewer lives outside the repository in `deal-or-force-tools/tracy/0.13.1` |
+| dotnet-trace, dotnet-counters | 10.0.750501 | MIT, © .NET Foundation and Contributors — [LICENSE](https://github.com/dotnet/diagnostics/blob/main/LICENSE.TXT) | [nuget.org](https://www.nuget.org/packages/dotnet-trace), [GitHub](https://github.com/dotnet/diagnostics) | Global .NET tools on the developer's machine; nothing is shipped |
+
+Благодарности: Bartosz Taudul and the Tracy contributors; clibequilibrium for Tracy-CSharp;
+the .NET diagnostics team for dotnet-trace and dotnet-counters.
+
 ## Packaging
 
 Ship this register, `game/gfx/CREDITS.md`, `LICENSE` and `LICENSE-EXCEPTIONS.md` with the
