@@ -187,11 +187,25 @@ public static class MovementFall
     /// counted again on the spot rather than at the economy's next week, because a week of a
     /// country with ground and nobody in it is what the player saw. Walked over the nation list,
     /// in order, so the day it happens is the same in every replay.
+    ///
+    /// People are not the whole of a country, and the four older roads back each gave the rest
+    /// too. The books: the fall closed them at zero (StatePartition.Annex, the economy's week), and
+    /// a country returned with zero converges on what it makes at a tenth a week - a Congo of seven
+    /// million taxing 0.007 a week, two months below the world's poorest tenth, unable to pay for
+    /// an army or a budget. A closed book is reopened at what its people made by the country's own
+    /// 2024 measure (ProductionCapacity), the way MovementRules.TakeZone seeds a movement's first
+    /// ground, and the market corrects it from there. And the seat: the fall took the capital to
+    /// nothing, and CapitalCore never places one for a country that has none - only
+    /// LocateCapitals does, which loading a save runs and a running campaign did not. So a revived
+    /// country had no seat until it was saved and opened again, and the two worlds differed on the
+    /// seat, the supply origin and the capital's battles with the same fingerprint. The same call
+    /// the load makes is made here.
     /// </summary>
     internal static int ReturnTheLanded(Campaign campaign)
     {
         if (campaign is null || campaign.Fallen.Count == 0) return 0;
         var returned = 0;
+        var seatless = false;
         for (var id = 0; id < campaign.Nations.Count; id++)
         {
             var nation = campaign.Nations[id];
@@ -202,16 +216,42 @@ public static class MovementFall
             long people = 0;
             foreach (var region in held) people += Math.Max(0L, region.Population);
             nation.Population = people;
+            ReopenBooks(nation);
+            if (nation.CapitalProvinceId <= 0) seatless = true;
             returned++;
             DiagnosticLogs.Write("simulation",
-                $"FALLEN_RETURNED nation={nation.Tag} regions={held.Length} people={people} day={campaign.ElapsedDays}");
+                $"FALLEN_RETURNED nation={nation.Tag} regions={held.Length} people={people} gdp={nation.Gdp:0.###} day={campaign.ElapsedDays}");
         }
         if (returned > 0)
         {
+            // Once for all of them, and only with the map attached: a save being read has none
+            // yet, and attaching it runs this same call.
+            if (seatless && campaign.ProvinceMap is not null)
+            {
+                campaign.LocateCapitals(preserveExisting: true);
+                campaign.CapitalRevision++;
+            }
             campaign.MovementRevision++;
             campaign.MarkStrategicChange();
         }
         return returned;
+    }
+
+    /// <summary>
+    /// A returned country's books, closed at zero by its fall, opened at what its people make by
+    /// its own measure. Only a closed book: a country the list kept by mistake but the economy
+    /// never emptied has a GDP of its own, and that is better than any estimate. The capacity is
+    /// the 2024 output per head of this country times the people it has now (ProductionCapacity),
+    /// in the scale the economy prices it at, so the next week's market moves it by what changed
+    /// rather than rebuilding it from nothing.
+    /// </summary>
+    private static void ReopenBooks(Nation nation)
+    {
+        if (nation.Gdp > 0f || nation.Population <= 0) return;
+        var capacity = ProductionCapacity.Of(nation);
+        if (!(capacity > 0f) || !float.IsFinite(capacity)) return;
+        nation.Gdp = capacity;
+        if (nation.OutputScale > 0f) nation.GrossOutput = capacity / (52f * nation.OutputScale);
     }
 
     /// <summary>Every country found with no ground this week has its fall decided, once.</summary>

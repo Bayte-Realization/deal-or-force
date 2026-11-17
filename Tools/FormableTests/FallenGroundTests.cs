@@ -56,6 +56,8 @@ static class FallenGroundTests
         var firstRegion = c.StatesOf(small).OrderBy(s => s.MapIndex).First().MapIndex;
         var giveBack = home.Where(p => c.ProvinceMap.ProvinceToState[p] == firstRegion).ToArray();
         Check(giveBack.Length > 0, "the ground to give back is a whole region of its own");
+        var gdp2024 = small.Gdp;
+        var people2024 = small.Population;
 
         // Overrun: every province goes, and the weekly review rules the fall.
         StatePartition.Annex(c, home, taker, asConquest: true);
@@ -63,6 +65,11 @@ static class FallenGroundTests
         MovementFall.Decide(c);
         Check(c.Fallen.Contains(small.Id) && small.Movement is null,
             "the weekly review puts it on the fallen list, with no government abroad");
+        // What the fall does to the rest of it: the books closed at zero by the conquest that took
+        // the last province, and the seat taken away by the capital watch.
+        for (var tick = 0; tick < 4; tick++) CapitalCore.Tick(c);
+        Check(small.Gdp == 0f && small.CapitalProvinceId == 0 && small.CapitalStateMapIndex == 0 && !CapitalCore.HasSeat(c, small),
+            "fallen, its books are closed at zero and it has no capital and no seat");
 
         // Back on the map by the road a status quo peace or a coalition's liberation takes: the
         // same transfer every peace uses. Before the fix this left it on the list.
@@ -72,6 +79,35 @@ static class FallenGroundTests
         Check(!c.Fallen.Contains(small.Id), "and Luxembourg is off the fallen list the moment the border moves");
         Check(small.Population == held.Sum(s => s.Population) && small.Population > 0,
             $"its people are counted at once ({small.Population:N0})");
+        // Its books reopened at what those people make by its own 2024 measure, not at zero to
+        // crawl back a tenth a week: before the fix a returned country taxed nothing for months.
+        var expected = gdp2024 * (small.Population / (double)people2024);
+        Check(small.Gdp > 0.5 * expected && small.Gdp < 2 * expected,
+            $"its GDP is reopened at what its people make ({small.Gdp:0.###}, its 2024 output per head says {expected:0.###})");
+        // And a seat, as the four older roads back gave one. CapitalCore never places a capital
+        // for a country with none; before the fix only saving and opening the campaign did.
+        Check(small.CapitalProvinceId > 0 && small.CapitalStateMapIndex > 0 && CapitalCore.HasSeat(c, small) &&
+              held.Any(s => s.MapIndex == small.CapitalStateMapIndex),
+            $"it has a capital in its own region again (province {small.CapitalProvinceId}) without a save and a reload");
+        for (var tick = 0; tick < 4; tick++) CapitalCore.Tick(c);
+        Check(small.CapitalProvinceId > 0 && CapitalCore.HasSeat(c, small), "and the capital watch keeps it");
+        var running = (small.CapitalProvinceId, small.CapitalStateMapIndex, small.GovernmentSeatProvinceId);
+        var folder = Path.Combine(Path.GetTempPath(), "dof-fallen-seat-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            SaveSystem.Save(folder, "seat", c, "");
+            var reopened = SaveSystem.Load(folder, "seat", "");
+            Check(reopened.Success, "the campaign with the returned country saves and opens: " + reopened.Warning);
+            // A map of its own, built the way opening a save builds it.
+            Check(MapRasterCatalog.TryBuildProvinceTopology(WorldMapSource.States, WorldMapSource.Control,
+                WorldMapSource.Width, WorldMapSource.Height, out var fresh, out var why), why);
+            reopened.Campaign.AttachProvinceTopology(fresh);
+            var again = reopened.Campaign.NationByTag("LUX");
+            Check((again.CapitalProvinceId, again.CapitalStateMapIndex, again.GovernmentSeatProvinceId) == running,
+                $"the world opened from the save has the same seat as the one that kept running ({running})");
+        }
+        finally { try { Directory.Delete(folder, true); } catch { } }
         MovementFall.Decide(c);
         Check(!c.Fallen.Contains(small.Id), "the next weekly review does not rule it fallen again");
 
@@ -108,6 +144,7 @@ static class FallenGroundTests
         var c = World(20261118);
         var stale = c.NationByTag("LUX");
         var regionPeople = c.StatesOf(stale).Sum(s => s.Population);
+        var gdp2024 = stale.Gdp;
         // The state the bug left: ground, people in the regions, nobody counted, on the list.
         c.Fallen.Add(stale.Id);
         stale.Population = 0;
@@ -123,6 +160,8 @@ static class FallenGroundTests
             Check(!loaded.Campaign.Fallen.Contains(back.Id), "the loaded campaign does not have it on the fallen list");
             Check(back.Population == regionPeople && back.Population > 0,
                 $"its people are counted on load ({back.Population:N0} = the regions' {regionPeople:N0})");
+            Check(back.Gdp > 0.5f * gdp2024 && back.Gdp < 2f * gdp2024,
+                $"and its books, closed at zero in the save, open at what they make ({back.Gdp:0.###}; 2024: {gdp2024:0.###})");
             var landedFallen = loaded.Campaign.Nations.Count(n => n.Movement is null && loaded.Campaign.Fallen.Contains(n.Id) &&
                                                                   loaded.Campaign.StatesOf(n).Length > 0);
             Check(landedFallen == 0, "no country with ground is on the list after load");
