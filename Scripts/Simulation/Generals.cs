@@ -37,6 +37,14 @@ public sealed partial class Defines
     /// </summary>
     public bool AiRelievesFailedCommanders { get; set; } = true;
     public int AiCommanderReliefDefeats { get; set; } = 3;
+    /// <summary>
+    /// How long an army group stands with no formation of its country under it before it is struck
+    /// off (Generals.Tidy). Long enough for what the country is recruiting to be put under it - a
+    /// new formation joins its country's smallest group, an empty one first - and for a detachment
+    /// out of a withdrawal to come back; short enough that a long campaign does not keep the
+    /// headquarters of every army it ever lost.
+    /// </summary>
+    public int ArmyGroupEmptyDays { get; set; } = 30;
 }
 
 /// <summary>An officer who could take a group: name, skill and temperament.</summary>
@@ -146,7 +154,7 @@ public static class Generals
             if (nation is null) return null;
             smallest = new ArmyGroup
             {
-                Id = campaign.ArmyGroups.Count == 0 ? 1 : campaign.ArmyGroups.Max(existing => existing.Id) + 1,
+                Id = NewGroupId(campaign),
                 NationId = nation.Id,
                 Name = $"{nation.Tag} Army 1"
             };
@@ -154,6 +162,140 @@ public static class Generals
         }
         army.ArmyGroupId = smallest.Id;
         return smallest;
+    }
+
+    /// <summary>
+    /// The id for a group being founded now: past every group standing and every group ever struck
+    /// off. Ids were the highest standing one plus one, which reused the id of a struck-off group
+    /// that had been the highest - and with it that group's first commander, whose name, skill and
+    /// temperament are drawn from the id, and any order still queued for it.
+    /// </summary>
+    public static int NewGroupId(Campaign campaign)
+    {
+        var id = Math.Max(1, campaign.NextArmyGroupId);
+        foreach (var group in campaign.ArmyGroups) if (group.Id >= id) id = group.Id + 1;
+        campaign.NextArmyGroupId = id + 1;
+        return id;
+    }
+
+    /// <summary>
+    /// The first "Army Group N" a country does not have yet. Counting its groups and adding one
+    /// named the next group after one that already stood once a group in the middle was struck off.
+    /// </summary>
+    public static int NextGroupNumber(Campaign campaign, int nationId)
+    {
+        var taken = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var group in campaign.ArmyGroups)
+            if (group.NationId == nationId) taken.Add(group.Name ?? "");
+        var number = 1;
+        while (taken.Contains($"Army Group {number}")) number++;
+        return number;
+    }
+
+    /// <summary>
+    /// Strike off the army groups nobody serves in any more.
+    ///
+    /// Groups were only ever added: one per hundred divisions at the start, one more each time a
+    /// country with none needed one (GroupOf), one for every group the player made. Nothing took
+    /// one away - not when its last division was destroyed, not when its divisions went to another
+    /// country in a merger or a defection, not when the country itself was annexed. A 107-year
+    /// campaign carried 1 204 of them and 1 032 had nobody under them: a commander, a name and a
+    /// record standing over an empty field, walked by every formation that looked for a group to
+    /// join.
+    ///
+    /// Weekly. A group with formations of its own country under it is staffed and stays, the
+    /// player's and the computer's alike. One left empty is first reused - a new formation joins
+    /// its country's smallest group, which an empty one is - and struck off once it has stood
+    /// empty for ArmyGroupEmptyDays; at once if its country is gone (fallen with no ground, or no
+    /// country at all), because nobody will ever be put under it again. A group the player made
+    /// and has never filled is kept for him: it is empty because he has not got to it yet, and only
+    /// one that has had formations and lost them is struck off. A formation still pointing at a
+    /// struck-off group (one of another country's, which GroupOf would move on its next look) is
+    /// set to answer to none, so no saved reference names a group that is not there.
+    ///
+    /// A formation answering to no group of its own country keeps one alive: the group GroupOf
+    /// will put it in, its country's smallest. Nothing puts a new formation under a group the day
+    /// it is raised - recruits, militia, contractors and defectors all start in none, and GroupOf
+    /// runs only when they fight - so a country rebuilding in peace had every division outside its
+    /// groups, and the review struck off the headquarters they were about to join: 80 groups with
+    /// a record of victories in the owner's campaign, gone within forty days, and a new "Army 1"
+    /// with a fresh commander founded the day those divisions next fought.
+    /// </summary>
+    public static int Tidy(Campaign campaign)
+    {
+        if (campaign is null || campaign.ArmyGroups.Count == 0 || campaign.ElapsedDays % 7 != 5) return 0;
+        // Weekly and small: built here rather than kept in a static, which two campaigns ticking
+        // side by side would share.
+        var groups = new Dictionary<int, ArmyGroup>(campaign.ArmyGroups.Count);
+        var staffed = new HashSet<int>();
+        var struck = new HashSet<int>();
+        foreach (var group in campaign.ArmyGroups) groups.TryAdd(group.Id, group);
+        // How many formations each group has under it, of any country - the count GroupOf weighs.
+        var members = new Dictionary<int, int>(campaign.ArmyGroups.Count);
+        HashSet<int> waiting = null, reserved = null;
+        foreach (var army in campaign.Armies)
+        {
+            if (army.ArmyGroupId >= 0) members[army.ArmyGroupId] = members.GetValueOrDefault(army.ArmyGroupId) + 1;
+            if (army.ArmyGroupId >= 0 && groups.TryGetValue(army.ArmyGroupId, out var group) && group.NationId == army.NationId)
+                staffed.Add(group.Id);
+            else (waiting ??= new HashSet<int>()).Add(army.NationId);
+        }
+        if (waiting is not null)
+        {
+            // The group GroupOf would choose for each country with a formation waiting: fewest
+            // members, then the lowest id - its own walk, so the group kept is the one joined.
+            var chosen = new Dictionary<int, ArmyGroup>();
+            foreach (var group in campaign.ArmyGroups)
+            {
+                if (!waiting.Contains(group.NationId)) continue;
+                if (!chosen.TryGetValue(group.NationId, out var best)) { chosen[group.NationId] = group; continue; }
+                var count = members.GetValueOrDefault(group.Id);
+                var bestCount = members.GetValueOrDefault(best.Id);
+                if (count < bestCount || (count == bestCount && group.Id < best.Id)) chosen[group.NationId] = group;
+            }
+            foreach (var group in chosen.Values) (reserved ??= new HashSet<int>()).Add(group.Id);
+        }
+        var today = campaign.ElapsedDays;
+        var grace = Math.Max(0, campaign.Defines.ArmyGroupEmptyDays);
+        foreach (var group in campaign.ArmyGroups)
+        {
+            if (staffed.Contains(group.Id))
+            {
+                group.StaffedDay = today;
+                continue;
+            }
+            var nation = campaign.NationById(group.NationId);
+            var gone = nation is null ||
+                       (nation.Movement is null && campaign.Fallen.Contains(nation.Id) && campaign.StatesOf(nation).Length == 0);
+            if (gone) { struck.Add(group.Id); continue; }
+            if (reserved is not null && reserved.Contains(group.Id))
+            {
+                // Held for the formations about to join it, as good as staffed - but a group the
+                // player made and never filled stays never-filled: being next in line is not service.
+                if (group.StaffedDay >= 0) group.StaffedDay = today;
+                continue;
+            }
+            if (group.StaffedDay < 0)
+            {
+                // Never seen staffed. The player's own is waiting to be filled; the computer
+                // never makes an empty one, so its clock starts now.
+                if (!nation.IsHuman) group.StaffedDay = today;
+                continue;
+            }
+            if (today - group.StaffedDay >= grace) struck.Add(group.Id);
+        }
+        if (struck.Count == 0) return 0;
+        // Past every id that stood, the struck-off ones included, before they go.
+        foreach (var group in campaign.ArmyGroups)
+            if (group.Id >= campaign.NextArmyGroupId) campaign.NextArmyGroupId = group.Id + 1;
+        campaign.ArmyGroups.RemoveAll(group => struck.Contains(group.Id));
+        foreach (var army in campaign.Armies)
+            if (struck.Contains(army.ArmyGroupId)) army.ArmyGroupId = -1;
+        // The lookup is rebuilt when the count changes; a group struck off and another founded
+        // before the next look would leave the count where it was and the index stale.
+        _indexedCount = -1;
+        campaign.MarkStrategicChange();
+        return struck.Count;
     }
 
     private static float Roll(Campaign campaign, ArmyGroup group, int salt) =>

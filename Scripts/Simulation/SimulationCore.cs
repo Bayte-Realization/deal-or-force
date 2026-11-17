@@ -501,6 +501,14 @@ public sealed partial class Campaign
     public readonly List<ScenarioState> States = new();
     public readonly List<Army> Armies = new();
     public readonly List<ArmyGroup> ArmyGroups = new();
+    /// <summary>
+    /// The id the next army group is founded under, once one has been struck off (Generals.NewGroupId).
+    /// 0 until then: an id is the highest standing one plus one, which is all a world that only ever
+    /// adds groups needs. Kept because a group that is struck off can be the one with the highest id,
+    /// and its id handed out again would give the new group the old one's first commander (the draw
+    /// is seeded by the id) and pass it any order still queued for the old one.
+    /// </summary>
+    public int NextArmyGroupId;
     public readonly List<Fleet> Fleets = new();
     public readonly List<StrategicWar> Wars = new();
 
@@ -1459,6 +1467,8 @@ public sealed partial class Campaign
             HeldRegions.AiMonth(this);
             // A government relieves the commander who keeps losing (Generals).
             Generals.AiMonth(this);
+            // And strikes off the army groups nobody serves in any more (Generals.Tidy).
+            using (SimProfiler.Measure("army groups")) Generals.Tidy(this);
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
             // In stages, like the economy before it (BrainDrain.Stages).
@@ -2670,6 +2680,9 @@ public sealed partial class Campaign
         if (ProvinceMap is not null)
             foreach (var n in Nations)
                 if (n.Movement is not null) MovementRules.SynchroniseTerritory(this, n);
+        // And the same for the fallen list: a country back on the map is not fallen, by
+        // whichever road its ground came back (MovementFall.ReturnTheLanded).
+        MovementFall.ReturnTheLanded(this);
         InterfaceDirty = true;
     }
 

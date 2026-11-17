@@ -74,6 +74,12 @@ public sealed class ArmyGroup
     public int CommandersLost;
     /// <summary>How many of its commanders the government has relieved (Generals.Relieve).</summary>
     public int CommandersRelieved;
+    /// <summary>
+    /// The last weekly review (Generals.Tidy) that found formations of its own country under it -
+    /// or, for a group the computer runs, the first that found it without any. -1 until then. A
+    /// group left empty for Defines.ArmyGroupEmptyDays after it is struck off.
+    /// </summary>
+    public int StaffedDay = -1;
 }
 
 /// <summary>
@@ -237,8 +243,9 @@ public sealed class CreateArmyGroupCommand : ICampaignCommand
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
         if (campaign.NationById(IssuerId) is null) return;
-        var id = campaign.ArmyGroups.Count == 0 ? 1 : campaign.ArmyGroups.Max(group => group.Id) + 1;
-        var number = campaign.ArmyGroups.Count(group => group.NationId == IssuerId) + 1;
+        // Never an id or a number a struck-off group had (Generals.NewGroupId, NextGroupNumber).
+        var number = Generals.NextGroupNumber(campaign, IssuerId);
+        var id = Generals.NewGroupId(campaign);
         campaign.ArmyGroups.Add(new ArmyGroup
         {
             Id = id,

@@ -739,6 +739,12 @@ public static partial class SaveSystem
             foreach (var n in campaign.Nations)
                 if (n.Movement is not null && campaign.HasOwnedLand(n))
                     MovementRules.SynchroniseTerritory(campaign, n);
+            // A save written before the fallen list followed the map can carry countries that hold
+            // regions with people in them and are still on it - 41 in one 107-year campaign, every
+            // one emptied by the economy each week. Taken off here, by the same rule the map now
+            // applies on every change; regions, not the topology, so it needs nothing attached.
+            var returned = MovementFall.ReturnTheLanded(campaign);
+            if (returned > 0) DiagnosticLogs.Write("simulation", $"SAVE_REPAIR fallen_with_ground={returned}");
             Factions.SettleDefenselessRebelRemnants(campaign);
             return new SaveLoadResult(campaign, metadata, warning);
         }
@@ -1145,6 +1151,8 @@ public static partial class SaveSystem
         public List<SupportOrder> SupportOrders = new();
         public int NextSupportId = 1;
         public List<ArmyGroup> ArmyGroups = new();
+        /// <summary>Campaign.NextArmyGroupId; 0, as in older saves, until a group has been struck off.</summary>
+        public int NextArmyGroupId;
         public List<Fleet> Fleets = new();
         public List<StrategicWar> Wars = new();
         // Null only for older payloads: reconstruct their surviving outbreak evidence once.
@@ -1299,6 +1307,7 @@ public static partial class SaveSystem
             SupportOrders = new List<SupportOrder>(campaign.SupportOrders),
             NextSupportId = campaign.NextSupportId,
             ArmyGroups = new List<ArmyGroup>(campaign.ArmyGroups),
+            NextArmyGroupId = campaign.NextArmyGroupId,
             Fleets = new List<Fleet>(campaign.Fleets),
             Wars = new List<StrategicWar>(campaign.Wars),
             CivilWarBudget = CivilWarOutbreak.Budget(campaign).Copy(campaign.ElapsedDays),
@@ -1502,6 +1511,9 @@ public static partial class SaveSystem
                         campaign.SupportFormations.Count == 0 ? 0 : campaign.SupportFormations.Max(f => f.Id),
                         campaign.SupportOrders.Count == 0 ? 0 : campaign.SupportOrders.Max(o => o.Id)) + 1);
             Replace(campaign.ArmyGroups, ArmyGroups);
+            // As saved, not raised to the standing groups: NewGroupId takes the higher of the two
+            // itself, and a value raised here would make the opened world differ from the one saved.
+            campaign.NextArmyGroupId = Math.Max(0, NextArmyGroupId);
             Replace(campaign.Fleets, Fleets);
             Replace(campaign.Wars, Wars);
             Replace(campaign.Sponsorships, Sponsorships);

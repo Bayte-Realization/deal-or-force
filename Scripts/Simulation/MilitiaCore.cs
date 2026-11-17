@@ -236,11 +236,17 @@ public static class MilitiaCore
             // walk back, and the village keeps volunteering while its ground is held. A
             // formation drained holding a line does not stay a muster roll of zeroes - it
             // fills again from home, a little each day, when there is a home to fill from.
-            if (army.Personnel < army.MaxPersonnel && army.Personnel >= 0)
+            // Who holds the ground is written on the map in the country's map number, not its
+            // place in the nation list. Comparing it with NationId compared two numberings that
+            // agree for hardly any real country (France is nation 20 and map number 22), so a
+            // drained militia on its own ground never filled - and one standing where a
+            // coincidence of numbers made a neighbour's map number its own list number did.
+            if (army.Personnel < army.MaxPersonnel && army.Personnel >= 0 &&
+                campaign.NationById(army.NationId) is { } home)
             {
                 var controls = campaign.ProvinceController;
                 if (controls is not null && army.ProvinceId > 0 && army.ProvinceId < controls.Length &&
-                    controls[army.ProvinceId] == (ushort)army.NationId)
+                    controls[army.ProvinceId] == (ushort)home.MapIndex)
                 {
                     var room = army.MaxPersonnel - army.Personnel;
                     var gain = (int)MathF.Min(room, MathF.Max(1f, army.MaxPersonnel * campaign.Defines.MilitiaVolunteerSharePerDay));
