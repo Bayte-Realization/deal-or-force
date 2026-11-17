@@ -1,0 +1,12 @@
+// Быстрые суммы и ползунок в окне долга (Scripts/ui/SovereignFinanceWorkspaceUI.cs).
+{
+  "Repay all we can": "Погасить сколько можем",
+  "Pay all overdue bills": "Оплатить все просроченные счета",
+  "Borrow the most we can": "Занять по максимуму",
+  "Nothing to repay, or no cash to repay it with.": "Гасить нечего или нечем.",
+  "No overdue bills, or no cash to pay them with.": "Просроченных счетов нет или нечем платить.",
+  "No new credit is available this week.": "На этой неделе нового кредита нет.",
+  "Repay {0} of principal at once: all the cash allows, or all that is owed. Review, then press Repay debt to confirm.": "Погасить {0} основного долга разом: всё, что позволяет казна, или весь долг. Проверьте и нажмите «Погасить долг», чтобы подтвердить.",
+  "Pay {0} of overdue bills at once. Review, then press Pay overdue bills to confirm.": "Оплатить {0} просроченных счетов разом. Проверьте и нажмите «Оплатить просрочки», чтобы подтвердить.",
+  "Issue {0} of bonds: all the credit available this week. Review, then press Issue bonds to confirm.": "Выпустить облигации на {0}: весь кредит, доступный на этой неделе. Проверьте и нажмите «Выпустить облигации», чтобы подтвердить."
+}

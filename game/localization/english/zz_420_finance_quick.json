@@ -1,0 +1,12 @@
+// One-press amounts and a slider in the debt window (Scripts/ui/SovereignFinanceWorkspaceUI.cs).
+{
+  "Repay all we can": "Repay all we can",
+  "Pay all overdue bills": "Pay all overdue bills",
+  "Borrow the most we can": "Borrow the most we can",
+  "Nothing to repay, or no cash to repay it with.": "Nothing to repay, or no cash to repay it with.",
+  "No overdue bills, or no cash to pay them with.": "No overdue bills, or no cash to pay them with.",
+  "No new credit is available this week.": "No new credit is available this week.",
+  "Repay {0} of principal at once: all the cash allows, or all that is owed. Review, then press Repay debt to confirm.": "Repay {0} of principal at once: all the cash allows, or all that is owed. Review, then press Repay debt to confirm.",
+  "Pay {0} of overdue bills at once. Review, then press Pay overdue bills to confirm.": "Pay {0} of overdue bills at once. Review, then press Pay overdue bills to confirm.",
+  "Issue {0} of bonds: all the credit available this week. Review, then press Issue bonds to confirm.": "Issue {0} of bonds: all the credit available this week. Review, then press Issue bonds to confirm."
+}
