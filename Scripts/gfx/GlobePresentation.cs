@@ -455,7 +455,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
             var colors = new Dictionary<int, uint>(_colorByMapIndex);
             // Read here, not on the worker: the skin is a table the main thread may reload.
             var shades = Simulation.MapBorderStyles.PlateShades();
-            _mapTask = Task.Run(() => BuildPoliticalMap(colors, shades));
+            // Decided here too: the worker must not read the settings while the main thread may write them.
+            var buildFrontier = FrontierFieldWanted();
+            _mapTask = Task.Run(() => BuildPoliticalMap(colors, shades, buildFrontier));
             // The terrain's pictures beside it, on other cores: they wait on nothing the map makes.
             StartTerrainImages();
             return;
@@ -3433,6 +3435,18 @@ void fragment() {
         nation_edge_pixels = mix(nation_edge_pixels, frontier_pixels, frontier_weight);
         has_nation_border = mix(has_nation_border, frontier_near, frontier_weight);
     }
+    // A frontier drawn by hand: its width wanders slowly along the border, and its ink a little.
+    // The noise is fixed to the map and runs over tens of cells, so it never crawls or flickers,
+    // and it is let go once a cell is under a quarter of a pixel, where it could only add grit.
+    // Everything drawn off nation_edge_pixels below - cushion, rim, the outline of a picked
+    // country - wanders with the line, so they stay together.
+    float border_wobble = 0.5;
+    float border_wobble_weight = 0.0;
+    if (atlas_look > 0.5) {
+        border_wobble = atlas_noise(UV, id_size.x * 0.06);
+        border_wobble_weight = look_border_wobble * clamp(4.0 - id_span, 0.0, 1.0);
+        nation_edge_pixels *= 1.0 + (border_wobble - 0.5) * border_wobble_weight;
+    }
     float country_edge = 1.0 - smoothstep(border_pixels * 0.85, border_pixels * 2.05, nation_edge_pixels);
     // Off the field the line can be kept to the world view: it is filtered, so it thins rather
     // than breaking into dots. Off the rebuild it has to fade once a pixel holds more than a
@@ -3440,6 +3454,16 @@ void fragment() {
     float far_line = mix(clamp(2.4 - pixel_texels, 0.0, 1.0),
                          clamp(1.15 - (pixel_texels - 1.5) * 0.09, 0.5, 1.0), frontier_weight);
     country_edge *= has_nation_border * far_line;
+    // Where one side is the sea the line is a coast, not a frontier, and the atlas inks it lighter
+    // and bluer, so the eye can tell where a state ends from where the land does. The two inks
+    // split one stroke; nothing is drawn twice.
+    float coast_edge = 0.0;
+    if (atlas_look > 0.5) {
+        country_edge *= 1.0 + (border_wobble - 0.5) * 0.12 * step(0.001, border_wobble_weight);
+        float coast_side = max(1.0 - step(0.5, near_nation), 1.0 - step(0.5, other_nation));
+        coast_edge = country_edge * coast_side;
+        country_edge -= coast_edge;
+    }
     // The highest rank wins. Where the province boundary under this pixel IS the country
     // boundary - the same edge, reconstructed twice from the same block of ids, so the two
     // reaches agree - only the country border is drawn: no province line and pale shoulder
@@ -3487,6 +3511,15 @@ void fragment() {
     base = mix(base, region_border_color, region_cushion * detail_mix * political.a * region_border_opacity);
     base = mix(base, clamp(base * 1.18 + vec3(0.055, 0.048, 0.032), vec3(0.0), vec3(1.0)),
         country_inner_rim * detail_mix * political.a * 0.40);
+    if (atlas_look > 0.5) {
+        // The far band (Imperator): from the middle zoom out, where the cushion above has gone
+        // because it is measured in pixels, the colour deepens towards every frontier and coast
+        // over a few cells of the frontier field instead. The border keeps its volume all the way
+        // out. Not in Compatibility, which has no field (frontier_ready stays nought there).
+        float far_band = (1.0 - smoothstep(frontier_offset, frontier_cap * 0.85, frontier_cells_all)) * frontier_ready
+            * clamp((id_span - 0.8) / 1.2, 0.0, 1.0) * political.a * (1.0 - step(0.5, terrain_mode));
+        base = mix(base, saturated_nation * 0.80, far_band * look_far_band);
+    }
 
     // Zoom-gated, screen-space strokes: readable through relief at tactical distance,
     // absent on the world map. A restrained light shoulder also works on dark terrain.
@@ -3499,6 +3532,9 @@ void fragment() {
     // One ink for every frontier: has_nation_border asks only whether the holder changes here.
     base = mix(base, country_border_color,
         country_edge * max(detail_mix, country_border_far_weight) * political.a * country_border_opacity);
+    if (atlas_look > 0.5)
+        base = mix(base, look_coast_ink,
+            coast_edge * max(detail_mix, country_border_far_weight) * political.a * country_border_opacity);
     // The country the player has asked about, drawn as one. Off the same coverage field as
     // the border above - the same stroke at a different weight and colour, rather than a
     // second idea of where a country ends - with a faint wash inside it so the outline reads
@@ -3509,6 +3545,13 @@ void fragment() {
     highlight_edge *= step(0.5, abs(near_nation - other_nation)) * highlighted;
     base = mix(base, vec3(0.91, 0.79, 0.42), highlighted * 0.085);
     base = mix(base, vec3(1.00, 0.87, 0.48), highlight_edge * 0.88);
+    if (atlas_look > 0.5 && highlighted_nation >= 0.0) {
+        // A soft glow just outside the picked country's border, so the gold ring reads as lit
+        // from within rather than painted on.
+        float selection_outer = (abs(other_nation - highlighted_nation) < 0.5 && abs(near_nation - highlighted_nation) > 0.5)
+            ? 1.0 - smoothstep(0.0, border_pixels * 6.0, nation_edge_pixels) : 0.0;
+        base = mix(base, vec3(1.0, 0.87, 0.48), selection_outer * look_selection_halo);
+    }
     // A line the player drew. Blue holds it, amber takes it, grey falls back to it.
     float plan = round(front.b * 4.0);
     vec3 plan_color = plan < 1.5 ? vec3(0.24, 0.56, 0.96)
@@ -5623,7 +5666,8 @@ void fragment() {
         return new Vector3(horizontal * Mathf.Sin(lon), Mathf.Sin(lat), horizontal * Mathf.Cos(lon)) * radius;
     }
 
-    private static MapBuildResult BuildPoliticalMap(Dictionary<int, uint> colors, Simulation.MapPlateShades shades)
+    private static MapBuildResult BuildPoliticalMap(Dictionary<int, uint> colors, Simulation.MapPlateShades shades,
+        bool buildFrontier)
     {
         var control = SourceEarthData.Control;
         var states = SourceEarthData.States;
@@ -5673,8 +5717,10 @@ void fragment() {
         // thread only uploads it. The control grid is kept by reference for the repaints that
         // follow a moving border - the source data lets its own copy go once the map is up.
         var frontierAuthored = control;
-        var frontierWork = Task.Run(() => FrontierImage(frontierAuthored, provinces,
-            provinces.ProvinceToNation, provinces.ProvinceToNation));
+        // Not at all in Compatibility under the atlas look, which cannot read it (FrontierFieldWanted).
+        var frontierWork = buildFrontier
+            ? Task.Run(() => FrontierImage(frontierAuthored, provinces, provinces.ProvinceToNation, provinces.ProvinceToNation))
+            : Task.FromResult<Image>(null);
 
         for (var y = 0; y < MapHeight; y++)
         {

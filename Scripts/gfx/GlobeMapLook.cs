@@ -50,7 +50,22 @@ public sealed partial class GlobePresentation
         _globeMaterial.SetShaderParameter("look_waterline", style.Waterline);
         _globeMaterial.SetShaderParameter("look_sea_sheen", style.SeaSheen);
         _globeMaterial.SetShaderParameter("look_selection_halo", style.SelectionHalo);
+        // Compatibility has no texture unit left for the frontier field, so its read there is a
+        // constant meaning "inland" (PackedMapShader). With frontier_ready at one every country
+        // line faded out from the middle zoom (GlobePlateRepaint.ApplyFrontier). The atlas keeps
+        // it at nought there, so the line is rebuilt per pixel at every zoom as the packed shader
+        // intends; classic keeps what it always did, so the old picture stays one value away.
+        if (_packedLookups is not null)
+            _globeMaterial.SetShaderParameter("frontier_ready",
+                !_mapLookAtlas && _frontierTexture is not null ? 1f : 0f);
     }
+
+    /// <summary>
+    /// Whether the frontier field is worth building: everywhere but Compatibility under the atlas
+    /// look, where the shader cannot read it and the 16-megabyte picture would be built and
+    /// uploaded for nothing.
+    /// </summary>
+    private bool FrontierFieldWanted() => _packedLookups is null || !MapLook.Atlas();
 
     /// <summary>Per frame from _Process: the paper share, sent only when it moves by more than 0.002.</summary>
     private void UpdatePaperMix()

@@ -88,7 +88,7 @@ public sealed partial class GlobePresentation
         // The picture and its mipmaps are made on the worker too: the main thread only uploads.
         // The frontier field follows the same owners in the same task, so the far stroke and
         // the far colours always change together.
-        var frontierAuthored = _frontierAuthored;
+        var frontierAuthored = FrontierFieldWanted() ? _frontierAuthored : null;
         _plateWork = Task.Run(() =>
         {
             var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8,
@@ -132,6 +132,14 @@ public sealed partial class GlobePresentation
     private void ApplyFrontier(Image frontier)
     {
         if (frontier is null || _globeMaterial is null) { frontier?.Dispose(); return; }
+        // Compatibility under the atlas look: the packed shader has no field, and a ready flag
+        // with nothing behind it made every country line fade out from the middle zoom.
+        if (!FrontierFieldWanted())
+        {
+            frontier.Dispose();
+            _globeMaterial.SetShaderParameter("frontier_ready", 0f);
+            return;
+        }
         if (_frontierTexture is not null && _frontierTexture.GetWidth() == frontier.GetWidth() &&
             _frontierTexture.GetHeight() == frontier.GetHeight())
             _frontierTexture.Update(frontier);

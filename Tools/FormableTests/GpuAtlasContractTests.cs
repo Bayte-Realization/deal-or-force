@@ -61,6 +61,19 @@ static class GpuAtlasContractTests
         Check(QualityProfiles.For("auto", "NVIDIA GeForce RTX 3060", "gl_compatibility").Id == QualityProfiles.Ladder[0].Id &&
             QualityProfiles.For("auto", "Intel HD Graphics 530", "gl_compatibility").CityLabels,
             "Compatibility is not mistaken for a mandatory low-quality preset");
+        // The atlas look (Simulation.MapLook) adds no texture: the same twelve units in
+        // Compatibility, and not one trace of the frontier field there, which the packed build
+        // cannot bind and which frontier_ready must therefore never claim.
+        Check(Regex.IsMatch(full, @"uniform\s+float\s+atlas_look\s*=\s*0\.0;") &&
+              Regex.IsMatch(full, @"uniform\s+float\s+paper_mix\s*=\s*0\.0;"),
+            "the full map declares the atlas switch and the paper share, both off by default");
+        var lookPacked = PackedMapShader.Build(corrected);
+        Check(Regex.Matches(lookPacked, @"uniform\s+sampler\w+\s+").Count == 12 && !lookPacked.Contains("frontier_field"),
+            "with the atlas look the packed build still binds exactly twelve samplers and never the frontier field");
+        Check(lookPacked.Contains("uniform float atlas_look") && lookPacked.Contains("if (atlas_look > 0.5"),
+            "the packed build carries the atlas look itself, not a stripped copy");
+        Check(!Regex.IsMatch(full, @"uniform\s+sampler\w+\s+(look_|atlas_look|paper_)"),
+            "the atlas look declares no sampler of its own");
         MapStyleSettingTests.Run();
     }
 }
