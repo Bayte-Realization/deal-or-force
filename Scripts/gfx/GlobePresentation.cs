@@ -1801,10 +1801,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
                         {
                             if (TryPick(button.Position, out var country)) CountryPicked?.Invoke(country);
                         }
-                        else if (SupportCommandMode)
+                        else if (SupportRebaseArmed)
                         {
-                            if (!SupportRebaseArmed && TryPickSupport(button.Position, out var formation)) SupportPicked?.Invoke(formation);
-                            else if (TryPick(button.Position, out var destination)) CountryPicked?.Invoke(destination);
+                            // A strike target is being named in the long-range panel: the click is its.
+                            if (TryPick(button.Position, out var destination)) CountryPicked?.Invoke(destination);
                         }
                         else if (TryPickBattle(button.Position, out var battle)) BattlePicked?.Invoke(battle);
                         else if (TryPickArmyStack(button.Position, out var stack))
@@ -1820,12 +1820,18 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     }
                     else
                     {
-                        if (!CountrySelectionOnly && SupportCommandMode) SupportBoxPicked?.Invoke(SupportInScreenRect(rect));
-                        else
+                        if (!CountrySelectionOnly)
                         {
+                            // Divisions and long-range formations in one box, as one selection -
+                            // the panel no longer has to be open for a box to take formations.
                             var selected = ArmiesInScreenRect(rect);
-                            if (!CountrySelectionOnly && selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
-                            else if (!CountrySelectionOnly && FleetsInScreenRect(rect) is { Count: > 0 } fleets)
+                            var formations = SupportInScreenRect(rect);
+                            if (selected.Count > 0 || formations.Count > 0)
+                            {
+                                if (SelectionBoxPicked is not null) SelectionBoxPicked.Invoke(selected, formations);
+                                else if (selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
+                            }
+                            else if (FleetsInScreenRect(rect) is { Count: > 0 } fleets)
                                 FleetsBoxPicked?.Invoke(fleets);
                         }
                     }

@@ -21,6 +21,12 @@ using DealOrForce.Simulation;
 ///     the attrition floor;
 ///   - how many battle-days had any long-range support on either side, and how much.
 /// It only reads the world: the campaign runs exactly as without it.
+///
+/// After the first slice of the rework (LongRangeMovement, 17 November) it also counts what the
+/// movement is supposed to have ended: every day, every formation's position against the day
+/// before - a road step to anything but a neighbouring province is a jump, a flight or a sea
+/// passage is measured in kilometres a day - the formation-days on the road, deploying and cut
+/// off, the computer's relocation orders and how many went toward the front, and the overruns.
 /// </summary>
 internal static class LongRangeReport
 {
@@ -31,6 +37,13 @@ internal static class LongRangeReport
         LongRangeStrikes.Salvos = LongRangeStrikes.DryLaunches = LongRangeStrikes.Procured = 0;
         LongRangeStrikes.LaunchedPoints = LongRangeStrikes.InterceptedPoints = LongRangeStrikes.LandedPoints = 0f;
         LongRangeStrikes.ByTarget.Clear();
+        LongRangeMovement.AiOrders = LongRangeMovement.AiOrdersTowardFront = LongRangeMovement.AiCityCover = LongRangeMovement.Withdrawals =
+            LongRangeMovement.CutOffs = LongRangeMovement.Overruns = 0;
+        long transitDays = 0, deployingDays = 0, cutOffDays = 0;
+        int landJumps = 0, landSteps = 0;
+        float maxLandKm = 0f, maxAirKm = 0f, maxSeaKm = 0f;
+        var position = c.SupportFormations.ToDictionary(f => f.Id, f => (Province: LongRangeMovement.At(f), Point: LongRangeMovement.Position(c, f),
+            Mode: f.RouteModes.Count > 0 ? f.RouteModes[0] : -1));
 
         var startIds = new HashSet<int>(c.SupportFormations.Select(f => f.Id));
         Console.WriteLine($"LONGRANGE seed={c.Seed} days={days} formations_at_start={c.SupportFormations.Count} " +
@@ -46,6 +59,7 @@ internal static class LongRangeReport
         long battleDays = 0, battleDaysWithSupport = 0;
         double supportPoints = 0;
         long reachSamples = 0, reachCovering = 0;
+        var missing = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var lines = new List<string>();
         var byYear = new SortedDictionary<int, int[]>();   // formations, at war, evacuations, ordered, salvos
 
@@ -69,7 +83,31 @@ internal static class LongRangeReport
             foreach (var f in c.SupportFormations)
             {
                 now[f.Id] = (f.StateMapIndex, f.BaseProvinceId, f.NationId);
-                if (f.BaseProvinceId <= 0) limboDays++;
+                // Off the map is a formation with no province at all; a moving or deploying one has
+                // no base for the day but is somewhere, and is counted as that instead.
+                if (LongRangeMovement.At(f) <= 0) limboDays++;
+                if (f.Route.Count > 0) transitDays++;
+                else if (f.DeployDaysLeft > 0) deployingDays++;
+                if (f.CutOff) cutOffDays++;
+                var here = (Province: LongRangeMovement.At(f), Point: LongRangeMovement.Position(c, f), Mode: f.RouteModes.Count > 0 ? f.RouteModes[0] : -1);
+                if (position.TryGetValue(f.Id, out var was) && was.Province > 0 && here.Province > 0)
+                {
+                    var dayKm = Km(was.Point, here.Point);
+                    // By what the formation is, not by the route it had last night: a wing whose
+                    // base fell this morning is given its flight and makes it the same day.
+                    var flies = SupportTypeCatalog.TryGet(f.TypeId, out var kindOf) && kindOf.Movement == SupportMoveMode.Air;
+                    var mode = flies ? SupportMoveMode.Air
+                        : (SupportMoveMode)(was.Mode >= 0 ? was.Mode : (int)SupportMoveMode.Land);
+                    if (was.Province != here.Province && mode is SupportMoveMode.Land or SupportMoveMode.Rail)
+                    {
+                        landSteps++;
+                        if (!map.Neighbors[was.Province].Contains(here.Province)) landJumps++;
+                        maxLandKm = MathF.Max(maxLandKm, dayKm);
+                    }
+                    else if (mode == SupportMoveMode.Air) maxAirKm = MathF.Max(maxAirKm, dayKm);
+                    else if (mode == SupportMoveMode.Sea) maxSeaKm = MathF.Max(maxSeaKm, dayKm);
+                }
+                position[f.Id] = here;
                 if (atWar.Contains(f.NationId))
                 {
                     atWarFormationDays++;
@@ -77,7 +115,9 @@ internal static class LongRangeReport
                 }
                 else peaceFormationDays++;
                 if (!last.TryGetValue(f.Id, out var before)) { raised++; continue; }
-                if (before.Item2 == f.BaseProvinceId) continue;
+                // A base set to -1 is a formation packing up for the road, not a jump; a base that
+                // appears is one deploying where it arrived. Both are counted by position above.
+                if (before.Item2 == f.BaseProvinceId || f.BaseProvinceId <= 0 || before.Item2 <= 0) continue;
                 var nation = c.NationById(f.NationId);
                 var baseHeld = before.Item2 > 0 && before.Item2 <= map.ProvinceCount && nation is not null &&
                                controllers[before.Item2] == nation.MapIndex;
@@ -119,14 +159,23 @@ internal static class LongRangeReport
             {
                 if (!atWar.Contains(f.NationId) || !SupportTypeCatalog.TryGet(f.TypeId, out var type)) continue;
                 reachSamples++;
-                if (SupportCore.Displaced(c, f)) continue;
+                // Why a sample does not cover, so the share can be read rather than guessed at.
+                string Miss(string why) { missing[why] = missing.GetValueOrDefault(why) + 1; return why; }
+                if (f.CutOff) { Miss("cut_off"); continue; }
+                if (SupportCore.Displaced(c, f)) { Miss(f.Route.Count > 0 ? "on_the_road" : "deploying"); continue; }
                 var covers = false;
+                var anyBattle = false;
                 foreach (var war in c.Wars)
                 {
                     if (war.Ended || !war.Involves(f.NationId) || !battlesByWar.TryGetValue(war.Id, out var battles)) continue;
-                    if (battles.Any(b => SupportCore.DistanceKm(c, f.BaseProvinceId, b.ProvinceId) <= type.RangeKm)) { covers = true; break; }
+                    anyBattle = true;
+                    if (battles.Any(b => SupportCore.DistanceKm(c, f.BaseProvinceId, b.ProvinceId) <= SupportCore.ReachKm(c, type))) { covers = true; break; }
                 }
                 if (covers) reachCovering++;
+                else if (!anyBattle) Miss("no_battle_in_its_wars");
+                else if (type.Kind == SupportKind.AirDefence) Miss("air_defence");
+                else if (c.NationById(f.NationId)?.IsHuman == true) Miss("human");
+                else Miss("out_of_reach_" + type.Id);
             }
         }
 
@@ -138,7 +187,24 @@ internal static class LongRangeReport
         Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
             "LONGRANGE_MOVES ordered={0} evacuated={1} to_limbo={2} jumps_measured={3} median_km={4:0} p90_km={5:0} max_km={6:0} over_500km={7} no_land_route={8}",
             ordered, evacuated, toLimbo, jumpKm.Count, Pct(.5f), Pct(.9f), jumpKm.Count == 0 ? 0 : jumpKm[^1], over500, noLandRoute));
-        Console.WriteLine($"LONGRANGE_LIMBO formation_days_without_base={limboDays} at_end={c.SupportFormations.Count(f => f.BaseProvinceId <= 0)}");
+        Console.WriteLine($"LONGRANGE_LIMBO formation_days_off_the_map={limboDays} at_end={c.SupportFormations.Count(f => LongRangeMovement.At(f) <= 0)}");
+        Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+            "LONGRANGE_MOVEMENT land_steps={0} land_jumps_beyond_neighbour={1} max_land_day_km={2:0} max_air_day_km={3:0} max_sea_day_km={4:0} " +
+            "transit_days={5} deploying_days={6} cut_off_days={7} cut_off_at_end={8}",
+            landSteps, landJumps, maxLandKm, maxAirKm, maxSeaKm, transitDays, deployingDays, cutOffDays, c.SupportFormations.Count(f => f.CutOff)));
+        foreach (var f in c.SupportFormations.Where(f => f.CutOff).OrderBy(f => f.Id).Take(12))
+        {
+            var nation = c.NationById(f.NationId);
+            var at = LongRangeMovement.At(f);
+            var holder = at > 0 ? c.Nations.Find(n => n.MapIndex == (c.ProvinceController ?? map.ProvinceToNation)[at]) : null;
+            Console.WriteLine($"LONGRANGE_CUTOFF id={f.Id} nation={nation?.Tag} type={f.TypeId} province={at} held_by={holder?.Tag} " +
+                              $"at_war_with_holder={(nation is not null && holder is not null && MilitaryAccess.Hostile(c, nation.Id, holder.Id) ? 1 : 0)} " +
+                              $"own_provinces={(nation is null ? 0 : (c.ProvinceController ?? map.ProvinceToNation).Count(o => o == nation.MapIndex))}");
+        }
+        Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+            "LONGRANGE_AI relocation_orders={0} toward_front={1} sam_to_cities={5} withdrawals={2} overruns={3} cut_offs={4}",
+            LongRangeMovement.AiOrders, LongRangeMovement.AiOrdersTowardFront, LongRangeMovement.Withdrawals,
+            LongRangeMovement.Overruns, LongRangeMovement.CutOffs, LongRangeMovement.AiCityCover));
         Console.WriteLine($"LONGRANGE_FORCE raised={raised} ai_procured={LongRangeStrikes.Procured} lost={lost} at_end={c.SupportFormations.Count} " +
                           $"started_and_survived={c.SupportFormations.Count(f => startIds.Contains(f.Id))}");
         var atWarEnd = c.SupportFormations.Where(f => c.Wars.Any(w => !w.Ended && w.Involves(f.NationId))).ToList();
@@ -151,6 +217,7 @@ internal static class LongRangeReport
         Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
             "LONGRANGE_REACH monthly_samples={0} covering_a_battle_of_own_war={1} share={2:0.0}%",
             reachSamples, reachCovering, 100.0 * reachCovering / Math.Max(1, reachSamples)));
+        Console.WriteLine("LONGRANGE_REACH_MISSES " + string.Join(" ", missing.Select(p => $"{p.Key}={p.Value}")));
         Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
             "LONGRANGE_STRIKES salvos={0} dry={1} launched={2:0} intercepted={3:0} landed={4:0} {5}",
             LongRangeStrikes.Salvos, LongRangeStrikes.DryLaunches, LongRangeStrikes.LaunchedPoints,
@@ -169,5 +236,14 @@ internal static class LongRangeReport
                               string.Join(",", group.GroupBy(f => f.Mission).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key}:{g.Count()}")));
         }
         return 0;
+    }
+
+    private static float Km((float Latitude, float Longitude) a, (float Latitude, float Longitude) b)
+    {
+        var radians = MathF.PI / 180f;
+        var dLat = (b.Latitude - a.Latitude) * radians; var dLon = (b.Longitude - a.Longitude) * radians;
+        var h = MathF.Sin(dLat / 2) * MathF.Sin(dLat / 2) +
+                MathF.Cos(a.Latitude * radians) * MathF.Cos(b.Latitude * radians) * MathF.Sin(dLon / 2) * MathF.Sin(dLon / 2);
+        return 6371f * 2f * MathF.Asin(MathF.Min(1f, MathF.Sqrt(h)));
     }
 }

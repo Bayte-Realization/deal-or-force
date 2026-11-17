@@ -15,7 +15,15 @@
     "recruitment_cost": 0.25,
     "build_days": 30,
     "personnel": 600,
-    "missions": ["standby", "close_air_support", "interdiction"]
+    "missions": ["standby", "close_air_support", "interdiction"],
+    // How it moves and where it stands. A drone kind drives by default - its launchers and
+    // ground station are trucks - and these crews are quicker than a gun column, in place the
+    // day they arrive, and need no more room than a battery. "air" would make it fly ferry
+    // legs instead, up to "ferry_km" each.
+    "movement": "land",
+    "speed": 1.2,
+    "deploy_days": 0,
+    "basing": 1
   },
 
   // A kind the game already has, changed by one number. A later file naming the same kind

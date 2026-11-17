@@ -8,7 +8,11 @@ namespace DealOrForce;
 
 /// <summary>
 /// Player-controlled long-range formations on the operational map. The catalogue owns
-/// the icons and reach; this layer only turns their actual bases into readable counters.
+/// the icons and reach; this layer turns where each formation actually is into a readable
+/// counter - at the province it stands in, or, on the road, at sea or in the air, part-way
+/// along the step it is making, with the rest of its route drawn dashed in its arm's colour and
+/// the days left on the card. Cards are shown at the zoom divisions are, panel or no panel, and
+/// picked, boxed and ordered the way divisions are (GlobePresentation._GuiInput).
 /// </summary>
 public sealed partial class GlobePresentation
 {
@@ -54,8 +58,14 @@ public sealed partial class GlobePresentation
     public int SelectedSupportId => _selectedSupportId;
     public IReadOnlyCollection<int> SelectedSupportIds => _selectedSupportIds;
     public bool SupportCommandMode { get; set; }
+    /// <summary>A strike target is being named in the panel: the next left click on the map is its.</summary>
     public bool SupportRebaseArmed { get; set; }
     public event Action<List<SupportFormation>> SupportBoxPicked;
+    /// <summary>A box over the map: the divisions and the formations in it, one selection.</summary>
+    public event Action<IReadOnlyList<Simulation.Army>, List<SupportFormation>> SelectionBoxPicked;
+    // Days left for the cards of moving formations, recomputed when the formation has moved on.
+    private readonly Dictionary<int, (long Key, int Days)> _supportEta = new();
+    private (int Province, int Selection, long Hours, string Text) _supportMoveTip = (-1, 0, -1, "");
 
     /// <summary>
     /// The long-range forces panel is open: every base is shown from further out, and every
@@ -135,17 +145,19 @@ public sealed partial class GlobePresentation
     {
         if (_campaign?.ProvinceMap is null) return;
         var formation = _campaign.SupportFormations.Find(f => f.Id == formationId && f.NationId == _campaign.Player?.Id);
-        if (formation is null || formation.BaseProvinceId <= 0) return;
+        if (formation is null || LongRangeMovement.At(formation) <= 0) return;
         SelectSupportFormation(formationId);
-        var center = _campaign.ProvinceMap.CenterOf(formation.BaseProvinceId);
+        var center = LongRangeMovement.Position(_campaign, formation);
         FocusOn(center.Latitude, center.Longitude, 7.8f);
     }
 
     private void UpdateSupportPresentation(double delta)
     {
         if (!IsInstanceValid(_supportMarkerRoot)) return;
+        // Out to the zoom divisions are drawn at, panel or no panel: a formation that cannot be seen
+        // where the divisions are cannot be selected beside them.
         var show = MilitaryMarkersEnabled && _campaign?.Player is not null && _campaign.FeatureEnabled("long_range_forces") &&
-                   (_flatMap || ViewDistance <= Ui.Metric(_supportOverlay ? "support.overlay_distance" : "support.marker_distance", _supportOverlay ? 17f : 9.2f));
+                   (_flatMap || ViewDistance <= Ui.Metric(_supportOverlay ? "support.overlay_distance" : "support.marker_distance", _supportOverlay ? 17f : 10.8f));
         _supportMarkerRoot.Visible = show;
         _supportRangeNode.Visible = show && (_selectedSupportIds.Count > 0 || _supportOverlay) &&
                                     _supportRangeMesh.GetSurfaceCount() > 0;
@@ -176,8 +188,11 @@ public sealed partial class GlobePresentation
         var player = _campaign?.Player;
         var map = _campaign?.ProvinceMap;
         if (player is null || map is null) return;
+        // Every formation of ours that is anywhere on the map - deployed, on the road, deploying or
+        // cut off. There is no "off the map" any more, so there is nothing to leave out.
         var owned = _campaign.SupportFormations
-            .Where(f => f.NationId == player.Id && SupportCore.Enabled(_campaign, f.TypeId) && f.BaseProvinceId > 0 && f.BaseProvinceId <= map.ProvinceCount)
+            .Where(f => f.NationId == player.Id && SupportCore.Enabled(_campaign, f.TypeId) &&
+                        LongRangeMovement.At(f) > 0 && LongRangeMovement.At(f) <= map.ProvinceCount)
             .OrderBy(f => f.StateMapIndex).ThenBy(f => f.Id).ToArray();
         var hash = new HashCode();
         hash.Add(player.Id);
@@ -185,14 +200,13 @@ public sealed partial class GlobePresentation
         {
             hash.Add(formation.Id);
             hash.Add(formation.TypeId);
-            hash.Add(formation.BaseProvinceId);
-            hash.Add(formation.StateMapIndex);
         }
         var fingerprint = hash.ToHashCode();
         var reachHash = new HashCode();
         foreach (var formation in owned)
         {
-            reachHash.Add(formation.Id); reachHash.Add(formation.BaseProvinceId);
+            reachHash.Add(formation.Id); reachHash.Add(formation.BaseProvinceId); reachHash.Add(formation.ProvinceId);
+            reachHash.Add(formation.Route.Count); reachHash.Add((int)(formation.MoveProgress * 16f));
             reachHash.Add(formation.Mission); reachHash.Add(SupportCore.Displaced(_campaign, formation));
         }
         var reachFingerprint = reachHash.ToHashCode();
@@ -200,9 +214,19 @@ public sealed partial class GlobePresentation
         _supportRangeFingerprint = reachFingerprint;
         if (ReferenceEquals(_supportMarkedCampaign, _campaign) && fingerprint == _supportRosterFingerprint)
         {
+            var moved = false;
             foreach (var formation in owned)
                 if (_supportMapMarkers.TryGetValue(formation.Id, out var marker))
+                {
+                    moved |= MoveSupportMarker(marker, formation);
                     PaintSupportMarker(marker, formation);
+                }
+            if (moved)
+            {
+                _supportVisibility.Clear();
+                foreach (var marker in _supportMapMarkers.Values) _supportVisibility.Add((marker.Node, marker.Normal));
+                InvalidateFlatCounterDensity();
+            }
             if (reachChanged) BuildSupportRange();
             return;
         }
@@ -219,9 +243,10 @@ public sealed partial class GlobePresentation
         foreach (var formation in owned)
         {
             if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
-            var center = map.CenterOf(formation.BaseProvinceId);
-            // Geography is not a collision-avoidance slot. Keep the actual base anchor;
-            // the bounded screen layout may only use room inside this same province.
+            var center = LongRangeMovement.Position(_campaign, formation);
+            // Geography is not a collision-avoidance slot. Keep the actual anchor - the province
+            // it stands in, or the point it has reached on the road; the bounded screen layout may
+            // only use room inside that same province.
             var latitude = center.Latitude;
             var longitude = center.Longitude;
             var node = new Node3D { Name = $"LongRange_{formation.Id}" };
@@ -268,6 +293,30 @@ public sealed partial class GlobePresentation
         BuildSupportRange();
     }
 
+    /// <summary>The card follows the formation along its road: true when it moved.</summary>
+    private bool MoveSupportMarker(SupportMapMarker marker, SupportFormation formation)
+    {
+        var (latitude, longitude) = LongRangeMovement.Position(_campaign, formation);
+        if (MathF.Abs(latitude - marker.Latitude) < .0001f && MathF.Abs(longitude - marker.Longitude) < .0001f) return false;
+        marker.Latitude = latitude;
+        marker.Longitude = longitude;
+        marker.Normal = SurfacePoint(latitude, longitude, 1f).Normalized();
+        marker.DisplayOffset = Vector2.Zero;
+        PlaceSupportMarker(marker);
+        return true;
+    }
+
+    /// <summary>Days until a moving formation works again, kept until it has moved on.</summary>
+    private int SupportEta(SupportFormation formation)
+    {
+        var key = ((long)_campaign.ElapsedDays << 32) ^ ((long)formation.Route.Count << 20) ^
+                  BitConverter.SingleToInt32Bits(formation.MoveProgress);
+        if (_supportEta.TryGetValue(formation.Id, out var known) && known.Key == key) return known.Days;
+        var days = LongRangeMovement.DaysLeft(_campaign, formation);
+        _supportEta[formation.Id] = (key, days);
+        return days;
+    }
+
     private void PlaceSupportMarker(SupportMapMarker marker)
     {
         marker.Node.Position = _flatMap
@@ -301,7 +350,10 @@ public sealed partial class GlobePresentation
     private void PaintSupportMarker(SupportMapMarker marker, SupportFormation formation)
     {
         marker.Formation = formation;
-        var displaced = SupportCore.Displaced(_campaign, formation);
+        // Red for a formation that cannot work where it stands and is not on its way anywhere:
+        // cut off, or stopped on ground it may not use. A column on the road keeps its arm's colour.
+        var moving = formation.Route.Count > 0 || formation.DeployDaysLeft > 0;
+        var displaced = !moving && SupportCore.Displaced(_campaign, formation);
         if (SupportTypeCatalog.TryGet(formation.TypeId, out var type))
         {
             var icon = SpriteCatalog.TextureOf($"icon_{type.Icon}", $"res://game/gfx/interface/icons/icon_{type.Icon}.png");
@@ -316,7 +368,10 @@ public sealed partial class GlobePresentation
                 : 1f / marker.Plate.Texture.GetWidth();
         }
         marker.Plate.Modulate = Colors.White;
-        var mission = displaced ? "!" : formation.Mission switch
+        var mission = formation.CutOff ? Loc.Get("ISOLATED")
+            : formation.Route.Count > 0 ? Loc.Format("→ {0} d", SupportEta(formation))
+            : formation.DeployDaysLeft > 0 ? Loc.Get("DEPLOY")
+            : displaced ? "!" : formation.Mission switch
         {
             SupportCore.MissionCloseAirSupport => Loc.Get("FIRE"),
             SupportCore.MissionAirSuperiority => Loc.Get("AIR"),
@@ -400,25 +455,63 @@ public sealed partial class GlobePresentation
 
     private string SupportMapTooltip(Vector2 pixel)
     {
-        if (SupportRebaseArmed && TryPick(pixel, out var destination, updateSelection: false) && destination.State is not null)
+        if (TryPickSupport(pixel, out var formation) && SupportTypeCatalog.TryGet(formation.TypeId, out var type))
         {
-            var plan = SupportCore.PreviewRebase(_campaign, _campaign.Player.Id, _selectedSupportIds, destination.State.MapIndex);
-            return destination.State.DisplayName + "\n" +
-                Loc.Format("Need {0} posts · {1} free · {2} reserved for training.", plan.Moving, plan.Free, plan.Reserved) + "\n" +
-                (plan.Refusal.Length > 0 ? Loc.Get(plan.Refusal) : Loc.Get("Click to rebase the whole group. Esc cancels."));
+            var state = _campaign.States.Find(s => s.MapIndex == formation.StateMapIndex);
+            var where = formation.CutOff ? Loc.Get("Cut off: no road out and no flight long enough. It looks for a way out every day.")
+                : formation.Route.Count > 0 ? Loc.Format("On the way: {0} d to go, then deploying.", SupportEta(formation))
+                : formation.DeployDaysLeft > 0 ? Loc.Format("Deploying: works in {0} d.", formation.DeployDaysLeft)
+                : SupportCore.Displaced(_campaign, formation) ? Loc.Get("Cannot work from this ground - move it.") : "";
+            return Loc.Get(type.Name) + "\n" + state?.DisplayName + "\n" +
+                Loc.Format("Readiness {0:P0} · reach {1:0} km", formation.Strength, SupportCore.ReachKm(_campaign, type)) + "\n" +
+                Loc.Get(formation.Mission switch
+                {
+                    SupportCore.MissionCloseAirSupport => "Fire support",
+                    SupportCore.MissionAirSuperiority => "Air superiority",
+                    SupportCore.MissionInterdiction => "Interdiction",
+                    AirReconnaissance.Mission => "Reconnaissance",
+                    SupportCore.MissionStrike => "Deep strike",
+                    _ => "Standby / recover"
+                }) + (where.Length > 0 ? "\n" + where : "");
         }
-        if (!TryPickSupport(pixel, out var formation) || !SupportTypeCatalog.TryGet(formation.TypeId, out var type)) return "";
-        var state = _campaign.States.Find(s => s.MapIndex == formation.StateMapIndex);
-        return Loc.Get(type.Name) + "\n" + state?.DisplayName + "\n" +
-            Loc.Format("Readiness {0:P0} · reach {1:0} km", formation.Strength, type.RangeKm) + "\n" +
-            Loc.Get(formation.Mission switch
-            {
-                SupportCore.MissionCloseAirSupport => "Fire support",
-                SupportCore.MissionAirSuperiority => "Air superiority",
-                SupportCore.MissionInterdiction => "Interdiction",
-                AirReconnaissance.Mission => "Reconnaissance",
-                _ => "Standby / recover"
-            }) + (SupportCore.Displaced(_campaign, formation) ? "\n" + Loc.Get("BASE LOST — REBASE IT") : "");
+        // Formations selected and the cursor over ground: what a right-click here would do, from
+        // the same preview the order is checked against - the way, the days, the room on arrival,
+        // or why not.
+        if (_selectedSupportIds.Count == 0 || SupportRebaseArmed || _campaign?.Player is null ||
+            !TryPick(pixel, out var destination, updateSelection: false) || destination.ProvinceId <= 0) return "";
+        var selection = 17;
+        foreach (var id in _selectedSupportIds.OrderBy(id => id)) selection = selection * 31 + id;
+        if (_supportMoveTip.Province == destination.ProvinceId && _supportMoveTip.Selection == selection &&
+            _supportMoveTip.Hours == _campaign.ElapsedHours) return _supportMoveTip.Text;
+        var append = Input.IsKeyPressed(Key.Shift);
+        var previews = LongRangeMovement.PreviewRelocate(_campaign, _campaign.Player.Id, _selectedSupportIds, destination.ProvinceId, append);
+        var lines = new List<string> { destination.State?.DisplayName ?? "" };
+        var going = previews.Where(p => p.Accepted).ToList();
+        if (going.Count > 0)
+        {
+            var modes = new List<string>();
+            if (going.Any(p => p.Uses(SupportMoveMode.Land))) modes.Add(Loc.Get("by road"));
+            if (going.Any(p => p.Uses(SupportMoveMode.Rail))) modes.Add(Loc.Get("by rail"));
+            if (going.Any(p => p.Uses(SupportMoveMode.Sea))) modes.Add(Loc.Get("by sea"));
+            if (going.Any(p => p.Uses(SupportMoveMode.Air))) modes.Add(Loc.Get("by air"));
+            var first = going[0];
+            lines.Add(Loc.Format(append ? "Right-click: {0} formation(s) add this waypoint · {1}-{2} d" : "Right-click: {0} formation(s) go here · {1}-{2} d",
+                going.Count, going.Min(p => p.Days), going.Max(p => p.Days)) +
+                (modes.Count > 0 ? " · " + string.Join(", ", modes) : ""));
+            lines.Add(Loc.Format("Basing on arrival: used {0:0.#} of {1}", first.BasingUsed + going.Skip(1).Sum(p =>
+                SupportTypeCatalog.TryGet(_campaign.SupportFormations.Find(f => f.Id == p.FormationId)?.TypeId, out var t) ? t.Basing : 1f),
+                first.BasingCapacity) +
+                (first.BasingUsed > first.BasingCapacity ? " · " + Loc.Get("crowded: readiness recovers more slowly") : ""));
+        }
+        foreach (var refused in previews.Where(p => !p.Accepted).GroupBy(p => p.RefusalText).Take(3))
+        {
+            var sample = refused.First();
+            var reason = sample.RefusalArgs.Length == 0 ? Loc.Get(sample.Refusal) : Loc.Format(sample.Refusal, sample.RefusalArgs);
+            lines.Add(going.Count == 0 && refused.Count() == previews.Count ? reason : Loc.Format("{0} cannot: {1}", refused.Count(), reason));
+        }
+        var text = string.Join("\n", lines.Where(line => line.Length > 0));
+        _supportMoveTip = (destination.ProvinceId, selection, _campaign.ElapsedHours, text);
+        return text;
     }
 
     private void BuildSupportRange()
@@ -427,13 +520,17 @@ public sealed partial class GlobePresentation
         _supportRangeMesh.ClearSurfaces();
         var player = _campaign.Player;
         var rings = new List<(SupportFormation Formation, SupportTypeDefinition Type, bool Selected)>();
+        var paths = new List<(SupportFormation Formation, bool Selected)>();
         var deduplicate = new HashSet<(int Base, string Type, string Mission, bool Selected)>();
         foreach (var candidate in _campaign.SupportFormations)
         {
             if (!SupportCore.Enabled(_campaign, candidate.TypeId)) continue;
-            if (candidate.NationId != player?.Id || candidate.BaseProvinceId <= 0 || candidate.BaseProvinceId > _campaign.ProvinceMap.ProvinceCount) continue;
+            if (candidate.NationId != player?.Id) continue;
             var selected = _selectedSupportIds.Contains(candidate.Id);
             if (!selected && !_supportOverlay) continue;
+            // A column on the road has no ring - it reaches nothing until it has arrived - but it has a path.
+            if (candidate.Route.Count > 0) { paths.Add((candidate, selected)); continue; }
+            if (candidate.BaseProvinceId <= 0 || candidate.BaseProvinceId > _campaign.ProvinceMap.ProvinceCount) continue;
             if (!SupportTypeCatalog.TryGet(candidate.TypeId, out var candidateType)) continue;
             if (!deduplicate.Add((candidate.BaseProvinceId, candidate.TypeId, candidate.Mission, selected))) continue;
             rings.Add((candidate, candidateType, selected));
@@ -444,7 +541,7 @@ public sealed partial class GlobePresentation
         _supportRangeView = _camera.GlobalTransform;
         _supportRangeViewport = Size;
         _nextSupportRangeRefreshMs = Time.GetTicksMsec() + 50;
-        if (rings.Count == 0)
+        if (rings.Count == 0 && paths.Count == 0)
         {
             _supportRangeNode.Visible = false;
             return;
@@ -523,16 +620,75 @@ public sealed partial class GlobePresentation
                 }
             }
         }
+        // The roads ahead: from where the card is now through every province still to reach,
+        // dashed in the arm's colour - bright for the selection, faint for the rest under the
+        // panel's overlay. A sea passage and a flight are one straight leg, cut into pieces so
+        // the line lies on the globe rather than under it.
+        foreach (var (formation, selected) in paths)
+        {
+            if (!SupportTypeCatalog.TryGet(formation.TypeId, out var pathType)) continue;
+            var colour = SupportArmColour(pathType.Kind) with { A = selected ? .92f : .30f };
+            var from = LongRangeMovement.Position(_campaign, formation);
+            var dash = 0;
+            foreach (var province in formation.Route)
+            {
+                if (province <= 0 || province > _campaign.ProvinceMap.ProvinceCount) break;
+                var to = _campaign.ProvinceMap.CenterOf(province);
+                var pieces = Math.Clamp((int)(SupportCore.DistanceKm(_campaign, LongRangeMovement.At(formation), province) / 40f), 2, 40);
+                for (var piece = 0; piece < pieces; piece++, dash++)
+                {
+                    if (dash % 2 == 1) continue;
+                    var a = PathPoint(from, to, piece / (float)pieces);
+                    var b = PathPoint(from, to, (piece + 1) / (float)pieces);
+                    if (_flatMap && Wraps(a, b)) continue;
+                    Ribbon(a, b, colour, selected ? 1.6f : .8f);
+                }
+                from = to;
+            }
+        }
         if (surfaceOpen) _supportRangeMesh.SurfaceEnd();
         _supportRangeNode.Visible = MilitaryMarkersEnabled && (_flatMap || ViewDistance <=
-            Ui.Metric(_supportOverlay ? "support.overlay_distance" : "support.marker_distance", _supportOverlay ? 17f : 9.2f));
+            Ui.Metric(_supportOverlay ? "support.overlay_distance" : "support.marker_distance", _supportOverlay ? 17f : 10.8f));
+
+        Vector3 PathPoint((float Latitude, float Longitude) a, (float Latitude, float Longitude) b, float t)
+        {
+            // The same great circle the card travels along (LongRangeMovement.Between).
+            var (lat, lon) = LongRangeMovement.Between(a, b, t);
+            return _flatMap ? FlatPoint(lat, lon, FlatLineZ + .0012f) : SurfacePoint(lat, lon, SurfaceLineRadius * 1.0008f);
+        }
+
+        void Ribbon(Vector3 a, Vector3 b, Color colour, float width)
+        {
+            var worldA = _supportRangeNode.ToGlobal(a);
+            var worldB = _supportRangeNode.ToGlobal(b);
+            if (_camera.IsPositionBehind(worldA) || _camera.IsPositionBehind(worldB)) return;
+            if (!_flatMap)
+            {
+                var horizon = GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length());
+                var view = _camera.GlobalPosition.Normalized();
+                if (a.Normalized().Dot(view) < horizon && b.Normalized().Dot(view) < horizon) return;
+            }
+            var screenA = _camera.UnprojectPosition(worldA);
+            var screenB = _camera.UnprojectPosition(worldB);
+            if (screenA.DistanceSquaredTo(screenB) < .01f) return;
+            var direction = (screenB - screenA).Normalized();
+            var normal = new Vector2(-direction.Y, direction.X) * width * .5f;
+            var depthA = -_camera.ToLocal(worldA).Z;
+            var depthB = -_camera.ToLocal(worldB).Z;
+            var ai = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenA - normal, depthA));
+            var ao = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenA + normal, depthA));
+            var bi = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenB - normal, depthB));
+            var bo = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenB + normal, depthB));
+            Triangle(ai, ao, bo, colour);
+            Triangle(ai, bo, bi, colour);
+        }
 
         void Aim(SupportFormation formation, SupportTypeDefinition type)
         {
             var center = _campaign.ProvinceMap.CenterOf(formation.BaseProvinceId);
             latitude = Mathf.DegToRad(center.Latitude);
             longitude = Mathf.DegToRad(center.Longitude);
-            angularReach = Math.Clamp(type.RangeKm / 6371f, .002f, MathF.PI);
+            angularReach = Math.Clamp(SupportCore.ReachKm(_campaign, type) / 6371f, .002f, MathF.PI);
         }
 
         void Triangle(Vector3 p, Vector3 q, Vector3 r, Color colour)

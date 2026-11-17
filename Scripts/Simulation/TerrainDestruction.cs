@@ -44,7 +44,10 @@ public sealed partial class Campaign
         }
         foreach (var army in Armies.Where(a => a.ProvinceId == province).ToArray())
             Attrition.Destroy(this, army, "Terrain destroyed by the trickster.");
-        SupportFormations.RemoveAll(s => s.BaseProvinceId == province);
+        SupportFormations.RemoveAll(s => s.BaseProvinceId == province || LongRangeMovement.At(s) == province);
+        // A column whose road ran through the hole stops where it is; the next day replans it.
+        foreach (var formation in SupportFormations)
+            if (formation.Route.Contains(province)) { formation.Route.Clear(); formation.RouteModes.Clear(); formation.MoveProgress = 0f; }
         if (remaining == 1) SupportOrders.RemoveAll(o => o.StateMapIndex == stateId);
         foreach (var army in Armies)
         {

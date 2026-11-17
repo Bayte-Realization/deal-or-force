@@ -73,7 +73,7 @@ public partial class DealOrForceGame
         if (!CanInspectNation(fleet.NationId)) return;
         // One selection at a time: an order has to be unambiguous about who it is for.
         if (_supportLayer is { Visible: true }) CloseSupportScreen();
-        _globe.SelectSupportFormation(-1);
+        ClearSupportMapSelection();
         ClearArmySelectionAndClose();
         _selectedFleet = fleet;
         _selectedFleets.Clear();
@@ -90,7 +90,7 @@ public partial class DealOrForceGame
         if (!_campaign.FeatureEnabled("navy") || !_hudLayer.Visible || fleets is null || fleets.Count == 0) return;
         if (fleets.Count == 1) { OnFleetPicked(fleets[0]); return; }
         if (_supportLayer is { Visible: true }) CloseSupportScreen();
-        _globe.SelectSupportFormation(-1);
+        ClearSupportMapSelection();
         ClearArmySelectionAndClose();
         _selectedFleets.Clear();
         _selectedFleets.AddRange(fleets.OrderByDescending(fleet => fleet.Hulls).ThenBy(fleet => fleet.Id));

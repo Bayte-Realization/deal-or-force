@@ -45,7 +45,10 @@ public partial class DealOrForceGame
         CancelConstructionPlacement();
         CloseFleetPanel();
         if (_supportLayer is { Visible: true }) CloseSupportScreen();
-        _globe.SelectSupportFormation(-1);
+        // Divisions and long-range formations are one selection on the map: a plain click takes
+        // this division alone, Shift keeps the formations selected beside it.
+        if (!AddingToSelection && !RemovingFromSelection) ClearSupportMapSelection();
+        else RefreshFormationBar();
         // Shift adds, control takes away - the Paradox reading, and the one that lets a
         // player build a selection without fear. A single key that toggled did both, so
         // shift-clicking a stack you had half-selected removed the ones you wanted and
@@ -91,23 +94,14 @@ public partial class DealOrForceGame
         // They must replace the previous military inspector just like a single click.
         CloseFleetPanel();
         if (_supportLayer is { Visible: true }) CloseSupportScreen();
-        _globe.SelectSupportFormation(-1);
 
-        // A box does the same three things a click does: replace, add, or take away.
-        if (RemovingFromSelection)
+        // A box does the same three things a click does: replace, add, or take away. The
+        // formations in the same box were taken by OnSelectionBoxPicked before this.
+        MapSelection.Apply(_selectedArmies, playerArmies, AddingToSelection, RemovingFromSelection);
+        if (_selectedArmies.Count == 0)
         {
-            foreach (var army in playerArmies) _selectedArmies.Remove(army);
-            if (_selectedArmies.Count == 0)
-            {
-                ClearArmySelectionAndClose();
-                return;
-            }
-        }
-        else
-        {
-            if (!AddingToSelection) _selectedArmies.Clear();
-            foreach (var army in playerArmies)
-                if (!_selectedArmies.Contains(army)) _selectedArmies.Add(army);
+            ClearArmySelectionAndClose();
+            return;
         }
         _selectedArmy = _selectedArmies[0];
         _selectedNation = _campaign.Player;
@@ -331,11 +325,14 @@ public partial class DealOrForceGame
     {
         if (!_hudLayer.Visible) return;
 
-        if (_supportLayer is { Visible: true })
+        // Selected long-range formations take the right button first - to any province, by their
+        // own way there - and divisions selected beside them take the same order after.
+        if (_supportSelected.Count > 0 && pick.ProvinceId > 0)
         {
-            if (_supportSelected.Count > 0 && pick.State is not null) RebaseSupportSelection(pick.State);
-            return;
+            RelocateSupportSelection(pick.ProvinceId, Input.IsKeyPressed(Key.Shift));
+            if (_selectedArmy is null) return;
         }
+        else if (_supportLayer is { Visible: true }) return;
 
         // A fleet is ordered to a place rather than to a province - most of the sea is not
         // one - so it is handled before the province guard below rejects open water.
@@ -761,6 +758,7 @@ public partial class DealOrForceGame
         _redeploymentArmed = false;
         _sidePanel.Visible = false;
         _openScreen = "";
+        RefreshFormationBar();
     }
 
     private void SelectAllPlayerArmies()
