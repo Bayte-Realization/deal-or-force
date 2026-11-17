@@ -1,0 +1,6 @@
+Source Serif 4 (Regular, SemiBold, Bold)
+Copyright 2014 - 2021 Adobe Systems Incorporated (http://www.adobe.com/), with Reserved Font Name "Source".
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The license is available with a FAQ at: http://scripts.sil.org/OFL
+The files are unmodified copies, bundled only so the mockup shows the intended serif.
