@@ -657,6 +657,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
             _cachedProvinceDetail = provinceDetail;
             _globeMaterial?.SetShaderParameter("province_detail", provinceDetail);
         }
+        // The far regime of the atlas look: the map becomes a sheet of paper. One number from
+        // the camera, sent only when it moves (GlobeMapLook).
+        UpdatePaperMix();
         if (_cachedFlatMapBorder != _flatMap)
         {
             _cachedFlatMapBorder = _flatMap;
@@ -2392,6 +2395,37 @@ uniform float selected_region_live = 0.0;
 uniform float detail_mix = 0.0;
 uniform float province_detail = 0.0;
 uniform float map_mode = 0.0;
+// The atlas look (Simulation.MapLook, game/gui/78_map_look.json): warm paper and ink, and a sheet
+// of paper from far away. Every term it adds stands behind atlas_look, and both switches start at
+// nought, so a material nobody has configured - and the classic setting - draws the old map.
+uniform float atlas_look = 0.0;
+// 0 close in, 1 where the map has become paper; worked out from the camera once a frame.
+uniform float paper_mix = 0.0;
+// Linear colours; the defaults are the design's starting table, the game sets them from the skin.
+uniform vec3 look_paper = vec3(0.7913, 0.6939, 0.4969);
+uniform float look_paper_grain = 0.035;
+// The relief's shade and lamp as multipliers, already scaled to the old 0.52 and 1.42.
+uniform vec3 look_shade_mul = vec3(0.7304, 0.4781, 0.3155);
+uniform vec3 look_lamp_mul = vec3(1.5987, 1.4062, 1.0303);
+uniform vec3 look_lamp = vec3(1.0, 0.8796, 0.6445);
+uniform vec3 look_sea_deep = vec3(0.0091, 0.0319, 0.0497);
+uniform vec3 look_sea_mid = vec3(0.0168, 0.0704, 0.0976);
+uniform vec3 look_sea_shelf = vec3(0.0467, 0.1470, 0.1620);
+uniform vec3 look_sea_coast = vec3(0.1441, 0.3050, 0.2789);
+uniform vec3 look_sea_chart = vec3(0.0802, 0.1620, 0.1946);
+uniform vec3 look_foam = vec3(0.8388, 0.7835, 0.6445);
+uniform vec3 look_coast_ink = vec3(0.0273, 0.0513, 0.0648);
+uniform float look_cover_near = 0.70;
+uniform float look_flat_cover_near = 0.80;
+uniform float look_cover_far = 0.95;
+uniform float look_saturation_far = 0.80;
+uniform float look_relief_far = 0.45;
+uniform float look_border_wobble = 0.22;
+uniform float look_far_band = 0.30;
+uniform float look_foam_strength = 0.55;
+uniform float look_waterline = 0.15;
+uniform float look_sea_sheen = 0.06;
+uniform float look_selection_halo = 0.10;
 float map_id(sampler2D map_texture, vec2 uv) {
     vec4 encoded = texture(map_texture, vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0)));
     return floor(encoded.r * 255.0 + 0.5) + floor(encoded.g * 255.0 + 0.5) * 256.0;
@@ -2824,6 +2858,12 @@ float sea_crest_field(vec2 at) {
 " + SeamSamplingFunctions() + @"
 void fragment() {
     float excavation = crossover_excavations_active * texture(crossover_excavations, UV).r;
+    // How far this point is from the nearest frontier or shore, in cells (FrontierField). Read
+    // once, here, outside every branch that depends on the pixel: the far stroke, the atlas's far
+    // band and its surf all use this one sample. Keep the call spelt exactly as it is: it is the
+    // one form the packed Compatibility build knows how to cut (PackedMapShader).
+    float frontier_cells_all = frontier_cap;
+    if (frontier_ready > 0.5) frontier_cells_all = texture(frontier_field, UV).r * frontier_cap;
     // One wander, and every boundary on the map reads through it.
     //
     // Reconstructing a boundary from the four ids around a point puts it within half a texel
@@ -3316,7 +3356,7 @@ void fragment() {
     // is two pixels or more, the rebuild is sharper than any filtered field.
     float frontier_weight = frontier_ready * smoothstep(0.62, 0.85, id_span);
     if (frontier_weight > 0.001) {
-        float frontier_cells = texture(frontier_field, UV).r * frontier_cap;
+        float frontier_cells = frontier_cells_all;
         float frontier_pixels = max(frontier_cells - frontier_offset, 0.0) / id_aa;
         float frontier_near = 1.0 - smoothstep(frontier_reach - 0.3, frontier_reach + 0.3, frontier_cells);
         nation_edge_pixels = mix(nation_edge_pixels, frontier_pixels, frontier_weight);

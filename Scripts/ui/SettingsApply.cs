@@ -250,6 +250,7 @@ public partial class DealOrForceGame
                 if (_mapSelectionOpen) ShowMapSelectionContent();
                 break;
             case "map_visual_style":
+            case "map_look":
             case "map_cloud_opacity":
             case "map_consistent_lighting":
                 _globe?.ApplyMapVisualStyle();

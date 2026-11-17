@@ -1,0 +1,72 @@
+{
+  // The atlas look of the map (Simulation.MapLook): a map printed in warm inks on heavy paper and
+  // lit by a desk lamp from the north-west. Close in the ground shows through a watercolour wash
+  // of country colour; at the middle zoom the countries are flat paint with dark ink borders; from
+  // far away the whole map becomes a sheet of paper. Switched by the video setting "map_look"
+  // (atlas / classic); classic ignores everything in this file.
+  //
+  // Colours are ordinary sRGB hex, converted to linear light for the shader. One brightness
+  // order runs through them, light to dark: labels, land paper, coastal water and shelf, open
+  // sea, then the inks (country border, coast, province). Accents - selection gold, front red,
+  // plan blue - are not used for anything else.
+  "colours": {
+    // The paper under the country colours from far away. A shade darker than the interface's own
+    // paper (#efe4c8), so panels lying over the map still separate from it.
+    "map.look_paper": "#e6d9bb",
+    // The colour of shadow on a slope: umber, not black. The shader keeps the old depth of the
+    // shade and only changes its colour.
+    "map.look_shade": "#5b4a3c",
+    // The lamp: the lit side of a slope and the broad highlight over open water.
+    "map.look_lamp": "#fff1d2",
+    // The sea by depth, on the same thresholds the classic map used: abyss, continental slope,
+    // shelf, and the shallow littoral along a coast. Warmer and darker than the classic navy.
+    "map.look_sea_deep": "#18323f",
+    "map.look_sea_mid": "#234b58",
+    "map.look_sea_shelf": "#3d6b70",
+    "map.look_sea_coast": "#6a9690",
+    // From far away the sea settles into three quiet steps of this one chart tone.
+    "map.look_sea_chart": "#50707a",
+    // Surf along a shore: paper white, never pure white.
+    "map.look_foam": "#ece5d2",
+    // A coast is inked lighter and bluer than a frontier (#1c2230), so the eye can tell where a
+    // state ends and where the land does.
+    "map.look_coast_ink": "#2e4048"
+  },
+  "metrics": {
+    // How much of the ground the country colour covers: close in (globe and flat map), where the
+    // land should show through, and from far away, where the countries are what the map is for.
+    // The middle zoom keeps the terrain's own political_opacity.
+    "map.look_cover_near": 0.70,
+    "map.look_flat_cover_near": 0.80,
+    "map.look_cover_far": 0.95,
+    // Country colour saturation on the paper map: a printed atlas is a little quieter than a poster.
+    "map.look_saturation_far": 0.80,
+    // How much of the relief shading survives on the paper map: mountains stay a soft wash.
+    "map.look_relief_far": 0.45,
+    // Where the map becomes paper: on the globe by camera distance (5.25 .. 24, default 12.5),
+    // on the flat map by zoom (0.1 .. 11.5, default 8.8). It starts at the first value and is
+    // complete at the second.
+    "map.look_paper_from_distance": 17,
+    "map.look_paper_full_distance": 22,
+    "map.look_flat_paper_from_zoom": 9.0,
+    "map.look_flat_paper_full_zoom": 11.5,
+    // How much the paper's fibre varies its brightness. Fixed to the map, not the screen, so it
+    // does not swim; it fades by itself where a pixel would hold more than one fibre.
+    "map.look_paper_grain": 0.035,
+    // A hand-drawn frontier: the line's width wanders slowly along it by half this much either
+    // way (here about eleven per cent), its opacity by six per cent.
+    "map.look_border_wobble": 0.22,
+    // The band of deeper colour inside every frontier and coast at the middle and far zoom, where
+    // the close-in cushion has gone (as in Imperator). Nought switches it off.
+    "map.look_far_band": 0.30,
+    // Surf: two thin broken lines along a shore, about one and two cells out, breathing slowly.
+    "map.look_foam_strength": 0.55,
+    // Engraved waterlines two, three and a half and five cells off the coast, middle zoom only.
+    // Nought switches them off.
+    "map.look_waterline": 0.15,
+    // The lamp's broad soft highlight over open sea.
+    "map.look_sea_sheen": 0.06,
+    // A soft gold glow outside the border of the country the player picked.
+    "map.look_selection_halo": 0.10
+  }
+}

@@ -162,6 +162,18 @@ public static class InterfaceSkin
         ("map.border_province_halo",  "#e5e7e3"),
         ("map.border_occupation",     "#f6f1db"),
         ("map.border_occupation_key", "#3c4850"),
+        // The atlas look's colour roles (MapLook). Mirrors game/gui/78_map_look.json, which
+        // ships the same values and says what each one is for.
+        ("map.look_paper",      "#e6d9bb"),
+        ("map.look_shade",      "#5b4a3c"),
+        ("map.look_lamp",       "#fff1d2"),
+        ("map.look_sea_deep",   "#18323f"),
+        ("map.look_sea_mid",    "#234b58"),
+        ("map.look_sea_shelf",  "#3d6b70"),
+        ("map.look_sea_coast",  "#6a9690"),
+        ("map.look_sea_chart",  "#50707a"),
+        ("map.look_foam",       "#ece5d2"),
+        ("map.look_coast_ink",  "#2e4048"),
         ("resources.none",      "#1c2b35"),
         ("resources.low",       "#304951"),
         ("resources.mid",       "#548677"),
