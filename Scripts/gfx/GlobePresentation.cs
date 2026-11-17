@@ -2405,29 +2405,29 @@ uniform float atlas_look = 0.0;
 uniform float paper_mix = 0.0;
 // Linear colours; the defaults are the design's starting table, the game sets them from the skin.
 uniform vec3 look_paper = vec3(0.7913, 0.6939, 0.4969);
-uniform float look_paper_grain = 0.035;
-// The relief's shade and lamp as multipliers, already scaled to the old 0.52 and 1.42.
-uniform vec3 look_shade_mul = vec3(0.7304, 0.4781, 0.3155);
-uniform vec3 look_lamp_mul = vec3(1.5987, 1.4062, 1.0303);
+// The colours the relief leans towards: a cool shade and a warm lamp, as in Imhof's relief
+// shading. Only their hue is used - the brightness of a slope is the old grey hillshade's.
+uniform vec3 look_shade = vec3(0.0685, 0.0782, 0.1119);
 uniform vec3 look_lamp = vec3(1.0, 0.8796, 0.6445);
+uniform float look_relief_tint = 0.60;
 uniform vec3 look_sea_deep = vec3(0.0091, 0.0319, 0.0497);
 uniform vec3 look_sea_mid = vec3(0.0168, 0.0704, 0.0976);
 uniform vec3 look_sea_shelf = vec3(0.0467, 0.1470, 0.1620);
 uniform vec3 look_sea_coast = vec3(0.1441, 0.3050, 0.2789);
-uniform vec3 look_sea_chart = vec3(0.0802, 0.1620, 0.1946);
+uniform vec3 look_sea_chart = vec3(0.0232, 0.0578, 0.0802);
 uniform vec3 look_foam = vec3(0.8388, 0.7835, 0.6445);
 uniform vec3 look_coast_ink = vec3(0.0273, 0.0513, 0.0648);
-uniform float look_cover_near = 0.70;
-uniform float look_flat_cover_near = 0.80;
+uniform vec3 look_unowned = vec3(0.6867, 0.6038, 0.4342);
+uniform float look_ground_show_near = 0.30;
 uniform float look_cover_far = 0.95;
 uniform float look_saturation_far = 0.80;
 uniform float look_relief_far = 0.45;
-uniform float look_border_wobble = 0.22;
 uniform float look_far_band = 0.30;
+uniform float look_far_band_pixels = 3.0;
 uniform float look_foam_strength = 0.55;
-uniform float look_waterline = 0.15;
-uniform float look_sea_sheen = 0.06;
-uniform float look_selection_halo = 0.10;
+uniform float look_waterline = 0.0;
+uniform float look_sea_sheen = 0.30;
+uniform float look_selection_width = 1.3;
 float map_id(sampler2D map_texture, vec2 uv) {
     vec4 encoded = texture(map_texture, vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0)));
     return floor(encoded.r * 255.0 + 0.5) + floor(encoded.g * 255.0 + 0.5) * 256.0;
@@ -2462,19 +2462,34 @@ float value_noise(vec2 p) {
                mix(hash21(cell + vec2(0.0, 1.0)), hash21(cell + vec2(1.0, 1.0)), f.x), f.y);
 }
 
-/// value_noise laid on the map with a whole number of cells around the world, so it meets itself
-/// at the date line instead of drawing a seam there. `across` is how many cells span the world
-/// east to west; cells are square on the 2:1 map, so half as many span it north to south.
-float atlas_noise(vec2 uv, float across) {
-    float period = max(round(across), 1.0);
-    vec2 p = vec2(uv.x * period, uv.y * period * 0.5);
-    vec2 cell = floor(p);
-    vec2 f = p - cell;
+/// One row of atlas_noise: `period` cells round the world, so the row closes on itself at the
+/// date line.
+float atlas_noise_row(float u, float period, float row) {
+    float x = fract(u) * period;
+    float cell = floor(x);
+    float f = x - cell;
     f = f * f * (3.0 - 2.0 * f);
-    float x0 = mod(cell.x, period);
-    float x1 = mod(cell.x + 1.0, period);
-    return mix(mix(hash21(vec2(x0, cell.y)), hash21(vec2(x1, cell.y)), f.x),
-               mix(hash21(vec2(x0, cell.y + 1.0)), hash21(vec2(x1, cell.y + 1.0)), f.x), f.y);
+    return mix(hash21(vec2(mod(cell, period), row)), hash21(vec2(mod(cell + 1.0, period), row)), f);
+}
+
+/// value_noise laid on the map, `across` cells round the equator, that meets itself at the date
+/// line instead of drawing a seam there. On the globe a parallel at latitude L is cos(L) as long
+/// as the equator, so a noise laid straight on the map would be squashed east to west into stripes
+/// along the meridians near a pole. Each row of cells is given as many cells as fit round its own
+/// parallel instead - a whole number, so it still closes - and the two rows either side of a point
+/// are blended north to south as usual. On the flat map the parallels are as long as the equator
+/// on screen, so there every row keeps the equator's count.
+float atlas_noise(vec2 uv, float across, float flat_share) {
+    float rows = max(round(across * 0.5), 1.0);
+    float y = clamp(uv.y, 0.0, 1.0) * rows;
+    float row = floor(y);
+    float f = y - row;
+    f = f * f * (3.0 - 2.0 * f);
+    float shrink0 = mix(cos((row / rows - 0.5) * 3.1415927), 1.0, flat_share);
+    float shrink1 = mix(cos(((row + 1.0) / rows - 0.5) * 3.1415927), 1.0, flat_share);
+    float period0 = max(round(across * shrink0), 1.0);
+    float period1 = max(round(across * shrink1), 1.0);
+    return mix(atlas_noise_row(uv.x, period0, row), atlas_noise_row(uv.x, period1, row + 1.0), f);
 }
 
 /// Two octaves, centred on zero: a slow wander with a finer one riding on it.
@@ -2985,6 +3000,13 @@ void fragment() {
         float paper_saturation = mix(political_saturation, look_saturation_far, paper_mix);
         political.rgb = mix(vec3(dot(political.rgb, vec3(0.2126, 0.7152, 0.0722))), political.rgb,
             paper_saturation / max(political_saturation, 0.001));
+        // Land no state holds is the paper itself, as in a printed atlas - not the classic slate
+        // grey, which from far away sat so close to the chart sea in value and hue that unclaimed
+        // land melted into the water. Shared out by the same coverage the country colours use,
+        // so its edge against a country is as smooth as theirs. (65535 is MapBorders.Unowned.)
+        float unowned_share = abs(near_nation - 65535.0) < 0.5 ? mix(1.0, nation_share, step(0.5, map_smoothing))
+            : (abs(other_nation - 65535.0) < 0.5 ? (1.0 - nation_share) * step(0.5, map_smoothing) : 0.0);
+        political.rgb = mix(political.rgb, look_unowned, unowned_share);
     }
     float rim = pow(1.0 - max(dot(normalize(NORMAL), normalize(VIEW)), 0.0), 2.0);
     // The sea has a floor. Deep water keeps the strategic navy it always had; the continental
@@ -3020,10 +3042,13 @@ void fragment() {
         atlas_sea = mix(atlas_sea, look_sea_coast, littoral * 0.55);
         // From far away a printed chart has no gradients, only steps: one tone, a shade lighter
         // over the slope and again over the shelf. Each step is as soft as one pixel of depth.
+        // The steps are about two and a half L* apart (0.72 / 0.86 / 1.0): any closer and they
+        // do not register. The chart tone itself is dark - the lightest step still under a
+        // third of the darkest usual country fill - so land stands above water from orbit.
         float step_width = max(fwidth(sea_floor), 0.001);
         float step_slope = smoothstep(0.80 - step_width, 0.80 + step_width, sea_floor);
         float step_shelf = smoothstep(0.968 - step_width, 0.968 + step_width, sea_floor);
-        vec3 chart = look_sea_chart * (0.86 + 0.07 * (step_slope + step_shelf));
+        vec3 chart = look_sea_chart * (0.72 + 0.14 * (step_slope + step_shelf));
         sea = mix(atlas_sea, chart, paper_mix);
     }
     // Living water. Three directional sine waves, crossing at angles, rather than value
@@ -3062,7 +3087,9 @@ void fragment() {
         crest = mix(crest, sea_crest_field(wave_polar_at), sea_polar);
     }
     float glint = pow(clamp(crest * 0.5 + 0.5, 0.0, 1.0), 6.0);
-    water += vec3(0.58, 0.75, 0.84) * glint * 0.18 * wave_fade;
+    // The atlas has one light on its water - the lamp's - so the crests catch its foam colour
+    // rather than a cold cyan beside a warm highlight.
+    water += mix(vec3(0.58, 0.75, 0.84), look_foam, step(0.5, atlas_look)) * glint * 0.18 * wave_fade;
     // Foam & coastal ink: a pale surf line where the sea meets the shore, framed by a subtle
     // cartographic coastal shadow so continents stand out crisply from the ocean.
     float shore_band = max(fwidth(political.a) * 2.2, 0.022);
@@ -3070,52 +3097,60 @@ void fragment() {
     float reef_halo = smoothstep(shore_band * 3.8, 0.0, abs(political.a - 0.5)) * (1.0 - political.a);
     vec3 reef_color = ocean_shelf_color * 1.38 + vec3(0.03, 0.09, 0.11);
     vec3 surf_color = vec3(0.84, 0.91, 0.95);
+    // The one-pixel surf, and separately the dark frame on the water side of every coast below.
+    // The atlas replaces only the surf (with its own, off the true distance to the shore) and
+    // only where it has the field to draw it from; the frame stays at every zoom, because it is
+    // what keeps a continent's outline crisp against the sea in the middle and far views.
+    float surf_edge = shore_edge;
     if (atlas_look > 0.5) {
         reef_color = look_sea_coast;
         surf_color = look_foam;
-        // With the frontier field the atlas draws its own surf below, off the true distance to
-        // the shore. The old one-pixel surf stays only where there is no field: Compatibility.
-        shore_edge *= 1.0 - step(0.5, frontier_ready);
+        surf_edge *= 1.0 - step(0.5, frontier_ready);
     }
     water = mix(water, reef_color, reef_halo * 0.42);
-    water += surf_color * shore_edge * 0.50 * wave_fade;
+    water += surf_color * surf_edge * 0.50 * wave_fade;
     water = mix(water, water * 0.58, shore_edge * 0.38 * (1.0 - political.a));
     if (atlas_look > 0.5) {
         float sea_side = 1.0 - political.a;
-        if (frontier_ready > 0.5) {
-            // On the sea the frontier field is the distance to the shore in cells, so surf can be
-            // drawn where surf is: two thin lines about one and two cells out, broken by noise
-            // and breathing slowly. Only while a cell is at least about 0.7 of a pixel - further
-            // out the lines would be finer than the screen and only shimmer.
+        // On the sea the frontier field is the distance to the shore in cells, so surf can be
+        // drawn where surf is. Asked only where it can show: on water, with the field, and while
+        // a cell is still bigger than a pixel. Further out a line a fraction of a cell wide is
+        // finer than the screen and only shimmers.
+        float foam_fade = clamp(1.0 - id_span, 0.0, 1.0);
+        if (frontier_ready > 0.5 && political.a < 0.999 && foam_fade > 0.0) {
             float shore_cells = frontier_cells_all;
-            float foam_noise = atlas_noise(UV, id_size.x * 0.15);
-            float breathe = 0.20 * sin(TIME * 0.6 + foam_noise * 6.0);
+            float foam_noise = atlas_noise(UV, id_size.x * 0.15, flat_projection);
+            // One broken line a little under a cell out. It breathes, but the breath is let go
+            // well before a cell shrinks to a couple of pixels: a thin line shifting by a fraction
+            // of a pixel is what reads as shimmer crawling along a coast.
+            float breathe = 0.20 * sin(TIME * 0.6 + foam_noise * 6.0) * clamp(1.0 - id_span * 2.0, 0.0, 1.0);
             float foam_line = 1.0 - smoothstep(0.0, 0.30 + id_aa, abs(shore_cells - (0.9 + breathe)));
-            float foam_second = (1.0 - smoothstep(0.0, 0.30 + id_aa, abs(shore_cells - (2.1 + breathe)))) * 0.5;
             // A soft threshold rather than a step: the break in the surf has an edge a fraction of
             // a noise cell wide instead of a hard one that would crawl as the camera moves.
-            float foam = max(foam_line, foam_second) * smoothstep(0.30, 0.40, foam_noise)
-                * clamp(1.6 - id_span, 0.0, 1.0) * sea_side;
+            float foam = foam_line * smoothstep(0.30, 0.40, foam_noise) * foam_fade * sea_side;
             water = mix(water, look_foam, foam * look_foam_strength);
-            // Engraved waterlines, as on an old chart: pale lines at two, three and a half and
-            // five cells off the coast, at the middle zoom only and never on the paper map.
-            float line_width = 0.25 + id_aa;
-            float waterlines = (1.0 - smoothstep(0.0, line_width, abs(shore_cells - 2.0))) * 0.6
-                + (1.0 - smoothstep(0.0, line_width, abs(shore_cells - 3.5))) * 0.4
-                + (1.0 - smoothstep(0.0, line_width, abs(shore_cells - 5.0))) * 0.25;
-            waterlines *= look_waterline * clamp(1.2 - id_span, 0.0, 1.0) * (1.0 - paper_mix) * sea_side;
-            water = mix(water, look_foam, waterlines);
+            // Waterlines - lines ruled along a coast at two, three and a half and five cells out -
+            // are a nineteenth-century engraver's mark, so they belong to an era's overlay, not to
+            // the base map: off (nought) in the shipped look, kept here for a skin that asks.
+            if (look_waterline > 0.001) {
+                float line_width = 0.25 + id_aa;
+                float waterlines = (1.0 - smoothstep(0.0, line_width, abs(shore_cells - 2.0))) * 0.6
+                    + (1.0 - smoothstep(0.0, line_width, abs(shore_cells - 3.5))) * 0.4
+                    + (1.0 - smoothstep(0.0, line_width, abs(shore_cells - 5.0))) * 0.25;
+                waterlines *= look_waterline * foam_fade * (1.0 - paper_mix) * sea_side;
+                water = mix(water, look_foam, waterlines);
+            }
         }
-        // The lamp's broad highlight over open water, in the albedo rather than the specular so it
-        // looks the same on every renderer. On the globe it is the reflection of a fixed lamp up
-        // and to the left of the camera; the flat map is seen straight on by an orthographic
-        // camera, which has no reflection to give, so there it is a soft gradient from the top left.
-        float sheen;
-        if (PROJECTION_MATRIX[3][3] > 0.5)
-            sheen = pow(1.0 - smoothstep(0.0, 0.95, distance(SCREEN_UV, vec2(0.28, 0.22))), 2.0);
-        else
-            sheen = pow(max(dot(reflect(-VIEW, NORMAL), normalize(vec3(-0.45, 0.55, 0.70))), 0.0), 6.0);
-        water += look_lamp * sheen * look_sea_sheen * (1.0 - paper_mix * 0.5) * sea_side;
+        // The lamp's broad highlight over open water, on the globe only, where it is the
+        // reflection of a fixed lamp up and to the left of the camera. It brightens the water's
+        // own colour rather than adding a warm constant to it: added to a dark albedo, a constant
+        // turned the abyss into a neutral grey smear. The flat map has none - an orthographic
+        // camera has no reflection to give, and a spot fixed to the screen read as a smudge on
+        // the monitor that stayed put while the map moved under it. Gone on the paper map.
+        if (PROJECTION_MATRIX[3][3] < 0.5) {
+            float sheen = pow(max(dot(reflect(-VIEW, NORMAL), normalize(vec3(-0.45, 0.55, 0.70))), 0.0), 6.0);
+            water *= 1.0 + sheen * look_sea_sheen * (1.0 - paper_mix) * sea_side;
+        }
     }
     vec2 texel = 1.0 / vec2(textureSize(province_ids, 0));
     float region = map_id(region_ids, map_uv);
@@ -3219,14 +3254,11 @@ void fragment() {
             ground = mix(ground, relief_tint, relief_color_opacity);
         }
         if (atlas_look > 0.5) {
-            // From far away the ground becomes the paper the atlas is printed on. Its fibre is
-            // fixed to the map, so it does not swim as the camera moves, and it fades where a
-            // pixel would hold more than one fibre, so it never shimmers.
-            vec2 fibre_at = vec2(UV.x * 1800.0, UV.y * 900.0);
-            float fibre_fade = 1.0 - smoothstep(0.5, 1.0, max(fwidth(fibre_at.x), fwidth(fibre_at.y)));
-            float fibre = (atlas_noise(UV, 1800.0) - 0.5) * 2.0 * look_paper_grain * fibre_fade;
-            // The terrain and relief views keep their ground at every zoom: they are about it.
-            ground = mix(ground, look_paper * (1.0 + fibre), paper_mix * (1.0 - step(0.5, terrain_mode)));
+            // From far away the ground becomes the paper the atlas is printed on. Plain paper: a
+            // fibre texture under a 95 per cent wash came to a tenth of a per cent of brightness,
+            // a noise per pixel spent on nothing anyone could see. The terrain and relief views
+            // keep their ground at every zoom: they are about it.
+            ground = mix(ground, look_paper, paper_mix * (1.0 - step(0.5, terrain_mode)));
         }
         // Political tint is an albedo blend, not transparent 3D geometry.
         // Keep surface detail while preserving recognisable controller colours.
@@ -3241,11 +3273,21 @@ void fragment() {
         ground_light = mix(ground_light, clamp(ground_light, 0.93, 1.02), flat_projection);
         float colour_cover = mix(political_opacity, min(0.93, political_opacity + 0.17), flat_projection);
         if (atlas_look > 0.5) {
-            // A watercolour wash close in, flat paint at the middle zoom, near-solid colour on
-            // paper: political colour comes in as the camera pulls back, as in HoI4, and gives
-            // way to the ground close in, as in CK3.
-            float near_cover = mix(look_cover_near, look_flat_cover_near, flat_projection);
-            colour_cover = mix(mix(near_cover, colour_cover, 1.0 - province_detail), look_cover_far, paper_mix);
+            // Close in the ground shows through the country colour, as in CK3 - but through its
+            // brightness, not its hue. Lowering the cover mixed the tile's own colour into the
+            // fill, and where the two roughly complement each other (a purple state over green
+            // forest, a blue one over ochre desert) that mixes to brown-grey mud. So the hue keeps
+            // the middle zoom's cover, and close in the brightness band the ground may move the
+            // paint by is widened instead: forest darker, steppe lighter, in the country's colour.
+            float ground_lum = dot(ground, vec3(0.2126, 0.7152, 0.0722));
+            float near_light = clamp(ground_lum * 1.4 + 0.50, 1.0 - look_ground_show_near, 1.0 + look_ground_show_near * 0.5);
+            ground_light = mix(ground_light, near_light, province_detail * (1.0 - paper_mix));
+            // On paper the brightness of the ground no longer reaches the fill at all: it was the
+            // light paper under it that lifted every country by up to a fifth as the camera pulled
+            // back, and bleached the world view.
+            ground_light = mix(ground_light, 1.0, paper_mix);
+            // Political colour comes in as the camera pulls back, as in HoI4: near-solid on paper.
+            colour_cover = mix(colour_cover, look_cover_far, paper_mix);
         }
         vec3 colored_ground = mix(ground, political.rgb * ground_light, colour_cover);
         vec3 land_surface = terrain_mode > 1.5 ? relief_tint : (terrain_mode > 0.5 ? ground : colored_ground);
@@ -3278,13 +3320,19 @@ void fragment() {
         // and Caucasus read with physical relief even through political colour.
         float alpine_ridge = smoothstep(0.58, 0.86, elev) * smoothstep(0.12, 0.52, slope_mag) * clamp(lit - flat_lit + 0.15, 0.0, 1.0);
         if (atlas_look > 0.5) {
-            // A warm wash: umber in the shade, cream on the lit slopes, at the same depth and
-            // brightness the grey multiplier had - so no slope is darker than before, only warmer.
+            // The brightness of a slope is the old grey hillshade's, exactly; on top of it only the
+            // hue leans a little - towards a cool shade on the slopes turned away, towards the warm
+            // lamp on those facing it, as in Imhof's relief shading. The lean is a colour with no
+            // luminance of its own (the tint over its own luminance, less one), scaled by the
+            // surface's luminance, so a blue country is no darker in the shade than before and a
+            // red one does not clip on a lit slope: its colour survives in the mountains.
+            // (MapLook.ReliefShade is the same sum, for the tests.)
+            vec3 shaded = base * hillshade;
+            vec3 relief_tint_colour = hillshade < 1.0 ? look_shade : look_lamp;
+            vec3 relief_lean = relief_tint_colour / max(dot(relief_tint_colour, vec3(0.2126, 0.7152, 0.0722)), 0.0001) - 1.0;
+            shaded = max(shaded + relief_lean * dot(shaded, vec3(0.2126, 0.7152, 0.0722)) * abs(hillshade - 1.0) * look_relief_tint, vec3(0.0));
             // On the paper map the relief stays as a soft wash.
-            vec3 relief_mul = hillshade < 1.0
-                ? mix(look_shade_mul, vec3(1.0), (hillshade - 0.52) / 0.48)
-                : mix(vec3(1.0), look_lamp_mul, (hillshade - 1.0) / 0.42);
-            base = mix(base, base * relief_mul + look_lamp * 0.106 * alpine_ridge,
+            base = mix(base, shaded + look_lamp * 0.106 * alpine_ridge,
                 political.a * relief_shading * (terrain_mode > 1.5 ? 1.0 : 0.88) * mix(1.0, look_relief_far, paper_mix));
         } else {
             base = mix(base, base * hillshade + vec3(0.09, 0.095, 0.105) * alpine_ridge,
@@ -3481,18 +3529,6 @@ void fragment() {
         nation_edge_pixels = mix(nation_edge_pixels, frontier_pixels, frontier_weight);
         has_nation_border = mix(has_nation_border, frontier_near, frontier_weight);
     }
-    // A frontier drawn by hand: its width wanders slowly along the border, and its ink a little.
-    // The noise is fixed to the map and runs over tens of cells, so it never crawls or flickers,
-    // and it is let go once a cell is under a quarter of a pixel, where it could only add grit.
-    // Everything drawn off nation_edge_pixels below - cushion, rim, the outline of a picked
-    // country - wanders with the line, so they stay together.
-    float border_wobble = 0.5;
-    float border_wobble_weight = 0.0;
-    if (atlas_look > 0.5) {
-        border_wobble = atlas_noise(UV, id_size.x * 0.06);
-        border_wobble_weight = look_border_wobble * clamp(4.0 - id_span, 0.0, 1.0);
-        nation_edge_pixels *= 1.0 + (border_wobble - 0.5) * border_wobble_weight;
-    }
     float country_edge = 1.0 - smoothstep(border_pixels * 0.85, border_pixels * 2.05, nation_edge_pixels);
     // Off the field the line can be kept to the world view: it is filtered, so it thins rather
     // than breaking into dots. Off the rebuild it has to fade once a pixel holds more than a
@@ -3503,10 +3539,26 @@ void fragment() {
     // Where one side is the sea the line is a coast, not a frontier, and the atlas inks it lighter
     // and bluer, so the eye can tell where a state ends from where the land does. The two inks
     // split one stroke; nothing is drawn twice.
+    //
+    // Close in, whether one side is the sea is read off the block of ids the stroke itself is rebuilt
+    // from. From the middle zoom out the stroke comes from the filtered frontier field, which
+    // reaches further than that block, and a block read at one point a pixel aliases: the land
+    // half of a coast stroke came out two-toned, and the ink crawled as the camera moved. There
+    // the question is put to something filtered instead - the far plate's land mask, averaged
+    // over about four cells by its mipmaps: under one wherever the sea is within about two cells.
+    // A frontier running down to a coast takes the coast's ink for its last few cells, which is
+    // where the two lines meet anyway.
     float coast_edge = 0.0;
+    float coast_far = 0.0;
     if (atlas_look > 0.5) {
-        country_edge *= 1.0 + (border_wobble - 0.5) * 0.12 * step(0.001, border_wobble_weight);
         float coast_side = max(1.0 - step(0.5, near_nation), 1.0 - step(0.5, other_nation));
+        if (frontier_weight > 0.001) {
+            vec2 plate_size = vec2(textureSize(political_map, 0));
+            float coast_lod = log2(max(4.0 * plate_size.x / id_size.x, 1.0));
+            float land_around = textureLod(political_map, vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0)), coast_lod).a;
+            coast_far = 1.0 - smoothstep(0.92, 0.995, land_around);
+            coast_side = mix(coast_side, coast_far, frontier_weight);
+        }
         coast_edge = country_edge * coast_side;
         country_edge -= coast_edge;
     }
@@ -3560,10 +3612,16 @@ void fragment() {
     if (atlas_look > 0.5) {
         // The far band (Imperator): from the middle zoom out, where the cushion above has gone
         // because it is measured in pixels, the colour deepens towards every frontier and coast
-        // over a few cells of the frontier field instead. The border keeps its volume all the way
-        // out. Not in Compatibility, which has no field (frontier_ready stays nought there).
-        float far_band = (1.0 - smoothstep(frontier_offset, frontier_cap * 0.85, frontier_cells_all)) * frontier_ready
-            * clamp((id_span - 0.8) / 1.2, 0.0, 1.0) * political.a * (1.0 - step(0.5, terrain_mode));
+        // off the frontier field instead. The border keeps its volume all the way out. Its width
+        // is a few screen pixels, capped by what the field holds: measured in cells it covered a
+        // growing share of a small state as the camera pulled back, until Belgium, Switzerland or
+        // an island nation read darker and more saturated than its real colour. Half as deep
+        // along a coast, which has its own ink already. Not in Compatibility, which has no field
+        // (frontier_ready stays nought there).
+        float band_end = min(frontier_cap * 0.85, frontier_offset + look_far_band_pixels * id_aa);
+        float far_band = (1.0 - smoothstep(frontier_offset, band_end, frontier_cells_all)) * frontier_ready
+            * clamp((id_span - 0.8) / 1.2, 0.0, 1.0) * political.a * (1.0 - step(0.5, terrain_mode))
+            * (1.0 - 0.5 * coast_far);
         base = mix(base, saturated_nation * 0.80, far_band * look_far_band);
     }
 
@@ -3587,17 +3645,16 @@ void fragment() {
     // as a country rather than as a region that happens to be lit.
     float highlighted = step(0.0, highlighted_nation) *
                         (abs(near_nation - highlighted_nation) < 0.5 ? 1.0 : 0.0) * political.a;
-    float highlight_edge = 1.0 - smoothstep(border_pixels * 0.5, border_pixels * 3.2, nation_edge_pixels);
+    // The atlas draws the gold a little heavier (look_selection_width) and nothing more: a glow
+    // round it would need to know which side of a line is the picked country further out than
+    // the block of ids around the line can say, so it came out clipped to a texel and unseen -
+    // and a stroke suits a map of ink better than a lit edge.
+    float selection_width = mix(1.0, look_selection_width, step(0.5, atlas_look));
+    float highlight_edge = 1.0 - smoothstep(border_pixels * 0.5 * selection_width, border_pixels * 3.2 * selection_width,
+        nation_edge_pixels);
     highlight_edge *= step(0.5, abs(near_nation - other_nation)) * highlighted;
     base = mix(base, vec3(0.91, 0.79, 0.42), highlighted * 0.085);
     base = mix(base, vec3(1.00, 0.87, 0.48), highlight_edge * 0.88);
-    if (atlas_look > 0.5 && highlighted_nation >= 0.0) {
-        // A soft glow just outside the picked country's border, so the gold ring reads as lit
-        // from within rather than painted on.
-        float selection_outer = (abs(other_nation - highlighted_nation) < 0.5 && abs(near_nation - highlighted_nation) > 0.5)
-            ? 1.0 - smoothstep(0.0, border_pixels * 6.0, nation_edge_pixels) : 0.0;
-        base = mix(base, vec3(1.0, 0.87, 0.48), selection_outer * look_selection_halo);
-    }
     // A line the player drew. Blue holds it, amber takes it, grey falls back to it.
     float plan = round(front.b * 4.0);
     vec3 plan_color = plan < 1.5 ? vec3(0.24, 0.56, 0.96)

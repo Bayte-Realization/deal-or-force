@@ -28,10 +28,9 @@ public sealed partial class GlobePresentation
         var style = _mapLookStyle;
         _globeMaterial.SetShaderParameter("atlas_look", _mapLookAtlas ? 1f : 0f);
         _globeMaterial.SetShaderParameter("look_paper", Ink(style.Paper));
-        _globeMaterial.SetShaderParameter("look_paper_grain", style.PaperGrain);
-        _globeMaterial.SetShaderParameter("look_shade_mul", Ink(MapLook.ScaledTo(style.Shade, MapLook.ShadeLuminance)));
-        _globeMaterial.SetShaderParameter("look_lamp_mul", Ink(MapLook.ScaledTo(style.Lamp, MapLook.LampLuminance)));
+        _globeMaterial.SetShaderParameter("look_shade", Ink(style.Shade));
         _globeMaterial.SetShaderParameter("look_lamp", Ink(style.Lamp));
+        _globeMaterial.SetShaderParameter("look_relief_tint", style.ReliefTint);
         _globeMaterial.SetShaderParameter("look_sea_deep", Ink(style.SeaDeep));
         _globeMaterial.SetShaderParameter("look_sea_mid", Ink(style.SeaMid));
         _globeMaterial.SetShaderParameter("look_sea_shelf", Ink(style.SeaShelf));
@@ -39,25 +38,39 @@ public sealed partial class GlobePresentation
         _globeMaterial.SetShaderParameter("look_sea_chart", Ink(style.SeaChart));
         _globeMaterial.SetShaderParameter("look_foam", Ink(style.Foam));
         _globeMaterial.SetShaderParameter("look_coast_ink", Ink(style.CoastInk));
-        _globeMaterial.SetShaderParameter("look_cover_near", style.CoverNear);
-        _globeMaterial.SetShaderParameter("look_flat_cover_near", style.FlatCoverNear);
+        _globeMaterial.SetShaderParameter("look_unowned", Ink(style.Unowned));
+        _globeMaterial.SetShaderParameter("look_ground_show_near", style.GroundShowNear);
         _globeMaterial.SetShaderParameter("look_cover_far", style.CoverFar);
         _globeMaterial.SetShaderParameter("look_saturation_far", style.SaturationFar);
         _globeMaterial.SetShaderParameter("look_relief_far", style.ReliefFar);
-        _globeMaterial.SetShaderParameter("look_border_wobble", style.BorderWobble);
         _globeMaterial.SetShaderParameter("look_far_band", style.FarBand);
+        _globeMaterial.SetShaderParameter("look_far_band_pixels", style.FarBandPixels);
         _globeMaterial.SetShaderParameter("look_foam_strength", style.FoamStrength);
         _globeMaterial.SetShaderParameter("look_waterline", style.Waterline);
         _globeMaterial.SetShaderParameter("look_sea_sheen", style.SeaSheen);
-        _globeMaterial.SetShaderParameter("look_selection_halo", style.SelectionHalo);
+        _globeMaterial.SetShaderParameter("look_selection_width", style.SelectionWidth);
         // Compatibility has no texture unit left for the frontier field, so its read there is a
         // constant meaning "inland" (PackedMapShader). With frontier_ready at one every country
         // line faded out from the middle zoom (GlobePlateRepaint.ApplyFrontier). The atlas keeps
-        // it at nought there, so the line is rebuilt per pixel at every zoom as the packed shader
-        // intends; classic keeps what it always did, so the old picture stays one value away.
+        // it at nought there, so the line is rebuilt per pixel, as the packed shader intends,
+        // out to the zoom where a pixel holds about two cells; beyond that the rebuilt line would
+        // only alias, so it fades, and the far frontiers are the ones painted into the plate.
+        // Classic keeps what it always did.
         if (_packedLookups is not null)
+        {
             _globeMaterial.SetShaderParameter("frontier_ready",
                 !_mapLookAtlas && _frontierTexture is not null ? 1f : 0f);
+            // Under the atlas the field is never built there (FrontierFieldWanted), so a switch to
+            // classic in the middle of a game would leave classic without it - drawing differently
+            // from a classic cold start - until some border happened to move. Build it now: the
+            // plate repaint makes the field on its worker, from the same owners, once.
+            if (!_mapLookAtlas && _frontierTexture is null && _frontierAuthored is not null &&
+                _campaign?.ProvinceMap is { } topology)
+            {
+                _plateColoursStale = true;
+                RequestPlateRepaint(topology);
+            }
+        }
     }
 
     /// <summary>

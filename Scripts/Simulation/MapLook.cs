@@ -14,9 +14,9 @@ namespace DealOrForce.Simulation;
 /// </summary>
 public sealed record MapLookStyle(
     LinearColour Paper,
-    float PaperGrain,
     LinearColour Shade,
     LinearColour Lamp,
+    float ReliefTint,
     LinearColour SeaDeep,
     LinearColour SeaMid,
     LinearColour SeaShelf,
@@ -24,8 +24,8 @@ public sealed record MapLookStyle(
     LinearColour SeaChart,
     LinearColour Foam,
     LinearColour CoastInk,
-    float CoverNear,
-    float FlatCoverNear,
+    LinearColour Unowned,
+    float GroundShowNear,
     float CoverFar,
     float SaturationFar,
     float ReliefFar,
@@ -33,12 +33,12 @@ public sealed record MapLookStyle(
     float PaperFullDistance,
     float FlatPaperFromZoom,
     float FlatPaperFullZoom,
-    float BorderWobble,
     float FarBand,
+    float FarBandPixels,
     float FoamStrength,
     float Waterline,
     float SeaSheen,
-    float SelectionHalo);
+    float SelectionWidth);
 
 public static class MapLook
 {
@@ -47,13 +47,19 @@ public static class MapLook
     public const string ClassicValue = "classic";
 
     // The relief multiplier the shader has always used runs from 0.52 in the deepest shade to
-    // 1.42 on a slope facing the lamp. The atlas look keeps those two brightnesses and only
-    // changes their colour, so a mountain is no darker or brighter than before - only warmer.
-    public const float ShadeLuminance = 0.52f;
-    public const float LampLuminance = 1.42f;
+    // 1.42 on a slope facing the lamp. The atlas keeps exactly that brightness and only leans the
+    // hue (ReliefShade).
+    public const float HillshadeMin = 0.52f;
+    public const float HillshadeMax = 1.42f;
 
-    public const float CoverNearDefault = 0.70f;
-    public const float FlatCoverNearDefault = 0.80f;
+    // The three steps of the chart sea on the paper map, as shares of map.look_sea_chart: abyss,
+    // continental slope, shelf. About two and a half L* apart at this darkness.
+    public const float ChartStepAbyss = 0.72f;
+    public const float ChartStepSlope = 0.86f;
+    public const float ChartStepShelf = 1.0f;
+
+    public const float ReliefTintDefault = 0.60f;
+    public const float GroundShowNearDefault = 0.30f;
     public const float CoverFarDefault = 0.95f;
     public const float SaturationFarDefault = 0.80f;
     public const float ReliefFarDefault = 0.45f;
@@ -61,27 +67,27 @@ public static class MapLook
     public const float PaperFullDistanceDefault = 22f;
     public const float FlatPaperFromZoomDefault = 9.0f;
     public const float FlatPaperFullZoomDefault = 11.5f;
-    public const float BorderWobbleDefault = 0.22f;
     public const float FarBandDefault = 0.30f;
+    public const float FarBandPixelsDefault = 3f;
     public const float FoamDefault = 0.55f;
-    public const float WaterlineDefault = 0.15f;
-    public const float SeaSheenDefault = 0.06f;
-    public const float SelectionHaloDefault = 0.10f;
-    public const float PaperGrainDefault = 0.035f;
+    public const float WaterlineDefault = 0f;
+    public const float SeaSheenDefault = 0.30f;
+    public const float SelectionWidthDefault = 1.3f;
 
-    /// <summary>The design's starting palette, as sRGB hex - what InterfaceSkin also ships compiled.</summary>
+    /// <summary>The design's palette, as sRGB hex - what InterfaceSkin also ships compiled.</summary>
     public static readonly (string Token, string Hex)[] DefaultColours =
     {
         ("map.look_paper", "#e6d9bb"),
-        ("map.look_shade", "#5b4a3c"),
+        ("map.look_shade", "#4a4f5e"),
         ("map.look_lamp", "#fff1d2"),
         ("map.look_sea_deep", "#18323f"),
         ("map.look_sea_mid", "#234b58"),
         ("map.look_sea_shelf", "#3d6b70"),
         ("map.look_sea_coast", "#6a9690"),
-        ("map.look_sea_chart", "#50707a"),
+        ("map.look_sea_chart", "#2a4450"),
         ("map.look_foam", "#ece5d2"),
         ("map.look_coast_ink", "#2e4048"),
+        ("map.look_unowned", "#d8ccb0"),
     };
 
     /// <summary>
@@ -100,9 +106,9 @@ public static class MapLook
         var flatFull = Math.Clamp(InterfaceSkin.Metric("map.look_flat_paper_full_zoom", FlatPaperFullZoomDefault), flatFrom, 40f);
         return new MapLookStyle(
             Ink("map.look_paper"),
-            Math.Clamp(InterfaceSkin.Metric("map.look_paper_grain", PaperGrainDefault), 0f, 0.2f),
             Ink("map.look_shade"),
             Ink("map.look_lamp"),
+            Math.Clamp(InterfaceSkin.Metric("map.look_relief_tint", ReliefTintDefault), 0f, 1f),
             Ink("map.look_sea_deep"),
             Ink("map.look_sea_mid"),
             Ink("map.look_sea_shelf"),
@@ -110,18 +116,18 @@ public static class MapLook
             Ink("map.look_sea_chart"),
             Ink("map.look_foam"),
             Ink("map.look_coast_ink"),
-            Math.Clamp(InterfaceSkin.Metric("map.look_cover_near", CoverNearDefault), 0f, 1f),
-            Math.Clamp(InterfaceSkin.Metric("map.look_flat_cover_near", FlatCoverNearDefault), 0f, 1f),
+            Ink("map.look_unowned"),
+            Math.Clamp(InterfaceSkin.Metric("map.look_ground_show_near", GroundShowNearDefault), 0f, 0.6f),
             Math.Clamp(InterfaceSkin.Metric("map.look_cover_far", CoverFarDefault), 0f, 1f),
             Math.Clamp(InterfaceSkin.Metric("map.look_saturation_far", SaturationFarDefault), 0f, 1.5f),
             Math.Clamp(InterfaceSkin.Metric("map.look_relief_far", ReliefFarDefault), 0f, 1.5f),
             paperFrom, paperFull, flatFrom, flatFull,
-            Math.Clamp(InterfaceSkin.Metric("map.look_border_wobble", BorderWobbleDefault), 0f, 0.6f),
             Math.Clamp(InterfaceSkin.Metric("map.look_far_band", FarBandDefault), 0f, 1f),
+            Math.Clamp(InterfaceSkin.Metric("map.look_far_band_pixels", FarBandPixelsDefault), 0f, 12f),
             Math.Clamp(InterfaceSkin.Metric("map.look_foam_strength", FoamDefault), 0f, 1f),
             Math.Clamp(InterfaceSkin.Metric("map.look_waterline", WaterlineDefault), 0f, 1f),
-            Math.Clamp(InterfaceSkin.Metric("map.look_sea_sheen", SeaSheenDefault), 0f, 0.5f),
-            Math.Clamp(InterfaceSkin.Metric("map.look_selection_halo", SelectionHaloDefault), 0f, 1f));
+            Math.Clamp(InterfaceSkin.Metric("map.look_sea_sheen", SeaSheenDefault), 0f, 1f),
+            Math.Clamp(InterfaceSkin.Metric("map.look_selection_width", SelectionWidthDefault), 1f, 2.5f));
     }
 
     /// <summary>
@@ -140,16 +146,24 @@ public static class MapLook
     }
 
     /// <summary>
-    /// A colour scaled to a given luminance, for the relief multipliers: the shade and the lamp
-    /// say what colour the dark and the lit slopes take, and the shader's old range says how dark
-    /// and how light they are.
+    /// The atlas relief, the same sum the map shader does: the surface times the grey hillshade -
+    /// so its brightness is exactly the classic one - plus a lean of hue towards the shade colour
+    /// (hillshade under one) or the lamp (over one). The lean is the tint over its own luminance
+    /// less one, a colour with no luminance, scaled by the shaded surface's luminance, how far the
+    /// slope is from flat, and <paramref name="tint"/>. Any surface keeps its luminance, however
+    /// saturated; only negative channels are clipped.
     /// </summary>
-    public static LinearColour ScaledTo(LinearColour colour, float luminance)
+    public static LinearColour ReliefShade(LinearColour surface, float hillshade, LinearColour shade, LinearColour lamp,
+        float tint)
     {
-        var own = Luminance(colour);
-        if (own < 1e-5f) return new LinearColour(luminance, luminance, luminance);
-        var k = luminance / own;
-        return new LinearColour(colour.R * k, colour.G * k, colour.B * k);
+        var lean = hillshade < 1f ? shade : lamp;
+        var leanLuminance = MathF.Max(Luminance(lean), 0.0001f);
+        var shaded = new LinearColour(surface.R * hillshade, surface.G * hillshade, surface.B * hillshade);
+        var k = Luminance(shaded) * MathF.Abs(hillshade - 1f) * tint;
+        return new LinearColour(
+            MathF.Max(shaded.R + (lean.R / leanLuminance - 1f) * k, 0f),
+            MathF.Max(shaded.G + (lean.G / leanLuminance - 1f) * k, 0f),
+            MathF.Max(shaded.B + (lean.B / leanLuminance - 1f) * k, 0f));
     }
 
     public static float Luminance(LinearColour colour) =>

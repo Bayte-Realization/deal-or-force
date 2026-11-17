@@ -34,45 +34,49 @@ static class MapLookTests
     private static void Tokens()
     {
         InterfaceSkin.ResetCatalog();
-        // The design's table, word for word (docs/design/graphics-2026-11-18/map-look.md).
+        // The design's table, as revised after the first review (docs/MAP_LOOK_WAVE_1_2026_11_18_RU.md).
         var table = new Dictionary<string, string>
         {
-            ["map.look_paper"] = "#e6d9bb", ["map.look_shade"] = "#5b4a3c", ["map.look_lamp"] = "#fff1d2",
+            ["map.look_paper"] = "#e6d9bb", ["map.look_shade"] = "#4a4f5e", ["map.look_lamp"] = "#fff1d2",
             ["map.look_sea_deep"] = "#18323f", ["map.look_sea_mid"] = "#234b58", ["map.look_sea_shelf"] = "#3d6b70",
-            ["map.look_sea_coast"] = "#6a9690", ["map.look_sea_chart"] = "#50707a", ["map.look_foam"] = "#ece5d2",
-            ["map.look_coast_ink"] = "#2e4048",
+            ["map.look_sea_coast"] = "#6a9690", ["map.look_sea_chart"] = "#2a4450", ["map.look_foam"] = "#ece5d2",
+            ["map.look_coast_ink"] = "#2e4048", ["map.look_unowned"] = "#d8ccb0",
         };
         Check(MapLook.DefaultColours.Length == table.Count &&
               MapLook.DefaultColours.All(entry => table.TryGetValue(entry.Token, out var hex) &&
                   string.Equals(hex, entry.Hex, StringComparison.OrdinalIgnoreCase)),
-            "the compiled colour fallbacks are the design's starting table");
+            "the compiled colour fallbacks are the design's table");
         foreach (var (token, hex) in table)
             Check(InterfaceSkin.Has(token) && string.Equals(InterfaceSkin.Colour(token), hex, StringComparison.OrdinalIgnoreCase) &&
                   !InterfaceSkin.Overridden.Contains(token),
                 "game/gui/78_map_look.json and the compiled skin agree on " + token);
 
         foreach (var (token, compiled) in new[] {
-                     ("map.look_cover_near", MapLook.CoverNearDefault), ("map.look_flat_cover_near", MapLook.FlatCoverNearDefault),
+                     ("map.look_ground_show_near", MapLook.GroundShowNearDefault),
                      ("map.look_cover_far", MapLook.CoverFarDefault), ("map.look_saturation_far", MapLook.SaturationFarDefault),
+                     ("map.look_relief_tint", MapLook.ReliefTintDefault),
                      ("map.look_relief_far", MapLook.ReliefFarDefault), ("map.look_paper_from_distance", MapLook.PaperFromDistanceDefault),
                      ("map.look_paper_full_distance", MapLook.PaperFullDistanceDefault),
                      ("map.look_flat_paper_from_zoom", MapLook.FlatPaperFromZoomDefault),
                      ("map.look_flat_paper_full_zoom", MapLook.FlatPaperFullZoomDefault),
-                     ("map.look_border_wobble", MapLook.BorderWobbleDefault), ("map.look_far_band", MapLook.FarBandDefault),
+                     ("map.look_far_band", MapLook.FarBandDefault), ("map.look_far_band_pixels", MapLook.FarBandPixelsDefault),
                      ("map.look_foam_strength", MapLook.FoamDefault), ("map.look_waterline", MapLook.WaterlineDefault),
-                     ("map.look_sea_sheen", MapLook.SeaSheenDefault), ("map.look_selection_halo", MapLook.SelectionHaloDefault),
-                     ("map.look_paper_grain", MapLook.PaperGrainDefault) })
+                     ("map.look_sea_sheen", MapLook.SeaSheenDefault), ("map.look_selection_width", MapLook.SelectionWidthDefault) })
             Check(Near(InterfaceSkin.Metric(token, float.NaN), compiled, 0.00001f),
                 "game/gui/78_map_look.json ships " + token + " at the compiled value");
 
-        Check(MapLook.CoverNearDefault == 0.70f && MapLook.FlatCoverNearDefault == 0.80f && MapLook.CoverFarDefault == 0.95f &&
-              MapLook.SaturationFarDefault == 0.80f && MapLook.ReliefFarDefault == 0.45f &&
+        Check(MapLook.GroundShowNearDefault == 0.30f && MapLook.CoverFarDefault == 0.95f &&
+              MapLook.SaturationFarDefault == 0.80f && MapLook.ReliefFarDefault == 0.45f && MapLook.ReliefTintDefault == 0.60f &&
               MapLook.PaperFromDistanceDefault == 17f && MapLook.PaperFullDistanceDefault == 22f &&
               MapLook.FlatPaperFromZoomDefault == 9.0f && MapLook.FlatPaperFullZoomDefault == 11.5f &&
-              MapLook.BorderWobbleDefault == 0.22f && MapLook.FarBandDefault == 0.30f && MapLook.FoamDefault == 0.55f &&
-              MapLook.WaterlineDefault == 0.15f && MapLook.SeaSheenDefault == 0.06f &&
-              MapLook.SelectionHaloDefault == 0.10f && MapLook.PaperGrainDefault == 0.035f,
-            "the compiled metric fallbacks are the brief's numbers");
+              MapLook.FarBandDefault == 0.30f && MapLook.FarBandPixelsDefault == 3f && MapLook.FoamDefault == 0.55f &&
+              MapLook.WaterlineDefault == 0f && MapLook.SeaSheenDefault == 0.30f && MapLook.SelectionWidthDefault == 1.3f,
+            "the compiled metric fallbacks are the brief's numbers, as revised");
+        Check(InterfaceSkin.Metric("map.look_waterline", 1f) == 0f,
+            "engraved waterlines are an era's mark: off in the base look");
+        foreach (var gone in new[] { "map.look_paper_grain", "map.look_border_wobble", "map.look_selection_halo",
+                     "map.look_cover_near", "map.look_flat_cover_near" })
+            Check(float.IsNaN(InterfaceSkin.Metric(gone, float.NaN)), "the retired token " + gone + " is no longer shipped");
 
         var style = MapLook.Current();
         Check(Near(style.Paper, LinearColour.FromHex("#e6d9bb", default)) && Near(style.CoastInk, LinearColour.FromHex("#2e4048", default)) &&
@@ -83,10 +87,45 @@ static class MapLookTests
         Check(L(style.Paper) > L(style.SeaCoast) && L(style.SeaCoast) > L(style.SeaShelf) && L(style.SeaShelf) > L(style.SeaMid) &&
               L(style.SeaMid) > L(style.SeaDeep) && L(style.CoastInk) < L(style.SeaShelf) && L(style.Foam) > L(style.SeaCoast),
             "one brightness order: paper, coastal water, shelf, open sea; the coast ink below the shelf; foam above the sea");
-        var shade = MapLook.ScaledTo(style.Shade, MapLook.ShadeLuminance);
-        var lamp = MapLook.ScaledTo(style.Lamp, MapLook.LampLuminance);
-        Check(Near(L(shade), 0.52f, 0.0005f) && Near(L(lamp), 1.42f, 0.0005f) && shade.R > shade.B && lamp.R > lamp.B,
-            "the warm shade and lamp keep the old relief range (0.52 .. 1.42) and only change its colour");
+        // Unclaimed land is paper, and far from the sea in value: the classic slate grey sat
+        // within a few per cent of the chart sea, and Antarctica melted into the water.
+        Check(L(style.Unowned) < L(style.Paper) && L(style.Unowned) > 0.85f * L(style.Paper) &&
+              L(style.Unowned) > 4f * L(style.SeaChart) && style.Unowned.R > style.Unowned.B,
+            "unowned land is the paper a shade darker, warm, and over four times the chart sea's luminance");
+        // The far sea: three steps far enough apart to register, and land standing above water. A
+        // country fill of luminance 0.15 is about the darkest the shipped palette gives after the
+        // paper map's quieter saturation.
+        Check(L(style.SeaChart) * MapLook.ChartStepShelf * 2.5f <= 0.15f,
+            "the lightest chart step is at most two-fifths of the darkest usual country fill");
+        float Lstar(float y) => y > 0.008856f ? 116f * MathF.Cbrt(y) - 16f : 903.3f * y;
+        Check(Lstar(L(style.SeaChart) * MapLook.ChartStepSlope) - Lstar(L(style.SeaChart) * MapLook.ChartStepAbyss) >= 2f &&
+              Lstar(L(style.SeaChart) * MapLook.ChartStepShelf) - Lstar(L(style.SeaChart) * MapLook.ChartStepSlope) >= 2f,
+            "each chart step is at least two L* above the one below it");
+
+        // The relief keeps the classic brightness for ANY surface, saturated ones included: only
+        // the hue leans. Before this the tint was a coloured multiplier, matched to the classic
+        // range only for grey, and a blue country came out a tenth darker in the shade while a
+        // red one clipped on lit slopes.
+        var surfaces = new[] {
+            ("grey", new LinearColour(0.30f, 0.30f, 0.30f)), ("saturated blue", new LinearColour(0.02f, 0.10f, 0.60f)),
+            ("saturated red", new LinearColour(0.70f, 0.05f, 0.03f)), ("forest green", new LinearColour(0.06f, 0.25f, 0.05f)),
+            ("ochre", new LinearColour(0.55f, 0.35f, 0.08f)) };
+        foreach (var (name, surface) in surfaces)
+            foreach (var hillshade in new[] { MapLook.HillshadeMin, 0.75f, 1f, 1.2f, MapLook.HillshadeMax })
+            {
+                var shaded = MapLook.ReliefShade(surface, hillshade, style.Shade, style.Lamp, style.ReliefTint);
+                Check(Near(L(shaded), L(surface) * hillshade, 0.002f),
+                    "relief on " + name + " at hillshade " + hillshade.ToString(CultureInfo.InvariantCulture) +
+                    " keeps the classic luminance");
+            }
+        var blue = surfaces[1].Item2;
+        var red = surfaces[2].Item2;
+        var blueShade = MapLook.ReliefShade(blue, MapLook.HillshadeMin, style.Shade, style.Lamp, style.ReliefTint);
+        var redLit = MapLook.ReliefShade(red, MapLook.HillshadeMax, style.Shade, style.Lamp, style.ReliefTint);
+        Check(blueShade.B >= blue.B * MapLook.HillshadeMin && redLit.R <= red.R * MapLook.HillshadeMax * 1.05f,
+            "in the shade a blue country keeps at least the grey hillshade's blue; on a lit slope a red one gains under five per cent red");
+        Check(style.Shade.B > style.Shade.R && style.Lamp.R > style.Lamp.B,
+            "warm light, cool shade (Imhof): the shade leans blue, the lamp warm");
 
         var errors = new List<string>();
         InterfaceSkin.Merge("{ \"colours\": { \"map.look_paper\": \"#ffffff\" }, \"metrics\": { " +
@@ -180,8 +219,7 @@ static class MapLookTests
                      ("look_paper", style.Paper), ("look_lamp", style.Lamp), ("look_sea_deep", style.SeaDeep),
                      ("look_sea_mid", style.SeaMid), ("look_sea_shelf", style.SeaShelf), ("look_sea_coast", style.SeaCoast),
                      ("look_sea_chart", style.SeaChart), ("look_foam", style.Foam), ("look_coast_ink", style.CoastInk),
-                     ("look_shade_mul", MapLook.ScaledTo(style.Shade, MapLook.ShadeLuminance)),
-                     ("look_lamp_mul", MapLook.ScaledTo(style.Lamp, MapLook.LampLuminance)) })
+                     ("look_shade", style.Shade), ("look_unowned", style.Unowned) })
         {
             var match = Regex.Match(full, @"uniform\s+vec3\s+" + uniform + @"\s*=\s*vec3\(([^)]*)\);");
             var parts = match.Success ? match.Groups[1].Value.Split(',').Select(p => float.Parse(p.Trim(), CultureInfo.InvariantCulture)).ToArray() : null;
@@ -191,5 +229,39 @@ static class MapLookTests
 
         Check(full.Contains("float frontier_cells_all") && Regex.Matches(full, @"texture\(frontier_field, UV\)").Count == 1,
             "the frontier field is read once, exactly as texture(frontier_field, UV), so Compatibility can cut it");
+
+        // Metric defaults in the shader are the compiled ones, so an unconfigured material and a
+        // configured one agree on numbers as well as on colours.
+        foreach (var (uniform, value) in new[] {
+                     ("look_relief_tint", style.ReliefTint), ("look_ground_show_near", style.GroundShowNear),
+                     ("look_cover_far", style.CoverFar), ("look_saturation_far", style.SaturationFar),
+                     ("look_relief_far", style.ReliefFar), ("look_far_band", style.FarBand),
+                     ("look_far_band_pixels", style.FarBandPixels), ("look_foam_strength", style.FoamStrength),
+                     ("look_waterline", style.Waterline), ("look_sea_sheen", style.SeaSheen),
+                     ("look_selection_width", style.SelectionWidth) })
+        {
+            var match = Regex.Match(full, @"uniform\s+float\s+" + uniform + @"\s*=\s*([0-9.]+);");
+            Check(match.Success && Near(float.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture), value, 0.00001f),
+                "shader default of " + uniform + " is the shipped number");
+        }
+
+        // The review's findings, held in place (docs/MAP_LOOK_WAVE_1_2026_11_18_RU.md, "Разбор замечаний").
+        Check(full.Contains("water += surf_color * surf_edge * 0.50 * wave_fade;") &&
+              full.Contains("water = mix(water, water * 0.58, shore_edge * 0.38 * (1.0 - political.a));"),
+            "the atlas replaces only the one-pixel surf: the dark frame on the water side of every coast stays");
+        Check(full.Contains("vec3 shaded = base * hillshade;") && !full.Contains("look_shade_mul"),
+            "the relief's brightness is the classic grey hillshade's; only the hue leans");
+        Check(!full.Contains("SCREEN_UV, vec2(0.28, 0.22)") && full.Contains("water *= 1.0 + sheen * look_sea_sheen"),
+            "the sea sheen brightens the water's own colour, on the globe only, never fixed to the screen");
+        Check(!full.Contains("selection_outer") && full.Contains("look_selection_width"),
+            "no glow outside the picked country, which the id block could not place: a heavier gold stroke instead");
+        Check(MapBorders.Unowned == 65535 && full.Contains("abs(near_nation - 65535.0) < 0.5"),
+            "unowned land is found by the id MapBorders.Unowned, which the shader spells as 65535");
+        Check(full.Contains("look_far_band_pixels * id_aa"), "the far band is a few screen pixels wide at every zoom");
+        Check(full.Contains("textureLod(political_map,") && full.Contains("coast_side = mix(coast_side, coast_far, frontier_weight);"),
+            "from the middle zoom out a coast is told from a frontier by the filtered land mask, not the id block");
+        Check(!full.Contains("look_border_wobble") && !full.Contains("look_paper_grain") &&
+              full.Contains("float atlas_noise(vec2 uv, float across, float flat_share)"),
+            "no border wobble or paper fibre; the one map noise left keeps its cells square on the globe");
     }
 }
