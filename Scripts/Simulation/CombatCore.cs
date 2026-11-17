@@ -1643,7 +1643,7 @@ public static partial class Warfare
 
     private static StrategicWar FindLiveWar(Campaign campaign, int warId)
     {
-        foreach (var candidate in campaign.Wars)
+        foreach (var candidate in Warfare.OpenWars(campaign))
             if (candidate.Id == warId && !candidate.Ended) return candidate;
         return null;
     }

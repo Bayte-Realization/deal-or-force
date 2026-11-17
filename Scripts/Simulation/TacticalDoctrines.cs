@@ -844,6 +844,8 @@ public static class TacticalDoctrines
         {
             var nation = nations[ni];
             if (++ticked % 8 == 0) yield return 0;
+            // A retired country (LongCampaign) has no shelves to open and studies nothing.
+            if (campaign.IsRetired(nation)) continue;
             if (runCourses)
             {
                 EnsureShelves(nation);

@@ -120,6 +120,11 @@ public static partial class SaveSystem
         options.Converters.Add(new CompactRowConverter<MarketQuote>());
         options.Converters.Add(new CompactRowConverter<OpinionReason>());
         options.Converters.Add(new CompactRowConverter<ChronicleEntry>());
+        // A relation and a trade route are short records there are a hundred thousand of. One to
+        // a line they are found and edited as easily as spread over eight, and the eight were
+        // 10 MB of line ends and indentation in a text save 107 years long.
+        options.Converters.Add(new CompactRowConverter<DiplomaticRelation>());
+        options.Converters.Add(new CompactRowConverter<TradeRoute>());
         return options;
     }
 
@@ -1538,7 +1543,7 @@ public static partial class SaveSystem
                 (entry.Value.Dormant ? campaign.DormantRelations : campaign.Relations)[entry.Key] = entry.Value;
             campaign.TradeRoutesDay = TradeRoutesDay;
             Replace(campaign.TradeRoutes, TradeRoutes);
-            campaign.History.Restore(History);
+            campaign.History.Restore(History, campaign.Defines);
             campaign.ObserverMode = ObserverMode;
             campaign.Curse = Curse ?? "";
             campaign.CurseDay = CurseDay;

@@ -168,7 +168,7 @@ public static class Delegation
     /// </summary>
     private static void RunTheTradeDesk(Campaign campaign, Nation nation)
     {
-        var atWar = campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id));
+        var atWar = Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(nation.Id));
         var fiscalStress = nation.DebtCondition >= DebtCondition.Stressed || nation.Treasury < 0.5f;
 
         foreach (var (commodity, quote) in nation.Market)

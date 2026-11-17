@@ -26,6 +26,8 @@ static class Program
         if (args.Contains("--movement-quiet-think-only")) { MovementQuietThinkTests.Run(); return; }
         if (args.Contains("--weekly-diplomacy-scan-only")) { WeeklyDiplomacyScanTests.Run(); return; }
         if (args.Contains("--relation-table-only")) { RelationTableTests.Run(); return; }
+        if (args.Contains("--long-campaign-only")) { LongCampaignTests.Run(); return; }
+        if (args.Length == 0) LongCampaignTests.Run();
         if (args.Contains("--people-index-reuse-only")) { PeopleIndexReuseTests.Run(); return; }
         if (args.Contains("--people-index-names-only")) { PeopleIndexNamesTests.Run(); return; }
         if (args.Contains("--society-passes-only")) { SocietyPassTests.Run(); return; }

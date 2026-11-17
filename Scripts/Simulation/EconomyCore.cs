@@ -853,7 +853,7 @@ public static class EconomySystem
             if (!nation.IsHuman) continue;
             SovereignFinance.Prepare(campaign, nation, false);
             var atWar = false;
-            foreach (var war in campaign.Wars)
+            foreach (var war in Warfare.OpenWars(campaign))
                 if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
 
             var weeklyOutput = nation.Gdp / 52f;
@@ -975,6 +975,8 @@ public static class EconomySystem
             if (index > 0 && index % EconomyStageCountries == 0) yield return 0;
             using var stage = SimProfiler.Measure("economy");
             var nation = campaign.Nations[index];
+            // A retired country (LongCampaign) keeps no books: no ledger to close, nothing to zero.
+            if (campaign.IsRetired(nation)) continue;
             // The money ledger's week closes here, before this week's budget is booked, so each
             // closed week holds exactly one budget; and penalties that have run out go first.
             MoneyLedger.Close(campaign, nation);

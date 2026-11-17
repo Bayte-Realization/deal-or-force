@@ -63,7 +63,7 @@ public static class IntelNetworks
     public static float CounterIntelligence(Campaign c, Nation target)
     {
         var authority = M.Clamp01(PoliticsCore.IdeologyOf(target).Authority);
-        var atWar = c.Wars.Any(w => !w.Ended && w.Involves(target.Id)) ? 0.15f : 0f;
+        var atWar = Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(target.Id)) ? 0.15f : 0f;
         return M.Clamp01(0.20f + 0.40f * authority + atWar + 0.15f * M.Clamp01(target.Stability));
     }
 

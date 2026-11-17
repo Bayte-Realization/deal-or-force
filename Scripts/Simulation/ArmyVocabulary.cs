@@ -86,7 +86,7 @@ public static class ArmyVocabulary
         if (army.OrderKind == ArmyOrder.ReserveFront) return Loc.Get("In reserve behind the line.");
         if (army.AssignedWarId >= 0) return Loc.Get("Attached to a war but not yet given a role.");
         if (campaign is not null)
-            foreach (var war in campaign.Wars)
+            foreach (var war in Warfare.OpenWars(campaign))
                 if (!war.Ended && war.Involves(army.NationId))
                     return Loc.Get("Idle: no front has claimed this formation.");
         return Loc.Get("At rest: the country is not at war.");

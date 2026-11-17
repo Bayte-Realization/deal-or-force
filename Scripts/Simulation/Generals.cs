@@ -224,7 +224,7 @@ public static class Generals
     {
         if (campaign is null || group is null) return 0f;
         var atWar = false;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Involves(group.NationId)) { atWar = true; break; }
         if (!atWar) return 0f;
         var d = campaign.Defines;

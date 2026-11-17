@@ -1,0 +1,106 @@
+// What a campaign of centuries may not carry (Scripts/Simulation/LongCampaign.cs,
+// docs/PERFORMANCE_LONG_CAMPAIGN_2026_11_16_RU.md).
+//
+// Everything here is about countries that are gone and about records nobody reads. None of it
+// simplifies how a living country is simulated: all of them are simulated the same. But
+// retiring the dead CHANGES THE WORLD the living are in, once a country has been gone
+// RetireDeadAfterDays: organisations lose the dead members' seats (and one with nobody alive
+// left is wound up, its fund to the members' treasuries), the living forget what they thought
+// of the dead and their sleeping relations with them, and the fleets struck stop moving the
+// naval pass's random draws. Deterministic, people and money kept exactly; the measured effect
+// is in docs/PERFORMANCE_LONG_CAMPAIGN_2026_11_16_RU.md. A campaign younger than that is the
+// same world to the bit.
+{
+  // The whole diet. false: nothing is retired, pruned or trimmed - the game as it was.
+  "LongCampaignEnabled": true,
+
+  // A country with no ground, no people, no living movement, no formation, no war, no subject
+  // and no open paper is retired once it has been gone this long: it stays in the list as a
+  // short record of who it was (tag, id, names, colour, capital, peoples, homeland, laws, what
+  // it knew) so that it can be restored, released or rise again as the same country, and
+  // everything it was doing goes - market, ledgers, doctrine shelves, research in hand, its
+  // relations, what the world thought of it, its idle fleets and empty army groups, its seats
+  // in organisations. Five years: long enough that a peace conference or a restoration in the
+  // same war finds the country exactly as it fell. 0: never.
+  "RetireDeadAfterDays": 1820,
+
+  // How often the sweep runs, in days (whole weeks). It rides the weekly relation sweep.
+  "LongCampaignSweepDays": 28,
+
+  // A sleeping relation between two sides that both hold no ground, with every field at a new
+  // relation's value and an opinion too small to show, is dropped: the pair makes a new one
+  // the day they have anything to do with each other.
+  "PruneLandlessRelations": true,
+
+  // A war this long over lets go of who held each province before it. The ledger line stays:
+  // who, when, losses, score, how it ended. 0: keep for ever.
+  "EndedWarDetailDays": 364,
+
+  // A country without ground gets a ledger sample every four weeks, not every week, and its
+  // older samples are kept one step coarser. Charts are the only reader. 7: weekly, as before.
+  "HistoryLandlessSampleDays": 28,
+
+  // The ledger's resolution by age (CampaignHistory): every weekly sample for HistoryWeeklyDays
+  // back, one of each four weeks back to HistoryMonthlyDays, one of each HistoryOldSampleDays
+  // back to HistoryKeptDays, and nothing older. As shipped: three years, ten years, a quarter,
+  // forty years - at most 371 points a country, which is what bounds the ledger for good.
+  // Charts are the only reader, so none of this changes the world. On a save 107 years long the
+  // ledger is 28 MB of text as shipped; with one year of weeks and a point a year beyond ten
+  // (HistoryWeeklyDays 364, HistoryOldSampleDays 364) it is 18 MB, and the whole file 107.9 MB
+  // instead of 117.8, 17.1 MB instead of 19.5 compressed
+  // (docs/PERFORMANCE_LONG_CAMPAIGN_2026_11_16_RU.md).
+  "HistoryWeeklyDays": 1092,
+  "HistoryMonthlyDays": 3640,
+  "HistoryKeptDays": 14560,
+  "HistoryOldSampleDays": 91,
+
+  // ---- Slivers folded (Scripts/Simulation/PopulationFolding.cs) -------------------------
+  //
+  // A region's people are counted by people, faith, trade and class, and a century of migration
+  // fills that table with slivers: 268,313 groups on a save 107 years long, 116,204 of them under
+  // a thousand people. Once a week, where the cohorts move, a sliver joins its nearest kin in the
+  // same region. This CHANGES THE WORLD (who is counted under which trade, and for the last few
+  // of a people in a region under which people), so it has its own switch; with it off - or the
+  // whole diet off - the table is exactly as it was. As shipped it leaves that save 185,328
+  // groups; what it costs and what it buys is measured in
+  // docs/PERFORMANCE_LONG_CAMPAIGN_2026_11_16_RU.md.
+  "FoldSliverGroups": false,
+
+  // A trade's sliver: at most this many people AND at most this share of its region. It joins
+  // another trade of the same people and the same faith: the same class in the same sector when
+  // there is one that is no sliver itself, failing that the same class, failing that the
+  // largest. Nobody changes people or faith. 0: never.
+  "FoldTradeSliverPeople": 2500,
+  "FoldTradeSliverShare": 0.002,
+
+  // A faith's sliver of a people, and then a people's sliver, in a region: everyone of them
+  // there is at most this many AND at most this share of the region. The faith's sliver joins
+  // its own people's largest faith there; the people's sliver joins the largest people of its
+  // faith there. A hundred is dust. Keep it below what a week of migration brings into a
+  // region: at 500 every week's arrivals of a new people were folded before they could become a
+  // community (2.4 million people a year counted under another people in a world from 2024);
+  // at 100 it is a fifth of that. 0: never - only trades are folded and nobody is ever counted
+  // under another people or faith.
+  "FoldPeopleSliverPeople": 100,
+  "FoldPeopleSliverShare": 0.0003,
+
+  // How often a region's slivers of a faith and of a people are looked at, in weeks, each
+  // region on a week of its own. A year: what is folded is what has stayed a sliver, not
+  // whoever arrived this week - two newcomers a week are a community before the region's turn
+  // comes round. Trades are folded every week whatever this says. 1: every week.
+  "FoldPeopleEveryWeeks": 52,
+
+  // A people's sliver is folded into another people only while it is also at most this share
+  // of its own people in the whole world: a scattered people is not folded away piece by piece.
+  "FoldPeopleSliverOfPeople": 0.0005,
+
+  // A people with fewer than this many in the whole world is never folded into another.
+  // Nor, whatever the numbers: the people the region's owner is for or declares itself of; the
+  // people of any country, living or fallen, in a region that is its homeland; the people of a
+  // living movement in a region where it has support, fighters or its headquarters; and any
+  // people in the region where its largest group lives - so no people leaves the world this way.
+  "FoldKeepCulturePeople": 250000,
+
+  // A region with fewer groups than this is left alone.
+  "FoldMinRegionGroups": 24
+}

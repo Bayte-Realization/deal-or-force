@@ -513,6 +513,109 @@ public static partial class Warfare
         return board.Advance;
     }
 
+    /// <summary>One reading of the war record: the wars not over, in the record's order. Never written again once made.</summary>
+    sealed class OpenReading
+    {
+        public readonly List<StrategicWar> Wars = new();
+        /// <summary>Every war of the record by its number, the first of a number as a walk would meet it; made when first asked for.</summary>
+        public Dictionary<int, StrategicWar> ById;
+        public int Revision = int.MinValue;
+        public int Count = -1;
+        public StrategicWar Tail;
+        public bool TailWasEnded;
+    }
+
+    sealed class OpenBoard { public volatile OpenReading Reading = new(); }
+
+    static readonly ConditionalWeakTable<Campaign, OpenBoard> OpenBoards = new();
+    static readonly List<StrategicWar> NoWars = new(0);
+
+    /// <summary>
+    /// The wars not over, in the record's own order: what "is anybody at war with X" is asked of.
+    ///
+    /// The record only grows. A save 107 years long held 2,476 wars, 26 of them still being
+    /// fought, and every such question was put to the record itself - all 2,476, to skip 2,450
+    /// at the first test - by a fleet asking whether a port was friendly, a movement asking
+    /// whether it was outranked, a cabinet asking whether it was losing. A campaign paid for its
+    /// whole history each time, and paid more every year.
+    ///
+    /// Kept apart from <see cref="LiveWars"/> on purpose: that list is refreshed in place and
+    /// clears a finished war's fronts as it does so, which is the war pass's business and happens
+    /// when the war pass asks. This one changes nothing in the world and is never written after
+    /// it is made - a refresh makes another - so a loop half way down it keeps the list it
+    /// started with, and a pass worked on several threads may ask (the rebuild is under a lock).
+    /// A war that ends while a caller is still walking an older reading is still in that reading:
+    /// test <c>Ended</c> as a walk of the record would. Handed out as the list itself so that a
+    /// foreach over it makes no garbage (through an interface it boxes an enumerator a call);
+    /// nobody but this function writes to it.
+    /// </summary>
+    public static List<StrategicWar> OpenWars(Campaign campaign)
+    {
+        if (campaign is null) return NoWars;
+        var board = OpenBoards.GetValue(campaign, static _ => new OpenBoard());
+        var reading = board.Reading;
+        if (OpenStale(campaign, reading))
+            lock (board)
+            {
+                reading = board.Reading;
+                if (OpenStale(campaign, reading))
+                {
+                    var now = new OpenReading();
+                    var wars = campaign.Wars;
+                    for (var index = 0; index < wars.Count; index++)
+                    {
+                        var war = wars[index];
+                        if (war is null || war.Ended) continue;
+                        now.Wars.Add(war);
+                    }
+                    now.Revision = campaign.WarRevision;
+                    now.Count = wars.Count;
+                    now.Tail = wars.Count > 0 ? wars[^1] : null;
+                    now.TailWasEnded = now.Tail?.Ended ?? false;
+                    board.Reading = reading = now;
+                }
+            }
+        return reading.Wars;
+    }
+
+    /// <summary>
+    /// The war with this number, over or not; null when the record holds none. The record was
+    /// walked for it - by every sponsor's paper, every request for arms - and the record is the
+    /// one list here that nothing ever shortens. Read off the same reading as
+    /// <see cref="OpenWars"/>, so it is made again whenever a war is declared or ends.
+    /// </summary>
+    public static StrategicWar WarById(Campaign campaign, int id)
+    {
+        if (campaign is null) return null;
+        OpenWars(campaign);
+        var board = OpenBoards.GetValue(campaign, static _ => new OpenBoard());
+        var reading = board.Reading;
+        // Read and written as volatile: a worker may ask while another thread is making it, and
+        // must see the table whole or not at all on every processor the game runs on.
+        var byId = System.Threading.Volatile.Read(ref reading.ById);
+        if (byId is null)
+            lock (board)
+            {
+                byId = reading.ById;
+                if (byId is null)
+                {
+                    var wars = campaign.Wars;
+                    var made = new Dictionary<int, StrategicWar>(wars.Count);
+                    for (var index = 0; index < wars.Count; index++)
+                        if (wars[index] is { } war) made.TryAdd(war.Id, war);
+                    System.Threading.Volatile.Write(ref reading.ById, byId = made);
+                }
+            }
+        return byId.GetValueOrDefault(id);
+    }
+
+    static bool OpenStale(Campaign campaign, OpenReading reading) =>
+        reading.Revision != campaign.WarRevision || reading.Count != campaign.Wars.Count || EndedIn(reading.Wars) ||
+        !ReferenceEquals(reading.Tail, campaign.Wars.Count > 0 ? campaign.Wars[^1] : null) ||
+        // Direct status edits can reopen the newest war without changing the list or revision.
+        // Remember its observed state; an empty active reading cannot detect this with EndedIn.
+        reading.TailWasEnded != (reading.Tail?.Ended ?? false);
+
     static bool EndedIn(List<StrategicWar> wars)
     {
         for (var index = 0; index < wars.Count; index++)

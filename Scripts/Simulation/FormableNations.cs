@@ -453,9 +453,8 @@ public static class FormableNations
 
     internal static bool IsAtPeace(Campaign campaign, int nationId)
     {
-        for (var i = 0; i < campaign.Wars.Count; i++)
+        foreach (var w in Warfare.OpenWars(campaign))
         {
-            var w = campaign.Wars[i];
             if (!w.Ended && w.Involves(nationId)) return false;
         }
         return true;

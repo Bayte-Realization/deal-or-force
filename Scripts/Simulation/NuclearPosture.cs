@@ -143,12 +143,12 @@ public static class NuclearPosture
     public static int Effective(Campaign c, Nation n) =>
         IsHolder(c, n) ? Math.Min(DefconSystem.CurrentLevel(c), Math.Clamp(n.NuclearPosture, 1, 5)) : DefconSystem.CurrentLevel(c);
 
-    private static bool AtWarWith(Campaign c, int a, int b) => c.Wars.Any(w => !w.Ended && w.Opposes(a, b));
+    private static bool AtWarWith(Campaign c, int a, int b) => Warfare.OpenWars(c).Any(w => !w.Ended && w.Opposes(a, b));
 
     /// <summary>Player-visible country targets follow the same non-civil wars as automatic
     /// targeting. Choosing a country never creates a war or bypasses readiness and cooldown.</summary>
     public static IReadOnlyList<Nation> Targets(Campaign c, Nation n) => c is null || n is null ? Array.Empty<Nation>() :
-        c.Wars.Where(w => !w.Ended && !w.CivilConflict && w.Involves(n.Id)).SelectMany(w => w.EnemiesOf(n.Id)).Distinct()
+        Warfare.OpenWars(c).Where(w => !w.Ended && !w.CivilConflict && w.Involves(n.Id)).SelectMany(w => w.EnemiesOf(n.Id)).Distinct()
             .Select(c.NationById).Where(t => t is { Population: > 0 }).OrderBy(t => t.Id).ToArray();
 
     public static string Refusal(Campaign c, Nation n, string action, Nation target = null)
@@ -291,7 +291,7 @@ public static class NuclearPosture
         enemies = new HashSet<int>();
         var topology = c.ProvinceMap;
         if (topology is null || n is null) return 0;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
             if (!war.Ended && !war.CivilConflict && war.Involves(n.Id))
                 foreach (var id in war.EnemiesOf(n.Id)) enemies.Add(id);
         if (target is not null)
@@ -358,7 +358,7 @@ public static class NuclearPosture
         }
         else victim = Avenging(c, n);
         if (victim is null && target is null)
-            foreach (var war in c.Wars)
+            foreach (var war in Warfare.OpenWars(c))
             {
                 if (war.Ended || war.CivilConflict || !war.Involves(n.Id)) continue;
                 foreach (var id in war.EnemiesOf(n.Id))
@@ -478,7 +478,7 @@ public static class NuclearPosture
         var controllers = c.ProvinceController;
         var capitalLost = controllers is not null && n.CapitalProvinceId > 0 && n.CapitalProvinceId < controllers.Length &&
                           controllers[n.CapitalProvinceId] != n.MapIndex;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || war.CivilConflict || !war.Involves(n.Id)) continue;
             if (capitalLost || (war.IsAttacking(n.Id) ? war.WarScore : -war.WarScore) < -60f)

@@ -119,7 +119,11 @@ public partial class DealOrForceGame
 
             case "save_format":
                 if (_campaign is not null)
-                    _campaign.Defines.SaveTextFormat = SettingsCatalog.Chosen("save_format") != "false";
+                    // Text only when text was chosen. This read "anything but compressed", so an
+                    // option the catalogue could not find (a mod's settings file that drops it, a
+                    // catalogue that failed to load) came back as "" and switched every save to the
+                    // large editable format without anybody having asked for it.
+                    _campaign.Defines.SaveTextFormat = SettingsCatalog.Chosen("save_format") == "true";
                 break;
             case "civil_wars_players":
                 // A toggle is stored as a JSON boolean. Chosen only reads strings, so the

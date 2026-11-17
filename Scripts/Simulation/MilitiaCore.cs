@@ -147,7 +147,10 @@ public static class MilitiaCore
         IReadOnlyDictionary<int, int[]> warMembers)
     {
         if (campaign is null || nation is null) return;
-        foreach (var war in campaign.Wars)
+        // The wars still being fought, in the record's order (Warfare.OpenWars): asked of the
+        // whole record this was every war there has ever been, for every country, every
+        // morning - 2,476 wars on a save 107 years long to find the 26 not over.
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended || !war.Involves(nation.Id)) continue;
             if (!warMembers.TryGetValue(war.Id, out var members)) continue;
@@ -163,8 +166,9 @@ public static class MilitiaCore
     /// <summary>Both sides of every open war as a flat id list, built once per day.</summary>
     private static Dictionary<int, int[]> WarMembers(Campaign campaign)
     {
-        var map = new Dictionary<int, int[]>(campaign.Wars.Count);
-        foreach (var war in campaign.Wars)
+        var open = Warfare.OpenWars(campaign);
+        var map = new Dictionary<int, int[]>(open.Count);
+        foreach (var war in open)
         {
             if (war.Ended) continue;
             var members = new List<int>(war.BelligerentCount);
@@ -207,7 +211,7 @@ public static class MilitiaCore
         if (campaign?.ProvinceMap is null) yield break;
 
         var fighting = false;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended) { fighting = true; break; }
 
         // Who each war is between, once for the whole day: the per-country enemy lists

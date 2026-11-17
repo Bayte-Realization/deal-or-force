@@ -44,7 +44,7 @@ public static class AirReconnaissance
     private static HashSet<int> Enemies(Campaign c, int viewerId)
     {
         var enemies = new HashSet<int>();
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || !war.Involves(viewerId)) continue;
             var attacking = war.Side(true).Contains(viewerId);
@@ -153,7 +153,7 @@ public static class AirReconnaissance
                 if (nearest < 0) continue;
                 var enemyIds = new List<int>();
                 var ownIds = new List<int> { nationId };
-                foreach (var war in c.Wars)
+                foreach (var war in Warfare.OpenWars(c))
                 {
                     if (war.Ended || !war.Involves(nationId)) continue;
                     var attacking = war.Side(true).Contains(nationId);

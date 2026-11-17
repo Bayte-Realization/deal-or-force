@@ -189,9 +189,8 @@ public static class DiplomaticGestures
     public static StrategicWar MediableWar(Campaign c, Nation issuer, Nation target)
     {
         StrategicWar best = null;
-        for (var i = 0; i < c.Wars.Count; i++)
+        foreach (var w in Warfare.OpenWars(c))
         {
-            var w = c.Wars[i];
             if (w.Ended || !w.Involves(target.Id) || w.Involves(issuer.Id)) continue;
             if (best is null || w.StartedDay < best.StartedDay || (w.StartedDay == best.StartedDay && w.Id < best.Id))
                 best = w;
@@ -243,7 +242,7 @@ public static class DiplomaticGestures
         if (c is null || donor is null || recipient is null || recipient.Population <= 0) return false;
         var d = c.Defines;
         if (recipient.Stability < d.HumanitarianAidNeedStability) return true;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
             if (!war.Ended && war.Involves(recipient.Id) && !war.Involves(donor.Id)) return true;
         if (donor.Population <= 0) return false;
         var theirs = recipient.Gdp / recipient.Population;
@@ -524,7 +523,7 @@ public static class DiplomaticGestures
                 {
                     yield return 0;
                     var mediable = new List<StrategicWar>();
-                    foreach (var w in c.Wars)
+                    foreach (var w in Warfare.OpenWars(c))
                         if (!w.Ended && !w.Involves(nation.Id) && c.ElapsedDays - w.StartedDay > 180)
                             mediable.Add(w);
                     if (mediable.Count > 1) mediable.Sort((a, b) => a.Id.CompareTo(b.Id));

@@ -341,7 +341,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
         var enemy = targetController == nation.MapIndex
             ? null
             : campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == targetController);
-        var war = enemy is null ? null : campaign.Wars.FirstOrDefault(candidate => !candidate.Ended &&
+        var war = enemy is null ? null : Warfare.OpenWars(campaign).FirstOrDefault(candidate => !candidate.Ended &&
             candidate.Opposes(nation.Id, enemy.Id));
         if (war is null && !MilitaryAccess.CanEnter(campaign, nation.Id, targetController))
         {
@@ -352,7 +352,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
         var continuingAttack = AppendWaypoint && army.AssignedWarId >= 0 && army.PlannedRoute.Count > 0;
         if (continuingAttack && war is null)
         {
-            war = campaign.Wars.Find(candidate => candidate.Id == army.AssignedWarId && !candidate.Ended);
+            war = Warfare.OpenWars(campaign).Find(candidate => candidate.Id == army.AssignedWarId && !candidate.Ended);
             if (war is not null)
                 enemy = campaign.NationById(war.EnemyLeaderOf(nation.Id));
         }
@@ -382,7 +382,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
                 var standing = controllers[army.ProvinceId];
                 var captor = standing == nation.MapIndex ? null
                     : campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == standing);
-                var captorWar = captor is null ? null : campaign.Wars.FirstOrDefault(candidate =>
+                var captorWar = captor is null ? null : Warfare.OpenWars(campaign).FirstOrDefault(candidate =>
                     !candidate.Ended && candidate.Opposes(nation.Id, captor.Id));
                 var breakout = captorWar is null ? Array.Empty<int>()
                     : WarCoalition.OperationalRoute(campaign, captorWar, nation.Id,
@@ -466,7 +466,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
         var controller = controllers[TargetProvinceId];
         var targetNation = controller == nation.MapIndex ? null
             : campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == controller);
-        var targetWar = targetNation is null ? null : campaign.Wars.FirstOrDefault(candidate =>
+        var targetWar = targetNation is null ? null : Warfare.OpenWars(campaign).FirstOrDefault(candidate =>
             !candidate.Ended && candidate.Opposes(nation.Id, targetNation.Id));
         if (targetWar is null && !MilitaryAccess.CanEnter(campaign, nation.Id, controller))
         {
@@ -487,7 +487,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
         // country's province into a corridor merely because a different war exists.
         var captor = from > 0 && from < controllers.Length && controllers[from] != nation.MapIndex
             ? campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == controllers[from]) : null;
-        var captorWar = captor is null ? null : campaign.Wars.FirstOrDefault(candidate =>
+        var captorWar = captor is null ? null : Warfare.OpenWars(campaign).FirstOrDefault(candidate =>
             !candidate.Ended && candidate.Opposes(nation.Id, captor.Id));
         return captorWar is not null && WarCoalition.OperationalRoute(campaign, captorWar, nation.Id,
             from, TargetProvinceId, controllers).Length > 0;
@@ -942,7 +942,7 @@ public static class MilitaryOperations
     {
         var blockingNation = nextProvince > 0 && nextProvince <= topology.ProvinceCount
             ? campaign.Nations.Find(n => n.MapIndex == controllers[nextProvince]) : null;
-        var crossingWar = nation is null || blockingNation is null ? null : campaign.Wars.Find(w =>
+        var crossingWar = nation is null || blockingNation is null ? null : Warfare.OpenWars(campaign).Find(w =>
             !w.Ended && w.Opposes(nation.Id, blockingNation.Id));
         if (army.DirectOrder && army.OrderProvinceId > 0 && crossingWar is not null)
         {
@@ -1051,7 +1051,7 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
     {
         StrategicWar first = null, kept = null;
         var count = 0;
-        foreach (var candidate in campaign.Wars)
+        foreach (var candidate in Warfare.OpenWars(campaign))
         {
             if (candidate.Ended || !candidate.Involves(issuerId)) continue;
             if (candidate.Id == named) return candidate;
@@ -1066,7 +1066,7 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         StrategicWar nearest = null;
         var best = float.MaxValue;
         var keptDistance = float.MaxValue;
-        foreach (var candidate in campaign.Wars)
+        foreach (var candidate in Warfare.OpenWars(campaign))
         {
             if (candidate.Ended || !candidate.Involves(issuerId)) continue;
             var distance = FrontDistance(map, candidate.FriendlyFront(issuerId), latitude, longitude);

@@ -2121,6 +2121,8 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("reunion")) StatePartition.Reunify(this);
             // The relations of countries with nobody left go to sleep; a restored country's wake.
             using (SimProfiler.Measure("relation dormancy")) RelationDormancy.Sweep(this);
+            // And every fourth week the long dead are retired and what they left behind is struck (LongCampaign).
+            using (SimProfiler.Measure("long campaign")) LongCampaign.Sweep(this);
 
             // And last, where each government now sits: a region ceded today takes its
             // capital with it, and the country moves to what it has left.

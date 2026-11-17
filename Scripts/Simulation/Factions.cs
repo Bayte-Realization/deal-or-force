@@ -341,7 +341,7 @@ public static class Factions
             if (campaign.Fallen.Contains(faction.Id)) continue;
             var parent = campaign.NationById(faction.SecededFromId);
             if (parent is null || campaign.Fallen.Contains(parent.Id) || parent.Movement is not null) continue;
-            var war = campaign.Wars.FirstOrDefault(w => !w.Ended && w.Involves(faction.Id) && w.Involves(parent.Id) &&
+            var war = Warfare.OpenWars(campaign).FirstOrDefault(w => !w.Ended && w.Involves(faction.Id) && w.Involves(parent.Id) &&
                                                        w.Opposes(faction.Id, parent.Id));
             if (war is null) continue;
             if (Of(faction) is not { ClaimsState: true } && !Reintegration.ClaimsParentState(campaign, war, faction, parent)) continue;
@@ -385,7 +385,7 @@ public static class Factions
 
         // The fallen government's other wars end with it. What its enemies held of its ground they
         // give back to the new government, which never fought them.
-        foreach (var other in campaign.Wars)
+        foreach (var other in Warfare.OpenWars(campaign))
         {
             if (other.Ended || !other.Involves(parent.Id)) continue;
             foreach (var (province, was) in other.OriginalController)
@@ -396,7 +396,7 @@ public static class Factions
             other.PeaceSummary = $"Ended with the fall of the government of {parent.Name}.";
             foreach (var enemyId in other.EnemiesOf(parent.Id))
                 if (CampaignDiplomacy.Peek(campaign, faction.Id, enemyId) is { Stance: DiplomaticStance.AtWar } stance &&
-                    !campaign.Wars.Any(w => !w.Ended && w.Opposes(faction.Id, enemyId)))
+                    !Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Opposes(faction.Id, enemyId)))
                     stance.Stance = DiplomaticStance.Neutral;
         }
 
@@ -635,7 +635,7 @@ public static class Factions
                 }
             }
             if (parent is null || parent.Id == rebel.Id || !campaign.HasOwnedLand(parent)) continue;
-            var war = campaign.Wars.FirstOrDefault(w => !w.Ended && w.Opposes(parent.Id, rebel.Id));
+            var war = Warfare.OpenWars(campaign).FirstOrDefault(w => !w.Ended && w.Opposes(parent.Id, rebel.Id));
             if (war is null) continue;
 
             var rebelStates = campaign.StatesOf(rebel);
@@ -650,7 +650,7 @@ public static class Factions
             var hasDivisions = campaign.Armies.Any(a => a.NationId == rebel.Id && a.Strength > 0.05f);
             if (hasDivisions) continue;
 
-            var foreignWars = campaign.Wars.Any(w => !w.Ended && w.Involves(rebel.Id) && !w.Involves(parent.Id));
+            var foreignWars = Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(rebel.Id) && !w.Involves(parent.Id));
             if (foreignWars) continue;
 
             var isRebel = rebel.SecededFromId == parent.Id ||
@@ -862,7 +862,7 @@ public static class Factions
             {
                 var enemy = campaign.NationByTag(enemyTag);
                 if (enemy is null || enemy.Id == born.Id) continue;
-                var war = campaign.Wars.FirstOrDefault(w => !w.Ended && w.Involves(parent.Id) && w.Involves(enemy.Id) && w.Opposes(parent.Id, enemy.Id));
+                var war = Warfare.OpenWars(campaign).FirstOrDefault(w => !w.Ended && w.Involves(parent.Id) && w.Involves(enemy.Id) && w.Opposes(parent.Id, enemy.Id));
                 if (war is null) continue;
                 if (war.IsAttacking(parent.Id)) war.AttackerAllies.Add(born.Id);
                 else war.DefenderAllies.Add(born.Id);

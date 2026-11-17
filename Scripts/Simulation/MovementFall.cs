@@ -686,7 +686,7 @@ public static class MovementFall
                  following < defines.MovementCrushedFollowing && !campaign.Armies.Exists(a => a.NationId == nation.Id))
             Dissolve(campaign, nation, Loc.Get("Its leaders are in prison or dead, and the rank and file have gone home: the movement is broken."));
         else if (!GovernmentInExile(state) && Matured(campaign, state) && state.Militancy >= 0f && state.Militancy < defines.MovementFoldMilitancy &&
-                 following < defines.MovementFoldFollowing && !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)))
+                 following < defines.MovementFoldFollowing && !Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(nation.Id)))
             Dissolve(campaign, nation, Loc.Get("What is left of it has joined ordinary politics: the movement has folded into the parties."));
         // Legitimacy is what an exile lives on, and recognition from a capital that gives nothing
         // costs that capital nothing. One the world no longer takes seriously and nobody pays for
@@ -697,7 +697,7 @@ public static class MovementFall
         // grown up at home under other flags, and almost nobody there still following it.
         else if (state.Exile && Matured(campaign, state) && following < defines.MovementFoldFollowing &&
                  HomelandSettled(campaign, state, defines.MovementExileForgottenHabit) &&
-                 !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)))
+                 !Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(nation.Id)))
             Dissolve(campaign, nation, Loc.Get("A generation has grown up at home under other flags: the government in exile is a memory now."));
     }
 
@@ -727,7 +727,7 @@ public static class MovementFall
         var strong = following >= defines.MovementCrushedFollowing && state.Cadres >= defines.MovementCrushedCadres ||
                      campaign.Armies.Exists(army => army.NationId == nation.Id);
         if (!state.Exile || defines.MovementExileFadeDays <= 0 || state.Legitimacy >= defines.MovementExileFadeLegitimacy ||
-            strong || HasPatron(campaign, state) || campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)))
+            strong || HasPatron(campaign, state) || Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(nation.Id)))
         {
             state.ReadyOnDay.Remove(FadingKey);
             return false;

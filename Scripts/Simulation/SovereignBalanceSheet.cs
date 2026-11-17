@@ -21,7 +21,7 @@ public readonly record struct SovereignBalanceSheet(
     public static SovereignBalanceSheet Read(Campaign c, Nation n)
     {
         var war = false;
-        foreach (var conflict in c.Wars)
+        foreach (var conflict in Warfare.OpenWars(c))
             if (!conflict.Ended && conflict.Involves(n.Id)) { war = true; break; }
         var output = n.Gdp / 52f;
         var budget = BudgetCore.Evaluate(n, output, war);

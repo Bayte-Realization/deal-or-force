@@ -362,9 +362,8 @@ public static class FrontManager
         if (line.AllEnemies) BorderFronts.Refresh(campaign, line);
         if (line.IsEmpty || line.Cohesion == PlanCohesion.Immobile) return;
         StrategicWar war = null;
-        for (var i = 0; i < campaign.Wars.Count; i++)
+        foreach (var candidate in Warfare.OpenWars(campaign))
         {
-            var candidate = campaign.Wars[i];
             if (!candidate.Ended && candidate.Involves(nation.Id) &&
                 (line.BorderNationId < 0 || candidate.Opposes(nation.Id, line.BorderNationId)))
             {

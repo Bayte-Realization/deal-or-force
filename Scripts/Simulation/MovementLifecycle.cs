@@ -30,7 +30,7 @@ public static class MovementLifecycle
             var people = MovementRules.PeopleOf(region, definition, out _);
             if (people / (float)region.Population < campaign.Defines.MovementMinimumAudienceShare) continue;
             var grievance = region.Radicalism * .6f + (1f - region.Stability) * .25f;
-            if (campaign.Wars.Any(w => !w.Ended && w.Involves(owner.Id))) grievance += .08f;
+            if (Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(owner.Id))) grievance += .08f;
             // Self-government debates can organise peacefully without requiring misery.
             if (definition.Has("civic_independence")) grievance += .14f;
             strongest = MathF.Max(strongest, M.Clamp01(grievance * NationalModifiers.Factor(owner, "movement_activity")));
