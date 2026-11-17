@@ -1,0 +1,20 @@
+[package]
+name = "household_kernel"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+# No dependencies on purpose: the experiment asks what the language and its compiler give,
+# not what a crate ecosystem gives. Threads come from std::thread::scope.
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
