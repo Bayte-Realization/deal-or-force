@@ -14,6 +14,11 @@ public partial class DealOrForceGame
     private readonly Dictionary<string, ProgressBar> _financeGauges = new();
     private readonly Dictionary<string, Button> _financeActions = new();
     private SpinBox _financeAmount;
+    // The amount as a slider and three one-press amounts (owner, 17 November: "a button to pay
+    // off all the debt that can be paid, and a slider - fewer numbers to type").
+    private HSlider _financeSlider;
+    private Button _financeRepayAll, _financeArrearsAll, _financeBorrowMost;
+    private bool _financeSyncing;
     private Button _financeClose;
     private bool _financeFromBudget;
     private Control _financeReturnFocus;
@@ -160,6 +165,36 @@ public partial class DealOrForceGame
             Step = .01, Value = .01, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _financeAmount.ValueChanged += _ => { _financePendingAction = ""; _financeFeedback.Text = ""; RefreshSovereignFinanceWorkspace(); };
         actions.AddChild(_financeAmount);
+        // From nothing to the most any one operation could move today; the box above stays for an exact sum.
+        _financeSlider = new HSlider { Name = "FinanceAmountSlider", MinValue = 0, MaxValue = 1, Step = .01, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _financeSlider.ValueChanged += value =>
+        {
+            if (_financeSyncing) return;
+            _financeAmount.Value = Math.Max(.01, value);
+        };
+        actions.AddChild(_financeSlider);
+        var quick = new HFlowContainer { Name = "FinanceQuickAmounts", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        quick.AddThemeConstantOverride("h_separation", 6);
+        quick.AddThemeConstantOverride("v_separation", 4);
+        actions.AddChild(quick);
+        Button Quick(string caption, string action, Func<SovereignBalanceSheet, float> pool)
+        {
+            var button = ActionButton(caption, () =>
+            {
+                var sheet = SovereignBalanceSheet.Read(_campaign, _campaign.Player);
+                var amount = Math.Floor(Math.Max(0f, pool(sheet)) * 100.0) / 100.0;
+                if (amount < .01) return;
+                _financeAmount.SetValueNoSignal(amount);
+                _financePendingAction = "";
+                // Straight to the review: the next press on the action's own button confirms it.
+                ReviewFinanceAction(action);
+            }, 0, 30);
+            quick.AddChild(button);
+            return button;
+        }
+        _financeRepayAll = Quick("Repay all we can", "repay", sheet => MathF.Min(sheet.Cash, sheet.Principal));
+        _financeArrearsAll = Quick("Pay all overdue bills", "arrears", sheet => MathF.Min(sheet.Cash, sheet.Arrears));
+        _financeBorrowMost = Quick("Borrow the most we can", "borrow", sheet => sheet.NewCredit);
         foreach (var (id, caption) in new[] { ("borrow", "Issue bonds"), ("repay", "Repay debt"),
                      ("arrears", "Pay overdue bills"), ("restructure", "Negotiate restructuring") })
         {
@@ -261,6 +296,25 @@ public partial class DealOrForceGame
         FinanceValue("restructuring", n.DebtCondition == DebtCondition.Restructuring
             ? Loc.Format("{0} / {1} weeks", n.DebtRestructuringProgress, _campaign.Defines.DebtRestructuringWeeks) : "—");
         var amount = (float)_financeAmount.Value;
+        if (_financeSlider is not null)
+        {
+            _financeSyncing = true;
+            _financeSlider.MaxValue = Math.Max(.01, Math.Max(Math.Max(s.Cash, s.NewCredit), Math.Max(s.Principal, s.Arrears)));
+            _financeSlider.SetValueNoSignal(Math.Min(amount, _financeSlider.MaxValue));
+            _financeSyncing = false;
+            void Pool(Button button, float pool, string none, string some)
+            {
+                var can = MathF.Floor(MathF.Max(0f, pool) * 100f) / 100f;
+                button.Disabled = can < .01f || _observerMode;
+                button.TooltipText = Ui.Tip(can < .01f ? Tr(none) : Loc.Format(some, Fmt.Money(can)));
+            }
+            Pool(_financeRepayAll, MathF.Min(s.Cash, s.Principal), "Nothing to repay, or no cash to repay it with.",
+                "Repay {0} of principal at once: all the cash allows, or all that is owed. Review, then press Repay debt to confirm.");
+            Pool(_financeArrearsAll, MathF.Min(s.Cash, s.Arrears), "No overdue bills, or no cash to pay them with.",
+                "Pay {0} of overdue bills at once. Review, then press Pay overdue bills to confirm.");
+            Pool(_financeBorrowMost, s.NewCredit, "No new credit is available this week.",
+                "Issue {0} of bonds: all the credit available this week. Review, then press Issue bonds to confirm.");
+        }
         foreach (var (id, button) in _financeActions)
         {
             var reason = FinanceActionRefusal(n, s, id, amount);

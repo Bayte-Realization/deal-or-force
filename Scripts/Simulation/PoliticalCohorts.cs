@@ -361,7 +361,7 @@ public static class PoliticalCohorts
 
     private static bool Losing(Campaign c, Nation n)
     {
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || !war.Involves(n.Id)) continue;
             if ((war.IsAttacking(n.Id) ? war.WarScore : -war.WarScore) <= -20f) return true;

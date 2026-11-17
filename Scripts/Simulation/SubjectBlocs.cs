@@ -79,7 +79,7 @@ public static class SubjectBlocs
         if (RegionalAdministration.IsMicroCityEnclave(keep) ||
             RegionalAdministration.IsMicroCityEnclave(absorb))
         { refusal = Loc.Get("A micro-territory cannot be merged into a regional administration."); return false; }
-        if (campaign.Wars.Any(war => !war.Ended && war.Involves(absorb.Id) && !war.Involves(keep.Id)))
+        if (Warfare.OpenWars(campaign).Any(war => !war.Ended && war.Involves(absorb.Id) && !war.Involves(keep.Id)))
         { refusal = Loc.Get("An administration fighting its own war cannot be dissolved into another."); return false; }
 
         var keepRegions = campaign.StatesOf(keep);

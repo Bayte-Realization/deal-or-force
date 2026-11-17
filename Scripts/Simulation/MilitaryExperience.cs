@@ -127,6 +127,8 @@ public static class MilitaryExperience
         foreach (var nation in campaign.Nations)
         {
             if (++ticked % 16 == 0) yield return 0;
+            // A retired country (LongCampaign) trains nobody and earns no political credit.
+            if (campaign.IsRetired(nation)) continue;
             // Money above what the army costs anyway is what buys training value: a budget at
             // the baseline teaches nobody anything new, and a cut teaches nobody faster.
             var funding = MathF.Max(0f, nation.MilitarySpending / baseline - 1f) *
@@ -194,7 +196,7 @@ public static class MilitaryExperience
         }
         Array.Clear(scratch.AtWar, 0, nations);
         Array.Clear(scratch.Start, 0, nations + 1);
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended) continue;
             if ((uint)war.AttackerId < (uint)nations) scratch.AtWar[war.AttackerId] = true;
@@ -245,7 +247,7 @@ public static class MilitaryExperience
             var atWar = false;
             if (indexed) atWar = world.AtWar[nation.Id];
             else
-                foreach (var war in campaign.Wars)
+                foreach (var war in Warfare.OpenWars(campaign))
                     if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
             if (atWar)
             {

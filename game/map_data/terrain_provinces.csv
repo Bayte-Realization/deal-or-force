@@ -19483,7 +19483,7 @@ province_id;terrain;dominant_share
 19482;farmland;0.6986
 19483;hills;0.9407
 19484;hills;0.9273
-19485;forest;0.4673
+19485;forest;0.4554
 19486;mountains;0.9697
 19487;desert;1.0
 19488;desert;1.0
@@ -19830,7 +19830,7 @@ province_id;terrain;dominant_share
 19829;hills;0.5761
 19830;farmland;0.5638
 19831;hills;0.7293
-19832;hills;0.65
+19832;hills;0.64
 19833;forest;0.5
 19834;hills;0.7607
 19835;mountains;1.0
@@ -19879,7 +19879,7 @@ province_id;terrain;dominant_share
 19878;hills;1.0
 19879;forest;0.3636
 19880;forest;0.6709
-19881;hills;0.6875
+19881;hills;0.6923
 19882;desert;1.0
 19883;desert;1.0
 19884;desert;1.0
@@ -20060,7 +20060,7 @@ province_id;terrain;dominant_share
 20059;steppe;0.4113
 20060;hills;0.7736
 20061;plains;0.4737
-20062;hills;0.7073
+20062;hills;0.7436
 20063;hills;0.9444
 20064;hills;0.8241
 20065;hills;0.52

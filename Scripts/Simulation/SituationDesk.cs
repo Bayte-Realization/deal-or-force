@@ -183,7 +183,7 @@ public static class SituationDesk
     private static void Security(Campaign campaign, Nation nation, List<DeskItem> items)
     {
         var atWar = false;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended || !war.Involves(nation.Id)) continue;
             atWar = true;
@@ -278,11 +278,11 @@ public static class SituationDesk
                 Loc.Get("Living standards are falling"), Fmt.Percent(nation.StandardOfLiving),
                 "State Affairs", livingTrend));
 
-        if (nation.WarSupport < 0.25f && campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)))
+        if (nation.WarSupport < 0.25f && Warfare.OpenWars(campaign).Any(war => !war.Ended && war.Involves(nation.Id)))
             items.Add(new DeskItem("war_support", DeskLens.Society, DeskSeverity.Should,
                 Loc.Get("The country is tired of the war"), Fmt.Percent(nation.WarSupport), "Wars", ""));
 
-        if (nation.WarSupport > 0.7f && campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)))
+        if (nation.WarSupport > 0.7f && Warfare.OpenWars(campaign).Any(war => !war.Ended && war.Involves(nation.Id)))
             items.Add(new DeskItem("war_mood", DeskLens.Society, DeskSeverity.Watch,
                 Loc.Get("The country is still behind the war"), Fmt.Percent(nation.WarSupport), "Wars", ""));
 

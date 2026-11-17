@@ -94,7 +94,7 @@ public static class ConflictHistory
                     continue;
                 }
                 StrategicWar war = null;
-                foreach (var candidate in campaign.Wars)
+                foreach (var candidate in Warfare.OpenWars(campaign))
                     if (!candidate.Ended && candidate.Involves(warPair.Value.Item1.Id) && candidate.Involves(warPair.Value.Item2.Id))
                     { war = candidate; break; }
                 if (war is null) { errors?.Add($"history/conflicts: no war between {warPair.Value.Item1.Tag} and {warPair.Value.Item2.Tag}."); continue; }

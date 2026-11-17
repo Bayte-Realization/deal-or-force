@@ -74,7 +74,7 @@ public static class WorldWar
     private const int RecogniseStageWars = 32;
 
     /// <summary>Whether any world war is being fought.</summary>
-    public static bool Active(Campaign c) => c is not null && c.Wars.Any(w => !w.Ended && w.WorldWarDay >= 0);
+    public static bool Active(Campaign c) => c is not null && Warfare.OpenWars(c).Any(w => !w.Ended && w.WorldWarDay >= 0);
 
     /// <summary>
     /// The recognition in stages: a few wars at a time.
@@ -202,7 +202,7 @@ public static class WorldWar
         {
             if (++ticked % 16 == 0) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null) continue;
-            if (c.Wars.Any(w => !w.Ended && w.WorldWarDay >= 0 && w.Involves(nation.Id))) continue;
+            if (Warfare.OpenWars(c).Any(w => !w.Ended && w.WorldWarDay >= 0 && w.Involves(nation.Id))) continue;
             nation.Stability = M.Clamp01(nation.Stability - shock);
         }
     }

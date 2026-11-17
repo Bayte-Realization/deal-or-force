@@ -112,7 +112,7 @@ public static class PoliticalMood
     public static (float Economic, float Authority) PopularPosition(Campaign c, Nation nation)
     {
         if (c is null || nation is null) return (0f, 0f);
-        var atWar = c.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
+        var atWar = Warfare.OpenWars(c).Any(war => !war.Ended && war.Involves(nation.Id));
         double people = 0, economic = 0, authority = 0;
         foreach (var region in c.StatesOf(nation))
         {
@@ -194,7 +194,7 @@ public static class PoliticalMood
     {
         if (c is null || region is null || nation is null) return Array.Empty<PoliticalMoodShare>();
         var atWar = false;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
             if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
         var (economic, authority) = RegionPositionWithLaws(c, region, nation, atWar);
         var governing = IdeologyCatalog.Knows(nation.Ideology) ? nation.Ideology : "";
@@ -249,7 +249,7 @@ public static class PoliticalMood
     public static IReadOnlyList<PoliticalGroupLean> GroupLeans(Campaign c, Nation nation, int limit = 6)
     {
         if (c is null || nation is null) return Array.Empty<PoliticalGroupLean>();
-        var atWar = c.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
+        var atWar = Warfare.OpenWars(c).Any(war => !war.Ended && war.Involves(nation.Id));
         var governing = IdeologyCatalog.Knows(nation.Ideology) ? nation.Ideology : "";
         var temperature = MathF.Max(.05f, c.Defines.PoliticalMoodTemperature);
         var groups = new Dictionary<(string Culture, string Religion), (double People, double Economic, double Authority)>();

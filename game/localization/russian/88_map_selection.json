@@ -24,5 +24,5 @@
   "No river runs between this province and its neighbours.": "Между этой провинцией и соседями нет рек.",
   "Attacking across a river costs the attacker dearly; a major one costs more.": "Наступление через реку дорого обходится атакующему, через крупную — ещё дороже.",
   "Formations you can see standing in this province. Foreign forces are hidden by fog of war.": "Соединения, которые вы видите в этой провинции. Чужие войска скрыты туманом войны.",
-  "Move the government to {0}. It costs {1} from the treasury.": "Перенести правительство в регион {0}. Это стоит {1} из казны."
+  "Move the government to {0}. It costs {1} from the treasury.": "Перенести правительство: {0}. Это стоит {1} из казны."
 }

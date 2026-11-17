@@ -173,7 +173,7 @@ public static class ControlTally
             }
             else
             {
-                foreach (var war in campaign.Wars)
+                foreach (var war in Warfare.OpenWars(campaign))
                 {
                     if (war.Ended) continue;
                     // By side, not by membership. An ally standing beside you in the same war is

@@ -24,7 +24,7 @@ public static partial class FrontPlanner
             a.EmbarkedFleetId < 0 && !a.DirectOrder && a.FrontLineId < 0).OrderBy(a => a.Id).ToArray();
         // These are already detached. Their current region need not be the one of birth.
         foreach (var army in militia)
-            if (army.AssignedWarId >= 0 && c.Wars.Any(w => !w.Ended && w.Id == army.AssignedWarId) &&
+            if (army.AssignedWarId >= 0 && Warfare.OpenWars(c).Any(w => !w.Ended && w.Id == army.AssignedWarId) &&
                 (hasRegulars || regulars.Count < limit))
                 regulars.Add(army);
         if (hasRegulars) return regulars;

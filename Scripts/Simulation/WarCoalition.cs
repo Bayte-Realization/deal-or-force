@@ -32,7 +32,7 @@ public static class WarCoalition
 
     internal static StrategicWar AssignedWar(Campaign c, Army army)
     {
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
             if (war.Id == army.AssignedWarId && !war.Ended && war.Involves(army.NationId)) return war;
         return null;
     }

@@ -92,7 +92,7 @@ public static class Defections
             StrategicWar chosen = null;
             Nation enemy = null;
             var civil = false;
-            foreach (var war in campaign.Wars)
+            foreach (var war in Warfare.OpenWars(campaign))
             {
                 if (war.Ended || !war.Involves(nation.Id)) continue;
                 foreach (var enemyId in war.EnemiesOf(nation.Id).OrderBy(id => id))

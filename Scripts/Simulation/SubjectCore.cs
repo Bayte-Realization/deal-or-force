@@ -363,7 +363,7 @@ public static class SubjectSystem
         subject.LibertyDesire = 0f;
 
         // A war between the two is over by definition; one of them has just won it.
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Involves(overlord.Id) && war.Involves(subject.Id))
             {
                 war.Ended = true;
@@ -537,7 +537,7 @@ public static class SubjectSystem
 
         // And whether it is busy.
         var civilWar = false;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended || !war.Involves(overlord.Id)) continue;
             want += weights.OverlordAtWarPull;

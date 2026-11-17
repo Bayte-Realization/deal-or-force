@@ -218,9 +218,8 @@ public static class DecisionCatalog
     /// <summary>By hand: Wars.Any(lambda) captures the nation and allocates to say so.</summary>
     private static bool AtWar(Campaign campaign, Nation nation)
     {
-        for (var index = 0; index < campaign.Wars.Count; index++)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
-            var war = campaign.Wars[index];
             if (!war.Ended && war.Involves(nation.Id)) return true;
         }
         return false;

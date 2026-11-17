@@ -10,7 +10,7 @@ public static class UltimatumAnnexation
 {
     public static bool Eligible(Campaign c, Nation target) => c?.ProvinceMap is not null && target is not null &&
         c.HasOwnedLand(target) && !c.Fallen.Contains(target.Id) &&
-        !c.Wars.Any(war => !war.Ended && war.Involves(target.Id)) &&
+        !Warfare.OpenWars(c).Any(war => !war.Ended && war.Involves(target.Id)) &&
         Enumerable.Range(1, c.ProvinceMap.ProvinceCount).Where(p => c.ProvinceMap.ProvinceToNation[p] == target.MapIndex)
             .All(p => (c.ProvinceController ?? c.ProvinceMap.ProvinceToNation)[p] == target.MapIndex);
 

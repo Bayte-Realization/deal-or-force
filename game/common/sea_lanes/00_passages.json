@@ -31,6 +31,11 @@
   // Turkey invoked Montreux in February 2022: no warship of a country at war passes the
   // Straits. That is why Russia's Baltic and Northern fleets could not reinforce the Black
   // Sea, and why the Black Sea Fleet fought the war with what it already had.
+  //
+  // Since 16 November 2026 the map itself draws both straits as a channel of sea a pixel wide
+  // (docs/MAP_STRAITS_2026_11_16_RU.md). These two entries stay: the rule that shuts a strait
+  // lives here, and it shuts the band along the line, drawn water included. So the lines must
+  // keep running down the drawn channels - move one and the other moves with it.
   "bosporus": {
     "name": "Bosporus",
     "closes_to_enemies": true,

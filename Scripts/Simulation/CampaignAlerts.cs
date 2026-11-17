@@ -73,7 +73,7 @@ public static class CampaignAlerts
         if (n.ArmyExperience >= 35f)
             result.Add(new("unspent_army_xp", CampaignAlertGroup.Could, Loc.Get("Spend military experience"),
                 Loc.Get("Accumulated combat experience is ready to be used for doctrines, maneuvers, and army reforms."), CampaignAlertRoute.Doctrine));
-        if (c.Wars.Any(w => !w.Ended && w.Involves(n.Id)) && c.Armies.Any(a => a.NationId == n.Id && a.FrontLineId < 0 && a.AssignedWarId < 0 && !a.DirectOrder && !a.Training && !a.InBattle))
+        if (Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(n.Id)) && c.Armies.Any(a => a.NationId == n.Id && a.FrontLineId < 0 && a.AssignedWarId < 0 && !a.DirectOrder && !a.Training && !a.InBattle))
             result.Add(new("unassigned_divisions", CampaignAlertGroup.Must, Loc.Get("Unassigned divisions at war"),
                 Loc.Get("Frontline divisions lack sector assignments while the country is at war."), CampaignAlertRoute.Army));
         var strained = c.Relations.Values.FirstOrDefault(r => (r.A == n.Id || r.B == n.Id) && r.Stance == DiplomaticStance.Allied && r.AllianceStrainedDays > 0);
@@ -94,7 +94,7 @@ public static class CampaignAlerts
             result.Add(new("nuclear_struck", CampaignAlertGroup.Must, Loc.Get("A nuclear weapon has struck our forces"),
                 Loc.Format("{0} used it. For {1} more day(s) we may answer on its strongest force, wherever it stands.",
                     striker.DisplayName, c.Defines.NuclearRetaliationDays - (c.ElapsedDays - n.NuclearStruckDay)), CampaignAlertRoute.Defcon, striker.Id));
-        foreach (var war in c.Wars.Where(w => !w.Ended && w.Involves(n.Id)).OrderBy(w => w.Id).Take(6))
+        foreach (var war in Warfare.OpenWars(c).Where(w => !w.Ended && w.Involves(n.Id)).OrderBy(w => w.Id).Take(6))
             result.Add(new("war:" + war.Id, CampaignAlertGroup.Important, Loc.Get("War in progress"),
                 Loc.Get("Review the front, war score and peace terms."), CampaignAlertRoute.War, war.Id));
         var battle = c.Battles.FirstOrDefault(b => !b.Ended && (b.AttackerId == n.Id || b.DefenderId == n.Id));

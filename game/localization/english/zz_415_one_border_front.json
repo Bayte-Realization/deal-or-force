@@ -1,0 +1,12 @@
+// A standing front on one border (Scripts/ui/PlanningBarUI.cs, BattlePlanBrushUI.cs).
+{
+  "One border": "One border",
+  "Front on one border": "Front on one border",
+  "Click a land border with a country: the selection takes that whole border, digs in, and keeps to it as the border moves - and to no other country. Or hold the right button and drag to take only a stretch of it.": "Click a land border with a country: the selection takes that whole border, digs in, and keeps to it as the border moves - and to no other country. Or hold the right button and drag to take only a stretch of it.",
+  "Standing front on the whole border with {0}: {1:N0} divisions on {2:N0} provinces. It follows that border as it moves and takes no other.": "Standing front on the whole border with {0}: {1:N0} divisions on {2:N0} provinces. It follows that border as it moves and takes no other.",
+  "One border: click a border - a standing front along all of it. RMB-drag - one stretch. Esc cancels.": "One border: click a border - a standing front along all of it. RMB-drag - one stretch. Esc cancels.",
+  "Click: standing front on the whole border with {0} ({1:N0} posts). RMB-drag: one stretch.": "Click: standing front on the whole border with {0} ({1:N0} posts). RMB-drag: one stretch.",
+  "Whole front: every border with an enemy · {0:N0} posts.": "Whole front: every border with an enemy · {0:N0} posts.",
+  "Standing front: the whole border with {0} · {1:N0} posts · follows that border, takes no other.": "Standing front: the whole border with {0} · {1:N0} posts · follows that border, takes no other.",
+  "Front: a stretch of the border with {0} · {1:N0} posts.": "Front: a stretch of the border with {0} · {1:N0} posts."
+}

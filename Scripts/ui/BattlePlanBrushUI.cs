@@ -100,12 +100,15 @@ public partial class DealOrForceGame
         _globe.BorderStrokeStarted -= BeginBorderStroke;
         _globe.BorderStrokeMoved -= MoveBorderStroke;
         _globe.BorderStrokeFinished -= CommitDrawnLine;
+        _globe.BorderHovered -= PreviewBorderUnderPointer;
+        _borderHoverCountry = -1;
         if (kind != FrontLineKind.AreaDefence)
         {
             _drawnProvinces.Clear();
             _globe.BorderStrokeStarted += BeginBorderStroke;
             _globe.BorderStrokeMoved += MoveBorderStroke;
             _globe.BorderStrokeFinished += CommitDrawnLine;
+            if (kind == FrontLineKind.Defence) _globe.BorderHovered += PreviewBorderUnderPointer;
         }
         _globe.SetPlanPreview(_drawnProvinces, (int)kind);
         RefreshDrawingUi();
@@ -192,6 +195,16 @@ public partial class DealOrForceGame
             OffensivePlanning.PhaseGoals(l, appendPhase ? OffensivePlanning.PhaseCount(l) - 1 : l.ActiveOffensivePhase).SequenceEqual(provinces)))
         {
             SetArmyFeedback(Tr("Objective rejected: draw one connected land line in the front's target country. Existing orders were kept."));
+            return;
+        }
+        if (kind == FrontLineKind.Defence && border is { WholeBorder: true, BorderNationId: >= 0 } &&
+            _campaign.NationById(border.BorderNationId) is { } across)
+        {
+            // The standing front on one border: say whose, and that it will keep to it.
+            SetArmyFeedback(Simulation.Loc.Format(
+                "Standing front on the whole border with {0}: {1:N0} divisions on {2:N0} provinces. It follows that border as it moves and takes no other.",
+                across.DisplayName, armies.Count, provinces.Count));
+            ShowSelectedArmies();
             return;
         }
         SetArmyFeedback(Simulation.Loc.Format(
@@ -296,6 +309,8 @@ public partial class DealOrForceGame
         _offensiveSource = null;
         _appendOffensivePhase = false;
         _defensiveStroke.Clear();
+        _globe.BorderHovered -= PreviewBorderUnderPointer;
+        _borderHoverCountry = -1;
         _globe.BorderStrokeStarted -= BeginBorderStroke;
         _globe.BorderStrokeMoved -= MoveBorderStroke;
         _globe.BorderStrokeFinished -= CommitDrawnLine;
@@ -320,8 +335,14 @@ public partial class DealOrForceGame
             : _drawingKind is null
             ? OffensiveStatus()
             : _drawingKind == FrontLineKind.Defence
-                ? Simulation.Loc.Format(
-                    "Border front: {0:N0} posts · release RMB to assign. MMB pans.", _drawnProvinces.Count)
+                ? _borderDraft is not null
+                    ? Simulation.Loc.Format(
+                        "Border front: {0:N0} posts · release RMB to assign. MMB pans.", _drawnProvinces.Count)
+                    : _borderHoverCountry >= 0 && _campaign.NationById(_borderHoverCountry) is { } neighbour
+                        ? Simulation.Loc.Format(
+                            "Click: standing front on the whole border with {0} ({1:N0} posts). RMB-drag: one stretch.",
+                            neighbour.DisplayName, _drawnProvinces.Count)
+                        : Tr("One border: click a border - a standing front along all of it. RMB-drag - one stretch. Esc cancels.")
             : _drawingKind == FrontLineKind.Offensive
                 ? Simulation.Loc.Format(
                     "Objective: {0:N0} provinces · RMB drag to save · Shift+RMB adds a phase · Alt+RMB redraws · Esc cancel.",
@@ -343,6 +364,19 @@ public partial class DealOrForceGame
             return Simulation.Loc.Format("Defence: {0:N0}/{1:N0} divisions at their posts. Defend + Alt/RMB redraws the line.",
                 armies.Count(a => a.OrderProvinceId > 0 && a.ProvinceId == a.OrderProvinceId), armies.Length);
         var line = OffensivePlanning.Source(_campaign, armies);
+        // On a border front and no offensive drawn from it: say which border, so the order just
+        // given can be read back where the tools are and not guessed from arrows on the map.
+        if ((line is not { Kind: FrontLineKind.Offensive } || line.Objectives.Count == 0) &&
+            defensive is { Kind: FrontLineKind.Defence } && armies.All(a => a.FrontLineId == defensive.Id))
+        {
+            if (defensive.AllEnemies)
+                return Simulation.Loc.Format("Whole front: every border with an enemy · {0:N0} posts.", defensive.Provinces.Count);
+            if (defensive.BorderNationId >= 0 && _campaign.NationById(defensive.BorderNationId) is { } across)
+                return Simulation.Loc.Format(defensive.WholeBorder
+                        ? "Standing front: the whole border with {0} · {1:N0} posts · follows that border, takes no other."
+                        : "Front: a stretch of the border with {0} · {1:N0} posts.",
+                    across.DisplayName, defensive.Provinces.Count);
+        }
         if (line is not { Kind: FrontLineKind.Offensive } || line.Objectives.Count == 0)
             return Tr("Pick a tool, then drag with the right button on the map. Hover a tool for what it does.");
         var reached = armies.Count(a => line.Objectives.GetValueOrDefault(a.Id, -1) == a.ProvinceId);
@@ -355,6 +389,31 @@ public partial class DealOrForceGame
                    "Phase {0:N0}/{1:N0} · {2} · {3:N0}/{4:N0} divisions at objective · {5:N0} goal provinces.",
                    line.ActiveOffensivePhase + 1, OffensivePlanning.PhaseCount(line), state, reached, armies.Length, line.Provinces.Count) + " " +
                Tr("Execute advances; Prepare stops. Attack + Shift/RMB adds a phase; Alt/RMB redraws the active one.");
+    }
+
+    private int _borderHoverCountry = -1;
+
+    /// <summary>
+    /// The front tool in hand, nothing pressed yet: light the whole border with the country under
+    /// the pointer, because that is what a click will take. The order existed and nobody could
+    /// find it - the bar spoke only of dragging - so the map now answers before the click.
+    /// </summary>
+    private void PreviewBorderUnderPointer(GlobePick pick)
+    {
+        if (_drawingKind != FrontLineKind.Defence || _borderDraft is not null || _campaign?.Player is null) return;
+        var owner = _campaign.Player.Id;
+        var foreign = BorderFronts.ForeignAt(_campaign, owner, pick.ProvinceId);
+        _drawnProvinces.Clear();
+        if (foreign >= 0)
+            _drawnProvinces.UnionWith(BorderFronts.Resolve(_campaign, new DrawnFrontLine
+            {
+                NationId = owner, Kind = FrontLineKind.Defence, BorderNationId = foreign, WholeBorder = true,
+                StartLatitude = pick.Latitude, StartLongitude = pick.Longitude, EndLatitude = pick.Latitude, EndLongitude = pick.Longitude
+            }));
+        _borderHoverCountry = _drawnProvinces.Count > 0 ? foreign : -1;
+        if (_borderHoverCountry >= 0) _globe.SetBorderPlanPreview(_drawnProvinces, foreign);
+        else _globe.ClearPlanPreview();
+        RefreshDrawingUi();
     }
 
     private void BeginBorderStroke(GlobePick pick, bool whole, bool edit, bool append)

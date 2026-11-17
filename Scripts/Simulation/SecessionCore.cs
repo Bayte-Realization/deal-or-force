@@ -355,7 +355,7 @@ public static class SecessionCore
 
         // Busy elsewhere - and every war beyond the first is another reason to let one go.
         var wars = 0;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Involves(parent.Id)) wars++;
         if (wars > 0) accept += 0.20f + (wars - 1) * weights.EachFurtherWar;
 

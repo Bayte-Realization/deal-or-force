@@ -193,9 +193,8 @@ public static partial class ForeignAssistance
             var amount = (double)requester.Gdp * c.Defines.AidShareOfRecipientGdp;
             if (!double.IsFinite(amount) || amount < .01 || amount > float.MaxValue) continue;
             var warId = -1;
-            for (var wIdx = 0; wIdx < c.Wars.Count; wIdx++)
+            foreach (var w in Warfare.OpenWars(c))
             {
-                var w = c.Wars[wIdx];
                 if (!w.Ended && w.Involves(requester.Id) && (warId < 0 || w.Id < warId)) warId = w.Id;
             }
             // Same predicate as the live payment assessment: without need, no
@@ -293,7 +292,7 @@ public static partial class ForeignAssistance
         if (!float.IsFinite(c.Defines.AiAidCrisisTreasuryOfGdp) || c.Defines.AiAidCrisisTreasuryOfGdp < 0 ||
             !float.IsFinite(requester.WeeklyBalance) || !float.IsFinite(requester.PaymentArrears) || !float.IsFinite(requester.DebtArrears))
             return new(false, 0, 0, false, "The financial inputs are invalid.");
-        var war = warId < 0 ? c.Wars.FirstOrDefault(w => !w.Ended && w.Involves(requesterId)) : c.Wars.FirstOrDefault(w => w.Id == warId);
+        var war = warId < 0 ? Warfare.OpenWars(c).FirstOrDefault(w => !w.Ended && w.Involves(requesterId)) : c.Wars.FirstOrDefault(w => w.Id == warId);
         if (warId >= 0 && (war is null || war.Ended || !war.Involves(requesterId)))
             return new(false, 0, 0, false, "The requested war is no longer active.");
         if (!HasCurrentNeed(c, requester, war is not null))
@@ -343,7 +342,7 @@ public static partial class ForeignAssistance
             (relation?.GuaranteedBy(donor.Id) == true ? .3f : 0) +
             (requester.OverlordId == donor.Id && !string.IsNullOrEmpty(requester.SubjectType) ? .3f : 0) +
             (Math.Clamp(donor.Stability, 0, 1) - .5f) * .1f;
-        if (c.Wars.Any(w => !w.Ended && w.Involves(donor.Id))) score -= .3f;
+        if (Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(donor.Id))) score -= .3f;
         if (war is not null)
         {
             if (war.AttackerId != requester.Id) score += .15f;

@@ -777,12 +777,13 @@ public partial class DealOrForceGame
     private void RefreshRegionCardCapitalButton()
     {
         if (_regionCardMoveCapital is null || _selectedState is null) return;
-        var refusal = CapitalCore.Refusal(_campaign, _campaign.Player, _selectedState);
+        SyncCapitalCityChooser();
+        var refusal = CapitalMoveRefusal();
         _regionCardMoveCapital.Disabled = refusal.Length > 0;
         _regionCardMoveCapital.TooltipText = Ui.Tip(refusal.Length > 0
             ? Tr(refusal)
             : Simulation.Loc.Format("Move the government to {0}. It costs {1} from the treasury.",
-                _selectedState.DisplayName, Fmt.Money(CapitalCore.Cost(_campaign, _campaign.Player))));
+                CapitalMoveTarget(), Fmt.Money(CapitalCore.Cost(_campaign, _campaign.Player))));
     }
 
     private void RegionCardBuild(BuildingKind kind, int count = 1)
@@ -794,7 +795,6 @@ public partial class DealOrForceGame
     private void RegionCardMoveCapital()
     {
         MoveCapitalHere();
-        _regionCardFeedback.Text = _regionActionFeedback.Text;
     }
 
     /// <summary>After an order to a region: redraw whichever of the two views the player is reading.</summary>

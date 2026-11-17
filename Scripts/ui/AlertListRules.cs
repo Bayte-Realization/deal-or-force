@@ -63,6 +63,15 @@ internal static class AlertListRules
     /// <summary>The tension row's dot, in the conflicts screen's colours for the same thresholds.</summary>
     internal static string TensionDot(float tension) => tension >= 80f ? "state.critical" : tension >= 60f ? "state.warning" : "state.info";
 
+    /// <summary>
+    /// Rows of one kind stand as one row. Three lines reading "Shortage: Lithium", "Shortage:
+    /// Rubber", "Shortage: Coffee" are one piece of news told three times, and they pushed a war
+    /// under "+N more" (and a streamer called the screen overloaded). The key is the kind and the
+    /// rank, so an urgent shortage is not folded into the mild ones; empty for a row that stands alone.
+    /// </summary>
+    internal static string GroupKey(string id, int rank) =>
+        id is not null && id.StartsWith("shortage:", StringComparison.Ordinal) ? "group:shortage:" + rank : "";
+
     /// <summary>`hud.alerts.max_rows`, kept to a list that still fits a 720-pixel screen.</summary>
     internal static int MaxRows(float metric) => float.IsFinite(metric) ? Math.Clamp((int)MathF.Round(metric), 1, 12) : 6;
 

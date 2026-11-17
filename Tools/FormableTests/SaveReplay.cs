@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using DealOrForce.Simulation;
@@ -76,6 +77,14 @@ static class SaveReplay
 
         Console.WriteLine($"REPLAY_LOADED day={c.ElapsedDays} date={c.Date.Display()} file={Path.GetFileName(path)}");
         Console.WriteLine($"REPLAY_WORLD {Summary(c)}");
+        // `--replay-watch TAG,TAG`: the people and the output of named countries at the start and
+        // the end of the run - the same list in two builds, so "the fix brought them back" is two
+        // rows of numbers rather than a feeling.
+        var watchAt = Array.IndexOf(args, "--replay-watch");
+        var watch = watchAt >= 0 && watchAt + 1 < args.Length
+            ? args[watchAt + 1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : Array.Empty<string>();
+        Health(c, "load", watch);
         Console.WriteLine($"REPLAY_SCALE armies={c.Armies.Count} battles={c.Battles.Count} wars={c.Wars.Count} " +
                           $"fronts={c.FrontLines.Count} states={c.States.Count} relations={c.Relations.Count}");
         // Smooth time is a frame budget in the Godot loop (SettingsCatalog smooth_ticks →
@@ -137,6 +146,7 @@ static class SaveReplay
                           $"steady_days={steadyDays} steady_ms={steadyMs} " +
                           $"steady_ms_per_day={(steadyDays == 0 ? 0 : steadyMs / (double)steadyDays):0.0}");
         Console.WriteLine($"REPLAY_WORLD {Summary(c)}");
+        Health(c, "end", watch);
         Console.WriteLine($"REPLAY_ROUTE asks={Warfare.AdvanceRouteAsks} keeps={Warfare.AdvanceRouteKeeps} " +
                           $"reuses={Warfare.AdvanceRouteReuses} walks={Warfare.AdvanceRouteSearches}");
         // The allocation column used to be formatted `,8:1`, which is a custom numeric format
@@ -194,6 +204,68 @@ static class SaveReplay
         _gen0 = gen0; _gen1 = gen1; _gen2 = gen2; _allocated = allocated;
         foreach (var (name, ms) in deltas.OrderByDescending(d => d.Ms).Take(top))
             Console.WriteLine($"REPLAY_DAY_SCOPE n={n} name={name.Trim()} ms={ms:0.0}");
+    }
+
+    /// <summary>
+    /// Three things a long campaign can quietly get wrong, counted: countries that hold ground and
+    /// are still on the fallen list (the economy then empties them every week), countries with
+    /// ground and nobody in them, army groups with nobody under them, and militia that never fill
+    /// again. Read at load and at the end, so a repair on load and what the days after it do are
+    /// two separate numbers.
+    /// </summary>
+    static void Health(Campaign c, string when, string[] watch)
+    {
+        int landed = 0, peopled = 0, fallenLanded = 0, landedEmpty = 0;
+        var odd = new System.Collections.Generic.List<string>();
+        foreach (var n in c.Nations)
+        {
+            var held = c.StatesOf(n).Length > 0;
+            if (n.Population > 0) peopled++;
+            if (!held) continue;
+            landed++;
+            var fallen = c.Fallen.Contains(n.Id);
+            if (fallen) fallenLanded++;
+            if (n.Population <= 0) landedEmpty++;
+            if (fallen || n.Population <= 0) odd.Add(n.Tag);
+            if (fallen && when == "load")
+                Console.WriteLine($"REPLAY_FALLEN_LANDED tag={n.Tag} id={n.Id} map={n.MapIndex} movement={(n.Movement is null ? "none" : n.Movement.Id)} " +
+                                  $"regions={c.StatesOf(n).Length} region_people={c.StatesOf(n).Sum(s => s.Population)} population={n.Population} " +
+                                  $"homeland={(c.Homelands.TryGetValue(n.Id, out var home) ? home.Count : -1)} seceded_from={n.SecededFromId} " +
+                                  $"collapse={n.CollapseAnnounced} armies={c.Armies.Count(a => a.NationId == n.Id)} " +
+                                  $"chronicle=[{string.Join(" | ", c.Chronicle.Entries.Where(e => e.ActorId == n.Id || e.TargetId == n.Id).TakeLast(4).Select(e => $"{e.Day}:{e.Kind}:{e.ActorId}>{e.TargetId}"))}]");
+        }
+        var members = new System.Collections.Generic.Dictionary<int, int>();
+        var own = new System.Collections.Generic.HashSet<int>();
+        var groupNation = c.ArmyGroups.ToDictionary(g => g.Id, g => g.NationId);
+        int militia = 0, militiaShort = 0;
+        long militiaMen = 0, militiaRoom = 0;
+        foreach (var army in c.Armies)
+        {
+            members[army.ArmyGroupId] = members.GetValueOrDefault(army.ArmyGroupId) + 1;
+            if (groupNation.TryGetValue(army.ArmyGroupId, out var owner) && owner == army.NationId) own.Add(army.ArmyGroupId);
+            if (army.TemplateId != MilitiaCore.TemplateId) continue;
+            militia++;
+            militiaMen += Math.Max(0, army.Personnel);
+            militiaRoom += Math.Max(0, army.MaxPersonnel);
+            if (army.Personnel < army.MaxPersonnel) militiaShort++;
+        }
+        var groupsEmpty = c.ArmyGroups.Count(g => !members.ContainsKey(g.Id));
+        var groupsNoOwn = c.ArmyGroups.Count(g => !own.Contains(g.Id));
+        var dangling = c.Armies.Count(a => a.ArmyGroupId >= 0 && !groupNation.ContainsKey(a.ArmyGroupId));
+        Console.WriteLine($"REPLAY_HEALTH at={when} day={c.ElapsedDays} landed={landed} peopled={peopled} fallen={c.Fallen.Count} " +
+                          $"fallen_landed={fallenLanded} landed_no_people={landedEmpty} " +
+                          $"groups={c.ArmyGroups.Count} groups_no_army={groupsEmpty} groups_no_own_army={groupsNoOwn} " +
+                          $"armies={c.Armies.Count} armies_dangling_group={dangling} " +
+                          $"militia={militia} militia_below_strength={militiaShort} militia_men={militiaMen} militia_room={militiaRoom}");
+        if (odd.Count > 0) Console.WriteLine($"REPLAY_LANDED_EMPTY at={when} {string.Join(",", odd)}");
+        foreach (var tag in watch)
+        {
+            var n = c.NationByTag(tag);
+            if (n is null) { Console.WriteLine($"REPLAY_WATCH at={when} tag={tag} missing"); continue; }
+            Console.WriteLine($"REPLAY_WATCH at={when} tag={tag} fallen={c.Fallen.Contains(n.Id)} regions={c.StatesOf(n).Length} " +
+                              $"region_people={c.StatesOf(n).Sum(s => s.Population)} population={n.Population} gdp={n.Gdp:0} " +
+                              $"armies={c.Armies.Count(a => a.NationId == n.Id)}");
+        }
     }
 
     /// <summary>What a campaign looks like from outside: enough to tell a living world from a dead one.</summary>
