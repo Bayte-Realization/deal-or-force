@@ -165,6 +165,95 @@ public static class MovementFall
         foreach (var (id, regions) in held) campaign.Homelands[id] = regions;
     }
 
+    /// <summary>
+    /// The fall undone by the map: a country the weekly review ruled fallen, that holds ground of
+    /// its own again, is a country again.
+    ///
+    /// The review puts a country on the list the week it is found with no ground, and four paths
+    /// took it off - a restoration, a movement graduating, a release that revives the tag, a
+    /// movement re-founded under it. Every other road back to the map did not: a status quo peace
+    /// that leaves a fallen country's surviving divisions holding what they occupied, a coalition
+    /// that hands a beaten ally its land back, a civil war returning ground to its parent. All of
+    /// them go through StatePartition.Annex and end at MarkMapChanged, and none of them knew the
+    /// list existed. So the country stood on the map with its regions and its people in them,
+    /// while everything that reads the list took it for dead - the economy most of all, which
+    /// emptied it every week: 41 of them in a 107-year campaign, 360 countries with ground and
+    /// only 320 with anybody in them.
+    ///
+    /// The rule is the review's own, run backwards: the review rules a country fallen when it
+    /// holds no region (StatesOf), and a country holding one is not. Only a country without a
+    /// movement - an exile or an underground that takes ground back is settled by its own path
+    /// (MovementRules.SynchroniseTerritory, Restoration.RestoreExiledNation). Its people are
+    /// counted again on the spot rather than at the economy's next week, because a week of a
+    /// country with ground and nobody in it is what the player saw. Walked over the nation list,
+    /// in order, so the day it happens is the same in every replay.
+    ///
+    /// People are not the whole of a country, and the four older roads back each gave the rest
+    /// too. The books: the fall closed them at zero (StatePartition.Annex, the economy's week), and
+    /// a country returned with zero converges on what it makes at a tenth a week - a Congo of seven
+    /// million taxing 0.007 a week, two months below the world's poorest tenth, unable to pay for
+    /// an army or a budget. A closed book is reopened at what its people made by the country's own
+    /// 2024 measure (ProductionCapacity), the way MovementRules.TakeZone seeds a movement's first
+    /// ground, and the market corrects it from there. And the seat: the fall took the capital to
+    /// nothing, and CapitalCore never places one for a country that has none - only
+    /// LocateCapitals does, which loading a save runs and a running campaign did not. So a revived
+    /// country had no seat until it was saved and opened again, and the two worlds differed on the
+    /// seat, the supply origin and the capital's battles with the same fingerprint. The same call
+    /// the load makes is made here.
+    /// </summary>
+    internal static int ReturnTheLanded(Campaign campaign)
+    {
+        if (campaign is null || campaign.Fallen.Count == 0) return 0;
+        var returned = 0;
+        var seatless = false;
+        for (var id = 0; id < campaign.Nations.Count; id++)
+        {
+            var nation = campaign.Nations[id];
+            if (nation.Movement is not null || !campaign.Fallen.Contains(nation.Id)) continue;
+            var held = campaign.StatesOf(nation);
+            if (held.Length == 0) continue;
+            campaign.Fallen.Remove(nation.Id);
+            long people = 0;
+            foreach (var region in held) people += Math.Max(0L, region.Population);
+            nation.Population = people;
+            ReopenBooks(nation);
+            if (nation.CapitalProvinceId <= 0) seatless = true;
+            returned++;
+            DiagnosticLogs.Write("simulation",
+                $"FALLEN_RETURNED nation={nation.Tag} regions={held.Length} people={people} gdp={nation.Gdp:0.###} day={campaign.ElapsedDays}");
+        }
+        if (returned > 0)
+        {
+            // Once for all of them, and only with the map attached: a save being read has none
+            // yet, and attaching it runs this same call.
+            if (seatless && campaign.ProvinceMap is not null)
+            {
+                campaign.LocateCapitals(preserveExisting: true);
+                campaign.CapitalRevision++;
+            }
+            campaign.MovementRevision++;
+            campaign.MarkStrategicChange();
+        }
+        return returned;
+    }
+
+    /// <summary>
+    /// A returned country's books, closed at zero by its fall, opened at what its people make by
+    /// its own measure. Only a closed book: a country the list kept by mistake but the economy
+    /// never emptied has a GDP of its own, and that is better than any estimate. The capacity is
+    /// the 2024 output per head of this country times the people it has now (ProductionCapacity),
+    /// in the scale the economy prices it at, so the next week's market moves it by what changed
+    /// rather than rebuilding it from nothing.
+    /// </summary>
+    private static void ReopenBooks(Nation nation)
+    {
+        if (nation.Gdp > 0f || nation.Population <= 0) return;
+        var capacity = ProductionCapacity.Of(nation);
+        if (!(capacity > 0f) || !float.IsFinite(capacity)) return;
+        nation.Gdp = capacity;
+        if (nation.OutputScale > 0f) nation.GrossOutput = capacity / (52f * nation.OutputScale);
+    }
+
     /// <summary>Every country found with no ground this week has its fall decided, once.</summary>
     internal static void Decide(Campaign campaign)
     {
@@ -686,7 +775,7 @@ public static class MovementFall
                  following < defines.MovementCrushedFollowing && !campaign.Armies.Exists(a => a.NationId == nation.Id))
             Dissolve(campaign, nation, Loc.Get("Its leaders are in prison or dead, and the rank and file have gone home: the movement is broken."));
         else if (!GovernmentInExile(state) && Matured(campaign, state) && state.Militancy >= 0f && state.Militancy < defines.MovementFoldMilitancy &&
-                 following < defines.MovementFoldFollowing && !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)))
+                 following < defines.MovementFoldFollowing && !Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(nation.Id)))
             Dissolve(campaign, nation, Loc.Get("What is left of it has joined ordinary politics: the movement has folded into the parties."));
         // Legitimacy is what an exile lives on, and recognition from a capital that gives nothing
         // costs that capital nothing. One the world no longer takes seriously and nobody pays for
@@ -697,7 +786,7 @@ public static class MovementFall
         // grown up at home under other flags, and almost nobody there still following it.
         else if (state.Exile && Matured(campaign, state) && following < defines.MovementFoldFollowing &&
                  HomelandSettled(campaign, state, defines.MovementExileForgottenHabit) &&
-                 !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)))
+                 !Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(nation.Id)))
             Dissolve(campaign, nation, Loc.Get("A generation has grown up at home under other flags: the government in exile is a memory now."));
     }
 
@@ -727,7 +816,7 @@ public static class MovementFall
         var strong = following >= defines.MovementCrushedFollowing && state.Cadres >= defines.MovementCrushedCadres ||
                      campaign.Armies.Exists(army => army.NationId == nation.Id);
         if (!state.Exile || defines.MovementExileFadeDays <= 0 || state.Legitimacy >= defines.MovementExileFadeLegitimacy ||
-            strong || HasPatron(campaign, state) || campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)))
+            strong || HasPatron(campaign, state) || Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(nation.Id)))
         {
             state.ReadyOnDay.Remove(FadingKey);
             return false;

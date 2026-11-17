@@ -105,9 +105,8 @@ public static class LostLands
         var relative = people / (Math.Max(1, nation.Population) + people);
         var memory = people / 12_000_000 + relative * Math.Max(0, campaign.Defines.AiRevancheRelativeWeight);
         var distractions = 0;
-        for (var i = 0; i < campaign.Wars.Count; i++)
+        foreach (var w in Warfare.OpenWars(campaign))
         {
-            var w = campaign.Wars[i];
             if (!w.Ended && w.Involves(other.Id) && !w.Involves(nation.Id)) distractions++;
         }
         var distress = M.Clamp01((.55f - other.Stability) / .55f);

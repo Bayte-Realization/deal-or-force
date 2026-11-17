@@ -147,7 +147,10 @@ public static class MilitiaCore
         IReadOnlyDictionary<int, int[]> warMembers)
     {
         if (campaign is null || nation is null) return;
-        foreach (var war in campaign.Wars)
+        // The wars still being fought, in the record's order (Warfare.OpenWars): asked of the
+        // whole record this was every war there has ever been, for every country, every
+        // morning - 2,476 wars on a save 107 years long to find the 26 not over.
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended || !war.Involves(nation.Id)) continue;
             if (!warMembers.TryGetValue(war.Id, out var members)) continue;
@@ -163,8 +166,9 @@ public static class MilitiaCore
     /// <summary>Both sides of every open war as a flat id list, built once per day.</summary>
     private static Dictionary<int, int[]> WarMembers(Campaign campaign)
     {
-        var map = new Dictionary<int, int[]>(campaign.Wars.Count);
-        foreach (var war in campaign.Wars)
+        var open = Warfare.OpenWars(campaign);
+        var map = new Dictionary<int, int[]>(open.Count);
+        foreach (var war in open)
         {
             if (war.Ended) continue;
             var members = new List<int>(war.BelligerentCount);
@@ -207,7 +211,7 @@ public static class MilitiaCore
         if (campaign?.ProvinceMap is null) yield break;
 
         var fighting = false;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended) { fighting = true; break; }
 
         // Who each war is between, once for the whole day: the per-country enemy lists
@@ -232,11 +236,17 @@ public static class MilitiaCore
             // walk back, and the village keeps volunteering while its ground is held. A
             // formation drained holding a line does not stay a muster roll of zeroes - it
             // fills again from home, a little each day, when there is a home to fill from.
-            if (army.Personnel < army.MaxPersonnel && army.Personnel >= 0)
+            // Who holds the ground is written on the map in the country's map number, not its
+            // place in the nation list. Comparing it with NationId compared two numberings that
+            // agree for hardly any real country (France is nation 20 and map number 22), so a
+            // drained militia on its own ground never filled - and one standing where a
+            // coincidence of numbers made a neighbour's map number its own list number did.
+            if (army.Personnel < army.MaxPersonnel && army.Personnel >= 0 &&
+                campaign.NationById(army.NationId) is { } home)
             {
                 var controls = campaign.ProvinceController;
                 if (controls is not null && army.ProvinceId > 0 && army.ProvinceId < controls.Length &&
-                    controls[army.ProvinceId] == (ushort)army.NationId)
+                    controls[army.ProvinceId] == (ushort)home.MapIndex)
                 {
                     var room = army.MaxPersonnel - army.Personnel;
                     var gain = (int)MathF.Min(room, MathF.Max(1f, army.MaxPersonnel * campaign.Defines.MilitiaVolunteerSharePerDay));

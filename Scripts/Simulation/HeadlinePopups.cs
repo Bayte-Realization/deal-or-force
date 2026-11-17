@@ -48,7 +48,7 @@ public static class HeadlinePopups
             if (other.AnswersTo(player.Id) || player.AnswersTo(other.Id) ||
                 CampaignDiplomacy.Peek(campaign, player.Id, other.Id) is { Stance: DiplomaticStance.Allied })
                 tie = HeadlineTie.Ally;
-            else if (campaign.Wars.Any(war => !war.Ended && war.Involves(player.Id) && war.Involves(other.Id) &&
+            else if (Warfare.OpenWars(campaign).Any(war => !war.Ended && war.Involves(player.Id) && war.Involves(other.Id) &&
                                               war.EnemiesOf(player.Id).Contains(other.Id)))
                 tie = HeadlineTie.Enemy;
             else if (CampaignDiplomacy.SharesLandBorder(campaign, player.MapIndex, other.MapIndex))

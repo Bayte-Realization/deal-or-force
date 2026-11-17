@@ -53,7 +53,7 @@ public static class Contractors
 
     public static int InService(Campaign c, int nationId) => c.Armies.Count(a => a.NationId == nationId && a.ContractUntilDay >= 0);
 
-    public static bool AtWar(Campaign c, int nationId) => c.Wars.Any(w => !w.Ended && w.Involves(nationId));
+    public static bool AtWar(Campaign c, int nationId) => Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(nationId));
 
     /// <summary>Why this country cannot sign so many contractor formations, or empty when it can.</summary>
     public static string Refusal(Campaign c, Nation nation, int formations)
@@ -152,7 +152,7 @@ public static class Contractors
         foreach (var nation in c.Nations)
         {
             if (nation.IsHuman || nation.Movement is not null || nation.Population <= 0) continue;
-            var war = c.Wars.FirstOrDefault(w => !w.Ended && w.Involves(nation.Id));
+            var war = Warfare.OpenWars(c).FirstOrDefault(w => !w.Ended && w.Involves(nation.Id));
             if (war is null || InService(c, nation.Id) >= limit) continue;
             var ours = AiStatecraft.CachedStrength(c, nation);
             var theirs = war.EnemiesOf(nation.Id).Select(c.NationById).Where(n => n is not null)

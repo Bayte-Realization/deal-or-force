@@ -56,7 +56,7 @@ public static class OffensivePlanning
         }
         if (departure.Count == 0) return;
         var seed = departure.OrderBy(x => x).First();
-        var war = c.Wars.Find(w => !w.Ended && w.Opposes(own.Id, enemy.Id));
+        var war = Warfare.OpenWars(c).Find(w => !w.Ended && w.Opposes(own.Id, enemy.Id));
         var corridor = war is null
             ? map.FindOperationalRoute(seed, goals[0], (ushort)own.MapIndex, (ushort)enemy.MapIndex, control)
             : WarCoalition.OperationalRoute(c, war, own.Id, seed, goals[0], control);
@@ -140,7 +140,7 @@ public static class OffensivePlanning
         var control = c.ProvinceController ?? map.ProvinceToNation;
         var holder = c.Nations.FirstOrDefault(n => n.MapIndex == control[province] && n.MapIndex > 0);
         if (holder is null) return -1;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
             if (!war.Ended && war.Opposes(source.NationId, holder.Id)) return holder.Id;
         return -1;
     }
@@ -206,7 +206,7 @@ public static class OffensivePlanning
                 line.OffensiveRegroupDay = -1;
                 continue;
             }
-            var war = c.Wars.Find(w => !w.Ended && w.Opposes(line.NationId, line.BorderNationId));
+            var war = Warfare.OpenWars(c).Find(w => !w.Ended && w.Opposes(line.NationId, line.BorderNationId));
             var ready = war is not null && participants.Any(a => FullyPrepared(c, line, a)) &&
                 line.ObjectiveSequence.All(p => c.ProvinceController[p] == own.MapIndex);
             if (!ready) { line.OffensiveRegroupDay = -1; continue; }
@@ -242,7 +242,7 @@ public static class OffensivePlanning
         var map = c.ProvinceMap; var own = c.NationById(army.NationId); var enemy = c.NationById(line.BorderNationId);
         if (map is null || own is null || enemy is null) return;
         var control = c.ProvinceController ?? map.ProvinceToNation;
-        var war = c.Wars.Find(w => !w.Ended && w.Opposes(own.Id, enemy.Id));
+        var war = Warfare.OpenWars(c).Find(w => !w.Ended && w.Opposes(own.Id, enemy.Id));
         army.AssignedWarId = war?.Id ?? -1;
         army.Route.Clear(); army.PlannedRoute.Clear(); army.MoveProgress = 0;
         var goal = line.Objectives.GetValueOrDefault(army.Id, -1);

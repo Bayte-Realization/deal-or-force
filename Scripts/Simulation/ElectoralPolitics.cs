@@ -142,7 +142,7 @@ public static partial class ElectoralPolitics
             }
             if (e.Suspended) continue;
             if (!n.IsHuman && n.NextElectionDay - c.ElapsedDays is >= 0 and <= 30 &&
-                e.LastPostponedRound != e.Round && c.Wars.Any(w => !w.Ended && w.Involves(n.Id) &&
+                e.LastPostponedRound != e.Round && Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(n.Id) &&
                     (w.CivilConflict || (w.IsAttacking(n.Id) ? w.WarScore : -w.WarScore) < -30)))
                 new ElectionCommand { IssuerId = n.Id, Action = ElectionAction.Postpone }.Apply(c);
             if (c.ElapsedDays >= n.NextElectionDay) Hold(c, n);

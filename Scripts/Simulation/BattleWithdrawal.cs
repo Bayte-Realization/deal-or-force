@@ -161,7 +161,7 @@ public static partial class Warfare
         var quote = AssessWithdrawal(campaign, army, 1, targetProvinceId);
         if (!quote.Available) { result = quote.Refusal; return false; }
         var battle = campaign.Battles.Find(candidate => candidate.Id == army.BattleId && !candidate.Ended);
-        var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
+        var war = Warfare.OpenWars(campaign).Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
         var attacking = quote.Attacking;
         var retreat = quote.Destination;
 

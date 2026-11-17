@@ -60,9 +60,8 @@ public static class NationalCourses
     {
         result.Clear();
         var war = false; var exhaustion = 0f;
-        for (var i = 0; i < c.Wars.Count; i++)
+        foreach (var w in Warfare.OpenWars(c))
         {
-            var w = c.Wars[i];
             if (!w.Ended && w.Involves(n.Id))
             { war = true; exhaustion = MathF.Max(exhaustion, M.Clamp01((c.ElapsedDays - w.StartedDay) / 730f)); }
         }
@@ -196,9 +195,8 @@ public static class NationalCourses
             if (m.PreviousLiving - n.StandardOfLiving >= .08f) Shock(c, n, .4f, "course.shock.living_collapse");
             m.PreviousLiving = n.StandardOfLiving;
             var fighting = false;
-            for (var wi = 0; wi < c.Wars.Count; wi++)
+            foreach (var w in Warfare.OpenWars(c))
             {
-                var w = c.Wars[wi];
                 if (!w.Ended && w.Involves(n.Id)) { fighting = true; break; }
             }
             // Peace does not erase yesterday's years of exhaustion.

@@ -97,7 +97,7 @@ public static class DefensivePlanning
     public static void Route(Campaign c, Army a, DrawnFrontLine line)
     {
         Sequence(c, line);
-        a.AssignedWarId = c.Wars.Find(w => !w.Ended && w.Involves(a.NationId))?.Id ?? -1;
+        a.AssignedWarId = Warfare.OpenWars(c).Find(w => !w.Ended && w.Involves(a.NationId))?.Id ?? -1;
         var post = line.Posts.GetValueOrDefault(a.Id, -1);
         a.Route.Clear(); a.PlannedRoute.Clear(); a.MoveProgress = 0;
         a.OrderProvinceId = post;

@@ -346,14 +346,9 @@ public static class ArmsShipmentRequests
 
     private static StrategicWar WarFor(Campaign c, int requesterId, int warId)
     {
-        if (warId >= 0)
-        {
-            foreach (var war in c.Wars)
-                if (war.Id == warId) return war;
-            return null;
-        }
+        if (warId >= 0) return Warfare.WarById(c, warId);
         StrategicWar found = null;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || !war.Involves(requesterId)) continue;
             if (found is null || war.Id < found.Id) found = war;

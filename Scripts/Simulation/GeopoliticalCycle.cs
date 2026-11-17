@@ -24,7 +24,7 @@ public static class GeopoliticalCycle
 
         // Feedback from global major conflicts: if the world is engulfed in large-scale wars, global tension rises
         var activeMajorWars = 0;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (!war.Ended && (war.Intensity >= 1 || war.AttackerLosses + war.DefenderLosses > 50_000))
                 activeMajorWars++;

@@ -202,7 +202,7 @@ public static class StrandedGarrisons
     {
         if (c?.ProvinceMap is null || c.ProvinceController is null || parent is null || born is null ||
             provinces is null || provinces.Count == 0 || !c.Defines.StrandedGarrisonsEnabled) return;
-        var war = c.Wars.FirstOrDefault(w => !w.Ended && w.Opposes(parent.Id, born.Id));
+        var war = Warfare.OpenWars(c).FirstOrDefault(w => !w.Ended && w.Opposes(parent.Id, born.Id));
         if (war is null) return;
         var ground = provinces as HashSet<int> ?? new HashSet<int>(provinces);
         var garrison = c.Armies.Where(army => army.NationId == parent.Id && army.EmbarkedFleetId < 0 &&
@@ -681,7 +681,7 @@ public static class StrandedGarrisons
     private static List<int> Enemies(Campaign c, int nationId)
     {
         var enemies = new List<int>();
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || !war.Involves(nationId)) continue;
             foreach (var id in war.Side(!war.IsAttacking(nationId)))

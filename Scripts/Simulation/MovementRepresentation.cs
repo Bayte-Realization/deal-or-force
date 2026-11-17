@@ -41,7 +41,7 @@ public static partial class Movements
                 campaign.SupportFormations.Any(f => f.NationId == nation.Id) ||
                 campaign.Recruitment.Any(o => o.NationId == nation.Id) ||
                 campaign.SupportOrders.Any(o => o.NationId == nation.Id) ||
-                campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id))) continue;
+                Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(nation.Id))) continue;
             MovementFall.Dissolve(campaign, nation,
                 Loc.Get("This organisation is already represented by its territorial administration."));
             retired++;

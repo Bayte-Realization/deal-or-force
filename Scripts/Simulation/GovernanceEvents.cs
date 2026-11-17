@@ -238,7 +238,7 @@ public static class GovernanceEvents
 
             var atWar = false;
             var losing = false;
-            foreach (var war in campaign.Wars)
+            foreach (var war in Warfare.OpenWars(campaign))
             {
                 if (war.Ended || !war.Involves(nation.Id)) continue;
                 atWar = true;
@@ -285,7 +285,7 @@ public static class GovernanceEvents
             campaign.ElapsedDays - nation.PoliticsChangedDay < PoliticsCore.ChangeCooldownDays) return false;
         var atWar = false;
         var losing = false;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended || !war.Involves(nation.Id)) continue;
             atWar = true;

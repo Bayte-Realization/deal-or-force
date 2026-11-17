@@ -96,7 +96,7 @@ public static class OrganizationDiscipline
         if (c is null || org is null || member is null) return "";
         var others = org.Members.Where(id => id != member.Id).ToList();
         if (others.Count == 0) return "";
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || war.CivilConflict || war.AttackerId != member.Id) continue;
             if (war.Side(false).Any(others.Contains)) return "aggression";
@@ -149,7 +149,7 @@ public static class OrganizationDiscipline
         if (relation?.Stance == DiplomaticStance.Allied || opinion >= 50f || voter.AnswersTo(target.Id)) return false;
         // The pot does not vote against the kettle.
         if (cause == "coup" && voter.Government == "military_junta") return false;
-        if (cause == "aggression" && c.Wars.Any(w => !w.Ended && !w.CivilConflict && w.IsAttacking(voter.Id) && w.IsAttacking(target.Id))) return false;
+        if (cause == "aggression" && Warfare.OpenWars(c).Any(w => !w.Ended && !w.CivilConflict && w.IsAttacking(voter.Id) && w.IsAttacking(target.Id))) return false;
         if (m.Kind == "suspend") return cause.Length > 0 ? opinion < 30f : opinion < -45f;
         // Expulsion is for good: a member votes for it only against a government it has fallen out with.
         return cause.Length > 0 ? opinion < -10f : opinion < -55f;
@@ -207,7 +207,7 @@ public static class OrganizationDiscipline
             { org.Suspended.Remove(id); org.SuspendedFor.Remove(id); }
 
         // An attack on a fellow member: suspended the same week, its expulsion tabled.
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || war.CivilConflict || !org.Members.Contains(war.AttackerId)) continue;
             if (!war.Side(false).Any(id => id != war.AttackerId && org.Members.Contains(id))) continue;

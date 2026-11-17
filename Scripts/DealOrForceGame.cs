@@ -624,7 +624,7 @@ public partial class DealOrForceGame : Control
             && !key.Echo && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed)
         {
             var step = SpeedKey(key);
-            if (step is >= 1 and <= 5) { SetSpeed(step); GetViewport().SetInputAsHandled(); return; }
+            if (step is >= 1 and <= 5) { SetSpeed(step, resume: false); GetViewport().SetInputAsHandled(); return; }
             if (step != 0)
             {
                 SetSpeed(_speed + (step > 0 ? 1 : -1), resume: false);

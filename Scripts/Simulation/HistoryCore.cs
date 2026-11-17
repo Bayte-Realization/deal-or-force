@@ -54,9 +54,41 @@ public sealed class CampaignHistory
     // than forty. Fifteen years of every week was 780 points a country and most of every
     // save - 47 MB of an 80 MB save in a long campaign - for charts that draw a decade in a
     // few hundred pixels. This keeps forty years in under half the points.
+    //
+    // These three are the rule as shipped; a campaign reads its own from the defines
+    // (HistoryWeeklyDays, HistoryMonthlyDays, HistoryKeptDays, HistoryOldSampleDays in
+    // 95_long_campaign.json), which start at the same values.
     public const int WeeklyDays = 3 * 364;
     public const int MonthlyDays = 10 * 364;
     public const int KeptDays = 40 * 364;
+    public const int OldSampleDays = 91;
+
+    /// <summary>The ledger's resolution by age, as one campaign has it set.</summary>
+    internal readonly record struct Bands(int Weekly, int Monthly, int Kept, int OldSpan)
+    {
+        public static readonly Bands Shipped = new(WeeklyDays, MonthlyDays, KeptDays, OldSampleDays);
+
+        /// <summary>
+        /// Read from the defines and put in order: the stretches cannot overlap backwards, and the
+        /// oldest spacing is whole weeks and no finer than the four-week stretch before it.
+        /// </summary>
+        public static Bands Of(Defines rules)
+        {
+            if (rules is null) return Shipped;
+            var weekly = Math.Max(0, rules.HistoryWeeklyDays);
+            var monthly = Math.Max(weekly, rules.HistoryMonthlyDays);
+            var kept = Math.Max(monthly, rules.HistoryKeptDays);
+            var span = Math.Max(28, rules.HistoryOldSampleDays / 7 * 7);
+            return new Bands(weekly, monthly, kept, span);
+        }
+
+        /// <summary>
+        /// The same rule without its weekly stretch: how a landless country's ledger is kept.
+        /// No stretch at all, not one of no days: ages are counted from the last turn of a year
+        /// (ThinAll), so this year's samples have ages below zero and would pass for weekly.
+        /// </summary>
+        public Bands Coarse() => this with { Weekly = int.MinValue };
+    }
     /// <summary>An upper bound on what one country keeps, for whatever reads a count.</summary>
     public const int MaximumSamplesPerNation = WeeklyDays / 7 + (MonthlyDays - WeeklyDays) / 28 + (KeptDays - MonthlyDays) / 91 + 4;
     private readonly Dictionary<int, List<NationHistorySample>> _samples = new();
@@ -71,6 +103,21 @@ public sealed class CampaignHistory
         _lastCapturedDay = -1;
     }
 
+    /// <summary>The day of a country's newest sample, or -1 when it has none.</summary>
+    public int LastDay(int nationId) =>
+        _samples.TryGetValue(nationId, out var values) && values.Count > 0 ? values[^1].Day : -1;
+
+    /// <summary>How many countries have a ledger, and how many samples there are in all (for the bench).</summary>
+    public (int Series, int Samples) Size()
+    {
+        var samples = 0;
+        foreach (var values in _samples.Values) samples += values.Count;
+        return (_samples.Count, samples);
+    }
+
+    /// <summary>A retired country's ledger goes with it (LongCampaign). True when there was one.</summary>
+    internal bool Forget(int nationId) => _samples.Remove(nationId);
+
     internal Dictionary<int, List<NationHistorySample>> Export()
     {
         var copy = new Dictionary<int, List<NationHistorySample>>(_samples.Count);
@@ -79,7 +126,7 @@ public sealed class CampaignHistory
         return copy;
     }
 
-    internal void Restore(Dictionary<int, List<NationHistorySample>> samples)
+    internal void Restore(Dictionary<int, List<NationHistorySample>> samples, Defines rules = null)
     {
         _samples.Clear();
         if (samples is not null)
@@ -99,7 +146,10 @@ public sealed class CampaignHistory
         // load, so the file it is saved back into is the smaller one. Against the same yearly
         // mark the campaign last thinned at, so a save made since loads exactly as it was.
         if (_lastCapturedDay >= 0)
-            foreach (var values in _samples.Values) Thin(values, _lastCapturedDay / 364 * 364);
+        {
+            var bands = Bands.Of(rules);
+            foreach (var values in _samples.Values) Thin(values, _lastCapturedDay / 364 * 364, bands);
+        }
     }
 
     private float[] _militaryPowerScratch = Array.Empty<float>();
@@ -138,17 +188,28 @@ public sealed class CampaignHistory
                 warSupport[war.DefenderId] = MathF.Min(warSupport[war.DefenderId], war.DefenderWarSupport);
         }
 
+        // A country without ground has no economy to chart: a movement's ledger is its cadres
+        // and its purse, and a point every four weeks draws the same line as one every week. In
+        // a save 107 years long the landless movements' weekly rows were 117,000 of 395,000.
+        var landlessEvery = Math.Max(7, campaign.Defines.HistoryLandlessSampleDays / 7 * 7);
+        var landlessDue = campaign.ElapsedDays % landlessEvery == 0;
         foreach (var nation in campaign.Nations)
         {
+            // A retired country (LongCampaign) has no ledger at all and is not given one.
+            if (campaign.IsRetired(nation)) continue;
             // A country that is no more has no week to record. Its history ends where it
             // did, which is what its chart should show - and sixty dead countries writing a
-            // row of zeros every week was a fifth of the table.
-            if (nation.Movement is null && campaign.ProvinceMap is not null && !campaign.HasOwnedLand(nation) &&
-                _samples.ContainsKey(nation.Id))
+            // row of zeros every week was a fifth of the table. A movement that has dissolved
+            // is the same: it was sampled every week for as long as the campaign ran.
+            var landless = campaign.ProvinceMap is not null && !campaign.HasOwnedLand(nation);
+            if (landless && (nation.Movement is null || nation.Movement.Dissolved) && _samples.ContainsKey(nation.Id))
                 continue;
+            if (landless && !force && !landlessDue && _samples.ContainsKey(nation.Id)) continue;
             if (!_samples.TryGetValue(nation.Id, out var values))
             {
-                values = new List<NationHistorySample>(MaximumSamplesPerNation);
+                // Room for a year, not for forty: a list grows as it is filled, and a movement
+                // born yesterday was handed 32 kB for a ledger it may never write a line of.
+                values = new List<NationHistorySample>(64);
                 _samples[nation.Id] = values;
             }
 
@@ -177,10 +238,14 @@ public sealed class CampaignHistory
                 Chart(PriceIndex(nation, Commodity.IndustrialMaterials)),
                 Chart(PriceIndex(nation, Commodity.Energy)),
                 Chart(PriceIndex(nation, Commodity.Arms))));
-
-            // Thinned once a year rather than every week: the cost is a pass over each list.
-            if (campaign.ElapsedDays % 364 == 0) Thin(values, campaign.ElapsedDays);
         }
+
+        // Thinned once a year rather than every week: the cost is a pass over each list. Every
+        // list, not only those that took a sample today: a country that had stopped being
+        // sampled was never thinned again and never aged out, so the dead kept the ledger of
+        // their last three years at one point a week for the rest of the campaign - 148,600 of
+        // 395,000 samples in a save 107 years long.
+        if (campaign.ElapsedDays % 364 == 0) ThinAll(campaign);
 
         _lastCapturedDay = campaign.ElapsedDays;
     }
@@ -207,30 +272,66 @@ public sealed class CampaignHistory
     /// a weekly cost. The predicate, the order and the surviving samples are exactly what they
     /// were; only the second list is gone.
     /// </summary>
-    internal static void Thin(List<NationHistorySample> values, int today)
+    internal static void Thin(List<NationHistorySample> values, int today, int weeklyDays = WeeklyDays) =>
+        Thin(values, today, Bands.Shipped with { Weekly = weeklyDays });
+
+    internal static void Thin(List<NationHistorySample> values, int today, Bands bands)
     {
         if (values.Count == 0) return;
+        var weeklyDays = bands.Weekly;
         var kept = 0;
         var lastBucket = int.MinValue;
         for (var read = 0; read < values.Count; read++)
         {
             var sample = values[read];
             var age = today - sample.Day;
-            if (age > KeptDays) continue;
-            if (age <= WeeklyDays)
+            if (age > bands.Kept) continue;
+            if (age <= weeklyDays)
             {
                 values[kept++] = sample;
                 lastBucket = int.MinValue;
                 continue;
             }
-            var span = age <= MonthlyDays ? 28 : 91;
-            // Quarters are numbered below zero so they never meet a four-week span's number.
-            var bucket = span == 28 ? sample.Day / 28 : -1 - sample.Day / 91;
+            // The old spans (quarters as shipped) are numbered below zero so they never meet a
+            // four-week span's number.
+            var bucket = age <= bands.Monthly ? sample.Day / 28 : -1 - sample.Day / bands.OldSpan;
             if (bucket == lastBucket) continue;
             lastBucket = bucket;
             values[kept++] = sample;
         }
+        // The last point of a ledger is never thinned away: a country that stopped being sampled
+        // forty years ago keeps the one row that says when its books closed. The chart of a dead
+        // country ends on it, and it is how long it has been gone (LongCampaign reads the day).
+        if (kept == 0) values[kept++] = values[^1];
+        // Nor when it shares a span with the point before it: a country that fell in the second
+        // week of a four-week span would otherwise have its chart end three weeks early once
+        // those weeks aged out of the weekly stretch. The ledger of a country still being
+        // sampled ends inside the weekly stretch, so this never adds a point to it.
+        else if (values[kept - 1].Day != values[^1].Day && today - values[^1].Day <= bands.Kept)
+            values[kept++] = values[^1];
         if (kept < values.Count) values.RemoveRange(kept, values.Count - kept);
+    }
+
+    /// <summary>
+    /// The yearly thinning of every ledger there is. A landless country's is kept one step
+    /// coarser throughout (no weekly stretch: it is sampled every four weeks, see Capture). A
+    /// ledger whose last point has aged out stays as an empty list: that is how Capture knows
+    /// the country has been seen, and does not start a dead one a new ledger of zeros.
+    /// </summary>
+    internal void ThinAll(Campaign campaign)
+    {
+        // Ages are counted from the last turn of a year, whenever this is asked - the same mark a
+        // load thins against (Restore). So the running game, a save of it and whoever loads that
+        // save all keep the same points, however often the long-campaign sweep comes by.
+        var today = campaign.ElapsedDays / 364 * 364;
+        var coarse = campaign.Defines.HistoryLandlessSampleDays > 7 && campaign.ProvinceMap is not null;
+        var bands = Bands.Of(campaign.Defines);
+        var landlessBands = bands.Coarse();
+        foreach (var (id, values) in _samples)
+        {
+            var landless = coarse && campaign.NationById(id) is { } nation && !campaign.HasOwnedLand(nation);
+            Thin(values, today, landless ? landlessBands : bands);
+        }
     }
 
     private static float PriceIndex(Nation nation, Commodity commodity)
