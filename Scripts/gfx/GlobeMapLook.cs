@@ -62,7 +62,7 @@ public sealed partial class GlobePresentation
 
     /// <summary>
     /// Whether the frontier field is worth building: everywhere but Compatibility under the atlas
-    /// look, where the shader cannot read it and the 16-megabyte picture would be built and
+    /// look, where the shader cannot read it and the 22-megabyte picture (with mipmaps) would be built and
     /// uploaded for nothing.
     /// </summary>
     private bool FrontierFieldWanted() => _packedLookups is null || !MapLook.Atlas();

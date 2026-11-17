@@ -3068,9 +3068,55 @@ void fragment() {
     float shore_band = max(fwidth(political.a) * 2.2, 0.022);
     float shore_edge = smoothstep(shore_band, 0.0, abs(political.a - 0.5));
     float reef_halo = smoothstep(shore_band * 3.8, 0.0, abs(political.a - 0.5)) * (1.0 - political.a);
-    water = mix(water, ocean_shelf_color * 1.38 + vec3(0.03, 0.09, 0.11), reef_halo * 0.42);
-    water += vec3(0.84, 0.91, 0.95) * shore_edge * 0.50 * wave_fade;
+    vec3 reef_color = ocean_shelf_color * 1.38 + vec3(0.03, 0.09, 0.11);
+    vec3 surf_color = vec3(0.84, 0.91, 0.95);
+    if (atlas_look > 0.5) {
+        reef_color = look_sea_coast;
+        surf_color = look_foam;
+        // With the frontier field the atlas draws its own surf below, off the true distance to
+        // the shore. The old one-pixel surf stays only where there is no field: Compatibility.
+        shore_edge *= 1.0 - step(0.5, frontier_ready);
+    }
+    water = mix(water, reef_color, reef_halo * 0.42);
+    water += surf_color * shore_edge * 0.50 * wave_fade;
     water = mix(water, water * 0.58, shore_edge * 0.38 * (1.0 - political.a));
+    if (atlas_look > 0.5) {
+        float sea_side = 1.0 - political.a;
+        if (frontier_ready > 0.5) {
+            // On the sea the frontier field is the distance to the shore in cells, so surf can be
+            // drawn where surf is: two thin lines about one and two cells out, broken by noise
+            // and breathing slowly. Only while a cell is at least about 0.7 of a pixel - further
+            // out the lines would be finer than the screen and only shimmer.
+            float shore_cells = frontier_cells_all;
+            float foam_noise = atlas_noise(UV, id_size.x * 0.15);
+            float breathe = 0.20 * sin(TIME * 0.6 + foam_noise * 6.0);
+            float foam_line = 1.0 - smoothstep(0.0, 0.30 + id_aa, abs(shore_cells - (0.9 + breathe)));
+            float foam_second = (1.0 - smoothstep(0.0, 0.30 + id_aa, abs(shore_cells - (2.1 + breathe)))) * 0.5;
+            // A soft threshold rather than a step: the break in the surf has an edge a fraction of
+            // a noise cell wide instead of a hard one that would crawl as the camera moves.
+            float foam = max(foam_line, foam_second) * smoothstep(0.30, 0.40, foam_noise)
+                * clamp(1.6 - id_span, 0.0, 1.0) * sea_side;
+            water = mix(water, look_foam, foam * look_foam_strength);
+            // Engraved waterlines, as on an old chart: pale lines at two, three and a half and
+            // five cells off the coast, at the middle zoom only and never on the paper map.
+            float line_width = 0.25 + id_aa;
+            float waterlines = (1.0 - smoothstep(0.0, line_width, abs(shore_cells - 2.0))) * 0.6
+                + (1.0 - smoothstep(0.0, line_width, abs(shore_cells - 3.5))) * 0.4
+                + (1.0 - smoothstep(0.0, line_width, abs(shore_cells - 5.0))) * 0.25;
+            waterlines *= look_waterline * clamp(1.2 - id_span, 0.0, 1.0) * (1.0 - paper_mix) * sea_side;
+            water = mix(water, look_foam, waterlines);
+        }
+        // The lamp's broad highlight over open water, in the albedo rather than the specular so it
+        // looks the same on every renderer. On the globe it is the reflection of a fixed lamp up
+        // and to the left of the camera; the flat map is seen straight on by an orthographic
+        // camera, which has no reflection to give, so there it is a soft gradient from the top left.
+        float sheen;
+        if (PROJECTION_MATRIX[3][3] > 0.5)
+            sheen = pow(1.0 - smoothstep(0.0, 0.95, distance(SCREEN_UV, vec2(0.28, 0.22))), 2.0);
+        else
+            sheen = pow(max(dot(reflect(-VIEW, NORMAL), normalize(vec3(-0.45, 0.55, 0.70))), 0.0), 6.0);
+        water += look_lamp * sheen * look_sea_sheen * (1.0 - paper_mix * 0.5) * sea_side;
+    }
     vec2 texel = 1.0 / vec2(textureSize(province_ids, 0));
     float region = map_id(region_ids, map_uv);
     vec2 destruction_uv = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
