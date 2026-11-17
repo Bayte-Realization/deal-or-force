@@ -77,6 +77,14 @@ internal static class PocketReport
         public float YesterdaySupport;
         public readonly HashSet<int> EndedWars = new();
         public readonly List<string> WarEnds = new();
+        // Why a side gives up: its war support every sixty days of its life, with the home-front
+        // mood its wars were granting it then (WarWeariness.HomeFrontMood: B going badly, C
+        // collapsing), the days under each, and the worst its wars went. A side that signs at
+        // war support 0.17 with eleven formations in the field lost its war at home, and this
+        // says when and of what.
+        public readonly List<string> Trail = new();
+        public int BadlyDays, CollapsingDays;
+        public float WorstOccupied, WorstScore;
     }
 
     private static readonly int[] Marks = { 1, 30, 60, 180, 365, 730 };
@@ -241,6 +249,22 @@ internal static class PocketReport
                                          $"had {side.YesterdayFormations}f/{side.YesterdayHeld}p, has {count}f/{ground}p, in hiding {Partisans.Hidden(nation):N0}, " +
                                          $"war support {nation.WarSupport:0.00} (yesterday {side.YesterdaySupport:0.00})");
                     }
+                    var mood = "";
+                    foreach (var war in Warfare.LiveWars(c))
+                    {
+                        if (war.Ended || !war.Involves(nation.Id)) continue;
+                        var attacking = war.IsAttacking(nation.Id);
+                        var score = attacking ? war.WarScore : -war.WarScore;
+                        var occupied = attacking ? war.AttackerOccupiedValue : war.DefenderOccupiedValue;
+                        side.WorstOccupied = MathF.Max(side.WorstOccupied, occupied);
+                        side.WorstScore = MathF.Min(side.WorstScore, score);
+                        var felt = nation.Movement is null ? WarWeariness.MoodOf(c, war, nation) : null;
+                        if (felt == "front_collapsing") mood = "C";
+                        else if (felt == "war_going_badly" && mood != "C") mood = "B";
+                    }
+                    if (mood == "C") side.CollapsingDays++;
+                    else if (mood == "B") side.BadlyDays++;
+                    if (age > 0 && age % 60 == 0 && side.FallenDay < 0) side.Trail.Add($"{age}:{nation.WarSupport:0.00}{mood}");
                     side.YesterdaySupport = nation.WarSupport;
                     side.YesterdayFormations = count;
                     side.YesterdayHeld = ground;
@@ -265,9 +289,13 @@ internal static class PocketReport
         // and the pockets nobody has dealt with (a number that says the AI must learn to reduce them).
         var old = episodes.Where(e => e.End < 0).ToList();
         Console.WriteLine($"PARTISANS living off the land: {forageDays:N0} formation-days by {foragers.Count} formations; " +
+                          $"slipped away past the enemy {Partisans.Tally.GetValueOrDefault("slipped_away")}, " +
                           $"went to ground {Partisans.Tally.GetValueOrDefault("went_to_ground")}, came back {Partisans.Tally.GetValueOrDefault("came_back")} " +
                           $"({Partisans.Tally.GetValueOrDefault("came_back_on_enemy_ground")} of them on ground the enemy held); " +
-                          $"in hiding at the end {c.Nations.Sum(n => (double)Partisans.Hidden(n)):N0} men of {c.Nations.Count(n => n.FightersGoneToGround.Count > 0)} sides");
+                          $"in hiding at the end {c.Nations.Sum(n => (double)Partisans.Hidden(n)):N0} men of {c.Nations.Count(n => n.FightersGoneToGround.Count > 0)} sides; " +
+                          "why there was no way out for those who went to ground: " +
+                          string.Join(", ", Partisans.Tally.Where(p => p.Key.StartsWith("to_ground:", StringComparison.Ordinal))
+                              .OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key[10..]} {p.Value}")));
         Console.WriteLine($"POCKETS still closed at the end: {old.Count}, older than 180 days {old.Count(e => end - e.Start > 180)}, " +
                           $"older than a year {old.Count(e => end - e.Start > 365)}; hungry among them {old.Count(e => e.HungryDays > 0)}");
         // Whose they are and where: a pocket of a country at war is one somebody should be
@@ -364,6 +392,10 @@ internal static class PocketReport
         return $"{nation.Tag,-5} born {side.BornDay,4}{(side.BornFighting ? " at war" : "")} parent={parent?.Tag ?? "-",-4} {marks} {now} {fate} (age {end - side.BornDay}) {nation.Name}" +
                (causes.Length > 0 ? $" [{causes}]" : "") +
                (Partisans.Hidden(nation) >= 1f ? $" in hiding {Partisans.Hidden(nation):N0}" : "") +
+               (side.Trail.Count > 0 || side.BadlyDays + side.CollapsingDays > 0
+                   ? $"\n         war support {string.Join(" ", side.Trail)}; days going badly {side.BadlyDays}, collapsing {side.CollapsingDays}; " +
+                     $"worst score {side.WorstScore:0}, worst occupied {side.WorstOccupied:0.00}"
+                   : "") +
                string.Concat(side.WarEnds.Select(line => "\n         " + line));
     }
 

@@ -56,15 +56,42 @@
   // The share of that in a province the enemy controls: a garrison in the town, a curfew.
   "PartisanOccupiedGroundShare": 0.5,
 
-  // --- go to ground and come back (Partisans.TryGoToGround, Partisans.TickStages) ---
-  // A rising's formation beaten with nowhere to retreat, among its own people, scatters into
-  // the villages instead of surrendering whole.
+  // --- the home front of the war of the weak (WarWeariness.MoodOf) ---
+  // A rising, faction or breakaway that still has the formations it fights on with
+  // (FactionFightOnFormations, in the field or in hiding) is not told "the front is collapsing"
+  // because the strong hold its towns: that is its war on the first day. It loses its war at home
+  // when its fighters are gone. Read as a state's, HTS felt the front collapse from its second
+  // month and signed at war support 0.17 with eleven formations in the field; the SDF at 0.04
+  // with nineteen (SimBench 730 --pockets, seed 4242, 17 November 2026). The long war still weighs.
+  "RisingHomeFrontByArms": true,
+  // Nor does it fall the week the strong take its last town: a side of the war of the weak that
+  // owns no region and still fights on (formations and will, as FactionFightOnFormations and
+  // FactionFightOnSupport ask of a side holding nothing) keeps its war and its army, and falls the
+  // week either is gone (Factions.FightsOnWithoutGround). It does not sign a peace that leaves it
+  // nothing - the line drawn into a border that hands its towns to the government, a treaty
+  // taking its last province - and coming out of a peace with ground and formations it is a small
+  // statelet, not a rump folded back in. Without it HTS capitulated with ten formations in the
+  // field at war support 0.95 when Idlib was taken; Myanmar's armies signed their last provinces
+  // away on day 546 and fell with them; the Arakan Army, kept two regions by a deadlock, was
+  // reabsorbed whole the next day (SimBench 730 --pockets, both seeds, 17 November 2026).
+  "RisingsFightOnWithoutGround": true,
+
+  // --- slip away, go to ground and come back (Partisans.SlipAwayProvince, TryGoToGround, TickStages) ---
+  // A rising's formation broken among its own people with no ground of its side behind it
+  // slips into a neighbouring province where no enemy stands, whoever holds the town - its own
+  // people's first, where it is fed; among strangers it is an ordinary pocket - and stays on the
+  // map. Without it the scatter below came at the very moment and place of the old surrender,
+  // and the formation still vanished in the battle where it rose (136 of them in five years of
+  // seed 20260830, reviewed 17 November).
+  "GuerrillaSlipAwayEnabled": true,
+  // One with every way out watched scatters into the villages instead of surrendering whole.
   "GuerrillaGoToGroundEnabled": true,
   // The share of its men who get away. The other four in ten are the price of the lost battle:
   // dead (SurrenderKilledShare) and prisoners. One detachment comes back about twice.
   "GuerrillaGoToGroundShare": 0.6,
   // Each week, the chance a region's hidden fighters field a detachment: about a month between
-  // going to ground and coming back.
+  // going to ground and coming back. Whatever the side's war support: they used to wait for it
+  // to be over the line at which a faction gives up, so they never came when they were needed.
   "GuerrillaReformWeeklyChance": 0.25,
   // The least they field, as a share of a militia formation (common/militia, 9000 men).
   "GuerrillaReformMinShare": 0.5,

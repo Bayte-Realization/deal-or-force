@@ -52,7 +52,10 @@ static class PocketRuleTests
         RisingOnItsOwnLandIsNotCutOff();
         LandFeedsOnlySoMany();
         MilitiaRefillsFromItsRegion();
+        BrokenAmongItsOwnSlipsAway();
         BeatenWithNoRetreatGoesToGround();
+        TheWeakLoseTheirWarInTheField();
+        TheWeakFightOnWithoutGround();
         UndergroundMeltsAway();
         HiddenFightersKeepTheWarAlive();
         SaveLoadAndOldSaves();
@@ -516,6 +519,19 @@ static class PocketRuleTests
         Check(!Partisans.HeldWhenTheWarBegan(held, held.Nations[2], 3) &&
               Partisans.Support(held, held.Nations[2], 3) < held.Defines.PartisanSupportFloor,
             "a province it took in the war is not: there it is a stranger with a rifle");
+        // A second war, against the bystander, knows nothing of that capture: the record is the
+        // first war's alone. The town is still taken ground, read through either war.
+        var second = new StrategicWar { Id = WarId + 1, AttackerId = 2, DefenderId = 3, StartedDay = 0, LastFrontDay = 0 };
+        held.Wars.Add(second); held.MarkWarsChanged();
+        Check(!Partisans.HeldWhenTheWarBegan(held, held.Nations[2], 3) &&
+              Partisans.Support(held, held.Nations[2], 3) < held.Defines.PartisanSupportFloor,
+            "fighting two wars, ground taken in one is not its own through the other, which never recorded it");
+        Check(Partisans.HeldWhenTheWarBegan(held, held.Nations[2], 4), "and ground it held before both still is");
+        var shadow = Unit(held, 2, 3);
+        Day(held, 3);
+        Check(shadow.CutOff && !shadow.LivingOffLand, "a formation in that conquered town is cut off, not fed as if among its own");
+        held.Armies.Remove(shadow);
+        second.Ended = true;
         heldWar.Ended = true; held.MarkWarsChanged();
         Check(!Partisans.HeldWhenTheWarBegan(held, held.Nations[2], 4), "and with no war on, the question is not asked");
 
@@ -558,13 +574,163 @@ static class PocketRuleTests
         var away = MilitiaCore.FoundAt(c, c.Nations[2], c.States.First(s => s.MapIndex == 1005), 5, 9000, 0.45f);
         Check(home is not null && away is not null && home.TemplateId == MilitiaCore.TemplateId && home.Personnel == 9000,
             "a militia formation can be stood up in a named province");
-        home.Personnel = away.Personnel = 5000;
+        // Beaten: 4,000 men off the roll and off its strength, 1,000 of them wounded and coming back.
+        foreach (var militia in new[] { home, away })
+        {
+            militia.Personnel = 5000;
+            militia.Strength = 5000f / militia.MaxPersonnel;
+            militia.Recovering = 1000f;
+        }
         SetDay(c, 1);
         MilitiaCore.Tick(c);
         var share = (int)(home.MaxPersonnel * c.Defines.MilitiaVolunteerSharePerDay);
-        Console.WriteLine($"  a drained militia after a day: on its own ground {home.Personnel}, on the enemy's {away.Personnel}");
+        Console.WriteLine($"  a drained militia after a day: on its own ground {home.Personnel} men at strength {home.Strength:0.000}, " +
+                          $"{home.Recovering:N0} wounded; on the enemy's {away.Personnel}");
         Check(home.Personnel == 5000 + share, "a militia on ground its country holds refills from its region (it never did: the flag was compared with a list position)");
-        Check(away.Personnel == 5000, "one standing on the enemy's ground does not");
+        Check(MathF.Abs(home.Strength - (5000f + share) / home.MaxPersonnel) < 0.0001f,
+            "a volunteer is fighting strength as well as a name on the roll: strength rises with the roll");
+        Check(home.Recovering == 1000f, "the volunteers are new men: the wounded are still the wounded, coming back by their own road");
+        Check(away.Personnel == 5000 && away.Strength == 5000f / away.MaxPersonnel, "one standing on the enemy's ground does not");
+        // Full but for its wounded: there is no place for a volunteer that a wounded man is coming back to.
+        home.Personnel = 8000; home.Strength = 8000f / home.MaxPersonnel; home.Recovering = 1000f;
+        SetDay(c, 2);
+        MilitiaCore.Tick(c);
+        Check(home.Personnel == 8000 && home.Strength == 8000f / home.MaxPersonnel,
+            "a militia whose only gap is its wounded takes no volunteers: the roll never outgrows the establishment");
+    }
+
+    /// <summary>
+    /// "Partisans die right where they rose." A rising's formation broken in its own province,
+    /// with the enemy's flag over every neighbour, is not taken off the map when one neighbour
+    /// is its own people's valley and no enemy stands in it: it slips there and lives.
+    /// </summary>
+    static void BrokenAmongItsOwnSlipsAway()
+    {
+        var (c, fighters, war) = RisingWorld();
+        var rising = c.Nations[2];
+        // Region 5, between its two, is its people's too: the besieger holds the town, nobody
+        // stands in it.
+        c.Homelands[rising.Id] = new List<int> { 1004, 1005, 1006 };
+        Day(c, 0);
+        var assault = Unit(c, 0, 3, 3f);
+        Battle(c, assault, fighters);
+        fighters.Organisation = .001f;
+        var slipped = Partisans.Tally.GetValueOrDefault("slipped_away");
+        var gone = Partisans.Tally.GetValueOrDefault("went_to_ground");
+        var men = fighters.Personnel;
+        string said = null;
+        Attrition.Witness = (_, army, reason, _) => { if (ReferenceEquals(army, fighters)) said = reason; };
+        var day = 1;
+        try
+        {
+            for (; day < 6 && fighters.ProvinceId == 4 && c.Armies.Contains(fighters); day++) { SetDay(c, day); Warfare.Tick(c); }
+        }
+        finally { Attrition.Witness = null; }
+        Console.WriteLine($"  broken in its own province with the enemy's flag on both sides: in province {fighters.ProvinceId} on day {day - 1}, " +
+                          $"{fighters.Personnel:N0} of {men:N0} men, morale {fighters.Organisation:0.000}; \"{said ?? "still on the map"}\"");
+        Check(c.Armies.Contains(fighters) && said is null, "a rising's formation broken among its own people is not taken off the map");
+        Check(fighters.ProvinceId == 5 && Partisans.Tally.GetValueOrDefault("slipped_away") == slipped + 1,
+            "it slipped past the enemy into the neighbouring valley of its people, where nobody was standing");
+        Check(Partisans.Tally.GetValueOrDefault("went_to_ground") == gone && rising.FightersGoneToGround.Count == 0 &&
+              war.DefenderCaptured < men * 0.05f,
+            "nobody went to ground and nobody walked into captivity");
+        Check(c.ProvinceController[4] == Besieger && c.ProvinceController[5] == Besieger,
+            "the battle is lost and the ground is the victor's; the valley it slipped into is not taken by slipping into it");
+        Check(fighters.ReadyDay > c.ElapsedDays, "it arrives as any beaten formation does, needing rest");
+        for (var rest = day; rest < day + 4; rest++) { SetDay(c, rest); LogisticsSystem.Tick(c); }
+        Check(fighters.LivingOffLand && !fighters.CutOff && fighters.SupplySourceStateMapIndex == 1005,
+            "under the enemy's flag among its own people it is not a pocket: the valley feeds it");
+
+        // The enemy follows it there and stands in every way out: now there is nowhere to slip
+        // to, and it goes to ground. Province 6 is held by an enemy formation as well.
+        Unit(c, 0, 6);
+        assault.ProvinceId = 4; assault.StateMapIndex = 1004;
+        var again = Unit(c, 0, 4, 3f);
+        c.Battles.Clear();
+        fighters.BattleId = -1; assault.BattleId = -1;
+        Battle(c, again, fighters);
+        fighters.Organisation = .001f;
+        Attrition.Witness = (_, army, reason, _) => { if (ReferenceEquals(army, fighters)) said = reason; };
+        try { SetDay(c, day + 5); Warfare.Tick(c); }
+        finally { Attrition.Witness = null; }
+        Check(!c.Armies.Contains(fighters) && said == Partisans.WentToGround,
+            "with an enemy formation in every province it could slip to, it scatters into the villages");
+
+        // A state's formation has no such people and no such paths.
+        var (plain, regular, plainWar) = RisingWorld(rebel: false);
+        plain.Homelands[2] = new List<int> { 1004, 1005, 1006 };
+        Day(plain, 0);
+        Battle(plain, Unit(plain, 0, 3, 3f), regular);
+        regular.Organisation = .001f;
+        SetDay(plain, 1); Warfare.Tick(plain);
+        Check(!plain.Armies.Contains(regular) && plainWar.DefenderCaptured > 10_000f,
+            "a state's formation broken in the same place surrenders, as it always did");
+        // Nor with the rule switched off.
+        var (off, same, _) = RisingWorld();
+        off.Homelands[2] = new List<int> { 1004, 1005, 1006 };
+        off.Defines.GuerrillaSlipAwayEnabled = false;
+        Day(off, 0);
+        Battle(off, Unit(off, 0, 3, 3f), same);
+        same.Organisation = .001f;
+        SetDay(off, 1); Warfare.Tick(off);
+        Check(!off.Armies.Contains(same) && off.Nations[2].FightersGoneToGround.Count > 0,
+            "with slipping away switched off it goes to ground where it was beaten, as in the first version");
+
+        // The only way out leads among strangers (region 5 is not its people's): it takes it
+        // all the same, and there it is an ordinary pocket on what it carries - weakening, and
+        // not dying of it - instead of vanishing where it was beaten.
+        var (far, wanderer, _) = RisingWorld();
+        Day(far, 0);
+        Battle(far, Unit(far, 0, 3, 3f), wanderer);
+        wanderer.Organisation = .001f;
+        for (var at = 1; at < 6 && wanderer.ProvinceId == 4 && far.Armies.Contains(wanderer); at++) { SetDay(far, at); Warfare.Tick(far); }
+        Console.WriteLine($"  broken with only strangers' ground unwatched: on the map {far.Armies.Contains(wanderer)}, in province {wanderer.ProvinceId}, " +
+                          $"hidden {Partisans.Hidden(far.Nations[2]):N0}, morale {wanderer.Organisation:0.000}");
+        Check(far.Armies.Contains(wanderer) && wanderer.ProvinceId is 3 or 5 && far.Nations[2].FightersGoneToGround.Count == 0,
+            "with only strangers' ground unwatched, it slips there rather than vanish - even behind the assault, emptied by it");
+        for (var at = 6; at < 10; at++) { SetDay(far, at); LogisticsSystem.Tick(far); }
+        Check(wanderer.CutOff && !wanderer.LivingOffLand && wanderer.PocketStores >= 0f,
+            "among strangers nobody feeds it: it is a pocket, on its stores");
+    }
+
+    /// <summary>
+    /// "Small pockets in civil wars should stand up to a great power." A rising still under
+    /// arms loses its war at home when its fighters are gone, not when the strong hold its
+    /// towns: its home front reads its formations, a state's reads the score and its ground.
+    /// </summary>
+    static void TheWeakLoseTheirWarInTheField()
+    {
+        var (c, fighters, war) = RisingWorld();
+        var rising = c.Nations[2];
+        var besieger = c.Nations[0];
+        // Both of its provinces taken: a state in that position is collapsing.
+        c.SetProvinceController(4, Besieger); c.SetProvinceController(6, Besieger);
+        war.DefenderOccupiedValue = 1f; war.WarScore = 90f;
+        Check(WarWeariness.HomeFrontMood(c.Defines, -90f, 1f) == "front_collapsing",
+            "a state with all its ground under the enemy and the score against it reads its front as collapsing");
+        Unit(c, 2, 4);
+        Check(Factions.HoldsOnByArms(c, rising) && WarWeariness.MoodOf(c, war, rising) is null,
+            "a rising with the formations it fights on with feels no collapse for the towns it lost");
+        c.Armies.RemoveAll(a => a.NationId == rising.Id && !ReferenceEquals(a, fighters));
+        Check(!Factions.HoldsOnByArms(c, rising) && WarWeariness.MoodOf(c, war, rising) == "front_collapsing",
+            "down to its last formation it is read as anybody is");
+        rising.FightersGoneToGround[1004] = MilitiaCore.Weights.Formation;
+        Check(WarWeariness.MoodOf(c, war, rising) is null, "a detachment in hiding beside it counts as one under arms");
+        rising.FightersGoneToGround.Clear();
+        Unit(c, 2, 4);
+        c.Defines.RisingHomeFrontByArms = false;
+        Check(WarWeariness.MoodOf(c, war, rising) == "front_collapsing", "with the rule off it is read as a state");
+        c.Defines.RisingHomeFrontByArms = true;
+        // Not a state's army: the besieger, attacking and losing, is read by its score.
+        war.WarScore = -90f;
+        Unit(c, 0, 1); Unit(c, 0, 1);
+        Check(WarWeariness.MoodOf(c, war, besieger) == "front_collapsing", "a state under arms is still read by its score and its ground");
+        // Weekly, through the pass that grants it.
+        war.WarScore = 90f;
+        SetDay(c, c.Defines.EconomyTickDays);
+        WarWeariness.Tick(c);
+        Check(!rising.Modifiers.Any(m => m.Id is "front_collapsing" or "war_going_badly"),
+            "and the weekly pass grants the rising under arms no collapsing front");
     }
 
     static void BeatenWithNoRetreatGoesToGround()
@@ -572,6 +738,8 @@ static class PocketRuleTests
         var (c, fighters, war) = RisingWorld();
         var rising = c.Nations[2];
         Day(c, 0);
+        // Every way out watched: the besieger stands in province 5 as well as attacking from 3.
+        var watch = Unit(c, 0, 5);
         var assault = Unit(c, 0, 3, 3f);
         Battle(c, assault, fighters);
         fighters.Organisation = .001f;
@@ -631,6 +799,148 @@ static class PocketRuleTests
             "a state's formation in the same place surrenders whole");
     }
 
+    /// <summary>
+    /// "Small pockets in civil wars should stand up to a great power." A rising that has lost
+    /// the last region it owned, with formations in the field and the will to use them, has lost
+    /// its towns and not its war: it does not fall that week, its war is not ended for it, and
+    /// its army is not laid down with a state that is not there. It falls when the fighters go.
+    /// </summary>
+    static void TheWeakFightOnWithoutGround()
+    {
+        // The besieger owns everything: the rising's two regions have been taken off it.
+        var landless = new ushort[] { 0, Besieger, Besieger, Besieger, Besieger, Besieger, Besieger, Besieger, Besieger };
+        Campaign Landless(bool rule)
+        {
+            var c = World(landless);
+            var rising = c.Nations[2];
+            rising.SecededFromId = 0; rising.RevoltParentId = 0;
+            rising.CapitalProvinceId = 4; rising.CapitalStateMapIndex = 1004;
+            c.Homelands[rising.Id] = new List<int> { 1004, 1006 };
+            c.Defines.RisingsFightOnWithoutGround = rule;
+            War(c, 0, 2);
+            Unit(c, 2, 4); Unit(c, 2, 6); Unit(c, 2, 6);
+            return c;
+        }
+        void Week(Campaign c, int day)
+        {
+            SetDay(c, day);
+            CapitalCore.Tick(c);
+            MovementFall.Decide(c);
+            MovementFall.EndLostWars(c);
+        }
+
+        var held = Landless(rule: true);
+        var side = held.Nations[2];
+        var war = held.Wars[0];
+        Check(held.StatesOf(side).Length == 0 && Factions.FightsOnWithoutGround(held, side),
+            "a rising with no region, three formations and its people for the war fights on without ground");
+        Week(held, 7);
+        Check(!held.Fallen.Contains(side.Id) && !war.Ended && held.Armies.Count(a => a.NationId == side.Id) == 3,
+            "it has not fallen, its war goes on and its formations are still in the field");
+
+        // Nor is it signed out of existence: the line as the border leaves it nothing, and it
+        // will not take that peace. A white peace gives ground back; that one it may weigh.
+        SetDay(held, 600);
+        Check(Factions.KeepsNothingByTheLine(held, war, side) &&
+              PeaceNegotiation.Acceptance(held, war, 0, PeaceTerms.StatusQuo) == 0f &&
+              PeaceNegotiation.BlockReason(held, war, 0, PeaceTerms.StatusQuo).Length > 0,
+            "keeping nothing by the line, it refuses the peace of the line, however long the war");
+        Check(PeaceNegotiation.Acceptance(held, war, 0, PeaceTerms.WhitePeace) > 0f,
+            "a white peace is still a peace it weighs");
+        SetDay(held, held.Defines.PeaceForcedEndDays + 1);
+        Check(PeaceNegotiation.Acceptance(held, war, 0, PeaceTerms.StatusQuo) > 0f,
+            "past the five years at which the world ends a war nobody plays, the line is drawn all the same");
+        SetDay(held, 600);
+
+        // Owning ground it no longer holds, it does not sign the last of it away either. The
+        // rising owns provinces 4 and 6; a treaty taking both is refused, one taking 4 is not -
+        // not for that reason - and with its army gone it is no longer refused.
+        var (owned, _, ownedWar) = RisingWorld();
+        Unit(owned, 2, 6); Unit(owned, 2, 6);
+        const string lastGround = "They will not sign away the last of their ground while they still have an army in the field";
+        var unconditional = false;
+        string Asked(params int[] provinces)
+        {
+            var demand = new PeaceDemand { WarId = ownedWar.Id, ProposerId = 0, Unconditional = unconditional };
+            foreach (var province in provinces) demand.Provinces.Add(province);
+            return PeaceConference.BlockReason(owned, ownedWar, demand);
+        }
+        Check(Asked(4, 6) == lastGround, "a rising in the field will not sign away the last of the ground it owns");
+        Check(Asked(4) != lastGround, "a treaty that leaves it some of its ground is weighed as any other");
+        unconditional = true;
+        Check(Asked(4, 6) == lastGround, "nor as the unconditional settlement of a war decided by the ground the other side holds");
+        unconditional = false;
+        owned.Armies.RemoveAll(a => a.NationId == 2 && a.ProvinceId == 6);
+        Check(Asked(4, 6) != lastGround, "with its last formation alone in the field, that refusal is gone");
+
+        // Holding a province is not keeping one. A rising that owns and holds its two provinces
+        // keeps them by the line; once the besieger holds both, the line would give them to it.
+        var (line, _, lineWar) = RisingWorld();
+        Unit(line, 2, 6); Unit(line, 2, 6);
+        Check(!Factions.KeepsNothingByTheLine(line, lineWar, line.Nations[2]), "owning and holding its own ground, the line leaves it that");
+        foreach (var province in new[] { 4, 6 })
+        {
+            lineWar.OriginalController[province] = Rising;
+            line.SetProvinceController(province, Besieger);
+        }
+        Check(PeaceNegotiation.StatusQuoLeavesNothing(line, lineWar, line.Nations[2]) &&
+              Factions.KeepsNothingByTheLine(line, lineWar, line.Nations[2]),
+            "with both its provinces held by the besieger, the line would leave it nothing, and it refuses it");
+        // In a coalition the leader signs for all: a leader with nothing at stake does not sign
+        // the line that ends its member.
+        lineWar.DefenderId = 1;
+        lineWar.DefenderAllies.Add(2);
+        line.MarkWarsChanged();
+        Check(Factions.SideKeepsNothingByTheLine(line, lineWar, attackers: false) &&
+              PeaceNegotiation.Acceptance(line, lineWar, 0, PeaceTerms.StatusQuo) == 0f,
+            "a coalition will not sign the line that leaves one of its fighting members nothing");
+        // Out of a peace it lost, with its two regions and three formations, it is a statelet,
+        // not a rump to fold back into the state it fought.
+        var (kept, _, keptWar) = RisingWorld();
+        Unit(kept, 2, 6); Unit(kept, 2, 6);
+        keptWar.Ended = true; keptWar.WinnerId = 0;
+        Factions.SettleCivilWarSurvivors(kept, keptWar);
+        Check(kept.HasOwnedLand(kept.Nations[2]) && kept.Nations[2].Population > 0 && kept.StatesOf(kept.Nations[2]).Length == 2,
+            "a rising that came out of a lost war with its ground and its formations keeps both");
+        var (folded, _, foldedWar) = RisingWorld();
+        Unit(folded, 2, 6); Unit(folded, 2, 6);
+        folded.Defines.RisingsFightOnWithoutGround = false;
+        foldedWar.Ended = true; foldedWar.WinnerId = 0;
+        Factions.SettleCivilWarSurvivors(folded, foldedWar);
+        Check(!folded.HasOwnedLand(folded.Nations[2]) && folded.Nations[2].Population == 0,
+            "with the rule off, two regions are a rump and go back to the state, army or no army");
+
+        line.Defines.RisingsFightOnWithoutGround = false;
+        Check(!Factions.KeepsNothingByTheLine(line, lineWar, line.Nations[2]), "with the rule off it may sign that line, as before");
+
+        // Down to one formation: a side holding nothing needs two. That week it is over.
+        held.Armies.RemoveAll(a => a.NationId == side.Id && a.ProvinceId == 6);
+        Check(!Factions.FightsOnWithoutGround(held, side), "down to its last formation it no longer fights on without ground");
+        Week(held, 14);
+        Check(held.Fallen.Contains(side.Id) && war.Ended && held.Armies.All(a => a.NationId != side.Id),
+            "and that week it falls, its war ends and its last formation lays down its arms");
+
+        // Nor with nobody left believing in the war.
+        var tired = Landless(rule: true);
+        tired.Nations[2].WarSupport = tired.Defines.FactionFightOnSupport * 0.5f;
+        Week(tired, 7);
+        Check(tired.Fallen.Contains(2) && tired.Wars[0].Ended,
+            "with its people tired of the war it falls with all its formations standing");
+
+        // A state's army is not this: the old rule for a country overrun.
+        var state = Landless(rule: true);
+        state.Nations[2].SecededFromId = -1; state.Nations[2].RevoltParentId = -1;
+        Week(state, 7);
+        Check(state.Fallen.Contains(2) && state.Wars[0].Ended && state.Armies.All(a => a.NationId != 2),
+            "a state that has lost all its ground falls with its army, as it always did");
+
+        // And with the rule switched off, the rising goes the same way.
+        var off = Landless(rule: false);
+        Week(off, 7);
+        Check(off.Fallen.Contains(2) && off.Wars[0].Ended && off.Armies.All(a => a.NationId != 2),
+            "with the rule off, the last town lost is the war lost");
+    }
+
     static void UndergroundMeltsAway()
     {
         var (c, fighters, _) = RisingWorld();
@@ -679,15 +989,51 @@ static class PocketRuleTests
         rising.WarSupport = 0.3f;
         Check(!Factions.FightsOn(c, rising, 1f), "holding nothing, with nobody hidden, a lukewarm war is given up");
         var detachment = MilitiaCore.Weights.Formation * c.Defines.GuerrillaReformMinShare;
-        rising.FightersGoneToGround[1004] = 2.2f * detachment;
+        // What fields n formations out of one region: a full militia formation at a time, and
+        // the last one when it is at least a detachment.
+        float Worth(int n) => (n - 1) * MilitiaCore.Weights.Formation + detachment;
+        rising.FightersGoneToGround[1004] = Worth(2);
+        Check(Partisans.DetachmentsInHiding(c, rising) == 2, "the hidden are counted as the formations they would field");
         Check(!Factions.FightsOn(c, rising, 1f), "holding nothing and down to two detachments, a lukewarm war is still given up");
         Unit(c, 2, 6); Unit(c, 2, 6);
         Check(Factions.FightsOn(c, rising, 1f), "holding nothing, with two formations in the field and two hidden, it is not");
         c.Armies.RemoveAll(a => a.NationId == rising.Id);
-        rising.FightersGoneToGround[1004] = 4.2f * detachment;
+        rising.FightersGoneToGround[1004] = Worth(4);
         Check(Factions.FightsOn(c, rising, 1f), "nor with four detachments' worth hidden and nobody in the field");
         rising.WarSupport = 0.15f;
         Check(!Factions.FightsOn(c, rising, 1f), "and with nobody left believing in the war, it is given up all the same");
+
+        // Hidden men do not walk between regions to make up a detachment. Three regions of 2,700
+        // each are 8,100 in hiding and not one formation that could ever take the field: the
+        // side is overrun, and the remnant pass may settle it.
+        rising.WarSupport = 0.6f;
+        rising.FightersGoneToGround.Clear();
+        rising.FightersGoneToGround[1004] = 2_700f;
+        rising.FightersGoneToGround[1005] = 2_700f;
+        rising.FightersGoneToGround[1006] = 2_700f;
+        Check(Partisans.Hidden(rising) > detachment && Partisans.DetachmentsInHiding(c, rising) == 0,
+            "scattered under a detachment in every region, the hidden add up to nobody who can take the field");
+        Check(AiStatecraft.SideOverrun(c, war, attackers: false) && !Factions.FightsOn(c, rising, 0.9f),
+            "so a side with nothing else is overrun, not kept alive by a phantom");
+        // Nor do men count in a region where their war is over: a region of the bystander's, at
+        // peace with the rising, has no ground for them to come out on.
+        c.SetProvinceController(7, 103);
+        rising.FightersGoneToGround.Clear();
+        rising.FightersGoneToGround[1007] = Worth(2);
+        Check(Partisans.DetachmentsInHiding(c, rising) == 0 && AiStatecraft.SideOverrun(c, war, attackers: false),
+            "hidden in a region held by a country it is not at war with, they are nobody's detachments");
+        c.SetProvinceController(7, Besieger);
+        Check(Partisans.DetachmentsInHiding(c, rising) == 2, "in the same region under the enemy's flag they are two");
+
+        // They come out when the side needs them, not only when it is confident: a rising at the
+        // line where a faction gives up still fields what it has hidden.
+        rising.WarSupport = c.Defines.FactionFightOnSupport * 0.5f;
+        c.Defines.GuerrillaReformWeeklyChance = 1f;
+        c.Armies.RemoveAll(a => a.NationId == 0 && a.ProvinceId == 7);
+        SetDay(c, 2); Partisans.Tick(c);
+        Check(c.Armies.Any(a => a.NationId == rising.Id && a.StateMapIndex == 1007),
+            "with war support at the giving-up line, the hidden still take the field");
+        c.Armies.RemoveAll(a => a.NationId == rising.Id);
         rising.WarSupport = 0.6f;
         // The war over, they are simply home.
         rising.FightersGoneToGround[1004] = 20_000f;

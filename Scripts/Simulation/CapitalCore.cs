@@ -525,8 +525,9 @@ public static class CapitalCore
             if (best is null)
             {
                 // Total occupation is not extinction. Armies abroad and liberation remain
-                // possible while any owned land survives, even a fragment of a foreign region.
-                if (landOwners.Contains(nation.MapIndex))
+                // possible while any owned land survives, even a fragment of a foreign region -
+                // and, for a rising, while it still fights on with none (Factions.FightsOnWithoutGround).
+                if (landOwners.Contains(nation.MapIndex) || Factions.FightsOnWithoutGround(campaign, nation))
                 {
                     SetGovernmentSeat(campaign, nation, -1);
                     continue;

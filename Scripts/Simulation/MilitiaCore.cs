@@ -7,10 +7,11 @@ namespace DealOrForce.Simulation;
 
 public sealed partial class Defines
 {
-    /// <summary>The share of a militia formation's establishment its home region sends back
-    /// each day - the wounded returning, the village volunteering - while the formation
-    /// holds ground the nation controls. Without it a militia drained by the line it held
-    /// stays a muster roll of zeroes, and the bench counts the zeroes as nobody at home.</summary>
+    /// <summary>The share of a militia formation's establishment its home region sends it
+    /// each day as new volunteers, while the formation holds ground the nation controls.
+    /// Without it a militia drained by the line it held stays a muster roll of zeroes, and
+    /// the bench counts the zeroes as nobody at home. Its wounded are not these: they walk
+    /// back by the rule every formation has (MilitaryOperations.ReturnWounded).</summary>
     public float MilitiaVolunteerSharePerDay { get; set; } = 0.02f;
 }
 
@@ -228,10 +229,10 @@ public static class MilitiaCore
             Standing[army.NationId] = Standing.GetValueOrDefault(army.NationId) + 1;
             var key = ((long)army.NationId << 32) | (uint)army.StateMapIndex;
             Here[key] = Here.GetValueOrDefault(key) + 1;
-            // The militia's men are the region's own, so its losses come home: the wounded
-            // walk back, and the village keeps volunteering while its ground is held. A
-            // formation drained holding a line does not stay a muster roll of zeroes - it
-            // fills again from home, a little each day, when there is a home to fill from.
+            // The militia's men are the region's own, so the village keeps volunteering while
+            // its ground is held. A formation drained holding a line does not stay a muster roll
+            // of zeroes - it fills again from home, a little each day, when there is a home to
+            // fill from.
             if (army.Personnel < army.MaxPersonnel && army.Personnel >= 0)
             {
                 // "Its ground is held" is the province's controller against the country's flag
@@ -243,10 +244,21 @@ public static class MilitiaCore
                 if (controls is not null && army.ProvinceId > 0 && army.ProvinceId < controls.Length &&
                     campaign.NationById(army.NationId) is { } home && controls[army.ProvinceId] == (ushort)home.MapIndex)
                 {
-                    var room = army.MaxPersonnel - army.Personnel;
-                    var gain = (int)MathF.Min(room, MathF.Max(1f, army.MaxPersonnel * campaign.Defines.MilitiaVolunteerSharePerDay));
-                    army.Personnel += gain;
-                    army.Recovering = MathF.Max(0f, army.Recovering - gain);
+                    // A volunteer is a new man with a rifle: he is on the roll and he is fighting
+                    // strength, both, the way a returning wounded man is (ReturnWounded). This took
+                    // its men out of the wounded and left strength where it was, so a beaten
+                    // militia read full on the roll and fought at half - and was paid back at
+                    // half when stood down, and deserted against a roll it did not have. The
+                    // wounded keep their places: they are coming back by their own road.
+                    var establishment = (float)army.MaxPersonnel;
+                    var room = MathF.Min(establishment - army.Personnel - MathF.Max(0f, army.Recovering),
+                        establishment * (1f - M.Clamp01(army.Strength)));
+                    var gain = (int)MathF.Min(room, MathF.Max(1f, establishment * campaign.Defines.MilitiaVolunteerSharePerDay));
+                    if (gain > 0)
+                    {
+                        army.Personnel += gain;
+                        army.Strength = M.Clamp01(army.Strength + gain / establishment);
+                    }
                 }
             }
         }

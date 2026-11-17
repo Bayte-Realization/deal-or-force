@@ -15,5 +15,6 @@
   "chronicle.fighters_went_to_ground": "{0}: beaten in {3} with no road out, {2} fighters hid their rifles and went home. They are nobody's prisoners.",
   "chronicle.enemy_went_to_ground": "{0}: the fighters of {1} were beaten in {3} - and about {2} of them scattered among the people instead of surrendering.",
   "chronicle.fighters_came_back": "{0}: {2} fighters who had gone to ground in {3} have taken up arms again.",
-  "chronicle.enemy_came_back": "{0}: the fighters of {1} are in the field again in {3} - {2} of them, where nobody was standing guard."
+  "chronicle.enemy_came_back": "{0}: the fighters of {1} are in the field again in {3} - {2} of them, where nobody was standing guard.",
+  "They will not sign away the last of their ground while they still have an army in the field": "They will not sign away the last of their ground while they still have an army in the field"
 }

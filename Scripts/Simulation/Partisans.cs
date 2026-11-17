@@ -37,6 +37,14 @@ public sealed partial class Defines
     public float PartisanForageSupply { get; set; } = 0.65f;
     public float PartisanOccupiedGroundShare { get; set; } = 0.5f;
 
+    /// <summary>
+    /// Whether a rising's formation broken among its own people, with no ground of its side to
+    /// fall back on, slips away into a neighbouring province where no enemy stands - its own
+    /// people's if there is one, whoever's flag is over the town - and stays on the map
+    /// (Partisans.SlipAwayProvince). Going to ground is for one with every way out watched.
+    /// </summary>
+    public bool GuerrillaSlipAwayEnabled { get; set; } = true;
+
     /// <summary>Whether a rising's formation beaten with nowhere to retreat scatters among its people instead of surrendering.</summary>
     public bool GuerrillaGoToGroundEnabled { get; set; } = true;
 
@@ -50,7 +58,9 @@ public sealed partial class Defines
     /// <summary>
     /// The chance each week that the hidden fighters of a region field a detachment, the least
     /// of a militia formation's establishment they will field, and the organisation it takes
-    /// the field with - under a fresh militia's 0.45, because it mustered in a hurry.
+    /// the field with - under a fresh militia's 0.45, because it mustered in a hurry. They come
+    /// out whatever the side's war support says: they are the part of it that still believes,
+    /// and a side that has stopped believing signs a peace, which sends them home.
     /// </summary>
     public float GuerrillaReformWeeklyChance { get; set; } = 0.25f;
     public float GuerrillaReformMinShare { get; set; } = 0.5f;
@@ -102,10 +112,16 @@ public sealed partial class Nation
 /// Both answers read one number, <see cref="Support"/>: how far the people of the region a
 /// formation stands in are this side's own. Where it is high enough, the land feeds the
 /// formation the road does not reach (<see cref="LiveOffTheLand"/>) - so many divisions per
-/// head of population and no more, food and cartridges but no guns - and a formation beaten
-/// with nowhere to go scatters into the villages instead of walking into captivity
-/// (<see cref="TryGoToGround"/>), to come back as a detachment where no enemy formation is
-/// standing (<see cref="TickStages"/>). Neither is immunity. They fight by the same formulas
+/// head of population and no more, food and cartridges but no guns - and a formation broken
+/// with no ground of its side behind it slips past the enemy into the next valley where no
+/// enemy stands, its own people's if it can (<see cref="SlipAwayProvince"/>), and stays on the map.
+/// Only one with nowhere at all to slip to scatters into the villages instead of walking
+/// into captivity (<see cref="TryGoToGround"/>), to come back as a detachment where no enemy
+/// formation is standing (<see cref="TickStages"/>). The first version had only the scatter,
+/// at the very moment and place the old surrender came, and to a player that is the same
+/// thing: the formation vanished in the battle where it rose - 136 of them in five years of
+/// one seed, a median 51 days after they appeared, and only one in five came back (SimBench
+/// --pockets, reviewed 17 November 2026). Neither is immunity. They fight by the same formulas
 /// as everybody, each lost battle costs four men in ten and everything heavy, the land feeds
 /// only so many, and the hidden drift home week by week.
 ///
@@ -155,10 +171,17 @@ public static class Partisans
     }
 
     /// <summary>
-    /// Whether the side governed this province when a war it is fighting began: it controlled it
-    /// then (the war's record of first holders says so, for ground that has changed hands since),
-    /// or it controls it now and nobody has taken it in the war. Ground it conquered in the war
-    /// is not this, and nor is anything at all for a side at peace. A read.
+    /// Whether the side governed this province when the wars it is fighting began: it controlled
+    /// it then (a war's record of first holders says so, for ground that has changed hands
+    /// since), or it controls it now and nobody has taken it in any of them. Ground it conquered
+    /// in any war it is still fighting is not this, and nor is anything at all for a side at
+    /// peace. A read.
+    ///
+    /// Every war has to agree, not one of them. A capture is written down only in the war it
+    /// was made in (CombatTerritory.Capture), so a side fighting two - HTS against the
+    /// government and against the SDF, Myanmar's armies against the junta and each other - had
+    /// the government's town it took in one war read as its own ground through the other,
+    /// because that war had no record of the town and the flag over it was the side's.
     /// </summary>
     public static bool HeldWhenTheWarBegan(Campaign c, Nation nation, int province)
     {
@@ -166,14 +189,20 @@ public static class Partisans
         if (controllers is null || nation is null || province <= 0 || province >= controllers.Length) return false;
         var own = (ushort)nation.MapIndex;
         var wars = Warfare.LiveWars(c);
+        var held = false;
         for (var index = 0; index < wars.Count; index++)
         {
             var war = wars[index];
             if (war.Ended || !war.Involves(nation.Id)) continue;
-            if (war.OriginalController.TryGetValue(province, out var first) ? first == own : controllers[province] == own)
-                return true;
+            if (war.OriginalController.TryGetValue(province, out var first))
+            {
+                // Somebody else's when this war began: taken in it, whatever the others know.
+                if (first != own) return false;
+                held = true;
+            }
+            else if (controllers[province] == own) held = true;
         }
-        return false;
+        return held;
     }
 
     /// <summary>Divisions the people of a region will keep in the field at this support.</summary>
@@ -241,9 +270,11 @@ public static class Partisans
 
     /// <summary>
     /// Men a formation actually has: its establishment at its strength, and never more than
-    /// its roll says. The roll alone would not do - a militia's roll is topped up from its
-    /// village day by day while its strength is not (MilitiaCore), and a detachment that came
-    /// back thin, was beaten again and hid again would have hidden more men than it ever had.
+    /// its roll says. Either alone can overstate it - the roll counts nobody missing from a
+    /// formation whose strength fell by a rule that does not touch the roll (hunger, wasting),
+    /// and strength is a share of an establishment the roll may never have filled - and a
+    /// detachment that came back thin, was beaten again and hid again must not hide more men
+    /// than it ever had.
     /// </summary>
     private static float Men(Army army)
     {
@@ -253,8 +284,99 @@ public static class Partisans
     }
 
     /// <summary>
-    /// A formation has lost a battle and has no province to fall back into. Called before it
-    /// surrenders, at each place Warfare decides that. A rising's formation among its own
+    /// Where a rising's formation broken among its own people goes when its side has no ground
+    /// next to it to fall back on (WarCoalition.SpreadRetreatProvince asks, for a beaten
+    /// formation only): a neighbouring province where no enemy formation stands, whoever's flag
+    /// is over the town. The people of the province it was beaten in hide it and show it the
+    /// paths round the enemy's posts; a state's division in the same place has no such people
+    /// and no such paths. A valley of its own people first - there it is fed - then the most
+    /// support, the roughest ground, the lowest number; failing that a valley of strangers,
+    /// where it is an ordinary pocket on what it carries, weakening and not dying of it
+    /// (StrandedGarrisons). Nought when every way out is watched, and then it goes to ground
+    /// (<see cref="TryGoToGround"/>). A read.
+    ///
+    /// Strangers' valleys count because they were half of the way out. Asked for its own
+    /// people's alone, 23 of the 41 formations that went to ground in two years of two seeds had
+    /// an unwatched neighbour, among strangers - and vanished where they were beaten rather than
+    /// walk into it (SimBench --pockets, 17 November 2026).
+    ///
+    /// It arrives as any beaten formation arrives, spent and needing rest, and is the enemy's
+    /// to find. It is still on the map, which is the point: a rising does not die in the battle
+    /// where it rose because it lost that battle.
+    /// </summary>
+    internal static int SlipAwayProvince(Campaign c, StrategicWar war, Army army, int from)
+    {
+        var d = c?.Defines;
+        var map = c?.ProvinceMap;
+        var controllers = c?.ProvinceController;
+        if (d is null || map is null || controllers is null || army is null || !d.GuerrillaSlipAwayEnabled ||
+            army.EmbarkedFleetId >= 0 || from <= 0 || from >= map.Neighbors.Length) return 0;
+        var nation = c.NationById(army.NationId);
+        if (nation is null || !WarAims.IsRebel(nation)) return 0;
+        var floor = MathF.Max(0.0001f, d.PartisanSupportFloor);
+        // Strangers do not hide you: the way out starts among your own people.
+        if (Support(c, nation, from) < floor) return 0;
+        var best = 0;
+        var bestOwn = false;
+        var bestSupport = 0f;
+        var bestRough = float.MinValue;
+        foreach (var province in map.Neighbors[from])
+        {
+            if (province <= 0 || province > map.ProvinceCount || province >= controllers.Length ||
+                map.IsWater(province) || c.DestroyedProvinces.Contains(province) ||
+                WarCoalition.EnemyStandsIn(c, war, nation.Id, province)) continue;
+            var support = Support(c, nation, province);
+            var own = support >= floor;
+            var rough = map.TerrainAt(province).Defense;
+            var better = best == 0 || own && !bestOwn ||
+                         own == bestOwn && (support > bestSupport + 0.0001f ||
+                                            MathF.Abs(support - bestSupport) <= 0.0001f &&
+                                            (rough > bestRough || rough == bestRough && province < best));
+            if (!better) continue;
+            best = province;
+            bestOwn = own;
+            bestSupport = support;
+            bestRough = rough;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Why a formation that went to ground had nowhere to slip to, for the bench: every way out
+    /// had an enemy formation standing in it, or it had no land neighbour at all.
+    /// </summary>
+    private static string WhyNoWayOut(Campaign c, StrategicWar war, Nation nation, int from)
+    {
+        var map = c.ProvinceMap;
+        if (!c.Defines.GuerrillaSlipAwayEnabled) return "to_ground:slipping_off";
+        if (from <= 0 || from >= map.Neighbors.Length) return "to_ground:no_neighbours";
+        var land = 0;
+        var watched = 0;
+        foreach (var province in map.Neighbors[from])
+        {
+            if (province <= 0 || province > map.ProvinceCount || map.IsWater(province) ||
+                c.DestroyedProvinces.Contains(province)) continue;
+            land++;
+            if (WarCoalition.EnemyStandsIn(c, war, nation.Id, province)) watched++;
+        }
+        return land == 0 ? "to_ground:no_neighbours" : watched == land ? "to_ground:every_way_watched" : "to_ground:other";
+    }
+
+    /// <summary>
+    /// A rising's formation slipped away (<see cref="SlipAwayProvince"/>) and Warfare has moved
+    /// it: counted for the bench, and written to the diagnostic log. Nobody's chronicle - a
+    /// beaten formation falling back is not news, and this is a beaten formation falling back.
+    /// </summary>
+    internal static void SlippedAway(Campaign c, Army army, int from, int to)
+    {
+        Count("slipped_away");
+        DiagnosticLogs.Write("simulation",
+            $"SLIPPED_AWAY army={army.Id} nation={army.NationId} from={from} to={to} strength={DiagnosticLogs.N(army.Strength)}");
+    }
+
+    /// <summary>
+    /// A formation has lost a battle and has nowhere to fall back into or slip away to. Called
+    /// before it surrenders, at each place Warfare decides that. A rising's formation among its own
     /// people does not surrender: most of its men hide their rifles and go home, to be counted
     /// in <see cref="Nation.FightersGoneToGround"/> for the region; the rest are the dead and
     /// the prisoners of a lost battle, on the war's books like any others; the formation and
@@ -280,6 +402,7 @@ public static class Partisans
         WarLosses.Record(war ?? WarLosses.WarOf(c, army), nation.Id, killed, 0f, lost - killed);
 
         Count("went_to_ground");
+        Count(WhyNoWayOut(c, war, nation, province));
         DiagnosticLogs.Write("simulation",
             $"WENT_TO_GROUND army={army.Id} nation={nation.Tag} province={province} region={region} hidden={DiagnosticLogs.N(hidden)} lost={DiagnosticLogs.N(lost)}");
         // Both sides are told, each in its own chronicle: to one it is men saved, to the other
@@ -309,11 +432,55 @@ public static class Partisans
 
     /// <summary>
     /// Detachments this side could still field from hiding. A rising with nobody on the map
-    /// and three thousand rifles under the floorboards has not been beaten yet, and the rules
-    /// that decide a rising is finished count these beside its formations (Factions.FightsOn).
+    /// and a detachment's worth of rifles under the floorboards has not been beaten yet, and
+    /// the rules that decide a rising is finished count these beside its formations
+    /// (Factions.FightsOn, AiStatecraft.SideOverrun, Factions' remnant pass).
+    ///
+    /// Counted the way <see cref="TickStages"/> fields them, or the count is a promise nobody
+    /// keeps: region by region, because the hidden do not walk between regions to make up a
+    /// detachment; a full militia formation at a time, the remainder only when it is a
+    /// detachment itself; and only in a region with ground to come out on (<see cref="Fieldable"/>).
+    /// It divided the total of every region by the least detachment, so three regions of
+    /// 2,700 each were "one detachment" that could never take the field, and that phantom kept
+    /// a side with no formation and no province from being overrun for twenty weeks.
     /// </summary>
-    public static int DetachmentsInHiding(Campaign c, Nation nation) =>
-        c is null || nation is null ? 0 : (int)(Hidden(nation) / Muster(c.Defines));
+    public static int DetachmentsInHiding(Campaign c, Nation nation)
+    {
+        if (c?.ProvinceMap is null || nation is null || nation.FightersGoneToGround.Count == 0 ||
+            !c.Defines.GuerrillaGoToGroundEnabled) return 0;
+        var muster = Muster(c.Defines);
+        var formation = MathF.Max(muster, MilitiaCore.Weights.Formation);
+        var count = 0;
+        foreach (var (region, men) in nation.FightersGoneToGround)
+            if (men >= muster && Fieldable(c, nation, region))
+                count += 1 + (int)((men - muster) / formation);
+        return count;
+    }
+
+    /// <summary>
+    /// Whether hidden fighters of this region have anywhere to take the field: a province of
+    /// it the side still holds, or one held by somebody it is at war with. A region now held
+    /// by a former enemy at peace with it, or by a bystander, is not - the war there is over,
+    /// whatever wars the side is fighting elsewhere. Garrisons are not asked: they come and go.
+    /// </summary>
+    private static bool Fieldable(Campaign c, Nation nation, int region)
+    {
+        var map = c.ProvinceMap;
+        var controllers = c.ProvinceController;
+        if (map is null || controllers is null) return false;
+        var wars = Warfare.LiveWars(c);
+        foreach (var province in map.ProvincesOfState(region))
+        {
+            if (province <= 0 || province >= controllers.Length || map.IsWater(province) ||
+                c.DestroyedProvinces.Contains(province)) continue;
+            var flag = controllers[province];
+            if (flag == nation.MapIndex) return true;
+            if (flag == 0 || c.NationByMapIndex(flag) is not { } holder) continue;
+            for (var index = 0; index < wars.Count; index++)
+                if (!wars[index].Ended && wars[index].Opposes(nation.Id, holder.Id)) return true;
+        }
+        return false;
+    }
 
     [ThreadStatic] private static List<int> _regions;
     [ThreadStatic] private static HashSet<int> _garrisoned;
@@ -324,10 +491,13 @@ public static class Partisans
     }
 
     /// <summary>
-    /// Weekly: the hidden drift home, and where there are still enough of them in a region, and
-    /// the side still believes in its war, some weeks they take the field again - on ground the
-    /// side holds in that region, or failing that in a province of it where no enemy formation
-    /// is standing, which they take. So an occupier keeps a rising down by standing in every
+    /// Weekly: the hidden drift home, and where there are still enough of them in a region,
+    /// some weeks they take the field again - on ground the side holds in that region, or
+    /// failing that in a province of it where no enemy formation is standing, which they take.
+    /// They used to wait until the side's war support was over the line at which a faction gives
+    /// up (FactionFightOnSupport): the one moment the side needed them most was the moment they
+    /// could not come, and of 178,537 Kazakh fighters in hiding not one came back before the
+    /// side signed at that line. So an occupier keeps a rising down by standing in every
     /// province of its homeland, for as long as the hidden last, or it makes peace. A side at
     /// war with nobody has nobody in hiding: the war ended and they are simply home.
     ///
@@ -356,8 +526,7 @@ public static class Partisans
                 var men = bank[region] * keep;
                 if (men < 1f) { bank.Remove(region); continue; }
                 bank[region] = men;
-                if (!d.GuerrillaGoToGroundEnabled || men < Muster(d) ||
-                    nation.WarSupport <= d.FactionFightOnSupport) continue;
+                if (!d.GuerrillaGoToGroundEnabled || men < Muster(d)) continue;
                 if (Escalation.Roll(c.Seed, nation.Id, region, c.ElapsedDays / 7, 0x6A7E) >= d.GuerrillaReformWeeklyChance)
                     continue;
                 var fielded = Reform(c, nation, region, MathF.Min(men, MilitiaCore.Weights.Formation));
