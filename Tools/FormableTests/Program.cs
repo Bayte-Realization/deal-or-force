@@ -374,6 +374,8 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Length == 0) FallenGroundTests.Run();
         if (args.Contains("--nation-numbering-only")) { NationNumberingTests.Run(); return; }
         if (args.Length == 0) NationNumberingTests.Run();
+        if (args.Contains("--army-group-tidy-only")) { ArmyGroupTidyTests.Run(); return; }
+        if (args.Length == 0) ArmyGroupTidyTests.Run();
         if (args.Contains("--territorial-front-only")) { TerritorialFrontTests.Run(); return; }
         if (args.Length == 0) TerritorialFrontTests.Run();
         if (args.Length == 0) RevoltOccupationTests.Run();

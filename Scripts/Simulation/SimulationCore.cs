@@ -1459,6 +1459,8 @@ public sealed partial class Campaign
             HeldRegions.AiMonth(this);
             // A government relieves the commander who keeps losing (Generals).
             Generals.AiMonth(this);
+            // And strikes off the army groups nobody serves in any more (Generals.Tidy).
+            using (SimProfiler.Measure("army groups")) Generals.Tidy(this);
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
             // In stages, like the economy before it (BrainDrain.Stages).

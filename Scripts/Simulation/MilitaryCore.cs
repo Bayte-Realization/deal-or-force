@@ -74,6 +74,12 @@ public sealed class ArmyGroup
     public int CommandersLost;
     /// <summary>How many of its commanders the government has relieved (Generals.Relieve).</summary>
     public int CommandersRelieved;
+    /// <summary>
+    /// The last weekly review (Generals.Tidy) that found formations of its own country under it -
+    /// or, for a group the computer runs, the first that found it without any. -1 until then. A
+    /// group left empty for Defines.ArmyGroupEmptyDays after it is struck off.
+    /// </summary>
+    public int StaffedDay = -1;
 }
 
 /// <summary>
