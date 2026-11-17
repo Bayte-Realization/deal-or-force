@@ -1256,11 +1256,15 @@ public static partial class Warfare
             var attackerOrgBefore = AverageOrganisation(AttackerLine);
             var defenderOrgBefore = AverageOrganisation(DefenderLine);
 
-            var isHomeProvince = campaign.ProvinceMap?.ProvinceToNation != null &&
-                battle.ProvinceId > 0 && battle.ProvinceId < campaign.ProvinceMap.ProvinceToNation.Length &&
-                campaign.ProvinceMap.ProvinceToNation[battle.ProvinceId] == battle.DefenderId;
-
+            // The owner of a province is its country's map number; DefenderId is its place in the
+            // nation list. Compared with each other they matched almost nowhere, so the homeland
+            // bonus a defender is owed on its own soil was paid to nobody - or to whoever a
+            // coincidence of numbers put on another country's ground.
             var defenderNation = campaign.NationById(battle.DefenderId);
+            var isHomeProvince = defenderNation is not null && campaign.ProvinceMap?.ProvinceToNation != null &&
+                battle.ProvinceId > 0 && battle.ProvinceId < campaign.ProvinceMap.ProvinceToNation.Length &&
+                campaign.ProvinceMap.ProvinceToNation[battle.ProvinceId] == defenderNation.MapIndex;
+
             var isCapitalState = defenderNation != null && defenderNation.CapitalStateMapIndex >= 0 &&
                 campaign.ProvinceMap?.ProvinceToState != null &&
                 battle.ProvinceId > 0 && battle.ProvinceId < campaign.ProvinceMap.ProvinceToState.Length &&
