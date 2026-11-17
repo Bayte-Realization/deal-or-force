@@ -913,6 +913,10 @@ public sealed partial class Campaign
         // Notify only after clearing the iterator. A hook may issue commands or save;
         // neither should recurse into the day whose last stage just returned.
         if (finished && ElapsedHours != startedHours) StepCompleted?.Invoke(this);
+        // A step that crossed midnight closes a simulation day on Tracy's timeline. Marked
+        // here, once the step is whole, rather than inside the day loop: a frame that ended
+        // halfway through a bounded StepFor would cut a day in two.
+        if (finished && ElapsedHours / 24 != startedHours / 24) TracyBridge.SimulationDay();
         return finished;
     }
 
@@ -2796,10 +2800,23 @@ public static class SimProfiler
         private readonly string _name;
         private readonly long _started;
         private readonly long _allocated;
+#if DOF_TRACY
+        // The same scope as a Tracy zone (TracyBridge), opened only in a profiling build that
+        // was started with DOF_TRACY=1 and has a viewer attached. Ordinary builds do not have
+        // this field at all.
+        private readonly Tracy.PInvoke.TracyCZoneCtx _zone;
+        private readonly bool _traced;
+#endif
 
         public Scope(string name)
         {
             _name = name;
+#if DOF_TRACY
+            // Decided once per scope, so a viewer connecting or leaving mid-scope can never
+            // produce an end without its beginning.
+            _traced = TracyBridge.Live;
+            _zone = _traced ? TracyBridge.Begin(name) : default;
+#endif
             _allocated = GC.GetAllocatedBytesForCurrentThread();
             _started = Stopwatch.GetTimestamp();
         }
@@ -2808,6 +2825,9 @@ public static class SimProfiler
         {
             var elapsed = (Stopwatch.GetTimestamp() - _started) * 1000.0 / Stopwatch.Frequency;
             var allocated = GC.GetAllocatedBytesForCurrentThread() - _allocated;
+#if DOF_TRACY
+            if (_traced) TracyBridge.End(_zone, allocated);
+#endif
             if (!Samples.TryGetValue(_name, out var sample))
             {
                 sample = new Sample { Name = _name };
