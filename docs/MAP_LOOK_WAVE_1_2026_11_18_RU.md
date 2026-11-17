@@ -126,8 +126,16 @@
   `--frontier-field-only`, `--border-rank-only`, `--border-coherence-only`, `--date-plate-only`,
   `--atlas-surfaces-only`, `--raster-rivers-only`, `--river-width-only`, `--map-usability-only`,
   `--colour-distance-only` — все проходят.
-- `Tools/CartographyTests`, `Tools/TerrainTests`, `Tools/MapTerritoryTests`, полный `FormableTests`
-  — результаты в отчёте сессии.
+- `Tools/CartographyTests` — 6793 проверки, 0 ошибок; `Tools/TerrainTests` и
+  `Tools/MapTerritoryTests` — проходят целиком.
+- Полный `FormableTests` (скрытый отсоединённый процесс, `tmp_logs/mapart-full.log`):
+  17 821 строка `PASS`, ни одного `FAIL`, код выхода 0. Нестабильный тест brotli в этот раз прошёл.
+- После последней правки шейдера группы `--map-look-only` (88), `--gpu-atlas-contract-only` (62),
+  `--frontier-field-only` (16) и `--border-rank-only` (104) перезапущены на свежей сборке — без
+  ошибок.
+- Шейдер дополнительно прочитан на порядок объявлений: всё, что берут пена, береговые линии и
+  блик (`id_size`, `id_aa`, `id_span`, `sea_floor`, `wave_fade`), объявлено выше воды; производные
+  (`fwidth`) внутри новых ветвлений стоят только под ветвлениями по униформам.
 - `Tools/GraphicsTests` и `Tools/VisualTests` не запускались: им нужен Godot.
 
 ## Что снять ведущему
