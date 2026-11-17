@@ -332,6 +332,8 @@ public static class Program
         if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
         if (Array.IndexOf(args, "--kin") >= 0) return mapped ? KinBenchReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--exiles") >= 0) return mapped ? ExileReport.Run(campaign, days) : 2;
+        // `--movement-births`: when new movements appear, and of what kind (MovementBirthReport).
+        if (Array.IndexOf(args, "--movement-births") >= 0) return mapped ? MovementBirthReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--wars") >= 0) return mapped ? WarStuckReport.Run(campaign, days) : 2;
         // `--border-probe A B`: one border of a war, every fifteen days (BorderProbeReport).
         var borderAt = Array.IndexOf(args, "--border-probe");
