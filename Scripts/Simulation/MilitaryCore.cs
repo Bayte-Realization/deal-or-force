@@ -627,6 +627,7 @@ public sealed class SplitArmyCommand : ICampaignCommand
             PocketSinceDay = army.PocketSinceDay,
             HoldoutSinceDay = army.HoldoutSinceDay,
             ReliefDistance = army.ReliefDistance,
+            LivingOffLand = army.LivingOffLand,
             ReadyDay = army.ReadyDay,
             Latitude = army.Latitude,
             Longitude = army.Longitude
@@ -816,24 +817,25 @@ public static class MilitaryOperations
                     (row >= 0 ? factors.Readiness(campaign, row)
                         : DefconSystem.ReadinessRecoveryMultiplier(campaign, army.NationId));
                 if (army.OrderKind == ArmyOrder.ReserveFront) recovery *= 1.25f;
-                // A closed pocket is living on what it carried. Rest would put the day's
-                // organisation straight back, and the dry-out would never arrive.
-                if (army.CutOff) recovery = 0f;
+                // A closed pocket is living on what it carried, and rests accordingly: at half
+                // pace while the stores last, a quarter once they are gone. It used to rest
+                // not at all, so a pocket that beat off an assault stayed as spent as the
+                // assault left it and fell to the next shove. The dry-out still arrives - the
+                // ceiling below comes down with the hungry days whatever was recovered.
+                if (army.CutOff)
+                    recovery *= army.PocketStores > 0f
+                        ? campaign.Defines.PocketRecoveryWithStores
+                        : campaign.Defines.PocketRecoveryHungry;
                 army.Organisation = M.Clamp01(army.Organisation + recovery);
                 Reinforce(campaign, army, reinforcementWeights.GetValueOrDefault(army.NationId, 1f));
             }
 
+            // And nothing else wastes it here. There was a third hunger in this place, by
+            // the hour, for any cut-off formation whose supply had sunk under 0.16 - on top of
+            // the daily clock (LogisticsSystem.AgeCutOff) and the daily wasting (Attrition).
+            // Hunger now has one clock and one wasting, both with a floor, and the supply
+            // floor is 0.15: left in, this would have run for ever.
             if (army.CutOff) LogisticsSystem.HoldCauldron(campaign, army);
-
-            // By the hour. These were written as a step's worth when a step was a day, and the
-            // pockets that surrender when they starve were built and measured once the step
-            // was an hour - so an hour's worth is what the game has been playing, and scaling
-            // by the step keeps that while a longer step no longer starves a pocket slower.
-            if (army.CutOff && army.SupplyLevel < 0.16f)
-            {
-                army.Organisation = M.Clamp01(army.Organisation - 0.012f * campaign.TickHours);
-                army.Strength = M.Clamp01(army.Strength - 0.00045f * campaign.TickHours);
-            }
 
             if (army.InBattle) continue;
 

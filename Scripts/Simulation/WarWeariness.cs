@@ -30,6 +30,12 @@ public sealed partial class Defines
     public float WarGoingBadlyOccupied { get; set; } = 0.2f;
     public float FrontCollapsingScore { get; set; } = -80f;
     public float FrontCollapsingOccupied { get; set; } = 0.5f;
+    /// <summary>
+    /// Whether a side of the war of the weak with the formations it fights on with, in the field
+    /// or in hiding (Factions.HoldsOnByArms), is spared the home-front mood the score and the
+    /// occupied ground grant a state. See <see cref="WarWeariness.MoodOf"/>.
+    /// </summary>
+    public bool RisingHomeFrontByArms { get; set; } = true;
     /// <summary>A people's young men and women coming of age, as a share of the population a year; the most a country can have in reserve.</summary>
     public float ManpowerGrowthPerYear { get; set; } = 0.0015f;
     public float MobilisationCeilingShare { get; set; } = 0.05f;
@@ -129,12 +135,9 @@ public static class WarWeariness
             // believing in anything. It is what lets a beaten country bring itself to sign.
             foreach (var attacking in new[] { true, false })
             {
-                var score = attacking ? war.WarScore : -war.WarScore;
-                var occupied = attacking ? war.AttackerOccupiedValue : war.DefenderOccupiedValue;
-                var mood = HomeFrontMood(defines, score, occupied);
-                if (mood is null) continue;
                 foreach (var id in war.Side(attacking))
-                    if (campaign.NationById(id) is { } side && side.Movement is null)
+                    if (campaign.NationById(id) is { } side && side.Movement is null &&
+                        MoodOf(campaign, war, side) is { } mood)
                         ModifierSystem.Grant(campaign, side, mood, defines.EconomyTickDays * 2);
             }
 
@@ -335,7 +338,33 @@ public static class WarWeariness
         return war.Stalled && age >= defines.AiStalemateDays + delay;
     }
 
-    /// <summary>The home-front modifier Tick grants a side, or null when the front is holding.</summary>
+    /// <summary>
+    /// The home-front modifier a war grants this member of a side, or null when the front is
+    /// holding. A state reads the score and the share of its ground under the enemy
+    /// (<see cref="HomeFrontMood"/>). A side of the war of the weak that still has the formations
+    /// it fights on with, in the field or in hiding, reads neither: the strong holding its towns
+    /// is how its war looks on the day it begins, not a sign that it is being lost, and it is
+    /// lost when its fighters are gone - then the ordinary measure comes back with them.
+    ///
+    /// Read as a state's, the 2024 factions lost their war at home while they still had it in
+    /// the field. HTS holds Idlib, not much of what the map calls its own: "the front is
+    /// collapsing" from its second month, three hundredths of war support a week, and it signed
+    /// at 0.17 with eleven formations standing; the SDF signed at 0.04 with nineteen, the Kachin
+    /// Independence Army at nought with its men still under arms (SimBench --pockets, 17 November
+    /// 2026). The long war still weighs on it as on anybody (<see cref="LengthWeight"/>).
+    /// </summary>
+    public static string MoodOf(Campaign campaign, StrategicWar war, Nation nation)
+    {
+        var defines = campaign?.Defines;
+        if (defines is null || war is null || nation is null) return null;
+        if (defines.RisingHomeFrontByArms && Factions.HoldsOnByArms(campaign, nation)) return null;
+        var attacking = war.IsAttacking(nation.Id);
+        var score = attacking ? war.WarScore : -war.WarScore;
+        var occupied = attacking ? war.AttackerOccupiedValue : war.DefenderOccupiedValue;
+        return HomeFrontMood(defines, score, occupied);
+    }
+
+    /// <summary>The home-front modifier a state's war grants it from the score and the ground lost, or null when the front is holding.</summary>
     public static string HomeFrontMood(Defines defines, float score, float occupied)
     {
         if (defines is null) return null;
@@ -412,10 +441,7 @@ public static class WarWeariness
             var war = live[i];
             if (war is null || war.Ended || !war.Involves(nation.Id)) continue;
             atWar = true;
-            var attacking = war.IsAttacking(nation.Id);
-            var score = attacking ? war.WarScore : -war.WarScore;
-            var occupied = attacking ? war.AttackerOccupiedValue : war.DefenderOccupiedValue;
-            var nextMood = HomeFrontMood(defines, score, occupied);
+            var nextMood = MoodOf(campaign, war, nation);
             if (Rank(nextMood) > Rank(mood)) mood = nextMood;
             var nextLength = LengthWeight(defines, campaign.ElapsedDays - war.StartedDay);
             if (Rank(nextLength) > Rank(length)) length = nextLength;

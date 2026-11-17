@@ -532,6 +532,9 @@ public static class Program
                 secessionAt + 2 < args.Length && !args[secessionAt + 2].StartsWith("--") ? args[secessionAt + 2] : "");
         // `--factions`: the de facto powers of 2024 at the start and after the run (FactionReport).
         if (Array.IndexOf(args, "--factions") >= 0) return mapped ? FactionReport.Run(campaign, days) : 2;
+        // `--pockets`: what becomes of cut-off formations and of the forces of risings and
+        // factions - who starved untouched, who was broken, how long each pocket lasted (PocketReport).
+        if (Array.IndexOf(args, "--pockets") >= 0) return mapped ? PocketReport.Run(campaign, days) : 2;
         // `--world-stability`: every five years, the spread of stability and living standards of
         // the countries of a million people or more - the drift a century can hide.
         if (Array.IndexOf(args, "--world-stability") >= 0 && mapped)
@@ -1801,12 +1804,6 @@ public static class Program
     }
 
     /// <summary>
-    /// Days of the world with the profiler reset first, reported by total time. Each pass is
-    /// shown with its share of the whole, its mean cost and how often it ran - a cheap pass
-    /// run every hour and a dear one run every month look the same in a mean and nothing
-    /// alike in a total.
-    /// </summary>
-    /// <summary>
     /// Nanoseconds per SimProfiler.Measure scope: 64 distinct names (a day uses a few hundred,
     /// so the dictionary is not a one-entry toy), a million scopes a sample, five warm-up samples
     /// and 21 measured. The checksum is the profiler's own run count, read back at the end, so
@@ -1845,6 +1842,12 @@ public static class Program
         return checksum == scopes ? 0 : 1;
     }
 
+    /// <summary>
+    /// Days of the world with the profiler reset first, reported by total time. Each pass is
+    /// shown with its share of the whole, its mean cost and how often it ran - a cheap pass
+    /// run every hour and a dear one run every month look the same in a mean and nothing
+    /// alike in a total.
+    /// </summary>
     private static int ProfileSave(Campaign fresh, string path, int days)
     {
         if (fresh.ProvinceMap is null) { Console.WriteLine("  province map unavailable"); return 2; }

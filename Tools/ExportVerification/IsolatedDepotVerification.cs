@@ -16,6 +16,10 @@ public partial class ExportVerification
         c.ConfigureSinglePlayer(poland.Id);
         c.IsPaused = true;
         c.Armies.Clear(); c.Battles.Clear(); c.Wars.Clear(); c.FrontLines.Clear();
+        // The neighbour that closes the ring is at war with Poland: a pocket's clock runs only
+        // for a country somebody is fighting (LogisticsSystem.Besieged).
+        c.Wars.Add(new StrategicWar { Id = 8801, AttackerId = enemy.Id, DefenderId = poland.Id });
+        c.MarkWarsChanged();
         var map = c.ProvinceMap;
         var province = Enumerable.Range(1, map.ProvinceCount).First(p =>
             p != poland.CapitalProvinceId && map.ProvinceToNation[p] == poland.MapIndex &&

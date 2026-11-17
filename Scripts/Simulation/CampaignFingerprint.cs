@@ -71,7 +71,7 @@ public static class CampaignFingerprint
             { Mix(id); Mix(regions.Count); foreach (var region in regions.OrderBy(r => r)) Mix(region); }
         }
         if (!campaign.Defines.PocketResistanceEnabled || campaign.Defines.PocketResistanceMinStrength != .25f ||
-            campaign.Defines.PocketResistanceMinSupply != .10f)
+            campaign.Defines.PocketResistanceMinSupply != 0f)
         {
             MixText("pocket_resistance_rules"); Mix(campaign.Defines.PocketResistanceEnabled ? 1 : 0);
             MixFloat(campaign.Defines.PocketResistanceMinStrength); MixFloat(campaign.Defines.PocketResistanceMinSupply);
@@ -1186,6 +1186,15 @@ public static class CampaignFingerprint
             if (army.PocketStores >= 0f) { MixText("pocket_stores"); Mix(army.Id); MixFloat(army.PocketStores); Mix(army.PocketSinceDay); }
             if (army.HoldoutSinceDay >= 0) { MixText("holdout"); Mix(army.Id); Mix(army.HoldoutSinceDay); }
             if (army.ReliefDistance != -1) { MixText("relief_distance"); Mix(army.Id); Mix(army.ReliefDistance); }
+            if (army.LivingOffLand) { MixText("living_off_land"); Mix(army.Id); }
+        }
+        // Fighters in hiding (Partisans): nothing mixed for a country that has none.
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.FightersGoneToGround.Count == 0) continue;
+            MixText("gone_to_ground"); Mix(nation.Id);
+            foreach (var (region, men) in nation.FightersGoneToGround.OrderBy(pair => pair.Key))
+            { Mix(region); MixFloat(men); }
         }
         foreach (var item in campaign.PendingEvents.OrderBy(e => e.Id))
             if (item.Options.Any(o => o.SecessionTargetId >= 0))

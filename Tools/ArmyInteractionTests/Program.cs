@@ -21,6 +21,11 @@ static class Program
         if (args.Length == 0) BattleWithdrawalPreviewTests.Run();
         if (args.Contains("--pocket-resistance-only")) { PocketResistanceTests.Run(); return; }
         if (args.Length == 0) PocketResistanceTests.Run();
+        // Pockets weaken and do not die by themselves; risings live among their own people.
+        if (args.Contains("--pocket-rules-only")) { PocketRuleTests.Run(); return; }
+        if (args.Contains("--pocket-hunger-only")) { PocketRuleTests.RunHunger(); return; }
+        if (args.Contains("--partisans-only")) { PocketRuleTests.RunPartisans(); return; }
+        if (args.Length == 0) PocketRuleTests.Run();
         if (args.Contains("--front-staff-mutation-only")) { FrontStaffMutationTests.Run(); return; }
         if (args.Contains("--front-staff-save")) { FrontStaffMutationTests.Replay(args); return; }
         if (args.Length == 0) FrontStaffMutationTests.Run();
