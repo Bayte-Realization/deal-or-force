@@ -9,7 +9,8 @@ map_clean.jpg - map.jpg with the old map layer taken off, for the map budget (sp
                Ukrainian front are found and filled from their surroundings; the mockup
                then draws merged counters and the front line itself. Building icons come
                back only in the Economy mode (C) or with B, which show map.jpg.
-flags/*.png  - copies of game/gfx/flags, scaled to 96x64.
+flags/*.png  - copies of game/gfx/flags, 128 px high in the country's own proportions
+               (--flags-only rebuilds just these).
 fonts/*.ttf  - Source Serif 4 (SIL OFL 1.1), copied from the local font folder if found,
                so the owner judges the intended serif and not Georgia.
 icons.css    - the same icons as data URIs, so CSS masks work when index.html is
@@ -24,6 +25,23 @@ from PIL import Image, ImageDraw, ImageFilter
 ROOT = os.getcwd()
 OUT = os.path.join(ROOT, "docs/design/interface-2026-11-17/mockup")
 SRC = os.path.join(ROOT, "docs/screenshots/ui-aoh/step-04-crisis-1920.jpg")
+
+def flags():
+    # Flags keep the country's own proportions (revision 3: no shield, no common 3:2 box).
+    # The file's aspect is the truth, except where it disagrees with the official ratio:
+    # Qatar's game file is 2133x512 (4.17:1), the flag is 28:11 - the mockup uses 28:11 and
+    # the mismatch is reported (spec, revision 3). Alpha is kept: Nepal is not a rectangle.
+    OFFICIAL = {"qat": 28 / 11}
+    for code in "srb hrv bih hun rou bgr kos mne mkd alb ukr rus che npl qat vat".split():
+        src = os.path.join(ROOT, f"game/gfx/flags/flag_{code}.png")
+        im = Image.open(src).convert("RGBA")
+        ratio = OFFICIAL.get(code, im.width / im.height)
+        if abs(ratio - im.width / im.height) > .02:
+            print(f"flag {code}: file {im.width}x{im.height} ({im.width / im.height:.2f}:1), official {ratio:.2f}:1", file=sys.stderr)
+        im.resize((round(128 * ratio), 128), Image.LANCZOS).save(os.path.join(OUT, f"img/flags/{code}.png"), optimize=True)
+
+if "--flags-only" in sys.argv:
+    flags(); print("ok"); sys.exit(0)
 
 shot = Image.open(SRC).convert("RGB")
 # Main view: the clean rectangle between the old rail, top bar, report and army bar.
@@ -123,9 +141,7 @@ for name in ICONS:
     css.append(f".i-{name.replace('_','-')}{{--m:url(data:image/png;base64,{data})}}")
 open(os.path.join(OUT, "icons.css"), "w").write("\n".join(css) + "\n")
 
-for code in "srb hrv bih hun rou bgr kos mne mkd alb ukr rus".split():
-    src = os.path.join(ROOT, f"game/gfx/flags/flag_{code}.png")
-    Image.open(src).convert("RGB").resize((96, 64), Image.LANCZOS).save(os.path.join(OUT, f"img/flags/{code}.png"))
+flags()
 # Source Serif 4 (OFL): only copied, never downloaded
 os.makedirs(os.path.join(OUT, "fonts"), exist_ok=True)
 for d in [os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft/Windows/Fonts"), "C:/Windows/Fonts"]:

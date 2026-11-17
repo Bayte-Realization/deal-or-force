@@ -20,9 +20,24 @@ const FIRST_STEPS = () => S.day < 60;
 // ---------------------------------------------------------------- small helpers
 const px = v => Math.round(v * 100) / 100 + "px";
 const box = r => `left:${px(r[0])};top:${px(r[1])};width:${px(r[2] - r[0])};height:${px(r[3] - r[1])}`;
-const ico = (n, s, cls = "") => `<i class="ico i-${n.replace(/_/g, "-")} ${cls}" style="--s:${s}px"></i>`;
+// game icons are masks in one paper ink; the few the game still has as outlines are drawn in the filled hand (GLYPH_FOR)
+const ico = (n, s, cls = "") => GLYPH_FOR[n] ? `<span class="glyph ico-g ${cls}" style="--s:${s}px">${GLYPH[GLYPH_FOR[n]]}</span>` : `<i class="ico i-${n.replace(/_/g, "-")} ${cls}" style="--s:${s}px"></i>`;
 const gl = (n, s, style = "") => `<span class="glyph" style="--s:${s}px;${style}">${GLYPH[n]}</span>`;
 const sevGlyph = s => s === "n" ? `<span style="color:var(--neg)">●</span>` : s === "w" ? `<span style="color:var(--warn)">▲</span>` : `<span style="color:var(--info)">◆</span>`;
+const PF = (qs.get("flag") || "srb").toLowerCase();     // the player's flag (?flag=che / npl / qat / vat shows the frame with other proportions)
+// a flag in its own proportions with a thin honest edge; shaped flags (Nepal) keep their outline
+function flagImg(code, maxW, maxH, cls = "") {
+  const [w, h] = flagFit(code, maxW, maxH);
+  return `<span class="flag ${cls} ${code === "npl" ? "shaped" : ""}" style="width:${px(w)};height:${px(h)};--f:url(img/flags/${code}.png)"><img src="img/flags/${code}.png" alt=""><i class="cloth"></i></span>`;
+}
+// a hand-ruled line: one pen stroke with a little unevenness, the same every render (seeded by position)
+function ruled(x, y, w, seed = 1, cls = "") {
+  let d = `M0 1`, r = seed * 9301 + 49297;
+  const rnd = () => ((r = (r * 9301 + 49297) % 233280) / 233280 - .5);
+  for (let t = 24; t < w; t += 24 + rnd() * 8) d += ` L${t.toFixed(1)} ${(1 + rnd() * .7).toFixed(2)}`;
+  d += ` L${w} ${(1 + rnd() * .6).toFixed(2)}`;
+  return `<svg class="ruled ${cls}" style="left:${px(x)};top:${px(y - 1)};width:${px(w)}" width="${w}" height="3" viewBox="0 0 ${w} 3"><path d="${d}"/></svg>`;
+}
 let dynId = 0;
 const dyn = tip => { const k = "dyn" + (dynId++); DYN[k] = tip; return k; };
 const big = () => S.res === 1080;
@@ -51,27 +66,26 @@ function chamfer(w, h, c, corners) {
 }
 const pts = P => P.map(p => `${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(" ");
 
-// A plate: shadow, clipped face, then the frame: dark outer line, a 2-3 px warm metal rim
-// (bronze gradient, a material and not an accent colour), a light inner line, and the
-// engraved line further in. One frame for every plate on the screen.
-function plateHTML(x, y, w, h, P, { cls = "", panel = "", inner = "", pop = false, attrs = "" } = {}) {
+// A plate: shadow, clipped face, then the frame. Revision 3: the frame depends on what the plate is.
+//  rim "brass" - the corner and the headers of important things (left panel, full screen): a dark outer
+//                line, a 2-3 px brass rim, a light inner line. The only ornament on the screen.
+//  rim "plain" - everything else (date, alerts, map plate, strip, popups): one dark edge and one faint
+//                light line along the top, where the light comes from. No rim, no engraving.
+function plateHTML(x, y, w, h, P, { cls = "", panel = "", inner = "", pop = false, attrs = "", rim: kind = "plain" } = {}) {
   const clip = "polygon(" + P.map(p => `${p[0]}px ${p[1]}px`).join(",") + ")";
-  const b = big(), rim = b ? 2.6 : 2, e = b ? 8 : 6;
-  const svg = `<svg class="eng" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  const b = big(), rim = b ? 2.6 : 2;
+  const svg = kind === "brass" ? `<svg class="eng" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     <polygon points="${pts(polyInset(P, .5))}" fill="none" stroke="#090705"/>
     <polygon points="${pts(polyInset(P, 1 + rim / 2))}" fill="none" stroke="url(#rimG)" stroke-width="${rim}"/>
-    <polygon points="${pts(polyInset(P, 1.5 + rim))}" fill="none" stroke="rgba(255,236,200,.20)"/>
-    <polygon points="${pts(polyInset(P, 2.5 + rim))}" fill="none" stroke="rgba(0,0,0,.55)"/>
-    <polygon points="${pts(polyInset(P, e))}" fill="none" stroke="#0b0907"/>
-    <polygon points="${pts(polyInset(P, e + 1))}" fill="none" stroke="#4d4336" stroke-opacity=".8"/></svg>`;
+    <polygon points="${pts(polyInset(P, 1.5 + rim))}" fill="none" stroke="rgba(255,236,200,.16)"/>
+    <polygon points="${pts(polyInset(P, 2.5 + rim))}" fill="none" stroke="rgba(0,0,0,.55)"/></svg>`
+    : `<svg class="eng" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polygon points="${pts(polyInset(P, .5))}" fill="none" stroke="#090705"/>
+    <polyline points="${pts(polyInset(P, 1.5).filter((p, i, a) => p[1] < 4))}" fill="none" stroke="rgba(255,236,200,.13)"/></svg>`;
   return `<div class="plate ${pop ? "pop " : ""}${cls}" ${panel ? `data-panel="${panel}"` : ""} ${attrs} style="left:${x}px;top:${y}px;width:${w}px;height:${h}px"><div class="sh"><div class="pl" style="clip-path:${clip}"></div></div>${svg}${inner}</div>`;
 }
 const plate = (r, c, corners, o = {}) => plateHTML(r[0], r[1], r[2] - r[0], r[3] - r[1], chamfer(r[2] - r[0], r[3] - r[1], c, corners), o);
 
-// heater shield, era-neutral (the shape is skin data: game/skins/<id>/materials -> shield.path)
-function shieldPath(w, h) {
-  return `M0 0H${w}V${h * .46}C${w} ${h * .78} ${w * .74} ${h * .93} ${w / 2} ${h}C${w * .26} ${h * .93} 0 ${h * .78} 0 ${h * .46}Z`;
-}
 
 // ---------------------------------------------------------------- panel 1: corner
 function cellDefs() {
@@ -90,9 +104,10 @@ function cellDefs() {
 }
 function corner() {
   const l = L(), c = l.corner, cells = cellDefs(), n = cells.length;
-  const W = l.cellX0 + n * l.cellW + (big() ? 12 : 8), ch = c.c, H = c.H, RW = c.RW, B = c.B;
-  const P = [[0, 0], [W, 0], [W, H - ch], [W - ch, H], [RW, H], [RW, B - ch], [RW - ch, B], [0, B]];
-  let h = plateHTML(0, 0, W, B, P, { panel: "corner" });
+  const W = l.cellX0 + n * l.cellW + (big() ? 12 : 8), ch = c.c, H = c.H, RW = c.RW, B = c.B, S2 = c.S, N = c.N, nc = big() ? 8 : 6;
+  // the L, with a square node where the arms meet: the node holds the flag
+  const P = [[0, 0], [W, 0], [W, H - ch], [W - ch, H], [S2, H], [S2, N - nc], [S2 - nc, N], [RW, N], [RW, B - ch], [RW - ch, B], [0, B]];
+  let h = plateHTML(0, 0, W, B, P, { panel: "corner", rim: "brass" });
   // resource cells: one long sunken well with engraved separators
   const y1 = l.cellY[0], y2 = l.cellY[1];
   h += `<div class="well cellsbed" style="${box([l.cellX0 - 2, y1, l.cellX0 + n * l.cellW + 2, y2])}"></div>`;
@@ -104,21 +119,14 @@ function corner() {
       <div class="cap" style="left:${l.cellIx}px;top:${l.cellCy}px"><span class="c">${cl.cap}</span>${big() ? cl.d : (cl.d ? cl.d.replace(/(▲|▼)[^<]*/, "$1") : "")}</div>`;
     h += `<div class="cell ${on ? "on" : ""}" data-btn data-tip="${cl.k}" data-topic="${cl.topic}" ${cl.act ? `data-act="${cl.act}"` : ""} ${cl.flash ? `data-k="${cl.flash}"` : ""} style="${box(r)}">${inner}${i < n - 1 ? '<span class="sep"></span>' : ""}</div>`;
   });
-  // the shield: the one rich detail of the screen, over both arms
-  const s = l.shield, sw = s[2] - s[0], sh = s[3] - s[1], ins = big() ? 9 : 6;
-  const innerW = sw - 2 * ins, innerH = sh - 2 * ins;
-  h += `<div class="shield ${S.state === 2 ? "on" : ""}" data-btn data-tip="U1" data-key="Q" data-act="country" style="${box(s)}">
-    <svg width="${sw}" height="${sh}" viewBox="-2 -2 ${sw + 4} ${sh + 4}" style="position:absolute;left:-2px;top:-2px;overflow:visible">
-      <defs><clipPath id="shclip"><path transform="translate(${ins} ${ins})" d="${shieldPath(innerW, innerH)}"/></clipPath>
-      <linearGradient id="gloss" x1="0" y1="0" x2=".6" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></linearGradient></defs>
-      <path d="${shieldPath(sw, sh)}" fill="url(#plateG)" stroke="#090705" stroke-width="1.5"/>
-      <path transform="translate(2.2 2.2)" d="${shieldPath(sw - 4.4, sh - 4.4)}" fill="none" stroke="url(#rimG)" stroke-width="${big() ? 3.4 : 2.4}"/>
-      <path transform="translate(4.4 4.4)" d="${shieldPath(sw - 8.8, sh - 8.8)}" fill="none" stroke="rgba(255,236,200,.22)"/>
-      <image href="img/flags/srb.png" x="${ins - 6}" y="${ins}" width="${innerW + 12}" height="${innerH}" preserveAspectRatio="xMidYMid slice" clip-path="url(#shclip)"/>
-      <path transform="translate(${ins} ${ins})" d="${shieldPath(innerW, innerH)}" fill="url(#gloss)" stroke="#0b0907" stroke-width="2"/>
-      <path transform="translate(${ins - 2} ${ins - 2})" d="${shieldPath(innerW + 4, innerH + 4)}" fill="none" stroke="#4d4336"/></svg></div>`;
-  h += `<div class="rankplate" data-tip="${dyn(T("Место в мире", `<p>№ ${SRB.rank} по ВВП. Рейтинги — Сводки (L).</p>`, ""))}" style="${box(l.rank)}">№ ${SRB.rank}</div>`;
-  // rail: nine doors and search; the country lives on the shield (Q)
+  // the flag: set into the node in its own proportions (Serbia 2:3, Switzerland 1:1, Nepal its own outline,
+  // Qatar 11:28), a thin dark edge and at most a faint cloth shading. The node is the button (Q).
+  const f = l.flag, fw = f[2] - f[0], fh = f[3] - f[1];
+  const name = FLAG_NAME[PF] || SRB.name;
+  h += `<div class="flagnode ${S.state === 2 ? "on" : ""}" data-btn data-tip="${PF === "srb" ? "U1" : dyn(T(name, `<p>Рамка флага в углу: ${name}, пропорции флага как есть.</p>`, "Щелчок или <kbd>Q</kbd> — панель «Страна»"))}" data-key="Q" data-act="country" style="${box([f[0], f[1], f[2], l.rank[3]])}">
+    <span class="flagset" style="width:${fw}px;height:${fh}px">${flagImg(PF, fw - (big() ? 8 : 6), fh - (big() ? 8 : 6))}</span>
+    <span class="rank" data-tip="${dyn(T("Место в мире", `<p>№ ${SRB.rank} по ВВП, за год ▲ 2 места. До 70-го — $1,9 млрд.</p>`, "Рейтинги — Сводки (<kbd>L</kbd>)"))}" style="top:${l.rank[1] - f[1]}px;height:${l.rank[3] - l.rank[1]}px">№ ${SRB.rank}<small>по ВВП</small></span></div>`;
+  // rail: nine doors and search; the country lives on the flag (Q)
   const openRail = { 4: "R7", 5: "R3" }[S.state];
   RAIL.forEach((it, i) => {
     const r = l.rail[i];
@@ -137,21 +145,24 @@ function corner() {
 
 // ---------------------------------------------------------------- panel 2: date plate
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+const WDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 function dateText() {
   const d = new Date(Date.UTC(2024, 0, 1 + S.day));
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}<small class="wd">${WDAYS[d.getUTCDay()]}</small>`;
 }
 function datePlate() {
   const l = L(), r = l.date, b = big();
-  let h = plate(r, b ? 8 : 6, "bl", { panel: "date" });
-  h += `<div class="date ${S.paused ? "paused" : ""}" id="d1" data-btn data-tip="D1" data-key="Пробел" data-act="pause" style="${box(l.d1)}">${gl(S.paused ? "play" : "pause", b ? 20 : 15)}<span class="dt">${dateText()}</span><small class="p">${S.paused ? "пауза" : "идёт"}</small></div>`;
+  let h = plate(r, b ? 8 : 6, "bl", { panel: "date" });   // plain: the date is a line, not an ornament
+  // the date is a dated ledger line: written in ink on a ruled line, the state as a margin note
+  h += `<div class="date ${S.paused ? "paused" : ""}" id="d1" data-btn data-tip="D1" data-key="Пробел" data-act="pause" style="${box(l.d1)}">${gl(S.paused ? "play" : "pause", b ? 18 : 14)}<span class="dt">${dateText()}</span><small class="p">${S.paused ? "пауза" : "идёт"}</small></div>`;
+  h += ruled(l.d1[0] + (b ? 34 : 24), l.d1[3] - (b ? 3 : 2), l.d1[2] - l.d1[0] - (b ? 42 : 30), 3);
   const [mw, mh, st] = l.mark;
   let marks = "";
   for (let i = 0; i < 5; i++) marks += `<i data-speed="${i + 1}" class="${i < S.speed ? "lit" : ""} ${i + 1 === S.speed ? "cur" : ""}" style="left:${i * st}px;width:${mw}px;height:${mh}px"></i>`;
   h += `<div class="speed well ${S.paused ? "paused" : ""}" data-btn data-tip="D3" data-key="1–5" style="${box(l.d3)}"><div class="marks" style="left:${b ? 6 : 4}px;top:${(l.d3[3] - l.d3[1] - mh) / 2}px">${marks}</div></div>`;
   const crisis = S.state === 6 || WAR(), lv = crisis ? 3 : 5, ten = crisis ? 91 : 79;
   let lamps = ""; for (let i = 5; i >= 1; i--) lamps += `<i class="${i === lv ? "l" + lv : ""}"></i>`;
-  const tipK = crisis ? dyn(T("Мир", `<table><tr><td><span class="term" data-term="defcon">DEFCON</span></td><td class="warn">3 · готовность</td></tr><tr><td><span class="term" data-term="tension">Напряжённость</span></td><td class="neg">91 · на грани</td></tr></table><p>Ступень поднялась из-за мобилизаций на Балканах; смена ступени поставила паузу (пресет «Paradox»).</p>`, "Щелчок — окно «Мир»: последние новости, DEFCON, державы")) : "D4";
+  const tipK = crisis ? dyn(T("Мир", `<table><tr><td><span class="term" data-term="defcon">DEFCON</span></td><td class="warn">3 · готовность</td></tr><tr><td><span class="term" data-term="tension">Напряжённость</span></td><td class="neg">91 · на грани</td></tr></table><p>Ступень поднялась 14 марта из-за мобилизаций на Балканах. Пресет «Спокойно»: смена ступени — карточка, без паузы.</p>`, "Щелчок — окно «Мир»: последние новости, DEFCON, державы")) : "D4";
   h += `<div class="world well ${crisis ? "pulse" : ""}" data-btn data-tip="${tipK}" data-act="news" style="${box(l.d4)}">
     <div class="dc"><span class="lb">DEFCON</span><b class="${lv <= 3 ? "wn" : ""}">${lv}</b><div class="lamps">${lamps}</div></div><span class="vr"></span>
     <div class="tn">${gl("tension", b ? 17 : 13)}<b class="${crisis ? "ng" : "wn"}">${ten}</b><div class="bar"><i style="width:${ten}%"></i><s style="left:75%"></s></div></div></div>`;
@@ -185,14 +196,16 @@ function alertsPlate() {
   let h = plate([a.x1, a.y - (b ? 8 : 6), a.x2, bottom], b ? 8 : 6, "bl", { panel: "alerts" });
   list.forEach((al, i) => {
     const y = a.y + i * a.row, k = dyn(al.tip), w = a.x2 - a.x1;
-    const fieldW = al.field ? a.field : 0, txW = w - a.tx1 - a.sev - 10 - (fieldW ? fieldW + 6 : 0);
-    h += `<div class="arow ${al.next ? "next" : ""} ${al.more ? "more" : ""}" data-btn data-tip="${k}" data-alert="${i}" data-topic="${al.topic}" ${al.go ? `data-go="${al.go}"` : ""} style="left:${a.x1}px;top:${y}px;width:${w}px;height:${a.row}px">
+    const fieldW = al.field ? a.field : 0, tickW = al.seen ? (b ? 20 : 15) : 0, txW = w - a.tx1 - a.sev - 10 - (fieldW ? fieldW + 6 : 0) - tickW;
+    if (i > 0) h += ruled(a.x1 + (b ? 10 : 7), y, w - (b ? 20 : 14), 7 + i, "ink");      // notes in a hand-ruled list
+    h += `<div class="arow ${al.next ? "next" : ""} ${al.more ? "more" : ""} ${al.seen ? "seen" : ""}" data-btn data-tip="${k}" data-alert="${i}" data-topic="${al.topic}" ${al.go ? `data-go="${al.go}"` : ""} style="left:${a.x1}px;top:${y}px;width:${w}px;height:${a.row}px">
       <span style="position:absolute;left:${a.ix}px;top:${(a.row - a.icon) / 2}px">${ico(al.ic, a.icon, al.sev === "n" ? "t-neg" : al.sev === "w" ? "t-warn" : "")}</span>
       <span class="tx" style="left:${a.tx1}px;width:${txW}px;top:${(a.row - (b ? 20 : 16)) / 2}px">${al.tx}</span>
       ${fieldW ? `<span class="fd ${al.sev === "n" ? "ng" : ""}" style="left:${w - a.sev - 10 - fieldW}px;width:${fieldW}px;top:${(a.row - (b ? 20 : 16)) / 2}px">${al.field}</span>` : ""}
+      ${al.seen ? `<span class="tick" style="left:${w - a.sev - 10 - (fieldW ? fieldW + 6 : 0) - tickW}px;top:${(a.row - tickW) / 2 - 1}px">${gl("tick", tickW)}</span>` : ""}
       <span class="st" style="left:${w - a.sev - 4}px;top:${(a.row - 12) / 2}px;width:12px">${sevGlyph(al.sev)}</span></div>`;
   });
-  h += `<div class="rule-h" style="left:${a.x1 + 12}px;top:${tabY - 3}px;width:${a.x2 - a.x1 - 24}px"></div>`;
+  h += ruled(a.x1 + (b ? 10 : 7), tabY - 2, a.x2 - a.x1 - (b ? 20 : 14), 3, "ink");
   h += `<div class="ostab ${open ? "open" : ""}" data-btn data-tip="O1" data-key="J" data-act="outliner" style="left:${a.x1 + 6}px;top:${tabY}px;width:${a.x2 - a.x1 - 12}px;height:${a.tab}px">${gl("eye", b ? 17 : 13)}Слежу · ${rowsO.length}<span class="ar">▸</span></div>`;
   if (open) h += outliner(rowsO, a.x1 + 12, tabY + a.tab + 2, a.x2 - a.x1 - 24, oh);
   return h;
@@ -204,7 +217,7 @@ function outliner(rows, x, y, w, hgt) {
     const [grp, ic, n, v, topic, dot, bar] = r;
     if (grp !== last) { inner += `<h4>${grp}</h4>`; last = grp; }
     const dc = dot === "neg" ? "var(--neg)" : dot === "warn" ? "var(--warn)" : null;
-    inner += `<div class="orow" data-btn data-topic="${topic}" data-tip="${dyn(T(n, `<p>${grp}: ${v}</p>`, "Щелчок — к месту · ПКМ — открепить"))}">${ico(ic, 16)}<span class="n">${n}</span>${bar ? `<span class="mini"><i style="width:${bar * 100}%"></i></span>` : ""}${dc ? `<span class="dot" style="background:${dc};box-shadow:0 0 4px ${dc}"></span>` : ""}<span class="v">${v}</span></div>`;
+    inner += `<div class="orow" data-btn data-topic="${topic}" data-tip="${dyn(T(n, `<p>${grp}: ${v}</p>`, "Щелчок — к месту · ПКМ — открепить"))}">${ico(ic, 16)}<span class="n">${n}</span>${bar ? `<span class="mini"><i style="width:${bar * 100}%"></i></span>` : ""}${dc ? `<span class="dot" style="background:${dc}"></span>` : ""}<span class="v">${v}</span></div>`;
   });
   if (rows.length > S.ocap) inner += `<div class="omore">ещё ${rows.length - S.ocap} — колесом</div>`;
   return `<div class="outliner" style="left:${x}px;top:${y}px;width:${w}px;height:${hgt}px">${inner}</div>`;
@@ -253,19 +266,25 @@ function bottomStrip(shift) {
   items.slice(0, n).forEach((a, i) => {
     const r = [x0 + i * step, s.h[0], x0 + i * step + tw, s.h[1]];
     let st = a.st, g = a.g, edge = a.edge;
-    if (S.state === 6 && i < 2) { st = i === 0 ? "Марш · Рашка, 3 дн." : "Марш · Бујановац, 2 дн."; g = "march"; edge = "#e7b058"; }
-    if (S.state === 4 && i === 0) { st = "Марш · Ниш, 4 дн."; g = "march"; edge = "#6da7e6"; }
+    if (S.state === 6 && i < 2) { st = i === 0 ? "Марш · Рашка, 3 дн." : "Марш · Бујановац, 2 дн."; g = "march"; edge = "#c08a2e"; }
+    if (S.state === 4 && i === 0) { st = "Марш · Ниш, 4 дн."; g = "march"; edge = "#2f6db3"; }
     const tip = dyn(T(a.front ? a.n : a.n, a.front
       ? `<p>${a.armies} армии · ${a.d} дивизий. Щелчок — выбрать весь фронт; ▸ — развернуть армии фронта в полосе.</p>`
       : `<table><tr><td>Командующий</td><td>${a.gen || "—"}</td></tr><tr><td>Дивизий</td><td>${a.d}</td></tr><tr><td>Сила</td><td>${Math.round(a.str * 100)} %</td></tr><tr><td><span class="term" data-term="org">Организация</span></td><td>88 %</td></tr>${a.grp ? `<tr><td>Группа</td><td>${a.grp}</td></tr>` : ""}</table>`,
       "Щелчок — выбрать · двойной — камера · <kbd>Ctrl</kbd>+щелчок — добавить · <kbd>Ctrl</kbd>+<kbd>6</kbd>…<kbd>0</kbd> — в группу"));
-    const flag = a.front ? "" : `<img src="img/flags/srb.png" alt="">`;
+    // a paper tag: the army's flag in its own proportions, the name in ink, the order as a pencilled line,
+    // the state as the ink of the left stripe; selected = an ink-blue edge, no glow
+    const sel = S.state === 4 && i === 0, tw2 = r[2] - r[0], th2 = r[3] - r[1], nk = b ? 9 : 7;
+    const TP = [[nk, 0], [tw2, 0], [tw2, th2], [nk, th2], [0, th2 - nk], [0, nk]];
+    const face = `<span class="face" style="clip-path:polygon(${TP.map(p => p[0] + "px " + p[1] + "px").join(",")})"></span>
+      <svg class="tagedge" width="${tw2}" height="${th2}"><polygon points="${pts(polyInset(TP, sel ? 1.25 : .5))}" fill="none" stroke="${sel ? "#2f6db3" : "rgba(30,24,18,.75)"}" stroke-width="${sel ? 2.5 : 1}"/></svg>`;
+    const flag = a.front ? "" : flagImg(PF, b ? 24 : 18, b ? 16 : 12, "tf");
     const grp = a.grp ? `<span class="grp">${a.grp % 10}</span>` : "";
     if (compact) {
-      h += `<div class="token compact ${S.state === 4 && i === 0 ? "sel" : ""}" data-btn data-tip="${tip}" data-act="army" style="${box(r)};--edge:${edge}">${a.front ? gl("front", b ? 18 : 14) : flag}<b>${a.d}</b>${grp}</div>`;
+      h += `<div class="token compact ${sel ? "sel" : ""}" data-btn data-tip="${tip}" data-act="army" style="${box(r)};--edge:${edge}">${face}${a.front ? gl("front", b ? 18 : 14) : flag}<b>${a.d}</b>${grp}</div>`;
     } else {
-      h += `<div class="token ${a.front ? "front" : ""} ${S.state === 4 && i === 0 ? "sel" : ""}" data-btn data-tip="${tip}" data-act="army" style="${box(r)};--edge:${edge}">
-        ${a.front ? `<span class="fg">${gl("front", b ? 22 : 16)}</span>` : flag}
+      h += `<div class="token ${a.front ? "front" : ""} ${sel ? "sel" : ""}" data-btn data-tip="${tip}" data-act="army" style="${box(r)};--edge:${edge}">${face}
+        ${a.front ? `<span class="fg">${gl("front", b ? 22 : 16)}</span>` : `<span class="fg">${flag}</span>`}
         <div class="nm">${a.n}<span>×${a.d}</span></div>
         <div class="stt">${gl(g, b ? 12 : 10)}${st}</div>
         <div class="str"><i style="width:${a.str * 100}%"></i></div>${grp}${a.front ? `<span class="exp">▸</span>` : ""}</div>`;
@@ -282,7 +301,7 @@ function leftPanel(spec) {
   const l = L(), r = l.left, b = big(), w = r[2] - r[0];
   const hh = S.lpH || (r[3] - r[1]);
   const pad = b ? 14 : 10, head = l.head, tabs = l.tabs, foot = l.foot;
-  const emb = spec.flag ? `<div class="emb shieldemb"><svg viewBox="0 0 52 60"><defs><clipPath id="embclip"><path transform="translate(4 4)" d="${shieldPath(44, 52)}"/></clipPath></defs><path d="${shieldPath(52, 60)}" fill="url(#plateG)" stroke="url(#rimG)" stroke-width="2.4"/><image href="img/flags/${spec.flag}.png" x="-2" y="4" width="56" height="52" preserveAspectRatio="xMidYMid slice" clip-path="url(#embclip)"/><path transform="translate(4 4)" d="${shieldPath(44, 52)}" fill="url(#gloss2)" stroke="#0b0907" stroke-width="1.5"/></svg></div>` : `<div class="emb icon hdr">${ico(spec.icon, b ? 30 : 22, spec.tint || "")}</div>`;
+  const emb = spec.flag ? `<div class="emb flagemb">${flagImg(spec.flag, b ? 54 : 40, b ? 36 : 27)}</div>` : `<div class="emb icon hdr">${ico(spec.icon, b ? 30 : 22, spec.tint || "")}</div>`;
   let inner = `<div class="lp-head" style="left:${pad}px;right:${pad - 4}px;top:${b ? 12 : 8}px">
     ${emb}<div class="tt"><h2>${spec.title}</h2><div>${spec.sub}</div></div>
     <div class="hb" data-btn data-tip="BACK">${gl("back", 18)}</div><div class="hb ${spec.pinned ? "on" : ""}" data-btn data-tip="PIN">${gl("pin", 18)}</div><div class="hb" data-btn data-tip="CLOSE" data-act="close" data-key="Esc">${gl("close", 16)}</div></div>
@@ -290,7 +309,7 @@ function leftPanel(spec) {
   inner += `<div class="ftabs attached" style="left:${pad}px;right:${pad}px;top:${head + 2}px;height:${tabs}px">${spec.tabs.map((t, i) => `<div class="ftab ${i === spec.active ? "on" : ""}" data-btn>${t}</div>`).join("")}</div>`;
   inner += `<div class="lp-body" style="left:${pad}px;right:${pad}px;top:${head + tabs + 2}px;bottom:${foot + 2}px"><div class="lpc">${spec.body}</div></div>`;
   inner += `<div class="lp-foot" style="left:${pad}px;right:${pad}px;bottom:${b ? 9 : 6}px;height:${foot - (b ? 16 : 10)}px">${spec.foot}</div>`;
-  return plateHTML(r[0], r[1], w, hh, chamfer(w, hh, b ? 12 : 8, "tl tr"), { panel: "left", inner, cls: "paperbody", attrs: `id="lp"` });
+  return plateHTML(r[0], r[1], w, hh, chamfer(w, hh, b ? 12 : 8, "tl tr"), { panel: "left", inner, cls: "paperbody", attrs: `id="lp"`, rim: "brass" });
 }
 const kv = (k, v, cls = "", icn = "") => `<div class="kv"><span class="k">${icn}${k}</span><span class="v ${cls}">${v}</span></div>`;
 const term = (t, k) => `<span class="term" data-term="${k}">${t}</span>`;
@@ -298,7 +317,7 @@ const term = (t, k) => `<span class="term" data-term="${k}">${t}</span>`;
 function countrySpec() {
   const nb = [["hun", "Венгрия", "$212", "+48"], ["rou", "Румыния", "$351", "+36"], ["bgr", "Болгария", "$101", "+21"], ["hrv", "Хорватия", "$82", "−34"], ["bih", "Босния и Герцеговина", "$27", "+8"], ["kos", "Косово", "$10", "−81"]];
   return {
-    title: SRB.name, sub: `${SRB.form} · президент ${SRB.leader}`, flag: "srb",
+    title: FLAG_NAME[PF] || SRB.name, sub: PF === "srb" ? `${SRB.form} · президент ${SRB.leader}` : "Образец рамки: флаг в своих пропорциях, данные — Сербии", flag: PF,
     figs: [["71-е", "ВВП в мире · ▲ 2 места"], ["3-я из 8", "стабильность в регионе"], ["58-е", "сила армии в мире"]],
     tabs: ["Обзор", "Общество", `Решения <span class="badge">3</span>`, "Нации"], active: 0,
     body: `<div class="sec"><h3>Сравнение с соседями<span class="r">ВВП, млрд · отношения</span></h3>
@@ -337,7 +356,7 @@ function armySpec() {
       <p class="note" style="margin:6px 2px 0">ПКМ по карте — марш · <b>Shift</b>+ПКМ — точка пути · <b>Ctrl</b>+ПКМ — поддержать · <b>Alt</b>+ПКМ — отделить часть · ЛКМ по карте — карточка у курсора, панель остаётся</p></div>
       <div class="sec"><h3>Дивизии<span class="r">перетащите на жетон, чтобы перевести</span></h3>
       ${divs.map(d => `<div class="kv" data-btn><span class="k">${ico("military", 16)}${d[0]} <span style="color:var(--paper-faint)">${d[2]}</span></span><span class="v" style="display:flex;align-items:center;gap:8px"><span class="meter" style="width:60px;height:5px"><i style="width:${d[1] * 100}%"></i></span>${Math.round(d[1] * 100)} %</span></div>`).join("")}</div>`,
-    foot: `<div class="btn" data-btn data-tip="${dyn(T("Пополам", "", "<kbd>Ctrl</kbd>+<kbd>X</kbd>"))}">Пополам <span class="k">Ctrl X</span></div><div class="btn" data-btn data-tip="${dyn(T("Объединить с выбранными", "", "<kbd>G</kbd>"))}">Объединить <span class="k">G</span></div><div class="btn primary" data-btn data-tip="${dyn(T("Отделить часть…", `<p>Сначала куда (щелчок по карте), потом сколько: 25 / 50 / 75 / 100 % (A S D F) или число дивизий.</p>`, "<kbd>Alt</kbd>+ПКМ по карте"))}">${ico("hq_detach", 18)}Отделить…</div>`,
+    foot: `<div class="btn" data-btn data-tip="${dyn(T("Пополам", "<p>Две армии по 6 дивизий; генерал Петрович остаётся с первой.</p>", "<kbd>Ctrl</kbd>+<kbd>X</kbd>"))}">Пополам <span class="k">Ctrl X</span></div><div class="btn" data-btn data-tip="${dyn(T("Объединить с выбранными", "<p>Выбрана одна армия — объединять не с чем. Ctrl+щелчок по жетону добавляет к выбору.</p>", "<kbd>G</kbd>"))}">Объединить <span class="k">G</span></div><div class="btn primary" data-btn data-tip="${dyn(T("Отделить часть…", `<p>Сначала куда (щелчок по карте), потом сколько: 25 / 50 / 75 / 100 % (A S D F) или число дивизий.</p>`, "<kbd>Alt</kbd>+ПКМ по карте"))}">${ico("hq_detach", 18)}Отделить…</div>`,
   };
 }
 
@@ -395,7 +414,7 @@ function budgetScreen() {
       <div class="sec"><h3>Расходы<span class="r" id="b-exp">${fmtM(s.exp)}</span></h3>${b.exp.map((it, i) => brow(it, "exp", i)).join("")}</div>
       <div class="sec" style="grid-column:1/-1"><h3>Куда идут деньги<span class="r">доля расходов</span></h3><div class="stack">${b.exp.map(it => { const m = money(it); return `<i style="flex:${m}" data-tip="${dyn(T(it.n, `<p>${fmtM(m)} в неделю · ${Math.round(m / s.exp * 100)} %</p>`, ""))}"><span>${it.n}</span><b>${Math.round(m / s.exp * 100)} %</b></i>`; }).join("")}</div></div>
       <div class="sec" style="grid-column:1/-1"><h3>Казна за полгода<span class="r">${SRB.treasury}</span></h3>${spark([3.9, 3.8, 3.75, 3.6, 3.62, 3.5, 3.41, 3.38, 3.3, 3.25, 3.2, 3.12], 1180, 150, "#e7b058")}</div></div>
-      <div class="rcol"><div class="sec"><h3>${term("Баланс", "balance")}</h3><div class="bigfig ${s.bal < -0.5 ? "neg" : "pos"}" id="b-bal">${fmtM(s.bal)}</div>
+      <div class="rcol"><div class="sec"><h3>${term("Баланс", "balance")}</h3><div class="bigfig total ${s.bal < -0.5 ? "neg" : "pos"}" id="b-bal">${fmtM(s.bal)}</div>
         <div class="meter" style="height:10px;margin-top:8px"><i style="width:${Math.min(100, s.exp / Math.max(s.rev, s.exp) * 100)}%"></i><b style="left:${s.rev / Math.max(s.rev, s.exp) * 100}%"></b></div>
         <p class="note" style="margin-top:8px">Через год при этом бюджете: казна <b>${yr >= 0 ? "$" + yr.toFixed(2).replace(".", ",") + " млрд" : "пуста"}</b> · долг <b>${debt.toFixed(1).replace(".", ",")} % ВВП</b> · ${term("инфляция", "inflation")} <b>7,1 %</b></p></div>
         <div class="sec"><h3>Долг<span class="r">$39,3 млрд · 52,3 % ВВП</span></h3>
@@ -405,7 +424,7 @@ function budgetScreen() {
         <p class="note">Готовые значения стоят только у выбранной строки — одна полоса под ней, а не четыре кнопки у каждой. Щелчок по строке выбирает её.</p></div></div>
     <div class="fs-foot"><div class="btn" data-btn data-act="b-last">Как в прошлом году</div><div class="btn" data-btn data-act="b-rec">Рекомендуемое</div>
       <div class="btn primary" data-btn data-act="b-zero" data-rc="b-zero-tax" data-tip="${dyn(T("Свести в ноль", `<p>Подгоняет расходы (кроме армии и долга) так, чтобы баланс стал нулём. <b>Shift</b>+щелчок или ПКМ — то же налогами.</p>`, "ЛКМ — расходами · Shift/ПКМ — налогами"))}">${ico("balance", 18)}Свести в ноль</div></div>`;
-  return `<div id="dim"></div>` + plateHTML(r[0], r[1], w, hh, chamfer(w, hh, 14, "tl tr"), { panel: "full", inner, cls: "paperbody fullscreen" });
+  return `<div id="dim"></div>` + plateHTML(r[0], r[1], w, hh, chamfer(w, hh, 14, "tl tr"), { panel: "full", inner, cls: "paperbody fullscreen", rim: "brass" });
 }
 
 // ---------------------------------------------------------------- popups: quick amount, plan bar, headline, news, province card
@@ -421,23 +440,34 @@ function qaBox(x, y, title, sub, opts, sel, cons, everywhere) {
 }
 function planBar(shift) {
   const l = L(), r = l.pbar.slice(), dx = shift ? l.tshift - r[0] : 0; r[0] += dx; r[2] += dx;
-  const b = (ic, name, key) => `<div class="pb" data-btn data-tip="${dyn(T(name, "", key ? `<kbd>${key}</kbd>` : ""))}">${ico(ic, 18)}${key ? `<span class="k">${key}</span>` : ""}</div>`;
+  const b = (ic, name, key, fact) => `<div class="pb" data-btn data-tip="${dyn(T(name, `<p>${fact}</p>`, key ? `<kbd>${key}</kbd>` : ""))}">${ico(ic, 18)}${key ? `<span class="k">${key}</span>` : ""}</div>`;
   const inner = `<div class="pbar" style="position:absolute;inset:0">
     <span class="lbl">1-я армия · 12 див. · группа 6</span>
-    ${b("army_halt", "Стоять", "H")}${b("plan_front", "Линия фронта и сплочённость", "Ctrl F")}${b("army_defend", "Оборона области", "Ctrl G")}${b("army_advance", "Переброска", "Ctrl B")}${b("plan_execute", "Исполнить план", "Shift H")}
-    <span class="vr"></span>${b("army_withdraw", "Отменить все передвижения всех армий", "Ctrl Alt H")}</div>`;
+    ${b("army_halt", "Стоять", "H", "Марш на Ниш снимается; армия окапывается за 2 дня.")}${b("plan_front", "Линия фронта и сплочённость", "Ctrl F", "Рисуется по границе; сплочённость держит дивизии вместе, но медленнее на 15 %.")}${b("army_defend", "Оборона области", "Ctrl G", "Выбранная область: Шумадия, 7 провинций.")}${b("army_advance", "Переброска", "Ctrl B", "По железной дороге: Белград → Ниш за 1 день вместо 4.")}${b("plan_execute", "Исполнить план", "Shift H", "Плана у 1-й армии пока нет.")}
+    <span class="vr"></span>${b("army_withdraw", "Отменить все передвижения всех армий", "Ctrl Alt H", "Остановит 3 армии на марше. Спрашивает подтверждение.")}</div>`;
   return plate(r, 6, "tl tr", { inner, cls: "pbarplate" });
 }
+// The event card is a clipping from a newspaper the world in the game would print: paper, ink, a serif
+// headline, a dateline. Under the default preset «Спокойно» world news is only written to the log; a card
+// comes for a change of DEFCON (crisis) and for sanctions against us (war).
 function headline() {
-  const r = L().headline, w = r[2] - r[0], hh = r[3] - r[1];
+  const r = L().headline, w = r[2] - r[0], hh = r[3] - r[1], b = big();
   const war = WAR();
-  const inner = `<div class="headline" style="position:absolute;inset:${big() ? "12px 16px" : "8px 10px"}"><div class="kick"><span>Мировая новость · ${war ? "20 мая" : "14 марта"}</span><span class="pin ${S.hlPinned ? "on" : ""}">${gl("pin", 14)}${S.hlPinned ? "закреплена" : "щелчок — закрепить"}</span></div>
-    <h3>${war ? "ЕС вводит санкции против Сербии" : "KFOR: +1 200 военных в Косово"}</h3><p>${war ? "Заморожены активы центробанка; торговля с ЕС −30 %." : "НАТО отвечает на мобилизацию Сербии. Напряжённость +4."}</p></div>${S.hlPinned ? "" : `<div class="headline"><div class="timer"><i></i></div></div>`}`;
-  return plateHTML(r[0], r[1], w, hh, chamfer(w, hh, 8, "tl br"), { pop: true, panel: "headline", inner, attrs: `data-btn data-act="hlpin" data-topic="news:${war ? "eu-sanctions" : "kfor"}" data-tip="${dyn(T("Мировая новость", "<p>Карточка живёт 9 секунд игрового хода (на паузе стоит). Щелчок закрепляет её. Все новости — окно «Мир» › Последние новости (щелчок по показателю мира).</p>", "Щелчок — закрепить · Esc — закрыть"))}"` });
+  const kick = war ? "Санкции против нас · 20 мая 2024" : "Смена ступени DEFCON · 14 марта 2024";
+  const title = war ? "ЕС вводит санкции против Сербии" : "DEFCON 3: мобилизации на Балканах";
+  const text = war ? "Заморожены активы центробанка; торговля с ЕС −30 %. Ответить — Дипломатия (O)." : "KFOR усиливает гарнизон в Косово на 1 200 военных. Напряжённость 91 при пороге 75.";
+  // scissors do not cut straight: a few points of the edge sit a pixel off
+  const cut = `polygon(0 1px, 22% 0, 61% 1px, 100% 0, calc(100% - 1px) 38%, 100% 100%, 70% calc(100% - 1px), 34% 100%, 0 calc(100% - 1px), 1px 55%)`;
+  return `<div class="clip" data-panel="headline" data-btn data-act="hlpin" data-topic="news:${war ? "eu-sanctions" : "defcon3"}"
+    data-tip="${dyn(T(war ? "Санкции против нас" : "Смена ступени DEFCON", "<p>Карточка живёт 9 секунд игрового хода (на паузе стоит). Щелчок закрепляет её. Пресет «Спокойно»: мировые новости — только запись в окне «Мир», карточка — смена DEFCON и санкции против нас.</p>", "Щелчок — закрепить · Esc — закрыть"))}"
+    style="left:${r[0]}px;top:${r[1]}px;width:${w}px;height:${hh}px">
+    <div class="paper" style="clip-path:${cut}"></div>
+    <div class="headline" style="position:absolute;inset:${b ? "11px 16px" : "7px 10px"}"><div class="kick"><span>${kick}</span><span class="pin ${S.hlPinned ? "on" : ""}">${gl("pin", b ? 14 : 11)}${S.hlPinned ? "закреплена" : ""}</span></div>
+    <h3>${title}</h3><p>${text}</p></div>${S.hlPinned ? "" : `<div class="headline"><div class="timer"><i></i></div></div>`}</div>`;
 }
 function newsPop() {
   const r = L().news, w = r[2] - r[0], hh = r[3] - r[1];
-  const items = [["14 мар", "KFOR: +1 200 военных в Косово", "pin"], ["13 мар", "Хорватия объявила учения у Срема", ""], ["11 мар", "DEFCON 3: мобилизации на Балканах", ""], ["9 мар", "Венгрия и Сербия подписали газовый договор", ""], ["2 мар", "Цены на никель +18 % за месяц", ""], ["26 фев", "Выборы в Румынии: победа правых", ""], ["19 фев", "Перемирие в Газе сорвано", ""]];
+  const items = [["14 мар", "DEFCON 3: мобилизации на Балканах", "pin"], ["14 мар", "KFOR: +1 200 военных в Косово", ""], ["13 мар", "Хорватия объявила учения у Срема", ""], ["9 мар", "Венгрия и Сербия подписали газовый договор", ""], ["2 мар", "Цены на никель +18 % за месяц", ""], ["26 фев", "Выборы в Румынии: победа правых", ""], ["19 фев", "Перемирие в Газе сорвано", ""]];
   const inner = `<div style="position:absolute;inset:12px 14px"><div class="ftabs" style="position:relative;height:32px">${["Последние новости", "DEFCON", "Державы"].map((t, i) => `<div class="ftab ${i === 0 ? "on" : ""}" data-btn>${t}</div>`).join("")}</div>
     <div class="newslist">${items.map(n => `<div class="nrow" data-btn><span class="nd">${n[0]}</span><span class="nt">${n[1]}</span>${n[2] ? gl("pin", 14, "color:var(--paper)") : ""}</div>`).join("")}</div>
     <p class="note" style="margin-top:6px">Последние 20 новостей; закреплённые — сверху. Что ставит паузу, что даёт карточку, что строку тревоги, что только запись — Настройки › Сообщения.</p></div>`;
@@ -459,20 +489,19 @@ const SUMADIJA = [[728, 690], [762, 684], [795, 686], [818, 704], [823, 736], [8
 function counter(x, y, flag, num, { sel = false, edge = "#86745a", glyph = "" } = {}) {
   return `<g class="mglyph" transform="translate(${x - 24} ${y - 11})">${sel ? `<rect x="-4" y="-4" width="56" height="30" rx="3" fill="none" stroke="#6da7e6" stroke-width="2.5"/>` : ""}
     <rect width="48" height="22" rx="2" fill="#221d19" stroke="#090705" stroke-width="1"/><rect x="1.5" y="1.5" width="45" height="19" rx="1.5" fill="none" stroke="${edge}" stroke-width="1.2"/>
-    <image href="img/flags/${flag}.png" x="5" y="5" width="18" height="12" preserveAspectRatio="none"/><text x="36" y="15.5" text-anchor="middle" font-size="13" font-weight="700" fill="#efe4c8" font-family="Segoe UI,sans-serif">${num}</text>${glyph}</g>`;
+    <image href="img/flags/${flag}.png" x="5" y="5" width="${(12 * (FLAG[flag] || 1.5)).toFixed(1)}" height="12" preserveAspectRatio="none"/><text x="${(24 + 12 * (FLAG[flag] || 1.5)) / 2 + 12}" y="15.5" text-anchor="middle" font-size="13" font-weight="700" fill="#efe4c8" font-family="Segoe UI,sans-serif">${num}</text>${glyph}</g>`;
 }
 function overlay() {
   const P = a => a.map(p => p.join(",")).join(" ");
   let s = `<svg id="overlay" viewBox="0 0 1920 1080" preserveAspectRatio="none"><defs>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter>
     <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="8" fill="rgba(201,79,85,.55)"/></pattern>
     <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 10 5 0 10z" fill="#6da7e6"/></marker></defs>`;
   // the Ukrainian front: one line and one counter per country per sector, not a wall of counters
   const fl = FRONT_LINE.map(p => p.join(" ")).join(" L");
   s += `<path d="M${fl}" fill="none" stroke="#120f0c" stroke-width="7" stroke-linejoin="round" opacity=".75"/><path d="M${fl}" fill="none" stroke="#c94f55" stroke-width="2.4" stroke-dasharray="10 5" stroke-linejoin="round"/>`;
   COUNTERS.forEach(c => { s += counter(c.at[0], c.at[1], c.f, c.n); });
-  if (S.state === 2) s += `<polygon points="${P(SERBIA)}" fill="rgba(239,228,200,.10)" stroke="#efe4c8" stroke-width="5" opacity=".35" filter="url(#glow)"/><polygon points="${P(SERBIA)}" fill="none" stroke="#efe4c8" stroke-width="2"/>`;
-  if (S.state === 3) s += `<polygon points="${P(SERBIA)}" fill="none" stroke="#efe4c8" stroke-width="1.5" stroke-dasharray="4 4" opacity=".7"/><polygon points="${P(SUMADIJA)}" fill="rgba(109,167,230,.28)" stroke="#6da7e6" stroke-width="5" opacity=".5" filter="url(#glow)"/><polygon points="${P(SUMADIJA)}" fill="rgba(109,167,230,.22)" stroke="#9cc8f2" stroke-width="2"/>`;
+  if (S.state === 2) s += `<polygon points="${P(SERBIA)}" fill="rgba(239,228,200,.08)" stroke="#120f0c" stroke-width="5" opacity=".55"/><polygon points="${P(SERBIA)}" fill="none" stroke="#efe4c8" stroke-width="2"/>`;
+  if (S.state === 3) s += `<polygon points="${P(SERBIA)}" fill="none" stroke="#efe4c8" stroke-width="1.5" stroke-dasharray="4 4" opacity=".7"/><polygon points="${P(SUMADIJA)}" fill="rgba(109,167,230,.22)" stroke="#0b1a2e" stroke-width="5" opacity=".6"/><polygon points="${P(SUMADIJA)}" fill="none" stroke="#9cc8f2" stroke-width="2"/>`;
   if (S.state === 6 || WAR()) s += `<polygon points="${P(KOSOVO)}" fill="url(#hatch)" stroke="#c94f55" stroke-width="2.5"/>`;
   // alert marks: the same record as the alert row (rule 6)
   const list = S.state === 5 ? [] : alertList();
@@ -594,9 +623,9 @@ function census() {
       const b = rects[j][1];
       if (a[0] < b[2] - .5 && b[0] < a[2] - .5 && a[1] < b[3] - .5 && b[1] < a[3] - .5) {
         if (rects[i][0] === "corner" || rects[j][0] === "corner") {
-          // the corner's bounding box is an L: test against its two arms and the shield
+          // the corner's bounding box is an L: test against its two arms and the flag node
           const o = rects[i][0] === "corner" ? b : a, c = l.corner, cw = rects[i][0] === "corner" ? a[2] : b[2];
-          const arms = [[0, 0, cw, c.H], [0, 0, c.RW, c.B], [l.shield[0], l.shield[1], l.shield[2], l.rank[3]]];
+          const arms = [[0, 0, cw, c.H], [0, 0, c.RW, c.B], [0, 0, c.S, c.N]];
           if (!arms.some(m => o[0] < m[2] && m[0] < o[2] && o[1] < m[3] && m[1] < o[3])) continue;
         }
         overlaps++;
@@ -795,7 +824,7 @@ function budgetRefresh() {
     sl.style.setProperty("--p", (it.v - it.min) / ((it.max - it.min) || 1) * 100 + "%");
   });
   F.querySelector("#b-rev").textContent = fmtM(s.rev); F.querySelector("#b-exp").textContent = fmtM(s.exp);
-  const b = F.querySelector("#b-bal"); b.textContent = fmtM(s.bal); b.className = "bigfig " + (s.bal < -0.5 ? "neg" : "pos");
+  const b = F.querySelector("#b-bal"); b.textContent = fmtM(s.bal); b.className = "bigfig total " + (s.bal < -0.5 ? "neg" : "pos");
 }
 function budgetSet(spec) {
   const [side, i, v] = spec.split(":"), it = S.budget[side][+i];
@@ -833,7 +862,7 @@ F.addEventListener("mouseover", e => {
 let ticker = null;
 function togglePause() {
   S.paused = !S.paused; clearInterval(ticker);
-  if (!S.paused) ticker = setInterval(() => { S.day++; const d = document.querySelector("#d1 .dt"); if (d) d.textContent = dateText(); }, [0, 1400, 900, 550, 300, 150][S.speed]);
+  if (!S.paused) ticker = setInterval(() => { S.day++; const d = document.querySelector("#d1 .dt"); if (d) d.innerHTML = dateText(); }, [0, 1400, 900, 550, 300, 150][S.speed]);
   render();
 }
 
@@ -891,7 +920,7 @@ document.getElementById("t-mouse").innerHTML = "<tr><th>Жест</th><th>Что 
 document.getElementById("t-keys").innerHTML = "<tr><th>Клавиша</th><th>Что</th></tr>" + KEYS.map(r => `<tr><td>${kb(r[0])}</td><td>${r[1]}</td></tr>`).join("");
 document.getElementById("t-touch").innerHTML = "<tr><th>Мышь и клавиатура</th><th>Касание</th></tr>" + TOUCH.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("");
 const MSGN = { P: "пауза", K: "карточка", R: "строка тревоги", L: "только запись" };
-document.getElementById("t-msg").innerHTML = "<tr><th>Событие</th><th>«Paradox» (по умолчанию)</th><th>«AoH: не останавливаться»</th><th>«Спокойно»</th></tr>" + MSG_EVENTS.map(r => `<tr><td>${r[0]}</td>${r.slice(1).map(v => `<td class="m-${v}">${MSGN[v]}</td>`).join("")}</tr>`).join("");
+document.getElementById("t-msg").innerHTML = "<tr><th>Событие</th><th>«Paradox»</th><th>«AoH: не останавливаться»</th><th>«Спокойно» (по умолчанию)</th></tr>" + MSG_EVENTS.map(r => `<tr><td>${r[0]}</td>${r.slice(1).map(v => `<td class="m-${v}">${MSGN[v]}</td>`).join("")}</tr>`).join("");
 
 setState(+(qs.get("state") || 1));
 window.addEventListener("load", () => { fit(); census(); });

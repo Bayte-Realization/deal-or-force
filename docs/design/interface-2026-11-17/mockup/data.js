@@ -1,4 +1,4 @@
-// Data for the mockup: layout from section 11 of the spec (revision 2), Serbia in 2024,
+// Data for the mockup: layout from section 11 of the spec (revision 3), Serbia in 2024,
 // tooltip texts, nested terms, the controls and message tables (sections 5 and 6a).
 "use strict";
 
@@ -6,8 +6,9 @@
 const LAY = {
   1080: {
     W: 1920, H: 1080,
-    corner: { S: 112, H: 70, RW: 64, B: 792, c: 12 },
-    shield: [4, 0, 108, 116], rank: [26, 114, 86, 138],
+    // the corner node holds the flag in its own proportions: an S x N block where both arms meet
+    corner: { S: 112, N: 124, H: 70, RW: 64, B: 792, c: 12 },
+    flag: [10, 8, 102, 78], rank: [10, 88, 102, 114],
     cellX0: 120, cellW: 148, cellY: [6, 64],
     cellIcon: 26, cellIx: 10, cellIy: 7, cellVx: 44, cellVy: 6, cellCy: 38,
     rail: [152, 220, 280, 340, 400, 468, 528, 588, 656, 724].map(y => [4, y, 60, y + 56]),
@@ -29,8 +30,8 @@ const LAY = {
   },
   720: {
     W: 1280, H: 720,
-    corner: { S: 76, H: 48, RW: 44, B: 552, c: 8 },
-    shield: [3, 0, 73, 78], rank: [16, 76, 60, 93],
+    corner: { S: 76, N: 86, H: 48, RW: 44, B: 552, c: 8 },
+    flag: [7, 6, 69, 52], rank: [7, 59, 69, 78],
     cellX0: 82, cellW: 104, cellY: [4, 44],
     cellIcon: 18, cellIx: 6, cellIy: 6, cellVx: 28, cellVy: 3, cellCy: 25,
     rail: [100, 148, 190, 232, 274, 322, 364, 406, 454, 502].map(y => [2, y, 42, y + 40]),
@@ -62,27 +63,46 @@ const SRB = {
   pc: "42", pcG: "+2,1",
 };
 
-// ---------------------------------------------------------------- placeholder glyphs (spec 7.2 "нарисовать")
+// ---------------------------------------------------------------- flags: width / height, the country's own proportions
+// (from the files in game/gfx/flags; Qatar's file is 4.17:1, the flag is 28:11 - see spec, revision 3)
+const FLAG = { srb: 1.5, hrv: 2, bih: 2, hun: 2, rou: 1.5, bgr: 5 / 3, kos: 1.4, mne: 2, mkd: 2, alb: 1.4, ukr: 1.5, rus: 1.5, che: 1, npl: 105 / 128, qat: 28 / 11, vat: 1 };
+const FLAG_NAME = { srb: "Сербия", che: "Швейцария", npl: "Непал", qat: "Катар", vat: "Ватикан" };
+// fit a flag into a box without changing its proportions
+function flagFit(code, maxW, maxH) { const r = FLAG[code] || 1.5; let w = maxW, h = w / r; if (h > maxH) { h = maxH; w = h * r; } return [w, h]; }
+
+// ---------------------------------------------------------------- glyphs drawn for the mockup (spec 7.2 "нарисовать").
+// One hand: filled shapes on a 24 grid, no outlines. The only stroke is the pencil tick, because it is a pencil mark.
 const GLYPH = {
   play: '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg>',
-  pause: '<svg viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.2" height="15" rx=".6" fill="currentColor"/><rect x="13.8" y="4.5" width="4.2" height="15" rx=".6" fill="currentColor"/></svg>',
-  menu: '<svg viewBox="0 0 24 24"><g fill="currentColor"><rect x="3.5" y="5" width="17" height="2.6" rx=".8"/><rect x="3.5" y="10.7" width="17" height="2.6" rx=".8"/><rect x="3.5" y="16.4" width="17" height="2.6" rx=".8"/></g></svg>',
+  pause: '<svg viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.2" height="15" fill="currentColor"/><rect x="13.8" y="4.5" width="4.2" height="15" fill="currentColor"/></svg>',
+  menu: '<svg viewBox="0 0 24 24"><g fill="currentColor"><rect x="3.5" y="5" width="17" height="2.6"/><rect x="3.5" y="10.7" width="17" height="2.6"/><rect x="3.5" y="16.4" width="17" height="2.6"/></g></svg>',
   more: '<svg viewBox="0 0 24 24"><g fill="currentColor"><path d="M12 3.5 21 8l-9 4.5L3 8z"/><path d="M3.5 12.2 12 16.5l8.5-4.3-1.9-1L12 14.5l-6.6-3.3z"/><circle cx="6" cy="20" r="1.6"/><circle cx="12" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/></g></svg>',
-  political: '<svg viewBox="0 0 24 24"><path d="M3.5 4.5h17v15h-17z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 4.5h7.5l1.5 3-2 3.5 2.5 3-1 5.5h-8.5z" fill="currentColor"/><path d="M14 11.5l2.5-1 4 2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
-  warmode: '<svg viewBox="0 0 24 24"><path d="M3 18.5c3-1 5-3.5 6.5-6.5s4-5 8-6l-1.6 3.4 3.6.6c-3.5 1.2-5.6 3.3-6.8 6.1S9.5 20 3 18.5z" fill="currentColor"/><path d="M5 6l2 2M9 4l1 2.6M4 10.5l2.6.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
-  eye: '<svg viewBox="0 0 24 24"><path d="M12 5.5C6.5 5.5 3 12 3 12s3.5 6.5 9 6.5 9-6.5 9-6.5-3.5-6.5-9-6.5z" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="12" r="3.3" fill="currentColor"/></svg>',
+  political: '<svg viewBox="0 0 24 24"><path d="M3 4.5h8l1.6 3.2-2 3.4 2.5 3.1-1.1 5.3H3z" fill="currentColor"/><path d="M13.7 4.5H21v15h-8.3l1-4.7-2.4-3.3 1.9-3.6z" fill="currentColor" opacity=".55"/></svg>',
+  warmode: '<svg viewBox="0 0 24 24"><path d="M3 18.5c3-1 5-3.5 6.5-6.5s4-5 8-6l-1.6 3.4 3.6.6c-3.5 1.2-5.6 3.3-6.8 6.1S9.5 20 3 18.5z" fill="currentColor"/><path d="M4.2 5.2 6 4l2.6 3.4-1.4 1.1zM8.4 3.4l1.8-.6 1.2 3.6-1.6.5zM3 10l.4-1.8 3.4 1-.4 1.6z" fill="currentColor"/></svg>',
+  eye: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 5C6.5 5 2.5 12 2.5 12S6.5 19 12 19s9.5-7 9.5-7S17.5 5 12 5zm0 2.8a4.2 4.2 0 1 1 0 8.4 4.2 4.2 0 0 1 0-8.4zm0 1.9a2.3 2.3 0 1 0 0 4.6 2.3 2.3 0 0 0 0-4.6z" fill="currentColor"/></svg>',
   pin: '<svg viewBox="0 0 24 24"><path d="M9 3h6l-1 6 4 4H6l4-4zM11.2 13h1.6v8l-.8 1-.8-1z" fill="currentColor"/></svg>',
   undo: '<svg viewBox="0 0 24 24"><path d="M9 5 3.5 10 9 15v-3.3c4.6 0 7.6 1.4 10 5.3-.8-5.4-3.8-8.8-10-9.4z" fill="currentColor"/></svg>',
-  back: '<svg viewBox="0 0 24 24"><path d="M14.5 5 7.5 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  back: '<svg viewBox="0 0 24 24"><path d="M15.4 3.8 7.2 12l8.2 8.2 2.1-2.1-6.1-6.1 6.1-6.1z" fill="currentColor"/></svg>',
+  close: '<svg viewBox="0 0 24 24"><path d="M6.1 4 12 9.9 17.9 4 20 6.1 14.1 12l5.9 5.9-2.1 2.1-5.9-5.9L6.1 20 4 17.9 9.9 12 4 6.1z" fill="currentColor"/></svg>',
   march: '<svg viewBox="0 0 24 24"><path d="M4 8h9l-3-3.5h3.6L18.5 10l-4.9 5.5H10l3-3.5H4z" fill="currentColor"/></svg>',
-  stand: '<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>',
+  stand: '<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" fill="currentColor"/></svg>',
   fight: '<svg viewBox="0 0 24 24"><path d="M4 4l7 7-1.6 1.6L5.6 8.8V12L3 9.4V4zM20 4v5.4L17.4 12V8.8l-3.8 3.8L12 11zM8 14l2 2-4 4-2-2zm8 0 4 4-2 2-4-4z" fill="currentColor"/></svg>',
-  front: '<svg viewBox="0 0 24 24"><path d="M3 15c3-4 6-4 9 0s6 4 9 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M6 13.2 7.4 9M12 15l0-4.4M18 13.2 16.6 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-  tension: '<svg viewBox="0 0 24 24"><path d="M3.5 17a8.5 8.5 0 0 1 17 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M12 17 17 9.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17" r="2.2" fill="currentColor"/></svg>',
+  front: '<svg viewBox="0 0 24 24"><path d="M2.5 15.2c3.2-4.4 6.3-4.4 9.5 0s6.3 4.4 9.5 0v3.3c-3.2 4-6.3 4-9.5 0s-6.3-4-9.5 0z" fill="currentColor"/><path d="M5 12.6 7 8.2l1.7 3.2zM10.9 11l1.1-4.8 1.1 4.8zM15.3 11.4 17 8.2l2 4.4z" fill="currentColor"/></svg>',
+  tension: '<svg viewBox="0 0 24 24"><path d="M2.5 17a9.5 9.5 0 0 1 19 0h-3a6.5 6.5 0 0 0-13 0z" fill="currentColor"/><path d="M10.9 16.4 16.6 8.8l1.4 1-5 8z" fill="currentColor"/><circle cx="12" cy="17" r="2.3" fill="currentColor"/></svg>',
   news: '<svg viewBox="0 0 24 24"><path d="M4 5h13v13.5a1.5 1.5 0 0 0 1.5 1.5H5.5A1.5 1.5 0 0 1 4 18.5z" fill="currentColor"/><path d="M17 9h3v9.5a1.5 1.5 0 0 1-3 0z" fill="currentColor" opacity=".7"/><g fill="#1c1916"><rect x="6.2" y="7.2" width="8.6" height="3"/><rect x="6.2" y="12" width="8.6" height="1.4"/><rect x="6.2" y="15" width="6" height="1.4"/></g></svg>',
-  minimap: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.9"/><rect x="9" y="9" width="7" height="5" fill="currentColor"/></svg>',
+  minimap: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3 5h18v14H3zm2 2v10h14V7z" fill="currentColor"/><rect x="9" y="9" width="7" height="5" fill="currentColor"/></svg>',
+  // filled replacements for the outlined game glyphs (spec 7.2: nickel, crane, document, warning)
+  nickel: '<svg viewBox="0 0 24 24"><path d="M3 19.5 4.6 14h6.6l1.6 5.5zM11.2 19.5l1.6-5.5h6.6L21 19.5zM7.1 13 8.7 7.5h6.6l1.6 5.5z" fill="currentColor"/></svg>',
+  crane: '<svg viewBox="0 0 24 24"><path d="M6 21V7.4h2.6V21zM3.8 4.6h17v2.6h-17zM8.6 7.2h3.2l-3.2 3.4zM17.3 7.2h1.3v5.6h-1.3zM15.9 12.8h4.1v2.9h-4.1zM3.2 19.4h8.2V22H3.2z" fill="currentColor"/></svg>',
+  treaty: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M5 2.5h10l4 4v15H5zm3 6v1.6h8V8.5zm0 3.3v1.6h8v-1.6zm0 3.3v1.6h4.5v-1.6z" fill="currentColor"/><circle cx="16" cy="18" r="3.2" fill="currentColor" stroke="#1c1916" stroke-width="1.2"/></svg>',
+  warning: '<svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.8 22.5 21h-21zM10.8 9v6.3h2.4V9zm0 7.8v2.4h2.4v-2.4z" fill="currentColor"/></svg>',
+  detach: '<svg viewBox="0 0 24 24"><path d="M2.5 10.8h8.3l4-4.8h2.6V3.6l4.1 3.6-4.1 3.6V8.4h-1.5L12.4 12l3.5 3.6h1.5v-2.4l4.1 3.6-4.1 3.6v-2.4h-2.6l-4-4.8H2.5z" fill="currentColor"/></svg>',
+  gather: '<svg viewBox="0 0 24 24"><path d="M4.5 2.5h2.2V21H4.5zM6.7 3.5h11.5l-2.6 3.7 2.6 3.8H6.7zM15.2 13.2h2.2v2.6H20V18h-2.6v2.6h-2.2V18h-2.6v-2.2h2.6z" fill="currentColor"/></svg>',
+  // a pencil mark, not an icon: "seen" on an alert row
+  tick: '<svg viewBox="0 0 24 24"><path d="M3.6 13.2c1.7 1.1 3.1 2.8 4.4 5 2.2-5.6 6.4-10.5 12.4-13.6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
+// game glyphs that are still outlines are drawn here in the filled hand instead
+const GLYPH_FOR = { good_nickel: "nickel", alert_construction: "crane", treaty: "treaty", debt_default: "warning", hq_detach: "detach", hq_new: "gather" };
 
 // ---------------------------------------------------------------- nested terms (depth up to 4)
 const TERMS = {
@@ -115,13 +135,13 @@ const T = (title, body, key, extra = "") => ({ title, body, key, extra });
 const TIPS = {
   U1: T("Сербия", `<p>${SRB.form}. Президент <b>${SRB.leader}</b>, премьер-министр <b>${SRB.premier}</b>.</p><table><tr><td>Место в мире по ВВП</td><td>№ ${SRB.rank}</td></tr><tr><td>Население</td><td>${SRB.pop}</td></tr><tr><td>Столица</td><td>${SRB.capital}</td></tr></table>`, "Щелчок или <kbd>Q</kbd> — панель «Страна» · <kbd>Home</kbd> — к столице"),
   C1: T("Казна", `<h4 style="margin-top:-2px"><span>${SRB.treasury}</span></h4><table><tr><td>Доходы за неделю</td><td>$612 млн</td></tr><tr><td>Расходы за неделю</td><td>$650 млн</td></tr><tr><td><span class="term" data-term="balance">Баланс</span></td><td class="neg">${SRB.balance}</td></tr><tr><td>Хватит при этом балансе</td><td>82 недели</td></tr></table>${spark([3.9, 3.8, 3.75, 3.6, 3.62, 3.5, 3.41, 3.38, 3.3, 3.25, 3.2, 3.12], 300, 46, "#e7b058")}`, "Щелчок — Экономика › Бюджет"),
-  C2: T("ВВП", `<h4 style="margin-top:-2px"><span>${SRB.gdp}</span></h4><table><tr><td>Рост за год</td><td class="pos">${SRB.growth}</td></tr><tr><td>Население</td><td>${SRB.pop}</td></tr><tr><td>ВВП на душу</td><td>$11 360</td></tr><tr><td>Место в мире</td><td>№ ${SRB.rank}</td></tr></table>${spark([72.1, 72.4, 72.6, 73.0, 73.2, 73.5, 73.9, 74.1, 74.4, 74.6, 74.9, 75.2])}<p class="note">Население ушло из верхней полосы сюда и в подсказку щита.</p>`, "Щелчок — Сводки › Экономика"),
+  C2: T("ВВП", `<h4 style="margin-top:-2px"><span>${SRB.gdp}</span></h4><table><tr><td>Рост за год</td><td class="pos">${SRB.growth}</td></tr><tr><td>Население</td><td>${SRB.pop}</td></tr><tr><td>ВВП на душу</td><td>$11 360</td></tr><tr><td>Место в мире</td><td>№ ${SRB.rank}</td></tr></table>${spark([72.1, 72.4, 72.6, 73.0, 73.2, 73.5, 73.9, 74.1, 74.4, 74.6, 74.9, 75.2])}<p class="note">До 70-го места не хватает $1,9 млрд (Гана).</p>`, "Щелчок — Сводки › Экономика"),
   C3: T("Госдолг", `<table><tr><td>Долг</td><td>${SRB.debt} ВВП · $39,3 млрд</td></tr><tr><td><span class="term" data-term="credit">Доверие кредиторов</span></td><td>BB+</td></tr><tr><td>Обслуживание долга</td><td>$41 млн/нед.</td></tr><tr><td>Порог тревоги</td><td>60 % ВВП</td></tr></table>`, "Щелчок — Экономика › Долг"),
-  C4: T("Инфляция", `<table><tr><td><span class="term" data-term="inflation">Инфляция</span></td><td class="warn">${SRB.infl} ▲</td></tr><tr><td>Цель центробанка</td><td>3 ± 1,5 %</td></tr><tr><td>Ключевая ставка</td><td>6,50 %</td></tr></table><p>Янтарь — выше цели; красный — выше 15 %. У каждой ячейки свой цвет, своя подпись: наводить, чтобы узнать, что плохо, не нужно.</p>`, "Щелчок — Экономика › Центробанк"),
+  C4: T("Инфляция", `<table><tr><td><span class="term" data-term="inflation">Инфляция</span></td><td class="warn">${SRB.infl} ▲</td></tr><tr><td>Цель центробанка</td><td>3 ± 1,5 %</td></tr><tr><td>Ключевая ставка</td><td>6,50 %</td></tr></table><p>Выше цели на 3,1 п. п. Следующий порог — 15 %: там начинает падать доверие к динару.</p>`, "Щелчок — Экономика › Центробанк"),
   C5: T("Стабильность", `<table><tr><td><span class="term" data-term="stability">Стабильность</span></td><td>${SRB.stab}</td></tr><tr><td>При нынешних условиях</td><td>62 %</td></tr></table>${spark([66, 66, 65.5, 65, 65.2, 64.8, 64.6, 64.5, 64.3, 64.2, 64.1, 64])}`, "Щелчок — Страна › Общество"),
   C6: T("Призыв", `<table><tr><td><span class="term" data-term="manpower">Призывной резерв</span></td><td>${SRB.man}</td></tr><tr><td>Прирост в день</td><td class="pos">${SRB.manG}</td></tr><tr><td>Под ружьём</td><td>28 дивизий · 41 тыс.</td></tr></table>`, "Щелчок — Армия › Набор"),
   C7: T("Политический капитал", `<table><tr><td><span class="term" data-term="polcap">Капитал</span></td><td>${SRB.pc}</td></tr><tr><td>Прирост в неделю</td><td class="pos">${SRB.pcG}</td></tr><tr><td>Ближайшее решение стоит</td><td>35</td></tr></table>`, "Щелчок — Власть"),
-  C8: T("Война", `<table><tr><td><span class="term" data-term="wsup">Поддержка войны</span></td><td class="warn">63 % ▼</td></tr><tr><td>Опыт: армия · авиация · флот</td><td>14 · 3 · 0</td></tr><tr><td>Следующая <span class="term" data-term="doctrine">доктрина</span> армии</td><td>20 опыта</td></tr></table><p>Ячейка есть только в войну. В мирное время её нет — вместо трёх нулей опыта.</p>`, "Щелчок — Войны"),
+  C8: T("Война", `<table><tr><td><span class="term" data-term="wsup">Поддержка войны</span></td><td class="warn">63 % ▼</td></tr><tr><td>Опыт: армия · авиация · флот</td><td>14 · 3 · 0</td></tr><tr><td>Следующая <span class="term" data-term="doctrine">доктрина</span> армии</td><td>20 опыта</td></tr></table><p>Ниже 30 % война каждую неделю отнимает стабильность. За последние 30 дней: −9 п. п.</p>`, "Щелчок — Войны"),
   D1: T("Пауза · пуск", `<p>Дата — кнопка, как в играх Paradox: щелчок ставит и снимает паузу. Только она и пробел запускают время.</p>`, "<kbd>Пробел</kbd>"),
   D3: T("Скорость", `<p>Пять меток: щелчок выбирает скорость, время не запускается (как в Paradox, сделано в 0f976e1e). Колесо над шкалой — ±1.</p>`, "<kbd>1</kbd>–<kbd>5</kbd> · <kbd>+</kbd> <kbd>−</kbd>"),
   D4: T("Мир", `<table><tr><td><span class="term" data-term="defcon">DEFCON</span></td><td>5 · мир</td></tr><tr><td><span class="term" data-term="tension">Напряжённость</span></td><td class="warn">79 · выше порога 75</td></tr></table><p>Мир говорит только здесь. Щелчок открывает окно «Мир»: <b>Последние новости</b> (20 последних, закреплённые сверху), лестница DEFCON, соперничество держав.</p>`, "Щелчок — окно «Мир»: последние новости, DEFCON, державы"),
@@ -136,7 +156,7 @@ const TIPS = {
   O1: T("Слежу", `<p>Аутлайнер: только то, за чем игрок следит, — ход стройки и науки, линии с нехваткой, закреплённые цены, флоты, закреплённое. Состояний «пусто / ничего» в нём нет: это тревоги и точки рейки.</p><p>Открыт — не больше 4 строк, остальное колесом; тревог тогда 3.</p>`, "<kbd>J</kbd> — открыть или сложить"),
   PIN: T("Закрепить", `<p>Панель остаётся на месте, второе выбранное открывается карточкой у курсора. Закреплённое попадает в «Слежу».</p>`, ""),
   BACK: T("Назад", `<p>К прошлому содержимому панели: страна → её регион → армия в нём → назад.</p>`, "<kbd>Alt</kbd>+<kbd>←</kbd> · боковая кнопка мыши"),
-  CLOSE: T("Закрыть", ``, "<kbd>Esc</kbd>"),
+  CLOSE: T("Закрыть панель", `<p>Выбор на карте остаётся; панель вернётся по «назад».</p>`, "<kbd>Esc</kbd>"),
 };
 
 const RAIL = [
@@ -165,10 +185,10 @@ const LAYERS = [["2D / 3D", "F2", true], ["Облака", "", true], ["Тума�
 // alerts: severity n (red ●) / w (amber ▲) / i (info ◆); field = deadline or the one figure, right-aligned, never cut.
 // Rows are sorted by deadline, then severity. topic = the fact the row states (the dedupe test compares these).
 const ALERTS_REST = [
-  { sev: "w", ic: "alert_battle", tx: "Опасное противостояние: Косово", field: "", mk: [778, 818], topic: "kosovo:standoff",
+  { sev: "w", ic: "alert_battle", tx: "Противостояние в Косово", field: "", mk: [778, 818], topic: "kosovo:standoff",
     tip: T("Опасное противостояние: Косово", `<p>Если противостояние перейдёт порог — инцидент, затем кризис с ультиматумом.</p><p>Ответы: переговоры, войска к границе, обращение к <b>ЕС</b>.</p>`, "Щелчок — к Косово · ПКМ — скрыть на 30 дней") },
-  { sev: "w", ic: "good_nickel", tx: "Дефицит никеля", field: "−11,8 %", mk: [700, 640], topic: "nickel:shortage",
-    tip: T("Дефицит никеля", `<p>Не хватает 11,8 % потребности. Страдают линии стали и аккумуляторов.</p><p>Ответы: квота ввоза из Индонезии, замена в линиях, стройка добычи.</p>`, "Щелчок — Торговля › никель · ПКМ — скрыть на 30 дней") },
+  { sev: "w", ic: "good_nickel", tx: "Дефицит никеля", field: "−11,8 %", mk: [700, 640], topic: "nickel:shortage", seen: "1 января",
+    tip: T("Дефицит никеля", `<p>Не хватает 11,8 % потребности. Страдают линии стали и аккумуляторов.</p><p>Ответы: квота ввоза из Индонезии, замена в линиях, стройка добычи.</p><p class="note">Галочка карандашом — вы открывали эту строку 1 января. Строка стоит, пока беда не ушла.</p>`, "Щелчок — Торговля › никель · ПКМ — скрыть на 30 дней") },
   { sev: "i", next: true, ic: "alert_construction", tx: "Дальше: начать стройку", field: "", go: 3, mk: [780, 722], topic: "construction:idle",
     tip: T("Дальше: начать стройку", `<p>Ни одна площадка в Сербии не занята. Шумадия даёт лучший возврат: гражданская промышленность окупится за 3,1 года.</p><p class="note">Строки «Дальше» идут после бед и выключаются после первых шагов (или настройкой).</p>`, "Щелчок — к Шумадии · ПКМ — скрыть на 30 дней") },
 ];
@@ -211,16 +231,16 @@ const OUTLINER_CRISIS = [
 ];
 
 const ARMIES = [
-  { n: "1-я армия", d: 12, st: "Стоит", g: "stand", edge: "#9a917c", str: .96, gen: "ген. Д. Петрович", at: "Белград", pos: [748, 676], grp: 6 },
-  { n: "2-я армия", d: 10, st: "Стоит", g: "stand", edge: "#9a917c", str: .91, gen: "ген. М. Илич", at: "Ниш", pos: [826, 760] },
-  { n: "3-я армия", d: 6, st: "Стоит", g: "stand", edge: "#9a917c", str: .88, gen: "ген. С. Йованович", at: "Нови-Сад", pos: [742, 628] },
+  { n: "1-я армия", d: 12, st: "Стоит", g: "stand", edge: "#7d705b", str: .96, gen: "ген. Д. Петрович", at: "Белград", pos: [748, 676], grp: 6 },
+  { n: "2-я армия", d: 10, st: "Стоит", g: "stand", edge: "#7d705b", str: .91, gen: "ген. М. Илич", at: "Ниш", pos: [826, 760] },
+  { n: "3-я армия", d: 6, st: "Стоит", g: "stand", edge: "#7d705b", str: .88, gen: "ген. С. Йованович", at: "Нови-Сад", pos: [742, 628] },
 ];
 // war: the strip groups armies by front (HoI4 army bar), one plate per front, collapsible
 const WAR_STRIP = [
-  { front: true, n: "Фронт Косово", d: 22, armies: 2, st: "Бой · 2 армии", g: "fight", edge: "#c94f55", str: .82, grp: 6 },
-  { n: "3-я армия", d: 6, st: "Марш · Рашка, 3 дн.", g: "march", edge: "#e7b058", str: .88, grp: 7 },
-  { n: "4-я армия", d: 8, st: "Оборона · Срем", g: "stand", edge: "#9a917c", str: .97 },
-  { n: "Резерв", d: 4, st: "Белград", g: "stand", edge: "#9a917c", str: 1 },
+  { front: true, n: "Фронт Косово", d: 22, armies: 2, st: "Бой · 2 армии", g: "fight", edge: "#b3373e", str: .82, grp: 6 },
+  { n: "3-я армия", d: 6, st: "Марш · Рашка, 3 дн.", g: "march", edge: "#c08a2e", str: .88, grp: 7 },
+  { n: "4-я армия", d: 8, st: "Оборона · Срем", g: "stand", edge: "#7d705b", str: .97 },
+  { n: "Резерв", d: 4, st: "Белград", g: "stand", edge: "#7d705b", str: 1 },
 ];
 // merged counters on the map (one per country per front sector), 1080-basis positions
 const FRONT_LINE = [[1330, 112], [1420, 114], [1500, 130], [1548, 182], [1600, 236], [1640, 290], [1666, 342], [1672, 400], [1658, 446], [1612, 474], [1540, 488], [1466, 500], [1406, 524], [1370, 562], [1360, 596]];
@@ -262,7 +282,7 @@ const KEYS = [
   ["+ / −", "Скорость на шаг; пауза остаётся паузой"],
   ["WASD, стрелки", "Двигать карту (кроме времени, когда открыто окошко «сколько» и оно в фокусе)"],
   ["Home", "К своей столице"],
-  ["Q", "Страна (щит флага)"],
+  ["Q", "Страна (флаг в углу)"],
   ["E R T Y U I O P L", "Экраны рейки; повторное нажатие закрывает"],
   ["Z X C V N", "Режимы карты; N — всегда «Война»"],
   ["M", "Ещё режимы и слои"],
@@ -299,9 +319,10 @@ const TOUCH = [
   ["Клавиши", "Видимые кнопки (правило 1)"],
 ];
 
-// message settings (spec 6a): event -> [Paradox, AoH, Calm]; P pause, K card, R alert row, L log only
+// message settings (spec 4.4): event -> [Paradox, AoH, Calm]; P pause, K card, R alert row, L log only.
+// The owner chose "Спокойно" as the default (18 November).
 const MSG_EVENTS = [
-  ["Нам объявили войну", "P", "K", "P"], ["Ультиматум нам", "P", "R", "P"], ["Смена ступени DEFCON", "P", "K", "K"],
+  ["Нам объявили войну", "P", "K", "P"], ["Ультиматум нам", "P", "R", "P"], ["Смена ступени DEFCON", "P", "K", "K"], ["Санкции против нас", "K", "K", "K"],
   ["Ядерный удар где угодно", "P", "P", "P"], ["Предложение мира", "P", "R", "R"], ["Бой проигран", "K", "L", "R"],
   ["Армия окружена", "P", "R", "R"], ["Мировая новость", "K", "K", "L"], ["Выборы через 30 дней", "R", "R", "R"],
   ["Стройка закончена", "L", "L", "L"], ["Исследование закончено", "R", "L", "R"], ["Дефицит товара", "R", "R", "L"],
