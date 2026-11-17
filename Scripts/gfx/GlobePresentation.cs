@@ -2460,6 +2460,21 @@ float value_noise(vec2 p) {
                mix(hash21(cell + vec2(0.0, 1.0)), hash21(cell + vec2(1.0, 1.0)), f.x), f.y);
 }
 
+/// value_noise laid on the map with a whole number of cells around the world, so it meets itself
+/// at the date line instead of drawing a seam there. `across` is how many cells span the world
+/// east to west; cells are square on the 2:1 map, so half as many span it north to south.
+float atlas_noise(vec2 uv, float across) {
+    float period = max(round(across), 1.0);
+    vec2 p = vec2(uv.x * period, uv.y * period * 0.5);
+    vec2 cell = floor(p);
+    vec2 f = p - cell;
+    f = f * f * (3.0 - 2.0 * f);
+    float x0 = mod(cell.x, period);
+    float x1 = mod(cell.x + 1.0, period);
+    return mix(mix(hash21(vec2(x0, cell.y)), hash21(vec2(x1, cell.y)), f.x),
+               mix(hash21(vec2(x0, cell.y + 1.0)), hash21(vec2(x1, cell.y + 1.0)), f.x), f.y);
+}
+
 /// Two octaves, centred on zero: a slow wander with a finer one riding on it.
 float grain(vec2 p) {
     return value_noise(p) * 0.66 + value_noise(p * 2.7 + 11.3) * 0.34 - 0.5;
@@ -2961,6 +2976,14 @@ void fragment() {
         : nation_paint(near_nation);
     vec4 political = mix(political_smooth, political_crisp, detail_mix);
     political.rgb = mix(vec3(dot(political.rgb, vec3(0.2126, 0.7152, 0.0722))), political.rgb, political_saturation);
+    if (atlas_look > 0.5) {
+        // The paper map is a printed atlas, a little quieter than a poster. Applied as a second
+        // step over the first so the classic line above stays as it was: both keep luminance, so
+        // the two compose to exactly the target saturation.
+        float paper_saturation = mix(political_saturation, look_saturation_far, paper_mix);
+        political.rgb = mix(vec3(dot(political.rgb, vec3(0.2126, 0.7152, 0.0722))), political.rgb,
+            paper_saturation / max(political_saturation, 0.001));
+    }
     float rim = pow(1.0 - max(dot(normalize(NORMAL), normalize(VIEW)), 0.0), 2.0);
     // The sea has a floor. Deep water keeps the strategic navy it always had; the continental
     // slope lifts it a little, and the shelf along every coast - the North Sea, the Yellow Sea,
@@ -2987,6 +3010,20 @@ void fragment() {
     vec3 sea = mix(abyss_color, ocean_color * 1.24, slope_rise);
     sea = mix(sea, ocean_shelf_color, shelf * 0.82);
     sea = mix(sea, ocean_shelf_color * 1.22 + vec3(0.015, 0.045, 0.055), littoral * 0.55);
+    if (atlas_look > 0.5) {
+        // The same four depths on the same thresholds, in the atlas's own inks: warmer and
+        // darker in the abyss, a clear green-grey over the shelf.
+        vec3 atlas_sea = mix(look_sea_deep, look_sea_mid, slope_rise);
+        atlas_sea = mix(atlas_sea, look_sea_shelf, shelf * 0.82);
+        atlas_sea = mix(atlas_sea, look_sea_coast, littoral * 0.55);
+        // From far away a printed chart has no gradients, only steps: one tone, a shade lighter
+        // over the slope and again over the shelf. Each step is as soft as one pixel of depth.
+        float step_width = max(fwidth(sea_floor), 0.001);
+        float step_slope = smoothstep(0.80 - step_width, 0.80 + step_width, sea_floor);
+        float step_shelf = smoothstep(0.968 - step_width, 0.968 + step_width, sea_floor);
+        vec3 chart = look_sea_chart * (0.86 + 0.07 * (step_slope + step_shelf));
+        sea = mix(atlas_sea, chart, paper_mix);
+    }
     // Living water. Three directional sine waves, crossing at angles, rather than value
     // noise: noise interpolates on its own axis-aligned grid, and on a surface this large
     // the grid arrives as a tiling of diamonds with visible seams. Sines have no grid to
@@ -3077,56 +3114,72 @@ void fragment() {
         vec2 terrain_size = vec2(textureSize(terrain_surface, 0));
         vec2 terrain_lookup = UV + map_drift * terrain_warp_texels / terrain_size;
 
-        float near_slot;
-        float other_slot;
-        float slot_cover = terrain_coverage(terrain_surface, terrain_lookup, smooth_edges, near_slot, other_slot);
-        float slot_span = max(length(fwidth(UV) * terrain_size), 0.0001);
-        float slot_band = max(terrain_blend_texels * 0.25, slot_span);
-        float slot_share = smoothstep(0.5 - slot_band, 0.5 + slot_band, slot_cover);
+        // All paper: the ground is the sheet, and the tile rebuild (sixteen samples), the two
+        // tiles and their detail are not asked at all. A branch on uniforms, so whole draws take it.
+        bool paper_only = atlas_look > 0.5 && paper_mix > 0.999 && terrain_mode < 0.5;
+        vec3 ground = look_paper;
+        vec3 relief_tint = look_paper;
+        if (!paper_only) {
+            float near_slot;
+            float other_slot;
+            float slot_cover = terrain_coverage(terrain_surface, terrain_lookup, smooth_edges, near_slot, other_slot);
+            float slot_span = max(length(fwidth(UV) * terrain_size), 0.0001);
+            float slot_band = max(terrain_blend_texels * 0.25, slot_span);
+            float slot_share = smoothstep(0.5 - slot_band, 0.5 + slot_band, slot_cover);
 
-        vec2 terrain_uv = UV * vec2(terrain_repeat, terrain_repeat * 0.5);
-        // Near a pole the tiles lie on the plane about it (polar_plane), blended in over a band.
-        // The gradients are taken here, outside any branch, so a sample inside one stays defined.
-        float terrain_polar = polar_blend(UV);
-        vec2 terrain_polar_uv = vec2(0.0);
-        vec2 pdx = vec2(0.0), pdy = vec2(0.0);
-        if (terrain_polar > 0.001) {
-            terrain_polar_uv = polar_plane(UV, terrain_repeat / 6.2831853);
-            pdx = dFdx(terrain_polar_uv);
-            pdy = dFdy(terrain_polar_uv);
-        }
-        vec2 tdx = dFdx(terrain_uv), tdy = dFdy(terrain_uv);
-        // One ground sample when unsmoothed rather than two mixed: the saving is a texture
-        // fetch per pixel on the largest surface the game draws, which is the half of this
-        // switch that matters on a machine that needed it.
-        vec3 ground;
-        if (map_smoothing > 0.5)
-            ground = mix(texture(terrain_tiles, vec3(terrain_uv, other_slot)).rgb,
-                         texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb, slot_share);
-        else
-            ground = texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb;
-        if (terrain_polar > 0.001) {
-            vec3 polar_ground;
+            vec2 terrain_uv = UV * vec2(terrain_repeat, terrain_repeat * 0.5);
+            // Near a pole the tiles lie on the plane about it (polar_plane), blended in over a band.
+            // The gradients are taken here, outside any branch, so a sample inside one stays defined.
+            float terrain_polar = polar_blend(UV);
+            vec2 terrain_polar_uv = vec2(0.0);
+            vec2 pdx = vec2(0.0), pdy = vec2(0.0);
+            if (terrain_polar > 0.001) {
+                terrain_polar_uv = polar_plane(UV, terrain_repeat / 6.2831853);
+                pdx = dFdx(terrain_polar_uv);
+                pdy = dFdy(terrain_polar_uv);
+            }
+            vec2 tdx = dFdx(terrain_uv), tdy = dFdy(terrain_uv);
+            // One ground sample when unsmoothed rather than two mixed: the saving is a texture
+            // fetch per pixel on the largest surface the game draws, which is the half of this
+            // switch that matters on a machine that needed it.
             if (map_smoothing > 0.5)
-                polar_ground = mix(textureGrad(terrain_tiles, vec3(terrain_polar_uv, other_slot), pdx, pdy).rgb,
-                                   textureGrad(terrain_tiles, vec3(terrain_polar_uv, near_slot), pdx, pdy).rgb, slot_share);
+                ground = mix(texture(terrain_tiles, vec3(terrain_uv, other_slot)).rgb,
+                             texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb, slot_share);
             else
-                polar_ground = textureGrad(terrain_tiles, vec3(terrain_polar_uv, near_slot), pdx, pdy).rgb;
-            ground = mix(ground, polar_ground, terrain_polar);
+                ground = texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb;
+            if (terrain_polar > 0.001) {
+                vec3 polar_ground;
+                if (map_smoothing > 0.5)
+                    polar_ground = mix(textureGrad(terrain_tiles, vec3(terrain_polar_uv, other_slot), pdx, pdy).rgb,
+                                       textureGrad(terrain_tiles, vec3(terrain_polar_uv, near_slot), pdx, pdy).rgb, slot_share);
+                else
+                    polar_ground = textureGrad(terrain_tiles, vec3(terrain_polar_uv, near_slot), pdx, pdy).rgb;
+                ground = mix(ground, polar_ground, terrain_polar);
+            }
+            // Close in a tile is magnified until its texels show. A second look at the same ground at
+            // four times the frequency puts fine grain back under the coarse - as brightness only, so
+            // the colours stay the tile's own - and only as close in as the province lines appear.
+            if (terrain_detail > 0.001 && province_detail > 0.001 && flat_projection < 0.5) {
+                vec2 fine_uv = mix(terrain_uv, terrain_polar_uv, step(0.5, terrain_polar));
+                vec2 fdx = mix(tdx, pdx, step(0.5, terrain_polar)), fdy = mix(tdy, pdy, step(0.5, terrain_polar));
+                vec3 fine = textureGrad(terrain_tiles, vec3(fine_uv * 4.0, near_slot), fdx * 4.0, fdy * 4.0).rgb;
+                vec3 tile_mean = textureLod(terrain_tiles, vec3(fine_uv, near_slot), 7.0).rgb;
+                float grain_shift = dot(fine - tile_mean, vec3(0.2126, 0.7152, 0.0722));
+                ground *= 1.0 + terrain_detail * province_detail * grain_shift * 2.2;
+            }
+            relief_tint = seam_sample_relief_color(UV).rgb;
+            ground = mix(ground, relief_tint, relief_color_opacity);
         }
-        // Close in a tile is magnified until its texels show. A second look at the same ground at
-        // four times the frequency puts fine grain back under the coarse - as brightness only, so
-        // the colours stay the tile's own - and only as close in as the province lines appear.
-        if (terrain_detail > 0.001 && province_detail > 0.001 && flat_projection < 0.5) {
-            vec2 fine_uv = mix(terrain_uv, terrain_polar_uv, step(0.5, terrain_polar));
-            vec2 fdx = mix(tdx, pdx, step(0.5, terrain_polar)), fdy = mix(tdy, pdy, step(0.5, terrain_polar));
-            vec3 fine = textureGrad(terrain_tiles, vec3(fine_uv * 4.0, near_slot), fdx * 4.0, fdy * 4.0).rgb;
-            vec3 tile_mean = textureLod(terrain_tiles, vec3(fine_uv, near_slot), 7.0).rgb;
-            float grain_shift = dot(fine - tile_mean, vec3(0.2126, 0.7152, 0.0722));
-            ground *= 1.0 + terrain_detail * province_detail * grain_shift * 2.2;
+        if (atlas_look > 0.5) {
+            // From far away the ground becomes the paper the atlas is printed on. Its fibre is
+            // fixed to the map, so it does not swim as the camera moves, and it fades where a
+            // pixel would hold more than one fibre, so it never shimmers.
+            vec2 fibre_at = vec2(UV.x * 1800.0, UV.y * 900.0);
+            float fibre_fade = 1.0 - smoothstep(0.5, 1.0, max(fwidth(fibre_at.x), fwidth(fibre_at.y)));
+            float fibre = (atlas_noise(UV, 1800.0) - 0.5) * 2.0 * look_paper_grain * fibre_fade;
+            // The terrain and relief views keep their ground at every zoom: they are about it.
+            ground = mix(ground, look_paper * (1.0 + fibre), paper_mix * (1.0 - step(0.5, terrain_mode)));
         }
-        vec3 relief_tint = seam_sample_relief_color(UV).rgb;
-        ground = mix(ground, relief_tint, relief_color_opacity);
         // Political tint is an albedo blend, not transparent 3D geometry.
         // Keep surface detail while preserving recognisable controller colours.
         // How far the kind of ground may move a country's colour. It used to be allowed from
@@ -3139,6 +3192,13 @@ void fragment() {
         // ground: the relief shows through the hillshade below.
         ground_light = mix(ground_light, clamp(ground_light, 0.93, 1.02), flat_projection);
         float colour_cover = mix(political_opacity, min(0.93, political_opacity + 0.17), flat_projection);
+        if (atlas_look > 0.5) {
+            // A watercolour wash close in, flat paint at the middle zoom, near-solid colour on
+            // paper: political colour comes in as the camera pulls back, as in HoI4, and gives
+            // way to the ground close in, as in CK3.
+            float near_cover = mix(look_cover_near, look_flat_cover_near, flat_projection);
+            colour_cover = mix(mix(near_cover, colour_cover, 1.0 - province_detail), look_cover_far, paper_mix);
+        }
         vec3 colored_ground = mix(ground, political.rgb * ground_light, colour_cover);
         vec3 land_surface = terrain_mode > 1.5 ? relief_tint : (terrain_mode > 0.5 ? ground : colored_ground);
         base = mix(water, land_surface, political.a);
@@ -3169,8 +3229,19 @@ void fragment() {
         // Subtle alpine ridge highlight on high mountain chains so the Himalayas, Andes, Alps
         // and Caucasus read with physical relief even through political colour.
         float alpine_ridge = smoothstep(0.58, 0.86, elev) * smoothstep(0.12, 0.52, slope_mag) * clamp(lit - flat_lit + 0.15, 0.0, 1.0);
-        base = mix(base, base * hillshade + vec3(0.09, 0.095, 0.105) * alpine_ridge,
-            political.a * relief_shading * (terrain_mode > 1.5 ? 1.0 : 0.88));
+        if (atlas_look > 0.5) {
+            // A warm wash: umber in the shade, cream on the lit slopes, at the same depth and
+            // brightness the grey multiplier had - so no slope is darker than before, only warmer.
+            // On the paper map the relief stays as a soft wash.
+            vec3 relief_mul = hillshade < 1.0
+                ? mix(look_shade_mul, vec3(1.0), (hillshade - 0.52) / 0.48)
+                : mix(vec3(1.0), look_lamp_mul, (hillshade - 1.0) / 0.42);
+            base = mix(base, base * relief_mul + look_lamp * 0.106 * alpine_ridge,
+                political.a * relief_shading * (terrain_mode > 1.5 ? 1.0 : 0.88) * mix(1.0, look_relief_far, paper_mix));
+        } else {
+            base = mix(base, base * hillshade + vec3(0.09, 0.095, 0.105) * alpine_ridge,
+                political.a * relief_shading * (terrain_mode > 1.5 ? 1.0 : 0.88));
+        }
     }
     // Distance fields describe the drawn shore, never the simulation's river strength.
     // Rivers of low importance no longer disappear at a hard intensity threshold.
