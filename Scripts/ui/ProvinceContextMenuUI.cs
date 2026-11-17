@@ -44,7 +44,8 @@ public partial class DealOrForceGame
         BuildProvinceCard(pick, owner, controller ?? owner, mouse);
     }
 
-    private void BuildProvinceCard(GlobePick pick, Nation owner, Nation controller, Vector2 at, bool capitalArmed = false)
+    private void BuildProvinceCard(GlobePick pick, Nation owner, Nation controller, Vector2 at, bool capitalArmed = false,
+        bool autonomyArmed = false)
     {
         CloseProvinceCard();
         var player = _campaign.Player;
@@ -232,6 +233,43 @@ public partial class DealOrForceGame
                         "Pay {0} to cool this region for {1} days: the pull to leave, the anger, and the distance from the government. One region at a time. A border is not redrawn.",
                         Fmt.Money(DomesticCrises.ConciliationCost(_campaign, player, region)),
                         _campaign.Defines.CrisisConciliationDays));
+                }
+                // Self-government, beside the season's payment: offered where it means something -
+                // ground the country has no title to, an angry region, or one that already runs itself.
+                if (region.MapIndex != player.CapitalStateMapIndex &&
+                    (RegionalAutonomy.Autonomous(region) || ConquestAcceptance.Unentitled(_campaign, player, region) ||
+                     region.Radicalism >= _campaign.Defines.AiAutonomyRadicalism))
+                {
+                    var d = _campaign.Defines;
+                    if (!RegionalAutonomy.Autonomous(region))
+                    {
+                        var refusal = RegionalAutonomy.Refusal(_campaign, player, region);
+                        Action("laws", autonomyArmed
+                                ? Simulation.Loc.Format("Confirm: grant autonomy to {0}", region.DisplayName)
+                                : "Grant autonomy", () =>
+                            {
+                                // The second press confirms: it costs points now and money every week.
+                                if (!autonomyArmed) { BuildProvinceCard(pick, owner, controller, at, autonomyArmed: true); return; }
+                                _campaign.Commands.Enqueue(new GrantRegionalAutonomyCommand { IssuerId = player.Id, StateMapIndex = region.MapIndex });
+                                _campaign.Commands.ApplyAll(_campaign);
+                                CloseProvinceCard();
+                            }, refusal.Length > 0 ? Tr(refusal) : "", Simulation.Loc.Format(
+                                "Costs {0} political points now and {1} a week: the region keeps {2} of its taxes. It weighs {3} as much in imperial overstretch, takes in less grievance and comes to accept the state twice as fast.",
+                                d.AutonomyPoliticalCost.ToString("0"), Fmt.Money(RegionalAutonomy.WeeklyPrice(_campaign, player, region)),
+                                Fmt.Percent(d.AutonomyRevenueShare), Fmt.Percent(d.AutonomyOverstretchWeight)));
+                    }
+                    else
+                        Action("laws", autonomyArmed
+                                ? Simulation.Loc.Format("Confirm: revoke the autonomy of {0}", region.DisplayName)
+                                : "Revoke autonomy", () =>
+                            {
+                                if (!autonomyArmed) { BuildProvinceCard(pick, owner, controller, at, autonomyArmed: true); return; }
+                                _campaign.Commands.Enqueue(new RevokeRegionalAutonomyCommand { IssuerId = player.Id, StateMapIndex = region.MapIndex });
+                                _campaign.Commands.ApplyAll(_campaign);
+                                CloseProvinceCard();
+                            }, help: Simulation.Loc.Format(
+                                "Free, but remembered: the region's radicalism rises by {0} points at once, its acceptance of the state halves, and it cannot be granted autonomy again for {1} days.",
+                                (d.AutonomyRevokeRadicalism * 100f).ToString("0"), d.AutonomyRegrantDays));
                 }
                 // Into a city, and the one nearest the province that was clicked: a capital is a
                 // city, and a click beside Gatchina means Gatchina, not the first city on the list.
