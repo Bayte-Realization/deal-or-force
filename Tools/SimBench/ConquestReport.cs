@@ -40,7 +40,7 @@ internal static class ConquestReport
         var at = Array.IndexOf(args, "--conquest");
         var mode = at >= 0 && at + 1 < args.Length && !args[at + 1].StartsWith("--", StringComparison.Ordinal)
             ? args[at + 1] : "serbia";
-        return mode == "world" ? World(c, days) : Serbia(c, days, args);
+        return mode == "world" ? World(c, days, OptionText(args, "--watch")) : Serbia(c, days, args);
     }
 
     // ---------------------------------------------------------------- the staged case --
@@ -218,35 +218,26 @@ internal static class ConquestReport
             long people = group.Sum(s => s.Population);
             double w(Func<ScenarioState, float> f) => people <= 0 ? 0 : group.Sum(s => f(s) * (double)s.Population) / people;
             Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                "SNAP_FROM day={0} from={1} regions={2} people={3:N0} stability={4:0.000} radicalism={5:0.000} foreign={6:0.000} pressure={7:0.000}",
+                "SNAP_FROM day={0} from={1} regions={2} people={3:N0} stability={4:0.000} radicalism={5:0.000} foreign={6:0.000} pressure={7:0.000} acceptance={8:0.000} autonomous={9} homeland={10}",
                 day, group.Key, group.Count(), people, w(s => s.Stability), w(s => s.Radicalism),
-                w(s => EconomySystem.ForeignShare(s, n.Tag)), w(s => s.SecessionPressure)));
+                w(s => EconomySystem.ForeignShare(s, n.Tag)), w(s => s.SecessionPressure), w(s => s.Acceptance),
+                group.Count(RegionalAutonomy.Autonomous), group.Count(s => TerritorialClaims.TitleOf(c, n, s) == TerritorialTitle.Homeland)));
         }
         foreach (var s in c.StatesOf(n).OrderBy(s => s.MapIndex))
             Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                "SNAP_REGION day={0} id={1} name=\"{2}\" from={3} title={4} pop={5:N0} stability={6:0.000} radicalism={7:0.000} foreign={8:0.000} living={9:0.000} pressure={10:0.000} recovery_days={11}",
+                "SNAP_REGION day={0} id={1} name=\"{2}\" from={3} title={4} pop={5:N0} stability={6:0.000} radicalism={7:0.000} foreign={8:0.000} living={9:0.000} pressure={10:0.000} recovery_days={11} " +
+                "acceptance={12:0.000} autonomous={13} exhausted_days={14}",
                 day, s.MapIndex, s.Name, tracked.TryGetValue(TerritorialClaims.Origin(s), out var t) ? t.From : "new",
                 TerritorialClaims.TitleOf(c, n, s), s.Population, s.Stability, s.Radicalism,
-                EconomySystem.ForeignShare(s, n.Tag), s.StandardOfLiving, s.SecessionPressure, RevoltRecovery.DaysLeft(c, n, s)));
+                EconomySystem.ForeignShare(s, n.Tag), s.StandardOfLiving, s.SecessionPressure, RevoltRecovery.DaysLeft(c, n, s),
+                s.Acceptance, s.AutonomousSinceDay, RisingAftermath.DaysLeft(c, s)));
     }
 
-    /// <summary>The same sum StabilityCore.Overstretch makes, before it is turned into a cost.</summary>
-    static float StrainedWeight(Campaign c, Nation nation)
-    {
-        var strained = 0f;
-        foreach (var state in c.StatesOf(nation))
-        {
-            if (state.Unclaimed) continue;
-            var homeland = TerritorialClaims.TitleOf(c, nation, state) == TerritorialTitle.Homeland;
-            if (!homeland && EconomySystem.ForeignShare(state, nation.Tag) >= 0.35f)
-                strained += 0.4f + 0.6f * M.Clamp01(state.Radicalism / 0.4f);
-            else if (c.ElapsedDays > 0 && state.MapIndex != nation.CapitalStateMapIndex && state.PoliticalDivergence >= 0.50f)
-                strained += 0.5f;
-        }
-        var subjects = c.Nations.Count(o => o.AnswersTo(nation.Id));
-        if (c.ElapsedDays > 0 && subjects > 2) strained += (subjects - 2) * 0.5f;
-        return strained;
-    }
+    /// <summary>
+    /// The same sum StabilityCore.Overstretch makes, before it is turned into a cost: read from the
+    /// rule itself, so the report cannot drift from it when acceptance and autonomy change the weights.
+    /// </summary>
+    static float StrainedWeight(Campaign c, Nation nation) => StabilityCore.StrainedWeight(c, nation);
 
     static double MeanRadicalism(Campaign c, Nation n, Func<ScenarioState, bool> which)
     {
@@ -306,10 +297,12 @@ internal static class ConquestReport
         public void Day(Campaign c, int day)
         {
             var self = c.NationById(_nation);
+            var today = new List<ChronicleEntry>();
             foreach (var entry in c.Chronicle.Entries)
             {
                 if (entry.Sequence <= _seen) continue;
                 _seen = entry.Sequence;
+                today.Add(entry);
                 var mine = entry.ActorId == _nation || entry.TargetId == _nation ||
                            c.NationById(entry.ActorId)?.SecededFromId == _nation;
                 if (mine) _chronicle[entry.Kind] = _chronicle.GetValueOrDefault(entry.Kind) + 1;
@@ -331,12 +324,20 @@ internal static class ConquestReport
                 if (!_owner.TryGetValue(origin, out var was) || was == owner) continue;
                 _owner[origin] = owner;
                 var to = c.NationByMapIndex(owner);
-                var kind = Kind(c, self, was, to, day);
+                // What the chronicle wrote that day about the new holder: the road the ground left by,
+                // which SecededFromId alone cannot tell - a release, a sale and a rising all carry it.
+                // Sofia "rose twice" in a measured Yugoslavia; the second time it was sold back to a
+                // reborn Bulgaria in a deal (seed 7, day 3215).
+                var road = string.Join(",", today.Where(e => to is not null && (e.ActorId == to.Id || e.TargetId == to.Id))
+                    .Select(e => e.Kind).Distinct());
+                var kind = road.Contains("deal_signed") && to?.Id != self?.Id ? "deal"
+                    : road.Contains("country_released") ? "released" : Kind(c, self, was, to, day);
                 _kinds[kind] = _kinds.GetValueOrDefault(kind) + 1;
                 if (kind is "secession" or "civil_war" or "movement") _rose[origin] = _rose.GetValueOrDefault(origin) + 1;
                 Console.WriteLine($"HANDS day={day} region=\"{_tracked[origin].Name}\" origin={origin} from_country={_tracked[origin].From} " +
                                   $"was={c.NationByMapIndex(was)?.Tag ?? "-"} now={to?.Tag ?? "-"} kind={kind} " +
-                                  $"stab={self?.Stability:0.000} rad={c.States.Where(s => TerritorialClaims.Origin(s) == origin).Select(s => s.Radicalism).DefaultIfEmpty().Max():0.000}");
+                                  $"stab={self?.Stability:0.000} rad={c.States.Where(s => TerritorialClaims.Origin(s) == origin).Select(s => s.Radicalism).DefaultIfEmpty().Max():0.000} " +
+                                  $"road={(road.Length == 0 ? "-" : road)}");
             }
         }
 
@@ -360,6 +361,8 @@ internal static class ConquestReport
             foreach (var (origin, times) in _rose.OrderByDescending(r => r.Value).ThenBy(r => r.Key))
                 Console.WriteLine($"ROSE region=\"{_tracked[origin].Name}\" from_country={_tracked[origin].From} times={times}");
             Console.WriteLine("CHRONICLE " + string.Join(" ", _chronicle.OrderByDescending(k => k.Value).Take(40).Select(k => $"{k.Key}={k.Value}")));
+            Console.WriteLine($"AUTONOMY granted={_chronicle.GetValueOrDefault("autonomy_granted")} revoked={_chronicle.GetValueOrDefault("autonomy_revoked")}");
+            Console.WriteLine($"HOMELAND integrated={_chronicle.GetValueOrDefault("homeland_integrated")} exhausted_risings={_chronicle.GetValueOrDefault("rising_exhausted")}");
             var self = c.NationById(_nation);
             var lost = _owner.Where(o => o.Value != self?.MapIndex).ToList();
             var lostPeople = c.States.Where(s => lost.Any(l => l.Key == TerritorialClaims.Origin(s))).Sum(s => s.Population);
@@ -401,7 +404,7 @@ internal static class ConquestReport
         }
     }
 
-    static int World(Campaign c, int days)
+    static int World(Campaign c, int days, string watch = "")
     {
         Console.WriteLine($"CONQUEST world seed={c.Seed} days={days}");
         c.IsPaused = false;
@@ -409,9 +412,27 @@ internal static class ConquestReport
         var yesterday = c.Nations.ToDictionary(n => n.Id, n => n.Stability);
         var episodes = new Dictionary<int, Episode>();
         var allRadicalism = new List<float>();
+        // What the world did with its conquered ground, read from the chronicle as it is written:
+        // the chronicle is a ring of 2048 lines, and reading it at the end would report the last
+        // two thousand of ten years as if they were all of them.
+        var facts = new Dictionary<string, int>();
+        var factsBy = new Dictionary<(string Kind, int Actor), int>();
+        var seen = c.Chronicle.Entries.Count == 0 ? 0L : c.Chronicle.Entries.Max(e => e.Sequence);
+        string[] counted = { "civil_war", "coup_civil_war", "secession", "state_collapse", "revolution",
+            "homeland_integrated", "autonomy_granted", "autonomy_revoked", "rising_exhausted" };
         for (var day = 1; day <= days; day++)
         {
             c.TickDay();
+            foreach (var entry in c.Chronicle.Entries)
+            {
+                if (entry.Sequence <= seen) continue;
+                seen = entry.Sequence;
+                if (Array.IndexOf(counted, entry.Kind) < 0) continue;
+                facts[entry.Kind] = facts.GetValueOrDefault(entry.Kind) + 1;
+                factsBy[(entry.Kind, entry.ActorId)] = factsBy.GetValueOrDefault((entry.Kind, entry.ActorId)) + 1;
+            }
+            if (day % 365 == 0 || day == days) WorldStability(c, day);
+            if (watch.Length > 0 && day % 91 == 0) WatchCountry(c, ByTag(c, watch), day);
             foreach (var s in c.States)
             {
                 if (!owner.TryGetValue(s.MapIndex, out var was)) { owner[s.MapIndex] = s.NationMapIndex; continue; }
@@ -462,12 +483,22 @@ internal static class ConquestReport
             Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
                 "EPISODE conqueror={0} from={1} first_day={2} last_day={3} regions={4} people={5:N0} rad_at_transfer_median={6:0.000} " +
                 "stab_before={7:0.000} lowest={8:0.000}@{9} recovered_day={10} stab_end={11:0.000} overstretch_end={12:0.000} days_below_line={13} " +
-                "risings={14} regions_rose={15} rose_twice={16} still_held={17}",
+                "risings={14} regions_rose={15} rose_twice={16} still_held={17} autonomies={18} integrated={19}",
                 e.Tag, string.Join("+", e.From.OrderBy(t => t)), e.FirstDay, e.LastDay, e.Origins.Count, e.People,
                 rad.Count == 0 ? 0 : rad[rad.Count / 2], e.StabilityBefore, e.Lowest, e.LowestDay, e.Recovered(),
                 n?.Stability ?? 0, n?.ImperialOverstretch ?? 0, e.DaysBelowLine, e.Rose.Values.Sum(), e.Rose.Count,
-                e.Rose.Count(r => r.Value >= 2), stillHeld));
+                e.Rose.Count(r => r.Value >= 2), stillHeld,
+                factsBy.GetValueOrDefault(("autonomy_granted", e.Conqueror)),
+                factsBy.GetValueOrDefault(("homeland_integrated", e.Conqueror))));
         }
+        Console.WriteLine("WORLD_FACTS " + string.Join(" ", counted.Select(k => $"{k}={facts.GetValueOrDefault(k)}")));
+        // Who gave autonomy, conqueror or not: the computer has to be seen using the lever.
+        Console.WriteLine("AUTONOMY granted=" + facts.GetValueOrDefault("autonomy_granted") + " by=" +
+                          string.Join(",", factsBy.Where(f => f.Key.Kind == "autonomy_granted").OrderByDescending(f => f.Value)
+                              .ThenBy(f => f.Key.Actor).Select(f => $"{c.NationById(f.Key.Actor)?.Tag ?? "?"}:{f.Value}")));
+        Console.WriteLine("HOMELAND integrated=" + facts.GetValueOrDefault("homeland_integrated") + " by=" +
+                          string.Join(",", factsBy.Where(f => f.Key.Kind == "homeland_integrated").OrderByDescending(f => f.Value)
+                              .ThenBy(f => f.Key.Actor).Select(f => $"{c.NationById(f.Key.Actor)?.Tag ?? "?"}:{f.Value}")));
         var sorted = allRadicalism.OrderBy(x => x).ToList();
         Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
             "WORLD conquerors={0} regions_conquered={1} radicalism_at_transfer p25={2:0.000} median={3:0.000} p75={4:0.000} " +
@@ -476,6 +507,51 @@ internal static class ConquestReport
             episodes.Values.Count(e => e.Recovered() >= 0), episodes.Values.Count(e => e.Recovered() < 0),
             episodes.Values.Sum(e => e.Rose.Values.Sum()), episodes.Values.Sum(e => e.Rose.Count(r => r.Value >= 2))));
         return 0;
+    }
+
+    /// <summary>
+    /// The world's stability in one line: the median and mean of every country that holds ground,
+    /// and how many are below the civil-war line. A change meant for conquered ground must not move
+    /// the rest of the world, and this is the line that would show it.
+    /// </summary>
+    static void WorldStability(Campaign c, int day)
+    {
+        var values = c.Nations.Where(n => n.Movement is null && c.StatesOf(n).Length > 0 && float.IsFinite(n.Stability))
+            .Select(n => n.Stability).OrderBy(v => v).ToList();
+        if (values.Count == 0) return;
+        Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+            "WORLD_STABILITY day={0} countries={1} median={2:0.000} mean={3:0.000} below_civil_war_line={4}",
+            day, values.Count, values[values.Count / 2], values.Average(),
+            values.Count(v => v < c.Defines.CivilWarStabilityThreshold)));
+    }
+
+    /// <summary>
+    /// `--watch TAG` in world mode: one country every quarter - stability, its target and the three
+    /// heaviest terms, the overstretch and what it is made of. Written for the one world (seed 42)
+    /// where Russia held its Ukrainian conquest at 0.62 before the slice and fell to 0.04 after it,
+    /// because an episode line says that it happened and not why.
+    /// </summary>
+    static void WatchCountry(Campaign c, Nation n, int day)
+    {
+        if (n is null) return;
+        var drivers = new Breakdown();
+        var target = StabilityCore.Preview(c, n, drivers);
+        var states = c.StatesOf(n);
+        var unentitled = states.Where(s => ConquestAcceptance.Unentitled(c, n, s)).ToList();
+        var divergent = states.Count(s => s.MapIndex != n.CapitalStateMapIndex && s.PoliticalDivergence >= 0.50f &&
+                                          !unentitled.Contains(s));
+        var subjects = c.Nations.Count(o => o.Id != n.Id && o.AnswersTo(n.Id));
+        var worst = drivers.Entries.OrderBy(e => e.Value).Take(4)
+            .Select(e => string.Format(CultureInfo.InvariantCulture, "{0}:{1:+0.000;-0.000}", e.Source, e.Value));
+        Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+            "WATCH day={0} tag={1} stab={2:0.000} target={3:0.000} overstretch={4:0.000} strain={5:0.00} unentitled={6} " +
+            "unentitled_rad={7:0.000} unentitled_acc={8:0.000} autonomous={9} divergent={10} subjects={11} regions={12} enemies={13} [{14}]",
+            day, n.Tag, n.Stability, target, n.ImperialOverstretch, StabilityCore.StrainedWeight(c, n), unentitled.Count,
+            unentitled.Count == 0 ? 0 : unentitled.Average(s => s.Radicalism),
+            unentitled.Count == 0 ? 0 : unentitled.Average(s => s.Acceptance),
+            states.Count(RegionalAutonomy.Autonomous), divergent, subjects, states.Length,
+            c.Nations.Count(o => o.Id != n.Id && CampaignDiplomacy.AtWar(c, o.Id, n.Id)),
+            string.Join(" ", worst)));
     }
 
     /// <summary>Ground moving between two sides of a war that is on or ended in the last two days.</summary>
