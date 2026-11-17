@@ -1801,12 +1801,6 @@ public static class Program
     }
 
     /// <summary>
-    /// Days of the world with the profiler reset first, reported by total time. Each pass is
-    /// shown with its share of the whole, its mean cost and how often it ran - a cheap pass
-    /// run every hour and a dear one run every month look the same in a mean and nothing
-    /// alike in a total.
-    /// </summary>
-    /// <summary>
     /// Nanoseconds per SimProfiler.Measure scope: 64 distinct names (a day uses a few hundred,
     /// so the dictionary is not a one-entry toy), a million scopes a sample, five warm-up samples
     /// and 21 measured. The checksum is the profiler's own run count, read back at the end, so
@@ -1845,6 +1839,12 @@ public static class Program
         return checksum == scopes ? 0 : 1;
     }
 
+    /// <summary>
+    /// Days of the world with the profiler reset first, reported by total time. Each pass is
+    /// shown with its share of the whole, its mean cost and how often it ran - a cheap pass
+    /// run every hour and a dear one run every month look the same in a mean and nothing
+    /// alike in a total.
+    /// </summary>
     private static int ProfileSave(Campaign fresh, string path, int days)
     {
         if (fresh.ProvinceMap is null) { Console.WriteLine("  province map unavailable"); return 2; }
