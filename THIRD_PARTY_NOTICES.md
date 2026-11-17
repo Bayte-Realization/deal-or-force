@@ -56,6 +56,41 @@ two notices below.
 Благодарности: Bartosz Taudul and the Tracy contributors; clibequilibrium for Tracy-CSharp;
 the .NET diagnostics team for dotnet-trace and dotnet-counters.
 
+## Development tools (not shipped with the game)
+
+`Tools/KernelBench` (the data-layout and native-code benchmark of 17 November 2026) restores
+these packages from nuget.org for the benchmark only. None of them is referenced by
+`DealOrForce.csproj` or exported with the game. Licences were read from each package's
+licence expression on nuget.org and the repository's `LICENSE` file on 17 November 2026.
+
+| Package | Version | Licence | Source |
+| --- | --- | --- | --- |
+| Friflo.Engine.ECS | 3.6.0 | MIT | <https://github.com/friflo/Friflo.Engine.ECS/blob/main/LICENSE> |
+| Friflo.Json.Fliox, Friflo.Json.Burst, Friflo.Json.Fliox.Annotation (pulled in by Friflo.Engine.ECS) | 1.0.4 | **LGPL-3.0-only** | <https://github.com/friflo/Friflo.Json.Fliox/blob/main/LICENSE> |
+| Arch | 2.1.0 | Apache-2.0 | <https://github.com/genaray/Arch/blob/master/LICENSE.MD> |
+| Arch.LowLevel | 1.1.5 | Apache-2.0 | nuget.org licence expression |
+| ZeroAllocJobScheduler | 1.1.2 | Apache-2.0 | nuget.org licence expression |
+| Collections.Pooled | 2.0.0-preview.27 | MIT | <https://github.com/jtmueller/Collections.Pooled/blob/master/LICENSE.txt> |
+| CommunityToolkit.HighPerformance | 8.2.2 | MIT | nuget.org licence expression |
+| Microsoft.Extensions.ObjectPool | 7.0.0 | MIT | nuget.org licence expression |
+| System.Runtime.CompilerServices.Unsafe | 6.0.0 / 6.1.0 | MIT | nuget.org licence expression |
+
+Friflo.Engine.ECS itself is MIT, but its three Friflo.Json dependencies are LGPL-3.0-only.
+That is acceptable in a benchmark nobody receives; it is **not cleared for the game**, and in
+particular not for an ahead-of-time compiled build (Android), where the library would be linked
+into the binary. Do not add Friflo.Engine.ECS to the game without resolving that first.
+
+The Rust kernel in `Tools/KernelBench/native` uses no crates. It was built with the official
+Rust toolchain 1.100.0 (stable, minimal profile) installed by rustup 1.29.3 (`rustup-init.exe` from
+<https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe>,
+SHA-256 38027d51d69a5d05493627a0634dbea52d6cd793c8f072d2373d3f4163eec7db, checked against the
+published `.sha256`), into a git-ignored folder without changing PATH. Rust, rustup and the
+standard library linked into the DLL are MIT OR Apache-2.0
+(<https://github.com/rust-lang/rust/blob/master/COPYRIGHT>). The DLL is not shipped.
+
+Благодарности: Ullrich Praetz (Friflo.Engine.ECS), genaray и участникам Arch, проекту Rust
+и команде rustup, Joel Mueller (Collections.Pooled), команде .NET Community Toolkit.
+
 ## Packaging
 
 Ship this register, `game/gfx/CREDITS.md`, `LICENSE` and `LICENSE-EXCEPTIONS.md` with the
