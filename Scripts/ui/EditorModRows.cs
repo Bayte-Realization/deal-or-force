@@ -14,14 +14,16 @@ public static class EditorModRows
         var loader = new ModLoader();
         loader.Discover();
         var selection = LauncherSelection.Read();
-        parent.AddChild(DealOrForceGame.RowLabel(Loc.Get("MOD_EDITOR_HEADING"), 20, Ui.Colour("text.accent")));
-        var explanation = Caption(Loc.Get("MOD_EDITOR_SEPARATE"), Ui.Colour("text.muted"));
+        var heading = DealOrForceGame.RowLabel(Loc.Get("MOD_EDITOR_HEADING"), 20, MenuChromeTheme.Paper);
+        MenuChromeTheme.StyleExistingLabel(heading, 20, MenuChromeTheme.Paper, serif: true);
+        parent.AddChild(heading);
+        var explanation = Caption(Loc.Get("MOD_EDITOR_SEPARATE"), MenuChromeTheme.PaperDim);
         parent.AddChild(explanation);
-        var notice = Caption(Loc.Get(campaignRunning ? "MOD_EDITOR_RESTART" : "MOD_EDITOR_NEXT_CAMPAIGN"), Ui.Colour("text.hint"));
+        var notice = Caption(Loc.Get(campaignRunning ? "MOD_EDITOR_RESTART" : "MOD_EDITOR_NEXT_CAMPAIGN"), MenuChromeTheme.BrassHi);
         parent.AddChild(notice);
         if (loader.AvailableMods.Count == 0)
         {
-            parent.AddChild(Caption(Loc.Get("MOD_EDITOR_EMPTY"), Ui.Colour("text.muted")));
+            parent.AddChild(Caption(Loc.Get("MOD_EDITOR_EMPTY"), MenuChromeTheme.PaperDim));
             return;
         }
         foreach (var package in loader.AvailableMods)
@@ -29,17 +31,7 @@ public static class EditorModRows
             var id = package.Manifest.Id;
             var requested = selection.IsEnabled(id, false, package.Manifest.Enabled);
             var panel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            var style = new StyleBoxFlat
-            {
-                BgColor = new Color(.065f, .10f, .135f, .96f),
-                BorderColor = Ui.Colour("text.faint"),
-                ContentMarginLeft = 16, ContentMarginRight = 16,
-                ContentMarginTop = 12, ContentMarginBottom = 12,
-                CornerRadiusTopLeft = 3, CornerRadiusTopRight = 3,
-                CornerRadiusBottomLeft = 3, CornerRadiusBottomRight = 3
-            };
-            style.SetBorderWidthAll(1);
-            panel.AddThemeStyleboxOverride("panel", style);
+            panel.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(16, 12));
             parent.AddChild(panel);
             var rows = new VBoxContainer();
             rows.AddThemeConstantOverride("separation", 6);
@@ -52,10 +44,22 @@ public static class EditorModRows
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
             };
             toggle.SetMeta("mod_id", id);
-            toggle.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.body", 13));
+            toggle.AddThemeFontOverride("font", MenuChromeTheme.SerifBody());
+            toggle.AddThemeFontSizeOverride("font_size", 15);
+            toggle.AddThemeColorOverride("font_color", MenuChromeTheme.Paper);
+            toggle.AddThemeColorOverride("font_hover_color", MenuChromeTheme.Highlight);
+            toggle.AddThemeColorOverride("font_pressed_color", MenuChromeTheme.Paper);
+            toggle.AddThemeColorOverride("font_focus_color", MenuChromeTheme.Highlight);
+            toggle.AddThemeStyleboxOverride("normal", new StyleBoxEmpty());
+            toggle.AddThemeStyleboxOverride("hover", MenuChromeTheme.GradientPlateBox(
+                MenuChromeTheme.PlateTop, MenuChromeTheme.PlateBottom, MenuChromeTheme.RuleLight,
+                innerTopLine: null, innerBottomLine: null, brassEdge: null, borderThickness: 1,
+                padLeft: 6, padTop: 4, padRight: 6, padBottom: 4));
+            toggle.AddThemeStyleboxOverride("pressed", new StyleBoxEmpty());
+            toggle.AddThemeStyleboxOverride("focus", MenuChromeTheme.FocusBox());
             toggle.SetPressedNoSignal(requested);
             rows.AddChild(toggle);
-            var status = Caption(Status(requested, package.Manifest.Version), Ui.Colour("text.muted"));
+            var status = Caption(Status(requested, package.Manifest.Version), MenuChromeTheme.PaperFaint);
             rows.AddChild(status);
             toggle.Toggled += enabled =>
             {

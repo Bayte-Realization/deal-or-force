@@ -7,10 +7,10 @@ render_mode unshaded, cull_front, blend_add, depth_draw_never;
 // gone a third of a unit out - and on which side the sun is, so the night limb stays dark.
 
 uniform vec3 sun_direction = vec3(-0.76, 0.32, 0.42);
-uniform vec3 air_colour : source_color = vec3(0.20, 0.40, 0.80);
+uniform vec3 air_colour : source_color = vec3(0.64, 0.54, 0.40);
 uniform float planet_radius = 5.0;
-uniform float thickness = 0.30;
-uniform float strength = 0.55;
+uniform float thickness = 0.28;
+uniform float strength = 0.42;
 
 varying vec3 centre;
 

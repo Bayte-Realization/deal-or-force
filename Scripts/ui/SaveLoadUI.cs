@@ -78,23 +78,29 @@ public partial class DealOrForceGame
         _saveLoadLayer.MouseFilter = MouseFilterEnum.Stop;
         AddChild(_saveLoadLayer);
 
-        var veil = new ColorRect { Color = Ui.Colour("surface.overlay", 0.84f), MouseFilter = MouseFilterEnum.Stop };
+        var veil = new ColorRect { Color = MenuChromeTheme.VeilColor, MouseFilter = MouseFilterEnum.Stop };
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _saveLoadLayer.AddChild(veil);
 
         var panel = TexturedPanel(_saveLoadLayer, PanelSurface.Modal);
+        MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true);
         Ui.Place(panel, "modal.save_load");
         var rows = ScrollablePanelRows(panel, 28, 24, 10);
         var openFolder = ActionButton("Open folder", OpenSaveFolder, 128, 32);
+        MenuChromeTheme.StyleWellButton(openFolder, false, 13);
         openFolder.TooltipText = Ui.Tip(Tr("Open the folder these are kept in, to copy a campaign somewhere or send one to somebody."));
+        var headerClose = ActionButton("×", HideSaveLoadInterface, 38, 32);
+        MenuChromeTheme.StyleWellButton(headerClose, false, 15);
         ScreenHeader(rows, "CAMPAIGN ARCHIVE",
             "Compressed saves by default · F5 quicksave · F9 quickload",
-            false, openFolder, ActionButton("×", HideSaveLoadInterface, 38, 32));
+            false, openFolder, headerClose);
+        MenuChromeTheme.StyleScreenHeader(rows.GetChildOrNull<PanelContainer>(0));
 
         var folderRow = new HBoxContainer();
         folderRow.AddThemeConstantOverride("separation", 8);
         rows.AddChild(folderRow);
-        _saveFolderLine = RowLabel("", 11, Ui.Colour("text.faint"));
+        _saveFolderLine = RowLabel("", 11, MenuChromeTheme.PaperFaint);
+        MenuChromeTheme.StyleExistingLabel(_saveFolderLine, 11, MenuChromeTheme.PaperFaint, tabular: true);
         _saveFolderLine.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         folderRow.AddChild(_saveFolderLine);
 
@@ -105,26 +111,31 @@ public partial class DealOrForceGame
         {
             PlaceholderText = Tr("Name this campaign…"),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 34)
+            CustomMinimumSize = new Vector2(0, 36)
         };
+        MenuChromeTheme.StyleLineEdit(_saveNameField);
         _saveNameField.TextSubmitted += _ => SaveAsNew();
         newRow.AddChild(_saveNameField);
-        newRow.AddChild(ActionButton("Save", SaveAsNew, 110, 34, true));
+        var saveNewButton = ActionButton("Save", SaveAsNew, 118, 36, true);
+        MenuChromeTheme.StylePrimaryCta(saveNewButton, 14, serif: false);
+        newRow.AddChild(saveNewButton);
 
-        _saveStatus = Title("", 13, Ui.Colour("text.accent_dim"));
+        _saveStatus = Title("", 13, MenuChromeTheme.BrassHi);
         rows.AddChild(_saveStatus);
 
-        SectionRule(rows, "SAVED CAMPAIGNS");
+        var listCaption = Title("SAVED CAMPAIGNS", 11, MenuChromeTheme.PaperFaint);
+        rows.AddChild(listCaption);
+        rows.AddChild(MenuChromeTheme.CreateEngravedRule("SaveListDivider", 1f));
         var saveWell = new PanelContainer { Name = "SaveListWell", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        saveWell.SetMeta("atlas_section_ground", "surface.inset");
-        saveWell.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
-        AtlasSurfaceSkin.Attach(saveWell, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        saveWell.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(12, 10));
         rows.AddChild(saveWell);
         _saveList = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _saveList.AddThemeConstantOverride("separation", 4);
+        _saveList.AddThemeConstantOverride("separation", 6);
         saveWell.AddChild(_saveList);
 
-        rows.AddChild(ActionButton("Close", HideSaveLoadInterface, 160, 38));
+        var closeSaveLoad = ActionButton("Close", HideSaveLoadInterface, 160, 38);
+        MenuChromeTheme.StyleWellButton(closeSaveLoad, false, 14);
+        rows.AddChild(closeSaveLoad);
     }
 
     private void OpenSaveFolder()
@@ -182,7 +193,7 @@ public partial class DealOrForceGame
         var saves = SaveSystem.List(SaveRoot);
         if (saves.Count == 0)
         {
-            _saveList.AddChild(RowLabel("No campaigns saved yet.", 13, Ui.Colour("text.muted")));
+            _saveList.AddChild(RowLabel("No campaigns saved yet.", 13, MenuChromeTheme.PaperDim));
             return;
         }
 
@@ -193,20 +204,26 @@ public partial class DealOrForceGame
     {
         var accent = save.Slot switch
         {
-            SaveSystem.AutoSlot => "text.caption",
-            SaveSystem.QuickSlot => "state.info",
-            _ => "button.primary_border"
+            SaveSystem.AutoSlot => MenuChromeTheme.PaperFaint,
+            SaveSystem.QuickSlot => MenuChromeTheme.PauseAmber,
+            _ => MenuChromeTheme.BrassHi
         };
-        var row = new StructuredFactRow
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            AccentToken = accent,
-            Alternate = _saveList.GetChildCount() % 2 == 1
-        };
-        row.AddThemeConstantOverride("separation", 8);
-        _saveList.AddChild(row);
+        var alternate = _saveList.GetChildCount() % 2 == 1;
+        var card = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        card.AddThemeStyleboxOverride("panel", MenuChromeTheme.GradientPlateBox(
+            alternate ? MenuChromeTheme.BodyBottom : MenuChromeTheme.BodyTop,
+            alternate ? MenuChromeTheme.WellBottom : MenuChromeTheme.BodyBottom,
+            MenuChromeTheme.RuleLight,
+            innerTopLine: new Color(MenuChromeTheme.Highlight, 0.05f),
+            innerBottomLine: MenuChromeTheme.RuleDark,
+            brassEdge: null, borderThickness: 1, padLeft: 10, padTop: 8, padRight: 10, padBottom: 8));
+        _saveList.AddChild(card);
+
+        var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        row.AddThemeConstantOverride("separation", 10);
+        card.AddChild(row);
         var edge = new Panel { CustomMinimumSize = new Vector2(3, 0), MouseFilter = MouseFilterEnum.Ignore };
-        var edgeStyle = new StyleBoxFlat { BgColor = Ui.Colour(accent) };
+        var edgeStyle = new StyleBoxFlat { BgColor = accent };
         edgeStyle.SetCornerRadiusAll(1);
         edge.AddThemeStyleboxOverride("panel", edgeStyle);
         row.AddChild(edge);
@@ -218,22 +235,46 @@ public partial class DealOrForceGame
             _ => string.IsNullOrWhiteSpace(save.DisplayName) ? save.Slot : save.DisplayName
         };
         var seedSuffix = save.Seed > 0 ? Simulation.Loc.Format(" · seed {0}", save.Seed) : "";
-        var info = RowLabel(Simulation.Loc.Format("{0}\n{1} · {2} · {3} · {4} KiB",
-            title, save.NationName + seedSuffix, save.GameDate,
-            save.SavedUtc.ToLocalTime().ToString("g"),
-            (save.CompressedBytes / 1024f).ToString("0")), 13, Ui.Colour("text.body_soft"));
-        info.AutowrapMode = TextServer.AutowrapMode.Off;
-        info.CustomMinimumSize = new Vector2(405, 42);
-        info.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        row.AddChild(info);
+        var textCol = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        textCol.AddThemeConstantOverride("separation", 2);
+        row.AddChild(textCol);
+
+        var heading = new Label
+        {
+            Text = title,
+            AutowrapMode = TextServer.AutowrapMode.Off,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+        };
+        MenuChromeTheme.StyleExistingLabel(heading, 15, MenuChromeTheme.Paper, serif: true);
+        textCol.AddChild(heading);
+
+        var meta = new Label
+        {
+            Text = Simulation.Loc.Format("{0} · {1} · {2} · {3} KiB",
+                save.NationName + seedSuffix, save.GameDate,
+                save.SavedUtc.ToLocalTime().ToString("g"),
+                (save.CompressedBytes / 1024f).ToString("0")),
+            AutowrapMode = TextServer.AutowrapMode.Off,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+        };
+        MenuChromeTheme.StyleExistingLabel(meta, 12, MenuChromeTheme.PaperFaint, tabular: true);
+        textCol.AddChild(meta);
 
         var slot = save.Slot;
         var kept = save.DisplayName;
-        row.AddChild(ActionButton("Load", () => LoadFromSlot(slot), 84, 36));
+        var loadBtn = ActionButton("Load", () => LoadFromSlot(slot), 90, 34, true);
+        MenuChromeTheme.StylePrimaryCta(loadBtn, 13, serif: false);
+        row.AddChild(loadBtn);
         // Overwriting keeps the name it already had: a campaign saved over is the same
         // campaign later, and renaming it every time would turn the list into strangers.
-        row.AddChild(ActionButton("Overwrite", () => SaveToSlot(slot, displayName: kept), 104, 36));
-        row.AddChild(ActionButton("Delete", () => DeleteSave(slot), 84, 36));
+        var overwriteBtn = ActionButton("Overwrite", () => SaveToSlot(slot, displayName: kept), 112, 34);
+        MenuChromeTheme.StyleWellButton(overwriteBtn, false, 13);
+        row.AddChild(overwriteBtn);
+        var deleteBtn = ActionButton("Delete", () => DeleteSave(slot), 88, 34);
+        MenuChromeTheme.StyleWellButton(deleteBtn, false, 13);
+        row.AddChild(deleteBtn);
     }
 
     /// <summary>
@@ -340,30 +381,32 @@ public partial class DealOrForceGame
         layer.MouseFilter = MouseFilterEnum.Stop;
         AddChild(layer);
         _campaignFaultDialog = layer;
-        var veil = new ColorRect { Color = Ui.Colour("surface.overlay", 0.82f), MouseFilter = MouseFilterEnum.Stop };
+        var veil = new ColorRect { Color = MenuChromeTheme.VeilColor, MouseFilter = MouseFilterEnum.Stop };
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         layer.AddChild(veil);
         var panel = TexturedPanel(layer, PanelSurface.Modal);
         panel.Name = "CampaignFaultPanel";
+        MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true);
         Ui.Place(panel, "modal.peace_offer");
         var rows = PanelRows(panel, 28, 22, 12);
         void Dismiss() { if (IsInstanceValid(layer)) layer.QueueFree(); }
+        var dismissX = ActionButton("×", Dismiss, 38, 32);
+        MenuChromeTheme.StyleWellButton(dismissX, false, 15);
         ScreenHeader(rows, "Campaign integrity",
             message,
-            false, ActionButton("×", Dismiss, 38, 32));
+            false, dismissX);
+        MenuChromeTheme.StyleScreenHeader(rows.GetChildOrNull<PanelContainer>(0));
         var well = new PanelContainer { Name = "FaultDiagnosticWell", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
-        well.SetMeta("atlas_section_ground", "surface.inset");
-        well.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
-        AtlasSurfaceSkin.Attach(well, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        well.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(12, 10));
         rows.AddChild(well);
         var wellRows = PanelRows(well, 12, 10, 8);
-        var diagLabel = Title(diagnostic, 12, Ui.Colour("text.body_soft"));
+        var diagLabel = Title(diagnostic, 12, MenuChromeTheme.PaperDim);
         diagLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         wellRows.AddChild(diagLabel);
         var detailSummary = detail.Length > 240 ? detail[..240] + "…" : detail;
         if (!string.IsNullOrEmpty(detailSummary))
         {
-            var detailLabel = Title(detailSummary, 12, Ui.Colour("state.warning"));
+            var detailLabel = Title(detailSummary, 12, MenuChromeTheme.Warning);
             detailLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             wellRows.AddChild(detailLabel);
         }
@@ -371,8 +414,14 @@ public partial class DealOrForceGame
         actions.AddThemeConstantOverride("separation", 8);
         rows.AddChild(actions);
         if (!string.IsNullOrEmpty(diagnosticPath))
-            actions.AddChild(ActionButton("Copy diagnostic path", () => DisplayServer.ClipboardSet(diagnosticPath), 190, 36));
-        actions.AddChild(ActionButton("Close", Dismiss, 120, 36, true));
+        {
+            var copyBtn = ActionButton("Copy diagnostic path", () => DisplayServer.ClipboardSet(diagnosticPath), 190, 36);
+            MenuChromeTheme.StyleWellButton(copyBtn, false, 13);
+            actions.AddChild(copyBtn);
+        }
+        var closeBtn = ActionButton("Close", Dismiss, 120, 36, true);
+        MenuChromeTheme.StylePrimaryCta(closeBtn, 14, serif: false);
+        actions.AddChild(closeBtn);
         layer.MoveToFront();
         _campaign.MarkStrategicChange();
     }

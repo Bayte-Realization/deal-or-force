@@ -6,8 +6,9 @@ render_mode unshaded, cull_front, depth_draw_never;
 // is cheaper than a picture of one and is sharp on any screen. The cells are small - a
 // quarter of a degree - because a star is a point: at the first size tried they were discs.
 
-uniform vec3 ground_colour : source_color = vec3(0.0035, 0.0058, 0.0105);
-uniform float star_strength = 0.9;
+uniform vec3 ground_colour : source_color = vec3(0.022, 0.017, 0.013);
+uniform vec3 star_colour : source_color = vec3(0.95, 0.89, 0.76);
+uniform float star_strength = 0.78;
 
 float cell_hash(vec2 cell) {
 	return fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
@@ -23,5 +24,5 @@ void fragment() {
 	float star = step(0.9917, chance) * point * (0.12 + 0.88 * brightness * brightness);
 	// Fewer near the poles of the shell, where the cells are squeezed into slivers.
 	star *= smoothstep(0.04, 0.18, UV.y) * smoothstep(0.96, 0.82, UV.y);
-	ALBEDO = ground_colour + vec3(0.82, 0.88, 1.0) * star * star_strength;
+	ALBEDO = ground_colour + star_colour * star * star_strength;
 }

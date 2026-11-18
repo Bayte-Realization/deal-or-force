@@ -301,6 +301,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--controls-ergonomics-only")) { ControlsErgonomicsTests.RunControlsErgonomicsOnly(); return; }
         if (args.Contains("--quick-amount-only")) { ControlsErgonomicsTests.RunQuickAmountOnly(); return; }
         if (args.Contains("--alert-list-only")) { AlertListTests.Run(); return; }
+        if (args.Contains("--menu-chrome-only")) { MenuChromeTests.Run(); return; }
         if (args.Contains("--new-shell-rest-only")) { NewShellTests.RunRestLayout(); return; }
         if (args.Contains("--alert-dedupe-only")) { NewShellTests.RunAlertDedupe(); return; }
         if (args.Contains("--hotkey-map-only")) { NewShellTests.RunHotkeyMap(); return; }
@@ -692,6 +693,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         HudResourceTests.Run();
         DatePlateTests.Run();
         AlertListTests.Run();
+        MenuChromeTests.Run();
         NewShellTests.RunAll();
         WarTollTests.Run();
         DiplomacyPreviewTests.Run();
