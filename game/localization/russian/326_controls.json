@@ -217,5 +217,12 @@
   "Toggle interface visibility for screenshots": "Скрыть или вернуть весь интерфейс для снимка",
   "Toggle velocity smoothing in Free Camera": "Включить/выключить инерцию в свободной камере",
   "Undo mass action": "Отменить массовое действие",
-  "Write an immediate quick save": "Сделать мгновенное быстрое сохранение"
+  "Write an immediate quick save": "Сделать мгновенное быстрое сохранение",
+  "Quick search": "Быстрый поиск",
+  "Find any country, region, movement, or army (/)": "Найти любую страну, регион, движение или армию (/)",
+  "Open Technology & research tree": "Открыть технологии и дерево исследований",
+  "Outliner": "Сводка «Слежу»",
+  "Collapse or expand the situation outliner": "Свернуть или развернуть сводку «Слежу»",
+  "Switch map to Resources mode": "Режим ресурсов карты",
+  "Switch map to Wars mode": "Военный режим карты (войны)"
 }

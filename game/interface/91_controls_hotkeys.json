@@ -31,6 +31,7 @@
     // --- System & history (global) ---
     "help_handbook": { "scope": "global", "key": "F1", "category": "system", "order": 40, "label": "Handbook", "description": "Open the in-game encyclopedia and controls reference", "hud_target": "help_button", "visible_button": true },
     "search_navigator": { "scope": "global", "key": "K", "ctrl": true, "category": "system", "order": 42, "label": "Search", "description": "Find any country, region, movement, or army", "hud_target": "search_button", "badge": "Ctrl+K", "visible_button": true },
+    "search_navigator_slash": { "scope": "global", "key": "Slash", "category": "system", "order": 43, "label": "Quick search", "description": "Find any country, region, movement, or army (/)", "badge": "/", "visible_button": false },
     "quick_save": { "scope": "global", "key": "F5", "category": "system", "order": 44, "label": "Quick save", "description": "Write an immediate quick save", "visible_button": false },
     "quick_load": { "scope": "global", "key": "F9", "category": "system", "order": 45, "label": "Quick load", "description": "Load the latest quick save", "visible_button": false },
     "hide_interface": { "scope": "global", "key": "F9", "ctrl": true, "category": "system", "order": 46, "label": "Hide HUD", "description": "Toggle interface visibility for screenshots", "visible_button": false },
@@ -46,26 +47,26 @@
     "toggle_free_camera": { "scope": "global", "key": "F10", "category": "camera", "order": 63, "label": "Free camera", "description": "Enter or leave cinematic free-flight camera", "visible_button": false },
     "focus_capital": { "scope": "global", "key": "Home", "category": "camera", "order": 64, "label": "Home capital", "description": "Center the camera on your capital", "visible_button": false },
 
-    // --- Campaign top/rail screens (physical QWERTY top/middle row) ---
+    // --- Campaign top/rail screens (canonical §5.3 QWERTY/JCUKEN rail order Q / E R T Y U I O P L) ---
     "screen_nation": { "scope": "campaign", "key": "Q", "category": "screens", "order": 100, "label": "Nation", "description": "Open the Nation overview screen", "hud_target": "nav_nation", "visible_button": true },
-    "screen_economy": { "scope": "campaign", "key": "E", "category": "screens", "order": 101, "label": "Economy", "description": "Open Economy, industry & buildings", "hud_target": "nav_economy", "visible_button": true },
-    "screen_military": { "scope": "campaign", "key": "R", "category": "screens", "order": 102, "label": "Military", "description": "Open Military & recruitment", "hud_target": "nav_military", "visible_button": true },
-    "screen_diplomacy": { "scope": "campaign", "key": "T", "category": "screens", "order": 103, "label": "Diplomacy", "description": "Open Diplomacy & foreign relations", "hud_target": "nav_diplomacy", "visible_button": true },
-    "screen_wars": { "scope": "campaign", "key": "Y", "category": "screens", "order": 104, "label": "Wars", "description": "Open Active Wars & peace treaties", "hud_target": "nav_wars", "visible_button": true },
-    "screen_decisions": { "scope": "campaign", "key": "U", "category": "screens", "order": 105, "label": "Decisions", "description": "Open National Decisions", "hud_target": "nav_decisions", "visible_button": true },
-    "screen_state_affairs": { "scope": "campaign", "key": "I", "category": "screens", "order": 106, "label": "State Affairs", "description": "Open Budget, taxes & central bank", "hud_target": "nav_state_affairs", "visible_button": true },
-    "screen_trade": { "scope": "campaign", "key": "O", "category": "screens", "order": 107, "label": "Trade", "description": "Open Trade & stockpiles", "hud_target": "nav_trade", "visible_button": true },
-    "screen_production": { "scope": "campaign", "key": "P", "category": "screens", "order": 108, "label": "Production", "description": "Open Production lines & templates", "hud_target": "nav_production", "visible_button": true },
+    "screen_state_affairs": { "scope": "campaign", "key": "E", "category": "screens", "order": 101, "label": "State Affairs", "description": "Open Budget, taxes & central bank", "hud_target": "nav_state_affairs", "visible_button": true },
+    "screen_economy": { "scope": "campaign", "key": "R", "category": "screens", "order": 102, "label": "Economy", "description": "Open Economy, industry & buildings", "hud_target": "nav_economy", "visible_button": true },
+    "screen_trade": { "scope": "campaign", "key": "T", "category": "screens", "order": 103, "label": "Trade", "description": "Open Trade & stockpiles", "hud_target": "nav_trade", "visible_button": true },
+    "screen_production": { "scope": "campaign", "key": "Y", "category": "screens", "order": 104, "label": "Production", "description": "Open Production lines & templates", "hud_target": "nav_production", "visible_button": true },
+    "screen_research": { "scope": "campaign", "key": "U", "category": "screens", "order": 105, "label": "Research", "description": "Open Technology & research tree", "hud_target": "nav_research", "visible_button": true },
+    "screen_military": { "scope": "campaign", "key": "I", "category": "screens", "order": 106, "label": "Military", "description": "Open Military & recruitment", "hud_target": "nav_military", "visible_button": true },
+    "screen_diplomacy": { "scope": "campaign", "key": "O", "category": "screens", "order": 107, "label": "Diplomacy", "description": "Open Diplomacy & foreign relations", "hud_target": "nav_diplomacy", "visible_button": true },
+    "screen_wars": { "scope": "campaign", "key": "P", "category": "screens", "order": 108, "label": "Wars", "description": "Open Active Wars & peace treaties", "hud_target": "nav_wars", "visible_button": true },
     "screen_ledger": { "scope": "campaign", "key": "L", "category": "screens", "order": 109, "label": "Ledger", "description": "Open Statistical Ledger", "hud_target": "nav_ledger", "visible_button": true },
 
-    // --- Map layers (bottom row Z X C V N M + J drawer + B icons) ---
-    "toggle_map_layers": { "scope": "campaign", "key": "J", "category": "map", "order": 150, "label": "Map layers", "description": "Open or close the map mode drawer", "hud_target": "map_layers", "visible_button": true },
+    // --- Map layers & outliner (canonical §5.3 bottom row Z X C V N + M drawer + J outliner + B icons) ---
+    "toggle_outliner": { "scope": "campaign", "key": "J", "category": "map", "order": 150, "label": "Outliner", "description": "Collapse or expand the situation outliner", "hud_target": "outliner_toggle", "visible_button": true },
     "map_mode_political": { "scope": "campaign", "key": "Z", "category": "map", "order": 151, "label": "Political", "description": "Switch map to Political mode", "hud_target": "map_mode_political", "visible_button": true },
     "map_mode_diplomatic": { "scope": "campaign", "key": "X", "category": "map", "order": 152, "label": "Diplomacy", "description": "Switch map to Diplomatic mode", "hud_target": "map_mode_diplomatic", "visible_button": true },
-    "map_mode_terrain": { "scope": "campaign", "key": "C", "category": "map", "order": 153, "label": "Terrain", "description": "Switch map to Terrain mode", "hud_target": "map_mode_terrain", "visible_button": true },
-    "map_mode_population": { "scope": "campaign", "key": "V", "category": "map", "order": 154, "label": "Population", "description": "Switch map to Population mode", "hud_target": "map_mode_population", "visible_button": true },
-    "map_mode_economy": { "scope": "campaign", "key": "N", "category": "map", "order": 155, "label": "Economy", "description": "Switch map to Economy mode", "hud_target": "map_mode_economy", "visible_button": true },
-    "map_mode_military": { "scope": "campaign", "key": "M", "category": "map", "order": 156, "label": "Military", "description": "Switch map to Military mode", "hud_target": "map_mode_military", "visible_button": true },
+    "map_mode_economy": { "scope": "campaign", "key": "C", "category": "map", "order": 153, "label": "Economy", "description": "Switch map to Economy mode", "hud_target": "map_mode_economy", "visible_button": true },
+    "map_mode_resources": { "scope": "campaign", "key": "V", "category": "map", "order": 154, "label": "Resources", "description": "Switch map to Resources mode", "hud_target": "map_mode_resources", "visible_button": true },
+    "map_mode_wars": { "scope": "campaign", "key": "N", "category": "map", "order": 155, "label": "Wars", "description": "Switch map to Wars mode", "hud_target": "map_mode_wars", "visible_button": true },
+    "toggle_map_layers": { "scope": "campaign", "key": "M", "category": "map", "order": 156, "label": "Map layers", "description": "Open or close the map mode drawer", "hud_target": "map_layers", "visible_button": true },
     "toggle_region_icons": { "scope": "campaign", "key": "B", "category": "map", "order": 157, "label": "Map icons", "description": "Show or hide building icons on regions", "hud_target": "map_region_icons", "visible_button": true },
 
     // --- Army control groups, selection & emergency brake (global/selection) ---

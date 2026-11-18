@@ -217,5 +217,12 @@
   "Toggle interface visibility for screenshots": "Toggle interface visibility for screenshots",
   "Toggle velocity smoothing in Free Camera": "Toggle velocity smoothing in Free Camera",
   "Undo mass action": "Undo mass action",
-  "Write an immediate quick save": "Write an immediate quick save"
+  "Write an immediate quick save": "Write an immediate quick save",
+  "Quick search": "Quick search",
+  "Find any country, region, movement, or army (/)": "Find any country, region, movement, or army (/)",
+  "Open Technology & research tree": "Open Technology & research tree",
+  "Outliner": "Outliner",
+  "Collapse or expand the situation outliner": "Collapse or expand the situation outliner",
+  "Switch map to Resources mode": "Switch map to Resources mode",
+  "Switch map to Wars mode": "Switch map to Wars mode"
 }

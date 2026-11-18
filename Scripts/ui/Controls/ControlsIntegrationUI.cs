@@ -145,14 +145,14 @@ public partial class DealOrForceGame
         var screenToTarget = new (string Screen, string Target)[]
         {
             ("Nation", "nav_nation"),
+            ("State Affairs", "nav_state_affairs"),
             ("Economy", "nav_economy"),
+            ("Trade", "nav_trade"),
+            ("Production", "nav_production"),
+            ("Research", "nav_research"),
             ("Military", "nav_military"),
             ("Diplomacy", "nav_diplomacy"),
             ("Wars", "nav_wars"),
-            ("Decisions", "nav_decisions"),
-            ("State Affairs", "nav_state_affairs"),
-            ("Trade", "nav_trade"),
-            ("Production", "nav_production"),
             ("Ledger", "nav_ledger")
         };
         foreach (var (screen, target) in screenToTarget)
@@ -161,14 +161,15 @@ public partial class DealOrForceGame
             _altHotkeyOverlay.RegisterTarget(target, () => _screenButtons.GetValueOrDefault(captured));
         }
 
+        _altHotkeyOverlay.RegisterTarget("outliner_toggle", () => _outliner?.FindChild("OutlinerToggle", true, false) as Button);
+
         var modeToTarget = new (StrategicMapMode Mode, string Target)[]
         {
             (StrategicMapMode.Political, "map_mode_political"),
             (StrategicMapMode.Diplomatic, "map_mode_diplomatic"),
-            (StrategicMapMode.Terrain, "map_mode_terrain"),
-            (StrategicMapMode.Population, "map_mode_population"),
             (StrategicMapMode.Economy, "map_mode_economy"),
-            (StrategicMapMode.Wars, "map_mode_military")
+            (StrategicMapMode.Resources, "map_mode_resources"),
+            (StrategicMapMode.Wars, "map_mode_wars")
         };
         foreach (var (mode, target) in modeToTarget)
         {
@@ -481,9 +482,14 @@ public partial class DealOrForceGame
             return true;
         }
 
-        // Campaign screens (Q E R T Y U I O P L) and Map modes (J Z X C V N M) — physical QWERTY/JCUKEN
+        // Campaign screens (Q E R T Y U I O P L), / search, J outliner, Map modes (Z X C V N M) — physical QWERTY/JCUKEN
         if (!ctrl && !shift && !alt)
         {
+            if (letter == Key.Slash)
+            {
+                ToggleNavigator();
+                return true;
+            }
             var resolved = HotkeyCatalog.ResolveActive(
                 letter.ToString(), ctrl: false, shift: false, alt: false,
                 hasArmiesSelected: _selectedArmies.Count > 0,
@@ -496,22 +502,22 @@ public partial class DealOrForceGame
                 switch (resolved.Id)
                 {
                     case "screen_nation": ToggleCampaignScreen("Nation"); return true;
+                    case "screen_state_affairs": ToggleCampaignScreen("State Affairs"); return true;
                     case "screen_economy": ToggleCampaignScreen("Economy"); return true;
+                    case "screen_trade": ToggleCampaignScreen("Trade"); return true;
+                    case "screen_production": ToggleCampaignScreen("Production"); return true;
+                    case "screen_research": ToggleCampaignScreen("Research"); return true;
                     case "screen_military": ToggleCampaignScreen("Military"); return true;
                     case "screen_diplomacy": ToggleCampaignScreen("Diplomacy"); return true;
                     case "screen_wars": ToggleCampaignScreen("Wars"); return true;
-                    case "screen_decisions": ToggleCampaignScreen("Decisions"); return true;
-                    case "screen_state_affairs": ToggleCampaignScreen("State Affairs"); return true;
-                    case "screen_trade": ToggleCampaignScreen("Trade"); return true;
-                    case "screen_production": ToggleCampaignScreen("Production"); return true;
                     case "screen_ledger": ToggleCampaignScreen("Ledger"); return true;
-                    case "toggle_map_layers": ToggleMapLayerDrawer(); return true;
+                    case "toggle_outliner": ToggleOutliner(); return true;
                     case "map_mode_political": _globe.SetMapMode(StrategicMapMode.Political); CloseMapLayerDrawer(); return true;
                     case "map_mode_diplomatic": _globe.SetMapMode(StrategicMapMode.Diplomatic); CloseMapLayerDrawer(); return true;
-                    case "map_mode_terrain": _globe.SetMapMode(StrategicMapMode.Terrain); CloseMapLayerDrawer(); return true;
-                    case "map_mode_population": _globe.SetMapMode(StrategicMapMode.Population); CloseMapLayerDrawer(); return true;
                     case "map_mode_economy": _globe.SetMapMode(StrategicMapMode.Economy); CloseMapLayerDrawer(); return true;
-                    case "map_mode_military": _globe.SetMapMode(StrategicMapMode.Wars); CloseMapLayerDrawer(); return true;
+                    case "map_mode_resources": _globe.SetMapMode(StrategicMapMode.Resources); CloseMapLayerDrawer(); return true;
+                    case "map_mode_wars": _globe.SetMapMode(StrategicMapMode.Wars); CloseMapLayerDrawer(); return true;
+                    case "toggle_map_layers": ToggleMapLayerDrawer(); return true;
                 }
             }
         }

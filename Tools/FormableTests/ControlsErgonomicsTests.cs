@@ -179,6 +179,23 @@ static class ControlsErgonomicsTests
             "QuickAmount A/S/D/F active ONLY while QuickAmount holds focus");
         Check(HotkeyCatalog.ResolveActive("K", true, false, false, true, false, false, false)?.Id == "search_navigator",
             "Ctrl+K stays strictly Search/Navigator even when armies selected");
+        Check(HotkeyCatalog.ResolveActive("/", false, false, false, false, false, false, false)?.Id == "search_navigator_slash",
+            "Slash opens quick search/navigator");
+        Check(HotkeyCatalog.ResolveInScope("campaign", "E", false, false, false)?.Id == "screen_state_affairs" &&
+              HotkeyCatalog.ResolveInScope("campaign", "R", false, false, false)?.Id == "screen_economy" &&
+              HotkeyCatalog.ResolveInScope("campaign", "T", false, false, false)?.Id == "screen_trade" &&
+              HotkeyCatalog.ResolveInScope("campaign", "Y", false, false, false)?.Id == "screen_production" &&
+              HotkeyCatalog.ResolveInScope("campaign", "U", false, false, false)?.Id == "screen_research" &&
+              HotkeyCatalog.ResolveInScope("campaign", "I", false, false, false)?.Id == "screen_military" &&
+              HotkeyCatalog.ResolveInScope("campaign", "O", false, false, false)?.Id == "screen_diplomacy" &&
+              HotkeyCatalog.ResolveInScope("campaign", "P", false, false, false)?.Id == "screen_wars" &&
+              HotkeyCatalog.ResolveInScope("campaign", "L", false, false, false)?.Id == "screen_ledger" &&
+              HotkeyCatalog.ResolveInScope("campaign", "J", false, false, false)?.Id == "toggle_outliner" &&
+              HotkeyCatalog.ResolveInScope("campaign", "C", false, false, false)?.Id == "map_mode_economy" &&
+              HotkeyCatalog.ResolveInScope("campaign", "V", false, false, false)?.Id == "map_mode_resources" &&
+              HotkeyCatalog.ResolveInScope("campaign", "N", false, false, false)?.Id == "map_mode_wars" &&
+              HotkeyCatalog.ResolveInScope("campaign", "M", false, false, false)?.Id == "toggle_map_layers",
+            "canonical §5.3 screen & map keys match ShellHotkeys 100%");
 
         // 5. Army suite: Control groups (6..0), idle cycle (.), Gather idle, Alt+RMB split-move, Emergency brake (Ctrl+Alt+H)
         var campaign = CreateSyntheticCampaignWithMap(out var player, out var stateA, out var stateB, out var provA, out var provB);
@@ -291,15 +308,18 @@ static class ControlsErgonomicsTests
             "BatchActionUndo stays valid even after AI commands (timeless)");
 
         var undoCmd = BatchActionUndo.CreateUndoCommand(campaign, player.Id);
+        ICampaignCommand decodedBuildUndo = null;
         Check(NetworkCommandCodec.TryEncode(undoCmd, out var undoType, out var undoJson) &&
-              NetworkCommandCodec.TryDecode(undoType, undoJson, out _),
+              NetworkCommandCodec.TryDecode(undoType, undoJson, out decodedBuildUndo) &&
+              decodedBuildUndo is UndoBatchActionCommand,
             "UndoBatchActionCommand round-trips through NetworkCommandCodec");
-        Check(BatchActionUndo.TryUndo(campaign, player.Id, out var executedBuildUndo) &&
-              executedBuildUndo.UndoneCount == buildPlan.TotalBuildings,
-            "Ctrl+Z undoes all unstarted queued construction items");
-        Check(!BatchActionUndo.CanUndo(campaign, player.Id), "PendingBatchUndo clears after undo");
+        campaign.Commands.Enqueue(decodedBuildUndo);
+        campaign.Commands.ApplyAll(campaign);
+        Check(((UndoBatchActionCommand)decodedBuildUndo).UndoneCount == buildPlan.TotalBuildings,
+            "Decoded Ctrl+Z construction command undoes all unstarted queued construction items");
+        Check(!BatchActionUndo.CanUndo(campaign, player.Id), "PendingBatchUndo clears after decoded undo");
         Check(CampaignFingerprint.Of(campaign) == fpBeforeBuild,
-            "Ctrl+Z Construction Everywhere restores exact CampaignFingerprint");
+            "Decoded Ctrl+Z Construction Everywhere restores exact CampaignFingerprint");
 
         // 4. Timeless Ctrl+Z clears immediately on the owning player's NEXT command
         var buildPlan2 = BatchActionUndo.ExecuteEverywhereConstruction(campaign, player, new[] { stateA, stateB },
@@ -316,20 +336,28 @@ static class ControlsErgonomicsTests
         Check(!BatchActionUndo.CanUndo(campaign, player.Id),
             "player's next non-undo command cleanly expires PendingBatchUndo");
 
-        // 5. Timeless Ctrl+Z on Recruitment Everywhere restores Treasury, Manpower, Stockpiles & Fingerprint
+        // 5. Timeless Ctrl+Z on Recruitment Everywhere restores Treasury, Manpower, Stockpiles & Fingerprint via wire roundtrip
         var fpBeforeRecruit = CampaignFingerprint.Of(campaign);
         var execRecruit = BatchActionUndo.ExecuteEverywhereRecruitment(campaign, player, new[] { stateA, stateB },
             tpl.Id, MobilisationMode.Standard, quarterOrCount: 1, isQuarter: false);
         Check(execRecruit.TotalDivisions >= 1 && BatchActionUndo.CanUndo(campaign, player.Id),
             "Everywhere Recruitment arms BatchActionUndo");
-        Check(BatchActionUndo.TryUndo(campaign, player.Id, out var executedRecruitUndo) &&
-              executedRecruitUndo.UndoneCount == execRecruit.Items.Count &&
+        var recruitUndoCmd = BatchActionUndo.CreateUndoCommand(campaign, player.Id);
+        ICampaignCommand decodedRecruitUndo = null;
+        Check(NetworkCommandCodec.TryEncode(recruitUndoCmd, out var rUndoType, out var rUndoJson) &&
+              NetworkCommandCodec.TryDecode(rUndoType, rUndoJson, out decodedRecruitUndo) &&
+              decodedRecruitUndo is UndoBatchActionCommand,
+            "Recruitment UndoBatchActionCommand round-trips through NetworkCommandCodec");
+        campaign.Commands.Enqueue(decodedRecruitUndo);
+        campaign.Commands.ApplyAll(campaign);
+        var executedRecruitUndo = (UndoBatchActionCommand)decodedRecruitUndo;
+        Check(executedRecruitUndo.UndoneCount == execRecruit.Items.Count &&
               executedRecruitUndo.RefundedCash > 0f && executedRecruitUndo.RefundedManpower > 0,
-            "Ctrl+Z Recruitment Everywhere refunds 100% unstarted cash + manpower");
+            "Decoded Ctrl+Z Recruitment Everywhere refunds 100% unstarted cash + manpower");
         Check(CampaignFingerprint.Of(campaign) == fpBeforeRecruit,
-            "Ctrl+Z Recruitment Everywhere restores exact CampaignFingerprint");
+            "Decoded Ctrl+Z Recruitment Everywhere restores exact CampaignFingerprint");
 
-        // 6. Debt preview & Budget "Balance to zero" solver + Ctrl+Z restore
+        // 6. Debt preview & Budget "Balance to zero" solver + decoded Ctrl+Z restore
         var debtPreview = QuickAmountRules.PreviewDebtAction(campaign, player, "borrow", 1.5f);
         var sheet = SovereignBalanceSheet.Read(campaign, player);
         if (sheet.NewCredit >= 0.01f)
@@ -346,8 +374,15 @@ static class ControlsErgonomicsTests
         {
             Check(MathF.Abs(zeroExec.BalanceAfter) <= MathF.Abs(zeroExec.BalanceBefore) + 0.001f,
                 $"Balance-to-zero reduces deficit/surplus ({zeroExec.BalanceBefore:0.###} -> {zeroExec.BalanceAfter:0.###})");
-            Check(BatchActionUndo.TryUndo(campaign, player.Id, out _), "Ctrl+Z reverts Zero-budget rate edits");
-            Check(CampaignFingerprint.Of(campaign) == fpBeforeZero, "Ctrl+Z Zero-budget restores exact CampaignFingerprint");
+            var zeroUndoCmd = BatchActionUndo.CreateUndoCommand(campaign, player.Id);
+            ICampaignCommand decodedZeroUndo = null;
+            Check(NetworkCommandCodec.TryEncode(zeroUndoCmd, out var zType, out var zJson) &&
+                  NetworkCommandCodec.TryDecode(zType, zJson, out decodedZeroUndo) &&
+                  decodedZeroUndo is UndoBatchActionCommand,
+                "Zero-budget UndoBatchActionCommand round-trips through NetworkCommandCodec");
+            campaign.Commands.Enqueue(decodedZeroUndo);
+            campaign.Commands.ApplyAll(campaign);
+            Check(CampaignFingerprint.Of(campaign) == fpBeforeZero, "Decoded Ctrl+Z Zero-budget restores exact CampaignFingerprint");
         }
     }
 }
