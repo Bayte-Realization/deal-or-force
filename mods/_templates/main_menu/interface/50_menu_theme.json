@@ -1,0 +1,11 @@
+{
+  "colors": {
+    "text.accent": "#e8d9b8",
+    "button.primary_fill": "#234a78",
+    "button.primary_border": "#89b7ea"
+  },
+  "metrics": {
+    "menu.backdrop_brightness": 0.52,
+    "menu.globe_brightness": 0.90
+  }
+}

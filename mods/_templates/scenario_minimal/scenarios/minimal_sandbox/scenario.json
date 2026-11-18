@@ -1,0 +1,8 @@
+{
+  "id": "minimal_sandbox",
+  "name": "Minimal Sandbox (1995)",
+  "description": "Compact single-province sandbox starter scenario.",
+  "world": "world.bdfsave",
+  "player_country": "ALF",
+  "skin": ""
+}

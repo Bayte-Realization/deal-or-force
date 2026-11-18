@@ -27,6 +27,8 @@
     },
     "open_country": "land_calm",
     "sea": "sea_coast",
+    "high_wind": "audio/ambience/wind_high.ogg",
+    "front": "audio/ambience/front_far.ogg",
     "terrain": {
       "forest": { "forest": 1 },
       "jungle": { "jungle": 1 },

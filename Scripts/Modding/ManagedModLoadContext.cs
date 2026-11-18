@@ -30,7 +30,7 @@ public sealed class ManagedModLoadContext : AssemblyLoadContext
     /// <summary>Share the host contract. Load everything else from the package, not from a second copy of the game.</summary>
     protected override Assembly Load(AssemblyName name)
     {
-        foreach (var shared in new[] { typeof(IGlobalityMod).Assembly, typeof(Godot.Node).Assembly })
+        foreach (var shared in ModPlatform.SharedAssemblies())
             if (AssemblyName.ReferenceMatchesDefinition(name, shared.GetName())) return shared;
         var path = _resolver.ResolveAssemblyToPath(name);
         // Class-library mods may not have a deps.json; support explicitly shipped sibling DLLs.

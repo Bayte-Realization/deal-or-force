@@ -269,7 +269,7 @@ public static class IncidentCatalog
         foreach (var entry in incidents.EnumerateObject())
         {
             if (entry.Value.ValueKind != JsonValueKind.Object) continue;
-            if (entry.Value.TryGetProperty("remove", out var remove) && remove.ValueKind == JsonValueKind.True)
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/escalation:{entry.Name}"))
             {
                 ById.Remove(entry.Name);
                 continue;

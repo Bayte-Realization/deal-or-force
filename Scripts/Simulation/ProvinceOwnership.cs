@@ -142,6 +142,7 @@ public static class ProvinceOwnership
     public static void LoadDirectory(string directory, List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
+        GameDataLoader.WarnNestedFilesWithExtension(directory, "*.csv", "history/provinces", errors);
         foreach (var file in Directory.EnumerateFiles(directory, "*.csv", SearchOption.TopDirectoryOnly)
                      .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {

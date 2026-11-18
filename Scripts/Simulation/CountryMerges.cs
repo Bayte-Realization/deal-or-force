@@ -71,8 +71,13 @@ public static class CountryMerges
         if (root.ValueKind != JsonValueKind.Object) return;
         foreach (var entry in root.EnumerateObject())
         {
-            if (entry.Value.ValueKind != JsonValueKind.Object ||
-                !entry.Value.TryGetProperty("into", out var into) || into.ValueKind != JsonValueKind.String) continue;
+            if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/country_merges:{entry.Name}"))
+            {
+                Owners.Remove(entry.Name);
+                continue;
+            }
+            if (!entry.Value.TryGetProperty("into", out var into) || into.ValueKind != JsonValueKind.String) continue;
             var owner = into.GetString()?.Trim() ?? "";
             if (owner.Length == 0) Owners.Remove(entry.Name);
             else Owners[entry.Name] = owner;

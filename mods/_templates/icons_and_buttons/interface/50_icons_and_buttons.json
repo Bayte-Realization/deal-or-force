@@ -1,0 +1,22 @@
+{
+  "colors": {
+    "icon.category.economy": "#d4ad54",
+    "icon.category.military": "#a9bac9",
+    "icon.category.diplomacy": "#58bfb0",
+    "icon.category.society": "#8ec06b",
+    "icon.category.state": "#b59de0",
+    "button.fill": "#1b242e",
+    "button.border": "#506173",
+    "button.primary_fill": "#2d5585",
+    "button.primary_border": "#88b8ef"
+  },
+  "metrics": {
+    "button.corner_radius": 6,
+    "button.border_width": 2,
+    "button.focus_width": 2
+  },
+  "materials": {
+    "button": { "corner_radius": 6, "bevel": 1 },
+    "chip": { "corner_radius": 4 }
+  }
+}

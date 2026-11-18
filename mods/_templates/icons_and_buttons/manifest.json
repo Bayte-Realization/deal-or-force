@@ -1,0 +1,10 @@
+{
+  "id": "example_icons_and_buttons",
+  "name": "Example: icons and buttons",
+  "version": "1.0.0",
+  "supported_game_version": "0.6.*",
+  "enabled": false,
+  "load_order": 150,
+  "dependencies": [],
+  "gdscript_entry": ""
+}

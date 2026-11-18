@@ -145,12 +145,8 @@ public partial class DealOrForceGame
     }
 
     /// <summary>The imported picture, or the file itself when the editor has not imported it yet.</summary>
-    private static Texture2D LoadNuclearAlertPicture()
-    {
-        if (ResourceLoader.Exists(NuclearAlertPicture)) return GD.Load<Texture2D>(NuclearAlertPicture);
-        var image = Image.LoadFromFile(ProjectSettings.GlobalizePath(NuclearAlertPicture));
-        return image is null ? null : ImageTexture.CreateFromImage(image);
-    }
+    private static Texture2D LoadNuclearAlertPicture() =>
+        LoadingScreen.Picture(SpriteCatalog.TextureOf("event_nuclear_strike", NuclearAlertPicture));
 
     private void PlaceNuclearAlert()
     {

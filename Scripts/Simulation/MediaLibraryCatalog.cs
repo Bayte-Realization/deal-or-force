@@ -26,7 +26,7 @@ public static class MediaLibraryCatalog
     public static void LoadTree(string directory, string assetRoot, List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
-        foreach (var file in StructuredData.Files(directory, SearchOption.AllDirectories).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+        foreach (var file in GameDataLoader.TopLevelDataFiles(directory, "presentation", errors))
             try { Merge(StructuredData.ReadJson(file), assetRoot, file, errors); }
             catch (Exception ex) { errors?.Add($"media: {ex.Message}"); }
     }
@@ -41,7 +41,7 @@ public static class MediaLibraryCatalog
             {
                 var e = entry.Value;
                 if (!MechanicFeatures.ValidId(entry.Name) || e.ValueKind != JsonValueKind.Object) throw new FormatException("invalid asset id or body");
-                if (e.TryGetProperty("remove", out var remove) && remove.ValueKind == JsonValueKind.True) { Items.Remove(entry.Name); continue; }
+                if (GameDataLoader.IsRemoved(e, $"{origin}:{entry.Name}")) { Items.Remove(entry.Name); continue; }
                 var old = Find(entry.Name);
                 string Text(string key, string fallback) => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : fallback;
                 var kindText = Text("kind", old?.Kind.ToString() ?? "");

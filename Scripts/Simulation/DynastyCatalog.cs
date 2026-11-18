@@ -31,21 +31,39 @@ public static class DynastyCatalog
     private static void Ensure()
     {
         if (_dynastyOfTag is not null) return;
-        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        _dynastyOfTag = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var document in GameDataLoader.DataDocuments("common", "dynasties"))
         using (document)
+            Merge(document.RootElement);
+    }
+
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        Ensure();
+        if (root.ValueKind != JsonValueKind.Object) return;
+        var houses = root.TryGetProperty("dynasties", out var wrapped) && wrapped.ValueKind == JsonValueKind.Object
+            ? wrapped
+            : root;
+        foreach (var house in houses.EnumerateObject())
         {
-            if (document.RootElement.ValueKind != JsonValueKind.Object ||
-                !document.RootElement.TryGetProperty("dynasties", out var houses) ||
-                houses.ValueKind != JsonValueKind.Object) continue;
-            foreach (var house in houses.EnumerateObject())
+            if (house.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+            if (house.Value.ValueKind == JsonValueKind.Array)
             {
-                if (house.Value.ValueKind != JsonValueKind.Array) continue;
                 foreach (var tag in house.Value.EnumerateArray())
-                    if (tag.ValueKind == JsonValueKind.String) map[tag.GetString()] = house.Name;
+                    if (tag.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tag.GetString()))
+                        _dynastyOfTag[tag.GetString()] = house.Name;
+            }
+            else if (GameDataLoader.IsRemoved(house.Value, $"common/dynasties:{house.Name}"))
+            {
+                foreach (var key in new List<string>(_dynastyOfTag.Keys))
+                    if (string.Equals(_dynastyOfTag[key], house.Name, StringComparison.OrdinalIgnoreCase))
+                        _dynastyOfTag.Remove(key);
+            }
+            else
+            {
+                errors?.Add($"common/dynasties: '{house.Name}' must be an array of country tags.");
             }
         }
-        _dynastyOfTag = map;
     }
 
     /// <summary>The house a tag wears, or an empty string for a republic or an unknown crown.</summary>

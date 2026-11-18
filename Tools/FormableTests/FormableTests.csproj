@@ -7,7 +7,7 @@
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
   </PropertyGroup>
-  <ItemGroup><Compile Include="../../Scripts/Simulation/**/*.cs"/><Compile Include="../../Scripts/Modding/ModCodePaths.cs"/><Compile Include="../../Scripts/Modding/WorkerModBackend.cs"/><Compile Include="../../Scripts/Modding/ModOperations.cs"/><Compile Include="../../Scripts/Modding/ModContracts.cs"/></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Simulation/**/*.cs"/><Compile Include="../../Scripts/Modding/ModCodePaths.cs"/><Compile Include="../../Scripts/Modding/WorkerModBackend.cs"/><Compile Include="../../Scripts/Modding/ModOperations.cs"/><Compile Include="../../Scripts/Modding/ModContracts.cs"/><Compile Include="../../Scripts/Modding/ContentSelection.cs"/><Compile Include="../../Scripts/Modding/ManagedModLoadContext.cs"/><Compile Include="../../Scripts/Modding/ModPlatform.cs"/><Compile Include="../../Scripts/Modding/DlcLoader.cs"/><Compile Include="../../Scripts/Modding/ModLoader.cs"/></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/gfx/HydrologySurfaceData.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/gfx/RasterRiverCourses.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/gfx/DateLineSeam.cs" /></ItemGroup>

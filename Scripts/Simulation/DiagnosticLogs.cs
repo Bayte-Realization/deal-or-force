@@ -26,7 +26,12 @@ public static class DiagnosticLogs
     private static long _sequence;
     private static int _queueLimit = 2048;
     private static long _fileLimit = 4 * 1024 * 1024;
+    private static bool _configLoaded;
+    private static bool _configEnabled = true;
     public static double SlowScopeMilliseconds { get; private set; } = 40;
+    public static long MaxFileBytes => _fileLimit;
+    public static int QueueLimit => _queueLimit;
+    public static bool ConfigEnabled => _configEnabled;
     public static string DirectoryPath { get; private set; } = "";
     public static string LastFailure { get; private set; } = "";
     public static bool Enabled => _running;
@@ -42,17 +47,30 @@ public static class DiagnosticLogs
     /// </summary>
     public static bool ResetCatalog()
     {
-        var enabledHere = true;
+        _configEnabled = true;
+        _fileLimit = 4 * 1024 * 1024;
+        _queueLimit = 2048;
+        SlowScopeMilliseconds = 40;
+        _configLoaded = true;
         foreach (var doc in GameDataLoader.DataDocuments("common", "diagnostics"))
             using (doc)
-            {
-                var root = doc.RootElement;
-                if (root.TryGetProperty("enabled", out var enabled) && !enabled.GetBoolean()) enabledHere = false;
-                if (root.TryGetProperty("max_file_mb", out var mb)) _fileLimit = Math.Clamp(mb.GetInt32(), 1, 32) * 1024L * 1024L;
-                if (root.TryGetProperty("queue_limit", out var q)) _queueLimit = Math.Clamp(q.GetInt32(), 128, 16384);
-                if (root.TryGetProperty("slow_scope_ms", out var slow)) SlowScopeMilliseconds = Math.Clamp(slow.GetDouble(), 5, 5000);
-            }
-        return enabledHere;
+                Merge(doc.RootElement);
+        return _configEnabled;
+    }
+
+    public static void Merge(System.Text.Json.JsonElement root, List<string> errors = null)
+    {
+        if (!_configLoaded) ResetCatalog();
+        if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+        if (root.TryGetProperty("enabled", out var enabled) &&
+            enabled.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+            _configEnabled = enabled.GetBoolean();
+        if (root.TryGetProperty("max_file_mb", out var mb) && mb.TryGetInt32(out var mbCount))
+            _fileLimit = Math.Clamp(mbCount, 1, 32) * 1024L * 1024L;
+        if (root.TryGetProperty("queue_limit", out var q) && q.TryGetInt32(out var queueLimit))
+            _queueLimit = Math.Clamp(queueLimit, 128, 16384);
+        if (root.TryGetProperty("slow_scope_ms", out var slow) && slow.TryGetDouble(out var slowMs))
+            SlowScopeMilliseconds = Math.Clamp(slowMs, 5, 5000);
     }
 
     public static bool Start(string directory)

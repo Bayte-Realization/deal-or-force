@@ -568,11 +568,12 @@ public static class InterfaceSkin
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
 
-        foreach (var file in StructuredData.Files(directory, SearchOption.TopDirectoryOnly)
-                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        var category = Path.GetFileName(directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(category)) category = "interface";
+        foreach (var file in GameDataLoader.TopLevelDataFiles(directory, category, errors))
         {
-            try { Merge(StructuredData.ReadJson(file), $"interface/{Path.GetFileName(file)}", errors); }
-            catch (Exception exception) { errors?.Add($"interface/{Path.GetFileName(file)}: {exception.Message}"); }
+            try { Merge(StructuredData.ReadJson(file), $"{category}/{Path.GetFileName(file)}", errors); }
+            catch (Exception exception) { errors?.Add($"{category}/{Path.GetFileName(file)}: {exception.Message}"); }
         }
 
         Changed?.Invoke();

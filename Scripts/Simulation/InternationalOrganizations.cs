@@ -104,39 +104,53 @@ public static class InternationalOrganizations
         _doctrines = new(StringComparer.OrdinalIgnoreCase);
         foreach (var document in GameDataLoader.DataDocuments("common", "organizations"))
         using (document)
-        {
-            if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
-            if (document.RootElement.TryGetProperty("charters", out var rows) && rows.ValueKind == JsonValueKind.Object)
-                foreach (var row in rows.EnumerateObject())
+            Merge(document.RootElement, null);
+    }
+
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        Ensure();
+        if (root.ValueKind != JsonValueKind.Object) return;
+        if (root.TryGetProperty("charters", out var rows) && rows.ValueKind == JsonValueKind.Object)
+            foreach (var row in rows.EnumerateObject())
+            {
+                if (row.Value.ValueKind != JsonValueKind.Object) continue;
+                if (GameDataLoader.IsRemoved(row.Value, $"common/organizations:charters.{row.Name}"))
                 {
-                    var d = new OrganizationCharter { Id = row.Name }; var e = row.Value;
-                    if (e.ValueKind != JsonValueKind.Object) continue;
-                    string Text(string k) => e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : "";
-                    d.Name = Text("name"); d.Description = Text("description");
-                    d.Defence = e.TryGetProperty("defence", out var defence) && defence.ValueKind == JsonValueKind.True;
-                    d.Unanimity = e.TryGetProperty("unanimity", out var unanimity) && unanimity.ValueKind == JsonValueKind.True;
-                    if (e.TryGetProperty("weekly_gdp_dues", out var dues) && dues.ValueKind == JsonValueKind.Number && dues.TryGetSingle(out var cost) && float.IsFinite(cost)) d.WeeklyGdpDues = Math.Clamp(cost, 0, .001f);
-                    if (e.TryGetProperty("vote_days", out var days) && days.ValueKind == JsonValueKind.Number && days.TryGetInt32(out var duration)) d.VoteDays = Math.Clamp(duration, 7, 365);
-                    _charters[row.Name] = d;
+                    _charters.Remove(row.Name);
+                    continue;
                 }
-            if (document.RootElement.TryGetProperty("doctrines", out var docs) && docs.ValueKind == JsonValueKind.Object)
-                foreach (var row in docs.EnumerateObject())
+                var d = new OrganizationCharter { Id = row.Name }; var e = row.Value;
+                string Text(string k) => e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : "";
+                d.Name = Text("name"); d.Description = Text("description");
+                d.Defence = e.TryGetProperty("defence", out var defence) && defence.ValueKind == JsonValueKind.True;
+                d.Unanimity = e.TryGetProperty("unanimity", out var unanimity) && unanimity.ValueKind == JsonValueKind.True;
+                if (e.TryGetProperty("weekly_gdp_dues", out var dues) && dues.ValueKind == JsonValueKind.Number && dues.TryGetSingle(out var cost) && float.IsFinite(cost)) d.WeeklyGdpDues = Math.Clamp(cost, 0, .001f);
+                if (e.TryGetProperty("vote_days", out var days) && days.ValueKind == JsonValueKind.Number && days.TryGetInt32(out var duration)) d.VoteDays = Math.Clamp(duration, 7, 365);
+                _charters[row.Name] = d;
+            }
+        if (root.TryGetProperty("doctrines", out var docs) && docs.ValueKind == JsonValueKind.Object)
+            foreach (var row in docs.EnumerateObject())
+            {
+                var e = row.Value;
+                if (e.ValueKind != JsonValueKind.Object) continue;
+                if (GameDataLoader.IsRemoved(e, $"common/organizations:doctrines.{row.Name}"))
                 {
-                    var e = row.Value;
-                    if (e.ValueKind != JsonValueKind.Object) continue;
-                    string Text(string k) => e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : "";
-                    var mods = e.TryGetProperty("modifiers", out var m)
-                        ? NationalModifiers.Read(m, "organizations.doctrines." + row.Name, null)
-                        : new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-                    _doctrines[row.Name] = new OrganizationDoctrine
-                    {
-                        Id = row.Name,
-                        Name = Text("name"),
-                        Description = Text("description"),
-                        Modifiers = mods
-                    };
+                    _doctrines.Remove(row.Name);
+                    continue;
                 }
-        }
+                string Text(string k) => e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : "";
+                var mods = e.TryGetProperty("modifiers", out var m)
+                    ? NationalModifiers.Read(m, "organizations.doctrines." + row.Name, errors)
+                    : new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                _doctrines[row.Name] = new OrganizationDoctrine
+                {
+                    Id = row.Name,
+                    Name = Text("name"),
+                    Description = Text("description"),
+                    Modifiers = mods
+                };
+            }
     }
 
     public static float Influence(Campaign c, InternationalOrganization o, Nation n)

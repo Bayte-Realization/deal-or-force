@@ -112,6 +112,10 @@ public static class SoundCatalog
     /// <summary>The only bed a world under the ice of `snowgrave` still has, at every height (WorldCurses).</summary>
     public static string FrozenBed { get; private set; } = "";
 
+    public static string HighWindFile { get; private set; } = "";
+    public static string FrontFile { get; private set; } = "";
+    public static string StaticNoiseFile { get; private set; } = "";
+
     /// <summary>Raised whenever the tables are rebuilt, so loaded streams can be dropped.</summary>
     public static event Action Changed;
 
@@ -140,6 +144,7 @@ public static class SoundCatalog
         Beds.Clear();
         TerrainMixes.Clear();
         OpenCountryBed = SeaBed = FrozenBed = "";
+        HighWindFile = FrontFile = StaticNoiseFile = "";
         DataCatalogLoader.LoadBaseTree("sound", (directory, assetRoot) => LoadTree(directory, assetRoot, null));
         Changed?.Invoke();
     }
@@ -229,6 +234,11 @@ public static class SoundCatalog
                 errors?.Add($"{origin}: cue '{name}' is neither a path nor a declaration");
                 continue;
             }
+            if (GameDataLoader.IsRemoved(value, $"{origin}:{name}"))
+            {
+                Cues.Remove(name);
+                continue;
+            }
 
             var existing = Get(name);
             var file = value.TryGetProperty("file", out var declared) &&
@@ -296,6 +306,12 @@ public static class SoundCatalog
             SeaBed = sea.GetString() ?? "";
         if (block.TryGetProperty("frozen", out var frozen) && frozen.ValueKind == JsonValueKind.String)
             FrozenBed = frozen.GetString() ?? "";
+        if (block.TryGetProperty("high_wind", out var highWind) && highWind.ValueKind == JsonValueKind.String)
+            HighWindFile = GameDataLoader.ResolveAssetPath(highWind.GetString(), assetRoot);
+        if (block.TryGetProperty("front", out var front) && front.ValueKind == JsonValueKind.String)
+            FrontFile = GameDataLoader.ResolveAssetPath(front.GetString(), assetRoot);
+        if (block.TryGetProperty("static_noise", out var staticNoise) && staticNoise.ValueKind == JsonValueKind.String)
+            StaticNoiseFile = GameDataLoader.ResolveAssetPath(staticNoise.GetString(), assetRoot);
     }
 
     private static float Single(JsonElement element, float fallback) =>

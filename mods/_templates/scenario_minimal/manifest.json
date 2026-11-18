@@ -1,0 +1,10 @@
+{
+  "id": "example_scenario_minimal",
+  "name": "Example: minimal standalone scenario",
+  "version": "1.0.0",
+  "supported_game_version": "0.6.*",
+  "enabled": false,
+  "load_order": 180,
+  "dependencies": [],
+  "gdscript_entry": ""
+}

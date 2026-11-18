@@ -45,12 +45,18 @@ public static class PersonNameCatalog
     /// <summary>Later files replace supplied arrays; absent fields inherit. Reject broken rows atomically.</summary>
     public static void Merge(JsonElement root, List<string> errors = null)
     {
+        EnsureLoaded();
         if (root.ValueKind != JsonValueKind.Object) return;
         foreach (var entry in root.EnumerateObject())
         {
             if (entry.Name.StartsWith("//", StringComparison.Ordinal)) continue;
             if (entry.Value.ValueKind != JsonValueKind.Object)
             { errors?.Add("character_names: " + entry.Name + " must be an object"); continue; }
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/character_names:{entry.Name}"))
+            {
+                Pools.Remove(entry.Name);
+                continue;
+            }
             var value = entry.Value; Pools.TryGetValue(entry.Name, out var old);
             if (value.TryGetProperty("inherits", out var parent) && parent.ValueKind == JsonValueKind.String)
             {

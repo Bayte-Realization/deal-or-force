@@ -81,15 +81,37 @@ public static partial class ElectoralPolitics
     {
         get
         {
-            if (_initial is not null) return _initial;
-            var table = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-            foreach (var doc in GameDataLoader.DataDocuments("common", "elections"))
-            using (doc)
-                if (doc.RootElement.TryGetProperty("initial_control", out var rows) && rows.ValueKind == JsonValueKind.Object)
-                    foreach (var row in rows.EnumerateObject())
-                        if (row.Value.ValueKind == JsonValueKind.Number && row.Value.TryGetSingle(out var v) && float.IsFinite(v))
-                            table[row.Name] = Math.Clamp(v, 0, 1);
-            return _initial = table;
+            EnsureInitial();
+            return _initial;
+        }
+    }
+
+    private static void EnsureInitial()
+    {
+        if (_initial is not null) return;
+        _initial = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        foreach (var doc in GameDataLoader.DataDocuments("common", "elections"))
+        using (doc)
+            Merge(doc.RootElement);
+    }
+
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        EnsureInitial();
+        if (root.ValueKind != JsonValueKind.Object) return;
+        var rows = root.TryGetProperty("initial_control", out var wrapped) && wrapped.ValueKind == JsonValueKind.Object
+            ? wrapped
+            : root;
+        foreach (var row in rows.EnumerateObject())
+        {
+            if (row.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+            if (GameDataLoader.IsRemoved(row.Value, $"common/elections:{row.Name}"))
+            {
+                _initial.Remove(row.Name);
+                continue;
+            }
+            if (row.Value.ValueKind == JsonValueKind.Number && row.Value.TryGetSingle(out var v) && float.IsFinite(v))
+                _initial[row.Name] = Math.Clamp(v, 0, 1);
         }
     }
 

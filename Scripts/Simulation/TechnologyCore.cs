@@ -118,6 +118,11 @@ public static class TechnologyCatalog
         foreach (var entry in root.EnumerateObject())
         {
             if (entry.Name.StartsWith("//", StringComparison.Ordinal) || entry.Value.ValueKind != JsonValueKind.Object) continue;
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/technologies:{entry.Name}"))
+            {
+                ById.Remove(entry.Name);
+                continue;
+            }
             if (!ById.TryGetValue(entry.Name, out var technology))
                 ById[entry.Name] = technology = new TechnologyDefinition { Id = entry.Name, Name = entry.Name };
             var value = entry.Value;

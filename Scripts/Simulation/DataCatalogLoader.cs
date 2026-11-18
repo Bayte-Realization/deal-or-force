@@ -46,9 +46,7 @@ public static class DataCatalogLoader
         string[] files;
         try
         {
-            files = StructuredData.Files(directory, SearchOption.AllDirectories)
-                .OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            files = GameDataLoader.TopLevelDataFiles(directory, category, errors);
         }
         catch (Exception exception)
         {
@@ -73,17 +71,23 @@ public static class DataCatalogLoader
         if (root is not null) loadTree(root, $"res://game/{category}");
     }
 
-    /// <summary>Merge keyed object entries (`id -> { ... }`), replacing earlier definitions with the same id.</summary>
+    /// <summary>Merge keyed object entries (`id -> { ... }`), replacing or removing earlier definitions with the same id.</summary>
     public static void MergeNamedDefinitions<T>(
         JsonElement root,
         List<T> target,
         Func<string, JsonElement, T> read,
-        Func<T, string> getId) where T : class
+        Func<T, string> getId,
+        string removeCategory = null) where T : class
     {
         if (root.ValueKind != JsonValueKind.Object) return;
         foreach (var entry in root.EnumerateObject())
         {
             if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+            if (GameDataLoader.IsRemoved(entry.Value, removeCategory is null ? entry.Name : $"{removeCategory}:{entry.Name}"))
+            {
+                target.RemoveAll(existing => string.Equals(getId(existing), entry.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+                continue;
+            }
             var definition = read(entry.Name, entry.Value);
             if (definition is null) continue;
             var id = getId(definition);

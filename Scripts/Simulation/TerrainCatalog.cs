@@ -77,7 +77,7 @@ public static partial class TerrainCatalog
         // paths that belong to the package that declared them - so the record the loader
         // keeps of what is moddable has to be told by hand.
         GameDataLoader.Asked.Add("common/terrain");
-        foreach (var path in Files(root, "common/terrain"))
+        foreach (var path in GameDataLoader.TopLevelDataFiles(LocalPath(root, "common/terrain"), "common/terrain", errors))
         try
         {
             using var json = JsonDocument.Parse(StructuredData.ReadJson(path), GameDataLoader.ForgivingJson);
@@ -138,7 +138,7 @@ public static partial class TerrainCatalog
             ReliefColorOpacity = Number(s, "relief_color_opacity", ReliefColorOpacity, 0, 1);
         }
         catch (Exception e) { errors.Add($"{settingsPath}: {e.Message}"); }
-        foreach (var path in Files(root, "history/provinces/terrain"))
+        foreach (var path in GameDataLoader.TopLevelDataFiles(LocalPath(root, "history/provinces/terrain"), "history/provinces/terrain", errors))
         try
         {
             using var json = JsonDocument.Parse(StructuredData.ReadJson(path), GameDataLoader.ForgivingJson);

@@ -98,7 +98,7 @@ public static class HotkeyCatalog
         {
             if (pair.Name.StartsWith("//", StringComparison.Ordinal)) continue;
             if (pair.Value.ValueKind != JsonValueKind.Object) continue;
-            if (pair.Value.TryGetProperty("remove", out var rem) && rem.ValueKind == JsonValueKind.True)
+            if (GameDataLoader.IsRemoved(pair.Value, $"{context}:{pair.Name}"))
             {
                 Entries.Remove(pair.Name);
                 continue;

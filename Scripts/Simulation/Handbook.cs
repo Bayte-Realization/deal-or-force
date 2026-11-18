@@ -88,7 +88,7 @@ public static class HandbookCatalog
         foreach (var entry in articles.EnumerateObject())
         {
             if (entry.Value.ValueKind != JsonValueKind.Object) continue;
-            if (entry.Value.TryGetProperty("remove", out var remove) && remove.ValueKind == JsonValueKind.True)
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/handbook:{entry.Name}"))
             {
                 Articles.Remove(entry.Name);
                 continue;

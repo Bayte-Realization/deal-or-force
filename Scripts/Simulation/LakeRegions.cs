@@ -80,16 +80,18 @@ public static class LakeRegions
         FirstMapIndex = 2000;
         foreach (var document in GameDataLoader.DataDocuments("map_data", "lakes"))
             using (document)
-            {
-                var root = document.RootElement;
-                if (root.ValueKind != JsonValueKind.Object) continue;
-                if (root.TryGetProperty("minimum_cells", out var minimum) &&
-                    minimum.TryGetInt32(out var cells) && cells > 0) MinimumCells = cells;
-                if (root.TryGetProperty("minimum_width_cells", out var thickness) &&
-                    thickness.TryGetInt32(out var across) && across > 0) MinimumWidthCells = across;
-                if (root.TryGetProperty("first_map_index", out var first) &&
-                    first.TryGetInt32(out var index) && index > 0) FirstMapIndex = index;
-            }
+                Merge(document.RootElement);
+    }
+
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return;
+        if (root.TryGetProperty("minimum_cells", out var minimum) &&
+            minimum.TryGetInt32(out var cells) && cells > 0) MinimumCells = cells;
+        if (root.TryGetProperty("minimum_width_cells", out var thickness) &&
+            thickness.TryGetInt32(out var across) && across > 0) MinimumWidthCells = across;
+        if (root.TryGetProperty("first_map_index", out var first) &&
+            first.TryGetInt32(out var index) && index > 0) FirstMapIndex = index;
     }
 
     private static bool[] _water;

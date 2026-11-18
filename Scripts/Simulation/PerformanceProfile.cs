@@ -75,58 +75,74 @@ public static class QualityProfiles
     {
         Loaded.Clear();
         SoftwareMarkers.Clear();
-        _loaded = false;
-        EnsureLoaded();
+        SlowFrameMs = 34.0;
+        FastFrameMs = 11.0;
+        StepDownSeconds = 4.0;
+        StepUpSeconds = 20.0;
+        _loaded = true;
+        foreach (var document in GameDataLoader.DataDocuments("common", "performance"))
+            using (document)
+                Merge(document.RootElement);
+        if (Loaded.Count == 0)
+            Loaded.Add(new QualityProfile { Id = "high", Order = 0, Label = "High" });
     }
 
     public static void EnsureLoaded()
     {
         if (_loaded) return;
-        _loaded = true;
-        foreach (var document in GameDataLoader.DataDocuments("common", "performance"))
-            using (document)
+        ResetCatalog();
+    }
+
+    public static void Merge(System.Text.Json.JsonElement root, List<string> errors = null)
+    {
+        EnsureLoaded();
+        if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+        if (root.TryGetProperty("software_markers", out var markers) &&
+            markers.ValueKind == System.Text.Json.JsonValueKind.Array)
+            foreach (var marker in markers.EnumerateArray())
+                if (marker.ValueKind == System.Text.Json.JsonValueKind.String &&
+                    marker.GetString() is { Length: > 0 } text && !SoftwareMarkers.Contains(text))
+                    SoftwareMarkers.Add(text);
+        if (root.TryGetProperty("slow_frame_ms", out var slow) && slow.TryGetDouble(out var slowMs))
+            SlowFrameMs = Math.Clamp(slowMs, 12, 250);
+        if (root.TryGetProperty("fast_frame_ms", out var fast) && fast.TryGetDouble(out var fastMs))
+            FastFrameMs = Math.Clamp(fastMs, 2, 60);
+        if (root.TryGetProperty("step_down_seconds", out var down) && down.TryGetDouble(out var downSeconds))
+            StepDownSeconds = Math.Clamp(downSeconds, 1, 60);
+        if (root.TryGetProperty("step_up_seconds", out var up) && up.TryGetDouble(out var upSeconds))
+            StepUpSeconds = Math.Clamp(upSeconds, 5, 300);
+        if (root.TryGetProperty("tiers", out var tiers) &&
+            tiers.ValueKind == System.Text.Json.JsonValueKind.Object)
+        {
+            foreach (var tier in tiers.EnumerateObject())
             {
-                var root = document.RootElement;
-                if (root.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
-                if (root.TryGetProperty("software_markers", out var markers) &&
-                    markers.ValueKind == System.Text.Json.JsonValueKind.Array)
-                    foreach (var marker in markers.EnumerateArray())
-                        if (marker.ValueKind == System.Text.Json.JsonValueKind.String &&
-                            marker.GetString() is { Length: > 0 } text) SoftwareMarkers.Add(text);
-                if (root.TryGetProperty("slow_frame_ms", out var slow) && slow.TryGetDouble(out var slowMs))
-                    SlowFrameMs = Math.Clamp(slowMs, 12, 250);
-                if (root.TryGetProperty("fast_frame_ms", out var fast) && fast.TryGetDouble(out var fastMs))
-                    FastFrameMs = Math.Clamp(fastMs, 2, 60);
-                if (root.TryGetProperty("step_down_seconds", out var down) && down.TryGetDouble(out var downSeconds))
-                    StepDownSeconds = Math.Clamp(downSeconds, 1, 60);
-                if (root.TryGetProperty("step_up_seconds", out var up) && up.TryGetDouble(out var upSeconds))
-                    StepUpSeconds = Math.Clamp(upSeconds, 5, 300);
-                if (!root.TryGetProperty("tiers", out var tiers) ||
-                    tiers.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
-                foreach (var tier in tiers.EnumerateObject())
+                if (tier.Value.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                if (GameDataLoader.IsRemoved(tier.Value, $"common/performance:{tier.Name}"))
                 {
-                    if (tier.Value.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
-                    var value = tier.Value;
-                    Loaded.Add(new QualityProfile
-                    {
-                        Id = tier.Name,
-                        Order = Int(value, "order", Loaded.Count),
-                        Label = Text(value, "label", tier.Name),
-                        Description = Text(value, "description", ""),
-                        RenderScale = (float)Math.Clamp(Number(value, "render_scale", 1.0), 0.25, 2.0),
-                        MapSmoothing = Flag(value, "map_smoothing", true),
-                        SunShadows = Flag(value, "sun_shadows", true),
-                        CityLabels = Flag(value, "city_labels", true),
-                        TradeTraffic = Flag(value, "trade_traffic", true),
-                        Weather = Flag(value, "weather", true),
-                        MsaaSamples = value.TryGetProperty("msaa", out _) ? Math.Clamp(Int(value, "msaa", -1), -1, 4) : -1,
-                        MaxFps = Math.Clamp(Int(value, "max_fps", 0), 0, 480)
-                    });
+                    Loaded.RemoveAll(existing => string.Equals(existing.Id, tier.Name, StringComparison.OrdinalIgnoreCase));
+                    continue;
                 }
+                var existingTier = Loaded.Find(p => string.Equals(p.Id, tier.Name, StringComparison.OrdinalIgnoreCase));
+                Loaded.RemoveAll(existing => string.Equals(existing.Id, tier.Name, StringComparison.OrdinalIgnoreCase));
+                var value = tier.Value;
+                Loaded.Add(new QualityProfile
+                {
+                    Id = tier.Name,
+                    Order = Int(value, "order", existingTier?.Order ?? Loaded.Count),
+                    Label = Text(value, "label", existingTier?.Label ?? tier.Name),
+                    Description = Text(value, "description", existingTier?.Description ?? ""),
+                    RenderScale = (float)Math.Clamp(Number(value, "render_scale", existingTier?.RenderScale ?? 1.0), 0.25, 2.0),
+                    MapSmoothing = Flag(value, "map_smoothing", existingTier?.MapSmoothing ?? true),
+                    SunShadows = Flag(value, "sun_shadows", existingTier?.SunShadows ?? true),
+                    CityLabels = Flag(value, "city_labels", existingTier?.CityLabels ?? true),
+                    TradeTraffic = Flag(value, "trade_traffic", existingTier?.TradeTraffic ?? true),
+                    Weather = Flag(value, "weather", existingTier?.Weather ?? true),
+                    MsaaSamples = value.TryGetProperty("msaa", out _) ? Math.Clamp(Int(value, "msaa", -1), -1, 4) : (existingTier?.MsaaSamples ?? -1),
+                    MaxFps = Math.Clamp(Int(value, "max_fps", existingTier?.MaxFps ?? 0), 0, 480)
+                });
             }
-        Loaded.Sort((a, b) => a.Order.CompareTo(b.Order));
-        if (Loaded.Count == 0)
-            Loaded.Add(new QualityProfile { Id = "high", Order = 0, Label = "High" });
+            Loaded.Sort((a, b) => a.Order.CompareTo(b.Order));
+        }
     }
 
 
