@@ -2,11 +2,11 @@
 #
 # Three kinds of process share the name:
 #
-#   Godot_v4.8-beta2_mono_win64.exe  with a window title - an editor somebody opened. It holds
+#   Godot_v4.8-beta3_mono_win64.exe  with a window title - an editor somebody opened. It holds
 #       the project and every GDExtension DLL, so a second editor or a headless run cannot copy
 #       `~lib*.dll` while it lives. Closing it loses unsaved scenes, so this script never
 #       touches it unless you ask with -Editors.
-#   Godot_v4.8-beta2_mono_win64_console.exe  a command-line run: a probe, a test suite, a
+#   Godot_v4.8-beta3_mono_win64_console.exe  a command-line run: a probe, a test suite, a
 #       capture. Nothing to save; safe to close.
 #   godot-ai.exe  Fennara's helper daemon, started by the MCP server (`attach --port 8016`).
 #       It exists so the assistant can drive a running game. It is recreated on demand, so

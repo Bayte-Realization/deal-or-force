@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)][string]$GodotExecutable,
-    # verify-beta2.ps1 interface: the addon is <OutputDirectory>/addon (from build.ps1), and every
+    # verify-beta3.ps1 interface: the addon is <OutputDirectory>/addon (from build.ps1), and every
     # run gets a fresh project under <OutputDirectory>/runs/<stamp>.
     [string]$OutputDirectory,
     # Older explicit interface; still accepted.

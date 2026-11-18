@@ -3,18 +3,22 @@ $ErrorActionPreference = 'Stop'
 $version = ([xml](Get-Content -LiteralPath (Join-Path $ProjectRoot 'GameVersion.props') -Raw)).Project.PropertyGroup.Version
 if ($version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw 'Expected a numeric game release version.' }
 $expected = [regex]::Escape($version)
+$versionSource = [IO.File]::ReadAllText((Join-Path $ProjectRoot 'Scripts/Simulation/GameBuildInfo.cs'))
+$suffixMatch = [regex]::Match($versionSource, 'public const string VersionSuffix = "([^"]*)";')
+$displayVersion = $version + $(if ($suffixMatch.Success) { $suffixMatch.Groups[1].Value } else { '' })
+$expectedDisplay = [regex]::Escape($displayVersion)
 $checks = @{
     'Tools/FormableTests/VersionLabelTests.cs' = 'string\.Equals\(version, "' + $expected + '"'
-    "docs/CHANGELOG_${version}_EN.md" = '(?m)^# Deal or Force — EntertAlpha ' + $expected + '\s*$'
-    "docs/CHANGELOG_${version}_RU.md" = '(?m)^# Deal or Force — EntertAlpha ' + $expected + '\s*$'
+    "docs/CHANGELOG_${version}_EN.md" = '(?m)^# Deal or Force — EntertAlpha ' + $expectedDisplay + '\s*$'
+    "docs/CHANGELOG_${version}_RU.md" = '(?m)^# Deal or Force — EntertAlpha ' + $expectedDisplay + '\s*$'
     'Scripts/Simulation/GameBuildInfo.cs' = 'public const string Version = "' + $expected + '";'
     'Scripts/Simulation/SaveSystem.cs' = 'public const string GameVersion = GameBuildInfo\.Version;'
     'project.godot' = 'config/version="' + $expected + '"'
     'export_presets.cfg' = 'application/file_version="' + $expected + '"'
-    'README.md' = 'Version \*\*' + $expected + '\*\*'
-    'README.ru.md' = 'Версия \*\*' + $expected + '\*\*'
-    'docs/BUILDING.md' = 'Current game release: \*\*EntertAlpha ' + $expected + '\*\*'
-    'docs/BUILDING_RU.md' = 'Актуальный выпуск игры: \*\*EntertAlpha ' + $expected + '\*\*'
+    'README.md' = 'Version \*\*' + $expectedDisplay + '\*\*'
+    'README.ru.md' = 'Версия \*\*' + $expectedDisplay + '\*\*'
+    'docs/BUILDING.md' = 'Current game release: \*\*EntertAlpha ' + $expectedDisplay + '\*\*'
+    'docs/BUILDING_RU.md' = 'Актуальный выпуск игры: \*\*EntertAlpha ' + $expectedDisplay + '\*\*'
 }
 foreach ($file in $checks.Keys | Sort-Object) {
     if ([IO.File]::ReadAllText((Join-Path $ProjectRoot $file)) -notmatch $checks[$file]) {

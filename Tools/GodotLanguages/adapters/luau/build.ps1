@@ -12,8 +12,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $engine = (Resolve-Path -LiteralPath $GodotExecutable).Path
 $version = (& $engine --headless --version | Out-String).Trim()
-if ($LASTEXITCODE -or $version -notmatch '^4\.8\.beta[12]\.mono\.') {
-    throw "This adapter is verified on Godot 4.8 beta1/beta2 .NET only, found: $version"
+if ($LASTEXITCODE -or $version -notmatch '^4\.8\.beta[123]\.mono\.') {
+    throw "This adapter is verified on Godot 4.8 beta1/beta2/beta3 .NET only, found: $version"
 }
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath (Join-Path $output 'luau.gdextension')) {

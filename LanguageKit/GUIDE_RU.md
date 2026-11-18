@@ -1,9 +1,12 @@
-# Языки для Godot 4.8 Beta2 .NET
+# Языки для Godot 4.8 Beta3 .NET
 
 [English](GUIDE.md) · [Русский](GUIDE_RU.md)
 
-Установленная цель: Windows x86-64, `4.8.beta2.mono.official.cafc17a19`
-(`C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe`).
+Установленная цель: Windows x86-64, `4.8.beta3.mono.official.c51ff06e8`
+(`C:/GodotEngineNet 4.8-Beta3/Godot_v4.8-beta3_mono_win64_console.exe`).
+Результаты Beta3 от 16 ноября: [reports/beta3-2026-11-16.md](reports/beta3-2026-11-16.md):
+Rust, Luau, Zig, Go, Lua, Odin, Sandbox и F# пересобраны и прошли пробу; старые DLL Nim и Kotlin
+работают как есть; py4godot по-прежнему не проходит. Ниже — описание прохода Beta2, если не сказано иначе.
 Совместный прогон 16 октября был на `4.8.beta1.mono.official.4d10419ca`
 ([reports/native-bindings.md](reports/native-bindings.md)).
 Таблица пинов и команд на 29 октября — в [GUIDE.md](GUIDE.md).
@@ -42,7 +45,7 @@ DLL рядом с Godot.exe. Разные языки не получают ве�
 Комплект устанавливается рядом с редактором:
 
 ```text
-C:/GodotEngineNet 4.8-Beta2/LanguageKit/
+C:/GodotEngineNet 4.8-Beta3/LanguageKit/
   Open Workbench.cmd
   projects/AllSix/       # локальная собранная лаборатория, не в Git
   adapters/             # примеры, рецепты, патчи, лицензии
@@ -61,7 +64,7 @@ PowerShell 7, .NET SDK 10 и Java должны оставаться устано
 ./tests/kit-tests.ps1
 # Для уже собранной лаборатории, из каталога LanguageKit:
 $env:JAVA_HOME = 'C:/Program Files/Eclipse Adoptium/jdk-25.0.2.10-hotspot'
-& 'C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe' `
+& 'C:/GodotEngineNet 4.8-Beta3/Godot_v4.8-beta3_mono_win64_console.exe' `
   --headless --path ./projects/AllSix --script res://combined_probe.gd -- `
   fsharp luau rust nim odin kotlin
 ```
