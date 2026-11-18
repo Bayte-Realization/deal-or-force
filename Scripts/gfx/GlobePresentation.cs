@@ -745,13 +745,16 @@ public sealed partial class GlobePresentation : SubViewportContainer
             using (Simulation.SimProfiler.Measure("f:label place")) RefreshCountryLabelPlacement();
         if (IsInstanceValid(_frontPreview)) _frontPreview.Visible = MilitaryMarkersEnabled && _frontMesh.GetSurfaceCount() > 0;
         if (visualDue)
+        {
+            UpdateCityLabels(visualStep);
+            UpdateSettlementModels(visualStep);
             using (Simulation.SimProfiler.Measure("f:labels"))
             {
                 UpdateCountryLabelVisibility(visualStep);
                 UpdateRegionLabels(visualStep);
             }
+        }
         if (_battleMarkers.Count > 0 && (visualDue || _dragging || _boxSelecting || FlatViewInMotion)) QueueRedraw();
-        if (visualDue) { UpdateCityLabels(visualStep); UpdateSettlementModels(visualStep); }
         KeepRegionIcons(delta);
         UpdateMapModePaletteIfNeeded();
 

@@ -212,6 +212,13 @@ public static class MapLabelPriority
         }
     }
 
+    public static bool CollidesWithAny(LabelBox candidate, IReadOnlyList<LabelBox> taken)
+    {
+        for (var i = 0; i < taken.Count; i++)
+            if (taken[i].Intersects(candidate)) return true;
+        return false;
+    }
+
     private static float SmoothStep(float edge0, float edge1, float value)
     {
         if (edge1 <= edge0) return value >= edge0 ? 1f : 0f;

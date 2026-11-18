@@ -70,6 +70,9 @@ static class MapLabelPriorityTests
         taken.Add(new LabelBox(180f, 140f, 240f, 120f));
         var crowded = MapLabelPriority.SolveSide(300f, 200f, 8f, 60f, 14f, taken, stars, selfKey: 105, out _);
         Check(crowded == 0, "fully crowded spot yields cleanly (returns 0)");
+        Check(MapLabelPriority.CollidesWithAny(new LabelBox(290f, 195f, 70f, 18f), taken) &&
+              !MapLabelPriority.CollidesWithAny(new LabelBox(500f, 400f, 70f, 18f), taken),
+            "region collision detector yields when overlapping _cityTaken boxes and clears open ground");
     }
 
     private static void ZoomBandsAndFade()
@@ -157,11 +160,16 @@ static class MapLabelPriorityTests
         var root = Path.Combine(GameDataLoader.DataFolder(), "..", "Scripts", "gfx");
         var globe = File.ReadAllText(Path.Combine(root, "GlobePresentation.cs"));
         var cities = File.ReadAllText(Path.Combine(root, "GlobeCities.cs"));
+        var regions = File.ReadAllText(Path.Combine(root, "GlobeRegionLabels.cs"));
         var atmo = File.ReadAllText(Path.Combine(root, "GlobeAtmosphere.cs"));
         Check(globe.Contains("BuildRegionAnchorsDownsampled") && globe.Contains("RiverLabelLayout.BuildAnchors"),
             "region and river anchors build on worker threads inside BuildPoliticalMap");
         Check(cities.Contains("MapLabelPriority.OrderCityCandidates") && cities.Contains("PlaceRivers("),
             "city placement follows priority order and gives rivers lowest collision priority");
+        Check(regions.Contains("_cityTaken") && regions.Contains("_placedCityNames") &&
+              globe.IndexOf("UpdateCityLabels(visualStep)", StringComparison.Ordinal) <
+              globe.IndexOf("UpdateRegionLabels(visualStep)", StringComparison.Ordinal),
+            "region labels run after city placement and yield on _cityTaken / matching city names");
         Check(atmo.Contains("MapLabelPriority.AtmospherePolish("),
             "atmosphere rim uses pure Forward+/atlas gating");
     }

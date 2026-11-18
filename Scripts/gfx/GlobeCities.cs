@@ -56,6 +56,7 @@ public sealed partial class GlobePresentation
     private readonly Dictionary<int, float> _pinAlphas = new();
     private readonly HashSet<int> _placedPinKeys = new();
     private readonly List<FadePinSnapshot> _fadingPinSnapshots = new();
+    private readonly HashSet<string> _placedCityNames = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly record struct FadePinSnapshot(
         int SlotKey,
@@ -278,6 +279,8 @@ public sealed partial class GlobePresentation
         {
             // Hidden capitals must not reserve old screen rectangles after zooming out.
             _capitalNameBoxes.Clear();
+            _cityTaken.Clear();
+            _placedCityNames.Clear();
             _pinAlphas.Clear();
             return;
         }
@@ -457,6 +460,7 @@ public sealed partial class GlobePresentation
 
         _fadingPinSnapshots.Clear();
         _placedPinKeys.Clear();
+        _placedCityNames.Clear();
         if (_mapLookAtlas)
         {
             for (var i = 0; i < _cityPins.Count && _fadingPinSnapshots.Count < 24; i++)
@@ -728,6 +732,7 @@ public sealed partial class GlobePresentation
             pin.Name.Visible = true;
             pin.Node.Visible = true;
             AssignPinOpacity(pin, key, pass.CapitalColor, pass.OutlineColor, 1f, _mapLookAtlas);
+            _placedCityNames.Add(name);
         }
     }
 
@@ -781,7 +786,10 @@ public sealed partial class GlobePresentation
         if (pin.Dot.Texture != mark) pin.Dot.Texture = mark;
         pin.Dot.Visible = !(capital && NearCapitalMarker(index)) && !StarStandsOn(index);
         if (side != 0)
+        {
             AssignPinOpacity(pin, index, fill, pass.OutlineColor, _mapLookAtlas ? 0.94f : 1f, _mapLookAtlas);
+            _placedCityNames.Add(name);
+        }
         else
             AssignPinOpacity(pin, index, fill, pass.OutlineColor, 0f, _mapLookAtlas);
         pin.Dot.Modulate = Colors.White;

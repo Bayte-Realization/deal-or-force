@@ -33,6 +33,7 @@ public sealed partial class GlobePresentation
     private readonly List<RegionLabelCandidate>[] _regionBuckets = CreateRegionBuckets();
     private readonly Dictionary<int, float> _regionAlphas = new();
     private readonly Dictionary<int, float> _countryAlphas = new();
+    private readonly List<Rect2> _regionTaken = new();
     private bool _regionBucketsReady;
     private float _regionLastAlpha = -1f;
 
@@ -171,6 +172,7 @@ public sealed partial class GlobePresentation
 
         var used = 0;
         var maxAlpha = 0f;
+        _regionTaken.Clear();
         for (var dr = -rowRadius; dr <= rowRadius && used < MaxActiveRegionLabels; dr++)
         {
             var r = focusRow + dr;
@@ -184,28 +186,41 @@ public sealed partial class GlobePresentation
                     var item = bucket[i];
                     var horizonVisible = _flatMap || (rootBasis * item.Normal).Dot(cameraNormal) > horizon;
                     var target = MapLabelPriority.RegionTargetAlpha(_mapLookAtlas, _flatMap, measure, item.Cells, horizonVisible);
-                    var prev = _regionAlphas.TryGetValue(item.State.MapIndex, out var a) ? a : 0f;
-                    var next = MapLabelPriority.StepOpacity(prev, target, stepDt);
-                    _regionAlphas[item.State.MapIndex] = next;
-                    if (next <= 0.01f) continue;
 
-                    // Skip region names that match the sovereign state name (avoid double text in microstates).
+                    // Skip region names matching their country or an already-visible city pin (e.g. Saratov).
                     var ownerMap = item.State.NationMapIndex;
                     if (_lastLabelNames.TryGetValue(ownerMap, out var countryName) &&
                         string.Equals(countryName, item.State.Name, StringComparison.OrdinalIgnoreCase))
-                        continue;
+                        target = 0f;
 
                     var display = item.State.DisplayName;
-                    if (string.IsNullOrWhiteSpace(display)) continue;
+                    if (string.IsNullOrWhiteSpace(display) || _placedCityNames.Contains(display))
+                        target = 0f;
 
                     var pos = _flatMap
                         ? FlatPoint(item.Latitude, item.Longitude, FlatTextZ - 0.002f)
                         : SurfacePoint(item.Latitude, item.Longitude, SurfaceTextRadius - 0.002f);
                     var worldPos = _regionLabelRoot.GlobalTransform * pos;
-                    if (_camera.IsPositionBehind(worldPos)) continue;
-                    var screen = _camera.UnprojectPosition(worldPos);
-                    if (screen.X < -60f || screen.Y < -30f || screen.X > viewport.X + 60f || screen.Y > viewport.Y + 30f) continue;
+                    if (_camera.IsPositionBehind(worldPos)) target = 0f;
+                    var screen = target > 0.01f ? _camera.UnprojectPosition(worldPos) : Vector2.Zero;
+                    if (target > 0.01f &&
+                        (screen.X < -60f || screen.Y < -30f || screen.X > viewport.X + 60f || screen.Y > viewport.Y + 30f))
+                        target = 0f;
 
+                    Rect2 screenBox = default;
+                    if (target > 0.01f)
+                    {
+                        screenBox = RegionScreenBox(item, display, font, scale, pos);
+                        if (RegionCollidesWithHigherPriority(screenBox))
+                            target = 0f;
+                    }
+
+                    var prev = _regionAlphas.TryGetValue(item.State.MapIndex, out var a) ? a : 0f;
+                    var next = horizonVisible ? MapLabelPriority.StepOpacity(prev, target, stepDt) : 0f;
+                    _regionAlphas[item.State.MapIndex] = next;
+                    if (next <= 0.01f) continue;
+
+                    if (target > 0.01f) _regionTaken.Add(screenBox);
                     var label = RegionLabelAt(used++);
                     label.Text = display.ToUpperInvariant();
                     label.Font = font;
@@ -227,6 +242,50 @@ public sealed partial class GlobePresentation
             if (_regionLabelPool[i].Visible) _regionLabelPool[i].Visible = false;
         _regionLastAlpha = maxAlpha;
         _regionLabelRoot.Visible = used > 0;
+    }
+
+    private Rect2 RegionScreenBox(RegionLabelCandidate item, string display, Font font, float scale, Vector3 localPos)
+    {
+        var halfW = CityTextWidth(font, 36, display.ToUpperInvariant()) * item.PixelSize * scale * 0.5f;
+        var halfH = 36f * item.PixelSize * scale * 0.62f;
+        Vector3 right;
+        Vector3 up;
+        if (_flatMap)
+        {
+            var cos = Mathf.Cos(item.FlatRotation);
+            var sin = Mathf.Sin(item.FlatRotation);
+            right = new Vector3(cos, sin, 0f) * halfW;
+            up = new Vector3(-sin, cos, 0f) * halfH;
+        }
+        else
+        {
+            right = item.SurfaceBasis.X * halfW;
+            up = item.SurfaceBasis.Y * halfH;
+        }
+        var xform = _regionLabelRoot.GlobalTransform;
+        var min = new Vector2(float.MaxValue, float.MaxValue);
+        var max = new Vector2(float.MinValue, float.MinValue);
+        for (var sx = -1; sx <= 1; sx += 2)
+        for (var sy = -1; sy <= 1; sy += 2)
+        {
+            var corner = xform * (localPos + right * sx + up * sy);
+            if (_camera.IsPositionBehind(corner)) return new Rect2(-10000f, -10000f, 1f, 1f);
+            var pt = _camera.UnprojectPosition(corner);
+            min = min.Min(pt);
+            max = max.Max(pt);
+        }
+        return new Rect2(min, max - min).Grow(4f);
+    }
+
+    private bool RegionCollidesWithHigherPriority(Rect2 box)
+    {
+        foreach (var taken in _cityTaken)
+            if (taken.Intersects(box)) return true;
+        foreach (var (star, _) in _starMarks)
+            if (box.Intersects(new Rect2(star.X - 8f, star.Y - 8f, 16f, 16f))) return true;
+        foreach (var taken in _regionTaken)
+            if (taken.Intersects(box)) return true;
+        return false;
     }
 
     private Label3D RegionLabelAt(int slot)
