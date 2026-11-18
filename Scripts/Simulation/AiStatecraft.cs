@@ -1156,7 +1156,9 @@ public static partial class AiStatecraft
         }
 
         var recovery = TerritorialClaims.RecoveryGoal(campaign, nation, target);
-        var cause = annexation?.Cause ?? (recovery is null ? "" : "reconquest");
+        var cause = string.IsNullOrEmpty(annexation?.Cause)
+            ? (recovery is null ? null : "reconquest")
+            : annexation.Value.Cause;
         var claimed = recovery?.MapIndex ?? annexation?.ClaimedState ?? -1;
         // A union is about the whole state, so its capital is the objective even when an
         // older recovery claim names one region. A border reconquest keeps its own goal.

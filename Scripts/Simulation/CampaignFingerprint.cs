@@ -1213,6 +1213,28 @@ public static class CampaignFingerprint
             { MixText("world_war"); Mix(war.WorldWarDay); }
             if (war.PendingOffer is { BeneficiaryId: >= 0 } offer)
             { MixText("peace_beneficiary"); Mix(offer.BeneficiaryId); }
+            if (war.PendingOfferFromId >= 0)
+            {
+                MixText("pending_peace_offer");
+                Mix(war.PendingOfferFromId);
+                Mix(war.PendingOfferIsWritten ? 1 : 0);
+                Mix((int)war.PendingOfferTerms);
+                Mix(war.PendingOfferDay);
+                Mix(war.PendingOfferExpiresDay);
+                if (war.PendingOffer is { } pending)
+                {
+                    Mix(pending.Provinces.Count);
+                    foreach (var province in pending.Provinces.OrderBy(id => id)) Mix(province);
+                    Mix(pending.ReleaseRegions ? 1 : 0);
+                    Mix(pending.Reparations ? 1 : 0);
+                    Mix(pending.TradeConcessions ? 1 : 0);
+                    Mix(pending.Demilitarise ? 1 : 0);
+                    Mix(pending.Humiliate ? 1 : 0);
+                    Mix(pending.LongTruce ? 1 : 0);
+                    Mix(pending.Unconditional ? 1 : 0);
+                    MixText(pending.Subjugate);
+                }
+            }
             // The spacing of settlements put to a player (PeaceOffers.ToPlayerBlockReason).
             // Only a war a player is in ever sets these, so a world nobody plays mixes nothing.
             if (war.LastOfferToPlayerDay >= 0 || war.RefusedOfferDay >= 0)
