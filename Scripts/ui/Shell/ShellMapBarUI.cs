@@ -140,7 +140,7 @@ public partial class DealOrForceGame
         _shellMoreModesTabBtn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         tabs.AddChild(_shellMoreModesTabBtn);
 
-        _shellMoreLayersTabBtn = ActionButton("Map layers", () => { _shellMoreShowLayers = true; UpdateShellMoreTabs(); }, 0, 28);
+        _shellMoreLayersTabBtn = ActionButton("shell.map_layers", () => { _shellMoreShowLayers = true; UpdateShellMoreTabs(); }, 0, 28);
         _shellMoreLayersTabBtn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         tabs.AddChild(_shellMoreLayersTabBtn);
 

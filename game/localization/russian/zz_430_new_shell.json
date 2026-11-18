@@ -30,7 +30,7 @@
   "Live": "Бой",
   "More map modes and layers": "Ещё режимы и слои карты",
   "Map modes": "Режимы",
-  "Map layers": "Слои",
+  "shell.map_layers": "Слои",
   "Trade traffic lines": "Торговые маршруты на карте",
   "Event pulses on the map": "Импульсы событий на карте",
   "Political": "Политическая",
