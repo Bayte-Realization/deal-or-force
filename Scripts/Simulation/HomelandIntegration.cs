@@ -91,8 +91,10 @@ public static class HomelandIntegration
     {
         var d = c.Defines;
         // A region whose people have fully accepted the state (ConquestAcceptance) is home whatever
-        // the calendar says: acceptance is the years of quiet, counted where they actually passed.
-        var accepted = region.Acceptance >= 1f;
+        // the calendar says: acceptance is the years of quiet, counted where they actually passed -
+        // and under this state. A region somebody else digested and then ceded is not accepted here:
+        // its record names the state that earned it (ScenarioState.AcceptanceOf).
+        var accepted = region.AcceptanceOf == owner.Id && region.Acceptance >= 1f;
         if (!accepted && (d.HomelandIntegrationYears <= 0 || heldDays < d.HomelandIntegrationYears * 365)) return;
         if (TerritorialClaims.TitleOf(c, owner, region) == TerritorialTitle.Homeland) return;
         if (owner.RenouncedTerritoryOrigins.Contains(TerritorialClaims.Origin(region))) return;

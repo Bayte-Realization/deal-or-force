@@ -30,13 +30,13 @@ public static class RadicalismCore
         // itself less again (ConquestAcceptance, RegionalAutonomy). Both factors are exactly one on
         // ground nobody has conquered or granted anything, so the 2024 world reads as it always did.
         var minority = EconomySystem.ForeignShare(state, nation.Tag) * d.MinorityRadicalismPerWeek *
-                       ConquestAcceptance.MinorityFactor(d, state);
+                       ConquestAcceptance.MinorityFactor(d, state, nation);
         var occupation = StabilityCore.OccupiedShare(c, state, nation) * MathF.Max(0, d.RegionalRadicalismOccupation);
         var inflation = InflationPressure(nation);
         var overstretch = (nation is not null && nation.ImperialOverstretch > 0.001f &&
                            TerritorialClaims.TitleOf(c, nation, state) != TerritorialTitle.Homeland &&
                            EconomySystem.ForeignShare(state, nation.Tag) >= ConquestAcceptance.UnentitledForeignShare)
-            ? nation.ImperialOverstretch * d.ImperialOverstretchRadicalismWeekly * (1f - M.Clamp01(state.Acceptance))
+            ? nation.ImperialOverstretch * d.ImperialOverstretchRadicalismWeekly * (1f - ConquestAcceptance.Of(state, nation))
             : 0f;
         if (RegionalAutonomy.Autonomous(state))
         {

@@ -20,7 +20,7 @@ public partial class DealOrForceGame
         if (outlook.Shown)
         {
             var help = Simulation.Loc.Format(
-                "How far the people here have come to accept this state. It grows each quiet week on ground that is not the country's homeland: fastest below {0} radicalism, half as fast again for a people of the same family as ours, twice as fast with autonomy; it stops above {1} radicalism or under a foreign army. It eases what the minority costs in stability and anger by up to half and lightens the region in imperial overstretch. At 100% the region becomes part of the homeland.",
+                "How far the people here have come to accept this state. It grows each quiet week on ground that is not the country's homeland: fastest below {0} radicalism, half as fast again for a people of the same family as ours or one our proclaimed union names, twice as fast with autonomy; it stops above {1} radicalism or under a foreign army. It eases what the minority costs in stability and anger by up to half and lightens the region in imperial overstretch. At 100% the region becomes part of the homeland.",
                 Fmt.Percent(d.AcceptanceCalmRadicalism), Fmt.Percent(d.AcceptanceStallRadicalism));
             var tone = outlook.Acceptance >= 0.66f ? "state.positive" : outlook.Acceptance >= 0.33f ? "text.bright" : "state.warning";
             CardRow(_regionCardRegionRows, "Acceptance of rule", Fmt.Percent(outlook.Acceptance), help, tone);

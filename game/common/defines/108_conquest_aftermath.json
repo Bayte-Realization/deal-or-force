@@ -27,7 +27,12 @@
   // And weighs 0.4 of what it did in imperial overstretch; at acceptance 1 it becomes homeland and
   // leaves the overstretch altogether.
   "AcceptanceOverstretchRelief": 0.6,
-  // Ground handed over by agreement (a deal, a union, a release) arrives half accepted.
+  // Ground handed over by agreement of both governments (a deal, a union, a grant to a subject)
+  // carries across this share of how settled it was under the state giving it up: its old homeland
+  // arrives half accepted, a region it was still digesting at half of what it had, ground it had just
+  // taken at nothing. Acceptance is of one state: what was earned under the old holder never makes the
+  // region the new holder's homeland, and a conquest passed through a subject and annexed back is
+  // still a conquest. Ground yielded to an ultimatum is ground taken by force and starts at nothing.
   "AcceptancePeacefulStart": 0.5,
   // A crushed rising halves what acceptance the region had: being beaten is not agreeing.
   "AcceptanceRisingKeep": 0.5,

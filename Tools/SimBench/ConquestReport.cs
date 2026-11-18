@@ -24,6 +24,10 @@ namespace DealOrForce.Tools;
 ///     conquests leave, measured by the `world` mode). Options:
 ///       --as-player          Serbia is a seat nobody plays: the computer's cabinet does nothing
 ///                            for it, which is the player who does not know what to press.
+///       --heed-alerts        with --as-player: once a week the seat reads its situation report and,
+///                            when the "conquered ground strains the state" line is there and the
+///                            grant is not refused, presses the one button that line offers - the
+///                            player who reads his list of things to do and nothing more.
 ///       --declare-peoples    counterfactual: the Yugoslav peoples counted as Serbia's own, the
 ///                            way a proclaimed Yugoslavia should count them.
 ///       --bulgaria-day N     Bulgaria is taken on day N rather than at once.
@@ -57,12 +61,14 @@ internal static class ConquestReport
         // a fair answer and a different question. Quiet: the notoriety is wiped after the taking,
         // so what is left is the conquered ground itself.
         var quiet = args.Contains("--quiet-world");
+        var heed = asPlayer && args.Contains("--heed-alerts");
+        var pressed = 0;
         if (asPlayer) c.ConfigureSinglePlayer(srb.Id);
         if (declare)
             DemographyCatalog.Declare(srb.Tag, new[] { "serbian", "croatian", "slovene", "bosniak", "montenegrin", "macedonian" });
 
         Console.WriteLine($"CONQUEST serbia seed={c.Seed} days={days} war_radicalism={warRadicalism:0.00} " +
-                          $"as_player={asPlayer} declare_peoples={declare} bulgaria_day={bulgariaDay} quiet_world={quiet}");
+                          $"as_player={asPlayer} heed_alerts={heed} declare_peoples={declare} bulgaria_day={bulgariaDay} quiet_world={quiet}");
         Console.WriteLine($"BEFORE SRB stability={srb.Stability:0.000} regions={c.StatesOf(srb).Length} people={srb.Population:N0} bias={srb.StabilityBias:0.000}");
 
         var home = new HashSet<int>(c.StatesOf(srb).Select(TerritorialClaims.Origin));
@@ -85,6 +91,12 @@ internal static class ConquestReport
             {
                 Take(c, srb, "BGR", warRadicalism, tracked); watch.Add(c, tracked);
                 if (quiet) srb.Notoriety = 0f;
+            }
+            if (heed && day % 7 == 0 && ConquestStrainNotice.Read(c, srb) is { TargetId: > 0 } notice &&
+                c.StateByMapIndex(notice.TargetId) is { } asked && RegionalAutonomy.Refusal(c, srb, asked).Length == 0)
+            {
+                new GrantRegionalAutonomyCommand { IssuerId = srb.Id, StateMapIndex = asked.MapIndex }.Apply(c);
+                pressed++;
             }
             var radBefore = MeanRadicalism(c, srb, _ => true);
             c.TickDay();
@@ -115,6 +127,7 @@ internal static class ConquestReport
         }
         if (Array.IndexOf(Snapshots, days) < 0) Snapshot(c, srb, tracked, home, days);
         watch.Report(c, "SRB");
+        if (heed) Console.WriteLine($"HEED pressed={pressed}");
         // Measured from the worst of it: stability closes a tenth of its gap a week, so on the first
         // morning after the taking it still reads what the country was, and "above 0.40 on day 1"
         // says nothing about getting out.

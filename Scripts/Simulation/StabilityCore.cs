@@ -188,7 +188,7 @@ public static class StabilityCore
         var value = weights.Base
                     + (state.StandardOfLiving - weights.LivingTolerance) * weights.Living
                     - state.Radicalism * weights.Radicalism
-                    - EconomySystem.ForeignShare(state, owner.Tag) * weights.Minority * ConquestAcceptance.MinorityFactor(defines, state)
+                    - EconomySystem.ForeignShare(state, owner.Tag) * weights.Minority * ConquestAcceptance.MinorityFactor(defines, state, owner)
                     + (state.Literacy + owner.LiteracyOffset - 0.5f) * weights.Literacy
                     - control.OccupiedShare * weights.Occupation;
         return M.Clamp(value, 0f, 1f);
@@ -323,7 +323,7 @@ public static class StabilityCore
             if (state is null || state.Unclaimed) continue;
             var isHomeland = TerritorialClaims.TitleOf(campaign, nation, state) == TerritorialTitle.Homeland;
             if (!isHomeland && EconomySystem.ForeignShare(state, nation.Tag) >= ConquestAcceptance.UnentitledForeignShare)
-                strainedStates += ConquestAcceptance.StrainWeight(campaign, state);
+                strainedStates += ConquestAcceptance.StrainWeight(campaign, state, nation);
             else if (campaign.ElapsedDays > 0 && state.MapIndex != nation.CapitalStateMapIndex &&
                      state.PoliticalDivergence >= 0.50f)
                 strainedStates += 0.5f;

@@ -72,6 +72,9 @@ static class ConquestAftermathTests
         c.States[0].CoreTags.Add(Serbia);
         c.States[4].CoreTags.Add(Bulgaria);
         c.Homelands[2] = new() { 5006 };
+        // Split rose against Serbia: the rising took it from Serbia, and the region's record says so
+        // (ConquestAcceptance.ChangedHands keeps it while a breakaway holds the ground).
+        c.States[5].AcceptanceOf = c.Nations[0].Id;
         c.Nations[0].CapitalStateMapIndex = 5001;
         c.Nations[1].CapitalStateMapIndex = 5005;
         c.Nations[2].CapitalStateMapIndex = 5006;
@@ -144,6 +147,27 @@ static class ConquestAftermathTests
         Check(!DemographyCatalog.IsPrimary(Serbia, "slovene"),
             "a people of the union is declared only where the state actually holds a region of it");
 
+        // A union that names a people of another family does not make it the founder's own at once:
+        // Albanians named by a Serbian-led union stay a minority, and Durres stays conquered ground.
+        c = Fixture(); srb = c.Nations[0];
+        DemographyCatalog.Declare(Serbia, new[] { "serbian" });
+        var durres = Region(c, "Durres"); zagreb = Region(c, "Zagreb");
+        var balkan = Union("cq_balkan", new[] { Serbia, Croatia, Greece },
+            new[] { "serbian", "croatian", "albanian" },
+            Provinces(c, 5001).Concat(Provinces(c, 5002)).Concat(Provinces(c, 5004)).ToArray());
+        FormableNations.DeclareUnionPeoples(c, srb, balkan);
+        Check(DemographyCatalog.IsPrimary(Serbia, "croatian") && TerritorialClaims.TitleOf(c, srb, zagreb) == TerritorialTitle.Homeland &&
+              !DemographyCatalog.IsPrimary(Serbia, "albanian") && TerritorialClaims.TitleOf(c, srb, durres) != TerritorialTitle.Homeland &&
+              ConquestAcceptance.Unentitled(c, srb, durres),
+            "a union makes only its founder's own family of peoples its own: a named people of another family stays conquered");
+        // But it did promise them a place: the real Balkan Federation names Albanians, and a Serbia
+        // that proclaimed it digests Durres at the kindred pace; a plain Serbia does not.
+        Check(!ConquestAcceptance.Kindred(srb, durres, c), "without a union an Albanian region is not kindred to Serbia");
+        srb.FormedNationId = "balkan_federation";
+        Check(FormableNations.Find(c, "balkan_federation") is not null && ConquestAcceptance.Kindred(srb, durres, c),
+            "a people the proclaimed union names accepts it at the kindred pace");
+        srb.FormedNationId = "";
+
         DemographyCatalog.Declare(Serbia, new[] { "serbian" });
         var start = UnionCohesion.Start(c, srb, yugoslavia);
         Check(MathF.Abs(start - 0.70f) < 0.001f && start > c.Defines.UnionCalmStability,
@@ -184,11 +208,39 @@ static class ConquestAftermathTests
         Check(RevoltRecovery.DaysLeft(c, srb, split) == c.Defines.ReintegrationRecoveryDays,
             "and the protection against a new rising stays the two years it always was");
 
+        // Serbia's own homeland is Serbia's however long the breakaway counted it as its own.
+        c = Fixture(); srb = c.Nations[0]; split = Region(c, "Split");
+        split.CoreTags.Add(Serbia); split.AcceptanceOf = c.Nations[2].Id; split.Radicalism = 0.8f;
+        StatePartition.Annex(c, Provinces(c, 5006), srb, asConquest: true);
+        Check(MathF.Abs(split.Radicalism - 0.4f) < 1e-5f && split.ExhaustedUntilDay > 0,
+            "the state's own homeland taken back from its breakaway is a rising crushed");
+
         c = Fixture(); srb = c.Nations[0]; split = Region(c, "Split");
         split.Radicalism = 0.9f;
         StatePartition.Annex(c, Provinces(c, 5006), srb, asConquest: false, byConsent: true);
         Check(split.NationMapIndex == srb.MapIndex && MathF.Abs(split.Radicalism - 0.9f) < 1e-6f && split.ExhaustedUntilDay == -1,
             "a peaceful reunion is not a crushing");
+
+        // Ground the breakaway took from somebody else was never Serbia's: taking it from the
+        // breakaway in an ordinary war is a conquest, not a rising put down.
+        c = Fixture(); srb = c.Nations[0]; var rebels = c.Nations[2];
+        var plovdiv = Region(c, "Plovdiv");
+        StatePartition.Annex(c, Provinces(c, 5005), rebels, asConquest: true);
+        plovdiv.Radicalism = 0.8f; plovdiv.Acceptance = 0.6f;
+        Day(c, 300);
+        StatePartition.Annex(c, Provinces(c, 5005), srb, asConquest: true);
+        Check(plovdiv.NationMapIndex == srb.MapIndex && MathF.Abs(plovdiv.Radicalism - 0.8f) < 1e-6f &&
+              plovdiv.Acceptance == 0f && plovdiv.AcceptanceOf == srb.Id && plovdiv.ExhaustedUntilDay == -1 &&
+              !c.Chronicle.Entries.Any(e => e.Kind == "rising_exhausted"),
+            "a breakaway's own conquest taken from it is a conquest: no free halving, no exhaustion, acceptance from nothing");
+
+        // A seceded state written back into Serbia as an integrated subject: a peaceful absorption.
+        c = Fixture(); srb = c.Nations[0]; split = Region(c, "Split");
+        split.Radicalism = 0.9f; split.Acceptance = 0.3f;
+        SubjectInteractions.ForceAnnexIntegrated(c, srb, c.Nations[2]);
+        Check(split.NationMapIndex == srb.MapIndex && MathF.Abs(split.Radicalism - 0.9f) < 1e-6f &&
+              split.ExhaustedUntilDay == -1 && MathF.Abs(split.Acceptance - 0.3f) < 1e-6f,
+            "an integrated subject that once seceded is absorbed, not crushed");
 
         // A third of the grievance: minority and overstretch, with and without exhaustion.
         c = Fixture(); srb = c.Nations[0];
@@ -266,7 +318,7 @@ static class ConquestAftermathTests
         c = Fixture(); srb = c.Nations[0]; zagreb = Region(c, "Zagreb");
         var before = StabilityCore.RegionStability(c, srb, zagreb);
         var weightBefore = ConquestAcceptance.StrainWeight(c, zagreb);
-        zagreb.Acceptance = 1f;
+        zagreb.Acceptance = 1f; zagreb.AcceptanceOf = srb.Id;
         var after = StabilityCore.RegionStability(c, srb, zagreb);
         var weightAfter = ConquestAcceptance.StrainWeight(c, zagreb);
         var foreign = EconomySystem.ForeignShare(zagreb, Serbia);
@@ -283,12 +335,33 @@ static class ConquestAftermathTests
             "full acceptance makes a homeland, through the integration the calendar already used, and it leaves the overstretch");
 
         c = Fixture(); srb = c.Nations[0]; var bgr = c.Nations[1];
-        zagreb = Region(c, "Zagreb"); var sofia = Region(c, "Sofia");
-        zagreb.Acceptance = 0.7f; sofia.Acceptance = 0.1f;
+        zagreb = Region(c, "Zagreb"); durres = Region(c, "Durres"); var sofia = Region(c, "Sofia");
+        zagreb.Acceptance = 0.7f; zagreb.AcceptanceOf = srb.Id;
+        durres.Acceptance = 1f; durres.AcceptanceOf = srb.Id;
+        sofia.Acceptance = 0.4f; sofia.AcceptanceOf = srb.Id;
         StatePartition.Annex(c, Provinces(c, 5002), bgr, asConquest: true);
-        StatePartition.Annex(c, Provinces(c, 5003), bgr, asConquest: false, byConsent: true);
-        Check(zagreb.Acceptance == 0f && MathF.Abs(sofia.Acceptance - c.Defines.AcceptancePeacefulStart) < 1e-6f,
-            "conquest resets acceptance and a treaty starts it at half");
+        StatePartition.Annex(c, Provinces(c, 5004), bgr, asConquest: false, byConsent: true);
+        StatePartition.Annex(c, Provinces(c, 5003), bgr, asConquest: false);
+        Check(zagreb.Acceptance == 0f && zagreb.AcceptanceOf == bgr.Id,
+            "conquest resets acceptance, and it is the new holder's to earn");
+        Check(MathF.Abs(durres.Acceptance - c.Defines.AcceptancePeacefulStart) < 1e-6f && durres.AcceptanceOf == bgr.Id,
+            $"a treaty carries half of how settled the region was: Serbia's fully digested Durres arrives at {durres.Acceptance:0.00}, not 1");
+        Check(sofia.Acceptance == 0f, "ground yielded to an ultimatum is ground taken by force: it starts at nothing");
+        durres.TrackedOwnerMapIndex = durres.NationMapIndex; durres.OwnerSinceDay = 0;
+        durres.Acceptance = 1f; durres.AcceptanceOf = srb.Id;
+        for (var day = 1; day <= 2 * HomelandIntegration.Cycle + 1; day++) { Day(c, day); HomelandIntegration.Tick(c); }
+        Check(TerritorialClaims.TitleOf(c, bgr, durres) != TerritorialTitle.Homeland &&
+              ConquestAcceptance.Of(durres, bgr) == 0f && ConquestAcceptance.MinorityFactor(c.Defines, durres, bgr) == 1f,
+            "acceptance earned under another state does not make the region the holder's homeland, nor ease its minority");
+
+        // A fresh conquest passed through a subject and annexed back: still a conquest.
+        c = Fixture(); srb = c.Nations[0]; bgr = c.Nations[1]; zagreb = Region(c, "Zagreb");
+        StatePartition.Annex(c, Provinces(c, 5002), bgr, asConquest: true);
+        StatePartition.Annex(c, Provinces(c, 5002), srb, asConquest: true);
+        StatePartition.Annex(c, Provinces(c, 5002), bgr, asConquest: false, byConsent: true);
+        StatePartition.Annex(c, Provinces(c, 5002), srb, asConquest: false, byConsent: true);
+        Check(zagreb.NationMapIndex == srb.MapIndex && zagreb.Acceptance == 0f && zagreb.AcceptanceOf == srb.Id,
+            "a conquest handed to a subject and annexed back keeps nothing it never earned");
 
         // Resentment fades under peaceful rule, and faster with the lever.
         float Years(bool autonomous)
@@ -389,6 +462,20 @@ static class ConquestAftermathTests
         srb.ImperialOverstretch = 0.3f; zagreb.Radicalism = 0.4f;
         for (var d = 0; d < 21; d++) { Day(c, d); RegionalAutonomy.ConsiderGrant(c, srb); }
         Check(!c.States.Any(RegionalAutonomy.Autonomous), "nobody grants the player's autonomy");
+
+        // But the player is told where the lever is: the same region the computer would choose, in
+        // the situation report and so in the "Should do" alerts, routed to the screen that grants it.
+        var notice = SituationReport.Read(c, srb).FirstOrDefault(i => i.Id == ConquestStrainNotice.Id);
+        var alert = CampaignAlerts.Read(c, srb).FirstOrDefault(a => a.Id == ConquestStrainNotice.Id);
+        Check(notice is not null && notice.TargetId == RegionalAutonomy.Angriest(c, srb).MapIndex &&
+              notice.Route == SituationRoute.Crises && alert is not null && alert.Group <= CampaignAlertGroup.Should,
+            $"the player sees which conquered region could govern itself, in his list of things to do: {notice?.Title} -> {notice?.Action}");
+        srb.PoliticalPoints = 0;
+        Check(SituationReport.Read(c, srb).Any(i => i.Id == ConquestStrainNotice.Id &&
+                                                    i.Consequences.Contains(Loc.Get(RegionalAutonomy.NoPoints))),
+            "and is told even when he cannot pay yet, with the reason");
+        srb.ImperialOverstretch = 0f; srb.Stability = 0.6f;
+        Check(!SituationReport.Read(c, srb).Any(i => i.Id == ConquestStrainNotice.Id), "and nothing when nothing strains the state");
     }
 
     // ------------------------------------------------------------ save, load, determinism --
@@ -397,28 +484,36 @@ static class ConquestAftermathTests
     {
         var c = Fixture(); var srb = c.Nations[0];
         var zagreb = Region(c, "Zagreb"); var sofia = Region(c, "Sofia");
+        // A world nobody has conquered anything in: not even the fixture's record of Split's rising.
+        Region(c, "Split").AcceptanceOf = -1;
         var snapshot = SaveSystem.ExportNetworkSnapshot(c, "aftermath");
         var json = Decompress(snapshot);
         var loaded = SaveSystem.ImportNetworkSnapshot(snapshot, "aftermath").Campaign;
         // Saves leave default values out, so a world nobody conquered in writes nothing new at all.
-        Check(!json.Contains("\"ExhaustedUntilDay\"") && !json.Contains("\"AutonomousSinceDay\"") && loaded is not null &&
+        Check(!json.Contains("\"ExhaustedUntilDay\"") && !json.Contains("\"AutonomousSinceDay\"") &&
+              !json.Contains("\"AcceptanceOf\"") && loaded is not null &&
               loaded.States.All(s => s.Acceptance == 0f && s.ExhaustedUntilDay == -1 && s.AutonomousSinceDay == -1 && s.AutonomyRevokedDay == -1),
             "an old save without them loads with 0 / -1");
         var plain = CampaignFingerprint.Of(c);
 
+        zagreb.AcceptanceOf = srb.Id;
+        var owned = CampaignFingerprint.Of(c);
+        Check(owned != plain, "whose rule the acceptance is of participates in fingerprints");
         zagreb.Acceptance = 0.37f; sofia.ExhaustedUntilDay = 900; zagreb.AutonomousSinceDay = 12; sofia.AutonomyRevokedDay = 30;
-        Check(CampaignFingerprint.Of(c) != plain, "acceptance, exhaustion and autonomy participate in fingerprints");
+        Check(CampaignFingerprint.Of(c) != plain && CampaignFingerprint.Of(c) != owned,
+            "acceptance, exhaustion and autonomy participate in fingerprints");
         snapshot = SaveSystem.ExportNetworkSnapshot(c, "aftermath");
         loaded = SaveSystem.ImportNetworkSnapshot(snapshot, "aftermath").Campaign;
         var z = Region(loaded, "Zagreb"); var s2 = Region(loaded, "Sofia");
-        Check(z.Acceptance == 0.37f && s2.ExhaustedUntilDay == 900 && z.AutonomousSinceDay == 12 && s2.AutonomyRevokedDay == 30,
-            "acceptance and exhaustion survive save and load");
+        Check(z.Acceptance == 0.37f && z.AcceptanceOf == srb.Id && s2.ExhaustedUntilDay == 900 && z.AutonomousSinceDay == 12 &&
+              s2.AutonomyRevokedDay == 30,
+            "acceptance, whose it is, and exhaustion survive save and load");
 
         // A save written before the fields existed: the same snapshot with them taken out.
         var node = JsonNode.Parse(Decompress(snapshot));
         Strip(node);
         var old = SaveSystem.ImportNetworkSnapshot(Compress(node.ToJsonString()), "aftermath").Campaign;
-        Check(old is not null && old.States.All(s => s.Acceptance == 0f && s.ExhaustedUntilDay == -1 &&
+        Check(old is not null && old.States.All(s => s.Acceptance == 0f && s.ExhaustedUntilDay == -1 && s.AcceptanceOf == -1 &&
                                                      s.AutonomousSinceDay == -1 && s.AutonomyRevokedDay == -1),
             "a save with the fields removed loads the defaults rather than failing");
 
@@ -466,7 +561,7 @@ static class ConquestAftermathTests
         if (node is JsonObject obj)
         {
             if (obj.ContainsKey("PopulationGroups"))
-                foreach (var name in new[] { "Acceptance", "ExhaustedUntilDay", "AutonomousSinceDay", "AutonomyRevokedDay" })
+                foreach (var name in new[] { "Acceptance", "AcceptanceOf", "ExhaustedUntilDay", "AutonomousSinceDay", "AutonomyRevokedDay" })
                     obj.Remove(name);
             foreach (var pair in obj.ToList()) Strip(pair.Value);
         }

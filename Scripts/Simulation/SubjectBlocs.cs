@@ -138,7 +138,7 @@ public static class SubjectBlocs
 
         ProductionProgramme.MigrateLegacy(keep, ProductionProgramme.Allocate(campaign, keep));
         ProductionProgramme.MigrateLegacy(absorb, ProductionProgramme.Allocate(campaign, absorb));
-        StatePartition.Annex(campaign, provinces, keep, asConquest: false);
+        StatePartition.Annex(campaign, provinces, keep, asConquest: false, byConsent: true);
         SovereignFinance.MergeAccounts(campaign, keep, absorb);
         keep.Gdp += absorbGdp; absorb.Gdp = 0f;
         keep.ManpowerReserve += absorbManpower; absorb.ManpowerReserve = 0;

@@ -740,7 +740,9 @@ public static class SubjectInteractions
         subject.SubjectIntegrationProgress = 0f;
         if (!string.IsNullOrEmpty(subject.DeclaredCulture))
             overlord.FoundedCultures.Remove(subject.DeclaredCulture);
-        if (taken.Count > 0) StatePartition.Annex(campaign, taken, overlord, asConquest: false);
+        // A subject written into its overlord: a peaceful absorption, never a rising put down, even
+        // when the subject was once a breakaway of the overlord (ConquestAcceptance.ChangedHands).
+        if (taken.Count > 0) StatePartition.Annex(campaign, taken, overlord, asConquest: false, byConsent: true);
         campaign.MarkMapChanged();
         campaign.MarkStrategicChange();
     }

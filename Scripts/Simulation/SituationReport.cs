@@ -351,6 +351,9 @@ public static class SituationReport
                     SituationRoute.Crises, T("Inspect regional crisis"), hotState.MapIndex));
             }
 
+            // Conquered ground and the one lever over it, which used to live only in a right-click.
+            if (!observer && ConquestStrainNotice.Read(c, n) is { } strain) items.Add(strain);
+
             var ruinedState = ownedStates.Where(s => s.WarDamage >= 0.35f)
                 .OrderByDescending(s => s.WarDamage).FirstOrDefault();
             if (ruinedState is not null)

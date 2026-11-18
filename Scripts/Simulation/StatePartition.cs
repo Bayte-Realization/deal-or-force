@@ -583,7 +583,11 @@ public static class StatePartition
         parent.Literacy = Blend(parent.Literacy, child.Literacy);
         parent.StandardOfLiving = Blend(parent.StandardOfLiving, child.StandardOfLiving);
         parent.Radicalism = Blend(parent.Radicalism, child.Radicalism);
-        parent.Acceptance = Blend(parent.Acceptance, child.Acceptance);
+        // Acceptance is of one state: what the piece earned of somebody else is not added to what
+        // the whole has of its holder, it counts as none.
+        var owner = campaign.Nations.Find(n => n.MapIndex == parent.NationMapIndex);
+        parent.Acceptance = Blend(ConquestAcceptance.Of(parent, owner), ConquestAcceptance.Of(child, owner));
+        if (owner is not null && (parent.AcceptanceOf >= 0 || child.AcceptanceOf >= 0)) parent.AcceptanceOf = owner.Id;
         parent.ExhaustedUntilDay = Math.Max(parent.ExhaustedUntilDay, child.ExhaustedUntilDay);
         parent.AutonomyRevokedDay = Math.Max(parent.AutonomyRevokedDay, child.AutonomyRevokedDay);
         parent.Urbanization = Blend(parent.Urbanization, child.Urbanization);
@@ -731,6 +735,7 @@ public static class StatePartition
             // The people of the piece remember what the people of the whole did; a grant of
             // autonomy was made to the region as it was and does not follow a piece of it.
             Acceptance = parent.Acceptance,
+            AcceptanceOf = parent.AcceptanceOf,
             ExhaustedUntilDay = parent.ExhaustedUntilDay
         };
 

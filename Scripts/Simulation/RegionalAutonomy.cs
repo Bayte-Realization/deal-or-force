@@ -58,6 +58,9 @@ public static class RegionalAutonomy
 
     public static bool Autonomous(ScenarioState state) => state is not null && state.AutonomousSinceDay >= 0;
 
+    /// <summary>The refusal that only waiting for points answers, as an interface key.</summary>
+    public const string NoPoints = "Not enough political points.";
+
     /// <summary>Why this country cannot grant this region autonomy now, as an interface key, or "".</summary>
     public static string Refusal(Campaign c, Nation nation, ScenarioState state)
     {
@@ -69,7 +72,7 @@ public static class RegionalAutonomy
         if (Autonomous(state)) return "The region already governs itself.";
         if (state.AutonomyRevokedDay >= 0 && c.ElapsedDays - state.AutonomyRevokedDay < c.Defines.AutonomyRegrantDays)
             return "Its autonomy was taken back too recently to be granted again.";
-        if (nation.PoliticalPoints < c.Defines.AutonomyPoliticalCost) return "Not enough political points.";
+        if (nation.PoliticalPoints < c.Defines.AutonomyPoliticalCost) return NoPoints;
         return "";
     }
 
@@ -138,7 +141,8 @@ public static class RegionalAutonomy
         if (RevokeRefusal(c, nation, state).Length > 0) return false;
         // Taken back is remembered longer than given: Scotland 1997 to 2014, Catalonia 2006 to 2017.
         state.Radicalism = M.Clamp01(state.Radicalism + MathF.Max(0f, c.Defines.AutonomyRevokeRadicalism));
-        state.Acceptance = M.Clamp01(state.Acceptance * 0.5f);
+        state.Acceptance = ConquestAcceptance.Of(state, nation) * 0.5f;
+        state.AcceptanceOf = nation.Id;
         state.AutonomousSinceDay = -1;
         state.AutonomyRevokedDay = c.ElapsedDays;
         c.Chronicle.Record(c, "autonomy_revoked", nation.Id, -1, place: state.Name);
@@ -176,7 +180,7 @@ public static class RegionalAutonomy
     /// AiAutonomyRadicalism angry, and the most of its people angry or pulling away; ties to the
     /// lower map index, so every machine picks the same one.
     /// </summary>
-    public static ScenarioState Angriest(Campaign c, Nation nation)
+    public static ScenarioState Angriest(Campaign c, Nation nation, bool evenWithoutPoints = false)
     {
         if (c is null || nation is null || nation.Population <= 0) return null;
         ScenarioState best = null;
@@ -184,7 +188,9 @@ public static class RegionalAutonomy
         foreach (var state in c.StatesOf(nation))
         {
             if (Autonomous(state) || state.Radicalism < c.Defines.AiAutonomyRadicalism) continue;
-            if (!ConquestAcceptance.Unentitled(c, nation, state) || Refusal(c, nation, state).Length > 0) continue;
+            if (!ConquestAcceptance.Unentitled(c, nation, state)) continue;
+            var refusal = Refusal(c, nation, state);
+            if (refusal.Length > 0 && !(evenWithoutPoints && refusal == NoPoints)) continue;
             var score = (state.Radicalism + MathF.Max(0f, state.SecessionPressure)) *
                         (float)(state.Population / (double)nation.Population);
             if (best is null || score > bestScore || score == bestScore && state.MapIndex < best.MapIndex)
@@ -194,6 +200,57 @@ public static class RegionalAutonomy
             }
         }
         return best;
+    }
+}
+
+/// <summary>
+/// The line in the player's list of things to do that says the lever exists.
+///
+/// Measured on 17 November 2026: the same Serbia, the same conquests, the same rules. Run by the
+/// computer it gave ten regions autonomy and spent 183 of ten years' days below the civil-war line;
+/// run as a seat nobody presses anything for, it gave none and spent 3147 there, and lost two regions.
+/// The rules were fair; the knowledge was not - the grant lived in a region's right-click menu, and
+/// nothing said so. So whenever conquered ground strains the state and a region could be given
+/// self-government, the situation report (and with it the "Should do" alerts) says which region the
+/// computer would choose in the same place, what it costs, and opens the crisis screen on it, where
+/// the grant is one press away. Read-only, like every other line of the report.
+/// </summary>
+public static class ConquestStrainNotice
+{
+    public const string Id = "conquest_strain";
+
+    public static SituationItem Read(Campaign c, Nation n)
+    {
+        if (c is null || n is null || n.Movement is not null) return null;
+        // Asked quietly: a report read every frame must not log a disabled command every frame.
+        if (c.Defines.FeatureCommands.TryGetValue(nameof(GrantRegionalAutonomyCommand), out var feature) &&
+            !string.IsNullOrWhiteSpace(feature) && !c.FeatureEnabled(feature)) return null;
+        var d = c.Defines;
+        if (n.ImperialOverstretch <= 0f && n.Stability >= d.CivilWarStabilityThreshold) return null;
+        var region = RegionalAutonomy.Angriest(c, n, evenWithoutPoints: true);
+        if (region is null) return null;
+        string T(string text) => Loc.Get(text);
+        SituationFact F(string label, string value) => new(T(label), value);
+        var refusal = RegionalAutonomy.Refusal(c, n, region);
+        var unentitled = 0;
+        foreach (var state in c.StatesOf(n))
+            if (ConquestAcceptance.Unentitled(c, n, state) && !RegionalAutonomy.Autonomous(state)) unentitled++;
+        return new SituationItem(Id, n.Stability < d.CivilWarStabilityThreshold ? SituationPriority.Critical : SituationPriority.Warning,
+            SituationArea.Society,
+            T("Conquered ground strains the state"),
+            Loc.Format("{0} could govern itself. Autonomy makes it weigh {1} as much in imperial overstretch, cuts the grievance it takes in, and lets it accept the state twice as fast.",
+                region.DisplayName, Fmt.Percent(d.AutonomyOverstretchWeight)),
+            new[] { T("Regions whose people are not ours and that we have no title to weigh on the state by their anger: stability falls, and radicalism, risings and coups grow with the overstretch."),
+                    T("Their acceptance of our rule grows only in quiet years; above half radicalism it stops.") },
+            new[] { Loc.Format("A grant costs {0} political points now and {1} a week: the region keeps {2} of its taxes.",
+                        d.AutonomyPoliticalCost.ToString("0"), Fmt.Money(RegionalAutonomy.WeeklyPrice(c, n, region)), Fmt.Percent(d.AutonomyRevenueShare)),
+                    T("The same grant is on the region's map menu. Settling a region pays to cool it for one season instead."),
+                    refusal.Length > 0 ? T(refusal) : T("The computer uses the same lever on the same terms.") },
+            new[] { F("Imperial overstretch", Fmt.Percent(n.ImperialOverstretch)),
+                    F("Regions not yet self-governing", unentitled.ToString()),
+                    F("Radicalism there", Fmt.Percent(region.Radicalism)),
+                    F("Acceptance of rule", Fmt.Percent(ConquestAcceptance.Of(region, n))) },
+            SituationRoute.Crises, Loc.Format("Grant autonomy to {0}", region.DisplayName), region.MapIndex);
     }
 }
 
