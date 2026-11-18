@@ -97,3 +97,34 @@
   - Контейнер `"BDF3"` (`ContainerVersion = 1`, `SaveSystem.FormatVersion = 2`) с 44-байтным заголовком, проверкой контрольной суммы SHA-256 и встроенным поточным сжатием `BrotliCodec = 1` (`CompressionLevel.Fastest` через буфер `1 MiB`). В рантайме игры Zstd не подключается (`ZstdCodec = 2` только для стенда), поэтому внешние нативные зависимости и риски сборки отсутствуют.
   - История стран (`SaveHistoryTable`) вынесена в 22-колоночный бинарный табличный блок на `ArrayPool<int>` вместо MessagePack (от последнего обоснованно отказались из-за подхвата `IMessagePackFormatter` из мод-сборок и зависимости бесконтрактного резолвера от `Reflection.Emit` / JIT). Остальной граф сохраняется в JSON для сохранения совместимости с текстовыми сейвами и модами.
 - При первичном осмотре в `dof-fw-saves` были `10 M + 5 ??` поверх `7369e0a9` и битая ссылка на `SAVE_FORMAT_2026_11_18_RU.md`; впоследствии ветка зафиксирована в `a13ae3c7`, прошла гейт верификатора и уже интегрирована в `EntertAlpha` (`eeaa7e52`). Конфликтов с оптимизациями `work/perf3` не имеет; после `eeaa7e52` ветка `work/perf3` готова к интеграции.
+
+
+## Интеграция `EntertAlpha` (`eeaa7e52`) и правки конкурентности `#71` (коммит `b7a7a0f9`)
+
+- Ветка `work/perf3` объединена с `EntertAlpha` (`eeaa7e52`: `conquest-aftermath` + `work/deals` `TradeTerms` + `work/fw-saves` `BDF3`). Конфликты в `AiDiplomacy.cs`, `MarketCore.cs` и `TradeCore.cs` разрешены с сохранением обеих ветвей:
+  - `AiDiplomacy.TryHedgeSupply`: сохранён кэш `LiveNationsSorted` (обход без мёртвых/движений) и правило `eeaa7e52` («наибольший излишек побеждает, при равенстве — меньший Id»).
+  - `MarketCore.SettleNations`: сохранён параллельный цикл `DeterministicParallel.For` + `SettleSingleNation` с вызовом `DutyOf(nation, quote)` для `Relieved`-импорта.
+  - `TradeCore.Affinity` и `MergeCommodity`: сохранена плоская матрица `AffinityValues` по `AffinityStride` + `HasPartnerRules`, домноженная на `AgreementFactor` при `PairTerms.Count > 0`, плюс обработка `buf.Deliveries` (`GuarantorShortWeeks`, `Delivered`, `ShortWeeks`).
+- Закрыты все замечания независимого аудита `#71`:
+  - `Scripts/Simulation/NationNaming.cs` (`GroundPeople`): возвращён `StringComparer.OrdinalIgnoreCase.Compare`.
+  - `Scripts/Simulation/BrainDrain.cs` (`Stages`): `[ThreadStatic] _candidatesScratch` убран из корутины с `yield return 0`, заменён локальным `List<DestCandidate>`.
+  - `Scripts/Simulation/LandAtlas.cs` (`CentresOf`): гонка двойной проверки закрыта атомарной подменой неизменяемого `CentresSnapshot` через `volatile`.
+  - `Scripts/Simulation/CountryNames.cs` (`HasPoliticsOverride`) и `Scripts/Simulation/NavalCore.cs` (`NationAt`, `BuildHarbourIndex`): убраны парные lock-free чтения через атомарные `volatile`-снимки `PoliticsStemsSnapshot` и `MapIndexSnapshot`.
+  - `Scripts/Simulation/ProvinceVision.cs` (`EnsureActorIndex`) и `Scripts/Simulation/LongRangeMovement.cs`: сохранён явный флаг `HasActiveBattles`, удалена заглушка `ActiveControllerMask`.
+
+### Результаты проверок после правки (на `b7a7a0f9` без локальных правок кода)
+
+- Сборка `--artifacts-path "D:/Godot Projects/dof-perf3/tmp_logs/perf3-build"`: `DealOrForce.sln` (`Debug` и `Release`), `SimBench`, `FormableTests`, `ArmyInteractionTests` — **0 ошибок**; отсутствующих `Scripts/**/*.cs.uid` — **0**.
+- Статические проверки: `Tools/audit-localization.ps1 -Fail` (`russian: 27524 entries in 418`, `0` конфликтов/расхождений/пустых), `Tools/Test-ReleaseVersion.ps1` (`17/17 PASS`).
+- Профильные наборы тестов (`0 FAIL`):
+  - `FormableTests`: `--trade-terms-only` (`PASS=133`), `--deals-only` (`PASS=59`), `--save-container-only` (`PASS=43`), `--conquest-aftermath-only` (`PASS=57`), `--smooth-heavy-yield-only` (`PASS=7`), `--parallel-determinism-only` (`PASS=13`), `--performance-regressions-only` (`PASS=40`), `--identity-only` (`PASS=128`), `--brain-drain-only` (`PASS=20`), `--names-only` (`PASS=11`), `--country-name-settings-only` (`PASS=16`), `--campaign-isolation-only` (`PASS=11`), `--movement-staging-only` (exit `0`), `--stability-outlook-only` (exit `0`), `--diplomatic-participation-only` (`PASS=50`), `--diplomatic-symmetry-only` (`PASS=25`), `--exposure-only` (`PASS=25`).
+  - `ArmyInteractionTests --long-range-only`: `PASS=481 FAIL=0`.
+- `SimBench`:
+  - `SimBench 60 42 --fingerprint 60` ×2: совпадает побитово (`day 30: 10029390469122779836`, `day 60: 18243716138951872501`).
+  - `SimBench 365 1 --soak`: `Soak PASS: 365/365 days, 0 alert(s), 0 invariant failure(s)` (`GDP=94242B`, `wars=21`).
+  - Поздний сейв `bozhe.bdfsave` `14 --diet --fingerprint 14`:
+    - Параллельный прогон: `CPU own 334.8 ms/day` (`every thread 572.5`, `wall 359.4`), `mkt:trade 128 ms`, `mkt:nations 14 ms`, `orders:support 91 ms`; плавные кадры (`9 ms` бюджет, `1,271` кадр): `median 1.39 ms`, `p99 16.53`, `p99.9 20.21`, `worst 31.5`, `0 over 33 ms`; фингерпринт `7BB21264843608C8`.
+    - Последовательный прогон (`BDOF_NO_PARALLEL=1`): `CPU own 410.7 ms/day` (`wall 417.4`), `mkt:trade 197 ms`, `mkt:nations 6 ms`, `orders:support 88 ms`; плавные кадры (`1,365` кадр): `median 2.91 ms`, `p99 19.70`, `p99.9 28.45`, `worst 31.8`, `0 over 33 ms`; фингерпринт `7BB21264843608C8` (полное побитовое совпадение с многопоточным).
+- **Обнаруженные предсуществующие сбои вне `work/perf3` (не правились по границе владения)**:
+  - Полный прогон `FormableTests.exe` прошёл `11,021 PASS, 0 FAIL` до исключения в `SupplyHedgeTests.AnAiSignsWithTheOtherSupplier()` (`SupplyHedgeTests.cs:170`, `exit=-532462766`): в пришедшем из `eeaa7e52` (`work/deals`) переключении `AiStatecraft.TryHedgeSupply` на `TradeTermsComposer.Propose` фикстура `SupplyHedgeTests.World()` оставляет `WeeklyTaxIncome = 0`, из-за чего `TradeTermsValue.Read` берёт минимальный `Revenue = 0.001f`, штраф за потерю пошлины (`TradeValueDuty`) насыщается до `-200`, и ни один пресет не набирает `>= 0`. Файлы `TradeTerms*.cs`, `AgreementsCore.cs` и `SupplyHedgeTests.cs` имеют 0 отличий от `eeaa7e52`.
+  - В `--naming-only` зафиксирован предсуществующий сбой на `NamingTests.cs:205` (`WarNames.Of` вернул `"Republic of East War of Independence"` вместо `"Saudi Arabia Civil War"`); `WarCore.cs` в `work/perf3` не изменялся.
