@@ -95,6 +95,8 @@ static class Program
         if (args.Contains("--save-warmup-only")) { SaveSerializationWarmupTests.Run(); return; }
         if (args.Length == 0) SaveSerializationWarmupTests.Run();
         if (args.Length == 0) SaveCompressionTests.Run();
+        if (args.Contains("--save-container-only")) { SaveContainerTests.Run(); return; }
+        if (args.Length == 0) SaveContainerTests.Run();
         if (args.Contains("--region-reunion-only")) { RegionReunionTests.Run(); return; }
         if (args.Length == 0) RegionReunionTests.Run();
         if (args.Contains("--raster-rivers-only")) { RasterRiverCourseTests.Run(); return; }
