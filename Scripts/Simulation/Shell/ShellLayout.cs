@@ -9,7 +9,7 @@ public readonly record struct ShellRect(float X, float Y, float W, float H)
     public float Bottom => Y + H;
 
     public bool Inside(float viewportWidth, float viewportHeight) =>
-        W > 0f && H > 0f && X >= 0f && Y >= 0f && Right <= viewportWidth + 0.5f && Bottom <= viewportHeight + 0.5f;
+        W > 0f && H > 0f && X >= -0.5f && Y >= -0.5f && Right <= viewportWidth + 0.5f && Bottom <= viewportHeight + 0.5f;
 
     public bool Intersects(ShellRect other) =>
         X < other.Right - 0.5f && Right > other.X + 0.5f &&
@@ -31,11 +31,14 @@ public sealed record ShellLayoutProfile(
     float ViewportHeight,
     ShellRect TopPlate,
     ShellRect LeftRail,
+    ShellRect CornerNode,
     ShellRect DatePlate,
     ShellRect AlertColumn,
     ShellRect MapBar,
     ShellRect Strip,
     ShellRect NewsCard,
+    ShellRect LeftPanel,
+    ShellRect FullWorkspace,
     float FlagWellWidth,
     float FlagWellHeight,
     float StatCellWidth,
@@ -50,20 +53,12 @@ public sealed record ShellRestCensus(
     IReadOnlyList<string> Overlaps,
     IReadOnlyList<string> Offscreen);
 
-/// <summary>
-/// Pure viewport-adaptive layout geometry, natural-aspect flag fitting, and rest-HUD
-/// density census for the new campaign shell at both 1920x1080 and 1280x720.
-/// </summary>
 public static class ShellLayout
 {
     public static int MaxRestButtons => (int)InterfaceSkin.Metric("shell.max_rest_buttons", 40f);
     public static int MaxRestPanels => (int)InterfaceSkin.Metric("shell.max_rest_panels", 6f);
     public static int MaxMapSigns => (int)InterfaceSkin.Metric("shell.max_map_signs", 20f);
 
-    /// <summary>
-    /// Preserves the flag's natural proportions (2:3, 1:1 square, 28:11 Qatar, or cutout Nepal)
-    /// inside a recessed flag frame without stretching or applying a heraldic shield crop.
-    /// </summary>
     public static FlagFrame FitFlag(float texWidth, float texHeight, float maxWidth, float maxHeight, string nationTag = "")
     {
         if (maxWidth <= 0f || maxHeight <= 0f) return new(0f, 0f, 0f, 0f, false);
@@ -82,61 +77,58 @@ public static class ShellLayout
         var h = float.IsFinite(height) && height > 240f ? height : 1080f;
         var compact = w < 1600f || h < 900f;
         var prefix = compact ? "shell.compact." : "shell.";
+        var cellCount = atWar ? 8 : 7;
+        var cellX0 = compact ? 82f : 120f;
+        var wantedTopW = cellX0 + cellCount * (compact ? 102f : 144f) + (compact ? 10f : 14f);
+        var rightMargin = compact ? 6f : 8f;
 
-        ShellRect Resolve(string suffix, ShellRect fallback)
-        {
-            var key = prefix + suffix;
-            if (InterfaceSkin.HasLayout(key))
-            {
-                var r = ShellRect.FromOffsets(InterfaceSkin.Layout(key));
-                if (r.W > 0f && r.H > 0f) return r;
-            }
-            return fallback;
-        }
+        var top = Resolve(prefix + "top_plate", new ShellRect(0f, 0f, wantedTopW, compact ? 48f : 70f)) with { W = wantedTopW };
+        var rail = Resolve(prefix + "rail", compact ? new ShellRect(0f, 48f, 50f, 504f) : new ShellRect(0f, 70f, 64f, 722f));
+        var corner = compact ? new ShellRect(0f, 0f, 76f, 86f) : new ShellRect(0f, 0f, 112f, 124f);
+        var date = AnchorRight(Resolve(prefix + "date_plate", compact ? new ShellRect(w - 328f, 6f, 322f, 58f) : new ShellRect(w - 448f, 8f, 440f, 84f)), w, rightMargin);
+        var alert = AnchorRight(Resolve(prefix + "alert_column", compact ? new ShellRect(w - 290f, 66f, 284f, Math.Max(220f, h - 240f)) : new ShellRect(w - 384f, 94f, 376f, Math.Max(300f, h - 320f))), w, rightMargin);
+        var mapBar = AnchorBottomRight(Resolve(prefix + "map_bar", compact ? new ShellRect(w - 222f, h - 46f, 216f, 40f) : new ShellRect(w - 320f, h - 64f, 312f, 56f)), w, h, rightMargin);
+        if (top.Right > date.X - 8f) top = top with { W = Math.Max(320f, date.X - 8f - top.X) };
 
-        var topDefault = compact
-            ? new ShellRect(12f, 12f, atWar ? 708f : 632f, 56f)
-            : new ShellRect(16f, 16f, atWar ? 908f : 800f, 64f);
-        var railDefault = compact
-            ? new ShellRect(12f, 68f, 52f, 514f)
-            : new ShellRect(16f, 80f, 64f, 570f);
-        var dateDefault = compact
-            ? new ShellRect(Math.Max(760f, w - 376f), 12f, 364f, 90f)
-            : new ShellRect(Math.Max(980f, w - 432f), 16f, 416f, 102f);
-        var alertDefault = compact
-            ? new ShellRect(Math.Max(820f, w - 312f), 110f, 300f, Math.Max(220f, h - 232f))
-            : new ShellRect(Math.Max(1100f, w - 356f), 126f, 340f, Math.Max(300f, h - 300f));
-        var mapBarDefault = compact
-            ? new ShellRect(Math.Max(760f, w - 324f), h - 68f, 312f, 56f)
-            : new ShellRect(Math.Max(1100f, w - 376f), h - 76f, 360f, 60f);
-        var stripDefault = compact
-            ? new ShellRect(76f, h - 68f, Math.Max(240f, mapBarDefault.X - 92f), 56f)
-            : new ShellRect(92f, h - 84f, Math.Max(320f, mapBarDefault.X - 116f), 68f);
-        var newsDefault = compact
-            ? new ShellRect(76f, h - 180f, 360f, 102f)
-            : new ShellRect(92f, h - 224f, 420f, 128f);
-
-        var top = Resolve("top_plate", topDefault);
-        if (!atWar)
-        {
-            var trimmed = compact ? 632f : 800f;
-            if (top.W > trimmed) top = top with { W = trimmed };
-        }
-        var rail = Resolve("rail", railDefault);
-        var date = AnchorRight(Resolve("date_plate", dateDefault), w, compact ? 12f : 16f);
-        var alert = AnchorRight(Resolve("alert_column", alertDefault), w, compact ? 12f : 16f);
-        var mapBar = AnchorBottomRight(Resolve("map_bar", mapBarDefault), w, h, compact ? 12f : 16f);
-        var strip = AnchorBottomStrip(Resolve("strip", stripDefault), rail.Right + (compact ? 12f : 12f), mapBar.X - (compact ? 16f : 24f), h, compact ? 12f : 16f);
-        var news = AnchorBottomNews(Resolve("news_card", newsDefault), rail.Right + (compact ? 12f : 12f), strip.Y - (compact ? 10f : 12f));
+        var stripDef = compact ? new ShellRect(58f, h - 52f, Math.Max(220f, mapBar.X - 72f), 46f) : new ShellRect(72f, h - 76f, Math.Max(320f, mapBar.X - 88f), 68f);
+        var strip = AnchorBottomStrip(Resolve(prefix + "strip", stripDef), rail.Right + 8f, mapBar.X - 12f, h, rightMargin);
+        var (leftPanel, fullWorkspace, news) = BuildInteriorZones(compact, prefix, w, h, top, rail, corner, alert, strip);
+        var dynamicCellW = MathF.Floor(Math.Max(280f, top.W - cellX0 - (compact ? 8f : 12f)) / cellCount);
 
         return new ShellLayoutProfile(
-            compact, w, h, top, rail, date, alert, mapBar, strip, news,
-            FlagWellWidth: compact ? 74f : 96f,
-            FlagWellHeight: compact ? 42f : 48f,
-            StatCellWidth: compact ? 76f : 98f,
-            StatCellHeight: compact ? 44f : 50f,
-            RailButtonSize: compact ? 44f : 50f,
-            MapButtonSize: compact ? 44f : 50f);
+            compact, w, h, top, rail, corner, date, alert, mapBar, strip, news, leftPanel, fullWorkspace,
+            FlagWellWidth: compact ? 62f : 92f, FlagWellHeight: compact ? 44f : 66f,
+            StatCellWidth: dynamicCellW, StatCellHeight: compact ? 40f : 58f,
+            RailButtonSize: compact ? 40f : 56f, MapButtonSize: compact ? 30f : 40f);
+    }
+
+    private static (ShellRect Left, ShellRect Full, ShellRect News) BuildInteriorZones(
+        bool compact, string prefix, float w, float h, ShellRect top, ShellRect rail, ShellRect corner, ShellRect alert, ShellRect strip)
+    {
+        var leftTop = Math.Max(top.Bottom + 8f, corner.Bottom + 8f);
+        var leftBottom = Math.Min(h - 92f, strip.Y - 12f);
+        var leftX = rail.Right + 8f;
+        var leftRight = compact ? 390f : 544f;
+        var leftPanel = new ShellRect(leftX, leftTop, Math.Max(260f, leftRight - leftX), Math.Max(240f, leftBottom - leftTop));
+
+        var fullX = compact ? 58f : 80f;
+        var fullRight = w - (compact ? 12f : 16f);
+        var fullBottom = Math.Min(h - (compact ? 60f : 88f), strip.Y - 10f);
+        var fullWorkspace = new ShellRect(fullX, leftTop, Math.Max(520f, fullRight - fullX), Math.Max(360f, fullBottom - leftTop));
+
+        var newsDef = compact ? new ShellRect(460f, 56f, 370f, 76f) : new ShellRect(700f, 82f, 540f, 114f);
+        var rawNews = Resolve(prefix + "news_card", newsDef);
+        var newsX = Math.Clamp(rawNews.X, leftPanel.Right + 12f, Math.Max(leftPanel.Right + 12f, alert.X - newsDef.W - 12f));
+        var newsY = Math.Max(top.Bottom + 8f, rawNews.Y);
+        var newsW = Math.Min(newsDef.W, Math.Max(220f, alert.X - newsX - 12f));
+        return (leftPanel, fullWorkspace, new ShellRect(newsX, newsY, newsW, newsDef.H));
+    }
+
+    private static ShellRect Resolve(string key, ShellRect fallback)
+    {
+        if (!InterfaceSkin.HasLayout(key)) return fallback;
+        var r = ShellRect.FromOffsets(InterfaceSkin.Layout(key));
+        return r.W > 0f && r.H > 0f ? r : fallback;
     }
 
     private static ShellRect AnchorRight(ShellRect r, float viewportW, float margin) =>
@@ -152,73 +144,26 @@ public static class ShellLayout
         return new(x, Math.Max(0f, viewportH - margin - r.H), w, r.H);
     }
 
-    private static ShellRect AnchorBottomNews(ShellRect r, float minX, float maxBottom) =>
-        new(Math.Max(r.X, minX), Math.Max(0f, maxBottom - r.H), r.W, r.H);
-
     public static ShellRestCensus AuditRestHud(
-        float width,
-        float height,
-        ShellCampaignState state,
-        bool outlinerOpen,
-        bool newsCardVisible,
-        bool undoCellVisible = false,
-        int alertRowCount = -1,
-        int outlinerButtonCount = 0,
-        int stripTagCount = 2)
+        float width, float height, ShellCampaignState state, bool outlinerOpen, bool newsCardVisible,
+        bool undoCellVisible = false, int alertRowCount = -1, int outlinerButtonCount = 0, int stripTagCount = 2)
     {
-        var atWar = state == ShellCampaignState.War;
-        var profile = ForViewport(width, height, atWar);
-
+        var profile = ForViewport(width, height, state == ShellCampaignState.War);
         var maxAlerts = outlinerOpen ? 3 : 4;
         var alerts = alertRowCount >= 0 ? Math.Min(alertRowCount, maxAlerts)
-            : state switch
-            {
-                ShellCampaignState.War => Math.Min(4, maxAlerts),
-                ShellCampaignState.Crisis => Math.Min(3, maxAlerts),
-                _ => Math.Min(2, maxAlerts)
-            };
+            : state switch { ShellCampaignState.War => Math.Min(4, maxAlerts), ShellCampaignState.Crisis => Math.Min(3, maxAlerts), _ => Math.Min(2, maxAlerts) };
         var outlinerItems = outlinerOpen ? Math.Clamp(outlinerButtonCount > 0 ? outlinerButtonCount : 3, 0, 3) : 0;
-
-        // Interactive rest buttons matching live Godot shell node tree:
-        // Flag(1) + Rail(10) + DatePlate(Pause 1 + Speed 5 + World/DEFCON 1 + NewsLog 1 + Menu 1 = 9)
-        // + Alerts(alerts) + OutlinerEyeToggle(1) + OutlinerItems(outlinerItems)
-        // + MapBar(6) + StripTags(<=2) + NewsCard(Pin 1 + Close 1) + UndoCell(0 or 1).
-        // Top resource wells are hover/click PanelContainers rather than Button nodes.
-        var stripTags = Math.Clamp(stripTagCount, 0, 2);
-        var totalButtons = 1 + 10 + 9 + 1 + alerts + outlinerItems + 6 + stripTags
-            + (newsCardVisible ? 2 : 0) + (undoCellVisible ? 1 : 0);
-
-        // Visual plates: LCorner(1) + DatePlate(1) + AlertOutlinerColumn(1) + MapBar(1) + Strip(0..1) + NewsCard(0..1)
+        var stripTags = Math.Clamp(stripTagCount, 0, 4);
+        var totalButtons = 1 + 10 + 8 + 1 + alerts + outlinerItems + 6 + stripTags + (newsCardVisible ? 2 : 0) + (undoCellVisible ? 1 : 0);
         var totalPanels = 4 + (stripTags > 0 ? 1 : 0) + (newsCardVisible ? 1 : 0);
-
         var named = new Dictionary<string, ShellRect>(StringComparer.Ordinal)
         {
-            ["top_plate"] = profile.TopPlate,
-            ["left_rail"] = profile.LeftRail,
-            ["date_plate"] = profile.DatePlate,
-            ["alert_column"] = profile.AlertColumn,
-            ["map_bar"] = profile.MapBar
+            ["top_plate"] = profile.TopPlate, ["left_rail"] = profile.LeftRail,
+            ["date_plate"] = profile.DatePlate, ["alert_column"] = profile.AlertColumn, ["map_bar"] = profile.MapBar
         };
         if (stripTags > 0) named["strip"] = profile.Strip;
         if (newsCardVisible) named["news_card"] = profile.NewsCard;
-
-        var overlaps = new List<string>();
-        var offscreen = new List<string>();
-        var keys = new List<string>(named.Keys);
-        for (var i = 0; i < keys.Count; i++)
-        {
-            var aKey = keys[i];
-            var aRect = named[aKey];
-            if (!aRect.Inside(profile.ViewportWidth, profile.ViewportHeight))
-                offscreen.Add(aKey);
-            for (var j = i + 1; j < keys.Count; j++)
-            {
-                var bKey = keys[j];
-                if (aRect.Intersects(named[bKey]))
-                    overlaps.Add($"{aKey} vs {bKey}");
-            }
-        }
-
+        var (overlaps, offscreen) = ShellDockRules.CheckRectSet(named, profile.ViewportWidth, profile.ViewportHeight);
         return new ShellRestCensus(totalButtons, totalPanels, named, overlaps, offscreen);
     }
 }

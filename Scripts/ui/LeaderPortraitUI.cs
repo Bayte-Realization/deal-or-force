@@ -171,11 +171,16 @@ public partial class DealOrForceGame
         return new string(chars);
     }
 
-    /// <summary>
-    /// Builds a compact HOI4/Vic3/EU5-inspired Grand Strategy header block for a country,
-    /// showing its flag, formal title, Head of State & Head of Government portraits, traits,
-    /// and a visual ideology/stability summary bar.
-    /// </summary>
+    internal static bool HasRealLeaderPortrait(LeaderProfile leader)
+    {
+        var slug = SlugLeaderName(leader.Name);
+        var path = string.IsNullOrEmpty(leader.PortraitId) ? "" : SpriteCatalog.TextureOf(leader.PortraitId);
+        if (string.IsNullOrEmpty(path)) path = SpriteCatalog.TextureOf("leader_" + slug);
+        if (string.IsNullOrEmpty(path)) path = $"res://game/gfx/leaders/leader_{slug}.png";
+        return ResourceLoader.Exists(path) || Godot.FileAccess.FileExists(path.StartsWith("res://", StringComparison.Ordinal) ? ProjectSettings.GlobalizePath(path) : path);
+    }
+
+    /// <summary>Builds a compact Grand Strategy header block for a country and its executive leadership.</summary>
     private Control BuildGrandStrategyLeaderHeader(Nation nation, bool compact = false)
     {
         var box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };

@@ -38,7 +38,7 @@
       "Diplomacy": {"links":[{"label":"Compare them","action":"ledger","context":"foreign"}]}
     }
   },
-  "colors":{"shell.background":"#0d141df8","shell.border":"#35424f","shell.row":"#121b25","shell.row_alternate":"#18232e","shell.space":"#060b12"},
+  "colors":{"shell.background":"#191817f8","shell.border":"#3D3B38","shell.row":"#1E1D1C","shell.row_alternate":"#252422","shell.space":"#080808"},
   // `shell.space_texture` is deliberately NOT here. It is declared once, in
   // interface/00_skin.json, with the rest of the metrics - and this folder is read AFTER
   // that one, so a copy here silently wins whatever it says. A zero sat here for a while

@@ -7,7 +7,7 @@
     "description": "Classic keeps the multi-bar campaign interface. New shell enables the corner plate, ruled date journal, unified alert column and compact map bar live without restarting.",
     "values": ["classic", "new"],
     "labels": ["Classic", "New shell"],
-    "default": "classic"
+    "default": "new"
   },
   "ui_shell_next_hints": {
     "category": "interface",
@@ -22,8 +22,8 @@
     "order": 197,
     "kind": "toggle",
     "name": "Corner minimap in new shell",
-    "description": "Adds a compact minimap preview above the bottom-right map bar in the new campaign shell.",
-    "default": false
+    "description": "Adds a live political minimap preview above the bottom-right map bar in the new campaign shell.",
+    "default": true
   },
   "ui_shell_message_preset": {
     "category": "interface",
@@ -31,8 +31,8 @@
     "kind": "choice",
     "name": "Campaign message density",
     "description": "Controls which campaign events pause the clock, show a newspaper card, add an alert row, or stay in the news log.",
-    "values": ["calm", "paradox", "aoh"],
-    "labels": ["Calm", "Paradox (auto-pause)", "AoH (map feed)"],
+    "values": ["calm", "focus", "dispatch"],
+    "labels": ["Calm", "Focus (auto-pause)", "Dispatch (map feed)"],
     "default": "calm"
   }
 }

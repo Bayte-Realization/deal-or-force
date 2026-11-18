@@ -1,0 +1,31 @@
+{
+  "sprites": {
+    "shell_button_brass_cta_9s": "res://game/gfx/interface/shell/button_brass_cta_9s.png",
+    "shell_button_brass_cta_9s_2x": "res://game/gfx/interface/shell/button_brass_cta_9s@2x.png",
+    "shell_button_umber_9s": "res://game/gfx/interface/shell/button_umber_9s.png",
+    "shell_button_umber_9s_2x": "res://game/gfx/interface/shell/button_umber_9s@2x.png",
+    "shell_corner_joint": "res://game/gfx/interface/shell/corner_joint.png",
+    "shell_corner_joint_2x": "res://game/gfx/interface/shell/corner_joint@2x.png",
+    "shell_flag_pocket_9s": "res://game/gfx/interface/shell/flag_pocket_9s.png",
+    "shell_flag_pocket_9s_2x": "res://game/gfx/interface/shell/flag_pocket_9s@2x.png",
+    "shell_header_brass_9s": "res://game/gfx/interface/shell/header_brass_9s.png",
+    "shell_header_brass_9s_2x": "res://game/gfx/interface/shell/header_brass_9s@2x.png",
+    "shell_newspaper_card_9s": "res://game/gfx/interface/shell/newspaper_card_9s.png",
+    "shell_newspaper_card_9s_2x": "res://game/gfx/interface/shell/newspaper_card_9s@2x.png",
+    "shell_paper": "res://game/gfx/interface/shell/paper.jpg",
+    "shell_paper_tag_9s": "res://game/gfx/interface/shell/paper_tag_9s.png",
+    "shell_paper_tag_9s_2x": "res://game/gfx/interface/shell/paper_tag_9s@2x.png",
+    "shell_plate_brass_9s": "res://game/gfx/interface/shell/plate_brass_9s.png",
+    "shell_plate_brass_9s_2x": "res://game/gfx/interface/shell/plate_brass_9s@2x.png",
+    "shell_plate_umber_9s": "res://game/gfx/interface/shell/plate_umber_9s.png",
+    "shell_plate_umber_9s_2x": "res://game/gfx/interface/shell/plate_umber_9s@2x.png",
+    "shell_round_bezel": "res://game/gfx/interface/shell/round_bezel.png",
+    "shell_round_bezel_2x": "res://game/gfx/interface/shell/round_bezel@2x.png",
+    "shell_round_bezel_active": "res://game/gfx/interface/shell/round_bezel_active.png",
+    "shell_round_bezel_active_2x": "res://game/gfx/interface/shell/round_bezel_active@2x.png",
+    "shell_tab_folder_9s": "res://game/gfx/interface/shell/tab_folder_9s.png",
+    "shell_tab_folder_9s_2x": "res://game/gfx/interface/shell/tab_folder_9s@2x.png",
+    "shell_well_recessed_9s": "res://game/gfx/interface/shell/well_recessed_9s.png",
+    "shell_well_recessed_9s_2x": "res://game/gfx/interface/shell/well_recessed_9s@2x.png"
+  }
+}

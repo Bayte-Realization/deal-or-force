@@ -1153,7 +1153,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private float ViewDistance => _flatMap ? _flatZoom * 1.6f - 1.04f : _distance;
     internal float ShellViewDistance => ViewDistance;
     internal float ShellFlatZoom => _flatZoom;
+    internal bool IsFlatMap => _flatMap;
     internal IReadOnlySet<int> NewShellVisibleArmyIds { get; set; }
+    internal Vector2? ProjectMapPointToScreen(float latitude, float longitude) => BadgeScreenPoint(latitude, longitude);
+    internal (float Latitude, float Longitude, float SpanDegrees) CameraMinimapView =>
+        _flatMap
+            ? (Math.Clamp(_flatY * 18f, -85f, 85f), Math.Clamp(_flatX * 18f, -180f, 180f), Math.Clamp(_flatZoom * 14f, 12f, 180f))
+            : (Math.Clamp(-Mathf.RadToDeg(_pitch), -85f, 85f), Mathf.PosMod(Mathf.RadToDeg(_yaw), 360f) - 180f, Math.Clamp(_distance * 6.5f, 14f, 160f));
 
     private void ApplyNewShellArmyVisibility(IReadOnlySet<int> visibleArmies)
     {

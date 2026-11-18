@@ -30,7 +30,7 @@
     "material.plate.border": "#0e0c0a",
     "material.plate.engrave": "#3a332b",
     "material.well.fill": "#15130f",
-    "accent.primary": "#6da7e6",
+    "accent.primary": "#9B958C",
 
     // The five families an icon belongs to (campaign.icon_categories in gui/30_icon_roles.json).
     // Icons stay white masks; these are the tones the relief shader gives them.

@@ -91,6 +91,7 @@ public partial class DealOrForceGame : Control
             // The engine-neutral settings layer is told where the player's files live: one
             // folder under Documents, not the engine's folder in AppData.
             Simulation.PlayerSettings.UseDirectory(GamePaths.Settings);
+            Simulation.Shell.ShellSettingsMigration.ApplyOnce();
             await LoadingPhase("Loading interface and content catalogs", 10);
             // Resolve/migrate old saves only after the first loading frame is visible.
             GD.Print($"[dof] saves: {SaveRoot}");
@@ -154,7 +155,7 @@ public partial class DealOrForceGame : Control
             && !WatchingWorld;
         if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         // Choosing a country is choosing a shape and a colour: mines and factories are noise there.
-        if (_globe is not null) _globe.RegionIconsSuppressed = _pickerLayer is { Visible: true };
+        if (_globe is not null) _globe.RegionIconsSuppressed = _pickerLayer is { Visible: true } || IsNewShellSuppressingRegionIcons();
         // The lens and the roll move while a key is held, so the line that reports them
         // has to be written every frame rather than when something is pressed.
         if (_freeCameraMode) RefreshFreeCameraReadout();
@@ -483,10 +484,10 @@ public partial class DealOrForceGame : Control
             GetViewport().SetInputAsHandled();
             return;
         }
-        if (IsNewShellActive && key.Keycode == Key.Escape &&
-            (_shellRecentNewsPanel is { Visible: true } || _shellMapMorePopover is { Visible: true }))
+        if (IsNewShellActive && key.Keycode == Key.Escape && HasOpenShellTransientPopover)
         {
-            CloseShellTransientPopovers();
+            if (_shellEconomyWorkspace is { IsVisible: true }) CloseNewShellEconomyWorkspace();
+            else CloseShellTransientPopovers();
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -733,7 +734,15 @@ public partial class DealOrForceGame : Control
             _selectedArmies.Count == 0 && Letter(iconsKey) == Key.B && !iconsKey.CtrlPressed && !iconsKey.AltPressed &&
             !iconsKey.ShiftPressed && !iconsKey.MetaPressed)
         {
-            SettingsCatalog.Store("map_region_icons", !SettingsCatalog.Flag("map_region_icons"));
+            if (IsNewShellActive && _shellCtx is not null)
+            {
+                _shellCtx.ExplicitRegionIconsToggle = !_shellCtx.ExplicitRegionIconsToggle;
+                SettingsCatalog.Store("map_region_icons", _shellCtx.ExplicitRegionIconsToggle);
+            }
+            else
+            {
+                SettingsCatalog.Store("map_region_icons", !SettingsCatalog.Flag("map_region_icons"));
+            }
             ApplySetting("map_region_icons");
             RefreshMapVisualToggles();
             GetViewport().SetInputAsHandled();
@@ -1110,6 +1119,8 @@ public partial class DealOrForceGame : Control
         _menuLayer.Visible = false;
         if (_pickerLayer is not null) _pickerLayer.Visible = false;
         _hudLayer.Visible = true;
+        _shellEconomyWorkspace?.Close();
+        _shellWorkPanel?.Close();
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         _campaign.IsPaused = true;
         _pause.Text = Tr("▶");
@@ -1193,6 +1204,18 @@ public partial class DealOrForceGame : Control
         if (screen == "Support")
         {
             OpenSupportScreen();
+            UpdateScreenButtons();
+            return;
+        }
+        if (IsNewShellActive && screen == "Economy")
+        {
+            OpenNewShellEconomyWorkspace();
+            UpdateScreenButtons();
+            return;
+        }
+        if (IsNewShellActive && screen == "Nation")
+        {
+            OpenNewShellCountryDossier(_selectedNation ?? _campaign.Player);
             UpdateScreenButtons();
             return;
         }

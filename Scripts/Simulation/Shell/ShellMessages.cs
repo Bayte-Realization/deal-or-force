@@ -6,8 +6,8 @@ namespace DealOrForce.Simulation.Shell;
 public enum ShellMessagePreset
 {
     Calm,
-    Paradox,
-    Aoh
+    Focus,
+    Dispatch
 }
 
 public enum ShellMessageEvent
@@ -35,7 +35,7 @@ public sealed record ShellMessageDelivery(
 
 /// <summary>
 /// Presets and routing matrix for campaign message delivery:
-/// Calm ("Спокойно", default), Paradox (auto-pause discipline), and AoH (map flow).
+/// Calm ("Спокойно", default), Focus (auto-pause discipline), and Dispatch (map feed).
 /// </summary>
 public static class ShellMessages
 {
@@ -43,8 +43,8 @@ public static class ShellMessages
 
     public static ShellMessagePreset ParsePreset(string value) => (value ?? "").Trim().ToLowerInvariant() switch
     {
-        "paradox" => ShellMessagePreset.Paradox,
-        "aoh" => ShellMessagePreset.Aoh,
+        "focus" or "paradox" => ShellMessagePreset.Focus,
+        "dispatch" or "aoh" => ShellMessagePreset.Dispatch,
         _ => ShellMessagePreset.Calm
     };
 
@@ -57,8 +57,8 @@ public static class ShellMessages
         var speed5 = currentSpeed >= 5;
         return preset switch
         {
-            ShellMessagePreset.Paradox => ResolveParadox(evt, involvesPlayer, speed5),
-            ShellMessagePreset.Aoh => ResolveAoh(evt, involvesPlayer, speed5),
+            ShellMessagePreset.Focus => ResolveFocus(evt, involvesPlayer, speed5),
+            ShellMessagePreset.Dispatch => ResolveDispatch(evt, involvesPlayer, speed5),
             _ => ResolveCalm(evt, involvesPlayer, speed5)
         };
     }
@@ -81,7 +81,7 @@ public static class ShellMessages
         _ => new(false, false, false, true, false)
     };
 
-    private static ShellMessageDelivery ResolveParadox(ShellMessageEvent evt, bool involvesPlayer, bool speed5) => evt switch
+    private static ShellMessageDelivery ResolveFocus(ShellMessageEvent evt, bool involvesPlayer, bool speed5) => evt switch
     {
         ShellMessageEvent.NuclearStrike => new(true, true, true, true, true),
         ShellMessageEvent.UltimatumReceived when involvesPlayer => new(true, true, true, true, true),
@@ -98,7 +98,7 @@ public static class ShellMessages
         _ => new(false, false, false, true, false)
     };
 
-    private static ShellMessageDelivery ResolveAoh(ShellMessageEvent evt, bool involvesPlayer, bool speed5) => evt switch
+    private static ShellMessageDelivery ResolveDispatch(ShellMessageEvent evt, bool involvesPlayer, bool speed5) => evt switch
     {
         ShellMessageEvent.NuclearStrike => new(true, true, true, true, true),
         ShellMessageEvent.UltimatumReceived when involvesPlayer => new(speed5, true, true, true, speed5),

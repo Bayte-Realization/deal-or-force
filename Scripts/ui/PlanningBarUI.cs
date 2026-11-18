@@ -94,7 +94,11 @@ public partial class DealOrForceGame
         var show = _hudLayer is { Visible: true } && (mine.Length > 0 || _drawingKind is not null || _erasingPlans);
         if (_planningBar.Visible != show) _planningBar.Visible = show;
         if (!show) return;
-        if (IsInstanceValid(_armyBar))
+        if (IsNewShellActive)
+        {
+            SyncNewShellLeftAndBottomDock();
+        }
+        else if (IsInstanceValid(_armyBar))
         {
             var left = _armyBar.OffsetLeft;
             if (System.Math.Abs(_planningBar.OffsetLeft - left) > 0.5f)

@@ -214,11 +214,9 @@ public partial class DealOrForceGame
     private void RefreshDatePlate(Nation player)
     {
         if (_date is null || _campaign is null) return;
-        // The clock, whenever the campaign is running on something shorter than a day. At a
-        // whole-day step the hour is always midnight and printing it would be noise; below
-        // that it is the whole point, and it moves.
+        // Always show campaign hours (HH:00) alongside the date so hourly and sub-day progression is legible at a glance.
         var season = Simulation.WaterConditions.SeasonCaption(_campaign, player.CapitalLatitude);
-        var date = _campaign.Date.Display(_campaign.TickHours < 24);
+        var date = _campaign.Date.Display(withTime: true);
         _dateShort = date;
         _dateFull = season.Length == 0 ? date : date + " · " + Tr(season);
         _date.TooltipText = Ui.Tip((season.Length == 0

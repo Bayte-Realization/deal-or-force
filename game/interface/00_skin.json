@@ -1,124 +1,100 @@
 // Deal or Force - the interface skin: colour and metrics.
 //
-// Paradox keeps these apart, and so does this: `interface/` is what the game is made of -
-// the palette and the handful of numbers that set its density - while `gui/` is where
-// things sit. A mod that only wants a darker map recolours here and never opens gui/.
-//
-// Every file in this folder is read in name order and later files win, so a reskin ships
-// `50_my_palette.json` with the twenty tokens it cares about and inherits the rest.
-//
-// Tokens are named by role rather than by colour: text.caption, map.at_war,
-// button.primary_fill. Renaming a colour is then a change to one line here instead of a
-// search through the interface code.
+// Neutral architectural alabaster (#F2F0EC), neutral linen (#ECEAE4), brushed titanium (#9B958C),
+// and charcoal-graphite (#222120 -> #171615) — zero yellow/sepia cast and zero bright blue chrome.
+// Every step of the text ramp clears WCAG AA (>= 4.5:1) in strict descending luminance order.
 {
   "colors": {
-    "text.accent": "#efe4c8",
-    "text.accent_dim": "#c9c0a8",
+    "text.accent": "#F2F0EC",
+    "text.accent_dim": "#D6D3CC",
     "icon.commodity": "#d8cfb8",
-    "text.bright": "#eef4fb",
-    "text.body": "#e9eef5",
-    "text.body_soft": "#c8d3e0",
-    "text.muted": "#9dabbc",
-    // The two dimmest steps were raised after measuring, not after looking. Against the
-    // lightest panel background the interface actually renders (#21272E, sampled from a
-    // captured frame) `text.faint` sat at 3.84:1 and `text.hint` at 4.62:1, and these are the
-    // two steps the SMALLEST text uses - footnotes and captions, where a low ratio is hardest
-    // to read. WCAG AA asks 4.5:1 for normal text. They are now 4.57:1 and 5.06:1, which keeps
-    // the ramp in order (faint < hint < caption 5.44 < muted 6.44) and puts every step of it
-    // above the line. Nothing above them moved.
-    "text.hint": "#8797ac",
-    "text.faint": "#7f8fa4",
-    "text.caption": "#8e9daf",
+    "text.bright": "#F7F6F2",
+    "text.body": "#F2F0EC",
+    "text.body_soft": "#DFDDD7",
+    "text.muted": "#C4C1BA",
+    "text.caption": "#B2AEA6",
+    "text.hint": "#A39F97",
+    "text.faint": "#96928A",
     "state.positive": "#4fb477",
     "state.negative": "#c94f55",
-    "state.warning": "#e7b058",
+    "state.warning": "#d9a24c",
     "state.info": "#77c9e8",
-    // The fifth step of the severity ramp: calm (green), friction (blue), crisis (amber),
-    // clashes, war (red). Red, amber and green are taken by the other four, and the old value
-    // here was a soft salmon that sat next to `state.negative` - two reds a step apart, which on
-    // a ten-pixel tension bar is one colour. A violet is the one hue the ramp does not already
-    // use, so "clashes" and "war" can no longer be mistaken for each other.
     "state.critical": "#b473e0",
-    "surface.background": "#070b11",
-    "surface.panel_tint": "#d6dee8fa",
-    "surface.overlay": "#080e16f2",
-    "surface.inset": "#0b1118",
-    "surface.line": "#34404d",
-    "surface.line_faint": "#252f3ba8",
-    "surface.base": "#101720",
-    "surface.raised": "#18222d",
-    "surface.panel": "#111923",
-    // Compatibility paper token for reskins. The current parchment logo supplies its
-    // own opaque paper and worn edge; menus must not add a second rectangular plate.
-    "brand.paper": "#e9e4d9",
-    "button.text": "#edf2f7",
-    "button.text_hover": "#f5f7fa",
-    "button.text_pressed": "#cfe1f7",
-    "button.text_disabled": "#667586",
-    "button.fill": "#151e28",
-    "button.fill_hover": "#1b2733",
-    "button.fill_pressed": "#0d141c",
-    "button.fill_disabled": "#10161e",
-    "button.border": "#3b4856",
-    "button.border_hover": "#7c8997",
-    "button.border_pressed": "#5f97d6",
-    "button.border_disabled": "#29333d",
-    "button.primary_fill": "#1d4477",
-    "button.primary_fill_hover": "#27569a",
-    "button.primary_fill_pressed": "#16335a",
-    "button.primary_border": "#6da7e6",
-    // The light edge of what stands on the map: unit counters, fleet chips, building badges.
-    "map.counter_rim": "#c9c0a8",
+    "surface.background": "#0A0A09",
+    "surface.panel_tint": "#F2F0ECfa",
+    "surface.overlay": "#0A0A09d8",
+    "surface.inset": "#0F0E0E",
+    "surface.line": "#3D3B38",
+    "surface.line_faint": "#2E2C29b8",
+    "surface.base": "#191817",
+    "surface.raised": "#252422",
+    "surface.panel": "#1D1C1B",
+    "brand.paper": "#ECEAE4",
+    "button.text": "#F2F0EC",
+    "button.text_hover": "#FAF9F6",
+    "button.text_pressed": "#F2F0EC",
+    "button.text_disabled": "#6E6B65",
+    "button.fill": "#222120",
+    "button.fill_hover": "#2E2D2B",
+    "button.fill_pressed": "#111010",
+    "button.fill_disabled": "#161514",
+    "button.border": "#3D3B38",
+    "button.border_hover": "#7E7971",
+    "button.border_pressed": "#F2F0EC",
+    "button.border_disabled": "#262523",
+    "button.primary_fill": "#242321",
+    "button.primary_fill_hover": "#302E2C",
+    "button.primary_fill_pressed": "#141312",
+    "button.primary_border": "#9B958C",
+    "map.counter_rim": "#D6D3CC",
     "map.player": "#4fb477",
     "map.at_war": "#c94f55",
-    "map.allied": "#4e83c7",
-    "map.friendly": "#4ea6a0",
+    "map.allied": "#5fb3a6",
+    "map.friendly": "#6fb08f",
     "map.rival": "#c77943",
-    "map.neutral": "#49515d",
+    "map.neutral": "#55534F",
     "map.war_self": "#d3b34e",
     "map.war_attacker": "#b85443",
-    "map.war_defender": "#4b75aa",
-    "map.war_bystander": "#7b687f",
-    "map.value_low": "#173b56",
-    "map.value_mid": "#3aa6a0",
-    "map.value_high": "#f0c85b",
-    "map.terrain_low": "#3c294f",
-    "map.terrain_mid": "#477f73",
-    "map.terrain_high": "#d6c45d",
-    "globe.space": "#030914",
-    "globe.ambient": "#9eb7d4",
-    "globe.label": "#f2f5f7",
-    "globe.label_outline": "#111821",
-    "globe.label_minor": "#d9e4e9",
-    "globe.label_minor_outline": "#10161d",
-    "globe.label_province": "#e8f5f7",
-    "globe.label_province_outline": "#10202a",
-    "globe.selection": "#f4d66b",
-    "globe.city": "#eef2f4",
-    "globe.city_outline": "#0b1117",
-    "globe.city_capital": "#f7df92",
-    // The air at the planet's edge: drawn additively over the globe's own viewport and faded to
-    // nothing facing the camera, so it lights the limb and leaves the map's colours alone.
-    "globe.atmosphere": "#6fb0ee",
+    "map.war_defender": "#5b82ad",
+    "map.war_bystander": "#75716C",
+    "map.value_low": "#222120",
+    "map.value_mid": "#6f8d6b",
+    "map.value_high": "#d9a24c",
+    "map.terrain_low": "#33312E",
+    "map.terrain_mid": "#5c7a62",
+    "map.terrain_high": "#C8C3BA",
+    "globe.space": "#060709",
+    "globe.ambient": "#D4D6DA",
+    "globe.label": "#F5F6F8",
+    "globe.label_outline": "#111318",
+    "globe.label_minor": "#E2E4E8",
+    "globe.label_minor_outline": "#111318",
+    "globe.label_province": "#ECEEF2",
+    "globe.label_province_outline": "#111318",
+    "globe.selection": "#F2F0EC",
+    "globe.city": "#F2F3F5",
+    "globe.city_outline": "#0D0E11",
+    "globe.city_capital": "#F7F6F2",
+    "globe.atmosphere": "#8ca6bf",
     "military.routed": "#ef8c62",
-    "military.shaken": "#e7b058",
-    "military.planning": "#f3d36c",
-    "military.ready": "#d9e4e9",
+    "military.shaken": "#d9a24c",
+    "military.planning": "#D6D3CC",
+    "military.ready": "#F2F0EC",
     "military.battle": "#ffb34d",
     "military.battle_outline": "#631f1b",
-    "military.clash": "#fff1cf",
-    "military.clash_outline": "#291613",
-    "chart.tick": "#687a8c",
-    "chart.hover": "#9cc4f0cc",
-    "chart.row_hover": "#dfeeff",
-    "goods.industrial_materials": "#aeb8c2",
-    "goods.coal": "#5f6871",
-    "goods.oil": "#403a52",
+    "military.clash": "#F7F6F2",
+    "military.clash_outline": "#1F1D1B",
+    "chart.tick": "#7E7A73",
+    "chart.hover": "#F2F0ECcc",
+    "chart.row_hover": "#FAF9F6",
+    "goods.industrial_materials": "#b5b2ac",
+    "goods.coal": "#5e5c58",
+    "goods.oil": "#423e3c",
     "goods.iron_ore": "#a65f45",
-    "goods.rare_earths": "#4ec8b6",
-    "building.infrastructure": "#9eb0c2",
+    "goods.rare_earths": "#5fb3a6",
+    "building.infrastructure": "#a8a59e",
     "building.extraction": "#a65f45",
-    "building.power_plant": "#dfb14a",
+    "building.power_plant": "#d9a24c",
     "building.arms_industry": "#b9414b"
   },
   "metrics": {
@@ -126,21 +102,9 @@
     "button.border_width": 1,
     "button.focus_width": 2,
     "panel.texture_margin": 16,
-
-    // Whether the globe hangs in a photographed sky or against flat `shell.space`.
-    //
-    // The code reading this treats a missing value as nothing-behind-the-globe, which is the
-    // right default for a mod that has not thought about it and the wrong one for the game:
-    // the backdrop is art we ship, and without this line nothing ever asked for it. Set it
-    // to 0 for the flat colour.
     "shell.space_texture": 1,
     "news.feed_rows": 3,
-
-    // How bright the illustrations behind the main menu are (MenuIllustrations): 1 as painted,
-    // lower to sink them under the grid and the logo.
     "menu.backdrop_brightness": 0.42,
-    // How bright the planet behind the main menu is (MenuGlobe): 1 as baked, lower for a
-    // skin whose menu wants the world further back.
     "menu.globe_brightness": 1.0
   }
 }

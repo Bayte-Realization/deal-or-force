@@ -7,20 +7,8 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// What a left click on the map selects: a country, and the region and province under the
-/// cursor - shown the way the genre shows them, as two panels rather than one.
-///
-/// The click used to open the dossier: one tall column titled with the region, holding the
-/// country's diplomatic buttons, then the region's figures, then a button to go and talk to
-/// the country somewhere else. For a foreign region most of that column was a line saying the
-/// fog hid it. The two questions a click asks are different questions - who is this, and what
-/// is this place - so they get a panel each: the country on the left with its flag, what can
-/// be known about it and what can be done about it; the region and the province along the
-/// bottom, where the map above them stays in view. The country is outlined on the map, the
-/// same as a right click outlines it, so the panel and the map agree on what was picked.
-///
-/// The deep views stay where they were: the full diplomacy screen, and the region dossier
-/// with its population tables, one button away from each panel.
+/// What a left click on the map selects: a country on the left and its region/province along the
+/// bottom in the classic shell, or the unified Left Dossier in the new campaign shell.
 /// </summary>
 public partial class DealOrForceGame
 {
@@ -277,6 +265,7 @@ public partial class DealOrForceGame
         var foreign = pick.Nation != _campaign.Player;
         _globe?.HighlightNation(foreign ? pick.Nation.MapIndex : -1);
         _mapSelectionHighlights = foreign;
+        if (IsNewShellActive) { _mapSelectionOpen = false; OpenNewShellMapSelection(pick); return; }
 
         ShowMapSelectionContent();
     }
@@ -332,6 +321,7 @@ public partial class DealOrForceGame
     /// <summary>The selection is over: both panels, the outline and the map mode's subject.</summary>
     private void CloseMapSelection()
     {
+        if (IsNewShellActive) CloseNewShellWorkPanel(unpinnedOnly: false);
         HideMapSelection(true);
         ClearRegionSelection();
         _globe?.SetMapModeSubject(null);
