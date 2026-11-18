@@ -259,6 +259,7 @@ void fragment() {
 
     /// <summary>A detonation drawn at a point without anything happening in the world: for showing
     /// the effect, trailers and checking it after a change. Changes nothing in the campaign.</summary>
+    [DealOrForce.Simulation.ToolHook]
     public void PreviewNuclearBlast(float latitude, float longitude)
     {
         if (_pulseRoot is null || !IsInstanceValid(_pulseRoot)) return;

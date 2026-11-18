@@ -97,38 +97,15 @@ public static class MusicCatalog
     {
         Tracks.Clear();
         Director = new(); Revision++;
-        var root = GameDataLoader.DataFolder("music");
-        if (root is not null) LoadTree(root, "res://game/music", null);
+        DataCatalogLoader.LoadBaseTree("music", (directory, assetRoot) => LoadTree(directory, assetRoot, null));
         Changed?.Invoke();
     }
 
     /// <summary>Layer one package's `music/` tree over what is already loaded.</summary>
-    public static void LoadTree(string directory, string assetRoot, List<string> errors)
-    {
-        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
-
-        string[] files;
-        try
-        {
-            files = StructuredData.Files(directory, SearchOption.AllDirectories)
-                .OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-        }
-        catch (Exception exception)
-        {
-            errors?.Add($"music: {exception.Message}");
-            return;
-        }
-
-        foreach (var file in files)
-        {
-            var origin = $"music/{Path.GetFileName(file)}";
-            try { Merge(StructuredData.ReadJson(file), assetRoot, origin, errors); }
-            catch (Exception exception) { errors?.Add($"{origin}: {exception.Message}"); }
-        }
-
-        Changed?.Invoke();
-    }
+    public static void LoadTree(string directory, string assetRoot, List<string> errors) =>
+        DataCatalogLoader.LoadTree("music", directory, errors,
+            (json, origin) => Merge(json, assetRoot, origin, errors),
+            () => Changed?.Invoke());
 
     /// <summary>Merge one track list. A bare path is a track that plays anywhere, once as often as any other.</summary>
     public static void Merge(string json, string assetRoot, string origin, List<string> errors)

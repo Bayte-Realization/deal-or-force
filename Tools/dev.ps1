@@ -38,6 +38,7 @@ param(
     [string]$CaptureDirectory,
     [string]$Godot,
     [switch]$Doctor,
+    [switch]$Audit,
     [switch]$All
 )
 
@@ -202,12 +203,27 @@ function Invoke-Doctor {
         $count = (Get-ChildItem -LiteralPath $saves -Filter *.bdfsave -File | Measure-Object).Count
         Write-Host ("  saves           {0} campaigns in {1}" -f $count, $saves)
     }
+    $baselinePath = Join-Path $project 'Tools\CodeAudit\baseline.json'
+    if (Test-Path -LiteralPath $baselinePath) {
+        try {
+            $b = Get-Content -LiteralPath $baselinePath -Raw | ConvertFrom-Json
+            Write-Host ("  code audit      maxFile={0} maxMethod={1} maxCC={2} simStatic={3} dead={4} (run -Audit to verify)" -f $b.maxFileLines, $b.maxMethodLines, $b.maxCyclomatic, $b.simulationStaticMutable, $b.deadCandidates)
+        } catch { }
+    }
     Write-Host ''
 }
 
+function Invoke-CodeAudit {
+    Write-Host '== code audit (--ratchet) ==' -ForegroundColor Cyan
+    $auditProj = Join-Path $project 'Tools\CodeAudit\CodeAudit.csproj'
+    if (-not (Test-Path -LiteralPath $auditProj)) { throw "Missing $auditProj" }
+    dotnet run -c Release --project $auditProj -- --ratchet $project
+    if ($LASTEXITCODE -ne 0) { throw "CodeAudit --ratchet failed (exit $LASTEXITCODE)" }
+}
+
 if ($All) { $Build = $true; $Test = $true; $Game = $true }
-if (-not ($Build -or $Test -or $Import -or $Game -or $Doctor)) {
-    Write-Host 'Nothing asked for. Use -Build, -Test, -Import, -Game, -Doctor or -All.' -ForegroundColor Yellow
+if (-not ($Build -or $Test -or $Import -or $Game -or $Doctor -or $Audit)) {
+    Write-Host 'Nothing asked for. Use -Build, -Test, -Import, -Game, -Doctor, -Audit or -All.' -ForegroundColor Yellow
     exit 0
 }
 if ($Doctor) { Invoke-Doctor }
@@ -215,4 +231,5 @@ if ($Build) { Invoke-Build }
 if ($Import) { Invoke-Import }
 if ($Test) { Invoke-Tests }
 if ($Game) { Invoke-Game }
+if ($Audit) { Invoke-CodeAudit }
 Write-Host 'Done.' -ForegroundColor Cyan

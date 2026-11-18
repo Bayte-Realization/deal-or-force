@@ -154,9 +154,7 @@ public static class GovernmentCatalog
     {
         Definitions.Clear();
         ById.Clear();
-        foreach (var document in GameDataLoader.DataDocuments("common", "governments"))
-            using (document)
-                Merge(document.RootElement, errors);
+        DataCatalogLoader.LoadCommon("governments", root => Merge(root, errors));
         Sort();
         if (Definitions.Count == 0)
             errors?.Add("common/governments describes no form of government, so no country has one.");
@@ -164,42 +162,18 @@ public static class GovernmentCatalog
 
     public static void Merge(string json, List<string> errors = null)
     {
-        using var document = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
-        Merge(document.RootElement, errors);
+        DataCatalogLoader.ParseAndMerge(json, root => Merge(root, errors));
         Sort();
     }
 
-    public static void Merge(JsonElement root, List<string> errors = null)
-    {
-        if (root.ValueKind != JsonValueKind.Object) return;
-        foreach (var entry in root.EnumerateObject())
-        {
-            if (entry.Value.ValueKind != JsonValueKind.Object) continue;
-            var definition = Read(entry.Name, entry.Value, errors);
-            if (definition is null) continue;
-            Definitions.RemoveAll(existing =>
-                string.Equals(existing.Id, definition.Id, StringComparison.OrdinalIgnoreCase));
-            Definitions.Add(definition);
-        }
-    }
+    public static void Merge(JsonElement root, List<string> errors = null) =>
+        DataCatalogLoader.MergeNamedDefinitions(root, Definitions, (id, element) => Read(id, element, errors), d => d.Id);
 
-    public static void Validate(JsonElement root, List<string> problems)
-    {
-        if (root.ValueKind != JsonValueKind.Object) return;
-        foreach (var entry in root.EnumerateObject())
-            if (entry.Value.ValueKind == JsonValueKind.Object)
-                Read(entry.Name, entry.Value, problems);
-    }
+    public static void Validate(JsonElement root, List<string> problems) =>
+        DataCatalogLoader.ValidateNamedDefinitions(root, (id, element) => Read(id, element, problems));
 
-    private static void Sort()
-    {
-        Definitions.Sort((left, right) =>
-            left.Order != right.Order
-                ? left.Order.CompareTo(right.Order)
-                : string.CompareOrdinal(left.Id, right.Id));
-        ById.Clear();
-        foreach (var definition in Definitions) ById[definition.Id] = definition;
-    }
+    private static void Sort() =>
+        DataCatalogLoader.RebuildSortedById(Definitions, ById, d => d.Order, d => d.Id);
 
     private static GovernmentDefinition Read(string id, JsonElement element, List<string> errors)
     {
@@ -222,24 +196,10 @@ public static class GovernmentCatalog
                     definition.Modifiers = NationalModifiers.Read(field.Value, $"government `{id}`", errors);
                     break;
                 case "effects" when field.Value.ValueKind == JsonValueKind.Object:
-                    foreach (var effect in field.Value.EnumerateObject())
-                    {
-                        if (effect.Name.StartsWith("//", StringComparison.Ordinal)) continue;
-                        var value = Number(effect.Value, 0f);
-                        switch (effect.Name.ToLowerInvariant())
-                        {
-                            case "growth": definition.Growth = value; break;
-                            case "stability": definition.Stability = value; break;
-                            case "war_support": definition.WarSupport = value; break;
-                            case "radicalism": definition.Radicalism = value; break;
-                            case "living": definition.Living = value; break;
-                            case "literacy": definition.Literacy = value; break;
-                            default:
-                                errors?.Add($"government `{id}`: `{effect.Name}` is not an effect. Use " +
-                                            "growth, stability, war_support, radicalism, living or literacy.");
-                                break;
-                        }
-                    }
+                    ReadEffects(field.Value, $"government `{id}`", errors,
+                        v => definition.Growth = v, v => definition.Stability = v,
+                        v => definition.WarSupport = v, v => definition.Radicalism = v,
+                        v => definition.Living = v, v => definition.Literacy = v);
                     break;
                 default:
                     errors?.Add($"government `{id}`: `{field.Name}` is not a field a government has.");
@@ -247,6 +207,37 @@ public static class GovernmentCatalog
             }
         }
         return definition;
+    }
+
+    internal static void ReadEffects(
+        JsonElement effects,
+        string scope,
+        List<string> errors,
+        Action<float> growth,
+        Action<float> stability,
+        Action<float> warSupport,
+        Action<float> radicalism,
+        Action<float> living,
+        Action<float> literacy)
+    {
+        foreach (var effect in effects.EnumerateObject())
+        {
+            if (effect.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+            var value = Number(effect.Value, 0f);
+            switch (effect.Name.ToLowerInvariant())
+            {
+                case "growth": growth(value); break;
+                case "stability": stability(value); break;
+                case "war_support": warSupport(value); break;
+                case "radicalism": radicalism(value); break;
+                case "living": living(value); break;
+                case "literacy": literacy(value); break;
+                default:
+                    errors?.Add($"{scope}: `{effect.Name}` is not an effect. Use " +
+                                "growth, stability, war_support, radicalism, living or literacy.");
+                    break;
+            }
+        }
     }
 
     internal static string Text(JsonElement element, string fallback) =>
@@ -288,9 +279,8 @@ public static class IdeologyCatalog
     public static void ResetCatalog(List<string> errors = null)
     {
         Definitions.Clear();
-        foreach (var document in GameDataLoader.DataDocuments("common", "ideologies"))
-            using (document)
-                Merge(document.RootElement, errors);
+        ById.Clear();
+        DataCatalogLoader.LoadCommon("ideologies", root => Merge(root, errors));
         Sort();
         if (Definitions.Count == 0)
             errors?.Add("common/ideologies describes no ideology, so no government believes anything.");
@@ -298,42 +288,18 @@ public static class IdeologyCatalog
 
     public static void Merge(string json, List<string> errors = null)
     {
-        using var document = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
-        Merge(document.RootElement, errors);
+        DataCatalogLoader.ParseAndMerge(json, root => Merge(root, errors));
         Sort();
     }
 
-    public static void Merge(JsonElement root, List<string> errors = null)
-    {
-        if (root.ValueKind != JsonValueKind.Object) return;
-        foreach (var entry in root.EnumerateObject())
-        {
-            if (entry.Value.ValueKind != JsonValueKind.Object) continue;
-            var definition = Read(entry.Name, entry.Value, errors);
-            if (definition is null) continue;
-            Definitions.RemoveAll(existing =>
-                string.Equals(existing.Id, definition.Id, StringComparison.OrdinalIgnoreCase));
-            Definitions.Add(definition);
-        }
-    }
+    public static void Merge(JsonElement root, List<string> errors = null) =>
+        DataCatalogLoader.MergeNamedDefinitions(root, Definitions, (id, element) => Read(id, element, errors), d => d.Id);
 
-    public static void Validate(JsonElement root, List<string> problems)
-    {
-        if (root.ValueKind != JsonValueKind.Object) return;
-        foreach (var entry in root.EnumerateObject())
-            if (entry.Value.ValueKind == JsonValueKind.Object)
-                Read(entry.Name, entry.Value, problems);
-    }
+    public static void Validate(JsonElement root, List<string> problems) =>
+        DataCatalogLoader.ValidateNamedDefinitions(root, (id, element) => Read(id, element, problems));
 
-    private static void Sort()
-    {
-        Definitions.Sort((left, right) =>
-            left.Order != right.Order
-                ? left.Order.CompareTo(right.Order)
-                : string.CompareOrdinal(left.Id, right.Id));
-        ById.Clear();
-        foreach (var definition in Definitions) ById[definition.Id] = definition;
-    }
+    private static void Sort() =>
+        DataCatalogLoader.RebuildSortedById(Definitions, ById, d => d.Order, d => d.Id);
 
     private static IdeologyDefinition Read(string id, JsonElement element, List<string> errors)
     {
@@ -369,24 +335,10 @@ public static class IdeologyCatalog
                             definition.PrefersGovernments.Add(item.GetString() ?? "");
                     break;
                 case "effects" when field.Value.ValueKind == JsonValueKind.Object:
-                    foreach (var effect in field.Value.EnumerateObject())
-                    {
-                        if (effect.Name.StartsWith("//", StringComparison.Ordinal)) continue;
-                        var value = GovernmentCatalog.Number(effect.Value, 0f);
-                        switch (effect.Name.ToLowerInvariant())
-                        {
-                            case "growth": definition.Growth = value; break;
-                            case "stability": definition.Stability = value; break;
-                            case "war_support": definition.WarSupport = value; break;
-                            case "radicalism": definition.Radicalism = value; break;
-                            case "living": definition.Living = value; break;
-                            case "literacy": definition.Literacy = value; break;
-                            default:
-                                errors?.Add($"ideology `{id}`: `{effect.Name}` is not an effect. Use " +
-                                            "growth, stability, war_support, radicalism, living or literacy.");
-                                break;
-                        }
-                    }
+                    GovernmentCatalog.ReadEffects(field.Value, $"ideology `{id}`", errors,
+                        v => definition.Growth = v, v => definition.Stability = v,
+                        v => definition.WarSupport = v, v => definition.Radicalism = v,
+                        v => definition.Living = v, v => definition.Literacy = v);
                     break;
                 default:
                     errors?.Add($"ideology `{id}`: `{field.Name}` is not a field an ideology has.");
