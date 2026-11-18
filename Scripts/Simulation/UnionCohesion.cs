@@ -24,6 +24,12 @@ public sealed partial class Defines
     /// <summary>What one people beyond the first costs a union at the moment it is proclaimed.</summary>
     public float UnionCohesionPerPeople { get; set; } = 0.12f;
 
+    /// <summary>
+    /// The share of that price a people of the founder's own family of peoples pays (cultures "group"):
+    /// six South Slav peoples are not six strangers. 1 makes every people cost the same again.
+    /// </summary>
+    public float UnionCohesionKindredShare { get; set; } = 0.5f;
+
     /// <summary>Below this a proclaimed state starts coming apart, region by region.</summary>
     public float UnionCohesionFloor { get; set; } = 0.3f;
 
@@ -75,27 +81,44 @@ public static class UnionCohesion
 
     /// <summary>
     /// The cohesion a state is proclaimed with. One people is one country and starts whole; every
-    /// people after that is a promise to be kept.
+    /// people after that is a promise to be kept - and a promise among kin is half as hard to keep.
+    ///
+    /// It used to count peoples (the largest of what the state declared, how many countries the claim
+    /// named, and its own) and charge each the same, so a Yugoslavia of six South Slav peoples began at
+    /// 0.40, under the line where a union's trouble starts, and pulled itself apart within a year in
+    /// every measured run. Korea mends and a two-Congo union has to be worked at was the intention;
+    /// kinship simply never reached the formula. Now each distinct people - what the state declared and
+    /// the peoples of every country the claim requires - beyond the founder's own costs the full price,
+    /// or UnionCohesionKindredShare of it when it is of the founder's family of peoples.
     /// </summary>
     public static float Start(Campaign campaign, Nation nation, FormableNation definition)
     {
-        // How many peoples it welded together: what the state declared, what the claim itself named,
-        // and at least its own. A union of two countries costs one people's worth of penalty.
-        var peoples = Math.Max(1, Math.Max(nation.FoundedCultures.Count, definition.RequiredTags.Length));
-        peoples = Math.Max(peoples, Peoples(nation));
-        var penalty = Math.Max(0, peoples - 1) * campaign.Defines.UnionCohesionPerPeople;
+        var d = campaign.Defines;
+        var founder = DemographyCatalog.PrimaryCulture(nation.Tag);
+        var founderGroup = DemographyCatalog.Culture(founder)?.Group ?? "";
+        var peoples = new List<string>();
+        void Add(string culture)
+        {
+            if (string.IsNullOrWhiteSpace(culture)) return;
+            foreach (var known in peoples)
+                if (string.Equals(known, culture, StringComparison.OrdinalIgnoreCase)) return;
+            peoples.Add(culture);
+        }
+        Add(founder);
+        foreach (var culture in nation.FoundedCultures) Add(culture);
+        foreach (var tag in definition?.RequiredTags ?? Array.Empty<string>())
+            foreach (var culture in DemographyCatalog.PrimaryCultures(tag)) Add(culture);
+        var penalty = 0f;
+        for (var index = 1; index < peoples.Count; index++)
+        {
+            var group = DemographyCatalog.Culture(peoples[index])?.Group ?? "";
+            var kindred = founderGroup.Length > 0 && string.Equals(group, founderGroup, StringComparison.OrdinalIgnoreCase);
+            penalty += d.UnionCohesionPerPeople * (kindred ? M.Clamp01(d.UnionCohesionKindredShare) : 1f);
+        }
         // A state brought back is not a new state: the ground was one country within living memory,
         // and its own declaration says so (Restores). It pays half of the penalty and no more.
         if (definition is { Restores.Length: > 0 }) penalty *= 0.5f;
         return Math.Clamp(1f - penalty, 0.35f, 1f);
-    }
-
-    /// <summary>How many peoples the state's ground speaks: its declared ones, or its own.</summary>
-    private static int Peoples(Nation nation)
-    {
-        var declared = nation.FoundedCultures.Count;
-        if (declared == 0) declared = DemographyCatalog.PrimaryCultures(nation.Tag).Count;
-        return Math.Max(1, declared);
     }
 
     /// <summary>
@@ -219,6 +242,10 @@ public static class UnionCohesion
         // Not the capital - a "Republic of Moscow" leaving Russia is not a union coming apart -
         // and not a region just taken back from a crushed breakaway (SecessionCore.CrushedPressure).
         if (state.MapIndex == nation.CapitalStateMapIndex || state.SecessionPressure < 0f) return false;
+        // Nor ground under the two years of protection a reconquest earns (RevoltRecovery), which
+        // every other road out of a state already respects: the crushed pressure above thaws, and a
+        // union in trouble was the one door left open, through which crushed regions walked out again.
+        if (RevoltRecovery.DaysLeft(campaign, nation, state) > 0) return false;
         // Nor ground whose people have a living state of their own: Ukrainians on land Russia
         // took are Ukraine's lost land, not a "Ukrainian Republic" breaking from the union.
         var people = EconomySystem.DominantCulture(state).Culture;

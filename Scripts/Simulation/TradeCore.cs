@@ -127,6 +127,14 @@ public static class TradeNetwork
         // The share of its weighted shortfall each buyer may take when the pool is short
         // (PrepCommodity); infinity when there is enough for everyone.
         internal float RationPerWeight = float.PositiveInfinity;
+        // What each buyer was handed this week under a supply guarantee before the queue formed
+        // (PrepCommodity): it is no longer short of that, so the queue and the ration see less.
+        internal readonly Dictionary<int, float> GuaranteedTake = new();
+        // What each guarantor already gave under its promises of this good this week, so two
+        // guarantees on one seller cannot hand out the same spare twice.
+        internal readonly Dictionary<int, float> GuaranteeUsed = new();
+        // Each guarantee's week, folded into its terms on the calling thread (MergeCommodity).
+        internal readonly List<(TradeTerms Terms, float Delivered, bool Counted, bool GuarantorShort)> Deliveries = new();
     }
 
     /// <summary>
@@ -179,6 +187,11 @@ public static class TradeNetwork
         // Each country's customs unions this week: the organisations it belongs to that have
         // chosen a common market (doctrine "common_market").
         internal readonly Dictionary<int, List<int>> CustomsUnions = new();
+        // The terms of every trade agreement in force this week, keyed (lower id << 32) | higher id,
+        // read once at the start of the week so a good's worker never opens a relation per pair.
+        internal readonly Dictionary<long, TradeTerms> PairTerms = new(PairKeyComparer.Instance);
+        // The supply guarantees in force, by the good they promise, in relation order.
+        internal readonly Dictionary<Commodity, List<(TradeTerms Terms, int GuarantorId, int ReceiverId)>> Guarantees = new();
     }
 
     private static readonly TradeRoute[] NoRoutes = Array.Empty<TradeRoute>();
@@ -300,6 +313,7 @@ public static class TradeNetwork
             {
                 quote.Imports = 0f;
                 quote.Exports = 0f;
+                quote.Relieved = 0f;
             }
         }
 
@@ -322,6 +336,7 @@ public static class TradeNetwork
                     unions.Add(organization.Id);
                 }
             }
+            ReadAgreements(campaign, work);
         }
         yield return 0;
 
@@ -499,6 +514,11 @@ public static class TradeNetwork
             buf.PoolCapacityAtStart = 0f;
             foreach (var capacity in buf.SellerCapacity) buf.PoolCapacityAtStart += capacity;
         }
+        buf.GuaranteedTake.Clear();
+        buf.GuaranteeUsed.Clear();
+        buf.Deliveries.Clear();
+        if (work.Guarantees.TryGetValue(commodity, out var lanes) && lanes.Count > 0)
+            RunGuarantees(campaign, commodity, work, buf, lanes);
         if (buf.SellerIds.Count == 0)
         {
             GreyMarketOnly(campaign, commodity);
@@ -528,6 +548,8 @@ public static class TradeNetwork
                             // A country that has capped its imports of this good goes short
                             // on purpose rather than depend on anybody for the rest.
                             M.Clamp01(TradeDesk.ForGood(nation, commodity, TradeDesk.ImportCeiling));
+            // What a guarantee already brought is not sought again, and does not weigh in the ration.
+            if (buf.GuaranteedTake.Count > 0) shortfall -= buf.GuaranteedTake.GetValueOrDefault(nation.Id);
             if (shortfall <= 0.0001f) continue;
             buf.BuyerIds[buyers] = nation.Id;
             // Ordered by need, weighted by how badly the country says it wants this good.
@@ -566,6 +588,7 @@ public static class TradeNetwork
                           TradePolicyRules.ImportAccess(buyer.TradePolicy) *
                           Ceiling(campaign, buyer, work) *
                           M.Clamp01(TradeDesk.ForGood(buyer, commodity, TradeDesk.ImportCeiling));
+            if (buf.GuaranteedTake.Count > 0) deficit -= buf.GuaranteedTake.GetValueOrDefault(buyer.Id);
             if (deficit <= 0.0001f) continue;
             var trace = BuyerTraceSink is null ? null : new BuyerTrace
             {
@@ -645,7 +668,7 @@ public static class TradeNetwork
                 buf.SellerCapacity[seat] -= take;
                 deficit -= take;
                 if (trace is not null) trace.Bought += take;
-                Record(buf, seller, buyer, commodity, take);
+                Record(buf, seller, buyer, commodity, take, CutFor(work, buyer.Id, seller.Id, commodity));
             }
 
             // Whatever no friend would sell. It arrives anyway, thinly and dearly, because
@@ -695,16 +718,31 @@ public static class TradeNetwork
             else work.RouteRecords[work.UsedRouteRecords] = route;
             work.UsedRouteRecords++;
         }
+        // A guarantee's week: how much of what it owed arrived, folded into a slow average so one
+        // bad week is a dent and eight are a broken promise (AgreementSystem reads ShortWeeks).
+        var freeBelow = TradeTermsCatalog.Spec.FreeExitBelow;
+        foreach (var (terms, delivered, counted, guarantorShort) in buf.Deliveries)
+        {
+            terms.GuarantorShortWeeks = guarantorShort ? Math.Min(10000, terms.GuarantorShortWeeks + 1) : 0;
+            if (!counted) continue;
+            terms.Delivered = 0.75f * terms.Delivered + 0.25f * delivered;
+            if (delivered < freeBelow) terms.ShortWeeks = Math.Min(10000, terms.ShortWeeks + 1);
+            else if (delivered >= 0.9f) terms.ShortWeeks = 0;
+        }
+        buf.Deliveries.Clear();
     }
 
     /// <summary>The good's own cells are written as the routes are computed: a quote cell is
     /// keyed by country AND good, so no two workers ever touch one.</summary>
-    private static void Record(CommodityBuffer buf, Nation seller, Nation buyer, Commodity commodity, float volume)
+    private static void Record(CommodityBuffer buf, Nation seller, Nation buyer, Commodity commodity, float volume, float cut)
     {
         var sellerQuote = seller.Market[commodity];
         var buyerQuote = buyer.Market[commodity];
         sellerQuote.Exports += volume;
         buyerQuote.Imports += volume;
+        // The part of this import that came in under a tariff cut: the importer neither marks it
+        // up nor collects duty on it (MarketSystem), in proportion to the cut.
+        if (cut > 0f) buyerQuote.Relieved += volume * cut;
         var slot = buf.Used;
         TradeRoute route;
         if (slot < buf.Pool.Count) route = buf.Pool[slot];
@@ -786,6 +824,8 @@ public static class TradeNetwork
         {
             score = PartnerAffinity(campaign, buyer, seller, work);
         }
+        if (score > 0f && work.PairTerms.Count > 0)
+            score *= AgreementFactor(campaign, work, buyer.Id, seller.Id, commodity);
         return score * TradePolicyRules.ImportAccess(buyer.TradePolicy) *
                TradePolicyRules.ExportAccess(seller.TradePolicy) *
                PartnerPreferenceBetween(buyer, seller, commodity, work);
@@ -807,7 +847,8 @@ public static class TradeNetwork
         if (relation is not null)
         {
             score *= M.Clamp(1f + relation.Opinion / 160f, 0.35f, 1.65f);
-            if (relation.TradeAgreement) score *= 1.75f;
+            // A trade agreement is no longer one multiplier on the pair: it is K per good
+            // (AgreementFactor), because the cut it gives is a cut on some goods and not others.
             if (relation.Stance == DiplomaticStance.Allied) score *= 1.30f;
             else if (relation.Stance == DiplomaticStance.Rival) score *= 0.68f;
         }
@@ -837,6 +878,108 @@ public static class TradeNetwork
         }
 
         return score;
+    }
+
+    private static long PairKey(int x, int y) => x < y ? ((long)x << 32) | (uint)y : ((long)y << 32) | (uint)x;
+
+    /// <summary>
+    /// Every trade agreement's terms and every supply guarantee, read off the relations once a week.
+    /// A flag without terms (a save from before them, until AgreementSystem gives it some) reads as
+    /// the old terms - TradeTerms.Of - and the market writes nothing back onto the relation.
+    /// </summary>
+    private static void ReadAgreements(Campaign campaign, TradeWorkspace work)
+    {
+        work.PairTerms.Clear();
+        foreach (var list in work.Guarantees.Values) list.Clear();
+        foreach (var relation in campaign.Relations.Values)
+        {
+            if (!relation.TradeAgreement) continue;
+            var terms = TradeTerms.Of(relation);
+            work.PairTerms[PairKey(relation.A, relation.B)] = terms;
+            if (!terms.TryGuaranteeGood(out var good)) continue;
+            var receiver = terms.GuarantorId == relation.A ? relation.B : relation.A;
+            if (!work.Guarantees.TryGetValue(good, out var lanes)) work.Guarantees[good] = lanes = new();
+            lanes.Add((terms, terms.GuarantorId, receiver));
+        }
+    }
+
+    /// <summary>
+    /// K for one buyer, one seller and one good: 1 with no agreement, and 1 + the partner term +
+    /// the relief term x the buyer's own cut on this good otherwise. The old agreement (half off
+    /// everything) is 1.75, the multiplier the flag gave before it had terms.
+    /// </summary>
+    private static float AgreementFactor(Campaign campaign, TradeWorkspace work, int buyerId, int sellerId, Commodity good)
+    {
+        if (!work.PairTerms.TryGetValue(PairKey(buyerId, sellerId), out var terms)) return 1f;
+        var d = campaign.Defines;
+        return 1f + d.TradeAgreementPartnerAffinity + d.TradeAgreementReliefAffinity * terms.CutFor(buyerId, sellerId, good);
+    }
+
+    /// <summary>K for a pair read straight off its relation, for a test or a screen between market weeks.</summary>
+    public static float AgreementFactor(Campaign campaign, DiplomaticRelation relation, int buyerId, Commodity good)
+    {
+        var terms = TradeTerms.Of(relation);
+        if (terms is null) return 1f;
+        return 1f + campaign.Defines.TradeAgreementPartnerAffinity +
+               campaign.Defines.TradeAgreementReliefAffinity * terms.CutFor(buyerId, relation.Other(buyerId), good);
+    }
+
+    private static float CutFor(TradeWorkspace work, int buyerId, int sellerId, Commodity good) =>
+        work.PairTerms.Count > 0 && work.PairTerms.TryGetValue(PairKey(buyerId, sellerId), out var terms)
+            ? terms.CutFor(buyerId, sellerId, good) : 0f;
+
+    /// <summary>
+    /// The supply guarantees of one good, served before the queue forms. The guarantor hands its
+    /// partner up to the promised share of its spare - the same capacity it offers everybody else,
+    /// so its export reserve and its own shortages still hold - but never more than the partner
+    /// lacks, and never at a price either of them has refused. What it hands over is gone from the
+    /// pool before anybody else is served, which is the whole of what "first" means. War, an
+    /// embargo or a ban on the good stops the lane as it stops all trade, and such a week is not
+    /// counted against the promise; nor is a week in which nothing was owed.
+    /// </summary>
+    private static void RunGuarantees(Campaign campaign, Commodity commodity, TradeWorkspace work, CommodityBuffer buf,
+        List<(TradeTerms Terms, int GuarantorId, int ReceiverId)> lanes)
+    {
+        foreach (var (terms, guarantorId, receiverId) in lanes)
+        {
+            var seller = campaign.NationById(guarantorId);
+            var buyer = campaign.NationById(receiverId);
+            if (seller is null || buyer is null) continue;
+            if (!seller.Market.TryGetValue(commodity, out var sellerQuote) ||
+                !buyer.Market.TryGetValue(commodity, out var buyerQuote)) continue;
+            var relation = CampaignDiplomacy.Peek(campaign, guarantorId, receiverId);
+            if (relation is null || relation.Stance == DiplomaticStance.AtWar || relation.EmbargoByA || relation.EmbargoByB ||
+                TradeDesk.Forbidden(buyer, seller, commodity)) continue;
+            var guarantorShort = sellerQuote.Production < sellerQuote.Demand;
+            var capacity = MathF.Max(0f, (sellerQuote.Production - sellerQuote.Demand) *
+                           TradePolicyRules.ExportAccess(seller.TradePolicy) *
+                           (1f - M.Clamp01(TradeDesk.ForGood(seller, commodity, TradeDesk.ExportReserve))));
+            var promised = M.Clamp01(terms.GuaranteeShare) * capacity;
+            var need = (buyerQuote.Demand - buyerQuote.Production) *
+                       TradePolicyRules.ImportAccess(buyer.TradePolicy) *
+                       Ceiling(campaign, buyer, work) *
+                       M.Clamp01(TradeDesk.ForGood(buyer, commodity, TradeDesk.ImportCeiling)) -
+                       buf.GuaranteedTake.GetValueOrDefault(receiverId);
+            var owed = MathF.Min(promised, need);
+            if (!float.IsFinite(owed) || owed <= 0.0001f)
+            {
+                buf.Deliveries.Add((terms, 1f, false, guarantorShort));
+                continue;
+            }
+            var left = capacity - buf.GuaranteeUsed.GetValueOrDefault(guarantorId);
+            var take = MathF.Max(0f, MathF.Min(owed, left));
+            if (take > 0.0001f && !TradeDesk.PriceIsAcceptable(buyer, seller, commodity, sellerQuote.Price)) take = 0f;
+            if (take > 0.0001f)
+            {
+                buf.GuaranteeUsed[guarantorId] = buf.GuaranteeUsed.GetValueOrDefault(guarantorId) + take;
+                buf.GuaranteedTake[receiverId] = buf.GuaranteedTake.GetValueOrDefault(receiverId) + take;
+                var seat = buf.SellerIds.IndexOf(guarantorId);
+                if (seat >= 0) buf.SellerCapacity[seat] = MathF.Max(0f, buf.SellerCapacity[seat] - take);
+                Record(buf, seller, buyer, commodity, take, CutFor(work, receiverId, guarantorId, commodity));
+            }
+            else take = 0f;
+            buf.Deliveries.Add((terms, M.Clamp01(take / owed), true, guarantorShort));
+        }
     }
 
     /// <summary>

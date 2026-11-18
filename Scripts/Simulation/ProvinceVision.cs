@@ -38,6 +38,7 @@ public static partial class CampaignIntel
         public int[] HeldStart = Array.Empty<int>(), HeldNext = Array.Empty<int>(), HeldProvinces = Array.Empty<int>();
 
         public bool HasActorIndex;
+        public bool HasActiveBattles;
         public int ActorStamp;
         public long ActorHour;
         public float ActorLandingRange;
@@ -192,7 +193,7 @@ public static partial class CampaignIntel
     private static bool EnsureActorIndex(Campaign c, Cache cache, int stamp, ProvinceTopology map, float landingRange)
     {
         if (cache.HasActorIndex && cache.ActorStamp == stamp && cache.ActorHour == c.ElapsedHours && cache.ActorLandingRange == landingRange)
-            return cache.ArmyProvinceById.Count > 0;
+            return cache.HasActiveBattles;
 
         foreach (var list in cache.ArmiesByNation.Values) list.Clear();
         foreach (var list in cache.BattlesByNation.Values) list.Clear();
@@ -240,6 +241,7 @@ public static partial class CampaignIntel
         }
 
         cache.HasActorIndex = true;
+        cache.HasActiveBattles = hasBattles;
         cache.ActorStamp = stamp;
         cache.ActorHour = c.ElapsedHours;
         cache.ActorLandingRange = landingRange;

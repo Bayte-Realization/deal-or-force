@@ -186,7 +186,10 @@ public static class Consolidation
             }
             if (!relation.TradeAgreement)
             {
-                new ProposeAgreementCommand { IssuerId = founder.Id, TargetId = partner.Id, Kind = AgreementKind.TradeAgreement }.Apply(c);
+                DealTally.Count("trade_agreement.asked.union_courting");
+                // Courting toward a union is free trade, the one kind of agreement a union is made of.
+            new ProposeAgreementCommand { IssuerId = founder.Id, TargetId = partner.Id, Kind = AgreementKind.TradeAgreement,
+                Trade = TradeTermsCatalog.Build(c, TradeTermsCatalog.Find("free_trade"), founder, partner) }.Apply(c);
                 return;
             }
             if (relation.Stance != DiplomaticStance.Allied)
@@ -482,7 +485,10 @@ public static class Consolidation
         }
         if (!relation.TradeAgreement)
         {
-            new ProposeAgreementCommand { IssuerId = founder.Id, TargetId = partner.Id, Kind = AgreementKind.TradeAgreement }.Apply(c);
+            DealTally.Count("trade_agreement.asked.union_courting");
+            // Courting toward a union is free trade, the one kind of agreement a union is made of.
+            new ProposeAgreementCommand { IssuerId = founder.Id, TargetId = partner.Id, Kind = AgreementKind.TradeAgreement,
+                Trade = TradeTermsCatalog.Build(c, TradeTermsCatalog.Find("free_trade"), founder, partner) }.Apply(c);
             return;
         }
         if (relation.Stance != DiplomaticStance.Allied)

@@ -83,18 +83,30 @@ static class MovementPowerFingerprintTests
         // 2 November: MergeFleetsCommand and SplitFleetCommand joined the navy feature table.
         // 10 November: SeaLiftCommand joined it too; removing exactly that binding gives back the
         // 2 November pair (0x69654ABCA8CA3DF6, 0x22A558E6BC330E2E), checked just below.
+        // 17 November: GrantRegionalAutonomyCommand and RevokeRegionalAutonomyCommand joined the
+        // domestic_crises table (RegionalAutonomy); removing exactly those two gives back the
+        // 10 November pair, checked here, and every older golden below is reached without them.
+        foreach (var movement in new[] { false, true })
+        {
+            var withoutAutonomy = Fixture(movement);
+            WithoutAutonomy(withoutAutonomy);
+            var before = CampaignFingerprint.Of(withoutAutonomy);
+            Check(before == (movement ? 0x568E463C8CB67FFEUL : 0xFA0A897F24B60B66UL),
+                $"removing exactly the two regional autonomy bindings restores the 10 November golden: {movement} (got 0x{before:X16})");
+        }
         foreach (var movement in new[] { false, true })
         {
             var withoutLift = Fixture(movement);
+            WithoutAutonomy(withoutLift);
             withoutLift.Defines.FeatureCommands.Remove("SeaLiftCommand");
             var liftless = CampaignFingerprint.Of(withoutLift);
             Check(liftless == (movement ? 0x22A558E6BC330E2EUL : 0x69654ABCA8CA3DF6UL),
                 $"removing exactly the SeaLiftCommand binding restores the 2 November golden: {movement} (got 0x{liftless:X16})");
         }
-        Check(withoutMovement == 0xFA0A897F24B60B66UL,
+        Check(withoutMovement == 0xA49141C29F5C7AACUL,
             $"a world without movement state retains the current catalogue golden fingerprint (got 0x{withoutMovement:X16})");
         var withMovement = CampaignFingerprint.Of(Fixture());
-        Check(withMovement == 0x568E463C8CB67FFEUL,
+        Check(withMovement == 0xC43FF99EBDAAA660UL,
             $"an empty legacy movement retains the current presence and militancy fingerprint (got 0x{withMovement:X16})");
         MechanicFeatures.BuiltIns.Remove("land_arrangements");
         try
@@ -102,6 +114,7 @@ static class MovementPowerFingerprintTests
         foreach (var movement in new[] { false, true })
         {
             var beforeLand = Fixture(movement);
+            WithoutAutonomy(beforeLand);
             beforeLand.Defines.Features.Remove("land_arrangements");
             beforeLand.Defines.FeatureCommands.Remove("LandArrangementCommand");
             beforeLand.Defines.FeatureCommands.Remove("MergeFleetsCommand"); beforeLand.Defines.FeatureCommands.Remove("SplitFleetCommand");
@@ -250,5 +263,11 @@ static class MovementPowerFingerprintTests
         c.ConfigureSinglePlayer(0);
         SovereignFinance.NormalizeAccounts(c);
         return c;
+    }
+
+    private static void WithoutAutonomy(Campaign campaign)
+    {
+        campaign.Defines.FeatureCommands.Remove("GrantRegionalAutonomyCommand");
+        campaign.Defines.FeatureCommands.Remove("RevokeRegionalAutonomyCommand");
     }
 }

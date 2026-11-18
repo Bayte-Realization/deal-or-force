@@ -7,6 +7,13 @@ namespace DealOrForce.Simulation;
 /// or a forecast that invents future events. Re-evaluate when actual conditions change.</summary>
 public sealed record StabilityOutlook(float Current, float Target, float NextReviewChange, Breakdown Drivers)
 {
+    /// <summary>
+    /// What the imperial overstretch is weighed from, so the line can say what the figure is: the
+    /// weight of the regions that strain the state, and the capacity it bears for free. Empty when
+    /// the country is not overstretched.
+    /// </summary>
+    public string OverstretchNote { get; init; } = "";
+
     public string Direction => NextReviewChange > .0005f ? "Conditions favour recovery" :
         NextReviewChange < -.0005f ? "Pressure is building" : "Holding steady";
     public string Tone => NextReviewChange > .0005f ? "state.positive" :
@@ -22,6 +29,10 @@ public sealed record StabilityOutlook(float Current, float Target, float NextRev
         var target = StabilityCore.Preview(campaign, nation, drivers);
         if (!float.IsFinite(target)) return null;
         var change = (target - nation.Stability) * M.Clamp01(StabilityCore.Weights.Approach);
-        return new(nation.Stability, target, change, drivers);
+        var note = StabilityCore.Overstretch(campaign, nation) > 0f
+            ? Loc.Format("Unaccepted regions weigh {0:0.0} against a capacity of {1}; autonomy and acceptance lower the weight.",
+                StabilityCore.StrainedWeight(campaign, nation), campaign.Defines.BaseImperialCapacity)
+            : "";
+        return new(nation.Stability, target, change, drivers) { OverstretchNote = note };
     }
 }

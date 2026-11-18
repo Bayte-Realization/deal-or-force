@@ -1,0 +1,23 @@
+// What a deal term may say (Scripts/Simulation/TradeTerms.cs, TradeTermsCatalog). The first entry of
+// the term catalogue the deals plan names (docs/DEALS_REWORK_2026_11_14_RU.md, 3.1).
+//
+// trade_agreement
+//   shared       a term of the pair, not of one side: it has no column on the deal table, and both
+//                countries count the same terms from where each stands
+//   years        the lengths a trade agreement may be signed for; 0 is "no end"
+//   cut_step     the step a tariff cut moves in (a quarter of the tariff)
+//   guarantee    the share of its spare output of one good a supply guarantee may promise
+//   exit         what leaving early costs: the opinion the partner keeps ("broke_trade_agreement",
+//                scaled by the share of the term still to run, never below
+//                TradeAgreementBreakOpinionMin in defines/89_trade_agreements.json), and the
+//                delivered share below which a week counts against a guarantee. After
+//                TradeGuaranteeFreeExitWeeks such weeks in a row the receiver may leave for free.
+{
+  "trade_agreement": {
+    "shared": true,
+    "years": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0],
+    "cut_step": 0.25,
+    "guarantee": { "min": 0.05, "max": 0.5, "step": 0.05 },
+    "exit": { "opinion": "broke_trade_agreement", "minimum_scale": 0.3, "free_exit_weeks": 8, "free_exit_below": 0.5 }
+  }
+}

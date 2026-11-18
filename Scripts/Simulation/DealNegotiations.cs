@@ -28,7 +28,10 @@ public sealed class DealOffer
     public string Reason = "";
     /// <summary>Answered by the addressed player's standing rule (DealAnswer), not by the player's own hand.</summary>
     public bool ByRule;
-    [JsonIgnore] public Ultimatum.Deal Terms => new(From, To);
+    /// <summary>The trade agreement on the paper (TradeTerms), a term of the pair; null for none.
+    /// A paper written before terms existed carries none and reads its sides' old ticks instead.</summary>
+    public TradeTerms Trade;
+    [JsonIgnore] public Ultimatum.Deal Terms => new(From, To) { Trade = Trade };
     [JsonIgnore] public bool Pending => State == DealOfferState.Pending;
 }
 
@@ -63,6 +66,7 @@ public static class DealNegotiations
         CreatedDay = offer.CreatedDay, ExpiresDay = offer.ExpiresDay, ClosedDay = offer.ClosedDay,
         ParentOfferId = offer.ParentOfferId, CounterDepth = offer.CounterDepth,
         From = Copy(offer.From), To = Copy(offer.To), State = offer.State, Reason = offer.Reason ?? "", ByRule = offer.ByRule,
+        Trade = TradeTerms.Copy(offer.Trade),
         FromProvinces = (offer.FromProvinces ?? Array.Empty<int>()).ToArray(),
         ToProvinces = (offer.ToProvinces ?? Array.Empty<int>()).ToArray()
     };
@@ -90,12 +94,19 @@ public static class DealNegotiations
         // Counterproposals to governments still use the same current AI assessment.
         // A refusal keeps the original paper on the table.
         var assessment = Ultimatum.AssessNegotiatedDeal(c, from, to, terms);
+        // Counted for the bench (DealTally), never read by the world.
+        var tallyKey = $"deal.{DealTally.KindOf(terms)}.{DealTally.Seat(from)}>{DealTally.Seat(to)}";
+        DealTally.Count(tallyKey + ".put");
         if (!to.IsHuman && DealAnswer.Decide(c, to, from, terms, assessment).Verdict != DealVerdict.Accept)
+        {
+            DealTally.Count(tallyKey + ".declined");
+            if (assessment.Valid) RememberTradeRefusal(c, from, to, terms);
             return new(false, assessment.Reason);
+        }
         var paper = new DealOffer
         {
             Id = c.NextDealOfferId++, FromId = from.Id, ToId = to.Id,
-            From = Copy(terms.From), To = Copy(terms.To), CreatedDay = c.ElapsedDays,
+            From = Copy(terms.From), To = Copy(terms.To), Trade = TradeTerms.Copy(terms.Trade), CreatedDay = c.ElapsedDays,
             ExpiresDay = (int)Math.Min(int.MaxValue, (long)c.ElapsedDays + Math.Clamp(c.Defines.DealOfferDays, 1, 365)),
             ParentOfferId = parentId, CounterDepth = depth,
             FromProvinces = Ground(c, terms.From), ToProvinces = Ground(c, terms.To)
@@ -115,6 +126,7 @@ public static class DealNegotiations
         var result = Ultimatum.ResolveAgreedDeal(c, from, to, paper.Terms);
         Close(c, paper, result.Accepted ? DealOfferState.Accepted : DealOfferState.Invalidated,
             result.Accepted ? "The bargain is signed" : result.Note);
+        DealTally.Count(tallyKey + (result.Accepted ? ".signed" : ".invalid"));
         return result;
     }
 
@@ -132,6 +144,8 @@ public static class DealNegotiations
         }
         if (reply != DealReply.Accept)
         {
+            if (reply == DealReply.Decline)
+                RememberTradeRefusal(c, c.NationById(paper.FromId), c.NationById(paper.ToId), paper.Terms);
             Close(c, paper, reply == DealReply.Decline ? DealOfferState.Declined : DealOfferState.Withdrawn,
                 reply == DealReply.Decline ? "The offer was declined. Nothing was transferred." : "The offer was withdrawn. Nothing was transferred.");
             return new(false, Loc.Get(paper.Reason));
@@ -216,6 +230,7 @@ public static class DealNegotiations
         if (decision.Verdict == DealVerdict.Decline)
         {
             paper.ByRule = true;
+            RememberTradeRefusal(c, from, to, paper.Terms);
             Close(c, paper, DealOfferState.Declined, decision.Reason);
             result = new(false, Loc.Get(paper.Reason));
         }
@@ -264,6 +279,18 @@ public static class DealNegotiations
         foreach (var paper in c.DealOffers)
             if (paper.FromId == fromId && paper.ToId == toId && (latest is null || paper.Id > latest.Id)) latest = paper;
         return latest is { ByRule: true, Pending: false } && latest.ClosedDay == c.ElapsedDays;
+    }
+
+    /// <summary>
+    /// A refused paper whose only term is a trade agreement buys the same silence a refused button
+    /// does (AgreementRefusalDays), whoever refused it: one question, one answer, by either route.
+    /// A renewal is not a new question and buys nothing.
+    /// </summary>
+    internal static void RememberTradeRefusal(Campaign c, Nation from, Nation to, Ultimatum.Deal terms)
+    {
+        if (c is null || from is null || to is null || !Ultimatum.IsTradeOnly(terms) ||
+            Ultimatum.TradeOf(terms) is not { Renewal: false }) return;
+        CampaignDiplomacy.Get(c, from.Id, to.Id).AgreementRefusedDay = c.ElapsedDays;
     }
 
     private static void Close(Campaign c, DealOffer paper, DealOfferState state, string reason)

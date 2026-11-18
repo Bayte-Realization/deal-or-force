@@ -740,7 +740,9 @@ public static class SubjectInteractions
         subject.SubjectIntegrationProgress = 0f;
         if (!string.IsNullOrEmpty(subject.DeclaredCulture))
             overlord.FoundedCultures.Remove(subject.DeclaredCulture);
-        if (taken.Count > 0) StatePartition.Annex(campaign, taken, overlord, asConquest: false);
+        // A subject written into its overlord: a peaceful absorption, never a rising put down, even
+        // when the subject was once a breakaway of the overlord (ConquestAcceptance.ChangedHands).
+        if (taken.Count > 0) StatePartition.Annex(campaign, taken, overlord, asConquest: false, byConsent: true);
         campaign.MarkMapChanged();
         campaign.MarkStrategicChange();
     }
@@ -1361,6 +1363,10 @@ public static class CountryRelease
                         s.Population >= nation.Population * 0.30f ||
                         EconomySystem.ForeignShare(s, nation.Tag) < 0.65f ||
                         (s.Radicalism < campaign.Defines.AiReleaseRegionHeatThreshold && s.SecessionPressure < 0.65f)) continue;
+                    // Not ground it fought a war to take back from rebels in the last two years
+                    // (RevoltRecovery): Lipljan, crushed on day 1401 of a measured Yugoslavia, was
+                    // released to a reborn Kosovo on day 2003, and the region was counted rising again.
+                    if (RevoltRecovery.DaysLeft(campaign, nation, s) > 0) continue;
                     var heat = s.SecessionPressure + s.Radicalism;
                     if (candidate is null || heat > candidateHeat)
                     {

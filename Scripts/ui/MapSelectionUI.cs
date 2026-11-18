@@ -661,6 +661,9 @@ public partial class DealOrForceGame
             if (foreign > 0.001f)
                 CardRow(_regionCardRegionRows, "Minorities", Fmt.Percent(foreign), null,
                     foreign > 0.5f ? "state.negative" : "state.warning");
+            // Beside the minority it is about: how far conquered ground has come to accept the state,
+            // whether it governs itself, and whether a crushed rising has exhausted it (ConquestAftermathUI).
+            AddConquestAftermathRows(owner, state);
             // What stands there, as the icons the build list and the map's region badges use: read at
             // a glance, named in the tooltip. Five kinds, the most numerous first.
             var buildings = BuildingCatalog.All

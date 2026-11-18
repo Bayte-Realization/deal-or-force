@@ -150,6 +150,37 @@ public partial class DealOrForceGame
                 _policyPreview.AddChild(settle);
                 if (refusal.Length > 0) PolicyText(_policyPreview, refusal, "state.warning");
             }
+            // Self-government, beside the season's payment: the lever the "conquered ground" alert
+            // opens this screen for (ConquestStrainNotice), so it has to be here, one press away, and
+            // not only in the region's right-click menu.
+            var region = selected.Region;
+            if (region.MapIndex != nation.CapitalStateMapIndex && !RegionalAutonomy.Autonomous(region) &&
+                (ConquestAcceptance.Unentitled(_campaign, nation, region) || region.Radicalism >= _campaign.Defines.AiAutonomyRadicalism))
+            {
+                var d = _campaign.Defines;
+                var refusal = RegionalAutonomy.Refusal(_campaign, nation, region);
+                PolicyStat(_policyPreview, "Grant autonomy", Simulation.Loc.Format("{0} political points · {1} a week",
+                    d.AutonomyPoliticalCost.ToString("0"), Fmt.Money(RegionalAutonomy.WeeklyPrice(_campaign, nation, region))), "agenda");
+                PolicyText(_policyPreview, Simulation.Loc.Format(
+                    "Costs {0} political points now and {1} a week: the region keeps {2} of its taxes. It weighs {3} as much in imperial overstretch, takes in less grievance and comes to accept the state twice as fast.",
+                    d.AutonomyPoliticalCost.ToString("0"), Fmt.Money(RegionalAutonomy.WeeklyPrice(_campaign, nation, region)),
+                    Fmt.Percent(d.AutonomyRevenueShare), Fmt.Percent(d.AutonomyOverstretchWeight)));
+                var armed = _crisisResponseConfirmation == "autonomy";
+                var grant = ActionButton(armed ? Simulation.Loc.Format("Confirm: grant autonomy to {0}", region.DisplayName) : "Grant autonomy", () =>
+                {
+                    if (_crisisResponseConfirmation != "autonomy") { _crisisResponseConfirmation = "autonomy"; ShowDomesticCrisisWorkspace(); return; }
+                    _campaign.Commands.Enqueue(new GrantRegionalAutonomyCommand { IssuerId = nation.Id, StateMapIndex = region.MapIndex });
+                    _campaign.Commands.ApplyAll(_campaign);
+                    _crisisResponseConfirmation = "";
+                    ShowDomesticCrisisWorkspace();
+                    Refresh();
+                }, 0, 32, armed, "res://game/gfx/interface/icons/icon_laws.png");
+                grant.Name = "GrantRegionalAutonomy";
+                grant.Disabled = refusal.Length > 0;
+                if (refusal.Length > 0) grant.TooltipText = Ui.Tip(Tr(refusal));
+                _policyPreview.AddChild(grant);
+                if (refusal.Length > 0) PolicyText(_policyPreview, refusal, "state.warning");
+            }
         }
         if (response is { LastOutcomeId.Length: > 0 })
             PolicyText(_policyPreview, Loc.Format("Last institutional outcome: {0} · campaign day {1}",

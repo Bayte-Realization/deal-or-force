@@ -24,7 +24,8 @@ namespace DealOrForce.Simulation;
 ///
 ///  [ Рез-ты по регионам: RegionStability ]
 ///  Base (0.62) + LivingDelta * Living (0.55) - Radicalism (0.85)
-///  - ForeignShare * Minority (0.30) - OccupiedShare * Occupation (0.55) + Literacy (0.04)
+///  - ForeignShare * Minority (0.30) * (1 - 0.5 * Acceptance)
+///  - OccupiedShare * Occupation (0.55) + Literacy (0.04)
 ///           │
 ///           ▼
 ///  [ Агрегация по стране ]
@@ -173,19 +174,21 @@ public static class StabilityCore
     public static float RegionStability(Campaign campaign, Nation owner, ScenarioState state)
     {
         return RegionStability(owner, state,
-            ControlTally.World(campaign, owner?.MapIndex ?? 0, state?.MapIndex ?? 0));
+            ControlTally.World(campaign, owner?.MapIndex ?? 0, state?.MapIndex ?? 0), campaign?.Defines);
     }
 
     /// <summary>The same, against a tally already taken. Used inside the weekly pass.</summary>
     private static float RegionStability(Nation owner, ScenarioState state,
-        RegionControl control)
+        RegionControl control, Defines defines)
     {
         if (state is null || owner is null) return Weights.Base;
         var weights = Weights;
+        // The minority's cost eases as the region comes to accept its holder (ConquestAcceptance),
+        // by at most half; at no acceptance the factor is exactly one.
         var value = weights.Base
                     + (state.StandardOfLiving - weights.LivingTolerance) * weights.Living
                     - state.Radicalism * weights.Radicalism
-                    - EconomySystem.ForeignShare(state, owner.Tag) * weights.Minority
+                    - EconomySystem.ForeignShare(state, owner.Tag) * weights.Minority * ConquestAcceptance.MinorityFactor(defines, state, owner)
                     + (state.Literacy + owner.LiteracyOffset - 0.5f) * weights.Literacy
                     - control.OccupiedShare * weights.Occupation;
         return M.Clamp(value, 0f, 1f);
@@ -228,7 +231,7 @@ public static class StabilityCore
         {
             // One walk of the map a day for the whole world, shared with everything that asks.
             var settled = RegionStability(nation, state,
-                ControlTally.World(campaign, nation.MapIndex, state.MapIndex));
+                ControlTally.World(campaign, nation.MapIndex, state.MapIndex), campaign.Defines);
             if (updateState) state.Stability = settled;
             if (state.MapIndex == nation.CapitalStateMapIndex) capitalStability = settled;
             if (state.Population <= 0) continue;
@@ -299,17 +302,28 @@ public static class StabilityCore
     {
         if (campaign is null || nation is null) return 0f;
         var capacity = campaign.Defines?.BaseImperialCapacity ?? 4;
+        var strainedStates = StrainedWeight(campaign, nation);
+        if (strainedStates <= capacity) return 0f;
+        return MathF.Min(1.0f, (strainedStates - capacity) * 0.08f);
+    }
+
+    /// <summary>
+    /// What the overstretch is made of before the capacity is taken off: every region the country
+    /// has no title to and whose people are a third or more not its own, at the weight
+    /// ConquestAcceptance.StrainWeight gives it (its anger, eased by acceptance and autonomy); every
+    /// other region whose politics have drifted far from the centre; and subjects beyond two.
+    /// Public so the stability breakdown can say what the figure is weighed against.
+    /// </summary>
+    public static float StrainedWeight(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return 0f;
         var strainedStates = 0f;
         foreach (var state in campaign.StatesOf(nation.MapIndex))
         {
             if (state is null || state.Unclaimed) continue;
             var isHomeland = TerritorialClaims.TitleOf(campaign, nation, state) == TerritorialTitle.Homeland;
-            if (!isHomeland && EconomySystem.ForeignShare(state, nation.Tag) >= 0.35f)
-                // A conquered people strains an empire by its anger, not by being there: a calm
-                // annexed region weighs 0.4, a seething one the full 1. Measured: Russia, after
-                // taking a dozen Ukrainian regions, sat at the overstretch cap for good - nothing
-                // it could do would ever digest them.
-                strainedStates += 0.4f + 0.6f * M.Clamp01(state.Radicalism / 0.4f);
+            if (!isHomeland && EconomySystem.ForeignShare(state, nation.Tag) >= ConquestAcceptance.UnentitledForeignShare)
+                strainedStates += ConquestAcceptance.StrainWeight(campaign, state, nation);
             else if (campaign.ElapsedDays > 0 && state.MapIndex != nation.CapitalStateMapIndex &&
                      state.PoliticalDivergence >= 0.50f)
                 strainedStates += 0.5f;
@@ -321,8 +335,7 @@ public static class StabilityCore
                 if (other.AnswersTo(nation.Id)) subjects++;
             if (subjects > 2) strainedStates += (subjects - 2) * 0.5f;
         }
-        if (strainedStates <= capacity) return 0f;
-        return MathF.Min(1.0f, (strainedStates - capacity) * 0.08f);
+        return strainedStates;
     }
 
     /// <summary>

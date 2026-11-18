@@ -315,10 +315,21 @@ public static class NavalOperations
         return NationAt(campaign, mapIndex);
     }
 
+    private sealed class MapIndexSnapshot
+    {
+        public readonly Nation[] ByMapIndex;
+        public readonly int NationsCount;
+
+        public MapIndexSnapshot(Nation[] byMapIndex, int nationsCount)
+        {
+            ByMapIndex = byMapIndex;
+            NationsCount = nationsCount;
+        }
+    }
+
     private sealed class NavalBoard
     {
-        public Nation[] ByMapIndex = Array.Empty<Nation>();
-        public int NationsCount = -1;
+        public volatile MapIndexSnapshot MapIndex = new(Array.Empty<Nation>(), -1);
 
         public int HarbourRevision = -1;
         public int HarbourNationsCount = -1;
@@ -340,18 +351,23 @@ public static class NavalOperations
     {
         if (campaign is null || mapIndex <= 0) return null;
         var board = Boards.GetOrCreateValue(campaign);
+        var nationsCount = campaign.Nations.Count;
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            var index = Volatile.Read(ref board.ByMapIndex);
-            var stale = Volatile.Read(ref board.NationsCount) != campaign.Nations.Count;
-            var found = mapIndex < index.Length ? index[mapIndex] : null;
+            var snap = board.MapIndex;
+            var stale = snap.NationsCount != nationsCount;
+            var found = mapIndex < snap.ByMapIndex.Length ? snap.ByMapIndex[mapIndex] : null;
             if (!stale && found is not null && found.MapIndex == mapIndex) return found;
             if (attempt == 1) return null;
             if (stale || found is null || found.MapIndex != mapIndex)
             {
                 lock (board)
                 {
+                    snap = board.MapIndex;
                     var count = campaign.Nations.Count;
+                    if (snap.NationsCount == count && mapIndex < snap.ByMapIndex.Length &&
+                        snap.ByMapIndex[mapIndex] is { } existing && existing.MapIndex == mapIndex)
+                        return existing;
                     var top = 0;
                     for (var i = 0; i < count; i++) top = Math.Max(top, campaign.Nations[i].MapIndex);
                     var rebuilt = new Nation[top + 1];
@@ -360,8 +376,7 @@ public static class NavalOperations
                         var nation = campaign.Nations[i];
                         if (nation.MapIndex > 0) rebuilt[nation.MapIndex] = nation;
                     }
-                    Volatile.Write(ref board.ByMapIndex, rebuilt);
-                    Volatile.Write(ref board.NationsCount, count);
+                    board.MapIndex = new MapIndexSnapshot(rebuilt, count);
                 }
             }
         }
@@ -800,7 +815,7 @@ public static class NavalOperations
 
         if (campaign.Nations.Count > 0) NationAt(campaign, campaign.Nations[0].MapIndex);
         var board = Boards.GetOrCreateValue(campaign);
-        var byMap = Volatile.Read(ref board.ByMapIndex);
+        var byMap = board.MapIndex.ByMapIndex;
         var harbours = SeaLanes.Harbours(map);
         var provinces = harbours.Province;
         var count = provinces.Length;

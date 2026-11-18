@@ -1,0 +1,79 @@
+// Conquered ground, and the ways out of holding it (Scripts/Simulation/ConquestAftermath.cs,
+// RegionalAutonomy.cs, UnionCohesion.cs).
+//
+// The owner's game of 17 November 2026: Serbia took Yugoslavia, proclaimed it, took Bulgaria, and
+// was strangled by risings - "several times in a row on the same lands". Measured (SimBench
+// --conquest serbia, docs/design/gameplay-2026-11-17/conquest-aftermath.md): a proclaimed Yugoslavia
+// began at cohesion 0.40, under the union's trouble line, and counted Croats and Bosniaks as
+// foreigners; conquered regions stayed at stability 0.15-0.30 for ever because nothing let their
+// people get used to the new state; a crushed rising came back exactly as angry as it left and rose
+// again the day its two years of protection ran out. These numbers are the way out, each with a
+// price and a time. docs/CONQUEST_AFTERMATH_2026_11_17_RU.md has the before and after.
+{
+  // ---- acceptance: conquered ground digested by years of quiet.
+  // What a quiet week adds. 0.001 is about nineteen years from nothing to home - a generation, and
+  // half of the fifty years foreign ground needed before. 0 switches acceptance off.
+  "AcceptanceWeekly": 0.001,
+  // A people of the holder's own family of peoples ("group" in cultures/00_cultures.json) accepts
+  // half as fast again: for Serbia the Yugoslav peoples and the Bulgarians alike.
+  "AcceptanceKindredFactor": 1.5,
+  // Full pace at or below this radicalism, none at or above the stall line (the same 0.5 that stops
+  // BorderHabit): a region half radical is not getting used to anybody.
+  "AcceptanceCalmRadicalism": 0.15,
+  "AcceptanceStallRadicalism": 0.50,
+  // A fully accepted region pays half of what its minority costs in stability and radicalism, not
+  // none of it: Wales is still Wales.
+  "AcceptanceMinorityRelief": 0.5,
+  // And weighs 0.4 of what it did in imperial overstretch; at acceptance 1 it becomes homeland and
+  // leaves the overstretch altogether.
+  "AcceptanceOverstretchRelief": 0.6,
+  // Ground handed over by agreement of both governments (a deal, a union, a grant to a subject)
+  // carries across this share of how settled it was under the state giving it up: its old homeland
+  // arrives half accepted, a region it was still digesting at half of what it had, ground it had just
+  // taken at nothing. Acceptance is of one state: what was earned under the old holder never makes the
+  // region the new holder's homeland, and a conquest passed through a subject and annexed back is
+  // still a conquest. Ground yielded to an ultimatum is ground taken by force and starts at nothing.
+  "AcceptancePeacefulStart": 0.5,
+  // A crushed rising halves what acceptance the region had: being beaten is not agreeing.
+  "AcceptanceRisingKeep": 0.5,
+
+  // ---- a crushed rising exhausts its region.
+  // Its radicalism is halved the day the breakaway that held it is beaten: crushed regions came back
+  // at 0.43-0.99 and rose again the day RevoltRecovery's 730 days ended.
+  "RisingCrushedRadicalismCut": 0.5,
+  // For three years grievance, overstretch and occupation feed its anger at 0.35 of the rate: a
+  // region at 0.70 is at 0.35 the day it is retaken and at 0.15-0.20 three years on, instead of
+  // full when the protection ends. Not a new immunity: RevoltRecovery stays the only guard.
+  "RisingExhaustionDays": 1095,
+  "RisingExhaustionInflow": 0.35,
+
+  // ---- regional autonomy: the one active lever, the same for the computer.
+  // A third of a mobilisation decision in political points, at once.
+  "AutonomyPoliticalCost": 15,
+  // Every week the region keeps this share of its own taxes (its share of the people times the
+  // country's weekly tax income). Sixteen autonomous Yugoslav regions would cost Serbia about 30 %.
+  "AutonomyRevenueShare": 0.4,
+  // An autonomous region weighs as little in the overstretch as the calmest conquered one.
+  "AutonomyOverstretchWeight": 0.4,
+  // Self-government: less to resent, and twice as fast to accept the state.
+  "AutonomyRadicalismInflow": 0.6,
+  "AutonomyAcceptanceFactor": 2.0,
+  // Taking it back is free and remembered: +10 points of radicalism at once, half the acceptance
+  // gone, and three years before the same region can be granted it again (Scotland 1997 to 2014,
+  // Catalonia 2006 to 2017).
+  "AutonomyRevokeRadicalism": 0.10,
+  "AutonomyRegrantDays": 1095,
+  // The computer grants only when overstretched or below 0.50 stability, to a region it has no
+  // title to and at least this radical, at most once a quarter, and only with the points (1.5 times
+  // the cost) and the money: the week must stay out of deficit, or the treasury hold this many weeks
+  // of the price. It never takes a grant back.
+  "AiAutonomyRadicalism": 0.15,
+  "AiAutonomyIntervalDays": 90,
+  "AiAutonomyReserveWeeks": 26,
+
+  // ---- a proclaimed union of kindred peoples.
+  // A people of the founder's family pays this share of UnionCohesionPerPeople when the union is
+  // proclaimed: Yugoslavia's six South Slav peoples start at 0.70, above the trouble line 0.60,
+  // instead of 0.40 and gone within the year. 1 restores the old price for everyone.
+  "UnionCohesionKindredShare": 0.5
+}

@@ -174,8 +174,6 @@ public static class LongRangeMovement
         return ground;
     }
 
-    private static bool[] ActiveControllerMask(Campaign c, ProvinceTopology map, ushort[] controls) => null;
-
     internal static HashSet<int> BattleProvinces(Campaign c)
     {
         var set = new HashSet<int>();
@@ -1051,7 +1049,6 @@ public static class LongRangeMovement
         var battles = BattleProvinces(c);
         var map = c.ProvinceMap;
         var controls = c.ProvinceController ?? map.ProvinceToNation;
-        bool[] activeControllers = null;
         var formations = InIdOrder(c);
         foreach (var f in formations)
         {
@@ -1060,8 +1057,7 @@ public static class LongRangeMovement
                 f.BaseProvinceId == f.ProvinceId && f.ProvinceId <= map.ProvinceCount &&
                 c.NationById(f.NationId) is { } owner && controls[f.ProvinceId] == owner.MapIndex) continue;
             if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || !SupportCore.Enabled(c, type)) continue;
-            activeControllers ??= ActiveControllerMask(c, map, controls);
-            var g = GroundOf(c, f.NationId, grounds, battles, activeControllers);
+            var g = GroundOf(c, f.NationId, grounds, battles);
             if (g is null) continue;
             var at = At(f);
             if (!g.Valid(at)) continue;
@@ -1216,7 +1212,6 @@ public static class LongRangeMovement
         var controls = c.ProvinceController ?? map.ProvinceToNation;
         Dictionary<int, Ground> grounds = null;
         HashSet<int> battles = null;
-        bool[] activeControllers = null;
         var changed = 0;
         foreach (var f in InIdOrder(c))
         {
@@ -1230,8 +1225,7 @@ public static class LongRangeMovement
             if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || !SupportCore.Enabled(c, type)) continue;
             grounds ??= new Dictionary<int, Ground>();
             battles ??= BattleProvinces(c);
-            activeControllers ??= ActiveControllerMask(c, map, controls);
-            var g = GroundOf(c, f.NationId, grounds, battles, activeControllers);
+            var g = GroundOf(c, f.NationId, grounds, battles);
             if (g is null || g.Enterable(at)) continue;
             // Already leaving by a road that is still open: it has paid, and it is going.
             if (f.Route.Count > 0 && f.Overrun && g.Passing(f, f.Route[0])) continue;
@@ -1410,7 +1404,6 @@ public static class LongRangeMovement
         }
         var battles = BattleProvinces(c);
         var controls = c.ProvinceController ?? map.ProvinceToNation;
-        var activeControllers = ActiveControllerMask(c, map, controls);
         Dictionary<ushort, List<int>> landByController = null;
         var grounds = new Dictionary<int, Ground>();
         foreach (var nation in c.Nations.OrderBy(n => n.Id))
@@ -1419,7 +1412,7 @@ public static class LongRangeMovement
             var inWar = false;
             foreach (var war in wars) if (!war.Ended && war.Involves(nation.Id)) { inWar = true; break; }
             if (!inWar) continue;
-            var g = GroundOf(c, nation.Id, grounds, battles, activeControllers);
+            var g = GroundOf(c, nation.Id, grounds, battles);
             if (g is null) continue;
             landByController ??= BuildLandByController(map, controls);
             RepositionNation(c, g, own, wars, battlesByWar, landByController);

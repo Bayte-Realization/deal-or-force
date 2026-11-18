@@ -440,6 +440,81 @@ public static class FormableNations
         return people;
     }
 
+    /// <summary>
+    /// A proclaimed union owns the peoples of its own family that it unites.
+    ///
+    /// Proclaiming Yugoslavia over land taken by war left Croats, Bosniaks, Slovenes and Macedonians
+    /// minorities of it - the catalogue still said Serbia was for Serbs - so every one of their regions
+    /// was foreign ground, strained the empire, and fed its radicalism; a union only ever made its
+    /// peoples its own when partners joined it peacefully (PeacefulFormation). The union's peoples
+    /// are the ones it names (EligibleCultures), or else the peoples of the countries it requires.
+    ///
+    /// Only those of the founder's own family of peoples (cultures "group") become its own, at once,
+    /// with every region where one of them is the largest people and the state holds it inside the
+    /// union's territory made homeland. A proclamation is a name and a flag; what it can honestly
+    /// settle overnight is a quarrel among kin. Byzantium proclaimed by a Greece that had just
+    /// conquered Turkey, a Soviet Union declared over the Caucasus and Central Asia, a caliphate over
+    /// half a continent: the peoples it names of another family stay a minority of it, and their
+    /// ground stays conquered ground that has to be digested (ConquestAcceptance, which takes them at
+    /// the kindred pace, because the union did promise them a place). A people the union does not
+    /// name at all - Bulgarians, Albanians for Yugoslavia - is not touched, kin or not.
+    /// </summary>
+    internal static void DeclareUnionPeoples(Campaign campaign, Nation nation, FormableNation d)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null || nation is null || d is null) return;
+        // The founder's families, read before anything is declared, so a declaration never widens them.
+        var families = new List<string>();
+        foreach (var own in DemographyCatalog.PrimaryCultures(nation.Tag))
+            if (DemographyCatalog.Culture(own)?.Group is { Length: > 0 } family && !ContainsIgnoreCase(families, family))
+                families.Add(family);
+        if (families.Count == 0) return;
+        // The regions the state holds inside the territory, in map order so every machine agrees.
+        var regions = new SortedDictionary<int, ScenarioState>();
+        foreach (var province in Land(campaign, nation, d))
+        {
+            var index = map.ProvinceToState[province];
+            if (index == 0 || regions.ContainsKey(index)) continue;
+            if (campaign.StateByMapIndex(index) is { } region && region.NationMapIndex == nation.MapIndex &&
+                !region.Unclaimed && region.Population > 0)
+                regions[index] = region;
+        }
+        if (nation.FoundedCultures.Count == 0) nation.FoundedCultures.AddRange(DemographyCatalog.PrimaryCultures(nation.Tag));
+        foreach (var region in regions.Values)
+        {
+            var cultures = EconomySystem.Cultures(region);
+            if (cultures.Count == 0) continue;
+            var majority = cultures[0].Culture;
+            if (!NamesPeople(d, majority) || ContainsIgnoreCase(nation.FoundedCultures, majority)) continue;
+            if (DemographyCatalog.Culture(majority)?.Group is not { Length: > 0 } group || !ContainsIgnoreCase(families, group)) continue;
+            nation.FoundedCultures.Add(majority);
+        }
+        if (nation.FoundedCultures.Count > 0) DemographyCatalog.Declare(nation.Tag, nation.FoundedCultures);
+        if (!campaign.Homelands.TryGetValue(nation.Id, out var home)) campaign.Homelands[nation.Id] = home = new List<int>();
+        foreach (var region in regions.Values)
+        {
+            var cultures = EconomySystem.Cultures(region);
+            if (cultures.Count == 0 || !DemographyCatalog.IsPrimary(nation.Tag, cultures[0].Culture)) continue;
+            if (TerritorialClaims.TitleOf(campaign, nation, region) == TerritorialTitle.Homeland) continue;
+            home.Add(region.MapIndex);
+            campaign.HomelandChanges++;
+        }
+    }
+
+    /// <summary>
+    /// Whether a union names this people: in its own list of peoples if it has one, or else as a
+    /// people of one of the countries it requires.
+    /// </summary>
+    public static bool NamesPeople(FormableNation d, string culture)
+    {
+        if (d is null || string.IsNullOrWhiteSpace(culture)) return false;
+        if (d.EligibleCultures.Length > 0) return ContainsIgnoreCase(d.EligibleCultures, culture);
+        foreach (var tag in d.RequiredTags)
+            foreach (var people in DemographyCatalog.PrimaryCultures(tag))
+                if (string.Equals(people, culture, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
     /// <summary>The land provinces of a formable's foundation territory, for the map.</summary>
     public static int[] Land(Campaign campaign, Nation nation, FormableNation d)
     {
@@ -788,6 +863,8 @@ public sealed class FormNationCommand : ICampaignCommand
         nation.FormedNationId = d.Id;
         nation.FormedNationDay = campaign.ElapsedDays;
         FormableRestorations.Invalidate(campaign);
+        // A union is for the peoples it unites, before its cohesion is reckoned from them.
+        if (string.IsNullOrEmpty(d.Restores)) FormableNations.DeclareUnionPeoples(campaign, nation, d);
         // How well the proclaimed state holds together starts here: one people is one country, and
         // every people after that is a promise to be kept (UnionCohesion).
         nation.UnionCohesion = UnionCohesion.Start(campaign, nation, d);

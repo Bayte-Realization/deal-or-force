@@ -433,6 +433,8 @@ public sealed class MarketQuoteConverter : JsonConverter<MarketQuote>
                     case 4: quote.Exports = reader.GetSingle(); break;
                     case 5: quote.Price = reader.GetSingle(); break;
                     case 6: quote.Satisfaction = reader.GetSingle(); break;
+                    // Optional: a save from before trade terms has seven columns and loads 0.
+                    case 7: quote.Relieved = reader.GetSingle(); break;
                     default: reader.Skip(); break;
                 }
             }
@@ -457,6 +459,7 @@ public sealed class MarketQuoteConverter : JsonConverter<MarketQuote>
                 case "exports": quote.Exports = reader.GetSingle(); break;
                 case "price": quote.Price = reader.GetSingle(); break;
                 case "satisfaction": quote.Satisfaction = reader.GetSingle(); break;
+                case "relieved": quote.Relieved = reader.GetSingle(); break;
                 default: reader.Skip(); break;
             }
         }
@@ -473,6 +476,8 @@ public sealed class MarketQuoteConverter : JsonConverter<MarketQuote>
         SaveNumbers.Write(writer, quote.Exports, options);
         SaveNumbers.Write(writer, quote.Price, options);
         SaveNumbers.Write(writer, quote.Satisfaction, options);
+        // Written only when something was relieved, so a world without trade cuts saves as it did.
+        if (quote.Relieved != 0f) SaveNumbers.Write(writer, quote.Relieved, options);
         writer.WriteEndArray();
     }
 }

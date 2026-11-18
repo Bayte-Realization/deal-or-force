@@ -43,6 +43,17 @@ public static class CampaignFingerprint
 
         void MixFloat(float value) => Mix(BitConverter.SingleToInt32Bits(value));
         void MixText(string value) { foreach (var character in value ?? "") Mix(character); Mix(-8); }
+        void MixTradeTerms(TradeTerms t)
+        {
+            Mix(t.SignedDay); Mix(t.EndsDay); Mix(t.Years); MixFloat(t.CutA); MixFloat(t.CutB);
+            foreach (var g in t.GoodsA ?? Array.Empty<string>()) MixText(g);
+            Mix(-121);
+            foreach (var g in t.GoodsB ?? Array.Empty<string>()) MixText(g);
+            Mix(-122);
+            Mix(t.GuarantorId); MixText(t.GuaranteeGood); MixFloat(t.GuaranteeShare);
+            MixFloat(t.Delivered); Mix(t.ShortWeeks); Mix(t.GuarantorShortWeeks);
+            MixText(t.Preset); Mix(t.RenewalOfferedDay); Mix(t.Renewal ? 1 : 0);
+        }
         void MixFloatDictionary(string label, Dictionary<int, float> table)
         {
             if (table is not { Count: > 0 }) return;
@@ -344,6 +355,7 @@ public static class CampaignFingerprint
                 Mix(-102);
                 foreach (var province in paper.ToProvinces ?? Array.Empty<int>()) Mix(province);
                 Mix(-103);
+                if (paper.Trade is not null) { MixText("deal_trade_terms_v1"); MixTradeTerms(paper.Trade); }
                 foreach (var side in new[] { paper.From, paper.To })
                 {
                     MixFloat(side.Cash); Mix(side.ReleaseRegions ? 1 : 0); Mix(side.LiftEmbargo ? 1 : 0);
@@ -451,6 +463,10 @@ public static class CampaignFingerprint
                 MixText("agreement_offer_v1");
                 Mix(r.AgreementOfferedBy); Mix((int)r.AgreementOfferedKind); Mix(r.AgreementOfferedDay);
             }
+            // What a trade agreement says is state: the market routes by it and both sides decide by
+            // it. Mixed only when there is one, so a world without agreements keeps its fingerprint.
+            if (r.Trade is not null) { MixText("trade_terms_v1"); MixTradeTerms(r.Trade); }
+            if (r.AgreementOfferedTrade is not null) { MixText("offered_trade_terms_v1"); MixTradeTerms(r.AgreementOfferedTrade); }
             if (r.AgreementLapsedBy >= 0)
             {
                 MixText("agreement_lapse_v1");
@@ -1077,6 +1093,19 @@ public static class CampaignFingerprint
             }
             Mix(state.RememberedOwner); Mix(state.SettledBorderDays); Mix(state.LastBorderReviewDay);
             MixFloat(state.BorderHabit);
+            // What conquered ground has come to accept and how its last rising ended, and whether it
+            // governs itself (ConquestAcceptance, RisingAftermath, RegionalAutonomy). Mixed only when
+            // set, so a save from before they existed hashes as it did.
+            if (state.Acceptance != 0f || state.ExhaustedUntilDay != -1 || state.AutonomousSinceDay != -1 ||
+                state.AutonomyRevokedDay != -1 || state.AcceptanceOf != -1)
+            {
+                MixText("conquest_aftermath");
+                MixFloat(state.Acceptance); Mix(state.ExhaustedUntilDay);
+                Mix(state.AutonomousSinceDay); Mix(state.AutonomyRevokedDay);
+                // Whose rule that acceptance is of (ConquestAcceptance.Of): the same 0.5 means home
+                // under one holder and nothing under the next.
+                Mix(state.AcceptanceOf);
+            }
             // The age structure is authoritative, not decoration: the young share sets how many of
             // the country's own children are born, the old share how many of them die, and both
             // decide who arrives and which culture a region ends up counted under (DemographicCycle).
@@ -1279,6 +1308,11 @@ public static class CampaignFingerprint
                 Mix(route.SellerId); Mix(route.BuyerId); Mix((int)route.Commodity);
                 MixFloat(route.Volume); MixFloat(route.Value);
             }
+            // The week's imports that came in under a tariff cut: they set next week's markup and
+            // this week's duty. Mixed only where there were any.
+            foreach (var nation in campaign.Nations.OrderBy(n => n.Id))
+                foreach (var quote in nation.Market.Values.OrderBy(q => (int)q.Commodity))
+                    if (quote.Relieved != 0f) { Mix(nation.Id); Mix((int)quote.Commodity); MixFloat(quote.Relieved); }
         }
         // The deep-strike war (LongRangeStrikes): its rules when they differ from the shipped
         // ones, and each formation's chosen target when one was chosen. A world that never

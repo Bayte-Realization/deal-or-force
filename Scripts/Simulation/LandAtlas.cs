@@ -93,11 +93,23 @@ public static class LandAtlas
     /// accident about every small revolt inside it.
     /// </summary>
     /// <summary>The share of these regions' people living in a land, 0 to 1.</summary>
+    private sealed class CentresSnapshot
+    {
+        public readonly int Revision;
+        public readonly ProvinceTopology Topology;
+        public readonly (float Latitude, float Longitude)[] Centres;
+
+        public CentresSnapshot(int revision, ProvinceTopology topology, (float Latitude, float Longitude)[] centres)
+        {
+            Revision = revision;
+            Topology = topology;
+            Centres = centres;
+        }
+    }
+
     private sealed class CentresCache
     {
-        public ProvinceTopology Topology;
-        public int Revision = -1;
-        public (float Latitude, float Longitude)[] Centres = Array.Empty<(float, float)>();
+        public volatile CentresSnapshot Current;
     }
     private static readonly ConditionalWeakTable<Campaign, CentresCache> CentresByCampaign = new();
 
@@ -290,12 +302,14 @@ public static class LandAtlas
         if (topology is null) return Array.Empty<(float, float)>();
         var cache = CentresByCampaign.GetOrCreateValue(campaign);
         var revision = campaign.MapRevision;
-        if (cache.Revision == revision && ReferenceEquals(cache.Topology, topology))
-            return cache.Centres;
+        var snap = cache.Current;
+        if (snap is not null && snap.Revision == revision && ReferenceEquals(snap.Topology, topology))
+            return snap.Centres;
         lock (cache)
         {
-            if (cache.Revision == revision && ReferenceEquals(cache.Topology, topology))
-                return cache.Centres;
+            snap = cache.Current;
+            if (snap is not null && snap.Revision == revision && ReferenceEquals(snap.Topology, topology))
+                return snap.Centres;
             var maxState = 0;
             var provinceToState = topology.ProvinceToState;
             var count = topology.ProvinceCount;
@@ -322,9 +336,7 @@ public static class LandAtlas
                 var c = counts[s];
                 if (c > 0) centres[s] = ((float)(latSum[s] / c), (float)(lonSum[s] / c));
             }
-            cache.Topology = topology;
-            cache.Revision = revision;
-            cache.Centres = centres;
+            cache.Current = new CentresSnapshot(revision, topology, centres);
             return centres;
         }
     }

@@ -128,29 +128,41 @@ public static class CountryNames
         return plain;
     }
 
+    private sealed class PoliticsStemsSnapshot
+    {
+        public readonly int Revision;
+        public readonly HashSet<string> Stems;
+
+        public PoliticsStemsSnapshot(int revision, HashSet<string> stems)
+        {
+            Revision = revision;
+            Stems = stems;
+        }
+    }
+
     private static readonly object PoliticsStemsGate = new();
-    private static int _politicsStemsRevision = -1;
-    private static HashSet<string> _politicsStems;
+    private static volatile PoliticsStemsSnapshot _politicsSnapshot;
 
     private static bool HasPoliticsOverride(string identity)
     {
         var rev = Loc.Revision;
-        var stems = _politicsStems;
-        if (stems is null || _politicsStemsRevision != rev)
+        var snap = _politicsSnapshot;
+        if (snap is null || snap.Revision != rev)
         {
             lock (PoliticsStemsGate)
             {
-                if (_politicsStems is null || _politicsStemsRevision != Loc.Revision)
+                rev = Loc.Revision;
+                snap = _politicsSnapshot;
+                if (snap is null || snap.Revision != rev)
                 {
                     var next = new HashSet<string>(StringComparer.Ordinal);
                     Loc.CollectPoliticsStems(next);
-                    _politicsStems = next;
-                    _politicsStemsRevision = Loc.Revision;
+                    snap = new PoliticsStemsSnapshot(rev, next);
+                    _politicsSnapshot = snap;
                 }
-                stems = _politicsStems;
             }
         }
-        return stems.Contains(identity);
+        return snap.Stems.Contains(identity);
     }
 
     private static bool TryRoleKey(string stem, string role, string variant, bool map, out string result)

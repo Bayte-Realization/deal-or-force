@@ -153,8 +153,6 @@ public static class BrainDrain
         }
     }
 
-    [ThreadStatic] private static List<DestCandidate> _candidatesScratch;
-
     private static Nation BestDestinationFromPool(Campaign c, Nation source, List<DestCandidate> pool, out double doorMultiplier)
     {
         doorMultiplier = 1.0d;
@@ -341,8 +339,7 @@ public static class BrainDrain
         var maxWeeklyShare = M.Clamp(c.Defines.BrainDrainMaxWeeklyShare, 0f, 0.005f);
         var literacyWeight = M.Clamp(c.Defines.BrainDrainLiteracyWeight, 0f, 1f);
 
-        var candidates = _candidatesScratch ??= new List<DestCandidate>();
-        candidates.Clear();
+        var candidates = new List<DestCandidate>(c.Nations.Count);
         for (var i = 0; i < c.Nations.Count; i++)
         {
             var candidate = c.Nations[i];

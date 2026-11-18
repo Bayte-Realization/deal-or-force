@@ -556,7 +556,7 @@ public static class NationNaming
         foreach (var (people, size) in tally)
         {
             var cmp = size.CompareTo(bestSize);
-            if (bestKey is null || cmp > 0 || (cmp == 0 && string.CompareOrdinal(people, bestKey) < 0))
+            if (bestKey is null || cmp > 0 || (cmp == 0 && StringComparer.OrdinalIgnoreCase.Compare(people, bestKey) < 0))
             {
                 bestKey = people;
                 bestSize = size;
