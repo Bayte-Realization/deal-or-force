@@ -199,7 +199,7 @@ public static class AiAdmiralty
     private static StrategicWar FindWar(Campaign campaign, Nation nation)
     {
         StrategicWar landward = null;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended || !war.Involves(nation.Id)) continue;
             var enemyId = war.EnemyLeaderOf(nation.Id);
@@ -418,7 +418,7 @@ public static class AiAdmiralty
         var topology = campaign.ProvinceMap;
         var control = campaign.ProvinceController;
         StrategicWar war = null;
-        foreach (var candidate in campaign.Wars)
+        foreach (var candidate in Warfare.OpenWars(campaign))
             if (!candidate.Ended && candidate.Id == warId) { war = candidate; break; }
         if (war is null || topology is null || control is null) return reached;
         var own = (ushort)nation.MapIndex;

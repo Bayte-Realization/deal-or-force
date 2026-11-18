@@ -61,8 +61,10 @@ public static class FourSystemsIntegrationTests
         // The barracks rule on the bare hunger clock: a pocket's own stores (StrandedGarrisons)
         // would hold the clock at zero for weeks, which is tested where they are.
         c.Defines.StrandedGarrisonsEnabled = false;
-        // Cut off province 4 and 5 by putting province 3 under enemy control
+        // Cut off province 4 and 5 by putting province 3 under enemy control - an enemy at
+        // war: the hunger clock runs only for a country somebody is fighting.
         c.ProvinceController[3] = 101;
+        c.Wars.Add(new StrategicWar { Id = 98, AttackerId = 1, DefenderId = 0 });
 
         var pocketArmy = new Army
         {

@@ -155,9 +155,8 @@ public static class WarLosses
             if (map > 0 && campaign.NationByMapIndex(map) is { } holderNation)
                 holder = holderNation.Id;
         }
-        for (var i = 0; i < campaign.Wars.Count; i++)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
-            var war = campaign.Wars[i];
             if (war.Ended || !war.Involves(nationId)) continue;
             if (war.Id == assignedWarId) return war;
             if (holder >= 0 && war.Opposes(nationId, holder)) fallback = war;

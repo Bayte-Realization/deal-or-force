@@ -160,7 +160,7 @@ public static class DefconSystem
 
         // 1. Direct wars involving deterrent holders
         using (SimProfiler.Measure("    defcon:wars"))
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended) continue;
             var attackerHolder = holders.Contains(war.AttackerId);
@@ -382,7 +382,7 @@ public static class DefconSystem
 
     private static bool AtWar(Campaign campaign, Nation nation)
     {
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Involves(nation.Id)) return true;
         return false;
     }

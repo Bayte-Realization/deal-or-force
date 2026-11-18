@@ -230,7 +230,7 @@ public static class LandArrangementSystem
             {
                 c.LandArrangements.RemoveAt(index);
                 EndedLog.Add($"day {c.ElapsedDays}: {arrangement.Kind} {holder.Tag} in {RegionNames(c, arrangement)} ({owner.Tag}) ended by war: " +
-                             string.Join(" | ", c.Wars.Where(w => !w.Ended && w.Involves(owner.Id) && w.Involves(holder.Id)).Select(w => w.Name)));
+                             string.Join(" | ", Warfare.OpenWars(c).Where(w => !w.Ended && w.Involves(owner.Id) && w.Involves(holder.Id)).Select(w => w.Name)));
                 c.Chronicle.Record(c, arrangement.Kind == Lease ? "lease_voided_by_war" : "presence_became_war",
                     holder.Id, owner.Id, place: RegionNames(c, arrangement));
                 changed = true;

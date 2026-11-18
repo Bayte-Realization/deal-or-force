@@ -389,14 +389,16 @@ public partial class DealOrForceGame
                 CommodityColor(commodity), samples, sample => sample.PriceIndex(commodity))).ToArray(), StrategicChartFormat.Index);
         _ledgerBarsA.SetData("Demand satisfaction", "Shortages reduce growth and living standards. The shortest are first.", CommodityCatalog.All.Select(commodity =>
         {
-            var quote = nation.Market[commodity];
+            // A retired or just-woken country has no quotes yet (LongCampaign): an empty one, not a crash.
+            var quote = nation.Market.TryGetValue(commodity, out var known) ? known : new MarketQuote();
             return new StrategicBarEntry(CommodityCatalog.Get(commodity).Name, quote.Satisfaction,
                 quote.IsShortage ? Red : Green,
                 Simulation.Loc.Format("Production {0:0.0} · demand {1:0.0}", quote.Production, quote.Demand));
         }).OrderBy(entry => entry.Value).ThenBy(entry => entry.Name, StringComparer.Ordinal).ToArray(), StrategicChartFormat.Percent);
         _ledgerBarsB.SetData("Net commodity flow", "Positive is surplus; negative requires imports. The largest gaps are first.", CommodityCatalog.All.Select(commodity =>
         {
-            var quote = nation.Market[commodity];
+            // A retired or just-woken country has no quotes yet (LongCampaign): an empty one, not a crash.
+            var quote = nation.Market.TryGetValue(commodity, out var known) ? known : new MarketQuote();
             return new StrategicBarEntry(CommodityCatalog.Get(commodity).Name, quote.Net,
                 quote.Net >= 0f ? Green : Red,
                 Simulation.Loc.Format("Imports {0:0.0} · exports {1:0.0}", quote.Imports, quote.Exports));

@@ -80,7 +80,7 @@ public partial class DealOrForceGame
         controls.AddChild(slower);
         _pause = ActionButton("II", TogglePause, 34, 28, true);
         _pause.Name = "DatePlatePause";
-        _pause.TooltipText = Ui.Tip(Tr("Pause or resume (Space). Keys 1 to 5 set the speed and let time run; plus and minus make it one step faster or slower."));
+        _pause.TooltipText = Ui.Tip(Tr("Pause or resume (Space). Keys 1 to 5 and the marks choose the speed without starting time; plus and minus make it one step faster or slower."));
         StyleHudButton(_pause, true);
         controls.AddChild(_pause);
         var faster = ActionButton("+", () => StepSpeed(1), 28, 28);
@@ -102,7 +102,8 @@ public partial class DealOrForceGame
             Choose = speed =>
             {
                 PlayStrategicCue("ui_select");
-                SetSpeed(speed);
+                // As in Paradox games: a mark chooses the speed; only the pause button and Space start time.
+                SetSpeed(speed, resume: false);
             },
             // Read every frame: the clock is paused from many places (an event, a peace
             // conference, the save list, a seat handover, the host's heartbeat), and marks that

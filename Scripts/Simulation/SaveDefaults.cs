@@ -41,6 +41,21 @@ internal static class SaveDefaults
         property.Name.EndsWith("Id", StringComparison.Ordinal) || property.Name.EndsWith("Tag", StringComparison.Ordinal) ||
         property.Name is "Name" or "A" or "B" or "Kind" or "Day";
 
+    /// <summary>
+    /// A pinned member that names somebody else, still saying "nobody".
+    ///
+    /// The pin is for what an object IS, and it catches by the name's ending - so it also caught
+    /// every member that points at another country and starts at -1: a relation's mediator, its
+    /// intervening power and that power's target were written, as -1, on each of 244,841
+    /// relations of a save 107 years long - 22 MB of a 201 MB file saying "nobody" three times a
+    /// pair. A member whose fresh value is negative is not the object's own identity (an id of
+    /// one's own is never negative), so while it still holds that value it is left out like any
+    /// other unchanged member, and loads back as the same -1.
+    /// </summary>
+    private static bool Nobody(JsonPropertyInfo property, object fresh) =>
+        property.Name.EndsWith("Id", StringComparison.Ordinal) && property.Name.Length > 2 &&
+        fresh is int value && value < 0;
+
     /// <summary>How many members of how many types are left out when unchanged (for the bench).</summary>
     public static int Types, Members;
 
@@ -56,10 +71,10 @@ internal static class SaveDefaults
         foreach (var property in info.Properties)
         {
             if (property.Get is null || property.Set is null && !property.PropertyType.IsAssignableTo(typeof(ICollection))) continue;
-            if (Pinned(info, property)) continue;
             object a, b;
             try { a = property.Get(first); b = property.Get(second); }
             catch { continue; }
+            if (Pinned(info, property) && !Nobody(property, a)) continue;
             if (!Plain(a) || !Same(a, b)) continue;
             var fresh = a;
             Members++;

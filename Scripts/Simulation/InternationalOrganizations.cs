@@ -176,7 +176,7 @@ public static class InternationalOrganizations
         var charter = Charter(o.CharterId);
         if (charter?.Defence == true)
         {
-            if (c.Wars.Any(w => !w.Ended && w.Involves(n.Id)) || n.StrategicDoctrine.Id is "manoeuvre_warfare" or "homeland_defense")
+            if (Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(n.Id)) || n.StrategicDoctrine.Id is "manoeuvre_warfare" or "homeland_defense")
                 return Doctrine("integrated_command") is not null ? "integrated_command" : "sovereign_equality";
             return Doctrine("integrated_command") is not null ? "integrated_command" : "sovereign_equality";
         }
@@ -640,7 +640,7 @@ public static class InternationalOrganizations
                 .OrderBy(n => n.Id)
                 .FirstOrDefault(a => Eligible(c, a) && !org.Members.Contains(a.Id) &&
                     Unsanctioned(c, org, a))
-                ?? c.Wars.Where(w => !w.Ended && !w.CivilConflict && org.Members.Any(w.IsDefending))
+                ?? Warfare.OpenWars(c).Where(w => !w.Ended && !w.CivilConflict && org.Members.Any(w.IsDefending))
                 .Select(w => c.NationById(w.AttackerId))
                 .FirstOrDefault(a => a is not null && Eligible(c, a) && !org.Members.Contains(a.Id) &&
                     Unsanctioned(c, org, a));

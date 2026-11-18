@@ -214,7 +214,7 @@ public static class StateFailure
     public static int RisingsAgainst(Campaign c, Nation nation)
     {
         var count = 0;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || !war.CivilConflict || !war.Involves(nation.Id)) continue;
             foreach (var enemyId in war.EnemiesOf(nation.Id))
@@ -228,7 +228,7 @@ public static class StateFailure
 
     private static bool LosingWar(Campaign c, Nation nation)
     {
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
             if (!war.Ended && war.Involves(nation.Id) &&
                 (war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore) <= -25f)
                 return true;
@@ -720,7 +720,7 @@ public static class StateFailure
 
         var roll = Escalation.Roll(c.Seed, nation.Id, 0x4E71, c.ElapsedDays, 0x3);
         if (!forceCivilWar && roll >= d.RevolutionCivilWarChance) return null;
-        if (c.Wars.Any(w => !w.Ended && w.CivilConflict && w.Involves(nation.Id)) && !forceCivilWar) return null;
+        if (Warfare.OpenWars(c).Any(w => !w.Ended && w.CivilConflict && w.Involves(nation.Id)) && !forceCivilWar) return null;
         var owned = Breakable(c, nation);
         if (owned.Count < 2) return null;
         var adjacency = Adjacency(c, owned);
@@ -747,7 +747,7 @@ public static class StateFailure
         nation.LastCivilWarDay = c.ElapsedDays;
         Count("revolution_civil_wars");
         Log.Add($"day {c.ElapsedDays}   {nation.Tag} old regime fights on as {loyalists.Tag} regions {ground.Count} people {report.Population:N0}");
-        var war = c.Wars.LastOrDefault(w => !w.Ended && w.Involves(nation.Id) && w.Involves(loyalists.Id));
+        var war = Warfare.OpenWars(c).LastOrDefault(w => !w.Ended && w.Involves(nation.Id) && w.Involves(loyalists.Id));
         if (war is not null)
         {
             Count("revolution_sponsors", Backers(c, war, nation));
@@ -809,7 +809,7 @@ public static class StateFailure
             return "Both countries must be alive to unite.";
         if (piece.Movement is not null || centre.Movement is not null || piece.IsSubject || centre.IsSubject)
             return "Both countries must be sovereign to unite by consent.";
-        if (c.Wars.Any(w => !w.Ended && (w.Involves(piece.Id) || w.Involves(centre.Id))))
+        if (Warfare.OpenWars(c).Any(w => !w.Ended && (w.Involves(piece.Id) || w.Involves(centre.Id))))
             return "Union is a peace-time act; neither country may be at war.";
         var born = Math.Max(piece.LastSecessionDay, piece.LastCivilWarDay);
         if (c.ElapsedDays - (long)born < d.ReunionEarliestDays) return "The wounds of the split are too fresh.";

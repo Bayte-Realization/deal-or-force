@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Data layout and native code for the heaviest numeric loop of a late week: the household
+    review over every population group (HouseholdEconomy.Review). Tools-only - nothing here is
+    referenced by the game. It compiles the simulation sources like SimBench does, so the
+    variant called "the game's code" is the game's code, and the oracle is the game's own
+    HouseholdEconomy.Review run on the same loaded save.
+
+    net10.0 and the server collector because that is what the game runs on (DealOrForce.csproj);
+    a C# number measured on another runtime would be a number about another JIT.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <RootNamespace>DealOrForce.Tools.KernelBench</RootNamespace>
+    <AssemblyName>KernelBench</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <NoWarn>$(NoWarn);CS1591;CS0618;CS8981</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\ArmyOrderObservation.cs" />
+    <Compile Include="..\..\Scripts\Simulation\**\*.cs" />
+    <Compile Include="..\..\Scripts\Modding\ModOperations.cs" />
+    <Compile Include="..\..\Scripts\Modding\ModContracts.cs" />
+  </ItemGroup>
+
+  <!--
+    The two ECS libraries, for the benchmark only. Licences checked on 17 November 2026, see
+    THIRD_PARTY_NOTICES.md: Friflo.Engine.ECS is MIT but pulls Friflo.Json.Fliox, which is
+    LGPL-3.0-only - acceptable in a tool nobody ships, NOT cleared for the game.
+    Arch is Apache-2.0 with MIT/Apache-2.0 dependencies.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Friflo.Engine.ECS" Version="3.6.0" />
+    <PackageReference Include="Arch" Version="2.1.0" />
+  </ItemGroup>
+
+  <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />
+</Project>

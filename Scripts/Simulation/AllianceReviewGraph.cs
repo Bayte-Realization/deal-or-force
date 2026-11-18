@@ -17,7 +17,7 @@ internal sealed class AllianceReviewGraph
         Due.Clear(); Wars.Clear();
         foreach (var allies in _allies.Values) allies.Clear();
         foreach (var hostile in _hostile.Values) hostile.Clear();
-        foreach (var war in c.Wars) if (!war.Ended) Wars.Add(war);
+        foreach (var war in Warfare.OpenWars(c)) if (!war.Ended) Wars.Add(war);
         foreach (var pair in c.Relations)
         {
             var r = pair.Value;

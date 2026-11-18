@@ -123,7 +123,8 @@ public static partial class Warfare
         }
         foreach (var army in retreating)
         {
-            var retreat = WarCoalition.SpreadRetreatProvince(campaign, war, army, provinceId, beaten: true);
+            var retreat = WarCoalition.SpreadRetreatProvince(campaign, war, army, provinceId, beaten: true,
+                slipAway: true, out var slipped);
 
             // Nowhere to go. It was left standing in the province it had just lost, inside
             // ground the enemy now holds, and the code said as much in a diagnostic marked
@@ -133,12 +134,17 @@ public static partial class Warfare
             // counted and reported rather than quietly left in place.
             if (retreat <= 0)
             {
+                // Unless it is a rising's formation among its own people with no way past the
+                // enemy either. That one has somewhere to go that is not on the map: home
+                // (Partisans.TryGoToGround).
+                if (Partisans.TryGoToGround(campaign, war, army, provinceId)) continue;
                 DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={provinceId} war={war.Id} reason=no_line_of_retreat");
                 WarLosses.Surrender(campaign, army);
                 Attrition.Destroy(campaign, army, "destroyed: cut off with no line of retreat");
                 continue;
             }
             DiagnosticLogs.Write("simulation", $"RETREAT army={army.Id} nation={army.NationId} from={provinceId} to={retreat} ready_day={campaign.ElapsedDays + campaign.Defines.RestAfterRetreatDays}");
+            if (slipped) Partisans.SlippedAway(campaign, army, provinceId, retreat);
             var fallback = topology.CenterOf(retreat);
             army.ProvinceId = retreat;
             army.StateMapIndex = topology.ProvinceToState[retreat];

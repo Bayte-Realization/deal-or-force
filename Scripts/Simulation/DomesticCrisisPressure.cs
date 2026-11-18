@@ -56,7 +56,7 @@ public static partial class DomesticCrises
 
     private static bool HasDefeat(Campaign c, Nation n)
     {
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
             if (!war.Ended && war.Involves(n.Id) && (war.IsAttacking(n.Id) ? war.WarScore : -war.WarScore) < -15f)
                 return true;
         return false;

@@ -853,7 +853,7 @@ public static class EconomySystem
             if (!nation.IsHuman) continue;
             SovereignFinance.Prepare(campaign, nation, false);
             var atWar = false;
-            foreach (var war in campaign.Wars)
+            foreach (var war in Warfare.OpenWars(campaign))
                 if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
 
             var weeklyOutput = nation.Gdp / 52f;
@@ -975,6 +975,8 @@ public static class EconomySystem
             if (index > 0 && index % EconomyStageCountries == 0) yield return 0;
             using var stage = SimProfiler.Measure("economy");
             var nation = campaign.Nations[index];
+            // A retired country (LongCampaign) keeps no books: no ledger to close, nothing to zero.
+            if (campaign.IsRetired(nation)) continue;
             // The money ledger's week closes here, before this week's budget is booked, so each
             // closed week holds exactly one budget; and penalties that have run out go first.
             MoneyLedger.Close(campaign, nation);
@@ -984,9 +986,14 @@ public static class EconomySystem
             // Fallen countries (all ground lost, the fall flow has ruled) are not economies:
             // their books close the day the fall is decided, instead of a stateless remnant
             // financing a phantom army for months.
-            if (nation.Movement is null && (!campaign.HasOwnedLand(nation) || campaign.Fallen.Contains(nation.Id)))
+            // The list alone is not proof of a fall, though: a country on it that holds a region
+            // of its own is a list that was not kept (MovementFall.ReturnTheLanded), and emptying
+            // its regions' people on the strength of it is how 41 countries in one long campaign
+            // stood on the map with nobody in them. Ground decides; the list only confirms.
+            var fallen = campaign.Fallen.Contains(nation.Id) && campaign.StatesOf(nation).Length == 0;
+            if (nation.Movement is null && (!campaign.HasOwnedLand(nation) || fallen))
             {
-                nation.Population = campaign.Fallen.Contains(nation.Id) ? 0 : nation.Population;
+                nation.Population = fallen ? 0 : nation.Population;
                 nation.Gdp = nation.GrossOutput = 0;
                 nation.WeeklyTaxIncome = nation.WeeklyExpenses = nation.WeeklyBalance = 0;
                 continue;

@@ -28,7 +28,7 @@ public static partial class FlagCatalog
         if (!changed) return view.Active;
 
         view.Active.Clear();
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended) view.Active.Add(war);
         view.Count = campaign.Wars.Count;
         view.Revision = campaign.WarRevision;

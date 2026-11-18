@@ -168,7 +168,7 @@ public static class Guarantee
 
     private static bool Fighting(Campaign campaign, int nationId)
     {
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Involves(nationId)) return true;
         return false;
     }

@@ -74,6 +74,12 @@ public sealed class ArmyGroup
     public int CommandersLost;
     /// <summary>How many of its commanders the government has relieved (Generals.Relieve).</summary>
     public int CommandersRelieved;
+    /// <summary>
+    /// The last weekly review (Generals.Tidy) that found formations of its own country under it -
+    /// or, for a group the computer runs, the first that found it without any. -1 until then. A
+    /// group left empty for Defines.ArmyGroupEmptyDays after it is struck off.
+    /// </summary>
+    public int StaffedDay = -1;
 }
 
 /// <summary>
@@ -237,8 +243,9 @@ public sealed class CreateArmyGroupCommand : ICampaignCommand
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
         if (campaign.NationById(IssuerId) is null) return;
-        var id = campaign.ArmyGroups.Count == 0 ? 1 : campaign.ArmyGroups.Max(group => group.Id) + 1;
-        var number = campaign.ArmyGroups.Count(group => group.NationId == IssuerId) + 1;
+        // Never an id or a number a struck-off group had (Generals.NewGroupId, NextGroupNumber).
+        var number = Generals.NextGroupNumber(campaign, IssuerId);
+        var id = Generals.NewGroupId(campaign);
         campaign.ArmyGroups.Add(new ArmyGroup
         {
             Id = id,
@@ -341,7 +348,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
         var enemy = targetController == nation.MapIndex
             ? null
             : campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == targetController);
-        var war = enemy is null ? null : campaign.Wars.FirstOrDefault(candidate => !candidate.Ended &&
+        var war = enemy is null ? null : Warfare.OpenWars(campaign).FirstOrDefault(candidate => !candidate.Ended &&
             candidate.Opposes(nation.Id, enemy.Id));
         if (war is null && !MilitaryAccess.CanEnter(campaign, nation.Id, targetController))
         {
@@ -352,7 +359,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
         var continuingAttack = AppendWaypoint && army.AssignedWarId >= 0 && army.PlannedRoute.Count > 0;
         if (continuingAttack && war is null)
         {
-            war = campaign.Wars.Find(candidate => candidate.Id == army.AssignedWarId && !candidate.Ended);
+            war = Warfare.OpenWars(campaign).Find(candidate => candidate.Id == army.AssignedWarId && !candidate.Ended);
             if (war is not null)
                 enemy = campaign.NationById(war.EnemyLeaderOf(nation.Id));
         }
@@ -382,7 +389,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
                 var standing = controllers[army.ProvinceId];
                 var captor = standing == nation.MapIndex ? null
                     : campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == standing);
-                var captorWar = captor is null ? null : campaign.Wars.FirstOrDefault(candidate =>
+                var captorWar = captor is null ? null : Warfare.OpenWars(campaign).FirstOrDefault(candidate =>
                     !candidate.Ended && candidate.Opposes(nation.Id, captor.Id));
                 var breakout = captorWar is null ? Array.Empty<int>()
                     : WarCoalition.OperationalRoute(campaign, captorWar, nation.Id,
@@ -466,7 +473,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
         var controller = controllers[TargetProvinceId];
         var targetNation = controller == nation.MapIndex ? null
             : campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == controller);
-        var targetWar = targetNation is null ? null : campaign.Wars.FirstOrDefault(candidate =>
+        var targetWar = targetNation is null ? null : Warfare.OpenWars(campaign).FirstOrDefault(candidate =>
             !candidate.Ended && candidate.Opposes(nation.Id, targetNation.Id));
         if (targetWar is null && !MilitaryAccess.CanEnter(campaign, nation.Id, controller))
         {
@@ -487,7 +494,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
         // country's province into a corridor merely because a different war exists.
         var captor = from > 0 && from < controllers.Length && controllers[from] != nation.MapIndex
             ? campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == controllers[from]) : null;
-        var captorWar = captor is null ? null : campaign.Wars.FirstOrDefault(candidate =>
+        var captorWar = captor is null ? null : Warfare.OpenWars(campaign).FirstOrDefault(candidate =>
             !candidate.Ended && candidate.Opposes(nation.Id, captor.Id));
         return captorWar is not null && WarCoalition.OperationalRoute(campaign, captorWar, nation.Id,
             from, TargetProvinceId, controllers).Length > 0;
@@ -620,6 +627,7 @@ public sealed class SplitArmyCommand : ICampaignCommand
             PocketSinceDay = army.PocketSinceDay,
             HoldoutSinceDay = army.HoldoutSinceDay,
             ReliefDistance = army.ReliefDistance,
+            LivingOffLand = army.LivingOffLand,
             ReadyDay = army.ReadyDay,
             Latitude = army.Latitude,
             Longitude = army.Longitude
@@ -809,24 +817,25 @@ public static class MilitaryOperations
                     (row >= 0 ? factors.Readiness(campaign, row)
                         : DefconSystem.ReadinessRecoveryMultiplier(campaign, army.NationId));
                 if (army.OrderKind == ArmyOrder.ReserveFront) recovery *= 1.25f;
-                // A closed pocket is living on what it carried. Rest would put the day's
-                // organisation straight back, and the dry-out would never arrive.
-                if (army.CutOff) recovery = 0f;
+                // A closed pocket is living on what it carried, and rests accordingly: at half
+                // pace while the stores last, a quarter once they are gone. It used to rest
+                // not at all, so a pocket that beat off an assault stayed as spent as the
+                // assault left it and fell to the next shove. The dry-out still arrives - the
+                // ceiling below comes down with the hungry days whatever was recovered.
+                if (army.CutOff)
+                    recovery *= army.PocketStores > 0f
+                        ? campaign.Defines.PocketRecoveryWithStores
+                        : campaign.Defines.PocketRecoveryHungry;
                 army.Organisation = M.Clamp01(army.Organisation + recovery);
                 Reinforce(campaign, army, reinforcementWeights.GetValueOrDefault(army.NationId, 1f));
             }
 
+            // And nothing else wastes it here. There was a third hunger in this place, by
+            // the hour, for any cut-off formation whose supply had sunk under 0.16 - on top of
+            // the daily clock (LogisticsSystem.AgeCutOff) and the daily wasting (Attrition).
+            // Hunger now has one clock and one wasting, both with a floor, and the supply
+            // floor is 0.15: left in, this would have run for ever.
             if (army.CutOff) LogisticsSystem.HoldCauldron(campaign, army);
-
-            // By the hour. These were written as a step's worth when a step was a day, and the
-            // pockets that surrender when they starve were built and measured once the step
-            // was an hour - so an hour's worth is what the game has been playing, and scaling
-            // by the step keeps that while a longer step no longer starves a pocket slower.
-            if (army.CutOff && army.SupplyLevel < 0.16f)
-            {
-                army.Organisation = M.Clamp01(army.Organisation - 0.012f * campaign.TickHours);
-                army.Strength = M.Clamp01(army.Strength - 0.00045f * campaign.TickHours);
-            }
 
             if (army.InBattle) continue;
 
@@ -942,7 +951,7 @@ public static class MilitaryOperations
     {
         var blockingNation = nextProvince > 0 && nextProvince <= topology.ProvinceCount
             ? campaign.Nations.Find(n => n.MapIndex == controllers[nextProvince]) : null;
-        var crossingWar = nation is null || blockingNation is null ? null : campaign.Wars.Find(w =>
+        var crossingWar = nation is null || blockingNation is null ? null : Warfare.OpenWars(campaign).Find(w =>
             !w.Ended && w.Opposes(nation.Id, blockingNation.Id));
         if (army.DirectOrder && army.OrderProvinceId > 0 && crossingWar is not null)
         {
@@ -1051,7 +1060,7 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
     {
         StrategicWar first = null, kept = null;
         var count = 0;
-        foreach (var candidate in campaign.Wars)
+        foreach (var candidate in Warfare.OpenWars(campaign))
         {
             if (candidate.Ended || !candidate.Involves(issuerId)) continue;
             if (candidate.Id == named) return candidate;
@@ -1066,7 +1075,7 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         StrategicWar nearest = null;
         var best = float.MaxValue;
         var keptDistance = float.MaxValue;
-        foreach (var candidate in campaign.Wars)
+        foreach (var candidate in Warfare.OpenWars(campaign))
         {
             if (candidate.Ended || !candidate.Involves(issuerId)) continue;
             var distance = FrontDistance(map, candidate.FriendlyFront(issuerId), latitude, longitude);

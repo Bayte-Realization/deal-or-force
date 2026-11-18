@@ -32,7 +32,7 @@ public static class WarCoalition
 
     internal static StrategicWar AssignedWar(Campaign c, Army army)
     {
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
             if (war.Id == army.AssignedWarId && !war.Ended && war.Involves(army.NationId)) return war;
         return null;
     }
@@ -165,7 +165,7 @@ public static class WarCoalition
         }
     }
 
-    private static bool EnemyStandsIn(Campaign c, StrategicWar war, int nationId, int province)
+    internal static bool EnemyStandsIn(Campaign c, StrategicWar war, int nationId, int province)
     {
         if (war is null) return false;
         foreach (var unit in c.Armies)
@@ -199,8 +199,21 @@ public static class WarCoalition
     /// Intelligently select a safe retreat province that spreads retreating units across
     /// the frontline rather than bunching them all into a single lowest-id tile.
     /// </summary>
-    internal static int SpreadRetreatProvince(Campaign c, StrategicWar war, Army army, int from, bool beaten = false)
+    internal static int SpreadRetreatProvince(Campaign c, StrategicWar war, Army army, int from, bool beaten = false) =>
+        SpreadRetreatProvince(c, war, army, from, beaten, slipAway: false, out _);
+
+    /// <summary>
+    /// The same, for a formation whose morale is gone: <paramref name="slipAway"/> lets a
+    /// rising's formation with no ground of its side to fall back on slip into a neighbouring
+    /// province among its own people (Partisans.SlipAwayProvince), and <paramref name="slipped"/>
+    /// says that is where it is going. Only the places that decide a broken formation's fate
+    /// ask this: whether a pocket that still has morale holds on (PocketResistance) is about
+    /// its own side's ground, and a guerrilla's way out does not make a stand a retreat.
+    /// </summary>
+    internal static int SpreadRetreatProvince(Campaign c, StrategicWar war, Army army, int from, bool beaten,
+        bool slipAway, out bool slipped)
     {
+        slipped = false;
         var map = c.ProvinceMap;
         var controls = c.ProvinceController;
         var own = c.NationById(army.NationId);
@@ -253,8 +266,16 @@ public static class WarCoalition
                 bestProvince = p;
             }
         }
-        if (bestProvince > 0 || !beaten || c.Defines.RetreatSearchDepth <= 1) return bestProvince;
-        return DeepRetreatProvince(c, war, army, from, c.Defines.RetreatSearchDepth);
+        if (bestProvince > 0 || !beaten) return bestProvince;
+        if (c.Defines.RetreatSearchDepth > 1)
+        {
+            var deep = DeepRetreatProvince(c, war, army, from, c.Defines.RetreatSearchDepth);
+            if (deep > 0) return deep;
+        }
+        if (!slipAway) return 0;
+        var away = Partisans.SlipAwayProvince(c, war, army, from);
+        slipped = away > 0;
+        return away;
     }
 
     /// <summary>

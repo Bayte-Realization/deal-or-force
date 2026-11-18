@@ -143,7 +143,7 @@ public static class CivilWarOutbreak
         if (nation.LastCivilWarDay > 0 && c.ElapsedDays - nation.LastCivilWarDay < d.CivilWarCooldownDays)
             return "The country is protected from another outbreak during recovery.";
         // One civil war at a time: a state already fighting its own rebels is not split twice.
-        if (c.Wars.Any(w => !w.Ended && w.CivilConflict && w.Involves(nation.Id))) return "An existing civil war must end before another outbreak.";
+        if (Warfare.OpenWars(c).Any(w => !w.Ended && w.CivilConflict && w.Involves(nation.Id))) return "An existing civil war must end before another outbreak.";
         if (nation.Population < d.CivilWarMinimumPopulation || c.StatesOf(nation).Count(s => s.Population > 0) < d.CivilWarMinimumRegions)
             return "Too few residents or governed regions for a territorial civil war.";
         if (!ignoreStability && nation.Stability >= d.CivilWarStabilityThreshold) return "Institutions remain above the civil-war instability threshold.";
@@ -189,7 +189,7 @@ public static class CivilWarOutbreak
     /// <summary>A country at war abroad and losing has its army away from home.</summary>
     private static bool LosingForeignWar(Campaign c, Nation nation)
     {
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
             if (!war.Ended && !war.CivilConflict && war.Involves(nation.Id) &&
                 (war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore) < -10f)
                 return true;

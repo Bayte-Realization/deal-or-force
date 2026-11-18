@@ -82,8 +82,10 @@ public static class GovernmentSupplyTests
             EquipmentLogistics.DailyLimit(c, c.Armies[1]) > 0,
             "national replacements reach the emergency government's rear but not the separate depot");
         for (var day = 1; day < 14; day++) Morning(c, day);
-        Check(c.Armies[0].DaysCutOff == 14 && c.Armies[0].SupplyLevel == 0 && !c.Armies[1].CutOff,
-            "losing the capital does not keep the other pocket alive through repeated traces");
+        // Down to the hunger floor, where it used to be nothing (PocketHungerSupplyFloor).
+        Check(c.Armies[0].DaysCutOff == 14 &&
+              MathF.Abs(c.Armies[0].SupplyLevel - c.Defines.PocketHungerSupplyFloor) < 0.0005f && !c.Armies[1].CutOff,
+            "losing the capital does not keep the other pocket supplied through repeated traces");
         Check(c.Armies.All(a => a.Personnel == 10000 && a.Strength == 1f && a.Equipment == .2f),
             "the route decision itself neither destroys people nor durable kit");
 

@@ -239,7 +239,7 @@ public static class StrategicDoctrines
             if (nation.StrategicDoctrine.Id.Length == 0) { Adopt(campaign, nation, wanted); continue; }
             if (string.Equals(nation.StrategicDoctrine.Id, wanted, StringComparison.Ordinal)) continue;
             if (day - nation.StrategicDoctrine.LastChangeDay < campaign.Defines.StrategicAiChangeCooldownDays) continue;
-            if (campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id))) continue;
+            if (Warfare.OpenWars(campaign).Any(war => !war.Ended && war.Involves(nation.Id))) continue;
             Adopt(campaign, nation, wanted);
         }
     }

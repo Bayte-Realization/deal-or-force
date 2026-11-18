@@ -140,9 +140,8 @@ public static class PeacefulFormation
 
     private static bool AtPeace(Campaign campaign, Nation nation)
     {
-        for (var i = 0; i < campaign.Wars.Count; i++)
+        foreach (var w in Warfare.OpenWars(campaign))
         {
-            var w = campaign.Wars[i];
             if (!w.Ended && w.Involves(nation.Id)) return false;
         }
         return true;

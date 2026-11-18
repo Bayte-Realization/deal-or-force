@@ -119,7 +119,7 @@ public static class OrganizationDynamics
         target += members.Average(m => TradeWithMembers(m, members)) * 0.2f;
         // A danger in common: a member at war with an outsider, for a pact that exists to answer it.
         if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true &&
-            members.Any(m => c.Wars.Any(w => !w.Ended && !w.CivilConflict && w.IsDefending(m.Id) && w.EnemiesOf(m.Id).All(e => !org.Members.Contains(e)))))
+            members.Any(m => Warfare.OpenWars(c).Any(w => !w.Ended && !w.CivilConflict && w.IsDefending(m.Id) && w.EnemiesOf(m.Id).All(e => !org.Members.Contains(e)))))
             target += 0.12f;
         // Hegemonic rivalry inside the same council erodes unity when the top two members are rivals or far apart.
         if (InternationalOrganizations.Leader(c, org) is { } leader && InternationalOrganizations.Challenger(c, org) is { } challenger)
@@ -140,7 +140,7 @@ public static class OrganizationDynamics
                 if (mainLeader.NationalCourse.Dominant is "isolationism" or "armed_neutrality") target -= 0.14f * weight;
                 if (mainLeader.DebtCondition >= DebtCondition.Insolvent) target -= 0.12f * weight;
                 if (mainLeader.Stability < 0.35f) target -= 0.10f * weight;
-                if (c.Wars.Any(w => !w.Ended && w.CivilConflict && (w.AttackerId == mainLeader.Id || w.DefenderId == mainLeader.Id))) target -= 0.18f * weight;
+                if (Warfare.OpenWars(c).Any(w => !w.Ended && w.CivilConflict && (w.AttackerId == mainLeader.Id || w.DefenderId == mainLeader.Id))) target -= 0.18f * weight;
             }
         }
         return M.Clamp(target, 0.05f, 0.95f);
@@ -272,7 +272,7 @@ public static class OrganizationDynamics
         }
         else
             // Whoever attacks a fellow member is out.
-            foreach (var war in c.Wars)
+            foreach (var war in Warfare.OpenWars(c))
             {
                 if (war.Ended || war.CivilConflict) continue;
                 if (!org.Members.Contains(war.AttackerId) || !war.Side(false).Any(org.Members.Contains)) continue;

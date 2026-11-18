@@ -194,12 +194,7 @@ public static class ProxyWars
         return Math.Min(3, count);
     }
 
-    private static StrategicWar WarById(Campaign c, int id)
-    {
-        foreach (var war in c.Wars)
-            if (war.Id == id) return war;
-        return null;
-    }
+    private static StrategicWar WarById(Campaign c, int id) => Warfare.WarById(c, id);
 
     /// <summary>What a level of support costs this sponsor a week.</summary>
     public static float WeeklyCost(Campaign c, Nation sponsor, int level) =>
@@ -371,7 +366,7 @@ public static class ProxyWars
     {
         var defines = c.Defines;
         var cycle = Math.Max(1, defines.ProxyAiReviewDays);
-        var live = c.Wars.Where(w => !w.Ended).ToArray();
+        var live = Warfare.OpenWars(c).Where(w => !w.Ended).ToArray();
         var ticked = 0;
         foreach (var sponsor in c.Nations)
         {

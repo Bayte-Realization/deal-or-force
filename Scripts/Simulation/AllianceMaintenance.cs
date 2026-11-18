@@ -47,7 +47,7 @@ public static class AllianceMaintenance
         if (r.NonAggressionPact) Term("Mutual assurances", 0.05f);
         if (r.EmbargoByA || r.EmbargoByB) Term("Sanctions against an ally", -0.35f);
         var fightingTogether = false;
-        foreach (var w in graph?.Wars ?? c.Wars)
+        foreach (var w in graph?.Wars ?? Warfare.OpenWars(c))
             if (!w.Ended && w.Involves(a.Id) && w.Involves(b.Id) && !w.Opposes(a.Id, b.Id))
             {
                 fightingTogether = true;

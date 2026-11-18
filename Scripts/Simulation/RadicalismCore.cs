@@ -67,7 +67,7 @@ public static class RadicalismCore
     {
         var result = new Breakdown();
         if (c is null || nation is null || state is null) return result;
-        var atWar = c.Wars.Exists(w => !w.Ended && w.Involves(nation.Id));
+        var atWar = Warfare.OpenWars(c).Exists(w => !w.Ended && w.Involves(nation.Id));
         var budget = BudgetCore.Evaluate(nation, nation.Gdp / 52f, atWar);
         var policy = GovernmentFocusCatalog.Of(nation.GovernmentFocus).Radicalism +
                      PoliticsCore.GovernmentOf(nation).Radicalism + PoliticsCore.IdeologyOf(nation).Radicalism;
