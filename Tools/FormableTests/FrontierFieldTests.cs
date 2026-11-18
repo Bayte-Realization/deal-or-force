@@ -53,7 +53,7 @@ static class FrontierFieldTests
 
     private static void Distances()
     {
-        const int width = 32, height = 12;
+        const int width = 64, height = 12;
         var (holders, _) = Split(width, height, 10);
         var d = FrontierField.Distances(holders, width, height);
         float At(int x, int y) => d[y * width + x];
@@ -61,10 +61,13 @@ static class FrontierFieldTests
             "a cell on either side of the frontier is half a cell from it");
         Check(Math.Abs(At(13, 5) - 3.5f) < 1e-4 && Math.Abs(At(6, 5) - 3.5f) < 1e-4,
             "three cells further on it is three and a half");
-        Check(Math.Abs(At(20, 5) - FrontierField.Cap) < 1e-4, "far inland it holds the cap");
-        // Column 31 is east of column 0: the world wraps, so the western country's west edge is a
+        Check(Math.Abs(At(22, 5) - 12.5f) < 1e-4,
+            "twelve cells inland keeps true distance beyond the old 8-cell ceiling");
+        Check(Math.Abs(At(36, 5) - FrontierField.Cap) < 1e-4 && FrontierField.Cap >= 16f && FrontierField.Cap <= 24f,
+            "far inland it holds the extended 16..24 cell cap");
+        // Column 63 is east of column 0: the world wraps, so the western country's west edge is a
         // frontier with the eastern country too.
-        Check(Math.Abs(At(0, 5) - 0.5f) < 1e-4 && Math.Abs(At(31, 5) - 0.5f) < 1e-4,
+        Check(Math.Abs(At(0, 5) - 0.5f) < 1e-4 && Math.Abs(At(width - 1, 5) - 0.5f) < 1e-4,
             "east and west wrap: the last column meets the first");
         var sea = new ushort[width * height];
         Array.Fill(sea, (ushort)1);
@@ -143,21 +146,23 @@ static class FrontierFieldTests
     {
         var scripts = Path.Combine(GameDataLoader.DataFolder(), "..", "Scripts");
         var globe = File.ReadAllText(Path.Combine(scripts, "gfx", "GlobePresentation.cs"));
+        var full = MapShaderSource.LoadFull();
         var plate = File.ReadAllText(Path.Combine(scripts, "gfx", "GlobePlateRepaint.cs"));
-        Check(Regex.IsMatch(globe, @"uniform\s+sampler2D\s+frontier_field\s*:\s*filter_linear_mipmap") &&
-              globe.Contains("uniform float frontier_ready = 0.0;"),
-            "the map declares a filtered, mipmapped field that starts switched off");
-        Check(globe.Contains("float frontier_weight = frontier_ready * smoothstep(") &&
-              globe.Contains("nation_edge_pixels = mix(nation_edge_pixels, frontier_pixels, frontier_weight);"),
+        Check(Regex.IsMatch(full, @"uniform\s+sampler2D\s+frontier_field\s*:\s*filter_linear_mipmap") &&
+              full.Contains("uniform float frontier_ready = 0.0;") &&
+              Regex.IsMatch(full, @"uniform\s+float\s+frontier_cap\s*=\s*" + FrontierField.Cap.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + @";"),
+            "the map declares a filtered, mipmapped field starting switched off and aligned with FrontierField.Cap");
+        Check(plate.Contains("SetShaderParameter(\"frontier_cap\", Simulation.FrontierField.Cap);"),
+            "plate repaint uploads FrontierField.Cap cleanly");
+        Check(full.Contains("float frontier_weight = frontier_ready * smoothstep(") &&
+              full.Contains("nation_edge_pixels = mix(nation_edge_pixels, frontier_pixels, frontier_weight);"),
             "the far stroke and everything drawn off the frontier distance read the field by the same weight");
         Check(plate.Contains("Simulation.FrontierField.Build(authored, topology.CellToProvince, width, height, owners, authoredOwners)") &&
               plate.Contains("FrontierImage(frontierAuthored, topology, owners, authoredOwners)") &&
               plate.Contains("ApplyFrontier(done.Result.Frontier);"),
             "every plate repaint builds the field from the same owners and swaps both in together");
         Check(globe.Contains("ApplyFrontier(result.Frontier);"), "the opening map uploads the field with the plate");
-        var start = globe.IndexOf("Code = @\"shader_type spatial;", StringComparison.Ordinal) + "Code = @\"".Length;
-        var end = globe.IndexOf("\n}\"", start, StringComparison.Ordinal);
-        var packed = PackedMapShader.Build(MapColorSpaceShader.Build(globe[start..(end + 2)]));
+        var packed = PackedMapShader.Build(MapColorSpaceShader.Build(full));
         Check(!packed.Contains("frontier_field,") && !Regex.IsMatch(packed, @"uniform\s+sampler2D\s+frontier_field") &&
               Regex.Matches(packed, @"uniform\s+sampler\w+\s+").Count == PackedMapShader.TextureUnits,
             "the Compatibility build drops the field and keeps its twelve texture units");

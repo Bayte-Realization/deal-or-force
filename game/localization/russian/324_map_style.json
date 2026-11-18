@@ -7,5 +7,9 @@
   "map.style.vivid": "Насыщенный",
   "map.style.relief": "Рельефный",
   "Cloud veil strength": "Плотность облачной пелены",
-  "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not.": "Сохраняет движущиеся облака, но позволяет сделать их прозрачнее, чтобы лучше читать политическую карту. Меняются только декоративные облака и их тени — не туман войны и не разведданные."
+  "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not.": "Сохраняет движущиеся облака, но позволяет сделать их прозрачнее, чтобы лучше читать политическую карту. Меняются только декоративные облака и их тени — не туман войны и не разведданные.",
+  "Map look": "Облик карты",
+  "Atlas: warm paper and ink, with a paper map from far away. Classic: the previous look. Changes immediately, without reducing detail or changing gameplay.": "Атлас — тёплая бумага и чернила, бумажная карта издалека; Классика — прежний вид. Применяется сразу, без снижения детализации и изменения игровых правил.",
+  "map.look.atlas": "Атлас",
+  "map.look.classic": "Классика"
 }

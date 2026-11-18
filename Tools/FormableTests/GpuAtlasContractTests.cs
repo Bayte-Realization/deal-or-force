@@ -19,14 +19,16 @@ static class GpuAtlasContractTests
             Check(source.Contains("texture(" + uniform + ","), "live gameplay texture is sampled: " + uniform);
         Check(source.Contains("texture(resource_colors, entry)"),
             "resource layer uses the province lookup, not geographic UV coordinates");
-        var seam = File.ReadAllText(Path.Combine(GameDataLoader.DataFolder(), "..", "Scripts", "gfx", "SeamSamplingShader.cs"));
-        Check(!Regex.IsMatch(seam, @"textureQueryLod\s*\(") && seam.Contains("dFdx(texels)") && seam.Contains("dFdy(texels)"),
+        var full = MapShaderSource.LoadFull();
+        Check(full.StartsWith("shader_type spatial;", StringComparison.Ordinal) &&
+            full.TrimEnd().EndsWith("}", StringComparison.Ordinal),
+            "canonical full shader source loads cleanly from game/shaders/globe_map.gdshader");
+        Check(!Regex.IsMatch(full, @"textureQueryLod\s*\(") && full.Contains("dFdx(texels)") && full.Contains("dFdy(texels)"),
             "full atlas seam calculation also avoids the reproduced unsupported call");
         var globe = File.ReadAllText(Path.Combine(GameDataLoader.DataFolder(), "..", "Scripts", "gfx", "GlobePresentation.cs"));
-        var start = globe.IndexOf("Code = @\"shader_type spatial;", StringComparison.Ordinal) + "Code = @\"".Length;
-        var end = globe.IndexOf("\n}\"", start, StringComparison.Ordinal);
-        Check(start > 0 && end > start, "full shader source is located, not replaced by a test-only approximation");
-        var full = globe[start..(end + 2)];
+        Check(!globe.Contains("shader_type spatial;", StringComparison.Ordinal) &&
+            globe.Contains("LoadGlobeShaderSource()", StringComparison.Ordinal),
+            "GlobePresentation loads the extracted shader rather than keeping a duplicate inline literal");
         var corrected = MapColorSpaceShader.Build(full);
         Check(corrected.Contains("atlas_color_sample(texture(terrain_tiles, vec3(terrain_uv, near_slot)))") &&
             corrected.Contains("atlas_color_output(mix(base,"), "colour samples decode before mixing; final albedo encodes only for sRGB backends");
@@ -61,6 +63,19 @@ static class GpuAtlasContractTests
         Check(QualityProfiles.For("auto", "NVIDIA GeForce RTX 3060", "gl_compatibility").Id == QualityProfiles.Ladder[0].Id &&
             QualityProfiles.For("auto", "Intel HD Graphics 530", "gl_compatibility").CityLabels,
             "Compatibility is not mistaken for a mandatory low-quality preset");
+        // The atlas look (Simulation.MapLook) adds no texture: the same twelve units in
+        // Compatibility, and not one trace of the frontier field there, which the packed build
+        // cannot bind and which frontier_ready must therefore never claim.
+        Check(Regex.IsMatch(full, @"uniform\s+float\s+atlas_look\s*=\s*0\.0;") &&
+              Regex.IsMatch(full, @"uniform\s+float\s+paper_mix\s*=\s*0\.0;"),
+            "the full map declares the atlas switch and the paper share, both off by default");
+        var lookPacked = PackedMapShader.Build(corrected);
+        Check(Regex.Matches(lookPacked, @"uniform\s+sampler\w+\s+").Count == 12 && !lookPacked.Contains("frontier_field"),
+            "with the atlas look the packed build still binds exactly twelve samplers and never the frontier field");
+        Check(lookPacked.Contains("uniform float atlas_look") && lookPacked.Contains("if (atlas_look > 0.5"),
+            "the packed build carries the atlas look itself, not a stripped copy");
+        Check(!Regex.IsMatch(full, @"uniform\s+sampler\w+\s+(look_|atlas_look|paper_)"),
+            "the atlas look declares no sampler of its own");
         MapStyleSettingTests.Run();
     }
 }
