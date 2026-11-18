@@ -25,7 +25,7 @@
 // are refused by name (see REFUSED) however they are asked for.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,17 +33,48 @@ import { fileURLToPath } from 'node:url';
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const API = 'https://openrouter.ai/api/v1';
 
-// Two defaults because the two jobs have different prices: a judgement wants the strongest
-// reasoning model, a bulk read wants a cheap one with a long context. Both are overridable
-// per call and by environment, since model names on OpenRouter change monthly.
-const MODEL_JUDGE = process.env.ADVISOR_MODEL ?? 'google/gemini-4-argon';
-const MODEL_BULK = process.env.ADVISOR_BULK_MODEL ?? 'google/gemini-4-hydrogen';
-// The third job is not a conversation at all. A decision model answers structured questions
+// Defaults across the four adviser roles. Every role accepts either a short profile alias
+// from PROFILES or any exact OpenRouter model id, and defaults are overridable via env.
+const MODEL_JUDGE = process.env.ADVISOR_MODEL ?? 'google/gemini-4-carbon';
+const MODEL_BULK = process.env.ADVISOR_BULK_MODEL ?? 'deepseek/deepseek-v4.1-flash-1017';
+const MODEL_SEARCH = process.env.ADVISOR_SEARCH_MODEL ?? 'perplexity/sonar-pro-search';
+// The fourth job is not a conversation at all. A decision model answers structured questions
 // about a state - yes/no with a probability, one of named options, a score on a ladder - and
 // returns a confidence with each. It writes no prose, so it cannot argue, pad or wander, and
 // it costs a fraction of a chat model: the right tool for a vote, a triage or a gate.
 const MODEL_DECISION = process.env.ADVISOR_DECISION_MODEL ?? 'google/gemini-decision-1';
 const DECISIONS_API = 'https://openrouter.ai/api/alpha';
+
+const PROFILES = {
+  fable: 'anthropic/claude-fable-5.2',
+  frontier: 'anthropic/claude-fable-5.2',
+  'fable-code': 'anthropic/claude-fable-5.1',
+  code: 'anthropic/claude-fable-5.1',
+  astra: 'openai/gpt-6.2-astra',
+  'astra-pro': 'openai/gpt-6.2-astra-pro',
+  carbon: 'google/gemini-4-carbon',
+  argon: 'google/gemini-4-argon',
+  hydrogen: 'google/gemini-4-hydrogen',
+  grok: 'x-ai/grok-4.7',
+  deepseek: 'deepseek/deepseek-v4.1-flash-1017',
+  bulk: 'deepseek/deepseek-v4.1-flash-1017',
+  kimi: 'moonshotai/kimi-k3.1-pro',
+  glm: 'z-ai/glm-5.3-flash',
+  fast: 'openai/gpt-oss-120b',
+  search: 'perplexity/sonar-pro-search',
+  sonar: 'perplexity/sonar-pro-search',
+  decision: 'google/gemini-decision-1',
+  fusion: 'openrouter/fusion',
+  pareto: 'openrouter/pareto-code',
+  auto: 'openrouter/auto',
+  'auto-code': 'openrouter/auto-code'
+};
+
+function resolveModel(model) {
+  if (!model) return model;
+  const key = String(model).trim();
+  return PROFILES[key.toLowerCase()] ?? key;
+}
 
 const MAX_FILE_CHARS = 400_000;      // one file
 const MAX_TOTAL_CHARS = 2_400_000;   // one call: about 600k tokens, inside a 1M context
@@ -66,8 +97,27 @@ function apiKey() {
   return null;
 }
 
-const NO_KEY = 'No OpenRouter key found. The owner sets it once, in their own terminal (never in chat): ' +
-  'setx OPENROUTER_API_KEY "<key>"  - it is then picked up without restarting anything.';
+const NO_KEY = 'No OpenRouter key found. Copy your sk-or-... key to the clipboard and run once: ' +
+  'node Tools/advisor-mcp/server.mjs --set-key-from-clipboard  (or setx OPENROUTER_API_KEY "<key>").';
+
+async function setKeyFromClipboard() {
+  if (process.platform !== 'win32') {
+    throw new Error('--set-key-from-clipboard is currently implemented for Windows only.');
+  }
+  const key = execFileSync('powershell', ['-NoProfile', '-Command', 'Get-Clipboard -Raw'], { encoding: 'utf8' }).trim();
+  if (!key.startsWith('sk-or-') || key.length < 20) {
+    throw new Error('Clipboard does not hold a valid OpenRouter key (expected "sk-or-..." with length >= 20). Copy your key first and re-run.');
+  }
+  const dir = join(homedir(), '.config', 'deal-or-force');
+  mkdirSync(dir, { recursive: true });
+  const keyFile = join(dir, 'openrouter.key');
+  writeFileSync(keyFile, key + '\n', { encoding: 'utf8', mode: 0o600 });
+  execFileSync('reg', ['add', 'HKCU\\Environment', '/v', 'OPENROUTER_API_KEY', '/t', 'REG_SZ', '/d', key, '/f'], { stdio: 'ignore' });
+  process.env.OPENROUTER_API_KEY = key;
+  const tail = key.slice(-4);
+  const st = await status();
+  return `Saved key (len=${key.length}, tail=...${tail}) to user profile & HKCU\\Environment\n${st}`;
+}
 
 async function request(path, body, timeoutMs = 600_000, root = API) {
   const found = apiKey();
@@ -129,7 +179,7 @@ const STANCES = {
 async function ask({ prompt, files, model, stance, max_tokens, reasoning, bulk }) {
   if (!prompt || !String(prompt).trim()) throw new Error('prompt is required');
   const attached = attach(files);
-  const chosen = model ?? (bulk ? MODEL_BULK : MODEL_JUDGE);
+  const chosen = resolveModel(model ?? (bulk ? MODEL_BULK : MODEL_JUDGE));
   const body = {
     model: chosen,
     messages: [
@@ -206,7 +256,8 @@ async function judge({ state, files, images, questions, model }) {
   if (!text && !shown.count) throw new Error('state, files or images is required: the material the questions are about');
   // With pictures the state is a list of parts, text first; without, the plain string it always was.
   const material = shown.count ? [...(text ? [text] : []), ...shown.parts] : text;
-  const json = await request('/decisions', { model: model ?? MODEL_DECISION, state: material, questions }, 180_000, DECISIONS_API);
+  const chosen = resolveModel(model ?? MODEL_DECISION);
+  const json = await request('/decisions', { model: chosen, state: material, questions }, 180_000, DECISIONS_API);
   const percent = (value) => (value === undefined || value === null ? '?' : `${Math.round(Number(value) * 100)}%`);
   const lines = [];
   for (const [key, spec] of Object.entries(questions)) {
@@ -231,7 +282,7 @@ async function judge({ state, files, images, questions, model }) {
   }
   const usage = json?.usage ?? {};
   const footer = [
-    `model ${json?.model ?? model ?? MODEL_DECISION}`,
+    `model ${json?.model ?? chosen}`,
     `files ${attached.count}`,
     shown.count ? `images ${shown.count}` : null,
     `tokens in ${usage.input_tokens ?? '?'}`,
@@ -239,6 +290,34 @@ async function judge({ state, files, images, questions, model }) {
   ].filter(Boolean).join(' | ');
   const notes = attached.notes.length ? `\n[attachments] ${attached.notes.join('; ')}` : '';
   return `${lines.join('\n')}\n[${footer}]${notes}`;
+}
+
+async function search({ query, files, model, max_tokens }) {
+  if (!query || !String(query).trim()) throw new Error('query is required');
+  const attached = attach(files);
+  const chosen = resolveModel(model ?? MODEL_SEARCH);
+  const body = {
+    model: chosen,
+    messages: [
+      { role: 'user', content: attached.text ? `${query}\n\n${attached.text}` : String(query) }
+    ],
+    max_tokens: max_tokens ?? 12_000,
+    usage: { include: true }
+  };
+  const json = await request('/chat/completions', body);
+  const answer = json?.choices?.[0]?.message?.content ?? '';
+  const citations = Array.isArray(json?.citations) ? json.citations : [];
+  const usage = json?.usage ?? {};
+  const footer = [
+    `model ${json?.model ?? chosen}`,
+    attached.count ? `files ${attached.count} (${attached.chars} chars)` : null,
+    `tokens in ${usage.prompt_tokens ?? '?'} out ${usage.completion_tokens ?? '?'}`,
+    usage.cost !== undefined ? `cost $${Number(usage.cost).toFixed(4)}` : null
+  ].filter(Boolean).join(' | ');
+  const notes = attached.notes.length ? `\n[attachments] ${attached.notes.join('; ')}` : '';
+  const sources = citations.length ? `\n\nSources:\n${citations.map((u, i) => `[${i + 1}] ${u}`).join('\n')}` : '';
+  if (!answer) return `(the model returned no text; finish_reason=${json?.choices?.[0]?.finish_reason ?? 'unknown'})${sources}\n[${footer}]${notes}`;
+  return `${answer}${sources}\n\n[${footer}]${notes}`;
 }
 
 async function models({ filter, limit }) {
@@ -259,7 +338,13 @@ async function models({ filter, limit }) {
 
 async function status() {
   const found = apiKey();
-  const lines = [`judgement model: ${MODEL_JUDGE}`, `bulk model: ${MODEL_BULK}`, `decision model: ${MODEL_DECISION}`];
+  const lines = [
+    `judgement model: ${MODEL_JUDGE}`,
+    `search model: ${MODEL_SEARCH}`,
+    `bulk model: ${MODEL_BULK}`,
+    `decision model: ${MODEL_DECISION}`,
+    `profile aliases: ${Object.keys(PROFILES).join(', ')}`
+  ];
   if (!found) return [...lines, NO_KEY].join('\n');
   lines.push(`key: found in ${found.source}`);
   try {
@@ -279,7 +364,7 @@ const fileList = { type: 'array', items: { type: 'string' }, description: 'Proje
 const tools = [
   {
     name: 'advisor_status',
-    description: 'Whether an OpenRouter key is available (never the key itself), what has been spent on it, and which models are the defaults.',
+    description: 'Whether an OpenRouter key is available (never the key itself), what has been spent on it, default models, and available profile aliases.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
@@ -292,7 +377,7 @@ const tools = [
         files: fileList,
         stance: { type: 'string', enum: ['review', 'decide', 'critique', 'read', 'none'], description: 'The role the adviser is given. Default review.' },
         bulk: { type: 'boolean', description: 'Use the cheaper long-context model. Default false.' },
-        model: { type: 'string', description: 'An exact OpenRouter model id, overriding the defaults.' },
+        model: { type: 'string', description: 'A short profile alias (fable, fable-code, astra, astra-pro, carbon, argon, hydrogen, grok, deepseek, kimi, glm, fast, search, decision, fusion, pareto, auto, auto-code) or exact OpenRouter model id.' },
         reasoning: { type: 'string', enum: ['default', 'low', 'medium', 'high'], description: 'Reasoning effort, where the model supports it.' },
         max_tokens: { type: 'number', description: 'Cap on the answer. Default 16000.' }
       },
@@ -309,7 +394,7 @@ const tools = [
         options: { type: 'array', items: { type: 'string' }, description: 'Two or more options, each described fully enough to judge.' },
         criteria: { type: 'array', items: { type: 'string' } },
         files: fileList,
-        model: { type: 'string' }
+        model: { type: 'string', description: 'A short profile alias or exact OpenRouter model id.' }
       },
       required: ['question', 'options']
     }
@@ -332,9 +417,23 @@ const tools = [
             required: ['type', 'instructions']
           }
         },
-        model: { type: 'string' }
+        model: { type: 'string', description: 'A short profile alias (default decision -> google/gemini-decision-1) or exact OpenRouter model id.' }
       },
       required: ['questions']
+    }
+  },
+  {
+    name: 'advisor_search',
+    description: 'Run web-grounded agentic search (defaults to perplexity/sonar-pro-search) via OpenRouter, with optional project files attached, returning synthesized answer plus citation URLs and cost.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'The search question or research brief.' },
+        files: fileList,
+        model: { type: 'string', description: 'A short profile alias (default search -> perplexity/sonar-pro-search) or exact OpenRouter model id.' },
+        max_tokens: { type: 'number', description: 'Cap on the answer. Default 12000.' }
+      },
+      required: ['query']
     }
   },
   {
@@ -349,6 +448,7 @@ async function call(name, args) {
   if (name === 'advisor_ask') return ask(args);
   if (name === 'advisor_decide') return decide(args);
   if (name === 'advisor_judge') return judge(args);
+  if (name === 'advisor_search') return search(args);
   if (name === 'advisor_models') return models(args);
   throw new Error(`unknown tool: ${name}`);
 }
@@ -360,6 +460,7 @@ if (argv.length) {
   const all = (flag) => argv.flatMap((item, index) => (item === flag && argv[index + 1] ? [argv[index + 1]] : []));
   let job;
   if (argv.includes('--status')) job = status();
+  else if (argv.includes('--set-key-from-clipboard')) job = setKeyFromClipboard();
   else if (argv.includes('--models')) job = models({ filter: value('--models')?.startsWith('--') ? '' : value('--models'), limit: Number(value('--limit') ?? 25) });
   else if (argv.includes('--judge')) {
     // The questions are JSON, which no shell quotes safely: they come from a file.
@@ -368,6 +469,13 @@ if (argv.length) {
       state: stateFile ? readFileSync(resolve(stateFile), 'utf8') : value('--state'),
       files: all('--file'), images: all('--image'), model: value('--model'),
       questions: JSON.parse(readFileSync(resolve(value('--judge')), 'utf8'))
+    });
+  } else if (argv.includes('--search')) {
+    const promptFile = value('--prompt-file');
+    job = search({
+      query: promptFile ? readFileSync(resolve(promptFile), 'utf8') : value('--search'),
+      files: all('--file'), model: value('--model'),
+      max_tokens: value('--max-tokens') ? Number(value('--max-tokens')) : undefined
     });
   } else if (argv.includes('--ask')) {
     // A long prompt does not survive a shell's quoting; --prompt-file reads it from disk.
@@ -378,7 +486,7 @@ if (argv.length) {
       bulk: argv.includes('--bulk'), reasoning: value('--reasoning'),
       max_tokens: value('--max-tokens') ? Number(value('--max-tokens')) : undefined
     });
-  } else job = Promise.reject(new Error('usage: --status | --models [filter] | --judge <questions.json> [--state "<text>" | --state-file f] [--file path]... [--image path]... | --ask "<prompt>" [--prompt-file f] [--file path]... [--stance review|decide|critique|read|none] [--bulk] [--model id] [--reasoning low|medium|high]'));
+  } else job = Promise.reject(new Error('usage: --status | --set-key-from-clipboard | --models [filter] | --judge <questions.json> [--state "<text>" | --state-file f] [--file path]... [--image path]... [--model id] | --search "<query>" [--prompt-file f] [--file path]... [--model id] | --ask "<prompt>" [--prompt-file f] [--file path]... [--stance review|decide|critique|read|none] [--bulk] [--model id] [--reasoning low|medium|high]'));
   job.then((text) => { process.stdout.write(text + '\n'); process.exit(0); }, (error) => { process.stderr.write(String(error?.message ?? error) + '\n'); process.exit(1); });
 } else {
   // -------------------------------------------------------------- MCP stdio transport
