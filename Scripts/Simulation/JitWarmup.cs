@@ -1,6 +1,8 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using DealOrForce.Rules;
 
 namespace DealOrForce.Simulation;
 
@@ -21,6 +23,22 @@ namespace DealOrForce.Simulation;
 internal static class JitWarmup
 {
     private static bool _done;
+    private const BindingFlags DeclaredFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+
+    internal static (Type Type, string MethodName)[] GetTargets() => new[]
+    {
+        (typeof(SubjectSystem), nameof(SubjectSystem.TickStages)), (typeof(SubjectInteractions), nameof(SubjectInteractions.TickSubjectWeek)),
+        (typeof(NuclearPosture), nameof(NuclearPosture.WeekStages)), (typeof(MovementRules), nameof(MovementRules.TickStages)),
+        (typeof(MovementPower), nameof(MovementPower.TickStages)), (typeof(MarketSystem), nameof(MarketSystem.TickStages)),
+        (typeof(TradeNetwork), nameof(TradeNetwork.RouteStages)), (typeof(EconomySystem), nameof(EconomySystem.TickStages)),
+        (typeof(DemographicCycle), nameof(DemographicCycle.Stages)), (typeof(Warfare), nameof(Warfare.TickStages)),
+        (typeof(Warfare), "ResolveAdvancesStages"), (typeof(AiStatecraft), "ThinkTodayStages"),
+        (typeof(AiStatecraft), "DiplomacyStages"), (typeof(SocialMemory), nameof(SocialMemory.TickStages)),
+        (typeof(Shipbuilding), nameof(Shipbuilding.TickStages)), (typeof(DefconSystem), nameof(DefconSystem.TickStages)),
+        (typeof(BrainDrain), nameof(BrainDrain.Stages)), (typeof(Consolidation), nameof(Consolidation.TickStages)),
+        (typeof(AssaultRules), nameof(AssaultRules.Assess)), (typeof(WarRhythmRules), nameof(WarRhythmRules.OffensivePulse)),
+        (typeof(WarRhythmRules), nameof(WarRhythmRules.BattleFortune)),
+    };
 
     internal static void PrepareWeeklyPasses()
     {
@@ -29,50 +47,28 @@ internal static class JitWarmup
         // its passes itself, so the warmup's worth is a measured number, not a claim.
         if (System.Environment.GetEnvironmentVariable("BDOF_NO_JIT_WARMUP") == "1") { _done = true; return; }
         _done = true;
-        Prepare(typeof(SubjectSystem), "TickStages");
-        Prepare(typeof(SubjectInteractions), "TickSubjectWeek");
-        Prepare(typeof(NuclearPosture), "WeekStages");
-        Prepare(typeof(MovementRules), "TickStages");
-        Prepare(typeof(MovementPower), "TickStages");
-        Prepare(typeof(MarketSystem), "TickStages");
-        Prepare(typeof(MarketSystem), "RouteOneStages");
-        Prepare(typeof(EconomySystem), "TickStages");
-        Prepare(typeof(DemographicCycle), "TickStages");
-        Prepare(typeof(Warfare), "TickStages");
-        Prepare(typeof(Warfare), "ResolveAdvancesStages");
-        Prepare(typeof(AiStatecraft), "ThinkTodayStages");
-        Prepare(typeof(AiStatecraft), "DiplomacyStages");
-        Prepare(typeof(SocialMemory), "TickStages");
-        Prepare(typeof(Shipbuilding), "TickStages");
-        Prepare(typeof(DefconSystem), "TickStages");
-        Prepare(typeof(BrainDrain), "TickStages");
-        Prepare(typeof(Consolidation), "TickStages");
-        Prepare(typeof(DealOrForce.Rules.AssaultRules), "Assess");
-        Prepare(typeof(DealOrForce.Rules.WarRhythmRules), "OffensivePulse");
-        Prepare(typeof(DealOrForce.Rules.WarRhythmRules), "BattleFortune");
+        foreach (var (type, methodName) in GetTargets()) Prepare(type, methodName);
     }
+
+    internal static (MethodInfo[] Methods, MethodInfo[] MoveNexts) ResolveTargetMethods(Type type, string methodName) =>
+    (
+        Array.FindAll(type.GetMethods(DeclaredFlags), candidate => candidate.Name == methodName),
+        Array.FindAll(type.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic),
+                nested => nested.Name.IndexOf("<" + methodName + ">", StringComparison.Ordinal) >= 0)
+            .Select(nested => nested.GetMethod("MoveNext", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            .Where(moveNext => moveNext is not null).Cast<MethodInfo>().ToArray()
+    );
 
     private static void Prepare(Type type, string methodName)
     {
         try
         {
-            var method = type.GetMethod(methodName,
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
-            if (method is not null) RuntimeHelpers.PrepareMethod(method.MethodHandle);
+            var (methods, moveNexts) = ResolveTargetMethods(type, methodName);
+            foreach (var method in methods) RuntimeHelpers.PrepareMethod(method.MethodHandle);
             // The body of an iterator pass lives in its compiler-generated state machine:
             // preparing the entry point alone would leave MoveNext to compile on first use.
-            foreach (var nested in type.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
-            {
-                if (nested.Name.IndexOf(">" + methodName, StringComparison.Ordinal) < 0) continue;
-                var moveNext = nested.GetMethod("MoveNext",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                if (moveNext is not null) RuntimeHelpers.PrepareMethod(moveNext.MethodHandle);
-            }
+            foreach (var moveNext in moveNexts) RuntimeHelpers.PrepareMethod(moveNext.MethodHandle);
         }
-        catch
-        {
-            // A renamed pass simply stays cold until its first week; warmup must never
-            // be able to fail a load.
-        }
+        catch { /* A renamed pass simply stays cold until its first week; warmup must never be able to fail a load. */ }
     }
 }

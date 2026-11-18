@@ -51,6 +51,7 @@ public enum MenuIntent
 public partial class MainMenuScene : Control
 {
     /// <summary>Where the memory is (MemoryReport), for tools that drive the front door.</summary>
+    [ToolHook]
     public string MemoryReport(int top = 25) => DealOrForce.MemoryReport.Build(top);
 
     /// <summary>What the player asked for, read and cleared by the campaign scene.</summary>

@@ -319,22 +319,15 @@ public static class FormableProclamationAi
     private static bool HumanCountry(Campaign campaign, Nation nation) =>
         nation.IsHuman || nation.IsPlayer || campaign.HumanSeats.Contains(nation.Id);
 
-    private static Campaign _foundationCampaign;
-    private static int _foundationRevision = int.MinValue;
-    private static readonly Dictionary<string, (HashSet<int> Provinces, Dictionary<int, int> Foundation)> _foundationCache = new();
     [ThreadStatic] private static HashSet<string> _identityCultures;
     [ThreadStatic] private static HashSet<string> _identityGroups;
 
     private static (HashSet<int> Provinces, Dictionary<int, int> Foundation) GetDefinitionFoundation(Campaign campaign, FormableNation definition)
     {
+        var cache = campaign.Caches.FormableFoundation;
+        var revision = campaign.OwnershipRevision;
         // Province-to-region content only (OwnershipRevision); a battle's captures leave it alone.
-        if (!ReferenceEquals(_foundationCampaign, campaign) || _foundationRevision != campaign.OwnershipRevision)
-        {
-            _foundationCampaign = campaign;
-            _foundationRevision = campaign.OwnershipRevision;
-            _foundationCache.Clear();
-        }
-        if (_foundationCache.TryGetValue(definition.Id, out var cached)) return cached;
+        if (cache.TryGet(revision, definition.Id, out var cached)) return cached;
 
         var map = campaign.ProvinceMap;
         var provinces = new HashSet<int>();
@@ -347,7 +340,7 @@ public static class FormableProclamationAi
             foundation[state] = foundation.GetValueOrDefault(state) + 1;
         }
         var entry = (provinces, foundation);
-        _foundationCache[definition.Id] = entry;
+        cache.Store(revision, definition.Id, entry);
         return entry;
     }
 

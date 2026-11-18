@@ -116,20 +116,20 @@ public static class Generals
     public static GeneralTrait Trait(string id) =>
         Traits.Find(trait => string.Equals(trait.Id, id, StringComparison.OrdinalIgnoreCase)) ?? Traits[0];
 
-    private static readonly Dictionary<int, ArmyGroup> ById = new();
-    private static Campaign _indexed;
-    private static int _indexedCount = -1;
-
     public static ArmyGroup Group(Campaign campaign, int id)
     {
-        if (!ReferenceEquals(_indexed, campaign) || _indexedCount != campaign.ArmyGroups.Count)
+        if (campaign is null) return null;
+        var cache = campaign.Caches.ArmyGroupIndex;
+        lock (cache.Gate)
         {
-            ById.Clear();
-            foreach (var group in campaign.ArmyGroups) ById.TryAdd(group.Id, group);
-            _indexed = campaign;
-            _indexedCount = campaign.ArmyGroups.Count;
+            if (cache.GroupCount != campaign.ArmyGroups.Count)
+            {
+                cache.ById.Clear();
+                foreach (var group in campaign.ArmyGroups) cache.ById.TryAdd(group.Id, group);
+                cache.GroupCount = campaign.ArmyGroups.Count;
+            }
+            return cache.ById.TryGetValue(id, out var found) && found is not null ? found : null;
         }
-        return ById.TryGetValue(id, out var found) && found is not null ? found : null;
     }
 
     /// <summary>The group a formation answers to - joining the smallest of its country's if it answers to none, and founding one if the country has none.</summary>
@@ -293,7 +293,7 @@ public static class Generals
             if (struck.Contains(army.ArmyGroupId)) army.ArmyGroupId = -1;
         // The lookup is rebuilt when the count changes; a group struck off and another founded
         // before the next look would leave the count where it was and the index stale.
-        _indexedCount = -1;
+        campaign.Caches.ArmyGroupIndex.Invalidate();
         campaign.MarkStrategicChange();
         return struck.Count;
     }

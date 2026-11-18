@@ -126,44 +126,42 @@ public static class AiStrategyCatalog
     /// What one country's army amounts to: how many formations, and their organisation and
     /// supply - totalled while the table is built, averaged when it is read.
     /// </summary>
-    private readonly record struct Posture(int Formations, float Organisation, float Supply);
-
-    // By nation id, which is the nation's place in the list. It was a dictionary: two hashed
-    // operations for each of two thousand formations at the first question of every hour, which
-    // was most of what "may this division start its advance" (adv:execution) cost each step.
-    private static Posture[] _postures = Array.Empty<Posture>();
-    private static Campaign _postureCampaign;
-    private static long _postureHour = long.MinValue;
+    internal readonly record struct Posture(int Formations, float Organisation, float Supply);
 
     /// <summary>
     /// Every country's army, counted once per simulation step.
     ///
-    /// Stamped with the campaign it describes as well as the simulation hour, because a client
-    /// rebuilding from a host's snapshot holds two campaigns at once and a table that only
-    /// knows what day it is would answer one of them with the other's army.
+    /// Kept per campaign inside <see cref="CampaignCaches"/> so multiple worlds ticking side by
+    /// side never overwrite each other's hourly posture snapshot.
     /// </summary>
     private static Posture PostureOf(Campaign campaign, Nation nation)
     {
-        if (_postureHour != campaign.ElapsedHours || !ReferenceEquals(_postureCampaign, campaign))
+        if (campaign is null || nation is null) return default;
+        var cache = campaign.Caches.AiStrategyPosture;
+        Posture summed;
+        lock (cache.Gate)
         {
-            _postureHour = campaign.ElapsedHours;
-            _postureCampaign = campaign;
-            Array.Clear(_postures);
-            foreach (var army in campaign.Armies)
+            if (cache.Hour != campaign.ElapsedHours)
             {
-                var id = army.NationId;
-                // A formation of no country is counted for nobody; nobody asks after it.
-                if (id < 0) continue;
-                if (id >= _postures.Length) Array.Resize(ref _postures, Math.Max(id + 1, Math.Max(campaign.Nations.Count, _postures.Length * 2)));
-                ref var running = ref _postures[id];
-                running = new Posture(running.Formations + 1,
-                    running.Organisation + army.Organisation, running.Supply + army.SupplyLevel);
+                cache.Hour = campaign.ElapsedHours;
+                Array.Clear(cache.Postures);
+                foreach (var army in campaign.Armies)
+                {
+                    var id = army.NationId;
+                    // A formation of no country is counted for nobody; nobody asks after it.
+                    if (id < 0) continue;
+                    if (id >= cache.Postures.Length)
+                        Array.Resize(ref cache.Postures, Math.Max(id + 1, Math.Max(campaign.Nations.Count, cache.Postures.Length * 2)));
+                    ref var running = ref cache.Postures[id];
+                    running = new Posture(running.Formations + 1,
+                        running.Organisation + army.Organisation, running.Supply + army.SupplyLevel);
+                }
             }
+            // Totals go in, averages come out - dividing here rather than in a second pass over
+            // the table, so the day's work is one walk of the order of battle and nothing else.
+            summed = (uint)nation.Id < (uint)cache.Postures.Length ? cache.Postures[nation.Id] : default;
         }
 
-        // Totals go in, averages come out - dividing here rather than in a second pass over
-        // the table, so the day's work is one walk of the order of battle and nothing else.
-        var summed = (uint)nation.Id < (uint)_postures.Length ? _postures[nation.Id] : default;
         return summed.Formations == 0
             ? summed
             : new Posture(summed.Formations,

@@ -140,38 +140,15 @@ public static class SoundCatalog
         Beds.Clear();
         TerrainMixes.Clear();
         OpenCountryBed = SeaBed = FrozenBed = "";
-        var root = GameDataLoader.DataFolder("sound");
-        if (root is not null) LoadTree(root, "res://game/sound", null);
+        DataCatalogLoader.LoadBaseTree("sound", (directory, assetRoot) => LoadTree(directory, assetRoot, null));
         Changed?.Invoke();
     }
 
     /// <summary>Layer one package's `sound/` tree over what is already loaded.</summary>
-    public static void LoadTree(string directory, string assetRoot, List<string> errors)
-    {
-        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
-
-        string[] files;
-        try
-        {
-            files = StructuredData.Files(directory, SearchOption.AllDirectories)
-                .OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-        }
-        catch (Exception exception)
-        {
-            errors?.Add($"sound: {exception.Message}");
-            return;
-        }
-
-        foreach (var file in files)
-        {
-            var origin = $"sound/{Path.GetFileName(file)}";
-            try { Merge(StructuredData.ReadJson(file), assetRoot, origin, errors); }
-            catch (Exception exception) { errors?.Add($"{origin}: {exception.Message}"); }
-        }
-
-        Changed?.Invoke();
-    }
+    public static void LoadTree(string directory, string assetRoot, List<string> errors) =>
+        DataCatalogLoader.LoadTree("sound", directory, errors,
+            (json, origin) => Merge(json, assetRoot, origin, errors),
+            () => Changed?.Invoke());
 
     /// <summary>
     /// Merge one declaration file. Both tables are optional and independent, so a mod that

@@ -165,9 +165,6 @@ public static class PeaceShape
         return Anchors(campaign, Graph(campaign), winner, winnerRegions).Contains(region);
     }
 
-    private static Campaign _nearCacheCampaign;
-    private static readonly Dictionary<long, (int Revision, bool Near)> NearCache = new();
-
     /// <summary>
     /// Whether a whole country is within reach of another: ground the two own side by side,
     /// or - across the sea - both the other's capital and a stretch of its coast within
@@ -186,13 +183,9 @@ public static class PeaceShape
         if (map is null || from is null || other is null) return false;
         var reach = campaign.Defines.PeaceShapeBridgeheadKm;
         if (reach <= 0f) return true;
-        if (!ReferenceEquals(_nearCacheCampaign, campaign))
-        {
-            NearCache.Clear();
-            _nearCacheCampaign = campaign;
-        }
+        var cache = campaign.Caches.PeaceShapeNear;
         var key = ((long)from.Id << 32) | (uint)other.Id;
-        if (NearCache.TryGetValue(key, out var known) && known.Revision == campaign.MapRevision) return known.Near;
+        if (cache.TryGet(key, campaign.MapRevision, out var known)) return known;
         // By who owns the ground, not by whose troops stand on it: the border table the AI
         // reads is drawn from control, and an army on a beach is not a border.
         var ownerFrom = (ushort)from.MapIndex;
@@ -222,7 +215,7 @@ public static class PeaceShape
                         Within(map, province, shores, nearest)) { near = true; break; }
             }
         }
-        NearCache[key] = (campaign.MapRevision, near);
+        cache.Store(key, campaign.MapRevision, near);
         return near;
     }
 
