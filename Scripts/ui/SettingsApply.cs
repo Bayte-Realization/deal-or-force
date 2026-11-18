@@ -299,6 +299,14 @@ public partial class DealOrForceGame
                 var window = GetWindow();
                 if (window is not null)
                     window.ContentScaleFactor = Math.Clamp(SettingsCatalog.Number("interface_scale"), 0.5f, 2.5f);
+                if (IsNewShellActive) LayoutNewShell();
+                break;
+
+            case "ui_shell":
+            case "ui_shell_next_hints":
+            case "ui_shell_minimap":
+            case "ui_shell_message_preset":
+                ApplyUiShellSetting();
                 break;
 
             // ---- sound ---------------------------------------------------------------

@@ -1,0 +1,19 @@
+{
+  "fonts": {
+    "shell.serif": {
+      "file": "SourceSerif4-Regular.ttf",
+      "system_families": ["Georgia", "Noto Serif", "Liberation Serif", "DejaVu Serif"]
+    },
+    "shell.serif_semibold": {
+      "file": "SourceSerif4-SemiBold.ttf",
+      "system_families": ["Georgia", "Noto Serif", "Liberation Serif", "DejaVu Serif"]
+    },
+    "shell.serif_bold": {
+      "file": "SourceSerif4-Bold.ttf",
+      "system_families": ["Georgia", "Noto Serif", "Liberation Serif", "DejaVu Serif"]
+    },
+    "shell.sans": {
+      "system_families": ["Segoe UI Variable Text", "Segoe UI", "Noto Sans", "DejaVu Sans", "Arial"]
+    }
+  }
+}

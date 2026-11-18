@@ -714,6 +714,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
             {
                 UpdateMarkerVisibility(_armyRoot, _armyMarkers, armyLod && MilitaryMarkersEnabled,
                     _flatMap ? 0f : GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length()) + .002f);
+                if (NewShellVisibleArmyIds is { } visibleArmies)
+                    ApplyNewShellArmyVisibility(visibleArmies);
                 UpdateCounterScale();
             }
         if (MilitaryMarkersEnabled && visualDue)
@@ -1126,6 +1128,28 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// arithmetic checking itself.
     /// </summary>
     private float ViewDistance => _flatMap ? _flatZoom * 1.6f - 1.04f : _distance;
+    internal float ShellViewDistance => ViewDistance;
+    internal float ShellFlatZoom => _flatZoom;
+    internal IReadOnlySet<int> NewShellVisibleArmyIds { get; set; }
+
+    private void ApplyNewShellArmyVisibility(IReadOnlySet<int> visibleArmies)
+    {
+        foreach (var marker in _armyStacks.Values)
+        {
+            if (marker.Node is null || !IsInstanceValid(marker.Node) || !marker.Node.Visible) continue;
+            var stack = marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack;
+            var keep = false;
+            for (var i = 0; i < stack.Count; i++)
+            {
+                if (visibleArmies.Contains(stack[i].Id) || _selectedArmyIds.Contains(stack[i].Id))
+                {
+                    keep = true;
+                    break;
+                }
+            }
+            if (!keep) marker.Node.Visible = false;
+        }
+    }
 
     private float _counterScale = 1f;
     private float _counterWorldPixel;
