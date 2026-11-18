@@ -79,6 +79,7 @@ public static class PeaceOffers
             PeaceNegotiation.Resolve(campaign, war, proposer.Id, terms);
             return war.Ended;
         }
+        if (PeaceNegotiation.HardBlockReason(campaign, war, proposer.Id, terms).Length > 0) return false;
         if (!proposer.IsHuman && ToPlayerBlockReason(campaign, war, false, null, terms).Length > 0) return false;
         war.PendingOffer = null;
         war.PendingOfferIsWritten = false;
@@ -285,26 +286,45 @@ public static class PeaceOffers
         {
             var proposer = campaign?.NationById(proposerId);
             var opponent = campaign?.NationById(answeringNationId);
-            if (proposer is null || opponent is null || !CanAddress(campaign, war, proposer, opponent)) return false;
-            if (written && (demand is null || demand.ProposerId != proposerId || demand.WarId != war.Id ||
-                PeaceConference.BlockReason(campaign, war, demand).Length > 0)) return false;
+            if (proposer is null || opponent is null || !CanAddress(campaign, war, proposer, opponent))
+            {
+                war.LastNegotiation = Loc.Get("The offer cannot bypass a human coalition member or replace a pending offer.");
+                return false;
+            }
+            if (written)
+            {
+                if (demand is null || demand.ProposerId != proposerId || demand.WarId != war.Id) return false;
+                var block = PeaceConference.BlockReason(campaign, war, demand);
+                if (block.Length > 0)
+                {
+                    war.LastNegotiation = block;
+                    return false;
+                }
+                if (!PeaceConference.Resolve(campaign, war, demand)) return false;
+                Clear(war);
+                return true;
+            }
+            var hardBlock = PeaceNegotiation.HardBlockReason(campaign, war, proposerId, terms);
+            if (hardBlock.Length > 0)
+            {
+                war.LastNegotiation = hardBlock;
+                return false;
+            }
+            // The recipient's own signature IS the acceptance for a menu offer already put to them.
+            PeaceNegotiation.Resolve(campaign, war, proposerId, terms, requireAcceptance: false);
+            if (!war.Ended) return false;
+            Clear(war);
+            return true;
         }
         Clear(war);
 
-        if (!accept)
-        {
-            // Refusing costs nothing but time. The proposer waits out its own interval
-            // before asking again, which is what LastPeaceProposalDay already does.
-            war.LastPeaceProposalDay = campaign.ElapsedDays;
-            RememberRefusal(campaign, war, proposerId, written, demand, terms);
-            war.LastNegotiation = "The offer was refused";
-            campaign.MarkStrategicChange();
-            return true;
-        }
-
-        if (written && demand is not null) return PeaceConference.Resolve(campaign, war, demand);
-        PeaceNegotiation.Resolve(campaign, war, proposerId, terms);
-        return war.Ended;
+        // Refusing costs nothing but time. The proposer waits out its own interval
+        // before asking again, which is what LastPeaceProposalDay already does.
+        war.LastPeaceProposalDay = campaign.ElapsedDays;
+        RememberRefusal(campaign, war, proposerId, written, demand, terms);
+        war.LastNegotiation = "The offer was refused";
+        campaign.MarkStrategicChange();
+        return true;
     }
 
     /// <summary>Withdraw offers nobody answered. Called once a day; usually does nothing.</summary>

@@ -348,9 +348,24 @@ public partial class DealOrForceGame
 
         public override void _GuiInput(InputEvent input)
         {
-            if (input is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } click) return;
-            Choose?.Invoke(DatePlateClock.PipAt(click.Position.X, PipSize, PipGap));
-            AcceptEvent();
+            if (input is not InputEventMouseButton { Pressed: true } click) return;
+            if (click.ButtonIndex == MouseButton.Left)
+            {
+                Choose?.Invoke(DatePlateClock.PipAt(click.Position.X, PipSize, PipGap));
+                AcceptEvent();
+                return;
+            }
+            if (click.ButtonIndex == MouseButton.WheelUp)
+            {
+                Choose?.Invoke(DatePlateClock.Faster(Speed));
+                AcceptEvent();
+                return;
+            }
+            if (click.ButtonIndex == MouseButton.WheelDown)
+            {
+                Choose?.Invoke(DatePlateClock.Slower(Speed));
+                AcceptEvent();
+            }
         }
     }
 }

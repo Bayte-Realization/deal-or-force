@@ -1,0 +1,87 @@
+{
+  // The atlas look of the map (Simulation.MapLook): a map printed in warm inks on heavy paper and
+  // lit by a desk lamp from the north-west. Close in the ground shows through the country colour
+  // by its brightness; at the middle zoom the countries are flat paint with dark ink borders; from
+  // far away the whole map becomes a sheet of paper. Switched by the video setting "map_look"
+  // (atlas / classic); classic ignores everything in this file.
+  //
+  // This is the era-neutral base. Marks that belong to a period - engraved waterlines along the
+  // coasts, hand-lettered cartouches, a sepia cast - are for an era's overlay, not for here.
+  //
+  // Colours are ordinary sRGB hex, converted to linear light for the shader. One brightness
+  // order runs through them, light to dark: labels, land paper, coastal water and shelf, open
+  // sea, then the inks (country border, coast, province). Accents - selection gold, front red,
+  // plan blue - are not used for anything else.
+  "colours": {
+    // The paper under the country colours from far away. A shade darker than the interface's own
+    // paper (#efe4c8), so panels lying over the map still separate from it.
+    "map.look_paper": "#e6d9bb",
+    // Land no state holds (Antarctica, unclaimed regions): the paper itself, about six per cent
+    // darker so it still reads as ground rather than as a hole in the map.
+    "map.look_unowned": "#d8ccb0",
+    // The hue a slope turned away from the lamp leans towards: a cool slate, as in Imhof's relief
+    // shading - warm light, cool shade. Only the hue is used; how dark a slope is stays the
+    // classic hillshade's, so a country keeps its colour in the mountains.
+    "map.look_shade": "#4a4f5e",
+    // The lamp: the hue a lit slope leans towards, and the alpine ridge highlight.
+    "map.look_lamp": "#fff1d2",
+    // The sea by depth, on the same thresholds the classic map used: abyss, continental slope,
+    // shelf, and the shallow littoral along a coast. Warmer and darker than the classic navy.
+    "map.look_sea_deep": "#18323f",
+    "map.look_sea_mid": "#234b58",
+    "map.look_sea_shelf": "#3d6b70",
+    "map.look_sea_coast": "#6a9690",
+    // From far away the sea settles into three quiet steps of this one chart tone (0.72, 0.86 and
+    // the full tone). Dark on purpose: land has to stand above water on the world map.
+    "map.look_sea_chart": "#2a4450",
+    // Surf along a shore and the light on the crests: paper white, never pure white.
+    "map.look_foam": "#ece5d2",
+    // A coast is inked lighter and bluer than a frontier (#1c2230), so the eye can tell where a
+    // state ends and where the land does.
+    "map.look_coast_ink": "#2e4048",
+    // Warm paper-on-ink map typography for the atlas look (classic retains 00_skin.json globe.*).
+    "map.look_label_fill": "#efe4c8",
+    "map.look_label_outline": "#11161c",
+    "map.look_capital_fill": "#f7eed6",
+    "map.look_region_fill": "#e6d9bb",
+    "map.look_river_fill": "#a8cedd",
+    "map.look_river_outline": "#0f1e29"
+  },
+  "metrics": {
+    // Close in, how far the brightness of the ground may move the country colour: the fill runs
+    // from (1 - this) on dark ground to (1 + this / 2) on light. The hue is never the ground's.
+    "map.look_ground_show_near": 0.30,
+    // How much of the ground the country colour covers from far away, where the countries are
+    // what the map is for. Close in and at the middle zoom the terrain's own political_opacity.
+    "map.look_cover_far": 0.95,
+    // Country colour saturation on the paper map: a printed atlas is a little quieter than a poster.
+    "map.look_saturation_far": 0.80,
+    // How strongly a slope's hue leans towards the shade or the lamp colour (0 is the classic grey
+    // hillshade; brightness is the classic one at any value).
+    "map.look_relief_tint": 0.60,
+    // How much of the relief shading survives on the paper map: mountains stay a soft wash.
+    "map.look_relief_far": 0.45,
+    // Where the map becomes paper: on the globe by camera distance (5.25 .. 24, default 12.5),
+    // on the flat map by zoom (0.1 .. 11.5, default 8.8). It starts at the first value and is
+    // complete at the second.
+    "map.look_paper_from_distance": 17,
+    "map.look_paper_full_distance": 22,
+    "map.look_flat_paper_from_zoom": 9.0,
+    "map.look_flat_paper_full_zoom": 11.5,
+    // The band of deeper colour inside every frontier at the middle and far zoom, where the
+    // close-in cushion has gone (as in Imperator): how deep, and how many screen pixels wide.
+    // Half as deep along a coast. Nought switches it off.
+    "map.look_far_band": 0.36,
+    "map.look_far_band_pixels": 4.5,
+    // Surf: one thin broken line along a shore, a little under a cell out, close in only.
+    "map.look_foam_strength": 0.55,
+    // Engraved waterlines two, three and a half and five cells off the coast. An era's mark, so
+    // off in the base look; an era overlay may raise it (0.15 was the first trial).
+    "map.look_waterline": 0,
+    // The lamp's broad soft highlight over open sea on the globe: how much it brightens the
+    // water's own colour at its centre. Not on the flat map, not on the paper map.
+    "map.look_sea_sheen": 0.30,
+    // How much heavier the gold outline of the picked country is drawn (1 is the classic stroke).
+    "map.look_selection_width": 1.3
+  }
+}

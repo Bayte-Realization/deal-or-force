@@ -166,17 +166,37 @@ public partial class DealOrForceGame
         _financeAmount.ValueChanged += _ => { _financePendingAction = ""; _financeFeedback.Text = ""; RefreshSovereignFinanceWorkspace(); };
         actions.AddChild(_financeAmount);
         // From nothing to the most any one operation could move today; the box above stays for an exact sum.
-        _financeSlider = new HSlider { Name = "FinanceAmountSlider", MinValue = 0, MaxValue = 1, Step = .01, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _financeSlider = new HSlider { Name = "FinanceAmountSlider", MinValue = 0, MaxValue = 1, Step = .01, SizeFlagsHorizontal = SizeFlags.ExpandFill, Scrollable = false };
         _financeSlider.ValueChanged += value =>
         {
             if (_financeSyncing) return;
             _financeAmount.Value = Math.Max(.01, value);
+        };
+        _financeSlider.GuiInput += ev =>
+        {
+            if (ev is not InputEventMouseButton { Pressed: true } w ||
+                w.ButtonIndex is not (MouseButton.WheelUp or MouseButton.WheelDown)) return;
+            var dir = w.ButtonIndex == MouseButton.WheelUp ? 1.0 : -1.0;
+            var deltaStep = w.ShiftPressed ? 0.10 : 0.01;
+            _financeAmount.Value = Math.Clamp(_financeAmount.Value + dir * deltaStep, 0.01, Math.Max(0.01, _financeSlider.MaxValue));
+            _financeSlider.AcceptEvent();
         };
         actions.AddChild(_financeSlider);
         var quick = new HFlowContainer { Name = "FinanceQuickAmounts", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         quick.AddThemeConstantOverride("h_separation", 6);
         quick.AddThemeConstantOverride("v_separation", 4);
         actions.AddChild(quick);
+        foreach (var q in new[] { (1, "25%"), (2, "50%"), (3, "75%"), (4, "100%") })
+        {
+            var qIdx = q.Item1;
+            var shareBtn = ActionButton(q.Item2, () =>
+            {
+                var share = Simulation.Controls.QuickAmountRules.QuarterFloat((float)_financeSlider.MaxValue, qIdx, 0.01f);
+                _financeAmount.Value = Math.Max(0.01, share);
+            }, 54, 28);
+            shareBtn.Name = "FinanceQuarter_" + (qIdx * 25);
+            quick.AddChild(shareBtn);
+        }
         Button Quick(string caption, string action, Func<SovereignBalanceSheet, float> pool)
         {
             var button = ActionButton(caption, () =>

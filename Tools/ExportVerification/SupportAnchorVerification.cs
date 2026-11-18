@@ -15,7 +15,7 @@ public partial class ExportVerification
         var province=army.ProvinceId;var centre=map.CenterOf(province);
         var firstId=world.SupportFormations.Select(f=>f.Id).DefaultIfEmpty(0).Max()+1;
         for(var i=0;i<3;i++)world.SupportFormations.Add(new SupportFormation
-        {Id=firstId+i,NationId=player.Id,TypeId="artillery_brigade",BaseProvinceId=province,StateMapIndex=map.ProvinceToState[province]});
+        {Id=firstId+i,NationId=player.Id,TypeId="artillery_brigade",BaseProvinceId=province,ProvinceId=province,StateMapIndex=map.ProvinceToState[province]});
         world.MarkStrategicChange();
         GetTree().Root.Size=new Vector2I(1920,1080);
         foreach(var flat in new[]{false,true})
@@ -40,7 +40,7 @@ public partial class ExportVerification
         if(next>0)
         {
             var formation=world.SupportFormations.First(f=>f.Id==firstId);
-            formation.BaseProvinceId=next;formation.StateMapIndex=map.ProvinceToState[next];world.MarkStrategicChange();
+            formation.BaseProvinceId=next;formation.ProvinceId=next;formation.StateMapIndex=map.ProvinceToState[next];world.MarkStrategicChange();
             game.VerificationRefreshSupportLayout();await Wait(.2);
             Check(game.VerificationSupportAudit().Misplaced==0,"visual base follows a changed BaseProvinceId without stale geographic offsets");
         }
@@ -66,10 +66,11 @@ public sealed partial class GlobePresentation
         {
             if(!TryCounterScreenRoom(marker.Plate,out var room))continue;
             visible++;hash.Add(marker.Formation.Id);hash.Add(marker.Node.Position);
-            var centre=_campaign.ProvinceMap.CenterOf(marker.Formation.BaseProvinceId);
+            var standing=LongRangeMovement.At(marker.Formation);
+            var centre=LongRangeMovement.Position(_campaign,marker.Formation);
             if(Math.Abs(centre.Latitude-marker.Latitude)>.00001f||Math.Abs(centre.Longitude-marker.Longitude)>.00001f||
                !TryLocate(_camera.UnprojectPosition(marker.Node.GlobalPosition),out _,out _,out _,out var under)||
-               under!=marker.Formation.BaseProvinceId)misplaced++;
+               under!=standing)misplaced++;
             if(marker.DisplayFaded)
             {
                 crowded++;

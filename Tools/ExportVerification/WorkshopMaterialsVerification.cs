@@ -124,10 +124,11 @@ public partial class ExportVerification
             Check(formation is not null, "player has a declared formation for reserve presentation");
             if (formation is not null)
             {
-                var oldState = formation.StateMapIndex; var oldBase = formation.BaseProvinceId; var oldMission = formation.Mission;
+                var oldState = formation.StateMapIndex; var oldBase = formation.BaseProvinceId; var oldMission = formation.Mission; var oldCut = formation.CutOff;
                 try
                 {
-                    formation.StateMapIndex = -1; formation.BaseProvinceId = -1; formation.Mission = SupportCore.MissionStandby;
+                    // There is no "off the map" any more: the hardest row to read is a formation cut off where it stands.
+                    formation.CutOff = true; formation.BaseProvinceId = -1; formation.Mission = SupportCore.MissionStandby;
                     game.Call("OpenScreen", "Support"); await Wait(.3);
                     var reserveRow = game.FindChild("SupportRow_" + formation.Id, true, false) as Control;
                     for (var parent = reserveRow?.GetParent(); parent is not null; parent = parent.GetParent())
@@ -139,11 +140,11 @@ public partial class ExportVerification
                     Check(supportPanel is not null && railButton is not null && supportPanel.GetGlobalTransformWithCanvas().Origin.X >
                         (railButton.GetGlobalTransformWithCanvas() * railButton.Size).X,
                         "long-range dock stays clear of the persistent navigation at " + size.X);
-                    Check(game.FindChildren("*", "Label", true, false).OfType<Label>().Any(l => l.IsVisibleInTree() && l.Text == Loc.Get("IN RESERVE — NO SAFE BASE")),
-                        "off-map support reserve remains visible in the real roster: " + language + " " + size.X);
+                    Check(game.FindChildren("*", "Label", true, false).OfType<Label>().Any(l => l.IsVisibleInTree() && l.Text == Loc.Get("CUT OFF — no way out")),
+                        "a cut-off formation remains visible in the real roster: " + language + " " + size.X);
                     await Capture("materials-support-reserve-" + language + "-" + size.X);
                 }
-                finally { formation.StateMapIndex = oldState; formation.BaseProvinceId = oldBase; formation.Mission = oldMission; }
+                finally { formation.StateMapIndex = oldState; formation.BaseProvinceId = oldBase; formation.Mission = oldMission; formation.CutOff = oldCut; }
                 game.Call("CloseSupportScreen"); game.Call("OpenScreen", "Nation"); await Wait(.15);
             }
             var navigation = game.FindChild("NavMilitary", true, false) as Button;

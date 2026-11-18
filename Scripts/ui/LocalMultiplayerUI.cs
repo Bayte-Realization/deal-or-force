@@ -47,6 +47,8 @@ public partial class DealOrForceGame
     {
         if (!_campaign.IsHotseat || !_campaign.NextSeat()) return;
         ClearArmySelectionAndClose();
+        // The long-range formations the last seat selected are not this seat's to command.
+        ClearSupportMapSelection();
         _selectedNation = _campaign.Player;
         _globe.SelectArmy(-1);
         _sidePanel.Visible = false;

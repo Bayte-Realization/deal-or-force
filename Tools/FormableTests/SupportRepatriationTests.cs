@@ -50,46 +50,55 @@ static class SupportRepatriationTests
         StrategicStockpiles.EnsureSeeded(stockWorld, stockOwner);
         Check(quoted.SequenceEqual(StrategicStockpiles.TrackedGoods.Select(g => StrategicStockpiles.Get(stockWorld, stockOwner, g))),
             "every previewed opening amount matches actual initialized stock exactly");
+        // Lost ground is a withdrawal, not a jump (LongRangeMovement.Withdraw): the formation stays
+        // where it stood, pays the overrun once if the enemy took it, and leaves by road.
         foreach (var atWar in new[] { false, true })
         {
-            var c = Fixture(atWar); var f = Add(c, 1); Lose(c, 1001);
+            var c = Fixture(atWar); var f = Add(c, 1); var stood = f.BaseProvinceId; Lose(c, 1001);
             var rng = c.Random.State;
             var readStamp = CampaignFingerprint.Of(c);
             SupportCore.IndexReach(c);
-            Check(CampaignFingerprint.Of(c) == readStamp && SupportCore.Displaced(c, f), "rebuilding a read index never evacuates on a paused/UI read");
+            Check(CampaignFingerprint.Of(c) == readStamp && SupportCore.Displaced(c, f), "rebuilding a read index never moves anything on a paused/UI read");
             Check(!SupportCore.InRange(c, f, SupportTypeCatalog.Get(f.TypeId), f.BaseProvinceId), "captured base projects no power, war=" + atWar);
             SupportCore.PrepareStep(c); // Actual per-step hook, not a monthly AI call.
-            Check(c.Nations[0].IsHuman && !SupportCore.Displaced(c, f) && f.StateMapIndex == 1002,
-                "human formation evacuates immediately to controlled homeland, war=" + atWar);
-            Check(f.Strength == .43f && f.Experience == .62f && c.Random.State == rng && f.Mission == SupportCore.MissionStandby && f.TargetStateMapIndex == -1,
-                "evacuation clears firing orders but grants no healing/experience/RNG, war=" + atWar);
+            Check(f.ProvinceId == stood && f.StateMapIndex == 1001 && f.Route.Count > 0 && f.BaseProvinceId == -1 &&
+                  c.ProvinceMap.Neighbors[stood].Contains(f.Route[0]),
+                "the formation does not jump: it starts withdrawing by road from where it stood, war=" + atWar);
+            var expected = atWar ? .43f * (1f - c.Defines.LongRangeOverrunLoss) : .43f;
+            Check(MathF.Abs(f.Strength - expected) < 1e-6f && f.Experience == .62f && c.Random.State == rng,
+                "an enemy overrun costs the overrun loss once; a lost access costs nothing; no RNG, war=" + atWar);
             var hash = CampaignFingerprint.Of(c);
             Check(SupportRepatriation.Reconcile(c) == 0 && CampaignFingerprint.Of(c) == hash, "repeated reconciliation is inert");
+            var at = f.ProvinceId;
+            for (var day = 0; day < 40 && (f.Route.Count > 0 || f.DeployDaysLeft > 0); day++)
+            {
+                SupportRepatriation.Reconcile(c);
+                LongRangeMovement.Advance(c);
+                Check(f.ProvinceId == at || c.ProvinceMap.Neighbors[at].Contains(f.ProvinceId), "never more than one neighbouring province a day, war=" + atWar);
+                at = f.ProvinceId;
+            }
+            Check(c.ProvinceMap.ProvinceToState[f.ProvinceId] == 1002 && !SupportCore.Displaced(c, f) && MathF.Abs(f.Strength - expected) < 1e-6f,
+                "the withdrawal ends deployed on its own ground, and the loss was charged only once, war=" + atWar);
         }
         {
-            var c = Fixture(); var first = Add(c, 10); var second = Add(c, 20); Add(c, 30, 1002);
-            c.SupportOrders.Add(new SupportOrder { Id = 1, NationId = 0, StateMapIndex = 1002, TypeId = first.TypeId });
-            Lose(c, 1001); SupportCore.PrepareStep(c);
-            Check(first.BaseProvinceId == -1 && first.StateMapIndex == -1 && second.BaseProvinceId == -1 && c.SupportFormations.Count == 3,
-                "full bases plus training reservations put displaced units in off-map reserve, never delete/overfill them");
-            Check(!SupportCore.InRange(c, first, SupportTypeCatalog.Get(first.TypeId), 1), "unbased reserve has no firing range");
-            c.SupportOrders.Clear(); c.States.First(s => s.MapIndex == 1002).Buildings[BuildingKind.Barracks] = 1;
-            typeof(Campaign).GetProperty(nameof(Campaign.StepOpensNewDay))!.SetValue(c, true);
-            Check(SupportRepatriation.Reconcile(c) == 2 && !SupportCore.Displaced(c, first) && !SupportCore.Displaced(c, second),
-                "reserve automatically returns when posts become available");
-            Check(SupportCore.PostsUsed(c, 1002) <= SupportCore.CapacityOf(c, c.States.First(s => s.MapIndex == 1002)), "reserved posts never exceed capacity");
-        }
-        {
-            var c = Fixture(); var f = Add(c, 1); Lose(c, 1001); Lose(c, 1002);
+            var c = Fixture(true); var f = Add(c, 1); var stood = f.BaseProvinceId; Lose(c, 1001); Lose(c, 1002);
             SupportCore.PrepareStep(c);
-            Check(f.BaseProvinceId == -1 && f.StateMapIndex == -1 && f.Strength == .43f,
-                "landless nation retains a non-operational reserve instead of occupying a foreign base forever");
+            Check(f.CutOff && f.ProvinceId == stood && f.Route.Count == 0 && SupportCore.Displaced(c, f) && c.SupportFormations.Count == 1,
+                "with no way out the formation is cut off where it stands - on the map, never off it");
+            var strength = f.Strength;
+            for (var day = 0; day < 3; day++) LongRangeMovement.Advance(c);
+            Check(f.CutOff && f.Strength == strength, "a cut-off formation looks for a way out daily without paying again");
+            // The neighbouring region retaken: the way out opens and it leaves.
+            c.States.First(s => s.MapIndex == 1002).NationMapIndex = 501;
+            for (var p = 1; p <= c.ProvinceMap.ProvinceCount; p++)
+                if (c.ProvinceMap.ProvinceToState[p] == 1002) { c.ProvinceMap.ProvinceToNation[p] = 501; c.SetProvinceController(p, 501); }
+            LongRangeMovement.Advance(c);
+            Check(!f.CutOff && (f.Route.Count > 0 || f.ProvinceId != stood), "a way out reopened is taken the next day");
         }
         {
             var c = Fixture(); var f = Add(c, 1, 1002); f.StateMapIndex = 9999;
-            Check(SupportCore.Displaced(c, f), "stale region binding is recognized");
             SupportCore.PrepareStep(c);
-            Check(f.StateMapIndex == 1002 && !SupportCore.Displaced(c, f), "region split/reunion repairs binding using actual controlled map");
+            Check(f.StateMapIndex == 1002 && !SupportCore.Displaced(c, f), "the region always follows the province the formation stands in");
         }
         {
             var c = Fixture(); var f = Add(c, 1); Lose(c, 1001);
@@ -112,18 +121,20 @@ static class SupportRepatriationTests
         if (MapRasterCatalog.TryLoadHydrology(WorldMapSource.Width, WorldMapSource.Height, out var water, out _)) map.AttachHydrology(water);
         c.AttachProvinceTopology(map);
         var rus = c.NationByTag("RUS");
-        var lost = c.SupportFormations.Where(f => SupportCore.Enabled(c, f.TypeId) && SupportCore.Displaced(c, f) && f.BaseProvinceId > 0).ToArray();
+        LongRangeMovement.Settle(c);
+        var lost = c.SupportFormations.Where(f => SupportCore.Enabled(c, f.TypeId) && SupportCore.Displaced(c, f) && f.Route.Count == 0 && f.DeployDaysLeft == 0).ToArray();
         Console.WriteLine($"SUPPORT_SAVE_BEFORE day={c.ElapsedDays} human_rus={rus?.IsHuman} formations={c.SupportFormations.Count} displaced={lost.Length} rus_displaced={lost.Count(f => f.NationId == rus?.Id)}");
-        var rng = c.Random.State; var locations = lost.Select(f => (f.Id, f.Strength, f.Experience)).ToArray();
+        var rng = c.Random.State; var locations = lost.Select(f => (f.Id, f.Strength, f.Experience, f.ProvinceId)).ToArray();
         SupportCore.PrepareStep(c);
-        Check(lost.All(f => f.BaseProvinceId < 0 && f.StateMapIndex < 0 || !SupportCore.Displaced(c, f)), "every originally stranded formation is safely rebased or explicitly reserved");
-        Console.WriteLine($"SUPPORT_SAVE_RUSSIA rebased={lost.Count(f => f.NationId == rus?.Id && f.BaseProvinceId > 0)} reserve={lost.Count(f => f.NationId == rus?.Id && f.BaseProvinceId < 0)}");
-        Check(locations.All(old => c.SupportFormations.Any(f => f.Id == old.Id && f.Strength == old.Strength && f.Experience == old.Experience)) && rng == c.Random.State,
-            "player save evacuation retains all formations and their condition without RNG");
+        Check(lost.All(f => f.Route.Count > 0 || f.CutOff || !SupportCore.Displaced(c, f)), "every originally stranded formation is withdrawing, cut off in place, or working again");
+        Console.WriteLine($"SUPPORT_SAVE_RUSSIA withdrawing={lost.Count(f => f.NationId == rus?.Id && f.Route.Count > 0)} cut_off={lost.Count(f => f.NationId == rus?.Id && f.CutOff)}");
+        Check(locations.All(old => c.SupportFormations.Any(f => f.Id == old.Id && f.ProvinceId == old.ProvinceId && f.Experience == old.Experience &&
+                f.Strength >= old.Strength * (1f - c.Defines.LongRangeOverrunLoss) - 1e-5f)) && rng == c.Random.State,
+            "player save withdrawal keeps every formation where it stood, charges at most the overrun once, without RNG");
         c.IsPaused = false; var start = c.ElapsedDays;
-        for (var day = 0; day < 2; day++) { c.TickDay(); Check(c.SimulationFault.Length == 0, "player campaign continues after evacuation, day=" + c.ElapsedDays); }
-        Console.WriteLine($"SUPPORT_SAVE_AFTER days={c.ElapsedDays - start} foreign_base={c.SupportFormations.Count(f => SupportCore.Enabled(c, f.TypeId) && f.BaseProvinceId > 0 && SupportCore.Displaced(c, f))} reserve={c.SupportFormations.Count(f => f.BaseProvinceId < 0 && f.StateMapIndex < 0)}");
-        Check(c.SupportFormations.All(f => !SupportCore.Enabled(c, f.TypeId) || f.BaseProvinceId < 0 || !SupportCore.Displaced(c, f)), "no enabled formation remains on a foreign base after continuation");
+        for (var day = 0; day < 2; day++) { c.TickDay(); Check(c.SimulationFault.Length == 0, "player campaign continues after withdrawal, day=" + c.ElapsedDays); }
+        Console.WriteLine($"SUPPORT_SAVE_AFTER days={c.ElapsedDays - start} moving={c.SupportFormations.Count(f => f.Route.Count > 0)} cut_off={c.SupportFormations.Count(f => f.CutOff)} unplaced={c.SupportFormations.Count(f => f.ProvinceId <= 0)}");
+        Check(c.SupportFormations.All(f => !SupportCore.Enabled(c, f.TypeId) || f.ProvinceId > 0), "no enabled formation is off the map after continuation");
         Check(source.AsSpan().SequenceEqual(Hash()), "original player save SHA256 remains unchanged");
     }
 }

@@ -249,10 +249,22 @@ public partial class DealOrForceGame
                 Refresh();
                 if (_mapSelectionOpen) ShowMapSelectionContent();
                 break;
+            case "map_look":
+                UpdateMapVignetteLook();
+                _globe?.ApplyMapVisualStyle();
+                break;
             case "map_visual_style":
             case "map_cloud_opacity":
             case "map_consistent_lighting":
                 _globe?.ApplyMapVisualStyle();
+                break;
+
+            case "mouse_scheme":
+            case "rmb_everywhere":
+            case "edge_pan":
+            case "drag_threshold_px":
+            case "drag_threshold_ms":
+                // Read live by ControlSchemeRules & QuickAmount everywhere buttons without restart.
                 break;
 
             case "window_mode":
@@ -299,6 +311,14 @@ public partial class DealOrForceGame
                 var window = GetWindow();
                 if (window is not null)
                     window.ContentScaleFactor = Math.Clamp(SettingsCatalog.Number("interface_scale"), 0.5f, 2.5f);
+                if (IsNewShellActive) LayoutNewShell();
+                break;
+
+            case "ui_shell":
+            case "ui_shell_next_hints":
+            case "ui_shell_minimap":
+            case "ui_shell_message_preset":
+                ApplyUiShellSetting();
                 break;
 
             // ---- sound ---------------------------------------------------------------

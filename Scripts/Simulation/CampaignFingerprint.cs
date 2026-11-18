@@ -1213,6 +1213,28 @@ public static class CampaignFingerprint
             { MixText("world_war"); Mix(war.WorldWarDay); }
             if (war.PendingOffer is { BeneficiaryId: >= 0 } offer)
             { MixText("peace_beneficiary"); Mix(offer.BeneficiaryId); }
+            if (war.PendingOfferFromId >= 0)
+            {
+                MixText("pending_peace_offer");
+                Mix(war.PendingOfferFromId);
+                Mix(war.PendingOfferIsWritten ? 1 : 0);
+                Mix((int)war.PendingOfferTerms);
+                Mix(war.PendingOfferDay);
+                Mix(war.PendingOfferExpiresDay);
+                if (war.PendingOffer is { } pending)
+                {
+                    Mix(pending.Provinces.Count);
+                    foreach (var province in pending.Provinces.OrderBy(id => id)) Mix(province);
+                    Mix(pending.ReleaseRegions ? 1 : 0);
+                    Mix(pending.Reparations ? 1 : 0);
+                    Mix(pending.TradeConcessions ? 1 : 0);
+                    Mix(pending.Demilitarise ? 1 : 0);
+                    Mix(pending.Humiliate ? 1 : 0);
+                    Mix(pending.LongTruce ? 1 : 0);
+                    Mix(pending.Unconditional ? 1 : 0);
+                    MixText(pending.Subjugate);
+                }
+            }
             // The spacing of settlements put to a player (PeaceOffers.ToPlayerBlockReason).
             // Only a war a player is in ever sets these, so a world nobody plays mixes nothing.
             if (war.LastOfferToPlayerDay >= 0 || war.RefusedOfferDay >= 0)
@@ -1271,6 +1293,29 @@ public static class CampaignFingerprint
                      .Where(f => !string.IsNullOrEmpty(f.StrikeTarget) || f.TargetStateMapIndex >= 0).OrderBy(f => f.Id))
         {
             MixText("strike_target"); Mix(formation.Id); MixText(formation.StrikeTarget); Mix(formation.TargetStateMapIndex);
+        }
+        // Long-range movement (LongRangeMovement): its rules when they differ from the shipped
+        // ones, and every formation that is not simply deployed - on the road, at sea, in the air,
+        // deploying, cut off or withdrawing from lost ground - down to the share of the step made.
+        // A deployed formation is what it was before formations moved, and adds nothing.
+        var relocationRules = LongRangeMovement.Rules(campaign.Defines);
+        if (!relocationRules.SequenceEqual(LongRangeMovement.DefaultRules))
+        {
+            MixText("long_range_movement_rules");
+            foreach (var rule in relocationRules) MixFloat(rule);
+        }
+        foreach (var formation in campaign.SupportFormations
+                     .Where(f => f.Route.Count > 0 || f.DeployDaysLeft > 0 || f.CutOff || f.Overrun).OrderBy(f => f.Id))
+        {
+            MixText("support_position"); Mix(formation.Id); Mix(formation.ProvinceId); Mix(formation.BaseProvinceId);
+            Mix(formation.Route.Count);
+            foreach (var step in formation.Route) Mix(step);
+            foreach (var mode in formation.RouteModes) Mix(mode);
+            MixFloat(formation.MoveProgress); Mix(formation.DeployDaysLeft);
+            Mix(formation.CutOff ? 1 : 0); Mix(formation.Overrun ? 1 : 0); MixFloat(formation.Strength);
+            // The straits it sailed under decide the course it is on; mixed only when some were
+            // shut, so a world with every strait open hashes as it did before ships followed the water.
+            if (formation.SeaCourseMask != 0) { MixText("sea_course"); Mix(formation.SeaCourseMask); }
         }
         var controllers = campaign.ProvinceController ?? campaign.PendingProvinceController;
         if (controllers is null) return hash;

@@ -30,9 +30,20 @@ public sealed partial class GlobePresentation
             OrientSurfaceCounter(marker.Node,anchor.Normalized());
             marker.DisplayOffset=Vector2.Zero;
             if(!TryCounterScreenRoom(marker.Plate,out var room))continue;
+            // A card part-way along a road is where the column is, not a slot to be tidied into a
+            // province: it is drawn exactly there and only takes its room.
+            if(marker.Formation.Route.Count>0 && marker.Formation.MoveProgress>0f)
+            {
+                marker.DisplayFaded=false;
+                marker.Plate.AlphaCut=SpriteBase3D.AlphaCutMode.Discard;
+                marker.Plate.Modulate=Colors.White;
+                TakeCounterRoom(room.Grow(2));
+                continue;
+            }
+            var standing=Simulation.LongRangeMovement.At(marker.Formation);
             var at=_camera.UnprojectPosition(marker.Node.GlobalPosition);
             bool InsideBase(Vector2 offset)=>TryLocate(at+offset,out _,out _,out _,out var province) &&
-                province==marker.Formation.BaseProvinceId;
+                province==standing;
             var found=TryFindFreeCounterOffset(room.Grow(2),out var offset,InsideBase);
             if(found && offset!=Vector2.Zero &&
                TryLocate(at+offset,out var latitude,out var longitude,out _,out _))
@@ -43,7 +54,7 @@ public sealed partial class GlobePresentation
                 // Radial height can move the projected centre by a fraction of a pixel.
                 // Reject even that final displacement if it crossed a very narrow edge.
                 if(!TryLocate(_camera.UnprojectPosition(marker.Node.GlobalPosition),out _,out _,out _,out var actual) ||
-                   actual!=marker.Formation.BaseProvinceId ||
+                   actual!=standing ||
                    TryCounterScreenRoom(marker.Plate,out var finalRoom)&&CounterRoomOccupied(finalRoom.Grow(2)))
                 {marker.Node.Position=anchor;OrientSurfaceCounter(marker.Node,anchor.Normalized());found=false;}
                 else marker.DisplayOffset=offset;

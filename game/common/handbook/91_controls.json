@@ -1,0 +1,15 @@
+// Controls & hotkeys quick-reference article under Basics in the F1 Handbook.
+{
+  "articles": {
+    "controls": {
+      "topic": "basics",
+      "order": 15,
+      "related": [
+        "first_steps",
+        "top_bar",
+        "time_and_saves",
+        "army"
+      ]
+    }
+  }
+}

@@ -233,6 +233,9 @@ public partial class DealOrForceGame
             _handbookPage.AddChild(paragraph);
         }
 
+        if (string.Equals(id, "controls", StringComparison.OrdinalIgnoreCase))
+            AppendHandbookControlsTable(_handbookPage);
+
         var actions = new HFlowContainer();
         actions.AddThemeConstantOverride("h_separation", 6);
         actions.AddThemeConstantOverride("v_separation", 6);

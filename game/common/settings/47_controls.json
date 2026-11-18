@@ -1,0 +1,57 @@
+// Controls & input ergonomics settings.
+//
+// `mouse_scheme` switches between Age of History style (LMB drag pans, MMB box selects,
+// Ctrl+LMB draws region box) and Paradox style (LMB box selects, MMB drag pans).
+// In both schemes, RMB click sends orders / context menu while RMB drag past threshold pans.
+{
+  "mouse_scheme": {
+    "category": "interface",
+    "order": 265,
+    "kind": "choice",
+    "name": "Mouse control scheme",
+    "description": "Age of History: drag with the left or right button to move the map, middle button to box-select armies, Ctrl+LMB to box-select regions. Paradox: left drag box-selects armies, middle or right drag moves the map.",
+    "values": ["aoh", "paradox"],
+    "labels": ["Age of History (LMB pan)", "Paradox (LMB box)"],
+    "default": "aoh"
+  },
+  "rmb_everywhere": {
+    "category": "interface",
+    "order": 266,
+    "kind": "toggle",
+    "name": "Right-click applies Everywhere",
+    "description": "When enabled, a clean right-click (or Shift+click) on quick construct and recruit actions applies across every eligible owned region instead of only the active one.",
+    "default": true
+  },
+  "edge_pan": {
+    "category": "interface",
+    "order": 267,
+    "kind": "toggle",
+    "name": "Edge-of-screen camera pan",
+    "description": "Move the map automatically when the pointer touches the edge of the screen.",
+    "default": false
+  },
+  "drag_threshold_px": {
+    "category": "interface",
+    "order": 268,
+    "kind": "slider",
+    "name": "Mouse drag threshold (distance)",
+    "description": "Minimum pointer travel in pixels before a right-button hold turns into a map drag instead of a click order.",
+    "minimum": 4,
+    "maximum": 24,
+    "step": 1,
+    "default": 8,
+    "unit": "pixels"
+  },
+  "drag_threshold_ms": {
+    "category": "interface",
+    "order": 269,
+    "kind": "slider",
+    "name": "Mouse drag threshold (hold time)",
+    "description": "Minimum hold time in milliseconds before a right-button drag starts moving the map. Prevents accidental orders when panning fast.",
+    "minimum": 60,
+    "maximum": 300,
+    "step": 10,
+    "default": 120,
+    "unit": "milliseconds"
+  }
+}

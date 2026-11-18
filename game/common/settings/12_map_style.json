@@ -7,6 +7,14 @@
     "labels": ["map.style.balanced", "map.style.vivid", "map.style.relief"],
     "default": "balanced"
   },
+  "map_look": {
+    "category": "video", "order": 320, "kind": "choice",
+    "name": "Map look",
+    "description": "Atlas: warm paper and ink, with a paper map from far away. Classic: the previous look. Changes immediately, without reducing detail or changing gameplay.",
+    "values": ["atlas", "classic"],
+    "labels": ["map.look.atlas", "map.look.classic"],
+    "default": "atlas"
+  },
   "map_consistent_lighting": {
     "category": "video", "order": 319, "kind": "toggle",
     "name": "Consistent atlas lighting",
