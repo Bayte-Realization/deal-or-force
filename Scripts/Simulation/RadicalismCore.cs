@@ -26,14 +26,26 @@ public static class RadicalismCore
     {
         var d = c.Defines;
         var living = (.46f - state.StandardOfLiving) * .002f;
-        var minority = EconomySystem.ForeignShare(state, nation.Tag) * d.MinorityRadicalismPerWeek;
+        // A people that has come to accept its holder nurses its grievance less, and one that runs
+        // itself less again (ConquestAcceptance, RegionalAutonomy). Both factors are exactly one on
+        // ground nobody has conquered or granted anything, so the 2024 world reads as it always did.
+        var minority = EconomySystem.ForeignShare(state, nation.Tag) * d.MinorityRadicalismPerWeek *
+                       ConquestAcceptance.MinorityFactor(d, state, nation);
         var occupation = StabilityCore.OccupiedShare(c, state, nation) * MathF.Max(0, d.RegionalRadicalismOccupation);
         var inflation = InflationPressure(nation);
         var overstretch = (nation is not null && nation.ImperialOverstretch > 0.001f &&
                            TerritorialClaims.TitleOf(c, nation, state) != TerritorialTitle.Homeland &&
-                           EconomySystem.ForeignShare(state, nation.Tag) >= 0.35f)
-            ? nation.ImperialOverstretch * d.ImperialOverstretchRadicalismWeekly
+                           EconomySystem.ForeignShare(state, nation.Tag) >= ConquestAcceptance.UnentitledForeignShare)
+            ? nation.ImperialOverstretch * d.ImperialOverstretchRadicalismWeekly * (1f - ConquestAcceptance.Of(state, nation))
             : 0f;
+        if (RegionalAutonomy.Autonomous(state))
+        {
+            var inflow = M.Clamp01(d.AutonomyRadicalismInflow);
+            minority *= inflow;
+            overstretch *= inflow;
+        }
+        // Beaten rebels are years of quiet: what feeds anger arrives a third as fast (RisingAftermath).
+        var exhausted = RisingAftermath.Relief(c, state, minority + overstretch + occupation);
         // Recovery scales with the existing angry population, not a free stability bonus.
         // Good living conditions make it faster; war slows it, but never turns recovery into growth.
         var rate = MathF.Max(0, d.RegionalRadicalismRecoveryPerWeek) +
@@ -45,7 +57,7 @@ public static class RadicalismCore
         if (nation is not null && nation.TroublesDays > 0)
             rate *= 1f + M.Clamp(nation.TroublesDays / MathF.Max(1f, d.TroublesExhaustionDays), 0f, d.TroublesExhaustionCap);
         var recovery = -M.Clamp01(state.Radicalism) * M.Clamp01(rate);
-        var raw = living + minority + occupation + inflation + overstretch + budgetPressure + policyPressure + recovery;
+        var raw = living + minority + occupation + inflation + overstretch + exhausted + budgetPressure + policyPressure + recovery;
         var actual = M.Clamp01(state.Radicalism + raw) - state.Radicalism;
         if (drivers is not null)
         {
@@ -57,6 +69,7 @@ public static class RadicalismCore
             drivers.Add("Occupation", occupation);
             drivers.Add("Inflation", inflation);
             if (overstretch > 0f) drivers.Add(Loc.Get("Imperial overstretch"), overstretch);
+            if (exhausted < 0f) drivers.Add("Exhausted after a crushed rising", exhausted);
             drivers.Add("Gradual recovery", recovery);
             drivers.Settle(actual);
         }
@@ -71,7 +84,16 @@ public static class RadicalismCore
         var budget = BudgetCore.Evaluate(nation, nation.Gdp / 52f, atWar);
         var policy = GovernmentFocusCatalog.Of(nation.GovernmentFocus).Radicalism +
                      PoliticsCore.GovernmentOf(nation).Radicalism + PoliticsCore.IdeologyOf(nation).Radicalism;
-        WeeklyChange(c, nation, state, atWar, budget.Radicalism, policy, result);
+        var weekly = WeeklyChange(c, nation, state, atWar, budget.Radicalism, policy, result);
+        // What laws, spirits and a proclaimed union add to every region a week is paid outside this
+        // pass - a seventh a day by NationalModifiers.Tick - and a forecast that left it out showed a
+        // falling radicalism in a Yugoslavia whose every region was climbing two points a week.
+        if (MechanicFeatures.SystemEnabled(c, nameof(NationalModifiers)) &&
+            NationalModifiers.Of(nation, "radicalism_weekly") is var modifiers && modifiers != 0f)
+        {
+            result.Add("Laws, spirits and the union", modifiers);
+            result.Settle(M.Clamp01(state.Radicalism + weekly + modifiers) - state.Radicalism);
+        }
         return result;
     }
 

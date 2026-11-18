@@ -361,7 +361,9 @@ public static class RegionalAdministration
         var provinces = Enumerable.Range(1, c.ProvinceMap.ProvinceCount)
             .Where(p => ids.Contains(c.ProvinceMap.ProvinceToState[p])).ToArray();
         owner.PoliticalPoints -= price;
-        StatePartition.Annex(c, provinces, subject, asConquest: false);
+        // Given by the government that held it, so its people carry across what they had of it
+        // (ConquestAcceptance.ChangedHands): a fresh conquest handed down arrives at nothing.
+        StatePartition.Annex(c, provinces, subject, asConquest: false, byConsent: true);
         RegionalResourcePartition.RecountResidents(c, owner, subject);
         owner.Gdp -= gdp; subject.Gdp += gdp;
         owner.ProductionReferenceInitialized = subject.ProductionReferenceInitialized = true;

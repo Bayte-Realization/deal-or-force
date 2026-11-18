@@ -284,8 +284,16 @@ static class AssaultReadinessTests
         // (FleetGroups); the hashed command table moves 0xDA9F63EBAEB9AEA7 -> 0xD2110AF9B5F9FA1A.
         // 10 November: the navy feature binds SeaLiftCommand (SeaLift): 0xD2110AF9B5F9FA1A ->
         // 0x2158CC78B911DB8A, and removing exactly that binding restores the old value below.
-        Check(actual == 0x2158CC78B911DB8AUL,
+        // 17 November: domestic_crises binds GrantRegionalAutonomyCommand and
+        // RevokeRegionalAutonomyCommand (RegionalAutonomy): 0x2158CC78B911DB8A -> 0x340561118E3ACD50,
+        // the twin ClaudeStateFingerprintTests value; removing exactly those two restores the old one.
+        Check(actual == 0x340561118E3ACD50UL,
             $"default assault floors preserve the current catalogue golden fingerprint (got 0x{actual:X16})");
+        c.Defines.FeatureCommands.Remove("GrantRegionalAutonomyCommand");
+        c.Defines.FeatureCommands.Remove("RevokeRegionalAutonomyCommand");
+        var beforeAutonomy = CampaignFingerprint.Of(c);
+        Check(beforeAutonomy == 0x2158CC78B911DB8AUL,
+            $"and without the two regional autonomy bindings it is the 10 November golden (got 0x{beforeAutonomy:X16})");
         c.Defines.FeatureCommands.Remove("SeaLiftCommand");
         var beforeSeaLift = CampaignFingerprint.Of(c);
         Check(beforeSeaLift == 0xD2110AF9B5F9FA1AUL,

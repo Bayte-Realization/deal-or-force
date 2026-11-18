@@ -53,8 +53,20 @@ static class UnionCohesionTests
         Check(union is not null, "the catalogue holds a union of two countries");
         var start = UnionCohesion.Start(campaign, china, union);
         Check(start < 1f, "a union of two peoples starts short of whole: " + start);
-        Check(Math.Abs(1f - start - campaign.Defines.UnionCohesionPerPeople) < 0.001f,
-            "and it costs exactly one people's worth of what a claim costs");
+        // Peoples, not countries, since 17 November 2026 (UnionCohesion.Start): a union of the two
+        // Congos is five Bantu peoples, and a founder of none of them - China here - pays the full
+        // price for every one, as a founder of another family of peoples always did.
+        var congolese = union.RequiredTags.SelectMany(DemographyCatalog.PrimaryCultures).Distinct().Count();
+        Check(Math.Abs(1f - start - Math.Min(0.65f, congolese * campaign.Defines.UnionCohesionPerPeople)) < 0.001f,
+            $"and it costs one people's worth of what a claim costs for each of its {congolese} peoples");
+        var kinshasa = campaign.NationByTag("COD");
+        if (kinshasa is not null)
+        {
+            var kin = UnionCohesion.Start(campaign, kinshasa, union);
+            Check(Math.Abs(1f - kin - (congolese - 1) * campaign.Defines.UnionCohesionPerPeople *
+                    campaign.Defines.UnionCohesionKindredShare) < 0.001f,
+                $"while a Congolese founder pays the kindred share for the four other Bantu peoples: {kin:0.000}");
+        }
 
         // Proclaim it, and watch a calm country put itself back together.
         china.FormedNationId = union.Id;

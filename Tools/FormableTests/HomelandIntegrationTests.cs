@@ -89,7 +89,16 @@ internal static class HomelandIntegrationTests
         var off = Campaign.CreateBootstrap(20241108);
         off.Defines.HomelandIntegrationYears = 0;
         off.Defines.HomelandFadeYears = 0;
+        // 17 November 2026: full acceptance of conquered ground (ConquestAcceptance) is a third road
+        // home through this pass, so the pass runs while that is on; all three at zero, it is off.
         HomelandIntegration.Tick(off);
-        Check(off.States.All(s => s.TrackedOwnerMapIndex == 0), "both at zero, the system does nothing at all");
+        Check(off.States.Any(s => s.TrackedOwnerMapIndex != 0),
+            "with the calendar off, acceptance still keeps the monthly pass watching owners");
+        off = Campaign.CreateBootstrap(20241108);
+        off.Defines.HomelandIntegrationYears = 0;
+        off.Defines.HomelandFadeYears = 0;
+        off.Defines.AcceptanceWeekly = 0f;
+        HomelandIntegration.Tick(off);
+        Check(off.States.All(s => s.TrackedOwnerMapIndex == 0), "calendar, fading and acceptance all at zero, the system does nothing at all");
     }
 }

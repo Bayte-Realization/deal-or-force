@@ -1046,6 +1046,9 @@ public static class EconomySystem
             foreach (var line in BudgetCore.All)
                 if (line.Charge == BudgetBasis.Debt && line.Side == BudgetSide.Expense)
                     interest += BudgetCore.Amount(nation, line, weeklyOutput, atWar);
+            // Self-governing regions keep a share of the taxes just raised (RegionalAutonomy). Paid
+            // before the week is settled, so a treasury it empties borrows for it like any other bill.
+            RegionalAutonomy.PayWeek(campaign, nation);
             SovereignFinance.Settle(campaign, nation, nation.WeeklyBalance, interest);
             if (!nation.IsHuman || Delegation.Holds(nation, Delegation.Budget))
                 SovereignFinance.ManageLiquidity(campaign, nation);
@@ -1128,7 +1131,13 @@ public static class EconomySystem
             // keeps the serial and the parallel path to the same bytes.
             DeterministicParallel.For(campaign, 0, states.Length, index =>
                 WeekState(campaign, nation, annualGrowth, atWar, welfareRadicalism, focusRadicalism, states[index]));
-            foreach (var state in states) totalPopulation += state.Population;
+            foreach (var state in states)
+            {
+                totalPopulation += state.Population;
+                // After the week's anger is settled, the week's acceptance: one region at a time on
+                // this thread, because it reads titles and the map's tally (ConquestAcceptance).
+                ConquestAcceptance.Week(campaign, nation, state);
+            }
             if (states.Length > 0) nation.Population = totalPopulation;
             var focusSol = cabinet.Living + government.Living + ideology.Living;
             // The same tolerance growth and prices already forgive: a market 94% supplied is a

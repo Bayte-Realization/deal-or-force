@@ -464,8 +464,8 @@ public static partial class Ultimatum
         // Release before cessions: an ordinary annexation can reunify sibling regions.
         if (deal.From.ReleaseRegions) Dismantlement.Apply(c, from, deal.From.Regions, voluntary: true);
         if (deal.To.ReleaseRegions) Dismantlement.Apply(c, to, deal.To.Regions, voluntary: true);
-        if (fromGround.Length > 0 && !deal.From.ReleaseRegions) StatePartition.Annex(c, fromGround, to, asConquest: false);
-        if (toGround.Length > 0 && !deal.To.ReleaseRegions) StatePartition.Annex(c, toGround, from, asConquest: false);
+        if (fromGround.Length > 0 && !deal.From.ReleaseRegions) StatePartition.Annex(c, fromGround, to, asConquest: false, byConsent: true);
+        if (toGround.Length > 0 && !deal.To.ReleaseRegions) StatePartition.Annex(c, toGround, from, asConquest: false, byConsent: true);
         var relation = CampaignDiplomacy.Get(c, from.Id, to.Id);
         if (deal.From.LiftEmbargo)
         {

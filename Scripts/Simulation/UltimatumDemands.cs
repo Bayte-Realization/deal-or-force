@@ -352,6 +352,8 @@ public static partial class Ultimatum
             var population = c.States.Where(s => ids.Contains(s.MapIndex)).Sum(s => s.Population);
             var provinces = Enumerable.Range(1, c.ProvinceMap.ProvinceCount).Where(p =>
                 ids.Contains(c.ProvinceMap.ProvinceToState[p]) && c.ProvinceMap.ProvinceToNation[p] == target.MapIndex).ToArray();
+            // Yielded under a threat of force is not consent: the ground starts from nothing, as a
+            // war's would (ConquestAcceptance.ChangedHands), or the ultimatum is the cheap conquest.
             if (provinces.Length > 0) StatePartition.Annex(c, provinces, demander, asConquest: false);
             { var ledgerBefore = target.Treasury; target.Treasury -= demand.Reparations; MoneyLedger.Book(target, MoneyFlow.Reparations, target.Treasury - ledgerBefore); }
             { var ledgerBefore = demander.Treasury; demander.Treasury += demand.Reparations; MoneyLedger.Book(demander, MoneyFlow.Reparations, demander.Treasury - ledgerBefore); }

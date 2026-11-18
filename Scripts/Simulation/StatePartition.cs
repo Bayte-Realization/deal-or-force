@@ -42,8 +42,13 @@ public static class StatePartition
     /// ground it is standing on, and charging it notoriety for the land it already lived on
     /// would have every new state born an international pariah.
     /// </param>
+    /// <param name="byConsent">
+    /// Whether the side giving the ground up agreed to it: a union, a deal, a breakaway rejoining its
+    /// parent of its own accord. Only what this decides is whether ground taken back from a breakaway
+    /// was a rising crushed (RisingAftermath) or a reunion - the same provinces, a different history.
+    /// </param>
     public static IReadOnlyList<ScenarioState> Annex(Campaign campaign, IEnumerable<int> provinces,
-        Nation newOwner, bool asConquest = true)
+        Nation newOwner, bool asConquest = true, bool byConsent = false)
     {
         var topology = campaign?.ProvinceMap;
         if (topology is null || newOwner is null || provinces is null) return Array.Empty<ScenarioState>();
@@ -132,11 +137,24 @@ public static class StatePartition
         // A region under one owner is one region, in two pockets or in twenty. Countries are
         // shaped like that; so are provinces.
         var created = new List<ScenarioState>();
+        // Who held each piece before, so what its people carry across (acceptance, exhaustion,
+        // autonomy) is decided once for every road into this method (ConquestAcceptance.ChangedHands).
+        var arrived = new List<(ScenarioState Region, ushort Former)>();
         foreach (var stateMapIndex in touched)
         {
             var state = campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex);
-            if (state is not null) created.AddRange(Repartition(campaign, state, separatePockets: false));
+            if (state is null) continue;
+            var former = (ushort)state.NationMapIndex;
+            var pieces = Repartition(campaign, state, separatePockets: false);
+            created.AddRange(pieces);
+            if (former == newOwner.MapIndex) continue;
+            if (state.NationMapIndex == newOwner.MapIndex) arrived.Add((state, former));
+            foreach (var piece in pieces)
+                if (piece.NationMapIndex == newOwner.MapIndex) arrived.Add((piece, former));
         }
+        foreach (var (region, former) in arrived)
+            ConquestAcceptance.ChangedHands(campaign, region, campaign.Nations.Find(n => n.MapIndex == former),
+                newOwner, asConquest, byConsent);
 
         // A border can put a region back together as easily as it can cut one: taking the
         // last enemy province out of a region that was split years ago makes it one place
@@ -565,6 +583,13 @@ public static class StatePartition
         parent.Literacy = Blend(parent.Literacy, child.Literacy);
         parent.StandardOfLiving = Blend(parent.StandardOfLiving, child.StandardOfLiving);
         parent.Radicalism = Blend(parent.Radicalism, child.Radicalism);
+        // Acceptance is of one state: what the piece earned of somebody else is not added to what
+        // the whole has of its holder, it counts as none.
+        var owner = campaign.Nations.Find(n => n.MapIndex == parent.NationMapIndex);
+        parent.Acceptance = Blend(ConquestAcceptance.Of(parent, owner), ConquestAcceptance.Of(child, owner));
+        if (owner is not null && (parent.AcceptanceOf >= 0 || child.AcceptanceOf >= 0)) parent.AcceptanceOf = owner.Id;
+        parent.ExhaustedUntilDay = Math.Max(parent.ExhaustedUntilDay, child.ExhaustedUntilDay);
+        parent.AutonomyRevokedDay = Math.Max(parent.AutonomyRevokedDay, child.AutonomyRevokedDay);
         parent.Urbanization = Blend(parent.Urbanization, child.Urbanization);
         parent.Stability = Blend(parent.Stability, child.Stability);
         parent.SecessionPressure = Blend(parent.SecessionPressure, child.SecessionPressure);
@@ -706,7 +731,12 @@ public static class StatePartition
             StandardOfLiving = parent.StandardOfLiving,
             Radicalism = parent.Radicalism,
             ResidentAwareness = parent.ResidentAwareness,
-            Urbanization = parent.Urbanization
+            Urbanization = parent.Urbanization,
+            // The people of the piece remember what the people of the whole did; a grant of
+            // autonomy was made to the region as it was and does not follow a piece of it.
+            Acceptance = parent.Acceptance,
+            AcceptanceOf = parent.AcceptanceOf,
+            ExhaustedUntilDay = parent.ExhaustedUntilDay
         };
 
         carved.CoreTags.AddRange(parent.CoreTags);

@@ -53,10 +53,14 @@ public partial class DealOrForceGame
         if (outlook.MainDrag is { } drag)
             rows.AddChild(Text(Loc.Format("Main drag: {0}", Loc.Get(drag.Source)), 14, "text.body_soft", "OutlookMainDrag"));
         card.TooltipText = Ui.Tip(explanation + "\n\n" + string.Join("\n", outlook.Drivers.Entries.Select(entry =>
-            Loc.Format("{0}: {1:+0.0;-0.0;0.0} pp", Loc.Get(entry.Source), entry.Value * 100f))));
+            Loc.Format("{0}: {1:+0.0;-0.0;0.0} pp", Loc.Get(entry.Source), entry.Value * 100f) +
+            (IsOverstretch(entry) && outlook.OverstretchNote.Length > 0 ? "\n    " + outlook.OverstretchNote : ""))));
         AddOutlookCalculation(rows, nation, outlook, explanation);
         _countryCardRows.AddChild(card);
     }
+
+    private static bool IsOverstretch(Breakdown.Entry entry) =>
+        entry.Source == "Imperial overstretch" || entry.Source == Loc.Get("Imperial overstretch");
 
     /// <summary>A keyboard-reachable explanation of the same model as the hover tooltip.
     /// No simulated field is changed, and unknown foreign figures never reach this method.</summary>
@@ -97,6 +101,14 @@ public partial class DealOrForceGame
             amount.AutowrapMode = TextServer.AutowrapMode.Off;
             amount.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
             row.AddChild(caption); row.AddChild(amount); details.AddChild(row);
+            // Under the overstretch, what it is: "what is imperial overstretch" answered where the number is.
+            if (IsOverstretch(entry) && outlook.OverstretchNote.Length > 0)
+            {
+                var why = Title(outlook.OverstretchNote, 13, Ui.Colour("text.caption"));
+                why.Name = "OutlookOverstretchNote"; why.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                why.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                details.AddChild(why);
+            }
         }
         var total = Title(Loc.Format("Target under current conditions: {0}", Fmt.Percent(outlook.Target)), 14, Ui.Colour("text.bright"));
         total.Name = "OutlookCalculationTotal"; total.SizeFlagsHorizontal = SizeFlags.ExpandFill; details.AddChild(total);

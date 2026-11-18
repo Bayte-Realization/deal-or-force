@@ -315,7 +315,7 @@ public static class PeacefulFormation
         foreach (var partner in partners)
             ProductionProgramme.MigrateLegacy(partner, ProductionProgramme.Allocate(campaign, partner));
         var rawAnnual = founder.Gdp / MathF.Max(.0001f, founder.OutputScale);
-        StatePartition.Annex(campaign, provinces, founder, asConquest: false);
+        StatePartition.Annex(campaign, provinces, founder, asConquest: false, byConsent: true);
         foreach (var partner in partners)
         {
             var remaining = campaign.StatesOf(partner).Sum(s => s.Population);
@@ -388,7 +388,7 @@ public static class PeacefulFormation
                     provinces.Add(p);
             }
             if (provinces.Count > 0)
-                StatePartition.Annex(campaign, provinces, founder, asConquest: false);
+                StatePartition.Annex(campaign, provinces, founder, asConquest: false, byConsent: true);
         }
 
         ProductionProgramme.MigrateLegacy(founder, ProductionProgramme.Allocate(campaign, founder));

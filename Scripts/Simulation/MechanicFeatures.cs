@@ -215,7 +215,8 @@ public static class MechanicFeatures
         Bind("recruitment", "RaiseArmyCommand");
         Bind("decisions", "TakeDecisionCommand");
         Bind("politics", "ChangePoliticsCommand", "SetPolicyRateCommand", "SetGovernmentFocusCommand");
-        Bind("domestic_crises", "StartCrisisResponseCommand", "ConciliateRegionCommand");
+        Bind("domestic_crises", "StartCrisisResponseCommand", "ConciliateRegionCommand",
+            "GrantRegionalAutonomyCommand", "RevokeRegionalAutonomyCommand");
         Bind("movements", "MovementActionCommand", "MovementDealingCommand", "KinStatecraftCommand");
         Bind("colonisation", "ColoniseCommand");
         Bind("subjects", "OfferSubmissionCommand", "ConsolidateSubjectsCommand");
