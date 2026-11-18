@@ -69,13 +69,13 @@ public partial class LoadingScreen : Control
             // map are one place. The illustrations, when they are switched on, still come first.
             Name = "LoadingScene", Texture = plain ? WorldPicture() : NextScene(), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered, MouseFilter = MouseFilterEnum.Ignore,
-            SelfModulate = plain ? new Color(.62f, .64f, .70f) : new Color(.78f, .80f, .84f)
+            SelfModulate = plain ? new Color(0.66f, 0.66f, 0.67f) : new Color(0.84f, 0.84f, 0.84f)
         };
         var pictured = _scene.Texture is not null;
         AddChild(_scene);
         _scene.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         // Darker towards the edges and the foot, where the footer stands.
-        var ink = new Color(0.047f, 0.09f, 0.125f);
+        var ink = MenuChromeTheme.BackdropColor;
         _shade = new TextureRect
         {
             Name = "LoadingShade", MouseFilter = MouseFilterEnum.Ignore, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
@@ -87,7 +87,7 @@ public partial class LoadingScreen : Control
                 Gradient = new Gradient
                 {
                     Offsets = new[] { 0f, .55f, 1f },
-                    Colors = new[] { ink with { A = .18f }, ink with { A = .55f }, ink with { A = .92f } }
+                    Colors = new[] { ink with { A = .24f }, ink with { A = .62f }, ink with { A = .94f } }
                 }
             }
         };
@@ -102,12 +102,15 @@ public partial class LoadingScreen : Control
             drift.TweenProperty(_scene, "scale", new Vector2(1.045f, 1.045f), 24).SetTrans(Tween.TransitionType.Sine);
             drift.TweenProperty(_scene, "scale", Vector2.One, 24).SetTrans(Tween.TransitionType.Sine);
         }
+        var dossierPath = SpriteCatalog.TextureOf("panel_dossier", "res://game/gfx/interface/panels/panel_dossier.png");
         _paper = new TextureRect
         {
-            Texture = GD.Load<Texture2D>("res://game/gfx/interface/panels/panel_dossier.png"),
+            Texture = !string.IsNullOrWhiteSpace(dossierPath) && ResourceLoader.Exists(dossierPath)
+                ? GD.Load<Texture2D>(dossierPath)
+                : null,
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
-            Modulate = new Color(1, 1, 1, 0.12f), MouseFilter = MouseFilterEnum.Ignore
+            Modulate = MenuChromeTheme.PaperDim with { A = 0.05f }, MouseFilter = MouseFilterEnum.Ignore
         };
         AddChild(_paper);
         _paper.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -116,19 +119,22 @@ public partial class LoadingScreen : Control
         AddChild(_frame);
         _frame.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _card = new Panel { Name = "DossierCard", MouseFilter = MouseFilterEnum.Ignore };
-        _card.AddThemeStyleboxOverride("panel", new StyleBoxFlat
-        {
-            BgColor = ink with { A = .80f }, BorderColor = Ui.Colour("surface.line"),
-            BorderWidthTop = 1, BorderWidthBottom = 1, BorderWidthLeft = 1, BorderWidthRight = 1,
-            ShadowColor = new Color(0, 0, 0, .35f), ShadowSize = 18
-        });
+        _card.AddThemeStyleboxOverride("panel", MenuChromeTheme.GradientPlateBox(
+            MenuChromeTheme.PlateTop with { A = 0.92f },
+            MenuChromeTheme.PlateBottom with { A = 0.95f },
+            MenuChromeTheme.BorderDark,
+            innerTopLine: new Color(MenuChromeTheme.Highlight, 0.06f),
+            innerBottomLine: MenuChromeTheme.RuleDark,
+            brassEdge: MenuChromeTheme.RuleLight,
+            borderThickness: 1));
+        _card.AddChild(new MenuChromeBrassFrame { Name = "DossierBrassFrame", ZIndex = 2 });
         AddChild(_card);
-        // The dark card is there so the words read over a picture; the plain chart needs none.
+        // The dark umber plate is there so the words read cleanly over a picture; the plain chart needs none.
         _card.Visible = pictured;
         _body = new VBoxContainer { Name = "Dossier", MouseFilter = MouseFilterEnum.Ignore };
-        _body.AddThemeConstantOverride("separation", 20);
+        _body.AddThemeConstantOverride("separation", 14);
         AddChild(_body);
-        _caption = Text("STRATEGIC DOSSIER", 13, Ui.Colour("text.accent_dim"));
+        _caption = Text("STRATEGIC DOSSIER", 12, MenuChromeTheme.BrassHi);
         _caption.HorizontalAlignment = HorizontalAlignment.Center;
         _body.AddChild(_caption);
         _logoPlate = new Panel { MouseFilter = MouseFilterEnum.Ignore };
@@ -143,26 +149,40 @@ public partial class LoadingScreen : Control
         };
         _logoPlate.AddChild(_logo);
         _logo.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _heading = Text("Preparing the world", 28, Ui.Colour("text.bright"));
+        _heading = Text("Preparing the world", 26, MenuChromeTheme.Paper, serif: true, display: true);
+        _heading.HorizontalAlignment = HorizontalAlignment.Center;
         _body.AddChild(_heading);
-        _stage = Text("Opening the archive", 17, Ui.Colour("text.accent"));
+        _stage = Text("Opening the archive", 16, MenuChromeTheme.PaperDim, serif: true);
+        _stage.HorizontalAlignment = HorizontalAlignment.Center;
         _body.AddChild(_stage);
         _progress = new ProgressBar
         {
-            Name = "StageProgress", ShowPercentage = false, CustomMinimumSize = new Vector2(0, 4),
+            Name = "StageProgress", ShowPercentage = false, CustomMinimumSize = new Vector2(0, 6),
             MouseFilter = MouseFilterEnum.Ignore
         };
-        _progress.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = new Color("293642") });
-        _progress.AddThemeStyleboxOverride("fill", new StyleBoxFlat
+        var track = new StyleBoxFlat
         {
-            BgColor = Ui.Colour("button.primary_border"), ContentMarginTop = 2, ContentMarginBottom = 2
-        });
+            BgColor = MenuChromeTheme.WellTop,
+            BorderColor = MenuChromeTheme.RuleLight,
+            CornerRadiusTopLeft = 1, CornerRadiusTopRight = 1,
+            CornerRadiusBottomLeft = 1, CornerRadiusBottomRight = 1
+        };
+        track.SetBorderWidthAll(1);
+        var fill = new StyleBoxFlat
+        {
+            BgColor = MenuChromeTheme.BrassHi,
+            ContentMarginTop = 2, ContentMarginBottom = 2
+        };
+        _progress.AddThemeStyleboxOverride("background", track);
+        _progress.AddThemeStyleboxOverride("fill", fill);
         _body.AddChild(_progress);
-        _detail = Text("", 14, Ui.Colour("text.muted"));
+        _detail = Text("", 13, MenuChromeTheme.PaperFaint);
+        _detail.HorizontalAlignment = HorizontalAlignment.Center;
         _body.AddChild(_detail);
         _dismiss = new Button { Name = "LoadingDismiss", Visible = false, CustomMinimumSize = new Vector2(0, 44) };
+        MenuChromeTheme.StylePrimaryCta(_dismiss, 15, serif: true);
         _body.AddChild(_dismiss);
-        _footer = Text(Loc.Get(Motto), 14, Ui.Colour("text.caption"));
+        _footer = Text(Loc.Get(Motto), 14, MenuChromeTheme.PaperDim, serif: true);
         _footer.Name = "LoadingMotto";
         _footer.HorizontalAlignment = HorizontalAlignment.Center;
         AddChild(_footer);
@@ -178,10 +198,11 @@ public partial class LoadingScreen : Control
         return !string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
     }
 
-    private static Label Text(string text, int size, Color color)
+    private static Label Text(string text, int size, Color color, bool serif = false, bool display = false)
     {
         var label = new Label { Text = Loc.Get(text), AutowrapMode = TextServer.AutowrapMode.WordSmart,
             MouseFilter = MouseFilterEnum.Ignore };
+        label.AddThemeFontOverride("font", display ? MenuChromeTheme.SerifDisplay() : serif ? MenuChromeTheme.SerifBody() : MenuChromeTheme.SansBody());
         label.AddThemeFontSizeOverride("font_size", size);
         label.AddThemeColorOverride("font_color", color);
         return label;
@@ -191,9 +212,9 @@ public partial class LoadingScreen : Control
     {
         var width = Mathf.Min(640, Size.X - 80);
         _body.Size = new Vector2(width, 0);
-        _logoPlate.CustomMinimumSize = new Vector2(0, Mathf.Clamp(Size.Y * 0.245f, 125, 264));
+        _logoPlate.CustomMinimumSize = new Vector2(0, Mathf.Clamp(Size.Y * 0.22f, 120, 236));
         _body.Position = new Vector2((Size.X - width) / 2,
-            Mathf.Max(48, Mathf.Min(Size.Y * 0.20f, Size.Y - 110 - _body.GetCombinedMinimumSize().Y)));
+            Mathf.Max(48, Mathf.Min(Size.Y * 0.18f, Size.Y - 110 - _body.GetCombinedMinimumSize().Y)));
         _footer.Position = new Vector2(40, Size.Y - 70);
         _footer.Size = new Vector2(Size.X - 80, 40);
         _card.Position = _body.Position - new Vector2(32, 28);
@@ -272,8 +293,8 @@ public partial class LoadingScreen : Control
 
     public override void _Draw()
     {
-        DrawRect(new Rect2(Vector2.Zero, Size), new Color("0c1720"));
-        var grid = new Color(0.30f, 0.39f, 0.44f, 0.12f);
+        DrawRect(new Rect2(Vector2.Zero, Size), MenuChromeTheme.BackdropColor);
+        var grid = MenuChromeTheme.RuleLight with { A = 0.24f };
         for (var x = 32f; x < Size.X; x += 64) DrawLine(new Vector2(x, 32), new Vector2(x, Size.Y - 32), grid);
         for (var y = 32f; y < Size.Y; y += 64) DrawLine(new Vector2(32, y), new Vector2(Size.X - 32, y), grid);
     }
@@ -281,19 +302,20 @@ public partial class LoadingScreen : Control
     /// <summary>The gold frame and the cartographic seal, drawn over the picture.</summary>
     private void DrawFrame()
     {
-        var frame = Ui.Colour("surface.line");
+        var frame = MenuChromeTheme.RuleLight with { A = 0.72f };
+        var brass = MenuChromeTheme.BrassHi;
         _frame.DrawRect(new Rect2(new Vector2(26, 26), Size - new Vector2(52, 52)), frame, false, 1);
         foreach (var corner in new[] { new Vector2(26, 26), new Vector2(Size.X - 26, 26),
                      new Vector2(26, Size.Y - 26), Size - new Vector2(26, 26) })
         {
             var direction = new Vector2(corner.X < Size.X / 2 ? 1 : -1, corner.Y < Size.Y / 2 ? 1 : -1);
-            _frame.DrawLine(corner, corner + new Vector2(36 * direction.X, 0), Ui.Colour("text.accent_dim"), 2);
-            _frame.DrawLine(corner, corner + new Vector2(0, 36 * direction.Y), Ui.Colour("text.accent_dim"), 2);
+            _frame.DrawLine(corner, corner + new Vector2(36 * direction.X, 0), brass, 2);
+            _frame.DrawLine(corner, corner + new Vector2(0, 36 * direction.Y), brass, 2);
         }
         // A quiet cartographic seal, not a shader or another rendered 3D scene.
         var center = new Vector2(Size.X * 0.87f, Size.Y * 0.47f);
         var radius = Size.Y * 0.35f;
-        var ink = new Color(0.42f, 0.52f, 0.56f, 0.09f);
+        var ink = MenuChromeTheme.Brass with { A = 0.16f };
         _frame.DrawArc(center, radius, 0, Mathf.Tau, 96, ink, 1, true);
         _frame.DrawLine(center - new Vector2(radius, 0), center + new Vector2(radius, 0), ink);
         _frame.DrawLine(center - new Vector2(0, radius), center + new Vector2(0, radius), ink);

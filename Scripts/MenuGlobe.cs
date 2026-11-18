@@ -88,7 +88,10 @@ public partial class MenuGlobe : Control
         AddChild(_viewport);
 
         var sun = new Vector3(-0.76f, 0.32f, 0.42f).Normalized();
-        var ground = Ui.Colour("surface.background").Darkened(0.55f);
+        var ground = MenuChromeTheme.BackdropColor.Darkened(0.45f);
+        var twilight = MenuChromeTheme.BrassHi.Lerp(new Color(0.62f, 0.65f, 0.69f), 0.35f);
+        var lampTone = new Color(0.95f, 0.89f, 0.80f);
+        var starTone = MenuChromeTheme.Paper;
 
         _viewport.AddChild(new WorldEnvironment
         {
@@ -104,7 +107,12 @@ public partial class MenuGlobe : Control
         _viewport.AddChild(_camera);
 
         var sky = Shell("Sky", 90f, 48, 24, "menu_globe_sky");
-        if (sky.MaterialOverride is ShaderMaterial skyMaterial) skyMaterial.SetShaderParameter("ground_colour", ground);
+        if (sky.MaterialOverride is ShaderMaterial skyMaterial)
+        {
+            skyMaterial.SetShaderParameter("ground_colour", ground);
+            skyMaterial.SetShaderParameter("star_colour", starTone);
+            skyMaterial.SetShaderParameter("star_strength", 0.78f);
+        }
         _viewport.AddChild(sky);
 
         _planet = new Node3D { Name = "Planet" };
@@ -115,6 +123,8 @@ public partial class MenuGlobe : Control
             worldMaterial.SetShaderParameter("world_map", Picture("menu_globe", ShippedWorld));
             worldMaterial.SetShaderParameter("night_lights", Picture("menu_globe_lights", ShippedLights));
             worldMaterial.SetShaderParameter("sun_direction", sun);
+            worldMaterial.SetShaderParameter("air_colour", twilight);
+            worldMaterial.SetShaderParameter("lamp_colour", lampTone);
             worldMaterial.SetShaderParameter("brightness", InterfaceSkin.Metric("menu.globe_brightness", 1f));
         }
         _planet.AddChild(ball);
@@ -123,7 +133,9 @@ public partial class MenuGlobe : Control
         if (air.MaterialOverride is ShaderMaterial airMaterial)
         {
             airMaterial.SetShaderParameter("sun_direction", sun);
+            airMaterial.SetShaderParameter("air_colour", twilight);
             airMaterial.SetShaderParameter("planet_radius", Radius);
+            airMaterial.SetShaderParameter("strength", 0.38f);
         }
         _viewport.AddChild(air);
 

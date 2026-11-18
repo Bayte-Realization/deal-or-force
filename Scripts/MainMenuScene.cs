@@ -69,10 +69,14 @@ public partial class MainMenuScene : Control
     private Button _language;
 
     /// <summary>The menu itself, the credits and the options - one visible at a time.</summary>
-    private Control _menu;
+    private PanelContainer _menu;
+    private PanelContainer _creditsPanel;
     private Control _credits;
+    private PanelContainer _settingsPanel;
     private Control _settings;
+    private PanelContainer _archivePanel;
     private Control _archive;
+    private TextureRect _logoRect;
     private VBoxContainer _archiveRows;
     private VBoxContainer _settingsRows;
     private readonly Dictionary<string, Button> _settingsTabs = new(StringComparer.OrdinalIgnoreCase);
@@ -137,37 +141,33 @@ public partial class MainMenuScene : Control
 
         // One column on the left, anchored to the screen's edge and its middle rather than to
         // pixel positions, so it sits the same on a wide monitor and on a phone held sideways.
-        var panel = new PanelContainer();
-        panel.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
+        var panel = new PanelContainer { Name = "MenuCommandColumn", ClipContents = true };
+        MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true, padX: 24, padY: 18);
         panel.AnchorLeft = 0f;
         panel.AnchorRight = 0f;
-        panel.AnchorTop = 0.5f;
-        panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = 88;
-        panel.OffsetRight = 88 + 430;
-        panel.OffsetTop = -330;
-        panel.OffsetBottom = 330;
-        panel.GrowVertical = GrowDirection.Both;
+        panel.AnchorTop = 0f;
+        panel.AnchorBottom = 0f;
         AddChild(panel);
         _menu = panel;
 
         var rows = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        rows.AddThemeConstantOverride("separation", 9);
+        rows.AddThemeConstantOverride("separation", 8);
         panel.AddChild(rows);
 
         // The thumbnail's parchment plaque supplies its own edge. Do not put a second
         // rectangular paper/gold frame behind its transparent worn perimeter.
-        rows.AddChild(new TextureRect
+        _logoRect = new TextureRect
         {
             Name = "MenuGameLogo", Texture = BrandAssets.GamePlaque(),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            CustomMinimumSize = new Vector2(0, 214),
+            CustomMinimumSize = new Vector2(0, 196),
             MouseFilter = MouseFilterEnum.Ignore
-        });
+        };
+        rows.AddChild(_logoRect);
 
-        rows.AddChild(MenuCaption("Choose a world. Shape its future.", 15, "text.body_soft"));
-        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 14) });
+        rows.AddChild(MenuCaption("Choose a world. Shape its future.", 15, MenuChromeTheme.PaperDim, serif: true));
+        rows.AddChild(MenuChromeTheme.CreateEngravedRule("CommandHeaderRule", 3f));
 
         // What a player came for is the first, lit button - and that depends on who they are.
         // Somebody with a campaign on disk came back to it, so "Continue" leads and a new game
@@ -182,19 +182,19 @@ public partial class MainMenuScene : Control
         var saveRoot = DealOrForceGame.ResolveSaveRoot();
         var hasSaves = System.IO.Directory.Exists(saveRoot)
             && System.IO.Directory.EnumerateFiles(saveRoot, "*.bdfsave*").Any();
-        if (hasSaves) rows.AddChild(MenuAction("Continue", () => Enter(MenuIntent.LoadLatest), 56, true));
-        rows.AddChild(MenuAction("New campaign", () => Enter(MenuIntent.NewCampaign), hasSaves ? 44 : 56, !hasSaves));
-        rows.AddChild(MenuAction("Load campaign", ShowArchive, 44));
+        if (hasSaves) rows.AddChild(MenuAction("Continue", () => Enter(MenuIntent.LoadLatest), 52, true));
+        rows.AddChild(MenuAction("New campaign", () => Enter(MenuIntent.NewCampaign), hasSaves ? 42 : 52, !hasSaves));
+        rows.AddChild(MenuAction("Load campaign", ShowArchive, 42));
         // Scenarios and their editors are what this game is built on; "New campaign" goes
         // straight to the country picker (one built-in scenario), so they get their own door
         // here instead of hiding behind a button on the picker's bar.
-        rows.AddChild(MenuAction("Scenarios / editor", () => Enter(MenuIntent.Scenarios), 44));
-        rows.AddChild(MenuAction("Multiplayer · LAN / IP", () => Enter(MenuIntent.Multiplayer), 44));
+        rows.AddChild(MenuAction("Scenarios / editor", () => Enter(MenuIntent.Scenarios), 42));
+        rows.AddChild(MenuAction("Multiplayer · LAN / IP", () => Enter(MenuIntent.Multiplayer), 42));
 
-        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 10) });
+        rows.AddChild(MenuChromeTheme.CreateEngravedRule("CommandUtilityRule", 3f));
         var quiet = new GridContainer { Columns = 2 };
-        quiet.AddThemeConstantOverride("h_separation", 9);
-        quiet.AddThemeConstantOverride("v_separation", 9);
+        quiet.AddThemeConstantOverride("h_separation", 8);
+        quiet.AddThemeConstantOverride("v_separation", 8);
         rows.AddChild(quiet);
         _language = MenuAction(LanguageLabel(), CycleLanguage, 36);
         foreach (var button in new[]
@@ -216,13 +216,15 @@ public partial class MainMenuScene : Control
         { WantedModAction = id; Enter(MenuIntent.ModAction); });
         _modActions.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomLeft);
         _modActions.OffsetLeft = 24; _modActions.OffsetRight = 214;
-        _modActions.OffsetTop = -70; _modActions.OffsetBottom = -34;
+        _modActions.OffsetTop = -74; _modActions.OffsetBottom = -42;
         AddChild(_modActions);
 
         BuildCopyright();
         BuildCredits();
         BuildSettings();
         BuildArchive();
+        Resized += LayoutMainMenuChrome;
+        LayoutMainMenuChrome();
         StartupIntro.AttachIfNeeded(this);
         ExportVerification.AttachIfRequested(this);
     }
@@ -240,7 +242,7 @@ public partial class MainMenuScene : Control
     {
         var veil = new ColorRect
         {
-            Color = new Color(0.01f, 0.02f, 0.04f, 0.72f),
+            Color = MenuChromeTheme.VeilColor,
             MouseFilter = MouseFilterEnum.Stop,
             Visible = false
         };
@@ -249,7 +251,7 @@ public partial class MainMenuScene : Control
         _archive = veil;
 
         var panel = new PanelContainer { ClipContents = true };
-        panel.AddThemeStyleboxOverride("panel", MenuPanelStyle());
+        MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true, padX: 26, padY: 20);
         panel.SetAnchorsPreset(LayoutPreset.Center);
         panel.AnchorLeft = panel.AnchorTop = 0.5f;
         panel.AnchorRight = panel.AnchorBottom = 0.5f;
@@ -260,31 +262,44 @@ public partial class MainMenuScene : Control
         panel.GrowHorizontal = GrowDirection.Both;
         panel.GrowVertical = GrowDirection.Both;
         veil.AddChild(panel);
+        _archivePanel = panel;
 
-        var margin = new MarginContainer();
-        foreach (var side in new[] { "left", "right" }) margin.AddThemeConstantOverride("margin_" + side, 26);
-        foreach (var side in new[] { "top", "bottom" }) margin.AddThemeConstantOverride("margin_" + side, 20);
-        panel.AddChild(margin);
         var frame = new VBoxContainer();
-        frame.AddThemeConstantOverride("separation", 12);
-        margin.AddChild(frame);
+        frame.AddThemeConstantOverride("separation", 10);
+        panel.AddChild(frame);
 
-        frame.AddChild(MenuCaption("CAMPAIGN ARCHIVE", 24, "text.accent"));
+        var title = MenuCaption("CAMPAIGN ARCHIVE", 24, MenuChromeTheme.Paper, serif: true);
+        title.HorizontalAlignment = HorizontalAlignment.Left;
+        frame.AddChild(title);
+        frame.AddChild(MenuChromeTheme.CreateEngravedRule("ArchiveHeaderRule", 1f));
+
+        var well = new PanelContainer
+        {
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            ClipContents = true
+        };
+        well.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(12, 10));
+        frame.AddChild(well);
+
         var scroll = new ScrollContainer
         {
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
-        frame.AddChild(scroll);
+        well.AddChild(scroll);
         _archiveRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _archiveRows.AddThemeConstantOverride("separation", 6);
         scroll.AddChild(_archiveRows);
 
         var actions = new HBoxContainer();
-        actions.AddThemeConstantOverride("separation", 8);
+        actions.AddThemeConstantOverride("separation", 10);
         frame.AddChild(actions);
-        actions.AddChild(MenuAction("Back", HideArchive, 40));
-        actions.AddChild(MenuAction("Open folder", () => OS.ShellOpen(DealOrForceGame.ResolveSaveRoot()), 40));
+        var back = MenuAction("Back", HideArchive, 40);
+        back.CustomMinimumSize = new Vector2(130, 40);
+        actions.AddChild(back);
+        var folder = MenuAction("Open folder", () => OS.ShellOpen(DealOrForceGame.ResolveSaveRoot()), 40);
+        folder.CustomMinimumSize = new Vector2(170, 40);
+        actions.AddChild(folder);
     }
 
     private void ShowArchive()
@@ -294,39 +309,60 @@ public partial class MainMenuScene : Control
 
         var saves = SaveSystem.List(DealOrForceGame.ResolveSaveRoot());
         if (saves.Count == 0)
-            _archiveRows.AddChild(MenuCaption("No campaigns saved yet.", 14, "text.muted"));
-        foreach (var save in saves)
+            _archiveRows.AddChild(MenuCaption("No campaigns saved yet.", 14, MenuChromeTheme.PaperDim));
+        for (var i = 0; i < saves.Count; i++)
         {
-            var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 10);
-            _archiveRows.AddChild(row);
+            var save = saves[i];
+            var card = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            var bgTop = i % 2 == 0 ? MenuChromeTheme.BodyTop : MenuChromeTheme.BodyBottom;
+            var bgBot = i % 2 == 0 ? MenuChromeTheme.BodyBottom : MenuChromeTheme.WellBottom;
+            card.AddThemeStyleboxOverride("panel", MenuChromeTheme.GradientPlateBox(
+                bgTop, bgBot, MenuChromeTheme.RuleLight,
+                innerTopLine: new Color(MenuChromeTheme.Highlight, 0.05f),
+                innerBottomLine: MenuChromeTheme.RuleDark,
+                brassEdge: null, borderThickness: 1, padLeft: 12, padTop: 8, padRight: 12, padBottom: 8));
+            _archiveRows.AddChild(card);
 
-            var title = save.Slot switch
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 12);
+            card.AddChild(row);
+
+            var titleText = save.Slot switch
             {
                 SaveSystem.AutoSlot => Loc.Get("AUTOSAVE"),
                 SaveSystem.QuickSlot => Loc.Get("QUICKSAVE"),
                 _ => string.IsNullOrWhiteSpace(save.DisplayName) ? save.Slot : save.DisplayName
             };
-            var info = new Label
+            var textCol = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            textCol.AddThemeConstantOverride("separation", 2);
+            row.AddChild(textCol);
+
+            var heading = new Label
             {
-                Text = Loc.Format("{0}\n{1} · {2} · {3} · {4} KiB", title, save.NationName, save.GameDate,
+                Text = titleText,
+                AutowrapMode = TextServer.AutowrapMode.Off,
+                ClipText = true
+            };
+            MenuChromeTheme.StyleExistingLabel(heading, 15, MenuChromeTheme.Paper, serif: true);
+            textCol.AddChild(heading);
+
+            var details = new Label
+            {
+                Text = Loc.Format("{0} · {1} · {2} · {3} KiB", save.NationName, save.GameDate,
                     save.SavedUtc.ToLocalTime().ToString("g"), (save.CompressedBytes / 1024f).ToString("0")),
                 AutowrapMode = TextServer.AutowrapMode.Off,
-                ClipText = true,
-                SizeFlagsHorizontal = SizeFlags.ExpandFill,
-                VerticalAlignment = VerticalAlignment.Center
+                ClipText = true
             };
-            info.AddThemeFontSizeOverride("font_size", 13);
-            info.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
-            row.AddChild(info);
+            MenuChromeTheme.StyleExistingLabel(details, 12, MenuChromeTheme.PaperFaint, tabular: true);
+            textCol.AddChild(details);
 
             var slot = save.Slot;
             var load = MenuAction("Load", () =>
             {
                 WantedSlot = slot;
                 Enter(MenuIntent.LoadSlot);
-            }, 38, true);
-            load.CustomMinimumSize = new Vector2(110, 38);
+            }, 36, true);
+            load.CustomMinimumSize = new Vector2(114, 36);
             row.AddChild(load);
         }
 
@@ -358,22 +394,22 @@ public partial class MainMenuScene : Control
             VerticalAlignment = VerticalAlignment.Center,
             MouseFilter = MouseFilterEnum.Ignore
         };
-        mark.AddThemeFontSizeOverride("font_size", 12);
-        mark.AddThemeColorOverride("font_color", Ui.Colour("text.faint"));
+        MenuChromeTheme.StyleExistingLabel(mark, 12, MenuChromeTheme.PaperFaint, tabular: true);
         mark.SetAnchorsPreset(LayoutPreset.BottomLeft);
         mark.GrowHorizontal = GrowDirection.End;
         mark.GrowVertical = GrowDirection.Begin;
         mark.OffsetLeft = 24;
         mark.OffsetRight = 360;
-        mark.OffsetTop = -40;
-        mark.OffsetBottom = -18;
+        mark.OffsetTop = -34;
+        mark.OffsetBottom = -12;
         AddChild(mark);
-        var version = MenuCaption(GameBuildInfo.VersionLabel, 12, "text.caption");
+        var version = MenuCaption(GameBuildInfo.VersionLabel, 12, MenuChromeTheme.PaperFaint);
+        MenuChromeTheme.StyleExistingLabel(version, 12, MenuChromeTheme.PaperFaint, tabular: true);
         version.Name = "GameVersion"; version.HorizontalAlignment = HorizontalAlignment.Right;
         version.MouseFilter = MouseFilterEnum.Ignore; version.ClipText = true;
         version.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
         version.OffsetLeft = 390; version.OffsetRight = -24;
-        version.OffsetTop = -40; version.OffsetBottom = -18;
+        version.OffsetTop = -34; version.OffsetBottom = -12;
         AddChild(version);
     }
 
@@ -388,41 +424,48 @@ public partial class MainMenuScene : Control
     /// </summary>
     private void BuildCredits()
     {
-        var panel = new PanelContainer { Visible = false };
-        panel.AddThemeStyleboxOverride("panel", MenuPanelStyle());
+        var veil = new ColorRect
+        {
+            Color = MenuChromeTheme.VeilColor,
+            MouseFilter = MouseFilterEnum.Stop,
+            Visible = false
+        };
+        veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(veil);
+        _credits = veil;
+
+        var panel = new PanelContainer { ClipContents = true };
+        MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true, padX: 28, padY: 24);
         panel.SetAnchorsPreset(LayoutPreset.Center);
         panel.AnchorLeft = panel.AnchorRight = 0.5f;
         panel.AnchorTop = panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = -230;
-        panel.OffsetRight = 230;
-        panel.OffsetTop = -210;
-        panel.OffsetBottom = 210;
+        panel.OffsetLeft = -240;
+        panel.OffsetRight = 240;
+        panel.OffsetTop = -215;
+        panel.OffsetBottom = 215;
         panel.GrowHorizontal = GrowDirection.Both;
         panel.GrowVertical = GrowDirection.Both;
-        AddChild(panel);
-        _credits = panel;
-
-        var margin = new MarginContainer();
-        foreach (var side in new[] { "left", "right" }) margin.AddThemeConstantOverride("margin_" + side, 30);
-        foreach (var side in new[] { "top", "bottom" }) margin.AddThemeConstantOverride("margin_" + side, 28);
-        panel.AddChild(margin);
+        veil.AddChild(panel);
+        _creditsPanel = panel;
 
         var rows = new VBoxContainer();
         rows.AddThemeConstantOverride("separation", 10);
-        margin.AddChild(rows);
+        panel.AddChild(rows);
 
-        rows.AddChild(MenuCaption("brand.title", 26, "text.accent"));
-        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 10) });
-        rows.AddChild(MenuCaption("Made by", 13, "text.faint"));
-        rows.AddChild(MenuCaption("Bayte Realization (Kamil Suleymanov)", 18, "text.body"));
+        var heading = MenuCaption("brand.title", 26, MenuChromeTheme.Paper, serif: true, bold: true);
+        heading.HorizontalAlignment = HorizontalAlignment.Left;
+        rows.AddChild(heading);
+        rows.AddChild(MenuChromeTheme.CreateEngravedRule("CreditsRule", 2f));
+        rows.AddChild(LeftCaption("Made by", 12, MenuChromeTheme.PaperFaint));
+        rows.AddChild(LeftCaption("Bayte Realization (Kamil Suleymanov)", 18, MenuChromeTheme.Paper, serif: true));
 
         // The line the summary above promises, which had gone missing: the screen said who
         // and never said how. Plain, and in the game itself rather than in a readme.
-        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 6) });
-        rows.AddChild(MenuCaption("How it was made", 13, "text.faint"));
-        var made = MenuCaption("credits.made_with_ai", 13, "text.muted");
+        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 4) });
+        rows.AddChild(LeftCaption("How it was made", 12, MenuChromeTheme.PaperFaint));
+        var made = LeftCaption("credits.made_with_ai", 13, MenuChromeTheme.PaperDim);
         made.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        made.CustomMinimumSize = new Vector2(380, 0);
+        made.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         rows.AddChild(made);
 
         // Expanding, with a floor under it: the expansion pushes the way back to the
@@ -431,9 +474,9 @@ public partial class MainMenuScene : Control
         rows.AddChild(new Control
         {
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 18)
+            CustomMinimumSize = new Vector2(0, 14)
         });
-        rows.AddChild(MenuAction("Back", HideCredits, 40));
+        rows.AddChild(MenuAction("Back", HideCredits, 40, primary: true));
     }
 
     /// <summary>
@@ -451,7 +494,7 @@ public partial class MainMenuScene : Control
     {
         var veil = new ColorRect
         {
-            Color = new Color(0.01f, 0.02f, 0.04f, 0.72f),
+            Color = MenuChromeTheme.VeilColor,
             MouseFilter = MouseFilterEnum.Stop,
             Visible = false
         };
@@ -460,7 +503,7 @@ public partial class MainMenuScene : Control
         _settings = veil;
 
         var panel = new PanelContainer { ClipContents = true };
-        panel.AddThemeStyleboxOverride("panel", MenuPanelStyle());
+        MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true, padX: 26, padY: 20);
         panel.SetAnchorsPreset(LayoutPreset.Center);
         panel.AnchorLeft = panel.AnchorTop = 0.5f;
         panel.AnchorRight = panel.AnchorBottom = 0.5f;
@@ -471,24 +514,21 @@ public partial class MainMenuScene : Control
         panel.GrowHorizontal = GrowDirection.Both;
         panel.GrowVertical = GrowDirection.Both;
         veil.AddChild(panel);
+        _settingsPanel = panel;
 
         var frame = new VBoxContainer();
         frame.AddThemeConstantOverride("separation", 10);
         panel.AddChild(frame);
 
-        var head = new MarginContainer();
-        foreach (var side in new[] { "left", "right" }) head.AddThemeConstantOverride("margin_" + side, 26);
-        head.AddThemeConstantOverride("margin_top", 20);
-        frame.AddChild(head);
-        var headRows = new VBoxContainer();
-        headRows.AddThemeConstantOverride("separation", 10);
-        head.AddChild(headRows);
-        headRows.AddChild(MenuCaption("SETTINGS", 24, "text.accent"));
+        var title = MenuCaption("SETTINGS", 24, MenuChromeTheme.Paper, serif: true);
+        title.HorizontalAlignment = HorizontalAlignment.Left;
+        frame.AddChild(title);
+        frame.AddChild(MenuChromeTheme.CreateEngravedRule("SettingsHeaderRule", 1f));
 
         var tabs = new HFlowContainer();
         tabs.AddThemeConstantOverride("h_separation", 6);
-        tabs.AddThemeConstantOverride("v_separation", 5);
-        headRows.AddChild(tabs);
+        tabs.AddThemeConstantOverride("v_separation", 6);
+        frame.AddChild(tabs);
         var categories = DealOrForce.Modding.LauncherSelection.IsEditorRun
             ? SettingsCatalog.Categories().Append("editor_mods") : SettingsCatalog.Categories();
         foreach (var category in categories.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -497,39 +537,42 @@ public partial class MainMenuScene : Control
             var tab = new Button
             {
                 Text = SettingsRows.CategoryName(category),
-                CustomMinimumSize = new Vector2(150, 32)
+                CustomMinimumSize = new Vector2(138, 32)
             };
             // Marked like every other caption on this screen, so switching language from the
             // menu button relabels the tabs too. Without it they kept whichever language the
             // screen was built in while everything around them changed.
             tab.SetMeta(SourceMeta, SettingsRows.CategorySource(category));
             tab.Pressed += () => ShowSettingsCategory(captured);
-            DealOrForceGame.StyleButton(tab, false);
+            MenuChromeTheme.StyleTabButton(tab, active: false, fontSize: 13);
             tabs.AddChild(tab);
             _settingsTabs[category] = tab;
         }
 
-        var body = new MarginContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
-        foreach (var side in new[] { "left", "right" }) body.AddThemeConstantOverride("margin_" + side, 26);
-        frame.AddChild(body);
+        var bodyWell = new PanelContainer
+        {
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            ClipContents = true
+        };
+        bodyWell.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(14, 10));
+        frame.AddChild(bodyWell);
+
         var scroll = new ScrollContainer
         {
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
-        body.AddChild(scroll);
+        bodyWell.AddChild(scroll);
         _settingsRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _settingsRows.AddThemeConstantOverride("separation", 12);
         scroll.AddChild(_settingsRows);
 
-        var foot = new MarginContainer();
-        foreach (var side in new[] { "left", "right" }) foot.AddThemeConstantOverride("margin_" + side, 26);
-        foot.AddThemeConstantOverride("margin_bottom", 18);
-        frame.AddChild(foot);
         var actions = new HBoxContainer();
-        actions.AddThemeConstantOverride("separation", 8);
-        foot.AddChild(actions);
-        actions.AddChild(MenuAction("Back", HideSettings, 40));
+        actions.AddThemeConstantOverride("separation", 10);
+        frame.AddChild(actions);
+        var back = MenuAction("Back", HideSettings, 40, primary: true);
+        back.CustomMinimumSize = new Vector2(140, 40);
+        actions.AddChild(back);
         var reset = MenuAction("Reset this page", () =>
         {
             if (_settingsCategory == "editor_mods")
@@ -540,6 +583,7 @@ public partial class MainMenuScene : Control
             else SettingsRows.ResetCategory(_settingsCategory, ApplyMenuSetting);
             ShowSettingsCategory(_settingsCategory);
         }, 40);
+        reset.CustomMinimumSize = new Vector2(180, 40);
         actions.AddChild(reset);
     }
 
@@ -564,7 +608,7 @@ public partial class MainMenuScene : Control
     {
         _settingsCategory = category;
         foreach (var (id, tab) in _settingsTabs)
-            DealOrForceGame.StyleButton(tab, string.Equals(id, category, StringComparison.OrdinalIgnoreCase));
+            MenuChromeTheme.StyleTabButton(tab, string.Equals(id, category, StringComparison.OrdinalIgnoreCase), 13);
 
         foreach (var child in _settingsRows.GetChildren()) child.QueueFree();
         if (category == "editor_mods" && DealOrForce.Modding.LauncherSelection.IsEditorRun)
@@ -758,7 +802,7 @@ public partial class MainMenuScene : Control
 
     private const string SourceMeta = "loc_source";
 
-    private static Label MenuCaption(string text, int size, string colourToken)
+    private static Label MenuCaption(string text, int size, Color colour, bool serif = false, bool bold = false)
     {
         var label = new Label
         {
@@ -767,8 +811,14 @@ public partial class MainMenuScene : Control
             AutowrapMode = TextServer.AutowrapMode.Off
         };
         label.SetMeta(SourceMeta, text);
-        label.AddThemeFontSizeOverride("font_size", size);
-        label.AddThemeColorOverride("font_color", Ui.Colour(colourToken));
+        MenuChromeTheme.StyleExistingLabel(label, size, colour, serif: serif, bold: bold);
+        return label;
+    }
+
+    private static Label LeftCaption(string text, int size, Color colour, bool serif = false, bool bold = false)
+    {
+        var label = MenuCaption(text, size, colour, serif, bold);
+        label.HorizontalAlignment = HorizontalAlignment.Left;
         return label;
     }
 
@@ -780,22 +830,61 @@ public partial class MainMenuScene : Control
             CustomMinimumSize = new Vector2(0, height)
         };
         button.SetMeta(SourceMeta, text);
-        DealOrForceGame.StyleButton(button, primary);
-        button.AddThemeFontSizeOverride("font_size", height >= 56 ? 19 : height >= 46 ? 16 : 14);
+        var fontSize = height >= 50 ? 18 : height >= 42 ? 14 : 13;
+        if (primary)
+            MenuChromeTheme.StylePrimaryCta(button, fontSize, serif: true);
+        else
+            MenuChromeTheme.StyleWellButton(button, selected: false, fontSize: fontSize);
         button.Pressed += pressed;
         return button;
     }
 
-    /// <summary>The panel the menu sits in: the shell's own ground, ruled in its own brass.</summary>
-    private static StyleBoxFlat MenuPanelStyle()
+    private void LayoutMainMenuChrome()
     {
-        var box = new StyleBoxFlat
+        var view = Size.X > 100 && Size.Y > 100 ? Size : GetViewportRect().Size;
+        if (_menu is not null)
         {
-            BgColor = Ui.Colour("surface.overlay"),
-            BorderColor = new Color(Ui.Colour("button.primary_border"), 0.45f)
-        };
-        box.SetBorderWidthAll(1);
-        return box;
+            var left = Mathf.Clamp(view.X * 0.045f, 28f, 84f);
+            var width = Mathf.Clamp(view.X * 0.30f, 360f, 428f);
+            var height = Mathf.Clamp(view.Y - 116f, 480f, 624f);
+            var top = Mathf.Max(22f, (view.Y - 64f - height) * 0.5f);
+            _menu.OffsetLeft = left;
+            _menu.OffsetRight = left + width;
+            _menu.OffsetTop = top;
+            _menu.OffsetBottom = top + height;
+            if (_logoRect is not null)
+                _logoRect.CustomMinimumSize = new Vector2(0, view.Y <= 780f ? 164f : 204f);
+        }
+
+        if (_archivePanel is not null)
+        {
+            var halfW = Mathf.Min(410f, (view.X - 48f) * 0.5f);
+            var halfH = Mathf.Min(310f, (view.Y - 48f) * 0.5f);
+            _archivePanel.OffsetLeft = -halfW;
+            _archivePanel.OffsetRight = halfW;
+            _archivePanel.OffsetTop = -halfH;
+            _archivePanel.OffsetBottom = halfH;
+        }
+
+        if (_settingsPanel is not null)
+        {
+            var halfW = Mathf.Min(470f, (view.X - 48f) * 0.5f);
+            var halfH = Mathf.Min(330f, (view.Y - 48f) * 0.5f);
+            _settingsPanel.OffsetLeft = -halfW;
+            _settingsPanel.OffsetRight = halfW;
+            _settingsPanel.OffsetTop = -halfH;
+            _settingsPanel.OffsetBottom = halfH;
+        }
+
+        if (_creditsPanel is not null)
+        {
+            var halfW = Mathf.Min(240f, (view.X - 48f) * 0.5f);
+            var halfH = Mathf.Min(215f, (view.Y - 48f) * 0.5f);
+            _creditsPanel.OffsetLeft = -halfW;
+            _creditsPanel.OffsetRight = halfW;
+            _creditsPanel.OffsetTop = -halfH;
+            _creditsPanel.OffsetBottom = halfH;
+        }
     }
 }
 
@@ -859,7 +948,7 @@ public partial class MenuWorld : Control
     /// </summary>
     private static TextureRect Shade(float edge, float column, float world, float far)
     {
-        var ground = Ui.Colour("surface.background");
+        var ground = MenuChromeTheme.BackdropColor;
         var gradient = new Gradient
         {
             Offsets = new[] { 0f, 0.26f, 0.58f, 1f },
@@ -949,42 +1038,45 @@ public partial class AtlasBackdrop : Control
         var size = Size;
         if (size.X < 2f || size.Y < 2f) return;
 
-        // The ground is not one colour. A flat #060b13 rectangle is what made the old menu
-        // feel like a dialog box on a desktop; a vertical gradient from near-black at the top
-        // to a warmer, faintly lit navy at the bottom puts the light source where the panel
-        // is, and the eye reads it as a room rather than as a form.
-        var baseColour = Ui.Colour("surface.background");
+        // The ground is not one colour. A flat dark rectangle makes the menu feel like
+        // a dialog box on a desktop; a vertical gradient from obsidian well at the top
+        // to warm dark umber towards the center puts the light source where the command column
+        // stands, and the eye reads it as a chart table rather than a generic form.
+        var baseColour = MenuChromeTheme.BackdropColor;
+        var warmGround = MenuChromeTheme.BodyBottom;
         var bands = 24;
         for (var band = 0; band < bands; band++)
         {
             var t = band / (float)(bands - 1);
-            var colour = baseColour.Lerp(new Color(0.045f, 0.070f, 0.105f), t * 0.85f);
+            var colour = baseColour.Lerp(warmGround, t * 0.65f);
             DrawRect(new Rect2(0, size.Y * band / bands, size.X, size.Y / bands + 1f), colour);
         }
 
-        // A halo behind where the panel stands, so the menu sits in a pool of light.
-        var line = Ui.Colour("surface.line");
+        // A halo behind where the panel stands, so the menu sits in a pool of warm study light.
+        var line = MenuChromeTheme.RuleLight;
         var glowCentre = new Vector2(size.X * 0.5f, size.Y * 0.50f);
         var glowRadius = Mathf.Min(size.X, size.Y) * 0.62f;
+        var halo = MenuChromeTheme.PlateTop;
         for (var ring = 14; ring >= 1; ring--)
         {
             var t = ring / 14f;
-            DrawCircle(glowCentre, glowRadius * t, new Color(0.10f, 0.14f, 0.20f, 0.030f * (1f - t)));
+            DrawCircle(glowCentre, glowRadius * t, new Color(halo.R, halo.G, halo.B, 0.045f * (1f - t)));
         }
 
         // Stars in the outer margins only. Under the panel they would be hidden anyway, and
         // crowding the centre is exactly what the gradient and the halo are there to avoid.
+        var starColour = MenuChromeTheme.Paper.Lerp(MenuChromeTheme.BrassHi, 0.30f);
         foreach (var star in Stars)
         {
             var at = new Vector2(star.X * size.X, star.Y * size.Y);
             var fromCentre = at.DistanceTo(glowCentre) / glowRadius;
             if (fromCentre < 0.55f) continue;
             var twinkle = 0.5f + 0.5f * Mathf.Sin(_time * 0.7f + star.X * 40f + star.Y * 17f);
-            DrawCircle(at, 1f, new Color(0.75f, 0.82f, 0.90f, 0.10f + 0.16f * twinkle * fromCentre));
+            DrawCircle(at, 1f, new Color(starColour.R, starColour.G, starColour.B, 0.09f + 0.14f * twinkle * fromCentre));
         }
 
-        var faint = new Color(line, 0.055f);
-        var marked = new Color(line, 0.13f);
+        var faint = new Color(line, 0.14f);
+        var marked = new Color(line, 0.32f);
 
         // Meridians, drifting. The prime meridian is brighter, so the drift is visible as
         // movement rather than as a shimmer.
@@ -1013,7 +1105,7 @@ public partial class AtlasBackdrop : Control
         var centre = new Vector2(size.X * 0.5f, size.Y * 0.52f);
         var radius = Mathf.Min(size.X, size.Y) * 0.44f;
         var spin = _time * 0.06f;
-        DrawArc(centre, radius, 0f, Mathf.Tau, 128, new Color(line, 0.16f), 1.5f, true);
+        DrawArc(centre, radius, 0f, Mathf.Tau, 128, new Color(line, 0.26f), 1.5f, true);
         for (var meridian = 0; meridian < 12; meridian++)
         {
             var phase = spin + meridian * Mathf.Tau / 12f;
@@ -1027,7 +1119,7 @@ public partial class AtlasBackdrop : Control
             // drawn circle into that ellipse; reset it before anything else draws.
             DrawSetTransform(centre, 0f, new Vector2(width / radius, 1f));
             DrawArc(Vector2.Zero, radius, 0f, Mathf.Tau, 64,
-                new Color(line, 0.05f + 0.07f * squash), 1f, false);
+                new Color(line, 0.10f + 0.12f * squash), 1f, false);
             DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
         }
         for (var parallel = 1; parallel <= 4; parallel++)
@@ -1035,12 +1127,12 @@ public partial class AtlasBackdrop : Control
             var lat = parallel * 0.2f;
             var ringRadius = radius * Mathf.Cos(lat * Mathf.Pi * 0.5f);
             var ringY = centre.Y - radius * Mathf.Sin(lat * Mathf.Pi * 0.5f) * 0.85f;
-            DrawArc(new Vector2(centre.X, ringY), ringRadius, 0f, Mathf.Tau, 96, new Color(line, 0.07f), 1f, true);
+            DrawArc(new Vector2(centre.X, ringY), ringRadius, 0f, Mathf.Tau, 96, new Color(line, 0.14f), 1f, true);
         }
 
         // Two brass hairlines, top and bottom, the same rule the dossier frames are drawn in.
-        var brass = Ui.Colour("button.primary_border");
-        DrawRect(new Rect2(0, size.Y * 0.055f, size.X, 1f), new Color(brass, 0.22f));
-        DrawRect(new Rect2(0, size.Y * 0.945f, size.X, 1f), new Color(brass, 0.22f));
+        var brass = MenuChromeTheme.BrassHi;
+        DrawRect(new Rect2(0, size.Y * 0.055f, size.X, 1f), new Color(brass, 0.28f));
+        DrawRect(new Rect2(0, size.Y * 0.945f, size.X, 1f), new Color(brass, 0.28f));
     }
 }

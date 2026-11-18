@@ -5,9 +5,9 @@
   "maxMethodLines": 1257,
   "maxCyclomatic": 233,
   "simulationStaticMutable": 944,
-  "deadCandidates": 151,
-  "totalFiles": 892,
-  "totalLines": 262489,
+  "deadCandidates": 154,
+  "totalFiles": 894,
+  "totalLines": 263953,
   "files": {
     "Scripts/AudioAssets.cs": {
       "lines": 34,
@@ -73,15 +73,15 @@
       "magicNumbers": 0
     },
     "Scripts/MainMenuScene.cs": {
-      "lines": 1047,
-      "maxMethodLines": 148,
+      "lines": 1139,
+      "maxMethodLines": 146,
       "maxCyclomatic": 18,
       "staticMutable": 4,
       "magicNumbers": 0
     },
     "Scripts/MenuGlobe.cs": {
-      "lines": 260,
-      "maxMethodLines": 76,
+      "lines": 272,
+      "maxMethodLines": 88,
       "maxCyclomatic": 9,
       "staticMutable": 1,
       "magicNumbers": 0
@@ -4335,6 +4335,13 @@
       "staticMutable": 0,
       "magicNumbers": 0
     },
+    "Scripts/ui/CountryPickerDossier.cs": {
+      "lines": 241,
+      "maxMethodLines": 95,
+      "maxCyclomatic": 15,
+      "staticMutable": 0,
+      "magicNumbers": 0
+    },
     "Scripts/ui/CountryRankingsUI.cs": {
       "lines": 309,
       "maxMethodLines": 71,
@@ -4350,8 +4357,8 @@
       "magicNumbers": 0
     },
     "Scripts/ui/CountrySelectionUI.cs": {
-      "lines": 584,
-      "maxMethodLines": 190,
+      "lines": 728,
+      "maxMethodLines": 225,
       "maxCyclomatic": 18,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -4588,8 +4595,8 @@
       "magicNumbers": 0
     },
     "Scripts/ui/EditorModRows.cs": {
-      "lines": 106,
-      "maxMethodLines": 73,
+      "lines": 110,
+      "maxMethodLines": 77,
       "maxCyclomatic": 4,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -4791,8 +4798,8 @@
       "magicNumbers": 0
     },
     "Scripts/ui/LoadingScreen.cs": {
-      "lines": 312,
-      "maxMethodLines": 115,
+      "lines": 334,
+      "maxMethodLines": 135,
       "maxCyclomatic": 6,
       "staticMutable": 1,
       "magicNumbers": 0
@@ -4812,8 +4819,8 @@
       "magicNumbers": 0
     },
     "Scripts/ui/MainMenuUI.cs": {
-      "lines": 233,
-      "maxMethodLines": 85,
+      "lines": 248,
+      "maxMethodLines": 100,
       "maxCyclomatic": 12,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -4881,6 +4888,13 @@
       "staticMutable": 0,
       "magicNumbers": 0
     },
+    "Scripts/ui/MenuChromeTheme.cs": {
+      "lines": 757,
+      "maxMethodLines": 69,
+      "maxCyclomatic": 20,
+      "staticMutable": 6,
+      "magicNumbers": 0
+    },
     "Scripts/ui/MenuIllustrations.cs": {
       "lines": 120,
       "maxMethodLines": 33,
@@ -4896,15 +4910,15 @@
       "magicNumbers": 0
     },
     "Scripts/ui/ModFrontendActionUI.cs": {
-      "lines": 17,
-      "maxMethodLines": 9,
-      "maxCyclomatic": 2,
+      "lines": 80,
+      "maxMethodLines": 70,
+      "maxCyclomatic": 3,
       "staticMutable": 0,
       "magicNumbers": 0
     },
     "Scripts/ui/ModFrontendMenu.cs": {
-      "lines": 34,
-      "maxMethodLines": 21,
+      "lines": 35,
+      "maxMethodLines": 22,
       "maxCyclomatic": 1,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -5057,9 +5071,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/PauseMenuUI.cs": {
-      "lines": 100,
-      "maxMethodLines": 60,
-      "maxCyclomatic": 3,
+      "lines": 146,
+      "maxMethodLines": 63,
+      "maxCyclomatic": 6,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -5281,7 +5295,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/SaveLoadUI.cs": {
-      "lines": 549,
+      "lines": 598,
       "maxMethodLines": 79,
       "maxCyclomatic": 21,
       "staticMutable": 0,
@@ -5344,15 +5358,15 @@
       "magicNumbers": 0
     },
     "Scripts/ui/SettingsRows.cs": {
-      "lines": 222,
-      "maxMethodLines": 53,
+      "lines": 223,
+      "maxMethodLines": 50,
       "maxCyclomatic": 10,
       "staticMutable": 0,
       "magicNumbers": 0
     },
     "Scripts/ui/SettingsUI.cs": {
-      "lines": 201,
-      "maxMethodLines": 104,
+      "lines": 218,
+      "maxMethodLines": 121,
       "maxCyclomatic": 6,
       "staticMutable": 0,
       "magicNumbers": 0

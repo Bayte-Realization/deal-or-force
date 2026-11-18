@@ -12,10 +12,11 @@ internal static class ModFrontendMenu
     internal static MenuButton Create(Func<IReadOnlyList<ModFrontendActionDescriptor>> describe, Action<string> selected)
     {
         var button = new MenuButton { Name = "ModFrontendActions", Text = Loc.Get("Mod actions"),
-            CustomMinimumSize = new Vector2(160, 36), ClipText = true };
+            CustomMinimumSize = new Vector2(160, 34), ClipText = true };
         button.SetMeta("loc_source", "Mod actions");
-        DealOrForceGame.StyleButton(button, false);
+        MenuChromeTheme.StyleWellButton(button, false, 13);
         var popup = button.GetPopup();
+        MenuChromeTheme.StylePopupMenu(popup);
         IReadOnlyList<ModFrontendActionDescriptor> actions = Array.Empty<ModFrontendActionDescriptor>();
         popup.AboutToPopup += () =>
         {
