@@ -38,7 +38,14 @@
     "map.look_foam": "#ece5d2",
     // A coast is inked lighter and bluer than a frontier (#1c2230), so the eye can tell where a
     // state ends and where the land does.
-    "map.look_coast_ink": "#2e4048"
+    "map.look_coast_ink": "#2e4048",
+    // Warm paper-on-ink map typography for the atlas look (classic retains 00_skin.json globe.*).
+    "map.look_label_fill": "#efe4c8",
+    "map.look_label_outline": "#11161c",
+    "map.look_capital_fill": "#f7eed6",
+    "map.look_region_fill": "#e6d9bb",
+    "map.look_river_fill": "#a8cedd",
+    "map.look_river_outline": "#0f1e29"
   },
   "metrics": {
     // Close in, how far the brightness of the ground may move the country colour: the fill runs
@@ -64,8 +71,8 @@
     // The band of deeper colour inside every frontier at the middle and far zoom, where the
     // close-in cushion has gone (as in Imperator): how deep, and how many screen pixels wide.
     // Half as deep along a coast. Nought switches it off.
-    "map.look_far_band": 0.30,
-    "map.look_far_band_pixels": 3,
+    "map.look_far_band": 0.36,
+    "map.look_far_band_pixels": 4.5,
     // Surf: one thin broken line along a shore, a little under a cell out, close in only.
     "map.look_foam_strength": 0.55,
     // Engraved waterlines two, three and a half and five cells off the coast. An era's mark, so

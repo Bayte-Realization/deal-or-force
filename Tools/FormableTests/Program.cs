@@ -129,6 +129,8 @@ static class Program
         if (args.Length == 0) GpuAtlasContractTests.Run();
         if (args.Contains("--map-look-only")) { MapLookTests.Run(); return; }
         if (args.Length == 0) MapLookTests.Run();
+        if (args.Contains("--map-labels-only")) { MapLabelPriorityTests.Run(); return; }
+        if (args.Length == 0) MapLabelPriorityTests.Run();
         if (args.Contains("--release-0530-only")) { Release0530Tests.Run(); return; }
         if (args.Length == 0) Release0530Tests.Run();
         if (args.Contains("--country-name-settings-only")) { CountryNameSettingTests.Run(); return; }

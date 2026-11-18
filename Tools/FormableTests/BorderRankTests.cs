@@ -396,10 +396,9 @@ static class BorderRankTests
     {
         var scripts = Path.Combine(GameDataLoader.DataFolder(), "..", "Scripts");
         var globe = File.ReadAllText(Path.Combine(scripts, "gfx", "GlobePresentation.cs"));
-        var start = globe.IndexOf("Code = @\"shader_type spatial;", StringComparison.Ordinal) + "Code = @\"".Length;
-        var end = globe.IndexOf("\n}\"", start, StringComparison.Ordinal);
-        Check(start > 20 && end > start, "the full map shader is located in GlobePresentation.cs");
-        var full = globe[start..(end + 2)];
+        var full = MapShaderSource.LoadFull();
+        Check(full.StartsWith("shader_type spatial;", StringComparison.Ordinal) && full.TrimEnd().EndsWith("}", StringComparison.Ordinal),
+            "the full map shader is loaded from game/shaders/globe_map.gdshader");
         var safe = CompatibilityMapShader.Source;
 
         Check(full.Contains("float has_nation_border = step(0.5, abs(near_nation - other_nation)) * step(0.5, near_nation);"),
@@ -467,7 +466,7 @@ static class BorderRankTests
               safe.Contains("provincial * (1.0 - national) * province_detail"),
             "safe map: one ink for every country border, and the higher rank drawn alone");
 
-        Check(Balanced(full.Replace("\" + OccupationShaderFunctions + @\"", "").Replace("\" + SeamSamplingFunctions() + @\"", "")) &&
+        Check(Balanced(full) &&
               Balanced(safe),
             "both shader sources keep balanced brackets after the edit");
         var packed = PackedMapShader.Build(MapColorSpaceShader.Build(full));

@@ -7,7 +7,12 @@ namespace DealOrForce;
 
 internal static class PresentationFonts
 {
+    internal const int MapMsdfPixelRange = 40;
     private static readonly Dictionary<string, Font> Faces = new(StringComparer.OrdinalIgnoreCase);
+
+    internal static bool IsMapLabelRole(string role) =>
+        string.Equals(role, "map.countries", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(role, "map.cities", StringComparison.OrdinalIgnoreCase);
 
     static PresentationFonts()
     {
@@ -43,14 +48,37 @@ internal static class PresentationFonts
 
     private static Font Load(string role)
     {
+        var isMap = IsMapLabelRole(role);
+        var msdfSize = string.Equals(role, "map.countries", StringComparison.OrdinalIgnoreCase) ? 64 : 48;
         var file = FontCatalog.FileOf(role);
         if (file.Length > 0 && ResourceLoader.Exists(file))
         {
             var supplied = GD.Load<Font>(file);
-            if (supplied is not null) return supplied;
+            if (supplied is not null)
+            {
+                if (isMap && supplied is FontFile fileFont)
+                {
+                    var clone = (FontFile)fileFont.Duplicate();
+                    clone.MultichannelSignedDistanceField = true;
+                    clone.MsdfPixelRange = MapMsdfPixelRange;
+                    clone.MsdfSize = msdfSize;
+                    return clone;
+                }
+                return supplied;
+            }
         }
         var families = FontCatalog.FamiliesOf(role);
-        if (families.Length > 0) return new SystemFont { FontNames = families };
+        if (families.Length > 0)
+        {
+            var sys = new SystemFont { FontNames = families };
+            if (isMap)
+            {
+                sys.MultichannelSignedDistanceField = true;
+                sys.MsdfPixelRange = MapMsdfPixelRange;
+                sys.MsdfSize = msdfSize;
+            }
+            return sys;
+        }
         return ThemeDB.FallbackFont;
     }
 }

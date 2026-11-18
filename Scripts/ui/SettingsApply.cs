@@ -249,8 +249,11 @@ public partial class DealOrForceGame
                 Refresh();
                 if (_mapSelectionOpen) ShowMapSelectionContent();
                 break;
-            case "map_visual_style":
             case "map_look":
+                UpdateMapVignetteLook();
+                _globe?.ApplyMapVisualStyle();
+                break;
+            case "map_visual_style":
             case "map_cloud_opacity":
             case "map_consistent_lighting":
                 _globe?.ApplyMapVisualStyle();

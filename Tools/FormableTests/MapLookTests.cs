@@ -41,6 +41,9 @@ static class MapLookTests
             ["map.look_sea_deep"] = "#18323f", ["map.look_sea_mid"] = "#234b58", ["map.look_sea_shelf"] = "#3d6b70",
             ["map.look_sea_coast"] = "#6a9690", ["map.look_sea_chart"] = "#2a4450", ["map.look_foam"] = "#ece5d2",
             ["map.look_coast_ink"] = "#2e4048", ["map.look_unowned"] = "#d8ccb0",
+            ["map.look_label_fill"] = "#efe4c8", ["map.look_label_outline"] = "#11161c",
+            ["map.look_capital_fill"] = "#f7eed6", ["map.look_region_fill"] = "#e6d9bb",
+            ["map.look_river_fill"] = "#a8cedd", ["map.look_river_outline"] = "#0f1e29",
         };
         Check(MapLook.DefaultColours.Length == table.Count &&
               MapLook.DefaultColours.All(entry => table.TryGetValue(entry.Token, out var hex) &&
@@ -69,7 +72,7 @@ static class MapLookTests
               MapLook.SaturationFarDefault == 0.80f && MapLook.ReliefFarDefault == 0.45f && MapLook.ReliefTintDefault == 0.60f &&
               MapLook.PaperFromDistanceDefault == 17f && MapLook.PaperFullDistanceDefault == 22f &&
               MapLook.FlatPaperFromZoomDefault == 9.0f && MapLook.FlatPaperFullZoomDefault == 11.5f &&
-              MapLook.FarBandDefault == 0.30f && MapLook.FarBandPixelsDefault == 3f && MapLook.FoamDefault == 0.55f &&
+              MapLook.FarBandDefault == 0.36f && MapLook.FarBandPixelsDefault == 4.5f && MapLook.FoamDefault == 0.55f &&
               MapLook.WaterlineDefault == 0f && MapLook.SeaSheenDefault == 0.30f && MapLook.SelectionWidthDefault == 1.3f,
             "the compiled metric fallbacks are the brief's numbers, as revised");
         Check(InterfaceSkin.Metric("map.look_waterline", 1f) == 0f,
@@ -196,11 +199,9 @@ static class MapLookTests
     private static void ShaderContract()
     {
         var scripts = Path.Combine(GameDataLoader.DataFolder(), "..", "Scripts");
-        var globe = File.ReadAllText(Path.Combine(scripts, "gfx", "GlobePresentation.cs"));
-        var start = globe.IndexOf("Code = @\"shader_type spatial;", StringComparison.Ordinal) + "Code = @\"".Length;
-        var end = globe.IndexOf("\n}\"", start, StringComparison.Ordinal);
-        Check(start > 20 && end > start, "the full map shader is located");
-        var full = globe[start..(end + 2)];
+        var full = MapShaderSource.LoadFull();
+        Check(full.StartsWith("shader_type spatial;", StringComparison.Ordinal) && full.TrimEnd().EndsWith("}", StringComparison.Ordinal),
+            "the full map shader is loaded from the canonical .gdshader asset");
 
         Check(full.Contains("uniform float atlas_look = 0.0;") && full.Contains("uniform float paper_mix = 0.0;"),
             "both switches of the look start at nought: an unconfigured material draws the classic map");
@@ -263,5 +264,9 @@ static class MapLookTests
         Check(!full.Contains("look_border_wobble") && !full.Contains("look_paper_grain") &&
               full.Contains("float atlas_noise(vec2 uv, float across, float flat_share)"),
             "no border wobble or paper fibre; the one map noise left keeps its cells square on the globe");
+        var fonts = File.ReadAllText(Path.Combine(scripts, "ui", "PresentationFonts.cs"));
+        Check(fonts.Contains("MultichannelSignedDistanceField = true") && fonts.Contains("MapMsdfPixelRange = 40") &&
+              fonts.Contains("IsMapLabelRole(role)"),
+            "dynamic map label fonts use MSDF with pixel range >= 2x max outline while leaving small UI fonts hinted");
     }
 }

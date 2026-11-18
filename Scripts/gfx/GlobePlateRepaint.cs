@@ -147,8 +147,8 @@ public sealed partial class GlobePresentation
         {
             _frontierTexture = ImageTexture.CreateFromImage(frontier);
             _globeMaterial.SetShaderParameter("frontier_field", _frontierTexture);
-            _globeMaterial.SetShaderParameter("frontier_cap", Simulation.FrontierField.Cap);
         }
+        _globeMaterial.SetShaderParameter("frontier_cap", Simulation.FrontierField.Cap);
         frontier.Dispose();
         _globeMaterial.SetShaderParameter("frontier_ready", 1f);
     }

@@ -12,32 +12,47 @@ namespace DealOrForce;
 /// </summary>
 public partial class DealOrForceGame
 {
+    private ShaderMaterial _mapVignetteMaterial;
+
     private const string VignetteShader = @"shader_type canvas_item;
 uniform float strength = 0.38;
 uniform vec4 tint : source_color = vec4(0.02, 0.03, 0.05, 1.0);
+uniform float warmth = 0.0;
+uniform vec4 warm_tint : source_color = vec4(0.08, 0.055, 0.035, 1.0);
 void fragment() {
     vec2 p = (UV - 0.5) * vec2(1.0, 0.82);
-    float fall = smoothstep(0.30, 0.78, length(p) * 1.18);
-    COLOR = vec4(tint.rgb, fall * strength);
+    float fall = smoothstep(mix(0.30, 0.34, warmth), mix(0.78, 0.82, warmth), length(p) * 1.18);
+    COLOR = vec4(mix(tint.rgb, warm_tint.rgb, warmth), fall * strength);
 }";
 
     private void BuildMapVignette()
     {
         var strength = Ui.Metric("map.vignette", 0.38f);
         if (strength <= 0f) return;
-        var material = new ShaderMaterial { Shader = new Shader { Code = VignetteShader } };
-        material.SetShaderParameter("strength", Mathf.Clamp(strength, 0f, 1f));
-        material.SetShaderParameter("tint", Ui.Colour("surface.background"));
+        _mapVignetteMaterial = new ShaderMaterial { Shader = new Shader { Code = VignetteShader } };
+        UpdateMapVignetteLook();
         var veil = new ColorRect
         {
             Name = "MapVignette",
-            Material = material,
+            Material = _mapVignetteMaterial,
             MouseFilter = Control.MouseFilterEnum.Ignore,
             FocusMode = Control.FocusModeEnum.None
         };
         veil.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _hudLayer.AddChild(veil);
         _hudLayer.MoveChild(veil, 0);
+    }
+
+    internal void UpdateMapVignetteLook()
+    {
+        if (!IsInstanceValid(_mapVignetteMaterial)) return;
+        var polish = MapLabelPriority.AtmospherePolish(
+            Simulation.MapLook.Atlas(),
+            RenderingServer.GetCurrentRenderingMethod(),
+            Ui.Metric("map.vignette", 0.38f));
+        _mapVignetteMaterial.SetShaderParameter("strength", polish.VignetteStrength);
+        _mapVignetteMaterial.SetShaderParameter("warmth", polish.VignetteWarmth);
+        _mapVignetteMaterial.SetShaderParameter("tint", Ui.Colour("surface.background"));
     }
 
     /// <summary>

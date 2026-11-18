@@ -67,8 +67,8 @@ public static class MapLook
     public const float PaperFullDistanceDefault = 22f;
     public const float FlatPaperFromZoomDefault = 9.0f;
     public const float FlatPaperFullZoomDefault = 11.5f;
-    public const float FarBandDefault = 0.30f;
-    public const float FarBandPixelsDefault = 3f;
+    public const float FarBandDefault = 0.36f;
+    public const float FarBandPixelsDefault = 4.5f;
     public const float FoamDefault = 0.55f;
     public const float WaterlineDefault = 0f;
     public const float SeaSheenDefault = 0.30f;
@@ -88,7 +88,22 @@ public static class MapLook
         ("map.look_foam", "#ece5d2"),
         ("map.look_coast_ink", "#2e4048"),
         ("map.look_unowned", "#d8ccb0"),
+        ("map.look_label_fill", "#efe4c8"),
+        ("map.look_label_outline", "#11161c"),
+        ("map.look_capital_fill", "#f7eed6"),
+        ("map.look_region_fill", "#e6d9bb"),
+        ("map.look_river_fill", "#a8cedd"),
+        ("map.look_river_outline", "#0f1e29"),
     };
+
+    /// <summary>Returns a skin colour hex token with compiled fallback (without mutating classic globals).</summary>
+    public static string ColourHex(string token)
+    {
+        if (InterfaceSkin.Has(token)) return InterfaceSkin.Colour(token);
+        foreach (var (name, hex) in DefaultColours)
+            if (name == token) return hex;
+        return "#efe4c8";
+    }
 
     /// <summary>
     /// Whether the atlas look is on. Anything but an explicit "classic" is the atlas: a player who
@@ -123,7 +138,7 @@ public static class MapLook
             Math.Clamp(InterfaceSkin.Metric("map.look_relief_far", ReliefFarDefault), 0f, 1.5f),
             paperFrom, paperFull, flatFrom, flatFull,
             Math.Clamp(InterfaceSkin.Metric("map.look_far_band", FarBandDefault), 0f, 1f),
-            Math.Clamp(InterfaceSkin.Metric("map.look_far_band_pixels", FarBandPixelsDefault), 0f, 12f),
+            Math.Clamp(InterfaceSkin.Metric("map.look_far_band_pixels", FarBandPixelsDefault), 0f, 16f),
             Math.Clamp(InterfaceSkin.Metric("map.look_foam_strength", FoamDefault), 0f, 1f),
             Math.Clamp(InterfaceSkin.Metric("map.look_waterline", WaterlineDefault), 0f, 1f),
             Math.Clamp(InterfaceSkin.Metric("map.look_sea_sheen", SeaSheenDefault), 0f, 1f),

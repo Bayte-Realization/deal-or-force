@@ -24,6 +24,9 @@ public sealed partial class GlobePresentation
         _mapLookAtlas = MapLook.Atlas();
         // Resend paper_mix on the next frame: switching to classic sends nought, back sends the zoom's.
         _cachedPaperMix = -1f;
+        ApplyAtmosphereLook();
+        InvalidateCities();
+        InvalidateCountryAndRegionLabelAppearance();
         if (_globeMaterial is null) return;
         var style = _mapLookStyle;
         _globeMaterial.SetShaderParameter("atlas_look", _mapLookAtlas ? 1f : 0f);

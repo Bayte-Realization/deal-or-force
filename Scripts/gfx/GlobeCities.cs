@@ -51,6 +51,29 @@ public sealed partial class GlobePresentation
     private bool[] _cityIsCapital = Array.Empty<bool>();
     /// <summary>The same cities as a list, in the order of the catalogue: the first to be lettered.</summary>
     private readonly List<int> _cityCapitals = new();
+    private IReadOnlyList<RiverLabelAnchor> _riverAnchors = Array.Empty<RiverLabelAnchor>();
+    private Vector3[] _riverNormals = Array.Empty<Vector3>();
+    private readonly Dictionary<int, float> _pinAlphas = new();
+    private readonly HashSet<int> _placedPinKeys = new();
+    private readonly List<FadePinSnapshot> _fadingPinSnapshots = new();
+
+    private readonly record struct FadePinSnapshot(
+        int SlotKey,
+        Vector3 Position,
+        Quaternion Rotation,
+        Vector3 Scale,
+        float FlatScale,
+        string Text,
+        Font Font,
+        int FontSize,
+        int OutlineSize,
+        float PixelSize,
+        Vector2 Offset,
+        HorizontalAlignment Align,
+        Color BaseFill,
+        Color BaseOutline,
+        float Alpha,
+        Vector3 AnchorNormal);
 
     /// <summary>Whether cities are drawn at all - the player's setting.</summary>
     public bool CityLabelsEnabled
@@ -74,6 +97,21 @@ public sealed partial class GlobePresentation
         /// <summary>The capital's star a name stands beside, when it is one of those.</summary>
         public Node3D Star;
         public float FlatPixelScale = -1f;
+        public int TargetKey = -1;
+        public float Alpha = 1f;
+        public float TargetAlpha = 1f;
+        public Color BaseFill = Colors.White;
+        public Color BaseOutline = Colors.Black;
+        public Vector3 AnchorNormal = Vector3.Up;
+    }
+
+    private void AdoptRiverAnchors(IReadOnlyList<RiverLabelAnchor> anchors)
+    {
+        _riverAnchors = anchors ?? Array.Empty<RiverLabelAnchor>();
+        _riverNormals = new Vector3[_riverAnchors.Count];
+        for (var i = 0; i < _riverAnchors.Count; i++)
+            _riverNormals[i] = SurfacePoint(_riverAnchors[i].Latitude, _riverAnchors[i].Longitude, 1f).Normalized();
+        _cityDirty = true;
     }
 
     /// <summary>
@@ -240,8 +278,10 @@ public sealed partial class GlobePresentation
         {
             // Hidden capitals must not reserve old screen rectangles after zooming out.
             _capitalNameBoxes.Clear();
+            _pinAlphas.Clear();
             return;
         }
+        if (_mapLookAtlas) StepCityPinFades((float)delta);
 
         _cityClock += delta;
         var viewport = ViewportSize();
@@ -314,6 +354,7 @@ public sealed partial class GlobePresentation
         public float Horizon;
         public Color CapitalColor;
         public Color CityColor;
+        public Color OutlineColor;
         public int Used;
         public bool StarsNamed;
     }
@@ -407,11 +448,27 @@ public sealed partial class GlobePresentation
             RootInverse = rootTransform.AffineInverse(),
             RootBasis = rootBasis,
             Horizon = horizon,
-            CapitalColor = Ui.Colour("globe.city_capital"),
-            CityColor = Ui.Colour("globe.city"),
+            CapitalColor = _mapLookAtlas ? Color.FromHtml(MapLook.ColourHex("map.look_capital_fill")) : Ui.Colour("globe.city_capital"),
+            CityColor = _mapLookAtlas ? Color.FromHtml(MapLook.ColourHex("map.look_label_fill")) : Ui.Colour("globe.city"),
+            OutlineColor = _mapLookAtlas ? Color.FromHtml(MapLook.ColourHex("map.look_label_outline")) : Ui.Colour("globe.city_outline"),
             Used = 0,
             StarsNamed = false
         };
+
+        _fadingPinSnapshots.Clear();
+        _placedPinKeys.Clear();
+        if (_mapLookAtlas)
+        {
+            for (var i = 0; i < _cityPins.Count && _fadingPinSnapshots.Count < 24; i++)
+            {
+                var p = _cityPins[i];
+                if (!p.Node.Visible || !p.Name.Visible || p.Alpha <= 0.03f || p.TargetKey == -1) continue;
+                _fadingPinSnapshots.Add(new FadePinSnapshot(
+                    p.TargetKey, p.Node.Position, p.Node.Quaternion, p.Node.Scale, p.FlatPixelScale,
+                    p.Name.Text, p.Name.Font, p.Name.FontSize, p.Name.OutlineSize, p.Name.PixelSize,
+                    p.Name.Offset, p.Name.HorizontalAlignment, p.BaseFill, p.BaseOutline, p.Alpha, p.AnchorNormal));
+            }
+        }
 
         // Headquarters names have fixed anchors and never hide on collision. Reserve their
         // room first, then place capitals before lesser cities without a cyclic dependency
@@ -419,29 +476,221 @@ public sealed partial class GlobePresentation
         _movementLayer?.AddNames(_cityTaken);
         _capitalNameBoxes.Clear();
         _cityDone.Clear();
-        // The capitals first - whichever cities those are today (RefreshStarNames) - at any zoom.
-        foreach (var index in _cityCapitals)
+
+        if (!_mapLookAtlas)
         {
-            if (pass.Used >= limit) break;
-            _cityDone.Add(index);
-            if (PlaceCity(index, ref pass, out var room)) _capitalNameBoxes.Add(room);
+            // Classic preserves the original placement order and instant visibility switch.
+            foreach (var index in _cityCapitals)
+            {
+                if (pass.Used >= limit) break;
+                _cityDone.Add(index);
+                if (PlaceCity(index, ref pass, out var room)) _capitalNameBoxes.Add(room);
+            }
+            for (var index = 0; index < candidates && pass.Used < limit; index++)
+            {
+                if (index >= leading && !pass.StarsNamed) NameStars(ref pass);
+                if (pass.Used >= limit) break;
+                if (_cityDone.Contains(index)) continue;
+                PlaceCity(index, ref pass, out _);
+            }
+            if (!pass.StarsNamed) NameStars(ref pass);
         }
-        // Every candidate is looked at, to the end of the list. The walk used to stop after four
-        // thousand cities whether or not they were on the screen, so on a region's own screen -
-        // the one zoom at which all of them are candidates - the cities written after about the
-        // 4,200th were never drawn anywhere: Zahle, and every town added by hand after the
-        // generated list. A city off the screen costs a projection and nothing else, and the
-        // ones on it are bounded by the label limit.
-        for (var index = 0; index < candidates && pass.Used < limit; index++)
+        else
         {
-            if (index >= leading && !pass.StarsNamed) NameStars(ref pass);
-            if (pass.Used >= limit) break;
-            if (_cityDone.Contains(index)) continue;
-            PlaceCity(index, ref pass, out _);
+            var playerMapIndex = _campaign?.Player?.MapIndex ?? -1;
+            var selectedMapIndex = _highlightedNation;
+            var provinceOwners = _campaign?.ProvinceMap?.ProvinceToNation;
+            bool IsPriorityCity(int cityIndex)
+            {
+                if (provinceOwners is null || cityIndex < 0 || cityIndex >= _cityAnchors.Length) return false;
+                var pid = _cityAnchors[cityIndex].ProvinceId;
+                if (pid <= 0 || pid >= provinceOwners.Length) return false;
+                var owner = provinceOwners[pid];
+                return (playerMapIndex > 0 && owner == playerMapIndex) || (selectedMapIndex > 0 && owner == selectedMapIndex);
+            }
+
+            var playerCap = -1;
+            var selectedCap = -1;
+            if (provinceOwners is not null)
+                foreach (var capIndex in _cityCapitals)
+                {
+                    if (capIndex < 0 || capIndex >= _cityAnchors.Length) continue;
+                    var pid = _cityAnchors[capIndex].ProvinceId;
+                    if (pid <= 0 || pid >= provinceOwners.Length) continue;
+                    var owner = provinceOwners[pid];
+                    if (playerCap < 0 && playerMapIndex > 0 && owner == playerMapIndex) playerCap = capIndex;
+                    if (selectedCap < 0 && selectedMapIndex > 0 && owner == selectedMapIndex) selectedCap = capIndex;
+                }
+
+            var ordered = MapLabelPriority.OrderCityCandidates(_cityCapitals, playerCap, selectedCap, candidates, IsPriorityCity);
+            var placedOrdinary = 0;
+            for (var i = 0; i < ordered.Count && pass.Used < limit; i++)
+            {
+                var index = ordered[i];
+                var capital = IsCapitalNow(index);
+                if (!capital && placedOrdinary >= leading && !pass.StarsNamed) NameStars(ref pass);
+                if (pass.Used >= limit) break;
+                if (!_cityDone.Add(index)) continue;
+                if (PlaceCity(index, ref pass, out var room) && capital) _capitalNameBoxes.Add(room);
+                if (!capital) placedOrdinary++;
+            }
+            if (!pass.StarsNamed) NameStars(ref pass);
+            PlaceRivers(ref pass);
+            EmitFadeOutPins(ref pass);
         }
-        if (!pass.StarsNamed) NameStars(ref pass);
+
         for (var index = pass.Used; index < _cityPins.Count; index++)
-            if (_cityPins[index].Node.Visible) _cityPins[index].Node.Visible = false;
+        {
+            var unused = _cityPins[index];
+            unused.TargetKey = -1;
+            if (unused.Node.Visible) unused.Node.Visible = false;
+        }
+    }
+
+    private void PlaceRivers(ref CityPassContext pass)
+    {
+        if (!_mapLookAtlas || _riverAnchors.Count == 0 || !WorldLayers.On("city_labels")) return;
+        var measure = _flatMap ? _flatZoom : ViewDistance;
+        var riverPixels = Math.Max(10f, pass.TextPixels * 0.92f);
+        var riverFont = PresentationFonts.For("map.cities");
+        var riverFill = Color.FromHtml(MapLook.ColourHex("map.look_river_fill"));
+        var riverOutline = Color.FromHtml(MapLook.ColourHex("map.look_river_outline"));
+
+        for (var r = 0; r < _riverAnchors.Count && pass.Used < pass.Limit; r++)
+        {
+            var anchor = _riverAnchors[r];
+            var targetAlpha = MapLabelPriority.RiverTargetAlpha(true, _flatMap, measure, anchor.Rank, true);
+            if (targetAlpha <= 0.02f) continue;
+
+            var normal = _riverNormals[r];
+            Vector3 local;
+            if (_flatMap) local = FlatPoint(anchor.Latitude, anchor.Longitude, 0f);
+            else
+            {
+                if ((pass.RootBasis * normal).Dot(pass.CameraNormal) < pass.Horizon) continue;
+                local = normal * GlobeRadius;
+            }
+            var world = pass.RootTransform * local;
+            if (_camera.IsPositionBehind(world)) continue;
+            var screen = _camera.UnprojectPosition(world);
+            if (screen.X < -40f || screen.Y < -20f || screen.X > pass.Viewport.X + 40f || screen.Y > pass.Viewport.Y + 20f) continue;
+
+            var name = anchor.DisplayName;
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            var textWidth = CityTextWidth(riverFont, pass.FontSize, name) * riverPixels / pass.FontSize;
+            var key = -10000 - r;
+            var side = TakeLabelRoom(screen, 0f, textWidth, riverPixels, key, out _);
+            if (side == 0) continue;
+
+            var pin = CityPinAt(pass.Used++);
+            pin.City = key;
+            pin.TargetKey = key;
+            pin.Star = null;
+            pin.AnchorNormal = normal;
+            pin.Node.Name = $"River_{anchor.Key}";
+            pin.Name.Text = name;
+            pin.Name.Font = riverFont;
+            pin.Name.FontSize = pass.FontSize;
+            pin.Name.OutlineSize = Math.Max(4, pass.FontSize / 5);
+            pin.Name.FixedSize = !_flatMap;
+            pin.Name.Billboard = BaseMaterial3D.BillboardModeEnum.Enabled;
+            pin.Name.HorizontalAlignment = HorizontalAlignment.Center;
+            pin.Name.Offset = Vector2.Zero;
+            pin.Node.Position = local;
+            pin.Node.Quaternion = _flatMap ? Quaternion.Identity
+                : CountryLabelSurfaceBasis(anchor.Latitude, anchor.Longitude, 1f, 0f).GetRotationQuaternion();
+            var pixel = _flatMap ? 1f : pass.FixedPixel;
+            pin.Node.Scale = _flatMap ? Vector3.One * pass.FlatPixel : Vector3.One;
+            pin.FlatPixelScale = _flatMap ? pass.FlatPixel : -1f;
+            pin.Name.PixelSize = pixel * riverPixels / pass.FontSize;
+            pin.Dot.Visible = false;
+            pin.Name.Visible = true;
+            pin.Node.Visible = true;
+            AssignPinOpacity(pin, key, riverFill, riverOutline, targetAlpha, smooth: true);
+        }
+    }
+
+    private void EmitFadeOutPins(ref CityPassContext pass)
+    {
+        if (!_mapLookAtlas || _fadingPinSnapshots.Count == 0) return;
+        var emitted = 0;
+        for (var i = 0; i < _fadingPinSnapshots.Count && emitted < 16; i++)
+        {
+            var snap = _fadingPinSnapshots[i];
+            if (_placedPinKeys.Contains(snap.SlotKey)) continue;
+            if (!_flatMap && (pass.RootBasis * snap.AnchorNormal).Dot(pass.CameraNormal) < pass.Horizon) continue;
+            var pin = CityPinAt(pass.Used++);
+            emitted++;
+            pin.City = snap.SlotKey;
+            pin.TargetKey = snap.SlotKey;
+            pin.Star = null;
+            pin.AnchorNormal = snap.AnchorNormal;
+            pin.Node.Position = snap.Position;
+            pin.Node.Quaternion = snap.Rotation;
+            pin.Node.Scale = snap.Scale;
+            pin.FlatPixelScale = snap.FlatScale;
+            pin.Name.Text = snap.Text;
+            pin.Name.Font = snap.Font;
+            pin.Name.FontSize = snap.FontSize;
+            pin.Name.OutlineSize = snap.OutlineSize;
+            pin.Name.PixelSize = snap.PixelSize;
+            pin.Name.Offset = snap.Offset;
+            pin.Name.HorizontalAlignment = snap.Align;
+            pin.Name.FixedSize = !_flatMap;
+            pin.Name.Billboard = BaseMaterial3D.BillboardModeEnum.Enabled;
+            pin.Dot.Visible = false;
+            pin.Name.Visible = true;
+            pin.Node.Visible = true;
+            pin.BaseFill = snap.BaseFill;
+            pin.BaseOutline = snap.BaseOutline;
+            pin.Alpha = snap.Alpha;
+            pin.TargetAlpha = 0f;
+            _pinAlphas[snap.SlotKey] = snap.Alpha;
+            ApplyPinModulate(pin);
+        }
+    }
+
+    private void AssignPinOpacity(CityPin pin, int key, Color baseFill, Color baseOutline, float targetAlpha, bool smooth)
+    {
+        pin.BaseFill = baseFill;
+        pin.BaseOutline = baseOutline;
+        pin.TargetAlpha = targetAlpha;
+        if (!smooth)
+            pin.Alpha = targetAlpha;
+        else
+            pin.Alpha = _pinAlphas.TryGetValue(key, out var existing) ? existing : Math.Min(0.18f, targetAlpha);
+        _pinAlphas[key] = pin.Alpha;
+        _placedPinKeys.Add(key);
+        ApplyPinModulate(pin);
+    }
+
+    private static void ApplyPinModulate(CityPin pin)
+    {
+        pin.Name.Modulate = new Color(pin.BaseFill, pin.BaseFill.A * pin.Alpha);
+        pin.Name.OutlineModulate = new Color(pin.BaseOutline, pin.BaseOutline.A * pin.Alpha);
+    }
+
+    private void StepCityPinFades(float delta)
+    {
+        if (delta <= 0f) return;
+        for (var i = 0; i < _cityPins.Count; i++)
+        {
+            var pin = _cityPins[i];
+            if (!pin.Node.Visible || pin.TargetKey == -1) continue;
+            if (MathF.Abs(pin.Alpha - pin.TargetAlpha) > 0.002f)
+            {
+                pin.Alpha = MapLabelPriority.StepOpacity(pin.Alpha, pin.TargetAlpha, delta);
+                _pinAlphas[pin.TargetKey] = pin.Alpha;
+                ApplyPinModulate(pin);
+            }
+            if (pin.TargetAlpha <= 0.001f && pin.Alpha <= 0.01f)
+            {
+                pin.Name.Visible = false;
+                if (!pin.Dot.Visible) pin.Node.Visible = false;
+                _pinAlphas.Remove(pin.TargetKey);
+                pin.TargetKey = -1;
+            }
+        }
     }
 
     private void NameStars(ref CityPassContext pass)
@@ -466,7 +715,9 @@ public sealed partial class GlobePresentation
 
             var pin = CityPinAt(pass.Used++);
             if (pin.City != -2 - star || pin.Name.Text != name) SetUpStarPin(pin, star, marker, name, pass.Font, pass.FontSize);
-            pin.Name.Modulate = pass.CapitalColor;
+            var key = -2 - star;
+            pin.TargetKey = key;
+            pin.AnchorNormal = normal;
             pin.Node.Position = pass.RootInverse * marker.GlobalPosition;
             var pixel = _flatMap ? 1f : pass.FixedPixel;
             pin.Node.Scale = _flatMap ? Vector3.One * pass.FlatPixel : Vector3.One;
@@ -476,6 +727,7 @@ public sealed partial class GlobePresentation
             pin.Dot.Visible = false;
             pin.Name.Visible = true;
             pin.Node.Visible = true;
+            AssignPinOpacity(pin, key, pass.CapitalColor, pass.OutlineColor, 1f, _mapLookAtlas);
         }
     }
 
@@ -511,6 +763,8 @@ public sealed partial class GlobePresentation
         var side = TakeLabelRoom(screen, dot, textWidth, tierPixels, index, out room);
         var pin = CityPinAt(pass.Used++);
         if (pin.City != index || pin.Name.Text != name) SetUpCityPin(pin, index, name, pass.Font, pass.FontSize);
+        pin.TargetKey = index;
+        pin.AnchorNormal = _cityNormals[index];
         pin.Node.Position = local;
         pin.Node.Quaternion = _flatMap ? Quaternion.Identity
             : CountryLabelSurfaceBasis(_cityAnchors[index].Latitude, _cityAnchors[index].Longitude, 1f, 0f).GetRotationQuaternion();
@@ -518,13 +772,18 @@ public sealed partial class GlobePresentation
         pin.Node.Scale = _flatMap ? Vector3.One * pass.FlatPixel : Vector3.One;
         pin.FlatPixelScale = _flatMap ? pass.FlatPixel : -1f;
         pin.Name.PixelSize = pixel * tierPixels / pass.FontSize;
-        pin.Name.Visible = side != 0;
+        var fill = capital ? pass.CapitalColor : pass.CityColor;
+        var fadeTail = _mapLookAtlas && side == 0 && _pinAlphas.TryGetValue(index, out var prevAlpha) && prevAlpha > 0.03f;
+        pin.Name.Visible = side != 0 || fadeTail;
         if (side != 0) SetLabelSide(pin, side, dot, pass.FontSize, tierPixels);
         pin.Dot.PixelSize = pixel * dot / 32f;
         var mark = capital ? _cityCapitalTexture : _cityDotTexture;
         if (pin.Dot.Texture != mark) pin.Dot.Texture = mark;
         pin.Dot.Visible = !(capital && NearCapitalMarker(index)) && !StarStandsOn(index);
-        pin.Name.Modulate = capital ? pass.CapitalColor : pass.CityColor;
+        if (side != 0)
+            AssignPinOpacity(pin, index, fill, pass.OutlineColor, _mapLookAtlas ? 0.94f : 1f, _mapLookAtlas);
+        else
+            AssignPinOpacity(pin, index, fill, pass.OutlineColor, 0f, _mapLookAtlas);
         pin.Dot.Modulate = Colors.White;
         pin.Node.Visible = true;
         // A crowded name may be omitted, but its geographical point must remain.
@@ -696,10 +955,17 @@ public sealed partial class GlobePresentation
             if (!pin.Node.Visible) continue;
             Vector3 normal;
             if (pin.City >= 0 && pin.City < _cityNormals.Length) normal = _cityNormals[pin.City];
+            else if (pin.City <= -10000) normal = pin.AnchorNormal;
             else if (pin.Star is not null && -2 - pin.City < _starNames.Count && IsInstanceValid(pin.Star) &&
                      pin.Star.IsVisibleInTree()) normal = _starNames[-2 - pin.City].Normal;
-            else { pin.Node.Visible = false; continue; }
-            if ((rootBasis * normal).Dot(cameraNormal) < horizon) pin.Node.Visible = false;
+            else { pin.Alpha = 0f; pin.TargetAlpha = 0f; pin.Node.Visible = false; continue; }
+            if ((rootBasis * normal).Dot(cameraNormal) < horizon)
+            {
+                pin.Alpha = 0f;
+                pin.TargetAlpha = 0f;
+                if (pin.TargetKey != -1) _pinAlphas.Remove(pin.TargetKey);
+                pin.Node.Visible = false;
+            }
         }
     }
 

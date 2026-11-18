@@ -136,6 +136,7 @@
     <Content Include="game\**\*.csv" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.map" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="game\**\*.gdshader" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!--
       `dlc/` used to be published here, and is not any more. A content pack is paid content and
       the first public alpha is free, so shipping one inactive would hand every player both the
