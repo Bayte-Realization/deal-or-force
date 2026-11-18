@@ -188,6 +188,8 @@ public partial class DealOrForceGame
                     OpenEconomyTab("Construction");
                 }, help: Tr("Choose what to build in this region. The queue, the price and the effect are on one screen."));
                 Action("military", "Recruit here", () => { CloseProvinceCard(); OpenRecruitment(region.MapIndex); });
+                Action("military", "Quick recruit", () => { CloseProvinceCard(); OpenQuickRecruitPopup(region); },
+                    help: Tr("A S D F — quarters · Enter — apply · Esc — close"));
                 var garrison = GarrisonPlanner.NearestFree(_campaign, player, pick.ProvinceId);
                 if (garrison is null)
                     Action("military", "Garrison here", () => { },
@@ -201,6 +203,22 @@ public partial class DealOrForceGame
                         OrderGarrison(garrisonId, pick.ProvinceId);
                         CloseProvinceCard();
                     }, help: Tr("Orders the nearest free division to march here and hold the province. It remains a normal formation with normal upkeep and can be ordered away again."));
+                }
+                var gatherable = Simulation.Controls.ArmySelectionRules.GatherableIdleArmies(_campaign, player, pick.ProvinceId);
+                if (gatherable.Count > 0)
+                {
+                    var provId = pick.ProvinceId;
+                    var regName = region.DisplayName;
+                    Action("military", Simulation.Loc.Format("Gather idle armies here ({0})", gatherable.Count), () =>
+                    {
+                        CloseProvinceCard();
+                        GatherIdleArmiesToProvince(provId, regName);
+                    });
+                }
+                else
+                {
+                    Action("military", Simulation.Loc.Format("Gather idle armies here ({0})", 0), () => { },
+                        refusal: Tr("No idle armies can march here."));
                 }
                 if (region.WarDamage >= 0.02f)
                     Action("relief", "Rebuild what the war broke", () =>
@@ -250,6 +268,20 @@ public partial class DealOrForceGame
                             CloseProvinceCard();
                         }, capitalRefusal.Length > 0 ? Tr(capitalRefusal) : "",
                         Simulation.Loc.Format("The government moves here. It costs {0} and a little order while it settles.", Fmt.Money(CapitalCore.Cost(_campaign, player))));
+            }
+            if (!ours && pick.ProvinceId > 0)
+            {
+                var gatherable = Simulation.Controls.ArmySelectionRules.GatherableIdleArmies(_campaign, player, pick.ProvinceId);
+                if (gatherable.Count > 0)
+                {
+                    var provId = pick.ProvinceId;
+                    var regName = region.DisplayName;
+                    Action("military", Simulation.Loc.Format("Gather idle armies here ({0})", gatherable.Count), () =>
+                    {
+                        CloseProvinceCard();
+                        GatherIdleArmiesToProvince(provId, regName);
+                    });
+                }
             }
         }
 

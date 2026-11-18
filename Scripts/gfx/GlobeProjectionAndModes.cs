@@ -100,6 +100,7 @@ public sealed partial class GlobePresentation
         _flatGlide = Vector2.Zero;
         _orbitGlide = Vector2.Zero;
         _lastFlatDragUsec = Time.GetTicksUsec();
+        _globeZoomAnchorActive = false;
         if (!_flatMap)
         {
             _targetYaw = _yaw;
@@ -119,11 +120,12 @@ public sealed partial class GlobePresentation
         new((pixel.X - Size.X * .5f) / Math.Max(1f, Size.Y),
             (Size.Y * .5f - pixel.Y) / Math.Max(1f, Size.Y));
 
-    private void ZoomFlatMapAt(Vector2 pixel, float direction)
+    private void ZoomFlatMapAt(Vector2 pixel, float direction, bool fine = false)
     {
         _flatZoomAnchorPixel = pixel;
         _flatZoomAnchorWorld = new Vector2(_flatX, _flatY) + FlatPointerOffset(pixel) * _flatZoom;
-        var step = Math.Clamp(InterfaceSkin.Metric("map.flat_zoom_step", .15f), .04f, .3f);
+        var baseStep = Math.Clamp(InterfaceSkin.Metric("map.flat_zoom_step", .15f), .04f, .3f);
+        var step = Simulation.Controls.ControlSchemeRules.ComputeZoomStep(baseStep, fine, 0.35f);
         _targetFlatZoom = Mathf.Clamp(_targetFlatZoom * (1f + direction * step), MinimumFlatZoom, MaximumFlatZoom);
         var target = _flatZoomAnchorWorld - FlatPointerOffset(pixel) * _targetFlatZoom;
         _targetFlatX = target.X;

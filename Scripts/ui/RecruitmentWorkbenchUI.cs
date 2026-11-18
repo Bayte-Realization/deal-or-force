@@ -112,6 +112,18 @@ public partial class DealOrForceGame
             quick.AddChild(ActionButton("+" + step, () => _recruitmentCount.Value = Math.Min(_recruitmentCount.MaxValue, _recruitmentCount.Value + step), 52, 32));
         }
         quick.AddChild(ActionButton("MAX", () => _recruitmentCount.Value = _recruitmentCount.MaxValue, 64, 32));
+        foreach (var quarter in new[] { (1, "25%"), (2, "50%"), (3, "75%"), (4, "100%") })
+        {
+            var q = quarter.Item1;
+            var btn = ActionButton(quarter.Item2, () =>
+            {
+                var maxInt = Math.Max(1, (int)_recruitmentCount.MaxValue);
+                _recruitmentCount.Value = Math.Clamp(Simulation.Controls.QuickAmountRules.QuarterInteger(maxInt, q),
+                    _recruitmentCount.MinValue, _recruitmentCount.MaxValue);
+            }, 56, 32);
+            btn.Name = "RecruitmentQuarter_" + (q * 25);
+            quick.AddChild(btn);
+        }
         _recruitmentSlider.ValueChanged += value =>
         {
             if (_updatingRecruitmentCount) return;
@@ -140,7 +152,53 @@ public partial class DealOrForceGame
                 Divisions = (int)_recruitmentCount.Value, Mode = _recruitmentMode });
             _campaign.Commands.ApplyAll(_campaign); RefreshRecruitment(); Refresh();
         }, 0, 36);
-        _recruitmentSubmit.Name = "RecruitmentSubmit"; footer.AddChild(_recruitmentSubmit);
+        _recruitmentSubmit.Name = "RecruitmentSubmit";
+        void TriggerRecruitEverywhere()
+        {
+            if (_campaign?.Player is null) return;
+            var plan = Simulation.Controls.BatchActionUndo.ExecuteEverywhereRecruitment(
+                _campaign, _campaign.Player, null, RecruitmentTemplateId(), _recruitmentMode,
+                Math.Max(1, (int)_recruitmentCount.Value), isQuarter: false);
+            if (_recruitmentOrderStatus is not null)
+                _recruitmentOrderStatus.Text = plan.Items.Count > 0
+                    ? Simulation.Loc.Format("Done in {0} region(s) ({1}) — Undo (Ctrl+Z)",
+                        plan.Items.Count, Simulation.Loc.Format("{0} × {1}", plan.TotalDivisions,
+                            Tr(UnitTypeCatalog.All.FirstOrDefault(t => t.Id == RecruitmentTemplateId())?.Name ?? RecruitmentTemplateId())))
+                    : plan.Refusal;
+            PlayStrategicCue(plan.Items.Count > 0 ? "ui_select" : "ui_error");
+            RefreshRecruitment();
+            Refresh();
+        }
+        EverywhereButtonHelper.Attach(_recruitmentSubmit, null, TriggerRecruitEverywhere, () =>
+        {
+            if (_campaign?.Player is null) return "";
+            var plan = Simulation.Controls.QuickAmountRules.PlanEverywhereRecruitment(
+                _campaign, _campaign.Player, null, RecruitmentTemplateId(), _recruitmentMode,
+                Math.Max(1, (int)_recruitmentCount.Value), isQuarter: false);
+            return plan.Items.Count == 0
+                ? plan.Refusal
+                : Simulation.Loc.Format(
+                    Simulation.Controls.ControlSchemeRules.RmbEverywhereEnabled
+                        ? "Click: apply to active region\nShift+click / Right-click: apply Everywhere ({0} region(s), {1} total, {2})"
+                        : "Click: apply to active region\nShift+click: apply Everywhere ({0} region(s), {1} total, {2})",
+                    plan.Items.Count, plan.TotalDivisions, Fmt.Money(plan.TotalCost));
+        });
+        footer.AddChild(_recruitmentSubmit);
+
+        var recruitEverywhereBtn = ActionButton(Tr("Do everywhere"), TriggerRecruitEverywhere, 0, 32);
+        recruitEverywhereBtn.Name = "RecruitmentEverywhere";
+        EverywhereButtonHelper.Attach(recruitEverywhereBtn, null, null, () =>
+        {
+            if (_campaign?.Player is null) return "";
+            var plan = Simulation.Controls.QuickAmountRules.PlanEverywhereRecruitment(
+                _campaign, _campaign.Player, null, RecruitmentTemplateId(), _recruitmentMode,
+                Math.Max(1, (int)_recruitmentCount.Value), isQuarter: false);
+            return plan.Items.Count == 0
+                ? plan.Refusal
+                : Simulation.Loc.Format("Apply to {0} eligible region(s): {1} total for {2}\n\nRefundable via Ctrl+Z until your next order.",
+                    plan.Items.Count, plan.TotalDivisions, Fmt.Money(plan.TotalCost));
+        });
+        footer.AddChild(recruitEverywhereBtn);
 
         var queue = RecruitmentScroll(_recruitmentPages["queue"], "RecruitmentQueueScroll");
         queue.AddChild(Title("Occupation pauses training. Cancellation returns all recruits and up to 75% of the unspent procurement budget.", 12, Ui.Colour("text.caption")));

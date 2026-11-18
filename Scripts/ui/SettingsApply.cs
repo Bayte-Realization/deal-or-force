@@ -255,6 +255,14 @@ public partial class DealOrForceGame
                 _globe?.ApplyMapVisualStyle();
                 break;
 
+            case "mouse_scheme":
+            case "rmb_everywhere":
+            case "edge_pan":
+            case "drag_threshold_px":
+            case "drag_threshold_ms":
+                // Read live by ControlSchemeRules & QuickAmount everywhere buttons without restart.
+                break;
+
             case "window_mode":
             case "window_size":
                 ApplyWindowMode(SettingsCatalog.Chosen("window_mode"));

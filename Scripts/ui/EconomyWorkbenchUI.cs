@@ -289,9 +289,39 @@ public partial class DealOrForceGame
             add.Name = "Build" + kind;
             // Mirror admission, not the full project price: the economy pays it over time.
             add.Disabled = refusal.Length > 0;
-            Tip(add, add.Disabled ? refusal
-                : Simulation.Loc.Format("Queue in {0}", _selectedState.DisplayName) + "\n\n" + outlookTip);
+            EverywhereButtonHelper.Attach(add, null, () => ExecuteEverywhereConstructionAction(captured, 1), () =>
+            {
+                if (refusal.Length > 0) return refusal;
+                var plan = Simulation.Controls.QuickAmountRules.PlanEverywhereConstruction(_campaign, _campaign.Player, null, captured, 1);
+                var baseTip = Simulation.Loc.Format("Queue in {0}", _selectedState.DisplayName) + "\n\n" + outlookTip;
+                if (plan.Items.Count == 0) return baseTip;
+                var every = Simulation.Loc.Format(
+                    Simulation.Controls.ControlSchemeRules.RmbEverywhereEnabled
+                        ? "Click: apply to active region\nShift+click / Right-click: apply Everywhere ({0} region(s), {1} total, {2})"
+                        : "Click: apply to active region\nShift+click: apply Everywhere ({0} region(s), {1} total, {2})",
+                    plan.Items.Count, plan.TotalBuildings, Fmt.Money(plan.TotalCost));
+                return baseTip + "\n\n" + every;
+            });
             line.AddChild(add);
+
+            var batch3 = ActionButton("×3", () =>
+            {
+                for (var n = 0; n < 3; n++) QueueBuilding(captured);
+            }, 40, 32);
+            batch3.Name = "Build3_" + kind;
+            batch3.Disabled = refusal.Length > 0;
+            EverywhereButtonHelper.Attach(batch3, null, () => ExecuteEverywhereConstructionAction(captured, 3), () =>
+            {
+                if (refusal.Length > 0) return refusal;
+                var plan = Simulation.Controls.QuickAmountRules.PlanEverywhereConstruction(_campaign, _campaign.Player, null, captured, 3);
+                if (plan.Items.Count == 0) return plan.Refusal;
+                return Simulation.Loc.Format(
+                    Simulation.Controls.ControlSchemeRules.RmbEverywhereEnabled
+                        ? "Click: apply to active region\nShift+click / Right-click: apply Everywhere ({0} region(s), {1} total, {2})"
+                        : "Click: apply to active region\nShift+click: apply Everywhere ({0} region(s), {1} total, {2})",
+                    plan.Items.Count, plan.TotalBuildings, Fmt.Money(plan.TotalCost));
+            });
+            line.AddChild(batch3);
         }
         if (_buildingCatalogRows.GetChildCount() == 0)
             _buildingCatalogRows.AddChild(Title("No matches", 13, Ui.Colour("text.muted")));

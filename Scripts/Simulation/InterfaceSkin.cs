@@ -520,6 +520,7 @@ public static class InterfaceSkin
     public static void ResetCatalog(List<string> errors = null)
     {
         CampaignUiCatalog.Reset();
+        Controls.HotkeyCatalog.Reset();
         InterfaceMaterials.Reset();
         SkinOverlays.MarkBase();
         LayoutMaterials.Clear();
@@ -583,6 +584,11 @@ public static class InterfaceSkin
         {
             sectioned = true;
             CampaignUiCatalog.Merge(campaign, errors);
+        }
+        if (root.TryGetProperty("hotkeys", out var hotkeys))
+        {
+            sectioned = true;
+            Controls.HotkeyCatalog.Merge(hotkeys, context, errors);
         }
         foreach (var section in new[] { "colors", "colours" })
             if (root.TryGetProperty(section, out var element) && element.ValueKind == JsonValueKind.Object)

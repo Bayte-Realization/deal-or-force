@@ -287,6 +287,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private float _cachedDetailMix = -1f;
     private float _cachedProvinceDetail = -1f;
     private int _cachedFogViewerParam = -999;
+    private readonly Simulation.Controls.MapGestureSession _gesture = new();
+    private bool _globeZoomAnchorActive;
+    private (double X, double Y, double Z) _globeZoomAnchorWorld;
+    private Vector2 _globeZoomAnchorPixel;
 
     public event Action<GlobePick> CountryPicked;
     public bool CountrySelectionOnly { get; set; }
@@ -303,6 +307,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// </summary>
     public event Action<IReadOnlyList<int>> ProvincesBoxSelected;
     public event Action<GlobePick> ProvinceCommanded;
+    public event Action EmptyMapClicked;
+    public event Action<GlobePick> AltProvinceSplitCommanded;
 
     /// <summary>
     /// Painting a peace. While this is on, the map is a canvas: dragging the left button
@@ -1760,43 +1766,76 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
         if (inputEvent is InputEventMouseButton button)
         {
+            var scheme = Simulation.Controls.ControlSchemeRules.ActiveMouseScheme;
+            var threshPx = Simulation.Controls.ControlSchemeRules.DragThresholdPx;
+            var threshMs = Simulation.Controls.ControlSchemeRules.DragThresholdMs;
+            var nowMs = Time.GetTicksMsec();
+
             if (button.ButtonIndex == MouseButton.Left)
             {
                 if (button.Pressed)
                 {
-                    _boxSelecting = true;
-                    _boxRegions = button.CtrlPressed && !CountrySelectionOnly && ProvincesBoxSelected is not null;
-                    _boxStart = button.Position;
-                    _boxCurrent = button.Position;
+                    _gesture.BeginPress(scheme, Simulation.Controls.MapPointerButton.Left,
+                        button.Position.X, button.Position.Y, nowMs,
+                        button.CtrlPressed, button.AltPressed, button.ShiftPressed,
+                        allowRegionBox: !CountrySelectionOnly && ProvincesBoxSelected is not null);
+
+                    if (_gesture.BoxStarted)
+                    {
+                        _boxSelecting = true;
+                        _boxRegions = _gesture.BoxRegions;
+                        _boxStart = button.Position;
+                        _boxCurrent = button.Position;
+                        _dragging = false;
+                    }
+                    else
+                    {
+                        _boxSelecting = false;
+                        _boxRegions = false;
+                        _cameraDragButton = MouseButton.Left;
+                        _previousPointer = button.Position;
+                        _dragDistance = 0f;
+                        _flatGlide = Vector2.Zero;
+                        _orbitGlide = Vector2.Zero;
+                        _lastFlatDragUsec = Time.GetTicksUsec();
+                        _globeZoomAnchorActive = false;
+                        _flatZoomAnchorActive = false;
+                        _dragging = false;
+                    }
                     QueueRedraw();
                 }
-                else if (_boxSelecting && _boxRegions)
+                else if (_gesture.IsPressed && _gesture.Button == Simulation.Controls.MapPointerButton.Left)
                 {
-                    _boxCurrent = button.Position;
+                    var outcome = _gesture.ReleaseLeft(button.Position.X, button.Position.Y, threshPx);
                     _boxSelecting = false;
                     _boxRegions = false;
-                    var area = RectFromPoints(_boxStart, _boxCurrent);
-                    var provinces = area.Size.Length() >= 8f ? ProvincesInScreenRect(area) : new List<int>();
-                    if (provinces.Count == 0 && TryPick(button.Position, out var single, updateSelection: false) && single.ProvinceId > 0)
-                        provinces.Add(single.ProvinceId);
-                    if (provinces.Count > 0) ProvincesBoxSelected?.Invoke(provinces);
-                    QueueRedraw();
-                    AcceptEvent();
-                    return;
-                }
-                else if (_boxSelecting)
-                {
+                    _dragging = false;
                     _boxCurrent = button.Position;
-                    _boxSelecting = false;
-                    var rect = RectFromPoints(_boxStart, _boxCurrent);
-                    if (rect.Size.Length() < 8f)
+
+                    if (outcome == Simulation.Controls.LmbReleaseOutcome.BoxRegionSelect)
                     {
-                        // Resolve headquarters through the same map GUI input as provinces.
-                        // The container consumes this click before child _Input handlers run.
-                        if (!CountrySelectionOnly && _movementLayer is not null && _movementLayer.TryPickAt(button.Position, out var movement))
+                        var area = RectFromPoints(_boxStart, _boxCurrent);
+                        var provinces = area.Size.Length() >= threshPx ? ProvincesInScreenRect(area) : new List<int>();
+                        if (provinces.Count == 0 && TryPick(button.Position, out var single, updateSelection: false) && single.ProvinceId > 0)
+                            provinces.Add(single.ProvinceId);
+                        if (provinces.Count > 0) ProvincesBoxSelected?.Invoke(provinces);
+                    }
+                    else if (outcome == Simulation.Controls.LmbReleaseOutcome.BoxArmySelect)
+                    {
+                        var rect = RectFromPoints(_boxStart, _boxCurrent);
+                        if (!CountrySelectionOnly && SupportCommandMode) SupportBoxPicked?.Invoke(SupportInScreenRect(rect));
+                        else
                         {
-                            MovementPicked?.Invoke(movement);
+                            var selected = ArmiesInScreenRect(rect);
+                            if (!CountrySelectionOnly && selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
+                            else if (!CountrySelectionOnly && FleetsInScreenRect(rect) is { Count: > 0 } fleets)
+                                FleetsBoxPicked?.Invoke(fleets);
                         }
+                    }
+                    else if (outcome == Simulation.Controls.LmbReleaseOutcome.ClickSelect)
+                    {
+                        if (!CountrySelectionOnly && _movementLayer is not null && _movementLayer.TryPickAt(button.Position, out var movement))
+                            MovementPicked?.Invoke(movement);
                         else if (CountrySelectionOnly)
                         {
                             if (TryPick(button.Position, out var country)) CountryPicked?.Invoke(country);
@@ -1817,17 +1856,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
                         else if (TryPick(button.Position, out var pick)) CountryPicked?.Invoke(pick);
                         else if (TryPickUnclaimed(button.Position, out var unclaimed, out var unclaimedProvince))
                             UnclaimedPicked?.Invoke(unclaimed, unclaimedProvince);
-                    }
-                    else
-                    {
-                        if (!CountrySelectionOnly && SupportCommandMode) SupportBoxPicked?.Invoke(SupportInScreenRect(rect));
                         else
-                        {
-                            var selected = ArmiesInScreenRect(rect);
-                            if (!CountrySelectionOnly && selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
-                            else if (!CountrySelectionOnly && FleetsInScreenRect(rect) is { Count: > 0 } fleets)
-                                FleetsBoxPicked?.Invoke(fleets);
-                        }
+                            EmptyMapClicked?.Invoke();
                     }
                     QueueRedraw();
                 }
@@ -1837,19 +1867,81 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
             if (button.ButtonIndex is MouseButton.Right or MouseButton.Middle)
             {
+                var ptrBtn = button.ButtonIndex == MouseButton.Right
+                    ? Simulation.Controls.MapPointerButton.Right
+                    : Simulation.Controls.MapPointerButton.Middle;
+
                 if (button.Pressed)
                 {
-                    BeginCameraDrag(button.Position, button.ButtonIndex);
-                    _boxSelecting = false;
+                    _gesture.BeginPress(scheme, ptrBtn, button.Position.X, button.Position.Y, nowMs,
+                        button.CtrlPressed, button.AltPressed, button.ShiftPressed, allowRegionBox: false);
+                    if (_gesture.BoxStarted)
+                    {
+                        _boxSelecting = true;
+                        _boxRegions = false;
+                        _boxStart = button.Position;
+                        _boxCurrent = button.Position;
+                        _dragging = false;
+                    }
+                    else
+                    {
+                        BeginCameraDrag(button.Position, button.ButtonIndex);
+                        _dragging = _gesture.PanStarted;
+                        _boxSelecting = false;
+                    }
                     QueueRedraw();
                 }
                 else
                 {
-                    if (button.ButtonIndex != _cameraDragButton) return;
-                    var wasClick = _dragging && _dragDistance < 5f && button.ButtonIndex == MouseButton.Right;
-                    _dragging = false;
-                    if (!PlanEraseMode && !CountrySelectionOnly && wasClick && TryPick(button.Position, out var commanded, updateSelection: false))
-                        ProvinceCommanded?.Invoke(commanded);
+                    if (button.ButtonIndex == MouseButton.Middle && _gesture.IsPressed &&
+                        _gesture.Button == Simulation.Controls.MapPointerButton.Middle)
+                    {
+                        var outcome = _gesture.ReleaseMiddle(button.Position.X, button.Position.Y, threshPx);
+                        _boxSelecting = false;
+                        _dragging = false;
+                        _boxCurrent = button.Position;
+                        if (outcome == Simulation.Controls.MmbReleaseOutcome.BoxArmySelect && !CountrySelectionOnly)
+                        {
+                            var rect = RectFromPoints(_boxStart, _boxCurrent);
+                            if (SupportCommandMode) SupportBoxPicked?.Invoke(SupportInScreenRect(rect));
+                            else
+                            {
+                                var selected = ArmiesInScreenRect(rect);
+                                if (selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
+                                else if (FleetsInScreenRect(rect) is { Count: > 0 } fleets)
+                                    FleetsBoxPicked?.Invoke(fleets);
+                            }
+                        }
+                        else if (outcome == Simulation.Controls.MmbReleaseOutcome.ClickArmySelect && !CountrySelectionOnly)
+                        {
+                            if (TryPickArmyStack(button.Position, out var mmbStack))
+                            {
+                                if (mmbStack.Count == 1) ArmyPicked?.Invoke(mmbStack[0]);
+                                else if (mmbStack.Count > 1) ArmiesBoxPicked?.Invoke(mmbStack);
+                            }
+                        }
+                        QueueRedraw();
+                    }
+                    else if (button.ButtonIndex == MouseButton.Right && _gesture.IsPressed &&
+                             _gesture.Button == Simulation.Controls.MapPointerButton.Right)
+                    {
+                        var outcome = _gesture.ReleaseRight(button.Position.X, button.Position.Y, nowMs,
+                            threshPx, threshMs, button.AltPressed);
+                        _dragging = false;
+                        if (!PlanEraseMode && !CountrySelectionOnly)
+                        {
+                            if (outcome == Simulation.Controls.RmbReleaseOutcome.AltSplitMove &&
+                                TryPick(button.Position, out var altCommanded, updateSelection: false))
+                                AltProvinceSplitCommanded?.Invoke(altCommanded);
+                            else if (outcome == Simulation.Controls.RmbReleaseOutcome.CommandOrContextMenu &&
+                                     TryPick(button.Position, out var commanded, updateSelection: false))
+                                ProvinceCommanded?.Invoke(commanded);
+                        }
+                    }
+                    else if (button.ButtonIndex == _cameraDragButton)
+                    {
+                        _dragging = false;
+                    }
                 }
                 AcceptEvent();
                 return;
@@ -1858,21 +1950,53 @@ public sealed partial class GlobePresentation : SubViewportContainer
             if (button.ButtonIndex == MouseButton.WheelUp || button.ButtonIndex == MouseButton.WheelDown)
             {
                 _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero;
-                // A step proportional to the altitude rather than a fixed one. A quarter
-                // of a unit is a nudge from orbit and a lurch from a hundred metres up,
-                // and the whole reason for coming this close is to move one division.
                 var sign = button.ButtonIndex == MouseButton.WheelUp ? -1f : 1f;
                 if (_flatMap)
-                    ZoomFlatMapAt(button.Position, sign);
+                    ZoomFlatMapAt(button.Position, sign, button.ShiftPressed);
                 else
-                {
-                    var altitude = Mathf.Max(0.10f, _targetDistance - GlobeRadius);
-                    _targetDistance = Mathf.Clamp(_targetDistance + sign * altitude * 0.22f,
-                        MinimumDistance, MaximumDistance);
-                }
+                    ZoomGlobeAt(button.Position, sign, button.ShiftPressed);
                 AcceptEvent();
                 return;
             }
+        }
+
+        if (inputEvent is InputEventMouseMotion gestureMotion && _gesture.IsPressed)
+        {
+            var threshPx = Simulation.Controls.ControlSchemeRules.DragThresholdPx;
+            var threshMs = Simulation.Controls.ControlSchemeRules.DragThresholdMs;
+            var nowMs = Time.GetTicksMsec();
+            var shouldPan = _gesture.UpdateMotion(gestureMotion.Position.X, gestureMotion.Position.Y,
+                nowMs, threshPx, threshMs, out var panDx, out var panDy);
+
+            if (_gesture.BoxStarted)
+            {
+                _boxCurrent = gestureMotion.Position;
+                QueueRedraw();
+                AcceptEvent();
+                return;
+            }
+
+            if (shouldPan)
+            {
+                if (!_dragging)
+                {
+                    _dragging = true;
+                    _previousPointer = gestureMotion.Position - new Vector2(panDx, panDy);
+                    _lastFlatDragUsec = Time.GetTicksUsec();
+                    _globeZoomAnchorActive = false;
+                    _flatZoomAnchorActive = false;
+                    _targetFlatX = _flatX;
+                    _targetFlatY = _flatY;
+                    _targetFlatZoom = _flatZoom;
+                    _targetYaw = _yaw;
+                    _targetPitch = _pitch;
+                    _targetDistance = _distance;
+                }
+                DragCamera(new Vector2(panDx, panDy));
+                _previousPointer = gestureMotion.Position;
+            }
+            AcceptEvent();
+            return;
         }
 
         if (inputEvent is InputEventMouseMotion boxMotion && _boxSelecting)
@@ -2132,6 +2256,31 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     .Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)));
         }
         return selected;
+    }
+
+    public IReadOnlyList<Simulation.Army> VisiblePlayerArmiesOnScreen(int playerId)
+    {
+        var result = new List<Simulation.Army>();
+        if (_campaign is null || !IsInstanceValid(_camera)) return result;
+        var vp = ViewportSize();
+        var rect = new Rect2(Vector2.Zero, new Vector2(vp.X, vp.Y));
+        var viewNormal = _camera.GlobalPosition.Normalized();
+        var seen = new HashSet<int>();
+        foreach (var marker in _armyStacks.Values)
+        {
+            var node = marker.Node;
+            if (!IsInstanceValid(node) || !marker.Plate.Visible || _camera.IsPositionBehind(node.GlobalPosition))
+                continue;
+            if (!_flatMap && node.GlobalPosition.Normalized().Dot(viewNormal) <= 0.05f)
+                continue;
+            if (!rect.HasPoint(_camera.UnprojectPosition(node.GlobalPosition)))
+                continue;
+            var stack = marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack;
+            foreach (var army in stack)
+                if (army.NationId == playerId && Simulation.ArmyInteraction.CanSelect(_campaign, army) && seen.Add(army.Id))
+                    result.Add(army);
+        }
+        return result;
     }
 
     /// <summary>
@@ -3633,6 +3782,54 @@ void fragment() {
         _orbitGlide *= Mathf.Exp(-CameraInertia.Damping * Math.Clamp(delta, 0, .1f));
     }
 
+    private void ZoomGlobeAt(Vector2 pixel, float direction, bool fine)
+    {
+        var vp = ViewportSize();
+        var fov = IsInstanceValid(_camera) ? _camera.Fov : RigFieldOfView;
+        var baseAltitude = Mathf.Max(0.10f, _targetDistance - GlobeRadius);
+        var baseDelta = direction * baseAltitude * 0.22f;
+        var delta = Simulation.Controls.ControlSchemeRules.ComputeZoomStep(baseDelta, fine, 0.35f);
+        var nextDistance = Mathf.Clamp(_targetDistance + delta, MinimumDistance, MaximumDistance);
+
+        if (vp.X >= 2 && vp.Y >= 2 &&
+            Simulation.Controls.ControlSchemeRules.TryGlobeRayHitLocal(pixel.X, pixel.Y, vp.X, vp.Y, fov, GlobeRadius, _distance, out var hitLocal))
+        {
+            _globeZoomAnchorWorld = Simulation.Controls.ControlSchemeRules.OrbitLocalToWorld(hitLocal, _pitch, _yaw);
+            _globeZoomAnchorPixel = pixel;
+            _globeZoomAnchorActive = true;
+            _targetDistance = nextDistance;
+            if (Simulation.Controls.ControlSchemeRules.SolveGlobeZoomAnchor(
+                pixel.X, pixel.Y, vp.X, vp.Y, fov, GlobeRadius, MaxPitch,
+                _globeZoomAnchorWorld.X, _globeZoomAnchorWorld.Y, _globeZoomAnchorWorld.Z,
+                _pitch, _yaw, nextDistance, out var nextPitch, out var nextYaw))
+            {
+                _targetPitch = nextPitch;
+                _targetYaw = nextYaw;
+            }
+            return;
+        }
+        _globeZoomAnchorActive = false;
+        _targetDistance = nextDistance;
+    }
+
+    private void UpdateGlobeZoomAnchor()
+    {
+        if (_flatMap || !_globeZoomAnchorActive) return;
+        var vp = ViewportSize();
+        var fov = IsInstanceValid(_camera) ? _camera.Fov : RigFieldOfView;
+        if (vp.X >= 2 && vp.Y >= 2 &&
+            Simulation.Controls.ControlSchemeRules.SolveGlobeZoomAnchor(
+                _globeZoomAnchorPixel.X, _globeZoomAnchorPixel.Y, vp.X, vp.Y, fov, GlobeRadius, MaxPitch,
+                _globeZoomAnchorWorld.X, _globeZoomAnchorWorld.Y, _globeZoomAnchorWorld.Z,
+                _pitch, _yaw, _distance, out var p, out var y))
+        {
+            _pitch = p;
+            _yaw = y;
+        }
+        if (MathF.Abs(_distance - _targetDistance) < 0.0005f)
+            _globeZoomAnchorActive = false;
+    }
+
     /// <summary>The ordinary camera: an orbit rig the player turns, tilts and zooms.</summary>
     private void UpdateOrbitCamera(double delta)
     {
@@ -3653,11 +3850,13 @@ void fragment() {
         _flatY = Mathf.Lerp(_flatY, _targetFlatY, weight);
         _flatZoom = Mathf.Lerp(_flatZoom, _targetFlatZoom, weight);
         UpdateFlatZoomAnchor();
+        UpdateGlobeZoomAnchor();
         if (_flatMap) UpdateFlatGlide((float)delta);
         else UpdateOrbitGlide((float)delta);
 
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
-        if (_flatMap && !typing)
+        var cameraKeysBlocked = typing || DealOrForceGame.CameraKeyboardBlocked;
+        if (_flatMap && !cameraKeysBlocked)
         {
             if (DealOrForceGame.Held(Key.W) || DealOrForceGame.Held(Key.S) ||
                 DealOrForceGame.Held(Key.A) || DealOrForceGame.Held(Key.D)) _flatZoomAnchorActive = false;
@@ -3668,23 +3867,46 @@ void fragment() {
             if (DealOrForceGame.Held(Key.D)) _targetFlatX += flatSpeed;
             ClampFlatCamera();
         }
-        else if (!_flatMap && !typing)
+        else if (!_flatMap && !cameraKeysBlocked)
         {
             // The keys move the camera, not the globe.
-            //
-            // They used to do the opposite, and the proof that it was wrong is six lines
-            // above: on the flat map W walks the camera north and D walks it east, and on the
-            // globe the same two keys did the reverse. One screen, one pair of hands, two
-            // meanings - which is what "on WASD it is the globe that turns" describes.
-            //
-            // The right-drag is deliberately not touched. Dragging is direct manipulation of
-            // the thing under the pointer and reads correctly as taking hold of the globe;
-            // the keyboard is not holding anything, and a key that walks the viewpoint is
-            // what every map in the genre does.
+            if (DealOrForceGame.Held(Key.W) || DealOrForceGame.Held(Key.S) ||
+                DealOrForceGame.Held(Key.A) || DealOrForceGame.Held(Key.D)) _globeZoomAnchorActive = false;
             if (DealOrForceGame.Held(Key.W)) _targetPitch = Mathf.Clamp(_targetPitch - (float)delta * 0.7f, -MaxPitch, MaxPitch);
             if (DealOrForceGame.Held(Key.S)) _targetPitch = Mathf.Clamp(_targetPitch + (float)delta * 0.7f, -MaxPitch, MaxPitch);
             if (DealOrForceGame.Held(Key.A)) _targetYaw -= (float)delta * 0.7f;
             if (DealOrForceGame.Held(Key.D)) _targetYaw += (float)delta * 0.7f;
+        }
+
+        if (!LoadingInputBlocked && !_dragging && !_boxSelecting && !cameraKeysBlocked &&
+            Simulation.Controls.ControlSchemeRules.EdgePanEnabled && GetWindow() is { } win && win.HasFocus())
+        {
+            var vp = ViewportSize();
+            var localMouse = GetLocalMousePosition();
+            if (localMouse.X >= 0f && localMouse.Y >= 0f && localMouse.X <= vp.X && localMouse.Y <= vp.Y)
+            {
+                var (edx, edy) = Simulation.Controls.ControlSchemeRules.ComputeEdgePanDelta(
+                    localMouse.X, localMouse.Y, vp.X, vp.Y, deltaSec: (float)delta);
+                if (edx != 0f || edy != 0f)
+                {
+                    _flatZoomAnchorActive = false;
+                    _globeZoomAnchorActive = false;
+                    if (_flatMap)
+                    {
+                        var upp = MapPanScale.FlatUnitsPerPixel(_flatZoom, vp.Y);
+                        _targetFlatX -= edx * upp;
+                        _targetFlatY += edy * upp;
+                        ClampFlatCamera();
+                    }
+                    else
+                    {
+                        var rad = MapPanScale.OrbitRadiansPerPixel(_distance, GlobeRadius, _camera.Fov, vp.Y);
+                        var lonScale = Mathf.Max(0.28f, Mathf.Cos(_pitch));
+                        _targetYaw -= edx * rad / lonScale;
+                        _targetPitch = Mathf.Clamp(_targetPitch - edy * rad, -MaxPitch, MaxPitch);
+                    }
+                }
+            }
         }
 
         ApplyCamera();

@@ -164,6 +164,7 @@ public sealed class CampaignCommandQueue
             // ровно один раз и при выключенной диагностике тоже. Повторный Apply здесь
             // удвоит цену/набор войск. Граница записи и трассировки должна остаться общей.
             DiagnosticLogs.TraceCommand(campaign, command);
+            Controls.BatchActionUndo.OnCommandApplied(campaign, command);
         }
     }
 }
