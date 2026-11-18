@@ -1028,7 +1028,7 @@ public sealed class ScriptedTrigger
         if (_invalidPeople || _people.Any(person => !person.Matches(campaign, nation))) return false;
         if (_tags.Count > 0 && !_tags.Any(tag => string.Equals(tag, nation.Tag, StringComparison.OrdinalIgnoreCase)))
             return false;
-        if (_atWar.HasValue && campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)) != _atWar.Value)
+        if (_atWar.HasValue && Warfare.OpenWars(campaign).Any(war => !war.Ended && war.Involves(nation.Id)) != _atWar.Value)
             return false;
 
         foreach (var (key, value, isMinimum) in _bounds)
@@ -1053,7 +1053,7 @@ public sealed class ScriptedTrigger
         if (_tags.Count > 0 && !_tags.Any(tag => string.Equals(tag, nation.Tag, StringComparison.OrdinalIgnoreCase)))
             return float.PositiveInfinity;
         if (_atWar.HasValue && campaign is not null &&
-            campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)) != _atWar.Value)
+            Warfare.OpenWars(campaign).Any(war => !war.Ended && war.Involves(nation.Id)) != _atWar.Value)
             return float.PositiveInfinity;
 
         var total = 0f;

@@ -88,9 +88,9 @@ public static class Expeditions
         if (sponsor.Movement is not null) return Loc.Get("A movement has no army to lend.");
         if (!c.HasOwnedLand(host)) return Loc.Get("They hold no ground to fight on.");
         if (MilitaryAccess.Hostile(c, sponsor.Id, host.Id)) return Loc.Get("We are at war with them.");
-        if (!c.Wars.Any(w => !w.Ended && w.Involves(host.Id))) return Loc.Get("They are not at war.");
+        if (!Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(host.Id))) return Loc.Get("They are not at war.");
         // A country already in the war beside them sends its army, not volunteers.
-        if (c.Wars.Any(w => !w.Ended && w.Involves(host.Id) && w.Involves(sponsor.Id))) return Loc.Get("We are already in their war.");
+        if (Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(host.Id) && w.Involves(sponsor.Id))) return Loc.Get("We are already in their war.");
         if (sponsor.PoliticalPoints < c.Defines.VolunteerPoliticalCost)
             return Loc.Format("The order costs {0:0} political credit; there is {1:0.#}.", c.Defines.VolunteerPoliticalCost, sponsor.PoliticalPoints);
         if (LentDivisions(c, sponsor) >= Cap(c, sponsor)) return Loc.Get("As many of our divisions serve abroad as the country can spare.");
@@ -133,7 +133,7 @@ public static class Expeditions
 
         // The host remembers who came; the side they fight against remembers it too.
         if (CampaignDiplomacy.Get(c, host.Id, sponsor.Id) is { } grateful) OpinionSystem.Remember(c, grateful, "sent_volunteers");
-        foreach (var war in c.Wars.Where(w => !w.Ended && w.Involves(host.Id)).ToList())
+        foreach (var war in Warfare.OpenWars(c).Where(w => !w.Ended && w.Involves(host.Id)).ToList())
             foreach (var enemyId in war.EnemiesOf(host.Id).Distinct().ToList())
             {
                 if (enemyId == sponsor.Id) continue;
@@ -235,11 +235,11 @@ public static class Expeditions
             if (army.LentById < 0 || army.InBattle) continue;
             var host = c.NationById(army.NationId);
             var sponsor = c.NationById(army.LentById);
-            var hostAtWar = host is not null && c.Wars.Any(w => !w.Ended && w.Involves(host.Id));
+            var hostAtWar = host is not null && Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(host.Id));
             if (sponsor is null || sponsor.Population <= 0 || !c.HasOwnedLand(sponsor))
             { army.LentById = -1; army.LentDay = -1; continue; }   // the sender is gone: they stay where they fought
             if (!hostAtWar || host is null || !c.HasOwnedLand(host) || MilitaryAccess.Hostile(c, sponsor.Id, host.Id) ||
-                c.Wars.Any(w => !w.Ended && w.Involves(host.Id) && w.Involves(sponsor.Id)))
+                Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(host.Id) && w.Involves(sponsor.Id)))
                 Return(c, army);
         }
         if (c.Defines.AiVolunteerChance <= 0f || c.ElapsedDays % 7 != 0) yield break;
@@ -248,7 +248,7 @@ public static class Expeditions
         {
             if (++ticked % 8 == 0) yield return 0;
             if (sponsor.IsHuman || sponsor.Movement is not null || sponsor.Population <= 0) continue;
-            if (c.Wars.Any(w => !w.Ended && w.Involves(sponsor.Id))) continue;   // its own wars come first
+            if (Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(sponsor.Id))) continue;   // its own wars come first
             if (MovementRules.Roll(c.Seed, sponsor.Id, c.ElapsedDays, 0x7011) >= c.Defines.AiVolunteerChance * AiTemper.Aggression(c)) continue;
             var host = Friend(c, sponsor);
             if (host is null) continue;
@@ -280,7 +280,7 @@ public static class Expeditions
         var creed = PoliticsCore.IdeologyOf(sponsor)?.Id ?? "";
         Nation best = null;
         var bestScore = 0f;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended) continue;
             foreach (var side in new[] { true, false })

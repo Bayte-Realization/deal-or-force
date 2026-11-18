@@ -41,7 +41,7 @@ public static class StrategicDeploymentPlanner
 
             homeland.Sort();
             var capital = Nearest(homeland, topology, nation.CapitalLatitude, nation.CapitalLongitude);
-            var activeWar = campaign.Wars.FirstOrDefault(war => !war.Ended && war.Involves(nation.Id));
+            var activeWar = Warfare.OpenWars(campaign).FirstOrDefault(war => !war.Ended && war.Involves(nation.Id));
             var front = activeWar?.FriendlyFront(nation.Id).OrderBy(value => value).ToList() ?? new List<int>();
             var border = borders.GetValueOrDefault((ushort)nation.MapIndex) ?? new List<int>();
             border.Sort();

@@ -250,7 +250,7 @@ public static class Coups
 
     private static bool LosingAWar(Campaign c, Nation nation)
     {
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || !war.Involves(nation.Id)) continue;
             var score = war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore;

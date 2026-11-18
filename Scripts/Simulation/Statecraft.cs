@@ -279,7 +279,7 @@ public static class Statecraft
 
     private static bool InCivilWar(Campaign campaign, Nation nation)
     {
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (war is { Ended: false, CivilConflict: true } && war.Involves(nation.Id)) return true;
         return false;
     }
@@ -333,7 +333,7 @@ public static class Statecraft
         foreach (var backing in campaign.Sponsorships)
         {
             if (backing.Ended || backing.SponsorId != attacker.Id) continue;
-            var war = campaign.Wars.Find(w => w.Id == backing.WarId);
+            var war = Warfare.WarById(campaign, backing.WarId);
             if (war is { Ended: false, CivilConflict: true } && war.Opposes(backing.ClientId, defender.Id))
                 return "intervention";
         }
@@ -412,7 +412,7 @@ public static class Statecraft
     /// </summary>
     public static Nation AllyUnderAttack(Campaign campaign, Nation attacker, Nation defender)
     {
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended || war.CivilConflict || !war.Involves(defender.Id)) continue;
             var victimId = war.AttackerId == defender.Id ? war.DefenderId : -1;
@@ -718,7 +718,7 @@ public static class Statecraft
         if (friend.IsHuman) return new(true, false, 0, "A player must decide.");
 
         // Already fighting a war of its own is the commonest and most honest excuse.
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Involves(friend.Id))
                 return new(false, false, 0, "Already committed to another war.");
         if (campaign.FeatureEnabled("public_debt") && friend.DebtCondition >= DebtCondition.Insolvent)

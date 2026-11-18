@@ -5,7 +5,7 @@ namespace DealOrForce.Simulation;
 
 /// <summary>
 /// The army's lifecycle: what grows in war, what goes home in peace, and the one
-/// thing that actually starves — a pocket nobody relieved.
+/// thing that actually goes hungry — a pocket nobody relieved.
 ///
 /// Despite the filename, this is NOT about peacetime attrition. (Yeah? NO SHIT, SHERLOCK! (addressing GLM 5.3, who wrote this)) Formations do not
 /// decay in peace. They stand, they cost money (the military spending slider),
@@ -17,8 +17,9 @@ namespace DealOrForce.Simulation;
 /// ═══════════════════════════════════════════════════════════════════════════════
 ///
 /// 1. STARVE THE POCKETS — the only genuine attrition here: a formation cut off
-///   from supply loses people and organisation daily until relieved or broken.
-///   This is the cauldron mechanic (LogisticsCore marks it CutOff, this bleeds it).
+///   from supply, its stores gone, loses people and organisation daily, down to a
+///   floor and no further (PocketHunger*Floor). Hunger weakens a pocket; it takes an
+///   enemy to destroy one. (LogisticsCore marks it CutOff, this bleeds it.)
 ///
 /// 2. BURY THE BROKEN — removes formations that have reached zero. Bookkeeping.
 ///
@@ -120,8 +121,26 @@ public static class Attrition
 {
     private static readonly List<Army> Broken = new();
 
-    /// <summary>Formations buried while cut off, this process: a bench counter, not campaign state.</summary>
+    /// <summary>
+    /// The two ends a pocket can come to in the burial pass, as the outcome tally and the
+    /// bench read them. The third and commonest end - beaten in a battle with no road out -
+    /// is Warfare's, and carries its own words.
+    /// </summary>
+    public const string BrokenInAPocket = "destroyed: ground down in a pocket under attack";
+    public const string DesertedInAPocket = "dissolved: deserted in a pocket";
+
+    /// <summary>
+    /// Formations that melted away in a pocket nobody was attacking, this process: a bench
+    /// counter, not campaign state. Hunger alone no longer gets a formation here - only years of
+    /// desertion do - so anything but a small number is a rule that has come loose.
+    /// </summary>
     public static int StarvedInPockets;
+
+    /// <summary>
+    /// A bench's ear on every formation that leaves the world through <see cref="Destroy"/>, and
+    /// the reason given. Null in the game; it reads and decides nothing (SimBench --pockets).
+    /// </summary>
+    public static Action<Campaign, Army, string, bool> Witness;
     private static readonly Dictionary<int, float> Standing = new();
 
     public static void Tick(Campaign campaign)
@@ -158,10 +177,19 @@ public static class Attrition
     /// that ought to decide a front was not worth making. Fronts moved when somebody walked
     /// into an empty province instead.
     ///
-    /// A pocket now collapses in about six weeks, sooner if it is being attacked while it
-    /// starves. That is long enough to be relieved by a counter-attack, which is the whole
-    /// point: it makes cutting an enemy off a real threat and breaking through to them a real
-    /// answer, and it gives both sides something to be doing besides pushing.
+    /// So a pocket collapsed in about six weeks, sooner if it was attacked while it starved -
+    /// and that turned out to be the same mistake from the other side. A pocket nobody
+    /// touched was gone in a month by arithmetic alone: of the pockets that were never
+    /// relieved, one in five was never attacked either (SimBench --pockets, November 2026), a
+    /// rising cut off from its own seat starved among its own people, and the player who
+    /// reported it put it exactly: divisions in a pocket should weaken, not die by themselves.
+    ///
+    /// Now hunger takes a pocket down to a floor and stops there: a third of its men, a
+    /// quarter of its organisation, a trickle of supply (PocketHunger*Floor). At the floor it
+    /// is worth about a hundredth of the division it was, so closing a ring is still the move
+    /// that decides a front - but somebody has to come and take it. What destroys a pocket is
+    /// a battle that spends its organisation to nothing with no road to fall back along
+    /// (Warfare). What it loses on the way down is still counted, below.
     ///
     /// Two things it did not do. The loss is a rate per day and this runs every step, and it
     /// took a whole day's loss each time: at the hourly step a pocket was gone in two days,
@@ -170,10 +198,10 @@ public static class Attrition
     /// world, so the war that closed the pocket showed none of it. Now they are killed or
     /// taken, on the books of the war that is starving them (see WarLosses).
     ///
-    /// The six weeks start when the pocket's own stores are gone, not when the ring closes.
-    /// What was stockpiled where it stands feeds it first (StrandedGarrisons.AssessStores), and a
-    /// pocket with stores and nobody coming gives up before it starves to the last man
-    /// (StrandedGarrisons.Tick).
+    /// The hunger starts when the pocket's own stores are gone, not when the ring closes: what
+    /// was stockpiled where it stands feeds it first (StrandedGarrisons.AssessStores). And only
+    /// in a war. A country at peace with everybody is not besieged in its own enclave; it
+    /// buys bread through the neighbour (LogisticsSystem.AgeCutOff).
     /// </summary>
     private static void StarveThePockets(Campaign campaign)
     {
@@ -186,6 +214,8 @@ public static class Attrition
         var defines = campaign.Defines;
         var scale = campaign.TickScale;
         var captured = M.Clamp01(defines.EncircledLossCapturedShare);
+        var strengthFloor = M.Clamp01(defines.PocketHungerStrengthFloor);
+        var organisationFloor = M.Clamp01(defines.PocketHungerOrganisationFloor);
         var scanned = 0;
         foreach (var army in campaign.Armies)
         {
@@ -199,6 +229,7 @@ public static class Attrition
             // A pocket still living off its stores is fed: it starves when they are gone
             // (LogisticsSystem.AgeCutOff, StrandedGarrisons).
             if (army.PocketStores > 0f) continue;
+            if (!LogisticsSystem.Besieged(campaign, army.NationId)) continue;
             // The day count is advanced once, by the supply pass, earlier on this step.
             // Counting it again made every retraced day two days older than the calendar.
 
@@ -206,9 +237,15 @@ public static class Attrition
                             army.DaysCutOff <= 9 ? 1.0f + (army.DaysCutOff - 3) * 0.15f :
                             1.6f + MathF.Min(1.0f, (army.DaysCutOff - 9) * 0.2f);
             var pressed = (army.InBattle ? defines.EncircledUnderAttack : 1f) * scale * dayFactor;
+            // Down to the floor and not through it. A formation already under a floor - a
+            // battle put it there - is left where the battle left it: hunger never raises
+            // anything, and it never finishes what the enemy started.
             var before = army.Strength;
-            army.Strength = M.Clamp01(army.Strength - defines.EncircledStrengthLoss * pressed);
-            army.Organisation = M.Clamp01(army.Organisation - defines.EncircledOrganisationLoss * pressed);
+            if (before > strengthFloor)
+                army.Strength = MathF.Max(strengthFloor, before - defines.EncircledStrengthLoss * pressed);
+            if (army.Organisation > organisationFloor)
+                army.Organisation = MathF.Max(organisationFloor,
+                    army.Organisation - defines.EncircledOrganisationLoss * pressed);
 
             var men = (before - army.Strength) * army.Divisions * MilitaryBootstrap.DivisionSize;
             if (men <= 0f) continue;
@@ -243,10 +280,23 @@ public static class Attrition
 
         foreach (var army in Broken)
         {
-            // A pocket that has starved down to nothing did not dissolve: what was left of it
-            // surrendered, and those men are the other side's prisoners now.
-            if (army.CutOff) { StarvedInPockets++; WarLosses.Surrender(campaign, army); }
-            Destroy(campaign, army, "destroyed: broken in the field");
+            // Three ways to be here, and they are three different stories. A pocket ground
+            // down in a battle was taken: what is left of it are the other side's prisoners.
+            // A pocket nobody was attacking cannot have starved to this - hunger stops at its
+            // floor - so its men left it, a few each week, over years (Desertion); they are
+            // already on the war's books, and nobody is captured. Anything else broke in the
+            // open field.
+            if (army.CutOff && army.InBattle)
+            {
+                WarLosses.Surrender(campaign, army);
+                Destroy(campaign, army, BrokenInAPocket);
+            }
+            else if (army.CutOff)
+            {
+                StarvedInPockets++;
+                Destroy(campaign, army, DesertedInAPocket);
+            }
+            else Destroy(campaign, army, "destroyed: broken in the field");
         }
         campaign.MarkStrategicChange();
     }
@@ -263,6 +313,7 @@ public static class Attrition
     public static void Destroy(Campaign campaign, Army army, string reason, bool lost = true)
     {
         if (campaign is null || army is null) return;
+        Witness?.Invoke(campaign, army, reason, lost);
         campaign.Armies.Remove(army);
         var owner = campaign.NationById(army.NationId);
         // A formation stood down is not a formation lost. The ledger, the attrition report

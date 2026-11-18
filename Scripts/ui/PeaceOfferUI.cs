@@ -204,16 +204,20 @@ public partial class DealOrForceGame
     private void AnswerPeaceOffer(bool accept)
     {
         if (_campaign?.Player is null || _shownPeaceOfferWar < 0) return;
+        var warId = _shownPeaceOfferWar;
         _campaign.Commands.Enqueue(new AnswerPeaceOfferCommand
         {
-            IssuerId = _campaign.Player.Id, WarId = _shownPeaceOfferWar, Accept = accept
+            IssuerId = _campaign.Player.Id, WarId = warId, Accept = accept
         });
         _campaign.Commands.ApplyAll(_campaign);
 
-        var war = _campaign.Wars.Find(candidate => candidate.Id == _shownPeaceOfferWar);
+        var war = _campaign.Wars.Find(candidate => candidate.Id == warId);
         ClosePeaceOffer();
         if (accept && war is { Ended: true }) SetArmyFeedback(war.PeaceSummary);
-        else if (!accept) SetArmyFeedback(Tr("The offer was refused. The war continues."));
+        else if (accept) SetArmyFeedback(!string.IsNullOrEmpty(war?.LastNegotiation)
+            ? war.LastNegotiation
+            : Tr("The offer could not be signed."));
+        else SetArmyFeedback(Tr("The offer was refused. The war continues."));
         Refresh();
     }
 }

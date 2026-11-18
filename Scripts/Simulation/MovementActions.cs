@@ -289,9 +289,8 @@ public static class MovementActions
             {
                 if (target.Id == nation.Id || target.Movement is not null) return explain ? Loc.Get("Only a country can hire it.") : "-";
                 var atWar = false;
-                for (var i = 0; i < campaign.Wars.Count; i++)
+                foreach (var war in Warfare.OpenWars(campaign))
                 {
-                    var war = campaign.Wars[i];
                     if (!war.Ended && war.Involves(target.Id)) { atWar = true; break; }
                 }
                 if (!atWar) return explain ? Loc.Format("{0} is not at war and does not need it.", target.DisplayName) : "-";

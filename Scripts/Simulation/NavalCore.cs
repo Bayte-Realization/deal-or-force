@@ -287,7 +287,7 @@ public static class NavalOperations
         var holder = campaign.NationById(holderId);
         if (nation is not null && nation.IsSubject && nation.OverlordId == holderId) return true;
         if (holder is not null && holder.IsSubject && holder.OverlordId == nationId) return true;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended || !war.Involves(nationId) || !war.Involves(holderId)) continue;
             if (!war.Opposes(nationId, holderId)) return true;
@@ -352,10 +352,17 @@ public static class NavalOperations
         var range = campaign.Defines.FleetBerthRangeDegrees;
         var best = -1;
         var bestDistance = range;
-        foreach (var province in SeaLanes.CoastalProvinces(map))
+        // Every harbour of the world as one table, in CoastalProvinces' own order
+        // (SeaLanes.Harbours): asked one at a time, each harbour cost the sea table's lock and a
+        // pixel turned into a latitude before it could be ruled out for lying in another ocean.
+        var harbours = SeaLanes.Harbours(map);
+        var latitudes = harbours.Latitude;
+        for (var index = 0; index < latitudes.Length; index++)
         {
-            if (!SeaLanes.TryHarbourPoint(map, province, out var latitude, out var longitude)) continue;
+            var latitude = latitudes[index];
             if (MathF.Abs(latitude - fleet.Latitude) > range) continue;
+            var province = harbours.Province[index];
+            var longitude = harbours.Longitude[index];
             var distance = Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
             if (distance > bestDistance) continue;
             if (!FriendlyPort(campaign, fleet.NationId, province)) continue;
@@ -390,6 +397,8 @@ public static class NavalOperations
             fleet.BerthProvinceId = FindBerth(campaign, fleet);
     }
 
+    [ThreadStatic] private static List<int> _ownHarbours;
+
     public static bool Rehome(Campaign campaign, Fleet fleet, Nation nation)
     {
         var map = campaign.ProvinceMap;
@@ -397,17 +406,25 @@ public static class NavalOperations
         var basin = SeaLanes.BasinAt(map, fleet.Latitude, fleet.Longitude);
         var best = -1;
         var bestDistance = float.MaxValue;
-        for (var anySea = 0; anySea < 2 && best <= 0; anySea++)
+        // Whose the port is, before which sea it is on. Both are plain questions and a
+        // port must pass both, so the order changes nothing but the price: the holder
+        // is one array read, the basin a lookup under the sea table's lock. A fleet of
+        // a country that has lost its coast asks this every morning about every harbour
+        // in the world - 0.39 ms a fleet a day on a save from 2050, a third of the whole
+        // naval pass - and nearly every harbour fails on the holder. Asked once: the
+        // country's own harbours are listed, in the coast's order, and both readings
+        // (this sea, then any sea) are of that list. It used to be the whole coast twice
+        // for exactly the fleets that had nowhere left to go.
+        var own = _ownHarbours ??= new List<int>();
+        own.Clear();
         foreach (var province in SeaLanes.CoastalProvinces(map))
         {
-            // Whose the port is, before which sea it is on. Both are plain questions and a
-            // port must pass both, so the order changes nothing but the price: the holder
-            // is one array read, the basin a lookup under the sea table's lock. A fleet of
-            // a country that has lost its coast asks this every morning about every harbour
-            // in the world, twice - 0.39 ms a fleet a day on a save from 2050, a third of
-            // the whole naval pass - and nearly every harbour fails on the holder.
             var holder = HolderOf(campaign, province);
-            if (holder is null || holder.Id != nation.Id) continue;
+            if (holder is not null && holder.Id == nation.Id) own.Add(province);
+        }
+        for (var anySea = 0; anySea < 2 && best <= 0; anySea++)
+        foreach (var province in own)
+        {
             if (anySea == 0 && basin >= 0 && SeaLanes.HarbourBasin(map, province) != basin) continue;
             if (!SeaLanes.TryHarbourPoint(map, province, out var latitude, out var longitude)) continue;
             var distance = Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
@@ -831,7 +848,7 @@ public static class NavalOperations
 
     private static bool AtWar(Campaign campaign, int left, int right)
     {
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended) continue;
             if (war.Opposes(left, right)) return true;

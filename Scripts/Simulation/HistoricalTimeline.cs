@@ -40,6 +40,8 @@ public static class HistoricalTimeline
             yield return 0;
             foreach (var nation in campaign.Nations)
             {
+                // History does not happen to a retired country (LongCampaign).
+                if (campaign.IsRetired(nation)) continue;
                 if (!definition.Suits(nation) || !definition.Trigger.Matches(campaign, nation)) continue;
                 if (!Ready(campaign, nation, definition)) continue;
                 if (definition.Chance < 1f && StableRoll(definition.Id, nation.Id, campaign.ElapsedDays) >= definition.Chance)

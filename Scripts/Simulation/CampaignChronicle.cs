@@ -45,7 +45,7 @@ public static class CampaignChronicle
     private static List<StrategicWar> OpenWars(Campaign campaign, int countryId)
     {
         var wars = new List<StrategicWar>();
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (war is not null && !war.Ended && war.Involves(countryId)) wars.Add(war);
         return wars;
     }

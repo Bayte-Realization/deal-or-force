@@ -329,7 +329,7 @@ public static partial class AiStatecraft
     {
         var fronts = 0;
         var worst = 0f;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended || war.CivilConflict || !war.Involves(other.Id)) continue;
             fronts++;
@@ -689,14 +689,14 @@ public static partial class AiStatecraft
 
     private static bool OnlyCivilWars(Campaign campaign, Nation nation)
     {
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Involves(nation.Id) && !war.CivilConflict) return false;
         return true;
     }
 
     private static bool AtWarWithAnybody(Campaign campaign, Nation nation)
     {
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Involves(nation.Id)) return true;
         return false;
     }

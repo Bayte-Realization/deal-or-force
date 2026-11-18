@@ -1,6 +1,6 @@
 param(
-    [string]$EngineDirectory='C:/GodotEngineNet 4.8-Beta2',
-    [string]$ArtifactDirectory=(Join-Path (Split-Path -Parent $PSScriptRoot) '.cache/verified-beta2'),
+    [string]$EngineDirectory='C:/GodotEngineNet 4.8-Beta3',
+    [string]$ArtifactDirectory=(Join-Path (Split-Path -Parent $PSScriptRoot) '.cache/verified-beta3'),
     [ValidateSet('rust','zig','go','python-release','luau')][string[]]$Languages=@('rust','zig','go')
 )
 $ErrorActionPreference='Stop'

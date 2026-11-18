@@ -9,8 +9,13 @@ public sealed partial class Defines
     public bool PocketResistanceEnabled { get; set; } = true;
     /// <summary>Below this strength, lost organisation is a defeat even in a closed pocket.</summary>
     public float PocketResistanceMinStrength { get; set; } = .25f;
-    /// <summary>Minimum remaining delivered supply when local stores have already run out.</summary>
-    public float PocketResistanceMinSupply { get; set; } = .10f;
+    /// <summary>
+    /// Minimum remaining delivered supply when local stores have already run out. Nothing as
+    /// shipped: an encircled formation fights to the end hungry as well as fed, because a
+    /// pocket is destroyed by the assault that spends its organisation, not by the day its
+    /// stores ran out (16 November 2026). A mod that wants starved garrisons to fold raises it.
+    /// </summary>
+    public float PocketResistanceMinSupply { get; set; } = 0f;
 }
 
 /// <summary>
@@ -30,14 +35,14 @@ public static class PocketResistance
             province > c.ProvinceMap.ProvinceCount) return false;
         var strength = MathF.Max(d.DivisionBrokenStrength,
             float.IsFinite(d.PocketResistanceMinStrength) ? M.Clamp01(d.PocketResistanceMinStrength) : .25f);
-        var supply = float.IsFinite(d.PocketResistanceMinSupply) ? M.Clamp01(d.PocketResistanceMinSupply) : .10f;
+        var supply = float.IsFinite(d.PocketResistanceMinSupply) ? M.Clamp01(d.PocketResistanceMinSupply) : 0f;
         foreach (var army in defenders)
         {
             if (army.ProvinceId != province || army.EmbarkedFleetId >= 0 || army.Divisions < .1f ||
                 army.Strength <= strength || !war.Involves(army.NationId) ||
                 army.Organisation <= 0.005f ||
                 !WarCoalition.FriendlyController(c, war, army.NationId, c.ProvinceController[province]) ||
-                !(army.PocketStores > 0f || army.SupplyLevel > supply)) continue;
+                !(army.PocketStores > 0f || army.SupplyLevel >= supply)) continue;
             // Do not trust the three-day logistics trace to decide whether a ring just closed.
             if (WarCoalition.SpreadRetreatProvince(c, war, army, province, beaten: true) <= 0) return true;
         }

@@ -21,7 +21,16 @@ namespace DealOrForce.Simulation;
 /// </summary>
 public static class CampaignFingerprint
 {
-    public static ulong Of(Campaign campaign)
+    public static ulong Of(Campaign campaign) => Of(campaign, longCampaignClock: true);
+
+    /// <summary>
+    /// The same number, with or without the long-campaign clock (Nation.GoneSinceDay): when each
+    /// dead country was first found gone. Lockstep compares it with the clock - it decides the day
+    /// a country is retired, and two machines that disagree about it would otherwise agree for
+    /// five years and then split. Without it is for the bench alone: a build with the diet against
+    /// a build or a run without one, where only the diet keeps that clock and nothing else may differ.
+    /// </summary>
+    public static ulong Of(Campaign campaign, bool longCampaignClock)
     {
         if (campaign is null) return 0;
         var hash = 14695981039346656037UL;
@@ -62,7 +71,7 @@ public static class CampaignFingerprint
             { Mix(id); Mix(regions.Count); foreach (var region in regions.OrderBy(r => r)) Mix(region); }
         }
         if (!campaign.Defines.PocketResistanceEnabled || campaign.Defines.PocketResistanceMinStrength != .25f ||
-            campaign.Defines.PocketResistanceMinSupply != .10f)
+            campaign.Defines.PocketResistanceMinSupply != 0f)
         {
             MixText("pocket_resistance_rules"); Mix(campaign.Defines.PocketResistanceEnabled ? 1 : 0);
             MixFloat(campaign.Defines.PocketResistanceMinStrength); MixFloat(campaign.Defines.PocketResistanceMinSupply);
@@ -549,10 +558,28 @@ public static class CampaignFingerprint
             { Mix(clock.RequesterId); Mix(clock.DonorId); Mix(clock.ReadyOnDay); }
         }
 
+        // The order of the sleeping table, once anybody has been retired. The relations above are
+        // mixed by key, which cannot see it, but the weekly wake walks the table in its own order,
+        // and the sweep that retires (LongCampaign.DropRelations) rebuilds the table so that a
+        // guest loading the host's save holds it in the host's order. Only then: a world nobody
+        // has been retired in keeps its fingerprint. Read off the records, not RetiredNations,
+        // which may wake a country - a fingerprint changes nothing.
+        if (campaign.Nations.Exists(static nation => nation.RetiredDay >= 0))
+        {
+            MixText("sleeping_order"); Mix(campaign.DormantRelations.Count);
+            foreach (var key in campaign.DormantRelations.Keys) Mix(key);
+        }
+
         foreach (var nation in Ordered(campaign.Nations, nation => nation.Id))
         {
             if (nation.GovernmentSeatProvinceId != 0)
             { MixText("government_seat"); Mix(nation.GovernmentSeatProvinceId); }
+            // A retired country (LongCampaign); nothing mixed while none is, so younger worlds keep their fingerprints.
+            if (nation.RetiredDay >= 0)
+            { MixText("retired"); Mix(nation.RetiredDay); }
+            // And the clock that decides when one is: kept from the first day a country is found gone.
+            if (longCampaignClock && nation.GoneSinceDay >= 0)
+            { MixText("gone_since"); Mix(nation.GoneSinceDay); }
             if (nation.Delegated.Count > 0 || nation.ArmyByHand)
             {
                 MixText("staff_portfolios_v1"); Mix(nation.ArmyByHand ? 1 : 0); Mix(nation.Delegated.Count);
@@ -1088,7 +1115,9 @@ public static class CampaignFingerprint
             MixFloat(group.StaffSkill); MixText(group.CommanderTrait); Mix(group.Victories);
             Mix(group.Defeats); Mix(group.CommanderSinceDay); Mix(group.CommandersLost);
             if (group.CommandersRelieved != 0) { MixText("relieved"); Mix(group.CommandersRelieved); }
+            if (group.StaffedDay >= 0) { MixText("staffed"); Mix(group.StaffedDay); }
         }
+        if (campaign.NextArmyGroupId > 0) { MixText("next_army_group"); Mix(campaign.NextArmyGroupId); }
         foreach (var army in Ordered(campaign.Armies, army => army.Id))
         {
             Mix(army.Id);
@@ -1157,6 +1186,15 @@ public static class CampaignFingerprint
             if (army.PocketStores >= 0f) { MixText("pocket_stores"); Mix(army.Id); MixFloat(army.PocketStores); Mix(army.PocketSinceDay); }
             if (army.HoldoutSinceDay >= 0) { MixText("holdout"); Mix(army.Id); Mix(army.HoldoutSinceDay); }
             if (army.ReliefDistance != -1) { MixText("relief_distance"); Mix(army.Id); Mix(army.ReliefDistance); }
+            if (army.LivingOffLand) { MixText("living_off_land"); Mix(army.Id); }
+        }
+        // Fighters in hiding (Partisans): nothing mixed for a country that has none.
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.FightersGoneToGround.Count == 0) continue;
+            MixText("gone_to_ground"); Mix(nation.Id);
+            foreach (var (region, men) in nation.FightersGoneToGround.OrderBy(pair => pair.Key))
+            { Mix(region); MixFloat(men); }
         }
         foreach (var item in campaign.PendingEvents.OrderBy(e => e.Id))
             if (item.Options.Any(o => o.SecessionTargetId >= 0))
@@ -1175,6 +1213,28 @@ public static class CampaignFingerprint
             { MixText("world_war"); Mix(war.WorldWarDay); }
             if (war.PendingOffer is { BeneficiaryId: >= 0 } offer)
             { MixText("peace_beneficiary"); Mix(offer.BeneficiaryId); }
+            if (war.PendingOfferFromId >= 0)
+            {
+                MixText("pending_peace_offer");
+                Mix(war.PendingOfferFromId);
+                Mix(war.PendingOfferIsWritten ? 1 : 0);
+                Mix((int)war.PendingOfferTerms);
+                Mix(war.PendingOfferDay);
+                Mix(war.PendingOfferExpiresDay);
+                if (war.PendingOffer is { } pending)
+                {
+                    Mix(pending.Provinces.Count);
+                    foreach (var province in pending.Provinces.OrderBy(id => id)) Mix(province);
+                    Mix(pending.ReleaseRegions ? 1 : 0);
+                    Mix(pending.Reparations ? 1 : 0);
+                    Mix(pending.TradeConcessions ? 1 : 0);
+                    Mix(pending.Demilitarise ? 1 : 0);
+                    Mix(pending.Humiliate ? 1 : 0);
+                    Mix(pending.LongTruce ? 1 : 0);
+                    Mix(pending.Unconditional ? 1 : 0);
+                    MixText(pending.Subjugate);
+                }
+            }
             // The spacing of settlements put to a player (PeaceOffers.ToPlayerBlockReason).
             // Only a war a player is in ever sets these, so a world nobody plays mixes nothing.
             if (war.LastOfferToPlayerDay >= 0 || war.RefusedOfferDay >= 0)

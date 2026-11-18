@@ -1,6 +1,6 @@
 param(
     [string]$KitRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta2',
+    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta3',
     [string]$BackupDirectory
 )
 $ErrorActionPreference = 'Stop'

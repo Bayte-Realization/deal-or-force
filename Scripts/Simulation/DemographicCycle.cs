@@ -221,6 +221,9 @@ public static class DemographicCycle
             campaign.NationsByMapIndex();
             if (campaign.Nations.Count > 0) campaign.HasOwnedLand(campaign.Nations[0]);
             KinTable(campaign);
+            // What folding needs to know of the whole world, read here once for the day's cycle
+            // (PopulationFolding); null when folding is off, and then nothing below differs.
+            var shield = PopulationFolding.Enabled(campaign) ? PopulationFolding.Prepare(campaign) : null;
             var changed = 0;
             DeterministicParallel.For(campaign, first, last, index =>
             {
@@ -236,7 +239,7 @@ public static class DemographicCycle
                     defines.DemographyMortalityOldWeight, interval);
                 state.YoungShare = stepped.YoungShare;
                 state.OldShare = stepped.OldShare;
-                MoveCultures(campaign, state);
+                MoveCultures(campaign, state, shield);
             });
             if (changed != 0) anyChanged = true;
         }
@@ -250,7 +253,7 @@ public static class DemographicCycle
     /// and then be relabelled as its largest minority, so the refugees of South Sudan and Congo
     /// became Ganda in Uganda and Ganda appeared all over Tanzania - five points a year.
     /// </summary>
-    private static void MoveCultures(Campaign campaign, ScenarioState state)
+    private static void MoveCultures(Campaign campaign, ScenarioState state, PopulationFolding.Shield shield)
     {
         var groups = state.PopulationGroups;
         if (groups.Count == 0 || state.Population <= 0) return;
@@ -281,6 +284,8 @@ public static class DemographicCycle
                 }
             }
         }
+        // And the slivers a century of migration leaves, into their nearest kin (PopulationFolding).
+        if (shield is not null) PopulationFolding.FoldRegion(campaign, state, shield, PopulationFolding.PeoplesTurn(campaign, state));
         // A group everybody has left or assimilated out of is nobody. Kept, they piled up -
         // every migration and every assimilation leaves its emptied group behind - and every
         // weekly walk over the region's people walked them too.

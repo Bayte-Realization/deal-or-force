@@ -26,6 +26,8 @@ static class Program
         if (args.Contains("--movement-quiet-think-only")) { MovementQuietThinkTests.Run(); return; }
         if (args.Contains("--weekly-diplomacy-scan-only")) { WeeklyDiplomacyScanTests.Run(); return; }
         if (args.Contains("--relation-table-only")) { RelationTableTests.Run(); return; }
+        if (args.Contains("--long-campaign-only")) { LongCampaignTests.Run(); return; }
+        if (args.Length == 0) LongCampaignTests.Run();
         if (args.Contains("--people-index-reuse-only")) { PeopleIndexReuseTests.Run(); return; }
         if (args.Contains("--people-index-names-only")) { PeopleIndexNamesTests.Run(); return; }
         if (args.Contains("--society-passes-only")) { SocietyPassTests.Run(); return; }
@@ -370,6 +372,12 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--gestures-only")) { DiplomaticGestureTests.Run(); return; }
         if (args.Length == 0) DiplomaticGestureTests.Run();
         if (args.Length == 0) OverrunWarTests.Run();
+        if (args.Contains("--fallen-ground-only")) { FallenGroundTests.Run(); return; }
+        if (args.Length == 0) FallenGroundTests.Run();
+        if (args.Contains("--nation-numbering-only")) { NationNumberingTests.Run(); return; }
+        if (args.Length == 0) NationNumberingTests.Run();
+        if (args.Contains("--army-group-tidy-only")) { ArmyGroupTidyTests.Run(); return; }
+        if (args.Length == 0) ArmyGroupTidyTests.Run();
         if (args.Contains("--territorial-front-only")) { TerritorialFrontTests.Run(); return; }
         if (args.Length == 0) TerritorialFrontTests.Run();
         if (args.Length == 0) RevoltOccupationTests.Run();
@@ -492,6 +500,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--ai-doctrine-only")) { AiDoctrineTests.Run(); return; }
         if (args.Contains("--ai-temperament-only")) { AiTemperamentTests.Run(); return; }
         if (args.Contains("--casus-belli-only")) { CasusBelliTests.Run(); return; }
+        if (args.Contains("--parity-wave1-only")) { ParityWave1Tests.Run(); return; }
         if (args.Contains("--scenario-manifest-only")) { ScenarioManifestTests.Run(); return; }
         if (args.Contains("--country-history-only")) { CountryHistoryTests.Run(); return; }
         if (args.Contains("--country-definition-only")) { CountryDefinitionTests.Run(); return; }
@@ -556,6 +565,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         MovementCatalogTests.Run();
         MovementRepresentationTests.Run();
         WarStalemateTests.Run();
+        ParityWave1Tests.Run();
         CoalitionAdvanceTests.Run();
         MarketShortageTests.Run();
         MovementPowerStateTests.Run();

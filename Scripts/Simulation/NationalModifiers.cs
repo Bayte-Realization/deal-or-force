@@ -210,6 +210,9 @@ public static class NationalModifiers
         foreach (var nation in campaign.Nations)
         {
             if (++ticked % 24 == 0) yield return 0;
+            // A retired country (LongCampaign) has no modifiers to sum: it was a twelfth of this
+            // pass's day, for every one of them, every day.
+            if (campaign.IsRetired(nation)) continue;
             using (SimProfiler.Measure("  mod:nations"))
             {
             // Rebuild into the country's own dictionary rather than dropping it: same sums,

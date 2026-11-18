@@ -347,7 +347,7 @@ public static class ColonisationCore
             if (nation.IsHuman || nation.Population <= 0) continue;
             if (campaign.ElapsedDays % 30 != Math.Abs(nation.Id) % 30) continue;
             if (Settling(campaign, nation) >= defines.MaxColoniesAtOnce) continue;
-            if (campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id))) continue;
+            if (Warfare.OpenWars(campaign).Any(war => !war.Ended && war.Involves(nation.Id))) continue;
             if (Chance(nation.Id, month) >= defines.AiColonisationChancePerMonth) continue;
 
             // The cheapest it can reach and afford - its own claims cheaper still, and anybody

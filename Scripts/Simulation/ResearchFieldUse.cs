@@ -166,7 +166,7 @@ public static partial class ResearchSystem
             if (army.NationId != nation.Id || army.Divisions <= 0f) continue;
             if (army.InBattle) return true;
             if (army.AssignedWarId < 0) continue;
-            foreach (var war in campaign.Wars)
+            foreach (var war in Warfare.OpenWars(campaign))
                 if (war.Id == army.AssignedWarId && !war.Ended && war.Involves(nation.Id)) return true;
         }
         return false;

@@ -109,9 +109,8 @@ public static class PeacefulFormationAi
     {
         if (nation.Population <= 0 || !FormableProclamationAi.EstablishedCountry(nation) || nation.Landless || nation.IsSubject)
             return false;
-        for (var i = 0; i < campaign.Wars.Count; i++)
+        foreach (var w in Warfare.OpenWars(campaign))
         {
-            var w = campaign.Wars[i];
             if (!w.Ended && w.Involves(nation.Id)) return false;
         }
         return true;
@@ -204,7 +203,7 @@ public static class PeacefulFormationAi
     private static HashSet<int> NationsAtWar(Campaign campaign)
     {
         var atWar = new HashSet<int>();
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended) continue;
             atWar.Add(war.AttackerId);

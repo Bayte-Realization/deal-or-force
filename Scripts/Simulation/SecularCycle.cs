@@ -110,7 +110,7 @@ public static class SecularCycle
         var breakdown = new Breakdown();
         breakdown.Begin("Rise and decline, a year", "share");
         var atWar = false;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
         Terms(campaign, nation, atWar, breakdown);
         return breakdown;

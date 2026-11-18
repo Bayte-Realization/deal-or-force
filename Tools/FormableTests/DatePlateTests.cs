@@ -198,7 +198,7 @@ static class DatePlateTests
         }),
         new("Speeds 1 to 5", "five numbered buttons", "a click on one of the five marks on the date plate, and keys 1 to 5", new[]
         {
-            ("Scripts/ui/DatePlateUI.cs", "SetSpeed(speed);"),
+            ("Scripts/ui/DatePlateUI.cs", "SetSpeed(speed, resume: false);"),
             ("Scripts/DealOrForceGame.cs", "Key.Key1 or Key.Kp1 => 1"),
             ("Scripts/DealOrForceGame.cs", "Key.Key5 or Key.Kp5 => 5")
         }),
@@ -265,8 +265,8 @@ static class DatePlateTests
         var keys = HudResourceTests.MemberText(game, "int SpeedKey(InputEventKey key)");
         for (var speed = 1; speed <= 5; speed++)
             Check(keys.Contains($"Key.Key{speed} or Key.Kp{speed} => {speed}"), $"key {speed} still sets speed {speed}");
-        Check(game.Contains("if (step is >= 1 and <= 5) { SetSpeed(step);") && game.Contains("SetSpeed(_speed + (step > 0 ? 1 : -1), resume: false);"),
-            "digits set the speed and let time run; plus and minus step it without starting the clock");
+        Check(game.Contains("if (step is >= 1 and <= 5) { SetSpeed(step, resume: false);") && game.Contains("SetSpeed(_speed + (step > 0 ? 1 : -1), resume: false);"),
+            "as in Paradox games, digits and plus/minus choose the speed without starting the clock; Space and the pause button start it (owner, 17 November)");
         Check(game.Contains("if (key.Keycode != Key.Space && key.PhysicalKeycode != Key.Space) return;"), "Space still pauses");
         Check(game.Contains("else if (_hudLayer.Visible)\n            ShowPauseMenu();") ||
               game.Contains("else if (_hudLayer.Visible)\r\n            ShowPauseMenu();"), "Escape on the bare map still opens the pause menu");

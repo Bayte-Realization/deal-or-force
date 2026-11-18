@@ -309,10 +309,14 @@ public sealed partial class Defines
 	/// <summary>Strength below which a formation has ceased to exist rather than be losing.</summary>
 	public float DivisionBrokenStrength { get; set; } = 0.06f;
 
-	/// <summary>Strength an encircled formation loses each day it cannot be supplied.</summary>
-	public float EncircledStrengthLoss { get; set; } = 0.022f;
+	/// <summary>
+	/// Strength an encircled formation loses each day once its stores are gone, until it is
+	/// down to PocketHungerStrengthFloor. A full division is there in about a month; at the
+	/// 0.022 this used to be it was empty in three weeks, floor or no floor.
+	/// </summary>
+	public float EncircledStrengthLoss { get; set; } = 0.010f;
 
-	/// <summary>Organisation it loses on the same day.</summary>
+	/// <summary>Organisation it loses on the same day, down to PocketHungerOrganisationFloor.</summary>
 	public float EncircledOrganisationLoss { get; set; } = 0.035f;
 
 	/// <summary>How much faster a pocket collapses while it is also being attacked.</summary>

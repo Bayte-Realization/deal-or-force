@@ -59,7 +59,7 @@ public static class MusicSituation
     {
         if (c is null || n is null) return new(MusicMood.Calm, "No campaign pressure recorded.");
         var policy = MusicCatalog.Director;
-        var active = c.Wars.Where(w => !w.Ended).ToArray();
+        var active = Warfare.OpenWars(c).Where(w => !w.Ended).ToArray();
         var involved = new HashSet<int>();
         foreach (var nation in c.Nations)
             if (nation.Movement is not { Landless: true } && active.Any(w => w.Involves(nation.Id))) involved.Add(nation.Id);

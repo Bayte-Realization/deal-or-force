@@ -315,6 +315,51 @@ public static class SeaLanes
         lock (Gate) return _nodeBasin[node];
     }
 
+    /// <summary>
+    /// Every harbour of a map as one table: the provinces of <see cref="CoastalProvinces"/> that
+    /// have a point on the water, in the same order, with that point beside each.
+    ///
+    /// A fleet looking for a berth asks about every harbour in the world, and asked each one
+    /// through <see cref="TryHarbourPoint"/> - the sea table's lock taken and a pixel turned into
+    /// a latitude six thousand times a fleet, before the first of them could be ruled out for
+    /// being on the wrong side of the planet. On a save a century long that was nine in every
+    /// hundred samples of the whole simulation. The points do not move while the sea does not,
+    /// so they are worked out once a sea and read without the lock.
+    /// </summary>
+    public sealed class HarbourTable
+    {
+        public int[] Province = Array.Empty<int>();
+        public float[] Latitude = Array.Empty<float>(), Longitude = Array.Empty<float>();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<int[], HarbourTable> HarbourTables = new();
+    private static readonly HarbourTable NoHarbours = new();
+
+    public static HarbourTable Harbours(ProvinceTopology map)
+    {
+        if (map is null) return NoHarbours;
+        lock (Gate)
+        {
+            Prepare(map, null);
+            // By the sea's own pixel table: another map, or the same map with a passage cut,
+            // is another array and gets its own.
+            if (HarbourTables.TryGetValue(_harbourPixel, out var table)) return table;
+            var provinces = new List<int>(_coastal.Length);
+            foreach (var province in _coastal)
+                if (province > 0 && province < _harbourPixel.Length && _harbourPixel[province] >= 0) provinces.Add(province);
+            table = new HarbourTable
+            {
+                Province = provinces.ToArray(),
+                Latitude = new float[provinces.Count],
+                Longitude = new float[provinces.Count]
+            };
+            for (var index = 0; index < provinces.Count; index++)
+                (table.Latitude[index], table.Longitude[index]) = PixelCentre(_harbourPixel[provinces[index]]);
+            HarbourTables.Add(_harbourPixel, table);
+            return table;
+        }
+    }
+
     /// <summary>Every province with a harbour, in id order.</summary>
     public static IReadOnlyList<int> CoastalProvinces(ProvinceTopology map)
     {
@@ -1291,14 +1336,14 @@ public static class SeaLanes
 
     private static bool AtWarWithAnybody(Campaign campaign, int nationId)
     {
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Involves(nationId)) return true;
         return false;
     }
 
     private static bool FightsBeside(Campaign campaign, int holderId, int nationId)
     {
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Involves(holderId) && war.Involves(nationId) && !war.Opposes(holderId, nationId))
                 return true;
         return false;

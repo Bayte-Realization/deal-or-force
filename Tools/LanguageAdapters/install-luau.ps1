@@ -1,52 +1,59 @@
-param([switch]$Activate, [ValidateRange(1, 32)][int]$Jobs = 8)
+param(
+    # Copy the built addon into game/extensions/luau and write the active descriptor.
+    # Without it the addon is only built into build/luau-addon-<stamp> for inspection.
+    [switch]$Activate,
+    [ValidateRange(1, 32)][int]$Jobs = 8,
+    [string]$GodotExecutable = 'C:/GodotEngineNet 4.8-Beta3/Godot_v4.8-beta3_mono_win64_console.exe',
+    [string]$PythonExecutable = 'python'
+)
+# Builds the game's Luau ScriptLanguageExtension with the LanguageKit recipe
+# (LanguageKit/adapters/luau/build.ps1): bindings from the API of the engine given here,
+# both .lua and .luau (the game ships no other Lua), an editor and a template_release DLL.
 $ErrorActionPreference = 'Stop'
-$adapterRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$sourceRoot = Join-Path $adapterRoot 'build/godot-luau-script'
-$installRoot = Join-Path $adapterRoot 'game/extensions/luau'
+$repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+$kitBuild = Join-Path $repository 'LanguageKit/adapters/luau/build.ps1'
+$legacySource = Join-Path $repository 'build/godot-luau-script'
+$sourceRoot = Join-Path $repository 'build/godot-luau-script-beta2'
+$installRoot = Join-Path $repository 'game/extensions/luau'
 $sourceCommit = '7942ce6def8023596ca0cb8d819b032eb40a4bce'
-$returnPatch = Join-Path $PSScriptRoot 'patches/builtin-vararg-return.patch'
-foreach ($tool in @('git', 'uv')) {
-    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "Required tool missing: $tool" }
-}
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw 'Required tool missing: git' }
 if (-not (Test-Path -LiteralPath $sourceRoot)) {
-    & git clone --no-checkout https://github.com/Fumohouse/godot-luau-script.git $sourceRoot
+    # A separate checkout: the 4.4-era build/godot-luau-script stays as it was.
+    & git -c core.longpaths=true clone --no-checkout https://github.com/Fumohouse/godot-luau-script.git $sourceRoot
     if ($LASTEXITCODE) { throw 'Source clone failed' }
     & git -C $sourceRoot checkout --detach $sourceCommit
     if ($LASTEXITCODE) { throw 'Pinned source checkout failed' }
 }
-$actualCommit = (& git -C $sourceRoot rev-parse HEAD).Trim()
-if ($LASTEXITCODE -or $actualCommit -ne $sourceCommit) { throw 'Unexpected source revision; existing checkout preserved' }
-$localChanges = @(& git -C $sourceRoot diff --name-only HEAD)
-if ($localChanges.Count -eq 0) {
-    & git -C $sourceRoot apply --check $returnPatch
-    if ($LASTEXITCODE) { throw 'Pinned return-value fix does not match upstream source' }
-    & git -C $sourceRoot apply $returnPatch
-    if ($LASTEXITCODE) { throw 'Applying return-value fix failed' }
-} else {
-    if ($localChanges.Count -ne 1 -or $localChanges[0] -ne 'src/core/godot_builtin_bindings.cpp') {
-        throw 'Source checkout has unexpected changes; existing files preserved'
-    }
-    & git -C $sourceRoot apply --reverse --check $returnPatch
-    if ($LASTEXITCODE) { throw 'Source changes differ from the recorded return-value fix' }
+$output = Join-Path $repository ('build/luau-addon-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+& $kitBuild -GodotExecutable $GodotExecutable -SourceDirectory $sourceRoot -OutputDirectory $output `
+    -Suffixes lua-and-luau -Targets editor, template_release -PythonExecutable $PythonExecutable -Jobs ([Math]::Min($Jobs, 16))
+if (-not $Activate) {
+    Write-Host "Built into $output. Nothing in game/ changed; rerun with -Activate (Godot closed) to install."
+    return
 }
-& git -C $sourceRoot submodule update --init --depth 1 extern/godot-cpp extern/luau
-if ($LASTEXITCODE) { throw 'Dependency checkout failed' }
-Push-Location $sourceRoot
-try {
-    # uv keeps this SCons installation isolated from the user's Python environment.
-    & uv run --with scons==4.11.1 --with tomli scons platform=windows target=editor arch=x86_64 "-j$Jobs"
-    if ($LASTEXITCODE) { throw 'Native adapter build failed' }
-} finally { Pop-Location }
-$binary = Join-Path $sourceRoot 'bin/luau-script/libluau-script.windows.editor.x86_64.dll'
-if (-not (Test-Path -LiteralPath $binary)) { throw 'Build produced no adapter DLL' }
+# A running Godot holds the library (and its ~lib copy); never replace it underneath.
+$existing = Get-ChildItem -LiteralPath $installRoot -Filter 'libluau-script*.dll' -ErrorAction SilentlyContinue
+foreach ($dll in $existing) {
+    try { $handle = [IO.File]::Open($dll.FullName, 'Open', 'ReadWrite', 'None'); $handle.Dispose() }
+    catch { throw "$($dll.Name) is in use. Close every Godot that has this project open, then rerun." }
+}
 New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
-Copy-Item -LiteralPath $binary -Destination $installRoot
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'LICENSE.txt') -Destination (Join-Path $installRoot 'LICENSE.txt')
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'COPYRIGHT.txt') -Destination (Join-Path $installRoot 'COPYRIGHT.txt')
-if ($Activate) {
-    Copy-Item -LiteralPath (Join-Path $installRoot 'luau_script.gdextension.in') -Destination (Join-Path $installRoot 'luau_script.gdextension')
-    Write-Host 'Experimental Luau adapter activated. Restart the Godot editor to expose it in Attach Script.'
-} else {
-    Write-Host 'DLL built. Use -Activate to install the descriptor; no project setting has been changed.'
+foreach ($name in @('libluau-script.windows.editor.x86_64.dll', 'libluau-script.windows.template_release.x86_64.dll')) {
+    Copy-Item -LiteralPath (Join-Path $output "bin/$name") -Destination (Join-Path $installRoot $name) -Force
 }
-Get-FileHash -LiteralPath $binary -Algorithm SHA256
+foreach ($name in @('LICENSE.txt', 'COPYRIGHT.txt', 'build-info.json')) {
+    Copy-Item -LiteralPath (Join-Path $output $name) -Destination (Join-Path $installRoot $name) -Force
+}
+$descriptor = @'
+[configuration]
+entry_symbol = "luau_script_init"
+compatibility_minimum = "4.8"
+reloadable = false
+
+[libraries]
+windows.debug.x86_64 = "res://game/extensions/luau/libluau-script.windows.editor.x86_64.dll"
+windows.release.x86_64 = "res://game/extensions/luau/libluau-script.windows.template_release.x86_64.dll"
+'@
+[IO.File]::WriteAllText((Join-Path $installRoot 'luau_script.gdextension'), $descriptor, [Text.UTF8Encoding]::new($false))
+Write-Host 'Luau adapter installed (.lua and .luau, editor + template_release). Restart Godot to load it.'
+Get-ChildItem -LiteralPath $installRoot -Filter 'libluau-script*.dll' | Get-FileHash -Algorithm SHA256

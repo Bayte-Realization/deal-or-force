@@ -1109,12 +1109,19 @@ public static partial class Warfare
             for (var i = defending.Count - 1; i >= 0; i--)
             {
                 var army = defending[i];
+                // A rising's formation among its own people with no ground of its side behind
+                // it slips away past the enemy (Partisans.SlipAwayProvince): it stays in the
+                // battle like any formation with a retreat and leaves when the province falls.
                 if (army.Organisation <= 0.005f &&
-                    WarCoalition.SpreadRetreatProvince(campaign, war, army, battle.ProvinceId, beaten: true) <= 0)
+                    WarCoalition.SpreadRetreatProvince(campaign, war, army, battle.ProvinceId, beaten: true, slipAway: true, out _) <= 0)
                 {
-                    DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
-                    WarLosses.Surrender(campaign, army);
-                    Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
+                    // One with nowhere at all to slip to scatters instead (Partisans).
+                    if (!Partisans.TryGoToGround(campaign, war, army, battle.ProvinceId))
+                    {
+                        DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
+                        WarLosses.Surrender(campaign, army);
+                        Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
+                    }
                     defending.RemoveAt(i);
                     battle.Defenders.Remove(army.Id);
                 }
@@ -1256,11 +1263,15 @@ public static partial class Warfare
             var attackerOrgBefore = AverageOrganisation(AttackerLine);
             var defenderOrgBefore = AverageOrganisation(DefenderLine);
 
-            var isHomeProvince = campaign.ProvinceMap?.ProvinceToNation != null &&
-                battle.ProvinceId > 0 && battle.ProvinceId < campaign.ProvinceMap.ProvinceToNation.Length &&
-                campaign.ProvinceMap.ProvinceToNation[battle.ProvinceId] == battle.DefenderId;
-
+            // The owner of a province is its country's map number; DefenderId is its place in the
+            // nation list. Compared with each other they matched almost nowhere, so the homeland
+            // bonus a defender is owed on its own soil was paid to nobody - or to whoever a
+            // coincidence of numbers put on another country's ground.
             var defenderNation = campaign.NationById(battle.DefenderId);
+            var isHomeProvince = defenderNation is not null && campaign.ProvinceMap?.ProvinceToNation != null &&
+                battle.ProvinceId > 0 && battle.ProvinceId < campaign.ProvinceMap.ProvinceToNation.Length &&
+                campaign.ProvinceMap.ProvinceToNation[battle.ProvinceId] == defenderNation.MapIndex;
+
             var isCapitalState = defenderNation != null && defenderNation.CapitalStateMapIndex >= 0 &&
                 campaign.ProvinceMap?.ProvinceToState != null &&
                 battle.ProvinceId > 0 && battle.ProvinceId < campaign.ProvinceMap.ProvinceToState.Length &&
@@ -1502,11 +1513,14 @@ public static partial class Warfare
             {
                 var army = defending[i];
                 if (army.Organisation <= 0.005f &&
-                    WarCoalition.SpreadRetreatProvince(campaign, war, army, battle.ProvinceId, beaten: true) <= 0)
+                    WarCoalition.SpreadRetreatProvince(campaign, war, army, battle.ProvinceId, beaten: true, slipAway: true, out _) <= 0)
                 {
-                    DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
-                    WarLosses.Surrender(campaign, army);
-                    Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
+                    if (!Partisans.TryGoToGround(campaign, war, army, battle.ProvinceId))
+                    {
+                        DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
+                        WarLosses.Surrender(campaign, army);
+                        Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
+                    }
                     defending.RemoveAt(i);
                     battle.Defenders.Remove(army.Id);
                     DefenderLine.Remove(army);
@@ -1643,7 +1657,7 @@ public static partial class Warfare
 
     private static StrategicWar FindLiveWar(Campaign campaign, int warId)
     {
-        foreach (var candidate in campaign.Wars)
+        foreach (var candidate in Warfare.OpenWars(campaign))
             if (candidate.Id == warId && !candidate.Ended) return candidate;
         return null;
     }
