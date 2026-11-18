@@ -163,6 +163,7 @@ public partial class DealOrForceGame : Control
         if (_campaign is not null)
         {
             FlushInterfaceIfDue(delta);
+            TickNewShell(delta);
             _modLoader.CaptureCrossoverSurface ??= () => _globe?.CaptureCrossoverSurface();
             _modLoader.CaptureCrossoverHydrology ??= () => _globe?.CaptureCrossoverHydrology();
             _modLoader.PresentCrossoverVoxels ??= blocks => _globe?.PresentCrossoverVoxels(blocks);
@@ -469,6 +470,13 @@ public partial class DealOrForceGame : Control
             GetViewport().SetInputAsHandled();
             return;
         }
+        if (IsNewShellActive && key.Keycode == Key.Escape &&
+            (_shellRecentNewsPanel is { Visible: true } || _shellMapMorePopover is { Visible: true }))
+        {
+            CloseShellTransientPopovers();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (key.Keycode == Key.Escape && MovementPanelOwnsEscape())
         {
             // The movement card is a HUD dock, and a focused control inside it may otherwise
@@ -626,6 +634,7 @@ public partial class DealOrForceGame : Control
         if (_campaign is not null && _hudLayer is { Visible: true } && _pauseMenuLayer is not { Visible: true }
             && !key.Echo && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed)
         {
+            if (IsNewShellActive && HandleNewShellHotkey(key)) { GetViewport().SetInputAsHandled(); return; }
             var step = SpeedKey(key);
             if (step is >= 1 and <= 5) { SetSpeed(step, resume: false); GetViewport().SetInputAsHandled(); return; }
             if (step != 0)
@@ -1053,6 +1062,7 @@ public partial class DealOrForceGame : Control
         Timed("conflicts", BuildConflictsScreen);
         Timed("map_controls", BuildMapControls);
         Timed("strategic_hud", BuildStrategicHud);
+        Timed("new_shell", BuildNewShell);
         Resized += LayoutCampaignShell;
         LayoutCampaignShell();
     }
@@ -1609,6 +1619,7 @@ public partial class DealOrForceGame : Control
         RefreshSituationRoom();
         RefreshSituationDesk();
         RefreshStrategicHud();
+        if (IsNewShellActive) RefreshNewShell();
         RefreshBattleDossier();
         if (_ledgerLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_ledgerLayer)) RefreshLedger();
         RefreshRecruitment();
@@ -2157,6 +2168,7 @@ public partial class DealOrForceGame : Control
         _strategicHudFingerprint = int.MinValue;
         RefreshSituationDesk();
         RefreshStrategicHud();
+        RefreshNewShellLocalised();
         if (_hudLayer is { Visible: true } && _militarySpending is not null && _campaign?.Player is { } player)
             RefreshTopBar(player);
         if (_mediaButton is not null) _mediaButton.AccessibilityName = Tr("Soundtrack player");

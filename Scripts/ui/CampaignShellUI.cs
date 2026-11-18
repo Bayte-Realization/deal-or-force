@@ -209,6 +209,7 @@ public partial class DealOrForceGame
     {
         if (_hudLayer is null) return;
         LayoutHudReadability();
+        if (IsNewShellActive) LayoutNewShell();
         LayoutCampaignAlerts();
         LayoutTeletype();
         LayoutCampaignNavigation();

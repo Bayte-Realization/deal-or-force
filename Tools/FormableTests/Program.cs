@@ -294,6 +294,11 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--hud-resources-only")) { HudResourceTests.Run(); return; }
         if (args.Contains("--date-plate-only")) { DatePlateTests.Run(); return; }
         if (args.Contains("--alert-list-only")) { AlertListTests.Run(); return; }
+        if (args.Contains("--new-shell-rest-only")) { NewShellTests.RunRestLayout(); return; }
+        if (args.Contains("--alert-dedupe-only")) { NewShellTests.RunAlertDedupe(); return; }
+        if (args.Contains("--hotkey-map-only")) { NewShellTests.RunHotkeyMap(); return; }
+        if (args.Contains("--messages-only")) { NewShellTests.RunMessages(); return; }
+        if (args.Contains("--shell-date-plate-only")) { NewShellTests.RunDatePlate(); return; }
         if (args.Contains("--war-toll-only")) { WarTollTests.Run(); return; }
         if (args.Contains("--research-route-only")) { ResearchRouteTests.Run(); return; }
         if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); ResearchRouteTests.Run(); return; }
@@ -677,6 +682,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         HudResourceTests.Run();
         DatePlateTests.Run();
         AlertListTests.Run();
+        NewShellTests.RunAll();
         WarTollTests.Run();
         DiplomacyPreviewTests.Run();
         ProductionUnitsTests.Run();

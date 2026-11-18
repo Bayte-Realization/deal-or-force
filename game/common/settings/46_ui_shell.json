@@ -1,0 +1,38 @@
+{
+  "ui_shell": {
+    "category": "interface",
+    "order": 195,
+    "kind": "choice",
+    "name": "Campaign HUD layout",
+    "description": "Classic keeps the multi-bar campaign interface. New shell enables the corner plate, ruled date journal, unified alert column and compact map bar live without restarting.",
+    "values": ["classic", "new"],
+    "labels": ["Classic", "New shell"],
+    "default": "classic"
+  },
+  "ui_shell_next_hints": {
+    "category": "interface",
+    "order": 196,
+    "kind": "toggle",
+    "name": "Early-game \"Next\" guidance",
+    "description": "Shows one soft \"Next\" direction row at the bottom of the alert column during the opening two months of a campaign.",
+    "default": true
+  },
+  "ui_shell_minimap": {
+    "category": "interface",
+    "order": 197,
+    "kind": "toggle",
+    "name": "Corner minimap in new shell",
+    "description": "Adds a compact minimap preview above the bottom-right map bar in the new campaign shell.",
+    "default": false
+  },
+  "ui_shell_message_preset": {
+    "category": "interface",
+    "order": 198,
+    "kind": "choice",
+    "name": "Campaign message density",
+    "description": "Controls which campaign events pause the clock, show a newspaper card, add an alert row, or stay in the news log.",
+    "values": ["calm", "paradox", "aoh"],
+    "labels": ["Calm", "Paradox (auto-pause)", "AoH (map feed)"],
+    "default": "calm"
+  }
+}
