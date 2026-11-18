@@ -436,7 +436,7 @@ public static class LongRangeStrikes
         if (c?.ProvinceMap is null || formation is null || !SupportTypeCatalog.TryGet(formation.TypeId, out var type))
             return new Plan { Refusal = "No such formation." };
         if (type.Strike <= 0f) return new Plan { Refusal = "This formation cannot strike deep." };
-        if (SupportCore.Displaced(c, formation)) return new Plan { Refusal = "The base is lost: rebase the formation." };
+        if (SupportCore.Displaced(c, formation)) return new Plan { Refusal = "Not deployed: it strikes once it has arrived and deployed." };
         var side = SidesOf(c, formation.NationId);
         if (side.Enemies.Count == 0) return new Plan { Refusal = "We are at war with nobody." };
         return PlanFor(c, formation, type, side);
@@ -451,7 +451,7 @@ public static class LongRangeStrikes
         {
             var anchor = AnchorOf(c.ProvinceMap, named);
             var enemyHeld = anchor > 0 && side.EnemyMaps.Contains(Controller(c, anchor));
-            if (enemyHeld && SupportCore.DistanceKm(c, formation.BaseProvinceId, anchor) <= type.RangeKm)
+            if (enemyHeld && SupportCore.DistanceKm(c, formation.BaseProvinceId, anchor) <= SupportCore.ReachKm(c, type))
             {
                 if (Choose(c, formation, type, side, wanted, named, plan)) { Odds(c, formation, type, side, plan); return plan; }
                 plan.Refusal = wanted == TargetFront ? "No enemy forces stand in the named region." : "";
@@ -472,7 +472,8 @@ public static class LongRangeStrikes
     {
         var map = c.ProvinceMap;
         var origin = map.CenterOf(formation.BaseProvinceId);
-        var band = type.RangeKm / 111f;
+        var reach = SupportCore.ReachKm(c, type);
+        var band = reach / 111f;
         var reachable = new Dictionary<int, float>();
         bool InReach(int province, out float km)
         {
@@ -481,7 +482,7 @@ public static class LongRangeStrikes
             if (reachable.TryGetValue(province, out km)) return km >= 0f;
             km = MathF.Abs(map.CenterOf(province).Latitude - origin.Latitude) > band
                 ? float.MaxValue : SupportCore.DistanceKm(c, formation.BaseProvinceId, province);
-            if (km > type.RangeKm) { reachable[province] = -1f; return false; }
+            if (km > reach) { reachable[province] = -1f; return false; }
             reachable[province] = km;
             return true;
         }
@@ -657,7 +658,11 @@ public static class LongRangeStrikes
                 : null;
             if (typeId is null || !SupportTypeCatalog.TryGet(typeId, out var type) || !SupportCore.Enabled(c, type)) continue;
             if (nation.Treasury < SupportCore.CostOf(nation, type) * MathF.Max(1f, d.AiLongRangeReserve)) continue;
-            foreach (var state in c.StatesOf(nation).OrderByDescending(s => s.Population).ThenBy(s => s.MapIndex).Take(12))
+            // Into the most populous region with room for it, or the most populous of all when none
+            // has: a full region is crowding now, not a refusal, and it is paid for in readiness.
+            var regions = c.StatesOf(nation).OrderByDescending(s => s.Population).ThenBy(s => s.MapIndex).Take(12).ToList();
+            var roomy = regions.Where(s => SupportCore.BasingUsed(c, s.MapIndex) + type.Basing <= SupportCore.CapacityOf(c, s)).ToList();
+            foreach (var state in roomy.Concat(regions.Except(roomy)))
             {
                 if (SupportCore.Validate(c, nation.Id, state.MapIndex, typeId).Length > 0) continue;
                 var command = new RaiseSupportCommand { IssuerId = nation.Id, StateMapIndex = state.MapIndex, TypeId = typeId };
@@ -679,6 +684,8 @@ public static class LongRangeStrikes
         d.StrikeEnergyDamage, d.StrikeEnergyStability, d.StrikeEnergyLiving, d.StrikeDamageCeiling,
         d.AiLongRangeProcurementDays, d.AiLongRangeReserve
     };
+    // The movement rules (LongRangeMovement.Rules) are a separate array so that a world which
+    // changed neither keeps the fingerprint it had before formations moved.
 
     internal static readonly float[] DefaultRules = Rules(new Defines());
 }

@@ -57,7 +57,10 @@ static class ModifierTests
             "a project is charged what ConstructionCost says it costs");
         c.Defines.ConstructionPriceLevelEnabled = false;
         Check(ConstructionCost.Of(c, india, BuildingKind.CivilianIndustry) ==
-              BuildingCatalog.Get(BuildingKind.CivilianIndustry).Cost * NationalModifiers.Factor(india, "construction_cost") &&
+              // The world's price scale (ConstructionCostScale) stays: switching the price level off
+              // takes away what one country's prices add, not the catalogue's scale for everyone.
+              BuildingCatalog.Get(BuildingKind.CivilianIndustry).Cost * ConstructionCost.CostScale(c) *
+              NationalModifiers.Factor(india, "construction_cost") &&
               ConstructionCost.Limit(c, china, c.Defines.MaxConstructionProjects) == c.Defines.MaxConstructionProjects,
             "ConstructionPriceLevelEnabled off restores the flat catalogue price and limit");
         c.Defines.ConstructionPriceLevelEnabled = true;

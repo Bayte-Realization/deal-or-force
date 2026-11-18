@@ -553,10 +553,13 @@ public partial class DealOrForceGame : Control
         { CloseResearchScreen(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode == Key.Escape && _doctrineLayer is { Visible: true })
         { CloseDoctrineScreen(); GetViewport().SetInputAsHandled(); return; }
-        // Escape takes back a rebase that is waiting for its region first, then the panel.
+        // Escape takes back a strike target waiting for its region first, then lets the selected
+        // formations go, then closes the panel - one layer a press, the way divisions are let go.
         if (key.Keycode == Key.Escape && _supportLayer is { Visible: true })
         {
-            if (_supportRebaseArmed || _supportTargetArmed) CancelSupportRebase(); else CloseSupportScreen();
+            if (_supportTargetArmed) CancelSupportRebase();
+            else if (_supportSelected.Count > 0) ClearSupportMapSelection();
+            else CloseSupportScreen();
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -843,7 +846,13 @@ public partial class DealOrForceGame : Control
         else if (_fleetPanel is { Visible: true })
             CloseFleetPanel();
         else if (_armyPanel is { Visible: true })
+        {
+            // Divisions and formations are one selection on the map, and Escape lets go of both.
             ClearArmySelectionAndClose();
+            if (_supportSelected.Count > 0) ClearSupportMapSelection();
+        }
+        else if (_supportSelected.Count > 0)
+            ClearSupportMapSelection();
         else if (_resourceAtlasPanel is { Visible: true })
             _globe.SetMapMode(StrategicMapMode.Political);
         else if (_movementPanel is { Visible: true })
@@ -957,6 +966,7 @@ public partial class DealOrForceGame : Control
             _globe.NuclearFlashed += FlashScreen;
             _globe.SupportPicked += OnSupportPicked;
             _globe.SupportBoxPicked += OnSupportBoxPicked;
+            _globe.SelectionBoxPicked += OnSelectionBoxPicked;
             _globe.BattlePicked += ShowBattleDetails;
             _globe.ArmiesBoxPicked += OnArmiesBoxPicked;
             _globe.ProvincesBoxSelected += OnRegionsBoxSelected;
@@ -1533,8 +1543,8 @@ public partial class DealOrForceGame : Control
         if (!_hudLayer.Visible) return;
         // An observer who clicks a country is now watching that country.
         if (_observerMode && pick.Nation is not null) WatchCountry(pick.Nation);
-        // The long-range forces panel takes a click on the map for itself: where the selected
-        // formations are rebased, or the base a new one is raised into.
+        // A click on the ground lets selected long-range formations go, as it lets divisions go;
+        // with the panel open it may be a strike target or the region a new one is raised into.
         if (TrySupportMapPick(pick)) return;
         QuickAmountManager.DismissAll();
         if (!_globe.CountrySelectionOnly && _selectedArmies.Count > 0 && !_globe.SupportCommandMode)
@@ -1667,6 +1677,7 @@ public partial class DealOrForceGame : Control
         if (_tradeScreenLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_tradeScreenLayer)) RefreshTradeScreen();
         if (_productionLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_productionLayer)) RefreshProductionScreen();
         if (_supportLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_supportLayer)) RefreshSupportScreen();
+        if (_formationBar is { Visible: true } && !InterfaceInteractionGuard.Busy(_formationBar)) RefreshFormationBar();
         if (_researchLayer is { Visible: true }) RefreshResearchScreen();
         if (_armyPanel is { Visible: true }) RefreshArmyPanel();
         else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation" or "Decisions" or "Laws" &&

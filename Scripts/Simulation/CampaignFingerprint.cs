@@ -1294,6 +1294,29 @@ public static class CampaignFingerprint
         {
             MixText("strike_target"); Mix(formation.Id); MixText(formation.StrikeTarget); Mix(formation.TargetStateMapIndex);
         }
+        // Long-range movement (LongRangeMovement): its rules when they differ from the shipped
+        // ones, and every formation that is not simply deployed - on the road, at sea, in the air,
+        // deploying, cut off or withdrawing from lost ground - down to the share of the step made.
+        // A deployed formation is what it was before formations moved, and adds nothing.
+        var relocationRules = LongRangeMovement.Rules(campaign.Defines);
+        if (!relocationRules.SequenceEqual(LongRangeMovement.DefaultRules))
+        {
+            MixText("long_range_movement_rules");
+            foreach (var rule in relocationRules) MixFloat(rule);
+        }
+        foreach (var formation in campaign.SupportFormations
+                     .Where(f => f.Route.Count > 0 || f.DeployDaysLeft > 0 || f.CutOff || f.Overrun).OrderBy(f => f.Id))
+        {
+            MixText("support_position"); Mix(formation.Id); Mix(formation.ProvinceId); Mix(formation.BaseProvinceId);
+            Mix(formation.Route.Count);
+            foreach (var step in formation.Route) Mix(step);
+            foreach (var mode in formation.RouteModes) Mix(mode);
+            MixFloat(formation.MoveProgress); Mix(formation.DeployDaysLeft);
+            Mix(formation.CutOff ? 1 : 0); Mix(formation.Overrun ? 1 : 0); MixFloat(formation.Strength);
+            // The straits it sailed under decide the course it is on; mixed only when some were
+            // shut, so a world with every strait open hashes as it did before ships followed the water.
+            if (formation.SeaCourseMask != 0) { MixText("sea_course"); Mix(formation.SeaCourseMask); }
+        }
         var controllers = campaign.ProvinceController ?? campaign.PendingProvinceController;
         if (controllers is null) return hash;
         for (var province = 0; province < controllers.Length; province++) Mix(controllers[province]);

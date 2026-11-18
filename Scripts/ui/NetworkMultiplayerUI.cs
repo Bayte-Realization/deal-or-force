@@ -540,6 +540,8 @@ public partial class DealOrForceGame
         // in this one - a secession, a rising - has no flag, only an empty frame.
         BindFlags(_campaign);
         _globe.BindCampaign(_campaign);
+        // A formation selection made in the world this one replaces is not a selection in this one.
+        ClearSupportMapSelection();
         ResetStrategicAudioState();
         AttachNetworkCommandTransport();
         _pause.Text = _campaign.IsPaused ? "▶" : "II";

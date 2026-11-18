@@ -337,7 +337,7 @@ public partial class DealOrForceGame
                     RecruitmentSystem.BatchPerLocalBarracks, RecruitmentSystem.BatchPerBarracks.ToString("0.#", culture)));
                 Add("Recruitment queue", Simulation.Loc.Format("+{0}, +{1} at war",
                     RecruitmentSystem.QueuePerBarracks, RecruitmentSystem.QueuePerBarracksAtWar));
-                Add("Support formations here", "+" + SupportCore.PostsPerBarracks);
+                Add("Long-range basing here", "+" + defines.LongRangeBasingPerBarracks);
                 summary.Add(Simulation.Loc.Get("reinforcements"));
                 break;
             case BuildingKind.University:

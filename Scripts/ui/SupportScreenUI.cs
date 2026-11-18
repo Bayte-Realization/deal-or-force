@@ -13,11 +13,15 @@ namespace DealOrForce;
 // orders is the map: where the bases are, what they reach, where the battles are. So it is a
 // panel docked beside the map instead, the way Hearts of Iron keeps its air wings, and the map
 // answers it - every base shown from further out, every formation's reach drawn in the colour of
-// its arm, the selected ones filled. Formations are chosen in the list (a click adds or removes
-// one, "all" takes a base's whole establishment) and given a mission with one button for all of
-// them; they are rebased by clicking a region of the country on the map. A new formation is
-// raised into the region last clicked on the map, so where it goes is a decision taken looking at
-// the front rather than at a list of names.
+// its arm, the selected ones filled.
+//
+// Since 17 November 2026 the panel is the roster, the raising and the missions, and nothing
+// else: formations are selected on the map the way divisions are - a click on the card, a box,
+// Shift to add, Ctrl to take away, Esc or a click on empty ground to let go - with or without the
+// panel, and the right button sends them to any province they may stand in, by road, rail, sea or
+// air (LongRangeMovement). The panel's list and the map's selection are one set,
+// `_supportSelected`. With only formations selected and the panel closed, their own bar stands
+// where the army bar stands.
 public partial class DealOrForceGame
 {
     private Control _supportLayer = null!;
@@ -28,8 +32,15 @@ public partial class DealOrForceGame
     private Control _supportSelectionBar = null!;
     private Label _supportSelectionCaption = null!;
     private GridContainer _supportSelectionMissions = null!;
-    private Button _supportRebaseButton = null!;
+    private Button _supportHaltButton = null!;
     private Label _supportRebaseBanner = null!;
+    // The formations' own command bar, in the army bar's place, for a selection made on the map
+    // with the panel closed: what they are doing, their missions, halt, show, the panel.
+    private PanelContainer _formationBar = null!;
+    private Label _formationBarTitle = null!;
+    private VBoxContainer _formationBarRows = null!;
+    private GridContainer _formationBarMissions = null!;
+    private Label _formationBarFeedback = null!;
     private Button _supportRaiseToggle = null!;
     private Button _supportRaiseButton = null!;
     private ScrollContainer _supportRaiseScroll = null!;
@@ -42,7 +53,6 @@ public partial class DealOrForceGame
     private Label _supportTrainingCaption = null!;
     private string _supportFilter = "all";
     private string _supportRaiseType = "";
-    private bool _supportRebaseArmed;
     // The deep-strike target bar (LongRangeStrikes): shown when the selection holds anything that
     // can strike. A kind of target is one click; a region is named by clicking it on the map.
     private VBoxContainer _supportTargetBar = null!;
@@ -124,7 +134,7 @@ public partial class DealOrForceGame
         _supportSummary.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _supportSummary.CustomMinimumSize = new Vector2(1, 18);
         rows.AddChild(_supportSummary);
-        var help = Title("Click: select · Ctrl: toggle · Shift: range · drag: group · right-click: rebase", 11, Ui.Colour("text.caption"));
+        var help = Title("On the map: click selects · Shift adds · drag a box · right-click moves them there · Shift+right-click adds a waypoint · Esc lets go", 11, Ui.Colour("text.caption"));
         help.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         help.CustomMinimumSize = new Vector2(1, 0);
         rows.AddChild(help);
@@ -189,10 +199,9 @@ public partial class DealOrForceGame
         var reach = ActionButton("SHOW REACH", FocusSupportSelection, 110, 26);
         Tip(reach, Tr("Centre the map on the selected formations and their reach."));
         selectionHeader.AddChild(reach);
-        _supportRebaseButton = ActionButton("REBASE ON MAP", ToggleSupportRebase, 130, 26);
-        _supportRebaseButton.ToggleMode = true;
-        Tip(_supportRebaseButton, Tr("Then click a region of the country on the map: the selected formations are based there, if it has posts free."));
-        selectionHeader.AddChild(_supportRebaseButton);
+        _supportHaltButton = ActionButton("HALT", HaltSupportSelection, 74, 26);
+        Tip(_supportHaltButton, Tr("Stop where they are: a column on the road finishes the step it is making and deploys there. To move them, right-click a province on the map."));
+        selectionHeader.AddChild(_supportHaltButton);
         selectionHeader.AddChild(ActionButton("CLEAR", ClearSupportSelection, 64, 26));
         _supportSelectionMissions = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _supportSelectionMissions.AddThemeConstantOverride("separation", 4);
@@ -264,6 +273,142 @@ public partial class DealOrForceGame
         _supportTrainingRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _supportTrainingRows.AddThemeConstantOverride("separation", 3);
         _supportRaiseBody.AddChild(_supportTrainingRows);
+        BuildFormationBar();
+    }
+
+    /// <summary>
+    /// The bar a map selection of formations gets with the panel closed, in the army bar's place:
+    /// a selection made the way divisions are selected is commanded where divisions are.
+    /// </summary>
+    private void BuildFormationBar()
+    {
+        _formationBar = TexturedPanel(_hudLayer, PanelSurface.Command);
+        _formationBar.Name = "LongRangeSelectionBar";
+        Ui.Place(_formationBar, "hud.army_panel");
+        _formationBar.Visible = false;
+        var shell = PanelRows(_formationBar, 22, 16, 6);
+        shell.ClipContents = true;
+        var header = new HBoxContainer();
+        header.AddThemeConstantOverride("separation", 6);
+        shell.AddChild(header);
+        _formationBarTitle = Title("", (int)Ui.Metric("ui.font.heading", 16), Ui.Colour("text.accent"));
+        _formationBarTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _formationBarTitle.AutowrapMode = TextServer.AutowrapMode.Off;
+        _formationBarTitle.ClipText = true;
+        header.AddChild(_formationBarTitle);
+        var show = ActionButton("SHOW", FocusSupportSelection, 70, 26);
+        Tip(show, Tr("Centre the map on the selected formations and their reach."));
+        header.AddChild(show);
+        var halt = ActionButton("HALT", HaltSupportSelection, 70, 26);
+        Tip(halt, Tr("Stop where they are: a column on the road finishes the step it is making and deploys there. To move them, right-click a province on the map."));
+        header.AddChild(halt);
+        var panel = ActionButton("PANEL", OpenSupportScreen, 74, 26);
+        Tip(panel, Tr("Open the long-range forces panel: the whole roster, raising, and strike targets."));
+        header.AddChild(panel);
+        header.AddChild(ActionButton("×", ClearSupportMapSelection, 34, 26));
+        var help = Title("Right-click: move there · Shift+right-click: add a waypoint · Shift+click: add · Esc: let go", 11, Ui.Colour("text.caption"));
+        help.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        help.CustomMinimumSize = new Vector2(1, 0);
+        shell.AddChild(help);
+        _formationBarRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _formationBarRows.AddThemeConstantOverride("separation", 2);
+        shell.AddChild(_formationBarRows);
+        _formationBarMissions = new GridContainer { Columns = 3, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _formationBarMissions.AddThemeConstantOverride("h_separation", 4);
+        _formationBarMissions.AddThemeConstantOverride("v_separation", 4);
+        shell.AddChild(_formationBarMissions);
+        _formationBarFeedback = Title("", 11, Ui.Colour("text.body_soft"));
+        _formationBarFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _formationBarFeedback.CustomMinimumSize = new Vector2(1, 0);
+        shell.AddChild(_formationBarFeedback);
+    }
+
+    /// <summary>Shown only for a selection of formations alone, with the panel closed: armies keep their own bar.</summary>
+    private void RefreshFormationBar()
+    {
+        if (_formationBar is null || _campaign?.Player is null) return;
+        var player = _campaign.Player;
+        var selected = _campaign.SupportFormations.Where(f => f.NationId == player.Id && _supportSelected.Contains(f.Id) &&
+                                                              SupportCore.Enabled(_campaign, f.TypeId)).OrderBy(f => f.Id).ToList();
+        var show = selected.Count > 0 && _hudLayer.Visible && _supportLayer is not { Visible: true } &&
+                   _selectedArmies.Count == 0 && _selectedArmy is null;
+        _formationBar.Visible = show;
+        if (!show) return;
+        _formationBarTitle.Text = Loc.Format("LONG-RANGE FORCES · {0} selected", selected.Count);
+        var shown = selected.Take(8).ToList();
+        while (_formationBarRows.GetChildCount() < shown.Count + (selected.Count > shown.Count ? 1 : 0))
+        {
+            var line = Title("", 11, Ui.Colour("text.bright"));
+            line.AutowrapMode = TextServer.AutowrapMode.Off;
+            line.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            line.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            _formationBarRows.AddChild(line);
+        }
+        var labels = _formationBarRows.GetChildren().OfType<Label>().ToList();
+        for (var index = 0; index < labels.Count; index++)
+        {
+            labels[index].Visible = index < shown.Count || index == shown.Count && selected.Count > shown.Count;
+            if (index < shown.Count)
+            {
+                var formation = shown[index];
+                var type = SupportTypeCatalog.Get(formation.TypeId);
+                labels[index].Text = $"{Loc.Get(type?.Name ?? formation.TypeId)} · {formation.Strength:P0} · " +
+                                     SupportPositionStatus(formation);
+            }
+            else if (index == shown.Count) labels[index].Text = Loc.Format("and {0} more", selected.Count - shown.Count);
+        }
+        var missions = new List<string>();
+        foreach (var formation in selected)
+            if (SupportTypeCatalog.TryGet(formation.TypeId, out var type))
+                foreach (var mission in type.Missions)
+                    if (!missions.Contains(mission)) missions.Add(mission);
+        var existing = _formationBarMissions.GetChildren().OfType<Button>().Select(b => b.GetMeta("mission", "").AsString()).ToList();
+        if (!existing.SequenceEqual(missions))
+        {
+            foreach (var child in _formationBarMissions.GetChildren()) { _formationBarMissions.RemoveChild(child); child.QueueFree(); }
+            foreach (var mission in missions)
+            {
+                var captured = mission;
+                var button = ActionButton(SupportMissionShort(mission), () => SetSupportMission(_supportSelected.ToArray(), captured), 0, 26);
+                button.SetMeta("mission", mission);
+                button.ToggleMode = true;
+                button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                button.ClipText = true;
+                button.TooltipText = Ui.Tip(SupportMissionHelp(mission) + "\n" + Tr("Given to every selected formation that can fly it."));
+                _formationBarMissions.AddChild(button);
+            }
+        }
+        foreach (var button in _formationBarMissions.GetChildren().OfType<Button>())
+        {
+            var mission = button.GetMeta("mission", "").AsString();
+            var able = selected.Where(f => SupportTypeCatalog.TryGet(f.TypeId, out var type) && type.Missions.Contains(mission)).ToList();
+            button.SetPressedNoSignal(able.Count > 0 && able.All(f => f.Mission == mission));
+        }
+    }
+
+    /// <summary>Where a formation is in its day: working, on the road with the days left, deploying, cut off.</summary>
+    private string SupportPositionStatus(SupportFormation formation)
+    {
+        if (formation.CutOff) return Tr("CUT OFF — no way out");
+        if (formation.Route.Count > 0)
+        {
+            var days = LongRangeMovement.DaysLeft(_campaign, formation);
+            return Loc.Format("en route → {0}, {1} d", SupportPlaceName(LongRangeMovement.Destination(formation)), days) +
+                   (formation.Overrun ? " · " + Tr("withdrawing") : "");
+        }
+        if (formation.DeployDaysLeft > 0) return Loc.Format("deploying, {0} d", formation.DeployDaysLeft);
+        if (SupportCore.Displaced(_campaign, formation)) return Tr("cannot work from here");
+        return Tr(SupportMissionShort(formation.Mission));
+    }
+
+    /// <summary>The name a province goes by: its town if it has one, else its region.</summary>
+    private string SupportPlaceName(int province)
+    {
+        var map = _campaign?.ProvinceMap;
+        if (map is null || province <= 0 || province > map.ProvinceCount) return "";
+        var town = CityCatalog.NearestTown(map, province);
+        if (town is not null) return Loc.Get(town.Name);
+        return _campaign.StateByMapIndex(map.ProvinceToState[province])?.DisplayName ?? "";
     }
 
     // ------------------------------------------------------------------ open, close, refresh
@@ -283,51 +428,89 @@ public partial class DealOrForceGame
         _globe.SelectSupportFormations(_supportSelected);
         RefreshSupportScreen();
         UpdateScreenButtons();
+        // The selection carries into the panel; its bar on the map gives way to it.
+        RefreshFormationBar();
     }
 
     private void CloseSupportScreen()
     {
         _supportLayer.Visible = false;
-        _supportRebaseArmed = false;
+        _supportTargetArmed = false;
         _globe.SupportOverlay = false;
         _globe.SupportCommandMode = false;
+        _globe.SupportRebaseArmed = false;
         if (_openScreen == "Support") _openScreen = "";
         UpdateScreenButtons();
-    }
-
-    /// <summary>A formation clicked on the map: the panel opens with it selected.</summary>
-    private void OnSupportPicked(SupportFormation formation)
-    {
-        if (_campaign?.Player is null || formation.NationId != _campaign.Player.Id) return;
-        if (!_supportLayer.Visible) _supportSelected.Clear();
-        SelectSupportRow(formation.Id, false);
-        OpenSupportScreen();
-        if (_supportRowMap.TryGetValue(formation.Id, out var row))
-            _supportScroll.EnsureControlVisible(row.Row);
+        // The selection outlives the panel, the way a division's outlives its roster.
+        RefreshFormationBar();
     }
 
     /// <summary>
-    /// A click on the map while the panel is open. With a rebase armed it is where the selected
-    /// formations go; otherwise it chooses the base a new formation is raised into. True when the
-    /// click was the panel's, so the country card does not open over it.
+    /// A formation's card clicked on the map: selected the way a division is - alone, or with
+    /// Shift added to what is selected, or with Ctrl taken away from it - and the panel neither
+    /// opens nor closes for it.
+    /// </summary>
+    private void OnSupportPicked(SupportFormation formation)
+    {
+        if (_campaign?.Player is null || formation.NationId != _campaign.Player.Id || !_hudLayer.Visible) return;
+        CancelConstructionPlacement();
+        CloseFleetPanel();
+        // The divisions' rule, from the same helper (MapSelection): one rule on the map.
+        if (!AddingToSelection && !RemovingFromSelection) DropArmySelection();
+        MapSelection.Apply(_supportSelected, new[] { formation.Id }, AddingToSelection, RemovingFromSelection);
+        if (!RemovingFromSelection) _supportSelectionAnchor = formation.Id;
+        SupportSelectionChanged();
+        if (_supportLayer.Visible && _supportRowMap.TryGetValue(formation.Id, out var row))
+            _supportScroll.EnsureControlVisible(row.Row);
+    }
+
+    /// <summary>The divisions let go of, without the screens a full clear also closes.</summary>
+    private void DropArmySelection()
+    {
+        if (_selectedArmy is null && _selectedArmies.Count == 0) return;
+        _selectedArmy = null;
+        _selectedArmies.Clear();
+        _globe.SelectArmy(-1);
+        SetArmyPanelVisible(false);
+        _redeploymentArmed = false;
+    }
+
+    /// <summary>Esc, a click on empty ground, or the bar's ×: no formation selected, panel or no panel.</summary>
+    private void ClearSupportMapSelection()
+    {
+        _supportSelected.Clear();
+        _supportTargetArmed = false;
+        _globe.SupportRebaseArmed = false;
+        _globe.SelectSupportFormations(_supportSelected);
+        if (_supportFeedback is not null) _supportFeedback.Text = "";
+        if (_supportLayer is { Visible: true }) RefreshSupportScreen();
+        RefreshFormationBar();
+    }
+
+    /// <summary>
+    /// A left click on the map's ground. With a strike target being named it is the target. A
+    /// click on empty ground lets the selected formations go, as it lets divisions go; with the
+    /// panel open and raising unfolded, a region of our own is where the next one is raised. True
+    /// when the click was the panel's, so the country card does not open over the panel.
     /// </summary>
     private bool TrySupportMapPick(GlobePick pick)
     {
-        if (_supportLayer is not { Visible: true } || _campaign?.Player is null || pick.State is null) return false;
+        if (_campaign?.Player is null) return false;
         var player = _campaign.Player;
-        if (_supportRebaseArmed)
-        {
-            RebaseSupportSelection(pick.State);
-            return true;
-        }
-        if (_supportTargetArmed)
+        if (_supportTargetArmed && _supportLayer is { Visible: true } && pick.State is not null)
         {
             AimSupportSelection(pick.State);
             return true;
         }
-        if (_supportRaiseOpen && pick.State.NationMapIndex == player.MapIndex)
+        var hadSelection = _supportSelected.Count > 0;
+        if (hadSelection) ClearSupportMapSelection();
+        if (_supportLayer is not { Visible: true }) return false;
+        if (_supportRaiseOpen && pick.State is not null && pick.State.NationMapIndex == player.MapIndex)
+        {
             SelectSupportRaiseRegion(pick.State.MapIndex);
-        return true;
+            return true;
+        }
+        return hadSelection;
     }
 
     private void RefreshSupportScreen()
@@ -386,10 +569,14 @@ public partial class DealOrForceGame
         // the country holds, by name, and after them the ones the war has taken - a formation
         // standing on lost ground is the one the player most needs to find and move.
         var shown = owned.Where(f => SupportTypeCatalog.TryGet(f.TypeId, out var type) && SupportFilterAdmits(type)).ToList();
-        var byState = shown.GroupBy(f => f.StateMapIndex)
+        // Formations on the road are a section of their own at the top: where they are this hour is
+        // not where they belong, and a column is what a player looks for first.
+        const int onTheMove = -2;
+        var byState = shown.GroupBy(f => f.Route.Count > 0 ? onTheMove : f.StateMapIndex)
             .Select(group => (State: _campaign.States.Find(s => s.MapIndex == group.Key) ??
-                new ScenarioState { MapIndex = group.Key, Name = Tr("Awaiting a safe base") }, Formations: group.ToList()))
-            .OrderByDescending(entry => entry.State.NationMapIndex == player.MapIndex)
+                new ScenarioState { MapIndex = group.Key, Name = Tr(group.Key == onTheMove ? "On the move" : "Awaiting a safe base") }, Formations: group.ToList()))
+            .OrderByDescending(entry => entry.State.MapIndex == onTheMove)
+            .ThenByDescending(entry => entry.State.NationMapIndex == player.MapIndex)
             .ThenBy(entry => entry.State.DisplayName)
             .ToList();
 
@@ -405,12 +592,18 @@ public partial class DealOrForceGame
                 _supportRows.AddChild(section.Box);
             }
             _supportRows.MoveChild(section.Box, order++);
-            var lost = formations.All(f => SupportCore.Displaced(_campaign, f));
+            var lost = state.MapIndex >= 0 && formations.All(f => f.CutOff);
             section.Caption.Disabled = state.MapIndex < 0;
-            section.Caption.Text = state.MapIndex < 0 ? Tr("Awaiting a safe base") : $"{state.DisplayName} · " + (lost
-                ? Tr("BASE LOST")
-                : Loc.Format("posts {0}/{1}", SupportCore.PostsUsed(_campaign, state.MapIndex), SupportCore.CapacityOf(_campaign, state)));
-            section.Caption.AddThemeColorOverride("font_color", Ui.Colour(lost ? "state.negative" : "text.caption"));
+            var used = state.MapIndex >= 0 ? SupportCore.BasingUsed(_campaign, state.MapIndex) : 0f;
+            var capacity = state.MapIndex >= 0 ? SupportCore.CapacityOf(_campaign, state) : 0;
+            var crowded = used > capacity;
+            section.Caption.Text = state.MapIndex < 0 ? state.DisplayName : $"{state.DisplayName} · " + (lost
+                ? Tr("CUT OFF")
+                : Loc.Format("used {0:0.#} of {1}", used, capacity) +
+                  (crowded ? " · " + Loc.Format("crowded: readiness recovers at {0:P0}", SupportCore.CrowdingOf(capacity, used)) : ""));
+            section.Caption.TooltipText = Ui.Tip(Tr("Show this base on the map.") + "\n" +
+                Tr("Basing: a battery takes 1, an air wing 2, a bomber regiment 3. A region holds 3, 2 more per barracks and 2 per leading city its owner holds. Over that is allowed - the formations there recover readiness more slowly."));
+            section.Caption.AddThemeColorOverride("font_color", Ui.Colour(lost || crowded ? "state.negative" : "text.caption"));
             var allSelected = formations.All(f => _supportSelected.Contains(f.Id));
             section.SelectAll.Text = allSelected ? Tr("NONE") : Tr("ALL");
             section.SelectAll.SetMeta("ids", string.Join(",", formations.Select(f => f.Id)));
@@ -611,9 +804,10 @@ public partial class DealOrForceGame
             ? Loc.Format("−{0:0.0}%", loss * 100f) : "";
         row.Loss.TooltipText = Ui.Tip("Strength lost over the front yesterday: the enemy's fighters, missile brigades and guns.");
 
-        var displaced = SupportCore.Displaced(_campaign, formation);
-        row.Displaced.Text = formation.StateMapIndex < 0 && formation.BaseProvinceId < 0
-            ? Tr("IN RESERVE — NO SAFE BASE") : displaced ? Tr("BASE LOST — REBASE IT") : "";
+        // Where it is in its day, in words: on the road with the days left, deploying, cut off.
+        row.Displaced.Text = formation.CutOff || formation.Route.Count > 0 || formation.DeployDaysLeft > 0 ||
+                             SupportCore.Displaced(_campaign, formation)
+            ? SupportPositionStatus(formation) : "";
 
         var missionSet = string.Join(",", type.Missions);
         if (row.MissionSet != missionSet)
@@ -639,12 +833,12 @@ public partial class DealOrForceGame
 
         row.Row.TooltipText = Ui.Tip(
             $"{Loc.Get(type.Name)}\n" +
-            Loc.Format("reach {0} km from {1}", type.RangeKm, state.DisplayName) + "\n" +
+            Loc.Format("reach {0} km from {1}", MathF.Round(SupportCore.ReachKm(_campaign, type)), SupportPlaceName(LongRangeMovement.At(formation))) + "\n" +
             Loc.Format("fire {0:0.#} · air superiority {1:0.#} · interdiction {2:0.#} · air defence {3:0.#} · recon {4:0.#}",
                 type.SupportFire, type.AirSuperiority, type.Interdiction, type.AirDefence, type.Recon) + "\n" +
             Loc.Format("experience {0:P0}", formation.Experience) + "\n" +
             SupportMissionHelp(formation.Mission) + "\n" +
-            Tr("Click selects one. Ctrl toggles; Shift selects a range. Use the command bar for missions."));
+            Tr("Click selects one. Ctrl toggles; Shift selects a range. Right-click a province on the map to send them there."));
     }
 
     /// <summary>A mission's player-facing name, shared by the roster and command bar.</summary>
@@ -688,6 +882,7 @@ public partial class DealOrForceGame
                 .Select(b => b.Name.ToString()).Where(n => n.StartsWith("SupportRow_"))
                 .Select(n => int.Parse(n[11..])).ToList();
             var a = visible.IndexOf(_supportSelectionAnchor);
+            DropArmySelection();
             var b = visible.IndexOf(id);
             if (!ctrl) _supportSelected.Clear();
             if (a >= 0 && b >= 0)
@@ -697,22 +892,33 @@ public partial class DealOrForceGame
         }
         else
         {
-            if (!ctrl) _supportSelected.Clear();
+            if (!ctrl) { _supportSelected.Clear(); DropArmySelection(); }
             if (!_supportSelected.Add(id)) _supportSelected.Remove(id);
             _supportSelectionAnchor = id;
         }
-        _supportRebaseArmed = false;
         SupportSelectionChanged();
     }
 
-    private void OnSupportBoxPicked(List<SupportFormation> formations)
+    /// <summary>
+    /// A box drawn on the map: divisions and formations together, by the divisions' rule - a plain
+    /// box replaces the selection, Shift adds to it, Ctrl takes away from it.
+    /// </summary>
+    private void OnSelectionBoxPicked(IReadOnlyList<Army> armies, List<SupportFormation> formations)
     {
-        if (_supportLayer is not { Visible: true }) return;
-        if (!Input.IsKeyPressed(Key.Ctrl) && !Input.IsKeyPressed(Key.Shift)) _supportSelected.Clear();
-        foreach (var formation in formations) _supportSelected.Add(formation.Id);
-        _supportRebaseArmed = false;
+        if (!_hudLayer.Visible || _campaign?.Player is null) return;
+        var own = formations.Where(f => f.NationId == _campaign.Player.Id).Select(f => f.Id).ToList();
+        var divisions = armies.Where(army => ArmyInteraction.CanSelect(_campaign, army)).ToList();
+        if (own.Count == 0 && divisions.Count == 0) return;
+        var removing = RemovingFromSelection;
+        var adding = AddingToSelection;
+        MapSelection.Apply(_supportSelected, own, adding, removing);
+        _globe.SelectSupportFormations(_supportSelected);
+        if (divisions.Count > 0) PickArmies(divisions, formationsTaken: true);
+        else if (!adding && !removing) DropArmySelection();
         SupportSelectionChanged();
     }
+
+    private void OnSupportBoxPicked(List<SupportFormation> formations) => OnSelectionBoxPicked(Array.Empty<Army>(), formations);
 
     /// <summary>Ctrl+X on the long-range screen: keep every other selected formation, by id.</summary>
     private bool SplitSupportSelection()
@@ -721,24 +927,19 @@ public partial class DealOrForceGame
         var ordered = _supportSelected.OrderBy(id => id).ToList();
         var left = ordered.Count / 2;
         for (var index = 1; index < ordered.Count; index += 2) _supportSelected.Remove(ordered[index]);
-        _supportRebaseArmed = false;
         SupportSelectionChanged();
         _supportFeedback.Text = Loc.Format("Split in half: {0} selected, {1} left as they were.", _supportSelected.Count, left);
         return true;
     }
 
-    private void ClearSupportSelection()
-    {
-        _supportSelected.Clear();
-        _supportRebaseArmed = false;
-        SupportSelectionChanged();
-    }
+    private void ClearSupportSelection() => ClearSupportMapSelection();
 
     private void SupportSelectionChanged()
     {
         _globe.SelectSupportFormations(_supportSelected);
         _supportFeedback.Text = "";
         RefreshSupportScreen();
+        RefreshFormationBar();
     }
 
     private void RefreshSupportSelection(List<SupportFormation> owned)
@@ -748,16 +949,11 @@ public partial class DealOrForceGame
         // but give the roster room instead of crushing it between two command surfaces.
         _supportSelectionBar.Visible = selected.Count > 0 &&
             (!_supportRaiseOpen || Size.Y >= Ui.Metric("support.compact_height", 840));
-        if (selected.Count == 0) { _supportRebaseArmed = false; _supportTargetArmed = false; }
-        _supportRebaseButton.SetPressedNoSignal(_supportRebaseArmed);
-        // While a region is being named the map's clicks are the panel's, not the cards'.
-        _globe.SupportRebaseArmed = _supportRebaseArmed || _supportTargetArmed;
-        _supportRebaseBanner.Visible = _supportRebaseArmed || _supportTargetArmed;
-        _supportRebaseBanner.Text = _supportTargetArmed
-            ? Tr("Click a region of a country we are at war with: the selected strike formations aim there. Esc cancels.")
-            : Loc.Format(
-            "Click a region of the country on the map to base the {0} selected formation(s) there. Esc cancels.",
-            selected.Count);
+        if (selected.Count == 0) _supportTargetArmed = false;
+        // While a strike target is being named the map's clicks are the panel's, not the cards'.
+        _globe.SupportRebaseArmed = _supportTargetArmed;
+        _supportRebaseBanner.Visible = _supportTargetArmed;
+        _supportRebaseBanner.Text = Tr("Click a region of a country we are at war with: the selected strike formations aim there. Esc cancels.");
         RefreshSupportTargetBar(selected);
         if (selected.Count == 0) return;
         _supportSelectionCaption.Text = Loc.Format("{0} selected", selected.Count);
@@ -814,18 +1010,20 @@ public partial class DealOrForceGame
         var applied = commands.Count(c => c.Refusal.Length == 0);
         _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour(applied > 0 ? "state.positive" : "state.negative"));
         _supportFeedback.Text = Loc.Format("{0}: ordered {1} of {2} selected.", Tr(SupportMissionShort(mission)), applied, _supportSelected.Count);
+        if (_formationBarFeedback is not null) _formationBarFeedback.Text = _supportFeedback.Text;
         if (applied > 0) PlayStrategicCue("support_mission");
         _globe.SelectSupportFormations(_supportSelected);
         RefreshSupportScreen();
+        RefreshFormationBar();
     }
 
     private void FocusSupportSelection()
     {
-        var first = _campaign?.SupportFormations.FirstOrDefault(f => _supportSelected.Contains(f.Id) && f.BaseProvinceId > 0);
+        var first = _campaign?.SupportFormations.FirstOrDefault(f => _supportSelected.Contains(f.Id) && LongRangeMovement.At(f) > 0);
         if (first is null || _campaign.ProvinceMap is null) return;
-        // The middle of the selection's bases, far enough out to see their reach.
-        var bases = _campaign.SupportFormations.Where(f => _supportSelected.Contains(f.Id) && f.BaseProvinceId > 0)
-            .Select(f => _campaign.ProvinceMap.CenterOf(f.BaseProvinceId)).ToList();
+        // The middle of where the selection stands - on the road too - far enough out to see their reach.
+        var bases = _campaign.SupportFormations.Where(f => _supportSelected.Contains(f.Id) && LongRangeMovement.At(f) > 0)
+            .Select(f => LongRangeMovement.Position(_campaign, f)).ToList();
         var reach = _campaign.SupportFormations.Where(f => _supportSelected.Contains(f.Id))
             .Select(f => SupportTypeCatalog.Get(f.TypeId)?.RangeKm ?? 100f).DefaultIfEmpty(100f).Max();
         // Spherical mean: bases on either side of the date line are neighbours, not
@@ -848,62 +1046,100 @@ public partial class DealOrForceGame
 
     private void FocusSupportBase(int stateMapIndex)
     {
-        var formation = _campaign?.SupportFormations.FirstOrDefault(f => f.StateMapIndex == stateMapIndex && f.BaseProvinceId > 0);
+        var formation = _campaign?.SupportFormations.FirstOrDefault(f =>
+            (stateMapIndex == -2 ? f.Route.Count > 0 : f.StateMapIndex == stateMapIndex) && LongRangeMovement.At(f) > 0);
         if (formation is null || _campaign.ProvinceMap is null) return;
-        var centre = _campaign.ProvinceMap.CenterOf(formation.BaseProvinceId);
+        var centre = LongRangeMovement.Position(_campaign, formation);
         _globe.FocusOn(centre.Latitude, centre.Longitude, 8.2f);
-    }
-
-    private void ToggleSupportRebase()
-    {
-        _supportRebaseArmed = !_supportRebaseArmed && _supportSelected.Count > 0;
-        if (_supportRebaseArmed) _supportTargetArmed = false;
-        _supportFeedback.Text = "";
-        RefreshSupportScreen();
     }
 
     private void CancelSupportRebase()
     {
-        _supportRebaseArmed = false;
         _supportTargetArmed = false;
         _supportFeedback.Text = "";
         RefreshSupportScreen();
     }
 
-    private void RebaseSupportSelection(ScenarioState target)
+    /// <summary>
+    /// The right button with formations selected: each goes to that province its own way, or says
+    /// why it cannot. Shift makes the province a waypoint after the route each already has.
+    /// </summary>
+    private void RelocateSupportSelection(int province, bool append)
     {
-        var player = _campaign.Player;
-        var plan = SupportCore.PreviewRebase(_campaign, player.Id, _supportSelected, target.MapIndex);
-        if (plan.Refusal.Length > 0)
-        {
-            _supportRebaseArmed = true;
-            _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour("state.negative"));
-            _supportFeedback.Text = target.DisplayName + " · " + Tr(plan.Refusal) +
-                (plan.Moving > 0 ? "\n" + Loc.Format("Need {0} posts · {1} free · {2} reserved for training. Nothing moved.", plan.Moving, plan.Free, plan.Reserved) : "");
-            RefreshSupportScreen();
-            return;
-        }
-        var command = new RebaseSupportGroupCommand
-        {
-            IssuerId = player.Id, FormationIds = _supportSelected.OrderBy(id => id).ToArray(), StateMapIndex = target.MapIndex
-        };
+        var player = _campaign?.Player;
+        if (player is null || province <= 0) return;
+        LongRangeMovement.KeepCommandable(_campaign, player.Id, _supportSelected);
+        var ids = _supportSelected.OrderBy(id => id).ToArray();
+        if (ids.Length == 0) return;
+        // The same answer the command will get, read first for the words: the command's own refusal
+        // is English for the log and the replay, this is for the player.
+        var previews = LongRangeMovement.PreviewRelocate(_campaign, player.Id, ids, province, append);
+        var command = new RelocateSupportCommand { IssuerId = player.Id, FormationIds = ids, ProvinceId = province, Append = append };
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
-        _supportRebaseArmed = command.Refusal.Length > 0;
-        _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour(_supportRebaseArmed ? "state.negative" : "state.positive"));
-        _supportFeedback.Text = _supportRebaseArmed ? Tr(command.Refusal) : command.Moved == 0
-            ? Loc.Format("The selected formations are already based in {0}.", target.DisplayName)
-            : Loc.Format("{0} formation(s) based in {1}.", command.Moved, target.DisplayName);
+        var place = SupportPlaceName(province);
+        var lines = new List<string>();
+        var going = previews.Where(p => p.Accepted).ToList();
+        if (command.Moved > 0)
+            lines.Add(Loc.Format("{0} formation(s) on the way to {1}: {2} d.", command.Moved, place,
+                going.Count == 0 ? 0 : going.Max(p => p.Days)));
+        else if (going.Count > 0)
+            lines.Add(Loc.Format("The selected formations are already at {0}.", place));
+        foreach (var refused in previews.Where(p => !p.Accepted).Take(4))
+        {
+            var formation = _campaign.SupportFormations.Find(f => f.Id == refused.FormationId);
+            var name = formation is not null ? Loc.Get(SupportTypeCatalog.Get(formation.TypeId)?.Name ?? formation.TypeId) : "#" + refused.FormationId;
+            lines.Add(name + ": " + (refused.RefusalArgs.Length == 0 ? Tr(refused.Refusal) : Loc.Format(refused.Refusal, refused.RefusalArgs)));
+        }
+        var text = string.Join("\n", lines);
+        var ok = command.Moved > 0 || previews.All(p => p.Accepted);
+        foreach (var label in new[] { _supportFeedback, _formationBarFeedback })
+        {
+            if (label is null) continue;
+            label.AddThemeColorOverride("font_color", Ui.Colour(ok ? "state.positive" : "state.negative"));
+            label.Text = text;
+        }
         if (command.Moved > 0) PlayStrategicCue("support_order");
         _globe.SelectSupportFormations(_supportSelected);
-        RefreshSupportScreen();
+        if (_supportLayer is { Visible: true }) RefreshSupportScreen();
+        RefreshFormationBar();
+        if (_supportFeedback is not null) _supportFeedback.Text = text;
+        if (_formationBarFeedback is not null) _formationBarFeedback.Text = text;
+    }
+
+    /// <summary>
+    /// Stop where they are: one halt order for the selection. A column part-way along a step
+    /// finishes it and deploys at its end - the simulation works that out when the order lands
+    /// (LongRangeMovement.PreviewHalt). Sending each to the province it last reached, as this
+    /// once did, turned a ship six days out round at the far port and sailed it home.
+    /// </summary>
+    private void HaltSupportSelection()
+    {
+        var player = _campaign?.Player;
+        if (player is null) return;
+        LongRangeMovement.KeepCommandable(_campaign, player.Id, _supportSelected);
+        var ids = _supportSelected.OrderBy(id => id).ToArray();
+        var halted = 0;
+        if (ids.Length > 0)
+        {
+            var command = new RelocateSupportCommand { IssuerId = player.Id, FormationIds = ids, Halt = true };
+            _campaign.Commands.Enqueue(command);
+            _campaign.Commands.ApplyAll(_campaign);
+            halted = command.Moved;
+        }
+        var text = Loc.Format("{0} formation(s) halted.", halted);
+        if (_supportFeedback is not null) _supportFeedback.Text = text;
+        if (_formationBarFeedback is not null) _formationBarFeedback.Text = text;
+        if (_supportLayer is { Visible: true }) RefreshSupportScreen();
+        RefreshFormationBar();
+        _globe.SelectSupportFormations(_supportSelected);
     }
 
     // ------------------------------------------------------------------ in training
 
     private void RefreshSupportTraining(List<SupportOrder> training)
     {
-        _supportTrainingCaption.Text = training.Count == 0 ? "" : Loc.Format("IN TRAINING · {0}", training.Count);
+        _supportTrainingCaption.Text = Loc.Format("IN TRAINING · {0} of {1}", training.Count, Math.Max(1, _campaign.Defines.SupportTrainingSlots));
         foreach (var order in training)
         {
             if (!_supportTrainingMap.TryGetValue(order.Id, out var row))
@@ -964,7 +1200,6 @@ public partial class DealOrForceGame
     private void ToggleSupportRaise()
     {
         _supportRaiseOpen = !_supportRaiseOpen;
-        if (_supportRaiseOpen) _supportRebaseArmed = false;
         _supportRaiseScroll.Visible = _supportRaiseOpen;
         _supportRaiseBody.Visible = _supportRaiseOpen;
         _supportRaiseToggle.Text = Tr(_supportRaiseOpen ? "▾ RAISE A FORMATION" : "▸ RAISE A FORMATION");
@@ -1009,9 +1244,8 @@ public partial class DealOrForceGame
         var option = 0;
         foreach (var state in _campaign.States.Where(s => s.NationMapIndex == player.MapIndex).OrderBy(s => s.DisplayName))
         {
-            var free = SupportCore.CapacityOf(_campaign, state) - SupportCore.PostsUsed(_campaign, state.MapIndex) -
-                       _campaign.SupportOrders.Count(o => o.NationId == player.Id && o.StateMapIndex == state.MapIndex && SupportCore.Enabled(_campaign, o.TypeId));
-            _supportRegionPicker.AddItem(Loc.Format("{0} · {1} free", state.DisplayName, Math.Max(0, free)));
+            _supportRegionPicker.AddItem(Loc.Format("{0} · used {1:0.#} of {2}", state.DisplayName,
+                SupportCore.BasingUsed(_campaign, state.MapIndex), SupportCore.CapacityOf(_campaign, state)));
             _supportRegionPicker.SetItemMetadata(option, state.MapIndex);
             if (state.MapIndex == selected) _supportRegionPicker.Select(option);
             option++;
@@ -1265,7 +1499,6 @@ public partial class DealOrForceGame
     private void ToggleSupportTargetPick()
     {
         _supportTargetArmed = !_supportTargetArmed && _supportSelected.Count > 0;
-        if (_supportTargetArmed) _supportRebaseArmed = false;
         _supportFeedback.Text = "";
         RefreshSupportScreen();
     }

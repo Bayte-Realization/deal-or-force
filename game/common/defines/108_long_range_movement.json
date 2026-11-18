@@ -1,0 +1,80 @@
+// Deal or Force - long-range forces on the map: how they travel, where they may stand, what
+// crowding and lost ground cost them, and how the computer moves its own (LongRangeMovement.cs).
+//
+// The road pace is not here: a formation drives at a division's MarchProgressPerDay
+// (07_movement.json), over the same terrain and roads, times the "speed" of its kind
+// (common/support); inland, where neither end of a step touches the enemy, it goes by train at
+// RailRedeploymentSpeed, the same railways the divisions use.
+//
+// Every key overrides the value compiled into LongRangeMovement.cs; a key no file mentions keeps
+// its compiled value, and files in this folder are read in name order with later files winning.
+{
+  // By sea.
+  //
+  // Where there is no road - an island, an enclave, an ally over the water - the formation
+  // drives to a port of its own side, ships, and lands at a port in the same sea. 450 km a day
+  // is a transport with heavy equipment at about ten knots.
+  "LongRangeSeaKmPerDay": 450,
+  // Loading a brigade at one end and unloading it at the other is days, not hours: two at each.
+  "LongRangePortDays": 2,
+
+  // By air.
+  //
+  // A squadron is there in hours; its ground echelon, fuel, munitions and technicians are not,
+  // and they are what a relocation waits for. 1,500 km a day puts a wing across Russia (6,000 km)
+  // in four days and one more to deploy - neither instant nor weeks.
+  "LongRangeAirKmPerDay": 1500,
+  // One ferry leg, unarmed and with drop tanks, is about three combat radii...
+  "LongRangeFerryRangeFactor": 3,
+  // ...never less than a helicopter is ferried (500-700 km)...
+  "LongRangeFerryMinKm": 600,
+  // ...and never more than this: past it is air-to-air refuelling, which the game does not have.
+  // Longer trips are flown in legs - Shift+right-click adds a waypoint.
+  "LongRangeFerryMaxKm": 4000,
+
+  // Lost ground.
+  //
+  // The share of strength a formation loses, once, when the province it stands in falls to the
+  // enemy: what is heavy or broken and could not be got out. Less and losing a province costs
+  // nothing; more and one breakthrough knocks out half a brigade. It then withdraws like any
+  // other move - and with no way out it is cut off where it stands.
+  "LongRangeOverrunLoss": 0.25,
+
+  // Reach.
+  //
+  // Added to every formation's range: half an average province (about 65 km across). Range is
+  // measured from the centre of the base province to the centre of the target, and the guns
+  // fire to the edge - without it a 45 km gun line did not reach the next province.
+  "LongRangeReachSlackKm": 35,
+
+  // Basing.
+  //
+  // Not a limit any more but a price: a region bases this much without crowding, and past it
+  // the readiness its formations recover is multiplied by capacity / used. A battery takes 1, an
+  // air wing 2 and a bomber regiment 3 ("basing" in common/support). The allowance is one or two
+  // formations without barracks, as before, plus one.
+  "LongRangeBasingBase": 3,
+  // What the old "posts per barracks" was, now here where a mod can reach it.
+  "LongRangeBasingPerBarracks": 2,
+  // A city is airfields, depots and rail yards to move into; counted for the leading cities its
+  // owner still holds.
+  "LongRangeBasingPerCity": 2,
+
+  // Training.
+  //
+  // Formations one country may have in training at once - what it was, now visible in the panel
+  // and changeable by a mod.
+  "SupportTrainingSlots": 8,
+
+  // The computer.
+  //
+  // Days between its reviews of where its formations stand. A front moves a province or two in a
+  // fortnight; reviewing more often only buys more moves.
+  "AiLongRangeRepositionDays": 15,
+  // It puts a formation within this share of its reach of the nearest battle or front, so the
+  // front can move a little and the formation still reaches.
+  "AiLongRangeStandoffShare": 0.6,
+  // Guns of shorter range than this stand on the front itself; everything longer-ranged stands
+  // back from it, where the enemy's guns do not reach.
+  "AiLongRangeFrontlineMaxRangeKm": 100
+}

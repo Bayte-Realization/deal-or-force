@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
 
+/// <summary>
+/// Raising long-range formations and where they stand: basing capacity (what used to be posts,
+/// now a price instead of a refusal), the training queue as a define, and the old region orders,
+/// which are now relocations - each formation travelling on its own, each refusal named.
+/// Run with --support-only; part of the full run.
+/// </summary>
 static class SupportTests
 {
     static void Check(bool condition, string name)
@@ -11,8 +17,16 @@ static class SupportTests
         Console.WriteLine("PASS support: " + name);
     }
 
-    public static void Run(Campaign campaign)
+    static bool Fail(string why) { Console.WriteLine("  " + why); return false; }
+
+    public static void Run(ProvinceTopology map)
     {
+        // A world of its own, fresh from the opening: the shared fixture has been ticked and
+        // ordered about by the time the full run gets here.
+        var campaign = Campaign.CreateBootstrap(20260917);
+        campaign.Defines.HoursPerTick = 24;
+        campaign.ConfigureSinglePlayer(campaign.NationByTag("RUS").Id);
+        campaign.AttachProvinceTopology(map);
         SupportTypeCatalog.ResetCatalog();
         Check(!SupportTypeCatalog.TryGet("missing_support_type", out _) &&
               SupportTypeCatalog.Get("artillery_brigade") is not null,
@@ -20,91 +34,102 @@ static class SupportTests
         Check(SupportTypeCatalog.TryGet("strike_drone_group", out var drones) &&
               drones.Missions.Contains(SupportCore.MissionInterdiction),
             "strike drones can receive the interdiction mission");
+        Check(SupportTypeCatalog.Get("fighter_wing").Movement == SupportMoveMode.Air &&
+              SupportTypeCatalog.Get("strike_drone_group").Movement == SupportMoveMode.Land &&
+              SupportTypeCatalog.Get("sam_brigade").Movement == SupportMoveMode.Land,
+            "aircraft fly; guns, missile brigades and drone crews drive");
+        Check(SupportTypeCatalog.Get("artillery_brigade").Speed == .8f && SupportTypeCatalog.Get("sam_brigade").DeployDays == 2 &&
+              SupportTypeCatalog.Get("fighter_wing").Basing == 2f && SupportTypeCatalog.Get("strategic_bomber_regiment").Basing == 3f &&
+              SupportTypeCatalog.Get("mlrs_battalion").Basing == 1f,
+            "speed, deployment and basing come from the data with kind defaults");
         Check(campaign.SupportFormations.Count > 0,
             "the opening world contains long-range formations");
+        Check(campaign.SupportFormations.All(f => f.ProvinceId > 0 && f.ProvinceId == f.BaseProvinceId),
+            "every opening formation stands, deployed, in a province");
         Check(campaign.States.All(state =>
-                SupportCore.PostsUsed(campaign, state.MapIndex) <= SupportCore.CapacityOf(campaign, state)),
-            "initial posts are within regional capacity");
+                SupportCore.BasingUsed(campaign, state.MapIndex) <= SupportCore.CapacityOf(campaign, state) + 0.001f),
+            "the opening world is spread within basing capacity");
 
         var player = campaign.Player;
         var region = campaign.States.First(state => state.NationMapIndex == player.MapIndex &&
             SupportCore.BaseProvinceOf(campaign, player, state.MapIndex) > 0);
-        region.Buildings[BuildingKind.Barracks] =
-            region.Buildings.GetValueOrDefault(BuildingKind.Barracks) + 1;
+        var barracksBefore = region.Buildings.GetValueOrDefault(BuildingKind.Barracks);
+        var capacityBefore = SupportCore.CapacityOf(campaign, region);
+        region.Buildings[BuildingKind.Barracks] = barracksBefore + 1;
+        Check(SupportCore.CapacityOf(campaign, region) == capacityBefore + campaign.Defines.LongRangeBasingPerBarracks,
+            "a barracks adds the define's basing");
         player.Treasury = MathF.Max(player.Treasury, 1000f);
         player.ManpowerReserve = Math.Max(player.ManpowerReserve, 1_000_000);
         Check(SupportCore.Validate(campaign, player.Id, region.MapIndex, "missing_support_type") ==
               "No such formation type.", "invalid training orders are rejected");
-        var before = campaign.SupportOrders.Count;
-        new RaiseSupportCommand
-        {
-            IssuerId = player.Id,
-            StateMapIndex = region.MapIndex,
-            TypeId = "artillery_brigade"
-        }.Apply(campaign);
-        Check(campaign.SupportOrders.Count == before + 1 &&
-              campaign.SupportOrders[^1].TypeId == "artillery_brigade",
-            "player can train artillery at a controlled base");
-
-        var target = campaign.States.First(s => s.NationMapIndex == player.MapIndex &&
-            SupportCore.PostsUsed(campaign, s.MapIndex) == 0 && s.MapIndex != region.MapIndex &&
-            SupportCore.BaseProvinceOf(campaign, player, s.MapIndex) > 0);
-        var pair = campaign.SupportFormations.Where(f => f.NationId == player.Id && f.StateMapIndex != target.MapIndex).Take(2).ToArray();
-        var oldLocations = pair.Select(f => (f.StateMapIndex, f.BaseProvinceId)).ToArray();
-        var oldBarracks = target.Buildings.GetValueOrDefault(BuildingKind.Barracks);
-        target.Buildings[BuildingKind.Barracks] = 0;
-        var reserve = new SupportOrder { Id = -110, NationId = player.Id, StateMapIndex = target.MapIndex };
-        campaign.SupportOrders.Add(reserve);
-        var ids = pair.Select(f => f.Id).ToArray();
+        var savedOrders = campaign.SupportOrders.ToList();
         try
         {
-            var plan = SupportCore.PreviewRebase(campaign, player.Id, ids, target.MapIndex);
-            Check(plan.Moving == 2 && plan.Free == 1 && plan.Reserved == 1 && plan.Refusal.Length > 0,
-                "preview includes posts reserved for training");
-            Check(pair.Select(f => (f.StateMapIndex, f.BaseProvinceId)).SequenceEqual(oldLocations), "preview is read-only");
-            var blocked = new RebaseSupportGroupCommand { IssuerId = player.Id, FormationIds = ids, StateMapIndex = target.MapIndex };
-            blocked.Apply(campaign);
-            Check(blocked.Refusal.Length > 0 && blocked.Moved == 0 &&
-                pair.Select(f => (f.StateMapIndex, f.BaseProvinceId)).SequenceEqual(oldLocations), "over-capacity group moves nobody");
-            campaign.SupportOrders.Remove(reserve);
-            var stale = new RebaseSupportGroupCommand { IssuerId = player.Id, FormationIds = new[] { ids[0], int.MaxValue }, StateMapIndex = target.MapIndex };
-            stale.Apply(campaign);
-            Check(stale.Refusal.Length > 0 && pair[0].StateMapIndex == oldLocations[0].StateMapIndex, "stale member refuses entire group");
-            var other = campaign.SupportFormations.First(f => f.NationId != player.Id);
-            var foreign = new RebaseSupportGroupCommand { IssuerId = player.Id, FormationIds = new[] { ids[0], other.Id }, StateMapIndex = target.MapIndex };
-            foreign.Apply(campaign);
-            Check(foreign.Refusal.Length > 0 && foreign.Moved == 0, "foreign member refuses entire group");
-            var abroad = campaign.States.First(s => s.NationMapIndex != player.MapIndex);
-            Check(SupportCore.PreviewRebase(campaign, player.Id, ids, abroad.MapIndex).Refusal.Length > 0,
-                "foreign region is not a friendly base");
-            var group = new RebaseSupportGroupCommand { IssuerId = player.Id, FormationIds = new[] { ids[1], ids[0], ids[0] }, StateMapIndex = target.MapIndex };
-            Check(NetworkCommandCodec.TryEncode(group, out var wireType, out var wire) &&
-                NetworkCommandCodec.TryDecode(wireType, wire, out var decoded) && decoded is RebaseSupportGroupCommand,
-                "group rebase survives the network/replay codec");
-            group.Apply(campaign);
-            Check(group.Refusal.Length == 0 && group.Moved == 2 && pair.All(f => f.StateMapIndex == target.MapIndex) &&
-                SupportCore.PostsUsed(campaign, target.MapIndex) == 2, "whole group moves, duplicate ids consume no extra posts");
-            group.Apply(campaign);
-            Check(group.Refusal.Length == 0 && group.Moved == 0, "repeat order is idempotent at a full base");
-            pair[0].BaseProvinceId = -1;
-            group.Apply(campaign);
-            Check(group.Refusal.Length == 0 && group.Moved == 1 && !SupportCore.Displaced(campaign, pair[0]),
-                "lost base can be repaired inside its full existing region");
-            campaign.SupportOrders.Add(reserve);
-            pair[0].StateMapIndex = oldLocations[0].StateMapIndex;
-            pair[0].BaseProvinceId = oldLocations[0].BaseProvinceId;
-            Check(SupportCore.Rebase(campaign, pair[0], target.MapIndex).Length > 0, "single rebase also respects training reservations");
-            pair[0].BaseProvinceId = campaign.ProvinceMap.ProvinceCount + 1;
-            Check(SupportCore.Displaced(campaign, pair[0]), "invalid saved base is safe to inspect");
+            var before = campaign.SupportOrders.Count;
+            new RaiseSupportCommand { IssuerId = player.Id, StateMapIndex = region.MapIndex, TypeId = "artillery_brigade" }.Apply(campaign);
+            Check(campaign.SupportOrders.Count == before + 1 && campaign.SupportOrders[^1].TypeId == "artillery_brigade",
+                "player can train artillery at a controlled base");
+            // The training queue is a define, not a literal.
+            var slots = campaign.Defines.SupportTrainingSlots;
+            campaign.Defines.SupportTrainingSlots = campaign.SupportOrders.Count(o => o.NationId == player.Id);
+            Check(SupportCore.Validate(campaign, player.Id, region.MapIndex, "artillery_brigade") == "Training capacity reached.",
+                "the training queue is full at SupportTrainingSlots");
+            campaign.Defines.SupportTrainingSlots = slots;
+            // A full region is not a refusal any more: it is crowding.
+            var full = new SupportOrder { Id = -110, NationId = player.Id, StateMapIndex = region.MapIndex, TypeId = "strategic_bomber_regiment" };
+            for (var i = 0; i < 6; i++) campaign.SupportOrders.Add(new SupportOrder { Id = -120 - i, NationId = -1, StateMapIndex = region.MapIndex, TypeId = "strategic_bomber_regiment" });
+            Check(SupportCore.BasingUsed(campaign, region.MapIndex) > SupportCore.CapacityOf(campaign, region) &&
+                  SupportCore.Validate(campaign, player.Id, region.MapIndex, "artillery_brigade").Length == 0,
+                "an over-full region still accepts a new formation: crowding is paid for, not refused");
+            Check(MathF.Abs(SupportCore.CrowdingOf(5f, 10f) - .5f) < 1e-6f && SupportCore.CrowdingOf(5f, 4f) == 1f,
+                "crowding halves recovery in a region twice over capacity, and costs nothing within it");
+            campaign.SupportOrders.Remove(full);
         }
         finally
         {
-            campaign.SupportOrders.Remove(reserve);
-            target.Buildings[BuildingKind.Barracks] = oldBarracks;
+            campaign.SupportOrders.Clear();
+            campaign.SupportOrders.AddRange(savedOrders);
+            region.Buildings[BuildingKind.Barracks] = barracksBefore;
+        }
+
+        // The old region orders are relocations now: each formation goes on its own way, the
+        // refusal names who stayed, and nothing jumps.
+        var pair = campaign.SupportFormations.Where(f => f.NationId == player.Id && f.Route.Count == 0 &&
+            SupportTypeCatalog.Get(f.TypeId).Movement == SupportMoveMode.Land).Take(2).ToArray();
+        // A region of our own the first of them can drive to.
+        var target = campaign.States.Where(s => s.NationMapIndex == player.MapIndex && pair.All(f => f.StateMapIndex != s.MapIndex))
+            .OrderBy(s => s.MapIndex).First(s =>
+                SupportCore.RegionOrderProvince(campaign, player.Id, s.MapIndex) is var province and > 0 &&
+                LongRangeMovement.PreviewRelocate(campaign, player.Id, new[] { pair[0].Id }, province).Single().Accepted);
+        var old = pair.Select(f => (f.ProvinceId, f.BaseProvinceId, f.StateMapIndex)).ToArray();
+        var ids = pair.Select(f => f.Id).ToArray();
+        try
+        {
+            var other = campaign.SupportFormations.First(f => f.NationId != player.Id);
+            var mixed = new RebaseSupportGroupCommand { IssuerId = player.Id, FormationIds = new[] { ids[0], int.MaxValue, other.Id }, StateMapIndex = target.MapIndex };
+            Check(NetworkCommandCodec.TryEncode(mixed, out var wireType, out var wire) &&
+                  NetworkCommandCodec.TryDecode(wireType, wire, out var decoded) && decoded is RebaseSupportGroupCommand,
+                "the old group order still survives the network/replay codec");
+            mixed.Apply(campaign);
+            Check(mixed.Moved == 1 && mixed.Refusal.Contains("#" + int.MaxValue) && mixed.Refusal.Contains("#" + other.Id) || Fail(mixed.Moved + " moved; " + mixed.Refusal),
+                "a stale or foreign member no longer holds back the group: it is named and the rest go");
+            Check(pair[0].ProvinceId == old[0].ProvinceId && pair[0].Route.Count > 0 &&
+                  pair[0].Route[^1] == SupportCore.BaseProvinceOf(campaign, player, target.MapIndex),
+                "a region order travels to the province the region's bases used to take, from where it stood");
+            Check(SupportCore.Displaced(campaign, pair[0]) && pair[0].BaseProvinceId == -1,
+                "a formation given an order packs up at once");
+            var abroad = campaign.States.First(s => s.NationMapIndex != player.MapIndex && s.NationMapIndex > 0);
+            Check(SupportCore.Rebase(campaign, pair[1], abroad.MapIndex).Length > 0, "a foreign region is not a region order's destination");
+            pair[1].BaseProvinceId = campaign.ProvinceMap.ProvinceCount + 1;
+            pair[1].ProvinceId = 0;
+            Check(SupportCore.Displaced(campaign, pair[1]), "an invalid saved base is safe to inspect");
+        }
+        finally
+        {
             for (var i = 0; i < pair.Length; i++)
             {
-                pair[i].StateMapIndex = oldLocations[i].StateMapIndex;
-                pair[i].BaseProvinceId = oldLocations[i].BaseProvinceId;
+                pair[i].Route.Clear(); pair[i].RouteModes.Clear(); pair[i].MoveProgress = 0f; pair[i].DeployDaysLeft = 0;
+                (pair[i].ProvinceId, pair[i].BaseProvinceId, pair[i].StateMapIndex) = old[i];
             }
         }
     }
