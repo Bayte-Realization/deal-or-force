@@ -16,11 +16,11 @@ const LAY = {
     railLabel: [72, 272],
     date: [1472, 8, 1912, 92], d1: [1488, 14, 1836, 48], d3: [1488, 56, 1598, 84], mark: [16, 22, 21],
     d4: [1606, 54, 1836, 86], d5: [1848, 16, 1904, 84], dv: 1842,
-    alerts: { x1: 1576, x2: 1912, y: 100, row: 40, icon: 24, ix: 10, tx1: 44, field: 64, sev: 18, tab: 30, open: 600 },
+    alerts: { x1: 1536, x2: 1912, y: 100, row: 40, icon: 24, ix: 22, tx1: 56, field: 64, sev: 18, tab: 30, open: 600 },   // ix: a margin for the pencil tick
     mapPlate: [1600, 1016, 1912, 1072], modes: [1612, 1660, 1708, 1756, 1804].map(x => [x, 1024, x + 40, 1064]), more: [1860, 1024, 1900, 1064],
     mapPlateMini: [1584, 848, 1912, 1072], miniRow: 856, m8: [1592, 904, 1904, 1060], modeGlyph: 22,
     morePop: [1520, 662, 1912, 1008],
-    strip: { y: [1004, 1072], x0: 16, w: 176, step: 184, h: [1012, 1064], cw: 64, cstep: 68, undo: 392, max: 5 },
+    strip: { y: [1004, 1072], x0: 16, w: 200, step: 208, h: [1012, 1064], cw: 64, cstep: 68, undo: 392, max: 5 },
     left: [72, 146, 544, 1000], head: 120, tabs: 34, foot: 56, tshift: 552,
     full: [80, 146, 1904, 996],
     pbar: [8, 944, 640, 996],
@@ -39,7 +39,7 @@ const LAY = {
     railLabel: [50, 230],
     date: [952, 6, 1274, 64], d1: [962, 9, 1214, 34], d3: [962, 38, 1046, 58], mark: [13, 18, 17.5],
     d4: [1054, 36, 1214, 61], d5: [1222, 10, 1268, 58], dv: 1218,
-    alerts: { x1: 1016, x2: 1274, y: 70, row: 30, icon: 18, ix: 7, tx1: 32, field: 60, sev: 14, tab: 24, open: 440 },
+    alerts: { x1: 990, x2: 1274, y: 70, row: 30, icon: 18, ix: 16, tx1: 40, field: 60, sev: 14, tab: 24, open: 440 },
     mapPlate: [1058, 674, 1274, 714], modes: [1066, 1099, 1132, 1165, 1198].map(x => [x, 679, x + 30, 709]), more: [1236, 679, 1266, 709],
     mapPlateMini: [1040, 550, 1274, 714], miniRow: 555, m8: [1046, 592, 1268, 709], modeGlyph: 17,
     morePop: [1000, 420, 1274, 668],
@@ -67,6 +67,8 @@ const SRB = {
 // (from the files in game/gfx/flags; Qatar's file is 4.17:1, the flag is 28:11 - see spec, revision 3)
 const FLAG = { srb: 1.5, hrv: 2, bih: 2, hun: 2, rou: 1.5, bgr: 5 / 3, kos: 1.4, mne: 2, mkd: 2, alb: 1.4, ukr: 1.5, rus: 1.5, che: 1, npl: 105 / 128, qat: 28 / 11, vat: 1 };
 const FLAG_NAME = { srb: "Сербия", che: "Швейцария", npl: "Непал", qat: "Катар", vat: "Ватикан" };
+// the second line of the panel header for the other flags of ?flag=: what the country is, as the game says it
+const FLAG_SUB = { che: "Федеративная республика · Федеральный совет", npl: "Федеративная республика · президент Р. Паудел", qat: "Эмират · эмир Тамим бин Хамад Аль Тани", vat: "Абсолютная монархия · папа римский" };
 // fit a flag into a box without changing its proportions
 function flagFit(code, maxW, maxH) { const r = FLAG[code] || 1.5; let w = maxW, h = w / r; if (h > maxH) { h = maxH; w = h * r; } return [w, h]; }
 
@@ -182,32 +184,41 @@ const MODES = [
 const ALL_MODES = ["Политическая · Z", "Дипломатия · X", "Экономика · C", "Рельеф · V", "Война · N", "Население", "Идеологии", "Ресурсы", "Торговля", "Снабжение", "Радикализм", "Религии", "Союзы"];
 const LAYERS = [["2D / 3D", "F2", true], ["Облака", "", true], ["Туман войны", "", true], ["События", "", true], ["Торговые пути", "", false], ["Города", "", true], ["Названия", "", true], ["Постройки", "B", false], ["Мини-карта", "", false], ["Облёт", "F6", false]];
 
+// alert marks on the map: places by longitude and latitude (mapgeo.js projects them onto the drawn map)
+const MK = {
+  kosovo: proj(21.05, 42.95),      // the administrative line north of Pristina
+  nickel: proj(22.1, 44.07),       // Bor, where the ore is
+  build: proj(20.75, 44.12),       // Sumadija, beside Kragujevac
+  srem: proj(19.25, 45.02),        // the Croatian border at Srem
+  mitrovica: proj(20.87, 42.89),
+  raska: proj(20.61, 43.29), kraljevo: proj(20.69, 43.72),
+};
 // alerts: severity n (red ●) / w (amber ▲) / i (info ◆); field = deadline or the one figure, right-aligned, never cut.
 // Rows are sorted by deadline, then severity. topic = the fact the row states (the dedupe test compares these).
 const ALERTS_REST = [
-  { sev: "w", ic: "alert_battle", tx: "Противостояние в Косово", field: "", mk: [778, 818], topic: "kosovo:standoff",
-    tip: T("Опасное противостояние: Косово", `<p>Если противостояние перейдёт порог — инцидент, затем кризис с ультиматумом.</p><p>Ответы: переговоры, войска к границе, обращение к <b>ЕС</b>.</p>`, "Щелчок — к Косово · ПКМ — скрыть на 30 дней") },
-  { sev: "w", ic: "good_nickel", tx: "Дефицит никеля", field: "−11,8 %", mk: [700, 640], topic: "nickel:shortage", seen: "1 января",
+  { sev: "w", ic: "alert_battle", tx: "Противостояние в Косово", field: "", mk: MK.kosovo, topic: "kosovo:standoff",
+    tip: T("Противостояние в Косово", `<p>Если противостояние перейдёт порог — инцидент, затем кризис с ультиматумом.</p><p>Ответы: переговоры, войска к границе, обращение к <b>ЕС</b>.</p>`, "Щелчок — к Косово · ПКМ — скрыть на 30 дней") },
+  { sev: "w", ic: "good_nickel", tx: "Дефицит никеля", field: "−11,8 %", mk: MK.nickel, topic: "nickel:shortage", seen: "1 января",
     tip: T("Дефицит никеля", `<p>Не хватает 11,8 % потребности. Страдают линии стали и аккумуляторов.</p><p>Ответы: квота ввоза из Индонезии, замена в линиях, стройка добычи.</p><p class="note">Галочка карандашом — вы открывали эту строку 1 января. Строка стоит, пока беда не ушла.</p>`, "Щелчок — Торговля › никель · ПКМ — скрыть на 30 дней") },
-  { sev: "i", next: true, ic: "alert_construction", tx: "Дальше: начать стройку", field: "", go: 3, mk: [780, 722], topic: "construction:idle",
+  { sev: "i", next: true, ic: "alert_construction", tx: "Дальше: начать стройку", field: "", go: 3, mk: MK.build, topic: "construction:idle",
     tip: T("Дальше: начать стройку", `<p>Ни одна площадка в Сербии не занята. Шумадия даёт лучший возврат: гражданская промышленность окупится за 3,1 года.</p><p class="note">Строки «Дальше» идут после бед и выключаются после первых шагов (или настройкой).</p>`, "Щелчок — к Шумадии · ПКМ — скрыть на 30 дней") },
 ];
 const ALERTS_CRISIS = [
-  { sev: "n", ic: "treaty", tx: "Ультиматум Косово", field: "5 дн.", mk: [778, 818], topic: "kosovo:ultimatum",
+  { sev: "n", ic: "treaty", tx: "Ультиматум Косово", field: "5 дн.", mk: MK.kosovo, topic: "kosovo:ultimatum",
     tip: T("Ультиматум Косово", `<p>Приштина требует отвести войска на 25 км от административной линии. Отказ — повод для обращения к KFOR и санкций ЕС.</p><p>Ответы: принять, отказать, просить посредничества.</p>`, "Щелчок — окно ультиматума") },
   { sev: "n", ic: "debt_default", tx: "Казна кончится · занять?", field: "40 дн.", go: 5, mk: null, topic: "treasury:runout",
-    tip: T("Казна кончится через 40 дней", `<p>Мобилизация подняла расходы до $1,02 млрд в неделю. Суммы нет в этой строке — она в ячейке казны (правило 1).</p><p>Ответы: занять сколько дают, урезать расходы, «Свести в ноль».</p>`, "Щелчок — Экономика › Бюджет") },
-  { sev: "w", ic: "military", tx: "Хорватия мобилизуется у границы", field: "", mk: [668, 600], topic: "croatia:mobilisation",
+    tip: T("Казна кончится через 40 дней", `<p>Мобилизация подняла расходы до $1,02 млрд в неделю; в казне $1,41 млрд.</p><p>Ответы: занять сколько дают, урезать расходы, «Свести в ноль».</p>`, "Щелчок — Экономика › Бюджет") },
+  { sev: "w", ic: "military", tx: "Хорватия мобилизуется", field: "", mk: MK.srem, topic: "croatia:mobilisation",
     tip: T("Хорватия мобилизуется", `<p>6 бригад выдвигаются к Срему. Хорватия в НАТО: удар по ней — война с союзом.</p>`, "Щелчок — к границе") },
   { sev: "w", ic: "good_nickel", more: true, tx: "Ещё 2: никель, литий", field: "", mk: null, topic: "more:nickel,lithium",
     tip: T("Ещё 2 тревоги", `<p>Дефицит никеля 11,8 % · дефицит лития 6,2 %.</p><p>Все тревоги с причинами и ответами — в Ситуационной.</p>`, "Щелчок — Ситуационная") },
 ];
 const ALERTS_WAR = [
-  { sev: "n", ic: "alert_battle", tx: "Окружение у Митровицы", field: "2 дн.", mk: [764, 800], topic: "war:encircle",
+  { sev: "n", ic: "alert_battle", tx: "Окружение у Митровицы", field: "2 дн.", mk: MK.mitrovica, topic: "war:encircle",
     tip: T("Угроза окружения", `<p>Две бригады 2-й армии под Митровицей: противник обходит с запада. Через 2 дня кольцо замкнётся.</p><p>Ответы: отвести (H), ударить 3-й армией во фланг, перебросить резерв.</p>`, "Щелчок — к Митровице") },
   { sev: "n", ic: "debt_default", tx: "Казна кончится · занять?", field: "26 дн.", go: 5, mk: null, topic: "treasury:runout",
     tip: T("Казна кончится через 26 дней", `<p>Война стоит $1,3 млрд в неделю.</p><p>Ответы: занять, урезать гражданские статьи, «Свести в ноль».</p>`, "Щелчок — Экономика › Бюджет") },
-  { sev: "w", ic: "military", tx: "Хорватия мобилизуется у границы", field: "", mk: [668, 600], topic: "croatia:mobilisation",
+  { sev: "w", ic: "military", tx: "Хорватия мобилизуется", field: "", mk: MK.srem, topic: "croatia:mobilisation",
     tip: T("Хорватия мобилизуется", `<p>6 бригад у Срема.</p>`, "Щелчок — к границе") },
   { sev: "w", ic: "good_nickel", more: true, tx: "Ещё 3: снабжение, никель, литий", field: "", mk: null, topic: "more:supply,nickel,lithium",
     tip: T("Ещё 3 тревоги", `<p>Снабжение 4-й армии 71 % · дефицит никеля · дефицит лития.</p>`, "Щелчок — Ситуационная") },
@@ -231,9 +242,9 @@ const OUTLINER_CRISIS = [
 ];
 
 const ARMIES = [
-  { n: "1-я армия", d: 12, st: "Стоит", g: "stand", edge: "#7d705b", str: .96, gen: "ген. Д. Петрович", at: "Белград", pos: [748, 676], grp: 6 },
-  { n: "2-я армия", d: 10, st: "Стоит", g: "stand", edge: "#7d705b", str: .91, gen: "ген. М. Илич", at: "Ниш", pos: [826, 760] },
-  { n: "3-я армия", d: 6, st: "Стоит", g: "stand", edge: "#7d705b", str: .88, gen: "ген. С. Йованович", at: "Нови-Сад", pos: [742, 628] },
+  { n: "1-я армия", d: 12, st: "Стоит", g: "stand", edge: "#7d705b", str: .96, gen: "ген. Д. Петрович", at: "Белград", pos: CITY["Белград"], grp: 6 },
+  { n: "2-я армия", d: 10, st: "Стоит", g: "stand", edge: "#7d705b", str: .91, gen: "ген. М. Илич", at: "Ниш", pos: CITY["Ниш"] },
+  { n: "3-я армия", d: 6, st: "Стоит", g: "stand", edge: "#7d705b", str: .88, gen: "ген. С. Йованович", at: "Нови-Сад", pos: CITY["Нови-Сад"] },
 ];
 // war: the strip groups armies by front (HoI4 army bar), one plate per front, collapsible
 const WAR_STRIP = [
@@ -242,13 +253,7 @@ const WAR_STRIP = [
   { n: "4-я армия", d: 8, st: "Оборона · Срем", g: "stand", edge: "#7d705b", str: .97 },
   { n: "Резерв", d: 4, st: "Белград", g: "stand", edge: "#7d705b", str: 1 },
 ];
-// merged counters on the map (one per country per front sector), 1080-basis positions
-const FRONT_LINE = [[1330, 112], [1420, 114], [1500, 130], [1548, 182], [1600, 236], [1640, 290], [1666, 342], [1672, 400], [1658, 446], [1612, 474], [1540, 488], [1466, 500], [1406, 524], [1370, 562], [1360, 596]];
-const COUNTERS = [
-  { f: "ukr", n: 41, at: [1478, 168] }, { f: "rus", n: 58, at: [1526, 98] },
-  { f: "ukr", n: 37, at: [1612, 330] }, { f: "rus", n: 63, at: [1714, 356] },
-  { f: "ukr", n: 29, at: [1470, 468] }, { f: "rus", n: 44, at: [1500, 548] },
-];
+// merged counters on the Ukrainian front: one per country per sector, placed along FRONT_LINE (mapgeo.js) by app.js
 
 // ---------------------------------------------------------------- controls (spec 5.2, 5.3, 5.5) - [gesture, what, changed in revision 2]
 const MOUSE = [
@@ -308,7 +313,7 @@ const KEYS = [
   ["Ctrl+X", "Разделить пополам"],
   ["Ctrl+B, Ctrl+G, Ctrl+F", "Переброска, оборона области, сплочённость плана"],
   ["Delete", "Распустить (спрашивает)"],
-  ["A S D F (окошко «сколько» в фокусе)", "25 / 50 / 75 / 100 %. Пока окошко держит клавиши, у него синяя кромка и надпись «A S D F — доли»"],
+  ["A S D F (окошко «сколько» в фокусе)", "25 / 50 / 75 / 100 %. Пока окошко держит клавиши, у него латунная кромка и строка с клавишами A S D F"],
   ["Enter / Esc / щелчок по карте", "Окошко «сколько»: подтвердить / закрыть / закрыть — клавиши возвращаются камере"],
 ];
 const TOUCH = [

@@ -1,4 +1,4 @@
-// New campaign screen mockup, revision 2: renders the frame for each state, tooltips, keys, census.
+// New campaign screen mockup, revision 3 (second pass): renders the frame for each state, tooltips, keys, census.
 "use strict";
 
 const F = document.getElementById("frame");
@@ -7,7 +7,7 @@ const SHOT = qs.has("shot");                           // ?shot: frame at 1:1, n
 if (SHOT) document.body.classList.add("shot");
 const S = {
   state: 1, res: 1080, paused: true, speed: 2, mode: "pol", outliner: false,
-  day: 0, alt: false, qa: null, undo: null, pcard: null, route: [826, 760], detach: [752, 752],
+  day: 0, alt: false, qa: null, undo: null, pcard: null, route: CITY["Ниш"].slice(), detach: MK.kraljevo.slice(),
   budget: null, flash: null, mini: false, more: false, moreTab: "modes", news: false, hlPinned: false,
   buildings: false, bfocus: "rev:2", lpH: null, debtQ: 3, ocap: 4,
 };
@@ -28,15 +28,20 @@ const PF = (qs.get("flag") || "srb").toLowerCase();     // the player's flag (?f
 // a flag in its own proportions with a thin honest edge; shaped flags (Nepal) keep their outline
 function flagImg(code, maxW, maxH, cls = "") {
   const [w, h] = flagFit(code, maxW, maxH);
-  return `<span class="flag ${cls} ${code === "npl" ? "shaped" : ""}" style="width:${px(w)};height:${px(h)};--f:url(img/flags/${code}.png)"><img src="img/flags/${code}.png" alt=""><i class="cloth"></i></span>`;
+  return `<span class="flag ${cls} ${code === "npl" ? "shaped" : ""}" style="width:${px(w)};height:${px(h)};--f:url(img/flags/${code}.png)"><img src="img/flags/${code}.png" alt=""></span>`;
 }
-// a hand-ruled line: one pen stroke with a little unevenness, the same every render (seeded by position)
+// a hand-ruled line: one pen stroke with a light unevenness, the same every render (seeded by position)
 function ruled(x, y, w, seed = 1, cls = "") {
-  let d = `M0 1`, r = seed * 9301 + 49297;
+  let r = seed * 7919 + 104729;
   const rnd = () => ((r = (r * 9301 + 49297) % 233280) / 233280 - .5);
-  for (let t = 24; t < w; t += 24 + rnd() * 8) d += ` L${t.toFixed(1)} ${(1 + rnd() * .7).toFixed(2)}`;
-  d += ` L${w} ${(1 + rnd() * .6).toFixed(2)}`;
-  return `<svg class="ruled ${cls}" style="left:${px(x)};top:${px(y - 1)};width:${px(w)}" width="${w}" height="3" viewBox="0 0 ${w} 3"><path d="${d}"/></svg>`;
+  const drift = rnd() * 0.7, x0 = 1 + Math.abs(rnd()) * 4, x1 = w - 1 - Math.abs(rnd()) * 6;
+  let d = `M${x0.toFixed(1)} ${(3 + rnd() * 0.4).toFixed(2)}`;
+  for (let t = x0 + 14; t < x1; t += 14 + rnd() * 6) {
+    const y2 = 3 + drift * Math.sin(t / w * Math.PI) + rnd() * 0.35;
+    d += ` L${t.toFixed(1)} ${y2.toFixed(2)}`;
+  }
+  d += ` L${x1.toFixed(1)} ${(3 + rnd() * 0.4).toFixed(2)}`;
+  return `<svg class="ruled ${cls}" style="left:${px(x)};top:${px(y - 3)};width:${px(w)}" width="${w}" height="6" viewBox="0 0 ${w} 6"><path d="${d}"/></svg>`;
 }
 let dynId = 0;
 const dyn = tip => { const k = "dyn" + (dynId++); DYN[k] = tip; return k; };
@@ -94,12 +99,12 @@ function cellDefs() {
     { k: "C1", ic: "treasury", cap: "Казна", v: war ? "$0,88<small>млрд</small>" : crisis ? "$1,41<small>млрд</small>" : "$3,12<small>млрд</small>", d: war ? `<span class="dn">▼ 1,3 млрд</span>` : crisis ? `<span class="dn">▼ 1,02 млрд</span>` : `<span class="dn">▼ 38 млн</span>`, st: war || crisis ? "bad" : "", act: "budget", topic: "cell:treasury" },
     { k: "C2", ic: "gdp", cap: "ВВП", v: "$75,2<small>млрд</small>", d: `<span class="up">▲ 2,4 %</span>`, topic: "cell:gdp" },
     { k: "C3", ic: "coins", cap: "Долг · ВВП", v: war ? "55,1 %" : SRB.debt, d: "", topic: "cell:debt" },
-    { k: "C4", ic: "inflation", cap: "Инфляция", v: SRB.infl, d: `<span class="wn">▲</span>`, st: "warn", topic: "cell:inflation" },
-    { k: "C5", ic: "stability", cap: "Стабильность", v: war ? "57 %" : crisis ? "59 %" : SRB.stab, d: crisis || war ? `<span class="dn">▼</span>` : "", topic: "cell:stability" },
+    { k: "C4", ic: "inflation", cap: "Инфляция", v: SRB.infl, d: `<span class="wn">▲ 0,4</span>`, st: "warn", topic: "cell:inflation" },
+    { k: "C5", ic: "stability", cap: "Стабильность", v: war ? "57 %" : crisis ? "59 %" : SRB.stab, d: war ? `<span class="dn">▼ 7</span>` : crisis ? `<span class="dn">▼ 5</span>` : "", topic: "cell:stability" },
     { k: "C6", ic: "manpower", cap: "Призыв", v: war ? "96<small>тыс.</small>" : crisis ? "121<small>тыс.</small>" : "182<small>тыс.</small>", d: `<span class="up">▲ 310</span>`, topic: "cell:manpower" },
     { k: "C7", ic: "government", cap: "Капитал", v: SRB.pc, d: `<span class="up">▲ 2,1</span>`, topic: "cell:capital" },
   ];
-  if (war) c.push({ k: "C8", ic: "wars", cap: "Война", v: "63 %", d: `<span class="dn">▼</span>`, st: "warn", act: "flash", flash: "R9", topic: "cell:war" });
+  if (war) c.push({ k: "C8", ic: "wars", cap: "Война", v: "63 %", d: `<span class="dn">▼ 4</span>`, st: "warn", act: "flash", flash: "R9", topic: "cell:war" });
   return c;
 }
 function corner() {
@@ -116,14 +121,14 @@ function corner() {
     const on = (cl.k === "C1" && S.state === 5);
     const inner = `<span style="position:absolute;left:${l.cellIx}px;top:${l.cellIy}px">${ico(cl.ic, l.cellIcon, cl.st === "bad" ? "t-neg" : "")}</span>
       <div class="v ${cl.st || ""}" style="left:${l.cellVx}px;top:${l.cellVy}px">${cl.v}</div>
-      <div class="cap" style="left:${l.cellIx}px;top:${l.cellCy}px"><span class="c">${cl.cap}</span>${big() ? cl.d : (cl.d ? cl.d.replace(/(▲|▼)[^<]*/, "$1") : "")}</div>`;
+      <div class="cap" style="left:${l.cellIx}px;top:${l.cellCy}px"><span class="c">${cl.cap}</span>${big() ? cl.d : cl.d.replace(/ (млрд|млн)/, "&#8239;$1")}</div>`;
     h += `<div class="cell ${on ? "on" : ""}" data-btn data-tip="${cl.k}" data-topic="${cl.topic}" ${cl.act ? `data-act="${cl.act}"` : ""} ${cl.flash ? `data-k="${cl.flash}"` : ""} style="${box(r)}">${inner}${i < n - 1 ? '<span class="sep"></span>' : ""}</div>`;
   });
   // the flag: set into the node in its own proportions (Serbia 2:3, Switzerland 1:1, Nepal its own outline,
   // Qatar 11:28), a thin dark edge and at most a faint cloth shading. The node is the button (Q).
   const f = l.flag, fw = f[2] - f[0], fh = f[3] - f[1];
   const name = FLAG_NAME[PF] || SRB.name;
-  h += `<div class="flagnode ${S.state === 2 ? "on" : ""}" data-btn data-tip="${PF === "srb" ? "U1" : dyn(T(name, `<p>Рамка флага в углу: ${name}, пропорции флага как есть.</p>`, "Щелчок или <kbd>Q</kbd> — панель «Страна»"))}" data-key="Q" data-act="country" style="${box([f[0], f[1], f[2], l.rank[3]])}">
+  h += `<div class="flagnode ${S.state === 2 ? "on" : ""}" data-btn data-tip="${PF === "srb" ? "U1" : dyn(T(name, `<p>${FLAG_SUB[PF] || ""}</p>`, "Щелчок или <kbd>Q</kbd> — панель «Страна»"))}" data-key="Q" data-act="country" style="${box([f[0], f[1], f[2], l.rank[3]])}">
     <span class="flagset" style="width:${fw}px;height:${fh}px">${flagImg(PF, fw - (big() ? 8 : 6), fh - (big() ? 8 : 6))}</span>
     <span class="rank" data-tip="${dyn(T("Место в мире", `<p>№ ${SRB.rank} по ВВП, за год ▲ 2 места. До 70-го — $1,9 млрд.</p>`, "Рейтинги — Сводки (<kbd>L</kbd>)"))}" style="top:${l.rank[1] - f[1]}px;height:${l.rank[3] - l.rank[1]}px">№ ${SRB.rank}<small>по ВВП</small></span></div>`;
   // rail: nine doors and search; the country lives on the flag (Q)
@@ -155,7 +160,7 @@ function datePlate() {
   let h = plate(r, b ? 8 : 6, "bl", { panel: "date" });   // plain: the date is a line, not an ornament
   // the date is a dated ledger line: written in ink on a ruled line, the state as a margin note
   h += `<div class="date ${S.paused ? "paused" : ""}" id="d1" data-btn data-tip="D1" data-key="Пробел" data-act="pause" style="${box(l.d1)}">${gl(S.paused ? "play" : "pause", b ? 18 : 14)}<span class="dt">${dateText()}</span><small class="p">${S.paused ? "пауза" : "идёт"}</small></div>`;
-  h += ruled(l.d1[0] + (b ? 34 : 24), l.d1[3] - (b ? 3 : 2), l.d1[2] - l.d1[0] - (b ? 42 : 30), 3);
+  h += ruled(l.d1[0] + (b ? 32 : 22), l.d1[3] - (b ? 2 : 1), l.d1[2] - l.d1[0] - (b ? 38 : 26), 5);
   const [mw, mh, st] = l.mark;
   let marks = "";
   for (let i = 0; i < 5; i++) marks += `<i data-speed="${i + 1}" class="${i < S.speed ? "lit" : ""} ${i + 1 === S.speed ? "cur" : ""}" style="left:${i * st}px;width:${mw}px;height:${mh}px"></i>`;
@@ -196,16 +201,16 @@ function alertsPlate() {
   let h = plate([a.x1, a.y - (b ? 8 : 6), a.x2, bottom], b ? 8 : 6, "bl", { panel: "alerts" });
   list.forEach((al, i) => {
     const y = a.y + i * a.row, k = dyn(al.tip), w = a.x2 - a.x1;
-    const fieldW = al.field ? a.field : 0, tickW = al.seen ? (b ? 20 : 15) : 0, txW = w - a.tx1 - a.sev - 10 - (fieldW ? fieldW + 6 : 0) - tickW;
-    if (i > 0) h += ruled(a.x1 + (b ? 10 : 7), y, w - (b ? 20 : 14), 7 + i, "ink");      // notes in a hand-ruled list
+    const fieldW = al.field ? a.field : 0, tickW = b ? 18 : 14, txW = w - a.tx1 - a.sev - 10 - (fieldW ? fieldW + 6 : 0);
+    if (i > 0) h += ruled(a.x1 + (b ? 18 : 13), y, w - (b ? 26 : 19), 7 + i * 3, "ink");      // notes in a hand-ruled list
     h += `<div class="arow ${al.next ? "next" : ""} ${al.more ? "more" : ""} ${al.seen ? "seen" : ""}" data-btn data-tip="${k}" data-alert="${i}" data-topic="${al.topic}" ${al.go ? `data-go="${al.go}"` : ""} style="left:${a.x1}px;top:${y}px;width:${w}px;height:${a.row}px">
       <span style="position:absolute;left:${a.ix}px;top:${(a.row - a.icon) / 2}px">${ico(al.ic, a.icon, al.sev === "n" ? "t-neg" : al.sev === "w" ? "t-warn" : "")}</span>
       <span class="tx" style="left:${a.tx1}px;width:${txW}px;top:${(a.row - (b ? 20 : 16)) / 2}px">${al.tx}</span>
       ${fieldW ? `<span class="fd ${al.sev === "n" ? "ng" : ""}" style="left:${w - a.sev - 10 - fieldW}px;width:${fieldW}px;top:${(a.row - (b ? 20 : 16)) / 2}px">${al.field}</span>` : ""}
-      ${al.seen ? `<span class="tick" style="left:${w - a.sev - 10 - (fieldW ? fieldW + 6 : 0) - tickW}px;top:${(a.row - tickW) / 2 - 1}px">${gl("tick", tickW)}</span>` : ""}
+      ${al.seen ? `<span class="tick" style="left:${b ? 2 : 1}px;top:${(a.row - tickW) / 2 - 2}px">${gl("tick", tickW)}</span>` : ""}
       <span class="st" style="left:${w - a.sev - 4}px;top:${(a.row - 12) / 2}px;width:12px">${sevGlyph(al.sev)}</span></div>`;
   });
-  h += ruled(a.x1 + (b ? 10 : 7), tabY - 2, a.x2 - a.x1 - (b ? 20 : 14), 3, "ink");
+  h += ruled(a.x1 + (b ? 18 : 13), tabY - 2, a.x2 - a.x1 - (b ? 26 : 19), 23, "ink");
   h += `<div class="ostab ${open ? "open" : ""}" data-btn data-tip="O1" data-key="J" data-act="outliner" style="left:${a.x1 + 6}px;top:${tabY}px;width:${a.x2 - a.x1 - 12}px;height:${a.tab}px">${gl("eye", b ? 17 : 13)}Слежу · ${rowsO.length}<span class="ar">▸</span></div>`;
   if (open) h += outliner(rowsO, a.x1 + 12, tabY + a.tab + 2, a.x2 - a.x1 - 24, oh);
   return h;
@@ -238,14 +243,14 @@ function mapPlate() {
   h += `<div class="mode ${S.more ? "on" : ""}" data-btn data-tip="MORE" data-key="M" data-act="more" style="${box(mo)}">${gl("more", g)}</div>`;
   if (mini) {
     const m8 = l.m8, w = m8[2] - m8[0], hh = m8[3] - m8[1];
-    const vx = (280 - 140) / 1416 * w, vw = 1010 / 1416 * w, vy = (395 - 260) / 708 * hh, vh = 568 / 708 * hh;
+    const [vx, vy, vw, vh] = [MINI_VIEW[0] * w, MINI_VIEW[1] * hh, MINI_VIEW[2] * w, MINI_VIEW[3] * hh];
     h += `<div class="minimap" data-btn data-tip="M8" style="${box(m8)}"><div class="vp" style="left:${vx}px;top:${vy}px;width:${vw}px;height:${vh}px"></div></div>`;
   }
   return h;
 }
 function morePop() {
   const l = L(), r = l.morePop, w = r[2] - r[0], hh = r[3] - r[1], b = big();
-  const tabs = `<div class="ftabs" style="left:${b ? 14 : 10}px;right:${b ? 14 : 10}px;top:${b ? 12 : 8}px">${[["modes", "Режимы"], ["layers", "Слои"]].map(t => `<div class="ftab ${S.moreTab === t[0] ? "on" : ""}" data-btn data-mtab="${t[0]}">${t[1]}</div>`).join("")}</div>`;
+  const tabs = `<div class="ftabs" style="left:${b ? 14 : 10}px;right:${b ? 14 : 10}px;top:${b ? 12 : 8}px;height:${b ? 38 : 30}px">${[["modes", "Режимы"], ["layers", "Слои"]].map(t => `<div class="ftab ${S.moreTab === t[0] ? "on" : ""}" data-btn data-mtab="${t[0]}">${t[1]}</div>`).join("")}</div>`;
   const body = S.moreTab === "modes"
     ? `<div class="mgrid">${ALL_MODES.map((m, i) => `<div class="btn mchip ${i < 5 && MODES[i].cls === S.mode ? "on" : ""}" data-btn>${m}</div>`).join("")}</div><p class="note" style="margin:10px 2px 0">Перетащите режим на любой из пяти слотов. Пятый слот — «Война» — постоянный.</p>`
     : `<div class="lgrid">${LAYERS.map(t => { const on = t[0] === "Мини-карта" ? S.mini : t[0] === "Постройки" ? S.buildings : t[2]; return `<div class="lrow" data-btn data-layer="${t[0]}"><span class="tg ${on ? "on" : ""}"></span>${t[0]}${t[1] ? `<span class="k">${t[1]}</span>` : ""}</div>`; }).join("")}</div>`;
@@ -267,27 +272,33 @@ function bottomStrip(shift) {
     const r = [x0 + i * step, s.h[0], x0 + i * step + tw, s.h[1]];
     let st = a.st, g = a.g, edge = a.edge;
     if (S.state === 6 && i < 2) { st = i === 0 ? "Марш · Рашка, 3 дн." : "Марш · Бујановац, 2 дн."; g = "march"; edge = "#c08a2e"; }
-    if (S.state === 4 && i === 0) { st = "Марш · Ниш, 4 дн."; g = "march"; edge = "#2f6db3"; }
-    const tip = dyn(T(a.front ? a.n : a.n, a.front
-      ? `<p>${a.armies} армии · ${a.d} дивизий. Щелчок — выбрать весь фронт; ▸ — развернуть армии фронта в полосе.</p>`
-      : `<table><tr><td>Командующий</td><td>${a.gen || "—"}</td></tr><tr><td>Дивизий</td><td>${a.d}</td></tr><tr><td>Сила</td><td>${Math.round(a.str * 100)} %</td></tr><tr><td><span class="term" data-term="org">Организация</span></td><td>88 %</td></tr>${a.grp ? `<tr><td>Группа</td><td>${a.grp}</td></tr>` : ""}</table>`,
+    if (S.state === 4 && i === 0) { st = "Марш · Ниш, 4 дн."; g = "march"; edge = "#5c4f3d"; }
+    const tip = dyn(T(a.n, a.front
+      ? `<p>${a.armies} армии · ${a.d} дивизий · бой. Щелчок — выбрать весь фронт; ▸ — развернуть армии фронта в полосе.</p>`
+      : `<table><tr><td>Командующий</td><td>${a.gen || "—"}</td></tr><tr><td>Дивизий</td><td>${a.d}</td></tr><tr><td>Сила</td><td>${Math.round(a.str * 100)} %</td></tr><tr><td><span class="term" data-term="org">Организация</span></td><td>88 %</td></tr>${a.grp ? `<tr><td>Группа</td><td>${a.grp % 10} — клавиша ${a.grp % 10}</td></tr>` : ""}</table>`,
       "Щелчок — выбрать · двойной — камера · <kbd>Ctrl</kbd>+щелчок — добавить · <kbd>Ctrl</kbd>+<kbd>6</kbd>…<kbd>0</kbd> — в группу"));
-    // a paper tag: the army's flag in its own proportions, the name in ink, the order as a pencilled line,
-    // the state as the ink of the left stripe; selected = an ink-blue edge, no glow
+    // An army is a paper tag (the cut corners of a luggage tag): flag, name in ink, divisions, the order as a line,
+    // the group in words. A front is a different thing - a bundle of the tags of its armies, so it is drawn as a
+    // stack: the sheets of the other armies show under the top one, and it has no flag of its own.
     const sel = S.state === 4 && i === 0, tw2 = r[2] - r[0], th2 = r[3] - r[1], nk = b ? 9 : 7;
-    const TP = [[nk, 0], [tw2, 0], [tw2, th2], [nk, th2], [0, th2 - nk], [0, nk]];
-    const face = `<span class="face" style="clip-path:polygon(${TP.map(p => p[0] + "px " + p[1] + "px").join(",")})"></span>
-      <svg class="tagedge" width="${tw2}" height="${th2}"><polygon points="${pts(polyInset(TP, sel ? 1.25 : .5))}" fill="none" stroke="${sel ? "#2f6db3" : "rgba(30,24,18,.75)"}" stroke-width="${sel ? 2.5 : 1}"/></svg>`;
+    const TP = a.front ? [[0, 0], [tw2, 0], [tw2, th2], [0, th2]] : [[nk, 0], [tw2, 0], [tw2, th2], [nk, th2], [0, th2 - nk], [0, nk]];
+    const po = `${-(i * 211 + 37) % 700}px ${-(i * 157 + 90) % 500}px`;
+    const sheets = a.front ? `<span class="sheet" style="left:5px;right:-5px;top:-7px;height:8px;--po:${po}"></span><span class="sheet" style="left:2px;right:-2px;top:-4px;height:6px"></span>` : "";
+    const face = `${sheets}<span class="face" style="clip-path:polygon(${TP.map(p => p[0] + "px " + p[1] + "px").join(",")});--po:${po}"></span>
+      <svg class="tagedge" width="${tw2}" height="${th2}"><polygon points="${pts(polyInset(TP, sel ? 1.25 : .5))}" fill="none" stroke="${sel ? "#1b140d" : "rgba(30,24,18,.75)"}" stroke-width="${sel ? 2.5 : 1}"/>${sel ? `<path d="M${nk} ${th2 + 4} Q${tw2 / 2} ${th2 + 5.5} ${tw2 - 2} ${th2 + 3.5}" fill="none" stroke="#1b140d" stroke-width="2.4" stroke-linecap="round"/>` : ""}</svg>`;
     const flag = a.front ? "" : flagImg(PF, b ? 24 : 18, b ? 16 : 12, "tf");
-    const grp = a.grp ? `<span class="grp">${a.grp % 10}</span>` : "";
+    const grpTxt = a.grp ? `гр. ${a.grp % 10}` : "";
     if (compact) {
-      h += `<div class="token compact ${sel ? "sel" : ""}" data-btn data-tip="${tip}" data-act="army" style="${box(r)};--edge:${edge}">${face}${a.front ? gl("front", b ? 18 : 14) : flag}<b>${a.d}</b>${grp}</div>`;
+      h += `<div class="token compact ${a.front ? "front" : ""} ${sel ? "sel" : ""}" data-btn data-tip="${tip}" data-act="army" style="${box(r)};--edge:${edge}">${face}${a.front ? `<b style="font:600 12px var(--serif)">Фронт</b>` : flag}<b>${a.d}</b></div>`;
+    } else if (a.front) {
+      h += `<div class="token front ${sel ? "sel" : ""}" data-btn data-tip="${tip}" data-act="army" style="${box(r)};--edge:${edge}">${face}
+        <div class="nm"><b>${a.n}</b><span>${a.d} див.</span></div>
+        <div class="stt">${gl(g, b ? 12 : 10)}${st}${grpTxt ? `<span class="gr">${grpTxt}</span>` : ""}</div><span class="exp">▸</span></div>`;
     } else {
-      h += `<div class="token ${a.front ? "front" : ""} ${sel ? "sel" : ""}" data-btn data-tip="${tip}" data-act="army" style="${box(r)};--edge:${edge}">${face}
-        ${a.front ? `<span class="fg">${gl("front", b ? 22 : 16)}</span>` : `<span class="fg">${flag}</span>`}
-        <div class="nm">${a.n}<span>×${a.d}</span></div>
-        <div class="stt">${gl(g, b ? 12 : 10)}${st}</div>
-        <div class="str"><i style="width:${a.str * 100}%"></i></div>${grp}${a.front ? `<span class="exp">▸</span>` : ""}</div>`;
+      h += `<div class="token ${sel ? "sel" : ""}" data-btn data-tip="${tip}" data-act="army" style="${box(r)};--edge:${edge}">${face}
+        <span class="fg">${flag}</span>
+        <div class="nm"><b>${a.n}</b><span>${a.d} див.</span></div>
+        <div class="stt">${gl(g, b ? 12 : 10)}${st}${grpTxt ? `<span class="gr">${grpTxt}</span>` : ""}</div></div>`;
     }
   });
   if (S.undo) {
@@ -305,7 +316,8 @@ function leftPanel(spec) {
   let inner = `<div class="lp-head" style="left:${pad}px;right:${pad - 4}px;top:${b ? 12 : 8}px">
     ${emb}<div class="tt"><h2>${spec.title}</h2><div>${spec.sub}</div></div>
     <div class="hb" data-btn data-tip="BACK">${gl("back", 18)}</div><div class="hb ${spec.pinned ? "on" : ""}" data-btn data-tip="PIN">${gl("pin", 18)}</div><div class="hb" data-btn data-tip="CLOSE" data-act="close" data-key="Esc">${gl("close", 16)}</div></div>
-    <div class="lp-figs" style="left:${pad}px;right:${pad}px;top:${b ? 72 : 50}px">${spec.figs.map(f => `<div class="fig well"><b class="${f[2] || ""}">${f[0]}</b><span>${f[1]}</span></div>`).join("")}</div>`;
+    <div class="lp-figs" style="left:${pad}px;right:${pad}px;top:${b ? 88 : 62}px">${spec.figs.map((f, i) => `<span class="f ${i === 0 ? "main" : ""}"><b class="${f[2] || ""}">${f[0]}</b>${f[1]}</span>`).join("")}</div>
+    ${ruled(pad, b ? 113 : 82, w - 2 * pad, 11)}`;
   inner += `<div class="ftabs attached" style="left:${pad}px;right:${pad}px;top:${head + 2}px;height:${tabs}px">${spec.tabs.map((t, i) => `<div class="ftab ${i === spec.active ? "on" : ""}" data-btn>${t}</div>`).join("")}</div>`;
   inner += `<div class="lp-body" style="left:${pad}px;right:${pad}px;top:${head + tabs + 2}px;bottom:${foot + 2}px"><div class="lpc">${spec.body}</div></div>`;
   inner += `<div class="lp-foot" style="left:${pad}px;right:${pad}px;bottom:${b ? 9 : 6}px;height:${foot - (b ? 16 : 10)}px">${spec.foot}</div>`;
@@ -317,8 +329,8 @@ const term = (t, k) => `<span class="term" data-term="${k}">${t}</span>`;
 function countrySpec() {
   const nb = [["hun", "Венгрия", "$212", "+48"], ["rou", "Румыния", "$351", "+36"], ["bgr", "Болгария", "$101", "+21"], ["hrv", "Хорватия", "$82", "−34"], ["bih", "Босния и Герцеговина", "$27", "+8"], ["kos", "Косово", "$10", "−81"]];
   return {
-    title: FLAG_NAME[PF] || SRB.name, sub: PF === "srb" ? `${SRB.form} · президент ${SRB.leader}` : "Образец рамки: флаг в своих пропорциях, данные — Сербии", flag: PF,
-    figs: [["71-е", "ВВП в мире · ▲ 2 места"], ["3-я из 8", "стабильность в регионе"], ["58-е", "сила армии в мире"]],
+    title: FLAG_NAME[PF] || SRB.name, sub: PF === "srb" ? `${SRB.form} · президент ${SRB.leader}` : FLAG_SUB[PF], flag: PF,
+    figs: [["71-е", "по ВВП"], ["3-я из 8", "по стабильности"], ["58-е", "по армии"]],
     tabs: ["Обзор", "Общество", `Решения <span class="badge">3</span>`, "Нации"], active: 0,
     body: `<div class="sec"><h3>Сравнение с соседями<span class="r">ВВП, млрд · отношения</span></h3>
       ${nb.map(n => `<div class="kv" data-btn><span class="k"><img src="img/flags/${n[0]}.png" class="kflag">${n[1]}</span><span class="v" style="min-width:56px;text-align:right;color:var(--paper-dim)">${n[2]}</span><span class="v ${n[3].startsWith("−") ? "neg" : ""}" style="min-width:40px;text-align:right">${n[3]}</span></div>`).join("")}</div>
@@ -335,8 +347,8 @@ function regionSpec() {
       <span style="display:flex;gap:3px"><span class="btn chip" data-btn data-tip="${tip}" data-rc="build">+1</span><span class="btn chip" data-btn data-tip="${tip}" data-rc="build">×3</span><span class="btn chip" data-btn data-tip="${dyn(T("Сколько хватит денег", `<p>Строит, пока казна не опустится до запаса на 8 недель: здесь ${n.toLowerCase()} ×5 за $480 млн.</p>`, "Shift/ПКМ — во всех регионах"))}" data-rc="build">всё</span></span></div>`;
   };
   return {
-    title: "Шумадия", sub: "Шумадия и Поморавье · Сербия · 7 провинций", icon: "region",
-    figs: [["1,93 млн", "население · 3-й регион"], ["$14,9 млрд", "ВВП · 20 % страны"], ["66 %", "стабильность"]],
+    title: "Шумадия", sub: "Шумадия и Поморавье · Сербия · 7&nbsp;провинций", icon: "region",
+    figs: [["1,93 млн", "жителей"], ["$14,9 млрд", "20 % ВВП"], ["66 %", "стабильность"]],
     tabs: ["Обзор", "Население", "Стройка", "Набор"], active: 0,
     body: `<div class="kv" data-btn style="background:rgba(239,228,200,.05)"><span class="k"><img src="img/flags/srb.png" class="kflag">Сербия</span><span class="v">к стране ›</span></div>
       <div class="sec" style="margin-top:10px"><h3>Регион</h3>
@@ -349,11 +361,10 @@ function regionSpec() {
 function armySpec() {
   const divs = [["1-я механизированная", .98, "Пехота + БМП"], ["2-я механизированная", .97, "Пехота + БМП"], ["3-я пехотная", .95, "Пехота"], ["4-я пехотная", .96, "Пехота"], ["63-я парашютная", 1, "Десант"], ["Смешанная артиллерийская", .93, "Артиллерия"]];
   return {
-    title: "1-я армия", sub: "ген. Д. Петрович · осторожный · группа 6", flag: "srb",
-    figs: [["12", "дивизий · 18 400"], ["96 %", "сила"], ["88 %", "организация"]],
+    title: "1-я армия", sub: "ген. Д. Петрович · осторожный · группа&nbsp;6", flag: "srb",
+    figs: [["12 дивизий", "18 400 чел."], ["96 %", "сила"], ["88 %", "организация"]],
     tabs: ["Состав", "Приказы", "Снабжение", "Генерал"], active: 0,
-    body: `<div class="sec"><h3>Приказ</h3><div class="kv sel"><span class="k">${gl("march", 16, "color:var(--accent)")}Марш: Белград → Ниш</span><span class="v">4 дн.</span></div>
-      <p class="note" style="margin:6px 2px 0">ПКМ по карте — марш · <b>Shift</b>+ПКМ — точка пути · <b>Ctrl</b>+ПКМ — поддержать · <b>Alt</b>+ПКМ — отделить часть · ЛКМ по карте — карточка у курсора, панель остаётся</p></div>
+    body: `<div class="sec"><h3>Приказ</h3><div class="kv sel" data-btn data-tip="${dyn(T("Марш: Белград → Ниш", "<p>4 дня по дороге E-75; снабжение в пути 100 %.</p>", "ПКМ по карте — марш · <kbd>Shift</kbd>+ПКМ — точка пути · <kbd>Ctrl</kbd>+ПКМ — поддержать · <kbd>Alt</kbd>+ПКМ — отделить часть"))}"><span class="k">${gl("march", 16, "color:var(--paper)")}Марш: Белград → Ниш</span><span class="v">4 дн.</span></div></div>
       <div class="sec"><h3>Дивизии<span class="r">перетащите на жетон, чтобы перевести</span></h3>
       ${divs.map(d => `<div class="kv" data-btn><span class="k">${ico("military", 16)}${d[0]} <span style="color:var(--paper-faint)">${d[2]}</span></span><span class="v" style="display:flex;align-items:center;gap:8px"><span class="meter" style="width:60px;height:5px"><i style="width:${d[1] * 100}%"></i></span>${Math.round(d[1] * 100)} %</span></div>`).join("")}</div>`,
     foot: `<div class="btn" data-btn data-tip="${dyn(T("Пополам", "<p>Две армии по 6 дивизий; генерал Петрович остаётся с первой.</p>", "<kbd>Ctrl</kbd>+<kbd>X</kbd>"))}">Пополам <span class="k">Ctrl X</span></div><div class="btn" data-btn data-tip="${dyn(T("Объединить с выбранными", "<p>Выбрана одна армия — объединять не с чем. Ctrl+щелчок по жетону добавляет к выбору.</p>", "<kbd>G</kbd>"))}">Объединить <span class="k">G</span></div><div class="btn primary" data-btn data-tip="${dyn(T("Отделить часть…", `<p>Сначала куда (щелчок по карте), потом сколько: 25 / 50 / 75 / 100 % (A S D F) или число дивизий.</p>`, "<kbd>Alt</kbd>+ПКМ по карте"))}">${ico("hq_detach", 18)}Отделить…</div>`,
@@ -390,6 +401,7 @@ const fmtM = v => (v < 0 ? "−" : "") + "$" + Math.abs(Math.round(v)).toLocaleS
 const fmtVal = (it, side) => it.army ? (Math.round(it.v * 10) / 10).toString().replace(".", ",") + " % ВВП" : side === "rev" ? (Math.round(it.v * 10) / 10).toString().replace(".", ",") + " %" : Math.round(it.v) + " %";
 function brow(it, side, i) {
   const key = side + ":" + i, focus = S.bfocus === key;
+  if (it.locked) return `<div class="brow fixed" data-tip="${dyn(T(it.n, "<p>Проценты по долгу $39,3 млрд. Платёж обязательный: пропуск — дефолт. Меньше он станет, когда долг погашен.</p>", ""))}"><span class="n">${ico(it.ic, 18)}${it.n}</span><span class="fixnote">обязательный платёж</span><span class="mon">${fmtM(money(it))}</span></div>`;
   const pct = (it.v - it.min) / ((it.max - it.min) || 1) * 100, rec = (it.rec - it.min) / ((it.max - it.min) || 1) * 100;
   let quick = "";
   if (focus && !it.locked) {
@@ -402,6 +414,23 @@ function brow(it, side, i) {
     <span class="sliderwrap"><input type="range" class="qs" data-btn data-sl="${key}" min="${it.min}" max="${it.max}" step="${it.army ? 0.1 : 1}" value="${it.v}" ${it.locked ? "disabled" : ""} style="--p:${pct}%"><span class="rec" style="left:calc(${rec}% * .94 + 3%)"></span></span>
     <span class="val">${fmtVal(it, side)}</span><span class="mon">${fmtM(money(it))}</span></div>${quick}`;
 }
+// The treasury on a ruled sheet: a grid in ink, the values at both ends, the zero line and the borrowing limit.
+function treasuryChart(vals, w, h) {
+  const top = 5, lo = -1, padL = 46, padR = 100, padT = 10, padB = 24, W2 = w - padL - padR, H2 = h - padT - padB;
+  const X = i => padL + i / (vals.length - 1) * W2, Y = v => padT + (top - v) / (top - lo) * H2;
+  let g = "";
+  for (let v = lo; v <= top; v++) g += `<line x1="${padL}" x2="${padL + W2}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 0 ? "#a39983" : "rgba(239,228,200,.10)"}" stroke-width="${v === 0 ? 1.4 : 1}"/><text x="${padL - 8}" y="${Y(v) + 4}" text-anchor="end" font-size="12" fill="#a39983">${v}</text>`;
+  ["июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь", "январь"].forEach((m, k) => { const x = padL + k / 6 * W2; g += `<line x1="${x}" x2="${x}" y1="${padT}" y2="${padT + H2}" stroke="rgba(239,228,200,.06)"/><text x="${x}" y="${h - 6}" text-anchor="middle" font-size="12" fill="#a39983">${m}</text>`; });
+  const lim = -0.9;   // borrowing limit: what the market lends against 52 % of GDP
+  g += `<line x1="${padL}" x2="${padL + W2}" y1="${Y(lim)}" y2="${Y(lim)}" stroke="#c94f55" stroke-width="1.2" stroke-dasharray="6 4"/><text x="${padL + W2 + 6}" y="${Y(lim) + 4}" font-size="12" fill="#ec8a8f">лимит займа</text>`;
+  g += `<text x="${padL + W2 + 6}" y="${Y(0) + 4}" font-size="12" fill="#cfc5ab">казна = 0</text>`;
+  const pts2 = vals.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+  g += `<polyline points="${pts2}" fill="none" stroke="#e7b058" stroke-width="2"/>`;
+  g += `<circle cx="${X(0)}" cy="${Y(vals[0])}" r="3" fill="#e7b058"/><text x="${X(0) + 6}" y="${Y(vals[0]) - 8}" font-size="13" font-weight="700" fill="#efe4c8">$${vals[0].toFixed(2).replace(".", ",")}</text>`;
+  const n = vals.length - 1;
+  g += `<circle cx="${X(n)}" cy="${Y(vals[n])}" r="3" fill="#e7b058"/><text x="${X(n)}" y="${Y(vals[n]) - 8}" text-anchor="end" font-size="13" font-weight="700" fill="#efe4c8">$${vals[n].toFixed(2).replace(".", ",")} · ▼ 0,78 за полгода</text>`;
+  return `<svg class="chart" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="Segoe UI,sans-serif">${g}</svg>`;
+}
 function budgetScreen() {
   if (!S.budget) budgetInit();
   const l = L(), r = l.full, w = r[2] - r[0], hh = r[3] - r[1];
@@ -413,7 +442,7 @@ function budgetScreen() {
     <div class="fs-body"><div class="lcol"><div class="sec"><h3>Доходы<span class="r" id="b-rev">${fmtM(s.rev)}</span></h3>${b.rev.map((it, i) => brow(it, "rev", i)).join("")}</div>
       <div class="sec"><h3>Расходы<span class="r" id="b-exp">${fmtM(s.exp)}</span></h3>${b.exp.map((it, i) => brow(it, "exp", i)).join("")}</div>
       <div class="sec" style="grid-column:1/-1"><h3>Куда идут деньги<span class="r">доля расходов</span></h3><div class="stack">${b.exp.map(it => { const m = money(it); return `<i style="flex:${m}" data-tip="${dyn(T(it.n, `<p>${fmtM(m)} в неделю · ${Math.round(m / s.exp * 100)} %</p>`, ""))}"><span>${it.n}</span><b>${Math.round(m / s.exp * 100)} %</b></i>`; }).join("")}</div></div>
-      <div class="sec" style="grid-column:1/-1"><h3>Казна за полгода<span class="r">${SRB.treasury}</span></h3>${spark([3.9, 3.8, 3.75, 3.6, 3.62, 3.5, 3.41, 3.38, 3.3, 3.25, 3.2, 3.12], 1180, 150, "#e7b058")}</div></div>
+      <div class="sec" style="grid-column:1/-1"><h3>Казна за полгода<span class="r">июль — январь, млрд $</span></h3>${treasuryChart([3.9, 3.8, 3.75, 3.6, 3.62, 3.5, 3.41, 3.38, 3.3, 3.25, 3.2, 3.12], 1180, 160)}</div></div>
       <div class="rcol"><div class="sec"><h3>${term("Баланс", "balance")}</h3><div class="bigfig total ${s.bal < -0.5 ? "neg" : "pos"}" id="b-bal">${fmtM(s.bal)}</div>
         <div class="meter" style="height:10px;margin-top:8px"><i style="width:${Math.min(100, s.exp / Math.max(s.rev, s.exp) * 100)}%"></i><b style="left:${s.rev / Math.max(s.rev, s.exp) * 100}%"></b></div>
         <p class="note" style="margin-top:8px">Через год при этом бюджете: казна <b>${yr >= 0 ? "$" + yr.toFixed(2).replace(".", ",") + " млрд" : "пуста"}</b> · долг <b>${debt.toFixed(1).replace(".", ",")} % ВВП</b> · ${term("инфляция", "inflation")} <b>7,1 %</b></p></div>
@@ -421,7 +450,7 @@ function budgetScreen() {
         <div class="btn wide" data-btn data-debt="3" data-tip="${dyn(T("Погасить всё, что можно", "<p>Гасит долг до запаса казны на 8 недель. Уже есть в окне долга (2b021679).</p>", ""))}">${ico("coins", 16)}Погасить всё, что можно · $0,9 млрд</div>
         <div style="display:flex;align-items:center;gap:6px;margin-top:8px">${["25 %", "50 %", "75 %", "100 %"].map((t, i) => `<span class="btn chip ${i === q ? "on" : ""}" data-btn data-debt="${i}">${t}</span>`).join("")}<span class="qfield" style="margin-left:auto">$${amt.toFixed(2).replace(".", ",")} млрд</span></div>
         <p class="note" style="margin-top:8px">После погашения: казна <b>$${(3.12 - amt).toFixed(2).replace(".", ",")} млрд</b> · долг <b>${(52.3 - amt / 75.2 * 100).toFixed(1).replace(".", ",")} % ВВП</b></p></div>
-        <p class="note">Готовые значения стоят только у выбранной строки — одна полоса под ней, а не четыре кнопки у каждой. Щелчок по строке выбирает её.</p></div></div>
+</div></div>
     <div class="fs-foot"><div class="btn" data-btn data-act="b-last">Как в прошлом году</div><div class="btn" data-btn data-act="b-rec">Рекомендуемое</div>
       <div class="btn primary" data-btn data-act="b-zero" data-rc="b-zero-tax" data-tip="${dyn(T("Свести в ноль", `<p>Подгоняет расходы (кроме армии и долга) так, чтобы баланс стал нулём. <b>Shift</b>+щелчок или ПКМ — то же налогами.</p>`, "ЛКМ — расходами · Shift/ПКМ — налогами"))}">${ico("balance", 18)}Свести в ноль</div></div>`;
   return `<div id="dim"></div>` + plateHTML(r[0], r[1], w, hh, chamfer(w, hh, 14, "tl tr"), { panel: "full", inner, cls: "paperbody fullscreen", rim: "brass" });
@@ -435,8 +464,9 @@ function qaBox(x, y, title, sub, opts, sel, cons, everywhere) {
     <div class="qt">${title}<span>${sub}</span></div>
     <div class="quarts">${opts.map((o, i) => `<div class="q ${i === sel ? "on" : ""}" data-btn data-q="${i}"><span class="lt">${letters[i]}</span>${o[0]}<small>${o[1]}</small></div>`).join("")}</div>
     <div class="qrow"><input type="range" class="qs" data-btn min="0" max="100" value="${(sel + 1) * 25}" style="--p:${(sel + 1) * 25}%"><span class="field">${opts[sel][2]}</span>${everywhere ? `<span class="btn chip" data-btn data-rc="recruit" data-tip="${dyn(T("Везде", `<p>${everywhere}</p><p>Видимая кнопка для телефона: долгое нажатие на кнопке действия — только подсказка.</p>`, ""))}">Везде</span>` : ""}</div>
-    <div class="cons">${cons}</div><div class="holds">A S D F — доли · Esc — закрыть</div></div>`;
-  return plateHTML(x, y, w, hgt + 14, chamfer(w, hgt + 14, 6, "tl br"), { pop: true, cls: "qa holdkeys", inner, attrs: `id="qa"` });
+    <div class="cons">${cons}</div><div class="holds"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>F</kbd>&nbsp;доли<span class="sp"></span><kbd>Esc</kbd>&nbsp;закрыть</div></div>`;
+  // while it holds A S D F it wears the brass rim of an important panel (it takes keys from the camera)
+  return plateHTML(x, y, w, hgt + 14, chamfer(w, hgt + 14, 6, "tl br"), { pop: true, cls: "qa holdkeys", inner, attrs: `id="qa"`, rim: "brass" });
 }
 function planBar(shift) {
   const l = L(), r = l.pbar.slice(), dx = shift ? l.tshift - r[0] : 0; r[0] += dx; r[2] += dx;
@@ -450,18 +480,32 @@ function planBar(shift) {
 // The event card is a clipping from a newspaper the world in the game would print: paper, ink, a serif
 // headline, a dateline. Under the default preset «Спокойно» world news is only written to the log; a card
 // comes for a change of DEFCON (crisis) and for sanctions against us (war).
+function clipEdge(w, h, seed) {
+  let r = seed * 7919 + 17;
+  const rnd = () => ((r = (r * 9301 + 49297) % 233280) / 233280);
+  const P = [[0, 1], [w * .3, 0], [w * .64, 1]];
+  // the torn right edge: small irregular steps, 2-6 px deep
+  for (let y = 0; y <= h; y += 3 + rnd() * 5) P.push([w - 2 - rnd() * 5 - (y / h) * 1.5, y]);
+  // the torn bottom edge
+  for (let x = w; x >= 0; x -= 3 + rnd() * 6) P.push([x, h - 2 - rnd() * 6]);
+  P.push([1, h * .55]);
+  const inner = P.map(p => `${p[0].toFixed(1)}px ${p[1].toFixed(1)}px`).join(",");
+  // the lighter fibre of the tear is the same outline pushed out by 1.5-2.5 px on the torn sides
+  const T = P.map(([x, y]) => [x >= w - 9 ? x + 1.5 + rnd() : x, y >= h - 9 ? y + 1.5 + rnd() : y]);
+  return [`polygon(${inner})`, `polygon(${T.map(p => `${p[0].toFixed(1)}px ${p[1].toFixed(1)}px`).join(",")})`];
+}
 function headline() {
   const r = L().headline, w = r[2] - r[0], hh = r[3] - r[1], b = big();
   const war = WAR();
   const kick = war ? "Санкции против нас · 20 мая 2024" : "Смена ступени DEFCON · 14 марта 2024";
   const title = war ? "ЕС вводит санкции против Сербии" : "DEFCON 3: мобилизации на Балканах";
   const text = war ? "Заморожены активы центробанка; торговля с ЕС −30 %. Ответить — Дипломатия (O)." : "KFOR усиливает гарнизон в Косово на 1 200 военных. Напряжённость 91 при пороге 75.";
-  // scissors do not cut straight: a few points of the edge sit a pixel off
-  const cut = `polygon(0 1px, 22% 0, 61% 1px, 100% 0, calc(100% - 1px) 38%, 100% 100%, 70% calc(100% - 1px), 34% 100%, 0 calc(100% - 1px), 1px 55%)`;
+  // scissors along the top and the left (a pixel off here and there), torn by hand along the right and the bottom
+  const [cut, tear] = clipEdge(w, hh, war ? 5 : 3);
   return `<div class="clip" data-panel="headline" data-btn data-act="hlpin" data-topic="news:${war ? "eu-sanctions" : "defcon3"}"
     data-tip="${dyn(T(war ? "Санкции против нас" : "Смена ступени DEFCON", "<p>Карточка живёт 9 секунд игрового хода (на паузе стоит). Щелчок закрепляет её. Пресет «Спокойно»: мировые новости — только запись в окне «Мир», карточка — смена DEFCON и санкции против нас.</p>", "Щелчок — закрепить · Esc — закрыть"))}"
     style="left:${r[0]}px;top:${r[1]}px;width:${w}px;height:${hh}px">
-    <div class="paper" style="clip-path:${cut}"></div>
+    <div class="tear" style="clip-path:${tear}"></div><div class="paper" style="clip-path:${cut}"></div>
     <div class="headline" style="position:absolute;inset:${b ? "11px 16px" : "7px 10px"}"><div class="kick"><span>${kick}</span><span class="pin ${S.hlPinned ? "on" : ""}">${gl("pin", b ? 14 : 11)}${S.hlPinned ? "закреплена" : ""}</span></div>
     <h3>${title}</h3><p>${text}</p></div>${S.hlPinned ? "" : `<div class="headline"><div class="timer"><i></i></div></div>`}</div>`;
 }
@@ -483,65 +527,115 @@ function provinceCard(x, y, note) {
 }
 
 // ---------------------------------------------------------------- map overlay (1080-basis coordinates): the map budget
-const SERBIA = [[697, 572], [740, 563], [767, 577], [773, 607], [797, 633], [813, 640], [827, 673], [847, 687], [860, 713], [857, 740], [870, 760], [873, 793], [870, 827], [853, 840], [827, 847], [807, 857], [797, 807], [783, 780], [750, 773], [727, 773], [713, 760], [700, 740], [697, 707], [693, 680], [690, 650], [693, 607]];
-const KOSOVO = [[727, 773], [750, 773], [783, 780], [797, 807], [807, 857], [790, 862], [770, 858], [745, 850], [725, 830], [716, 800]];
-const SUMADIJA = [[728, 690], [762, 684], [795, 686], [818, 704], [823, 736], [800, 756], [760, 760], [733, 748], [722, 718]];
-function counter(x, y, flag, num, { sel = false, edge = "#86745a", glyph = "" } = {}) {
-  return `<g class="mglyph" transform="translate(${x - 24} ${y - 11})">${sel ? `<rect x="-4" y="-4" width="56" height="30" rx="3" fill="none" stroke="#6da7e6" stroke-width="2.5"/>` : ""}
-    <rect width="48" height="22" rx="2" fill="#221d19" stroke="#090705" stroke-width="1"/><rect x="1.5" y="1.5" width="45" height="19" rx="1.5" fill="none" stroke="${edge}" stroke-width="1.2"/>
-    <image href="img/flags/${flag}.png" x="5" y="5" width="${(12 * (FLAG[flag] || 1.5)).toFixed(1)}" height="12" preserveAspectRatio="none"/><text x="${(24 + 12 * (FLAG[flag] || 1.5)) / 2 + 12}" y="15.5" text-anchor="middle" font-size="13" font-weight="700" fill="#efe4c8" font-family="Segoe UI,sans-serif">${num}</text>${glyph}</g>`;
+// The outlines (SERBIA, KOSOVO, SUMADIJA), the front (FRONT_LINE), the towns (CITY) and the box of every printed
+// name (LABEL_BOXES) come from tools/render_map.py, traced from the game's province and control maps. Areas are
+// drawn under the names (#overlay-under, then img/map_labels.png), tokens and marks over them (#overlay), and no
+// token is left lying on a name: it moves to the nearest free spot.
+// the plates over the map at rest, in 1080 basis (720p reserves slightly taller scaled boxes for the right panels)
+const REST_PLATES = () => S.res === 720
+  ? [[1480, 92, 1920, S.outliner ? 660 : 310], [0, 0, 1230, 74], [0, 0, 68, 830], [0, 1000, 1100, 1080]]
+  : [[1536, 92, 1920, S.outliner ? 495 : 266], [0, 0, 1170, 74], [0, 0, 68, 796], [0, 1000, 1060, 1080]];
+let PLACED = [], ON_NAMES = 0;
+function freeSpot(x, y, w, h, within = null) {
+  const hit = (cx, cy) => {
+    if (within && !pointIn([cx, cy], within)) return true;      // an army stays on its own country's ground
+    const b = [cx - w / 2 - 1, cy - h / 2 - 1, cx + w / 2 + 1, cy + h / 2 + 1];
+    return LABEL_BOXES.concat(PLACED, REST_PLATES()).some(o => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]);
+  };
+  for (let r = 0; r <= 180; r += 6) for (let k = 0; k < (r ? 24 : 1); k++) {
+    const a = k / 24 * Math.PI * 2, cx = x + Math.cos(a) * r, cy = y + Math.sin(a) * r * .8;
+    if (!hit(cx, cy)) { PLACED.push([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2]); return [cx, cy]; }
+  }
+  ON_NAMES++; PLACED.push([x - w / 2, y - h / 2, x + w / 2, y + h / 2]); return [x, y];
+}
+// A counter is the same paper tag as in the strip: paper, the flag in its own proportions, the number in ink,
+// the state as the ink of the left stripe. Selected = a heavier ink edge and an ink stroke under it, no ring.
+function counter(x, y, flag, num, { sel = false, edge = "#7d705b", within = null } = {}) {
+  const fw = 12 * (FLAG[flag] || 1.5), w = Math.round(fw + 36), h = 22;
+  [x, y] = freeSpot(x, y, w, h + (sel ? 6 : 0), within);
+  return `<g class="mglyph" transform="translate(${(x - w / 2).toFixed(1)} ${(y - h / 2).toFixed(1)})">
+    <rect x="1.5" y="2" width="${w}" height="${h}" fill="rgba(12,9,6,.38)"/>
+    <rect width="${w}" height="${h}" fill="url(#paperG)" stroke="${sel ? "#1b140d" : "rgba(30,24,18,.75)"}" stroke-width="${sel ? 2 : 1}"/>
+    <rect x="0" y="0" width="4" height="${h}" fill="${edge}"/>
+    <image href="img/flags/${flag}.png" x="8" y="5" width="${fw.toFixed(1)}" height="12" preserveAspectRatio="none"/>
+    <rect x="8" y="5" width="${fw.toFixed(1)}" height="12" fill="none" stroke="rgba(30,24,18,.55)" stroke-width=".8"/>
+    <text x="${((8 + fw + w) / 2 + 1).toFixed(1)}" y="15.5" text-anchor="middle" font-size="13" font-weight="700" fill="#231c15" font-family="Segoe UI,sans-serif">${num}</text>
+    ${sel ? `<path d="M1 ${h + 4} Q${w / 2} ${h + 5.2} ${w - 1} ${h + 3.6}" fill="none" stroke="#1b140d" stroke-width="2.2" stroke-linecap="round"/>` : ""}</g>`;
+}
+// the Ukrainian front: one counter per country per sector, along the visible part of the traced front
+function frontCounters() {
+  const L_ = FRONT_LINE, D = CITY["Днепр"];
+  if (L_.length < 6) return "";
+  let s = "";
+  [[.08, 29, 44], [.28, 37, 63], [.48, 41, 58]].forEach(([t, u, r]) => {
+    const i = Math.min(L_.length - 2, Math.round(t * (L_.length - 1))), a = L_[i], b = L_[i + 1];
+    let nx = -(b[1] - a[1]), ny = b[0] - a[0]; const n = Math.hypot(nx, ny) || 1; nx /= n; ny /= n;
+    if (nx * (D[0] - a[0]) + ny * (D[1] - a[1]) < 0) { nx = -nx; ny = -ny; }     // n points into Ukrainian-held ground
+    s += counter(a[0] + nx * 28, a[1] + ny * 28, "ukr", u) + counter(a[0] - nx * 28, a[1] - ny * 28, "rus", r);
+  });
+  return s;
 }
 function overlay() {
-  const P = a => a.map(p => p.join(",")).join(" ");
-  let s = `<svg id="overlay" viewBox="0 0 1920 1080" preserveAspectRatio="none"><defs>
-    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="8" fill="rgba(201,79,85,.55)"/></pattern>
-    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 10 5 0 10z" fill="#6da7e6"/></marker></defs>`;
-  // the Ukrainian front: one line and one counter per country per sector, not a wall of counters
-  const fl = FRONT_LINE.map(p => p.join(" ")).join(" L");
-  s += `<path d="M${fl}" fill="none" stroke="#120f0c" stroke-width="7" stroke-linejoin="round" opacity=".75"/><path d="M${fl}" fill="none" stroke="#c94f55" stroke-width="2.4" stroke-dasharray="10 5" stroke-linejoin="round"/>`;
-  COUNTERS.forEach(c => { s += counter(c.at[0], c.at[1], c.f, c.n); });
-  if (S.state === 2) s += `<polygon points="${P(SERBIA)}" fill="rgba(239,228,200,.08)" stroke="#120f0c" stroke-width="5" opacity=".55"/><polygon points="${P(SERBIA)}" fill="none" stroke="#efe4c8" stroke-width="2"/>`;
-  if (S.state === 3) s += `<polygon points="${P(SERBIA)}" fill="none" stroke="#efe4c8" stroke-width="1.5" stroke-dasharray="4 4" opacity=".7"/><polygon points="${P(SUMADIJA)}" fill="rgba(109,167,230,.22)" stroke="#0b1a2e" stroke-width="5" opacity=".6"/><polygon points="${P(SUMADIJA)}" fill="none" stroke="#9cc8f2" stroke-width="2"/>`;
-  if (S.state === 6 || WAR()) s += `<polygon points="${P(KOSOVO)}" fill="url(#hatch)" stroke="#c94f55" stroke-width="2.5"/>`;
+  PLACED = []; ON_NAMES = 0;
+  const P = a => a.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+  // under the names: areas and lines
+  let u = `<svg id="overlay-under" class="ovl" viewBox="0 0 1920 1080" preserveAspectRatio="none"><defs>
+    <pattern id="hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3.2" height="9" fill="rgba(178,52,58,.62)"/></pattern></defs>`;
+  if (FRONT_LINE.length > 1) {
+    const fl = "M" + FRONT_LINE.map(p => p.join(" ")).join(" L");
+    u += `<path d="${fl}" fill="none" stroke="#120f0c" stroke-width="6" stroke-linejoin="round" opacity=".55"/><path d="${fl}" fill="none" stroke="#b3373e" stroke-width="2.4" stroke-dasharray="10 5" stroke-linejoin="round"/>`;
+  }
+  if (S.state === 2) u += `<polygon points="${P(SERBIA)}" fill="rgba(239,228,200,.10)" stroke="#120f0c" stroke-width="5" stroke-linejoin="round" opacity=".55"/><polygon points="${P(SERBIA)}" fill="none" stroke="#efe4c8" stroke-width="2" stroke-linejoin="round"/>`;
+  if (S.state === 3) u += `<polygon points="${P(SERBIA)}" fill="none" stroke="#efe4c8" stroke-width="1.5" stroke-dasharray="4 4" opacity=".7"/><polygon points="${P(SUMADIJA)}" fill="rgba(239,228,200,.16)" stroke="#120f0c" stroke-width="5" stroke-linejoin="round" opacity=".55"/><polygon points="${P(SUMADIJA)}" fill="none" stroke="#efe4c8" stroke-width="2" stroke-linejoin="round"/>`;
+  if (S.state === 6 || WAR()) u += `<polygon points="${P(KOSOVO)}" fill="url(#hatch)" stroke="#b3373e" stroke-width="2.2" stroke-linejoin="round"/>`;
+  u += `</svg><img id="labels" src="img/map_labels.png" alt="">`;
+  // over the names: tokens, marks, orders
+  let s = `<svg id="overlay" class="ovl" viewBox="0 0 1920 1080" preserveAspectRatio="none"><defs>
+    <linearGradient id="paperG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8ddc0"/><stop offset="1" stop-color="#d5c7a3"/></linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 10 5 0 10z" fill="#efe4c8"/></marker></defs>`;
+  // own counters first (they belong where they stand), then the front, then the marks
+  const at = [];
+  if (WAR()) {
+    s += counter(...MK.mitrovica, "srb", 22, { edge: "#b3373e", within: KOSOVO }) + counter(...CITY["Приштина"], "kos", 4, { within: KOSOVO }) + counter(...MK.raska, "srb", 6, { edge: "#c08a2e", within: SERBIA }) + counter(...MK.srem, "srb", 8, { within: SERBIA }) + counter(...CITY["Белград"], "srb", 4, { within: SERBIA });
+  } else {
+    ARMIES.forEach((a, i) => {
+      const sel = S.state === 4 && i === 0, edge = S.state === 6 && i < 2 ? "#c08a2e" : "#7d705b";
+      s += counter(a.pos[0], a.pos[1], "srb", a.d, { sel, edge, within: SERBIA });
+      const b = PLACED[PLACED.length - 1]; at.push([(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]);
+    });
+  }
+  s += frontCounters();
   // alert marks: the same record as the alert row (rule 6)
   const list = S.state === 5 ? [] : alertList();
   list.forEach((a, i) => {
     if (!a.mk) return;
     const c = a.sev === "n" ? "#c94f55" : a.sev === "w" ? "#e7b058" : "#77c9e8";
-    s += `<g class="mglyph" id="mk${i}" transform="translate(${a.mk[0]} ${a.mk[1]})"><circle class="mk-pulse" r="11" fill="none" stroke="${c}" stroke-width="2" style="transform-box:fill-box;transform-origin:center"/>
+    const [x, y] = freeSpot(a.mk[0], a.mk[1], 20, 20);
+    s += `<g class="mglyph" id="mk${i}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle class="mk-pulse" r="11" fill="none" stroke="${c}" stroke-width="2" style="transform-box:fill-box;transform-origin:center"/>
       <rect x="-6" y="-6" width="12" height="12" transform="rotate(45)" fill="#1c1916" stroke="${c}" stroke-width="2"/><circle r="2.5" fill="${c}"/></g>`;
   });
   if (S.state === 4) {
-    const a = ARMIES[0].pos, t = S.route, mx = (a[0] + t[0]) / 2 + 18, my = (a[1] + t[1]) / 2 - 10;
-    s += `<path d="M${a[0]} ${a[1]} Q${mx} ${my} ${t[0]} ${t[1]}" fill="none" stroke="#0b1a2e" stroke-width="7" opacity=".7"/>
-      <path class="marching" d="M${a[0]} ${a[1]} Q${mx} ${my} ${t[0]} ${t[1]}" fill="none" stroke="#6da7e6" stroke-width="3.5" marker-end="url(#arrow)"/>
-      <g transform="translate(${t[0] + 26} ${t[1] - 40})"><rect x="0" y="0" width="70" height="22" rx="2" fill="#221d19" stroke="#6da7e6"/><text x="35" y="15.5" text-anchor="middle" font-size="13" font-weight="700" fill="#efe4c8" font-family="Segoe UI,sans-serif">Ниш · 4 дн.</text></g>
+    const a = at[0] || ARMIES[0].pos, t = S.route, mx = (a[0] + t[0]) / 2 + 18, my = (a[1] + t[1]) / 2 - 10;
+    // an order is written on the map in paper ink with a dark casing, like the selection
+    s += `<path d="M${a[0]} ${a[1]} Q${mx} ${my} ${t[0]} ${t[1]}" fill="none" stroke="#120f0c" stroke-width="7" opacity=".6"/>
+      <path class="marching" d="M${a[0]} ${a[1]} Q${mx} ${my} ${t[0]} ${t[1]}" fill="none" stroke="#efe4c8" stroke-width="3.2" marker-end="url(#arrow)"/>`;
+    const [lx, ly] = freeSpot(t[0] + 62, t[1] - 30, 76, 22);
+    s += `<g transform="translate(${(lx - 38).toFixed(1)} ${(ly - 11).toFixed(1)})"><rect x="1.5" y="2" width="76" height="22" fill="rgba(12,9,6,.38)"/><rect width="76" height="22" fill="url(#paperG)" stroke="rgba(30,24,18,.75)"/><text x="38" y="15.5" text-anchor="middle" font-size="13" font-weight="700" fill="#231c15" font-family="Segoe UI,sans-serif">Ниш · 4 дн.</text></g>
       <path d="M${a[0]} ${a[1]} L${S.detach[0]} ${S.detach[1]}" fill="none" stroke="#e7b058" stroke-width="2.5" stroke-dasharray="5 5"/><circle cx="${S.detach[0]}" cy="${S.detach[1]}" r="5" fill="#e7b058" stroke="#1c1916" stroke-width="2"/>`;
   }
-  // own counters: merged by front in war
-  if (WAR()) {
-    s += counter(770, 796, "srb", 22, { edge: "#c94f55" }) + counter(802, 832, "kos", 4) + counter(800, 742, "srb", 6, { edge: "#e7b058" }) + counter(704, 612, "srb", 8) + counter(748, 662, "srb", 4);
-  } else {
-    ARMIES.forEach((a, i) => {
-      const sel = S.state === 4 && i === 0, edge = S.state === 6 && i < 2 ? "#e7b058" : sel ? "#6da7e6" : "#86745a";
-      s += counter(a.pos[0], a.pos[1], "srb", a.d, { sel, edge });
-    });
-  }
-  return s + "</svg>";
+  return u + s + "</svg>";
 }
 
 // ---------------------------------------------------------------- render
 function render() {
   for (const k in DYN) delete DYN[k];
   dynId = 0;
-  S.res = S.state === 7 ? 720 : 1080;
+  S.res = S.res || 1080;
   F.className = "r" + S.res + (S.alt ? " altkeys" : "");
   const l = L(), st = S.state;
   const showBuildings = S.mode === "eco" || S.buildings;
   let h = `<svg width="0" height="0" style="position:absolute"><defs>
-      <linearGradient id="rimG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a48d68"/><stop offset=".45" stop-color="#7a6649"/><stop offset="1" stop-color="#43382b"/></linearGradient>
-      <linearGradient id="plateG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a322a"/><stop offset="1" stop-color="#221d19"/></linearGradient>
-      <linearGradient id="gloss2" x1="0" y1="0" x2=".6" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".25"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".3"/></linearGradient></defs></svg>
+      <linearGradient id="rimG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a48d68"/><stop offset=".45" stop-color="#7a6649"/><stop offset="1" stop-color="#43382b"/></linearGradient></defs></svg>
     <div id="map" class="m-${S.mode} ${showBuildings ? "bld" : ""}" data-map></div><div id="vignette"></div>${overlay()}`;
   let panel = null;
   if (st === 2) panel = countrySpec();
@@ -640,8 +734,8 @@ function census() {
   const rest = [1, 6, 7, 8].includes(S.state);
   const okB = btns.length <= 40, okP = panels.length <= 6;
   document.getElementById("census").innerHTML =
-    `${S.state === 1 || S.state === 7 ? "Покой" : "Состояние " + S.state} · ${l.W}×${l.H} · сводка ${S.outliner ? "открыта" : "сложена"} · кнопок <b class="${rest ? (okB ? "ok" : "bad") : ""}">${btns.length}</b>${rest ? " / 40" : ""} · панелей <b class="${rest ? (okP ? "ok" : "bad") : ""}">${panels.length}</b>${rest ? " / 6" : ""} · повторов <b class="${repeats.length ? "bad" : "ok"}">${repeats.length}</b> · знаков на карте <b class="${glyphs <= 20 ? "ok" : "bad"}">${glyphs}</b> / 20 · пересечений ${overlaps}${out ? " · за краем " + out : ""}`;
-  window.__census = { state: S.state, res: S.res, outliner: S.outliner, buttons: btns.length, panels: panels.map(p => p.dataset.panel), repeats, glyphs, overlaps, out };
+    `${S.state === 1 || S.state === 7 ? "Покой" : "Состояние " + S.state} · ${l.W}×${l.H} · сводка ${S.outliner ? "открыта" : "сложена"} · кнопок <b class="${rest ? (okB ? "ok" : "bad") : ""}">${btns.length}</b>${rest ? " / 40" : ""} · панелей <b class="${rest ? (okP ? "ok" : "bad") : ""}">${panels.length}</b>${rest ? " / 6" : ""} · повторов <b class="${repeats.length ? "bad" : "ok"}">${repeats.length}</b> · знаков на карте <b class="${glyphs <= 20 ? "ok" : "bad"}">${glyphs}</b> / 20 · жетонов на подписях <b class="${ON_NAMES ? "bad" : "ok"}">${ON_NAMES}</b> · пересечений ${overlaps}${out ? " · за краем " + out : ""}`;
+  window.__census = { onNames: ON_NAMES, state: S.state, res: S.res, outliner: S.outliner, buttons: btns.length, panels: panels.map(p => p.dataset.panel), repeats, glyphs, overlaps, out };
 }
 
 // ---------------------------------------------------------------- tooltips: nested, pin after 0.6 s, depth up to 4
@@ -733,8 +827,8 @@ function showRailLabel(rail) {
 }
 
 // ---------------------------------------------------------------- interaction
-function setState(n) {
-  S.state = n; S.pcard = null; S.qa = undefined; S.qaSel = 1; S.more = false; S.news = false; S.hlPinned = false; S.lpH = null; S.ocap = 4;
+function setState(n, keepRes = false) {
+  S.state = n; if (!keepRes) S.res = n === 7 ? 720 : 1080; S.pcard = null; S.qa = undefined; S.qaSel = 1; S.more = false; S.news = false; S.hlPinned = false; S.lpH = null; S.ocap = 4;
   S.outliner = n === 6 || (n === +(qs.get("state") || 1) && qs.get("outliner") === "1");
   S.day = n === 6 ? 73 : n === 8 ? 140 : 0;
   S.undo = n === 4 ? "Отделено к Кралеву: 6 див." : null;
@@ -761,14 +855,14 @@ F.addEventListener("click", e => {
   const set = t.closest("[data-set]"); if (set) { budgetSet(set.dataset.set); return; }
   const db = t.closest("[data-debt]"); if (db) { S.debtQ = +db.dataset.debt; render(); return; }
   const bf = t.closest("[data-bfocus]"); if (bf && !t.closest("input")) { S.bfocus = bf.dataset.bfocus; render(); return; }
-  const al = t.closest("[data-go]"); if (al) { setState(+al.dataset.go); return; }
+  const al = t.closest("[data-go]"); if (al) { setState(+al.dataset.go, true); return; }
   const a = t.closest("[data-act]");
   if (a) {
     const act = a.dataset.act;
-    if (act === "country") return setState(S.state === 2 ? 1 : 2);
-    if (act === "budget") return setState(S.state === 5 ? 1 : 5);
-    if (act === "army") return setState(S.state === 4 ? 1 : 4);
-    if (act === "close") return setState(1);
+    if (act === "country") return setState(S.state === 2 ? 1 : 2, true);
+    if (act === "budget") return setState(S.state === 5 ? 1 : 5, true);
+    if (act === "army") return setState(S.state === 4 ? 1 : 4, true);
+    if (act === "close") return setState(1, true);
     if (act === "pause") { togglePause(); return; }
     if (act === "outliner") { S.outliner = !S.outliner; render(); return; }
     if (act === "undo") { S.undo = null; render(); return; }
@@ -787,7 +881,7 @@ F.addEventListener("click", e => {
     if (document.getElementById("qa")) { S.qa = false; render(); return; }      // a map click closes the "how much" box
     if (S.state === 4) { S.pcard = [x + 6, y + 6]; render(); return; }          // armies selected: card at the cursor, panel stays
     if (S.state === 1 || S.state === 2 || S.state === 3) {
-      if (pointIn([mx, my], SERBIA)) setState(3); else if (S.state !== 1) setState(1);
+      if (pointIn([mx, my], SERBIA)) setState(3, true); else if (S.state !== 1) setState(1, true);
     }
   }
 });
@@ -857,6 +951,9 @@ F.addEventListener("mouseover", e => {
   F.querySelectorAll("#overlay g[id^=mk]").forEach(g => g.setAttribute("transform", g.getAttribute("transform").replace(/ scale\([^)]*\)/, "")));
   if (r) { const g = F.querySelector("#mk" + r.dataset.alert); if (g) g.setAttribute("transform", g.getAttribute("transform") + " scale(1.5)"); }
 });
+F.addEventListener("mouseleave", () => {
+  F.querySelectorAll("#overlay g[id^=mk]").forEach(g => g.setAttribute("transform", g.getAttribute("transform").replace(/ scale\([^)]*\)/, "")));
+});
 
 // time
 let ticker = null;
@@ -888,17 +985,17 @@ document.addEventListener("keydown", e => {
     if (tips.some(t => t && t.pinned)) { closeTips(); return; }
     if (qa) { S.qa = false; render(); return; }
     if (S.pcard || S.more || S.news) { S.pcard = null; S.more = false; S.news = false; render(); return; }
-    if (![1, 6, 7, 8].includes(S.state)) setState(1);
+    if (![1, 6, 7, 8].includes(S.state)) setState(1, true);
     return;
   }
   if (k === "KeyJ") { S.outliner = !S.outliner; render(); return; }
   if (k === "KeyB") { S.buildings = !S.buildings; render(); return; }
   if (k === "KeyM") { S.more = !S.more; render(); return; }
   if (k === "KeyG") return flash("R7");
-  if (k === "KeyQ") return setState(S.state === 2 ? 1 : 2);
+  if (k === "KeyQ") return setState(S.state === 2 ? 1 : 2, true);
   const rail = { KeyE: "R2", KeyR: "R3", KeyT: "R4", KeyY: "R5", KeyU: "R6", KeyI: "R7", KeyO: "R8", KeyP: "R9", KeyL: "R10", Slash: "R11" }[k];
-  if (rail === "R3") return setState(S.state === 5 ? 1 : 5);
-  if (rail === "R7") return setState(S.state === 4 ? 1 : 4);
+  if (rail === "R3") return setState(S.state === 5 ? 1 : 5, true);
+  if (rail === "R7") return setState(S.state === 4 ? 1 : 4, true);
   if (rail) return flash(rail);
   const mode = { KeyZ: "pol", KeyX: "dip", KeyC: "eco", KeyV: "ter", KeyN: "war" }[k];
   if (mode) { S.mode = mode; render(); return; }

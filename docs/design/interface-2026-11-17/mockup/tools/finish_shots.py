@@ -34,7 +34,7 @@ rows = [("srb", "Сербия 2:3", "state-1.png", "state-2.png"), ("che", "Шв
         ("vat", "Ватикан 1:1", "flag-vat.png", "flagpanel-vat.png")]
 if all(os.path.exists(os.path.join(src, r[2])) for r in rows):
     S, bg = 2, (20, 17, 14)
-    corner, header = (0, 0, 300, 150), (72, 146, 544, 214)
+    corner, header = (0, 0, 300, 150), (72, 146, 544, 232)
     cw, hw = (corner[2] - corner[0]) * S, (header[2] - header[0]) * S
     rh = (corner[3] - corner[1]) * S
     sheet = Image.new("RGB", (40 + 300 + cw + 30 + hw + 40, 90 + len(rows) * (rh + 24) + 330), bg)
