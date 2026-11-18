@@ -25,7 +25,7 @@ sealed class FileBaseline
 
 static class Ratchet
 {
-    private const int NewFileLineCeiling = 1000;
+    private const int NewFileLineCeiling = 800;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,

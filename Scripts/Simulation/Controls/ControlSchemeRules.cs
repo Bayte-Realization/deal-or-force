@@ -96,11 +96,6 @@ public static class ControlSchemeRules
         return MathF.Sqrt(dx * dx + dy * dy);
     }
 
-    /// <summary>True only if the pointer stayed within maxDriftPx between press and release.</summary>
-    public static bool IsButtonClickWithinDrift(float pressX, float pressY, float releaseX, float releaseY,
-        float maxDriftPx = EverywhereMaxDriftPx) =>
-        Distance(pressX, pressY, releaseX, releaseY) <= maxDriftPx;
-
     /// <summary>
     /// Guards "Do Everywhere" (Shift+LMB always, or RMB when rmb_everywhere is enabled)
     /// against pointer drift across button release.

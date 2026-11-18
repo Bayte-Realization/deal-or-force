@@ -185,11 +185,6 @@ public static class SecessionEvents
     /// a country with ninety regions it was the whole week. One pass over the country's
     /// provinces gives the same answer.
     /// </summary>
-    private static void BuildAdjacency(Campaign campaign, ScenarioState[] owned)
-    {
-        foreach (var _ in BuildAdjacencyStages(campaign, owned)) { }
-    }
-
     private static IEnumerable<int> BuildAdjacencyStages(Campaign campaign, ScenarioState[] owned)
     {
         var topology = campaign.ProvinceMap;

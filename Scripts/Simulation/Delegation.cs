@@ -148,9 +148,6 @@ public static class Delegation
         if (Holds(nation, Cabinet)) AiStatecraft.RunTheCabinet(campaign, nation);
     }
 
-    /// <summary>The instruction key a delegated desk writes, so its work can be told apart.</summary>
-    public const string DeskReason = "desk";
-
     /// <summary>
     /// What a trade desk does with a month.
     ///

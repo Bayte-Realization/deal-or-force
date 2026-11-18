@@ -44,27 +44,6 @@ void fragment() {
     ALPHA = COLOR.a * dash * core;
 }";
 
-    /// <summary>The legend line for this layer, in the player's language.</summary>
-    public static string StraitCrossingLegend => Simulation.LandCrossings.Legend();
-
-    /// <summary>
-    /// What the crossings that start in a province are, for a tooltip on it: one sentence a
-    /// crossing, or an empty string for a province with none.
-    /// </summary>
-    public string StraitCrossingTooltip(int province)
-    {
-        var map = _campaign?.ProvinceMap;
-        if (map is null || !map.IsCrossingEnd(province)) return "";
-        var text = "";
-        foreach (var crossing in map.Crossings)
-        {
-            if (crossing.From != province && crossing.To != province) continue;
-            var line = Simulation.LandCrossings.Describe(_campaign, crossing, _campaign.Player?.Id ?? -1);
-            text = text.Length == 0 ? line : text + "\n" + line;
-        }
-        return text;
-    }
-
     private void UpdateStraitCrossings()
     {
         var map = _campaign?.ProvinceMap;

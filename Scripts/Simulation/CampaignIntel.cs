@@ -81,7 +81,4 @@ public static partial class CampaignIntel
             return (hash & 0xFFFFFF) / (float)0x1000000;
         }
     }
-
-    public static float EstimatedNavy(Campaign c, Nation target) =>
-        Math.Clamp(AiStatecraft.RegionsHeldBy(c, target.MapIndex) * 3f, 10f, 180f);
 }

@@ -87,7 +87,6 @@ public sealed partial class QuickAmountWidget : PanelContainer
     private bool _integerOnly = true;
     private bool _syncing;
     private bool _hasFocusHighlight;
-    private string _unitFormat = "{0}";
 
     private Func<float, string> _valueFormatter;
     private Func<float, string> _previewProvider;
@@ -96,7 +95,6 @@ public sealed partial class QuickAmountWidget : PanelContainer
     private Action<float> _onEverywhere;
     private Action _onClose;
 
-    public float CurrentValue => _value;
     public int CurrentIntValue => Math.Max(0, (int)MathF.Round(_value, MidpointRounding.AwayFromZero));
 
     public QuickAmountWidget(bool showCloseButton = true)

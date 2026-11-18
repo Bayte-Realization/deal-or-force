@@ -235,14 +235,6 @@ public static class SeaLanes
         }
     }
 
-    public static int CellAt(float latitude, float longitude)
-    {
-        var row = Math.Clamp((int)MathF.Floor(90f - latitude), 0, Rows - 1);
-        var column = (int)MathF.Floor(longitude + 180f) % Columns;
-        if (column < 0) column += Columns;
-        return row * Columns + column;
-    }
-
     public static (float Latitude, float Longitude) CentreOf(int cell) =>
         (90f - (cell / Columns + 0.5f), -180f + (cell % Columns + 0.5f));
 
@@ -368,20 +360,6 @@ public static class SeaLanes
         {
             Prepare(map, null);
             return _coastal;
-        }
-    }
-
-    /// <summary>The nearest point on water, or the point itself when it is already on water.</summary>
-    public static (float Latitude, float Longitude) WaterPointNear(ProvinceTopology map, float latitude, float longitude)
-    {
-        if (map is null) return (latitude, longitude);
-        lock (Gate)
-        {
-            Prepare(map, null);
-            var pixel = PixelAt(latitude, longitude);
-            if (Passable(pixel, null)) return (latitude, longitude);
-            var near = NearestWaterPixel(pixel, 48, null);
-            return near < 0 ? (latitude, longitude) : PixelCentre(near);
         }
     }
 

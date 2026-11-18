@@ -283,9 +283,6 @@ public static class AllyRivalShift
             }
         }
 
-        internal bool Protects(int patron, int other) =>
-            _protected.TryGetValue(patron, out var protectedIds) && protectedIds.Contains(other);
-
         internal bool AtWar(int first, int second) =>
             _enemies.TryGetValue(first, out var enemies) && enemies.Contains(second);
 

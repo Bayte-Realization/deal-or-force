@@ -5,15 +5,6 @@ using System.Linq;
 
 namespace DealOrForce.Simulation.Controls;
 
-public enum QuickAmountKind
-{
-    Recruit,
-    Construct,
-    Debt,
-    BudgetLine,
-    SplitArmy
-}
-
 public readonly record struct QuickRecruitQuote(
     int MaxDivisions,
     int QueueHeadroom,
@@ -445,12 +436,6 @@ public static class QuickAmountRules
     }
 
     // ------------------------------------------------------------------ Budget
-
-    public static float RecommendBudgetRate(BudgetLine line) =>
-        line is null ? 0f : Math.Clamp(line.Neutral, line.Minimum, line.Maximum);
-
-    public static float StepBudgetRatePp(BudgetLine line, float currentRate, float deltaPp) =>
-        line is null ? currentRate : Math.Clamp(currentRate + deltaPp, line.Minimum, line.Maximum);
 
     /// <summary>
     /// Computes rate adjustments to bring the weekly budget as close to zero balance as possible

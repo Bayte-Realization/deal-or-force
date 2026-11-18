@@ -158,10 +158,4 @@ public partial class DealOrForceGame
         ShowObserverHint("");
         Refresh();
     }
-
-    private void HideForObserver(string nodeName, bool watching)
-    {
-        if (_hudLayer is null) return;
-        if (_hudLayer.FindChild(nodeName, true, false) is Control panel) panel.Visible = !watching;
-    }
 }

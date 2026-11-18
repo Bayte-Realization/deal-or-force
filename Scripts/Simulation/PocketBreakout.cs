@@ -68,7 +68,6 @@ public static class PocketBreakout
         public int DayPathMapRevision = -1;
         public readonly HashSet<ushort> LocalAllowed = new();
         public readonly HashSet<ushort> LocalFriendly = new();
-        public readonly HashSet<ushort> LocalHostile = new();
     }
 
     sealed class PassPair
@@ -151,12 +150,6 @@ public static class PocketBreakout
 
     internal static List<int> SearchNeighbours(Campaign campaign) =>
         campaign is not null && Scratches.TryGetValue(campaign, out var scratch) ? scratch.Neighbours : null;
-
-    internal static List<int> SearchPocketed(Campaign campaign) =>
-        campaign is not null && Scratches.TryGetValue(campaign, out var scratch) ? scratch.Pocketed : null;
-
-    internal static Dictionary<int, Army> SearchArmies(Campaign campaign) =>
-        campaign is not null && Scratches.TryGetValue(campaign, out var scratch) ? scratch.ById : null;
 
     /// <summary>Whether the last <see cref="WayHome"/> gave up because the "pocket" was a large piece of the country, not a pocket.</summary>
     internal static bool LastPocketTooLarge { get; private set; }

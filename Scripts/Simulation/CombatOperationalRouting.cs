@@ -195,31 +195,6 @@ public static partial class Warfare
         return 1;
     }
 
-    private static bool HeldControllersChanged(Campaign campaign, StrategicWar war, Army army, ushort[] controllers)
-    {
-        if (army.DirectOrder) return false;
-        var routes = UseArmyIndex(campaign).AdvanceRoutes;
-        return routes.TryGetValue(army.Id, out var held) &&
-            held.From == army.ProvinceId && held.To == army.OrderProvinceId && held.WarId == war.Id &&
-            !SameControl(held, controllers);
-    }
-
-    private static bool ReuseHeldRoute(Campaign campaign, StrategicWar war, Army army, ushort[] controllers)
-    {
-        if (army.DirectOrder) return false;
-        var index = UseArmyIndex(campaign);
-        if (!index.AdvanceRoutes.TryGetValue(army.Id, out var held) ||
-            held.From != army.ProvinceId || held.To != army.OrderProvinceId || held.WarId != war.Id ||
-            !SameControl(held, controllers)) return false;
-        if (!SameSteps(army.PlannedRoute, held.Path))
-        {
-            army.PlannedRoute.Clear();
-            army.PlannedRoute.AddRange(held.Path);
-        }
-        index.NoRoute.Remove(army.Id);
-        return true;
-    }
-
     private static void RememberAdvanceRoute(Campaign campaign, StrategicWar war, Army army, ushort[] controllers)
     {
         var routes = UseArmyIndex(campaign).AdvanceRoutes;

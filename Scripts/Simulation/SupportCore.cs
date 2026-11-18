@@ -812,21 +812,6 @@ public static class SupportCore
         return DistanceKm(campaign, formation.BaseProvinceId, province) <= ReachKm(campaign, type);
     }
 
-    /// <summary>The country's most populous region, for a formation that has lost its own.</summary>
-    public static int HomeStateOf(Campaign campaign, int nationId)
-    {
-        var nation = campaign.NationById(nationId);
-        if (nation is null) return -1;
-        var best = -1;
-        var bestPopulation = -1L;
-        foreach (var state in campaign.States)
-        {
-            if (state.NationMapIndex != nation.MapIndex) continue;
-            if (state.Population > bestPopulation) { bestPopulation = state.Population; best = state.MapIndex; }
-        }
-        return best;
-    }
-
     /// <summary>
     /// The province an order naming only a region goes to: the one the region's bases used to be
     /// put in (<see cref="ChooseBase"/>). Kept for the replays and network peers that still send

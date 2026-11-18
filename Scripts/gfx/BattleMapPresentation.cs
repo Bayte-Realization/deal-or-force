@@ -39,7 +39,6 @@ public sealed partial class GlobePresentation
     }
 
     private float BattleMarkerRadius() => Math.Clamp(InterfaceSkin.Metric("combat.map_marker_pixels", 36), 28, 48) * .5f;
-    private Vector2 BattleMarkerScreen(Node3D anchor) => _camera.UnprojectPosition(anchor.GlobalPosition);
 
     private string BattleMapTooltip(LandBattle battle)
     {

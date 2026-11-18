@@ -174,62 +174,6 @@ public static class EconomicExposure
         return result;
     }
 
-    internal static Row PickHedgeCandidate(Campaign campaign, Nation nation, float line, float shortAt,
-        Dictionary<string, int> decisionAvailableDay, int elapsedDays, Func<Commodity, string> keyOf)
-    {
-        if (campaign is null || nation is null) return null;
-        var scratch = ScratchOf();
-        var totals = scratch.Totals;
-        var used = scratch.Used;
-        ClearTotals(scratch);
-        if (campaign.TradeRoutesDay >= 0)
-        {
-            if (TradeNetwork.TryGetFiledRoutesTouching(campaign, nation.Id, out var filed))
-            {
-                if (filed is not null)
-                    for (var i = 0; i < filed.Count; i++)
-                        AccumulateRoute(campaign, nation.Id, filed[i], totals, used);
-            }
-            else
-            {
-                foreach (var route in TradeNetwork.RoutesTouching(campaign, nation.Id))
-                    AccumulateRoute(campaign, nation.Id, route, totals, used);
-            }
-        }
-        Row chosen = null;
-        foreach (var quote in nation.Market.Values)
-        {
-            if (!float.IsFinite(quote.Demand) || quote.Demand <= .001f ||
-                !float.IsFinite(quote.Imports) || quote.Imports <= .001f) continue;
-            if (decisionAvailableDay.GetValueOrDefault(keyOf(quote.Commodity)) > elapsedDays) continue;
-            var shortOf = float.IsFinite(quote.Satisfaction) && quote.Satisfaction < shortAt;
-            if (!shortOf && quote.Imports / quote.Demand < 0.5f) continue;
-
-            Supplier[] suppliers = null;
-            if (totals.TryGetValue(quote.Commodity, out var sellers) && sellers.Count > 0)
-            {
-                suppliers = new Supplier[sellers.Count];
-                var at = 0;
-                foreach (var seller in sellers) suppliers[at++] = new Supplier(seller.Key, (float)seller.Value);
-                Array.Sort(suppliers, SupplierOrder);
-            }
-            double named = 0;
-            if (suppliers is not null)
-                foreach (var supplier in suppliers) named += supplier.Volume;
-            var row = new Row(quote.Commodity, quote.Demand, quote.Imports, quote.Satisfaction,
-                Math.Max(0, quote.Imports - (float)named), suppliers ?? Array.Empty<Supplier>());
-            var concentrated = row.Suppliers.Length > 0 && row.LargestImportShare + 0.0001f >= line;
-            var unnamed = row.Suppliers.Length == 0 && row.Imports > 0.001f;
-            if (concentrated && (shortOf || row.ImportShare >= 0.5f) || unnamed && shortOf)
-            {
-                if (chosen is null || row.LargestImportShare > chosen.LargestImportShare ||
-                    row.LargestImportShare == chosen.LargestImportShare && (int)row.Good < (int)chosen.Good)
-                    chosen = row;
-            }
-        }
-        return chosen;
-    }
-
     internal static bool TryPickHedgeCandidate(Campaign campaign, Nation nation, float line, float shortAt,
         Dictionary<string, int> decisionAvailableDay, int elapsedDays, Func<Commodity, string> keyOf,
         out HedgeCandidate candidate)

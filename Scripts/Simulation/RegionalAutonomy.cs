@@ -85,11 +85,6 @@ public static class RegionalAutonomy
         return "";
     }
 
-    /// <summary>The days left before a revoked region may be granted autonomy again; 0 when it may.</summary>
-    public static int RegrantDaysLeft(Campaign c, ScenarioState state) =>
-        c is null || state is null || state.AutonomyRevokedDay < 0 ? 0
-            : Math.Max(0, state.AutonomyRevokedDay + c.Defines.AutonomyRegrantDays - c.ElapsedDays);
-
     /// <summary>
     /// What this region's autonomy costs a week: its share of the country's people, times the share
     /// of taxes it keeps, of the tax income the budget actually raised last week (Nation.WeeklyTaxIncome).
