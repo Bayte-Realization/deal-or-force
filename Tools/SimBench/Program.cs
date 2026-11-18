@@ -322,6 +322,14 @@ public static class Program
         if (integrityAt >= 0 && integrityAt + 1 < args.Length)
             return CampaignIntegrityReport.Run(campaign, args[integrityAt + 1],
                 integrityAt + 2 < args.Length && int.TryParse(args[integrityAt + 2], out var replayDays) ? replayDays : 0);
+        // `--save-roundtrip-file <file.bdfsave> [N] [out-folder]`: the save written and read back N
+        // times through the game's own path, timed by halves and judged by the world
+        // (SaveRoundTripReport).
+        var roundTripAt = Array.IndexOf(args, "--save-roundtrip-file");
+        if (roundTripAt >= 0 && roundTripAt + 1 < args.Length)
+            return SaveRoundTripReport.Run(campaign, args[roundTripAt + 1],
+                roundTripAt + 2 < args.Length && int.TryParse(args[roundTripAt + 2], out var trips) ? trips : 3,
+                roundTripAt + 3 < args.Length && !args[roundTripAt + 3].StartsWith("--") ? args[roundTripAt + 3] : null);
         var profileSaveAt = Array.IndexOf(args, "--profile-save");
         if (profileSaveAt >= 0 && profileSaveAt + 1 < args.Length)
             return ProfileSave(campaign, args[profileSaveAt + 1],
@@ -3008,22 +3016,14 @@ public static class Program
                           $"the history alone {watch.Elapsed.TotalMilliseconds:N0} ms for {historyBytes.Length / 1048576.0:0.0} MB.");
         var compressed = File.ReadAllBytes(Path.Combine(folder, "probe.bdfsave"));
         byte[] json;
-        // Sniff the container instead of assuming gzip: saves may be this game's Brotli
-        // ("BDF2" magic), gzip, or plain JSON, and the probe measures whatever was written.
-        if (compressed.Length >= 4 && System.Text.Encoding.ASCII.GetString(compressed, 0, 4) == "BDF2")
+        // Whatever container was written (framed BDF3, Brotli BDF2, gzip, plain JSON), opened
+        // the way the game opens it. The framed file's history is its own binary section, so
+        // the JSON here is the campaign without it.
+        using (var file = new FileStream(Path.Combine(folder, "probe.bdfsave"), FileMode.Open, FileAccess.Read))
+        using (var source = SaveSystem.OpenJson(file))
+        using (var output = new MemoryStream())
         {
-            using var input = new MemoryStream(compressed, 4, compressed.Length - 4);
-            using var brotli = new System.IO.Compression.BrotliStream(input, System.IO.Compression.CompressionMode.Decompress);
-            using var output = new MemoryStream();
-            brotli.CopyTo(output);
-            json = output.ToArray();
-        }
-        else
-        {
-            using var input = new MemoryStream(compressed);
-            using var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress);
-            using var output = new MemoryStream();
-            gzip.CopyTo(output);
+            source.CopyTo(output);
             json = output.ToArray();
         }
         Console.WriteLine($"Save after {days} day(s): {saveMs:N0} ms in all, {compressed.Length / 1048576.0:0.0} MB written, " +

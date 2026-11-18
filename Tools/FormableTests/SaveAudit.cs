@@ -21,10 +21,9 @@ static class SaveAudit
         var clock = Stopwatch.StartNew();
         using (var file = File.OpenRead(path))
         {
-            var magic = new byte[4]; file.ReadExactly(magic); file.Position = 0;
-            using Stream source = Encoding.ASCII.GetString(magic) == "BDF2"
-                ? Brotli(file) : magic[0] == 0x1f && magic[1] == 0x8b
-                    ? new GZipStream(file, CompressionMode.Decompress) : file;
+            // Whatever container the save is in (framed BDF3, Brotli BDF2, gzip, none), as the
+            // game itself opens it to list a slot.
+            using Stream source = SaveSystem.OpenJson(file);
             using var json = JsonDocument.Parse(source);
             Console.WriteLine($"SAVE_AUDIT bytes={file.Length} format={(source == file ? "editable-json" : "compressed")} parse_ms={clock.ElapsedMilliseconds}");
             foreach (var item in json.RootElement.EnumerateObject()
@@ -91,9 +90,6 @@ static class SaveAudit
             throw new Exception("Input save changed during read-only audit.");
         Console.WriteLine("PASS player save: source SHA256 unchanged");
     }
-
-    static Stream Brotli(FileStream file)
-    { file.Position = 4; return new BrotliStream(file, CompressionMode.Decompress); }
 
     static void Print(Campaign c, string phase, string regionFilter)
     {

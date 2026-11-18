@@ -108,6 +108,11 @@ file and the package's NuGet licence expression before the package was added.
 If any of them is later referenced by `DealOrForce.csproj`, move its row to the section
 above and ship its licence text with the game.
 
+The framed save of 18 November 2026 (`Scripts/Simulation/SaveContainer.cs`) uses none of
+them: Brotli comes with .NET, and the history table is written by hand with `BinaryWriter`
+(`docs/SAVE_FORMAT_2026_11_18_RU.md`). Zstandard has a codec number reserved in the file
+format and stays in the tool.
+
 ## Packaging
 
 Ship this register, `game/gfx/CREDITS.md`, `LICENSE` and `LICENSE-EXCEPTIONS.md` with the

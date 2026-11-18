@@ -177,9 +177,16 @@ internal static class Program
             $"RESULT|{candidate.Name}|{encoded.Length}|" +
             $"{Median(enc, s => s.Ms):0}|{P95(enc, s => s.Ms):0}|{Median(enc, s => s.AllocMb):0}|{Median(enc, s => s.PeakMb):0}|" +
             $"{Median(dec, s => s.Ms):0}|{P95(dec, s => s.Ms):0}|{Median(dec, s => s.AllocMb):0}|{Median(dec, s => s.PeakMb):0}|" +
-            $"{payloadSame}|{fingerprint == originalFingerprint}|{checksum}|{proc.PeakWorkingSet64 / 1048576}");
+            $"{payloadSame}|{fingerprint == originalFingerprint}|{checksum}|{proc.PeakWorkingSet64 / 1048576}|" +
+            $"{Median(enc, s => s.PeakWsMb):0}|{Max(enc, s => s.PeakWsMb):0}|{Median(dec, s => s.PeakWsMb):0}|{Max(dec, s => s.PeakWsMb):0}|" +
+            $"{Max(enc, s => s.PeakMb):0}|{Max(dec, s => s.PeakMb):0}");
         Console.WriteLine("ENC_MS " + string.Join(",", enc.Select(s => s.Ms.ToString("0"))));
         Console.WriteLine("DEC_MS " + string.Join(",", dec.Select(s => s.Ms.ToString("0"))));
+        // The collector's own account, so a run under DOTNET_HeapVerify can be told from a run
+        // without it by more than its timing: verification is paid inside the pauses.
+        Console.WriteLine($"GC pause_ms={GC.GetTotalPauseDuration().TotalMilliseconds:0} gen0={GC.CollectionCount(0)} " +
+                          $"gen1={GC.CollectionCount(1)} gen2={GC.CollectionCount(2)} " +
+                          $"heap_verify={Environment.GetEnvironmentVariable("DOTNET_HeapVerify") ?? "-"}");
         return payloadSame && fingerprint == originalFingerprint ? 0 : 1;
     }
 
@@ -261,7 +268,7 @@ internal static class Program
         GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
     }
 
-    private readonly record struct Sample(double Ms, double AllocMb, double PeakMb, long Result);
+    private readonly record struct Sample(double Ms, double AllocMb, double PeakMb, long Result, double PeakWsMb = 0);
 
     /// <summary>
     /// Time, bytes allocated on every thread (a compressor may use several), and the highest
@@ -273,6 +280,11 @@ internal static class Program
     {
         var baseline = GC.GetTotalMemory(false);
         long peak = baseline;
+        // The process's working set too: a compressor's window and buffers are native memory
+        // the managed heap does not see (Brotli's encoder, ZstdSharp's contexts), and it is
+        // the whole process that a phone runs out of.
+        var baselineWs = Environment.WorkingSet;
+        long peakWs = baselineWs;
         var running = true;
         var poller = new System.Threading.Thread(() =>
         {
@@ -280,6 +292,8 @@ internal static class Program
             {
                 var now = GC.GetTotalMemory(false);
                 if (now > peak) peak = now;
+                var ws = Environment.WorkingSet;
+                if (ws > peakWs) peakWs = ws;
                 System.Threading.Thread.Sleep(1);
             }
         }) { IsBackground = true, Priority = System.Threading.ThreadPriority.AboveNormal };
@@ -293,8 +307,10 @@ internal static class Program
         Volatile.Write(ref running, false);
         poller.Join();
         if (end > peak) peak = end;
+        var endWs = Environment.WorkingSet;
+        if (endWs > peakWs) peakWs = endWs;
         return new Sample(clock.Elapsed.TotalMilliseconds, (allocatedAfter - allocated) / 1048576.0,
-            (peak - baseline) / 1048576.0, result);
+            (peak - baseline) / 1048576.0, result, (peakWs - baselineWs) / 1048576.0);
     }
 
     private static class Volatile
@@ -309,6 +325,8 @@ internal static class Program
         return sorted.Length == 0 ? 0 : sorted.Length % 2 == 1 ? sorted[sorted.Length / 2]
             : (sorted[sorted.Length / 2 - 1] + sorted[sorted.Length / 2]) / 2;
     }
+
+    private static double Max(List<Sample> list, Func<Sample, double> pick) => list.Count == 0 ? 0 : list.Max(pick);
 
     // Nearest-rank p95: with 15 samples it is the 15th, i.e. the worst one. Said so in the
     // document rather than dressed up as interpolation.

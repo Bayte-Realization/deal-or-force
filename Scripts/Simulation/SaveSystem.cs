@@ -462,14 +462,16 @@ public static partial class SaveSystem
         public SaveMetadata Metadata { get; }
 
         /// <summary>
-        /// Serialise, splice history, optionally compress, and write atomically. Safe on any
+        /// Serialise and write atomically: the text save here, with the history spliced into its
+        /// tail as before; the binary save in <see cref="CommitBinary"/>. Safe on any
         /// thread: <see cref="Prepare"/> already deep-isolated the snapshot from live campaign
         /// objects and <see cref="SaveStringTable"/> context is thread-static.
         /// </summary>
         public SaveMetadata Commit()
         {
             Directory.CreateDirectory(_root);
-            var options = _text ? TextOptions : JsonOptions;
+            if (!_text) return CommitBinary();
+            var options = TextOptions;
             var interned = SaveStringTable.InternIds;
             SaveStringTable.Use(_payload.StringTable);
             if (_text) SaveStringTable.InternIds = false;
@@ -543,32 +545,8 @@ public static partial class SaveSystem
                         return Metadata;
                     }
 
-                    long compressedBytes = 0;
-                    AtomicWrite(DataPath(_root, _slot), file =>
-                    {
-                        file.Write("BDF2"u8);
-                        using (var brotli = new BrotliStream(file, StorageCompression(_thorough), true))
-                        {
-                            if (historyToSplice is not null)
-                            {
-                                var span = payloadBuffer.WrittenSpan;
-                                brotli.Write(span[..^3]);
-                                brotli.Write(historyBuffer!.WrittenSpan);
-                                brotli.Write("}"u8);
-                            }
-                            else
-                            {
-                                brotli.Write(payloadBuffer.WrittenSpan);
-                            }
-                        }
-                        compressedBytes = file.Position;
-                    });
-                    Metadata.Checksum = "";
-                    Metadata.CompressedBytes = compressedBytes;
-                    Stale(LegacyTextPath(_root, _slot));
-                    Stale(MetaPath(_root, _slot));
-                    DiagnosticLogs.Write("system", $"SAVE_END slot={_slot} bytes={compressedBytes} json_bytes={jsonBytes} checksum={Metadata.Checksum} format={FormatVersion} map={MapDataVersion}");
-                    return Metadata;
+                    // Only the text save reaches here: the binary one is CommitBinary.
+                    throw new InvalidOperationException("A binary save is written by CommitBinary.");
                 }
                 finally
                 {
@@ -589,6 +567,43 @@ public static partial class SaveSystem
             finally
             {
                 SaveStringTable.InternIds = interned;
+            }
+        }
+
+        /// <summary>
+        /// The binary save, framed (<see cref="SaveContainer"/>) and streamed: the JSON goes from
+        /// the serializer through the compressor into the temporary file, and the history table
+        /// after it, with nothing held in between. The old path built the whole JSON in one
+        /// pooled buffer first - 144 MB on the owner's 107-year campaign, doubled on each growth
+        /// - to splice the history into its tail; the history now has its own section, so there
+        /// is no tail to splice.
+        /// </summary>
+        private SaveMetadata CommitBinary()
+        {
+            try
+            {
+                long bytes = 0;
+                var checksum = "";
+                AtomicWrite(DataPath(_root, _slot), file =>
+                    (bytes, checksum) = WriteBinary(file, _payload, _history, StorageCodec, StorageLevel(_thorough)));
+                Metadata.Checksum = checksum;
+                Metadata.CompressedBytes = bytes;
+                Stale(LegacyTextPath(_root, _slot));
+                Stale(MetaPath(_root, _slot));
+                DiagnosticLogs.Write("system", $"SAVE_END slot={_slot} bytes={bytes} container=BDF3 codec={StorageCodec} " +
+                                               $"level={StorageLevel(_thorough)} checksum={checksum[..Math.Min(16, checksum.Length)]} " +
+                                               $"format={FormatVersion} map={MapDataVersion}");
+                return Metadata;
+            }
+            catch (Exception exception) when (exception is ArgumentException or JsonException)
+            {
+                if (_history is not null) _payload.History = _history;
+                var issues = new List<string>();
+                foreach (var issue in NumericIntegrity.Inspect(_payload))
+                    if (!issues.Contains(issue)) issues.Add(issue);
+                var diagnostic = TryWriteDiagnostic(_root, _payload, issues);
+                var message = issues.Count > 0 ? string.Join("; ", issues) : exception.Message;
+                throw new CampaignIntegrityException(message, diagnostic);
             }
         }
 
@@ -682,12 +697,19 @@ public static partial class SaveSystem
             // refer to it.
             // Scan the ID table, then deserialize from the same open file. No full
             // compressed buffer, expanded MemoryStream or second expanded byte array.
-            var scan = OpenPayloadStream(file, leaveOpen: true);
-            try { SaveStringTable.Use(SaveStringTableScanner.Read(scan)); }
-            finally { if (!ReferenceEquals(scan, file)) scan.Dispose(); }
-            file.Position = 0;
-            using var source = OpenPayloadStream(file);
-            payload = JsonSerializer.Deserialize<CampaignSave>(source, JsonOptions);
+            // Since 18 November 2026 a binary save is framed ("BDF3", SaveContainer): its
+            // checksum is verified as it streams, and a mismatch refuses the file here.
+            if (first == 'B' && second == 'D' && IsFramed(file))
+                payload = ReadBinary(file);
+            else
+            {
+                var scan = OpenPayloadStream(file, leaveOpen: true);
+                try { SaveStringTable.Use(SaveStringTableScanner.Read(scan)); }
+                finally { if (!ReferenceEquals(scan, file)) scan.Dispose(); }
+                file.Position = 0;
+                using var source = OpenPayloadStream(file);
+                payload = JsonSerializer.Deserialize<CampaignSave>(source, JsonOptions);
+            }
         }
         catch (Exception exception)
         {
@@ -969,6 +991,16 @@ public static partial class SaveSystem
         return JsonSerializer.Deserialize<CampaignSave>(gzip, JsonOptions);
     }
 
+    private static bool IsFramed(FileStream file)
+    {
+        if (file.Length < 4) return false;
+        Span<byte> magic = stackalloc byte[4];
+        file.Position = 0;
+        file.ReadExactly(magic);
+        file.Position = 0;
+        return SaveContainer.IsContainer(magic);
+    }
+
     private static bool IsGzip(byte[] stored) =>
         stored is { Length: >= 2 } && stored[0] == 0x1f && stored[1] == 0x8b;
 
@@ -977,8 +1009,66 @@ public static partial class SaveSystem
     // Keep this policy independent of autosave metadata. Previously every manual save
     // selected quality 11 even with SaveCompressionThorough=false: a 2039 campaign
     // spent 110 seconds in Commit. File format and losslessness are unchanged.
+    //
+    // Since 18 November 2026 the default is Brotli quality 1 (CompressionLevel.Fastest), down
+    // from 4 (Optimal): on the owner's campaign quality 4 was most of a 3.6-second write and
+    // bought a file a few megabytes smaller. Zstandard level 1 was measured against it and its
+    // margin did not pay for a dependency of unsafe code - docs/SAVE_FORMAT_2026_11_18_RU.md.
     internal static CompressionLevel StorageCompression(bool thorough) =>
-        thorough ? CompressionLevel.SmallestSize : CompressionLevel.Optimal;
+        thorough ? CompressionLevel.SmallestSize : CompressionLevel.Fastest;
+
+    /// <summary>The codec a binary save is written with (<see cref="SaveContainer"/> ids).</summary>
+    internal const byte StorageCodec = SaveContainer.BrotliCodec;
+
+    /// <summary>The codec's level: Brotli quality 1, or 11 when Defines.SaveCompressionThorough.</summary>
+    internal static int StorageLevel(bool thorough) => thorough ? 11 : 1;
+
+    /// <summary>
+    /// The campaign as a framed binary save onto a seekable stream: the graph as the same JSON
+    /// every other save carries (history left out), the history as <see cref="SaveHistoryTable"/>.
+    /// The payload's own History is put back before this returns, whatever happens.
+    /// </summary>
+    internal static (long Bytes, string Checksum) WriteBinary(Stream file, CampaignSave payload,
+        Dictionary<int, List<NationHistorySample>> history, byte codec, int level)
+    {
+        var interned = SaveStringTable.InternIds;
+        var own = payload.History;
+        history ??= own;
+        payload.History = new Dictionary<int, List<NationHistorySample>>();
+        SaveStringTable.Use(payload.StringTable);
+        try
+        {
+            return SaveContainer.Write(file, graph => JsonSerializer.Serialize(graph, payload, JsonOptions),
+                history, codec, level, FormatVersion);
+        }
+        finally
+        {
+            payload.History = own;
+            SaveStringTable.InternIds = interned;
+        }
+    }
+
+    /// <summary>
+    /// A framed binary save back to its payload, history included. The string table is read
+    /// from the front of the graph first, as for every other save (its rows refer to it), then
+    /// the file is read once more from the start through the checksum. Throws on any damage.
+    /// </summary>
+    internal static CampaignSave ReadBinary(Stream file)
+    {
+        var start = file.Position;
+        var header = SaveContainer.ReadHeader(file);
+        using (var scan = SaveContainer.OpenGraph(file, header, leaveOpen: true))
+            SaveStringTable.Use(SaveStringTableScanner.Read(scan));
+        file.Position = start;
+        var (payload, history) = SaveContainer.Read(file, header,
+            graph => JsonSerializer.Deserialize<CampaignSave>(graph, JsonOptions));
+        payload.History = history;
+        return payload;
+    }
+
+    /// <summary>The campaign JSON inside whichever container a save file is - framed, Brotli,
+    /// gzip or none - for tools that look into a save without building a world from it.</summary>
+    internal static Stream OpenJson(FileStream file) => OpenPayloadStream(file);
 
     private static bool IsBrotli(byte[] stored) =>
         stored is { Length: >= 4 } && System.Text.Encoding.ASCII.GetString(stored, 0, 4) == BrotliMagic;
@@ -999,6 +1089,8 @@ public static partial class SaveSystem
         var third = file.ReadByte();
         var fourth = file.ReadByte();
         file.Position = 0;
+        if (first == (byte)'B' && second == (byte)'D' && third == (byte)'F' && fourth == (byte)'3')
+            return SaveContainer.OpenGraph(file, SaveContainer.ReadHeader(file), leaveOpen);
         if (first == 0x1f && second == 0x8b)
             return new GZipStream(file, CompressionMode.Decompress, leaveOpen);
         if (first == (byte)'B' && second == (byte)'D' && third == (byte)'F' && fourth == (byte)'2')
@@ -1043,10 +1135,18 @@ public static partial class SaveSystem
     private static void AtomicWrite(string target, Action<FileStream> writeTo)
     {
         var temporary = target + ".tmp";
-        using (var file = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 64 * 1024))
+        try
         {
+            using var file = new FileStream(temporary, FileMode.Create, FileAccess.ReadWrite, FileShare.None, 64 * 1024);
             writeTo(file);
             file.Flush(true);
+        }
+        catch
+        {
+            // The binary save streams into this file, so a refusal halfway (a non-finite number
+            // found by the serializer) leaves half a save; it is not a save, and it goes.
+            try { File.Delete(temporary); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            throw;
         }
         if (File.Exists(target)) File.Replace(temporary, target, target + ".bak");
         else File.Move(temporary, target);

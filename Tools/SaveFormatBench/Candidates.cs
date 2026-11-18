@@ -25,7 +25,9 @@ internal sealed record Candidate(string Name, string Note, Action<CampaignSave, 
 /// </summary>
 internal static class Candidates
 {
-    public static readonly Candidate[] All =
+    public static Candidate[] All => System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(Base, StreamCandidates.All));
+
+    private static readonly Candidate[] Base =
     {
         new("json-text", "today's text save (Defines.SaveTextFormat), no compression",
             (p, o) => Formats.WriteJson(p, o, text: true), b => Formats.ReadJsonStream(new MemoryStream(b))),
@@ -244,12 +246,16 @@ internal static class Formats
         finally { ArrayPool<byte>.Shared.Return(json.Array!); }
     }
 
+    // Quality 4 (Optimal) written out, not SaveSystem.StorageCompression: that policy moved to
+    // quality 1 on 18 November, and "today's binary save" must keep meaning the BDF2 file that
+    // builds before it wrote. The first run of the second round read the policy and measured
+    // quality 1 twice under two names; found by the two files being the same size to the byte.
     public static void WriteJsonBrotli(CampaignSave payload, PooledBuffer output)
     {
         using var json = new PooledBuffer(64 << 20);
         WriteJson(payload, json, text: false);
         output.Write("BDF2"u8);
-        using var brotli = new BrotliStream(output.AsStream(), SaveSystem.StorageCompression(false), leaveOpen: true);
+        using var brotli = new BrotliStream(output.AsStream(), CompressionLevel.Optimal, leaveOpen: true);
         brotli.Write(json.WrittenSpan);
     }
 
@@ -389,7 +395,7 @@ internal static class Formats
 
     public static void Brotli(ReadOnlySpan<byte> source, PooledBuffer output)
     {
-        using var brotli = new BrotliStream(output.AsStream(), SaveSystem.StorageCompression(false), leaveOpen: true);
+        using var brotli = new BrotliStream(output.AsStream(), CompressionLevel.Optimal, leaveOpen: true);
         brotli.Write(source);
     }
 

@@ -46,6 +46,19 @@ public static class HistoryBench
                 b => MessagePackSerializer.Deserialize<Dictionary<int, List<NationHistorySample>>>(b, Formats.MsgPackHistoryKeyed)),
             ("history-memorypack", h => MemoryPackSerializer.Serialize(h),
                 b => MemoryPackSerializer.Deserialize<Dictionary<int, List<NationHistorySample>>>(b)),
+            // The game's own table since 18 November (SaveHistoryTable): BinaryWriter by hand,
+            // a version and a column count, no library.
+            ("history-binarywriter", h =>
+            {
+                using var memory = new MemoryStream();
+                using (var writer = new BinaryWriter(memory, System.Text.Encoding.UTF8, leaveOpen: true))
+                    SaveHistoryTable.Write(writer, h);
+                return memory.ToArray();
+            }, b =>
+            {
+                using var reader = new BinaryReader(new MemoryStream(b));
+                return SaveHistoryTable.Read(reader);
+            }),
         };
         foreach (var c in cases)
         {
