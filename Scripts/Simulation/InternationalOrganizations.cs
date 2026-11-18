@@ -567,7 +567,8 @@ public static class InternationalOrganizations
                         if (id == m.TargetId) continue;
                         var rel = CampaignDiplomacy.Get(c, id, m.TargetId);
                         if (id == rel.A) rel.EmbargoByA = true; else rel.EmbargoByB = true;
-                        rel.TradeAgreement = false;
+                        // The organisation's act, not the member's: it costs the member nothing.
+                        AgreementSystem.End(c, rel, AgreementSystem.TradeEnd.Sanctioned);
                         OpinionSystem.Remember(c, rel, "embargoed_us");
                     }
                     var actor = c.NationById(m.ProposerId) ?? Leader(c, org);

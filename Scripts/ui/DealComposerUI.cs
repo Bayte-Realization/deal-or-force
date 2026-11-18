@@ -19,8 +19,9 @@ public partial class DealOrForceGame
     private readonly HashSet<int> _dealGiveRegions = new();
     private readonly HashSet<int> _dealAskRegions = new();
     private SpinBox _dealGiveCash, _dealAskCash;
-    private CheckBox _dealGivePact, _dealGiveTrade, _dealGiveEmbargo;
-    private CheckBox _dealAskPact, _dealAskTrade, _dealAskEmbargo;
+    private CheckBox _dealGivePact, _dealGiveEmbargo;
+    private CheckBox _dealAskPact, _dealAskEmbargo;
+    private Label _dealTruceLine;
     private CheckBox _dealGiveRelease, _dealAskRelease;
     private Label _dealAssessment, _dealTerms, _dealTreasuries, _dealValuation;
     private Label _dealWeightFigure, _dealPayFigure, _dealAskFigure;
@@ -56,8 +57,7 @@ public partial class DealOrForceGame
         ReleaseRegions = _dealGiveRelease.ButtonPressed,
         Cash = (float)_dealGiveCash.Value,
         LiftEmbargo = _dealGiveEmbargo.ButtonPressed,
-        NonAggression = _dealGivePact.ButtonPressed,
-        TradeAgreement = _dealGiveTrade.ButtonPressed
+        NonAggression = _dealGivePact.ButtonPressed
     };
 
     private Ultimatum.Side DealAskSide() => new()
@@ -66,13 +66,14 @@ public partial class DealOrForceGame
         ReleaseRegions = _dealAskRelease.ButtonPressed,
         Cash = (float)_dealAskCash.Value,
         LiftEmbargo = _dealAskEmbargo.ButtonPressed,
-        NonAggression = _dealAskPact.ButtonPressed,
-        TradeAgreement = _dealAskTrade.ButtonPressed
+        NonAggression = _dealAskPact.ButtonPressed
     };
 
-    private Ultimatum.Deal ComposedDeal() => new(DealGiveSide(), DealAskSide());
+    private Ultimatum.Deal ComposedDeal() => new(DealGiveSide(), DealAskSide()) { Trade = DealTradeDraft() };
 
-    internal void OpenDealComposer(Nation target)
+    /// <param name="trade">Terms to open the trade strip with (the country page's "Terms..." and
+    /// "Revise"); null leaves the strip closed.</param>
+    internal void OpenDealComposer(Nation target, TradeTerms trade = null)
     {
         if (_campaign?.Player is null || target is null || target.Id == _campaign.Player.Id) return;
         CloseDealComposer();
@@ -104,9 +105,11 @@ public partial class DealOrForceGame
         var relation = CampaignDiplomacy.Peek(_campaign, player.Id, target.Id);
 
         BuildDealHalf(body, Tr("You give"), player, ours: true, relation,
-            _dealGiveRegions, out _dealGiveCash, out _dealGivePact, out _dealGiveTrade, out _dealGiveEmbargo, out _dealGiveRelease);
+            _dealGiveRegions, out _dealGiveCash, out _dealGivePact, out _dealGiveEmbargo, out _dealGiveRelease);
         BuildDealHalf(body, Tr("You ask"), target, ours: false, relation,
-            _dealAskRegions, out _dealAskCash, out _dealAskPact, out _dealAskTrade, out _dealAskEmbargo, out _dealAskRelease);
+            _dealAskRegions, out _dealAskCash, out _dealAskPact, out _dealAskEmbargo, out _dealAskRelease);
+        // The trade agreement is the pair's term, so it sits under both columns, not in one.
+        BuildDealTradeStrip(rows, player, target, relation, trade);
 
         var reviewFrame = new PanelContainer { Name = "DealReviewPanel", SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill };
@@ -152,8 +155,8 @@ public partial class DealOrForceGame
         _dealTerms = WrappedUltimatumText("", 13);
         _dealTerms.Name = "DealTerms";
         review.AddChild(_dealTerms);
-        review.AddChild(WrappedUltimatumText(Loc.Format("Signed: {0} days of protected peace on both sides of the table.",
-            Math.Clamp(_campaign.Defines.DealSettlementTruceDays, 0, 3650)), 13));
+        _dealTruceLine = WrappedUltimatumText("", 13);
+        review.AddChild(_dealTruceLine);
         var footer = new PanelContainer { Name = "DealSettlementFooter" };
         footer.AddThemeStyleboxOverride("panel", WarInsetStyle(10, 10));
         AtlasSurfaceSkin.Attach(footer, AtlasSurfaceSkin.Level.Inset, "war.card");
@@ -203,7 +206,7 @@ public partial class DealOrForceGame
     /// never imposed cannot be lifted by it.</summary>
     private void BuildDealHalf(HBoxContainer body, string caption, Nation owner, bool ours,
         DiplomaticRelation relation, HashSet<int> chosen,
-        out SpinBox cash, out CheckBox pact, out CheckBox trade, out CheckBox embargo, out CheckBox release)
+        out SpinBox cash, out CheckBox pact, out CheckBox embargo, out CheckBox release)
     {
         var frame = new PanelContainer { Name = ours ? "DealGivePanel" : "DealAskPanel",
             SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
@@ -237,12 +240,6 @@ public partial class DealOrForceGame
             TooltipText = Ui.Tip(Tr("This is a mutual pact. Select it on one side only; an existing treaty cannot be sold again.")) };
         half.AddChild(pact);
         if (pact.Disabled) half.AddChild(DealRefusal("This is a mutual pact. Select it on one side only; an existing treaty cannot be sold again."));
-        trade = new CheckBox { Name = ours ? "DealGiveTrade" : "DealAskTrade", Text = Tr("Trade agreement"),
-            Disabled = relation?.TradeAgreement == true,
-            AutowrapMode = TextServer.AutowrapMode.WordSmart, SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            TooltipText = Ui.Tip(Tr("This is a mutual pact. Select it on one side only; an existing treaty cannot be sold again.")) };
-        half.AddChild(trade);
-        if (trade.Disabled) half.AddChild(DealRefusal("This is a mutual pact. Select it on one side only; an existing treaty cannot be sold again."));
         embargo = new CheckBox
         {
             Name = ours ? "DealGiveEmbargo" : "DealAskEmbargo",
@@ -318,7 +315,6 @@ public partial class DealOrForceGame
         ShowRegionCount("");
         cash.ValueChanged += _ => RefreshDealComposer();
         pact.Toggled += _ => RefreshDealComposer();
-        trade.Toggled += _ => RefreshDealComposer();
         embargo.Toggled += _ => RefreshDealComposer();
         release.Toggled += _ => RefreshDealComposer();
     }
@@ -378,6 +374,12 @@ public partial class DealOrForceGame
             Points(assessment.ToValuation.Cash), Points(assessment.ToValuation.Land), Points(assessment.ToValuation.Treaties),
             Points(-assessment.GrudgePenalty), Points(assessment.ToValue), Points(assessment.FromValue), Points(assessment.ToValuation.Borders));
         _dealTerritoryPreview.Refresh(_campaign, deal.From.Regions, deal.To.Regions, deal.From.ReleaseRegions, deal.To.ReleaseRegions);
+        RefreshDealTradeStrip(player, target);
+        // A trade agreement alone buys no truce (Ultimatum.ResolveDeal); everything else does.
+        _dealTruceLine.Text = Ultimatum.IsTradeOnly(deal)
+            ? Tr("Signed: a trade agreement alone brings no period of protected peace.")
+            : Loc.Format("Signed: {0} days of protected peace on both sides of the table.",
+                Math.Clamp(_campaign.Defines.DealSettlementTruceDays, 0, 3650));
         _dealMapHint.Text = Tr(_dealGiveRegions.Count + _dealAskRegions.Count == 0
             ? "Select regions to see their actual location before signing."
             : "Gold: you give. Green: you ask. Hatching: independence, not annexation. Preview only; no borders change until agreement.");
@@ -402,11 +404,10 @@ public partial class DealOrForceGame
             FromRegions = deal.From.Regions, FromCash = deal.From.Cash,
             FromReleaseRegions = deal.From.ReleaseRegions,
             FromLiftEmbargo = deal.From.LiftEmbargo, FromNonAggression = deal.From.NonAggression,
-            FromTradeAgreement = deal.From.TradeAgreement,
             ToRegions = deal.To.Regions, ToCash = deal.To.Cash,
             ToReleaseRegions = deal.To.ReleaseRegions,
             ToLiftEmbargo = deal.To.LiftEmbargo, ToNonAggression = deal.To.NonAggression,
-            ToTradeAgreement = deal.To.TradeAgreement
+            Trade = TradeTerms.Copy(deal.Trade)
         };
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);

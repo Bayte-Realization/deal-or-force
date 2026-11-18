@@ -15,7 +15,9 @@ using DealOrForce.Simulation;
 /// year as read-only previews, so "would the player get this?" is a share and not an anecdote.
 /// Third, at the end, one market week routed twice - with every agreement in force and with none -
 /// so what an agreement changes in bilateral trade, imports and shortages is measured on the same
-/// prices instead of guessed from the code.
+/// prices instead of guessed from the code. Since trade agreements have terms (TradeTerms) a fourth:
+/// what the terms say and how they end, and in the same week what the tariff cuts did to the import
+/// markup and what the supply guarantees did for the buyers they were written for.
 /// </summary>
 internal static class DealReport
 {
@@ -40,12 +42,17 @@ internal static class DealReport
         var ended = new Dictionary<string, int>();
         var lifetimes = new List<int>();
         var previews = new Dictionary<string, (int Asked, int Yes, double Points)>();
+        var delivered = new List<double>();
 
         for (var day = 1; day <= days; day++)
         {
             campaign.TickDay();
             Watch(campaign, live, signings, ended, lifetimes);
             if (day % 180 == 0) Preview(campaign, previews);
+            // How well the guarantees in force are kept, sampled each quarter (TradeTerms.Delivered).
+            if (day % 90 == 0)
+                foreach (var r in campaign.Relations.Values)
+                    if (r.Trade is { HasGuarantee: true } g) delivered.Add(g.Delivered);
             if (day % 365 == 0 || day == days) Year(campaign, live.Count, signings.Count, ended);
         }
 
@@ -53,6 +60,9 @@ internal static class DealReport
         Console.WriteLine("FLOW (DealTally: put / signed / declined, by kind and seat)");
         foreach (var (key, count) in DealTally.Snapshot()) Console.WriteLine($"  {key} = {count}");
         Console.WriteLine($"  ai.supply_hedge (AiStatecraft) = {AiStatecraft.Tally.GetValueOrDefault("supply_hedge") - hedgeBefore}");
+
+        Console.WriteLine();
+        Terms(campaign, delivered);
 
         Console.WriteLine();
         Console.WriteLine($"WHO SIGNS: {signings.Count} new trade agreements over {days} days");
@@ -151,19 +161,30 @@ internal static class DealReport
                 if (asked is null || asked.Population <= 0 || asked.Landless || asked.Movement is not null) continue;
                 var relation = CampaignDiplomacy.Peek(c, asker.Id, asked.Id);
                 if (relation is { Stance: DiplomaticStance.AtWar }) continue;
-                if (relation?.TradeAgreement != true)
+                // The bench's own "player" answers its papers by hand, not by the government's
+                // count, so it is left out of the trade rows: the comparison is government to government.
+                if (relation?.TradeAgreement != true && !asked.IsHuman)
                 {
-                    var button = AgreementSystem.Willingness(c, asked, asker, AgreementKind.TradeAgreement, preview: true) >=
-                                 AgreementSystem.Needed(c, AgreementKind.TradeAgreement);
-                    Add("trade.button (agreement screen)", button);
-                    var give = Ultimatum.AssessNegotiatedDeal(c, asker, asked,
-                        new Ultimatum.Deal(new Ultimatum.Side { TradeAgreement = true }, new Ultimatum.Side()));
-                    if (give.Valid) Add("trade.table, in our column, for nothing", give.Acceptable, give.ToValue);
-                    var ask = Ultimatum.AssessNegotiatedDeal(c, asker, asked,
-                        new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { TradeAgreement = true }));
-                    if (ask.Valid) Add("trade.table, in their column, for nothing", ask.Acceptable, ask.ToValue);
-                    if (give.Valid) Add("trade.bypass: button refuses, table signs", !button && give.Acceptable);
-                    if (give.Valid) Add("trade.points for US when it signs (our column)", give.Acceptable, give.FromValue);
+                    // One paper, one answer: the button sends the ordinary terms and is answered by
+                    // the deal table's count, so the table with the same terms must say the same.
+                    // There is no column any more - the terms are the pair's - so one table row.
+                    var ordinary = TradeTermsCatalog.Ordinary(c, asker, asked);
+                    var table = Ultimatum.AssessNegotiatedDeal(c, asker, asked,
+                        new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side()) { Trade = ordinary });
+                    // Asked of the same pairs: a table that cannot be laid (a fresh refusal's
+                    // pause, say) is a question neither route may put.
+                    if (table.Valid)
+                    {
+                        var button = DealAnswer.GovernmentSignsAgreement(c, asked, asker, AgreementKind.TradeAgreement, ordinary);
+                        Add("trade.button (agreement screen)", button);
+                        Add("trade.table, ordinary terms, for nothing", table.Acceptable, table.ToValue);
+                        Add("trade.bypass: button refuses, table signs", !button && table.Acceptable);
+                        Add("trade.points for US when it signs", table.Acceptable, table.FromValue);
+                    }
+
+                    // What the composer would ask of them, and whether they would sign it.
+                    var best = TradeTermsComposer.BestFor(c, asker, asked, TradeTermsComposer.Candidates(c, asker, asked));
+                    Add("trade.composer finds terms they sign", best is not null);
                 }
                 if (relation?.NonAggressionPact != true)
                 {
@@ -197,6 +218,35 @@ internal static class DealReport
             var r = c.Relations.GetValueOrDefault(key);
             if (r is null) continue;
             parties.Add(r.A); parties.Add(r.B);
+        }
+        // The supply guarantees in force: whose shortage of which good each one is meant to cover.
+        var lanes = new List<(int Receiver, Commodity Good)>();
+        foreach (var key in pairs)
+            if (c.Relations.GetValueOrDefault(key) is { Trade: { } t } held && t.TryGuaranteeGood(out var g))
+                lanes.Add((held.Other(t.GuarantorId), g));
+        (double Markup, double Guaranteed) TermsWeek()
+        {
+            // The import markup each signatory paid, weighted by what it imported (MarketSystem's
+            // rule: a relieved share sheds the markup), and how fully guaranteed buyers were served.
+            double paid = 0, weight = 0;
+            foreach (var id in parties)
+            {
+                var n = c.NationById(id);
+                if (n is null) continue;
+                foreach (var q in n.Market.Values)
+                {
+                    if (q.Imports <= 0.001f) continue;
+                    var w = q.Imports * CommodityCatalog.Get(q.Commodity).BasePrice;
+                    paid += w * (1 + (c.Defines.ImportMarkup - 1) *
+                                 (1 - Math.Clamp(c.Defines.TradeAgreementMarkupRelief * Math.Clamp(q.Relieved / q.Imports, 0f, 1f), 0f, 1f)));
+                    weight += w;
+                }
+            }
+            double served = 0;
+            foreach (var (receiver, good) in lanes)
+                if (c.NationById(receiver)?.Market.TryGetValue(good, out var q) == true)
+                    served += q.Demand <= 0.001f ? 1 : Math.Clamp((q.Production + q.Imports) / q.Demand, 0f, 1f);
+            return (weight > 0 ? paid / weight : 1, lanes.Count > 0 ? served / lanes.Count : 1);
         }
         (double Pair, double World, Dictionary<int, double> Imports, Dictionary<int, double> Shortage, Dictionary<int, double> Satisfied) Measure()
         {
@@ -234,10 +284,13 @@ internal static class DealReport
         }
 
         var with = Measure();
+        var termsWith = TermsWeek();
         var flags = new List<DiplomaticRelation>();
         foreach (var key in pairs)
             if (c.Relations.GetValueOrDefault(key) is { TradeAgreement: true } r) { r.TradeAgreement = false; flags.Add(r); }
+        // The flag down takes the terms with it: the market reads terms only where the flag is up.
         var without = Measure();
+        var termsWithout = TermsWeek();
         foreach (var r in flags) r.TradeAgreement = true;
         TradeNetwork.Route(c);
 
@@ -260,7 +313,12 @@ internal static class DealReport
         var priceWith = 1 + 1.4 * (1 - Mean(with.Satisfied, parties));
         var priceWithout = 1 + 1.4 * (1 - Mean(without.Satisfied, parties));
         Console.WriteLine($"  implied local price factor, signatories: {priceWith:0.0000} with, {priceWithout:0.0000} without " +
-                          $"({(priceWith / priceWithout - 1):+0.00%;-0.00%;0.00%}); tariffs: unchanged by construction (rate is the importer's policy, any partner)");
+                          $"({(priceWith / priceWithout - 1):+0.00%;-0.00%;0.00%})");
+        Console.WriteLine($"  import markup paid by the signatories (import-weighted): {termsWith.Markup:0.0000} with, {termsWithout.Markup:0.0000} without " +
+                          $"({(termsWith.Markup / termsWithout.Markup - 1):+0.00%;-0.00%;0.00%})");
+        Console.WriteLine($"  guaranteed buyers' satisfaction of the guaranteed good ({lanes.Count} guarantees): {termsWith.Guaranteed:P1} with, " +
+                          $"{termsWithout.Guaranteed:P1} without ({(termsWith.Guaranteed - termsWithout.Guaranteed) * 100:+0.0;-0.0;0.0} pp)");
+        Console.WriteLine($"  shortage of countries outside agreements: {Mean(with.Shortage, outsiders) - Mean(without.Shortage, outsiders):+0.0000;-0.0000;0.0000} from the agreements");
         var moved = parties.Select(id => (Id: id, Delta: with.Imports.GetValueOrDefault(id) - without.Imports.GetValueOrDefault(id)))
             .Concat(outsiders.Select(id => (Id: id, Delta: with.Imports.GetValueOrDefault(id) - without.Imports.GetValueOrDefault(id))))
             .OrderBy(x => x.Delta).ToList();
@@ -272,6 +330,46 @@ internal static class DealReport
         var dead = pairs.Count(key => c.Relations.GetValueOrDefault(key) is { } r &&
                                       (c.NationById(r.A)?.TradePartners.GetValueOrDefault(r.B) ?? 0f) <= 0.0001f);
         Console.WriteLine($"  agreements with no trade between the pair this week: {dead} of {pairs.Count} ({dead / (double)pairs.Count:P0})");
+    }
+
+    /// <summary>
+    /// What the agreements say (DealTally "trade_terms.*", counted where they are signed and ended):
+    /// how the presets, guarantees, goods lists and lengths are spread, how terms end - run out,
+    /// renewed, left at a price or for free - and how well the guarantees are kept. A mechanic with
+    /// one outcome looks like a working one in a log; these shares are what tell them apart.
+    /// </summary>
+    private static void Terms(Campaign c, List<double> delivered)
+    {
+        int T(string key) => DealTally.Get(key);
+        int Sum(string prefix) => DealTally.Snapshot().Where(e => e.Key.StartsWith(prefix, StringComparison.Ordinal)).Sum(e => e.Value);
+        var presets = DealTally.Snapshot().Where(e => e.Key.StartsWith("trade_terms.signed.preset.", StringComparison.Ordinal))
+            .Select(e => (Id: e.Key["trade_terms.signed.preset.".Length..], e.Value)).OrderByDescending(p => p.Value).ToList();
+        var signed = presets.Sum(p => p.Value);
+        Console.WriteLine($"TERMS: {signed} trade agreements signed with terms");
+        if (signed > 0)
+        {
+            Console.WriteLine("  by preset: " + string.Join(", ", presets.Select(p => $"{p.Id} {p.Value} ({p.Value / (double)signed:P0})")));
+            var largest = presets.Count > 0 ? presets[0].Value / (double)signed : 0;
+            Console.WriteLine($"  largest preset {largest:P0}; presets with at least 3 % each: {presets.Count(p => p.Value / (double)signed >= 0.03)}");
+            Console.WriteLine($"  with a guarantee {T("trade_terms.signed.with_guarantee") / (double)signed:P1}; " +
+                              $"with a goods list {T("trade_terms.signed.with_goods_list") / (double)signed:P1}");
+            var years = DealTally.Snapshot().Where(e => e.Key.StartsWith("trade_terms.signed.years.", StringComparison.Ordinal))
+                .Select(e => (Years: int.Parse(e.Key["trade_terms.signed.years.".Length..]), e.Value)).OrderBy(y => y.Years == 0 ? 99 : y.Years);
+            Console.WriteLine("  by length: " + string.Join(", ", years.Select(y => $"{(y.Years == 0 ? "no end" : y.Years + "y")} {y.Value / (double)signed:P1}")));
+        }
+        var renewed = Sum("trade_terms.renewed.preset.");
+        var expired = T("trade_terms.end.expired");
+        var ends = renewed + expired;
+        Console.WriteLine($"  at the end of a term: renewed {renewed} (of them on smaller terms {T("trade_terms.renewed.concession")}), " +
+                          $"expired {expired}" + (ends > 0 ? $" - renewed {renewed / (double)ends:P0}, expired {expired / (double)ends:P0}" : ""));
+        Console.WriteLine($"  left early: paid {T("trade_terms.exit.paid")}, free {T("trade_terms.exit.free")}; sanctioned away {T("trade_terms.end.sanctioned")}; " +
+                          $"renewal papers to a player {T("trade_terms.renewal_paper")}");
+        var toHuman = Sum("agreement.TradeAgreement.ai>human.") + Sum("deal.trade_agreement.ai>human.put");
+        Console.WriteLine($"  AI trade papers to the bench human: {toHuman}");
+        var live = c.Relations.Values.Where(r => r.Trade is { HasGuarantee: true }).Select(r => (double)r.Trade.Delivered).ToList();
+        Console.WriteLine($"  guarantees in force at the end: {live.Count}, delivered median {(live.Count > 0 ? Median(live) : 0):0.00}; " +
+                          $"quarterly samples {delivered.Count}, median {(delivered.Count > 0 ? Median(delivered) : 0):0.00}, " +
+                          $"under half {(delivered.Count > 0 ? delivered.Count(d => d < 0.5) / (double)delivered.Count : 0):P0}");
     }
 
     private static double Median(IEnumerable<double> values)

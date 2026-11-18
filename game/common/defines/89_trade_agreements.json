@@ -1,0 +1,47 @@
+// Trade agreements with terms (Scripts/Simulation/TradeTerms.cs, TradeTermsValue.cs,
+// TradeTermsComposer.cs). Design: docs/design/gameplay-2026-11-18/trade-agreements.md.
+{
+  // How a buyer ranks a seller it has an agreement with, per good: K = 1 + partner + relief x cut.
+  // 0.35 + 0.80 x 0.5 = 1.75 is exactly the multiplier the old flag gave, so the old agreement
+  // (half the tariff off everything) routes goods as it always did. A whole cut is 2.15; a good
+  // outside the list is 1.35 - still a partner, without the discount.
+  "TradeAgreementPartnerAffinity": 0.35,
+  "TradeAgreementReliefAffinity": 0.80,
+  // How much of the 1.06 import markup a relieved import sheds. 1: a good bought wholly under a
+  // whole cut costs the importer what it costs at home - the cut has to show in a price.
+  "TradeAgreementMarkupRelief": 1.0,
+
+  // The count of a set of terms, in deal points (TradeTermsValue). Selling and closing a shortage
+  // weigh most because they are what an agreement is for; duty forgone is heavy because the tax
+  // base it is divided by is large and a protectionist must feel its customs house empty.
+  "TradeValueExport": 100,
+  "TradeValueImport": 60,
+  "TradeValueShortage": 40,
+  "TradeValueGuaranteeIn": 30,
+  "TradeValueDuty": 200,
+  "TradeValueDependence": 20,
+  "TradeValueGuaranteeOut": 12,
+  // A guarantor that is itself short of the good it promises gives away what its own people lack.
+  "TradeValueGuaranteeOutShort": 20,
+  // How we regard them, against today's bar: 60 x (willingness - 0.18). With every economic line
+  // at zero this is the whole answer, and it signs where the old button signed.
+  "TradeValueRelations": 60,
+  // A longer term is worth more and binds harder: gains and costs for 2, 5, 10 years and no end.
+  "TradeTermGain": [0.7, 1.0, 1.2, 1.25],
+  "TradeTermCost": [0.8, 1.0, 1.3, 1.5],
+
+  // Leaving early: the breach memory scaled by the share of the term still to run, never below
+  // this. A term that is nearly over is nearly free to leave; one just signed is not.
+  "TradeAgreementBreakOpinionMin": 0.3,
+  // A guarantor that walks away while its partner is short of the good loses this much name.
+  "TradeGuaranteeBreakNotoriety": 3,
+  // Eight weeks in a row under half of what was owed and the receiver may leave without blame.
+  "TradeGuaranteeFreeExitWeeks": 8,
+  // A player party gets the renewal paper this many days before the term runs out - the same
+  // thirty days a deal paper waits on the table.
+  "TradeRenewalNoticeDays": 30,
+  // The computer's fallback length: each preset is also offered "the same, for two years". A
+  // government that will not bind itself for five often signs a trial, and the trial comes back
+  // to the table at its end - judged then on what it actually carried, not on what it promised.
+  "TradeShortTrialYears": 2
+}

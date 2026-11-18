@@ -236,6 +236,8 @@ public static class DealAnswerKinds
         if (deal?.From is null || deal.To is null) return null;
         var gives = TermsOf(deal.To);
         var gets = TermsOf(deal.From);
+        // A trade agreement is the pair's term: each country signs up to it, so it is on both halves.
+        if (Ultimatum.TradeOf(deal) is not null) { gives.Add("trade_agreement"); gets.Add("trade_agreement"); }
         foreach (var kind in _ordered)
             if (Matches(kind, gives, gets)) return kind;
         return null;
@@ -336,18 +338,45 @@ public static class DealAnswer
         }
     }
 
-    /// <summary>The deal an agreement offer amounts to: the asker writes the treaty, the asked country gives nothing.</summary>
-    public static Ultimatum.Deal AgreementDeal(AgreementKind kind) => new(
-        new Ultimatum.Side
-        {
-            TradeAgreement = kind == AgreementKind.TradeAgreement,
-            NonAggression = kind == AgreementKind.NonAggressionPact
-        },
-        new Ultimatum.Side());
+    /// <summary>
+    /// The deal an agreement offer amounts to. A pact: the asker writes it, the asked country gives
+    /// nothing. A trade agreement: one shared term with its terms (the ordinary ones when none are named).
+    /// </summary>
+    public static Ultimatum.Deal AgreementDeal(AgreementKind kind, TradeTerms terms = null) =>
+        kind == AgreementKind.TradeAgreement
+            ? new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side()) { Trade = TradeTerms.Copy(terms) ?? TradeTerms.Legacy() }
+            : new Ultimatum.Deal(new Ultimatum.Side { NonAggression = true }, new Ultimatum.Side());
 
-    /// <summary>A government's own answer to an agreement asked of it - the bar it always used.</summary>
-    public static bool GovernmentSignsAgreement(Campaign c, Nation asked, Nation asking, AgreementKind kind) =>
-        AgreementSystem.Willingness(c, asked, asking, kind) >= AgreementSystem.Needed(c, kind);
+    /// <summary>
+    /// A government's own answer to an agreement asked of it. A pact: the bar it always used. A trade
+    /// agreement: the same count and the same answer as the deal table gives the same terms.
+    /// </summary>
+    public static bool GovernmentSignsAgreement(Campaign c, Nation asked, Nation asking, AgreementKind kind,
+        TradeTerms terms = null)
+    {
+        if (kind != AgreementKind.TradeAgreement)
+            return AgreementSystem.Willingness(c, asked, asking, kind) >= AgreementSystem.Needed(c, kind);
+        return GovernmentSignsTrade(c, asked, asking, terms ?? TradeTermsCatalog.Ordinary(c, asking, asked), out _);
+    }
+
+    /// <summary>
+    /// A government's answer to trade terms put on their own: the deal table's answer to a table
+    /// with that one term (<see cref="Decide(Campaign, Nation, Nation, Ultimatum.Deal, Ultimatum.DealAssessment)"/>).
+    /// Where no table can be laid - deals switched off, or a world without a map - the same count is
+    /// read without one: a trade-only table's whole value is that count less the grudge floor, so
+    /// the answer is the same number either way and trade agreements do not depend on the deal table.
+    /// </summary>
+    public static bool GovernmentSignsTrade(Campaign c, Nation asked, Nation asking, TradeTerms terms,
+        out Ultimatum.DealAssessment assessment)
+    {
+        assessment = null;
+        if (c is null || asked is null || asking is null || terms is null) return false;
+        var deal = AgreementDeal(AgreementKind.TradeAgreement, terms);
+        assessment = Ultimatum.AssessNegotiatedDeal(c, asking, asked, deal);
+        if (assessment.Valid) return Decide(c, asked, asking, deal, assessment).Verdict == DealVerdict.Accept;
+        if (Ultimatum.CanOfferDeal(c, asking, asked, out _) || asked.IsHuman) return false;
+        return TradeTermsValue.For(c, asked, asking, terms) - Ultimatum.GrudgePenalty(c, asking, asked) >= 0f;
+    }
 
     /// <summary>
     /// An agreement offer on a player's table, answered by that player's standing rule if there is
@@ -359,7 +388,8 @@ public static class DealAnswer
         outcome = "";
         if (c is null || asked is null || asking is null || !asked.IsHuman || !HasStandingRules(asked))
             return AgreementResult.Offered;
-        var decision = Decide(c, asked, asking, AgreementDeal(kind));
+        var offered = kind == AgreementKind.TradeAgreement ? CampaignDiplomacy.Peek(c, asked.Id, asking.Id)?.AgreementOfferedTrade : null;
+        var decision = Decide(c, asked, asking, AgreementDeal(kind, offered));
         if (decision.Verdict == DealVerdict.Wait) return AgreementResult.Offered;
         var result = AgreementSystem.Answer(c, asked, asking.Id, decision.Verdict == DealVerdict.Accept, out outcome);
         if (result is AgreementResult.Signed or AgreementResult.Refused)

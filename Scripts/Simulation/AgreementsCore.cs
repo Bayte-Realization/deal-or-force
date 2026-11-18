@@ -257,14 +257,43 @@ public static class AgreementSystem
             ? campaign.Defines.TradeAgreementWillingness
             : campaign.Defines.NonAggressionPactWillingness;
 
-    /// <summary>Write it down between the two, with what that is worth to how each regards the other.</summary>
-    public static void Sign(Campaign campaign, DiplomaticRelation relation, AgreementKind kind)
+    /// <summary>
+    /// Write it down between the two, with what that is worth to how each regards the other.
+    ///
+    /// The only writer of a trade agreement: the deal table, the button, a peace conference, a peace
+    /// offer, an ultimatum and a union all come here, so the flag and its terms cannot part. Terms
+    /// already in force are replaced (a renewal or a revision) without the opinion being bought twice.
+    /// No terms means the ordinary ones - half the tariff off everything, for good.
+    /// </summary>
+    public static void Sign(Campaign campaign, DiplomaticRelation relation, AgreementKind kind, TradeTerms terms = null)
     {
         if (kind == AgreementKind.TradeAgreement)
         {
+            var renewing = relation.TradeAgreement;
+            var t = TradeTerms.Copy(terms) ?? TradeTerms.Legacy();
+            if (TradeTerms.Sanitize(t, relation.A, relation.B).Length > 0) t = TradeTerms.Legacy();
+            t.Renewal = false;
+            t.SignedDay = campaign.ElapsedDays;
+            t.EndsDay = t.Years > 0 ? (int)Math.Min(int.MaxValue, (long)campaign.ElapsedDays + 365L * t.Years) : -1;
+            t.Delivered = 1f;
+            t.ShortWeeks = 0;
+            t.GuarantorShortWeeks = 0;
+            t.RenewalOfferedDay = -9999;
+            relation.Trade = t;
             relation.TradeAgreement = true;
-            OpinionSystem.Forget(campaign, relation, "cancelled_trade_agreement");
-            OpinionSystem.Remember(campaign, relation, "trade_agreement");
+            if (!renewing)
+            {
+                OpinionSystem.Forget(campaign, relation, "cancelled_trade_agreement");
+                OpinionSystem.Remember(campaign, relation, "trade_agreement");
+            }
+            // Counted for the bench (DealTally), never read by the world.
+            DealTally.Count($"trade_terms.{(renewing ? "renewed" : "signed")}.preset.{(t.Preset is { Length: > 0 } p ? p : "custom")}");
+            DealTally.Count($"trade_terms.{(renewing ? "renewed" : "signed")}.years.{t.Years}");
+            if (!renewing)
+            {
+                if (t.HasGuarantee) DealTally.Count("trade_terms.signed.with_guarantee");
+                if (t.GoodsA.Length > 0 || t.GoodsB.Length > 0) DealTally.Count("trade_terms.signed.with_goods_list");
+            }
         }
         else
         {
@@ -272,6 +301,56 @@ public static class AgreementSystem
             OpinionSystem.Remember(campaign, relation, "non_aggression_pact");
         }
         relation.LastActionDay = campaign.ElapsedDays;
+        campaign.MarkStrategicChange();
+    }
+
+    /// <summary>How a trade agreement came to an end, which decides what it costs and whom.</summary>
+    public enum TradeEnd { Cancelled, Sanctioned, Expired }
+
+    /// <summary>What walking out of the trade agreement in force would cost this country now.</summary>
+    public readonly record struct TradeExitCost(bool Free, string Opinion, float Scale, float Notoriety);
+
+    public static TradeExitCost ExitCost(Campaign campaign, DiplomaticRelation relation, int issuerId)
+    {
+        var t = TradeTerms.Of(relation);
+        if (t is null) return new(true, "", 0f, 0f);
+        var partnerId = relation.Other(issuerId);
+        // They did not deliver what they promised: the one who was let down owes nothing.
+        if (t.HasGuarantee && t.GuarantorId == partnerId &&
+            t.ShortWeeks >= TradeTermsCatalog.FreeExitWeeks(campaign.Defines))
+            return new(true, "", 0f, 0f);
+        var notoriety = 0f;
+        if (t.HasGuarantee && t.GuarantorId == issuerId && t.TryGuaranteeGood(out var good) &&
+            campaign.NationById(partnerId) is { } partner && partner.Market.TryGetValue(good, out var q) && q.IsShortage)
+            notoriety = MathF.Max(0f, campaign.Defines.TradeGuaranteeBreakNotoriety);
+        if (t.EndsDay < 0) return new(false, "cancelled_trade_agreement", 1f, notoriety);
+        var span = Math.Max(1, t.EndsDay - t.SignedDay);
+        var left = M.Clamp01((t.EndsDay - campaign.ElapsedDays) / (float)span);
+        return new(false, TradeTermsCatalog.Spec.ExitOpinion,
+            MathF.Max(TradeTermsCatalog.BreakOpinionMin(campaign.Defines), left), notoriety);
+    }
+
+    /// <summary>
+    /// The only way a trade agreement ends. A cancellation pays the exit cost above; a sanction and
+    /// an expiry cost nobody anything - the first is the organisation's act, the second is the term
+    /// doing what it said. Either way the opinion the agreement bought goes with it.
+    /// </summary>
+    public static void End(Campaign campaign, DiplomaticRelation relation, TradeEnd reason, int issuerId = -1)
+    {
+        if (campaign is null || relation is null || !relation.TradeAgreement && relation.Trade is null) return;
+        if (reason == TradeEnd.Cancelled && issuerId >= 0)
+        {
+            var cost = ExitCost(campaign, relation, issuerId);
+            if (!cost.Free && cost.Opinion.Length > 0) OpinionSystem.Remember(campaign, relation, cost.Opinion, cost.Scale);
+            if (cost.Notoriety > 0f && campaign.NationById(issuerId) is { } issuer) issuer.Notoriety += cost.Notoriety;
+            DealTally.Count(cost.Free ? "trade_terms.exit.free" : "trade_terms.exit.paid");
+        }
+        else DealTally.Count("trade_terms.end." + reason.ToString().ToLowerInvariant());
+        relation.TradeAgreement = false;
+        relation.Trade = null;
+        OpinionSystem.Forget(campaign, relation, "trade_agreement");
+        relation.LastActionDay = campaign.ElapsedDays;
+        if (reason == TradeEnd.Expired) campaign.Chronicle.Record(campaign, "trade_agreement_expired", relation.A, relation.B);
         campaign.MarkStrategicChange();
     }
 
@@ -325,9 +404,11 @@ public static class AgreementSystem
             return AgreementResult.NotAsked;
         }
         var relation = CampaignDiplomacy.Get(campaign, answering.Id, proposerId);
+        var offeredTerms = relation.AgreementOfferedTrade;
         relation.AgreementOfferedBy = -1;
         relation.AgreementOfferedKind = AgreementKind.TradeAgreement;
         relation.AgreementOfferedDay = -9999;
+        relation.AgreementOfferedTrade = null;
         relation.LastActionDay = campaign.ElapsedDays;
 
         var proposer = campaign.NationById(proposerId);
@@ -350,7 +431,7 @@ public static class AgreementSystem
             outcome = Loc.Get("The offer no longer stands.");
             return AgreementResult.NotAllowed;
         }
-        Sign(campaign, relation, kind);
+        Sign(campaign, relation, kind, kind == AgreementKind.TradeAgreement ? offeredTerms : null);
         outcome = Loc.Format("{0} signed the {1}.", answering.DisplayName, name);
         DiagnosticLogs.Write("simulation",
             $"AGREEMENT_SIGNED by={answering.Tag} with={proposer?.Tag} kind={kind} day={campaign.ElapsedDays}");
@@ -383,9 +464,11 @@ public static class AgreementSystem
             relation.AgreementOfferedBy = -1;
             relation.AgreementOfferedKind = AgreementKind.TradeAgreement;
             relation.AgreementOfferedDay = -9999;
+            relation.AgreementOfferedTrade = null;
         }
         // Offers that waited before a player set a standing answer (DealAnswer).
         foreach (var step in DealAnswer.TickAgreements(campaign)) yield return step;
+        foreach (var step in TradeTermsLifecycle.TickStages(campaign)) yield return step;
     }
 
     /// <summary>What an aid package from this country to that one would be worth, or zero if it cannot be sent.</summary>
@@ -424,6 +507,11 @@ public sealed class ProposeAgreementCommand : ICampaignCommand
     public int IssuerId { get; init; }
     public int TargetId { get; init; }
     public AgreementKind Kind { get; init; }
+    /// <summary>
+    /// The trade terms asked for (A is the lower country id), or null for the ordinary ones. The
+    /// button on a country page sends none; "Terms..." and the computer's composer send their own.
+    /// </summary>
+    public TradeTerms Trade { get; init; }
 
     public AgreementResult Result { get; private set; } = AgreementResult.NotAsked;
     public string Reason { get; private set; } = "";
@@ -437,6 +525,12 @@ public sealed class ProposeAgreementCommand : ICampaignCommand
         {
             Result = AgreementResult.NotAllowed;
             Reason = refusal;
+            Tally(asking, asked);
+            return;
+        }
+        if (Kind == AgreementKind.TradeAgreement)
+        {
+            ApplyTrade(campaign, asking, asked);
             Tally(asking, asked);
             return;
         }
@@ -476,6 +570,63 @@ public sealed class ProposeAgreementCommand : ICampaignCommand
         relation.LastActionDay = campaign.ElapsedDays;
         Result = AgreementResult.Refused;
         Tally(asking, asked);
+    }
+
+    /// <summary>
+    /// The trade agreement button is a deal with one term: the same terms, valued by the same count
+    /// (TradeTermsValue) and answered by the same <see cref="DealAnswer.Decide(Campaign, Nation, Nation, Ultimatum.Deal, Ultimatum.DealAssessment)"/>
+    /// the deal table uses, so the button and the table cannot give two answers to one question.
+    /// </summary>
+    private void ApplyTrade(Campaign campaign, Nation asking, Nation asked)
+    {
+        var terms = Trade is null ? TradeTermsCatalog.Ordinary(campaign, asking, asked) : TradeTerms.Copy(Trade);
+        terms.Renewal = false;
+        var problem = TradeTerms.Sanitize(terms, Math.Min(asking.Id, asked.Id), Math.Max(asking.Id, asked.Id));
+        if (problem.Length > 0)
+        {
+            Result = AgreementResult.NotAllowed;
+            Reason = problem;
+            return;
+        }
+        var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
+        if (asked.IsHuman)
+        {
+            relation.AgreementOfferedBy = IssuerId;
+            relation.AgreementOfferedKind = Kind;
+            relation.AgreementOfferedDay = campaign.ElapsedDays;
+            relation.AgreementOfferedTrade = terms;
+            relation.LastActionDay = campaign.ElapsedDays;
+            campaign.MarkStrategicChange();
+            Result = AgreementResult.Offered;
+            Reason = Loc.Format("{0} will consider it.", asked.DisplayName);
+            DiagnosticLogs.Write("simulation",
+                $"AGREEMENT_OFFER from={asking.Tag} to={asked.Tag} kind={Kind} day={campaign.ElapsedDays}");
+            var ruled = DealAnswer.AnswerAgreementByRule(campaign, asked, asking, Kind, out var answer);
+            if (ruled != AgreementResult.Offered)
+            {
+                Result = ruled;
+                Reason = answer;
+            }
+            return;
+        }
+        var signs = DealAnswer.GovernmentSignsTrade(campaign, asked, asking, terms, out var assessment);
+        // A table that cannot be laid for a reason of its own (say, at war) is not a refusal.
+        if (!signs && !assessment.Valid && Ultimatum.CanOfferDeal(campaign, asking, asked, out _))
+        {
+            Result = AgreementResult.NotAllowed;
+            Reason = assessment.Reason;
+            return;
+        }
+        if (signs)
+        {
+            AgreementSystem.Sign(campaign, relation, Kind, terms);
+            Result = AgreementResult.Signed;
+            return;
+        }
+        relation.AgreementRefusedDay = campaign.ElapsedDays;
+        relation.LastActionDay = campaign.ElapsedDays;
+        Result = AgreementResult.Refused;
+        Reason = assessment.Valid ? assessment.Reason : Loc.Format("{0} declined the {1}.", asked.DisplayName, Loc.Get("trade agreement"));
     }
 
     // Counted for the bench (DealTally), never read by the world.
@@ -520,11 +671,7 @@ public sealed class CancelAgreementCommand : ICampaignCommand
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
         if (!AgreementSystem.Signed(relation, Kind)) return;
         if (Kind == AgreementKind.TradeAgreement)
-        {
-            relation.TradeAgreement = false;
-            OpinionSystem.Forget(campaign, relation, "trade_agreement");
-            OpinionSystem.Remember(campaign, relation, "cancelled_trade_agreement");
-        }
+            AgreementSystem.End(campaign, relation, AgreementSystem.TradeEnd.Cancelled, IssuerId);
         else
         {
             relation.NonAggressionPact = false;

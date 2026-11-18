@@ -63,8 +63,29 @@ public static partial class Ultimatum
         public bool IsEmpty => (Regions?.Length ?? 0) == 0 && Cash <= 0 && !LiftEmbargo && !NonAggression && !TradeAgreement;
     }
 
-    /// <summary>The whole table: <see cref="From"/> is what the proposer gives.</summary>
-    public sealed record Deal(Side From, Side To);
+    /// <summary>
+    /// The whole table: <see cref="From"/> is what the proposer gives. <see cref="Trade"/> is the
+    /// trade agreement, a term of the pair rather than of a side (TradeTerms): written the same
+    /// whichever column it was ticked in, and counted by both countries from where each stands.
+    /// A side's old TradeAgreement tick is read as the ordinary terms (<see cref="TradeOf"/>).
+    /// </summary>
+    public sealed record Deal(Side From, Side To)
+    {
+        public TradeTerms Trade { get; init; }
+    }
+
+    /// <summary>The trade terms on a table: the shared term, or the old terms for a side's tick, or null.</summary>
+    public static TradeTerms TradeOf(Deal deal) =>
+        deal is null ? null : deal.Trade ??
+        (deal.From?.TradeAgreement == true || deal.To?.TradeAgreement == true ? TradeTerms.Legacy() : null);
+
+    /// <summary>A table whose only term is a trade agreement: what the button on a country page puts.</summary>
+    public static bool IsTradeOnly(Deal deal)
+    {
+        if (TradeOf(deal) is null) return false;
+        static bool Bare(Side s) => s is null || ((s.Regions?.Length ?? 0) == 0 && s.Cash <= 0f && !s.LiftEmbargo && !s.NonAggression);
+        return Bare(deal.From) && Bare(deal.To);
+    }
 
     public sealed record DealOutcome(bool Accepted, string Note, int PendingOfferId = 0);
 
@@ -116,10 +137,12 @@ public static partial class Ultimatum
     /// adds, everything given subtracts, and a promise made by a notorious country is worth
     /// less than the paper it is written on.
     /// </summary>
-    public static float DealValue(Campaign c, Nation recipient, Nation counterparty, Side receive, Side give)
-        => ValueDealSide(c, recipient, counterparty, receive, give).Total;
+    public static float DealValue(Campaign c, Nation recipient, Nation counterparty, Side receive, Side give,
+        TradeTerms trade = null)
+        => ValueDealSide(c, recipient, counterparty, receive, give, trade).Total;
 
-    private static DealValuation ValueDealSide(Campaign c, Nation recipient, Nation counterparty, Side receive, Side give)
+    private static DealValuation ValueDealSide(Campaign c, Nation recipient, Nation counterparty, Side receive, Side give,
+        TradeTerms trade)
     {
         if (c?.ProvinceMap is null || recipient is null || counterparty is null || receive is null || give is null)
             return new(0, 0, 0);
@@ -156,15 +179,20 @@ public static partial class Ultimatum
                 give.ReleaseRegions ? Array.Empty<int>() : give.Regions) * MathF.Min(200f, c.Defines.DealBorderReliefWorth);
         // A promise received is worth what its maker's name can carry.
         var trust = 1f - M.Clamp01(counterparty.Notoriety / 100f) * .5f;
-        var partnerLeverage = CommodityLeverage.Calculate(c, counterparty, recipient);
-        var ourLeverage = CommodityLeverage.Calculate(c, recipient, counterparty);
         var treaties = 0f;
         if (receive.NonAggression) treaties += 10f * trust;
-        if (receive.TradeAgreement) treaties += (8f + partnerLeverage * 12f) * trust;
-        if (receive.LiftEmbargo) treaties += 5f + partnerLeverage * 10f;
         if (give.NonAggression) treaties -= 10f;
-        if (give.TradeAgreement) treaties -= 8f + ourLeverage * 6f;
-        if (give.LiftEmbargo) treaties -= 5f + ourLeverage * 8f;
+        if (receive.LiftEmbargo || give.LiftEmbargo)
+        {
+            var partnerLeverage = CommodityLeverage.Calculate(c, counterparty, recipient);
+            var ourLeverage = CommodityLeverage.Calculate(c, recipient, counterparty);
+            if (receive.LiftEmbargo) treaties += 5f + partnerLeverage * 10f;
+            if (give.LiftEmbargo) treaties -= 5f + ourLeverage * 8f;
+        }
+        // A trade agreement is one shared term, counted by this country from its own seat - the
+        // same count the button, the computer and the standing answers use (TradeTermsValue). It
+        // used to be a gain in one column and a loss in the other for the same signature.
+        if (trade is not null) treaties += TradeTermsValue.For(c, recipient, counterparty, trade);
         return new(cash, land, treaties, borders);
     }
 
@@ -250,10 +278,11 @@ public static partial class Ultimatum
         if (!CanOfferDealCore(c, from, to, out reason, allowHuman)) return false;
         if (deal.From.ReleaseRegions && deal.To.ReleaseRegions)
         { reason = Loc.Get("Only one independent settlement may be established per deal."); return false; }
-        if (deal.From.IsEmpty && deal.To.IsEmpty) { reason = Loc.Get("Select at least one demand."); return false; }
+        var trade = TradeOf(deal);
+        if (deal.From.IsEmpty && deal.To.IsEmpty && trade is null) { reason = Loc.Get("Select at least one demand."); return false; }
         if (deal.From.Cash == deal.To.Cash && (deal.From.Regions?.Length ?? 0) == 0 &&
             (deal.To.Regions?.Length ?? 0) == 0 && !deal.From.LiftEmbargo && !deal.To.LiftEmbargo &&
-            !deal.From.NonAggression && !deal.To.NonAggression && !deal.From.TradeAgreement && !deal.To.TradeAgreement)
+            !deal.From.NonAggression && !deal.To.NonAggression && trade is null)
         { reason = Loc.Get("The deal must change at least one term."); return false; }
         if (!float.IsFinite(deal.From.Cash) || !float.IsFinite(deal.To.Cash) ||
             deal.From.Cash < 0 || deal.To.Cash < 0)
@@ -272,16 +301,38 @@ public static partial class Ultimatum
         { reason = Loc.Get("The sums in this deal are too large."); return false; }
         if (!ValidateSide(c, from, deal.From, out reason)) return false;
         if (!ValidateSide(c, to, deal.To, out reason)) return false;
-        // Both cannot promise the same arrangement; that is not a deal but a treaty draft
-        // nobody owns. One side writes the pact; the other pays for it.
-        if ((deal.From.NonAggression && deal.To.NonAggression) ||
-            (deal.From.TradeAgreement && deal.To.TradeAgreement))
+        // Both cannot promise the same pact; that is not a deal but a treaty draft nobody owns.
+        // One side writes the pact; the other pays for it. A trade agreement is the pair's own
+        // term (TradeTerms) and has no side to be doubled on.
+        if (deal.From.NonAggression && deal.To.NonAggression)
         { reason = Loc.Get("Only one side may offer this term."); return false; }
         var relation = CampaignDiplomacy.Peek(c, from.Id, to.Id);
         if ((deal.From.NonAggression || deal.To.NonAggression) && relation?.NonAggressionPact == true)
         { reason = Loc.Get("Already signed."); return false; }
-        if ((deal.From.TradeAgreement || deal.To.TradeAgreement) && relation?.TradeAgreement == true)
-        { reason = Loc.Get("Already signed."); return false; }
+        if (trade is not null)
+        {
+            if (trade.Renewal ? relation?.TradeAgreement != true : relation?.TradeAgreement == true)
+            {
+                reason = trade.Renewal ? Loc.Get("There is no trade agreement in force to revise.") : Loc.Get("Already signed.");
+                return false;
+            }
+            var draft = TradeTerms.Copy(trade);
+            reason = TradeTerms.Sanitize(draft, Math.Min(from.Id, to.Id), Math.Max(from.Id, to.Id));
+            if (reason.Length > 0) return false;
+            // The pause a refusal buys holds for the same trade terms put on the table instead of
+            // the button: one question, one answer, by either route. Money or another term on the
+            // table makes it a different question, which may be put.
+            if (!trade.Renewal && IsTradeOnly(deal))
+            {
+                var since = c.ElapsedDays - (relation?.AgreementRefusedDay ?? -9999);
+                if (since < c.Defines.AgreementRefusalDays)
+                {
+                    reason = Loc.Format("They said no {0} day(s) ago; they will hear it again in {1}.",
+                        since, c.Defines.AgreementRefusalDays - since);
+                    return false;
+                }
+            }
+        }
         // Lifting an embargo one has not imposed is promising a shadow, and shadows do not
         // buy land.
         if (deal.From.LiftEmbargo && relation?.EmbargoBy(from.Id) != true)
@@ -373,12 +424,10 @@ public static partial class Ultimatum
         if (!ValidateDealCore(c, from, to, deal, out var reason, allowHuman))
             return new(false, reason, false, new(0, 0, 0), new(0, 0, 0), 0,
                 from?.Treasury ?? 0, to?.Treasury ?? 0);
-        var theirs = ValueDealSide(c, to, from, deal.From, deal.To);
-        var ours = ValueDealSide(c, from, to, deal.To, deal.From);
-        var relation = CampaignDiplomacy.Peek(c, from.Id, to.Id);
-        var grudgeThreshold = float.IsFinite(c.Defines.DealGrudgeOpinion) ? c.Defines.DealGrudgeOpinion : -25f;
-        var penalty = relation is not null && relation.Opinion <= grudgeThreshold
-            ? float.IsFinite(c.Defines.DealGrudgePenalty) ? MathF.Max(0, c.Defines.DealGrudgePenalty) : 15f : 0;
+        var trade = TradeOf(deal);
+        var theirs = ValueDealSide(c, to, from, deal.From, deal.To, trade);
+        var ours = ValueDealSide(c, from, to, deal.To, deal.From, trade);
+        var penalty = GrudgePenalty(c, from, to);
         // A bigger cheque cannot substitute for consent to sell a national heartland.
         // Genuine territorial swaps retain the existing valuation; human recipients
         // still choose explicitly. Culture shared by BOTH Koreas is not spare land.
@@ -392,6 +441,15 @@ public static partial class Ultimatum
         return new(true, protectedLand ? Loc.Get("They will not sell their national heartland for money or treaty promises.") :
             acceptable ? "" : DealRefusalNote(penalty - theirs.Total, penalty > 0), acceptable,
             ours, theirs, penalty, fromCash, toCash) { TerritoryProtected = protectedLand };
+    }
+
+    /// <summary>The old grievance a table must clear before it signs (the grudge floor), or 0.</summary>
+    public static float GrudgePenalty(Campaign c, Nation from, Nation to)
+    {
+        var relation = CampaignDiplomacy.Peek(c, from.Id, to.Id);
+        var grudgeThreshold = float.IsFinite(c.Defines.DealGrudgeOpinion) ? c.Defines.DealGrudgeOpinion : -25f;
+        return relation is not null && relation.Opinion <= grudgeThreshold
+            ? float.IsFinite(c.Defines.DealGrudgePenalty) ? MathF.Max(0, c.Defines.DealGrudgePenalty) : 15f : 0;
     }
 
     internal static bool ProtectsHomelandSale(Campaign c, Nation owner, ScenarioState state)
@@ -477,9 +535,19 @@ public static partial class Ultimatum
         }
         // One side's promise is the pair's pact: the flag is on the relation, not on a side.
         if (deal.From.NonAggression || deal.To.NonAggression) relation.NonAggressionPact = true;
-        if (deal.From.TradeAgreement || deal.To.TradeAgreement) relation.TradeAgreement = true;
-        relation.TruceUntil = Math.Max(relation.TruceUntil,
-            c.ElapsedDays + Math.Clamp(c.Defines.DealSettlementTruceDays, 0, 3650));
+        // The trade agreement is signed where every trade agreement is signed, with its terms.
+        var trade = TradeOf(deal);
+        if (trade is not null)
+        {
+            var terms = TradeTerms.Copy(trade);
+            TradeTerms.Sanitize(terms, relation.A, relation.B);
+            AgreementSystem.Sign(c, relation, AgreementKind.TradeAgreement, terms);
+        }
+        // A settlement buys a truce; a trade agreement alone does not. It was the cheapest way to
+        // buy half a year of safety from a neighbour, and that is not what it is for.
+        if (!IsTradeOnly(deal))
+            relation.TruceUntil = Math.Max(relation.TruceUntil,
+                c.ElapsedDays + Math.Clamp(c.Defines.DealSettlementTruceDays, 0, 3650));
         relation.LastActionDay = c.ElapsedDays;
         c.Chronicle.Record(c, "deal_signed", from.Id, to.Id, subject: summary);
         c.MarkStrategicChange();
@@ -502,11 +570,11 @@ public static partial class Ultimatum
             if (side.Cash > 0) parts.Add(Loc.Format("{0}: {1}", giver.DisplayName,
                 Loc.Format("One-time payment: {0}", Fmt.Money(side.Cash))));
             if (side.NonAggression) parts.Add(Loc.Get("Non-aggression pact"));
-            if (side.TradeAgreement) parts.Add(Loc.Get("Trade agreement"));
             if (side.LiftEmbargo) parts.Add(Loc.Format("{0}: lift embargo against {1}", giver.DisplayName, receiver.DisplayName));
         }
         Half(from, to, deal.From);
         Half(to, from, deal.To);
+        if (TradeOf(deal) is { } trade) parts.Add(TradeTermsText.Describe(c, trade, from, to));
         return string.Join(" · ", parts);
     }
 }
@@ -534,6 +602,9 @@ public sealed class ProposeDealCommand : ICampaignCommand
     public bool ToLiftEmbargo;
     public bool ToNonAggression;
     public bool ToTradeAgreement;
+    /// <summary>The trade agreement on the table, a term of the pair (TradeTerms). The two side
+    /// ticks above are the old way of saying "the ordinary terms" and are read as that.</summary>
+    public TradeTerms Trade;
 
     public Ultimatum.DealOutcome Outcome { get; private set; } = new(false, "No deal was proposed.");
 
@@ -550,7 +621,8 @@ public sealed class ProposeDealCommand : ICampaignCommand
                 LiftEmbargo = FromLiftEmbargo, NonAggression = FromNonAggression, TradeAgreement = FromTradeAgreement },
             new Ultimatum.Side { Regions = ToRegions ?? Array.Empty<int>(), Cash = ToCash,
                 ReleaseRegions = ToReleaseRegions,
-                LiftEmbargo = ToLiftEmbargo, NonAggression = ToNonAggression, TradeAgreement = ToTradeAgreement });
+                LiftEmbargo = ToLiftEmbargo, NonAggression = ToNonAggression, TradeAgreement = ToTradeAgreement })
+        { Trade = TradeTerms.Copy(Trade) };
         if (to?.IsHuman == true || ParentOfferId != 0)
         {
             Outcome = DealNegotiations.Submit(campaign, from, to, deal, ParentOfferId);
@@ -561,7 +633,14 @@ public sealed class ProposeDealCommand : ICampaignCommand
         var tallyKey = $"deal.{DealTally.KindOf(deal)}.{DealTally.Seat(from)}>{DealTally.Seat(to)}";
         DealTally.Count(tallyKey + ".put");
         if (DealAnswer.Decide(campaign, to, from, deal, assessment).Verdict != DealVerdict.Accept)
-        { Outcome = new(false, assessment.Reason); DealTally.Count(tallyKey + ".declined"); return; }
+        {
+            Outcome = new(false, assessment.Reason);
+            DealTally.Count(tallyKey + ".declined");
+            // The same silence a refused button buys (AgreementSystem): one answer, by either route.
+            if (assessment.Valid && Ultimatum.IsTradeOnly(deal) && Ultimatum.TradeOf(deal) is { Renewal: false })
+                CampaignDiplomacy.Get(campaign, from.Id, to.Id).AgreementRefusedDay = campaign.ElapsedDays;
+            return;
+        }
         Outcome = Ultimatum.ResolveDeal(campaign, from, to, deal);
         DealTally.Count(tallyKey + (Outcome.Accepted ? ".signed" : ".invalid"));
     }

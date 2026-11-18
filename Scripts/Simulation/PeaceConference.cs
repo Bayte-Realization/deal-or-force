@@ -446,7 +446,10 @@ public static class PeaceConference
 
         if (demand.TradeConcessions)
         {
-            CampaignDiplomacy.Get(campaign, beneficiary.Id, loser.Id).TradeAgreement = true;
+            // The unequal treaty of a lost war: the loser takes its whole tariff off the winner's
+            // goods for ten years and gets nothing back - signed where every agreement is signed.
+            AgreementSystem.Sign(campaign, CampaignDiplomacy.Get(campaign, beneficiary.Id, loser.Id),
+                AgreementKind.TradeAgreement, TradeTermsCatalog.Concession(campaign, beneficiary, loser, 10));
             DealTally.Count("trade_agreement.source.peace_conference");
         }
 

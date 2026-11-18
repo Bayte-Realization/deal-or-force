@@ -336,6 +336,11 @@ public sealed class MarketQuote
     public float Exports;
     public float Price;
     public float Satisfaction = 1f;
+    /// <summary>
+    /// The part of <see cref="Imports"/> that came in under a trade agreement's tariff cut, weighted
+    /// by the cut: free of the import markup and of duty in that proportion. Reset with the imports.
+    /// </summary>
+    public float Relieved;
     public float Net => Production + Imports - Demand - Exports;
     public bool IsShortage => Satisfaction < 0.985f;
 }
@@ -411,6 +416,21 @@ public static class MarketSystem
     /// measures a settled market instead of one still on its way there.
     /// </summary>
     public static void Prime(Campaign campaign) => Recalculate(campaign, false);
+
+    /// <summary>
+    /// The markup on a good bought abroad. What came in under a tariff cut carries none of it, in
+    /// proportion to the cut: a trade agreement's cut is a cut in what the importer pays, not only
+    /// in what its customs house collects. 1 + (markup - 1) x (1 - relief x relieved / imports).
+    /// </summary>
+    public static float ImportMarkupOf(Defines defines, MarketQuote quote) =>
+        quote.Imports > 0.001f
+            ? 1f + (defines.ImportMarkup - 1f) *
+              (1f - M.Clamp01(defines.TradeAgreementMarkupRelief * M.Clamp01(quote.Relieved / quote.Imports)))
+            : 1f;
+
+    /// <summary>The week's duty on one good, before the treasury's share: forgone on the relieved part.</summary>
+    public static float DutyOf(Nation nation, MarketQuote quote) =>
+        MathF.Max(0f, quote.Imports - quote.Relieved) * quote.Price * TradePolicyRules.TariffRate(nation.TradePolicy);
 
     private static void Recalculate(Campaign campaign, bool adjustPrice)
     {
@@ -500,7 +520,7 @@ public static class MarketSystem
                     : M.Clamp((quote.Production + quote.Imports) / quote.Demand, 0f, 1f);
 
                 var localScarcity = 1f + (1f - quote.Satisfaction) * 1.40f;
-                var importMarkup = quote.Imports > 0.001f ? campaign.Defines.ImportMarkup : 1f;
+                var importMarkup = ImportMarkupOf(campaign.Defines, quote);
                 var targetPrice = definition.BasePrice * worldScarcity * localScarcity * importMarkup;
                 quote.Price = adjustPrice
                     ? M.Lerp(quote.Price <= 0f ? definition.BasePrice : quote.Price, targetPrice, campaign.Defines.PriceAdjustSpeed)
@@ -526,7 +546,7 @@ public static class MarketSystem
                 weight += definition.EssentialWeight;
                 shortages += (1f - quote.Satisfaction) * definition.EssentialWeight;
                 trade += (quote.Exports - quote.Imports) * quote.Price;
-                tariffs += quote.Imports * quote.Price * TradePolicyRules.TariffRate(nation.TradePolicy);
+                tariffs += DutyOf(nation, quote);
             }
             // The value of what this country actually produced this week. EconomySystem
             // derives GDP from it, so output is a consequence of buildings, workers and

@@ -201,6 +201,29 @@ public static partial class AiStatecraft
     private static bool TryAgreement(Campaign campaign, Nation asking, Nation asked, AgreementKind kind)
     {
         if (!AgreementSystem.CanProposeQuiet(campaign, asking, asked, kind)) return false;
+        if (kind == AgreementKind.TradeAgreement)
+        {
+            // Terms, not a flag: the composer writes the presets that fit the pair and asks for the
+            // best one the friend would sign. A player gets the same paper under the same bar.
+            var candidates = TradeTermsComposer.Candidates(campaign, asking, asked);
+            if (asked.IsHuman)
+            {
+                var best = TradeTermsComposer.BestFor(campaign, asking, asked, candidates);
+                if (best is null) return false;
+                var paper = new ProposeAgreementCommand
+                {
+                    IssuerId = asking.Id, TargetId = asked.Id, Kind = kind, Trade = best.Terms
+                };
+                paper.Apply(campaign);
+                if (paper.Result != AgreementResult.Offered && paper.Result != AgreementResult.Signed) return false;
+                Count("agreement_offered");
+                return true;
+            }
+            if (TradeTermsComposer.Propose(campaign, asking, asked, candidates, out _) != AgreementResult.Signed) return false;
+            Count("trade_signed");
+            DealTally.Count("trade_agreement.source.friendship");
+            return true;
+        }
         // A player answers for themselves: the offer goes on their table and waits, and the
         // computer spends its move on it exactly as it does on an offer to another computer. It
         // used to be that the computer never asked a player for anything short of an alliance,
@@ -423,57 +446,62 @@ public static partial class AiStatecraft
         if (!CanHedgeWith(campaign, nation, alternate, dominant, blockedOffers))
         {
             alternate = null;
-            // One pass on this thread, lowest id wins. This scan used to be spread over the
-            // workers once a week for every country: 494 fan-outs in fourteen late days, and on
-            // a machine with anything else to do each cost 0.33 ms against 0.26 ms for the same
-            // scan left on one thread - the body is a few dictionary reads, and waking eight
-            // threads for it cost more than it saved. The serial walk also stops asking once a
-            // lower id has already qualified.
+            // One pass on this thread; the largest spare wins, the lower id on a tie. This scan used
+            // to be spread over the workers once a week for every country: 494 fan-outs in fourteen
+            // late days, and on a machine with anything else to do each cost 0.33 ms against 0.26 ms
+            // for the same scan left on one thread - the body is a few dictionary reads, and waking
+            // eight threads for it cost more than it saved. The largest spare, because the terms are
+            // now about the good: a guarantee from a country with a crumb to spare covers nothing.
             var nations = campaign.Nations;
             var count = nations.Count;
+            var bestSpare = 0f;
             for (var i = 0; i < count; i++)
             {
                 var other = nations[i];
                 if (other.Id == nation.Id || other.Id == dominant) continue;
                 if (other.Population <= 0 || other.Movement is not null) continue;
-                if (alternate is not null && other.Id >= alternate.Id) continue;
                 if (blockedOffers is not null && blockedOffers.Contains(other.Id)) continue;
                 if (!other.Market.TryGetValue(chosen.Good, out var quote)) continue;
-                if (quote.Production - quote.Demand <= 0.0001f) continue;
+                var spare = quote.Production - quote.Demand;
+                if (spare <= 0.0001f) continue;
+                if (alternate is not null && (spare < bestSpare || spare == bestSpare && other.Id >= alternate.Id)) continue;
                 if (!CanHedgeWith(campaign, nation, other, dominant, blockedOffers)) continue;
                 alternate = other;
+                bestSpare = spare;
             }
         }
         if (alternate is null) return false;
 
         var key = SupplyHedgeKey(chosen.Good);
+        // The terms are about the scarce good: that good for one of theirs, a guarantee of it with
+        // our market opened on it, or a guarantee for half our tariff on everything - with the
+        // largest guarantee they would give. A player's country gets the same paper under the same bar.
+        var candidates = TradeTermsComposer.Candidates(campaign, nation, alternate, HedgePresets, chosen.Good, HedgeShares);
         if (alternate.IsHuman)
         {
-            if (!campaign.FeatureEnabled("deals") || campaign.ProvinceMap is null) return false;
-            var deal = new Ultimatum.Deal(new Ultimatum.Side { TradeAgreement = true }, new Ultimatum.Side());
-            var submitted = DealNegotiations.Submit(campaign, nation, alternate, deal);
-            var pending = false;
-            foreach (var offer in campaign.DealOffers)
-                if (offer.Pending && offer.FromId == nation.Id && offer.ToId == alternate.Id &&
-                    offer.From.TradeAgreement && offer.From.Cash == 0f && (offer.From.Regions?.Length ?? 0) == 0 &&
-                    (offer.To.Regions?.Length ?? 0) == 0)
-                    pending = true;
-            // Answered at once by the player's standing rule, either way: the question was put,
-            // and asking again tomorrow would only fill their ministry's ledger.
-            var answeredByRule = !pending && campaign.DealOffers.Any(offer => offer.ByRule &&
-                offer.FromId == nation.Id && offer.ToId == alternate.Id && offer.ClosedDay == campaign.ElapsedDays);
-            if (!pending && !answeredByRule && !submitted.Accepted) return false;
+            var best = TradeTermsComposer.BestFor(campaign, nation, alternate, candidates);
+            if (best is null)
+            {
+                nation.DecisionAvailableDay[key] = campaign.ElapsedDays + Math.Max(30, defines.AiSupplyHedgeRetryDays / 2);
+                return false;
+            }
+            var paper = new ProposeAgreementCommand
+            {
+                IssuerId = nation.Id, TargetId = alternate.Id, Kind = AgreementKind.TradeAgreement, Trade = best.Terms
+            };
+            paper.Apply(campaign);
+            if (paper.Result is not (AgreementResult.Offered or AgreementResult.Signed or AgreementResult.Refused)) return false;
         }
         else
         {
             if (!AgreementSystem.CanProposeQuiet(campaign, nation, alternate, AgreementKind.TradeAgreement))
                 return false;
-            var offer = new ProposeAgreementCommand
+            if (TradeTermsComposer.Propose(campaign, nation, alternate, candidates, out _) != AgreementResult.Signed)
             {
-                IssuerId = nation.Id, TargetId = alternate.Id, Kind = AgreementKind.TradeAgreement
-            };
-            offer.Apply(campaign);
-            if (offer.Result != AgreementResult.Signed) return false;
+                // Nobody would sign anything about this good with us: ask around again later, not tomorrow.
+                nation.DecisionAvailableDay[key] = campaign.ElapsedDays + Math.Max(30, defines.AiSupplyHedgeRetryDays / 2);
+                return false;
+            }
         }
 
         nation.DecisionAvailableDay[key] = campaign.ElapsedDays + Math.Max(30, defines.AiSupplyHedgeRetryDays);
@@ -519,11 +547,15 @@ public static partial class AiStatecraft
         if (relation is { Stance: DiplomaticStance.AtWar }) return false;
         if (relation is { EmbargoByA: true } or { EmbargoByB: true }) return false;
         if (relation?.TradeAgreement == true) return false;
-        if (other.IsHuman) return campaign.FeatureEnabled("deals") && campaign.ProvinceMap is not null;
-        // The relation read above is the one both questions are about. Asking each of them to
-        // look the pair up again made three lookups of one fact for every country with a surplus.
+        // Whether they would sign is the composer's question now (TradeTermsComposer): terms about a
+        // good they can spare may carry an agreement a bare flag could not, so the friendliness bar is
+        // one line of their count rather than a gate in front of it. Here only whether one may ask.
+        // The relation read above is the one the question is about: looking it up again made three
+        // lookups of one fact for every country with a surplus.
         return AgreementSystem.CanProposeQuietWith(campaign, relation, AgreementKind.TradeAgreement) &&
-            AgreementSystem.WillingnessWith(campaign, other, buyer, AgreementKind.TradeAgreement, relation) >=
-            AgreementSystem.Needed(campaign, AgreementKind.TradeAgreement);
+               (!other.IsHuman || AgreementSystem.LapseWait(campaign, relation, buyer.Id) <= 0);
     }
+
+    private static readonly string[] HedgePresets = { "goods_for_goods", "supply_guarantee", "guarantee_for_access" };
+    private static readonly float[] HedgeShares = { 0.4f, 0.3f, 0.2f, 0.1f };
 }

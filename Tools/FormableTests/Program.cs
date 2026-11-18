@@ -384,6 +384,8 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Length == 0) TerritorialDealProtectionTests.Run();
         if (args.Contains("--negotiations-only")) { DealNegotiationTests.Run(); return; }
         if (args.Contains("--deal-autoanswer-only")) { DealAutoAnswerTests.Run(); return; }
+        // Trade agreements with terms (TradeTerms): the market, the count, the term, parity, saves.
+        if (args.Contains("--trade-terms-only") || args.Contains("--trade-agreements-only")) { TradeTermsTests.Run(); return; }
         if (args.Contains("--situation-only")) { SituationReportTests.Run(); return; }
         if (args.Contains("--situation-standoff-only")) { SituationStandoffTests.Run(); return; }
         if (args.Length == 0) SituationStandoffTests.Run();
@@ -597,6 +599,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         DealTests.Run();
         DealNegotiationTests.Run();
         DealAutoAnswerTests.Run();
+        TradeTermsTests.Run();
         SituationReportTests.Run();
         GovernmentPromiseTests.Run();
         AiPromiseTests.Run();

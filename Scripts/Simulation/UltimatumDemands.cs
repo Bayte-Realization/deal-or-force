@@ -416,7 +416,8 @@ public static partial class Ultimatum
             }
             if (demand.TradeAgreement)
             {
-                AgreementSystem.Sign(c, relation, AgreementKind.TradeAgreement);
+                // Conceded under threat: the target opens its market to the demander for five years.
+                AgreementSystem.Sign(c, relation, AgreementKind.TradeAgreement, TradeTermsCatalog.Concession(c, demander, target, 5));
                 DealTally.Count("trade_agreement.source.ultimatum");
             }
             if (demand.EmbargoThird)
