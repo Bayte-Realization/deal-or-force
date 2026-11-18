@@ -1,5 +1,9 @@
 <Project>
   <!-- Shared by the game and standalone tools that compile the simulation sources. -->
+  <PropertyGroup>
+    <!-- Enables .NET LibraryImport native interop and Span/pointer pinning in Simulation/Kernels. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
     <ProjectReference Include="$(MSBuildThisFileDirectory)../Rules/DealOrForce.Rules.fsproj" />

@@ -317,6 +317,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--shell-coherence-only")) { InterfaceSkin.ResetCatalog(); ShellCoherenceTests.Run(); return; }
         if (args.Contains("--decisive-patience-only")) { DecisivePatienceTests.Run(); return; }
         if (args.Contains("--rules-backends-only")) { RulesBackendTests.Run(); return; }
+        if (args.Contains("--polyglot-kernels-only")) { PolyglotKernelsTests.Run(); return; }
         if (args.Contains("--defections-only")) { DefectionsTests.Run(); return; }
         if (args.Contains("--participant-objective-only")) { ParticipantWarObjectiveTests.Run(); return; }
         if (args.Length == 0) ParticipantWarObjectiveTests.Run();

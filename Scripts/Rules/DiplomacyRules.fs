@@ -3,7 +3,13 @@ namespace DealOrForce.Rules
 
 open System
 
-/// Pure deterministic statecraft, union consolidation, and peace-purchase rules.
+/// Value-only result for strategic deterrence price and brinkmanship escalation pressure.
+[<Struct>]
+type DeterrenceOutcome =
+    { MutualPrice: single
+      Brinkmanship: single }
+
+/// Pure deterministic statecraft, union consolidation, deterrence, and peace-purchase rules.
 /// No Godot, IO, RNG or reference to mutable campaign state.
 [<AbstractClass; Sealed>]
 type DiplomacyRules private () =
@@ -44,3 +50,14 @@ type DiplomacyRules private () =
         else
             let gap = Math.Clamp((theirStrength - ourStrength) / Math.Max(0.01f, theirStrength), 0.0f, 1.0f)
             Math.Clamp(treasury * (0.1f + 0.4f * gap), 0.0f, discretionaryCash)
+
+    /// Evaluates bilateral nuclear deterrence war cost and brinkmanship escalation pressure.
+    static member EvaluateDeterrence(tierA: int,
+                                     tierB: int,
+                                     mutualDeterrencePrice: single,
+                                     enabled: bool) : DeterrenceOutcome =
+        let bothHold = tierA >= 1 && tierB >= 1
+        let mutualPrice = if bothHold then mutualDeterrencePrice else 0.0f
+        let brinkmanship = if enabled && bothHold then single (Math.Min(4, tierA * tierB)) else 0.0f
+        { MutualPrice = mutualPrice
+          Brinkmanship = brinkmanship }

@@ -3,10 +3,35 @@ namespace DealOrForce.Rules
 
 open System
 
-/// Pure deterministic combat tempo, encirclement, envelopment, breakthrough, and counterattack rules.
+/// Value-only bundle returning all four combat tempo modifiers together without heap allocation.
+[<Struct>]
+type CombatTempoBundle =
+    { Encirclement: single
+      Envelopment: single
+      Breakthrough: single
+      Counterattack: single }
+
+/// Value-only result of evaluating formation supply congestion, distance, blockade, and target readiness.
+[<Struct>]
+type SupplyDeliveryOutcome =
+    { Congestion: single
+      DistanceFactor: single
+      BlockadeFactor: single
+      TargetSupply: single
+      NextSupplyLevel: single }
+
+/// Pure deterministic combat tempo, encirclement, envelopment, breakthrough, counterattack, and supply rules.
 /// No Godot, IO, RNG or reference to mutable campaign state.
 [<AbstractClass; Sealed>]
 type CombatTempoRules private () =
+
+    static member private ClampExact(value: single, minVal: single, maxVal: single) : single =
+        if value < minVal then minVal
+        elif value > maxVal then maxVal
+        else value
+
+    static member private Clamp01Exact(value: single) : single =
+        CombatTempoRules.ClampExact(value, 0.0f, 1.0f)
 
     static member private Clamp01(v: single) : single =
         if not (Single.IsFinite v) then 0.0f
@@ -91,3 +116,59 @@ type CombatTempoRules private () =
                 let prepared = CombatTempoRules.Ratio(entrenchment, entrenchmentFloor)
                 let supplied = CombatTempoRules.Ratio(supply, supplyFloor)
                 CombatTempoRules.Clamp01(effectiveDrive * prepared * supplied)
+
+    /// Evaluates encirclement, envelopment, breakthrough, and counterattack in one value struct.
+    static member EvaluateTempoBundle(hasDefines: bool, cutOff: bool, daysCutOff: int,
+                                      maxCombatPenalty: single, supplyCutoffDays: int,
+                                      attackDirections: int, maxAttackDirections: int, flankingBonusPerDirection: single,
+                                      pressure: single, planning: single, supply: single,
+                                      defenderEntrenchment: single, terrainBreakthroughFactor: single,
+                                      breakthroughPlanningFloor: single, breakthroughSupplyFloor: single,
+                                      breakthroughPressureFloor: single, breakthroughPressureSpan: single,
+                                      entrenchmentResistanceWeight: single,
+                                      counterPressure: single, counterEntrenchment: single, counterSupply: single,
+                                      attackerOrg: single, defenderOrg: single, desperateDefense: bool,
+                                      counterEntrenchmentFloor: single, counterSupplyFloor: single,
+                                      counterPressureFloor: single, counterPressureSpan: single,
+                                      vulnerabilityWeight: single, desperateBonus: single) : CombatTempoBundle =
+        { Encirclement =
+            CombatTempoRules.EncirclementFactor(hasDefines, cutOff, daysCutOff, maxCombatPenalty, supplyCutoffDays)
+          Envelopment =
+            CombatTempoRules.EnvelopmentFactor(hasDefines, attackDirections, maxAttackDirections, flankingBonusPerDirection)
+          Breakthrough =
+            CombatTempoRules.Breakthrough(
+                hasDefines, pressure, planning, supply, defenderEntrenchment, attackDirections, terrainBreakthroughFactor,
+                breakthroughPlanningFloor, breakthroughSupplyFloor, breakthroughPressureFloor, breakthroughPressureSpan,
+                entrenchmentResistanceWeight)
+          Counterattack =
+            CombatTempoRules.Counterattack(
+                hasDefines, counterPressure, counterEntrenchment, counterSupply, attackerOrg, defenderOrg, desperateDefense,
+                counterEntrenchmentFloor, counterSupplyFloor, counterPressureFloor, counterPressureSpan,
+                vulnerabilityWeight, desperateBonus) }
+
+    /// Evaluates supply congestion, route-distance attenuation, blockade penalty, and army supply step.
+    static member EvaluateSupplyDelivery(capacity: single,
+                                         demand: single,
+                                         hopDistance: int,
+                                         traceRange: int,
+                                         lakeMultiplier: single,
+                                         blockade: single,
+                                         fleetBlockadePenalty: single,
+                                         terrainSupply: single,
+                                         nationalSupplyFactor: single,
+                                         currentSupplyLevel: single) : SupplyDeliveryOutcome =
+        let safeDemand = MathF.Max(0.01f, demand)
+        let congestion = CombatTempoRules.ClampExact(capacity / safeDemand, 0.08f, 1.0f)
+        let safeRange = Math.Max(1, traceRange)
+        let distanceFactor =
+            CombatTempoRules.ClampExact(1.0f - single hopDistance / single safeRange * 0.62f, 0.22f, 1.0f)
+        let blockadeFactor = 1.0f - blockade * fleetBlockadePenalty
+        let target =
+            CombatTempoRules.Clamp01Exact(
+                congestion * distanceFactor * lakeMultiplier * blockadeFactor * terrainSupply * nationalSupplyFactor)
+        let nextLevel = currentSupplyLevel + (target - currentSupplyLevel) * CombatTempoRules.Clamp01Exact(0.34f)
+        { Congestion = congestion
+          DistanceFactor = distanceFactor
+          BlockadeFactor = blockadeFactor
+          TargetSupply = target
+          NextSupplyLevel = nextLevel }

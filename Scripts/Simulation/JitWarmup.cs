@@ -50,6 +50,11 @@ internal static class JitWarmup
         Prepare(typeof(DealOrForce.Rules.AssaultRules), "Assess");
         Prepare(typeof(DealOrForce.Rules.WarRhythmRules), "OffensivePulse");
         Prepare(typeof(DealOrForce.Rules.WarRhythmRules), "BattleFortune");
+        Prepare(typeof(DealOrForce.Rules.EconomyRules), "EvaluateCreditTerms");
+        Prepare(typeof(DealOrForce.Rules.EconomyRules), "EvaluateTradeCost");
+        Prepare(typeof(DealOrForce.Rules.DemographyRules), "StepCohorts");
+        Prepare(typeof(DealOrForce.Rules.DiplomacyRules), "EvaluateDeterrence");
+        Prepare(typeof(DealOrForce.Rules.CombatTempoRules), "EvaluateSupplyDelivery");
     }
 
     private static void Prepare(Type type, string methodName)

@@ -95,5 +95,18 @@ static class RulesBackendTests
         // behaviour is covered by the peace suites either way.)
         Check(DealOrForce.Simulation.WarScoreRulesHook.IsInstalled,
             "the war score kernel is installed and answering");
+        Check(DealOrForce.Simulation.EconomyRulesHook.UsingFSharp &&
+              DealOrForce.Simulation.DemographyRulesHook.UsingFSharp &&
+              DealOrForce.Simulation.DiplomacyRulesHook.UsingFSharp &&
+              DealOrForce.Simulation.CombatTempoRulesHook.UsingFSharp,
+            "all expanded F# [<Struct>] boots (economy, demography, diplomacy, combat tempo) are installed");
+        var tc = EconomyRules.EvaluateTradeCost(100f, 40f, 2.5f, 1.25f, 0.5f, 0.1f);
+        Check(tc.ImportMarkup < 1.25f && tc.Duty > 0f, "F# [<Struct>] EvaluateTradeCost evaluates markup and tariff duty");
+        var dt = DiplomacyRules.EvaluateDeterrence(2, 2, 6f, true);
+        Check(dt.MutualPrice == 6f && dt.Brinkmanship == 4f, "F# [<Struct>] EvaluateDeterrence computes MAD cost & brinkmanship");
+        var sp = CombatTempoRules.EvaluateSupplyDelivery(120f, 80f, 4, 20, 1f, 0f, 0.5f, 1f, 1f, 0.4f);
+        Check(sp.Congestion == 1f && sp.NextSupplyLevel > 0.4f, "F# [<Struct>] EvaluateSupplyDelivery computes depot flow");
+        var pq = PeaceQuotaRules.EvaluateQuota(2, 5, 10f, 15f);
+        Check(pq.Affordable && pq.RemainingProvinces == 3, "F# [<Struct>] PeaceQuotaRules evaluates treaty quota zero-alloc");
     }
 }
