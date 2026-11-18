@@ -170,7 +170,14 @@ static class MapLabelPriorityTests
               globe.IndexOf("UpdateCityLabels(visualStep)", StringComparison.Ordinal) <
               globe.IndexOf("UpdateRegionLabels(visualStep)", StringComparison.Ordinal),
             "region labels run after city placement and yield on _cityTaken / matching city names");
-        Check(atmo.Contains("MapLabelPriority.AtmospherePolish("),
-            "atmosphere rim uses pure Forward+/atlas gating");
+        var fpRealistic = MapLabelPriority.AtmospherePolishForMood("realistic", "forward_plus", 0.38f);
+        var compatRealistic = MapLabelPriority.AtmospherePolishForMood("realistic", "gl_compatibility", 0.38f);
+        var fpPaper = MapLabelPriority.AtmospherePolishForMood("paper", "forward_plus", 0.38f);
+        Check(fpRealistic.RayleighMieHalo && !fpRealistic.MuteSpaceRim &&
+              !compatRealistic.RayleighMieHalo &&
+              fpPaper.MuteSpaceRim && !fpPaper.RayleighMieHalo,
+            "mood atmosphere gating activates Rayleigh/Mie halo on Forward+ realistic and mutes space rim on paper");
+        Check(atmo.Contains("MapLabelPriority.AtmospherePolishForMood("),
+            "atmosphere rim uses mood-aware Forward+ gating");
     }
 }

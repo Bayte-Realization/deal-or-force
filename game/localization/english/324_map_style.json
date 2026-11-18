@@ -9,7 +9,14 @@
   "Cloud veil strength": "Cloud veil strength",
   "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not.": "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not.",
   "Map look": "Map look",
-  "Atlas: warm paper and ink, with a paper map from far away. Classic: the previous look. Changes immediately, without reducing detail or changing gameplay.": "Atlas: warm paper and ink, with a paper map from far away. Classic: the previous look. Changes immediately, without reducing detail or changing gameplay.",
-  "map.look.atlas": "Atlas",
-  "map.look.classic": "Classic"
+  "Realistic: physical terrain, bathymetric ocean and atmospheric lighting. Paper: warm cabinet paper chart at every zoom. Atlas: hybrid look turning into paper from afar. Classic: the previous map. Changes immediately, without restarting or changing gameplay.": "Realistic: physical terrain, bathymetric ocean and atmospheric lighting. Paper: warm cabinet paper chart at every zoom. Atlas: hybrid look turning into paper from afar. Classic: the previous map. Changes immediately, without restarting or changing gameplay.",
+  "map.look.realistic": "Realistic (AAA)",
+  "map.look.paper": "Paper chart (always)",
+  "map.look.atlas": "Atlas (paper from afar)",
+  "map.look.classic": "Classic",
+  "Country colour fill": "Country colour fill",
+  "How opaque country colours are over physical terrain and paper. Solid keeps full political paint; Balanced lets mountain relief and biomes breathe; Translucent opens country interiors in the style of a physical atlas while keeping borders bold. Changes immediately.": "How opaque country colours are over physical terrain and paper. Solid keeps full political paint; Balanced lets mountain relief and biomes breathe; Translucent opens country interiors in the style of a physical atlas while keeping borders bold. Changes immediately.",
+  "map.fill.classic_opaque": "Solid",
+  "map.fill.balanced": "Balanced",
+  "map.fill.translucent": "Translucent"
 }

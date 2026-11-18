@@ -4,32 +4,48 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// The atlas look, handed to the material (Simulation.MapLook, game/gui/78_map_look.json).
+/// The 4-way map mood ("realistic", "paper", "atlas", "classic") and optional interior
+/// country-fill translucency ("classic_opaque", "balanced", "translucent"), handed to the
+/// globe material (Simulation.MapLook, game/gui/78_map_look.json).
 ///
-/// Every new term in the map shader stands behind the uniform atlas_look, which defaults to
-/// nought: a material nobody has configured, and the classic setting, both draw the map exactly
-/// as it was. The one per-frame number, paper_mix, is worked out in _Process from the camera
-/// alone - O(1), nothing that grows with provinces or cities - and sent only when it moves.
+/// Every new term in the map shader stands behind uniforms that default to nought, so an
+/// unconfigured material and the "classic" setting both draw the map exactly as it was.
 /// </summary>
 public sealed partial class GlobePresentation
 {
     private MapLookStyle _mapLookStyle;
+    private string _mapLookMode = MapLook.RealisticValue;
     private bool _mapLookAtlas;
+    private bool _mapLookRealistic;
+    private bool _mapLookPaper;
     private float _cachedPaperMix = -1f;
 
-    /// <summary>Reads the setting and the skin, and sets every uniform of the look. Cheap; not per frame.</summary>
+    /// <summary>Reads the mood and fill settings plus the skin, and updates every uniform. Cheap; not per frame.</summary>
     private void ApplyMapLook()
     {
         _mapLookStyle = MapLook.Current();
+        _mapLookMode = MapLook.Mode();
         _mapLookAtlas = MapLook.Atlas();
-        // Resend paper_mix on the next frame: switching to classic sends nought, back sends the zoom's.
+        _mapLookRealistic = _mapLookMode == MapLook.RealisticValue;
+        _mapLookPaper = _mapLookMode == MapLook.PaperValue;
+        var fillTranslucency = MapLook.PoliticalFillTranslucency(MapLook.EffectivePoliticalFill(_mapLookMode));
+        // Resend paper_mix immediately: switching to paper sends 1, classic sends 0, realistic/atlas send zoom's.
         _cachedPaperMix = -1f;
+        if (IsInstanceValid(_daySun))
+            _daySun.LightColor = _mapLookAtlas ? new Color(0.99f, 0.994f, 1.0f) : Colors.White;
+        if (IsInstanceValid(_skyEnvironment) && _skyEnvironment.Environment is not null)
+            _skyEnvironment.Environment.AmbientLightColor = _mapLookAtlas ? new Color(0.86f, 0.89f, 0.94f) : Ui.Colour("globe.ambient");
+        SyncAtlasSun();
         ApplyAtmosphereLook();
+        UpdateWeather(0);
+        _cityMiniatures.InvalidateVisibility();
         InvalidateCities();
         InvalidateCountryAndRegionLabelAppearance();
         if (_globeMaterial is null) return;
         var style = _mapLookStyle;
         _globeMaterial.SetShaderParameter("atlas_look", _mapLookAtlas ? 1f : 0f);
+        _globeMaterial.SetShaderParameter("realistic_look", _mapLookRealistic ? 1f : 0f);
+        _globeMaterial.SetShaderParameter("political_fill_translucency", fillTranslucency);
         _globeMaterial.SetShaderParameter("look_paper", Ink(style.Paper));
         _globeMaterial.SetShaderParameter("look_shade", Ink(style.Shade));
         _globeMaterial.SetShaderParameter("look_lamp", Ink(style.Lamp));
@@ -52,21 +68,10 @@ public sealed partial class GlobePresentation
         _globeMaterial.SetShaderParameter("look_waterline", style.Waterline);
         _globeMaterial.SetShaderParameter("look_sea_sheen", style.SeaSheen);
         _globeMaterial.SetShaderParameter("look_selection_width", style.SelectionWidth);
-        // Compatibility has no texture unit left for the frontier field, so its read there is a
-        // constant meaning "inland" (PackedMapShader). With frontier_ready at one every country
-        // line faded out from the middle zoom (GlobePlateRepaint.ApplyFrontier). The atlas keeps
-        // it at nought there, so the line is rebuilt per pixel, as the packed shader intends,
-        // out to the zoom where a pixel holds about two cells; beyond that the rebuilt line would
-        // only alias, so it fades, and the far frontiers are the ones painted into the plate.
-        // Classic keeps what it always did.
         if (_packedLookups is not null)
         {
             _globeMaterial.SetShaderParameter("frontier_ready",
                 !_mapLookAtlas && _frontierTexture is not null ? 1f : 0f);
-            // Under the atlas the field is never built there (FrontierFieldWanted), so a switch to
-            // classic in the middle of a game would leave classic without it - drawing differently
-            // from a classic cold start - until some border happened to move. Build it now: the
-            // plate repaint makes the field on its worker, from the same owners, once.
             if (!_mapLookAtlas && _frontierTexture is null && _frontierAuthored is not null &&
                 _campaign?.ProvinceMap is { } topology)
             {
@@ -74,12 +79,12 @@ public sealed partial class GlobePresentation
                 RequestPlateRepaint(topology);
             }
         }
+        UpdatePaperMix();
     }
 
     /// <summary>
-    /// Whether the frontier field is worth building: everywhere but Compatibility under the atlas
-    /// look, where the shader cannot read it and the 22-megabyte picture (with mipmaps) would be built and
-    /// uploaded for nothing.
+    /// Whether the frontier field is worth building: everywhere but Compatibility under the
+    /// overhauled looks, where the packed 12-unit shader cannot bind a 13th sampler.
     /// </summary>
     private bool FrontierFieldWanted() => _packedLookups is null || !MapLook.Atlas();
 
@@ -87,11 +92,9 @@ public sealed partial class GlobePresentation
     private void UpdatePaperMix()
     {
         if (_mapLookStyle is null) return;
-        var paperMix = _mapLookAtlas
-            ? MapLook.PaperMix(_flatMap, _flatMap ? _flatZoom : _distance, _mapLookStyle)
-            : 0f;
-        // The two ends are always sent exactly: the shader skips the terrain only above 0.999,
-        // and a camera that crept there in steps under the threshold would never get it.
+        var paperMix = MapLook.PaperMixForMode(
+            _mapLookMode, _flatMap, _flatMap ? _flatZoom : _distance, _mapLookStyle);
+        // The two ends are always sent exactly: the shader skips terrain sampling above 0.999.
         if (paperMix == _cachedPaperMix ||
             (Mathf.Abs(paperMix - _cachedPaperMix) <= 0.002f && paperMix > 0f && paperMix < 1f)) return;
         _cachedPaperMix = paperMix;

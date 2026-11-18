@@ -112,8 +112,22 @@ public sealed partial class GlobePresentation
     private void ApplyAtmosphereLook()
     {
         if (!IsInstanceValid(_atmosphereLayer) || _atmosphereLayer.MaterialOverride is not ShaderMaterial material) return;
-        var polish = MapLabelPriority.AtmospherePolish(_mapLookAtlas, RenderingServer.GetCurrentRenderingMethod(), 0f);
-        if (polish.WarmLampRim)
+        var polish = MapLabelPriority.AtmospherePolishForMood(
+            _mapLookMode, RenderingServer.GetCurrentRenderingMethod(), 0f);
+        material.SetShaderParameter("rayleigh_mie", polish.RayleighMieHalo ? 1f : 0f);
+        if (polish.MuteSpaceRim)
+        {
+            material.SetShaderParameter("tabletop_warmth", 0f);
+            material.SetShaderParameter("strength", 0f);
+            material.SetShaderParameter("falloff", 4.5f);
+        }
+        else if (polish.RayleighMieHalo)
+        {
+            material.SetShaderParameter("tabletop_warmth", 0f);
+            material.SetShaderParameter("strength", 0.58f);
+            material.SetShaderParameter("falloff", 3.5f);
+        }
+        else if (polish.WarmLampRim)
         {
             material.SetShaderParameter("tabletop_warmth", polish.RimWarmth);
             material.SetShaderParameter("lamp_rim_color", Color.FromHtml(Simulation.MapLook.ColourHex("map.look_lamp")));
@@ -128,12 +142,12 @@ public sealed partial class GlobePresentation
         }
     }
 
-    /// <summary>Keep the lit side of the halo on the lit side of the planet, and hide it flat.</summary>
+    /// <summary>Keep the lit side of the halo on the lit side of the planet, and hide it flat or on paper.</summary>
     private void UpdateAtmosphereRim()
     {
         if (!IsInstanceValid(_atmosphereLayer)) return;
-        _atmosphereLayer.Visible = !_flatMap;
-        if (_flatMap || !IsInstanceValid(_daySun)) return;
+        _atmosphereLayer.Visible = !_flatMap && !_mapLookPaper;
+        if (!_atmosphereLayer.Visible || !IsInstanceValid(_daySun)) return;
         if (_atmosphereLayer.MaterialOverride is ShaderMaterial material)
             material.SetShaderParameter("sun_direction", _daySun.GlobalBasis.Z);
     }
@@ -145,19 +159,36 @@ uniform float strength = 0.62;
 uniform float falloff = 3.1;
 uniform vec3 sun_direction = vec3(0.2, 0.6, 0.75);
 uniform float tabletop_warmth = 0.0;
-uniform vec3 lamp_rim_color : source_color = vec3(1.0, 0.89, 0.69);
+uniform float rayleigh_mie = 0.0;
+uniform vec3 lamp_rim_color : source_color = vec3(0.98, 0.98, 0.97);
 uniform vec3 lamp_direction = vec3(-0.62, 0.62, 0.48);
 void fragment() {
     vec3 n = normalize(NORMAL);
+    vec3 v = normalize(VIEW);
     // Zero facing the camera, one at the silhouette: the halo is the edge, not a wash.
-    float rim = 1.0 - clamp(abs(dot(n, normalize(VIEW))), 0.0, 1.0);
-    rim = pow(rim, falloff);
-    // The night limb of a planet is dark. Without this the ring glows all the way round and
-    // the globe stops looking lit by anything.
+    float ndotv = clamp(abs(dot(n, v)), 0.0, 1.0);
+    float rim = pow(1.0 - ndotv, falloff);
     vec3 world_n = normalize((MODEL_MATRIX * vec4(n, 0.0)).xyz);
-    float lit = smoothstep(-0.28, 0.55, dot(world_n, normalize(sun_direction)));
-    float lamp = smoothstep(-0.15, 0.75, dot(world_n, normalize(lamp_direction)));
-    ALBEDO = mix(limb_color.rgb, lamp_rim_color, tabletop_warmth * lamp);
-    ALPHA = rim * strength * mix(0.18, 1.0, max(lit, lamp * tabletop_warmth));
+    vec3 sun_l = normalize(sun_direction);
+    float sun_facing = dot(world_n, sun_l);
+    float lit = smoothstep(-0.28, 0.55, sun_facing);
+    if (rayleigh_mie > 0.5) {
+        // Rayleigh molecular sky scatter + Henyey-Greenstein crisp D65 Mie horizon scatter (zero yellow cast).
+        vec3 world_v = normalize((INV_VIEW_MATRIX * vec4(-v, 0.0)).xyz);
+        float cos_theta = clamp(dot(world_v, sun_l), -1.0, 1.0);
+        float rayleigh = 0.75 * (1.0 + cos_theta * cos_theta);
+        float g = 0.68;
+        float g2 = g * g;
+        float mie = (1.0 - g2) / max(4.0 * PI * pow(1.0 + g2 - 2.0 * g * cos_theta, 1.5), 0.02);
+        float terminator = smoothstep(-0.22, 0.18, sun_facing) * (1.0 - smoothstep(0.18, 0.68, sun_facing));
+        vec3 scatter = vec3(0.22, 0.50, 0.98) * rayleigh * 0.68
+                     + vec3(0.88, 0.93, 1.00) * (mie * 0.48 + terminator * 0.34);
+        ALBEDO = scatter;
+        ALPHA = rim * strength * mix(0.12, 1.0, smoothstep(-0.32, 0.48, sun_facing));
+    } else {
+        float lamp = smoothstep(-0.15, 0.75, dot(world_n, normalize(lamp_direction)));
+        ALBEDO = mix(limb_color.rgb, lamp_rim_color, tabletop_warmth * lamp);
+        ALPHA = rim * strength * mix(0.18, 1.0, max(lit, lamp * tabletop_warmth));
+    }
 }";
 }

@@ -15,11 +15,12 @@ public sealed partial class GlobePresentation
     private readonly Dictionary<int, int> _settlementCitiesInRegion = new();
     private (ProvinceTopology Map, int Revision) _settlementCountedFor;
     private MultiMeshInstance3D _settlementBuildings, _settlementRoofs;
+    private readonly CityMiniatureRenderer _cityMiniatures = new();
     private double _settlementClock;
     private readonly (float Latitude,float Longitude,float Width,float Depth,float LongitudeScale)[] _settlementFootprints =
         new (float,float,float,float,float)[SettlementCapacity];
     internal bool? SettlementVerificationEnabled;
-    internal int SettlementBuildingCount => _settlementBuildings?.Multimesh.VisibleInstanceCount ?? 0;
+    internal int SettlementBuildingCount => (_settlementBuildings?.Multimesh.VisibleInstanceCount ?? 0) + _cityMiniatures.VisibleInstanceCount;
     internal int SettlementCityCount { get; private set; }
     internal int SettlementRejectedWater { get; private set; }
 
@@ -46,8 +47,19 @@ public sealed partial class GlobePresentation
 
     private void UpdateSettlementModels(double delta)
     {
+        var sunDir = IsInstanceValid(_daySun) ? _daySun.GlobalBasis.Z.Normalized() : new Vector3(0.35f, 0.55f, 0.75f);
+        if (IsInstanceValid(_cityRoot))
+        {
+            _cityMiniatures.Update(new CityMiniatureRenderer.FrameInput(
+                _cityRoot, _camera, _campaign, _cities, _cityAnchors, _cityIsCapital,
+                _mapApplied, _flatMap, _distance, _flatZoom, _flatX,
+                QualityCityLabels, CityLabelsEnabled, SettlementVerificationEnabled,
+                _mapLookMode, sunDir));
+        }
+
         var visibility = SettlementSilhouette.Visibility(_flatMap,_distance,_flatZoom);
-        var wanted = _mapApplied && QualityCityLabels && CityLabelsEnabled &&
+        var wanted = !_cityMiniatures.IsHandlingCurrentLook &&
+            _mapApplied && QualityCityLabels && CityLabelsEnabled &&
             _cityRoot is { Visible:true } && _cityAnchors.Length == _cities.Count &&
             (SettlementVerificationEnabled ?? SettingsCatalog.Flag("map_city_models")) && visibility > .015f;
         if (!wanted)
@@ -155,8 +167,9 @@ public sealed partial class GlobePresentation
 
     internal bool SettlementFootprintsOnLand()
     {
-        for(var i=0;i<SettlementBuildingCount;i++)
+        var legacyCount = _settlementBuildings?.Multimesh.VisibleInstanceCount ?? 0;
+        for(var i=0;i<legacyCount;i++)
         {var p=_settlementFootprints[i];if(!SettlementOnLand(p.Latitude,p.Longitude,p.Width,p.Depth,p.LongitudeScale))return false;}
-        return true;
+        return _cityMiniatures.VisibleFootprintsOnLand(_campaign?.ProvinceMap, _campaign?.DestroyedProvinces);
     }
 }

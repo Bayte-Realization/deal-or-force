@@ -72,10 +72,12 @@ static class GpuAtlasContractTests
         var lookPacked = PackedMapShader.Build(corrected);
         Check(Regex.Matches(lookPacked, @"uniform\s+sampler\w+\s+").Count == 12 && !lookPacked.Contains("frontier_field"),
             "with the atlas look the packed build still binds exactly twelve samplers and never the frontier field");
-        Check(lookPacked.Contains("uniform float atlas_look") && lookPacked.Contains("if (atlas_look > 0.5"),
-            "the packed build carries the atlas look itself, not a stripped copy");
-        Check(!Regex.IsMatch(full, @"uniform\s+sampler\w+\s+(look_|atlas_look|paper_)"),
-            "the atlas look declares no sampler of its own");
+        Check(lookPacked.Contains("uniform float atlas_look") && lookPacked.Contains("if (atlas_look > 0.5") &&
+              lookPacked.Contains("uniform float realistic_look") && lookPacked.Contains("uniform float political_fill_translucency") &&
+              lookPacked.Contains("beer_transmittance") && lookPacked.Contains("snow_surface_mask"),
+            "the packed build carries the atlas and realistic looks and translucent fill without adding samplers");
+        Check(!Regex.IsMatch(full, @"uniform\s+sampler\w+\s+(look_|atlas_look|realistic_|political_fill|paper_)"),
+            "the atlas and realistic looks declare no sampler of their own");
         MapStyleSettingTests.Run();
     }
 }

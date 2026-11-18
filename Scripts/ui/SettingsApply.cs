@@ -75,6 +75,12 @@ public partial class DealOrForceGame
         CultureInfo.DefaultThreadCurrentUICulture = culture;
     }
 
+    public void ApplySettingChoice(string id, string value)
+    {
+        Simulation.SettingsCatalog.Store(id, value);
+        ApplySetting(id);
+    }
+
     private void ApplySetting(string id)
     {
         // A naming option is not one of a fixed list. `country_name_<tag>` is however many
@@ -250,7 +256,12 @@ public partial class DealOrForceGame
                 if (_mapSelectionOpen) ShowMapSelectionContent();
                 break;
             case "map_look":
+                Simulation.MapLook.SyncMoodDefaultFill(Simulation.SettingsCatalog.Chosen("map_look"));
                 UpdateMapVignetteLook();
+                _globe?.ApplyMapVisualStyle();
+                break;
+            case "map_political_fill":
+                Simulation.PlayerSettings.Set(Simulation.MapLook.PoliticalFillCustomKey, true);
                 _globe?.ApplyMapVisualStyle();
                 break;
             case "map_visual_style":

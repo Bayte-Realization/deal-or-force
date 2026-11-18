@@ -164,8 +164,15 @@ public sealed partial class GlobePresentation
                        _weatherWorld.GetNodeOrNull<Node3D>("MovingClouds") is { Visible: true };
         var cloudFull = defines?.CloudFullDistance ?? 10.5f;
         var cloudClear = defines?.CloudClearDistance ?? 7.6f;
+        var realisticCumulus = _mapLookRealistic && _packedLookups is null && QualityWeather;
+        if (realisticCumulus)
+        {
+            cloudClear = System.MathF.Min(cloudClear, 6.6f);
+            cloudFull = System.MathF.Min(cloudFull, 9.6f);
+        }
         var allowed = Simulation.WeatherReadability.LayersAllowed(_campaign);
-        var clouds = !allowed || !QualityWeather || !_weatherEnabled || !_cloudsShown || replaced || cloudFull <= cloudClear ? 0f
+        // Paper chart mode mutes decorative clouds and their shadows at every zoom (pure paper + max FPS).
+        var clouds = _mapLookPaper || !allowed || !QualityWeather || !_weatherEnabled || !_cloudsShown || replaced || cloudFull <= cloudClear ? 0f
             : Mathf.SmoothStep(cloudClear, cloudFull, distance);
 
         var mistFull = defines?.MistFullDistance ?? 6.0f;
@@ -184,6 +191,8 @@ public sealed partial class GlobePresentation
         var clock = (float)((VerificationWeatherTime ?? _weatherClock) % 100000.0);
         var readability = Simulation.WeatherReadability.Read(defines);
 
+        _cloudMaterial.SetShaderParameter("realistic_cumulus", realisticCumulus ? 1f : 0f);
+        _cloudShadeMaterial.SetShaderParameter("realistic_cumulus", realisticCumulus ? 1f : 0f);
         _cloudMaterial.SetShaderParameter("presence", clouds);
         _cloudShadeMaterial.SetShaderParameter("presence", clouds);
         _cloudMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale);
@@ -219,7 +228,7 @@ public sealed partial class GlobePresentation
         }
 
         var globe = !_flatMap;
-        if (IsInstanceValid(_airGlow)) _airGlow.Visible = globe;
+        if (IsInstanceValid(_airGlow)) _airGlow.Visible = globe && !_mapLookPaper;
         _cloudDeck.Visible = _cloudShade.Visible = globe && clouds > 0.002f;
         _mistShell.Visible = globe && mist > 0.002f;
         foreach (var sheet in _flatSheets)
@@ -243,6 +252,7 @@ uniform float flat_map = 0.0;
 uniform float opacity = 0.50;
 uniform float edge_softness = 0.20;
 uniform float detail_strength = 0.08;
+uniform float realistic_cumulus = 0.0;
 
 uvec3 scramble(uvec3 v) {
     v = v * 1664525u + 1013904223u;
@@ -322,13 +332,14 @@ void fragment() {
     float core = smoothstep(threshold, threshold + soft * 2.0, d);
     float limb = flat_map > 0.5 ? 1.0 : smoothstep(0.0, 0.25, dot(NORMAL, VIEW));
     if (shade_pass > 0.5) {
-        ALBEDO = vec3(0.02, 0.03, 0.05);
-        ALPHA = body * body * opacity * 0.22 * presence * limb;
+        ALBEDO = vec3(0.015, 0.024, 0.042);
+        ALPHA = body * body * opacity * mix(0.22, 0.29, realistic_cumulus) * presence * limb;
     } else {
-        float light = flat_map > 0.5 ? 0.95 : 0.80 + 0.20 * clamp(dot(sphere_at(UV), normalize(sun_dir)), 0.0, 1.0);
-        // Thin cloud is a grey veil the ground shows through; thick cloud is bright on top.
-        vec3 thin = vec3(0.86, 0.89, 0.93);
-        vec3 thick = vec3(0.98, 0.985, 1.0);
+        float sun_dot = clamp(dot(sphere_at(UV), normalize(sun_dir)), -0.2, 1.0);
+        float light = flat_map > 0.5 ? 0.95 : 0.80 + 0.20 * clamp(sun_dot, 0.0, 1.0);
+        // Thin cloud is a cool Rayleigh veil; thick cumulus catches crisp D65 sunlight on its crowns.
+        vec3 thin = mix(vec3(0.86, 0.89, 0.93), vec3(0.79, 0.84, 0.92), realistic_cumulus);
+        vec3 thick = mix(vec3(0.98, 0.985, 1.0), vec3(0.985, 0.99, 1.00), realistic_cumulus);
         ALBEDO = mix(thin, thick, core) * light;
         ALPHA = body * mix(0.30, 1.0, core) * opacity * presence * limb;
     }

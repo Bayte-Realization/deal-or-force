@@ -43,8 +43,17 @@ public sealed record MapLookStyle(
 public static class MapLook
 {
     public const string Setting = "map_look";
+    public const string RealisticValue = "realistic";
+    public const string PaperValue = "paper";
     public const string AtlasValue = "atlas";
     public const string ClassicValue = "classic";
+    public const string MigrationKeyV3 = "map_look_default_v3";
+
+    public const string PoliticalFillSetting = "map_political_fill";
+    public const string PoliticalFillCustomKey = "map_political_fill_custom";
+    public const string FillClassicOpaque = "classic_opaque";
+    public const string FillBalanced = "balanced";
+    public const string FillTranslucent = "translucent";
 
     // The relief multiplier the shader has always used runs from 0.52 in the deepest shade to
     // 1.42 on a slope facing the lamp. The atlas keeps exactly that brightness and only leans the
@@ -58,7 +67,7 @@ public static class MapLook
     public const float ChartStepSlope = 0.86f;
     public const float ChartStepShelf = 1.0f;
 
-    public const float ReliefTintDefault = 0.60f;
+    public const float ReliefTintDefault = 0.28f;
     public const float GroundShowNearDefault = 0.30f;
     public const float CoverFarDefault = 0.95f;
     public const float SaturationFarDefault = 0.80f;
@@ -74,26 +83,26 @@ public static class MapLook
     public const float SeaSheenDefault = 0.30f;
     public const float SelectionWidthDefault = 1.3f;
 
-    /// <summary>The design's palette, as sRGB hex - what InterfaceSkin also ships compiled.</summary>
+    /// <summary>The design's de-yellowed neutral D65 / archival cotton palette, as sRGB hex.</summary>
     public static readonly (string Token, string Hex)[] DefaultColours =
     {
-        ("map.look_paper", "#e6d9bb"),
-        ("map.look_shade", "#4a4f5e"),
-        ("map.look_lamp", "#fff1d2"),
+        ("map.look_paper", "#eceae4"),
+        ("map.look_shade", "#4d5463"),
+        ("map.look_lamp", "#faf9f6"),
         ("map.look_sea_deep", "#18323f"),
         ("map.look_sea_mid", "#234b58"),
         ("map.look_sea_shelf", "#3d6b70"),
         ("map.look_sea_coast", "#6a9690"),
         ("map.look_sea_chart", "#2a4450"),
-        ("map.look_foam", "#ece5d2"),
+        ("map.look_foam", "#f2f1ee"),
         ("map.look_coast_ink", "#2e4048"),
-        ("map.look_unowned", "#d8ccb0"),
-        ("map.look_label_fill", "#efe4c8"),
-        ("map.look_label_outline", "#11161c"),
-        ("map.look_capital_fill", "#f7eed6"),
-        ("map.look_region_fill", "#e6d9bb"),
-        ("map.look_river_fill", "#a8cedd"),
-        ("map.look_river_outline", "#0f1e29"),
+        ("map.look_unowned", "#dfddd6"),
+        ("map.look_label_fill", "#f5f6f8"),
+        ("map.look_label_outline", "#111318"),
+        ("map.look_capital_fill", "#f8f9fb"),
+        ("map.look_region_fill", "#eceef2"),
+        ("map.look_river_fill", "#b4d6e4"),
+        ("map.look_river_outline", "#0f1c26"),
     };
 
     /// <summary>Returns a skin colour hex token with compiled fallback (without mutating classic globals).</summary>
@@ -102,15 +111,87 @@ public static class MapLook
         if (InterfaceSkin.Has(token)) return InterfaceSkin.Colour(token);
         foreach (var (name, hex) in DefaultColours)
             if (name == token) return hex;
-        return "#efe4c8";
+        return "#f5f6f8";
     }
 
     /// <summary>
-    /// Whether the atlas look is on. Anything but an explicit "classic" is the atlas: a player who
-    /// never opened the settings, or a content pack that does not declare the option, gets the
-    /// new map, and the old one is one value away.
+    /// Active 4-way mood ("realistic", "paper", "atlas", "classic"). Unknown or missing values
+    /// resolve to "realistic", the shipped AAA physical look.
     /// </summary>
-    public static bool Atlas() => SettingsCatalog.Chosen(Setting) != ClassicValue;
+    public static string Mode()
+    {
+        var chosen = SettingsCatalog.Chosen(Setting);
+        return chosen switch
+        {
+            RealisticValue or PaperValue or AtlasValue or ClassicValue => chosen,
+            _ => RealisticValue
+        };
+    }
+
+    /// <summary>
+    /// Whether the overhauled cartographic pipeline is on. Anything but an explicit "classic"
+    /// uses linear-light skin inks, clean MSDF typography and distance-field borders; "classic"
+    /// reverts the entire map in one click.
+    /// </summary>
+    public static bool Atlas() => Mode() != ClassicValue;
+
+    public static bool IsRealistic() => Mode() == RealisticValue;
+
+    public static bool IsPaper() => Mode() == PaperValue;
+
+    /// <summary>
+    /// Effective country fill style ("classic_opaque", "balanced", "translucent"). Defaults to
+    /// "translucent" in realistic mode and "classic_opaque" in paper/atlas/classic unless the
+    /// player has explicitly stored a preference, which then works across every map mood.
+    /// </summary>
+    public static string EffectivePoliticalFill(string mode = null)
+    {
+        var activeMode = mode ?? Mode();
+        if (PlayerSettings.Has(PoliticalFillSetting))
+        {
+            var stored = SettingsCatalog.Chosen(PoliticalFillSetting);
+            if (stored is FillClassicOpaque or FillBalanced or FillTranslucent)
+                return stored;
+        }
+        return activeMode == RealisticValue ? FillTranslucent : FillClassicOpaque;
+    }
+
+    /// <summary>Shader blend weight [0..1] for Imperator-style interior political translucency.</summary>
+    public static float PoliticalFillTranslucency(string fill) => fill switch
+    {
+        FillTranslucent => 1.0f,
+        FillBalanced => 0.5f,
+        _ => 0.0f
+    };
+
+    /// <summary>Keeps the UI fill choice aligned with mood changes until the player picks a custom fill.</summary>
+    public static void SyncMoodDefaultFill(string mode)
+    {
+        if (PlayerSettings.Bool(PoliticalFillCustomKey, false)) return;
+        SettingsCatalog.Store(PoliticalFillSetting, mode == RealisticValue ? FillTranslucent : FillClassicOpaque);
+    }
+
+    /// <summary>
+    /// One-time boot upgrade from Wave 1/2 default ("atlas") to Wave 3 default ("realistic").
+    /// Preserves an explicit "classic" choice and never runs twice once stamped.
+    /// </summary>
+    public static void MigrateDefaultsIfNeeded()
+    {
+        if (!PlayerSettings.Located || PlayerSettings.Bool(MigrationKeyV3, false)) return;
+        if (PlayerSettings.Has(Setting))
+        {
+            var current = PlayerSettings.Text(Setting, "");
+            if (string.Equals(current, AtlasValue, StringComparison.Ordinal))
+                PlayerSettings.Set(Setting, RealisticValue);
+        }
+        if (PlayerSettings.Has(PoliticalFillSetting))
+        {
+            var fill = PlayerSettings.Text(PoliticalFillSetting, "");
+            if (fill is not (FillClassicOpaque or FillBalanced or FillTranslucent))
+                PlayerSettings.Clear(PoliticalFillSetting);
+        }
+        PlayerSettings.Set(MigrationKeyV3, true);
+    }
 
     /// <summary>The style in force, read from the skin with the design's values as fallbacks.</summary>
     public static MapLookStyle Current()
@@ -158,6 +239,29 @@ public static class MapLook
         if (full <= from) return distanceOrZoom >= from ? 1f : 0f;
         var t = Math.Clamp((distanceOrZoom - from) / (full - from), 0f, 1f);
         return t * t * (3f - 2f * t);
+    }
+
+    /// <summary>
+    /// Mode-aware paper share: "paper" stays 1.0 at every zoom; "classic" stays 0.0; "atlas"
+    /// uses the shipped middle-to-far transition; "realistic" keeps physical ground and ocean up
+    /// to orbital distance (d &gt; 18.5 on the globe) and fades smoothly into the engraved chart.
+    /// </summary>
+    public static float PaperMixForMode(string mode, bool flat, float distanceOrZoom, MapLookStyle style)
+    {
+        if (mode == ClassicValue || style is null) return 0f;
+        if (mode == PaperValue) return 1f;
+        if (mode == RealisticValue)
+        {
+            var orbital = style with
+            {
+                PaperFromDistance = Math.Max(style.PaperFromDistance + 1.5f, 18.5f),
+                PaperFullDistance = Math.Max(style.PaperFullDistance + 2.5f, 24.5f),
+                FlatPaperFromZoom = Math.Max(style.FlatPaperFromZoom + 1.2f, 10.2f),
+                FlatPaperFullZoom = Math.Max(style.FlatPaperFullZoom + 1.5f, 13.0f)
+            };
+            return PaperMix(flat, distanceOrZoom, orbital);
+        }
+        return PaperMix(flat, distanceOrZoom, style);
     }
 
     /// <summary>

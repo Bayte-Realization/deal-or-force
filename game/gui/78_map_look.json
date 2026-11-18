@@ -13,39 +13,31 @@
   // sea, then the inks (country border, coast, province). Accents - selection gold, front red,
   // plan blue - are not used for anything else.
   "colours": {
-    // The paper under the country colours from far away. A shade darker than the interface's own
-    // paper (#efe4c8), so panels lying over the map still separate from it.
-    "map.look_paper": "#e6d9bb",
-    // Land no state holds (Antarctica, unclaimed regions): the paper itself, about six per cent
-    // darker so it still reads as ground rather than as a hole in the map.
-    "map.look_unowned": "#d8ccb0",
-    // The hue a slope turned away from the lamp leans towards: a cool slate, as in Imhof's relief
-    // shading - warm light, cool shade. Only the hue is used; how dark a slope is stays the
-    // classic hillshade's, so a country keeps its colour in the mountains.
-    "map.look_shade": "#4a4f5e",
-    // The lamp: the hue a lit slope leans towards, and the alpine ridge highlight.
-    "map.look_lamp": "#fff1d2",
-    // The sea by depth, on the same thresholds the classic map used: abyss, continental slope,
-    // shelf, and the shallow littoral along a coast. Warmer and darker than the classic navy.
+    // Neutral archival cotton paper (#eceae4) under country colours in paper mood and far zoom.
+    "map.look_paper": "#eceae4",
+    // Land no state holds (Antarctica, unclaimed regions): neutral cotton ~6% darker.
+    "map.look_unowned": "#dfddd6",
+    // Cool Rayleigh slate shadow hue vs crisp neutral D65 daylight highlight (zero sepia cast).
+    "map.look_shade": "#4d5463",
+    "map.look_lamp": "#faf9f6",
+    // The sea by depth: abyss, continental slope, shelf, and shallow littoral.
     "map.look_sea_deep": "#18323f",
     "map.look_sea_mid": "#234b58",
     "map.look_sea_shelf": "#3d6b70",
     "map.look_sea_coast": "#6a9690",
-    // From far away the sea settles into three quiet steps of this one chart tone (0.72, 0.86 and
-    // the full tone). Dark on purpose: land has to stand above water on the world map.
+    // Three-step chart sea tone from far away and in paper mood.
     "map.look_sea_chart": "#2a4450",
-    // Surf along a shore and the light on the crests: paper white, never pure white.
-    "map.look_foam": "#ece5d2",
-    // A coast is inked lighter and bluer than a frontier (#1c2230), so the eye can tell where a
-    // state ends and where the land does.
+    // Crisp neutral surf along shores and wave crests (no yellow tint).
+    "map.look_foam": "#f2f1ee",
+    // Coast ink lighter and bluer than a frontier (#1c2230).
     "map.look_coast_ink": "#2e4048",
-    // Warm paper-on-ink map typography for the atlas look (classic retains 00_skin.json globe.*).
-    "map.look_label_fill": "#efe4c8",
-    "map.look_label_outline": "#11161c",
-    "map.look_capital_fill": "#f7eed6",
-    "map.look_region_fill": "#e6d9bb",
-    "map.look_river_fill": "#a8cedd",
-    "map.look_river_outline": "#0f1e29"
+    // Crisp neutral ivory-white map typography on deep #111318 ink outline (zero yellow cast).
+    "map.look_label_fill": "#f5f6f8",
+    "map.look_label_outline": "#111318",
+    "map.look_capital_fill": "#f8f9fb",
+    "map.look_region_fill": "#eceef2",
+    "map.look_river_fill": "#b4d6e4",
+    "map.look_river_outline": "#0f1c26"
   },
   "metrics": {
     // Close in, how far the brightness of the ground may move the country colour: the fill runs
@@ -56,9 +48,8 @@
     "map.look_cover_far": 0.95,
     // Country colour saturation on the paper map: a printed atlas is a little quieter than a poster.
     "map.look_saturation_far": 0.80,
-    // How strongly a slope's hue leans towards the shade or the lamp colour (0 is the classic grey
-    // hillshade; brightness is the classic one at any value).
-    "map.look_relief_tint": 0.60,
+    // Subtle neutral D65/slate relief hue lean (brightness stays exact grey hillshade).
+    "map.look_relief_tint": 0.28,
     // How much of the relief shading survives on the paper map: mountains stay a soft wash.
     "map.look_relief_far": 0.45,
     // Where the map becomes paper: on the globe by camera distance (5.25 .. 24, default 12.5),
