@@ -199,6 +199,7 @@ public static class LongRangeStrikes
         public readonly List<int> Own = new();
         public readonly HashSet<int> Enemies = new();
         public readonly HashSet<int> EnemyMaps = new();
+        public List<(ScenarioState State, int Anchor)> EnemyStates;
     }
 
     internal static Sides SidesOf(Campaign c, int nationId)
@@ -255,16 +256,29 @@ public static class LongRangeStrikes
     /// <summary>Every formation on the strike mission whose day of the week it is fires one salvo.</summary>
     public static void Fire(Campaign c)
     {
-        if (c.ProvinceMap is null || c.SupportFormations.Count == 0) return;
+        foreach (var _ in FireStages(c)) { }
+    }
+
+    internal static IEnumerable<int> FireStages(Campaign c)
+    {
+        if (c.ProvinceMap is null || c.SupportFormations.Count == 0) yield break;
         var interval = Math.Max(1, c.Defines.StrikeIntervalDays);
-        Dictionary<int, Sides> sides = null;
-        Dictionary<int, Nation> byMap = null;
-        // The saved list, not the by-nation index: strikes change the target's depots and a
-        // shared order of firing is what keeps two peers' depots equal.
-        foreach (var formation in c.SupportFormations.ToArray())
+        List<SupportFormation> due = null;
+        for (var i = 0; i < c.SupportFormations.Count; i++)
         {
-            if (formation.Mission != SupportCore.MissionStrike) continue;
-            if (((c.ElapsedDays + formation.Id) % interval + interval) % interval != 0) continue;
+            var f = c.SupportFormations[i];
+            if (f.Mission != SupportCore.MissionStrike) continue;
+            if (((c.ElapsedDays + f.Id) % interval + interval) % interval != 0) continue;
+            due ??= new List<SupportFormation>();
+            due.Add(f);
+        }
+        if (due is null) yield break;
+
+        Dictionary<int, Sides> sides = null;
+        var fired = 0;
+        for (var i = 0; i < due.Count; i++)
+        {
+            var formation = due[i];
             if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type) || !SupportCore.Enabled(c, type) ||
                 type.Strike <= 0f || !type.Missions.Contains(SupportCore.MissionStrike)) continue;
             var nation = c.NationById(formation.NationId);
@@ -272,13 +286,13 @@ public static class LongRangeStrikes
             sides ??= new Dictionary<int, Sides>();
             if (!sides.TryGetValue(nation.Id, out var side)) sides[nation.Id] = side = SidesOf(c, nation.Id);
             if (side.Enemies.Count == 0) continue;
-            byMap ??= c.Nations.GroupBy(n => n.MapIndex).ToDictionary(g => g.Key, g => g.First());
-            Salvo(c, formation, type, nation, side, byMap);
+            Salvo(c, formation, type, nation, side);
+            if (++fired % 3 == 0 && i + 1 < due.Count && Campaign.StageOverdue()) yield return 0;
         }
     }
 
     private static void Salvo(Campaign c, SupportFormation formation, SupportTypeDefinition type, Nation nation,
-        Sides side, Dictionary<int, Nation> byMap)
+        Sides side)
     {
         var d = c.Defines;
         var report = new Report { Day = c.ElapsedDays };
@@ -315,7 +329,8 @@ public static class LongRangeStrikes
 
         // The screen over the target, recomputed for the salvo actually fired (saturation
         // depends on its size), and what the defender spends doing it.
-        var target = byMap.GetValueOrDefault(Controller(c, plan.Province));
+        var ctrl = Controller(c, plan.Province);
+        var target = ctrl > 0 ? c.NationByMapIndex(ctrl) : null;
         var share = InterceptShare(c, type, launched, plan.Enemy, target);
         var intercepted = launched * share;
         if (intercepted > 0f && target is not null && d.StrategicStockpilesEnabled)
@@ -349,7 +364,9 @@ public static class LongRangeStrikes
     private static void Land(Campaign c, Sides side, Plan plan, float landed, Nation target)
     {
         var d = c.Defines;
-        var state = c.States.Find(s => s.MapIndex == plan.StateMapIndex);
+        var state = plan.StateMapIndex > 0
+            ? c.StateByMapIndex(plan.StateMapIndex)
+            : c.States.Find(s => s.MapIndex == plan.StateMapIndex);
         switch (plan.Target)
         {
             case TargetFront:
@@ -440,6 +457,47 @@ public static class LongRangeStrikes
         var side = SidesOf(c, formation.NationId);
         if (side.Enemies.Count == 0) return new Plan { Refusal = "We are at war with nobody." };
         return PlanFor(c, formation, type, side);
+    }
+
+    /// <summary>Fast check for AI repositioning: whether any enemy target of any kind lies in reach, without computing air-screen odds.</summary>
+    internal static bool HasTargetInReach(Campaign c, SupportFormation formation, SupportTypeDefinition type, Sides side)
+    {
+        if (c?.ProvinceMap is null || formation is null || type is null || type.Strike <= 0f || side is null || side.Enemies.Count == 0)
+            return false;
+        if (SupportCore.Displaced(c, formation)) return false;
+        var plan = new Plan();
+        var wanted = Targets.Contains(formation.StrikeTarget) ? formation.StrikeTarget : AutoTarget(type);
+        var named = formation.TargetStateMapIndex;
+        if (named >= 0)
+        {
+            var anchor = AnchorOf(c.ProvinceMap, named);
+            var enemyHeld = anchor > 0 && side.EnemyMaps.Contains(Controller(c, anchor));
+            if (enemyHeld && SupportCore.DistanceKm(c, formation.BaseProvinceId, anchor) <= SupportCore.ReachKm(c, type) &&
+                Choose(c, formation, type, side, wanted, named, plan))
+                return true;
+        }
+        if (Choose(c, formation, type, side, wanted, -1, plan)) return true;
+        if (wanted != TargetLogistics && Choose(c, formation, type, side, TargetLogistics, -1, plan)) return true;
+        if (wanted != TargetFront && Choose(c, formation, type, side, TargetFront, -1, plan)) return true;
+        if (wanted != TargetIndustry && Choose(c, formation, type, side, TargetIndustry, -1, plan)) return true;
+        if (wanted != TargetEnergy && Choose(c, formation, type, side, TargetEnergy, -1, plan)) return true;
+        return false;
+    }
+
+    private static List<(ScenarioState State, int Anchor)> EnemyStatesOf(Campaign c, Sides side)
+    {
+        if (side.EnemyStates is not null) return side.EnemyStates;
+        var map = c.ProvinceMap;
+        var list = new List<(ScenarioState, int)>();
+        for (var i = 0; i < c.States.Count; i++)
+        {
+            var state = c.States[i];
+            var anchor = AnchorOf(map, state.MapIndex);
+            if (anchor > 0 && side.EnemyMaps.Contains(Controller(c, anchor)))
+                list.Add((state, anchor));
+        }
+        side.EnemyStates = list;
+        return list;
     }
 
     private static Plan PlanFor(Campaign c, SupportFormation formation, SupportTypeDefinition type, Sides side)
@@ -539,11 +597,12 @@ public static class LongRangeStrikes
             case TargetIndustry:
             case TargetEnergy:
             {
-                foreach (var state in c.States)
+                var enemyStates = EnemyStatesOf(c, side);
+                for (var si = 0; si < enemyStates.Count; si++)
                 {
+                    var (state, anchor) = enemyStates[si];
                     if (onlyState >= 0 && state.MapIndex != onlyState) continue;
-                    var anchor = AnchorOf(map, state.MapIndex);
-                    if (anchor <= 0 || !side.EnemyMaps.Contains(Controller(c, anchor))) continue;
+                    if (!side.EnemyMaps.Contains(Controller(c, anchor))) continue;
                     var undamaged = 1f - M.Clamp01(state.WarDamage) / MathF.Max(0.01f, c.Defines.StrikeDamageCeiling);
                     if (undamaged <= 0f) continue;
                     var score = kind == TargetIndustry
@@ -566,7 +625,7 @@ public static class LongRangeStrikes
         plan.TargetNationId = kind == TargetFront
             ? c.Armies.Where(a => a.ProvinceId == bestProvince && side.Enemies.Contains(a.NationId))
                 .OrderByDescending(a => a.Divisions).ThenBy(a => a.Id).Select(a => a.NationId).DefaultIfEmpty(-1).First()
-            : c.Nations.FirstOrDefault(n => n.MapIndex == controller)?.Id ?? -1;
+            : (controller > 0 ? c.NationByMapIndex(controller)?.Id ?? -1 : -1);
         return true;
     }
 
@@ -580,7 +639,7 @@ public static class LongRangeStrikes
         plan.AirControl = ours + theirs <= 0.01f ? -1f : ours / (ours + theirs);
         var weight = formation.Strength * (1f + formation.Experience * 0.35f);
         var controller = Controller(c, plan.Province);
-        var defender = c.Nations.FirstOrDefault(n => n.MapIndex == controller);
+        var defender = controller > 0 ? c.NationByMapIndex(controller) : null;
         plan.InterceptShare = InterceptShare(c, type, type.Strike * weight, plan.Enemy, defender);
 
         // Precision: the formation's own sensors see a little; a reconnaissance flight of its

@@ -34,26 +34,73 @@ public static class TradeTermsValue
         internal Campaign Campaign;
     }
 
-    public static View Read(Campaign c, Nation x, Nation y)
+    private sealed class EvalScratch
     {
-        var goods = CommodityCatalog.All.ToArray();
+        public readonly View Ours = new();
+        public readonly View Theirs = new();
+        public readonly View Single = new();
+        public readonly Dictionary<(int Good, int Seller), float> FromOthers = new();
+        public float[] Total = Array.Empty<float>();
+    }
+
+    [ThreadStatic] private static EvalScratch _scratch;
+
+    internal static View ReadScratchOurs(Campaign c, Nation x, Nation y) =>
+        ReadInto(c, x, y, (_scratch ??= new EvalScratch()).Ours);
+
+    internal static View ReadScratchTheirs(Campaign c, Nation x, Nation y) =>
+        ReadInto(c, x, y, (_scratch ??= new EvalScratch()).Theirs);
+
+    public static View Read(Campaign c, Nation x, Nation y) =>
+        ReadInto(c, x, y, new View());
+
+    private static View ReadInto(Campaign c, Nation x, Nation y, View v)
+    {
+        var snap = CommodityCatalog.Snapshot;
+        var goods = snap.AllGoods;
+        var slots = snap.SlotByCommodity;
+        var byIndex = snap.ByIndex;
         var n = goods.Length;
-        var v = new View
+        v.Campaign = c;
+        v.X = x;
+        v.Y = y;
+        v.Goods = goods;
+        if (v.ShortX is null || v.ShortX.Length != n)
         {
-            Campaign = c, X = x, Y = y, Goods = goods,
-            ShortX = new float[n], SpareX = new float[n], ShortY = new float[n], SpareY = new float[n],
-            SatX = new float[n], ImportsFromY = new float[n], ExportsToY = new float[n], MainOtherShare = new float[n],
-            BasePrice = new float[n], Essential = new float[n], Strategic = new bool[n]
-        };
+            v.ShortX = new float[n];
+            v.SpareX = new float[n];
+            v.ShortY = new float[n];
+            v.SpareY = new float[n];
+            v.SatX = new float[n];
+            v.ImportsFromY = new float[n];
+            v.ExportsToY = new float[n];
+            v.MainOtherShare = new float[n];
+            v.BasePrice = new float[n];
+            v.Essential = new float[n];
+            v.Strategic = new bool[n];
+        }
+        else
+        {
+            Array.Clear(v.ImportsFromY, 0, n);
+            Array.Clear(v.ExportsToY, 0, n);
+            Array.Clear(v.MainOtherShare, 0, n);
+        }
+
         // What X bought this week, from Y and from its largest other supplier, by good.
         var routes = TradeNetwork.RoutesTouching(c, x.Id);
-        var fromOthers = new Dictionary<(int Good, int Seller), float>();
-        var total = new float[n];
-        var index = new Dictionary<Commodity, int>(n);
-        for (var i = 0; i < n; i++) index[goods[i]] = i;
-        foreach (var r in routes)
+        var scratch = _scratch ??= new EvalScratch();
+        var fromOthers = scratch.FromOthers;
+        fromOthers.Clear();
+        if (scratch.Total.Length < n) scratch.Total = new float[n];
+        else Array.Clear(scratch.Total, 0, n);
+        var total = scratch.Total;
+        for (var ri = 0; ri < routes.Count; ri++)
         {
-            if (!index.TryGetValue(r.Commodity, out var i) || !float.IsFinite(r.Volume)) continue;
+            var r = routes[ri];
+            var cIdx = (int)r.Commodity;
+            if ((uint)cIdx >= (uint)slots.Length) continue;
+            var i = slots[cIdx];
+            if (i < 0 || !float.IsFinite(r.Volume)) continue;
             if (r.SellerId == x.Id && r.BuyerId == y.Id) { v.ExportsToY[i] += r.Volume; continue; }
             if (r.BuyerId != x.Id) continue;
             total[i] += r.Volume;
@@ -65,7 +112,7 @@ public static class TradeTermsValue
         for (var i = 0; i < n; i++)
         {
             var good = goods[i];
-            var def = CommodityCatalog.Get(good);
+            var def = byIndex[(int)good];
             v.BasePrice[i] = def.BasePrice;
             v.Essential[i] = M.Clamp01(def.EssentialWeight);
             v.Strategic[i] = def.Leverage != CommodityLeverageTier.None;
@@ -98,7 +145,7 @@ public static class TradeTermsValue
     public static float For(Campaign c, Nation x, Nation y, TradeTerms terms, Breakdown why = null)
     {
         if (c is null || x is null || y is null || terms is null) return 0f;
-        return Value(Read(c, x, y), terms, why);
+        return Value(ReadInto(c, x, y, (_scratch ??= new EvalScratch()).Single), terms, why);
     }
 
     public static float Value(View v, TradeTerms terms, Breakdown why = null)

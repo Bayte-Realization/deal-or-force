@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -173,18 +174,86 @@ public static class CommodityCatalog
     private static readonly Dictionary<Commodity, string> Ids = new();
     private static int _nextId;
 
+    internal sealed class SnapshotData
+    {
+        public readonly Commodity[] AllGoods;
+        public readonly CommodityDefinition[] ByIndex;
+        public readonly string[] IdByIndex;
+        public readonly int[] SlotByCommodity;
+        public readonly FrozenDictionary<string, Commodity> NamedFrozen;
+
+        public SnapshotData(Commodity[] allGoods, CommodityDefinition[] byIndex, string[] idByIndex, int[] slotByCommodity,
+            FrozenDictionary<string, Commodity> namedFrozen)
+        {
+            AllGoods = allGoods;
+            ByIndex = byIndex;
+            IdByIndex = idByIndex;
+            SlotByCommodity = slotByCommodity;
+            NamedFrozen = namedFrozen;
+        }
+    }
+
+    private static volatile SnapshotData _snapshot;
+
+    internal static SnapshotData Snapshot => _snapshot ?? BuildSnapshot();
+
+    private static SnapshotData BuildSnapshot()
+    {
+        lock (Definitions)
+        {
+            if (_snapshot is { } existing) return existing;
+            var count = Definitions.Count;
+            var allGoods = new Commodity[count];
+            var maxIdx = -1;
+            var pos = 0;
+            foreach (var key in Definitions.Keys)
+            {
+                allGoods[pos++] = key;
+                if ((int)key > maxIdx) maxIdx = (int)key;
+            }
+            var len = maxIdx + 1;
+            var byIndex = len > 0 ? new CommodityDefinition[len] : Array.Empty<CommodityDefinition>();
+            var idByIndex = len > 0 ? new string[len] : Array.Empty<string>();
+            var slotByCommodity = len > 0 ? new int[len] : Array.Empty<int>();
+            if (len > 0) Array.Fill(slotByCommodity, -1);
+            for (var i = 0; i < count; i++)
+            {
+                var c = allGoods[i];
+                var idx = (int)c;
+                if ((uint)idx < (uint)len)
+                {
+                    byIndex[idx] = Definitions[c];
+                    slotByCommodity[idx] = i;
+                    if (Ids.TryGetValue(c, out var id)) idByIndex[idx] = id;
+                }
+            }
+            var built = new SnapshotData(allGoods, byIndex, idByIndex, slotByCommodity,
+                Named.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase));
+            _snapshot = built;
+            return built;
+        }
+    }
+
     /// <summary>A good the catalog has forgotten - a mod's, after the mod is gone.</summary>
     private static readonly CommodityDefinition Unknown =
         new("Unknown good", "?", 0.02f, 0f, "Declared by content that is no longer loaded.");
 
-    public static IEnumerable<Commodity> All => Definitions.Keys;
+    public static IEnumerable<Commodity> All => Snapshot.AllGoods;
 
-    public static CommodityDefinition Get(Commodity commodity) =>
-        Definitions.TryGetValue(commodity, out var definition) ? definition : Unknown;
+    public static CommodityDefinition Get(Commodity commodity)
+    {
+        var byIdx = Snapshot.ByIndex;
+        var idx = (int)commodity;
+        return (uint)idx < (uint)byIdx.Length && byIdx[idx] is { } definition ? definition : Unknown;
+    }
 
     /// <summary>The name this good has in a file, which is what a save should be keyed by.</summary>
-    public static string IdOf(Commodity commodity) =>
-        Ids.TryGetValue(commodity, out var id) ? id : ((int)commodity).ToString();
+    public static string IdOf(Commodity commodity)
+    {
+        var ids = Snapshot.IdByIndex;
+        var idx = (int)commodity;
+        return (uint)idx < (uint)ids.Length && ids[idx] is { } id ? id : idx.ToString();
+    }
 
     /// <summary>Stable raster icon key, including data-defined goods outside the enum.</summary>
     public static string IconNameOf(Commodity commodity) => "good_" + IdOf(commodity).ToLowerInvariant();
@@ -193,39 +262,44 @@ public static class CommodityCatalog
 
     public static void ResetCatalog()
     {
-        Definitions.Clear();
-        Named.Clear();
-        Ids.Clear();
-        _nextId = 0;
-        foreach (var entry in Defaults)
+        lock (Definitions)
         {
-            Definitions[entry.Key] = new CommodityDefinition(entry.Value.Name, entry.Value.Icon,
-                entry.Value.BasePrice, entry.Value.EssentialWeight, entry.Value.Description)
+            _snapshot = null;
+            Definitions.Clear();
+            Named.Clear();
+            Ids.Clear();
+            _nextId = 0;
+            foreach (var entry in Defaults)
             {
-                Leverage = DefaultLeverage(entry.Key)
-            };
-            Register(entry.Key, entry.Key.ToString());
-        }
-        foreach (var document in GameDataLoader.DataDocuments("common", "goods"))
-            using (document)
-            {
-                if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
-                foreach (var entry in document.RootElement.EnumerateObject())
+                Definitions[entry.Key] = new CommodityDefinition(entry.Value.Name, entry.Value.Icon,
+                    entry.Value.BasePrice, entry.Value.EssentialWeight, entry.Value.Description)
                 {
-                    if (entry.Value.ValueKind != JsonValueKind.Object) continue;
-                    if (!entry.Value.TryGetProperty("name", out var name)) name = default;
-                    if (!entry.Value.TryGetProperty("icon", out var icon)) icon = default;
-                    if (!entry.Value.TryGetProperty("description", out var description)) description = default;
-                    Override(entry.Name,
-                        name.ValueKind == JsonValueKind.String ? name.GetString() : null,
-                        icon.ValueKind == JsonValueKind.String ? icon.GetString() : null,
-                        entry.Value.TryGetProperty("base_price", out var price) && price.ValueKind == JsonValueKind.Number && price.TryGetSingle(out var basePrice) ? basePrice : null,
-                        entry.Value.TryGetProperty("essential_weight", out var weight) && weight.ValueKind == JsonValueKind.Number && weight.TryGetSingle(out var essential) ? essential : null,
-                        description.ValueKind == JsonValueKind.String ? description.GetString() : null);
-                    ReadLeverage(entry.Name, entry.Value);
-                    ReadWorldPrice(entry.Name, entry.Value);
-                }
+                    Leverage = DefaultLeverage(entry.Key)
+                };
+                Register(entry.Key, entry.Key.ToString());
             }
+            foreach (var document in GameDataLoader.DataDocuments("common", "goods"))
+                using (document)
+                {
+                    if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
+                    foreach (var entry in document.RootElement.EnumerateObject())
+                    {
+                        if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+                        if (!entry.Value.TryGetProperty("name", out var name)) name = default;
+                        if (!entry.Value.TryGetProperty("icon", out var icon)) icon = default;
+                        if (!entry.Value.TryGetProperty("description", out var description)) description = default;
+                        Override(entry.Name,
+                            name.ValueKind == JsonValueKind.String ? name.GetString() : null,
+                            icon.ValueKind == JsonValueKind.String ? icon.GetString() : null,
+                            entry.Value.TryGetProperty("base_price", out var price) && price.ValueKind == JsonValueKind.Number && price.TryGetSingle(out var basePrice) ? basePrice : null,
+                            entry.Value.TryGetProperty("essential_weight", out var weight) && weight.ValueKind == JsonValueKind.Number && weight.TryGetSingle(out var essential) ? essential : null,
+                            description.ValueKind == JsonValueKind.String ? description.GetString() : null);
+                        ReadLeverage(entry.Name, entry.Value);
+                        ReadWorldPrice(entry.Name, entry.Value);
+                    }
+                }
+            _snapshot = null;
+        }
     }
 
     /// <summary>
@@ -279,18 +353,25 @@ public static class CommodityCatalog
 
     private static string Squash(string id) => id is null
         ? ""
-        : id.Replace("_", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal);
+        : id.AsSpan().IndexOfAny('_', '-') < 0
+            ? id
+            : id.Replace("_", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal);
 
     private static void Register(Commodity commodity, string id)
     {
         Named[Squash(id)] = commodity;
         Ids[commodity] = id;
         if ((int)commodity >= _nextId) _nextId = (int)commodity + 1;
+        _snapshot = null;
     }
 
     /// <summary>Which good a file means, if the catalog has one by that name.</summary>
-    public static bool TryParse(string id, out Commodity commodity) =>
-        Named.TryGetValue(Squash(id), out commodity);
+    public static bool TryParse(string id, out Commodity commodity)
+    {
+        var squashed = Squash(id);
+        if (_snapshot is { } snap) return snap.NamedFrozen.TryGetValue(squashed, out commodity);
+        return Named.TryGetValue(squashed, out commodity);
+    }
 
     /// <summary>
     /// Change a good, or declare one that did not exist.

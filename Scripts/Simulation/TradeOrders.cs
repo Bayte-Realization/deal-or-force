@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Text.Json;
 
@@ -147,17 +148,74 @@ public static class TradeDesk
         }),
     };
 
+    private sealed class DefaultValues
+    {
+        public readonly FrozenDictionary<string, TradeSettingDefinition> FrozenSettings;
+        public readonly float ImportPriority;
+        public readonly float ImportCeiling;
+        public readonly float ExportReserve;
+        public readonly float PriceCeiling;
+        public readonly float PriceFloor;
+        public readonly float Preference;
+        public readonly float Forbid;
+
+        public DefaultValues(Dictionary<string, TradeSettingDefinition> s)
+        {
+            FrozenSettings = s.ToFrozenDictionary(StringComparer.Ordinal);
+            ImportPriority = s.TryGetValue(TradeDesk.ImportPriority, out var ip) ? ip.Default : 1f;
+            ImportCeiling = s.TryGetValue(TradeDesk.ImportCeiling, out var ic) ? ic.Default : 1f;
+            ExportReserve = s.TryGetValue(TradeDesk.ExportReserve, out var er) ? er.Default : 0f;
+            PriceCeiling = s.TryGetValue(TradeDesk.PriceCeiling, out var pc) ? pc.Default : 0f;
+            PriceFloor = s.TryGetValue(TradeDesk.PriceFloor, out var pf) ? pf.Default : 0f;
+            Preference = s.TryGetValue(TradeDesk.Preference, out var pr) ? pr.Default : 1f;
+            Forbid = s.TryGetValue(TradeDesk.Forbid, out var fb) ? fb.Default : 0f;
+        }
+    }
+
+    private static volatile DefaultValues _cachedDefaults;
+
+    private static DefaultValues FastDefaults => _cachedDefaults ??= new DefaultValues(Settings);
+
+    private static float DefaultOf(string setting)
+    {
+        var d = FastDefaults;
+        if (ReferenceEquals(setting, ImportPriority)) return d.ImportPriority;
+        if (ReferenceEquals(setting, ImportCeiling)) return d.ImportCeiling;
+        if (ReferenceEquals(setting, ExportReserve)) return d.ExportReserve;
+        if (ReferenceEquals(setting, PriceCeiling)) return d.PriceCeiling;
+        if (ReferenceEquals(setting, PriceFloor)) return d.PriceFloor;
+        if (ReferenceEquals(setting, Preference)) return d.Preference;
+        if (ReferenceEquals(setting, Forbid)) return d.Forbid;
+        return setting switch
+        {
+            ImportPriority => d.ImportPriority,
+            ImportCeiling => d.ImportCeiling,
+            ExportReserve => d.ExportReserve,
+            PriceCeiling => d.PriceCeiling,
+            PriceFloor => d.PriceFloor,
+            Preference => d.Preference,
+            Forbid => d.Forbid,
+            _ => Of(setting)?.Default ?? 0f
+        };
+    }
+
     static TradeDesk() => ResetCatalog();
 
     public static IReadOnlyDictionary<string, TradeSettingDefinition> All => Settings;
 
-    public static TradeSettingDefinition Of(string id) =>
-        id is not null && Settings.TryGetValue(id, out var definition) ? definition : null;
+    public static TradeSettingDefinition Of(string id)
+    {
+        if (id is null) return null;
+        if (_cachedDefaults is { } cached)
+            return cached.FrozenSettings.TryGetValue(id, out var def) ? def : null;
+        return Settings.TryGetValue(id, out var definition) ? definition : null;
+    }
 
     public static void ResetCatalog() => ResetCatalog(null);
 
     public static void ResetCatalog(List<string> errors)
     {
+        _cachedDefaults = null;
         Settings.Clear();
         foreach (var (id, definition) in Defaults) Settings[id] = definition;
 
@@ -167,11 +225,13 @@ public static class TradeDesk
                 try { Merge(document.RootElement); }
                 catch (Exception problem) { errors?.Add($"common/trade: {problem.Message}"); }
             }
+        _cachedDefaults = new DefaultValues(Settings);
     }
 
     public static void Merge(JsonElement root)
     {
         if (root.ValueKind != JsonValueKind.Object) return;
+        _cachedDefaults = null;
         foreach (var entry in root.EnumerateObject())
         {
             if (entry.Value.ValueKind != JsonValueKind.Object) continue;
@@ -327,9 +387,9 @@ public static class TradeDesk
     /// has said nothing is answered without touching a key at all.
     public static float ForGood(Nation nation, Commodity commodity, string setting)
     {
-        if (nation is null || nation.TradeSettings.Count == 0) return Of(setting)?.Default ?? 0f;
+        if (nation is null || nation.TradeSettings.Count == 0) return DefaultOf(setting);
         if (TryGetGood(nation.TradeSettings, commodity, setting, out var chosen)) return chosen;
-        return Of(setting)?.Default ?? 0f;
+        return DefaultOf(setting);
     }
 
     /// <summary>
@@ -339,12 +399,12 @@ public static class TradeDesk
     public static float ForPartner(Nation nation, string partnerTag, Commodity commodity, string setting)
     {
         if (nation is null || string.IsNullOrEmpty(partnerTag) || nation.TradeSettings.Count == 0)
-            return Of(setting)?.Default ?? 0f;
+            return DefaultOf(setting);
         if (TryGetPartner(nation.TradeSettings, partnerTag, commodity, setting, out var forThisGood))
             return forThisGood;
         if (TryGetPartner(nation.TradeSettings, partnerTag, setting, out var forEverything))
             return forEverything;
-        return Of(setting)?.Default ?? 0f;
+        return DefaultOf(setting);
     }
 
     private static bool TryGetGood(Dictionary<string, float> settings, Commodity commodity, string setting, out float value)

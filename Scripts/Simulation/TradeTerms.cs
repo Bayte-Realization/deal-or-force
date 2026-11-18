@@ -189,17 +189,18 @@ public sealed class TradeTerms
         t.CutA = Step(t.CutA);
         t.CutB = Step(t.CutB);
         if (!spec.Years.Contains(t.Years)) return Loc.Get("That term length is not one a trade agreement can have.");
-        string[] Goods(string[] goods)
+        static string[] Goods(string[] goods)
         {
-            var clean = new List<string>();
-            foreach (var g in goods ?? Array.Empty<string>())
+            if (goods is null || goods.Length == 0) return Array.Empty<string>();
+            var clean = new List<string>(goods.Length);
+            foreach (var g in goods)
                 if (CommodityCatalog.TryParse(g, out var c))
                 {
                     var id = CommodityCatalog.IdOf(c);
                     if (!clean.Contains(id, StringComparer.OrdinalIgnoreCase)) clean.Add(id);
                 }
             clean.Sort(StringComparer.Ordinal);
-            return clean.ToArray();
+            return clean.Count == 0 ? Array.Empty<string>() : clean.ToArray();
         }
         if ((t.GoodsA?.Length ?? 0) > 64 || (t.GoodsB?.Length ?? 0) > 64) return Loc.Get("These trade terms cannot be written.");
         var hadA = (t.GoodsA?.Length ?? 0) > 0;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace DealOrForce.Simulation;
 
@@ -111,6 +112,8 @@ public static class TradeNetwork
     internal sealed class CommodityBuffer
     {
         internal readonly List<int> SellerIds = new();
+        internal readonly List<Nation> SellerNations = new();
+        internal readonly List<float> SellerPrices = new();
         internal readonly List<float> SellerCapacity = new();
         internal readonly List<float> SellerScore = new();
         internal readonly List<int> SellerOrder = new();
@@ -163,6 +166,12 @@ public static class TradeNetwork
     private sealed class TradeWorkspace
     {
         internal readonly Dictionary<int, float> TransportReach = new();
+        internal readonly List<Nation> TradingNations = new();
+        internal float[] ImportAccessById = Array.Empty<float>();
+        internal float[] ExportAccessById = Array.Empty<float>();
+        internal float[] CeilingById = Array.Empty<float>();
+        internal bool[] HasAgreementById = Array.Empty<bool>();
+        internal float GlobalTradeMultiplier = 1f;
         internal float[] AffinityValues = Array.Empty<float>();
         internal int AffinityStride;
         internal int[] SellerSlots = Array.Empty<int>();
@@ -173,7 +182,9 @@ public static class TradeNetwork
         internal int UsedRouteRecords;
         internal float[] DistanceTable;
         internal int DistanceTableStride;
-        internal int DistanceNationCount;
+        internal int[] DistanceSlots = Array.Empty<int>();
+        internal int DistanceSlotCount;
+        internal int LastNationsCount;
         internal readonly Dictionary<int, (float Latitude, float Longitude)> CapitalCoordinates = new();
         internal bool[] HasPartnerRules = Array.Empty<bool>();
         internal readonly List<Nation> DirtyDistanceNations = new();
@@ -303,12 +314,18 @@ public static class TradeNetwork
         var work = Workspace(campaign);
         campaign.TradeRoutes.Clear();
         work.UsedRouteRecords = 0;
+        work.TradingNations.Clear();
         BeginRouteIndex(work);
-        foreach (var nation in nations)
+        var maxNationId = 0;
+        for (var ni = 0; ni < nations.Count; ni++)
         {
-            nation.TradePartners.Clear();
+            var nation = nations[ni];
+            if (nation.Id > maxNationId) maxNationId = nation.Id;
+            if (nation.TradePartners.Count > 0) nation.TradePartners.Clear();
             nation.ImportValue = 0f;
             nation.ExportValue = 0f;
+            if (nation.Market.Count == 0) continue;
+            work.TradingNations.Add(nation);
             foreach (var quote in nation.Market.Values)
             {
                 quote.Imports = 0f;
@@ -336,22 +353,44 @@ public static class TradeNetwork
                     unions.Add(organization.Id);
                 }
             }
+            var idSlots = maxNationId + 1;
+            if (work.ImportAccessById.Length < idSlots)
+            {
+                work.ImportAccessById = new float[idSlots + 64];
+                work.ExportAccessById = new float[idSlots + 64];
+                work.CeilingById = new float[idSlots + 64];
+                work.HasAgreementById = new bool[idSlots + 64];
+            }
+            else
+            {
+                Array.Clear(work.HasAgreementById, 0, idSlots);
+            }
+            var trading = work.TradingNations;
+            for (var ti = 0; ti < trading.Count; ti++)
+            {
+                var n = trading[ti];
+                if ((uint)n.Id >= (uint)idSlots) continue;
+                work.ImportAccessById[n.Id] = TradePolicyRules.ImportAccess(n.TradePolicy);
+                work.ExportAccessById[n.Id] = TradePolicyRules.ExportAccess(n.TradePolicy);
+                work.CeilingById[n.Id] = Ceiling(campaign, n, work);
+            }
+            work.GlobalTradeMultiplier = DefconSystem.GlobalTradeMultiplier(campaign);
             ReadAgreements(campaign, work);
         }
         yield return 0;
 
-        var catalog = new List<Commodity>(CommodityCatalog.All);
-        while (work.CommodityBuffers.Count < catalog.Count) work.CommodityBuffers.Add(new CommodityBuffer());
-        var parallelTrade = DeterministicParallel.Enabled(campaign) && catalog.Count >= 8 &&
+        var catalog = CommodityCatalog.Snapshot.AllGoods;
+        while (work.CommodityBuffers.Count < catalog.Length) work.CommodityBuffers.Add(new CommodityBuffer());
+        var parallelTrade = DeterministicParallel.Enabled(campaign) && catalog.Length >= 8 &&
                             System.Environment.GetEnvironmentVariable("BDOF_NO_PARALLEL_TRADE") != "1";
         if (parallelTrade)
         {
             using (SimProfiler.Measure("    mkt:trade"))
-                DeterministicParallel.For(campaign, 0, catalog.Count, ci =>
+                DeterministicParallel.For(campaign, 0, catalog.Length, ci =>
                     work.CommodityBuffers[ci].Buyers = PrepCommodity(campaign, catalog[ci], work, work.CommodityBuffers[ci]), minItems: 2);
             yield return 0;
             using (SimProfiler.Measure("    mkt:trade"))
-                PreparePartnerAffinity(campaign, work, catalog.Count);
+                PreparePartnerAffinity(campaign, work, catalog.Length);
             yield return 0;
             // Goods never read each other's quotes: every cell a route writes is keyed by
             // the good as well as the country. What the goods share - the route list, the
@@ -359,9 +398,9 @@ public static class TradeNetwork
             // the goods in catalogue order and therefore the same float sequence the serial
             // week wrote. Batched with yields so smooth ticks never swallow a 20 ms block.
             const int batchSize = 6;
-            for (var start = 0; start < catalog.Count; start += batchSize)
+            for (var start = 0; start < catalog.Length; start += batchSize)
             {
-                var end = Math.Min(catalog.Count, start + batchSize);
+                var end = Math.Min(catalog.Length, start + batchSize);
                 using (SimProfiler.Measure("    mkt:trade"))
                     DeterministicParallel.For(campaign, start, end, ci =>
                     {
@@ -370,11 +409,11 @@ public static class TradeNetwork
                     }, minItems: 2);
                 yield return 0;
             }
-            for (var ci = 0; ci < catalog.Count; ci++)
+            for (var ci = 0; ci < catalog.Length; ci++)
             {
                 using (SimProfiler.Measure("    mkt:trade"))
                     MergeCommodity(campaign, work, work.CommodityBuffers[ci]);
-                if ((ci + 1) % 4 == 0 && ci + 1 < catalog.Count) yield return 0;
+                if ((ci + 1) % 4 == 0 && ci + 1 < catalog.Length) yield return 0;
             }
             yield return 0;
         }
@@ -382,12 +421,12 @@ public static class TradeNetwork
         {
             using (SimProfiler.Measure("    mkt:trade"))
             {
-                for (var ci = 0; ci < catalog.Count; ci++)
+                for (var ci = 0; ci < catalog.Length; ci++)
                     work.CommodityBuffers[ci].Buyers = PrepCommodity(campaign, catalog[ci], work, work.CommodityBuffers[ci]);
-                PreparePartnerAffinity(campaign, work, catalog.Count);
+                PreparePartnerAffinity(campaign, work, catalog.Length);
             }
             yield return 0;
-            for (var ci = 0; ci < catalog.Count; ci++)
+            for (var ci = 0; ci < catalog.Length; ci++)
             {
                 // One good's routing used to be a single 76 ms stage: the heaviest
                 // indivisible piece left in a late week. The seams sit between buyer
@@ -485,24 +524,32 @@ public static class TradeNetwork
 
     private static int PrepCommodity(Campaign campaign, Commodity commodity, TradeWorkspace work, CommodityBuffer buf)
     {
-        var nations = campaign.Nations;
+        var trading = CollectionsMarshal.AsSpan(work.TradingNations);
+        var expById = work.ExportAccessById;
+        var impById = work.ImportAccessById;
+        var ceilById = work.CeilingById;
 
         // Who has a surplus, biggest first. Only the top few matter, so the list is
         // trimmed rather than sorted in full.
         buf.SellerIds.Clear();
+        buf.SellerNations.Clear();
+        buf.SellerPrices.Clear();
         buf.SellerCapacity.Clear();
         buf.Deltas.Clear();
         buf.Used = 0;
         buf.SurplusOfAllSellers = 0f;
-        for (var index = 0; index < nations.Count; index++)
+        for (var index = 0; index < trading.Length; index++)
         {
-            var nation = nations[index];
+            var nation = trading[index];
             if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
+            var expAccess = (uint)nation.Id < (uint)expById.Length
+                ? expById[nation.Id]
+                : TradePolicyRules.ExportAccess(nation.TradePolicy);
             // What is left after the country has kept back whatever it told itself to
             // keep. At a reserve of one nothing leaves, whatever anybody offers, which is
             // what "do not export food while my own people are short" has to mean.
             var capacity = (quote.Production - quote.Demand) *
-                           TradePolicyRules.ExportAccess(nation.TradePolicy) *
+                           expAccess *
                            (1f - M.Clamp01(TradeDesk.ForGood(nation, commodity, TradeDesk.ExportReserve)));
             if (PoolTraceSink is not null && quote.Production > quote.Demand) buf.SurplusOfAllSellers += quote.Production - quote.Demand;
             if (capacity <= 0.0001f) continue;
@@ -524,6 +571,12 @@ public static class TradeNetwork
             GreyMarketOnly(campaign, commodity);
             return 0;
         }
+        for (var s = 0; s < buf.SellerIds.Count; s++)
+        {
+            var seller = campaign.NationById(buf.SellerIds[s]);
+            buf.SellerNations.Add(seller);
+            buf.SellerPrices.Add(seller is not null && seller.Market.TryGetValue(commodity, out var sq) ? sq.Price : 0f);
+        }
 
         // Who is short, biggest shortfall first. Order matters - the sellers run out - and
         // serving the largest economies first is both the realistic answer and a stable
@@ -532,19 +585,25 @@ public static class TradeNetwork
         // eight hundred thousand per market week, which was most of what this pass cost. A
         // sort of two reused arrays does the same job; it is deterministic for identical
         // input, which is what the seed has to be able to rely on.
-        if (buf.BuyerIds.Length < nations.Count)
+        if (buf.BuyerIds.Length < trading.Length)
         {
-            buf.BuyerIds = new int[nations.Count + 32];
-            buf.BuyerKeys = new float[nations.Count + 32];
+            buf.BuyerIds = new int[trading.Length + 32];
+            buf.BuyerKeys = new float[trading.Length + 32];
         }
         var buyers = 0;
-        for (var index = 0; index < nations.Count; index++)
+        for (var index = 0; index < trading.Length; index++)
         {
-            var nation = nations[index];
+            var nation = trading[index];
             if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
+            var impAccess = (uint)nation.Id < (uint)impById.Length
+                ? impById[nation.Id]
+                : TradePolicyRules.ImportAccess(nation.TradePolicy);
+            var ceil = (uint)nation.Id < (uint)ceilById.Length
+                ? ceilById[nation.Id]
+                : Ceiling(campaign, nation, work);
             var shortfall = (quote.Demand - quote.Production) *
-                            TradePolicyRules.ImportAccess(nation.TradePolicy) *
-                            Ceiling(campaign, nation, work) *
+                            impAccess *
+                            ceil *
                             // A country that has capped its imports of this good goes short
                             // on purpose rather than depend on anybody for the rest.
                             M.Clamp01(TradeDesk.ForGood(nation, commodity, TradeDesk.ImportCeiling));
@@ -578,24 +637,35 @@ public static class TradeNetwork
 
     private static void RunBuyers(Campaign campaign, Commodity commodity, TradeWorkspace work, CommodityBuffer buf, int from, int to)
     {
+        var impById = work.ImportAccessById;
+        var ceilById = work.CeilingById;
+        var defconMult = work.GlobalTradeMultiplier;
+        var sellerCount = buf.SellerIds.Count;
         for (var index = from; index < to; index++)
         {
             var buyer = campaign.NationById(buf.BuyerIds[index]);
             if (buyer is null) continue;
             // The true shortfall, not the queue position above.
             if (!buyer.Market.TryGetValue(commodity, out var buyerQuote)) continue;
+            var impAccess = (uint)buyer.Id < (uint)impById.Length
+                ? impById[buyer.Id]
+                : TradePolicyRules.ImportAccess(buyer.TradePolicy);
+            var ceil = (uint)buyer.Id < (uint)ceilById.Length
+                ? ceilById[buyer.Id]
+                : Ceiling(campaign, buyer, work);
+            var deskCeil = M.Clamp01(TradeDesk.ForGood(buyer, commodity, TradeDesk.ImportCeiling));
             var deficit = (buyerQuote.Demand - buyerQuote.Production) *
-                          TradePolicyRules.ImportAccess(buyer.TradePolicy) *
-                          Ceiling(campaign, buyer, work) *
-                          M.Clamp01(TradeDesk.ForGood(buyer, commodity, TradeDesk.ImportCeiling));
+                          impAccess *
+                          ceil *
+                          deskCeil;
             if (buf.GuaranteedTake.Count > 0) deficit -= buf.GuaranteedTake.GetValueOrDefault(buyer.Id);
             if (deficit <= 0.0001f) continue;
             var trace = BuyerTraceSink is null ? null : new BuyerTrace
             {
                 NationId = buyer.Id, Good = commodity, Shortfall = buyerQuote.Demand - buyerQuote.Production,
-                ImportAccess = TradePolicyRules.ImportAccess(buyer.TradePolicy), Ceiling = Ceiling(campaign, buyer, work),
-                DeskCeiling = M.Clamp01(TradeDesk.ForGood(buyer, commodity, TradeDesk.ImportCeiling)), Sought = deficit,
-                SellersInPool = buf.SellerIds.Count
+                ImportAccess = impAccess, Ceiling = ceil,
+                DeskCeiling = deskCeil, Sought = deficit,
+                SellersInPool = sellerCount
             };
 
             // Rank this week's exporters from where the buyer is standing.
@@ -603,11 +673,11 @@ public static class TradeNetwork
             buf.SellerOrder.Clear();
             var availableCapacity = 0f;
             var blockedCapacity = 0f;
-            for (var seat = 0; seat < buf.SellerIds.Count; seat++)
+            for (var seat = 0; seat < sellerCount; seat++)
             {
                 var cap = buf.SellerCapacity[seat];
                 if (cap <= 0.0001f || buf.SellerIds[seat] == buyer.Id) continue;
-                var seller = campaign.NationById(buf.SellerIds[seat]);
+                var seller = buf.SellerNations[seat];
                 if (seller is null) continue;
                 var score = Affinity(campaign, buyer, seller, commodity, work);
                 if (score <= 0.0001f)
@@ -637,8 +707,8 @@ public static class TradeNetwork
                 if (trace is not null) trace.BlockedFactor = 1f - 0.35f * M.Clamp01(blockedShare);
             }
             else if (trace is not null) trace.BlockedFactor = 1f;
-            deficit *= DefconSystem.GlobalTradeMultiplier(campaign);
-            if (trace is not null) trace.DefconFactor = DefconSystem.GlobalTradeMultiplier(campaign);
+            deficit *= defconMult;
+            if (trace is not null) trace.DefconFactor = defconMult;
             // What the grey market sees: the whole unmet need, rationing included.
             var unrationed = deficit;
             if (float.IsFinite(buf.RationPerWeight))
@@ -652,14 +722,13 @@ public static class TradeNetwork
                 var seat = buf.SellerOrder[rank];
                 var take = MathF.Min(deficit, buf.SellerCapacity[seat]);
                 if (take <= 0.0001f) continue;
-                var seller = campaign.NationById(buf.SellerIds[seat]);
+                var seller = buf.SellerNations[seat];
                 if (seller is null) continue;
                 // A price either side has refused in advance. The seller's own price is what
                 // a route costs - see Record - so this is the same number the deal would be
                 // written at, against the limits the two countries set as multiples of what
                 // the good is worth at base.
-                if (!TradeDesk.PriceIsAcceptable(buyer, seller, commodity,
-                        seller.Market.TryGetValue(commodity, out var offer) ? offer.Price : 0f))
+                if (!TradeDesk.PriceIsAcceptable(buyer, seller, commodity, buf.SellerPrices[seat]))
                 {
                     if (trace is not null) trace.PriceRefused += take;
                     continue;
@@ -677,8 +746,7 @@ public static class TradeNetwork
             // what rationing held back.
             deficit = MathF.Max(0f, unrationed - (askedFromSellers - deficit));
             if (deficit <= 0.0001f) { if (trace is not null) BuyerTraceSink?.Invoke(trace); continue; }
-            var quote = buyer.Market[commodity];
-            quote.Imports += deficit * GreyMarketAccess * campaign.Defines.WorldMarketAccess;
+            buyerQuote.Imports += deficit * GreyMarketAccess * campaign.Defines.WorldMarketAccess;
             if (trace is not null)
             {
                 trace.GreyImported = deficit * GreyMarketAccess * campaign.Defines.WorldMarketAccess;
@@ -701,17 +769,18 @@ public static class TradeNetwork
             foreach (var left in buf.SellerCapacity) unsold += MathF.Max(0f, left);
             PoolTraceSink(new PoolTrace(buf.Good, buf.SurplusOfAllSellers, buf.PoolCapacityAtStart, unsold, buf.SellerIds.Count));
         }
-        for (var i = 0; i < buf.Deltas.Count; i++)
+        var deltas = CollectionsMarshal.AsSpan(buf.Deltas);
+        for (var i = 0; i < deltas.Length; i++)
         {
-            var delta = buf.Deltas[i];
+            ref readonly var delta = ref deltas[i];
             var route = buf.Pool[delta.PoolSlot];
             campaign.TradeRoutes.Add(route);
             Touch(work, delta.SellerId, route);
             if (delta.BuyerId != delta.SellerId) Touch(work, delta.BuyerId, route);
             var seller = campaign.NationById(delta.SellerId);
             var buyer = campaign.NationById(delta.BuyerId);
-            seller.TradePartners[buyer.Id] = seller.TradePartners.GetValueOrDefault(buyer.Id) + delta.Value;
-            buyer.TradePartners[seller.Id] = buyer.TradePartners.GetValueOrDefault(seller.Id) + delta.Value;
+            CollectionsMarshal.GetValueRefOrAddDefault(seller.TradePartners, buyer.Id, out _) += delta.Value;
+            CollectionsMarshal.GetValueRefOrAddDefault(buyer.TradePartners, seller.Id, out _) += delta.Value;
             seller.ExportValue += delta.Value;
             buyer.ImportValue += delta.Value;
             if (work.UsedRouteRecords >= work.RouteRecords.Count) work.RouteRecords.Add(route);
@@ -825,10 +894,19 @@ public static class TradeNetwork
             score = PartnerAffinity(campaign, buyer, seller, work);
         }
         if (score > 0f && work.PairTerms.Count > 0)
-            score *= AgreementFactor(campaign, work, buyer.Id, seller.Id, commodity);
-        return score * TradePolicyRules.ImportAccess(buyer.TradePolicy) *
-               TradePolicyRules.ExportAccess(seller.TradePolicy) *
-               PartnerPreferenceBetween(buyer, seller, commodity, work);
+        {
+            var hasAg = work.HasAgreementById;
+            if (((uint)buyer.Id >= (uint)hasAg.Length || hasAg[buyer.Id]) &&
+                ((uint)seller.Id >= (uint)hasAg.Length || hasAg[seller.Id]))
+                score *= AgreementFactor(campaign, work, buyer.Id, seller.Id, commodity);
+        }
+        var imp = (uint)buyer.Id < (uint)work.ImportAccessById.Length
+            ? work.ImportAccessById[buyer.Id]
+            : TradePolicyRules.ImportAccess(buyer.TradePolicy);
+        var exp = (uint)seller.Id < (uint)work.ExportAccessById.Length
+            ? work.ExportAccessById[seller.Id]
+            : TradePolicyRules.ExportAccess(seller.TradePolicy);
+        return score * imp * exp * PartnerPreferenceBetween(buyer, seller, commodity, work);
     }
 
     private static float PartnerAffinity(Campaign campaign, Nation buyer, Nation seller, TradeWorkspace work)
@@ -891,11 +969,14 @@ public static class TradeNetwork
     {
         work.PairTerms.Clear();
         foreach (var list in work.Guarantees.Values) list.Clear();
+        var hasAg = work.HasAgreementById;
         foreach (var relation in campaign.Relations.Values)
         {
             if (!relation.TradeAgreement) continue;
             var terms = TradeTerms.Of(relation);
             work.PairTerms[PairKey(relation.A, relation.B)] = terms;
+            if ((uint)relation.A < (uint)hasAg.Length) hasAg[relation.A] = true;
+            if ((uint)relation.B < (uint)hasAg.Length) hasAg[relation.B] = true;
             if (!terms.TryGuaranteeGood(out var good)) continue;
             var receiver = terms.GuarantorId == relation.A ? relation.B : relation.A;
             if (!work.Guarantees.TryGetValue(good, out var lanes)) work.Guarantees[good] = lanes = new();
@@ -925,7 +1006,10 @@ public static class TradeNetwork
     }
 
     private static float CutFor(TradeWorkspace work, int buyerId, int sellerId, Commodity good) =>
-        work.PairTerms.Count > 0 && work.PairTerms.TryGetValue(PairKey(buyerId, sellerId), out var terms)
+        work.PairTerms.Count > 0 &&
+        ((uint)buyerId >= (uint)work.HasAgreementById.Length || work.HasAgreementById[buyerId]) &&
+        ((uint)sellerId >= (uint)work.HasAgreementById.Length || work.HasAgreementById[sellerId]) &&
+        work.PairTerms.TryGetValue(PairKey(buyerId, sellerId), out var terms)
             ? terms.CutFor(buyerId, sellerId, good) : 0f;
 
     /// <summary>
@@ -1050,47 +1134,81 @@ public static class TradeNetwork
     public static float ReachOf(Campaign campaign, Nation nation) =>
         Workspace(campaign).TransportReach.TryGetValue(nation.Id, out var reach) ? reach : 0.45f;
 
-    /// <summary>Great-circle distance between two capitals, cached for the whole campaign.</summary>
+    /// <summary>Great-circle distance between two capitals, cached across active trading nations.</summary>
     private static float Kilometres(Campaign campaign, Nation a, Nation b, TradeWorkspace work)
     {
-        var count = work.DistanceNationCount;
-        if (a.Id < 0 || b.Id < 0 || a.Id >= count || b.Id >= count) return 12000f;
-        return work.DistanceTable[a.Id * work.DistanceTableStride + b.Id];
+        if (a.Id < 0 || b.Id < 0) return 12000f;
+        var slots = work.DistanceSlots;
+        if (work.DistanceTable is not null && (uint)a.Id < (uint)slots.Length && (uint)b.Id < (uint)slots.Length)
+        {
+            var sa = slots[a.Id];
+            var sb = slots[b.Id];
+            if ((uint)sa < (uint)work.DistanceSlotCount && (uint)sb < (uint)work.DistanceSlotCount)
+                return work.DistanceTable[sa * work.DistanceTableStride + sb];
+        }
+        var lo = a.Id <= b.Id ? a : b;
+        var hi = a.Id <= b.Id ? b : a;
+        return GreatCircle(lo.CapitalLatitude, lo.CapitalLongitude, hi.CapitalLatitude, hi.CapitalLongitude);
     }
 
     private static bool EnsureDistancesUnchanged(Campaign campaign, TradeWorkspace work)
     {
-        var count = 0;
-        foreach (var nation in campaign.Nations) count = Math.Max(count, nation.Id + 1);
-        var unchanged = work.DistanceTable is not null && work.DistanceNationCount == count &&
-            work.CapitalCoordinates.Count == campaign.Nations.Count;
-        if (!unchanged) return false;
-        foreach (var nation in campaign.Nations)
+        var trading = work.TradingNations;
+        if (work.DistanceTable is null || campaign.Nations.Count < work.LastNationsCount) return false;
+        var slots = work.DistanceSlots;
+        for (var i = 0; i < trading.Count; i++)
+        {
+            var nation = trading[i];
+            if ((uint)nation.Id >= (uint)slots.Length || slots[nation.Id] < 0) return false;
             if (!work.CapitalCoordinates.TryGetValue(nation.Id, out var coordinates) ||
                 coordinates != (nation.CapitalLatitude, nation.CapitalLongitude))
                 return false;
+        }
         return true;
     }
 
     private static IEnumerable<int> EnsureDistancesStages(Campaign campaign, TradeWorkspace work)
     {
-        var count = 0;
-        var nations = campaign.Nations;
+        var trading = work.TradingNations;
         var dirty = work.DirtyDistanceNations;
         var fullRebuild = false;
+        var oldSlotCount = work.DistanceSlotCount;
         using (SimProfiler.Measure("    mkt:trade"))
         {
-            for (var k = 0; k < nations.Count; k++) count = Math.Max(count, nations[k].Id + 1);
-            var oldCount = work.DistanceNationCount;
-            var oldStride = work.DistanceTableStride;
-            if (work.DistanceTable is null || oldStride < count)
+            var maxId = 0;
+            for (var k = 0; k < campaign.Nations.Count; k++)
+                if (campaign.Nations[k].Id > maxId) maxId = campaign.Nations[k].Id;
+            if (campaign.Nations.Count < work.LastNationsCount)
             {
-                var newStride = Math.Max(128, (count + 127) & ~127);
+                fullRebuild = true;
+                work.DistanceSlotCount = 0;
+                oldSlotCount = 0;
+                if (work.DistanceSlots.Length > 0) Array.Fill(work.DistanceSlots, -1);
+                work.CapitalCoordinates.Clear();
+            }
+            work.LastNationsCount = campaign.Nations.Count;
+            if (work.DistanceSlots.Length <= maxId)
+            {
+                var prevLen = work.DistanceSlots.Length;
+                Array.Resize(ref work.DistanceSlots, Math.Max(128, maxId + 64));
+                Array.Fill(work.DistanceSlots, -1, prevLen, work.DistanceSlots.Length - prevLen);
+            }
+            for (var k = 0; k < trading.Count; k++)
+            {
+                var n = trading[k];
+                if (n.Id >= 0 && work.DistanceSlots[n.Id] < 0)
+                    work.DistanceSlots[n.Id] = work.DistanceSlotCount++;
+            }
+            var slotCount = work.DistanceSlotCount;
+            var oldStride = work.DistanceTableStride;
+            if (work.DistanceTable is null || oldStride < slotCount)
+            {
+                var newStride = Math.Max(64, (slotCount + 63) & ~63);
                 var next = new float[newStride * newStride];
                 Array.Fill(next, 12000f);
-                if (work.DistanceTable is not null && oldCount > 0 && nations.Count >= work.CapitalCoordinates.Count)
+                if (work.DistanceTable is not null && oldSlotCount > 0 && !fullRebuild)
                 {
-                    var copyCols = Math.Min(oldCount, count);
+                    var copyCols = Math.Min(oldSlotCount, slotCount);
                     for (var r = 0; r < copyCols; r++)
                         Array.Copy(work.DistanceTable, r * oldStride, next, r * newStride, copyCols);
                 }
@@ -1098,42 +1216,31 @@ public static class TradeNetwork
                 work.DistanceTable = next;
                 work.DistanceTableStride = newStride;
             }
-            if (oldCount == 0 || nations.Count < work.CapitalCoordinates.Count) fullRebuild = true;
-            work.DistanceNationCount = count;
+            if (oldSlotCount == 0 && slotCount > 0) fullRebuild = true;
 
             dirty.Clear();
             if (fullRebuild)
             {
                 Array.Fill(work.DistanceTable, 12000f);
                 work.CapitalCoordinates.Clear();
-                for (var k = 0; k < nations.Count; k++)
+                for (var k = 0; k < trading.Count; k++)
                 {
-                    var n = nations[k];
+                    var n = trading[k];
                     work.CapitalCoordinates[n.Id] = (n.CapitalLatitude, n.CapitalLongitude);
                 }
             }
             else
             {
-                for (var k = 0; k < nations.Count; k++)
+                for (var k = 0; k < trading.Count; k++)
                 {
-                    var n = nations[k];
-                    if (n.Id < 0 || n.Id >= count) continue;
+                    var n = trading[k];
+                    if (n.Id < 0) continue;
+                    var slot = work.DistanceSlots[n.Id];
                     var coords = (n.CapitalLatitude, n.CapitalLongitude);
-                    if (n.Id >= oldCount || !work.CapitalCoordinates.TryGetValue(n.Id, out var prev) || prev != coords)
+                    if (slot >= oldSlotCount || !work.CapitalCoordinates.TryGetValue(n.Id, out var prev) || prev != coords)
                     {
                         dirty.Add(n);
                         work.CapitalCoordinates[n.Id] = coords;
-                    }
-                }
-                if (dirty.Count == 0 && nations.Count != work.CapitalCoordinates.Count)
-                {
-                    fullRebuild = true;
-                    Array.Fill(work.DistanceTable, 12000f);
-                    work.CapitalCoordinates.Clear();
-                    for (var k = 0; k < nations.Count; k++)
-                    {
-                        var n = nations[k];
-                        work.CapitalCoordinates[n.Id] = (n.CapitalLatitude, n.CapitalLongitude);
                     }
                 }
             }
@@ -1142,6 +1249,7 @@ public static class TradeNetwork
 
         var table = work.DistanceTable;
         var stride = work.DistanceTableStride;
+        var slots = work.DistanceSlots;
         if (!fullRebuild)
         {
             var di = 0;
@@ -1153,17 +1261,21 @@ public static class TradeNetwork
                     for (; di < end; di++)
                     {
                         var a = dirty[di];
-                        if (a.Id < 0 || a.Id >= count) continue;
-                        var aLat = a.CapitalLatitude;
-                        var aLon = a.CapitalLongitude;
-                        var aRow = a.Id * stride;
-                        for (var j = 0; j < nations.Count; j++)
+                        if (a.Id < 0 || a.Id >= slots.Length) continue;
+                        var sa = slots[a.Id];
+                        if (sa < 0) continue;
+                        var aRow = sa * stride;
+                        for (var j = 0; j < trading.Count; j++)
                         {
-                            var b = nations[j];
-                            if (b.Id < 0 || b.Id >= count) continue;
-                            var kilometres = GreatCircle(aLat, aLon, b.CapitalLatitude, b.CapitalLongitude);
-                            table[aRow + b.Id] = kilometres;
-                            table[b.Id * stride + a.Id] = kilometres;
+                            var b = trading[j];
+                            if (b.Id < 0 || b.Id >= slots.Length) continue;
+                            var sb = slots[b.Id];
+                            if (sb < 0) continue;
+                            var lo = a.Id <= b.Id ? a : b;
+                            var hi = a.Id <= b.Id ? b : a;
+                            var kilometres = GreatCircle(lo.CapitalLatitude, lo.CapitalLongitude, hi.CapitalLatitude, hi.CapitalLongitude);
+                            table[aRow + sb] = kilometres;
+                            table[sb * stride + sa] = kilometres;
                         }
                     }
                 }
@@ -1173,29 +1285,33 @@ public static class TradeNetwork
             yield break;
         }
 
-        var i = 0;
-        while (i < nations.Count)
+        const int rebuildBatch = 96;
+        for (var start = 0; start < trading.Count; start += rebuildBatch)
         {
+            var end = Math.Min(trading.Count, start + rebuildBatch);
             using (SimProfiler.Measure("    mkt:trade"))
-            {
-                var end = Math.Min(nations.Count, i + 24);
-                for (; i < end; i++)
+                DeterministicParallel.For(campaign, start, end, idx =>
                 {
-                    var a = nations[i];
-                    if (a.Id < 0 || a.Id >= count) continue;
-                    var aRow = a.Id * stride;
-                    for (var j = 0; j < nations.Count; j++)
+                    var a = trading[idx];
+                    if (a.Id < 0 || a.Id >= slots.Length) return;
+                    var sa = slots[a.Id];
+                    if (sa < 0) return;
+                    var aRow = sa * stride;
+                    for (var j = idx; j < trading.Count; j++)
                     {
-                        var b = nations[j];
-                        if (b.Id < a.Id || b.Id >= count) continue;
+                        var b = trading[j];
+                        if (b.Id < 0 || b.Id >= slots.Length) continue;
+                        var sb = slots[b.Id];
+                        if (sb < 0) continue;
+                        var lo = a.Id <= b.Id ? a : b;
+                        var hi = a.Id <= b.Id ? b : a;
                         var kilometres = GreatCircle(
-                            a.CapitalLatitude, a.CapitalLongitude, b.CapitalLatitude, b.CapitalLongitude);
-                        table[aRow + b.Id] = kilometres;
-                        table[b.Id * stride + a.Id] = kilometres;
+                            lo.CapitalLatitude, lo.CapitalLongitude, hi.CapitalLatitude, hi.CapitalLongitude);
+                        table[aRow + sb] = kilometres;
+                        table[sb * stride + sa] = kilometres;
                     }
-                }
-            }
-            if (i < nations.Count) yield return 0;
+                }, minItems: 16);
+            if (end < trading.Count) yield return 0;
         }
     }
 

@@ -888,7 +888,7 @@ public static class EconomySystem
     {
         if (campaign is null || nation is null) return "";
         var atWar = false;
-        var wars = campaign.Wars;
+        var wars = Warfare.OpenWars(campaign);
         for (var i = 0; i < wars.Count; i++)
         {
             var war = wars[i];

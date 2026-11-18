@@ -402,7 +402,7 @@ public static class SeparatePeace
     public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign c)
     {
         if (c?.Defines is not { SeparatePeaceEnabled: true } d || !c.StepOpensNewDay) yield break;
-        foreach (var war in c.Wars.ToArray())
+        foreach (var war in Warfare.OpenWars(c))
         {
             yield return 0;
             if (war.Ended || war.AttackerAllies.Count + war.DefenderAllies.Count == 0) continue;

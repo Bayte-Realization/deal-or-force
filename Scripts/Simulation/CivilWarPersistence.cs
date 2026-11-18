@@ -42,7 +42,7 @@ public static class CivilWarPersistence
     {
         if (!MechanicFeatures.SystemEnabled(c, nameof(CivilWarPersistence)) || !c.FeatureEnabled("militia")) yield break;
         var ticked = 0;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (++ticked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
             if (war.Ended || !war.CivilConflict || c.ProvinceMap is null) continue;

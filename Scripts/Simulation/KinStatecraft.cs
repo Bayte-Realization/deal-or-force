@@ -597,6 +597,19 @@ public static class KinStatecraft
         public List<(Nation Country, float Share)>[] Findings = Array.Empty<List<(Nation, float)>>();
         public int[] EvalCounts = Array.Empty<int>();
     }
+
+    private static int _nextScanRunId;
+
+    private sealed class ScanThreadScratch
+    {
+        public int RunId = -1;
+        public readonly Dictionary<string, int> CultureToClaim = new(ReferenceEqualityComparer.Instance);
+        public long[] Sums = Array.Empty<long>();
+        public int[] Stamps = Array.Empty<int>();
+        public int Tick;
+        public readonly List<Nation> Order = new();
+    }
+
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, ScanState> Scans = new();
     internal static int LastScanKinEvaluations { get; private set; }
 
@@ -638,11 +651,34 @@ public static class KinStatecraft
         if (claims.Count == 0) yield break;
 
         var minimum = campaign.Defines?.KinAgitationMinShare ?? 0.15f;
-        // Who holds what, once: a region's holder is asked of the whole world for every region
-        // otherwise, which is the kind of quiet waste that only shows up on a big map.
-        var holders = new Dictionary<int, Nation>(campaign.Nations.Count);
-        foreach (var nation in campaign.Nations)
-            if (nation is not null) holders.TryAdd(nation.MapIndex, nation);
+        var claimBuckets = new Nation[claims.Count][];
+        var claimIds = new Dictionary<string, int>(claims.Count, StringComparer.OrdinalIgnoreCase);
+        var nextClaimId = 0;
+        var maxNationId = 0;
+        var maxMapIndex = 0;
+        for (var i = 0; i < campaign.Nations.Count; i++)
+        {
+            var n = campaign.Nations[i];
+            if (n is null) continue;
+            if (n.Id > maxNationId) maxNationId = n.Id;
+            if (n.MapIndex > maxMapIndex) maxMapIndex = n.MapIndex;
+        }
+        foreach (var (culture, list) in claims)
+        {
+            claimIds[culture] = nextClaimId;
+            claimBuckets[nextClaimId] = list.ToArray();
+            nextClaimId++;
+        }
+        // Who holds what, once: dense array by MapIndex (first nation wins on duplicate, matching TryAdd).
+        var holdersByMap = new Nation[maxMapIndex + 1];
+        for (var i = 0; i < campaign.Nations.Count; i++)
+        {
+            var nation = campaign.Nations[i];
+            if (nation is not null && (uint)nation.MapIndex < (uint)holdersByMap.Length && holdersByMap[nation.MapIndex] is null)
+                holdersByMap[nation.MapIndex] = nation;
+        }
+        var runId = System.Threading.Interlocked.Increment(ref _nextScanRunId);
+        var denseNationLen = maxNationId + 1;
         var states = campaign.States;
         var stateCount = states.Count;
         if (state.Findings.Length < stateCount) state.Findings = new List<(Nation, float)>[stateCount + 64];
@@ -661,38 +697,85 @@ public static class KinStatecraft
                     if (findings[si] is { } existing) existing.Clear();
                     evalCounts[si] = 0;
                     if (region is null || region.Population <= 0) return;
-                    if (!holders.TryGetValue(region.NationMapIndex, out var host)) return;
-                    if (!Answerable(host)) return;
-                    var evaluated = _scanEvaluatedScratch ??= new Dictionary<int, long>();
-                    var order = _scanOrderScratch ??= new List<Nation>();
-                    evaluated.Clear();
+                    var hostMap = region.NationMapIndex;
+                    var host = (uint)hostMap < (uint)holdersByMap.Length ? holdersByMap[hostMap] : null;
+                    if (host is null || !Answerable(host)) return;
+                    var scratch = _scanScratch ??= new ScanThreadScratch();
+                    if (scratch.RunId != runId)
+                    {
+                        scratch.CultureToClaim.Clear();
+                        scratch.RunId = runId;
+                    }
+                    if (scratch.Sums.Length < denseNationLen)
+                    {
+                        scratch.Sums = new long[denseNationLen + 64];
+                        scratch.Stamps = new int[denseNationLen + 64];
+                        scratch.Tick = 0;
+                    }
+                    var tick = ++scratch.Tick;
+                    if (tick == 0)
+                    {
+                        Array.Clear(scratch.Stamps);
+                        tick = scratch.Tick = 1;
+                    }
+                    var sums = scratch.Sums;
+                    var stamps = scratch.Stamps;
+                    var order = scratch.Order;
+                    var refMap = scratch.CultureToClaim;
                     order.Clear();
+                    string lastCulture = null;
+                    var lastClaimId = -1;
                     var groups = region.PopulationGroups;
                     for (var gi = 0; gi < groups.Count; gi++)
                     {
                         var group = groups[gi];
-                        if (group is null || group.Size <= 0 || string.IsNullOrEmpty(group.Culture)) continue;
-                        if (!claims.TryGetValue(group.Culture, out var claimants)) continue;
-                        for (var ci = 0; ci < claimants.Count; ci++)
+                        if (group is null || group.Size <= 0) continue;
+                        var culture = group.Culture;
+                        if (string.IsNullOrEmpty(culture)) continue;
+                        int claimId;
+                        if (ReferenceEquals(culture, lastCulture))
+                        {
+                            claimId = lastClaimId;
+                        }
+                        else
+                        {
+                            if (!refMap.TryGetValue(culture, out claimId))
+                            {
+                                claimId = claimIds.TryGetValue(culture, out var cid) ? cid : -1;
+                                refMap[culture] = claimId;
+                            }
+                            lastCulture = culture;
+                            lastClaimId = claimId;
+                        }
+                        if (claimId < 0) continue;
+                        var claimants = claimBuckets[claimId];
+                        for (var ci = 0; ci < claimants.Length; ci++)
                         {
                             var country = claimants[ci];
                             if (country.Id == host.Id) continue;
-                            if (!evaluated.TryGetValue(country.Id, out var ours))
+                            var id = country.Id;
+                            if (stamps[id] != tick)
+                            {
+                                stamps[id] = tick;
+                                sums[id] = group.Size;
                                 order.Add(country);
-                            evaluated[country.Id] = ours + group.Size;
+                            }
+                            else
+                            {
+                                sums[id] += group.Size;
+                            }
                         }
                     }
                     evalCounts[si] = order.Count;
                     for (var oi = 0; oi < order.Count; oi++)
                     {
                         var country = order[oi];
-                        var ours = evaluated[country.Id];
+                        var ours = sums[country.Id];
                         var share = M.Clamp01(ours / (float)region.Population);
                         if (ours <= 0 || share < minimum) continue;
                         var bucket = findings[si] ??= new List<(Nation, float)>(2);
                         bucket.Add((country, share));
                     }
-                    evaluated.Clear();
                     order.Clear();
                 }, minItems: 64);
                 for (var si = start; si < end; si++)
@@ -701,7 +784,7 @@ public static class KinStatecraft
                     var bucket = findings[si];
                     if (bucket is null || bucket.Count == 0) continue;
                     var region = states[si];
-                    var host = holders[region.NationMapIndex];
+                    var host = holdersByMap[region.NationMapIndex];
                     for (var bi = 0; bi < bucket.Count; bi++)
                     {
                         var (country, share) = bucket[bi];
@@ -720,8 +803,7 @@ public static class KinStatecraft
         }
     }
 
-    [ThreadStatic] private static Dictionary<int, long> _scanEvaluatedScratch;
-    [ThreadStatic] private static List<Nation> _scanOrderScratch;
+    [ThreadStatic] private static ScanThreadScratch _scanScratch;
 
     /// <summary>
     /// What every country the game runs does about its kin abroad: rarely, and only against a

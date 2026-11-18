@@ -378,9 +378,10 @@ public static class MovementFall
     /// </summary>
     public static void EndLostWars(Campaign campaign)
     {
-        for (var index = 0; index < campaign.Wars.Count; index++)
+        var openWars = Warfare.OpenWars(campaign);
+        for (var index = 0; index < openWars.Count; index++)
         {
-            var war = campaign.Wars[index];
+            var war = openWars[index];
             if (war.Ended) continue;
             foreach (var attackers in new[] { true, false })
             {

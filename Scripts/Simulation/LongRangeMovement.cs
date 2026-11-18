@@ -89,6 +89,24 @@ public static class LongRangeMovement
 
     // ------------------------------------------------------------------ the ground a nation may use
 
+    internal sealed class BattleSet
+    {
+        public static readonly BattleSet Empty = new(Array.Empty<ulong>(), 0, false);
+        private readonly ulong[] _words;
+        private readonly int _limit;
+        private readonly bool _any;
+
+        public BattleSet(ulong[] words, int limit, bool any)
+        {
+            _words = words;
+            _limit = limit;
+            _any = any;
+        }
+
+        public bool Contains(int province) =>
+            _any && (uint)province < (uint)_limit && (_words[province >> 6] & (1UL << (province & 63))) != 0;
+    }
+
     /// <summary>What one country may drive over and stand on, worked out once per pass.</summary>
     internal sealed class Ground
     {
@@ -98,21 +116,48 @@ public static class LongRangeMovement
         public ushort[] Controls;
         public readonly HashSet<ushort> Passable = new();
         public readonly HashSet<ushort> Hostile = new();
-        public HashSet<int> Battles;
+        public ulong[] PassableBits = Array.Empty<ulong>();
+        public int PassableLimit;
+        public ulong[] HostileBits = Array.Empty<ulong>();
+        public int HostileLimit;
+        public ulong[] BordersCheckedBits;
+        public ulong[] BordersTrueBits;
+        public BattleSet Battles = BattleSet.Empty;
+
+        public bool IsPassable(ushort code) =>
+            (uint)code < (uint)PassableLimit && (PassableBits[code >> 6] & (1UL << (code & 63))) != 0;
+
+        public bool IsHostile(ushort code) =>
+            (uint)code < (uint)HostileLimit && (HostileBits[code >> 6] & (1UL << (code & 63))) != 0;
 
         public bool Valid(int province) => province > 0 && province <= Map.ProvinceCount;
         public bool Destroyed(int province) => Map.DestroyedByProvince is { } destroyed && province < destroyed.Length && destroyed[province];
-        public bool HostileHeld(int province) => Valid(province) && Hostile.Contains(Controls[province]);
+        public bool HostileHeld(int province) => Valid(province) && IsHostile(Controls[province]);
 
         /// <summary>Dry, standing, and held by us or by somebody who lets us in.</summary>
         public bool Enterable(int province) =>
-            Valid(province) && !Map.IsWater(province) && !Destroyed(province) && Passable.Contains(Controls[province]);
+            Valid(province) && !Map.IsWater(province) && !Destroyed(province) && IsPassable(Controls[province]);
 
         public bool BordersEnemy(int province)
         {
-            if (!Valid(province)) return false;
+            if (!Valid(province) || HostileLimit <= 0) return false;
+            if (BordersCheckedBits is null)
+            {
+                var wordsNeeded = (Map.ProvinceCount + 65) >> 6;
+                BordersCheckedBits = new ulong[wordsNeeded];
+                BordersTrueBits = new ulong[wordsNeeded];
+            }
+            var w = province >> 6;
+            var mask = 1UL << (province & 63);
+            if ((BordersCheckedBits[w] & mask) != 0)
+                return (BordersTrueBits[w] & mask) != 0;
+            BordersCheckedBits[w] |= mask;
             foreach (var next in Map.Neighbors[province])
-                if (!Map.IsWater(next) && Hostile.Contains(Controls[next])) return true;
+                if (!Map.IsWater(next) && IsHostile(Controls[next]))
+                {
+                    BordersTrueBits[w] |= mask;
+                    return true;
+                }
             return false;
         }
 
@@ -127,7 +172,7 @@ public static class LongRangeMovement
         /// </summary>
         public bool Crossable(int province) =>
             Valid(province) && !Map.IsWater(province) && !Destroyed(province) && Controls[province] != 0 &&
-            !Hostile.Contains(Controls[province]);
+            !IsHostile(Controls[province]);
 
         /// <summary>The next step of a route this formation may take: its side's ground, or, withdrawing, any ground but the enemy's.</summary>
         public bool Passing(SupportFormation f, int province) => Enterable(province) || f.Overrun && Crossable(province);
@@ -143,7 +188,7 @@ public static class LongRangeMovement
     [ThreadStatic] private static List<ushort> _settleKeysScratch;
     [ThreadStatic] private static Dictionary<int, int> _settleSeatScratch;
 
-    internal static Ground GroundOf(Campaign c, int nationId, Dictionary<int, Ground> cache = null, HashSet<int> battles = null, bool[] activeControllers = null)
+    internal static Ground GroundOf(Campaign c, int nationId, Dictionary<int, Ground> cache = null, BattleSet battles = null, bool[] activeControllers = null)
     {
         if (cache is not null && cache.TryGetValue(nationId, out var known)) return known;
         var nation = c.NationById(nationId);
@@ -170,16 +215,46 @@ public static class LongRangeMovement
                 ground.Hostile.Add((ushort)other.MapIndex);
         // Hostile ground is never passable, whatever an access grant once said.
         ground.Passable.ExceptWith(ground.Hostile);
+        if (ground.Passable.Count > 0)
+        {
+            var maxP = 0;
+            foreach (var code in ground.Passable) if (code > maxP) maxP = code;
+            ground.PassableLimit = maxP + 1;
+            ground.PassableBits = new ulong[(maxP + 64) >> 6];
+            foreach (var code in ground.Passable) ground.PassableBits[code >> 6] |= 1UL << (code & 63);
+        }
+        if (ground.Hostile.Count > 0)
+        {
+            var maxH = 0;
+            foreach (var code in ground.Hostile) if (code > maxH) maxH = code;
+            ground.HostileLimit = maxH + 1;
+            ground.HostileBits = new ulong[(maxH + 64) >> 6];
+            foreach (var code in ground.Hostile) ground.HostileBits[code >> 6] |= 1UL << (code & 63);
+        }
         if (cache is not null) cache[nationId] = ground;
         return ground;
     }
 
-    internal static HashSet<int> BattleProvinces(Campaign c)
+    internal static BattleSet BattleProvinces(Campaign c)
     {
-        var set = new HashSet<int>();
-        foreach (var battle in c.Battles)
-            if (!battle.Ended) set.Add(battle.ProvinceId);
-        return set;
+        var battles = c.Battles;
+        var count = battles.Count;
+        var maxP = 0;
+        for (var i = 0; i < count; i++)
+        {
+            var b = battles[i];
+            if (!b.Ended && b.ProvinceId > maxP) maxP = b.ProvinceId;
+        }
+        if (maxP <= 0) return BattleSet.Empty;
+        var limit = maxP + 1;
+        var words = new ulong[(limit + 63) >> 6];
+        for (var i = 0; i < count; i++)
+        {
+            var b = battles[i];
+            if (!b.Ended && b.ProvinceId > 0)
+                words[b.ProvinceId >> 6] |= 1UL << (b.ProvinceId & 63);
+        }
+        return new BattleSet(words, limit, true);
     }
 
     // ------------------------------------------------------------------ where a formation is
@@ -907,11 +982,29 @@ public static class LongRangeMovement
         return result;
     }
 
+    internal sealed class CachedGroundPlan
+    {
+        public string Refusal = "";
+        public object[] Args = Array.Empty<object>();
+        public int[] Route = Array.Empty<int>();
+        public int[] Modes = Array.Empty<int>();
+    }
+
     internal static RelocatePreview PreviewOne(Campaign c, int issuer, int formationId, int province, bool append,
-        Dictionary<int, Ground> grounds = null, HashSet<int> battles = null)
+        Dictionary<int, Ground> grounds = null, BattleSet battles = null,
+        Dictionary<int, SupportFormation> byId = null, bool includeBasing = true,
+        Dictionary<(int, int), CachedGroundPlan> planMemo = null)
     {
         var preview = new RelocatePreview { FormationId = formationId, Destination = province };
-        var formation = c.SupportFormations.Find(f => f.Id == formationId && f.NationId == issuer);
+        SupportFormation formation;
+        if (byId is not null)
+        {
+            if (!byId.TryGetValue(formationId, out formation) || formation.NationId != issuer) formation = null;
+        }
+        else
+        {
+            formation = c.SupportFormations.Find(f => f.Id == formationId && f.NationId == issuer);
+        }
         if (formation is null) { preview.Refusal = RefuseForeign; return preview; }
         if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type) || !SupportCore.Enabled(c, type))
         { preview.Refusal = RefuseDisabled; return preview; }
@@ -944,15 +1037,50 @@ public static class LongRangeMovement
         else origin = At(formation);
         if (!g.Valid(origin)) { preview.Refusal = RefuseNoRoute; return preview; }
 
-        var planned = Plan(g, type, origin, province, preview.Route, preview.Modes, out var args);
-        if (planned.Length > 0) { preview.Refusal = planned; preview.RefusalArgs = args; preview.Route.Clear(); preview.Modes.Clear(); return preview; }
+        if (planMemo is not null && type.Movement != SupportMoveMode.Air && !preview.KeepsStep)
+        {
+            var key = (origin, province);
+            if (planMemo.TryGetValue(key, out var cached))
+            {
+                if (cached.Refusal.Length > 0)
+                {
+                    preview.Refusal = cached.Refusal;
+                    preview.RefusalArgs = cached.Args;
+                    return preview;
+                }
+                preview.Route.AddRange(cached.Route);
+                preview.Modes.AddRange(cached.Modes);
+            }
+            else
+            {
+                var planned = Plan(g, type, origin, province, preview.Route, preview.Modes, out var args);
+                if (planned.Length > 0)
+                {
+                    planMemo[key] = new CachedGroundPlan { Refusal = planned, Args = args };
+                    preview.Refusal = planned;
+                    preview.RefusalArgs = args;
+                    preview.Route.Clear();
+                    preview.Modes.Clear();
+                    return preview;
+                }
+                planMemo[key] = new CachedGroundPlan { Route = preview.Route.ToArray(), Modes = preview.Modes.ToArray() };
+            }
+        }
+        else
+        {
+            var planned = Plan(g, type, origin, province, preview.Route, preview.Modes, out var args);
+            if (planned.Length > 0) { preview.Refusal = planned; preview.RefusalArgs = args; preview.Route.Clear(); preview.Modes.Clear(); return preview; }
+        }
 
         preview.Days = preview.Route.Count == 0 ? (formation.DeployDaysLeft > 0 ? formation.DeployDaysLeft : 0)
             : DaysFor(g, type, At(formation), progress, preview.Route, preview.Modes, formation.SeaCourseMask);
         preview.StateMapIndex = c.ProvinceMap.ProvinceToState[province];
-        var state = c.StateByMapIndex(preview.StateMapIndex);
-        preview.BasingCapacity = SupportCore.CapacityOf(c, state);
-        preview.BasingUsed = SupportCore.BasingUsed(c, preview.StateMapIndex, formation.Id) + type.Basing;
+        if (includeBasing)
+        {
+            var state = c.StateByMapIndex(preview.StateMapIndex);
+            preview.BasingCapacity = SupportCore.CapacityOf(c, state);
+            preview.BasingUsed = SupportCore.BasingUsed(c, preview.StateMapIndex, formation.Id) + type.Basing;
+        }
         return preview;
     }
 
@@ -966,7 +1094,7 @@ public static class LongRangeMovement
     /// it stands. Read-only, like every preview.
     /// </summary>
     internal static RelocatePreview PreviewHalt(Campaign c, int issuer, int formationId,
-        Dictionary<int, Ground> grounds = null, HashSet<int> battles = null)
+        Dictionary<int, Ground> grounds = null, BattleSet battles = null)
     {
         var formation = c?.SupportFormations.Find(f => f.Id == formationId && f.NationId == issuer);
         if (c?.ProvinceMap is null || formation is null) return new RelocatePreview { FormationId = formationId, Refusal = RefuseForeign };
@@ -1211,7 +1339,7 @@ public static class LongRangeMovement
         if (map is null) return 0;
         var controls = c.ProvinceController ?? map.ProvinceToNation;
         Dictionary<int, Ground> grounds = null;
-        HashSet<int> battles = null;
+        BattleSet battles = null;
         var changed = 0;
         foreach (var f in InIdOrder(c))
         {
@@ -1381,17 +1509,45 @@ public static class LongRangeMovement
     /// One order per formation per review, by the same command as a player's, and nothing on the
     /// road is re-planned. At peace nothing moves: the review is for wars.
     /// </summary>
+    private sealed class RepositionScratch
+    {
+        public float[] Near = Array.Empty<float>();
+        public readonly List<int> Within = new();
+        public float[] RoadDays = Array.Empty<float>();
+        public readonly List<int> RoadTouched = new();
+        public readonly PriorityQueue<int, (float, int)> Queue = new();
+        public readonly Dictionary<(int Origin, float Standoff, bool MayTouch, float Speed), int> RoadMemo = new();
+        public readonly Dictionary<(int Origin, float Standoff, bool MayTouch), int> SeaMemo = new();
+        public readonly Dictionary<(int Origin, float Standoff, bool MayTouch, float Ferry), int[]> AirMemo = new();
+        public readonly Dictionary<(int, int), CachedGroundPlan> PlanMemo = new();
+        public ulong[] TargetBits = Array.Empty<ulong>();
+        public readonly List<int> Targets = new();
+        public readonly List<(SupportFormation Formation, SupportTypeDefinition Type)> Idle = new();
+        public readonly List<(SupportFormation Formation, SupportTypeDefinition Type)> Sams = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, RepositionScratch> RepoWorkspaces = new();
+
     public static void Reposition(Campaign c)
     {
+        foreach (var _ in RepositionStages(c)) { }
+    }
+
+    public static IEnumerable<int> RepositionStages(Campaign c)
+    {
         var map = c?.ProvinceMap;
-        if (map is null) return;
+        if (map is null) yield break;
         var d = c.Defines;
-        if (c.ElapsedDays % Math.Max(1, d.AiLongRangeRepositionDays) != 0) return;
+        if (c.ElapsedDays % Math.Max(1, d.AiLongRangeRepositionDays) != 0) yield break;
         var wars = Warfare.LiveWars(c);
-        if (wars.Count == 0) return;
+        if (wars.Count == 0) yield break;
+        var ordered = InIdOrder(c);
         var byNation = new Dictionary<int, List<SupportFormation>>();
-        foreach (var f in InIdOrder(c))
+        var byId = new Dictionary<int, SupportFormation>(ordered.Count);
+        for (var fi = 0; fi < ordered.Count; fi++)
         {
+            var f = ordered[fi];
+            byId[f.Id] = f;
             if (!byNation.TryGetValue(f.NationId, out var list)) byNation[f.NationId] = list = new List<SupportFormation>();
             list.Add(f);
         }
@@ -1405,18 +1561,66 @@ public static class LongRangeMovement
         var battles = BattleProvinces(c);
         var controls = c.ProvinceController ?? map.ProvinceToNation;
         Dictionary<ushort, List<int>> landByController = null;
+        Dictionary<int, LongRangeStrikes.Sides> strikeSides = null;
+        List<(ushort OwnerMap, int Province, float Reach)> allStrikers = null;
+        Dictionary<int, List<ScenarioState>> statesByOwnerMap = null;
         var grounds = new Dictionary<int, Ground>();
-        foreach (var nation in c.Nations.OrderBy(n => n.Id))
+        var scratch = RepoWorkspaces.GetValue(c, static _ => new RepositionScratch());
+        var nations = new List<Nation>(c.Nations.Count);
+        for (var i = 0; i < c.Nations.Count; i++)
         {
-            if (nation.IsHuman || !byNation.TryGetValue(nation.Id, out var own)) continue;
+            var n = c.Nations[i];
+            if (!n.IsHuman && byNation.ContainsKey(n.Id)) nations.Add(n);
+        }
+        nations.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+        for (var ni = 0; ni < nations.Count; ni++)
+        {
+            var nation = nations[ni];
+            if (!byNation.TryGetValue(nation.Id, out var own)) continue;
             var inWar = false;
             foreach (var war in wars) if (!war.Ended && war.Involves(nation.Id)) { inWar = true; break; }
             if (!inWar) continue;
             var g = GroundOf(c, nation.Id, grounds, battles);
             if (g is null) continue;
             landByController ??= BuildLandByController(map, controls);
-            RepositionNation(c, g, own, wars, battlesByWar, landByController);
+            foreach (var _ in RepositionNationStages(c, g, own, wars, battlesByWar, landByController, grounds, battles, byId, scratch,
+                         () => strikeSides ??= new Dictionary<int, LongRangeStrikes.Sides>(),
+                         () => allStrikers ??= BuildAllStrikers(c, map),
+                         () => statesByOwnerMap ??= BuildStatesByOwnerMap(c)))
+                yield return 0;
+            if (ni + 1 < nations.Count && Campaign.StageOverdue()) yield return 0;
         }
+    }
+
+    private static List<(ushort OwnerMap, int Province, float Reach)> BuildAllStrikers(Campaign c, ProvinceTopology map)
+    {
+        var list = new List<(ushort, int, float)>();
+        var forms = c.SupportFormations;
+        for (var i = 0; i < forms.Count; i++)
+        {
+            var f = forms[i];
+            var at = f.BaseProvinceId > 0 ? f.BaseProvinceId : At(f);
+            if (at <= 0 || at > map.ProvinceCount) continue;
+            if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || type.Strike <= 0f || !SupportCore.Enabled(c, type)) continue;
+            var owner = c.NationById(f.NationId);
+            if (owner is null || owner.MapIndex <= 0) continue;
+            list.Add(((ushort)owner.MapIndex, at, SupportCore.ReachKm(c, type)));
+        }
+        return list;
+    }
+
+    private static Dictionary<int, List<ScenarioState>> BuildStatesByOwnerMap(Campaign c)
+    {
+        var map = new Dictionary<int, List<ScenarioState>>();
+        var states = c.States;
+        for (var i = 0; i < states.Count; i++)
+        {
+            var s = states[i];
+            if (s.NationMapIndex <= 0) continue;
+            if (!map.TryGetValue(s.NationMapIndex, out var list)) map[s.NationMapIndex] = list = new List<ScenarioState>();
+            list.Add(s);
+        }
+        return map;
     }
 
     private static Dictionary<ushort, List<int>> BuildLandByController(ProvinceTopology map, ushort[] controls)
@@ -1434,21 +1638,34 @@ public static class LongRangeMovement
         return byController;
     }
 
-    private static void RepositionNation(Campaign c, Ground g, List<SupportFormation> own,
-        IReadOnlyList<StrategicWar> wars, Dictionary<int, List<int>> battlesByWar, Dictionary<ushort, List<int>> landByController)
+    private static IEnumerable<int> RepositionNationStages(Campaign c, Ground g, List<SupportFormation> own,
+        IReadOnlyList<StrategicWar> wars, Dictionary<int, List<int>> battlesByWar,
+        Dictionary<ushort, List<int>> landByController, Dictionary<int, Ground> grounds, BattleSet battles,
+        Dictionary<int, SupportFormation> byId, RepositionScratch scratch,
+        Func<Dictionary<int, LongRangeStrikes.Sides>> getStrikeSides,
+        Func<List<(ushort OwnerMap, int Province, float Reach)>> getAllStrikers,
+        Func<Dictionary<int, List<ScenarioState>>> getStatesByOwnerMap)
     {
         var map = g.Map;
         var d = c.Defines;
-        // What the war is, for this country: the battles of its wars - where the fire is wanted
-        // today - or, while its wars have none, its side's front: every province of its side that
-        // touches the enemy's ground. A battery covering a quiet stretch of front while the
-        // fighting is two hundred kilometres up the line is standing in the wrong place.
-        var targets = new List<int>();
-        var targetSet = new HashSet<int>();
+        var wordsNeeded = (map.ProvinceCount + 65) >> 6;
+        if (scratch.TargetBits.Length < wordsNeeded) scratch.TargetBits = new ulong[wordsNeeded + 8];
+        else Array.Clear(scratch.TargetBits, 0, wordsNeeded);
+        var targetBits = scratch.TargetBits;
+        var targets = scratch.Targets;
+        targets.Clear();
+
         foreach (var war in wars)
         {
             if (war.Ended || !war.Involves(g.Nation.Id) || !battlesByWar.TryGetValue(war.Id, out var list)) continue;
-            foreach (var province in list) if (g.Valid(province) && targetSet.Add(province)) targets.Add(province);
+            for (var i = 0; i < list.Count; i++)
+            {
+                var province = list[i];
+                if (!g.Valid(province)) continue;
+                var w = province >> 6;
+                var mask = 1UL << (province & 63);
+                if ((targetBits[w] & mask) == 0) { targetBits[w] |= mask; targets.Add(province); }
+            }
         }
         if (targets.Count == 0)
             foreach (var code in g.Passable)
@@ -1456,15 +1673,22 @@ public static class LongRangeMovement
                     for (var i = 0; i < owned.Count; i++)
                     {
                         var p = owned[i];
-                        if (!targetSet.Contains(p) && g.BordersEnemy(p) && targetSet.Add(p)) targets.Add(p);
+                        var w = p >> 6;
+                        var mask = 1UL << (p & 63);
+                        if ((targetBits[w] & mask) == 0 && g.BordersEnemy(p)) { targetBits[w] |= mask; targets.Add(p); }
                     }
-        if (targets.Count == 0) return;
+        if (targets.Count == 0) yield break;
         targets.Sort();
 
-        var idle = new List<(SupportFormation Formation, SupportTypeDefinition Type)>();
-        var sams = new List<(SupportFormation Formation, SupportTypeDefinition Type)>();
-        foreach (var f in own)
+        var idle = scratch.Idle;
+        var sams = scratch.Sams;
+        idle.Clear();
+        sams.Clear();
+        scratch.PlanMemo.Clear();
+        LongRangeStrikes.Sides mySides = null;
+        for (var oi = 0; oi < own.Count; oi++)
         {
+            var f = own[oi];
             if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || !SupportCore.Enabled(c, type)) continue;
             // Only the standing: nothing on the road, deploying, or cut off is re-planned.
             if (f.Route.Count > 0 || f.DeployDaysLeft > 0 || f.CutOff || f.BaseProvinceId <= 0 || SupportCore.Displaced(c, f)) continue;
@@ -1474,40 +1698,67 @@ public static class LongRangeMovement
             // are what it is for, and while any of them is in reach it stays where it is.
             if (f.Mission == SupportCore.MissionStrike && type.Strike > 0f)
             {
-                if (LongRangeStrikes.Preview(c, f).Province <= 0) idle.Add((f, type));
+                if (mySides is null)
+                {
+                    var strikeSides = getStrikeSides();
+                    if (!strikeSides.TryGetValue(g.Nation.Id, out mySides))
+                        strikeSides[g.Nation.Id] = mySides = LongRangeStrikes.SidesOf(c, g.Nation.Id);
+                }
+                if (!LongRangeStrikes.HasTargetInReach(c, f, type, mySides)) idle.Add((f, type));
                 continue;
             }
             var reach = SupportCore.ReachKm(c, type);
             var covers = false;
-            foreach (var target in targets)
-                if (SupportCore.DistanceKm(c, f.BaseProvinceId, target) <= reach) { covers = true; break; }
+            for (var ti = 0; ti < targets.Count; ti++)
+                if (SupportCore.DistanceKm(c, f.BaseProvinceId, targets[ti]) <= reach) { covers = true; break; }
             if (!covers) idle.Add((f, type));
         }
         // SAM brigades guard the cities first; the ones no city needs - nothing of the enemy's
         // can reach any, or every threatened one is covered - go where the fighting is, to keep
         // the enemy's aircraft off it, like any other formation that reaches no battle.
         if (sams.Count > 0)
-            foreach (var (f, type) in CoverWithSams(c, g, sams, landByController))
+        {
+            foreach (var (f, type) in CoverWithSams(c, g, own, sams, landByController, grounds, battles, byId, scratch,
+                         getAllStrikers(), getStatesByOwnerMap()))
             {
                 var reach = SupportCore.ReachKm(c, type);
-                if (!targets.Any(target => SupportCore.DistanceKm(c, f.BaseProvinceId, target) <= reach)) idle.Add((f, type));
+                var covers = false;
+                for (var ti = 0; ti < targets.Count; ti++)
+                    if (SupportCore.DistanceKm(c, f.BaseProvinceId, targets[ti]) <= reach) { covers = true; break; }
+                if (!covers) idle.Add((f, type));
             }
+            if (idle.Count > 0 && Campaign.StageOverdue()) yield return 0;
+        }
 
         if (idle.Count > 0)
         {
             var bound = 0f;
-            foreach (var (_, type) in idle) bound = MathF.Max(bound, Standoff(c, type));
-            var near = DistanceField(c, map, targets, bound, out var within);
-            foreach (var (f, type) in idle)
+            for (var i = 0; i < idle.Count; i++) bound = MathF.Max(bound, Standoff(c, idle[i].Type));
+            DistanceField(c, map, targets, bound, scratch, out var near, out var within);
+            scratch.RoadMemo.Clear();
+            scratch.SeaMemo.Clear();
+            scratch.AirMemo.Clear();
+            for (var i = 0; i < idle.Count; i++)
             {
+                var (f, type) = idle[i];
                 var standoff = Standoff(c, type);
                 var mayTouch = type.RangeKm < d.AiLongRangeFrontlineMaxRangeKm;
                 var origin = f.BaseProvinceId;
+                var anySuit = false;
+                for (var wi = 0; wi < within.Count; wi++)
+                {
+                    var p = within[wi];
+                    if (p != origin && Suits(g, p, near, standoff, mayTouch)) { anySuit = true; break; }
+                }
+                if (!anySuit) continue;
                 var ordered = type.Movement == SupportMoveMode.Air
-                    ? FlyToward(c, g, f, type, origin, within, near, standoff, mayTouch, landByController)
-                    : DriveToward(c, g, f, type, origin, within, near, standoff, mayTouch);
-                if (ordered > 0 && near.GetValueOrDefault(ordered, float.MaxValue) < near.GetValueOrDefault(origin, float.MaxValue))
+                    ? FlyToward(c, g, f, type, origin, within, near, standoff, mayTouch, landByController, grounds, battles, byId, scratch)
+                    : DriveToward(c, g, f, type, origin, within, near, standoff, mayTouch, grounds, battles, byId, scratch);
+                var ordDist = (uint)ordered < (uint)near.Length ? near[ordered] : float.PositiveInfinity;
+                var orgDist = (uint)origin < (uint)near.Length ? near[origin] : float.PositiveInfinity;
+                if (ordered > 0 && ordDist < orgDist)
                     AiOrdersTowardFront++;
+                if (i + 1 < idle.Count && Campaign.StageOverdue()) yield return 0;
             }
         }
     }
@@ -1518,18 +1769,53 @@ public static class LongRangeMovement
     /// accepts, by ship if it must. Returns where it was sent, or -1.
     /// </summary>
     private static int DriveToward(Campaign c, Ground g, SupportFormation f, SupportTypeDefinition type, int origin,
-        List<int> within, Dictionary<int, float> near, float standoff, bool mayTouch)
+        List<int> within, float[] near, float standoff, bool mayTouch,
+        Dictionary<int, Ground> grounds, BattleSet battles, Dictionary<int, SupportFormation> byId, RepositionScratch scratch)
     {
-        var chosen = NearestByRoad(c, g, type, origin, near, standoff, mayTouch);
-        if (chosen > 0 && chosen != origin) return Order(c, g.Nation.Id, f.Id, chosen) ? chosen : -1;
-        var tried = 0;
-        foreach (var province in within.Where(p => p != origin && Suits(g, p, near, standoff, mayTouch))
-                     .OrderBy(p => SupportCore.DistanceKm(c, origin, p)).ThenBy(p => p))
+        var memoKey = (origin, standoff, mayTouch, type.Speed);
+        if (!scratch.RoadMemo.TryGetValue(memoKey, out var chosen))
         {
-            if (++tried > 4) break;
-            if (!PreviewOne(c, g.Nation.Id, f.Id, province, false).Accepted) continue;
-            return Order(c, g.Nation.Id, f.Id, province) ? province : -1;
+            chosen = NearestByRoad(c, g, type, origin, near, standoff, mayTouch, scratch);
+            scratch.RoadMemo[memoKey] = chosen;
         }
+        if (chosen > 0 && chosen != origin)
+            return OrderFast(c, g.Nation.Id, f.Id, chosen, grounds, battles, byId, scratch.PlanMemo) ? chosen : -1;
+
+        var seaKey = (origin, standoff, mayTouch);
+        if (!scratch.SeaMemo.TryGetValue(seaKey, out var seaChosen))
+        {
+            seaChosen = -1;
+            Span<int> topP = stackalloc int[4];
+            Span<float> topKm = stackalloc float[4];
+            var found = 0;
+            for (var wi = 0; wi < within.Count; wi++)
+            {
+                var p = within[wi];
+                if (p == origin || !Suits(g, p, near, standoff, mayTouch)) continue;
+                var km = SupportCore.DistanceKm(c, origin, p);
+                if (found == 4 && (km > topKm[3] || (km == topKm[3] && p >= topP[3]))) continue;
+                var insert = found < 4 ? found++ : 3;
+                while (insert > 0 && (km < topKm[insert - 1] || (km == topKm[insert - 1] && p < topP[insert - 1])))
+                {
+                    topKm[insert] = topKm[insert - 1];
+                    topP[insert] = topP[insert - 1];
+                    insert--;
+                }
+                topKm[insert] = km;
+                topP[insert] = p;
+            }
+            for (var ti = 0; ti < found; ti++)
+            {
+                var province = topP[ti];
+                if (!PreviewOne(c, g.Nation.Id, f.Id, province, false, grounds, battles, byId, includeBasing: false, planMemo: scratch.PlanMemo).Accepted)
+                    continue;
+                seaChosen = province;
+                break;
+            }
+            scratch.SeaMemo[seaKey] = seaChosen;
+        }
+        if (seaChosen > 0)
+            return OrderFast(c, g.Nation.Id, f.Id, seaChosen, grounds, battles, byId, scratch.PlanMemo) ? seaChosen : -1;
         return -1;
     }
 
@@ -1540,44 +1826,79 @@ public static class LongRangeMovement
     /// player gives it with Shift+right-click. Returns where it was sent, or -1.
     /// </summary>
     private static int FlyToward(Campaign c, Ground g, SupportFormation f, SupportTypeDefinition type, int origin,
-        List<int> within, Dictionary<int, float> near, float standoff, bool mayTouch, Dictionary<ushort, List<int>> landByController)
+        List<int> within, float[] near, float standoff, bool mayTouch, Dictionary<ushort, List<int>> landByController,
+        Dictionary<int, Ground> grounds, BattleSet battles, Dictionary<int, SupportFormation> byId, RepositionScratch scratch)
     {
-        var chosen = NearestByAir(c, g, type, origin, within, near, standoff, mayTouch);
-        if (chosen > 0 && chosen != origin) return Order(c, g.Nation.Id, f.Id, chosen) ? chosen : -1;
-        var goal = -1; var goalKm = float.MaxValue;
-        foreach (var province in within)
-        {
-            if (province == origin || !Suits(g, province, near, standoff, mayTouch)) continue;
-            var km = SupportCore.DistanceKm(c, origin, province);
-            if (km < goalKm) { goal = province; goalKm = km; }
-        }
-        if (goal <= 0) return -1;
         var ferry = FerryKm(c, type);
-        var hops = new List<int>();
-        var at = origin;
-        // Six legs is a wing across a continent; a war further than that is not this wing's.
-        while (SupportCore.DistanceKm(c, at, goal) > ferry && hops.Count < 6)
+        var airKey = (origin, standoff, mayTouch, ferry);
+        if (!scratch.AirMemo.TryGetValue(airKey, out var hopsArr))
         {
-            var next = -1; var nextKm = SupportCore.DistanceKm(c, at, goal) - 100f;
-            foreach (var code in g.Passable)
-                if (landByController.TryGetValue(code, out var bucket))
-                    for (var i = 0; i < bucket.Count; i++)
+            var chosen = NearestByAir(c, g, type, origin, within, near, standoff, mayTouch);
+            if (chosen > 0 && chosen != origin)
+            {
+                hopsArr = new[] { chosen };
+            }
+            else
+            {
+                var goal = -1; var goalKm = float.MaxValue;
+                for (var wi = 0; wi < within.Count; wi++)
+                {
+                    var province = within[wi];
+                    if (province == origin || !Suits(g, province, near, standoff, mayTouch)) continue;
+                    var km = SupportCore.DistanceKm(c, origin, province);
+                    if (km < goalKm) { goal = province; goalKm = km; }
+                }
+                if (goal <= 0)
+                {
+                    hopsArr = Array.Empty<int>();
+                }
+                else
+                {
+                    var map = g.Map;
+                    var goalLat = map.CenterOf(goal).Latitude;
+                    var hops = new List<int>();
+                    var at = origin;
+                    var reachable = true;
+                    // Six legs is a wing across a continent; a war further than that is not this wing's.
+                    while (SupportCore.DistanceKm(c, at, goal) > ferry && hops.Count < 6)
                     {
-                        var p = bucket[i];
-                        if (g.Destroyed(p) || g.Battles.Contains(p) || SupportCore.DistanceKm(c, at, p) > ferry) continue;
-                        var left = SupportCore.DistanceKm(c, p, goal);
-                        if (left < nextKm || (next > 0 && left == nextKm && p < next)) { next = p; nextKm = left; }
+                        var atLat = map.CenterOf(at).Latitude;
+                        var next = -1; var nextKm = SupportCore.DistanceKm(c, at, goal) - 100f;
+                        foreach (var code in g.Passable)
+                            if (landByController.TryGetValue(code, out var bucket))
+                                for (var i = 0; i < bucket.Count; i++)
+                                {
+                                    var p = bucket[i];
+                                    if (g.Destroyed(p) || g.Battles.Contains(p)) continue;
+                                    var pLat = map.CenterOf(p).Latitude;
+                                    if (MathF.Abs(pLat - atLat) * 111.0f > ferry || MathF.Abs(pLat - goalLat) * 111.0f > nextKm) continue;
+                                    if (SupportCore.DistanceKm(c, at, p) > ferry) continue;
+                                    var left = SupportCore.DistanceKm(c, p, goal);
+                                    if (left < nextKm || (next > 0 && left == nextKm && p < next)) { next = p; nextKm = left; }
+                                }
+                        if (next <= 0) { reachable = false; break; }
+                        hops.Add(next);
+                        at = next;
                     }
-            if (next <= 0) return -1;
-            hops.Add(next);
-            at = next;
+                    if (!reachable || SupportCore.DistanceKm(c, at, goal) > ferry)
+                    {
+                        hopsArr = Array.Empty<int>();
+                    }
+                    else
+                    {
+                        hops.Add(goal);
+                        hopsArr = hops.ToArray();
+                    }
+                }
+            }
+            scratch.AirMemo[airKey] = hopsArr;
         }
-        if (SupportCore.DistanceKm(c, at, goal) > ferry) return -1;
-        hops.Add(goal);
-        if (!Order(c, g.Nation.Id, f.Id, hops[0])) return -1;
-        for (var leg = 1; leg < hops.Count; leg++)
-            new RelocateSupportCommand { IssuerId = g.Nation.Id, FormationIds = new[] { f.Id }, ProvinceId = hops[leg], Append = true }.Apply(c);
-        return goal;
+        if (hopsArr.Length == 0) return -1;
+        if (!OrderFast(c, g.Nation.Id, f.Id, hopsArr[0], grounds, battles, byId, null)) return -1;
+        for (var leg = 1; leg < hopsArr.Length; leg++)
+            new RelocateSupportCommand { IssuerId = g.Nation.Id, FormationIds = new[] { f.Id }, ProvinceId = hopsArr[leg], Append = true }
+                .ApplyFast(c, grounds, battles, byId, null);
+        return hopsArr[^1];
     }
 
     /// <summary>
@@ -1593,10 +1914,12 @@ public static class LongRangeMovement
         return type.RangeKm < d.AiLongRangeFrontlineMaxRangeKm ? reach : d.AiLongRangeStandoffShare * reach;
     }
 
-    private static bool Order(Campaign c, int nationId, int formationId, int province)
+    private static bool OrderFast(Campaign c, int nationId, int formationId, int province,
+        Dictionary<int, Ground> grounds, BattleSet battles, Dictionary<int, SupportFormation> byId,
+        Dictionary<(int, int), CachedGroundPlan> planMemo)
     {
         var order = new RelocateSupportCommand { IssuerId = nationId, FormationIds = new[] { formationId }, ProvinceId = province };
-        order.Apply(c);
+        order.ApplyFast(c, grounds, battles, byId, planMemo);
         if (order.Moved == 0) return false;
         AiOrders++;
         return true;
@@ -1608,12 +1931,32 @@ public static class LongRangeMovement
     /// measure is inside it in fact. Ties never matter: a shortest distance is the same however
     /// equal-cost provinces are popped.
     /// </summary>
-    private static Dictionary<int, float> DistanceField(Campaign c, ProvinceTopology map, List<int> sources, float bound, out List<int> within)
+    private static void DistanceField(Campaign c, ProvinceTopology map, List<int> sources, float bound,
+        RepositionScratch scratch, out float[] distance, out List<int> within)
     {
-        var distance = new Dictionary<int, float>();
-        within = new List<int>();
-        var queue = new PriorityQueue<int, (float, int)>();
-        foreach (var source in sources) { distance[source] = 0f; queue.Enqueue(source, (0f, source)); }
+        var needed = map.ProvinceCount + 2;
+        within = scratch.Within;
+        if (scratch.Near.Length < needed)
+        {
+            scratch.Near = new float[needed + 64];
+            Array.Fill(scratch.Near, float.PositiveInfinity);
+            within.Clear();
+        }
+        else
+        {
+            for (var i = 0; i < within.Count; i++) scratch.Near[within[i]] = float.PositiveInfinity;
+            within.Clear();
+        }
+        distance = scratch.Near;
+        var queue = scratch.Queue;
+        queue.Clear();
+        for (var i = 0; i < sources.Count; i++)
+        {
+            var source = sources[i];
+            if ((uint)source >= (uint)distance.Length) continue;
+            distance[source] = 0f;
+            queue.Enqueue(source, (0f, source));
+        }
         while (queue.TryDequeue(out var province, out var key))
         {
             if (key.Item1 > distance[province]) continue;
@@ -1621,26 +1964,42 @@ public static class LongRangeMovement
             foreach (var next in map.Neighbors[province])
             {
                 var km = key.Item1 + SupportCore.DistanceKm(c, province, next);
-                if (km > bound || distance.TryGetValue(next, out var known) && known <= km) continue;
+                if (km > bound || distance[next] <= km) continue;
                 distance[next] = km;
                 queue.Enqueue(next, (km, next));
             }
         }
         within.Sort();
-        return distance;
     }
 
-    private static bool Suits(Ground g, int province, Dictionary<int, float> near, float standoff, bool mayTouch) =>
+    private static bool Suits(Ground g, int province, float[] near, float standoff, bool mayTouch) =>
         g.Enterable(province) && !g.Battles.Contains(province) &&
-        near.TryGetValue(province, out var km) && km <= standoff &&
+        (uint)province < (uint)near.Length && near[province] <= standoff &&
         (mayTouch || !g.BordersEnemy(province));
 
     /// <summary>The province suiting the formation that the road reaches soonest, ties to the lower id.</summary>
     private static int NearestByRoad(Campaign c, Ground g, SupportTypeDefinition type, int origin,
-        Dictionary<int, float> near, float standoff, bool mayTouch)
+        float[] near, float standoff, bool mayTouch, RepositionScratch scratch)
     {
-        var days = new Dictionary<int, float> { [origin] = 0f };
-        var queue = new PriorityQueue<int, (float, int)>();
+        var needed = g.Map.ProvinceCount + 2;
+        var touched = scratch.RoadTouched;
+        if (scratch.RoadDays.Length < needed)
+        {
+            scratch.RoadDays = new float[needed + 64];
+            Array.Fill(scratch.RoadDays, float.PositiveInfinity);
+            touched.Clear();
+        }
+        else
+        {
+            for (var i = 0; i < touched.Count; i++) scratch.RoadDays[touched[i]] = float.PositiveInfinity;
+            touched.Clear();
+        }
+        var days = scratch.RoadDays;
+        if ((uint)origin >= (uint)days.Length) return -1;
+        days[origin] = 0f;
+        touched.Add(origin);
+        var queue = scratch.Queue;
+        queue.Clear();
         queue.Enqueue(origin, (0f, origin));
         var popped = 0;
         while (queue.TryDequeue(out var province, out var key))
@@ -1654,7 +2013,9 @@ public static class LongRangeMovement
                 if (!g.Enterable(next)) continue;
                 var pace = PaceOf(g, type, province, next, SupportMoveMode.Land, out _);
                 var arrive = key.Item1 + MathF.Max(1f, 1f / pace);
-                if (days.TryGetValue(next, out var known) && known <= arrive) continue;
+                var known = days[next];
+                if (known <= arrive) continue;
+                if (float.IsPositiveInfinity(known)) touched.Add(next);
                 days[next] = arrive;
                 queue.Enqueue(next, (arrive, next));
             }
@@ -1664,13 +2025,14 @@ public static class LongRangeMovement
 
     /// <summary>The suiting province nearest in a straight line within one ferry flight, ties to the lower id.</summary>
     private static int NearestByAir(Campaign c, Ground g, SupportTypeDefinition type, int origin, List<int> within,
-        Dictionary<int, float> near, float standoff, bool mayTouch)
+        float[] near, float standoff, bool mayTouch)
     {
         var ferry = FerryKm(c, type);
         var best = -1;
         var bestKm = float.MaxValue;
-        foreach (var province in within)
+        for (var i = 0; i < within.Count; i++)
         {
+            var province = within[i];
             if (province == origin || !Suits(g, province, near, standoff, mayTouch)) continue;
             var km = SupportCore.DistanceKm(c, origin, province);
             if (km > ferry || km >= bestKm) continue;
@@ -1684,26 +2046,29 @@ public static class LongRangeMovement
     /// populous such region first - unless the brigade already stands under that threat.
     /// </summary>
     private static List<(SupportFormation Formation, SupportTypeDefinition Type)> CoverWithSams(Campaign c, Ground g,
-        List<(SupportFormation Formation, SupportTypeDefinition Type)> sams, Dictionary<ushort, List<int>> landByController)
+        List<SupportFormation> own,
+        List<(SupportFormation Formation, SupportTypeDefinition Type)> sams, Dictionary<ushort, List<int>> landByController,
+        Dictionary<int, Ground> grounds, BattleSet battles, Dictionary<int, SupportFormation> byId, RepositionScratch scratch,
+        List<(ushort OwnerMap, int Province, float Reach)> allStrikers,
+        Dictionary<int, List<ScenarioState>> statesByOwnerMap)
     {
         // The brigades no city needs, for the review to send toward the fighting instead.
         var spare = new List<(SupportFormation Formation, SupportTypeDefinition Type)>();
         var map = g.Map;
         var strikers = new List<(int Province, float Reach)>();
-        foreach (var f in c.SupportFormations)
+        for (var si = 0; si < allStrikers.Count; si++)
         {
-            var at = f.BaseProvinceId > 0 ? f.BaseProvinceId : At(f);
-            if (at <= 0 || at > map.ProvinceCount) continue;
-            if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || type.Strike <= 0f || !SupportCore.Enabled(c, type)) continue;
-            var owner = c.NationById(f.NationId);
-            if (owner is null || !g.Hostile.Contains((ushort)owner.MapIndex)) continue;
-            strikers.Add((at, SupportCore.ReachKm(c, type)));
+            var item = allStrikers[si];
+            if (g.IsHostile(item.OwnerMap)) strikers.Add((item.Province, item.Reach));
         }
         if (strikers.Count == 0) return sams;
         bool Threatened(int province)
         {
-            foreach (var (at, reach) in strikers)
+            for (var si = 0; si < strikers.Count; si++)
+            {
+                var (at, reach) = strikers[si];
                 if (SupportCore.DistanceKm(c, at, province) <= reach) return true;
+            }
             return false;
         }
 
@@ -1717,13 +2082,25 @@ public static class LongRangeMovement
                 if (!held.TryGetValue(region, out var list)) held[region] = list = new List<int>();
                 list.Add(p);
             }
-        var regions = c.States.Where(s => s.NationMapIndex == g.Nation.MapIndex && held.ContainsKey(s.MapIndex))
-            .OrderByDescending(s => s.Population).ThenBy(s => s.MapIndex).Take(40).ToList();
+        var regions = new List<ScenarioState>();
+        if (g.Nation.MapIndex > 0 && statesByOwnerMap.TryGetValue(g.Nation.MapIndex, out var ownedStates))
+            for (var i = 0; i < ownedStates.Count; i++)
+            {
+                var s = ownedStates[i];
+                if (held.ContainsKey(s.MapIndex)) regions.Add(s);
+            }
+        regions.Sort(static (a, b) =>
+        {
+            var cmp = b.Population.CompareTo(a.Population);
+            return cmp != 0 ? cmp : a.MapIndex.CompareTo(b.MapIndex);
+        });
+        if (regions.Count > 40) regions.RemoveRange(40, regions.Count - 40);
         var guarded = new List<(int Province, float Reach)>();
         foreach (var (f, type) in sams) guarded.Add((Destination(f), SupportCore.ReachKm(c, type)));
-        foreach (var other in c.SupportFormations)
+        for (var oi = 0; oi < own.Count; oi++)
         {
-            if (other.NationId != g.Nation.Id || other.Route.Count == 0) continue;
+            var other = own[oi];
+            if (other.Route.Count == 0) continue;
             if (SupportTypeCatalog.TryGet(other.TypeId, out var otherType) && otherType.Kind == SupportKind.AirDefence)
                 guarded.Add((Destination(other), SupportCore.ReachKm(c, otherType)));
         }
@@ -1741,7 +2118,7 @@ public static class LongRangeMovement
                 foreach (var (at, reach) in guarded)
                     if (at > 0 && SupportCore.DistanceKm(c, at, anchor) <= reach) { covered = true; break; }
                 if (covered) continue;
-                if (Order(c, g.Nation.Id, f.Id, anchor))
+                if (OrderFast(c, g.Nation.Id, f.Id, anchor, grounds, battles, byId, scratch.PlanMemo))
                 {
                     guarded.Add((anchor, SupportCore.ReachKm(c, type)));
                     AiCityCover++;
@@ -1791,31 +2168,50 @@ public sealed class RelocateSupportCommand : ICampaignCommand
     public int Moved { get; private set; }
     public int Refused { get; private set; }
 
-    public void Apply(Campaign campaign)
+    public void Apply(Campaign campaign) => ApplyFast(campaign, null, null, null, null);
+
+    internal void ApplyFast(Campaign campaign, Dictionary<int, LongRangeMovement.Ground> grounds,
+        LongRangeMovement.BattleSet battles, Dictionary<int, SupportFormation> byId,
+        Dictionary<(int, int), LongRangeMovement.CachedGroundPlan> planMemo)
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
         Moved = 0; Refused = 0; Refusal = "";
-        var ids = (FormationIds ?? Array.Empty<int>()).Distinct().OrderBy(id => id).Take(4096).ToArray();
-        if (ids.Length == 0 || campaign.ProvinceMap is null) { Refusal = LongRangeMovement.RefuseForeign; return; }
-        var lines = new List<string>();
-        var grounds = new Dictionary<int, LongRangeMovement.Ground>();
-        var battles = LongRangeMovement.BattleProvinces(campaign);
-        foreach (var id in ids)
+        var rawIds = FormationIds;
+        if (rawIds is null || rawIds.Length == 0 || campaign.ProvinceMap is null)
         {
+            Refusal = LongRangeMovement.RefuseForeign;
+            return;
+        }
+        int[] ids = rawIds.Length == 1 ? rawIds : rawIds.Distinct().OrderBy(id => id).Take(4096).ToArray();
+        grounds ??= new Dictionary<int, LongRangeMovement.Ground>();
+        battles ??= LongRangeMovement.BattleProvinces(campaign);
+        List<string> lines = null;
+        for (var i = 0; i < ids.Length; i++)
+        {
+            var id = ids[i];
             var plan = Halt
                 ? LongRangeMovement.PreviewHalt(campaign, IssuerId, id, grounds, battles)
-                : LongRangeMovement.PreviewOne(campaign, IssuerId, id, ProvinceId, Append, grounds, battles);
-            var formation = campaign.SupportFormations.Find(f => f.Id == id && f.NationId == IssuerId);
+                : LongRangeMovement.PreviewOne(campaign, IssuerId, id, ProvinceId, Append, grounds, battles, byId, includeBasing: false, planMemo: planMemo);
+            SupportFormation formation;
+            if (byId is not null)
+            {
+                if (!byId.TryGetValue(id, out formation) || formation.NationId != IssuerId) formation = null;
+            }
+            else
+            {
+                formation = campaign.SupportFormations.Find(f => f.Id == id && f.NationId == IssuerId);
+            }
             if (!plan.Accepted || formation is null)
             {
                 Refused++;
                 var name = formation is not null && SupportTypeCatalog.TryGet(formation.TypeId, out var named) ? named.Name : "Formation";
+                lines ??= new List<string>();
                 lines.Add($"{name} #{id}: {plan.RefusalText}");
                 continue;
             }
             if (LongRangeMovement.Commit(campaign, formation, SupportTypeCatalog.Get(formation.TypeId), plan)) Moved++;
         }
-        Refusal = string.Join("\n", lines);
+        Refusal = lines is null ? "" : string.Join("\n", lines);
         if (Moved > 0) campaign.MarkStrategicChange();
     }
 }

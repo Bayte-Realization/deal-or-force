@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -208,41 +209,65 @@ public sealed record SupportTypeDefinition(
 /// <summary>Paradox-style common/support catalogue, consumed by simulation and rendering.</summary>
 public static class SupportTypeCatalog
 {
-    private static readonly Dictionary<string, SupportTypeDefinition> Definitions = new();
+    private static readonly Dictionary<string, SupportTypeDefinition> Definitions = new(StringComparer.Ordinal);
+    private static volatile FrozenDictionary<string, SupportTypeDefinition> _frozen;
+
+    private static FrozenDictionary<string, SupportTypeDefinition> Frozen =>
+        _frozen ?? BuildFrozen();
+
+    private static FrozenDictionary<string, SupportTypeDefinition> BuildFrozen()
+    {
+        lock (Definitions)
+        {
+            return _frozen ??= Definitions.ToFrozenDictionary(StringComparer.Ordinal);
+        }
+    }
 
     static SupportTypeCatalog() => ResetCatalog();
 
     public static void ResetCatalog(List<string> errors = null)
     {
-        Definitions.Clear();
-        foreach (var document in GameDataLoader.DataDocuments("common", "support"))
-            using (document) Merge(document.RootElement, errors);
+        lock (Definitions)
+        {
+            _frozen = null;
+            Definitions.Clear();
+            foreach (var document in GameDataLoader.DataDocuments("common", "support"))
+                using (document) Merge(document.RootElement, errors);
+            _frozen = Definitions.ToFrozenDictionary(StringComparer.Ordinal);
+        }
     }
 
     public static void Merge(JsonElement root, List<string> errors = null)
     {
         if (root.ValueKind != JsonValueKind.Object) return;
-        foreach (var property in root.EnumerateObject())
+        lock (Definitions)
         {
-            if (property.Value.ValueKind != JsonValueKind.Object) continue;
-            // Key by key, like every other catalogue: a mod that wants longer-legged rocket
-            // artillery writes { "mlrs_battalion": { "range_km": 120 } } and keeps the rest.
-            // Replacing the whole entry made that one line a rocket battery with no fire.
-            Definitions.TryGetValue(property.Name, out var earlier);
-            var next = Read(property.Name, property.Value, earlier);
-            if (next is not null) Definitions[property.Name] = next;
+            _frozen = null;
+            foreach (var property in root.EnumerateObject())
+            {
+                if (property.Value.ValueKind != JsonValueKind.Object) continue;
+                // Key by key, like every other catalogue: a mod that wants longer-legged rocket
+                // artillery writes { "mlrs_battalion": { "range_km": 120 } } and keeps the rest.
+                // Replacing the whole entry made that one line a rocket battery with no fire.
+                Definitions.TryGetValue(property.Name, out var earlier);
+                var next = Read(property.Name, property.Value, earlier);
+                if (next is not null) Definitions[property.Name] = next;
+            }
         }
     }
 
-    public static SupportTypeDefinition Get(string id) =>
-        id is not null && Definitions.TryGetValue(id, out var definition)
+    public static SupportTypeDefinition Get(string id)
+    {
+        var map = Frozen;
+        return id is not null && map.TryGetValue(id, out var definition)
             ? definition
-            : Definitions.TryGetValue("artillery_brigade", out var fallback) ? fallback : null;
+            : map.TryGetValue("artillery_brigade", out var fallback) ? fallback : null;
+    }
 
     public static bool TryGet(string id, out SupportTypeDefinition definition)
     {
-        definition = null;
-        return !string.IsNullOrWhiteSpace(id) && Definitions.TryGetValue(id, out definition);
+        if (string.IsNullOrEmpty(id)) { definition = null; return false; }
+        return Frozen.TryGetValue(id, out definition);
     }
 
     public static IEnumerable<SupportTypeDefinition> All => Definitions.Values;
@@ -412,7 +437,7 @@ public static class SupportCore
         yield return 0;
         // The salvos go before the day's losses are counted: an aircraft that flew into a
         // defended sky to launch is charged for it the same evening.
-        LongRangeStrikes.Fire(campaign);
+        foreach (var _ in LongRangeStrikes.FireStages(campaign)) yield return 0;
         yield return 0;
         Attrition(campaign);
         yield return 0;
@@ -422,7 +447,7 @@ public static class SupportCore
         yield return 0;
         // Where the computer's formations stand, after it has decided what they fly: the same
         // relocation order a player gives, so neither side is moved by a better rule.
-        LongRangeMovement.Reposition(campaign);
+        foreach (var _ in LongRangeMovement.RepositionStages(campaign)) yield return 0;
         yield return 0;
         LongRangeStrikes.Procure(campaign);
     }
@@ -659,32 +684,52 @@ public static class SupportCore
         }
     }
 
+    [ThreadStatic] private static (Dictionary<int, float> Crowding, Dictionary<int, float> Used) _recoverScratch;
+
     /// <summary>Readiness again, out of the arms on the national market: a wing without planes does not fly.</summary>
     private static void Recover(Campaign campaign)
     {
-        // Crowding by region, worked out once for the pass: a hundred formations asking for
-        // their region's capacity one by one would walk the city list a hundred times.
-        var crowding = new Dictionary<int, float>();
+        Dictionary<int, float> crowding = null;
+        Dictionary<int, float> usedByState = null;
         foreach (var formation in campaign.SupportFormations)
         {
             var nation = campaign.NationById(formation.NationId);
             if (nation is null || !Enabled(campaign, formation.TypeId) || Displaced(campaign, formation)) continue;
-            if (!crowding.TryGetValue(formation.StateMapIndex, out var crowded))
+            if (formation.Strength < 1f)
             {
-                var state = campaign.StateByMapIndex(formation.StateMapIndex);
-                crowded = crowding[formation.StateMapIndex] = state is null ? 1f
-                    : CrowdingOf(CapacityOf(campaign, state), BasingUsed(campaign, state.MapIndex));
+                if (crowding is null)
+                {
+                    if (_recoverScratch.Crowding is null)
+                        _recoverScratch = (new Dictionary<int, float>(), new Dictionary<int, float>());
+                    crowding = _recoverScratch.Crowding;
+                    usedByState = _recoverScratch.Used;
+                    crowding.Clear();
+                    usedByState.Clear();
+                    foreach (var f in campaign.SupportFormations)
+                    {
+                        if (f.Route.Count > 0 || !Enabled(campaign, f.TypeId)) continue;
+                        usedByState[f.StateMapIndex] = usedByState.GetValueOrDefault(f.StateMapIndex) + BasingOf(f.TypeId);
+                    }
+                    foreach (var order in campaign.SupportOrders)
+                        if (Enabled(campaign, order.TypeId))
+                            usedByState[order.StateMapIndex] = usedByState.GetValueOrDefault(order.StateMapIndex) + BasingOf(order.TypeId);
+                }
+                if (!crowding.TryGetValue(formation.StateMapIndex, out var crowded))
+                {
+                    var state = campaign.StateByMapIndex(formation.StateMapIndex);
+                    crowded = crowding[formation.StateMapIndex] = state is null ? 1f
+                        : CrowdingOf(CapacityOf(campaign, state), usedByState.GetValueOrDefault(state.MapIndex));
+                }
+                var arms = nation.Market.TryGetValue(Commodity.Arms, out var quote) ? quote.Satisfaction : 1f;
+                var equipment = 0.50f + 0.50f * M.Clamp01(arms);
+                var resting = formation.Mission == MissionStandby ? 1.6f : 1f;
+                formation.Strength = M.Clamp01(formation.Strength +
+                    campaign.Defines.SupportRegenPerDay * equipment * resting * crowded * NationalModifiers.Factor(nation, "support_recovery"));
             }
-            var arms = nation.Market.TryGetValue(Commodity.Arms, out var quote) ? quote.Satisfaction : 1f;
-            var equipment = 0.50f + 0.50f * M.Clamp01(arms);
-            // Standing by repairs faster: a formation working its missions wears and a
-            // formation resting does not, and the difference is a decision worth having.
-            var resting = formation.Mission == MissionStandby ? 1.6f : 1f;
-            // Over capacity, repairs are shared: twice the formations on the same airfields and
-            // depots repair at half the rate - the price of crowding, instead of a refusal.
-            formation.Strength = M.Clamp01(formation.Strength +
-                campaign.Defines.SupportRegenPerDay * equipment * resting * crowded * NationalModifiers.Factor(nation, "support_recovery") *
-                (formation.Strength < 1f ? 1f : 0f));
+            else if (formation.Strength > 1f)
+            {
+                formation.Strength = 1f;
+            }
             // Experience drifts toward what the formation is doing, slowly, the way it does.
             var target = formation.Mission == MissionStandby ? 0.15f : 0.45f;
             formation.Experience = M.Lerp(formation.Experience, target, 0.002f);
@@ -701,12 +746,13 @@ public static class SupportCore
         // every formation it had on standby until the war ended, while still buying missiles
         // and air defence for it by the whole coalition (LongRangeStrikes.Procure).
         var wars = new HashSet<int>();
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended) continue;
             foreach (var id in war.Side(true)) wars.Add(id);
             foreach (var id in war.Side(false)) wars.Add(id);
         }
+        Dictionary<int, bool> enemyFlies = null;
         foreach (var formation in campaign.SupportFormations)
         {
             var nation = campaign.NationById(formation.NationId);
@@ -723,8 +769,14 @@ public static class SupportCore
             // with nowhere to go rests, because it has nothing to fly from.
             formation.Mission = !atWar || !fit || type.Kind == SupportKind.AirDefence || formation.CutOff
                 ? MissionStandby
-                : RoleOf(campaign, nation, type);
+                : RoleOf(campaign, nation, type, ref enemyFlies);
         }
+    }
+
+    internal static string RoleOf(Campaign campaign, Nation nation, SupportTypeDefinition type)
+    {
+        Dictionary<int, bool> scratch = null;
+        return RoleOf(campaign, nation, type, ref scratch);
     }
 
     /// <summary>
@@ -741,15 +793,20 @@ public static class SupportCore
     ///   - everything else supports the battles in reach, or interdicts when it cannot.
     /// The same rule a player's "Auto" target follows, so neither side is given a better staff.
     /// </summary>
-    internal static string RoleOf(Campaign campaign, Nation nation, SupportTypeDefinition type)
+    private static string RoleOf(Campaign campaign, Nation nation, SupportTypeDefinition type, ref Dictionary<int, bool> enemyFliesCache)
     {
         if (type.Missions.Contains(AirReconnaissance.Mission) &&
             type.Recon >= campaign.Defines.ReconFullSight * 0.66f)
             return AirReconnaissance.Mission;
         if (type.Kind == SupportKind.Air && type.Missions.Contains(MissionAirSuperiority) &&
             type.AirSuperiority >= 2f * type.SupportFire)
-            return LongRangeStrikes.EnemyFlies(campaign, nation.Id) ? MissionAirSuperiority
+        {
+            enemyFliesCache ??= new Dictionary<int, bool>();
+            if (!enemyFliesCache.TryGetValue(nation.Id, out var flies))
+                enemyFliesCache[nation.Id] = flies = LongRangeStrikes.EnemyFlies(campaign, nation.Id);
+            return flies ? MissionAirSuperiority
                 : type.Missions.Contains(MissionCloseAirSupport) ? MissionCloseAirSupport : MissionAirSuperiority;
+        }
         if (type.Missions.Contains(MissionStrike) && type.Strike > type.SupportFire)
             return LongRangeStrikes.DepotHolds(campaign, nation, type, 2f) ? MissionStrike : MissionStandby;
         return type.Missions.Contains(MissionCloseAirSupport) ? MissionCloseAirSupport
