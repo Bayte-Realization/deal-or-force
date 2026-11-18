@@ -17,7 +17,7 @@ public partial class DealOrForceGame
     private ShellOrchestrator _shell;
     private bool _newShellLastLeftVisible;
 
-    internal double LastRefreshNewShellMs => _shell?.LastRefreshMs ?? 0.0;
+    [ToolHook] internal double LastRefreshNewShellMs => _shell?.LastRefreshMs ?? 0.0;
 
     internal bool IsNewShellActive =>
         string.Equals(SettingsCatalog.Chosen("ui_shell"), "new", StringComparison.OrdinalIgnoreCase);
@@ -82,6 +82,7 @@ public partial class DealOrForceGame
 
     private void BindShellContextActions(ShellContext ctx)
     {
+        ctx.ResolveFlag = FlagTexture;
         ctx.OpenScreen = OpenScreen;
         ctx.ToggleScreen = ToggleCampaignScreen;
         ctx.SetMapMode = mode => { _globe?.SetMapMode(mode); RefreshNewShell(force: true); };
@@ -108,14 +109,14 @@ public partial class DealOrForceGame
         ctx.PerformBatchUndo = UndoLastBatchForShell;
         ctx.NavigateBack = () => StepHistory(forward: false);
         ctx.SplitSelectionInHalf = SplitSelectionInHalf;
-        ctx.MergeSelectedArmies = MergeSelectedArmies;
+        ctx.MergeSelectedArmies = () => OpenScreen("Military");
         ctx.ClearArmySelection = ClearArmySelectionAndClose;
         ctx.RefreshAll = () => { Refresh(); RefreshNewShell(force: true); };
     }
 
     private void UndoLastBatchForShell()
     {
-        if (_campaign?.Player is null || !BatchActionUndo.TryUndo(_campaign, _campaign.Player.Id)) return;
+        if (_campaign?.Player is null || !BatchActionUndo.TryUndo(_campaign, _campaign.Player.Id, out _)) return;
         EconomySystem.Explain(_campaign);
         Refresh();
         RefreshNewShell(force: true);
@@ -196,8 +197,38 @@ public partial class DealOrForceGame
 
     internal Control BuildDiplomacyLeaderBadge(Nation nation, LeaderProfile hos, int width, int height)
     {
-        if (HasRealLeaderPortrait(hos) || _shell is null) return BuildLeaderPortraitBadge(hos, nation.Color, width, height);
+        if (ShellOrchestrator.HasRealLeaderPortrait(hos) || _shell is null) return BuildLeaderPortraitBadge(hos, nation.Color, width, height);
         return _shell.BuildStateSealBadge(_campaign, nation, width, height);
+    }
+
+    private void ToggleMapRegionIconsSetting()
+    {
+        if (IsNewShellActive && _shell is not null)
+        {
+            _shell.Context.ExplicitRegionIconsToggle = !_shell.Context.ExplicitRegionIconsToggle;
+            SettingsCatalog.Store("map_region_icons", _shell.Context.ExplicitRegionIconsToggle);
+        }
+        else SettingsCatalog.Store("map_region_icons", !SettingsCatalog.Flag("map_region_icons"));
+    }
+
+    private bool TryOpenNewShellScreen(string screen)
+    {
+        if (!IsNewShellActive) return false;
+        if (screen == "Economy") { OpenNewShellEconomyWorkspace(); UpdateScreenButtons(); return true; }
+        if (screen == "Nation") { OpenNewShellCountryDossier(_selectedNation ?? _campaign.Player); UpdateScreenButtons(); return true; }
+        return false;
+    }
+
+    private void SyncPlanningBarDock()
+    {
+        if (IsNewShellActive) { SyncNewShellLeftAndBottomDock(); return; }
+        if (!IsInstanceValid(_armyBar)) return;
+        var left = _armyBar.OffsetLeft;
+        if (Math.Abs(_planningBar.OffsetLeft - left) > 0.5f)
+        {
+            _planningBar.OffsetLeft = left;
+            _planningBar.OffsetRight = left + _planningBar.GetCombinedMinimumSize().X;
+        }
     }
 
     private void HideLegacyLeftAndBottomCards()

@@ -164,20 +164,11 @@ public partial class DealOrForceGame
         }
     }
 
-    private static string SlugLeaderName(string name)
+    internal static string SlugLeaderName(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "default";
         var chars = name.Trim().ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray();
         return new string(chars);
-    }
-
-    internal static bool HasRealLeaderPortrait(LeaderProfile leader)
-    {
-        var slug = SlugLeaderName(leader.Name);
-        var path = string.IsNullOrEmpty(leader.PortraitId) ? "" : SpriteCatalog.TextureOf(leader.PortraitId);
-        if (string.IsNullOrEmpty(path)) path = SpriteCatalog.TextureOf("leader_" + slug);
-        if (string.IsNullOrEmpty(path)) path = $"res://game/gfx/leaders/leader_{slug}.png";
-        return ResourceLoader.Exists(path) || Godot.FileAccess.FileExists(path.StartsWith("res://", StringComparison.Ordinal) ? ProjectSettings.GlobalizePath(path) : path);
     }
 
     /// <summary>Builds a compact Grand Strategy header block for a country and its executive leadership.</summary>

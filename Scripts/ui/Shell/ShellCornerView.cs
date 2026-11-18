@@ -34,6 +34,7 @@ internal sealed class ShellCornerView
     private bool _atWar;
     private string _lastTag = "";
     private (Campaign World, int Day, int Rev, int Rank) _rankCache;
+    private (Campaign World, int NationId, int SampleDay, float SampleGdp, float GrowthPct) _gdpSample;
     private readonly Dictionary<string, StatCellNodes> _cells = new(StringComparer.Ordinal);
 
     private sealed class StatCellNodes
@@ -377,7 +378,7 @@ internal sealed class ShellCornerView
         SyncKeycapVisibility();
     }
 
-    private void RefreshCells(Campaign world, Nation player, WarState[] openWars, string openScreen)
+    private void RefreshCells(Campaign world, Nation player, StrategicWar[] openWars, string openScreen)
     {
         var debt = SovereignFinance.Outstanding(player);
         var debtRatio = debt / MathF.Max(0.01f, player.Gdp);
@@ -389,15 +390,14 @@ internal sealed class ShellCornerView
         UpdateCell("Treasury", trFig, trUnit,
             player.Treasury < 0.05f ? "shell.state.negative_text" : "shell.paper",
             trDeltaTxt, player.WeeklyBalance >= 0 ? "shell.state.positive" : "shell.state.negative",
-            $"{Loc.Get("Treasury")}: {Fmt.MoneyExact(player.Treasury)}
-{Loc.Get("Balance")}: {Fmt.MoneyDelta(player.WeeklyBalance)}/{Loc.Get("week")}",
+            $"{Loc.Get("Treasury")}: {Fmt.MoneyExact(player.Treasury)}\n{Loc.Get("Balance")}: {Fmt.MoneyDelta(player.WeeklyBalance)}/{Loc.Get("week")}",
             openScreen == "Economy");
 
         var (gdpFig, gdpUnit) = SplitMoney(player.Gdp);
-        var growth = player.RealGdpGrowthAnnual;
-        var gdpDelta = MathF.Abs(growth) >= 0.001f ? $"{(growth >= 0 ? "▲" : "▼")} {(MathF.Abs(growth) * 100f):0.0}%" : "";
+        var growthPct = SampleGdpDeltaPct(world, player);
+        var gdpDelta = MathF.Abs(growthPct) >= 0.05f ? $"{(growthPct >= 0 ? "▲" : "▼")} {MathF.Abs(growthPct):0.0}%" : "";
         UpdateCell("GDP", gdpFig, gdpUnit, "shell.paper",
-            gdpDelta, growth >= 0 ? "shell.state.positive" : "shell.state.negative",
+            gdpDelta, growthPct >= 0 ? "shell.state.positive" : "shell.state.negative",
             $"{Loc.Get("GDP")}: {Fmt.MoneyExact(player.Gdp)}", openScreen == "Ledger");
 
         UpdateCell("Debt", $"{(debtRatio * 100f):0.0}%", "",
@@ -415,13 +415,13 @@ internal sealed class ShellCornerView
             player.Stability < 0.50f ? "▼" : "", "shell.state.negative",
             $"{Loc.Get("Stability")}: {Fmt.Percent(player.Stability)}", openScreen == "Laws");
 
-        var (manFig, manUnit) = SplitPeople((long)Math.Max(0, player.Manpower));
+        var (manFig, manUnit) = SplitPeople((long)Math.Max(0, player.ManpowerReserve));
         UpdateCell("Manpower", manFig, manUnit, "shell.paper", "", "shell.state.positive",
-            $"{Loc.Get("Manpower")}: {Fmt.PeopleExact(player.Manpower)}", openScreen == "Military");
+            $"{Loc.Get("Manpower")}: {Fmt.PeopleExact(player.ManpowerReserve)}", openScreen == "Military");
 
-        UpdateCell("Capital", ((int)MathF.Round(player.PoliticalCapital)).ToString(CultureInfo.InvariantCulture), "",
+        UpdateCell("Capital", ((int)MathF.Round(player.PoliticalPoints)).ToString(CultureInfo.InvariantCulture), "",
             "shell.paper", "", "shell.state.positive",
-            $"{Loc.Get("Political capital")}: {player.PoliticalCapital:0.0}", openScreen == "State Affairs");
+            $"{Loc.Get("Political capital")}: {player.PoliticalPoints:0.0}", openScreen == "State Affairs");
 
         if (openWars.Length > 0)
         {
@@ -480,17 +480,33 @@ internal sealed class ShellCornerView
         _flagEdgeOverlay.QueueRedraw();
     }
 
+    private float SampleGdpDeltaPct(Campaign world, Nation player)
+    {
+        if (!ReferenceEquals(_gdpSample.World, world) || _gdpSample.NationId != player.Id)
+        {
+            _gdpSample = (world, player.Id, world.ElapsedDays, player.Gdp, 0f);
+            return 0f;
+        }
+        var days = world.ElapsedDays - _gdpSample.SampleDay;
+        if (days >= 7 && _gdpSample.SampleGdp > 0.01f)
+        {
+            var annualized = ((player.Gdp - _gdpSample.SampleGdp) / _gdpSample.SampleGdp) * (365f / days) * 100f;
+            _gdpSample = (world, player.Id, world.ElapsedDays, player.Gdp, annualized);
+        }
+        return _gdpSample.GrowthPct;
+    }
+
     private int ResolveGdpRank(Campaign world, Nation player)
     {
-        if (ReferenceEquals(_rankCache.World, world) && _rankCache.Day == world.ElapsedDays && _rankCache.Rev == world.Revision)
+        if (ReferenceEquals(_rankCache.World, world) && _rankCache.Day == world.ElapsedDays && _rankCache.Rev == world.MapRevision)
             return _rankCache.Rank;
         var higher = 1;
         for (var i = 0; i < world.Nations.Count; i++)
         {
             var other = world.Nations[i];
-            if (other.Id != player.Id && other.Exists && other.Gdp > player.Gdp) higher++;
+            if (other.Id != player.Id && other.Population > 0 && other.Gdp > 0f && other.Gdp > player.Gdp) higher++;
         }
-        _rankCache = (world, world.ElapsedDays, world.Revision, higher);
+        _rankCache = (world, world.ElapsedDays, world.MapRevision, higher);
         return higher;
     }
 

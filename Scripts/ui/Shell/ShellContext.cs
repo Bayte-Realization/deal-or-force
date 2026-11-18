@@ -18,55 +18,55 @@ internal sealed class ShellContext
     private readonly Dictionary<string, StyleBox> _styleCache = new(StringComparer.Ordinal);
 
     public Control Root { get; set; }
-    public Func<Campaign> GetCampaign { get; init; }
-    public Func<Vector2> GetViewportSize { get; init; }
-    public Func<bool> IsPaused { get; init; }
-    public Func<int> GetSpeed { get; init; }
-    public Func<bool> IsObserverMode { get; init; }
-    public Func<bool> IsFreeCameraMode { get; init; }
-    public Func<bool> IsAnyModalOpen { get; init; }
-    public Func<bool> IsProductionOpen { get; init; }
-    public Func<string> GetOpenScreen { get; init; }
-    public Func<StrategicMapMode> GetMapMode { get; init; }
-    public Func<bool> IsFlatMap { get; init; }
-    public Func<float> GetViewDistance { get; init; }
-    public Func<float> GetFlatZoom { get; init; }
-    public Func<(float Latitude, float Longitude, float SpanDegrees)> GetCameraMinimapView { get; init; }
-    public Func<IReadOnlyList<Army>> GetSelectedArmies { get; init; }
-    public Func<Nation> GetSelectedNation { get; init; }
-    public Func<RegionState> GetSelectedState { get; init; }
-    public Func<int> GetSelectedProvinceId { get; init; }
-    public Func<bool> CanNavigateBack { get; init; }
+    public Func<Campaign> GetCampaign { get; set; }
+    public Func<Vector2> GetViewportSize { get; set; }
+    public Func<bool> IsPaused { get; set; }
+    public Func<int> GetSpeed { get; set; }
+    public Func<bool> IsObserverMode { get; set; }
+    public Func<bool> IsFreeCameraMode { get; set; }
+    public Func<bool> IsAnyModalOpen { get; set; }
+    public Func<bool> IsProductionOpen { get; set; }
+    public Func<string> GetOpenScreen { get; set; }
+    public Func<StrategicMapMode> GetMapMode { get; set; }
+    public Func<bool> IsFlatMap { get; set; }
+    public Func<float> GetViewDistance { get; set; }
+    public Func<float> GetFlatZoom { get; set; }
+    public Func<(float Latitude, float Longitude, float SpanDegrees)> GetCameraMinimapView { get; set; }
+    public Func<IReadOnlyList<Army>> GetSelectedArmies { get; set; }
+    public Func<Nation> GetSelectedNation { get; set; }
+    public Func<ScenarioState> GetSelectedState { get; set; }
+    public Func<int> GetSelectedProvinceId { get; set; }
+    public Func<bool> CanNavigateBack { get; set; }
 
-    public Action<string> OpenScreen { get; init; }
-    public Action<string> ToggleScreen { get; init; }
-    public Action<StrategicMapMode> SetMapMode { get; init; }
-    public Action ToggleProjection { get; init; }
-    public Action TogglePause { get; init; }
-    public Action<int> SetSpeed { get; init; }
-    public Action ShowPauseMenu { get; init; }
-    public Action OpenDefconOverview { get; init; }
-    public Action OpenWarLedger { get; init; }
-    public Action<int> ShowWarDetail { get; init; }
-    public Action OpenSovereignFinance { get; init; }
-    public Action<int> OpenCountryRankings { get; init; }
-    public Action OpenRecruitment { get; init; }
-    public Action ToggleNavigator { get; init; }
-    public Action FocusOwnCapital { get; init; }
-    public Action<float, float, float> FocusLatLon { get; init; }
-    public Func<float, float, Vector2?> ProjectToScreen { get; init; }
-    public Action<IReadOnlySet<int>> SetMergedVisibleArmies { get; init; }
-    public Action<Army, bool> PickArmy { get; init; }
-    public Action<Nation, RegionState, int> PickMapRegion { get; init; }
-    public Action<string> ApplySetting { get; init; }
-    public Action<string> PlayCue { get; init; }
-    public Action<bool> ExecuteZeroBudget { get; init; }
-    public Action PerformBatchUndo { get; init; }
-    public Func<bool> NavigateBack { get; init; }
-    public Action SplitSelectionInHalf { get; init; }
-    public Action MergeSelectedArmies { get; init; }
-    public Action ClearArmySelection { get; init; }
-    public Action RefreshAll { get; init; }
+    public Action<string> OpenScreen { get; set; }
+    public Action<string> ToggleScreen { get; set; }
+    public Action<StrategicMapMode> SetMapMode { get; set; }
+    public Action ToggleProjection { get; set; }
+    public Action TogglePause { get; set; }
+    public Action<int> SetSpeed { get; set; }
+    public Action ShowPauseMenu { get; set; }
+    public Action OpenDefconOverview { get; set; }
+    public Action OpenWarLedger { get; set; }
+    public Action<int> ShowWarDetail { get; set; }
+    public Action OpenSovereignFinance { get; set; }
+    public Action<int> OpenCountryRankings { get; set; }
+    public Action OpenRecruitment { get; set; }
+    public Action ToggleNavigator { get; set; }
+    public Action FocusOwnCapital { get; set; }
+    public Action<float, float, float> FocusLatLon { get; set; }
+    public Func<float, float, Vector2?> ProjectToScreen { get; set; }
+    public Action<IReadOnlySet<int>> SetMergedVisibleArmies { get; set; }
+    public Action<Army, bool> PickArmy { get; set; }
+    public Action<Nation, ScenarioState, int> PickMapRegion { get; set; }
+    public Action<string> ApplySetting { get; set; }
+    public Action<string> PlayCue { get; set; }
+    public Action<bool> ExecuteZeroBudget { get; set; }
+    public Action PerformBatchUndo { get; set; }
+    public Func<bool> NavigateBack { get; set; }
+    public Action SplitSelectionInHalf { get; set; }
+    public Action MergeSelectedArmies { get; set; }
+    public Action ClearArmySelection { get; set; }
+    public Action RefreshAll { get; set; }
 
     public bool ExplicitRegionIconsToggle { get; set; }
     public bool AltKeycapsVisible { get; set; }
@@ -145,13 +145,13 @@ internal sealed class ShellContext
         return LoadTexture(path);
     }
 
+    public Func<string, Texture2D> ResolveFlag { get; set; }
+
     public Texture2D FlagTexture(string tag)
     {
         if (string.IsNullOrWhiteSpace(tag)) return null;
-        var path = FlagCatalog.PathFor(tag);
-        if (string.IsNullOrWhiteSpace(path))
-            path = $"res://game/gfx/flags/flag_{tag.ToLowerInvariant()}.png";
-        return LoadTexture(path);
+        if (ResolveFlag?.Invoke(tag) is { } resolved) return resolved;
+        return LoadTexture($"res://game/gfx/flags/flag_{tag.ToLowerInvariant()}.png");
     }
 
     public Texture2D PaperTexture() =>
@@ -194,6 +194,11 @@ internal sealed class ShellContext
             return sb;
         }
 
+        if (InterfaceSkin.Metric(InterfaceSkin.MaterialSwitch, 0f) >= 0.5f && Ui.Surface("plate") is { } matBox)
+        {
+            _styleCache[key] = matBox;
+            return matBox;
+        }
         var flat = new StyleBoxFlat
         {
             BgColor = Ui.Colour(fallbackBgToken),
@@ -340,7 +345,7 @@ internal sealed class ShellContext
         }
         else
         {
-            item.Modulate = tint;
+            item.Modulate = tint.A > 0f ? tint : MaterialStyles.IconTone("shell");
         }
     }
 }

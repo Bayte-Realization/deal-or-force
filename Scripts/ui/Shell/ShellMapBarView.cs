@@ -653,7 +653,7 @@ internal sealed class ShellMapBarView
         }
 
         var cells = map.CellToProvince;
-        var controllers = world.ProvinceControllers;
+        var controllers = world.ProvinceController;
         var owners = map.ProvinceToNation;
         var ownerGrid = new int[mw * mh];
 

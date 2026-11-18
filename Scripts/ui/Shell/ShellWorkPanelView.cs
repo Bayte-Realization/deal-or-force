@@ -303,7 +303,7 @@ internal sealed class ShellWorkPanelView
         Refresh();
     }
 
-    public void OpenRegion(Nation owner, RegionState state, int provinceId)
+    public void OpenRegion(Nation owner, ScenarioState state, int provinceId)
     {
         if (state is null && owner is not null)
         {
@@ -347,7 +347,7 @@ internal sealed class ShellWorkPanelView
         _backBtn.Disabled = !(_ctx.CanNavigateBack?.Invoke() ?? false);
         UpdatePinButtonState();
 
-        var sig = $"{_mode}|{_targetNationId}|{_targetStateMapIndex}|{_targetProvinceId}|{_activeTab}|{world.ElapsedDays}|{world.Revision}|{Loc.Language}";
+        var sig = $"{_mode}|{_targetNationId}|{_targetStateMapIndex}|{_targetProvinceId}|{_activeTab}|{world.ElapsedDays}|{world.MapRevision}|{Loc.Language}";
         if (_lastBuildSig == sig) return;
         _lastBuildSig = sig;
 
@@ -375,7 +375,7 @@ internal sealed class ShellWorkPanelView
         var ruler = Rulers.HeadOfState(world, nation);
         _subtitleLabel.Text = $"{Loc.Get(PoliticsCore.GovernmentOf(nation).Name)} · {Loc.Get(ruler.Title)} {ruler.Name}";
 
-        var gdpRank = 1 + world.Nations.Count(n => n.Exists && n.Id != nation.Id && n.Gdp > nation.Gdp);
+        var gdpRank = 1 + world.Nations.Count(n => n.Population > 0 && true && n.Id != nation.Id && n.Gdp > nation.Gdp);
         var armyDivs = (int)MathF.Ceiling(world.Armies.Where(a => a.NationId == nation.Id).Sum(a => a.Divisions));
         SetFigures(
             ($"№ {gdpRank}", Loc.Get("shell.by_gdp")),
@@ -391,12 +391,12 @@ internal sealed class ShellWorkPanelView
             AddKvRow(Loc.Get("GDP"), Fmt.Money(nation.Gdp));
             AddKvRow(Loc.Get("Treasury"), isOwn ? Fmt.Money(nation.Treasury) : "—");
             AddKvRow(Loc.Get("Inflation"), Fmt.Percent(nation.Inflation), nation.Inflation > 0.08f ? "shell.state.warning" : "shell.paper");
-            AddKvRow(Loc.Get("Manpower"), Fmt.People(nation.Manpower));
+            AddKvRow(Loc.Get("Manpower"), Fmt.People(nation.ManpowerReserve));
 
             AddSectionHeader(Loc.Get("Neighbours"), Loc.Get("GDP"));
             var ownStates = world.StatesOf(nation).Select(s => s.MapIndex).ToHashSet();
             var neighbors = world.Nations
-                .Where(n => n.Exists && n.Id != nation.Id)
+                .Where(n => n.Population > 0 && true && n.Id != nation.Id)
                 .OrderByDescending(n => n.Region == nation.Region ? 1 : 0)
                 .ThenByDescending(n => n.Gdp)
                 .Take(6)
@@ -405,7 +405,7 @@ internal sealed class ShellWorkPanelView
             foreach (var nb in neighbors)
             {
                 var captured = nb;
-                var rel = CampaignDiplomacy.Opinion(world, nation.Id, nb.Id);
+                var rel = (int)MathF.Round(CampaignDiplomacy.ReadOrNeutral(world, nation.Id, nb.Id).Opinion);
                 AddCountryComparisonRow(nb, Fmt.Money(nb.Gdp), $"{rel:+#;-#;0}",
                     rel < -15 ? "shell.state.negative_text" : (rel > 20 ? "shell.state.positive" : "shell.paper_muted"),
                     () => OpenCountry(captured));
@@ -422,7 +422,7 @@ internal sealed class ShellWorkPanelView
         else if (_activeTab == 2)
         {
             AddSectionHeader(Loc.Get("Decisions"));
-            AddKvRow(Loc.Get("Political capital"), $"{nation.PoliticalCapital:0.0}");
+            AddKvRow(Loc.Get("Political capital"), $"{nation.PoliticalPoints:0.0}");
             var note = CreateNoteLabel(Loc.Get("shell.open_decisions_hint"));
             _bodyRows.AddChild(note);
         }
@@ -433,7 +433,7 @@ internal sealed class ShellWorkPanelView
             AddKvRow(Loc.Get("Wars"), wars.Length.ToString(CultureInfo.InvariantCulture), wars.Length > 0 ? "shell.state.negative_text" : "shell.paper");
             if (!isOwn && world.Player is { } pl)
             {
-                var op = CampaignDiplomacy.Opinion(world, pl.Id, nation.Id);
+                var op = (int)MathF.Round(CampaignDiplomacy.ReadOrNeutral(world, pl.Id, nation.Id).Opinion);
                 AddKvRow(Loc.Get("Opinion"), $"{op:+#;-#;0}", op < 0 ? "shell.state.negative_text" : "shell.state.positive");
             }
         }
@@ -450,7 +450,7 @@ internal sealed class ShellWorkPanelView
         }
     }
 
-    private void PopulateRegion(Campaign world, Nation owner, RegionState state)
+    private void PopulateRegion(Campaign world, Nation owner, ScenarioState state)
     {
         ShowRoundCategoryEmblem("icon_region");
         var isOwn = owner is not null && world.Player?.Id == owner.Id;
@@ -461,11 +461,12 @@ internal sealed class ShellWorkPanelView
             : 1;
         _subtitleLabel.Text = $"{owner?.DisplayName ?? "—"} · {provCount} {Loc.Get("shell.provinces_count")}";
 
-        var gdpShare = owner is not null && owner.Gdp > 0.01f ? state.LocalGdp / owner.Gdp : 0f;
+        var estGdp = RegionalStatistics.EstimatedGdp(world, state);
+        var gdpShare = owner is not null && owner.Gdp > 0.01f ? estGdp / owner.Gdp : 0f;
         SetFigures(
             (Fmt.People(state.Population), Loc.Get("Population")),
-            (Fmt.Money(state.LocalGdp), $"{(int)MathF.Round(gdpShare * 100f)}% {Loc.Get("GDP")}"),
-            ($"{(int)MathF.Round((1f - state.Unrest) * 100f)}%", Loc.Get("Stability")));
+            (Fmt.Money(estGdp), $"{(int)MathF.Round(gdpShare * 100f)}% {Loc.Get("GDP")}"),
+            ($"{(int)MathF.Round(state.Stability * 100f)}%", Loc.Get("Stability")));
 
         SetFolderTabs(new[] { "Overview", "Population", "shell.tab_build", "shell.tab_recruit" });
         ClearBodyAndFooter();
@@ -481,8 +482,8 @@ internal sealed class ShellWorkPanelView
         {
             AddSectionHeader(Loc.Get("Region"));
             AddKvRow(Loc.Get("Population"), Fmt.PeopleExact(state.Population));
-            AddKvRow(Loc.Get("Unrest"), Fmt.Percent(state.Unrest), state.Unrest > 0.25f ? "shell.state.warning" : "shell.paper");
-            AddKvRow(Loc.Get("Infrastructure"), state.InfrastructureLevel.ToString(CultureInfo.InvariantCulture));
+            AddKvRow(Loc.Get("Radicalism"), Fmt.Percent(state.Radicalism), state.Radicalism > 0.25f ? "shell.state.warning" : "shell.paper");
+            AddKvRow(Loc.Get("Infrastructure"), state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure).ToString(CultureInfo.InvariantCulture));
             if (_targetProvinceId > 0)
                 AddKvRow(Loc.Get("Province"), $"#{_targetProvinceId}");
         }
@@ -496,7 +497,7 @@ internal sealed class ShellWorkPanelView
         if (isOwn && _activeTab == 3)
         {
             AddSectionHeader(Loc.Get("shell.tab_recruit"));
-            AddKvRow(Loc.Get("Manpower"), Fmt.People(owner.Manpower));
+            AddKvRow(Loc.Get("Manpower"), Fmt.People(owner.ManpowerReserve));
             _bodyRows.AddChild(CreateNoteLabel(Loc.Get("shell.recruit_workbench_hint")));
         }
 

@@ -16,7 +16,7 @@ internal static class ShellRegionBuildTabView
         Label feedbackLabel,
         Campaign world,
         Nation owner,
-        RegionState state,
+        ScenarioState state,
         Action onQueued)
     {
         foreach (var kind in new[] { BuildingKind.CivilianIndustry, BuildingKind.Infrastructure, BuildingKind.ArmsIndustry, BuildingKind.Barracks })
@@ -29,7 +29,7 @@ internal static class ShellRegionBuildTabView
         Label feedbackLabel,
         Campaign world,
         Nation owner,
-        RegionState state,
+        ScenarioState state,
         BuildingKind kind,
         Action onQueued)
     {
@@ -81,7 +81,7 @@ internal static class ShellRegionBuildTabView
         Label feedbackLabel,
         Campaign world,
         Nation owner,
-        RegionState state,
+        ScenarioState state,
         BuildingKind kind,
         int count,
         bool everywhere,

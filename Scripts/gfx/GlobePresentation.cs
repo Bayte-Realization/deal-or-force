@@ -1132,28 +1132,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
         return true;
     }
 
-    /// <summary>
-    /// How far away the camera is, on a scale both projections agree on.
-    ///
-    /// A dozen visibility thresholds in this file are written as "closer than 13.5", and
-    /// several of them were reading `_distance` - the orbit rig's distance - while the flat
-    /// map was the thing on screen. `_distance` does not change in flat mode: the wheel
-    /// drives `_flatZoom` instead. So whether the flat map showed its capital markers and
-    /// its fleets depended on how far out the globe happened to be when the player left it,
-    /// and no amount of zooming in on the flat map would bring them back.
-    ///
-    /// Rather than write `_flatMap ? a : b` at each site and let the pairs drift out of step
-    /// again, there is one conversion. Its two constants are read off the two thresholds
-    /// somebody had already tuned by eye in both projections - army counters at 7.4 flat
-    /// against 10.8 orbital, battle markers at 9.4 against 14.0 - so the line through them is
-    /// the game's own answer to what a flat zoom is worth in orbital distance, rather than a
-    /// number I chose. The two pairs that calibrated it come out unchanged, which is the
-    /// arithmetic checking itself.
-    /// </summary>
+    /// <summary>Unified camera distance across orbital and flat projections.</summary>
     private float ViewDistance => _flatMap ? _flatZoom * 1.6f - 1.04f : _distance;
     internal float ShellViewDistance => ViewDistance;
     internal float ShellFlatZoom => _flatZoom;
-    internal bool IsFlatMap => _flatMap;
     internal IReadOnlySet<int> NewShellVisibleArmyIds { get; set; }
     internal Vector2? ProjectMapPointToScreen(float latitude, float longitude) => BadgeScreenPoint(latitude, longitude);
     internal (float Latitude, float Longitude, float SpanDegrees) CameraMinimapView =>

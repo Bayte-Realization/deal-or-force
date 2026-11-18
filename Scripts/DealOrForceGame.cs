@@ -86,12 +86,8 @@ public partial class DealOrForceGame : Control
         Simulation.SettingsCatalog.CurrentCampaign = () => _campaign;
         var loaded = await RunLoadingOperation("Preparing the world", async () =>
         {
-            // Folders first: the journal below writes into `logs/`, and the first thing a
-            // support conversation needs is one known folder rather than two.
             GamePaths.Prepare();
             StartDiagnostics();
-            // The engine-neutral settings layer is told where the player's files live: one
-            // folder under Documents, not the engine's folder in AppData.
             Simulation.PlayerSettings.UseDirectory(GamePaths.Settings);
             Simulation.Shell.ShellSettingsMigration.ApplyOnce();
             await LoadingPhase("Loading interface and content catalogs", 10);
@@ -437,7 +433,7 @@ public partial class DealOrForceGame : Control
         }
         if (IsNewShellActive && key.Keycode == Key.Escape && HasOpenShellTransientPopover)
         {
-            if (_shellEconomyWorkspace is { IsVisible: true }) CloseNewShellEconomyWorkspace();
+            if (IsNewShellEconomyOpen) CloseNewShellEconomyWorkspace();
             else CloseShellTransientPopovers();
             GetViewport().SetInputAsHandled();
             return;
@@ -685,15 +681,7 @@ public partial class DealOrForceGame : Control
             _selectedArmies.Count == 0 && Letter(iconsKey) == Key.B && !iconsKey.CtrlPressed && !iconsKey.AltPressed &&
             !iconsKey.ShiftPressed && !iconsKey.MetaPressed)
         {
-            if (IsNewShellActive && _shellCtx is not null)
-            {
-                _shellCtx.ExplicitRegionIconsToggle = !_shellCtx.ExplicitRegionIconsToggle;
-                SettingsCatalog.Store("map_region_icons", _shellCtx.ExplicitRegionIconsToggle);
-            }
-            else
-            {
-                SettingsCatalog.Store("map_region_icons", !SettingsCatalog.Flag("map_region_icons"));
-            }
+            ToggleMapRegionIconsSetting();
             ApplySetting("map_region_icons");
             RefreshMapVisualToggles();
             GetViewport().SetInputAsHandled();
@@ -1070,8 +1058,8 @@ public partial class DealOrForceGame : Control
         _menuLayer.Visible = false;
         if (_pickerLayer is not null) _pickerLayer.Visible = false;
         _hudLayer.Visible = true;
-        _shellEconomyWorkspace?.Close();
-        _shellWorkPanel?.Close();
+        CloseNewShellEconomyWorkspace();
+        CloseNewShellWorkPanel(unpinnedOnly: false);
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         _campaign.IsPaused = true;
         _pause.Text = Tr("▶");
@@ -1149,27 +1137,8 @@ public partial class DealOrForceGame : Control
             UpdateScreenButtons();
             return;
         }
-        // The long-range forces: the guns, aircraft and drones that reach into the war
-        // from bases instead of standing in it. A full page for the same reason the
-        // other three are: it is where a player decides something.
-        if (screen == "Support")
-        {
-            OpenSupportScreen();
-            UpdateScreenButtons();
-            return;
-        }
-        if (IsNewShellActive && screen == "Economy")
-        {
-            OpenNewShellEconomyWorkspace();
-            UpdateScreenButtons();
-            return;
-        }
-        if (IsNewShellActive && screen == "Nation")
-        {
-            OpenNewShellCountryDossier(_selectedNation ?? _campaign.Player);
-            UpdateScreenButtons();
-            return;
-        }
+        if (screen == "Support") { OpenSupportScreen(); UpdateScreenButtons(); return; }
+        if (TryOpenNewShellScreen(screen)) return;
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
         if (_diplomacyLayer is not null) _diplomacyLayer.Visible = false;

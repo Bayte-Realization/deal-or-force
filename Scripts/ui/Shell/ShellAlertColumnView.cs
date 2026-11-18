@@ -50,7 +50,6 @@ internal sealed class ShellAlertColumnView
     private string _lastSnapSig = "";
 
     public bool IsNewsCardVisible => _newsCard is { Visible: true };
-    public bool IsOutlinerOpen => _outlinerOpen;
 
     public ShellAlertColumnView(ShellContext ctx, ShellMessageModalView messages)
     {
@@ -203,6 +202,19 @@ internal sealed class ShellAlertColumnView
             }
         };
         _ctx.Root.AddChild(_newsCard);
+        if (_ctx.PaperTexture() is { } paperGrain)
+        {
+            var grain = new TextureRect
+            {
+                Texture = paperGrain,
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.Tile,
+                Modulate = new Color(1f, 1f, 1f, 0.16f),
+                MouseFilter = Control.MouseFilterEnum.Ignore
+            };
+            grain.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+            _newsCard.AddChild(grain);
+        }
 
         var col = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         col.AddThemeConstantOverride("separation", 3);
@@ -331,13 +343,14 @@ internal sealed class ShellAlertColumnView
             player,
             _outlinerOpen,
             SettingsCatalog.Flag("ui_shell_next_hints"),
+            _ctx.IsObserverMode?.Invoke() ?? false,
             _viewedAlerts,
-            _watchedGoods,
-            key => _snoozes.Hidden(key, world.ElapsedDays));
+            _snoozes,
+            _watchedGoods);
 
         var sig = $"{_outlinerOpen}|{Loc.Language}|{_profile.Compact}|" +
-                  string.Join(";", snap.Alerts.Select(a => $"{a.TopicKey}:{a.Viewed}:{a.RightDeadline}")) + "|" +
-                  string.Join(";", snap.OutlinerGroups.SelectMany(g => g.Rows).Select(r => $"{r.TopicKey}:{r.RightStat}"));
+                  string.Join(";", snap.Alerts.Select(a => $"{a.TopicKey}:{a.IsViewed}:{a.DeadlineLabel}")) + "|" +
+                  string.Join(";", snap.OutlinerGroups.SelectMany(g => g.Rows).Select(r => $"{r.TopicKey}:{r.Value}"));
         if (_lastSnapSig == sig) return;
         _lastSnapSig = sig;
 
@@ -390,19 +403,19 @@ internal sealed class ShellAlertColumnView
             {
                 _viewedAlerts.Add(captured.TopicKey);
                 _ctx.PlayCue?.Invoke("ui_select");
-                RouteTopic(captured.RouteScreen, captured.TargetId);
+                RouteTopic(RouteOfEntry(captured.Route), captured.TargetId);
                 Refresh();
             };
             btn.GuiInput += ev =>
             {
                 if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } && !captured.IsNextHint)
                 {
-                    _snoozes.Snooze(captured.TopicKey, world.ElapsedDays);
+                    _snoozes.Hide(new CampaignAlert(captured.Id, CampaignAlertGroup.Should, captured.Title, captured.Summary, captured.Route, captured.TargetId), world.ElapsedDays, 7);
                     Refresh();
                     btn.AcceptEvent();
                 }
             };
-            btn.TooltipText = Ui.Tip($"{captured.Title}\n{captured.Subtitle}\n{Loc.Get("Right-click: hide temporarily.")}");
+            btn.TooltipText = Ui.Tip($"{captured.Title}\n{captured.Summary}\n{Loc.Get("Right-click: hide temporarily.")}");
 
             var h = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
             h.AddThemeConstantOverride("separation", compact ? 5 : 7);
@@ -417,7 +430,7 @@ internal sealed class ShellAlertColumnView
                 CustomMinimumSize = new Vector2(compact ? 12 : 15, rowH),
                 MouseFilter = Control.MouseFilterEnum.Ignore
             };
-            if (item.Viewed)
+            if (item.IsViewed)
             {
                 var tickTex = new TextureRect
                 {
@@ -458,14 +471,14 @@ internal sealed class ShellAlertColumnView
             };
             titleLbl.AddThemeFontOverride("font", _ctx.Font("shell.serif"));
             titleLbl.AddThemeFontSizeOverride("font_size", compact ? 12 : 14);
-            titleLbl.AddThemeColorOverride("font_color", Ui.Colour(item.Viewed ? "shell.paper_muted" : "shell.paper"));
+            titleLbl.AddThemeColorOverride("font_color", Ui.Colour(item.IsViewed ? "shell.paper_muted" : "shell.paper"));
             h.AddChild(titleLbl);
 
-            if (!string.IsNullOrEmpty(item.RightDeadline))
+            if (!string.IsNullOrEmpty(item.DeadlineLabel))
             {
                 var fd = new Label
                 {
-                    Text = item.RightDeadline,
+                    Text = item.DeadlineLabel,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Center,
                     AutowrapMode = TextServer.AutowrapMode.Off,
@@ -524,7 +537,7 @@ internal sealed class ShellAlertColumnView
             // Group header with horizontal rule (<h4> in style.css)
             var gHead = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
             gHead.AddThemeConstantOverride("separation", 6);
-            var gLbl = new Label { Text = grp.GroupTitle };
+            var gLbl = new Label { Text = grp.Title };
             gLbl.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
             gLbl.AddThemeFontSizeOverride("font_size", compact ? 11 : 12);
             gLbl.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
@@ -554,7 +567,7 @@ internal sealed class ShellAlertColumnView
                 rb.Pressed += () =>
                 {
                     _ctx.PlayCue?.Invoke("ui_select");
-                    RouteTopic(captured.RouteScreen, captured.TargetId);
+                    RouteTopic(captured.RouteKind, captured.TargetId);
                 };
 
                 var rh = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -565,7 +578,7 @@ internal sealed class ShellAlertColumnView
 
                 var rl = new Label
                 {
-                    Text = row.Label,
+                    Text = row.Title,
                     SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                     VerticalAlignment = VerticalAlignment.Center,
                     AutowrapMode = TextServer.AutowrapMode.Off,
@@ -579,7 +592,7 @@ internal sealed class ShellAlertColumnView
 
                 var rv = new Label
                 {
-                    Text = row.RightStat,
+                    Text = row.Value,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Center,
                     AutowrapMode = TextServer.AutowrapMode.Off
@@ -615,23 +628,20 @@ internal sealed class ShellAlertColumnView
             return;
         }
 
-        var lines = NewsFeed.Read(world, 6);
-        for (var i = lines.Count - 1; i >= 0; i--)
+        foreach (var line in NewsFeed.Lines(world, _newsSeenSeq, 12))
         {
-            var line = lines[i];
-            if (line.Sequence <= _newsSeenSeq) continue;
-            _newsSeenSeq = line.Sequence;
+            if (line.Sequence > _newsSeenSeq) _newsSeenSeq = line.Sequence;
             _messages.RecordLine(line);
 
-            var involvesPlayer = world.Player is { } p && (line.ActorId == p.Id || line.SecondId == p.Id);
+            var involvesPlayer = HeadlinePopups.TieOf(world, line) != HeadlineTie.World;
             var evt = ShellMessageModalView.ClassifyNewsKind(line.Kind);
             var delivery = _messages.Resolve(evt, involvesPlayer);
 
-            if (delivery.AutoPause && !(_ctx.IsPaused?.Invoke() ?? true))
+            if (delivery.PauseClock && !(_ctx.IsPaused?.Invoke() ?? true))
                 _ctx.TogglePause?.Invoke();
 
-            if (delivery.Channel == ShellMessageChannel.NewspaperCard && !_newsPinned)
-                ShowNewsCard(line, delivery.ReasonTag);
+            if (delivery.ShowNewspaperCard && !_newsPinned)
+                ShowNewsCard(line, delivery.PauseClock ? "Urgent dispatch" : "Dispatch");
         }
 
         if (_newsCard is { Visible: true } && !_newsPinned && !(_ctx.IsPaused?.Invoke() ?? true))
@@ -650,7 +660,7 @@ internal sealed class ShellAlertColumnView
         _newsAge = 0;
         _newsPinned = false;
         var world = _ctx.World;
-        var dateTxt = world is not null ? CalendarDate.Format(world.StartYear, line.Day) : "";
+        var dateTxt = world is not null ? LandArrangementSystem.DateOfDay(world, line.Day) : "";
         var reasonTxt = string.IsNullOrEmpty(reasonKey) ? Loc.Get("Dispatch") : Loc.Get(reasonKey);
         _newsKickerLabel.Text = string.IsNullOrEmpty(dateTxt) ? reasonTxt : $"{reasonTxt} · {dateTxt}";
 
@@ -696,10 +706,21 @@ internal sealed class ShellAlertColumnView
         _ctx.OpenScreen?.Invoke(screen);
     }
 
-    private static string ResolveAlertIcon(ShellAlertItem item)
+    private static string RouteOfEntry(CampaignAlertRoute route) => route switch
+    {
+        CampaignAlertRoute.War or CampaignAlertRoute.Battle => "Wars",
+        CampaignAlertRoute.Research => "Research",
+        CampaignAlertRoute.Doctrine or CampaignAlertRoute.Army => "Military",
+        CampaignAlertRoute.Defcon => "Defcon",
+        CampaignAlertRoute.Decisions => "Decisions",
+        CampaignAlertRoute.Elections or CampaignAlertRoute.Personnel or CampaignAlertRoute.Event or CampaignAlertRoute.Situation => "State Affairs",
+        _ => "State Affairs"
+    };
+
+    private static string ResolveAlertIcon(ShellAlertEntry item)
     {
         if (item.IsNextHint) return "icon_shell_crane";
-        return item.RouteScreen switch
+        return RouteOfEntry(item.Route) switch
         {
             "Wars" => "icon_alert_battle",
             "SovereignFinance" => "icon_shell_warning",

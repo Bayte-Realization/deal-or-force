@@ -192,6 +192,15 @@ internal sealed class ShellOrchestrator
         }
     }
 
+    public static bool HasRealLeaderPortrait(LeaderProfile leader)
+    {
+        var slug = DealOrForceGame.SlugLeaderName(leader.Name);
+        var path = string.IsNullOrEmpty(leader.PortraitId) ? "" : SpriteCatalog.TextureOf(leader.PortraitId);
+        if (string.IsNullOrEmpty(path)) path = SpriteCatalog.TextureOf("leader_" + slug);
+        if (string.IsNullOrEmpty(path)) path = $"res://game/gfx/leaders/leader_{slug}.png";
+        return ResourceLoader.Exists(path) || Godot.FileAccess.FileExists(path.StartsWith("res://", StringComparison.Ordinal) ? ProjectSettings.GlobalizePath(path) : path);
+    }
+
     public Control BuildStateSealBadge(Campaign world, Nation nation, int width, int height)
     {
         var frame = new PanelContainer
@@ -228,7 +237,7 @@ internal sealed class ShellOrchestrator
         if (world is not null && nation is not null)
         {
             for (var i = 0; i < world.Nations.Count; i++)
-                if (world.Nations[i].Exists && world.Nations[i].Id != nation.Id && world.Nations[i].Gdp > nation.Gdp)
+                if (world.Nations[i].Population > 0 && world.Nations[i].Gdp > 0f && world.Nations[i].Id != nation.Id && world.Nations[i].Gdp > nation.Gdp)
                     rank++;
         }
         var rankLbl = new Label

@@ -26,9 +26,6 @@ internal sealed class ShellStripView
     private double _mergeClock;
     private string _lastStripSig = "";
 
-    public int VisibleStripTagCount { get; private set; }
-    public ShellRect CurrentStripRect => _dock?.BottomStrip ?? _profile?.Strip ?? new ShellRect(0, 0, 0, 0);
-
     public ShellStripView(ShellContext ctx)
     {
         _ctx = ctx;
@@ -187,7 +184,6 @@ internal sealed class ShellStripView
         if (undoRec is not null && !_dock.CompactStripTokens)
             AddUndoCell(undoRec.SummaryText);
 
-        VisibleStripTagCount = added;
         _stripPlate.Visible = added > 0 || undoRec is not null;
         FitStripBounds();
     }
@@ -195,9 +191,9 @@ internal sealed class ShellStripView
     private static (string Glyph, string Text, Color Stripe) DescribeArmyOrder(Campaign world, Army army)
     {
         var stateName = world.States.FirstOrDefault(s => s.MapIndex == army.StateMapIndex)?.DisplayName ?? "";
-        if (army.InCombat)
+        if (army.InBattle)
             return ("icon_shell_fight", $"{Loc.Get("Live")} · {stateName}", Ui.Colour("shell.state.negative"));
-        if (army.TargetProvinceId > 0 && army.TargetProvinceId != army.ProvinceId)
+        if (army.DirectOrder)
             return ("icon_shell_march", $"{Loc.Get("shell.order_march")} · {stateName}", Ui.Colour("shell.state.warning"));
         return ("icon_shell_stand", $"{Loc.Get("shell.order_stand")} · {stateName}", Ui.Colour("shell.paper_tag_edge"));
     }
@@ -481,13 +477,13 @@ internal sealed class ShellStripView
         }
 
         var isFlat = _ctx.IsFlatMap?.Invoke() ?? false;
-        var tier = MapCounterMerge.ZoomTierFromDistance(
+        var tier = MapCounterMerge.ZoomTier(
             _ctx.GetViewDistance?.Invoke() ?? 6f,
             isFlat,
             _ctx.GetFlatZoom?.Invoke() ?? 4f);
 
         // At combat, tactical, and regional zoom, or in Wars map mode: show ALL divisions without filtering!
-        if (tier is MapZoomTier.TacticalClose or MapZoomTier.Regional ||
+        if (tier is MapZoomTier.TacticalClose or MapZoomTier.OperationalMid ||
             (_ctx.GetMapMode?.Invoke() ?? StrategicMapMode.Political) == StrategicMapMode.Wars)
         {
             _ctx.SetMergedVisibleArmies?.Invoke(null);
@@ -496,19 +492,20 @@ internal sealed class ShellStripView
 
         // At far continental/orbital zoom: keep ALL player + ALL active-war/front armies visible,
         // filtering only distant peacetime neutral garrisons so active fronts are never culled.
+        var openWars = Warfare.OpenWars(world);
         var warNationIds = new HashSet<int>();
-        foreach (var w in Warfare.OpenWars(world))
+        for (var ni = 0; ni < world.Nations.Count; ni++)
         {
-            if (w.Ended) continue;
-            foreach (var id in w.Attackers) warNationIds.Add(id);
-            foreach (var id in w.Defenders) warNationIds.Add(id);
+            var nid = world.Nations[ni].Id;
+            for (var wi = 0; wi < openWars.Count; wi++)
+                if (!openWars[wi].Ended && openWars[wi].Involves(nid)) { warNationIds.Add(nid); break; }
         }
 
         _visibleArmyIds.Clear();
         for (var i = 0; i < world.Armies.Count; i++)
         {
             var a = world.Armies[i];
-            if (a.NationId == player.Id || a.InCombat || a.AssignedWarId >= 0 || warNationIds.Contains(a.NationId))
+            if (a.NationId == player.Id || a.InBattle || a.AssignedWarId >= 0 || warNationIds.Contains(a.NationId))
                 _visibleArmyIds.Add(a.Id);
         }
         _ctx.SetMergedVisibleArmies?.Invoke(_visibleArmyIds);

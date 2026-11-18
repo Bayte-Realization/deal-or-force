@@ -235,18 +235,18 @@ internal sealed class ShellMessageModalView
             return;
         }
 
-        var startYear = _ctx.World?.StartYear ?? 2024;
+        var world = _ctx.World;
         for (var pass = 0; pass < 2; pass++)
             for (var i = 0; i < Math.Min(20, _recentNews.Count); i++)
             {
                 var line = _recentNews[i];
                 var pinned = _pinnedSeqs.Contains(line.Sequence);
                 if ((pass == 0 && !pinned) || (pass == 1 && pinned)) continue;
-                AddDispatchRow(line, pinned, startYear);
+                AddDispatchRow(world, line, pinned);
             }
     }
 
-    private void AddDispatchRow(NewsFeed.Line line, bool pinned, int startYear)
+    private void AddDispatchRow(Campaign world, NewsFeed.Line line, bool pinned)
     {
         var rowBtn = new Button
         {
@@ -275,7 +275,7 @@ internal sealed class ShellMessageModalView
 
         var dt = new Label
         {
-            Text = CalendarDate.Format(startYear, line.Day),
+            Text = world is not null ? LandArrangementSystem.DateOfDay(world, line.Day) : $"d{line.Day}",
             CustomMinimumSize = new Vector2(68, 0),
             VerticalAlignment = VerticalAlignment.Center,
             ClipText = true

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using DealOrForce.Simulation;
+using DealOrForce.Simulation.Controls;
 using DealOrForce.Simulation.Shell;
 using Godot;
 
@@ -250,21 +251,22 @@ internal sealed class ShellNavRailView
         }
     }
 
-    public void Refresh(Campaign world, Nation player, WarState[] openWars, string openScreen)
+    public void Refresh(Campaign world, Nation player, StrategicWar[] openWars, string openScreen)
     {
-        var incomingDeals = world.DealOffers.Count(d => d.TargetId == player.Id);
+        var incomingDeals = world.DealOffers.Count(d => d.Pending && d.ToId == player.Id);
         var pendingEvents = world.PendingEvents.Count(e => e.NationId == player.Id);
-        var researchIdle = string.IsNullOrEmpty(player.ActiveTechnology);
-        var idleArmies = world.Armies.Count(a => a.NationId == player.Id && a.AssignedWarId < 0 && a.Order == ArmyOrder.Manual && a.TargetProvinceId <= 0);
-        var doctrineReady = player.ArmyExperience >= 20f || player.AirExperience >= 20f || player.NavyExperience >= 20f;
+        var researchIdle = string.IsNullOrEmpty(player.CurrentResearch);
+        var idleArmies = world.Armies.Count(a => a.NationId == player.Id && a.FrontLineId < 0 && a.AssignedWarId < 0 && !a.DirectOrder && !a.Training && !a.InBattle);
+        var doctrineReady = player.ArmyExperience >= 20f || player.AirExperience >= 20f || player.NavalExperience >= 20f;
         var emptyStyle = new StyleBoxEmpty();
 
         foreach (var it in _railItems)
         {
             var active = string.Equals(openScreen, it.Screen, StringComparison.Ordinal);
             it.Button.AddThemeStyleboxOverride("normal", active ? _ctx.PressedWellStyle(underlineLeft: true) : emptyStyle);
-            it.Button.TooltipText = Ui.Tip($"{Loc.Get(it.TitleKey)} ({it.Hotkey})
-{Loc.Get(it.SubKey)}");
+            it.Button.TooltipText = Ui.Tip(it.Screen == "Search"
+                ? HotkeyCatalog.TipWithShortcut("navigator", it.SubKey)
+                : $"{Loc.Get(it.TitleKey)} ({it.Hotkey})\n{Loc.Get(it.SubKey)}");
 
             var count = it.Screen switch
             {

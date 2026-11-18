@@ -77,8 +77,10 @@ static class NewShellTests
             var skinText = File.ReadAllText(Path.Combine(root, "interface", "00_skin.json"));
             Check(!skinText.Contains("#1d4477", StringComparison.OrdinalIgnoreCase),
                 "00_skin.json contains zero #1d4477 cold blue button/tab hexes");
-            var (pr, _, pb, _) = InterfaceSkin.Rgba("shell.paper");
-            Check(MathF.Abs(pr - pb) <= 0.05f, $"shell.paper is crisp neutral alabaster without yellow cast (R={pr:0.00}, B={pb:0.00})");
+            var paperHex = InterfaceSkin.Colour("shell.paper");
+            var pr = Convert.ToInt32(paperHex.Substring(1, 2), 16) / 255f;
+            var pb = Convert.ToInt32(paperHex.Substring(5, 2), 16) / 255f;
+            Check(MathF.Abs(pr - pb) <= 0.05f, $"shell.paper ({paperHex}) is crisp neutral alabaster without yellow cast (R={pr:0.00}, B={pb:0.00})");
 
             Check(File.Exists(Path.Combine(root, "fonts", "SourceSerif4-Regular.ttf")) &&
                   File.Exists(Path.Combine(root, "fonts", "SourceSerif4-SemiBold.ttf")) &&

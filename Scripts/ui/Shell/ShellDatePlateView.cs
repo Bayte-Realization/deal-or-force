@@ -457,7 +457,7 @@ internal sealed class ShellDatePlateView
         {
             _lastDateKey = dateKey;
             _dateLabel.Text = world.Date.Display(withTime: true);
-            _weekdayLabel.Text = FormatWeekday(world.StartYear, world.ElapsedDays);
+            _weekdayLabel.Text = FormatWeekday(world.Date);
         }
 
         var paused = _ctx.IsPaused?.Invoke() ?? true;
@@ -467,12 +467,12 @@ internal sealed class ShellDatePlateView
             _lastPaused = paused;
             _lastSpeed = speed;
             _pauseGlyph.Texture = _ctx.Icon(paused ? "icon_shell_play" : "icon_shell_pause");
-            _stateNoteLabel.Text = Loc.Get(paused ? "shell.paused_note" : "shell.running_note");
+            _stateNoteLabel.Text = paused ? Loc.Get("shell.paused_note") : Loc.Format("shell.running_note", speed);
             _stateNoteLabel.AddThemeColorOverride("font_color", Ui.Colour(paused ? "shell.pause_amber" : "shell.paper_faint"));
             foreach (var c in _speedChevrons) c.QueueRedraw();
         }
 
-        var defcon = Math.Clamp(WorldWar.Defcon(world), 1, 5);
+        var defcon = Math.Clamp(DefconSystem.CurrentLevel(world), 1, 5);
         var tension = Math.Clamp(WorldWar.Tension(world) / 100f, 0f, 1f);
         if (_lastDefcon != defcon || MathF.Abs(_lastTension - tension) > 0.004f)
         {
@@ -494,11 +494,14 @@ internal sealed class ShellDatePlateView
         _menuKbd.Visible = _ctx.AltKeycapsVisible;
     }
 
-    private static string FormatWeekday(int startYear, int elapsedDays)
+    private static string FormatWeekday(GameDate date)
     {
         try
         {
-            var dt = new DateTime(Math.Clamp(startYear, 1, 9990), 1, 1).AddDays(Math.Max(0, elapsedDays));
+            var yr = Math.Clamp(date.Year, 1, 9990);
+            var mo = Math.Clamp(date.Month, 1, 12);
+            var dy = Math.Clamp(date.Day, 1, DateTime.DaysInMonth(yr, mo));
+            var dt = new DateTime(yr, mo, dy);
             var ru = string.Equals(Loc.Language, "russian", StringComparison.OrdinalIgnoreCase);
             return dt.DayOfWeek switch
             {
