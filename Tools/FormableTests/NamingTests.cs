@@ -195,7 +195,7 @@ static class NamingTests
             // A secession is one country's civil war, not two countries in a row.
             var warCampaign = new Campaign(20261019);
             var union = new Nation { Id = 0, MapIndex = 1, Tag = "SAU", Name = "Gulf Union" };
-            var east = new Nation { Id = 1, MapIndex = 2, Tag = "EAS", Name = "Republic of East", SecededFromId = 0 };
+            var east = new Nation { Id = 1, MapIndex = 2, Tag = "EAS", Name = "Republic of East", SecededFromId = 0, FoundedInRevolt = "national" };
             warCampaign.Nations.AddRange(new[] { union, east });
             var secessionWar = new StrategicWar
             {
@@ -214,6 +214,13 @@ static class NamingTests
             warCampaign.Wars.Add(storedKeyWar);
             Check(!NationNaming.LooksLikeKey(WarNames.Of(warCampaign, storedKeyWar)),
                 "a war name stored with a key is rebuilt from the countries: " + WarNames.Of(warCampaign, storedKeyWar));
+
+            var subject = new Nation { Id = 3, MapIndex = 4, Tag = "YEM", Name = "Yemen", SecededFromId = 0 };
+            warCampaign.Nations.Add(subject);
+            var independenceWar = new StrategicWar { Id = 2, Name = "Gulf Union–Yemen War", AttackerId = 0, DefenderId = 3, CivilConflict = true };
+            warCampaign.Wars.Add(independenceWar);
+            Check(WarNames.Of(warCampaign, independenceWar) == "Yemen War of Independence",
+                "a pre-existing subject breaking away reads as a war of independence: " + WarNames.Of(warCampaign, independenceWar));
 
             // A name that already says what kind of state it is takes no second form.
             Check(NationNaming.CarriesStateForm("United Republic of Tanzania") &&
