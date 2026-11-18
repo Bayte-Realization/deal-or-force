@@ -1,6 +1,6 @@
 param(
     [ValidateSet('rust','zig','go')][string[]]$Languages=@('rust','zig','go'),
-    [string]$EngineDirectory='C:/GodotEngineNet 4.8-Beta2',
+    [string]$EngineDirectory='C:/GodotEngineNet 4.8-Beta3',
     [string]$ArtifactDirectory,
     [switch]$Probe
 )
@@ -10,7 +10,7 @@ $kit=Split-Path -Parent $PSScriptRoot
 $engine=Get-KitEngine $EngineDirectory
 $lock=Read-KitLock $kit
 if($engine.Version -ne $lock.engine.version){throw 'Engine differs from kit target.'}
-if(-not $ArtifactDirectory){$ArtifactDirectory=Join-Path $kit '.cache/verified-beta2'}
+if(-not $ArtifactDirectory){$ArtifactDirectory=Join-Path $kit '.cache/verified-beta3'}
 $tools=Join-Path $kit '.cache/toolchains'
 $zig=Join-Path $tools 'zig-0.17.0/zig-x86_64-windows-0.17.0/zig.exe'
 $go=Join-Path $tools 'go-1.27.3/go/bin/go.exe'
@@ -18,7 +18,7 @@ $cargoRoot=Join-Path $tools 'rust/cargo'
 foreach($language in ($Languages | Select-Object -Unique)){
     $source=$lock.sources | Where-Object id -eq $language
     $folder=if($language -eq 'rust'){'rust-release'}else{$language}
-    $sourcePath=Get-KitSource ([pscustomobject]@{id=$folder;url=$source.url;commit=$source.commit}) (Join-Path $kit '.cache/sources-beta2')
+    $sourcePath=Get-KitSource ([pscustomobject]@{id=$folder;url=$source.url;commit=$source.commit}) (Join-Path $kit '.cache/sources-beta3')
     $parameters=@{GodotExecutable=$engine.Executable;SourceDirectory=$sourcePath;OutputDirectory=(Join-Path $ArtifactDirectory $language)}
     $before=@{}
     foreach($name in @('PATH','CARGO_HOME','RUSTUP_HOME','RUSTUP_TOOLCHAIN','LIB','CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER','GDRUST_GODOT_BIN')){$before[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}

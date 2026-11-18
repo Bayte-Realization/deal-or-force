@@ -1,7 +1,12 @@
 # Experimental native language adapters
 
-The installer pins a real Luau ScriptLanguageExtension, applies the recorded
-Callable return-value fix and builds it locally. No engine fork is required.
+The installer pins a real Luau ScriptLanguageExtension and builds it locally with
+the LanguageKit recipe (`LanguageKit/adapters/luau/build.ps1 -Suffixes lua-and-luau`):
+bindings from the installed engine's `--dump-extension-api`, the recorded patches,
+`.lua` and `.luau`, an editor and a template_release DLL. `-Activate` copies them into
+`game/extensions/luau` only when no Godot holds the old DLL. No engine fork is required.
+The beta2 build was verified on 14 November 2026 in a separate project, not yet installed
+into the game (the editor had the project open).
 See [the Russian guide](../../docs/LUAU_ADAPTER_RU.md) for installation, API,
 trust boundaries and limitations. This is not native Rust/Go/F# source support.
 
