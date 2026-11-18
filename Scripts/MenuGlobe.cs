@@ -89,9 +89,9 @@ public partial class MenuGlobe : Control
 
         var sun = new Vector3(-0.76f, 0.32f, 0.42f).Normalized();
         var ground = MenuChromeTheme.BackdropColor.Darkened(0.45f);
-        var twilight = MenuChromeTheme.BrassHi.Lerp(MenuChromeTheme.Brass, 0.25f);
-        var lampTone = MenuChromeTheme.Highlight.Lerp(MenuChromeTheme.PauseAmber, 0.42f);
-        var starTone = MenuChromeTheme.Paper.Lerp(MenuChromeTheme.BrassHi, 0.28f);
+        var twilight = MenuChromeTheme.BrassHi.Lerp(new Color(0.62f, 0.65f, 0.69f), 0.35f);
+        var lampTone = new Color(0.95f, 0.89f, 0.80f);
+        var starTone = MenuChromeTheme.Paper;
 
         _viewport.AddChild(new WorldEnvironment
         {
@@ -135,7 +135,7 @@ public partial class MenuGlobe : Control
             airMaterial.SetShaderParameter("sun_direction", sun);
             airMaterial.SetShaderParameter("air_colour", twilight);
             airMaterial.SetShaderParameter("planet_radius", Radius);
-            airMaterial.SetShaderParameter("strength", 0.42f);
+            airMaterial.SetShaderParameter("strength", 0.38f);
         }
         _viewport.AddChild(air);
 

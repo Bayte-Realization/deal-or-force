@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DealOrForce.Simulation;
 using DealOrForce.Simulation.Shell;
 
@@ -74,8 +75,21 @@ static class MenuChromeTests
 
         Check(File.Exists(Path.Combine(dataRoot, "gfx", "interface", "brand_logo_banner.png")),
             "worn parchment logo banner exists");
-        Check(File.Exists(Path.Combine(repoRoot, "Scripts", "ui", "MenuChromeTheme.cs")),
-            "standalone MenuChromeTheme exists");
+
+        var themePath = Path.Combine(repoRoot, "Scripts", "ui", "MenuChromeTheme.cs");
+        Check(File.Exists(themePath), "standalone MenuChromeTheme exists");
+        var themeText = File.ReadAllText(themePath);
+        Check(themeText.Contains("#222120", StringComparison.OrdinalIgnoreCase) &&
+              themeText.Contains("#171615", StringComparison.OrdinalIgnoreCase) &&
+              themeText.Contains("#9B958C", StringComparison.OrdinalIgnoreCase) &&
+              themeText.Contains("#F2F0EC", StringComparison.OrdinalIgnoreCase),
+            "MenuChromeTheme defaults align with de-yellowed charcoal-titanium-alabaster palette");
+        Check(themeText.Contains("LegacyYellowDefaults", StringComparison.Ordinal) &&
+              themeText.Contains("ApplyMenuButtonChromeGuards", StringComparison.Ordinal) &&
+              themeText.Contains("skin_button_primary", StringComparison.Ordinal) &&
+              themeText.Contains("skin_panel_surface", StringComparison.Ordinal),
+            "MenuChromeTheme bypasses pre-de-yellow shell defaults and strips legacy blue repaint metas");
+
         Check(File.Exists(Path.Combine(repoRoot, "Scripts", "ui", "CountryPickerDossier.cs")),
             "standalone CountryPickerDossier exists");
     }
@@ -149,15 +163,28 @@ static class MenuChromeTests
             "Scripts/ui/LoadingScreenUI.cs"
         };
 
-        foreach (var rel in ownedFiles)
+        var competitorPattern = new Regex(
+            @"(?<![A-Za-z])(Paradox|Age of History|AoH|HOI4|Victoria\s*3|Vic3|Europa Universalis|Crusader Kings)(?![A-Za-z0-9])",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        Check(!competitorPattern.IsMatch("Lake Victoria"),
+            "competitor guardrail preserves geographical Victoria place names");
+
+        foreach (var rel in ownedFiles.Concat(new[]
+                 {
+                     "game/localization/english/zz_440_menu_chrome.json",
+                     "game/localization/russian/zz_440_menu_chrome.json"
+                 }))
         {
             var full = Path.Combine(repoRoot, rel.Replace('/', Path.DirectorySeparatorChar));
             Check(File.Exists(full), $"owned file exists: {rel}");
-            Check(File.Exists(full + ".uid"), $"uid sidecar exists: {rel}.uid");
+            if (rel.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                Check(File.Exists(full + ".uid"), $"uid sidecar exists: {rel}.uid");
             var text = File.ReadAllText(full);
             foreach (var bad in forbiddenLiterals)
                 Check(!text.Contains(bad, StringComparison.OrdinalIgnoreCase),
                     $"{rel} free of cold literal '{bad}'");
+            Check(!competitorPattern.IsMatch(text),
+                $"{rel} free of competitor brand mentions");
         }
 
         foreach (var helper in new[] { "Scripts/ui/MenuChromeTheme.cs", "Scripts/ui/CountryPickerDossier.cs" })
@@ -179,8 +206,10 @@ static class MenuChromeTests
 
         var pickerText = File.ReadAllText(Path.Combine(repoRoot, "Scripts", "ui", "CountrySelectionUI.cs"));
         Check(pickerText.Contains("BEGIN AS {0}", StringComparison.Ordinal) &&
-              pickerText.Contains("START HOTSEAT", StringComparison.Ordinal),
-            "CountrySelectionUI preserves campaign start button patterns");
+              pickerText.Contains("START HOTSEAT", StringComparison.Ordinal) &&
+              pickerText.Contains("PickerWeatherToggle(", StringComparison.Ordinal) &&
+              !Regex.IsMatch(pickerText, @"\bWeatherToggle\("),
+            "CountrySelectionUI preserves start button patterns and isolates weather toggles from cold blue repaints");
 
         var loadingText = File.ReadAllText(Path.Combine(repoRoot, "Scripts", "ui", "LoadingScreen.cs"));
         Check(loadingText.Contains("LoadingGameLogo", StringComparison.Ordinal) &&

@@ -19,6 +19,11 @@ internal static class MenuChromeTheme
     private static readonly Dictionary<string, StyleBox> BoxCache = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, Texture2D> TextureCache = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, Font> FontCache = new(StringComparer.Ordinal);
+    private static readonly HashSet<string> LegacyYellowDefaults = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "#efe4c8", "#c8bc9d", "#332c25", "#221d19", "#3d342c", "#0e0b08", "#16120e",
+        "#a48d68", "#7a6649", "#43382b", "#0e0c0a", "#3b3228", "#f3e7ca", "#5a4d3f", "#d89a3c"
+    };
     private static StyleBoxFlat _focusBox;
     private static bool _wiredSkinInvalidation;
 
@@ -42,41 +47,45 @@ internal static class MenuChromeTheme
     private static void ClearFontCaches() => FontCache.Clear();
 
     /// <summary>
-    /// Resolves a semantic skin token when declared, otherwise uses the Revision 3 warm fallback.
+    /// Resolves a semantic skin token when declared (skipping pre-de-yellow defaults),
+    /// otherwise uses the neutral charcoal-titanium-alabaster fallback.
     /// </summary>
-    internal static Color Token(string token, string warmFallbackHex, float alpha = 1f)
+    internal static Color Token(string token, string neutralFallbackHex, float alpha = 1f)
     {
-        var color = InterfaceSkin.Has(token) ? Ui.Colour(token) : Color.FromHtml(warmFallbackHex);
+        var hex = InterfaceSkin.Has(token) ? InterfaceSkin.Colour(token) : "";
+        var color = hex.Length > 0 && !LegacyYellowDefaults.Contains(hex)
+            ? Ui.Colour(token)
+            : Color.FromHtml(neutralFallbackHex);
         color.A *= alpha;
         return color;
     }
 
-    internal static Color PlateTop => Token("shell.plate_top", "#332c25");
-    internal static Color PlateBottom => Token("shell.plate_bottom", "#221d19");
-    internal static Color PlateHover => Token("shell.plate_hover", "#3d342c");
-    internal static Color BodyTop => Token("shell.body_top", "#2a241e");
-    internal static Color BodyBottom => Token("shell.body_bottom", "#1f1a16");
-    internal static Color WellTop => Token("shell.well_top", "#0e0b08");
-    internal static Color WellBottom => Token("shell.well_bottom", "#16120e");
-    internal static Color BrassHi => Token("shell.brass_hi", "#a48d68");
-    internal static Color Brass => Token("shell.brass", "#7a6649");
-    internal static Color BrassShadow => Token("shell.brass_shadow", "#43382b");
-    internal static Color BorderDark => Token("shell.border", "#0e0c0a");
-    internal static Color RuleDark => Token("shell.rule_dark", "#0d0b09");
-    internal static Color RuleLight => Token("shell.engrave", "#4d4336");
-    internal static Color JournalRule => Token("shell.journal_rule", "#5a4d3f");
-    internal static Color Paper => Token("shell.paper", "#efe4c8");
-    internal static Color PaperDim => Token("shell.paper_muted", "#cfc5ab");
-    internal static Color PaperFaint => Token("shell.paper_faint", "#a39983");
-    internal static Color PaperGhost => Token("shell.paper_ghost", "#6f6757");
-    internal static Color Highlight => Token("shell.highlight", "#f3e7ca");
-    internal static Color PauseAmber => Token("shell.pause_amber", "#d89a3c");
+    internal static Color PlateTop => Token("shell.plate_top", "#222120");
+    internal static Color PlateBottom => Token("shell.plate_bottom", "#171615");
+    internal static Color PlateHover => Token("shell.plate_hover", "#2D2B29");
+    internal static Color BodyTop => Token("shell.body_top", "#1D1C1B");
+    internal static Color BodyBottom => Token("shell.body_bottom", "#141312");
+    internal static Color WellTop => Token("shell.well_top", "#0D0C0B");
+    internal static Color WellBottom => Token("shell.well_bottom", "#151413");
+    internal static Color BrassHi => Token("shell.brass_hi", "#9B958C");
+    internal static Color Brass => Token("shell.brass", "#746F68");
+    internal static Color BrassShadow => Token("shell.brass_shadow", "#413E3A");
+    internal static Color BorderDark => Token("shell.border", "#0A0A09");
+    internal static Color RuleDark => Token("shell.rule_dark", "#090908");
+    internal static Color RuleLight => Token("shell.rule", "#3A3734");
+    internal static Color JournalRule => Token("shell.journal_rule", "#4E4B45");
+    internal static Color Paper => Token("shell.paper", "#F2F0EC");
+    internal static Color PaperDim => Token("shell.paper_muted", "#C6C1B8");
+    internal static Color PaperFaint => Token("shell.paper_faint", "#9B958C");
+    internal static Color PaperGhost => Token("shell.paper_ghost", "#68645E");
+    internal static Color Highlight => Token("shell.highlight", "#F8F7F4");
+    internal static Color PauseAmber => Token("shell.pause_amber", "#C48A45");
     internal static Color Positive => Token("shell.state.positive", "#4fb477");
     internal static Color Negative => Token("shell.state.negative", "#c94f55");
-    internal static Color Warning => Token("shell.state.warning", "#e7b058");
+    internal static Color Warning => Token("shell.state.warning", "#d99b4e");
     internal static Color Info => Token("shell.state.info", "#77c9e8");
-    internal static Color VeilColor => WellTop with { A = 0.80f };
-    internal static Color BackdropColor => new(WellTop.R * 0.86f, WellTop.G * 0.86f, WellTop.B * 0.86f, 1f);
+    internal static Color VeilColor => WellTop with { A = 0.82f };
+    internal static Color BackdropColor => new(WellTop.R * 0.85f, WellTop.G * 0.85f, WellTop.B * 0.85f, 1f);
 
     internal static Font SerifDisplay(bool bold = false)
     {
@@ -253,6 +262,7 @@ internal static class MenuChromeTheme
     {
         if (panel is null) return;
         panel.SetMeta(MaterialStyles.MaterialMeta, "menu_chrome");
+        if (panel.HasMeta("skin_panel_surface")) panel.RemoveMeta("skin_panel_surface");
         if (panel.GetNodeOrNull<Node>("AtlasMaterial") is { } oldAtlas)
         {
             oldAtlas.QueueFree();
@@ -269,6 +279,29 @@ internal static class MenuChromeTheme
             var frame = new MenuChromeBrassFrame { Name = "MenuChromeBrassFrame", ZIndex = 4 };
             panel.AddChild(frame);
         }
+    }
+
+    private static void ApplyMenuButtonChromeGuards(Button button, bool highlightedText)
+    {
+        if (button.HasMeta("skin_button_primary")) button.RemoveMeta("skin_button_primary");
+        if (button.HasMeta("atlas_tab_button")) button.RemoveMeta("atlas_tab_button");
+        if (button.HasMeta("atlas_round_button")) button.RemoveMeta("atlas_round_button");
+        if (button.HasMeta("atlas_nav_tile")) button.RemoveMeta("atlas_nav_tile");
+        button.SetMeta(MaterialStyles.MaterialMeta, "menu_chrome");
+
+        var focus = FocusBox();
+        button.AddThemeStyleboxOverride("focus", focus);
+        button.SetMeta("button_keyboard_focus_style", focus);
+        button.SetMeta("button_applied_focus_style", focus);
+
+        var baseIcon = highlightedText ? Paper : PaperDim;
+        button.AddThemeColorOverride("icon_normal_color", baseIcon);
+        button.AddThemeColorOverride("icon_hover_color", Highlight);
+        button.AddThemeColorOverride("icon_pressed_color", Paper);
+        button.AddThemeColorOverride("icon_hover_pressed_color", Highlight);
+        button.AddThemeColorOverride("icon_focus_color", Highlight);
+        button.AddThemeColorOverride("icon_disabled_color", PaperGhost);
+        button.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
     }
 
     internal static Control CreateEngravedRule(string name = "EngravedRule", float verticalMargin = 2f)
@@ -309,7 +342,6 @@ internal static class MenuChromeTheme
         button.AddThemeStyleboxOverride("pressed", pressed);
         button.AddThemeStyleboxOverride("hover_pressed", pressed);
         button.AddThemeStyleboxOverride("disabled", disabled);
-        button.AddThemeStyleboxOverride("focus", FocusBox());
         button.AddThemeFontOverride("font", serif ? SerifDisplay() : SansBody());
         button.AddThemeFontSizeOverride("font_size", fontSize);
         button.AddThemeColorOverride("font_color", Paper);
@@ -317,7 +349,7 @@ internal static class MenuChromeTheme
         button.AddThemeColorOverride("font_pressed_color", Paper);
         button.AddThemeColorOverride("font_focus_color", Highlight);
         button.AddThemeColorOverride("font_disabled_color", PaperGhost);
-        button.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
+        ApplyMenuButtonChromeGuards(button, highlightedText: true);
     }
 
     internal static void StyleWellButton(Button button, bool selected = false, int fontSize = 14)
@@ -347,7 +379,6 @@ internal static class MenuChromeTheme
         button.AddThemeStyleboxOverride("pressed", pressed);
         button.AddThemeStyleboxOverride("hover_pressed", pressed);
         button.AddThemeStyleboxOverride("disabled", disabled);
-        button.AddThemeStyleboxOverride("focus", FocusBox());
         button.AddThemeFontOverride("font", SansBody());
         button.AddThemeFontSizeOverride("font_size", fontSize);
         button.AddThemeColorOverride("font_color", selected ? Paper : PaperDim);
@@ -355,7 +386,7 @@ internal static class MenuChromeTheme
         button.AddThemeColorOverride("font_pressed_color", Highlight);
         button.AddThemeColorOverride("font_focus_color", Paper);
         button.AddThemeColorOverride("font_disabled_color", PaperGhost);
-        button.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
+        ApplyMenuButtonChromeGuards(button, highlightedText: selected);
     }
 
     internal static void StylePlateButton(Button button, bool active = false, int fontSize = 13)
@@ -382,7 +413,6 @@ internal static class MenuChromeTheme
         button.AddThemeStyleboxOverride("pressed", pressed);
         button.AddThemeStyleboxOverride("hover_pressed", pressed);
         button.AddThemeStyleboxOverride("disabled", normal);
-        button.AddThemeStyleboxOverride("focus", FocusBox());
         button.AddThemeFontOverride("font", SansBody());
         button.AddThemeFontSizeOverride("font_size", fontSize);
         button.AddThemeColorOverride("font_color", active ? Paper : PaperDim);
@@ -390,7 +420,7 @@ internal static class MenuChromeTheme
         button.AddThemeColorOverride("font_pressed_color", Paper);
         button.AddThemeColorOverride("font_focus_color", Paper);
         button.AddThemeColorOverride("font_disabled_color", PaperGhost);
-        button.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
+        ApplyMenuButtonChromeGuards(button, highlightedText: active);
     }
 
     internal static void StyleTabButton(Button button, bool active, int fontSize = 13)
@@ -412,12 +442,14 @@ internal static class MenuChromeTheme
         button.AddThemeStyleboxOverride("hover", active ? normal : hover);
         button.AddThemeStyleboxOverride("pressed", normal);
         button.AddThemeStyleboxOverride("hover_pressed", normal);
-        button.AddThemeStyleboxOverride("focus", FocusBox());
         button.AddThemeFontOverride("font", active ? SerifDisplay() : SansBody());
         button.AddThemeFontSizeOverride("font_size", fontSize);
         button.AddThemeColorOverride("font_color", active ? Paper : PaperFaint);
         button.AddThemeColorOverride("font_hover_color", Paper);
         button.AddThemeColorOverride("font_pressed_color", Paper);
+        button.AddThemeColorOverride("font_focus_color", active ? Paper : PaperDim);
+        button.AddThemeColorOverride("font_disabled_color", PaperGhost);
+        ApplyMenuButtonChromeGuards(button, highlightedText: active);
     }
 
     internal static void StyleLineEdit(LineEdit field)

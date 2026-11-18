@@ -69,7 +69,7 @@ public partial class LoadingScreen : Control
             // map are one place. The illustrations, when they are switched on, still come first.
             Name = "LoadingScene", Texture = plain ? WorldPicture() : NextScene(), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered, MouseFilter = MouseFilterEnum.Ignore,
-            SelfModulate = plain ? new Color(0.68f, 0.64f, 0.58f) : new Color(0.84f, 0.80f, 0.74f)
+            SelfModulate = plain ? new Color(0.66f, 0.66f, 0.67f) : new Color(0.84f, 0.84f, 0.84f)
         };
         var pictured = _scene.Texture is not null;
         AddChild(_scene);
@@ -110,7 +110,7 @@ public partial class LoadingScreen : Control
                 : null,
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
-            Modulate = MenuChromeTheme.PaperDim with { A = 0.06f }, MouseFilter = MouseFilterEnum.Ignore
+            Modulate = MenuChromeTheme.PaperDim with { A = 0.05f }, MouseFilter = MouseFilterEnum.Ignore
         };
         AddChild(_paper);
         _paper.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);

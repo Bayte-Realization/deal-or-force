@@ -13,8 +13,8 @@ uniform sampler2D night_lights : filter_linear_mipmap, repeat_enable;
 // Where the sun stands, in the camera's own space: the camera does not turn, so the light
 // stays put while the planet turns under it and the dusk line crosses the continents.
 uniform vec3 sun_direction = vec3(-0.76, 0.32, 0.42);
-uniform vec3 air_colour : source_color = vec3(0.64, 0.54, 0.40);
-uniform vec3 lamp_colour : source_color = vec3(1.0, 0.85, 0.58);
+uniform vec3 air_colour : source_color = vec3(0.56, 0.57, 0.59);
+uniform vec3 lamp_colour : source_color = vec3(0.95, 0.89, 0.80);
 uniform float brightness = 1.0;
 
 varying vec3 local_normal;

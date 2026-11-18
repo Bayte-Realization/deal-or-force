@@ -6,8 +6,8 @@ render_mode unshaded, cull_front, depth_draw_never;
 // is cheaper than a picture of one and is sharp on any screen. The cells are small - a
 // quarter of a degree - because a star is a point: at the first size tried they were discs.
 
-uniform vec3 ground_colour : source_color = vec3(0.022, 0.017, 0.013);
-uniform vec3 star_colour : source_color = vec3(0.95, 0.89, 0.76);
+uniform vec3 ground_colour : source_color = vec3(0.018, 0.017, 0.016);
+uniform vec3 star_colour : source_color = vec3(0.95, 0.94, 0.92);
 uniform float star_strength = 0.78;
 
 float cell_hash(vec2 cell) {

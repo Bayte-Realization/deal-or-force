@@ -218,12 +218,10 @@ public partial class DealOrForceGame
         weatherRow.AddThemeConstantOverride("separation", 8);
         advanced.AddChild(weatherRow);
         // The globe here is a map being studied for its borders, and clouds are in the way of it.
-        var pickerClouds = WeatherToggle("map_clouds", "Clouds", "Clouds over the world. Press to hide or show them - the same option as in the settings.", 96);
-        MenuChromeTheme.StylePlateButton(pickerClouds, SettingsCatalog.Flag("map_clouds"), 13);
+        var pickerClouds = PickerWeatherToggle("map_clouds", "Clouds", "Clouds over the world. Press to hide or show them - the same option as in the settings.", 96);
         weatherRow.AddChild(pickerClouds);
-        var pickerFog = WeatherToggle("map_mist", "FOG", "Hide or show the visual mist. Unseen provinces remain unseen.", 70);
+        var pickerFog = PickerWeatherToggle("map_mist", "FOG", "Hide or show the visual mist. Unseen provinces remain unseen.", 70);
         pickerFog.Name = "PickerFog";
-        MenuChromeTheme.StylePlateButton(pickerFog, SettingsCatalog.Flag("map_mist"), 13);
         weatherRow.AddChild(pickerFog);
 
         // The seed the next world is built from. The same seed builds the same world to the
@@ -265,6 +263,39 @@ public partial class DealOrForceGame
     {
         var button = ActionButton(text, onPressed, width, 36);
         MenuChromeTheme.StyleWellButton(button, selected: false, fontSize: 13);
+        return button;
+    }
+
+    private Button PickerWeatherToggle(string setting, string caption, string help, float width)
+    {
+        var ownCaption = "map.toggle." + caption;
+        var labelKey = Simulation.Loc.Has(ownCaption) ? ownCaption : caption;
+        Button button = null!;
+        button = ActionButton(labelKey, () =>
+        {
+            var next = !SettingsCatalog.Flag(setting);
+            SettingsCatalog.Store(setting, next);
+            ApplySetting(setting);
+            RefreshMapVisualToggles();
+            button.SetPressedNoSignal(next);
+            MenuChromeTheme.StylePlateButton(button, next, 13);
+        }, MathF.Max(width, 86f), 34);
+        button.ToggleMode = true;
+        button.ClipText = true;
+        button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        Tip(button, help);
+        button.AccessibilityName = Tr(caption);
+
+        void Sync()
+        {
+            if (!IsInstanceValid(button)) return;
+            var on = SettingsCatalog.Flag(setting);
+            button.SetPressedNoSignal(on);
+            MenuChromeTheme.StylePlateButton(button, on, 13);
+        }
+
+        _pickerLayer.VisibilityChanged += Sync;
+        Sync();
         return button;
     }
 

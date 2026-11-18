@@ -167,7 +167,7 @@ internal sealed class CountryPickerDossier
 
     /// <summary>
     /// Harmonizes borrowed HUD child blocks (such as the compact executive header) into the
-    /// picker's warm parchment-and-brass palette without duplicating their construction logic.
+    /// picker's neutral alabaster-and-titanium palette without duplicating their construction logic.
     /// </summary>
     internal static void WarmSubtree(Node root)
     {
@@ -179,7 +179,7 @@ internal sealed class CountryPickerDossier
                 var current = label.HasThemeColorOverride("font_color")
                     ? label.GetThemeColor("font_color")
                     : MenuChromeTheme.Paper;
-                var target = current.B > current.R + 0.08f
+                var target = current.B > current.R + 0.08f || current.R > current.B + 0.14f
                     ? (label.GetThemeFontSize("font_size") >= 14 ? MenuChromeTheme.Paper : MenuChromeTheme.BrassHi)
                     : current.R < 0.55f ? MenuChromeTheme.PaperFaint
                     : MenuChromeTheme.PaperDim;
@@ -187,12 +187,13 @@ internal sealed class CountryPickerDossier
             }
             else if (child is PanelContainer panel)
             {
-                if (panel.GetThemeStylebox("panel") is StyleBoxFlat flat && flat.BorderColor.B > flat.BorderColor.R + 0.08f)
+                if (panel.GetThemeStylebox("panel") is StyleBoxFlat flat &&
+                    (flat.BorderWidthLeft > 0 || flat.BorderWidthTop > 0 || flat.BorderWidthRight > 0 || flat.BorderWidthBottom > 0))
                 {
-                    var warm = (StyleBoxFlat)flat.Duplicate();
-                    warm.BgColor = MenuChromeTheme.WellTop;
-                    warm.BorderColor = MenuChromeTheme.Brass;
-                    panel.AddThemeStyleboxOverride("panel", warm);
+                    var neutral = (StyleBoxFlat)flat.Duplicate();
+                    neutral.BgColor = MenuChromeTheme.WellTop;
+                    neutral.BorderColor = MenuChromeTheme.Brass;
+                    panel.AddThemeStyleboxOverride("panel", neutral);
                 }
             }
             WarmSubtree(child);
