@@ -366,12 +366,15 @@ public static class Reintegration
             if (DemographyCatalog.Culture(c)?.Group is { Length: > 0 } g) groups.Add(g);
         if (groups.Count == 0) return 0f;
         long total = 0, matching = 0;
-        foreach (var (culture, size) in EconomySystem.Cultures(region))
+        var popGroups = region.PopulationGroups;
+        for (var i = 0; i < popGroups.Count; i++)
         {
-            var s = Math.Max(0L, size);
-            total += s;
+            var group = popGroups[i];
+            if (group.Size <= 0) continue;
+            total += group.Size;
+            var culture = string.IsNullOrEmpty(group.Culture) ? "?" : group.Culture;
             if (DemographyCatalog.Culture(culture)?.Group is { Length: > 0 } g && groups.Contains(g))
-                matching += s;
+                matching += group.Size;
         }
         return total <= 0 ? 0f : matching / (float)total;
     }

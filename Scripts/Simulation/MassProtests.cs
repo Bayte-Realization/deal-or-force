@@ -67,6 +67,12 @@ public static class MassProtests
 {
     public static void Review(Campaign c, Nation nation, DomesticCrisisSnapshot snapshot, int days)
     {
+        if (snapshot is null) return;
+        Review(c, nation, snapshot.Awareness, snapshot.Radicalism, days);
+    }
+
+    internal static void Review(Campaign c, Nation nation, float awareness, float radicalism, int days)
+    {
         var d = c.Defines;
         if (!d.ProtestsEnabled || nation.Movement is not null || nation.Population <= 0 || days <= 0) return;
         var memory = nation.DomesticCrisis;
@@ -87,7 +93,7 @@ public static class MassProtests
         var own = cut * d.ProtestCutWeight + guns +
                   MathF.Max(0f, nation.Inflation - d.ProtestInflationFloor) * d.ProtestInflationWeight +
                   MathF.Max(0f, d.ProtestStabilityFloor - nation.Stability) * d.ProtestStabilityWeight +
-                  MathF.Max(0f, snapshot.Radicalism - d.ProtestRadicalismFloor) * d.ProtestRadicalismWeight;
+                  MathF.Max(0f, radicalism - d.ProtestRadicalismFloor) * d.ProtestRadicalismWeight;
         // A wave next door carries over only what people here are already angry about: added
         // without that, two neighbours kept each other's streets full and 162 countries marched
         // in the first year.
@@ -96,7 +102,7 @@ public static class MassProtests
         memory.ProtestGrievance = Move(memory.ProtestGrievance, target, d.ProtestGrievancePerDay * days);
 
         var openness = ParliamentaryPolitics.Eligible(nation) ? 1f : d.ProtestRepressedTurnout;
-        var turnout = (0.35f + 0.65f * snapshot.Awareness) * openness;
+        var turnout = (0.35f + 0.65f * awareness) * openness;
         var threshold = M.Clamp(d.ProtestThreshold, 0f, 0.95f);
         var wanted = M.Clamp01((memory.ProtestGrievance - threshold) / MathF.Max(0.05f, 0.8f - threshold)) * turnout;
         var before = memory.ProtestIntensity;

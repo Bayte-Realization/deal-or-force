@@ -117,7 +117,17 @@ public static class HomelandIntegration
             if (TerritorialClaims.TitleOf(c, claimant, region) != TerritorialTitle.Homeland) continue;
             if (1f - EconomySystem.ForeignShare(region, claimant.Tag) >= d.HomelandFadeOwnShare) continue;
             // Never while it still holds a piece of the same region: the memory is of the place.
-            if (c.States.Any(s => s.NationMapIndex == claimant.MapIndex && TerritorialClaims.Origin(s) == origin)) continue;
+            var stillHoldsOrigin = false;
+            var claimantStates = c.StatesOf(claimant);
+            for (var si = 0; si < claimantStates.Length; si++)
+            {
+                if (TerritorialClaims.Origin(claimantStates[si]) == origin)
+                {
+                    stillHoldsOrigin = true;
+                    break;
+                }
+            }
+            if (stillHoldsOrigin) continue;
             if (c.Homelands.TryGetValue(claimant.Id, out var home))
                 home.RemoveAll(id => id == origin || id == region.MapIndex);
             region.CoreTags.RemoveAll(tag => string.Equals(tag, claimant.Tag, StringComparison.OrdinalIgnoreCase));

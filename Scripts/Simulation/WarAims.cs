@@ -96,10 +96,14 @@ public static class WarAims
         if (region is null || cultures is null || cultures.Count == 0) return 0f;
         long total = 0;
         long ours = 0;
-        foreach (var (culture, size) in EconomySystem.Cultures(region))
+        var groups = region.PopulationGroups;
+        for (var i = 0; i < groups.Count; i++)
         {
-            total += Math.Max(0L, size);
-            if (cultures.Contains(culture)) ours += Math.Max(0L, size);
+            var group = groups[i];
+            if (group.Size <= 0) continue;
+            total += group.Size;
+            var culture = string.IsNullOrEmpty(group.Culture) ? "?" : group.Culture;
+            if (cultures.Contains(culture)) ours += group.Size;
         }
         return total <= 0 ? 0f : ours / (float)total;
     }

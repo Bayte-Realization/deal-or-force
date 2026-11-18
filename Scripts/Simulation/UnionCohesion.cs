@@ -221,8 +221,7 @@ public static class UnionCohesion
         if (state.MapIndex == nation.CapitalStateMapIndex || state.SecessionPressure < 0f) return false;
         // Nor ground whose people have a living state of their own: Ukrainians on land Russia
         // took are Ukraine's lost land, not a "Ukrainian Republic" breaking from the union.
-        var cultures = EconomySystem.Cultures(state);
-        var people = cultures.Count > 0 ? cultures[0].Culture : null;
+        var people = EconomySystem.DominantCulture(state).Culture;
         // The union's own peoples are not someone else's lost land, whoever else is of them.
         if (!string.IsNullOrEmpty(people) && !DemographyCatalog.IsPrimary(nation.Tag, people) &&
             SecessionEvents.KinNear(campaign, nation, people, state)) return false;

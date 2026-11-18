@@ -74,6 +74,9 @@ public static partial class AiStatecraft
         internal Dictionary<int, ScenarioState> StateByMapIndex;
         internal int GeographyWeek = int.MinValue;
         internal int GeographyStates = -1;
+        internal readonly List<Nation> LiveNationsSorted = new();
+        internal int LiveNationsDay = int.MinValue;
+        internal int LiveNationsCount = -1;
     }
 
     private static DailyTables TablesOf(Campaign campaign) =>
@@ -297,7 +300,7 @@ public static partial class AiStatecraft
         // a fifty-year save - so it is the one worth slicing. The dictionary is walked once, in
         // its own order, and the walk continues across slices without reordering anything.
         var signed = tables.SignedWith;
-        signed.Clear();
+        foreach (var list in signed.Values) list.Clear();
         using (var relations = campaign.Relations.Values.GetEnumerator())
         {
             var exhausted = false;

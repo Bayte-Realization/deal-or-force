@@ -328,7 +328,7 @@ public static class TradeDesk
     public static float ForGood(Nation nation, Commodity commodity, string setting)
     {
         if (nation is null || nation.TradeSettings.Count == 0) return Of(setting)?.Default ?? 0f;
-        if (nation.TradeSettings.TryGetValue(GoodKey(commodity, setting), out var chosen)) return chosen;
+        if (TryGetGood(nation.TradeSettings, commodity, setting, out var chosen)) return chosen;
         return Of(setting)?.Default ?? 0f;
     }
 
@@ -340,11 +340,133 @@ public static class TradeDesk
     {
         if (nation is null || string.IsNullOrEmpty(partnerTag) || nation.TradeSettings.Count == 0)
             return Of(setting)?.Default ?? 0f;
-        if (nation.TradeSettings.TryGetValue(PartnerKey(partnerTag, commodity, setting), out var forThisGood))
+        if (TryGetPartner(nation.TradeSettings, partnerTag, commodity, setting, out var forThisGood))
             return forThisGood;
-        if (nation.TradeSettings.TryGetValue(PartnerKey(partnerTag, setting), out var forEverything))
+        if (TryGetPartner(nation.TradeSettings, partnerTag, setting, out var forEverything))
             return forEverything;
         return Of(setting)?.Default ?? 0f;
+    }
+
+    private static bool TryGetGood(Dictionary<string, float> settings, Commodity commodity, string setting, out float value)
+    {
+        var goodId = CommodityCatalog.IdOf(commodity) ?? "";
+        var settingSpan = setting.AsSpan();
+        var len = 6 + goodId.Length + settingSpan.Length;
+#if NET9_0_OR_GREATER
+        if (len <= 160 && settings.TryGetAlternateLookup<ReadOnlySpan<char>>(out var lookup))
+        {
+            Span<char> buf = stackalloc char[len];
+            "good/".AsSpan().CopyTo(buf);
+            goodId.AsSpan().CopyTo(buf[5..]);
+            buf[5 + goodId.Length] = '/';
+            settingSpan.CopyTo(buf[(6 + goodId.Length)..]);
+            return lookup.TryGetValue(buf, out value);
+        }
+#else
+        if (settings.Count <= 128)
+        {
+            foreach (var kvp in settings)
+            {
+                var key = kvp.Key;
+                if (key.Length != len || !key.StartsWith("good/", StringComparison.Ordinal)) continue;
+                if (key[5 + goodId.Length] != '/') continue;
+                if (key.AsSpan(5, goodId.Length).SequenceEqual(goodId.AsSpan()) &&
+                    key.AsSpan(6 + goodId.Length).SequenceEqual(settingSpan))
+                {
+                    value = kvp.Value;
+                    return true;
+                }
+            }
+            value = 0f;
+            return false;
+        }
+#endif
+        return settings.TryGetValue(GoodKey(commodity, setting), out value);
+    }
+
+    private static bool TryGetPartner(Dictionary<string, float> settings, string tag, Commodity commodity, string setting, out float value)
+    {
+        var goodId = CommodityCatalog.IdOf(commodity) ?? "";
+        var tagSpan = tag.AsSpan();
+        var settingSpan = setting.AsSpan();
+        var len = 10 + tagSpan.Length + goodId.Length + settingSpan.Length;
+#if NET9_0_OR_GREATER
+        if (len <= 192 && settings.TryGetAlternateLookup<ReadOnlySpan<char>>(out var lookup))
+        {
+            Span<char> buf = stackalloc char[len];
+            "partner/".AsSpan().CopyTo(buf);
+            var pos = 8;
+            tagSpan.CopyTo(buf[pos..]);
+            pos += tagSpan.Length;
+            buf[pos++] = '/';
+            goodId.AsSpan().CopyTo(buf[pos..]);
+            pos += goodId.Length;
+            buf[pos++] = '/';
+            settingSpan.CopyTo(buf[pos..]);
+            return lookup.TryGetValue(buf, out value);
+        }
+#else
+        if (settings.Count <= 128)
+        {
+            foreach (var kvp in settings)
+            {
+                var key = kvp.Key;
+                if (key.Length != len || !key.StartsWith("partner/", StringComparison.Ordinal)) continue;
+                var pos = 8 + tagSpan.Length;
+                if (key[pos] != '/' || key[pos + 1 + goodId.Length] != '/') continue;
+                if (key.AsSpan(8, tagSpan.Length).SequenceEqual(tagSpan) &&
+                    key.AsSpan(pos + 1, goodId.Length).SequenceEqual(goodId.AsSpan()) &&
+                    key.AsSpan(pos + 2 + goodId.Length).SequenceEqual(settingSpan))
+                {
+                    value = kvp.Value;
+                    return true;
+                }
+            }
+            value = 0f;
+            return false;
+        }
+#endif
+        return settings.TryGetValue(PartnerKey(tag, commodity, setting), out value);
+    }
+
+    private static bool TryGetPartner(Dictionary<string, float> settings, string tag, string setting, out float value)
+    {
+        var tagSpan = tag.AsSpan();
+        var settingSpan = setting.AsSpan();
+        var len = 9 + tagSpan.Length + settingSpan.Length;
+#if NET9_0_OR_GREATER
+        if (len <= 160 && settings.TryGetAlternateLookup<ReadOnlySpan<char>>(out var lookup))
+        {
+            Span<char> buf = stackalloc char[len];
+            "partner/".AsSpan().CopyTo(buf);
+            var pos = 8;
+            tagSpan.CopyTo(buf[pos..]);
+            pos += tagSpan.Length;
+            buf[pos++] = '/';
+            settingSpan.CopyTo(buf[pos..]);
+            return lookup.TryGetValue(buf, out value);
+        }
+#else
+        if (settings.Count <= 128)
+        {
+            foreach (var kvp in settings)
+            {
+                var key = kvp.Key;
+                if (key.Length != len || !key.StartsWith("partner/", StringComparison.Ordinal)) continue;
+                var pos = 8 + tagSpan.Length;
+                if (key[pos] != '/') continue;
+                if (key.AsSpan(8, tagSpan.Length).SequenceEqual(tagSpan) &&
+                    key.AsSpan(pos + 1).SequenceEqual(settingSpan))
+                {
+                    value = kvp.Value;
+                    return true;
+                }
+            }
+            value = 0f;
+            return false;
+        }
+#endif
+        return settings.TryGetValue(PartnerKey(tag, setting), out value);
     }
 
     /// <summary>Whether either side has forbidden this particular trade.</summary>

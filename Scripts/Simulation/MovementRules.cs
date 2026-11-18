@@ -196,6 +196,7 @@ public static class MovementRules
 
     [ThreadStatic] private static Dictionary<int, bool> _ownStateCache;
     [ThreadStatic] private static Dictionary<int, bool> _atWarWithCache;
+    [ThreadStatic] private static Dictionary<int, float> _esteemCache;
     [ThreadStatic] private static HashSet<int> _liveRegions;
     [ThreadStatic] private static List<int> _staleSupport;
     [ThreadStatic] private static List<int> _sponsorKeysScratch;
@@ -260,6 +261,9 @@ public static class MovementRules
         // declares or ends a war, and the answer is the owner's, not the region's.
         var atWarWith = _atWarWithCache ??= new Dictionary<int, bool>();
         atWarWith.Clear();
+        var esteemCache = _esteemCache ??= new Dictionary<int, float>();
+        esteemCache.Clear();
+        var isCivicIndependence = definition.Has("civic_independence");
         // The regions where this movement has people, not every region on the map. The
         // support dictionary is sparse, and the people index already knows its own keys.
         using (SimProfiler.Measure("      mov:support"))
@@ -284,8 +288,11 @@ public static class MovementRules
                 var foreignRule = foreign ? 0.12f : 0f;
                 var grievance = M.Clamp01(region.Radicalism * 0.6f + (1f - region.Stability) * 0.25f +
                                           region.WarDamage * 0.4f + foreignRule);
-                var civic = CivilIndependence.AwarenessTarget(campaign, definition, state, region, owner);
-                var reputation = SocialMemory.Esteem(campaign, owner, nation) * defines.SocialMovementWeight;
+                var civic = isCivicIndependence ? CivilIndependence.AwarenessTarget(campaign, definition, state, region, owner) : 0f;
+                var esteemKey = owner?.Id ?? -1;
+                if (!esteemCache.TryGetValue(esteemKey, out var rawEsteem))
+                    esteemCache[esteemKey] = rawEsteem = SocialMemory.Esteem(campaign, owner, nation);
+                var reputation = rawEsteem * defines.SocialMovementWeight;
                 var target = M.Clamp(MathF.Max(civic, 0.05f + state.Legitimacy * 0.2f + grievance * 0.5f) + reputation, 0f, MathF.Min(.75f, supportCeiling));
                 support += (target - support) * defines.MovementSupportDrift;
                 state.Support[region.MapIndex] = M.Clamp(support, 0f, supportCeiling);

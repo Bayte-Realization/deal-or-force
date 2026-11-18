@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace DealOrForce.Simulation;
 
@@ -147,10 +148,10 @@ public static class NationNaming
         if (land is not null && !NameAlreadyTaken(campaign, LandAtlas.Name(land)))
             return ("land", land.Id);
 
-        // 7. A macro or regional land that covers this ground.
-        var anyLand = LandAtlas.BestFor(campaign, regions, parent?.Tag);
-        if (anyLand is not null && !NameAlreadyTaken(campaign, LandAtlas.Name(anyLand)))
-            return ("land", anyLand.Id);
+        // 7. A macro or regional land that covers this ground (same BestFor result as step 6).
+        //    Already checked via `land` above when not Macro/DeclaresGround.
+        if (land is not null && !NameAlreadyTaken(campaign, LandAtlas.Name(land)))
+            return ("land", land.Id);
 
         // 8. The region's own seat/city name (Rostov, Samara, Novosibirsk, Odesa, Lyon, Hamburg, etc.)
         //    - one nobody already wears: Nigeria's Niger State does not found a second Niger, it
@@ -158,16 +159,41 @@ public static class NationNaming
         //    each called themselves the Republic of Niger beside the real one.
         if (region is not null)
         {
-            var wanted = new HashSet<int>(regions ?? Array.Empty<int>());
-            foreach (var candidate in campaign.States.Where(s => wanted.Contains(s.MapIndex) || s == region)
-                         .OrderByDescending(s => s == region).ThenByDescending(s => s.Population).ThenBy(s => s.MapIndex))
+            var candidates = _candidateStatesScratch ??= new List<ScenarioState>();
+            candidates.Clear();
+            var seen = _seenRegionScratch ??= new HashSet<int>();
+            seen.Clear();
+            if (regions is not null)
             {
+                foreach (var rId in regions)
+                {
+                    if (!seen.Add(rId)) continue;
+                    var s = campaign.StateByMapIndex(rId);
+                    if (s is not null) candidates.Add(s);
+                }
+            }
+            if (seen.Add(region.MapIndex) && !candidates.Contains(region)) candidates.Add(region);
+            seen.Clear();
+            candidates.Sort((a, b) =>
+            {
+                var regCmp = (b == region).CompareTo(a == region);
+                if (regCmp != 0) return regCmp;
+                var popCmp = b.Population.CompareTo(a.Population);
+                return popCmp != 0 ? popCmp : a.MapIndex.CompareTo(b.MapIndex);
+            });
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
                 var place = StripAdministrativeSuffix(RegionNames.Resolve(candidate));
                 if (place.Length > 0 && CompassDirection(place).Length == 0 &&
                     !string.Equals(place, parent?.Name, StringComparison.OrdinalIgnoreCase) &&
                     !NameAlreadyTaken(campaign, place))
+                {
+                    candidates.Clear();
                     return ("region", candidate.Id);
+                }
             }
+            candidates.Clear();
         }
 
         // 9. Region fallback: authentic regional identity rather than an occupier's compass direction -
@@ -183,16 +209,24 @@ public static class NationNaming
         return parent is null ? ("literal", "") : IdentitySource(parent);
     }
 
+    [ThreadStatic] private static HashSet<int> _seenRegionScratch;
+    [ThreadStatic] private static List<ScenarioState> _candidateStatesScratch;
+    [ThreadStatic] private static Dictionary<string, long> _foreignCoreScratch;
+
     private static string ForeignCoreTag(Campaign campaign, Nation parent, int[] regions)
     {
         if (campaign?.States is null || regions is null || regions.Length == 0) return null;
-        var wanted = new HashSet<int>(regions);
-        var states = campaign.States.Where(s => wanted.Contains(s.MapIndex)).ToList();
-        if (states.Count == 0) return null;
-
-        var coreCounts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        foreach (var s in states)
+        var seen = regions.Length > 1 ? (_seenRegionScratch ??= new HashSet<int>()) : null;
+        seen?.Clear();
+        var coreCounts = _foreignCoreScratch ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        coreCounts.Clear();
+        var anyState = false;
+        foreach (var rId in regions)
         {
+            if (seen is not null && !seen.Add(rId)) continue;
+            var s = campaign.StateByMapIndex(rId);
+            if (s is null) continue;
+            anyState = true;
             var weight = Math.Max(1L, s.Population);
             foreach (var core in s.CoreTags)
             {
@@ -219,8 +253,7 @@ public static class NationNaming
             var cut = id.IndexOf('_');
             if (cut > 0)
             {
-                var iso2 = id[..cut].ToLowerInvariant();
-                var originTag = LandAtlas.Iso2ToTag(iso2);
+                var originTag = LandAtlas.Iso2ToTag(id.AsSpan(0, cut));
                 if (!string.IsNullOrWhiteSpace(originTag) &&
                     (parent is null || !string.Equals(originTag, parent.Tag, StringComparison.OrdinalIgnoreCase)) &&
                     Loc.Has("country." + originTag + ".name"))
@@ -229,8 +262,24 @@ public static class NationNaming
                 }
             }
         }
-        if (coreCounts.Count == 0) return null;
-        return coreCounts.OrderByDescending(p => p.Value).First().Key;
+        seen?.Clear();
+        if (!anyState || coreCounts.Count == 0)
+        {
+            coreCounts.Clear();
+            return null;
+        }
+        string bestTag = null;
+        long bestWeight = long.MinValue;
+        foreach (var pair in coreCounts)
+        {
+            if (bestTag is null || pair.Value > bestWeight)
+            {
+                bestTag = pair.Key;
+                bestWeight = pair.Value;
+            }
+        }
+        coreCounts.Clear();
+        return bestTag;
     }
 
 
@@ -239,27 +288,48 @@ public static class NationNaming
     /// is what makes a direction name mean something: a region of Ukrainians rising from
     /// Russia anchors on "Ukraine", a region of Arabs on the Arab country of their own.
     /// </summary>
+    [ThreadStatic] private static Dictionary<string, long> _cultureTallyScratch;
+
     private static string MajorityCountry(Campaign campaign, int[] regions)
     {
         if (campaign is null || regions is null || regions.Length == 0) return "";
-        var totals = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var totals = _cultureTallyScratch ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        totals.Clear();
         long total = 0;
         foreach (var id in regions)
         {
-            var state = campaign.States.Find(candidate => candidate.MapIndex == id);
+            var state = campaign.StateByMapIndex(id);
             if (state is null || state.Population <= 0) continue;
-            foreach (var (people, size) in EconomySystem.Cultures(state))
+            var groups = state.PopulationGroups;
+            for (var i = 0; i < groups.Count; i++)
             {
-                totals[people] = totals.GetValueOrDefault(people) + size;
-                total += size;
+                var group = groups[i];
+                if (group.Size <= 0) continue;
+                var key = string.IsNullOrEmpty(group.Culture) ? "?" : group.Culture;
+                totals[key] = totals.GetValueOrDefault(key) + group.Size;
+                total += group.Size;
             }
         }
-        foreach (var (people, size) in totals.OrderByDescending(pair => pair.Value))
+        // Only cultures holding >= 50% can qualify; at most two exist, preserving exact tie behavior.
+        string firstCulture = null, secondCulture = null;
+        long firstSize = -1, secondSize = -1;
+        foreach (var (people, size) in totals)
         {
-            if (size * 2 < total) break;
-            var country = DemographyCatalog.Culture(people)?.Country;
-            if (!string.IsNullOrWhiteSpace(country)) return country;
+            if (size * 2 < total) continue;
+            if (size > firstSize)
+            {
+                secondCulture = firstCulture; secondSize = firstSize;
+                firstCulture = people; firstSize = size;
+            }
+            else if (size > secondSize)
+            {
+                secondCulture = people; secondSize = size;
+            }
         }
+        if (firstCulture is not null && DemographyCatalog.Culture(firstCulture)?.Country is { Length: > 0 } c1 && !string.IsNullOrWhiteSpace(c1))
+            return c1;
+        if (secondCulture is not null && DemographyCatalog.Culture(secondCulture)?.Country is { Length: > 0 } c2 && !string.IsNullOrWhiteSpace(c2))
+            return c2;
         return "";
     }
 
@@ -289,7 +359,7 @@ public static class NationNaming
         if (land.RegionIds.Count == 0 && land.RegionNames.Count == 0) return false;
         foreach (var index in regions)
         {
-            var state = campaign.States.Find(candidate => candidate.MapIndex == index);
+            var state = campaign.StateByMapIndex(index);
             if (state is null) continue;
             if (land.RegionIds.Contains(state.Id)) return true;
             if (land.RegionNames.Contains(state.Name)) return true;
@@ -302,9 +372,16 @@ public static class NationNaming
     /// "Восточная". Such a word is a side of something, not a country; the name composer
     /// anchors it on the country it came from instead of using it alone.
     /// </summary>
-    public static string CompassDirection(string name)
+    public static string CompassDirection(string name) =>
+        string.IsNullOrEmpty(name) ? "" : CompassDirection(name.AsSpan());
+
+    private static string CompassDirection(ReadOnlySpan<char> name)
     {
-        var word = (name ?? "").Trim().ToLowerInvariant();
+        var trimmed = name.Trim();
+        if (trimmed.Length is < 2 or > 9) return "";
+        Span<char> lower = stackalloc char[trimmed.Length];
+        trimmed.ToLowerInvariant(lower);
+        ReadOnlySpan<char> word = lower;
         return word switch
         {
             "north" or "northern" or "север" or "северный" or "северная" or "северное" => "north",
@@ -325,22 +402,23 @@ public static class NationNaming
         if (string.IsNullOrWhiteSpace(name)) return false;
         // A name that is itself a republic - "Central African Republic", "Czech Republic",
         // "Республика Дагестан" - was becoming "Republic of Central African Republic".
-        var trimmed = name.Trim();
+        var trimmed = name.AsSpan().Trim();
         if (trimmed.EndsWith(" Republic", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("Republic ", StringComparison.OrdinalIgnoreCase) ||
             trimmed.Contains("Республика", StringComparison.OrdinalIgnoreCase)) return true;
+        var nameSpan = name.AsSpan();
         foreach (var phrase in FormPhrases)
         {
-            if (phrase.Length >= 3 && name.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+            if (phrase.Length >= 3 && nameSpan.Contains(phrase, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
-        foreach (var form in StateFormIds)
+        foreach (var key in StateFormKeys)
         {
-            var key = "name.found." + form;
             if (!Loc.Has(key)) continue;
             var pattern = Loc.Get(key);
-            var head = pattern.Split("{0}")[0].Trim();
-            if (head.Length >= 3 && name.Contains(head, StringComparison.OrdinalIgnoreCase)) return true;
+            var idx = pattern.IndexOf("{0}", StringComparison.Ordinal);
+            var head = (idx >= 0 ? pattern.AsSpan(0, idx) : pattern.AsSpan()).Trim();
+            if (head.Length >= 3 && nameSpan.Contains(head, StringComparison.OrdinalIgnoreCase)) return true;
         }
         return false;
     }
@@ -349,8 +427,15 @@ public static class NationNaming
     public static bool NamesASide(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return false;
-        foreach (var word in name.Split(' ', '-', ','))
-            if (CompassDirection(word).Length > 0) return true;
+        var span = name.AsSpan();
+        while (!span.IsEmpty)
+        {
+            var sep = span.IndexOfAny(' ', '-', ',');
+            var token = sep < 0 ? span : span[..sep];
+            if (CompassDirection(token).Length > 0) return true;
+            if (sep < 0) break;
+            span = span[(sep + 1)..];
+        }
         return false;
     }
 
@@ -360,22 +445,11 @@ public static class NationNaming
         "junta", "federation", "commune", "technate", "provisional", "free", "emirate", "host", "patriarchate"
     };
 
+    private static readonly string[] StateFormKeys =
+        Array.ConvertAll(StateFormIds, static form => "name.found." + form);
 
-    private static (float Latitude, float Longitude) CenterOf(Campaign campaign, ScenarioState region)
-    {
-        var map = campaign.ProvinceMap;
-        float latitude = 0f, longitude = 0f;
-        var counted = 0;
-        for (var province = 1; province <= map.ProvinceCount; province++)
-        {
-            if (map.ProvinceToState[province] != (ushort)region.MapIndex) continue;
-            var centre = map.CenterOf(province);
-            latitude += centre.Latitude;
-            longitude += centre.Longitude;
-            counted++;
-        }
-        return counted == 0 ? (0f, 0f) : (latitude / counted, longitude / counted);
-    }
+    private static (float Latitude, float Longitude) CenterOf(Campaign campaign, ScenarioState region) =>
+        region is null ? (0f, 0f) : LandAtlas.CentreOf(campaign, region.MapIndex);
 
     private static bool HasOwnCountryName(string culture) =>
         !string.IsNullOrWhiteSpace(DemographyCatalog.Culture(culture)?.Country);
@@ -383,13 +457,25 @@ public static class NationNaming
     private static ScenarioState LargestRegion(Campaign campaign, int[] regions)
     {
         ScenarioState best = null;
-        foreach (var id in regions ?? Array.Empty<int>())
+        if (campaign is null || regions is null) return null;
+        foreach (var id in regions)
         {
-            var state = campaign?.States.Find(candidate => candidate.MapIndex == id);
+            var state = campaign.StateByMapIndex(id);
             if (state is null) continue;
             if (best is null || state.Population > best.Population) best = state;
         }
         return best;
+    }
+
+    private static readonly string[] RepublicPrefixes = { "Republic of ", "Республика " };
+
+    private static ScenarioState FindStateById(Campaign campaign, string id)
+    {
+        if (campaign?.States is null || string.IsNullOrEmpty(id)) return null;
+        var states = campaign.States;
+        for (var i = 0; i < states.Count; i++)
+            if (string.Equals(states[i].Id, id, StringComparison.Ordinal)) return states[i];
+        return null;
     }
 
     /// <summary>
@@ -438,11 +524,10 @@ public static class NationNaming
         long total = 0, theirs = 0;
         foreach (var id in regions)
         {
-            var state = campaign.States.Find(candidate => candidate.MapIndex == id);
+            var state = campaign.StateByMapIndex(id);
             if (state is null || state.Population <= 0) continue;
             total += state.Population;
-            foreach (var (people, size) in EconomySystem.Cultures(state))
-                if (string.Equals(people, culture, StringComparison.OrdinalIgnoreCase)) theirs += size;
+            theirs += EconomySystem.CultureSize(state, culture);
         }
         return total > 0 && theirs * 2 >= total;
     }
@@ -450,19 +535,34 @@ public static class NationNaming
     /// <summary>Whether the ground is this people's by plurality, whatever the movement says.</summary>
     private static string GroundPeople(Campaign campaign, int[] regions)
     {
-        var tally = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         if (campaign is null || regions is null) return "";
+        var tally = _cultureTallyScratch ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        tally.Clear();
         foreach (var id in regions)
         {
-            var state = campaign.States.Find(candidate => candidate.MapIndex == id);
+            var state = campaign.StateByMapIndex(id);
             if (state is null) continue;
-            foreach (var (people, size) in EconomySystem.Cultures(state))
-                if (!string.IsNullOrWhiteSpace(people))
-                    tally[people] = tally.GetValueOrDefault(people) + Math.Max(0, size);
+            var groups = state.PopulationGroups;
+            for (var i = 0; i < groups.Count; i++)
+            {
+                var group = groups[i];
+                if (group.Size > 0 && !string.IsNullOrWhiteSpace(group.Culture))
+                    tally[group.Culture] = tally.GetValueOrDefault(group.Culture) + group.Size;
+            }
         }
-        return tally.Count == 0 ? ""
-            : tally.OrderByDescending(pair => pair.Value)
-                .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).First().Key;
+        if (tally.Count == 0) return "";
+        string bestKey = null;
+        long bestSize = -1;
+        foreach (var (people, size) in tally)
+        {
+            var cmp = size.CompareTo(bestSize);
+            if (bestKey is null || cmp > 0 || (cmp == 0 && string.CompareOrdinal(people, bestKey) < 0))
+            {
+                bestKey = people;
+                bestSize = size;
+            }
+        }
+        return bestKey ?? "";
     }
 
     /// <summary>
@@ -612,7 +712,7 @@ public static class NationNaming
     public static string StripRepublicPrefix(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return name ?? "";
-        foreach (var prefix in new[] { "Republic of ", "Республика " })
+        foreach (var prefix in RepublicPrefixes)
             if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && name.Length - prefix.Length >= 3)
                 return name[prefix.Length..].TrimStart();
         return name;
@@ -771,7 +871,7 @@ public static class NationNaming
                     ? Loc.Format("name.found.free", freeCountry)
                     : "Free " + freeCountry;
             case "region":
-                if (campaign?.States.Find(state => state.Id == nation.FoundNameId) is { } region)
+                if (FindStateById(campaign, nation.FoundNameId) is { } region)
                 {
                     var resolved = RegionNames.Resolve(region);
                     // A subdivision's administrative word is not part of a country's name: a
@@ -1079,7 +1179,7 @@ public static class NationNaming
             // A save written while "Eastern" was treated as a country's whole name repairs
             // the recipe: the side, anchored on the country it was a side of.
             if (nation.FoundNameKind == "region" &&
-                campaign.States.Find(state => state.Id == nation.FoundNameId) is { } oldRegion &&
+                FindStateById(campaign, nation.FoundNameId) is { } oldRegion &&
                 CompassDirection(RegionNames.Resolve(oldRegion)) is { Length: > 0 } oldCompass &&
                 campaign.NationById(nation.ReleasedFromId) is { } oldParent)
             {
@@ -1354,8 +1454,7 @@ public static class NationNaming
                 {
                     var state = campaign.StateByMapIndex(regions[i]);
                     if (state is not { Population: > 0 }) continue;
-                    foreach (var (people, size) in EconomySystem.Cultures(state))
-                        if (string.Equals(people, id, StringComparison.OrdinalIgnoreCase)) held += size;
+                    held += EconomySystem.CultureSize(state, id);
                 }
                 break;
             case "land":
@@ -1390,12 +1489,7 @@ public static class NationNaming
                 {
                     var state = campaign.StateByMapIndex(regions[i]);
                     if (state is not { Population: > 0 }) continue;
-                    foreach (var (people, size) in EconomySystem.Cultures(state))
-                    {
-                        for (var pi = 0; pi < movement.Peoples.Count; pi++)
-                            if (string.Equals(movement.Peoples[pi], people, StringComparison.OrdinalIgnoreCase))
-                            { held += size; break; }
-                    }
+                    held += EconomySystem.PeoplesSize(state, movement.Peoples);
                 }
                 break;
             default:
@@ -1460,7 +1554,7 @@ public static class NationNaming
         var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++scanned % 32 == 0 || Campaign.StageOverdue()) yield return 0;
+            if (++scanned % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if (string.IsNullOrEmpty(nation.FoundNameKind) || !string.IsNullOrWhiteSpace(nation.CustomName)) continue;
             // One large founded country's look at its ground is thirty or forty milliseconds of
             // walking its peoples, and cannot be cut. The one that took that long last month

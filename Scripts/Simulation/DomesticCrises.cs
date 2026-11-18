@@ -180,9 +180,30 @@ public static partial class DomesticCrises
                 if (ReviewPressure(c, nation, days)) alienation?.Spoil();
                 ConsiderConciliation(c, nation);
                 // The street is read weekly: a wave takes days to build, and Read walks every region.
-                if (c.Defines.ProtestsEnabled && (c.ElapsedDays + nation.Id) % 7 == 0) MassProtests.Review(c, nation, Read(c, nation), 7);
+                if (c.Defines.ProtestsEnabled && nation.Movement is null && nation.Population > 0 &&
+                    (c.ElapsedDays + nation.Id) % 7 == 0)
+                {
+                    AwarenessAndRadicalism(c, nation, out var awareness, out var radicalism);
+                    MassProtests.Review(c, nation, awareness, radicalism, 7);
+                }
             }
         }
+    }
+
+    private static void AwarenessAndRadicalism(Campaign c, Nation nation, out float awareness, out float radicalism)
+    {
+        var regions = c.StatesOf(nation);
+        double people = 0, awarenessSum = 0, radicalismSum = 0;
+        for (var i = 0; i < regions.Length; i++)
+        {
+            var region = regions[i];
+            if (region.Population <= 0) continue;
+            people += region.Population;
+            awarenessSum += region.Population * (double)ResidentAwareness.Of(c, region);
+            radicalismSum += region.Population * (double)M.Clamp01(region.Radicalism);
+        }
+        awareness = people > 0 ? (float)(awarenessSum / people) : 0f;
+        radicalism = people > 0 ? (float)(radicalismSum / people) : 0f;
     }
 
     private static float Threshold(Campaign c) => M.Clamp(c.Defines.CoupPressureThreshold, .05f, 1f);

@@ -153,10 +153,11 @@ public static class MovementDealings
 
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, HolderMemory> HolderMemories = new();
 
+    [ThreadStatic] private static HashSet<int> _uniqueHoldersScratch;
+    [ThreadStatic] private static List<int> _uniqueHoldersListScratch;
+
     /// <summary>
-    /// Who holds each homeland piece, in list order. -1 when nobody does, or the movement
-    /// itself does. Rebuilt when ownership changes. The weekly order search was resolving
-    /// the same pieces once per country.
+    /// Who holds each homeland piece, deduplicated in first-seen order.
     /// </summary>
     static int[] HomelandHolders(Campaign campaign, Nation movement)
     {
@@ -170,13 +171,25 @@ public static class MovementDealings
         if (memory.ByMovement.TryGetValue(movement.Id, out var cached)) return cached;
         var homeland = Movements.DefinitionOf(movement)?.Homeland;
         var count = homeland?.Count ?? 0;
-        var ids = new int[count];
+        if (count == 0)
+        {
+            memory.ByMovement[movement.Id] = Array.Empty<int>();
+            return Array.Empty<int>();
+        }
+        var seen = _uniqueHoldersScratch ??= new HashSet<int>();
+        var list = _uniqueHoldersListScratch ??= new List<int>();
+        seen.Clear();
+        list.Clear();
         for (var i = 0; i < count; i++)
         {
             var region = Movements.StateById(campaign, homeland[i]);
             var holder = region is null ? null : campaign.NationByMapIndex(region.NationMapIndex);
-            ids[i] = holder is null || holder.Id == movement.Id ? -1 : holder.Id;
+            var id = holder is null || holder.Id == movement.Id ? -1 : holder.Id;
+            if (id >= 0 && seen.Add(id)) list.Add(id);
         }
+        seen.Clear();
+        var ids = list.Count == 0 ? Array.Empty<int>() : list.ToArray();
+        list.Clear();
         memory.ByMovement[movement.Id] = ids;
         return ids;
     }
@@ -422,6 +435,44 @@ public static class MovementDealings
         return true;
     }
 
+    [ThreadStatic] private static Dictionary<int, sbyte> _holderStatusScratch;
+
+    private static sbyte GetHolderStatus(Campaign campaign, Nation country, int holderId, Dictionary<int, sbyte> cache)
+    {
+        if (cache.TryGetValue(holderId, out var cached)) return cached;
+        sbyte status;
+        if (holderId == country.Id || CampaignDiplomacy.Peek(campaign, country.Id, holderId)?.Stance == DiplomaticStance.Allied)
+            status = 1;
+        else if (Opinion(campaign, country.Id, holderId) <= campaign.Defines.AiIncitementRivalOpinion ||
+                 CampaignDiplomacy.AtWar(campaign, country.Id, holderId))
+            status = 2;
+        else
+            status = 0;
+        cache[holderId] = status;
+        return status;
+    }
+
+    private static bool CheckHoldsClaimFast(Campaign campaign, Nation country, Nation movement,
+        Dictionary<int, sbyte> holderCache, ref bool known, ref bool cached, out Nation firstRival)
+    {
+        firstRival = null;
+        if (!known)
+        {
+            var holders = HomelandHolders(campaign, movement);
+            cached = false;
+            var rivalId = -1;
+            for (var i = 0; i < holders.Length; i++)
+            {
+                var status = GetHolderStatus(campaign, country, holders[i], holderCache);
+                if (status == 1) { cached = true; rivalId = -1; break; }
+                if (status == 2 && rivalId < 0) rivalId = holders[i];
+            }
+            if (!cached && rivalId >= 0) firstRival = campaign.NationById(rivalId);
+            known = true;
+        }
+        return cached;
+    }
+
     internal static IEnumerable<int> AiStages(Campaign campaign)
     {
         var movements = new List<Nation>();
@@ -435,11 +486,13 @@ public static class MovementDealings
         // weekly matter - and on a day of its own, so a twenty-eighth of the world each day
         // rather than a quarter of it on one day in seven.
         var cycle = 4 * Math.Max(1, campaign.Defines.EconomyTickDays);
+        var holderCache = _holderStatusScratch ??= new Dictionary<int, sbyte>();
         for (var ci = 0; ci < campaign.Nations.Count; ci++)
         {
             var country = campaign.Nations[ci];
             if (!MovementRules.OnItsDay(campaign, country.Id, cycle)) continue;
             if (country.IsHuman || country.Movement is not null || campaign.StatesOf(country).Length == 0) continue;
+            holderCache.Clear();
             var fundedCount = -1;
             var acted = false;
             for (var mi = 0; mi < movements.Count; mi++)
@@ -454,14 +507,19 @@ public static class MovementDealings
                 var opinion = Opinion(campaign, country.Id, movement.Id);
                 var holdsClaim = false;
                 var holdsClaimKnown = false;
-                var claimant = opinion <= -30f || CheckHoldsClaim(campaign, country, movement, ref holdsClaimKnown, ref holdsClaim);
+                Nation cachedRival = null;
+                var claimant = opinion <= -30f || CheckHoldsClaimFast(campaign, country, movement, holderCache, ref holdsClaimKnown, ref holdsClaim, out cachedRival);
                 var hosting = state.Landless && state.HeadquartersStateMapIndex >= 0 && MovementRules.OwnerOf(campaign,
                     campaign.StateByMapIndex(state.HeadquartersStateMapIndex)) == country;
                 // The enemy of my enemy: backed for whose ground it claims, not for what it is -
                 // short of a movement that hates this country as much as the rival does.
-                var rival = !claimant && opinion > -20f && !state.DesignatedBy.Contains(country.Id)
-                    ? RivalHolding(campaign, country, movement)
-                    : null;
+                Nation rival = null;
+                if (!claimant && opinion > -20f && !state.DesignatedBy.Contains(country.Id))
+                {
+                    if (!holdsClaimKnown)
+                        CheckHoldsClaimFast(campaign, country, movement, holderCache, ref holdsClaimKnown, ref holdsClaim, out cachedRival);
+                    rival = holdsClaim ? null : cachedRival;
+                }
                 // Nothing to decide: neither side of the argument, not its host, no stranger in
                 // need and no rival's rebels.
                 if (!claimant && !hosting && rival is null && opinion < 20f &&
@@ -486,7 +544,7 @@ public static class MovementDealings
                         roll >= 1f - defines.AiIncitementRecogniseChance && TryDealingAction(campaign, country, movement, "recognise", ref acted)) continue;
                 }
 
-                var threatened = opinion <= -40f || CheckHoldsClaim(campaign, country, movement, ref holdsClaimKnown, ref holdsClaim);
+                var threatened = opinion <= -40f || CheckHoldsClaimFast(campaign, country, movement, holderCache, ref holdsClaimKnown, ref holdsClaim, out _);
                 if (threatened)
                 {
                     if (opinion <= -30f && roll < 0.08f && TryDealingAction(campaign, country, movement, "designate", ref acted)) continue;

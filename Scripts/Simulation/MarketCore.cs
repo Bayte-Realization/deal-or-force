@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 
 namespace DealOrForce.Simulation;
 
@@ -423,14 +424,33 @@ public static class MarketSystem
     /// <summary>How many goods one stage of the pricing settles. Two keeps each stage under a millisecond.</summary>
     private const int PricingStageCommodities = 2;
 
+    [ThreadStatic] private static List<ScenarioState> _stateScratch;
+    [ThreadStatic] private static MarketQuote[] _priceQuotes;
+
     private static IEnumerable<int> RecalculateStages(Campaign campaign, bool adjustPrice)
     {
+        // Warm read-only lookup tables before parallel market passes read them concurrently.
+        ControlTally.World(campaign, 0, 0);
+        HeldRegions.Refresh(campaign);
+        campaign.NationsByMapIndex();
+        campaign.StatesOf(0);
+        campaign.StateByMapIndex(1);
+        Rulers.Found(campaign);
+        var tallies = CollectTallies(campaign);
+
         for (var start = 0; start < campaign.Nations.Count; start += BalanceStageCountries)
         {
             using (SimProfiler.Measure("    mkt:balance"))
-                for (var index = start; index < Math.Min(campaign.Nations.Count, start + BalanceStageCountries); index++)
+            {
+                var end = Math.Min(campaign.Nations.Count, start + BalanceStageCountries);
+                DeterministicParallel.For(campaign, start, end, index =>
+                {
+                    var nation = campaign.Nations[index];
                     // A retired country (LongCampaign) has no market: it is not given sixty quotes of nothing.
-                    if (!campaign.IsRetired(campaign.Nations[index])) CalculateNationalBalance(campaign, campaign.Nations[index]);
+                    if (!campaign.IsRetired(nation))
+                        CalculateNationalBalance(campaign, nation, tallies.Get(nation.Id));
+                }, minItems: 8);
+            }
             yield return 0;
         }
 
@@ -444,8 +464,7 @@ public static class MarketSystem
         // price writes to every country, but no good reads another, so a stage can end
         // between any two of them. This used to be one block at the end of a market week -
         // 7,8 ms that a frame had to carry whole, on the week a market week runs.
-        var catalogue = new List<Commodity>();
-        foreach (var commodity in CommodityCatalog.All) catalogue.Add(commodity);
+        var catalogue = new List<Commodity>(CommodityCatalog.All);
         for (var firstGood = 0; firstGood < catalogue.Count; firstGood += PricingStageCommodities)
         {
             var lastGood = Math.Min(firstGood + PricingStageCommodities, catalogue.Count);
@@ -456,11 +475,23 @@ public static class MarketSystem
 
         // And what each country made of its own week - shortages, output, income, tariffs -
         // a chunk of countries at a time, in the same order as before: country by country.
+        var commerce = NavalOperations.BeginCommerceBatch(campaign);
+        var commerceDay = campaign.ElapsedDays;
+        var commerceRev = campaign.MapRevision;
+        var commerceFleets = campaign.Fleets.Count;
         for (var firstNation = 0; firstNation < campaign.Nations.Count; firstNation += BalanceStageCountries)
         {
+            if (commerceDay != campaign.ElapsedDays || commerceRev != campaign.MapRevision ||
+                commerceFleets != campaign.Fleets.Count)
+            {
+                commerce = NavalOperations.BeginCommerceBatch(campaign);
+                commerceDay = campaign.ElapsedDays;
+                commerceRev = campaign.MapRevision;
+                commerceFleets = campaign.Fleets.Count;
+            }
             var lastNation = Math.Min(campaign.Nations.Count, firstNation + BalanceStageCountries);
             using (SimProfiler.Measure("    mkt:nations"))
-                SettleNations(campaign, firstNation, lastNation);
+                SettleNations(campaign, firstNation, lastNation, commerce);
             yield return 0;
         }
     }
@@ -468,6 +499,12 @@ public static class MarketSystem
     /// <summary>Goods <paramref name="from"/> to <paramref name="to"/>: the world's price, and each country's share of it.</summary>
     private static void SettlePrices(Campaign campaign, bool adjustPrice, List<Commodity> catalogue, int from, int to)
     {
+        var nations = campaign.Nations;
+        var nationCount = nations.Count;
+        var quotes = _priceQuotes;
+        if (quotes is null || quotes.Length < nationCount)
+            _priceQuotes = quotes = new MarketQuote[nationCount];
+
         for (var good = from; good < to; good++)
         {
             var commodity = catalogue[good];
@@ -475,9 +512,10 @@ public static class MarketSystem
             var totalProduction = 0f;
             var wantedImports = 0f;
             var spareExports = 0f;
-            foreach (var nation in campaign.Nations)
+            for (var i = 0; i < nationCount; i++)
             {
-                if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
+                if (!nations[i].Market.TryGetValue(commodity, out var quote)) { quotes[i] = null; continue; }
+                quotes[i] = quote;
                 totalDemand += quote.Demand;
                 totalProduction += quote.Production;
                 if (quote.Demand > quote.Production) wantedImports += quote.Demand - quote.Production;
@@ -492,9 +530,11 @@ public static class MarketSystem
             var worldScarcity = definition.TradedWorldPrice
                 ? M.Clamp(MathF.Max(0.01f, wantedImports) / MathF.Max(0.01f, spareExports), 0.55f, 2.75f)
                 : M.Clamp(totalDemand / totalProduction, 0.55f, 2.75f);
-            foreach (var nation in campaign.Nations)
+            for (var i = 0; i < nationCount; i++)
             {
-                if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
+                var quote = quotes[i];
+                if (quote is null) continue;
+                quotes[i] = null;
                 quote.Satisfaction = quote.Demand <= 0.001f
                     ? 1f
                     : M.Clamp((quote.Production + quote.Imports) / quote.Demand, 0f, 1f);
@@ -510,58 +550,68 @@ public static class MarketSystem
     }
 
     /// <summary>Countries <paramref name="from"/> to <paramref name="to"/>: what the week left each of them with.</summary>
-    private static void SettleNations(Campaign campaign, int from, int to)
+    private static void SettleNations(Campaign campaign, int from, int to, NavalOperations.CommerceBatch commerce)
     {
-        for (var index = from; index < to; index++)
+        DeterministicParallel.For(campaign, from, to, index =>
         {
             var nation = campaign.Nations[index];
-            if (campaign.IsRetired(nation)) continue;
-            var weight = 0f;
-            var shortages = 0f;
-            var trade = 0f;
-            var tariffs = 0f;
-            foreach (var quote in nation.Market.Values)
-            {
-                var definition = CommodityCatalog.Get(quote.Commodity);
-                weight += definition.EssentialWeight;
-                shortages += (1f - quote.Satisfaction) * definition.EssentialWeight;
-                trade += (quote.Exports - quote.Imports) * quote.Price;
-                tariffs += quote.Imports * quote.Price * TradePolicyRules.TariffRate(nation.TradePolicy);
-            }
-            // The value of what this country actually produced this week. EconomySystem
-            // derives GDP from it, so output is a consequence of buildings, workers and
-            // prices rather than a number that grows on its own beside them.
-            var grossOutput = 0f;
-            // At base price plus a share of the difference (Defines.GdpPriceShare): real output with
-            // the terms of trade in it, not every shortage in the world counted as growth.
-            var priceShare = M.Clamp01(campaign.Defines.GdpPriceShare);
-            foreach (var quote in nation.Market.Values)
-            {
-                var basePrice = CommodityCatalog.Get(quote.Commodity).BasePrice;
-                // And within GdpPriceBand of the base: a world short of everything put prices at
-                // their cap of nearly three times, and the country making those goods doubled its
-                // GDP in two years - the United States reached two fifths of the world economy.
-                var band = MathF.Max(0f, campaign.Defines.GdpPriceBand);
-                var price = M.Clamp(quote.Price, basePrice * MathF.Max(0f, 1f - band), basePrice * (1f + band));
-                // What was sold, not what was made: the country's own use of its own goods and what
-                // it sent abroad. A mine working a deposit nobody wants piles up ore, not income -
-                // the United States mined rare earths it had no buyer for, at the world's floor
-                // price, until they were half its economy.
-                var sold = MathF.Min(quote.Production, MathF.Max(0f, quote.Demand - quote.Imports) + quote.Exports);
-                grossOutput += sold * (basePrice + priceShare * (price - basePrice));
-            }
-            nation.GrossOutput = grossOutput;
-            MeasureIncome(campaign, nation);
+            if (campaign.IsRetired(nation)) return;
+            SettleSingleNation(campaign, nation, commerce);
+        }, minItems: 8);
+    }
 
-            nation.ShortageIndex = weight <= 0f ? 0f : M.Clamp01(shortages / weight);
-            nation.MarketAccess = 1f - nation.ShortageIndex;
-            nation.WeeklyTradeBalance = trade * campaign.Defines.MarketTreasuryTradeShare;
+    private static void SettleSingleNation(Campaign campaign, Nation nation, NavalOperations.CommerceBatch commerce)
+    {
+        var weight = 0f;
+        var shortages = 0f;
+        var trade = 0f;
+        var tariffs = 0f;
+        // The value of what this country actually produced this week. EconomySystem
+        // derives GDP from it, so output is a consequence of buildings, workers and
+        // prices rather than a number that grows on its own beside them.
+        var grossOutput = 0f;
+        var real = 0f;
+        var tariffRate = TradePolicyRules.TariffRate(nation.TradePolicy);
+        var marketTradeShare = campaign.Defines.MarketTreasuryTradeShare;
+        // At base price plus a share of the difference (Defines.GdpPriceShare): real output with
+        // the terms of trade in it, not every shortage in the world counted as growth.
+        var priceShare = M.Clamp01(campaign.Defines.GdpPriceShare);
+        // And within GdpPriceBand of the base: a world short of everything put prices at
+        // their cap of nearly three times, and the country making those goods doubled its
+        // GDP in two years - the United States reached two fifths of the world economy.
+        var band = MathF.Max(0f, campaign.Defines.GdpPriceBand);
+        var bandLow = MathF.Max(0f, 1f - band);
+        var bandHigh = 1f + band;
 
-            // What the enemy's navy takes off the sea lanes, and what one's own escorts
-            // keep. This is where a fleet stops being scenery and becomes money.
-            NavalOperations.ApplyCommerceEffects(campaign, nation, null);
-            nation.WeeklyTariffIncome = tariffs * campaign.Defines.MarketTreasuryTradeShare;
+        foreach (var quote in nation.Market.Values)
+        {
+            var definition = CommodityCatalog.Get(quote.Commodity);
+            weight += definition.EssentialWeight;
+            shortages += (1f - quote.Satisfaction) * definition.EssentialWeight;
+            trade += (quote.Exports - quote.Imports) * quote.Price;
+            tariffs += quote.Imports * quote.Price * tariffRate;
+
+            var basePrice = definition.BasePrice;
+            var price = M.Clamp(quote.Price, basePrice * bandLow, basePrice * bandHigh);
+            // What was sold, not what was made: the country's own use of its own goods and what
+            // it sent abroad. A mine working a deposit nobody wants piles up ore, not income -
+            // the United States mined rare earths it had no buyer for, at the world's floor
+            // price, until they were half its economy.
+            var sold = MathF.Min(quote.Production, MathF.Max(0f, quote.Demand - quote.Imports) + quote.Exports);
+            grossOutput += sold * (basePrice + priceShare * (price - basePrice));
+            real += quote.Production * basePrice;
         }
+        nation.GrossOutput = grossOutput;
+        MeasureIncome(campaign, nation, real);
+
+        nation.ShortageIndex = weight <= 0f ? 0f : M.Clamp01(shortages / weight);
+        nation.MarketAccess = 1f - nation.ShortageIndex;
+        nation.WeeklyTradeBalance = trade * marketTradeShare;
+
+        // What the enemy's navy takes off the sea lanes, and what one's own escorts
+        // keep. This is where a fleet stops being scenery and becomes money.
+        NavalOperations.ApplyCommerceEffects(campaign, nation, null, commerce);
+        nation.WeeklyTariffIncome = tariffs * marketTradeShare;
     }
 
     /// <summary>
@@ -627,58 +677,102 @@ public static class MarketSystem
     /// <summary>What a country has under construction, under arms, at sea and at war.</summary>
     private readonly record struct NationTally(int Projects, float Divisions, int Hulls, bool AtWar);
 
-    private static readonly Dictionary<int, NationTally> TallyByNation = new();
-    private static int _talliedDay = int.MinValue;
-    private static Campaign _talliedCampaign;
+    private const int DenseNationTallyLimit = 4096;
 
-    /// <summary>
-    /// The four global lists, walked once each, instead of once per country.
-    ///
-    /// Cached for the day and stamped with the campaign it describes, because two live
-    /// campaigns sharing a static cache is a bug that has already been paid for once in this
-    /// codebase - see the border table in CampaignDiplomacy.
-    /// </summary>
-    private static NationTally Tallies(Campaign campaign, int nationId)
+    private readonly struct TallyTable
     {
-        if (!ReferenceEquals(_talliedCampaign, campaign) || _talliedDay != campaign.ElapsedDays)
-        {
-            _talliedCampaign = campaign;
-            _talliedDay = campaign.ElapsedDays;
-            TallyByNation.Clear();
+        public readonly NationTally[] Dense;
+        public readonly Dictionary<int, NationTally> Overflow;
 
-            foreach (var project in campaign.Construction)
-            {
-                // Materials are bought for the sites worked, not for every site open: twelve sites in
-                // Albania, one worked at a time, bought ten times the industrial materials it used.
-                if (!ConstructionQueue.WorkedToday(project)) continue;
-                var current = TallyByNation.GetValueOrDefault(project.NationId);
-                TallyByNation[project.NationId] = current with { Projects = current.Projects + 1 };
-            }
-            foreach (var army in campaign.Armies)
-            {
-                var current = TallyByNation.GetValueOrDefault(army.NationId);
-                TallyByNation[army.NationId] = current with { Divisions = current.Divisions + army.Divisions };
-            }
-            foreach (var fleet in campaign.Fleets)
-            {
-                var current = TallyByNation.GetValueOrDefault(fleet.NationId);
-                TallyByNation[fleet.NationId] = current with { Hulls = current.Hulls + fleet.Hulls };
-            }
-            var wars = Warfare.LiveWars(campaign);
-            for (var index = 0; index < wars.Count; index++)
-            {
-                var war = wars[index];
-                foreach (var side in new[] { war.AttackerId, war.DefenderId })
-                {
-                    var current = TallyByNation.GetValueOrDefault(side);
-                    TallyByNation[side] = current with { AtWar = true };
-                }
-            }
+        public TallyTable(NationTally[] dense, Dictionary<int, NationTally> overflow)
+        {
+            Dense = dense;
+            Overflow = overflow;
         }
-        return TallyByNation.GetValueOrDefault(nationId);
+
+        public NationTally Get(int nationId) =>
+            (uint)nationId < (uint)Dense.Length ? Dense[nationId] :
+            Overflow is not null && Overflow.TryGetValue(nationId, out var tally) ? tally : default;
     }
 
-    private static void CalculateNationalBalance(Campaign campaign, Nation nation)
+    private static void AddProjectTally(NationTally[] dense, ref Dictionary<int, NationTally> overflow, int nationId)
+    {
+        if ((uint)nationId < (uint)dense.Length)
+        {
+            dense[nationId] = dense[nationId] with { Projects = dense[nationId].Projects + 1 };
+            return;
+        }
+        overflow ??= new Dictionary<int, NationTally>();
+        overflow[nationId] = overflow.GetValueOrDefault(nationId) with { Projects = overflow.GetValueOrDefault(nationId).Projects + 1 };
+    }
+
+    private static void AddDivisionsTally(NationTally[] dense, ref Dictionary<int, NationTally> overflow, int nationId, float divisions)
+    {
+        if ((uint)nationId < (uint)dense.Length)
+        {
+            dense[nationId] = dense[nationId] with { Divisions = dense[nationId].Divisions + divisions };
+            return;
+        }
+        overflow ??= new Dictionary<int, NationTally>();
+        overflow[nationId] = overflow.GetValueOrDefault(nationId) with { Divisions = overflow.GetValueOrDefault(nationId).Divisions + divisions };
+    }
+
+    private static void AddHullsTally(NationTally[] dense, ref Dictionary<int, NationTally> overflow, int nationId, int hulls)
+    {
+        if ((uint)nationId < (uint)dense.Length)
+        {
+            dense[nationId] = dense[nationId] with { Hulls = dense[nationId].Hulls + hulls };
+            return;
+        }
+        overflow ??= new Dictionary<int, NationTally>();
+        overflow[nationId] = overflow.GetValueOrDefault(nationId) with { Hulls = overflow.GetValueOrDefault(nationId).Hulls + hulls };
+    }
+
+    private static void SetAtWarTally(NationTally[] dense, ref Dictionary<int, NationTally> overflow, int nationId)
+    {
+        if ((uint)nationId < (uint)dense.Length)
+        {
+            dense[nationId] = dense[nationId] with { AtWar = true };
+            return;
+        }
+        overflow ??= new Dictionary<int, NationTally>();
+        overflow[nationId] = overflow.GetValueOrDefault(nationId) with { AtWar = true };
+    }
+
+    /// <summary>The four global lists, walked once each per market week into a local table.</summary>
+    private static TallyTable CollectTallies(Campaign campaign)
+    {
+        var maxId = -1;
+        for (var i = 0; i < campaign.Nations.Count; i++)
+        {
+            var id = campaign.Nations[i].Id;
+            if (id >= 0 && id < DenseNationTallyLimit && id > maxId) maxId = id;
+        }
+        var dense = new NationTally[maxId + 1];
+        Dictionary<int, NationTally> overflow = null;
+
+        foreach (var project in campaign.Construction)
+        {
+            // Materials are bought for the sites worked, not for every site open: twelve sites in
+            // Albania, one worked at a time, bought ten times the industrial materials it used.
+            if (!ConstructionQueue.WorkedToday(project)) continue;
+            AddProjectTally(dense, ref overflow, project.NationId);
+        }
+        foreach (var army in campaign.Armies)
+            AddDivisionsTally(dense, ref overflow, army.NationId, army.Divisions);
+        foreach (var fleet in campaign.Fleets)
+            AddHullsTally(dense, ref overflow, fleet.NationId, fleet.Hulls);
+        var wars = Warfare.LiveWars(campaign);
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
+            SetAtWarTally(dense, ref overflow, war.AttackerId);
+            SetAtWarTally(dense, ref overflow, war.DefenderId);
+        }
+        return new TallyTable(dense, overflow);
+    }
+
+    private static void CalculateNationalBalance(Campaign campaign, Nation nation, NationTally tallies)
     {
         // Every good the catalog knows, not only when the market is empty.
         //
@@ -702,8 +796,8 @@ public static class MarketSystem
 
         // The regions whose economy answers to it: its own, less those another country holds,
         // and those it holds of others (HeldRegions) - held ground is ground.
-        var states = HeldRegions.EconomyOf(campaign, nation).ToArray();
-        ProductionChains.Defines = campaign.Defines;
+        var states = HeldRegions.FillEconomyOf(campaign, nation, _stateScratch ??= new List<ScenarioState>(), refresh: false);
+        var defines = campaign.Defines;
 
         // How much of the labour its buildings ask for the nation can actually staff.
         // A country whose industry has outgrown its workforce runs its plant below
@@ -711,8 +805,9 @@ public static class MarketSystem
         // population a real economic input rather than a display statistic.
         var demandedJobs = 0f;
         var availableWorkers = 0f;
-        foreach (var state in states)
+        for (var i = 0; i < states.Count; i++)
         {
+            var state = states[i];
             demandedJobs += JobsDemanded(state);
             availableWorkers += WorkersAvailable(state);
         }
@@ -735,17 +830,16 @@ public static class MarketSystem
         // What the country's quotes say to every one of its regions is asked once, here
         // (ProductionChains.RegionFactors); nothing between here and the last region writes
         // a price or a satisfaction.
-        var factors = ProductionChains.PrepareRegions(nation);
-        foreach (var state in states)
+        var factors = ProductionChains.PrepareRegions(nation, defines);
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
             ProductionChains.RunRegion(nation, state, outputFactor * WarDamage.OutputFactor(campaign, nation, state) *
-                HeldRegions.WorkedAt(campaign, nation, state), allocation, factors);
+                HeldRegions.WorkedAt(campaign, nation, state), allocation, factors, defines);
+        }
 
-        // Four LINQ scans of four global lists, once per country, with a capturing closure
-        // each. That is a thousand closures and half a million list steps every market week,
-        // to answer four questions that one pass over each list answers for everybody.
-        var tallies = Tallies(campaign, nation.Id);
         ProductionChains.RunNation(nation, tallies.Projects, tallies.Divisions, tallies.Hulls,
-            tallies.AtWar);
+            tallies.AtWar, defines);
     }
 
     /// <summary>
@@ -821,13 +915,10 @@ public static class MarketSystem
         return M.Clamp(MathF.Pow(deepening, share - 1f), 0.1f, 1f);
     }
 
-    private static void MeasureIncome(Campaign campaign, Nation nation)
+    private static void MeasureIncome(Campaign campaign, Nation nation, float real)
     {
         var people = nation.Population / 1_000_000f;
         if (people <= 0.001f) return;
-        var real = 0f;
-        foreach (var quote in nation.Market.Values)
-            real += quote.Production * CommodityCatalog.Get(quote.Commodity).BasePrice;
         var perHead = real / people;
         if (!float.IsFinite(perHead) || perHead <= 0f) return;
         if (nation.IncomeBaseline <= 0f) { nation.IncomeBaseline = perHead; nation.IncomeFactor = 1f; return; }

@@ -1288,11 +1288,8 @@ public static class EconomySystem
     [ThreadStatic] private static Dictionary<string, long> _techGroupTotals;
     [ThreadStatic] private static float[] _seedWeights;
 
-    private static IReadOnlyList<(string Key, long Size)> Tally(ScenarioState state, Func<PopulationGroup, string> of)
+    private static void AccumulateByKey(ScenarioState state, Func<PopulationGroup, string> of, Dictionary<string, long> totals)
     {
-        if (state is null || state.PopulationGroups.Count == 0) return Array.Empty<(string, long)>();
-        var totals = _techGroupTotals ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        totals.Clear();
         var groups = state.PopulationGroups;
         for (var i = 0; i < groups.Count; i++)
         {
@@ -1302,6 +1299,14 @@ public static class EconomySystem
             if (string.IsNullOrEmpty(key)) key = "?";
             totals[key] = totals.GetValueOrDefault(key) + group.Size;
         }
+    }
+
+    private static IReadOnlyList<(string Key, long Size)> Tally(ScenarioState state, Func<PopulationGroup, string> of)
+    {
+        if (state is null || state.PopulationGroups.Count == 0) return Array.Empty<(string, long)>();
+        var totals = _techGroupTotals ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        totals.Clear();
+        AccumulateByKey(state, of, totals);
         if (totals.Count == 0) return Array.Empty<(string, long)>();
         var result = new List<(string Key, long Size)>(totals.Count);
         foreach (var entry in totals)
@@ -1312,6 +1317,71 @@ public static class EconomySystem
             return cmp != 0 ? cmp : string.CompareOrdinal(a.Key, b.Key);
         });
         return result;
+    }
+
+    /// <summary>Largest culture living in a region with exact tie-breaking of <see cref="Cultures"/>, without List/Sort allocation.</summary>
+    internal static (string Culture, long Size) DominantCulture(ScenarioState state)
+    {
+        if (state is null || state.PopulationGroups.Count == 0) return default;
+        var totals = _techGroupTotals ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        totals.Clear();
+        AccumulateByKey(state, static group => group.Culture, totals);
+        string bestKey = null;
+        long bestSize = 0;
+        foreach (var entry in totals)
+        {
+            var cmp = entry.Value.CompareTo(bestSize);
+            if (bestKey is null || cmp > 0 || (cmp == 0 && string.CompareOrdinal(entry.Key, bestKey) < 0))
+            {
+                bestKey = entry.Key;
+                bestSize = entry.Value;
+            }
+        }
+        return bestKey is null ? default : (bestKey, bestSize);
+    }
+
+    /// <summary>Total population of one culture in a region, allocating nothing.</summary>
+    internal static long CultureSize(ScenarioState state, string culture)
+    {
+        if (state is null || string.IsNullOrEmpty(culture) || state.PopulationGroups.Count == 0) return 0;
+        long total = 0;
+        var groups = state.PopulationGroups;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var group = groups[i];
+            if (group.Size > 0 && string.Equals(group.Culture, culture, StringComparison.OrdinalIgnoreCase))
+                total += group.Size;
+        }
+        return total;
+    }
+
+    /// <summary>Total population belonging to any of the listed cultures in a region, allocating nothing.</summary>
+    internal static long PeoplesSize(ScenarioState state, IReadOnlyList<string> peoples)
+    {
+        if (state is null || peoples is null || peoples.Count == 0 || state.PopulationGroups.Count == 0) return 0;
+        long total = 0;
+        var groups = state.PopulationGroups;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var group = groups[i];
+            if (group.Size <= 0 || string.IsNullOrEmpty(group.Culture)) continue;
+            for (var pi = 0; pi < peoples.Count; pi++)
+            {
+                if (string.Equals(peoples[pi], group.Culture, StringComparison.OrdinalIgnoreCase))
+                {
+                    total += group.Size;
+                    break;
+                }
+            }
+        }
+        return total;
+    }
+
+    /// <summary>Adds each population group's culture size in <paramref name="state"/> into a caller-owned dictionary.</summary>
+    internal static void AccumulateCultures(ScenarioState state, Dictionary<string, long> into)
+    {
+        if (state is null || state.PopulationGroups.Count == 0) return;
+        AccumulateByKey(state, static group => group.Culture, into);
     }
 
     /// <summary>

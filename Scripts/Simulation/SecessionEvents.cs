@@ -285,7 +285,7 @@ public static class SecessionEvents
                 federal.Add(state);
                 continue;
             }
-            var largest = EconomySystem.Cultures(state).FirstOrDefault();
+            var largest = EconomySystem.DominantCulture(state);
             if (largest.Culture is null || largest.Size <= 0) continue;
             // The existing ethnic road still needs a people the state is not for.
             if (DemographyCatalog.IsPrimary(owner.Tag, largest.Culture)) continue;
@@ -323,7 +323,7 @@ public static class SecessionEvents
             best = bloc;
             bestPeople = here;
             var seat = bloc.OrderByDescending(state => state.Population).First();
-            culture = EconomySystem.Cultures(seat).FirstOrDefault().Culture
+            culture = EconomySystem.DominantCulture(seat).Culture
                 ?? DemographyCatalog.PrimaryCulture(owner.Tag);
         }
         return best;
@@ -485,9 +485,7 @@ public static class SecessionEvents
             return false;
         if (SecessionCore.IsFederalBreak(campaign, parent, state)) return true;
         if (string.IsNullOrWhiteSpace(culture) || state.Population <= 0) return true;
-        long theirs = 0;
-        foreach (var (people, size) in EconomySystem.Cultures(state))
-            if (string.Equals(people, culture, StringComparison.OrdinalIgnoreCase)) theirs += size;
+        var theirs = EconomySystem.CultureSize(state, culture);
         return theirs >= state.Population * (double)share;
     }
 
@@ -1071,7 +1069,7 @@ public static class SecessionEvents
         {
             var state = campaign.States.Find(candidate => candidate.MapIndex == piece.MapIndex);
             if (state is null || state.Population <= 0) continue;
-            var largest = EconomySystem.Cultures(state).FirstOrDefault();
+            var largest = EconomySystem.DominantCulture(state);
             if (largest.Culture is null) continue;
             if (largest.Size * 2 < state.Population) continue;
             if (!peoples.Contains(largest.Culture, StringComparer.OrdinalIgnoreCase))
@@ -1127,10 +1125,9 @@ public static class SecessionEvents
         var tally = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         foreach (var piece in leaving)
         {
-            var state = campaign.States.Find(candidate => candidate.MapIndex == piece.MapIndex);
+            var state = campaign.StateByMapIndex(piece.MapIndex);
             if (state is null) continue;
-            foreach (var (people, size) in EconomySystem.Cultures(state))
-                tally[people] = tally.GetValueOrDefault(people) + size;
+            EconomySystem.AccumulateCultures(state, tally);
         }
         var theirs = tally.GetValueOrDefault(culture);
         if (theirs <= 0) return false;

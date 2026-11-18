@@ -100,11 +100,8 @@ public static class ControlTally
             tally.SplitRegions, Key(owner, region), out _);
     }
 
-    // The list of live wars is filled on this thread before anything is handed out and then
-    // only read; each war computes its partial into a slot of its own. The "somebody is
-    // already inside" lease that kept two worlds from sharing this walk now lives in
-    // DeterministicParallel, where every other pass reads it too.
-    private static readonly List<int> _liveWarScratch = new();
+    [ThreadStatic] private static List<ushort> _attackersScratch;
+    [ThreadStatic] private static List<ushort> _defendersScratch;
 
     private static void Refresh(TallyState tally, Campaign campaign)
     {
@@ -124,68 +121,47 @@ public static class ControlTally
         tally.HostileTo.Clear();
         using (SimProfiler.Measure("  tally:wars"))
         {
-            // Every live war asks, for each of its sides, who among all countries it
-            // opposes: wars times countries squared. Each war's answer is independent, so
-            // the wars compute their own partial tables side by side and the partials fold
-            // in war order - set union has no order of its own, and folding in war order
-            // reproduces even the insertion order the serial walk produced.
-            var live = _liveWarScratch;
-            live.Clear();
-            for (var wi = 0; wi < campaign.Wars.Count; wi++)
-                if (!campaign.Wars[wi].Ended) live.Add(wi);
-            var parallelWars = campaign.Defines.ParallelRegions && live.Count >= 4 &&
-                               System.Environment.GetEnvironmentVariable("BDOF_NO_PARALLEL_TALLY") != "1";
-            if (parallelWars)
+            // Collect hostile map flags directly from each war's belligerent rosters instead of
+            // scanning Nations x Nations per war, preserving exact war-order insertion into HostileTo.
+            var attackers = _attackersScratch ??= new List<ushort>(8);
+            var defenders = _defendersScratch ??= new List<ushort>(8);
+            foreach (var war in Warfare.OpenWars(campaign))
             {
-                var partials = new Dictionary<ushort, HashSet<ushort>>[live.Count];
-                var nations = campaign.Nations;
-                var wars = campaign.Wars;
-                // Computed a war per slot, folded in war order. Set union has no order of its
-                // own, and folding in war order reproduces even the insertion order the serial
-                // walk produced - which matters because a later pass walks these sets. Slots
-                // falls back to this same fold on this thread when the machine is busy or a
-                // second loop already holds the lease; the result does not depend on which.
-                DeterministicParallel.Slots(campaign, partials,
-                    slot =>
-                    {
-                        var war = wars[live[slot]];
-                        var partial = new Dictionary<ushort, HashSet<ushort>>();
-                        foreach (var side in nations)
-                        {
-                            if (!war.Involves(side.Id)) continue;
-                            if (!partial.TryGetValue((ushort)side.MapIndex, out var set))
-                                partial[(ushort)side.MapIndex] = set = new HashSet<ushort>();
-                            foreach (var other in nations)
-                                if (other.Id != side.Id && war.Opposes(side.Id, other.Id))
-                                    set.Add((ushort)other.MapIndex);
-                        }
-                        return partial;
-                    },
-                    (slot, partial) =>
-                    {
-                        foreach (var (flag, enemies) in partial)
-                        {
-                            if (!tally.HostileTo.TryGetValue(flag, out var merged))
-                                tally.HostileTo[flag] = merged = new HashSet<ushort>();
-                            foreach (var enemy in enemies) merged.Add(enemy);
-                        }
-                    }, minItems: 4);
-            }
-            else
-            {
-                foreach (var war in Warfare.OpenWars(campaign))
+                if (war.Ended) continue;
+                attackers.Clear();
+                defenders.Clear();
+                void AddSide(int id, bool attacking)
                 {
-                    if (war.Ended) continue;
-                    // By side, not by membership. An ally standing beside you in the same war is
-                    // not somebody whose border counts as a threatened one.
-                    foreach (var side in campaign.Nations)
+                    if (campaign.NationById(id) is not { } side) return;
+                    var flag = (ushort)side.MapIndex;
+                    if (attacking) attackers.Add(flag);
+                    else defenders.Add(flag);
+                }
+                AddSide(war.AttackerId, true);
+                foreach (var ally in war.AttackerAllies) AddSide(ally, true);
+                AddSide(war.DefenderId, false);
+                foreach (var ally in war.DefenderAllies) AddSide(ally, false);
+                if (attackers.Count == 0 || defenders.Count == 0) continue;
+                for (var ai = 0; ai < attackers.Count; ai++)
+                {
+                    var af = attackers[ai];
+                    if (!tally.HostileTo.TryGetValue(af, out var set))
+                        tally.HostileTo[af] = set = new HashSet<ushort>();
+                    for (var di = 0; di < defenders.Count; di++)
                     {
-                        if (!war.Involves(side.Id)) continue;
-                        if (!tally.HostileTo.TryGetValue((ushort)side.MapIndex, out var set))
-                            tally.HostileTo[(ushort)side.MapIndex] = set = new HashSet<ushort>();
-                        foreach (var other in campaign.Nations)
-                            if (other.Id != side.Id && war.Opposes(side.Id, other.Id))
-                                set.Add((ushort)other.MapIndex);
+                        var df = defenders[di];
+                        if (df != af) set.Add(df);
+                    }
+                }
+                for (var di = 0; di < defenders.Count; di++)
+                {
+                    var df = defenders[di];
+                    if (!tally.HostileTo.TryGetValue(df, out var set))
+                        tally.HostileTo[df] = set = new HashSet<ushort>();
+                    for (var ai = 0; ai < attackers.Count; ai++)
+                    {
+                        var af = attackers[ai];
+                        if (af != df) set.Add(af);
                     }
                 }
             }

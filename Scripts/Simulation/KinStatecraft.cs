@@ -594,6 +594,8 @@ public static class KinStatecraft
     {
         public int Month = -1;
         public readonly Dictionary<int, List<Candidate>> Candidates = new();
+        public List<(Nation Country, float Share)>[] Findings = Array.Empty<List<(Nation, float)>>();
+        public int[] EvalCounts = Array.Empty<int>();
     }
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, ScanState> Scans = new();
     internal static int LastScanKinEvaluations { get; private set; }
@@ -641,49 +643,85 @@ public static class KinStatecraft
         var holders = new Dictionary<int, Nation>(campaign.Nations.Count);
         foreach (var nation in campaign.Nations)
             if (nation is not null) holders.TryAdd(nation.MapIndex, nation);
-        var evaluated = new Dictionary<int, long>();
-        var order = new List<Nation>();
-        var scanned = 0;
-        foreach (var region in campaign.States)
+        var states = campaign.States;
+        var stateCount = states.Count;
+        if (state.Findings.Length < stateCount) state.Findings = new List<(Nation, float)>[stateCount + 64];
+        if (state.EvalCounts.Length < stateCount) state.EvalCounts = new int[stateCount + 64];
+        var findings = state.Findings;
+        var evalCounts = state.EvalCounts;
+        const int batchSize = 256;
+        for (var start = 0; start < stateCount; start += batchSize)
         {
+            var end = Math.Min(stateCount, start + batchSize);
             using (SimProfiler.Measure("kin:scan"))
             {
-            if (region is null || region.Population <= 0) continue;
-            if (!holders.TryGetValue(region.NationMapIndex, out var host)) continue;
-            if (!Answerable(host)) continue;
-            evaluated.Clear();
-            order.Clear();
-            foreach (var group in region.PopulationGroups)
-            {
-                if (group is null || group.Size <= 0) continue;
-                if (!claims.TryGetValue(group.Culture, out var claimants)) continue;
-                foreach (var country in claimants)
+                DeterministicParallel.For(campaign, start, end, si =>
                 {
-                    if (country.Id == host.Id) continue;
-                    // Accumulate all primary culture groups per claimant in one pass
-                    // rather than re-walking PopulationGroups via Kin(...) for each claimant.
-                    if (!evaluated.TryGetValue(country.Id, out var ours))
-                        order.Add(country);
-                    evaluated[country.Id] = ours + group.Size;
+                    var region = states[si];
+                    if (findings[si] is { } existing) existing.Clear();
+                    evalCounts[si] = 0;
+                    if (region is null || region.Population <= 0) return;
+                    if (!holders.TryGetValue(region.NationMapIndex, out var host)) return;
+                    if (!Answerable(host)) return;
+                    var evaluated = _scanEvaluatedScratch ??= new Dictionary<int, long>();
+                    var order = _scanOrderScratch ??= new List<Nation>();
+                    evaluated.Clear();
+                    order.Clear();
+                    var groups = region.PopulationGroups;
+                    for (var gi = 0; gi < groups.Count; gi++)
+                    {
+                        var group = groups[gi];
+                        if (group is null || group.Size <= 0 || string.IsNullOrEmpty(group.Culture)) continue;
+                        if (!claims.TryGetValue(group.Culture, out var claimants)) continue;
+                        for (var ci = 0; ci < claimants.Count; ci++)
+                        {
+                            var country = claimants[ci];
+                            if (country.Id == host.Id) continue;
+                            if (!evaluated.TryGetValue(country.Id, out var ours))
+                                order.Add(country);
+                            evaluated[country.Id] = ours + group.Size;
+                        }
+                    }
+                    evalCounts[si] = order.Count;
+                    for (var oi = 0; oi < order.Count; oi++)
+                    {
+                        var country = order[oi];
+                        var ours = evaluated[country.Id];
+                        var share = M.Clamp01(ours / (float)region.Population);
+                        if (ours <= 0 || share < minimum) continue;
+                        var bucket = findings[si] ??= new List<(Nation, float)>(2);
+                        bucket.Add((country, share));
+                    }
+                    evaluated.Clear();
+                    order.Clear();
+                }, minItems: 64);
+                for (var si = start; si < end; si++)
+                {
+                    LastScanKinEvaluations += evalCounts[si];
+                    var bucket = findings[si];
+                    if (bucket is null || bucket.Count == 0) continue;
+                    var region = states[si];
+                    var host = holders[region.NationMapIndex];
+                    for (var bi = 0; bi < bucket.Count; bi++)
+                    {
+                        var (country, share) = bucket[bi];
+                        if (!Candidates.TryGetValue(country.Id, out var list))
+                            Candidates[country.Id] = list = new List<Candidate>(2);
+                        var foundAt = -1;
+                        for (var li = 0; li < list.Count; li++)
+                            if (list[li].Host.Id == host.Id) { foundAt = li; break; }
+                        if (foundAt < 0) list.Add(new Candidate(host, region, share));
+                        else if (list[foundAt].Share < share) list[foundAt] = new Candidate(host, region, share);
+                    }
+                    bucket.Clear();
                 }
             }
-            foreach (var country in order)
-            {
-                LastScanKinEvaluations++;
-                var ours = evaluated[country.Id];
-                var share = M.Clamp01(ours / (float)region.Population);
-                if (ours <= 0 || share < minimum) continue;
-                if (!Candidates.TryGetValue(country.Id, out var list))
-                    Candidates[country.Id] = list = new List<Candidate>(2);
-                // One region per host is enough for a monthly decision, and it is the best one.
-                var index = list.FindIndex(candidate => candidate.Host.Id == host.Id);
-                if (index < 0) list.Add(new Candidate(host, region, share));
-                else if (list[index].Share < share) list[index] = new Candidate(host, region, share);
-            }
-            }
-            if (++scanned % 48 == 0 || Campaign.StageOverdue()) yield return 0;
+            if (end < stateCount) yield return 0;
         }
     }
+
+    [ThreadStatic] private static Dictionary<int, long> _scanEvaluatedScratch;
+    [ThreadStatic] private static List<Nation> _scanOrderScratch;
 
     /// <summary>
     /// What every country the game runs does about its kin abroad: rarely, and only against a

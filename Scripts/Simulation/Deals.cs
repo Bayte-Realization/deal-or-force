@@ -186,7 +186,7 @@ public static partial class Ultimatum
     public static float RegionWorth(Campaign c, Nation nation, ScenarioState state, bool receiving = true)
     {
         var worth = 6f + 12f * M.Clamp(state.Population / 2_000_000f, 0f, 3f);
-        var largest = EconomySystem.Cultures(state).FirstOrDefault().Culture;
+        var largest = EconomySystem.DominantCulture(state).Culture;
         if (largest is not null && DemographyCatalog.PrimaryCultures(nation.Tag)
                 .Contains(largest, StringComparer.OrdinalIgnoreCase))
             worth *= c.Defines.DealKinRegionWeight;
@@ -401,7 +401,7 @@ public static partial class Ultimatum
             return false;
         if (c.Defines.DealForeignPocketSales && BorderShape.IsCutOffPocket(c, state))
         {
-            var largest = EconomySystem.Cultures(state).FirstOrDefault().Culture;
+            var largest = EconomySystem.DominantCulture(state).Culture;
             if (largest is null || !DemographyCatalog.IsPrimary(owner.Tag, largest)) return false;
         }
         if (c.Defines.DealProtectCivicHomelandSales) return true;

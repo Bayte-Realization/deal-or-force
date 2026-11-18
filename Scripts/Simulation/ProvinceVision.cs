@@ -36,6 +36,15 @@ public static partial class CampaignIntel
         /// <summary>The controllers as they stood when the grouping was built.</summary>
         public ushort[] HeldCopy = Array.Empty<ushort>();
         public int[] HeldStart = Array.Empty<int>(), HeldNext = Array.Empty<int>(), HeldProvinces = Array.Empty<int>();
+
+        public bool HasActorIndex;
+        public int ActorStamp;
+        public long ActorHour;
+        public float ActorLandingRange;
+        public readonly Dictionary<int, List<int>> ArmiesByNation = new();
+        public readonly Dictionary<int, List<int>> BattlesByNation = new();
+        public readonly Dictionary<int, int> ArmyProvinceById = new();
+        public readonly Dictionary<int, List<int>> InvasionBeachesByNation = new();
     }
 
     /// <summary>
@@ -153,34 +162,88 @@ public static partial class CampaignIntel
             view.TerritoryMapIndex = nation.MapIndex;
             view.TerritoryDepth = borderDepth;
         }
-        foreach (var army in c.Armies)
-            if (army.NationId == viewerId) Reveal(army.ProvinceId, armyDepth);
-        foreach (var battle in c.Battles)
+        var hasBattles = EnsureActorIndex(c, cache, stamp, map, Math.Clamp(c.Defines.LandingVisionRangeDegrees, .1f, 3f));
+        if (cache.ArmiesByNation.TryGetValue(viewerId, out var myArmies))
+            for (var i = 0; i < myArmies.Count; i++) Reveal(myArmies[i], armyDepth);
+        if (hasBattles && cache.BattlesByNation.TryGetValue(viewerId, out var myBattles))
         {
-            if (battle.Ended || (battle.AttackerId != viewerId && battle.DefenderId != viewerId)) continue;
-            Reveal(battle.ProvinceId, armyDepth);
-            view.CombatContacts.UnionWith(battle.Attackers);
-            view.CombatContacts.UnionWith(battle.Defenders);
+            for (var i = 0; i < myBattles.Count; i++)
+            {
+                var battle = c.Battles[myBattles[i]];
+                Reveal(battle.ProvinceId, armyDepth);
+                view.CombatContacts.UnionWith(battle.Attackers);
+                view.CombatContacts.UnionWith(battle.Defenders);
+            }
         }
         if (view.CombatContacts.Count > 0)
-            foreach (var army in c.Armies)
-                if (view.CombatContacts.Contains(army.Id)) Reveal(army.ProvinceId, 0);
+            foreach (var contactId in view.CombatContacts)
+                if (cache.ArmyProvinceById.TryGetValue(contactId, out var prov)) Reveal(prov, 0);
         // An invasion order alone is NOT reconnaissance across the world. The fleet
         // must actually have approached its beach, or combat must already have begun.
-        foreach (var fleet in c.Fleets)
-        {
-            if (fleet.NationId != viewerId || fleet.Hulls <= 0 || fleet.Mission != FleetMission.Invasion ||
-                fleet.TargetProvinceId <= 0 || fleet.TargetProvinceId > map.ProvinceCount) continue;
-            var beach = map.CenterOf(fleet.TargetProvinceId);
-            if (NavalOperations.Distance(fleet.Latitude, fleet.Longitude, beach.Latitude, beach.Longitude) <=
-                Math.Clamp(c.Defines.LandingVisionRangeDegrees, .1f, 3f))
-                Reveal(fleet.TargetProvinceId, armyDepth);
-        }
+        if (cache.InvasionBeachesByNation.TryGetValue(viewerId, out var beaches))
+            for (var i = 0; i < beaches.Count; i++) Reveal(beaches[i], armyDepth);
         Flood();
         // What agents report and what reconnaissance flights photograph: seen, not seen past.
         IntelNetworks.RevealInto(c, viewerId, view.Reach);
         AirReconnaissance.RevealInto(c, viewerId, view.Reach);
         return view;
+    }
+
+    private static bool EnsureActorIndex(Campaign c, Cache cache, int stamp, ProvinceTopology map, float landingRange)
+    {
+        if (cache.HasActorIndex && cache.ActorStamp == stamp && cache.ActorHour == c.ElapsedHours && cache.ActorLandingRange == landingRange)
+            return cache.ArmyProvinceById.Count > 0;
+
+        foreach (var list in cache.ArmiesByNation.Values) list.Clear();
+        foreach (var list in cache.BattlesByNation.Values) list.Clear();
+        cache.ArmyProvinceById.Clear();
+        foreach (var list in cache.InvasionBeachesByNation.Values) list.Clear();
+
+        var hasBattles = false;
+        for (var i = 0; i < c.Battles.Count; i++)
+        {
+            var battle = c.Battles[i];
+            if (battle.Ended) continue;
+            hasBattles = true;
+            if (!cache.BattlesByNation.TryGetValue(battle.AttackerId, out var atkList))
+                cache.BattlesByNation[battle.AttackerId] = atkList = new List<int>();
+            atkList.Add(i);
+            if (battle.DefenderId != battle.AttackerId)
+            {
+                if (!cache.BattlesByNation.TryGetValue(battle.DefenderId, out var defList))
+                    cache.BattlesByNation[battle.DefenderId] = defList = new List<int>();
+                defList.Add(i);
+            }
+        }
+
+        for (var i = 0; i < c.Armies.Count; i++)
+        {
+            var army = c.Armies[i];
+            if (!cache.ArmiesByNation.TryGetValue(army.NationId, out var list))
+                cache.ArmiesByNation[army.NationId] = list = new List<int>();
+            list.Add(army.ProvinceId);
+            if (hasBattles) cache.ArmyProvinceById[army.Id] = army.ProvinceId;
+        }
+
+        for (var i = 0; i < c.Fleets.Count; i++)
+        {
+            var fleet = c.Fleets[i];
+            if (fleet.Hulls <= 0 || fleet.Mission != FleetMission.Invasion ||
+                fleet.TargetProvinceId <= 0 || fleet.TargetProvinceId > map.ProvinceCount) continue;
+            var beach = map.CenterOf(fleet.TargetProvinceId);
+            if (NavalOperations.Distance(fleet.Latitude, fleet.Longitude, beach.Latitude, beach.Longitude) <= landingRange)
+            {
+                if (!cache.InvasionBeachesByNation.TryGetValue(fleet.NationId, out var list))
+                    cache.InvasionBeachesByNation[fleet.NationId] = list = new List<int>();
+                list.Add(fleet.TargetProvinceId);
+            }
+        }
+
+        cache.HasActorIndex = true;
+        cache.ActorStamp = stamp;
+        cache.ActorHour = c.ElapsedHours;
+        cache.ActorLandingRange = landingRange;
+        return hasBattles;
     }
 
     public static bool CanSeeProvince(Campaign c, int viewerId, int province) => Vision(c, viewerId)?.Sees(province) == true;

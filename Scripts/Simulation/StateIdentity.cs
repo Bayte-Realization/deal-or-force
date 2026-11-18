@@ -224,11 +224,15 @@ public static class StateIdentity
         var total = 0L;
         foreach (var state in campaign.StatesOf(nation))
         {
-            foreach (var (id, size) in religion ? EconomySystem.Religions(state) : EconomySystem.Cultures(state))
+            var groups = state.PopulationGroups;
+            for (var i = 0; i < groups.Count; i++)
             {
+                var group = groups[i];
+                if (group.Size <= 0) continue;
+                var id = religion ? group.Religion : group.Culture;
                 if (string.IsNullOrWhiteSpace(id)) continue;
-                totals[id] = totals.GetValueOrDefault(id) + size;
-                total += size;
+                totals[id] = totals.GetValueOrDefault(id) + group.Size;
+                total += group.Size;
             }
         }
         return total <= 0

@@ -176,13 +176,29 @@ public static class DiplomaticGestures
             if (IsRival(c, a.Id, other.Id, threshold) && IsRival(c, b.Id, other.Id, threshold)) rivals.Add(other);
         }
         return rivals;
+    }
 
-        static bool IsRival(Campaign c, int nationId, int otherId, float threshold)
+    private static bool IsRivalTie(DiplomaticRelation tie, float threshold) =>
+        tie is not null && (tie.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar ||
+                            tie.Tension >= threshold || tie.Opinion <= -40f);
+
+    private static bool IsRival(Campaign c, int nationId, int otherId, float threshold) =>
+        IsRivalTie(CampaignDiplomacy.Peek(c, nationId, otherId), threshold);
+
+    private static bool HasCommonRival(Campaign c, Nation a, Nation b, List<DiplomaticRelation> aRelations)
+    {
+        var threshold = c.Defines.TensionCrisisAt * 0.6f;
+        for (var i = 0; i < aRelations.Count; i++)
         {
-            var tie = CampaignDiplomacy.Peek(c, nationId, otherId);
-            return tie is not null && (tie.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar ||
-                                       tie.Tension >= threshold || tie.Opinion <= -40f);
+            var tie = aRelations[i];
+            if (!IsRivalTie(tie, threshold)) continue;
+            var otherId = Other(a.Id, tie);
+            if (otherId == b.Id) continue;
+            var other = c.NationById(otherId);
+            if (other is null || other.Movement is not null || other.Population <= 0) continue;
+            if (IsRival(c, b.Id, otherId, threshold)) return true;
         }
+        return false;
     }
 
     /// <summary>The war of theirs we could mediate: one they lead or fight in that we are not part of, the oldest first.</summary>
@@ -549,7 +565,7 @@ public static class DiplomaticGestures
                     c.NationById(Other(nation.Id, ally)) is { } allied)
                 {
                     yield return 0;
-                    if (CommonRivals(c, nation, allied).Count > 0)
+                    if (HasCommonRival(c, nation, allied, relations))
                         Perform(c, nation.Id, allied.Id, "joint_exercises");
                 }
 

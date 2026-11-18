@@ -535,9 +535,8 @@ public static partial class AiStatecraft
         if (!CampaignIntel.CanInspect(nation.Id, other.Id)) return 0f;
         if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, other.MapIndex)) return 0f;
         var ours = 0L;
-        foreach (var state in campaign.States)
+        foreach (var state in campaign.StatesOf(other))
         {
-            if (state.NationMapIndex != other.MapIndex) continue;
             foreach (var group in state.PopulationGroups)
                 if (DemographyCatalog.IsPrimary(nation.Tag, group.Culture)) ours += group.Size;
         }

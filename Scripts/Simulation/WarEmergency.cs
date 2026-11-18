@@ -131,7 +131,9 @@ public static class WarEmergency
                 Held.Add(army.OrderProvinceId);
         }
         var occupied = war.IsAttacking(nation.Id) ? war.AttackerOccupiedValue : war.DefenderOccupiedValue;
-        var unheld = Posts.Count(province => !Held.Contains(province));
+        var unheld = 0;
+        for (var pi = 0; pi < Posts.Count; pi++)
+            if (!Held.Contains(Posts[pi])) unheld++;
         var capitalLost = nation.CapitalProvinceId > 0 &&
             nation.CapitalProvinceId < campaign.ProvinceController.Length &&
             campaign.ProvinceController[nation.CapitalProvinceId] != (ushort)nation.MapIndex;
@@ -147,7 +149,9 @@ public static class WarEmergency
         if (unheld > 0)
             Reinforce(campaign, nation, war, Math.Max(0, campaign.Defines.WarEmergencyReinforcementsPerDay -
                 ReinforcedToday.GetValueOrDefault(nation.Id)));
-        unheld = Posts.Count(province => !Held.Contains(province));
+        unheld = 0;
+        for (var pi = 0; pi < Posts.Count; pi++)
+            if (!Held.Contains(Posts[pi])) unheld++;
         // A hole can be closed by taking the empty ground on the other side of it. This is
         // deliberately after the line is mended: an army that leaves a hole to chase a farm
         // has not helped. Only formations with no other front duty are used.
@@ -163,13 +167,22 @@ public static class WarEmergency
             Raised += EmergencyMilitia(campaign, nation, war);
     }
 
+    [ThreadStatic] private static List<int> _unheldPostsScratch;
+
     private static int Reinforce(Campaign campaign, Nation nation, StrategicWar war, int budget)
     {
         var used = 0;
-        var posts = Posts.Where(province => !Held.Contains(province))
-            .OrderBy(province => province).ToArray();
-        foreach (var post in posts)
+        var posts = _unheldPostsScratch ??= new List<int>();
+        posts.Clear();
+        for (var pi = 0; pi < Posts.Count; pi++)
         {
+            var province = Posts[pi];
+            if (!Held.Contains(province)) posts.Add(province);
+        }
+        posts.Sort();
+        for (var pi = 0; pi < posts.Count; pi++)
+        {
+            var post = posts[pi];
             if (used >= budget) break;
             Candidates.Clear();
             foreach (var army in campaign.Armies)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace DealOrForce.Simulation;
@@ -92,34 +93,59 @@ public static class LandAtlas
     /// accident about every small revolt inside it.
     /// </summary>
     /// <summary>The share of these regions' people living in a land, 0 to 1.</summary>
+    private sealed class CentresCache
+    {
+        public ProvinceTopology Topology;
+        public int Revision = -1;
+        public (float Latitude, float Longitude)[] Centres = Array.Empty<(float, float)>();
+    }
+    private static readonly ConditionalWeakTable<Campaign, CentresCache> CentresByCampaign = new();
+
+    [ThreadStatic] private static HashSet<int> _seenRegionScratch;
+    [ThreadStatic] private static List<ScenarioState> _statesScratch;
+
     public static float Share(Campaign campaign, LandDefinition land, IReadOnlyCollection<int> regions)
     {
         if (campaign is null || land is null || regions is null || regions.Count == 0) return 0f;
-        var wanted = new HashSet<int>(regions);
+        var centres = CentresOf(campaign);
+        var seen = regions.Count > 1 ? (_seenRegionScratch ??= new HashSet<int>()) : null;
+        seen?.Clear();
         long total = 0, covered = 0;
-        foreach (var state in campaign.States)
+        foreach (var regionId in regions)
         {
-            if (!wanted.Contains(state.MapIndex)) continue;
+            if (seen is not null && !seen.Add(regionId)) continue;
+            var state = campaign.StateByMapIndex(regionId);
+            if (state is null) continue;
             var people = Math.Max(0L, state.Population);
             total += people;
-            if (Matches(land, state, CentreOf(campaign, state.MapIndex), true, out _)) covered += people;
+            var centre = (uint)state.MapIndex < (uint)centres.Length ? centres[state.MapIndex] : (0f, 0f);
+            if (Matches(land, state, centre, true, out _)) covered += people;
         }
+        seen?.Clear();
         return total <= 0 ? 0f : covered / (float)total;
     }
 
     public static LandDefinition BestFor(Campaign campaign, IReadOnlyCollection<int> regions, string parentTag = "")
     {
         if (campaign is null || regions is null || regions.Count == 0) return null;
-        var wanted = new HashSet<int>(regions);
-        var states = campaign.States.Where(state => wanted.Contains(state.MapIndex)).ToArray();
-        if (states.Length == 0) return null;
-        var centres = new Dictionary<int, (float Latitude, float Longitude)>();
-        foreach (var state in states)
-            centres[state.MapIndex] = CentreOf(campaign, state.MapIndex);
-
+        var seen = regions.Count > 1 ? (_seenRegionScratch ??= new HashSet<int>()) : null;
+        seen?.Clear();
+        var states = _statesScratch ??= new List<ScenarioState>();
+        states.Clear();
         long total = 0;
-        foreach (var state in states) total += Math.Max(0, state.Population);
-        if (total <= 0) total = states.Length;
+        foreach (var regionId in regions)
+        {
+            if (seen is not null && !seen.Add(regionId)) continue;
+            var state = campaign.StateByMapIndex(regionId);
+            if (state is null) continue;
+            states.Add(state);
+            total += Math.Max(0, state.Population);
+        }
+        seen?.Clear();
+        if (states.Count == 0) return null;
+        if (total <= 0) total = states.Count;
+
+        var centres = CentresOf(campaign);
 
         // How much of the parent a macro-region has to hold before it may name a state.
         //
@@ -130,7 +156,12 @@ public static class LandAtlas
         // only name a state that really is a large part of it, which means a large part of
         // what it is leaving as well.
         var parent = string.IsNullOrEmpty(parentTag) ? null : campaign.NationByTag(parentTag);
-        var parentPeople = parent is null ? 0L : campaign.StatesOf(parent).Sum(state => Math.Max(0L, state.Population));
+        long parentPeople = 0;
+        if (parent is not null)
+        {
+            var parentStates = campaign.StatesOf(parent);
+            for (var i = 0; i < parentStates.Length; i++) parentPeople += Math.Max(0L, parentStates[i].Population);
+        }
 
         LandDefinition best = null;
         var bestScore = 0f;
@@ -140,9 +171,11 @@ public static class LandAtlas
                 land.Countries.Contains(parentTag);
             long covered = 0;
             var precise = false;
-            foreach (var state in states)
+            for (var i = 0; i < states.Count; i++)
             {
-                if (!Matches(land, state, centres[state.MapIndex], countryMatchesParent, out var exact)) continue;
+                var state = states[i];
+                var centre = (uint)state.MapIndex < (uint)centres.Length ? centres[state.MapIndex] : (0f, 0f);
+                if (!Matches(land, state, centre, countryMatchesParent, out var exact)) continue;
                 covered += Math.Max(0, state.Population);
                 precise |= exact;
             }
@@ -159,12 +192,12 @@ public static class LandAtlas
                 var isTransnational = land.Countries.Count > 1;
                 if (isTransnational)
                 {
-                    if (states.Length < 2 && total < 10_000_000L) continue;
-                    if (parentPeople > 0 && covered < parentPeople * 0.40d && states.Length < 3) continue;
+                    if (states.Count < 2 && total < 10_000_000L) continue;
+                    if (parentPeople > 0 && covered < parentPeople * 0.40d && states.Count < 3) continue;
                 }
                 else
                 {
-                    if (states.Length < 2 && land.RegionIds.Count != 1) continue;
+                    if (states.Count < 2 && land.RegionIds.Count != 1) continue;
                 }
             }
 
@@ -175,6 +208,7 @@ public static class LandAtlas
             best = land;
             bestScore = score;
         }
+        states.Clear();
         return best;
     }
 
@@ -222,42 +256,84 @@ public static class LandAtlas
         var id = state.Id ?? "";
         var cut = id.IndexOf('_');
         if (cut <= 0) return false;
-        var iso2 = id[..cut].ToLowerInvariant();
-        var tag = Iso2ToTag(iso2);
+        var tag = Iso2ToTag(id.AsSpan(0, cut));
         return tag.Length > 0 && land.Countries.Contains(tag);
     }
 
-    public static string Iso2ToTag(string iso2) => (iso2 ?? "").ToLowerInvariant() switch
+    public static string Iso2ToTag(string iso2) => iso2 is null ? "" : Iso2ToTag(iso2.AsSpan());
+
+    internal static string Iso2ToTag(ReadOnlySpan<char> iso2)
     {
-        "ua" => "UKR", "ru" => "RUS", "by" => "BLR", "pl" => "POL", "us" => "USA",
-        "ca" => "CAN", "mx" => "MEX", "br" => "BRA", "ar" => "ARG", "cl" => "CHL",
-        "de" => "DEU", "fr" => "FRA", "it" => "ITA", "es" => "ESP", "gb" => "GBR",
-        "ro" => "ROU", "tr" => "TUR", "ir" => "IRN", "iq" => "IRQ", "sy" => "SYR",
-        "sa" => "SAU", "ye" => "YEM", "eg" => "EGY", "ly" => "LBY", "dz" => "DZA",
-        "ma" => "MAR", "sd" => "SDN", "et" => "ETH", "so" => "SOM", "ng" => "NGA",
-        "cd" => "COD", "ao" => "AGO", "tz" => "TZA", "cm" => "CMR", "ml" => "MLI",
-        "cn" => "CHN", "in" => "IND", "pk" => "PAK", "mm" => "MMR", "id" => "IDN",
-        "ph" => "PHL", "jp" => "JPN", "kz" => "KAZ", "uz" => "UZB", "ge" => "GEO",
-        "az" => "AZE", "am" => "ARM", "md" => "MDA", "fi" => "FIN", "se" => "SWE",
-        "no" => "NOR", "gr" => "GRC", "rs" => "SRB", "hr" => "HRV", "ba" => "BIH",
-        _ => ""
-    };
+        if (iso2.Length != 2) return "";
+        var c0 = iso2[0] is >= 'A' and <= 'Z' ? (char)(iso2[0] + 32) : iso2[0];
+        var c1 = iso2[1] is >= 'A' and <= 'Z' ? (char)(iso2[1] + 32) : iso2[1];
+        return (c0, c1) switch
+        {
+            ('u', 'a') => "UKR", ('r', 'u') => "RUS", ('b', 'y') => "BLR", ('p', 'l') => "POL", ('u', 's') => "USA",
+            ('c', 'a') => "CAN", ('m', 'x') => "MEX", ('b', 'r') => "BRA", ('a', 'r') => "ARG", ('c', 'l') => "CHL",
+            ('d', 'e') => "DEU", ('f', 'r') => "FRA", ('i', 't') => "ITA", ('e', 's') => "ESP", ('g', 'b') => "GBR",
+            ('r', 'o') => "ROU", ('t', 'r') => "TUR", ('i', 'r') => "IRN", ('i', 'q') => "IRQ", ('s', 'y') => "SYR",
+            ('s', 'a') => "SAU", ('y', 'e') => "YEM", ('e', 'g') => "EGY", ('l', 'y') => "LBY", ('d', 'z') => "DZA",
+            ('m', 'a') => "MAR", ('s', 'd') => "SDN", ('e', 't') => "ETH", ('s', 'o') => "SOM", ('n', 'g') => "NGA",
+            ('c', 'd') => "COD", ('a', 'o') => "AGO", ('t', 'z') => "TZA", ('c', 'm') => "CMR", ('m', 'l') => "MLI",
+            ('c', 'n') => "CHN", ('i', 'n') => "IND", ('p', 'k') => "PAK", ('m', 'm') => "MMR", ('i', 'd') => "IDN",
+            ('p', 'h') => "PHL", ('j', 'p') => "JPN", ('k', 'z') => "KAZ", ('u', 'z') => "UZB", ('g', 'e') => "GEO",
+            ('a', 'z') => "AZE", ('a', 'm') => "ARM", ('m', 'd') => "MDA", ('f', 'i') => "FIN", ('s', 'e') => "SWE",
+            ('n', 'o') => "NOR", ('g', 'r') => "GRC", ('r', 's') => "SRB", ('h', 'r') => "HRV", ('b', 'a') => "BIH",
+            _ => ""
+        };
+    }
+
+    internal static (float Latitude, float Longitude)[] CentresOf(Campaign campaign)
+    {
+        var topology = campaign?.ProvinceMap;
+        if (topology is null) return Array.Empty<(float, float)>();
+        var cache = CentresByCampaign.GetOrCreateValue(campaign);
+        var revision = campaign.MapRevision;
+        if (cache.Revision == revision && ReferenceEquals(cache.Topology, topology))
+            return cache.Centres;
+        lock (cache)
+        {
+            if (cache.Revision == revision && ReferenceEquals(cache.Topology, topology))
+                return cache.Centres;
+            var maxState = 0;
+            var provinceToState = topology.ProvinceToState;
+            var count = topology.ProvinceCount;
+            for (var province = 1; province <= count; province++)
+            {
+                var s = provinceToState[province];
+                if (s > maxState) maxState = s;
+            }
+            var latSum = new double[maxState + 1];
+            var lonSum = new double[maxState + 1];
+            var counts = new int[maxState + 1];
+            for (var province = 1; province <= count; province++)
+            {
+                var s = provinceToState[province];
+                if (s <= 0) continue;
+                var centre = topology.CenterOf(province);
+                latSum[s] += centre.Latitude;
+                lonSum[s] += centre.Longitude;
+                counts[s]++;
+            }
+            var centres = new (float Latitude, float Longitude)[maxState + 1];
+            for (var s = 1; s <= maxState; s++)
+            {
+                var c = counts[s];
+                if (c > 0) centres[s] = ((float)(latSum[s] / c), (float)(lonSum[s] / c));
+            }
+            cache.Topology = topology;
+            cache.Revision = revision;
+            cache.Centres = centres;
+            return centres;
+        }
+    }
 
     internal static (float Latitude, float Longitude) CentreOf(Campaign campaign, int mapIndex)
     {
-        var topology = campaign.ProvinceMap;
-        if (topology is null || mapIndex <= 0) return (0f, 0f);
-        double latitude = 0, longitude = 0;
-        var counted = 0;
-        for (var province = 1; province <= topology.ProvinceCount; province++)
-        {
-            if (topology.ProvinceToState[province] != (ushort)mapIndex) continue;
-            var centre = topology.CenterOf(province);
-            latitude += centre.Latitude;
-            longitude += centre.Longitude;
-            counted++;
-        }
-        return counted == 0 ? (0f, 0f) : ((float)(latitude / counted), (float)(longitude / counted));
+        if (campaign?.ProvinceMap is null || mapIndex <= 0) return (0f, 0f);
+        var centres = CentresOf(campaign);
+        return (uint)mapIndex < (uint)centres.Length ? centres[mapIndex] : (0f, 0f);
     }
 
     private static List<LandDefinition> Load()

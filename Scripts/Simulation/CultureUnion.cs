@@ -145,20 +145,35 @@ public static class CultureUnion
         if (c.ElapsedDays % Math.Max(1, c.Defines.CultureUnionReviewDays) != 0) yield break;
 
         var eligible = KindredList(c);
+        var bornInPlayByCulture = new Dictionary<string, List<Nation>>(StringComparer.OrdinalIgnoreCase);
+        for (var j = 0; j < eligible.Count; j++)
+        {
+            var partner = eligible[j];
+            // A state of 2024 does not dissolve itself into a kindred neighbour on its own
+            // initiative; the pieces a people was scattered into by the game's own risings do.
+            if (!BornInPlay(partner)) continue;
+            var culture = DemographyCatalog.PrimaryCulture(partner.Tag);
+            if (string.IsNullOrWhiteSpace(culture)) continue;
+            if (!bornInPlayByCulture.TryGetValue(culture, out var list))
+                bornInPlayByCulture[culture] = list = new List<Nation>();
+            list.Add(partner);
+        }
+        if (bornInPlayByCulture.Count == 0) yield break;
+
         var ticked = 0;
         for (var i = 0; i < eligible.Count; i++)
         {
             var initiator = eligible[i];
             if (c.Fallen.Contains(initiator.Id)) continue;
+            var myCulture = DemographyCatalog.PrimaryCulture(initiator.Tag);
+            if (string.IsNullOrWhiteSpace(myCulture) ||
+                !bornInPlayByCulture.TryGetValue(myCulture, out var partners)) continue;
             if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
-            for (var j = 0; j < eligible.Count; j++)
+            for (var j = 0; j < partners.Count; j++)
             {
-                var partner = eligible[j];
+                var partner = partners[j];
                 if (partner.Id == initiator.Id || c.Fallen.Contains(partner.Id)) continue;
                 if (partner.Population > initiator.Population) continue;
-                // A state of 2024 does not dissolve itself into a kindred neighbour on its own
-                // initiative; the pieces a people was scattered into by the game's own risings do.
-                if (!BornInPlay(partner)) continue;
                 var opinion = CampaignDiplomacy.Peek(c, initiator.Id, partner.Id)?.Opinion ?? 0f;
                 if (opinion < c.Defines.CultureUnionMinimumOpinion) continue;
                 var wantsIt = opinion >= c.Defines.CultureUnionAcceptanceOpinion ||

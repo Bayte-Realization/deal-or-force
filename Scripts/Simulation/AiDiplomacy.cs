@@ -428,19 +428,32 @@ public static partial class AiStatecraft
             // scan left on one thread - the body is a few dictionary reads, and waking eight
             // threads for it cost more than it saved. The serial walk also stops asking once a
             // lower id has already qualified.
-            var nations = campaign.Nations;
-            var count = nations.Count;
-            for (var i = 0; i < count; i++)
+            var tables = TablesOf(campaign);
+            var sorted = tables.LiveNationsSorted;
+            if (tables.LiveNationsDay != campaign.ElapsedDays || tables.LiveNationsCount != campaign.Nations.Count)
             {
-                var other = nations[i];
+                sorted.Clear();
+                var nations = campaign.Nations;
+                for (var i = 0; i < nations.Count; i++)
+                {
+                    var candidate = nations[i];
+                    if (candidate.Population > 0 && candidate.Movement is null) sorted.Add(candidate);
+                }
+                sorted.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+                tables.LiveNationsDay = campaign.ElapsedDays;
+                tables.LiveNationsCount = campaign.Nations.Count;
+            }
+            for (var i = 0; i < sorted.Count; i++)
+            {
+                var other = sorted[i];
                 if (other.Id == nation.Id || other.Id == dominant) continue;
                 if (other.Population <= 0 || other.Movement is not null) continue;
-                if (alternate is not null && other.Id >= alternate.Id) continue;
                 if (blockedOffers is not null && blockedOffers.Contains(other.Id)) continue;
                 if (!other.Market.TryGetValue(chosen.Good, out var quote)) continue;
                 if (quote.Production - quote.Demand <= 0.0001f) continue;
                 if (!CanHedgeWith(campaign, nation, other, dominant, blockedOffers)) continue;
                 alternate = other;
+                break;
             }
         }
         if (alternate is null) return false;

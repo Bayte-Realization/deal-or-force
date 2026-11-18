@@ -263,8 +263,10 @@ public static class WarDamage
                 for (var wi = 0; wi < liveWars.Count; wi++)
                 {
                     var war = liveWars[wi];
-                    foreach (var other in campaign.Nations)
-                        if (war.Involves(other.Id)) atWar.Add(other.Id);
+                    atWar.Add(war.AttackerId);
+                    atWar.Add(war.DefenderId);
+                    foreach (var ally in war.AttackerAllies) atWar.Add(ally);
+                    foreach (var ally in war.DefenderAllies) atWar.Add(ally);
                 }
             }
             using (SimProfiler.Measure("  wd:abroad")) NeighboursAtPeace(campaign, nation, atWar, abroad);
@@ -441,6 +443,8 @@ public static class WarDamage
     /// and moved back. Some are never found - they have moved on, or been counted as locals -
     /// and the count falls by the share either way, so it ends.
     /// </summary>
+    [ThreadStatic] private static List<string> _displacedKeysScratch;
+
     private static void Return(Campaign campaign, ScenarioState[] states, ScenarioState home)
     {
         if (home.Displaced.Count == 0) return;
@@ -448,8 +452,12 @@ public static class WarDamage
         if (home.DisplacedOwner != home.NationMapIndex) { home.Displaced.Clear(); return; }
         if (home.WarDamage >= defines.WarDamageSafeBelow || !Safe(campaign, home)) return;
 
-        foreach (var culture in new List<string>(home.Displaced.Keys))
+        var keys = _displacedKeysScratch ??= new List<string>();
+        keys.Clear();
+        foreach (var key in home.Displaced.Keys) keys.Add(key);
+        for (var ki = 0; ki < keys.Count; ki++)
         {
+            var culture = keys[ki];
             var waiting = home.Displaced[culture];
             var coming = Math.Min(waiting, Math.Max(1L, (long)MathF.Ceiling(waiting * defines.WarDamageReturnPerWeek)));
             long found = 0;
@@ -563,7 +571,7 @@ public static class WarDamage
     }
 
     /// <summary>How many times a region is walked in a week before it is given a table.</summary>
-    private const int WalksBeforeTable = 32;
+    private const int WalksBeforeTable = 8;
 
     [ThreadStatic] private static Arrivals _arrivals;
 

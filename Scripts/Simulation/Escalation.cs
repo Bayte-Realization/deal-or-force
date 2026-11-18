@@ -362,6 +362,7 @@ public static class Escalation
                     Review(c, candidates[index], every);
             yield return 0;
         }
+        candidates.Clear();
         using (SimProfiler.Measure("escalation")) GrowWars(c, every);
         yield return 0;
         using (SimProfiler.Measure("escalation")) EndBorderWars(c, every);
@@ -373,6 +374,9 @@ public static class Escalation
     /// Every pair worth weighing, in a fixed order: the relations that already carry something,
     /// and every pair of neighbours, which are the pairs most wars are between.
     /// </summary>
+    [ThreadStatic] private static List<long> _candidateKeysScratch;
+    [ThreadStatic] private static List<DiplomaticRelation> _candidateRelationsScratch;
+
     private static List<DiplomaticRelation> Candidates(Campaign c)
     {
         // Every relation in the world is asked the same read-only question - does it carry
@@ -386,7 +390,8 @@ public static class Escalation
         var rows = System.Buffers.ArrayPool<DiplomaticRelation>.Shared.Rent(Math.Max(1, count));
         var pairKeys = System.Buffers.ArrayPool<long>.Shared.Rent(Math.Max(1, count));
         var keep = System.Buffers.ArrayPool<bool>.Shared.Rent(Math.Max(1, count));
-        var keys = new List<long>();
+        var keys = _candidateKeysScratch ??= new List<long>();
+        keys.Clear();
         try
         {
             relations.Values.CopyTo(rows, 0);
@@ -414,7 +419,8 @@ public static class Escalation
             }
         }
         keys.Sort();
-        var result = new List<DiplomaticRelation>(keys.Count);
+        var result = _candidateRelationsScratch ??= new List<DiplomaticRelation>(keys.Count);
+        result.Clear();
         for (var index = 0; index < keys.Count; index++)
         {
             var key = keys[index];

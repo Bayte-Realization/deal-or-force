@@ -83,11 +83,13 @@ public static class InternalMigration
     private static List<float> Pulls => _pullsScratch ??= new();
     private static List<(ScenarioState State, double Weight)> Destinations => _destinationsScratch ??= new();
 
-    private static readonly Dictionary<int, (float Latitude, float Longitude)> Centres = new();
-    private static Campaign _centresOf;
-    private static int _centresRevision = -1;
-    private static int _movedDay = -1;
-    private static Campaign _movedCampaign;
+    private sealed class MovedState
+    {
+        public int Day = int.MinValue;
+        public long Moved;
+        public readonly List<Nation> ActiveNations = new();
+    }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, MovedState> MovedStates = new();
 
     /// <summary>
     /// What draws people to a region, and keeps them: the standard of living, work, order and
@@ -113,35 +115,47 @@ public static class InternalMigration
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
         if (campaign is null) yield break;
-        if (_movedDay != campaign.ElapsedDays || !ReferenceEquals(_movedCampaign, campaign))
-        { MovedToday = 0; _movedDay = campaign.ElapsedDays; _movedCampaign = campaign; }
+        var movedState = MovedStates.GetOrCreateValue(campaign);
+        if (movedState.Day != campaign.ElapsedDays)
+        { movedState.Day = campaign.ElapsedDays; movedState.Moved = 0; MovedToday = 0; }
         var defines = campaign.Defines;
         if (!defines.InternalMigrationEnabled || !defines.HouseholdDynamicsEnabled) yield break;
         if (campaign.ElapsedDays <= 0 || campaign.ElapsedDays % Math.Max(1, defines.EconomyTickDays) != 0) yield break;
         var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
-        EnsureCentres(campaign);
+        var centres = LandAtlas.CentresOf(campaign);
         campaign.StatesOf(0);
         var reset = 0;
         foreach (var state in campaign.States) { if (++reset % 512 == 0) yield return 0; state.ReviewInternalMigration = 0; }
         yield return 0;
 
+        var active = movedState.ActiveNations;
+        active.Clear();
         var nations = campaign.Nations;
-        var nationCount = nations.Count;
-        const int batchSize = 32;
-        for (var start = 0; start < nationCount; start += batchSize)
+        for (var i = 0; i < nations.Count; i++)
         {
-            var count = Math.Min(batchSize, nationCount - start);
+            var nation = nations[i];
+            if (nation.Population <= 0 || nation.Movement is not null) continue;
+            if (campaign.StatesOf(nation).Length < 2) continue;
+            active.Add(nation);
+        }
+        var activeCount = active.Count;
+        const int batchSize = 32;
+        for (var start = 0; start < activeCount; start += batchSize)
+        {
+            var count = Math.Min(batchSize, activeCount - start);
             if (_migrationResultsScratch is null || _migrationResultsScratch.Length < count)
                 _migrationResultsScratch = new long[Math.Max(count, batchSize)];
             var batchStart = start;
             DeterministicParallel.Slots(campaign, count, _migrationResultsScratch,
-                i => MigrateNation(campaign, nations[batchStart + i], defines, interval),
-                (_, moved) => MovedToday += moved);
-            if (start + count < nationCount) yield return 0;
+                i => MigrateNation(campaign, active[batchStart + i], defines, interval, centres),
+                (_, moved) => { movedState.Moved += moved; MovedToday = movedState.Moved; });
+            if (start + count < activeCount) yield return 0;
         }
+        active.Clear();
     }
 
-    private static long MigrateNation(Campaign campaign, Nation nation, Defines defines, float interval)
+    private static long MigrateNation(Campaign campaign, Nation nation, Defines defines, float interval,
+        (float Latitude, float Longitude)[] centres)
     {
         if (nation.Population <= 0 || nation.Movement is not null) return 0;
         var states = campaign.StatesOf(nation);
@@ -177,14 +191,14 @@ public static class InternalMigration
 
             destinations.Clear();
             double total = 0;
-            var here = Centres.GetValueOrDefault(source.MapIndex);
+            (float Latitude, float Longitude) here = (uint)source.MapIndex < (uint)centres.Length ? centres[source.MapIndex] : default;
             for (var to = 0; to < regions.Count; to++)
             {
                 if (to == from) continue;
                 var target = regions[to];
                 var advantage = pulls[to] - MathF.Max(pulls[from], average - 0.02f);
                 if (advantage <= 0f || target.WarDamage >= 0.10f) continue;
-                var there = Centres.GetValueOrDefault(target.MapIndex);
+                (float Latitude, float Longitude) there = (uint)target.MapIndex < (uint)centres.Length ? centres[target.MapIndex] : default;
                 var km = NavalOperations.Distance(here.Latitude, here.Longitude, there.Latitude, there.Longitude) * 111f;
                 var weight = advantage * Math.Sqrt(target.Population) /
                              (1.0 + km / Math.Max(1f, defines.InternalMigrationReachKm));
@@ -517,27 +531,5 @@ public static class InternalMigration
             StandardOfLiving = to.StandardOfLiving, Radicalism = like.Radicalism
         });
         arrivals.Append(kind);
-    }
-
-    /// <summary>Every region's centre, once per map: a region's provinces averaged.</summary>
-    private static void EnsureCentres(Campaign campaign)
-    {
-        if (ReferenceEquals(_centresOf, campaign) && _centresRevision == campaign.MapRevision) return;
-        _centresOf = campaign;
-        _centresRevision = campaign.MapRevision;
-        Centres.Clear();
-        var topology = campaign.ProvinceMap;
-        if (topology is null) return;
-        var sums = new Dictionary<int, (double Latitude, double Longitude, int Count)>();
-        for (var province = 1; province <= topology.ProvinceCount; province++)
-        {
-            var state = topology.ProvinceToState[province];
-            if (state == 0) continue;
-            var centre = topology.CenterOf(province);
-            var sum = sums.GetValueOrDefault(state);
-            sums[state] = (sum.Latitude + centre.Latitude, sum.Longitude + centre.Longitude, sum.Count + 1);
-        }
-        foreach (var (state, sum) in sums)
-            Centres[state] = ((float)(sum.Latitude / sum.Count), (float)(sum.Longitude / sum.Count));
     }
 }

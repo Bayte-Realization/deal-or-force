@@ -37,8 +37,7 @@ public sealed partial class Defines
 /// </summary>
 public static class RegionalAdministration
 {
-    public static string DominantCulture(ScenarioState state) => EconomySystem.Cultures(state)
-        .OrderByDescending(p => p.Size).ThenBy(p => p.Culture, StringComparer.Ordinal).FirstOrDefault().Culture ?? "";
+    public static string DominantCulture(ScenarioState state) => EconomySystem.DominantCulture(state).Culture ?? "";
 
     /// <summary>
     /// What kind of administration a package should become. A large, culturally foreign bloc

@@ -226,6 +226,13 @@ public static class OpinionSystem
     /// the moment this returned.
     /// </summary>
     internal static void Settle(Campaign campaign, DiplomaticRelation relation,
+        out float politics, out float identity, out float social) =>
+        Settle(campaign, relation, true, out politics, out identity, out social);
+
+    internal static void Settle(Campaign campaign, DiplomaticRelation relation, bool explain) =>
+        Settle(campaign, relation, explain, out _, out _, out _);
+
+    private static void Settle(Campaign campaign, DiplomaticRelation relation, bool explain,
         out float politics, out float identity, out float social)
     {
         politics = identity = social = 0f;
@@ -236,18 +243,18 @@ public static class OpinionSystem
             if (reason.ExpiresDay > 0 && reason.ExpiresDay <= campaign.ElapsedDays)
                 relation.Reasons.RemoveAt(index);
         }
-        Explain(campaign, relation, true, out politics, out identity, out social);
+        Explain(campaign, relation, true, out politics, out identity, out social, explain);
     }
 
     public static void Explain(Campaign campaign, DiplomaticRelation relation, bool updateOpinion = false) =>
-        Explain(campaign, relation, updateOpinion, out _, out _, out _);
+        Explain(campaign, relation, updateOpinion, out _, out _, out _, true);
 
     private static void Explain(Campaign campaign, DiplomaticRelation relation, bool updateOpinion,
-        out float politics, out float declared, out float reputation)
+        out float politics, out float declared, out float reputation, bool explain = true)
     {
         politics = declared = reputation = 0f;
         if (relation is null) return;
-        relation.OpinionDrivers.Begin("Opinion", "share");
+        if (explain) relation.OpinionDrivers.Begin("Opinion", "share");
         var total = 0f;
         var witnessedAgainst = 0f;
         var witnessedFor = 0f;
@@ -264,8 +271,11 @@ public static class OpinionSystem
             {
                 if (weight < 0f) witnessedAgainst += weight; else witnessedFor += weight;
             }
-            var name = item.Name ?? reason.Id;
-            relation.OpinionDrivers.Add(reason.Stacks > 1 ? $"{name} (x{reason.Stacks})" : name, weight);
+            if (explain)
+            {
+                var name = item.Name ?? reason.Id;
+                relation.OpinionDrivers.Add(reason.Stacks > 1 ? $"{name} (x{reason.Stacks})" : name, weight);
+            }
         }
 
         // What the two of them hold against each other as bystanders - a test, a coup, a bad
@@ -279,13 +289,13 @@ public static class OpinionSystem
         if (witnessedAgainst < floor)
         {
             total += floor - witnessedAgainst;
-            relation.OpinionDrivers.Add(Loc.Get("Other countries' quarrels, beyond what concerns us"), floor - witnessedAgainst);
+            if (explain) relation.OpinionDrivers.Add(Loc.Get("Other countries' quarrels, beyond what concerns us"), floor - witnessedAgainst);
         }
         var ceiling = MathF.Max(0f, campaign.Defines.ThirdPartyOpinionCeiling);
         if (witnessedFor > ceiling)
         {
             total -= witnessedFor - ceiling;
-            relation.OpinionDrivers.Add(Loc.Get("Other countries' quarrels, beyond what concerns us"), ceiling - witnessedFor);
+            if (explain) relation.OpinionDrivers.Add(Loc.Get("Other countries' quarrels, beyond what concerns us"), ceiling - witnessedFor);
         }
 
         var leftNation = campaign.NationById(relation.A);
@@ -302,7 +312,7 @@ public static class OpinionSystem
         if (MathF.Abs(affinity) >= 0.05f)
         {
             total += affinity;
-            relation.OpinionDrivers.Add(
+            if (explain) relation.OpinionDrivers.Add(
                 Loc.Get(affinity >= 0f ? "Politics we recognise" : "Politics we do not share"), affinity);
         }
 
@@ -314,7 +324,7 @@ public static class OpinionSystem
         if (identity >= 0.05f)
         {
             total += identity;
-            relation.OpinionDrivers.Add(Loc.Get("The same church, the same people"), identity);
+            if (explain) relation.OpinionDrivers.Add(Loc.Get("The same church, the same people"), identity);
         }
 
         var memory = SocialMemory.OpinionEffect(campaign, leftNation, rightNation);
@@ -322,10 +332,10 @@ public static class OpinionSystem
         if (MathF.Abs(memory) >= 0.05f)
         {
             total += memory;
-            relation.OpinionDrivers.Add(Loc.Get("Accumulated public reputation"), memory);
+            if (explain) relation.OpinionDrivers.Add(Loc.Get("Accumulated public reputation"), memory);
         }
         if (updateOpinion) relation.Opinion = M.Clamp(total, -100f, 100f);
-        relation.OpinionDrivers.Settle(relation.Opinion, "clamped");
+        if (explain) relation.OpinionDrivers.Settle(relation.Opinion, "clamped");
     }
 
     /// <summary>
@@ -361,7 +371,13 @@ public static class OpinionSystem
         public SettleQueue(Campaign campaign)
         {
             Campaign = campaign;
-            SettleOne = index => Settle(Campaign, Waiting[index]);
+            SettleOne = index =>
+            {
+                var relation = Waiting[index];
+                var explain = Campaign.NationById(relation.A)?.IsHuman == true ||
+                              Campaign.NationById(relation.B)?.IsHuman == true;
+                Settle(Campaign, relation, explain);
+            };
         }
     }
 
@@ -417,7 +433,12 @@ public static class OpinionSystem
             if (relation.MissionByA is not null || relation.MissionByB is not null)
             {
                 DiplomaticOutreach.Tick(campaign, relation);
-                if (due) Settle(campaign, relation);
+                if (due)
+                {
+                    var explain = campaign.NationById(relation.A)?.IsHuman == true ||
+                                  campaign.NationById(relation.B)?.IsHuman == true;
+                    Settle(campaign, relation, explain);
+                }
                 continue;
             }
             if (!due) continue;
