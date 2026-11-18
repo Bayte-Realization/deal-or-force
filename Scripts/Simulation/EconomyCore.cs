@@ -956,10 +956,19 @@ public static class EconomySystem
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(EconomySystem))) yield break;
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) yield break;
+        if (campaign.ElapsedDays == 0) yield break;
+        var every = Math.Max(1, campaign.Defines.EconomyTickDays);
+        var marketDay = campaign.ElapsedDays % campaign.Defines.EconomyTickDays == 0;
+        // EconomyWeekStaggered (off as shipped): every country still closes its week once a
+        // week, on a day of its own, against the latest market, instead of all of them on the
+        // market's day - a seventh of the countries a day. The heavy weekly step loses most of
+        // its country half. The world it makes is not the shipped one; see the define.
+        var staggered = campaign.Defines.EconomyWeekStaggered;
+        if (!marketDay && !staggered) yield break;
         // The market pass had no top-level scope of its own: a hundred and fifty milliseconds
         // of a late week vanished into the day's unmeasured remainder instead of naming the
         // system that spent them.
+        if (marketDay)
         using (var market = MarketSystem.TickStages(campaign).GetEnumerator())
         {
             while (true)
@@ -972,7 +981,8 @@ public static class EconomySystem
         }
         for (var index = 0; index < campaign.Nations.Count; index++)
         {
-            if (index > 0 && index % EconomyStageCountries == 0) yield return 0;
+            if (index > 0 && (index % EconomyStageCountries == 0 || Campaign.StageOverdue())) yield return 0;
+            if (staggered && index % every != campaign.ElapsedDays % every) continue;
             using var stage = SimProfiler.Measure("economy");
             var nation = campaign.Nations[index];
             // A retired country (LongCampaign) keeps no books: no ledger to close, nothing to zero.
@@ -1287,11 +1297,8 @@ public static class EconomySystem
     [ThreadStatic] private static Dictionary<string, long> _techGroupTotals;
     [ThreadStatic] private static float[] _seedWeights;
 
-    private static IReadOnlyList<(string Key, long Size)> Tally(ScenarioState state, Func<PopulationGroup, string> of)
+    private static void AccumulateByKey(ScenarioState state, Func<PopulationGroup, string> of, Dictionary<string, long> totals)
     {
-        if (state is null || state.PopulationGroups.Count == 0) return Array.Empty<(string, long)>();
-        var totals = _techGroupTotals ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        totals.Clear();
         var groups = state.PopulationGroups;
         for (var i = 0; i < groups.Count; i++)
         {
@@ -1301,6 +1308,14 @@ public static class EconomySystem
             if (string.IsNullOrEmpty(key)) key = "?";
             totals[key] = totals.GetValueOrDefault(key) + group.Size;
         }
+    }
+
+    private static IReadOnlyList<(string Key, long Size)> Tally(ScenarioState state, Func<PopulationGroup, string> of)
+    {
+        if (state is null || state.PopulationGroups.Count == 0) return Array.Empty<(string, long)>();
+        var totals = _techGroupTotals ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        totals.Clear();
+        AccumulateByKey(state, of, totals);
         if (totals.Count == 0) return Array.Empty<(string, long)>();
         var result = new List<(string Key, long Size)>(totals.Count);
         foreach (var entry in totals)
@@ -1311,6 +1326,71 @@ public static class EconomySystem
             return cmp != 0 ? cmp : string.CompareOrdinal(a.Key, b.Key);
         });
         return result;
+    }
+
+    /// <summary>Largest culture living in a region with exact tie-breaking of <see cref="Cultures"/>, without List/Sort allocation.</summary>
+    internal static (string Culture, long Size) DominantCulture(ScenarioState state)
+    {
+        if (state is null || state.PopulationGroups.Count == 0) return default;
+        var totals = _techGroupTotals ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        totals.Clear();
+        AccumulateByKey(state, static group => group.Culture, totals);
+        string bestKey = null;
+        long bestSize = 0;
+        foreach (var entry in totals)
+        {
+            var cmp = entry.Value.CompareTo(bestSize);
+            if (bestKey is null || cmp > 0 || (cmp == 0 && string.CompareOrdinal(entry.Key, bestKey) < 0))
+            {
+                bestKey = entry.Key;
+                bestSize = entry.Value;
+            }
+        }
+        return bestKey is null ? default : (bestKey, bestSize);
+    }
+
+    /// <summary>Total population of one culture in a region, allocating nothing.</summary>
+    internal static long CultureSize(ScenarioState state, string culture)
+    {
+        if (state is null || string.IsNullOrEmpty(culture) || state.PopulationGroups.Count == 0) return 0;
+        long total = 0;
+        var groups = state.PopulationGroups;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var group = groups[i];
+            if (group.Size > 0 && string.Equals(group.Culture, culture, StringComparison.OrdinalIgnoreCase))
+                total += group.Size;
+        }
+        return total;
+    }
+
+    /// <summary>Total population belonging to any of the listed cultures in a region, allocating nothing.</summary>
+    internal static long PeoplesSize(ScenarioState state, IReadOnlyList<string> peoples)
+    {
+        if (state is null || peoples is null || peoples.Count == 0 || state.PopulationGroups.Count == 0) return 0;
+        long total = 0;
+        var groups = state.PopulationGroups;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var group = groups[i];
+            if (group.Size <= 0 || string.IsNullOrEmpty(group.Culture)) continue;
+            for (var pi = 0; pi < peoples.Count; pi++)
+            {
+                if (string.Equals(peoples[pi], group.Culture, StringComparison.OrdinalIgnoreCase))
+                {
+                    total += group.Size;
+                    break;
+                }
+            }
+        }
+        return total;
+    }
+
+    /// <summary>Adds each population group's culture size in <paramref name="state"/> into a caller-owned dictionary.</summary>
+    internal static void AccumulateCultures(ScenarioState state, Dictionary<string, long> into)
+    {
+        if (state is null || state.PopulationGroups.Count == 0) return;
+        AccumulateByKey(state, static group => group.Culture, into);
     }
 
     /// <summary>
@@ -1827,6 +1907,18 @@ public static class ConstructionSystem
 
 public sealed partial class Defines
 {
+    /// <summary>
+    /// Off as shipped. On, each country closes its economic week (budget, growth, its regions'
+    /// households) on a weekday of its own - its place in the list modulo the week - against the
+    /// most recent market, instead of every country on the market's day. Every country still
+    /// closes exactly one week a week. It takes most of the country half out of the week's heavy
+    /// step, at the price of a different world: a country's budget then reads a market from up
+    /// to six days earlier, and the daily passes in between read a world where some countries
+    /// have closed their week and some have not. Measured for the owner in
+    /// docs/PERFORMANCE_PASS_3_2026_11_18_RU.md; not part of the same-world contract.
+    /// </summary>
+    public bool EconomyWeekStaggered { get; set; }
+
     /// <summary>The weekly share of the gap between a country's living standard and what its
     /// economy carries that closes (EconomySystem.EconomicLiving): about a year and a third to halve it.</summary>
     public float LivingReversionPerWeek { get; set; } = 0.01f;

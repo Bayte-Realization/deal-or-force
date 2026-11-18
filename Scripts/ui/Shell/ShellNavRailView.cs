@@ -78,7 +78,7 @@ internal sealed class ShellNavRailView
 
             btn.Pressed += () =>
             {
-                _ctx.PlayCue?.Invoke("ui_select");
+                _ctx.PlayCue?.Invoke("shell_plate_tap");
                 if (capturedScreen == "Search") _ctx.ToggleNavigator?.Invoke();
                 else _ctx.ToggleScreen?.Invoke(capturedScreen);
             };

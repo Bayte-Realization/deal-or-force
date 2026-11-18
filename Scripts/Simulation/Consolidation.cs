@@ -93,7 +93,7 @@ public static class Consolidation
         for (var ni = 0; ni < nations.Count; ni++)
         {
             var nation = nations[ni];
-            if (++ticked % 8 == 0) yield return 0;
+            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if ((c.ElapsedDays + (long)nation.Id * 7) % every != 0) continue;
             // A player's country pursues a union only when the player has handed diplomacy over.
             if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;

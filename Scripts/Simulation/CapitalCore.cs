@@ -545,7 +545,7 @@ public static class CapitalCore
         var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++scanned % 8 == 0) yield return 0;
+            if (++scanned % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             // A movement or a country never represented on this raster has no placed seat
             // to lose. Its field units are governed by its own lifecycle.
             if (nation.CapitalStateMapIndex <= 0 && nation.CapitalProvinceId <= 0 &&

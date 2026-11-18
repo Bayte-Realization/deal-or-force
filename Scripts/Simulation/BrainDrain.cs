@@ -132,6 +132,66 @@ public static class BrainDrain
         return result;
     }
 
+    private readonly struct DestCandidate
+    {
+        public readonly Nation Nation;
+        public readonly float StabilityBonus;
+        public readonly float ProductivityBonus;
+        public readonly float OpenDoors;
+        public readonly float LaborShortagePull;
+        public readonly double DoorMultiplier;
+
+        public DestCandidate(Nation candidate)
+        {
+            Nation = candidate;
+            StabilityBonus = (candidate.Stability - 0.50f) * 0.55f;
+            ProductivityBonus = M.Clamp(candidate.Productivity - 1f, -0.2f, 0.5f) * 0.25f;
+            var hasOpen = ModifierSystem.Has(candidate, "open_migration_doors");
+            OpenDoors = hasOpen ? 0.35f : 0f;
+            LaborShortagePull = MathF.Max(0f, 0.62f - candidate.WorkingShare) * 1.5f;
+            DoorMultiplier = hasOpen ? 1.65d : 1.0d;
+        }
+    }
+
+    private static Nation BestDestinationFromPool(Campaign c, Nation source, List<DestCandidate> pool, out double doorMultiplier)
+    {
+        doorMultiplier = 1.0d;
+        if (c is null || source is null || pool.Count == 0) return null;
+        Nation best = null;
+        var bestScore = 0.12f; // Minimum pull threshold required to attract cross-border migrants.
+        var sourcePrimary = DemographyCatalog.PrimaryCulture(source.Tag);
+
+        for (var i = 0; i < pool.Count; i++)
+        {
+            var entry = pool[i];
+            var candidate = entry.Nation;
+            if (candidate.Id == source.Id) continue;
+            if (candidate.StandardOfLiving <= source.StandardOfLiving + 0.05f) continue;
+
+            var rel = CampaignDiplomacy.Peek(c, source.Id, candidate.Id);
+            if (rel is not null && (rel.EmbargoByA || rel.EmbargoByB || rel.Stance == DiplomaticStance.Rival)) continue;
+
+            var livingGap = candidate.StandardOfLiving - source.StandardOfLiving;
+            var tradeLink = source.TradePartners.GetValueOrDefault(candidate.Id) * 0.85f;
+            var sameContinent = string.Equals(candidate.Continent, source.Continent, StringComparison.OrdinalIgnoreCase) ? 0.18f : 0f;
+            var friendly = rel is not null && rel.Opinion > 15f ? 0.12f : 0f;
+            var kinship = StateIdentity.ShareDeclaredFaith(source, candidate) ||
+                          (!string.IsNullOrEmpty(sourcePrimary) && DemographyCatalog.IsPrimary(candidate.Tag, sourcePrimary))
+                ? 0.16f : 0f;
+
+            var score = livingGap * 1.35f + entry.StabilityBonus + tradeLink + sameContinent + friendly +
+                        entry.ProductivityBonus + kinship + entry.OpenDoors + entry.LaborShortagePull;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = candidate;
+                doorMultiplier = entry.DoorMultiplier;
+            }
+        }
+
+        return best;
+    }
+
     public static Nation BestDestination(Campaign c, Nation source, HashSet<int> atWarNations)
     {
         if (c is null || source is null) return null;
@@ -279,6 +339,17 @@ public static class BrainDrain
         var maxWeeklyShare = M.Clamp(c.Defines.BrainDrainMaxWeeklyShare, 0f, 0.005f);
         var literacyWeight = M.Clamp(c.Defines.BrainDrainLiteracyWeight, 0f, 1f);
 
+        var candidates = new List<DestCandidate>(c.Nations.Count);
+        for (var i = 0; i < c.Nations.Count; i++)
+        {
+            var candidate = c.Nations[i];
+            if (candidate.Movement is not null || candidate.Population <= 0) continue;
+            if (candidate.Stability < 0.52f || atWarNations.Contains(candidate.Id)) continue;
+            if (ModifierSystem.Has(candidate, "strict_border_controls")) continue;
+            if (c.StatesOf(candidate).Length == 0) continue;
+            candidates.Add(new DestCandidate(candidate));
+        }
+
         for (var i = 0; i < c.Nations.Count; i++)
         {
             if (i > 0 && i % StageCountries == 0) yield return 0;
@@ -298,7 +369,7 @@ public static class BrainDrain
 
             if (maxPressure < 0.08f) continue;
 
-            var destNation = BestDestination(c, sourceNation, atWarNations);
+            var destNation = BestDestinationFromPool(c, sourceNation, candidates, out var destDoorMultiplier);
             if (destNation is null) continue;
             if (!receptionsCache.TryGetValue(destNation.Id, out var receptions))
                 receptionsCache[destNation.Id] = receptions = ReceptionStates(c, destNation, c.Defines.BrainDrainReceptionRegions);
@@ -310,13 +381,13 @@ public static class BrainDrain
 
             long totalOutflow = 0;
             double weightedPressure = 0;
+            double doorMultiplier = destDoorMultiplier;
             for (var sIdx = 0; sIdx < states.Length; sIdx++)
             {
                 var st = states[sIdx];
                 weightedPressure += st.BrainDrainPressure * st.Population;
                 if (st.BrainDrainPressure < 0.08f || st.Population <= 5_000) continue;
 
-                var doorMultiplier = ModifierSystem.Has(destNation, "open_migration_doors") ? 1.65d : 1.0d;
                 var moved = (long)Math.Round(st.Population * (double)st.BrainDrainPressure * maxWeeklyShare * doorMultiplier);
                 moved = Math.Clamp(moved, 0L, Math.Min(st.Population / 50L, room));
                 if (moved <= 0) continue;

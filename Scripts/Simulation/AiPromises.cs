@@ -33,7 +33,7 @@ public static class AiPromises
         var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++scanned % 16 == 0) yield return 0;
+            if (++scanned % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             // The player's own government decides for itself, unless its cabinet has been
             // handed to the AI (Delegation) - then it speaks like any other cabinet, because
             // it already spends like one. Movements are not a government any electorate holds

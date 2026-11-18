@@ -62,65 +62,74 @@ static class ControlsErgonomicsTests
         SettingsCatalog.Reset("drag_threshold_px");
         SettingsCatalog.Reset("drag_threshold_ms");
 
-        // 1. Settings defaults (Owner Nov 18 decisions)
-        Check(string.Equals(SettingsCatalog.Of("mouse_scheme")?.DefaultValue, "aoh", StringComparison.OrdinalIgnoreCase),
-            "default mouse scheme is AoH");
-        Check(ControlSchemeRules.ActiveMouseScheme == MouseControlScheme.AoH,
-            "ControlSchemeRules defaults to AoH");
+        // 1. Settings defaults & backward-compatible legacy scheme migration
+        Check(string.Equals(SettingsCatalog.Of("mouse_scheme")?.DefaultValue, "direct_pan", StringComparison.OrdinalIgnoreCase),
+            "default mouse scheme is direct_pan");
+        Check(ControlSchemeRules.ActiveMouseScheme == MouseControlScheme.DirectPan,
+            "ControlSchemeRules defaults to DirectPan");
+        PlayerSettings.Set("mouse_scheme", "paradox");
+        Check(string.Equals(SettingsCatalog.Chosen("mouse_scheme"), "box_select", StringComparison.Ordinal) &&
+              ControlSchemeRules.ActiveMouseScheme == MouseControlScheme.BoxSelect,
+            "legacy saved mouse_scheme=paradox migrates cleanly to box_select / BoxSelect");
+        PlayerSettings.Set("mouse_scheme", "aoh");
+        Check(string.Equals(SettingsCatalog.Chosen("mouse_scheme"), "direct_pan", StringComparison.Ordinal) &&
+              ControlSchemeRules.ActiveMouseScheme == MouseControlScheme.DirectPan,
+            "legacy saved mouse_scheme=aoh migrates cleanly to direct_pan / DirectPan");
+        SettingsCatalog.Reset("mouse_scheme");
         Check(ControlSchemeRules.RmbEverywhereEnabled, "rmb_everywhere defaults to true");
         Check(!ControlSchemeRules.EdgePanEnabled, "edge_pan defaults to false");
         Check(MathF.Abs(ControlSchemeRules.DragThresholdPx - 8f) < 0.01f, "drag_threshold_px defaults to 8");
         Check(Math.Abs(ControlSchemeRules.DragThresholdMs - 120.0) < 0.01, "drag_threshold_ms defaults to 120");
 
-        // 2. MapGestureSession: AoH scheme vs Paradox scheme + 8 px / 120 ms disambiguation
+        // 2. MapGestureSession: DirectPan scheme vs BoxSelect scheme + 8 px / 120 ms disambiguation
         var g = new MapGestureSession();
 
-        // AoH: LMB drag past 8 px pans
-        g.BeginPress(MouseControlScheme.AoH, MapPointerButton.Left, 100f, 100f, 1000, false, false, false, true);
-        Check(!g.BoxStarted, "AoH LMB press does not start army box");
-        Check(!g.UpdateMotion(105f, 102f, 1040, 8f, 120.0, out _, out _), "AoH LMB < 8 px does not pan yet");
+        // DirectPan: LMB drag past 8 px pans
+        g.BeginPress(MouseControlScheme.DirectPan, MapPointerButton.Left, 100f, 100f, 1000, false, false, false, true);
+        Check(!g.BoxStarted, "DirectPan LMB press does not start army box");
+        Check(!g.UpdateMotion(105f, 102f, 1040, 8f, 120.0, out _, out _), "DirectPan LMB < 8 px does not pan yet");
         Check(g.UpdateMotion(114f, 104f, 1060, 8f, 120.0, out var dx, out var dy) && dx > 0f,
-            "AoH LMB >= 8 px triggers smooth pan immediately");
+            "DirectPan LMB >= 8 px triggers smooth pan immediately");
         Check(g.ReleaseLeft(120f, 105f, 8f) == LmbReleaseOutcome.PanEnded,
-            "AoH LMB drag ends cleanly as PanEnded with zero click side-effect");
+            "DirectPan LMB drag ends cleanly as PanEnded with zero click side-effect");
 
-        // AoH: Ctrl+LMB draws region box; MMB draws army box
-        g.BeginPress(MouseControlScheme.AoH, MapPointerButton.Left, 200f, 200f, 2000, true, false, false, true);
-        Check(g.BoxStarted && g.BoxRegions, "AoH Ctrl+LMB starts multi-region selection box");
+        // DirectPan: Ctrl+LMB draws region box; MMB draws army box
+        g.BeginPress(MouseControlScheme.DirectPan, MapPointerButton.Left, 200f, 200f, 2000, true, false, false, true);
+        Check(g.BoxStarted && g.BoxRegions, "DirectPan Ctrl+LMB starts multi-region selection box");
         g.UpdateMotion(260f, 250f, 2040, 8f, 120.0, out _, out _);
-        Check(g.ReleaseLeft(260f, 250f, 8f) == LmbReleaseOutcome.BoxRegionSelect, "AoH Ctrl+LMB releases BoxRegionSelect");
+        Check(g.ReleaseLeft(260f, 250f, 8f) == LmbReleaseOutcome.BoxRegionSelect, "DirectPan Ctrl+LMB releases BoxRegionSelect");
 
-        g.BeginPress(MouseControlScheme.AoH, MapPointerButton.Middle, 300f, 300f, 2100, false, false, false, false);
-        Check(g.BoxStarted && !g.BoxRegions, "AoH MMB press starts army selection box");
-        Check(!g.UpdateMotion(345f, 330f, 2130, 8f, 120.0, out _, out _), "AoH MMB drag never pans camera");
-        Check(g.ReleaseMiddle(345f, 330f, 8f) == MmbReleaseOutcome.BoxArmySelect, "AoH MMB releases BoxArmySelect");
+        g.BeginPress(MouseControlScheme.DirectPan, MapPointerButton.Middle, 300f, 300f, 2100, false, false, false, false);
+        Check(g.BoxStarted && !g.BoxRegions, "DirectPan MMB press starts army selection box");
+        Check(!g.UpdateMotion(345f, 330f, 2130, 8f, 120.0, out _, out _), "DirectPan MMB drag never pans camera");
+        Check(g.ReleaseMiddle(345f, 330f, 8f) == MmbReleaseOutcome.BoxArmySelect, "DirectPan MMB releases BoxArmySelect");
 
-        // Paradox: LMB drag draws army box; MMB drag pans immediately
-        g.BeginPress(MouseControlScheme.Paradox, MapPointerButton.Left, 100f, 100f, 3000, false, false, false, true);
-        Check(g.BoxStarted && !g.BoxRegions, "Paradox LMB starts army selection box");
-        Check(g.ReleaseLeft(150f, 140f, 8f) == LmbReleaseOutcome.BoxArmySelect, "Paradox LMB releases BoxArmySelect");
-        g.BeginPress(MouseControlScheme.Paradox, MapPointerButton.Middle, 100f, 100f, 3100, false, false, false, false);
-        Check(g.PanStarted && g.UpdateMotion(110f, 102f, 3110, 8f, 120.0, out _, out _), "Paradox MMB pans immediately");
-        Check(g.ReleaseMiddle(115f, 104f, 8f) == MmbReleaseOutcome.PanEnded, "Paradox MMB ends PanEnded");
+        // BoxSelect: LMB drag draws army box; MMB drag pans immediately
+        g.BeginPress(MouseControlScheme.BoxSelect, MapPointerButton.Left, 100f, 100f, 3000, false, false, false, true);
+        Check(g.BoxStarted && !g.BoxRegions, "BoxSelect LMB starts army selection box");
+        Check(g.ReleaseLeft(150f, 140f, 8f) == LmbReleaseOutcome.BoxArmySelect, "BoxSelect LMB releases BoxArmySelect");
+        g.BeginPress(MouseControlScheme.BoxSelect, MapPointerButton.Middle, 100f, 100f, 3100, false, false, false, false);
+        Check(g.PanStarted && g.UpdateMotion(110f, 102f, 3110, 8f, 120.0, out _, out _), "BoxSelect MMB pans immediately");
+        Check(g.ReleaseMiddle(115f, 104f, 8f) == MmbReleaseOutcome.PanEnded, "BoxSelect MMB ends PanEnded");
 
         // Strict RMB 8 px + 120 ms gate
-        g.BeginPress(MouseControlScheme.AoH, MapPointerButton.Right, 400f, 400f, 4000, false, false, false, false);
+        g.BeginPress(MouseControlScheme.DirectPan, MapPointerButton.Right, 400f, 400f, 4000, false, false, false, false);
         Check(!g.UpdateMotion(420f, 400f, 4060, 8f, 120.0, out _, out _),
             "RMB > 8 px before 120 ms does not start pan yet");
         Check(g.ReleaseRight(420f, 400f, 4070, 8f, 120.0, false) == RmbReleaseOutcome.IgnoredDrift,
             "fast swiped RMB (> 8 px before 120 ms) is suppressed (zero accidental march)");
 
-        g.BeginPress(MouseControlScheme.AoH, MapPointerButton.Right, 400f, 400f, 5000, false, false, false, false);
+        g.BeginPress(MouseControlScheme.DirectPan, MapPointerButton.Right, 400f, 400f, 5000, false, false, false, false);
         Check(!g.UpdateMotion(404f, 403f, 5200, 8f, 120.0, out _, out _),
             "RMB < 8 px even after 200 ms stays a click");
         Check(g.ReleaseRight(404f, 403f, 5220, 8f, 120.0, false) == RmbReleaseOutcome.CommandOrContextMenu,
             "clean RMB release <= 8 px triggers CommandOrContextMenu");
 
-        g.BeginPress(MouseControlScheme.AoH, MapPointerButton.Right, 400f, 400f, 6000, false, true, false, false);
+        g.BeginPress(MouseControlScheme.DirectPan, MapPointerButton.Right, 400f, 400f, 6000, false, true, false, false);
         Check(g.ReleaseRight(403f, 402f, 6040, 8f, 120.0, true) == RmbReleaseOutcome.AltSplitMove,
             "clean Alt+RMB click triggers AltSplitMove");
 
-        g.BeginPress(MouseControlScheme.AoH, MapPointerButton.Right, 400f, 400f, 7000, false, false, false, false);
+        g.BeginPress(MouseControlScheme.DirectPan, MapPointerButton.Right, 400f, 400f, 7000, false, false, false, false);
         Check(g.UpdateMotion(415f, 406f, 7140, 8f, 120.0, out var rDx, out var rDy) && rDx > 0f && rDy > 0f,
             "RMB > 8 px AND >= 120 ms transitions cleanly into pan");
         Check(g.ReleaseRight(430f, 412f, 7250, 8f, 120.0, false) == RmbReleaseOutcome.PanEnded,

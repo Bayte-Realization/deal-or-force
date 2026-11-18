@@ -231,7 +231,7 @@ public static class StrategicDoctrines
         var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++ticked % 8 == 0) yield return 0;
+            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if (!Delegation.RunByAi(nation)) continue;
             // Its own day of the week, on a longer cycle than the book: a course is not twitched.
             if ((day + nation.Id) % 11 != 0) continue;

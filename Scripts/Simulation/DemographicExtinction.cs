@@ -84,7 +84,7 @@ public static class DemographicExtinction
         var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++scanned % 16 == 0) yield return 0;
+            if (++scanned % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (nation is null || nation.IsHuman || nation.Movement is not null) continue;
             nation.CollapseReviews = Review(nation, campaign.Defines, (int)nation.Population);
             if (!IsFinal(nation, campaign.Defines)) continue;

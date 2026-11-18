@@ -843,7 +843,7 @@ public static class TacticalDoctrines
         for (var ni = 0; ni < nations.Count; ni++)
         {
             var nation = nations[ni];
-            if (++ticked % 8 == 0) yield return 0;
+            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             // A retired country (LongCampaign) has no shelves to open and studies nothing.
             if (campaign.IsRetired(nation)) continue;
             if (runCourses)

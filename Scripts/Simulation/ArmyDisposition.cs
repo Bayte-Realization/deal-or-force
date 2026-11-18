@@ -207,7 +207,7 @@ public static class ArmyDisposition
         for (var fi = 0; fi < Free.Count; fi++)
         {
             if (moves >= budget) break;
-            if (fi > 0 && fi % 4 == 0) yield return 0;
+            if (fi > 0 && (fi % 4 == 0 || Campaign.StageOverdue())) yield return 0;
             var army = Free[fi];
             if (army.CutOff || army.ProvinceId <= 0 || army.ProvinceId >= map.ProvinceToState.Length) continue; // cut off is the staff's problem: it needs breaking out, not spreading
             if (army.SupplyCongestion >= d.DispositionCongestionLimit && army.SupplyLevel >= d.DispositionSupplyLimit) continue;
@@ -318,7 +318,7 @@ public static class ArmyDisposition
         {
             var region = regions[rgi];
             if (moves >= budget) break;
-            if (rgi > 0 && rgi % 4 == 0) yield return 0;
+            if (rgi > 0 && (rgi % 4 == 0 || Campaign.StageOverdue())) yield return 0;
             if (held.Contains(region.MapIndex)) continue;
             // The province of the region we hold and can stand in: its capital's for the capital.
             var post = region.MapIndex == nation.CapitalStateMapIndex && nation.CapitalProvinceId > 0 &&

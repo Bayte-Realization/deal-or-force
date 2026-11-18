@@ -158,7 +158,7 @@ public static partial class Ultimatum
         var ticked = 0;
         foreach (var paper in c.UltimatumPapers.Where(candidate => candidate.Pending).ToArray())
         {
-            if (++ticked % 32 == 0) yield return 0;
+            if (++ticked % 32 == 0 || Campaign.StageOverdue()) yield return 0;
             if (paper.ExpiresDay <= c.ElapsedDays) CloseUnread(c, paper);
         }
         yield return 0;

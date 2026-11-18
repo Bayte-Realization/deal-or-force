@@ -169,16 +169,11 @@ public static class SecessionCore
     public static void ResetCatalog(List<string> errors = null)
     {
         Weights = new SecessionWeights();
-        foreach (var document in GameDataLoader.DataDocuments("common", "secession"))
-            using (document)
-                Merge(document.RootElement, errors);
+        DataCatalogLoader.LoadCommon("secession", root => Merge(root, errors));
     }
 
-    public static void Merge(string json, List<string> errors = null)
-    {
-        using var document = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
-        Merge(document.RootElement, errors);
-    }
+    public static void Merge(string json, List<string> errors = null) =>
+        DataCatalogLoader.ParseAndMerge(json, root => Merge(root, errors));
 
     public static void Merge(JsonElement root, List<string> errors = null)
     {

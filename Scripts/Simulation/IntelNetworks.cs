@@ -93,7 +93,7 @@ public static class IntelNetworks
         var scanned = 0;
         foreach (var owner in c.Nations)
         {
-            if (++scanned % 8 == 0) yield return 0;
+            if (++scanned % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if (owner.IntelNetworks.Count == 0) continue;
             foreach (var targetId in owner.IntelNetworks.Keys.OrderBy(id => id).ToList())
             {
@@ -140,7 +140,7 @@ public static class IntelNetworks
         var scanned = 0;
         foreach (var owner in c.Nations)
         {
-            if (++scanned % 4 == 0) yield return 0;
+            if (++scanned % 4 == 0 || Campaign.StageOverdue()) yield return 0;
             if (owner.IsHuman || owner.Movement is not null || owner.Population <= 0 || owner.Gdp < 10f) continue;
             // A service grows with the state that pays for it: one network for a small country,
             // the full complement only for the largest economies.

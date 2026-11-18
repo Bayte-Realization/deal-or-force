@@ -1041,6 +1041,7 @@ public partial class DealOrForceGame
 
         if (_diplomacyDossierPage == "Relations")
         {
+        Simulation.OpinionSystem.Explain(_campaign, relation);
         // ---- the opinion, and what it is made of.
         var drivers = relation.OpinionDrivers.Entries
             .OrderByDescending(item => Math.Abs(item.Value))

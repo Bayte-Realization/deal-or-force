@@ -11,25 +11,14 @@ public static class PeacefulFormation
     public static string ConsentKey(int founder, string formable) => "union_consent/" + founder + "/" + formable;
     private static string OfferKey(int founder, string formable) => "union_offer/" + founder + "/" + formable;
 
-    private static Campaign _territoryCampaign;
-    private static int _territoryMapRevision = int.MinValue;
-    private static int _territoryStateCount = -1;
-    private static readonly Dictionary<string, int[]> _territoryCache = new();
-    private static readonly Dictionary<string, HashSet<int>> _landTerritoryCache = new();
     private static readonly HashSet<int> EmptyIntSet = new();
-
-    /// <summary>
-    /// One lock for the territory cache. It is static state shared by every caller, and the
-    /// moment a second thread exists - a worker, a parallel review - a table being refilled must
-    /// not be read by anybody else. Held only while the table is looked up or rebuilt.
-    /// </summary>
-    private static readonly object TerritoryGate = new();
 
     public static int[] Territory(Campaign campaign, FormableNation definition)
     {
         if (campaign?.ProvinceMap is null || definition is null) return Array.Empty<int>();
-        lock (TerritoryGate)
-            return TerritoryUnlocked(campaign, definition);
+        var cache = campaign.Caches.PeacefulFormation;
+        lock (cache.TerritoryGate)
+            return TerritoryUnlocked(campaign, cache, definition);
     }
 
     /// <summary>
@@ -41,20 +30,19 @@ public static class PeacefulFormation
     /// </summary>
     [ThreadStatic] private static HashSet<int> _territoryScratch;
 
-    private static int[] TerritoryUnlocked(Campaign campaign, FormableNation definition)
+    private static int[] TerritoryUnlocked(Campaign campaign, CampaignCaches.PeacefulFormationCache cache, FormableNation definition)
     {
         // Keyed on the region layout, not on MapRevision: a formable's ground is its provinces and
         // the regions a border has carved from its named ones, none of which moves when a province
         // is merely taken in battle - and MapRevision moves dozens of times a day in any war.
-        if (!ReferenceEquals(_territoryCampaign, campaign) || _territoryMapRevision != campaign.OwnershipRevision || _territoryStateCount != campaign.States.Count)
+        if (cache.TerritoryOwnershipRevision != campaign.OwnershipRevision || cache.TerritoryStateCount != campaign.States.Count)
         {
-            _territoryCampaign = campaign;
-            _territoryMapRevision = campaign.OwnershipRevision;
-            _territoryStateCount = campaign.States.Count;
-            _territoryCache.Clear();
-            _landTerritoryCache.Clear();
+            cache.TerritoryOwnershipRevision = campaign.OwnershipRevision;
+            cache.TerritoryStateCount = campaign.States.Count;
+            cache.Territory.Clear();
+            cache.LandTerritory.Clear();
         }
-        if (_territoryCache.TryGetValue(definition.Id, out var cached)) return cached;
+        if (cache.Territory.TryGetValue(definition.Id, out var cached)) return cached;
 
         var set = _territoryScratch ??= new HashSet<int>();
         set.Clear();
@@ -68,17 +56,18 @@ public static class PeacefulFormation
             foreach (var p in provinces) set.Add(p);
         }
         var result = set.ToArray();
-        _territoryCache[definition.Id] = result;
+        cache.Territory[definition.Id] = result;
         return result;
     }
 
     internal static HashSet<int> LandTerritory(Campaign campaign, FormableNation definition)
     {
         if (campaign?.ProvinceMap is null || definition is null) return EmptyIntSet;
-        lock (TerritoryGate)
+        var cache = campaign.Caches.PeacefulFormation;
+        lock (cache.TerritoryGate)
         {
-            var territory = TerritoryUnlocked(campaign, definition);
-            if (_landTerritoryCache.TryGetValue(definition.Id, out var cached)) return cached;
+            var territory = TerritoryUnlocked(campaign, cache, definition);
+            if (cache.LandTerritory.TryGetValue(definition.Id, out var cached)) return cached;
             var map = campaign.ProvinceMap;
             var land = new HashSet<int>();
             for (var i = 0; i < territory.Length; i++)
@@ -86,7 +75,7 @@ public static class PeacefulFormation
                 var p = territory[i];
                 if (p > 0 && p <= map.ProvinceCount && !map.WaterByProvince[p]) land.Add(p);
             }
-            _landTerritoryCache[definition.Id] = land;
+            cache.LandTerritory[definition.Id] = land;
             return land;
         }
     }
@@ -95,12 +84,6 @@ public static class PeacefulFormation
     /// since cut out of them.</summary>
     public static IEnumerable<int> RegionProvinces(Campaign campaign, FormableNation definition) =>
         RegionProvinceList(campaign, definition);
-
-    private static Campaign _regionCampaign;
-    private static int _regionRevision = int.MinValue;
-    private static int _regionStateCount = -1;
-    private static readonly Dictionary<string, int[]> _regionCache = new();
-    private static readonly object RegionGate = new();
 
     /// <summary>
     /// The same answer, worked out once per region layout instead of once per question.
@@ -113,17 +96,17 @@ public static class PeacefulFormation
     {
         if (definition is null || campaign?.ProvinceMap is null || definition.RequiredRegions.Length == 0)
             return Array.Empty<int>();
-        lock (RegionGate)
+        var cache = campaign.Caches.PeacefulFormation;
+        lock (cache.RegionGate)
         {
-            if (!ReferenceEquals(_regionCampaign, campaign) || _regionRevision != campaign.OwnershipRevision ||
-                _regionStateCount != campaign.States.Count)
+            if (cache.RegionOwnershipRevision != campaign.OwnershipRevision ||
+                cache.RegionStateCount != campaign.States.Count)
             {
-                _regionCampaign = campaign;
-                _regionRevision = campaign.OwnershipRevision;
-                _regionStateCount = campaign.States.Count;
-                _regionCache.Clear();
+                cache.RegionOwnershipRevision = campaign.OwnershipRevision;
+                cache.RegionStateCount = campaign.States.Count;
+                cache.Regions.Clear();
             }
-            if (_regionCache.TryGetValue(definition.Id, out var cached)) return cached;
+            if (cache.Regions.TryGetValue(definition.Id, out var cached)) return cached;
             var named = campaign.States.Where(s => definition.RequiredRegions.Contains(s.Id, StringComparer.OrdinalIgnoreCase))
                 .Select(s => s.MapIndex).ToHashSet();
             var wanted = campaign.States.Where(s => named.Contains(s.MapIndex) || named.Contains(s.ParentMapIndex))
@@ -133,7 +116,7 @@ public static class PeacefulFormation
             for (var p = 1; p <= map.ProvinceCount; p++)
                 if (wanted.Contains(map.ProvinceToState[p])) provinces.Add(p);
             var result = provinces.ToArray();
-            _regionCache[definition.Id] = result;
+            cache.Regions[definition.Id] = result;
             return result;
         }
     }

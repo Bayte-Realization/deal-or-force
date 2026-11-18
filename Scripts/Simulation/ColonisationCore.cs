@@ -252,7 +252,7 @@ public static class ColonisationCore
         var scanned = 0;
         foreach (var state in campaign.States)
         {
-            if (++scanned % 64 == 0) yield return 0;
+            if (++scanned % 64 == 0 || Campaign.StageOverdue()) yield return 0;
             if (state.ColonistMapIndex == 0) continue;
             var nation = Colonist(campaign, state);
             // Somebody else got there, or the settlers' country is gone.

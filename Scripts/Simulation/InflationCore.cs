@@ -154,16 +154,11 @@ public static class InflationCore
     public static void ResetCatalog(List<string> errors = null)
     {
         Weights = new InflationWeights();
-        foreach (var document in GameDataLoader.DataDocuments("common", "inflation"))
-            using (document)
-                Merge(document.RootElement, errors);
+        DataCatalogLoader.LoadCommon("inflation", root => Merge(root, errors));
     }
 
-    public static void Merge(string json, List<string> errors = null)
-    {
-        using var document = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
-        Merge(document.RootElement, errors);
-    }
+    public static void Merge(string json, List<string> errors = null) =>
+        DataCatalogLoader.ParseAndMerge(json, root => Merge(root, errors));
 
     /// <summary>Later files win, field by field, so a mod names only what it disagrees with.</summary>
     public static void Merge(JsonElement root, List<string> errors = null)

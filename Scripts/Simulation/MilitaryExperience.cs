@@ -76,10 +76,15 @@ public static class MilitaryExperience
     /// </summary>
     public const string Command = "command";
 
-    private static readonly Dictionary<int, int> Engaged = new();
-    private static readonly Dictionary<int, int> Drilling = new();
-    private static readonly Dictionary<int, int> Flying = new();
-    private static readonly Dictionary<int, int> AtSea = new();
+    [ThreadStatic] private static Dictionary<int, int> _engagedScratch;
+    [ThreadStatic] private static Dictionary<int, int> _drillingScratch;
+    [ThreadStatic] private static Dictionary<int, int> _flyingScratch;
+    [ThreadStatic] private static Dictionary<int, int> _atSeaScratch;
+
+    private static Dictionary<int, int> Engaged => _engagedScratch ??= new();
+    private static Dictionary<int, int> Drilling => _drillingScratch ??= new();
+    private static Dictionary<int, int> Flying => _flyingScratch ??= new();
+    private static Dictionary<int, int> AtSea => _atSeaScratch ??= new();
 
     public static void Tick(Campaign campaign)
     {
@@ -123,12 +128,16 @@ public static class MilitaryExperience
         var perStability = defines.PoliticalPointsStabilityWeight / 7f * scale;
         var baseline = MathF.Max(0.0001f, defines.BaselineMilitarySpending);
         yield return 0;
-        var ticked = 0;
-        foreach (var nation in campaign.Nations)
+        // Every living country side by side (DeterministicParallel): a country's lesson is read
+        // off its own budget, its own strategy and the four counts above, which nothing in this
+        // loop writes, and it is written to its own experience, credit, treasury and ledger week
+        // only. No country reads another's, so the order of the countries is not part of the
+        // answer, and each country's sums are the same additions in the same order as before -
+        // the same bits on one thread or nine. This runs every hour of every day.
+        var living = campaign.ActiveNations;
+        DeterministicParallel.For(campaign, 0, living.Count, index =>
         {
-            if (++ticked % 16 == 0) yield return 0;
-            // A retired country (LongCampaign) trains nobody and earns no political credit.
-            if (campaign.IsRetired(nation)) continue;
+            var nation = living[index];
             // Money above what the army costs anyway is what buys training value: a budget at
             // the baseline teaches nobody anything new, and a cut teaches nobody faster.
             var funding = MathF.Max(0f, nation.MilitarySpending / baseline - 1f) *
@@ -153,7 +162,7 @@ public static class MilitaryExperience
             nation.PoliticalPoints += political + perStability * M.Clamp01(nation.Stability);
             if (drills > 0)
                 { var ledgerBefore = nation.Treasury; nation.Treasury -= drills * defines.TrainingCostPerDivisionWeek / 7f * scale; MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
-        }
+        });
 
         // A week's cabinet business, not a daily one: which governments keep their army sharp.
         yield return 0;
@@ -227,16 +236,14 @@ public static class MilitaryExperience
     /// the ones a season of drill changes most. A country's grand strategy can widen that bench
     /// (a cadre army drills more) or narrow it (a levy has no time for it).
     /// </summary>
+    [ThreadStatic] private static List<Army> _trainingOwnScratch;
+
     private static void AiTraining(Campaign campaign)
     {
         var baseLimit = Math.Max(0, campaign.Defines.AiTrainingMaxArmies);
-        var drilled = new Dictionary<int, int>();
-        if (baseLimit > 0)
-            foreach (var army in campaign.Armies)
-                if (army.Training && !army.InBattle)
-                    drilled[army.NationId] = drilled.GetValueOrDefault(army.NationId) + 1;
         var world = IndexForTraining(campaign);
         var indexedNations = campaign.Nations.Count;
+        var own = _trainingOwnScratch ??= new List<Army>();
         foreach (var nation in campaign.Nations)
         {
             if (!Delegation.RunByAi(nation)) continue;
@@ -262,23 +269,33 @@ public static class MilitaryExperience
                             campaign.Armies[index].Training = false;
                 continue;
             }
-            if (limit == 0 || drilled.GetValueOrDefault(nation.Id) >= limit) continue;
-            if (nation.Treasury <= campaign.Defines.AiTreasuryFloor) continue;
-            var room = limit - drilled.GetValueOrDefault(nation.Id);
-            // The least organised divisions first among the country's own formations.
-            var own = new List<Army>();
+            var drilledCount = 0;
+            own.Clear();
             if (indexed)
             {
                 for (var at = world.Start[nation.Id]; at < world.Start[nation.Id + 1]; at++)
                 {
                     var army = world.Formations[at];
-                    if (!army.Training && !army.InBattle) own.Add(army);
+                    if (army.InBattle) continue;
+                    if (army.Training) drilledCount++;
+                    else own.Add(army);
                 }
             }
             else
-                foreach (var army in campaign.Armies)
-                    if (army.NationId == nation.Id && !army.Training && !army.InBattle) own.Add(army);
-            own.Sort((left, right) =>
+            {
+                for (var index = 0; index < campaign.Armies.Count; index++)
+                {
+                    var army = campaign.Armies[index];
+                    if (army.NationId != nation.Id || army.InBattle) continue;
+                    if (army.Training) drilledCount++;
+                    else own.Add(army);
+                }
+            }
+            if (limit == 0 || drilledCount >= limit) { own.Clear(); continue; }
+            if (nation.Treasury <= campaign.Defines.AiTreasuryFloor) { own.Clear(); continue; }
+            var room = limit - drilledCount;
+            // The least organised divisions first among the country's own formations.
+            own.Sort(static (left, right) =>
             {
                 var cmp = left.Organisation.CompareTo(right.Organisation);
                 return cmp != 0 ? cmp : left.Id.CompareTo(right.Id);
@@ -292,12 +309,18 @@ public static class MilitaryExperience
             }
             else if (nation.ArmyExperience >= 35f)
             {
-                var candidate = own.FirstOrDefault(a => a.Experience < 0.40f || a.Cohesion < 0.60f);
+                Army candidate = null;
+                for (var index = 0; index < own.Count; index++)
+                {
+                    var army = own[index];
+                    if (army.Experience < 0.40f || army.Cohesion < 0.60f) { candidate = army; break; }
+                }
                 if (candidate is not null)
                 {
                     new RetrainArmyCommand { IssuerId = nation.Id, ArmyId = candidate.Id }.Apply(campaign);
                 }
             }
+            own.Clear();
         }
     }
 }

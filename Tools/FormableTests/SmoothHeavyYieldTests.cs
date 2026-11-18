@@ -38,6 +38,41 @@ static class SmoothHeavyYieldTests
               CampaignFingerprint.Of(heavy) == expected,
             "yielding after every stage matches the unbounded step (" + calls + " calls)");
         Console.WriteLine("SMOOTH_YIELD calls=" + calls + " first_call=one-stage infinity_finishes=true");
+
+        // The clock's own yields (Campaign.StageOverdue) with a slice of nothing: every staged
+        // loop that asks yields at every item it asks about, so the step is cut as finely as it
+        // can be. A yield is not part of the world, and this is the run that says so.
+        var slice = Campaign.StageSliceMilliseconds;
+        try
+        {
+            Campaign.StageSliceMilliseconds = 0;
+            var fine = Open();
+            var fineCalls = 0;
+            while (!fine.StepFor(60_000, 0))
+                if (++fineCalls > 400_000) throw new Exception("Smooth heavy yield: the finely cut day did not finish.");
+            Check(fineCalls >= calls && !fine.MidStep && fine.ElapsedHours == hours &&
+                  CampaignFingerprint.Of(fine) == expected,
+                "yielding at every clock check matches the unbounded step (" + fineCalls + " calls)");
+        }
+        finally
+        {
+            Campaign.StageSliceMilliseconds = slice;
+        }
+
+        // And the frame clock the game runs (SimulationFrameClock), at the top speed with smooth
+        // time on: however many frames it takes, the day it hands back is the same day.
+        var framed = Open();
+        var clock = new SimulationFrameClock();
+        var frames = 0;
+        while (framed.ElapsedHours < hours || framed.MidStep)
+        {
+            // Advance clock debt only until the single test step begins so CPU contention spanning
+            // 4+ frames cannot accumulate enough debt to start a second step on completion.
+            clock.RunFrame(framed, framed.MidStep ? 0.0 : 1.0 / 60.0, 5, smooth: true);
+            if (++frames > 400_000) throw new Exception("Smooth heavy yield: the frame clock did not finish the day.");
+        }
+        Check(framed.ElapsedHours == hours && CampaignFingerprint.Of(framed) == expected,
+            "the frame clock at the top speed matches the unbounded step (" + frames + " frames)");
     }
 
     static Campaign Open()

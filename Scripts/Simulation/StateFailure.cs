@@ -155,7 +155,7 @@ public static class StateFailure
             {
                 var nation = c.Nations[i];
                 if (nation.CollapseStartDay < 0) continue;
-                if (++worked % 8 == 0) yield return 0;
+                if (++worked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
                 Continue(c, nation);
             }
             if (c.ElapsedDays % 7 == 6 && c.ElapsedDays >= d.CollapseEarliestDay)
@@ -166,7 +166,7 @@ public static class StateFailure
             {
                 var nation = c.Nations[i];
                 if ((c.ElapsedDays + (long)nation.Id) % 30 != 0 || nation.Population <= 0) continue;
-                if (++worked % 8 == 0) yield return 0;
+                if (++worked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
                 ConsiderRevolution(c, nation);
             }
         if (d.CollapseReunions)
@@ -174,7 +174,7 @@ public static class StateFailure
             {
                 var nation = c.Nations[i];
                 if ((c.ElapsedDays + (long)nation.Id * 3) % 30 != 17 || nation.Population <= 0) continue;
-                if (++worked % 8 == 0) yield return 0;
+                if (++worked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
                 ConsiderReunion(c, nation);
             }
     }
@@ -294,7 +294,7 @@ public static class StateFailure
             var nation = c.Nations[i];
             if (thisYear >= d.CollapseWorldPerYear) yield break;
             if (nation.Stability >= d.CollapseStabilityThreshold || nation.Population <= 0) continue;   // the cheap test first
-            if (++scanned % 8 == 0) yield return 0;
+            if (++scanned % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             var refusal = CollapseRefusal(c, nation);
             if (refusal.Length > 0)
             {

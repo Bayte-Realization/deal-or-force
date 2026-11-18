@@ -187,7 +187,7 @@ public static class UnionCohesion
             var highestScore = -1f;
             for (var si = 0; si < states.Length; si++)
             {
-                if (si > 0 && si % 4 == 0) yield return 0;
+                if (si > 0 && (si % 4 == 0 || Campaign.StageOverdue())) yield return 0;
                 var state = states[si];
                 if (!TryScoreCandidate(campaign, nation, state, landlessHotspots, out var score)) continue;
                 if (angriest is null || score > highestScore)
@@ -248,8 +248,7 @@ public static class UnionCohesion
         if (RevoltRecovery.DaysLeft(campaign, nation, state) > 0) return false;
         // Nor ground whose people have a living state of their own: Ukrainians on land Russia
         // took are Ukraine's lost land, not a "Ukrainian Republic" breaking from the union.
-        var cultures = EconomySystem.Cultures(state);
-        var people = cultures.Count > 0 ? cultures[0].Culture : null;
+        var people = EconomySystem.DominantCulture(state).Culture;
         // The union's own peoples are not someone else's lost land, whoever else is of them.
         if (!string.IsNullOrEmpty(people) && !DemographyCatalog.IsPrimary(nation.Tag, people) &&
             SecessionEvents.KinNear(campaign, nation, people, state)) return false;

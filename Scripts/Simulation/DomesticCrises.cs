@@ -158,7 +158,7 @@ public static partial class DomesticCrises
         var tick = 0;
         foreach (var nation in c.Nations)
         {
-            if (++tick % 8 == 0) yield return 0;
+            if (++tick % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             var memory = nation.DomesticCrisis ??= new();
             if (memory.LastReviewDay == c.ElapsedDays) continue;
             // Start at the current conditions; a legacy save never accrues years of backdated crises.
@@ -182,9 +182,30 @@ public static partial class DomesticCrises
                 // The longer lever beside the season's payment: a region that runs itself.
                 RegionalAutonomy.ConsiderGrant(c, nation);
                 // The street is read weekly: a wave takes days to build, and Read walks every region.
-                if (c.Defines.ProtestsEnabled && (c.ElapsedDays + nation.Id) % 7 == 0) MassProtests.Review(c, nation, Read(c, nation), 7);
+                if (c.Defines.ProtestsEnabled && nation.Movement is null && nation.Population > 0 &&
+                    (c.ElapsedDays + nation.Id) % 7 == 0)
+                {
+                    AwarenessAndRadicalism(c, nation, out var awareness, out var radicalism);
+                    MassProtests.Review(c, nation, awareness, radicalism, 7);
+                }
             }
         }
+    }
+
+    private static void AwarenessAndRadicalism(Campaign c, Nation nation, out float awareness, out float radicalism)
+    {
+        var regions = c.StatesOf(nation);
+        double people = 0, awarenessSum = 0, radicalismSum = 0;
+        for (var i = 0; i < regions.Length; i++)
+        {
+            var region = regions[i];
+            if (region.Population <= 0) continue;
+            people += region.Population;
+            awarenessSum += region.Population * (double)ResidentAwareness.Of(c, region);
+            radicalismSum += region.Population * (double)M.Clamp01(region.Radicalism);
+        }
+        awareness = people > 0 ? (float)(awarenessSum / people) : 0f;
+        radicalism = people > 0 ? (float)(radicalismSum / people) : 0f;
     }
 
     private static float Threshold(Campaign c) => M.Clamp(c.Defines.CoupPressureThreshold, .05f, 1f);

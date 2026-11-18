@@ -44,7 +44,8 @@ public static class SettingsRows
         block.AddChild(row);
 
         var name = DealOrForceGame.RowLabel(DealOrForceGame.Tr(definition.Name), 14,
-            Ui.Colour("text.body"), 300);
+            MenuChromeTheme.Paper, 300);
+        MenuChromeTheme.StyleExistingLabel(name, 14, MenuChromeTheme.Paper);
         name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         row.AddChild(name);
 
@@ -57,8 +58,8 @@ public static class SettingsRows
 
         if (definition.Description.Length > 0)
         {
-            var note = DealOrForceGame.RowLabel(DealOrForceGame.Tr(definition.Description), 11,
-                Ui.Colour("text.hint"));
+            var note = DealOrForceGame.RowLabel(DealOrForceGame.Tr(definition.Description), 12,
+                MenuChromeTheme.PaperFaint);
             note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             block.AddChild(note);
         }
@@ -69,28 +70,25 @@ public static class SettingsRows
             block.AddChild(DealOrForceGame.RowLabel(DealOrForceGame.Tr(SettingsCatalog.CampaignBound
                     ? "This campaign only - it is kept in its save. New campaigns start from the value set in the main menu."
                     : "Where new campaigns start. A campaign keeps its own value once it has begun."), 11,
-                Ui.Colour("text.accent_dim")));
+                MenuChromeTheme.BrassHi));
         }
         if (definition.NeedsRestart)
         {
             block.AddChild(DealOrForceGame.RowLabel(
                 DealOrForceGame.Tr("Takes effect the next time the game starts."), 11,
-                Ui.Colour("text.accent_dim")));
+                MenuChromeTheme.BrassHi));
         }
 
-        parent.AddChild(new ColorRect
-        {
-            Color = Ui.Colour("surface.line_faint"),
-            CustomMinimumSize = new Vector2(0, 1)
-        });
+        parent.AddChild(MenuChromeTheme.CreateEngravedRule("SettingsRowRule", 2f));
     }
 
     private static void Toggle(SettingDefinition definition, Container row, Action<string> applied)
     {
         var id = definition.Id;
+        var initial = SettingsCatalog.Flag(id);
         var button = new Button
         {
-            Text = DealOrForceGame.Tr(SettingsCatalog.Flag(id) ? "On" : "Off"),
+            Text = DealOrForceGame.Tr(initial ? "On" : "Off"),
             CustomMinimumSize = new Vector2(150, 32)
         };
         button.Pressed += () =>
@@ -98,10 +96,10 @@ public static class SettingsRows
             var value = !SettingsCatalog.Flag(id);
             SettingsCatalog.Store(id, value);
             button.Text = DealOrForceGame.Tr(value ? "On" : "Off");
-            DealOrForceGame.ApplyLedgerButtonState(button, value);
+            MenuChromeTheme.StylePlateButton(button, value, 13);
             applied?.Invoke(id);
         };
-        DealOrForceGame.ApplyLedgerButtonState(button, SettingsCatalog.Flag(id));
+        MenuChromeTheme.StylePlateButton(button, initial, 13);
         row.AddChild(button);
     }
 
@@ -120,6 +118,7 @@ public static class SettingsRows
         }
         var chosen = definition.Values.IndexOf(SettingsCatalog.Chosen(id));
         option.Selected = chosen >= 0 ? chosen : 0;
+        MenuChromeTheme.StyleOptionButton(option);
         option.ItemSelected += index =>
         {
             var at = (int)index;
@@ -133,7 +132,8 @@ public static class SettingsRows
     private static void Slider(SettingDefinition definition, Container row, Action<string> applied)
     {
         var id = definition.Id;
-        var reading = DealOrForceGame.RowLabel("", 13, Ui.Colour("text.body"), 88);
+        var reading = DealOrForceGame.RowLabel("", 13, MenuChromeTheme.Paper, 88);
+        MenuChromeTheme.StyleExistingLabel(reading, 13, MenuChromeTheme.Paper, tabular: true);
         reading.HorizontalAlignment = HorizontalAlignment.Right;
 
         var slider = new HSlider
@@ -148,6 +148,7 @@ public static class SettingsRows
             // reading down a list of options should not change one on the way past.
             Scrollable = false
         };
+        MenuChromeTheme.StyleSlider(slider);
         reading.Text = Reading(definition, (float)slider.Value);
         slider.ValueChanged += value =>
         {

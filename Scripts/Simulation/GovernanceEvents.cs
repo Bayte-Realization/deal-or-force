@@ -229,7 +229,7 @@ public static class GovernanceEvents
         var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++scanned % 16 == 0) yield return 0;
+            if (++scanned % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             // The player's country is theirs to arrange. A cabinet that rearranged the
             // state out from under the person playing it would be the single most annoying
             // thing this game could do.
@@ -275,7 +275,11 @@ public static class GovernanceEvents
                 break;
             }
 
-            ApplyTransition(campaign, nation, chosen);
+            // A change of government reaches into the cabinet, the laws and the parties at once:
+            // one piece that cannot be cut, decided now, so it starts a frame of its own.
+            Campaign.HeavyNext();
+            yield return 0;
+            using (SimProfiler.Measure("  gov:apply")) ApplyTransition(campaign, nation, chosen);
         }
     }
 
@@ -300,11 +304,16 @@ public static class GovernanceEvents
         if (!Eligible(campaign, nation, chosen)) return false;
         var wasGovernment = nation.Government;
         var wasIdeology = nation.Ideology;
-        if (!campaign.ChangePolitics(nation.Id, chosen.Government, chosen.Ideology, out _)) return false;
-        if (wasGovernment != nation.Government)
-            Rulers.ReplaceHeadOfState(campaign, nation, "");
-        else if (wasIdeology != nation.Ideology)
-            Rulers.ReplaceHeadOfGovernment(campaign, nation, "");
+        bool changed;
+        using (SimProfiler.Measure("    gov:politics")) changed = campaign.ChangePolitics(nation.Id, chosen.Government, chosen.Ideology, out _);
+        if (!changed) return false;
+        using (SimProfiler.Measure("    gov:ruler"))
+        {
+            if (wasGovernment != nation.Government)
+                Rulers.ReplaceHeadOfState(campaign, nation, "");
+            else if (wasIdeology != nation.Ideology)
+                Rulers.ReplaceHeadOfGovernment(campaign, nation, "");
+        }
         Recent.Add(new GovernanceReport
         {
             Nation = nation,

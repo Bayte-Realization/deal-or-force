@@ -81,8 +81,21 @@ public static class BorderDiplomacy
                 warmed = true;
                 foreach (var _ in BorderShape.EnsureStages(c)) yield return 0;
             }
-            if (++ticked % 2 == 0) yield return 0;
-            Review(c, nation);
+            if (++ticked % 2 == 0 || Campaign.StageOverdue()) yield return 0;
+            // A country weighing a swap prices every pair of regions it might trade: tens of
+            // milliseconds for a long border, in one piece. Last time's cost says which (StageCosts).
+            if (StageCosts.Heavy("border deal", nation.Id)) { Campaign.HeavyNext(); yield return 0; }
+            var started = StageCosts.Start();
+            // And the review itself is staged between the deals it prices (ReviewStages): one
+            // long border was a hundred to six hundred milliseconds in one piece, the worst
+            // frame of a late save at the top speed.
+            foreach (var _ in ReviewStages(c, nation, null))
+            {
+                StageCosts.Stop("border deal", nation.Id, started);
+                yield return 0;
+                started = StageCosts.Start();
+            }
+            StageCosts.Stop("border deal", nation.Id, started);
         }
     }
 
@@ -90,6 +103,18 @@ public static class BorderDiplomacy
 
     /// <summary>One look at this country's worst border, and one approach at most.</summary>
     public static bool Review(Campaign c, Nation nation)
+    {
+        var reviewed = new bool[1];
+        foreach (var _ in ReviewStages(c, nation, reviewed)) { }
+        return reviewed[0];
+    }
+
+    /// <summary>
+    /// The same review, yielded between the deals it prices. A yield is not part of the world:
+    /// nothing else runs at one, so the deals are priced in the same order against the same
+    /// world, and the same one is chosen.
+    /// </summary>
+    private static IEnumerable<int> ReviewStages(Campaign c, Nation nation, bool[] reviewed)
     {
         var byIndex = c.NationsByMapIndex();
         foreach (var (otherIndex, grievance) in BorderShape.Against(c, nation))
@@ -102,10 +127,10 @@ public static class BorderDiplomacy
             if (!Ultimatum.CanNegotiateDeal(c, nation, other, out _)) continue;
             Reviews++;
             nation.DecisionAvailableDay[key] = c.ElapsedDays + Math.Max(30, c.Defines.BorderDealRetryDays);
-            Approach(c, nation, other, grievance);
-            return true;
+            foreach (var _ in ApproachStages(c, nation, other, grievance, null)) yield return 0;
+            if (reviewed is not null) reviewed[0] = true;
+            yield break;
         }
-        return false;
     }
 
     private enum Means { Swap, Purchase, Sale }
@@ -116,23 +141,24 @@ public static class BorderDiplomacy
     /// </summary>
     public static string Approach(Campaign c, Nation nation, Nation other, float grievance)
     {
+        var result = new string[] { "" };
+        foreach (var _ in ApproachStages(c, nation, other, grievance, result)) { }
+        return result[0];
+    }
+
+    /// <summary>
+    /// The approach, yielded after every deal it prices: each is a full assessment of both
+    /// sides' books, and there can be twenty-four of them. The answer goes into
+    /// <paramref name="result"/>[0] when a caller wants it.
+    /// </summary>
+    private static IEnumerable<int> ApproachStages(Campaign c, Nation nation, Nation other, float grievance, string[] result)
+    {
         BorderShape.Awkward(c, nation, other, Wanted, Pockets);
         var wanted = Wanted.Where(id => Transferable(c, other, id)).Take(4).ToList();
         var pockets = Pockets.Where(id => Transferable(c, nation, id)).Take(4).ToList();
-        if (wanted.Count == 0 && pockets.Count == 0) return "";
+        if (wanted.Count == 0 && pockets.Count == 0) yield break;
 
-        Ultimatum.Deal best = null;
-        var bestMeans = Means.Swap;
-        var bestValue = float.NegativeInfinity;
-        void Consider(Ultimatum.Deal deal, Means means, Ultimatum.DealAssessment precomputed = null)
-        {
-            if (deal is null) return;
-            var assessment = precomputed ?? Ultimatum.AssessNegotiatedDeal(c, nation, other, deal);
-            if (!assessment.Valid || !assessment.Acceptable || assessment.FromValue < 0f) return;
-            // What it costs us, in our own points: the cheapest means is the one that leaves us best off.
-            if (assessment.FromValue <= bestValue) return;
-            bestValue = assessment.FromValue; best = deal; bestMeans = means;
-        }
+        var choice = new Choice();
 
         // 1. A swap: each side's pocket for the other's, or one of our bulges into them for theirs into us.
         var offers = pockets.Count > 0 ? pockets : Bulges(c, nation, other);
@@ -141,21 +167,52 @@ public static class BorderDiplomacy
             {
                 var swap = new Ultimatum.Deal(new Ultimatum.Side { Regions = new[] { give } }, new Ultimatum.Side { Regions = new[] { take } });
                 var balanced = Balance(c, nation, other, swap, out var pre);
-                Consider(balanced, Means.Swap, pre);
+                choice.Consider(c, nation, other, balanced, Means.Swap, pre);
+                yield return 0;
             }
         // 2. A purchase of what we want.
         foreach (var take in wanted)
         {
             var balanced = Balance(c, nation, other, new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { Regions = new[] { take } }), out var pre);
-            Consider(balanced, Means.Purchase, pre);
+            choice.Consider(c, nation, other, balanced, Means.Purchase, pre);
+            yield return 0;
         }
         // 3. A sale of what we cannot hold, at what it is worth to them.
         foreach (var give in pockets)
         {
             var asking = Asking(c, nation, other, give, out var pre);
-            Consider(asking, Means.Sale, pre);
+            choice.Consider(c, nation, other, asking, Means.Sale, pre);
+            yield return 0;
         }
 
+        var answer = Settle(c, nation, other, grievance, wanted, choice);
+        if (result is not null) result[0] = answer;
+    }
+
+    /// <summary>The best deal priced so far: the cheapest means is the one that leaves us best off.</summary>
+    private sealed class Choice
+    {
+        public Ultimatum.Deal Best;
+        public Means BestMeans = Means.Swap;
+        public float BestValue = float.NegativeInfinity;
+
+        public void Consider(Campaign c, Nation nation, Nation other, Ultimatum.Deal deal, Means means,
+            Ultimatum.DealAssessment precomputed = null)
+        {
+            if (deal is null) return;
+            var assessment = precomputed ?? Ultimatum.AssessNegotiatedDeal(c, nation, other, deal);
+            if (!assessment.Valid || !assessment.Acceptable || assessment.FromValue < 0f) return;
+            // What it costs us, in our own points.
+            if (assessment.FromValue <= BestValue) return;
+            BestValue = assessment.FromValue; Best = deal; BestMeans = means;
+        }
+    }
+
+    /// <summary>The chosen deal laid on the table, or the grievance pressed when there is none.</summary>
+    private static string Settle(Campaign c, Nation nation, Nation other, float grievance, List<int> wanted, Choice choice)
+    {
+        var best = choice.Best;
+        var bestMeans = choice.BestMeans;
         if (best is not null)
         {
             var summary = Ultimatum.DealSummary(c, nation, other, best);

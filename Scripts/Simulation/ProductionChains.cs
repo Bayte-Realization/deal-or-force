@@ -84,7 +84,14 @@ public static class ProductionChains
 
     private static int SlotCount => FixedSlots + BuildingKinds * 2 + CommodityKinds;
 
-    private static float[] Slots = new float[FixedSlots + BuildingKinds * 2 + CommodityKinds];
+    [ThreadStatic] private static float[] _slots;
+
+    private static float[] SlotsBuffer()
+    {
+        var count = SlotCount;
+        if (_slots is null || _slots.Length < count) _slots = new float[count];
+        return _slots;
+    }
 
     /// <summary>The initial headroom is an allocation hint, not a mod-content limit.
     /// Grow at catalogue load, never per region/tick. Remap already compiled raw/deposit
@@ -109,7 +116,6 @@ public static class ProductionChains
                                 term.Factors[i] = slot + buildings - BuildingKinds;
                         }
         BuildingKinds = buildings; CommodityKinds = goods;
-        Slots = new float[SlotCount];
     }
 
     // ---------------------------------------------------------------- recipes -----------
@@ -517,7 +523,7 @@ public static class ProductionChains
     [ThreadStatic] private static RegionFactors _regionFactors;
 
     /// <summary>The country's factors for every regional recipe, as this week's quotes stand.</summary>
-    internal static RegionFactors PrepareRegions(Nation nation)
+    internal static RegionFactors PrepareRegions(Nation nation, Defines defines = null)
     {
         var prepared = _regionFactors ??= new RegionFactors();
         prepared.Nation = null;
@@ -542,7 +548,7 @@ public static class ProductionChains
             if (prepared.Factor.Length < room) Array.Resize(ref prepared.Factor, Math.Max(room + 64, prepared.Factor.Length * 2));
             // The order of OutputOf: needs, then the supply response, then shortfalls.
             foreach (var need in recipe.Needs) prepared.Factor[used++] = Supplied(nation, need.Good, need.Floor);
-            if (recipe.Shortfall.Length == 0) prepared.Factor[used++] = SupplyResponse(nation, quote);
+            if (recipe.Shortfall.Length == 0) prepared.Factor[used++] = SupplyResponse(nation, quote, defines);
             foreach (var lack in recipe.Shortfall) prepared.Factor[used++] = Supplied(nation, lack.Good, lack.Floor) - 1f;
         }
         prepared.First[count] = used;
@@ -557,10 +563,10 @@ public static class ProductionChains
     /// or for another catalogue, is not used.
     /// </summary>
     internal static void RunRegion(Nation nation, ScenarioState state, float outputFactor, ProductionAllocation allocation,
-        RegionFactors prepared)
+        RegionFactors prepared, Defines defines = null)
     {
         if (Regional.Count == 0) return;
-        var slots = Slots;
+        var slots = SlotsBuffer();
         FillRegion(slots, nation, state, outputFactor, null);
 
         // ---- the government's hand on the economy -----------------------------------------
@@ -585,7 +591,7 @@ public static class ProductionChains
 
         if (prepared is not null && (!ReferenceEquals(prepared.Nation, nation) || prepared.Recipes != Regional.Count))
             prepared = null;
-        state.RegionalOutputValue = Run(Regional, nation, slots, allocation, prepared);
+        state.RegionalOutputValue = Run(Regional, nation, slots, allocation, prepared, defines);
     }
 
     /// <summary>
@@ -696,10 +702,10 @@ public static class ProductionChains
     }
 
     /// <summary>What a country as a whole makes and spends, once, after its regions.</summary>
-    public static void RunNation(Nation nation, float projects, float divisions, float hulls, bool atWar)
+    public static void RunNation(Nation nation, float projects, float divisions, float hulls, bool atWar, Defines defines = null)
     {
         if (National.Count == 0) return;
-        var slots = Slots;
+        var slots = SlotsBuffer();
         Array.Clear(slots, 0, SlotCount);
         slots[SlotProjects] = projects;
         slots[SlotDivisions] = divisions;
@@ -708,11 +714,11 @@ public static class ProductionChains
         slots[SlotGdp] = nation.Gdp;
         slots[SlotProductionCapacity] = ProductionCapacity.Of(nation);
         slots[SlotArmsProductivity] = M.Clamp(nation.Productivity, 0.55f, 1.55f);
-        Run(National, nation, slots);
+        Run(National, nation, slots, null, null, defines);
     }
 
     private static float Run(List<Recipe> recipes, Nation nation, float[] slots, ProductionAllocation allocation = null,
-        RegionFactors prepared = null)
+        RegionFactors prepared = null, Defines defines = null)
     {
         // Production lines, worked out here because this is the one place every recipe of a
         // pass goes through. A line scales its pool's factory term of its own good's
@@ -755,7 +761,7 @@ public static class ProductionChains
                         output *= prepared.Factor[factor];
                     if (recipe.Shortfall.Length == 0) output = MathF.Max(0f, output);
                 }
-                else output = OutputOf(recipe, nation, quote, slots);
+                else output = OutputOf(recipe, nation, quote, slots, defines);
                 quote.Production += output;
                 grossValue += output * MathF.Max(0f, quote.Price);
             }
@@ -777,12 +783,12 @@ public static class ProductionChains
     /// One recipe's output this week: its terms, scaled by how well its needs turned up, by what
     /// the price says about making more (SupplyResponse), and by any shortfall it suffers.
     /// </summary>
-    private static float OutputOf(Recipe recipe, Nation nation, MarketQuote quote, float[] slots)
+    private static float OutputOf(Recipe recipe, Nation nation, MarketQuote quote, float[] slots, Defines defines = null)
     {
         var output = recipe.Sum(recipe.Output, slots);
         foreach (var need in recipe.Needs) output *= Supplied(nation, need.Good, need.Floor);
         // What the price says about making more of it (SupplyResponse).
-        if (recipe.Shortfall.Length == 0 && nation is not null) output *= SupplyResponse(nation, quote);
+        if (recipe.Shortfall.Length == 0 && nation is not null) output *= SupplyResponse(nation, quote, defines);
         foreach (var lack in recipe.Shortfall) output *= Supplied(nation, lack.Good, lack.Floor) - 1f;
         // A recipe with a shortfall term is a penalty by construction and may go
         // below zero; anything else may not, because a factory does not un-make
@@ -799,11 +805,12 @@ public static class ProductionChains
     /// what keeps a market near clearing and a price worth reading.
     /// </summary>
     /// <summary>The campaign's defines for the market pass under way, set by MarketSystem; null runs every plant flat out.</summary>
-    internal static Defines Defines;
+    [ThreadStatic] private static Defines _defines;
+    internal static Defines Defines { get => _defines; set => _defines = value; }
 
-    internal static float SupplyResponse(Nation nation, MarketQuote quote)
+    internal static float SupplyResponse(Nation nation, MarketQuote quote, Defines defines = null)
     {
-        var d = Defines;
+        var d = defines ?? _defines;
         if (d is null || d.SupplyResponseElasticity <= 0f) return 1f;
         var basePrice = CommodityCatalog.Get(quote.Commodity).BasePrice;
         if (basePrice <= 0f || quote.Price <= 0f || !float.IsFinite(quote.Price)) return 1f;

@@ -246,7 +246,7 @@ public static class Expeditions
         var ticked = 0;
         foreach (var sponsor in c.Nations)
         {
-            if (++ticked % 8 == 0) yield return 0;
+            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if (sponsor.IsHuman || sponsor.Movement is not null || sponsor.Population <= 0) continue;
             if (Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(sponsor.Id))) continue;   // its own wars come first
             if (MovementRules.Roll(c.Seed, sponsor.Id, c.ElapsedDays, 0x7011) >= c.Defines.AiVolunteerChance * AiTemper.Aggression(c)) continue;

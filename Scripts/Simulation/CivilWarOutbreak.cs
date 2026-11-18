@@ -101,11 +101,15 @@ public static class CivilWarOutbreak
         foreach (var nation in campaign.Nations.ToArray())
         {
             if (thisYear >= d.CivilWarWorldPerYear) yield break;
-            if (++scanned % 8 == 0) yield return 0;
+            if (++scanned % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if (!Eligible(campaign, nation)) continue;
             var chance = Chance(campaign, nation);
             if (!float.IsFinite(chance) || chance <= 0f) continue;
             if (Escalation.Roll(campaign.Seed, nation.Id, 0xC1C, campaign.ElapsedDays, 0x3) >= chance) continue;
+            // Splitting a country is one piece of twenty to forty milliseconds - a new state, its
+            // army, its war - and it is decided now, so it starts a frame of its own.
+            Campaign.HeavyNext();
+            yield return 0;
             if (Break(campaign, nation) is not null) thisYear++;
         }
     }

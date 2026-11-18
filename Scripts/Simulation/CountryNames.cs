@@ -77,9 +77,9 @@ public static class CountryNames
     {
         if (string.IsNullOrEmpty(tag)) return "";
         Variants.TryGetValue(tag, out var variant);
-        if (!string.IsNullOrEmpty(variant) && Loc.Has($"country.{tag}.name.{variant}"))
-            return Loc.Get($"country.{tag}.name.{variant}");
-        return Loc.Has($"country.{tag}.name") ? Loc.Get($"country.{tag}.name") : tag;
+        if (!string.IsNullOrEmpty(variant) && Loc.TryGet($"country.{tag}.name.{variant}", out var vText))
+            return vText;
+        return Loc.TryGet($"country.{tag}.name", out var text) ? text : tag;
     }
 
     /// <summary>
@@ -108,24 +108,14 @@ public static class CountryNames
         var identity = Identity(nation);
         var role = map ? ".map" : ".name";
         Variants.TryGetValue(nation.Tag ?? "", out var variant);
-        foreach (var key in new[] { identity + ".government." + nation.Government + ".ideology." + nation.Ideology + role,
-                     identity + ".government." + nation.Government + role, identity + ".ideology." + nation.Ideology + role })
+        if (HasPoliticsOverride(identity))
         {
-            // The variant is asked at each level rather than ahead of all of them, so a
-            // country that has become something else is still called what it became: a
-            // spelling preference is about the name, not about the state.
-            if (!string.IsNullOrEmpty(variant) && Loc.Has(key + "." + variant)) return Loc.Get(key + "." + variant);
-            if (Loc.Has(key)) return Loc.Get(key);
-            // A form of state with a name and no short form for the map is still that state on
-            // the map: China under the Beiyang Government read "Beiyang Government" in every tab
-            // and "CHINA" on the map, because the map fell through to the country's plain short
-            // name. One state, one name; a mod that wants a shorter label writes the ".map" row.
-            if (map)
-            {
-                var named = key[..^".map".Length] + ".name";
-                if (!string.IsNullOrEmpty(variant) && Loc.Has(named + "." + variant)) return Loc.Get(named + "." + variant);
-                if (Loc.Has(named)) return Loc.Get(named);
-            }
+            if (TryRoleKey(identity + ".government." + nation.Government + ".ideology." + nation.Ideology, role, variant, map, out var govIdeo))
+                return govIdeo;
+            if (TryRoleKey(identity + ".government." + nation.Government, role, variant, map, out var govOnly))
+                return govOnly;
+            if (TryRoleKey(identity + ".ideology." + nation.Ideology, role, variant, map, out var ideoOnly))
+                return ideoOnly;
         }
         // No name written for what it has become: the name it had, in the form its new
         // politics give a state - a France gone communist is a People's Republic. Not on the
@@ -138,11 +128,63 @@ public static class CountryNames
         return plain;
     }
 
+    private sealed class PoliticsStemsSnapshot
+    {
+        public readonly int Revision;
+        public readonly HashSet<string> Stems;
+
+        public PoliticsStemsSnapshot(int revision, HashSet<string> stems)
+        {
+            Revision = revision;
+            Stems = stems;
+        }
+    }
+
+    private static readonly object PoliticsStemsGate = new();
+    private static volatile PoliticsStemsSnapshot _politicsSnapshot;
+
+    private static bool HasPoliticsOverride(string identity)
+    {
+        var rev = Loc.Revision;
+        var snap = _politicsSnapshot;
+        if (snap is null || snap.Revision != rev)
+        {
+            lock (PoliticsStemsGate)
+            {
+                rev = Loc.Revision;
+                snap = _politicsSnapshot;
+                if (snap is null || snap.Revision != rev)
+                {
+                    var next = new HashSet<string>(StringComparer.Ordinal);
+                    Loc.CollectPoliticsStems(next);
+                    snap = new PoliticsStemsSnapshot(rev, next);
+                    _politicsSnapshot = snap;
+                }
+            }
+        }
+        return snap.Stems.Contains(identity);
+    }
+
+    private static bool TryRoleKey(string stem, string role, string variant, bool map, out string result)
+    {
+        var key = stem + role;
+        if (!string.IsNullOrEmpty(variant) && Loc.TryGet(key + "." + variant, out result)) return true;
+        if (Loc.TryGet(key, out result)) return true;
+        if (map)
+        {
+            var named = stem + ".name";
+            if (!string.IsNullOrEmpty(variant) && Loc.TryGet(named + "." + variant, out result)) return true;
+            if (Loc.TryGet(named, out result)) return true;
+        }
+        result = null;
+        return false;
+    }
+
     /// <summary>The name with no form of state in it: the country's row, or its own name.</summary>
     private static string Plain(Nation nation, bool map, string key, string variant)
     {
-        if (!string.IsNullOrEmpty(variant) && Loc.Has(key + "." + variant)) return Loc.Get(key + "." + variant);
-        if (Loc.Has(key)) return Loc.Get(key);
+        if (!string.IsNullOrEmpty(variant) && Loc.TryGet(key + "." + variant, out var vText)) return vText;
+        if (Loc.TryGet(key, out var kText)) return kText;
         if (map) return Plain(nation, false, key[..^".map".Length] + ".name", variant);
         // A proclaimed state whose identity row was never written is still the state its
         // catalogue names. Eighty-one of the eighty-six formables carry a name in their data
@@ -186,8 +228,7 @@ public static class CountryNames
         if (FormableNameOf(raw) is { Length: > 0 } formable) return formable;
         // Nothing left but the country's own row, and failing that its tag. A tag is short,
         // ugly and true; a key is none of those things.
-        var own = Loc.Has($"country.{nation.Tag}.name") ? Loc.Get($"country.{nation.Tag}.name") : "";
-        if (own.Length > 0) return own;
+        if (Loc.TryGet($"country.{nation.Tag}.name", out var own) && own.Length > 0) return own;
         return string.IsNullOrWhiteSpace(nation.Tag) ? raw : nation.Tag;
     }
 
@@ -228,23 +269,23 @@ public static class CountryNames
             (!string.IsNullOrEmpty(nation.FormedNationId) && restored is null) ||
             nation.Name.StartsWith("rising:", StringComparison.Ordinal) ||
             string.IsNullOrEmpty(nation.StartGovernment)) return "";
-        string Row(string form) => Loc.Has("name.form." + form) ? "name.form." + form : "";
+        static string RowKey(string key) => Loc.Has(key) ? key : "";
         if (nation.Ideology != nation.StartIdeology)
         {
-            if (nation.Ideology == "communism") return Row("communism");
-            if (nation.Ideology == "fascism") return Row("fascism");
+            if (nation.Ideology == "communism") return RowKey("name.form.communism");
+            if (nation.Ideology == "fascism") return RowKey("name.form.fascism");
         }
         if (nation.Government == nation.StartGovernment) return "";
         static bool Monarchy(string government) => government is "absolute_monarchy" or "constitutional_monarchy";
         static bool Republic(string government) => government is "parliamentary_republic" or "presidential_republic" or "direct_democracy";
-        if (Monarchy(nation.Government)) return Monarchy(nation.StartGovernment) ? "" : Row("kingdom");
-        if (Monarchy(nation.StartGovernment) && Republic(nation.Government)) return Row("republic");
+        if (Monarchy(nation.Government)) return Monarchy(nation.StartGovernment) ? "" : RowKey("name.form.kingdom");
+        if (Monarchy(nation.StartGovernment) && Republic(nation.Government)) return RowKey("name.form.republic");
         return nation.Government switch
         {
-            "theocracy" => Row(Muslim(nation) ? "islamic_republic" : "holy_state"),
-            "federation" => Row("federation"),
-            "technocracy" => Row("technate"),
-            "provisional_government" => Row("provisional"),
+            "theocracy" => RowKey(Muslim(nation) ? "name.form.islamic_republic" : "name.form.holy_state"),
+            "federation" => RowKey("name.form.federation"),
+            "technocracy" => RowKey("name.form.technate"),
+            "provisional_government" => RowKey("name.form.provisional"),
             _ => ""
         };
     }

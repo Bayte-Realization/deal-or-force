@@ -605,6 +605,7 @@ internal sealed class ShellEconomyWorkspaceView
 
     public void Open()
     {
+        _ctx.PlayCue?.Invoke("shell_drawer_slide");
         _layer.Visible = true;
         _layer.MoveToFront();
         _feedbackLabel.Visible = false;

@@ -452,12 +452,26 @@ public static partial class AiStatecraft
             // for the same scan left on one thread - the body is a few dictionary reads, and waking
             // eight threads for it cost more than it saved. The largest spare, because the terms are
             // now about the good: a guarantee from a country with a crumb to spare covers nothing.
-            var nations = campaign.Nations;
-            var count = nations.Count;
-            var bestSpare = 0f;
-            for (var i = 0; i < count; i++)
+            // Cached living-nation list sorted by Id skips retired/movement entries in a single pass.
+            var tables = TablesOf(campaign);
+            var sorted = tables.LiveNationsSorted;
+            if (tables.LiveNationsDay != campaign.ElapsedDays || tables.LiveNationsCount != campaign.Nations.Count)
             {
-                var other = nations[i];
+                sorted.Clear();
+                var nations = campaign.Nations;
+                for (var i = 0; i < nations.Count; i++)
+                {
+                    var candidate = nations[i];
+                    if (candidate.Population > 0 && candidate.Movement is null) sorted.Add(candidate);
+                }
+                sorted.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+                tables.LiveNationsDay = campaign.ElapsedDays;
+                tables.LiveNationsCount = campaign.Nations.Count;
+            }
+            var bestSpare = 0f;
+            for (var i = 0; i < sorted.Count; i++)
+            {
+                var other = sorted[i];
                 if (other.Id == nation.Id || other.Id == dominant) continue;
                 if (other.Population <= 0 || other.Movement is not null) continue;
                 if (blockedOffers is not null && blockedOffers.Contains(other.Id)) continue;

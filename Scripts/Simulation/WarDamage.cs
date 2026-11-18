@@ -240,7 +240,7 @@ public static class WarDamage
         var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++ticked % 2 == 0) yield return 0;
+            if (++ticked % 2 == 0 || Campaign.StageOverdue()) yield return 0;
             // What Arrive remembers of the regions is for one country's turn (Arrivals).
             _arrivals?.Forget();
             var states = campaign.StatesOf(nation);
@@ -252,7 +252,8 @@ public static class WarDamage
                 if (state.Displaced.Count > 0) anyDisplaced = true;
             }
             if (anyDisplaced)
-                foreach (var state in states) Return(campaign, states, state);
+                using (SimProfiler.Measure("  wd:return"))
+                    foreach (var state in states) Return(campaign, states, state);
             if (!anyDamage) continue;
             if (!recounted) { Recount(campaign, ledger); recounted = true; }
             if (atWar is null)
@@ -262,11 +263,13 @@ public static class WarDamage
                 for (var wi = 0; wi < liveWars.Count; wi++)
                 {
                     var war = liveWars[wi];
-                    foreach (var other in campaign.Nations)
-                        if (war.Involves(other.Id)) atWar.Add(other.Id);
+                    atWar.Add(war.AttackerId);
+                    atWar.Add(war.DefenderId);
+                    foreach (var ally in war.AttackerAllies) atWar.Add(ally);
+                    foreach (var ally in war.DefenderAllies) atWar.Add(ally);
                 }
             }
-            NeighboursAtPeace(campaign, nation, atWar, abroad);
+            using (SimProfiler.Measure("  wd:abroad")) NeighboursAtPeace(campaign, nation, atWar, abroad);
 
             ScenarioState worst = null;
             foreach (var state in states)
@@ -275,7 +278,8 @@ public static class WarDamage
                 if (damage <= 0f) continue;
 
                 state.StandardOfLiving = M.Clamp01(state.StandardOfLiving - damage * defines.WarDamageLivingPerWeek);
-                Flee(campaign, states, state, (long)(state.Population * damage * defines.WarDamageFleePerWeek), abroad);
+                using (SimProfiler.Measure("  wd:flee"))
+                    Flee(campaign, states, state, (long)(state.Population * damage * defines.WarDamageFleePerWeek), abroad);
 
                 // Proportional, so a ruin is rebuilt fastest where there is most to rebuild, and
                 // a last thousandth a week, so the last of it is rebuilt at all.
@@ -439,6 +443,8 @@ public static class WarDamage
     /// and moved back. Some are never found - they have moved on, or been counted as locals -
     /// and the count falls by the share either way, so it ends.
     /// </summary>
+    [ThreadStatic] private static List<string> _displacedKeysScratch;
+
     private static void Return(Campaign campaign, ScenarioState[] states, ScenarioState home)
     {
         if (home.Displaced.Count == 0) return;
@@ -446,8 +452,12 @@ public static class WarDamage
         if (home.DisplacedOwner != home.NationMapIndex) { home.Displaced.Clear(); return; }
         if (home.WarDamage >= defines.WarDamageSafeBelow || !Safe(campaign, home)) return;
 
-        foreach (var culture in new List<string>(home.Displaced.Keys))
+        var keys = _displacedKeysScratch ??= new List<string>();
+        keys.Clear();
+        foreach (var key in home.Displaced.Keys) keys.Add(key);
+        for (var ki = 0; ki < keys.Count; ki++)
         {
+            var culture = keys[ki];
             var waiting = home.Displaced[culture];
             var coming = Math.Min(waiting, Math.Max(1L, (long)MathF.Ceiling(waiting * defines.WarDamageReturnPerWeek)));
             long found = 0;
@@ -561,7 +571,7 @@ public static class WarDamage
     }
 
     /// <summary>How many times a region is walked in a week before it is given a table.</summary>
-    private const int WalksBeforeTable = 32;
+    private const int WalksBeforeTable = 8;
 
     [ThreadStatic] private static Arrivals _arrivals;
 

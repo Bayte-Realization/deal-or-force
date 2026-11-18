@@ -206,30 +206,38 @@ public static class NationalModifiers
         using (SimProfiler.Measure("  mod:policies")) PoliticalPolicies.Tick(campaign);
         using (SimProfiler.Measure("  mod:parliament")) ParliamentaryPolitics.Tick(campaign);
         yield return 0;
+        // The sums first, every living country's side by side, then the weekly keys paid in the
+        // order of the list on this thread (DeterministicParallel). Splitting the old loop in two
+        // changes nothing it read: a country's sum is read off its own laws, books, cabinet,
+        // spirits and people, and what the second half writes - stability, war support, the
+        // regions' radicalism and living - is in none of them. So the sum a country gets here is
+        // the sum it got when its neighbour's payment had already landed, to the bit.
+        //
+        // Build writes only the country's own table (and the course's own cache inside it), and
+        // the modifier tables are already filled from worker threads by every parallel region that
+        // asks Of() first; the one piece of shared lazy loading behind them, the rulers' book, is
+        // opened here on this thread before anyone else can race to it.
+        Rulers.Found(campaign);
+        var living = campaign.ActiveNations;
+        using (SimProfiler.Measure("  mod:nations"))
+            DeterministicParallel.For(campaign, 0, living.Count, index => Build(living[index]));
+        yield return 0;
         var ticked = 0;
-        foreach (var nation in campaign.Nations)
+        for (var index = 0; index < living.Count; index++)
         {
-            if (++ticked % 24 == 0) yield return 0;
-            // A retired country (LongCampaign) has no modifiers to sum: it was a twelfth of this
-            // pass's day, for every one of them, every day.
-            if (campaign.IsRetired(nation)) continue;
-            using (SimProfiler.Measure("  mod:nations"))
-            {
-            // Rebuild into the country's own dictionary rather than dropping it: same sums,
-            // none of the allocation. Invalidate still drops it outright on a source change.
-            Build(nation);
+            if (++ticked % 96 == 0) yield return 0;
+            var nation = living[index];
             var stability = Of(nation, "stability_weekly");
             var support = Of(nation, "war_support_weekly");
             var radicalism = Of(nation, "radicalism_weekly");
-            var living = Of(nation, "living_weekly");
+            var livingWeekly = Of(nation, "living_weekly");
             if (stability != 0f) nation.Stability = M.Clamp(nation.Stability + stability / 7f, 0.10f, 0.98f);
             if (support != 0f) nation.WarSupport = M.Clamp01(nation.WarSupport + support / 7f);
-            if (radicalism == 0f && living == 0f) continue;
+            if (radicalism == 0f && livingWeekly == 0f) continue;
             foreach (var state in campaign.StatesOf(nation))
             {
                 if (radicalism != 0f) state.Radicalism = M.Clamp01(state.Radicalism + radicalism / 7f);
-                if (living != 0f) state.StandardOfLiving = M.Clamp01(state.StandardOfLiving + living / 7f);
-            }
+                if (livingWeekly != 0f) state.StandardOfLiving = M.Clamp01(state.StandardOfLiving + livingWeekly / 7f);
             }
         }
     }

@@ -1,7 +1,7 @@
 // Controls & input ergonomics settings.
 //
-// `mouse_scheme` switches between Age of History style (LMB drag pans, MMB box selects,
-// Ctrl+LMB draws region box) and Paradox style (LMB box selects, MMB drag pans).
+// `mouse_scheme` switches between Direct Pan style (LMB drag pans, MMB box selects,
+// Ctrl+LMB draws region box) and Box Select style (LMB box selects, MMB drag pans).
 // In both schemes, RMB click sends orders / context menu while RMB drag past threshold pans.
 {
   "mouse_scheme": {
@@ -9,10 +9,10 @@
     "order": 265,
     "kind": "choice",
     "name": "Mouse control scheme",
-    "description": "Age of History: drag with the left or right button to move the map, middle button to box-select armies, Ctrl+LMB to box-select regions. Paradox: left drag box-selects armies, middle or right drag moves the map.",
-    "values": ["aoh", "paradox"],
-    "labels": ["Age of History (LMB pan)", "Paradox (LMB box)"],
-    "default": "aoh"
+    "description": "Direct Pan: drag with the left or right button to move the map, middle button to box-select armies, Ctrl+LMB to box-select regions. Box Select: left drag box-selects armies, middle or right drag moves the map.",
+    "values": ["direct_pan", "box_select"],
+    "labels": ["Direct Pan (LMB pan)", "Box Select (LMB box)"],
+    "default": "direct_pan"
   },
   "rmb_everywhere": {
     "category": "interface",

@@ -295,7 +295,7 @@ internal sealed class ShellAlertColumnView
     {
         _outlinerOpen = !_outlinerOpen;
         _lastSnapSig = "";
-        _ctx.PlayCue?.Invoke("ui_select");
+        _ctx.PlayCue?.Invoke("shell_drawer_slide");
         Refresh();
     }
 
@@ -671,6 +671,7 @@ internal sealed class ShellAlertColumnView
         }
 
         UpdateNewsPinVisual();
+        _ctx.PlayCue?.Invoke("shell_dispatch_seal");
         _newsCard.Visible = true;
         _newsTimerRule.QueueRedraw();
     }

@@ -80,24 +80,24 @@ public sealed partial class Defines
 /// </summary>
 public static class SecularCycle
 {
-    private static readonly List<double> PerHead = new();
-    private static int _frontierDay = -1;
-    private static Campaign _frontierWorld;
-    private static double _frontier;
-
     /// <summary>The frontier output per head this week, in dollars.</summary>
     public static double Frontier(Campaign campaign)
     {
-        if (ReferenceEquals(_frontierWorld, campaign) && _frontierDay == campaign.ElapsedDays) return _frontier;
-        PerHead.Clear();
-        foreach (var nation in campaign.Nations)
-            if (nation.Population >= 10_000_000 && nation.Gdp > 0f)
-                PerHead.Add(nation.Gdp * 1e9 / nation.Population);
-        PerHead.Sort();
-        _frontier = PerHead.Count == 0 ? 0 : PerHead[Math.Min(PerHead.Count - 1, (int)(PerHead.Count * 0.9))];
-        _frontierWorld = campaign;
-        _frontierDay = campaign.ElapsedDays;
-        return _frontier;
+        if (campaign is null) return 0;
+        var cache = campaign.Caches.SecularFrontier;
+        lock (cache.Gate)
+        {
+            if (cache.Day == campaign.ElapsedDays) return cache.Value;
+            cache.PerHeadScratch.Clear();
+            foreach (var nation in campaign.Nations)
+                if (nation.Population >= 10_000_000 && nation.Gdp > 0f)
+                    cache.PerHeadScratch.Add(nation.Gdp * 1e9 / nation.Population);
+            cache.PerHeadScratch.Sort();
+            cache.Value = cache.PerHeadScratch.Count == 0 ? 0 :
+                cache.PerHeadScratch[Math.Min(cache.PerHeadScratch.Count - 1, (int)(cache.PerHeadScratch.Count * 0.9))];
+            cache.Day = campaign.ElapsedDays;
+            return cache.Value;
+        }
     }
 
     /// <summary>This year's drift of a country's productivity, as an annual rate.</summary>

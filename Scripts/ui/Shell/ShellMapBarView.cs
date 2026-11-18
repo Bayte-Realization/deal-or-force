@@ -111,7 +111,7 @@ internal sealed class ShellMapBarView
         }
 
         _moreMedallion = CreateMedallion("ShellMap_More", "icon_shell_more", "M",
-            $"{Loc.Get("More map modes and layers")} (M)", TogglePopover);
+            $"{Loc.Get("More map modes and layers")} (M)", () => { _ctx.PlayCue?.Invoke("shell_drawer_slide"); TogglePopover(); });
         _medallionRow.AddChild(_moreMedallion.Button);
 
         BuildPopover();
@@ -135,7 +135,7 @@ internal sealed class ShellMapBarView
         btn.AddThemeStyleboxOverride("pressed", activeBox);
         btn.Pressed += () =>
         {
-            _ctx.PlayCue?.Invoke("ui_select");
+            _ctx.PlayCue?.Invoke("shell_map_lens");
             onPress();
         };
         btn.TooltipText = Ui.Tip(tip);
@@ -584,7 +584,9 @@ internal sealed class ShellMapBarView
             btn.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_muted"));
         }
 
-        var curFill = PlayerSettings.Text("map_political_fill", "balanced");
+        var curFill = SettingsCatalog.Of("map_political_fill") is not null
+            ? SettingsCatalog.Chosen("map_political_fill")
+            : PlayerSettings.Text("map_political_fill", "translucent");
         foreach (var (val, btn) in _fillButtons)
         {
             var on = string.Equals(curFill, val, StringComparison.OrdinalIgnoreCase);

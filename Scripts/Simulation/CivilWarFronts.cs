@@ -44,7 +44,7 @@ public static class CivilWarFronts
         var warsScanned = 0;
         foreach (var war in c.Wars)
         {
-            if (++warsScanned % 16 == 0) yield return 0;
+            if (++warsScanned % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (war.Ended || !war.CivilConflict) continue;
             foreach (var (government, rebel) in new[] { (war.AttackerId, war.DefenderId), (war.DefenderId, war.AttackerId) })
             {
@@ -61,7 +61,7 @@ public static class CivilWarFronts
         var governments = 0;
         foreach (var (government, sides) in risings.OrderBy(pair => pair.Key))
         {
-            if (++governments % 2 == 0) yield return 0;
+            if (++governments % 2 == 0 || Campaign.StageOverdue()) yield return 0;
             if (sides.Count < 2) continue;
             var indices = sides.Select(s => (ushort)s.MapIndex).ToHashSet();
             var touching = new HashSet<(int, int)>();

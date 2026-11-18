@@ -196,6 +196,7 @@ public static class MovementRules
 
     [ThreadStatic] private static Dictionary<int, bool> _ownStateCache;
     [ThreadStatic] private static Dictionary<int, bool> _atWarWithCache;
+    [ThreadStatic] private static Dictionary<int, float> _esteemCache;
     [ThreadStatic] private static HashSet<int> _liveRegions;
     [ThreadStatic] private static List<int> _staleSupport;
     [ThreadStatic] private static List<int> _sponsorKeysScratch;
@@ -260,6 +261,9 @@ public static class MovementRules
         // declares or ends a war, and the answer is the owner's, not the region's.
         var atWarWith = _atWarWithCache ??= new Dictionary<int, bool>();
         atWarWith.Clear();
+        var esteemCache = _esteemCache ??= new Dictionary<int, float>();
+        esteemCache.Clear();
+        var isCivicIndependence = definition.Has("civic_independence");
         // The regions where this movement has people, not every region on the map. The
         // support dictionary is sparse, and the people index already knows its own keys.
         using (SimProfiler.Measure("      mov:support"))
@@ -284,8 +288,11 @@ public static class MovementRules
                 var foreignRule = foreign ? 0.12f : 0f;
                 var grievance = M.Clamp01(region.Radicalism * 0.6f + (1f - region.Stability) * 0.25f +
                                           region.WarDamage * 0.4f + foreignRule);
-                var civic = CivilIndependence.AwarenessTarget(campaign, definition, state, region, owner);
-                var reputation = SocialMemory.Esteem(campaign, owner, nation) * defines.SocialMovementWeight;
+                var civic = isCivicIndependence ? CivilIndependence.AwarenessTarget(campaign, definition, state, region, owner) : 0f;
+                var esteemKey = owner?.Id ?? -1;
+                if (!esteemCache.TryGetValue(esteemKey, out var rawEsteem))
+                    esteemCache[esteemKey] = rawEsteem = SocialMemory.Esteem(campaign, owner, nation);
+                var reputation = rawEsteem * defines.SocialMovementWeight;
                 var target = M.Clamp(MathF.Max(civic, 0.05f + state.Legitimacy * 0.2f + grievance * 0.5f) + reputation, 0f, MathF.Min(.75f, supportCeiling));
                 support += (target - support) * defines.MovementSupportDrift;
                 state.Support[region.MapIndex] = M.Clamp(support, 0f, supportCeiling);
@@ -451,6 +458,8 @@ public static class MovementRules
         internal int CultureStampTick;
         internal readonly List<(int RelId, int CultId, string RawCulture, long Size)> RegionRelCultList = new();
         internal ulong[] StateDemographySigs = Array.Empty<ulong>();
+        /// <summary>Today's stamps, taken side by side before they are compared; scratch, not saved.</summary>
+        internal ulong[] FreshSigs = Array.Empty<ulong>();
         internal int[][] StateCultIds = Array.Empty<int[]>();
         internal int[][] StateRelIds = Array.Empty<int[]>();
         internal readonly List<int> DirtySlots = new();
@@ -636,9 +645,17 @@ public static class MovementRules
                     if (!ReferenceEquals(previous[i], orderedStates[i])) { sameRegions = false; break; }
                 }
             }
+            // Every region's stamp, side by side (DeterministicParallel): a stamp reads only that
+            // region's people and the index's own table of names, which nothing writes while
+            // the stamps are taken, and the regions that changed are then listed on this thread
+            // in the same ascending order as before. Two thousand regions of a late world, two
+            // hundred and seventy thousand groups, every day: the whole of it was on one thread.
+            var fresh = cache.FreshSigs.Length >= totalStates ? cache.FreshSigs : cache.FreshSigs = new ulong[totalStates];
+            DeterministicParallel.For(campaign, 0, totalStates,
+                i => fresh[i] = StateDemographySignature(cache, orderedStates[i]), minItems: 256);
             for (var i = 0; i < totalStates; i++)
             {
-                if (StateDemographySignature(cache, orderedStates[i]) != cache.StateDemographySigs[i])
+                if (fresh[i] != cache.StateDemographySigs[i])
                     dirtySlots.Add(i);
             }
             if (cache.OwnershipRevision != ownership && !sameRegions)
@@ -1244,7 +1261,21 @@ public static class MovementRules
 
     internal static IEnumerable<int> EnsurePeopleIndexedStages(Campaign campaign, bool insideMovRules)
     {
-        EnsurePeopleCache(campaign);
+        // The stamps that decide what is dirty were the unnamed twenty milliseconds the profile
+        // put "after mov:people": named now, beside the index they decide about.
+        if (insideMovRules)
+        {
+            using (SimProfiler.Measure("movements"))
+            using (SimProfiler.Measure("  mov:rules"))
+            using (SimProfiler.Measure("    mov:people"))
+            using (SimProfiler.Measure("      mov:people:stamp"))
+                EnsurePeopleCache(campaign);
+        }
+        else
+        {
+            using (SimProfiler.Measure("        mov:people:stamp"))
+                EnsurePeopleCache(campaign);
+        }
         var cache = campaign.MovementPeople;
         if (cache.Indexed) yield break;
         cache.IndexBuilds++;

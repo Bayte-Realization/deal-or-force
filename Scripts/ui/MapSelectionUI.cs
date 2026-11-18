@@ -428,6 +428,7 @@ public partial class DealOrForceGame
         _countryCardStanding.AddThemeColorOverride("font_color", Ui.Colour(
             war is not null || relation.Opinion < -20 ? "state.negative" :
             relation.Opinion > 20 ? "state.positive" : "text.accent"));
+        Simulation.OpinionSystem.Explain(_campaign, relation);
         var standingFacts = string.Join("\n", relation.OpinionDrivers.Entries
             .OrderByDescending(entry => Math.Abs(entry.Value))
             .Take(5)

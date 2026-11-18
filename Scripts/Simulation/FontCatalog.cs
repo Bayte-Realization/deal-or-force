@@ -56,38 +56,15 @@ public static class FontCatalog
     public static void Load()
     {
         Faces.Clear();
-        var root = GameDataLoader.DataFolder("fonts");
-        if (root is not null) LoadTree(root, "res://game/fonts", null);
+        DataCatalogLoader.LoadBaseTree("fonts", (directory, assetRoot) => LoadTree(directory, assetRoot, null));
         Changed?.Invoke();
     }
 
     /// <summary>Layer one package's `fonts/` tree over what is already loaded.</summary>
-    public static void LoadTree(string directory, string assetRoot, List<string> errors)
-    {
-        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
-
-        string[] files;
-        try
-        {
-            files = StructuredData.Files(directory, SearchOption.AllDirectories)
-                .OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-        }
-        catch (Exception exception)
-        {
-            errors?.Add($"fonts: {exception.Message}");
-            return;
-        }
-
-        foreach (var file in files)
-        {
-            var origin = $"fonts/{Path.GetFileName(file)}";
-            try { Merge(StructuredData.ReadJson(file), assetRoot, origin, errors); }
-            catch (Exception exception) { errors?.Add($"{origin}: {exception.Message}"); }
-        }
-
-        Changed?.Invoke();
-    }
+    public static void LoadTree(string directory, string assetRoot, List<string> errors) =>
+        DataCatalogLoader.LoadTree("fonts", directory, errors,
+            (json, origin) => Merge(json, assetRoot, origin, errors),
+            () => Changed?.Invoke());
 
     /// <summary>Merge one declaration file. A role is a path, or an object holding one.</summary>
     public static void Merge(string json, string assetRoot, string origin, List<string> errors)

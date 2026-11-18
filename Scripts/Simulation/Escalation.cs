@@ -362,6 +362,7 @@ public static class Escalation
                     Review(c, candidates[index], every);
             yield return 0;
         }
+        candidates.Clear();
         using (SimProfiler.Measure("escalation")) GrowWars(c, every);
         yield return 0;
         using (SimProfiler.Measure("escalation")) EndBorderWars(c, every);
@@ -373,21 +374,37 @@ public static class Escalation
     /// Every pair worth weighing, in a fixed order: the relations that already carry something,
     /// and every pair of neighbours, which are the pairs most wars are between.
     /// </summary>
+    [ThreadStatic] private static List<long> _candidateKeysScratch;
+    [ThreadStatic] private static List<DiplomaticRelation> _candidateRelationsScratch;
+
     private static List<DiplomaticRelation> Candidates(Campaign c)
     {
-        var keys = new SortedSet<long>();
-        foreach (var (key, relation) in c.Relations)
+        // Every relation in the world is asked the same read-only question - does it carry
+        // anything - so the hundred thousand of them in a long campaign are asked side by side
+        // (DeterministicParallel) and the answers kept in the table's own order. The pairs are
+        // then sorted and made unique, which is what the sorted set this used to be did one
+        // insertion at a time: the same keys in the same order, so the same relations are
+        // reviewed (and the same missing neighbour relations made) in the same sequence.
+        var relations = c.Relations;
+        var count = relations.Count;
+        var rows = System.Buffers.ArrayPool<DiplomaticRelation>.Shared.Rent(Math.Max(1, count));
+        var pairKeys = System.Buffers.ArrayPool<long>.Shared.Rent(Math.Max(1, count));
+        var keep = System.Buffers.ArrayPool<bool>.Shared.Rent(Math.Max(1, count));
+        var keys = _candidateKeysScratch ??= new List<long>();
+        keys.Clear();
+        try
         {
-            var a = c.NationById(relation.A);
-            var b = c.NationById(relation.B);
-            if (a is null || b is null || a.Movement is not null || b.Movement is not null ||
-                a.Population <= 0 || b.Population <= 0) continue;
-            if (relation.Tension > 0.01f || relation.StructuralTension > 0f || relation.GrievanceA > 0.01f ||
-                relation.GrievanceB > 0.01f || relation.Opinion < -20f ||
-                relation.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar ||
-                OpinionSystem.Has(relation, "refused_our_ultimatum") ||
-                OpinionSystem.Has(relation, "took_our_land"))
-                keys.Add(key);
+            relations.Values.CopyTo(rows, 0);
+            relations.Keys.CopyTo(pairKeys, 0);
+            DeterministicParallel.For(c, 0, count, index => keep[index] = Carries(c, rows[index]), minItems: 2048);
+            for (var index = 0; index < count; index++)
+                if (keep[index]) keys.Add(pairKeys[index]);
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<DiplomaticRelation>.Shared.Return(rows, clearArray: true);
+            System.Buffers.ArrayPool<long>.Shared.Return(pairKeys);
+            System.Buffers.ArrayPool<bool>.Shared.Return(keep);
         }
         foreach (var nation in c.Nations)
         {
@@ -401,15 +418,33 @@ public static class Escalation
                 keys.Add(((long)low << 32) | (uint)high);
             }
         }
-        var result = new List<DiplomaticRelation>(keys.Count);
-        foreach (var key in keys)
+        keys.Sort();
+        var result = _candidateRelationsScratch ??= new List<DiplomaticRelation>(keys.Count);
+        result.Clear();
+        for (var index = 0; index < keys.Count; index++)
         {
+            var key = keys[index];
+            if (index > 0 && keys[index - 1] == key) continue;
             var low = (int)(key >> 32);
             var high = (int)(uint)key;
             var relation = CampaignDiplomacy.Get(c, low, high);
             if (relation is not null) result.Add(relation);
         }
         return result;
+    }
+
+    /// <summary>Whether a relation already carries something worth weighing. Reads only; asked from workers.</summary>
+    private static bool Carries(Campaign c, DiplomaticRelation relation)
+    {
+        var a = c.NationById(relation.A);
+        var b = c.NationById(relation.B);
+        if (a is null || b is null || a.Movement is not null || b.Movement is not null ||
+            a.Population <= 0 || b.Population <= 0) return false;
+        return relation.Tension > 0.01f || relation.StructuralTension > 0f || relation.GrievanceA > 0.01f ||
+               relation.GrievanceB > 0.01f || relation.Opinion < -20f ||
+               relation.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar ||
+               OpinionSystem.Has(relation, "refused_our_ultimatum") ||
+               OpinionSystem.Has(relation, "took_our_land");
     }
 
     private static void Review(Campaign c, DiplomaticRelation relation, int days)

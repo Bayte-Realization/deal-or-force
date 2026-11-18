@@ -317,7 +317,7 @@ public static class PoliticalMood
         var scanned = 0;
         foreach (var nation in c.Nations)
         {
-            if (++scanned % 16 == 0) yield return 0;
+            if (++scanned % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null || !IdeologyCatalog.Knows(nation.Ideology)) continue;
             var mandate = Mandate(c, nation);
             var missing = MathF.Max(0f, floor - mandate);

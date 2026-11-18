@@ -127,39 +127,73 @@ public static class AirReconnaissance
     /// </summary>
     internal static void Expose(Campaign c)
     {
-        if (c.ProvinceMap is null) return;
-        var map = c.ProvinceMap;
-        var controllers = c.ProvinceController ?? map.ProvinceToNation;
+        if (c.ProvinceMap is null || c.SupportByNation.Count == 0) return;
+        var neededCodes = new HashSet<ushort>();
+        var activeNations = new List<(int NationId, HashSet<int> Enemies, List<int> OwnIds, List<int> EnemyIds, List<SupportFormation> Flights)>();
         foreach (var (nationId, formations) in c.SupportByNation)
         {
-            HashSet<int> enemies = null;
-            foreach (var formation in formations)
+            List<SupportFormation> flights = null;
+            for (var i = 0; i < formations.Count; i++)
+                if (Flying(c, formations[i], out _))
+                    (flights ??= new List<SupportFormation>()).Add(formations[i]);
+            if (flights is null) continue;
+            var enemies = Enemies(c, nationId);
+            if (enemies.Count == 0) continue;
+            var enemyIds = new List<int>();
+            var ownIds = new List<int> { nationId };
+            foreach (var war in Warfare.OpenWars(c))
             {
-                if (!Flying(c, formation, out var type)) continue;
-                enemies ??= Enemies(c, nationId);
-                if (enemies.Count == 0) break;
+                if (war.Ended || !war.Involves(nationId)) continue;
+                var attacking = war.Side(true).Contains(nationId);
+                enemyIds.AddRange(war.Side(!attacking));
+                ownIds.AddRange(war.Side(attacking));
+            }
+            foreach (var enemyCode in enemies)
+                if ((uint)enemyCode <= ushort.MaxValue) neededCodes.Add((ushort)enemyCode);
+            activeNations.Add((nationId, enemies, ownIds, enemyIds, flights));
+        }
+        if (activeNations.Count == 0 || neededCodes.Count == 0) return;
+
+        var map = c.ProvinceMap;
+        var controllers = c.ProvinceController ?? map.ProvinceToNation;
+        var byController = new Dictionary<ushort, List<(int Province, float Lat)>>(neededCodes.Count);
+        var limit = Math.Min(controllers.Length - 1, map.ProvinceCount);
+        for (var p = 1; p <= limit; p++)
+        {
+            var code = controllers[p];
+            if (!neededCodes.Contains(code)) continue;
+            if (!byController.TryGetValue(code, out var bucket))
+                byController[code] = bucket = new List<(int, float)>();
+            bucket.Add((p, map.CenterOf(p).Latitude));
+        }
+
+        foreach (var (_, enemies, ownIds, enemyIds, flights) in activeNations)
+        {
+            foreach (var formation in flights)
+            {
+                if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
                 var sight = SightKm(c, formation, type);
                 var origin = map.CenterOf(formation.BaseProvinceId);
                 var band = sight / 111f;
                 var nearest = -1;
                 var nearestKm = float.MaxValue;
-                for (var p = 1; p < controllers.Length && p <= map.ProvinceCount; p++)
+                foreach (var enemyCode in enemies)
                 {
-                    if (!enemies.Contains(controllers[p])) continue;
-                    if (MathF.Abs(map.CenterOf(p).Latitude - origin.Latitude) > band) continue;
-                    var km = SupportCore.DistanceKm(c, formation.BaseProvinceId, p);
-                    if (km <= sight && km < nearestKm) { nearestKm = km; nearest = p; }
+                    if ((uint)enemyCode > ushort.MaxValue ||
+                        !byController.TryGetValue((ushort)enemyCode, out var bucket)) continue;
+                    for (var i = 0; i < bucket.Count; i++)
+                    {
+                        var (p, lat) = bucket[i];
+                        if (MathF.Abs(lat - origin.Latitude) > band) continue;
+                        var km = SupportCore.DistanceKm(c, formation.BaseProvinceId, p);
+                        if (km <= sight && (km < nearestKm || (km == nearestKm && p < nearest)))
+                        {
+                            nearestKm = km;
+                            nearest = p;
+                        }
+                    }
                 }
                 if (nearest < 0) continue;
-                var enemyIds = new List<int>();
-                var ownIds = new List<int> { nationId };
-                foreach (var war in Warfare.OpenWars(c))
-                {
-                    if (war.Ended || !war.Involves(nationId)) continue;
-                    var attacking = war.Side(true).Contains(nationId);
-                    enemyIds.AddRange(war.Side(!attacking));
-                    ownIds.AddRange(war.Side(attacking));
-                }
                 var threat = SupportCore.ThreatTo(type, Mission, SupportCore.ReachOf(c, ownIds, nearest), SupportCore.ReachOf(c, enemyIds, nearest)) *
                              M.Clamp01(c.Defines.ReconExposureShare);
                 if (threat <= 0f) continue;

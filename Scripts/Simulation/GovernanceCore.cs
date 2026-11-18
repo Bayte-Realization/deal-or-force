@@ -51,7 +51,7 @@ public sealed partial class Campaign
         var nation = NationById(nationId);
         if (nation is null) return;
         nation.WelfareSpending = M.Clamp(value, 0f, 0.18f);
-        Changed?.Invoke();
+        NotifyInterface();
     }
 
     public void SetEducationSpending(int nationId, float value)
@@ -59,7 +59,7 @@ public sealed partial class Campaign
         var nation = NationById(nationId);
         if (nation is null) return;
         nation.EducationSpending = M.Clamp(value, 0f, 0.15f);
-        Changed?.Invoke();
+        NotifyInterface();
     }
 
     public void SetGovernmentFocus(int nationId, GovernmentFocus focus)
@@ -70,7 +70,7 @@ public sealed partial class Campaign
         if (nation is null || !GovernmentFocusCatalog.Knows(focus)) return;
         nation.GovernmentFocus = focus;
         NationalModifiers.Invalidate(nation);
-        Changed?.Invoke();
+        NotifyInterface();
     }
 
     /// <summary>
@@ -88,7 +88,7 @@ public sealed partial class Campaign
         var line = BudgetCore.Find(lineId);
         if (nation is null || line is null || !line.PlayerSet) return;
         BudgetCore.SetRate(nation, line, value);
-        Changed?.Invoke();
+        NotifyInterface();
     }
 
     /// <summary>
@@ -123,7 +123,7 @@ public sealed partial class Campaign
             state.Radicalism = M.Clamp01(state.Radicalism + cost * 0.5f);
 
         NationalModifiers.Invalidate(nation);
-        Changed?.Invoke();
+        NotifyInterface();
         return true;
     }
 }

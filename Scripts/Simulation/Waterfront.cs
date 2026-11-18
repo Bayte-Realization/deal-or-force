@@ -38,16 +38,8 @@ public enum WaterAccess
 /// </summary>
 public static class Waterfront
 {
-    private static ProvinceTopology _map;
-    private static WaterAccess[] _byProvince = Array.Empty<WaterAccess>();
-
-    // Regions are cut by wars - a partition gives half a coastal region to somebody else -
-    // so the region answer is stamped with how many regions there are. Geography does not
-    // move, but which province belongs to which region does.
-    private static Campaign _regionCampaign;
-    private static int _regionStamp = -1;
-    private static int _regionRevision = -1;
-    private static readonly Dictionary<int, WaterAccess> ByRegion = new();
+    private sealed record ProvinceCacheEntry(ProvinceTopology Map, WaterAccess[] Access);
+    private static volatile ProvinceCacheEntry _lastProvinceCache;
 
     /// <summary>
     /// Whether this building is useless away from water. Declared by the building, in
@@ -59,8 +51,9 @@ public static class Waterfront
     /// <summary>What a province can reach by water.</summary>
     public static WaterAccess OfProvince(ProvinceTopology map, int province)
     {
-        Refresh(map);
-        return province > 0 && province < _byProvince.Length ? _byProvince[province] : WaterAccess.None;
+        if (map is null || province <= 0) return WaterAccess.None;
+        var byProvince = ProvinceAccess(map);
+        return province < byProvince.Length ? byProvince[province] : WaterAccess.None;
     }
 
     /// <summary>
@@ -72,25 +65,29 @@ public static class Waterfront
     {
         var map = campaign?.ProvinceMap;
         if (map is null || stateMapIndex <= 0) return WaterAccess.None;
-        Refresh(map);
+        var byProvince = ProvinceAccess(map);
 
         var stamp = campaign.States?.Count ?? 0;
-        if (!ReferenceEquals(_regionCampaign, campaign) || stamp != _regionStamp || _regionRevision != campaign.MapRevision)
+        var cache = campaign.Caches.WaterfrontRegions;
+        lock (cache.Gate)
         {
-            _regionCampaign = campaign;
-            _regionStamp = stamp;
-            _regionRevision = campaign.MapRevision;
-            ByRegion.Clear();
-            for (var province = 1; province <= map.ProvinceCount; province++)
+            if (!ReferenceEquals(cache.Map, map) || stamp != cache.StateCount || cache.MapRevision != campaign.MapRevision)
             {
-                var region = map.ProvinceToState[province];
-                if (region == 0) continue;
-                var here = _byProvince[province];
-                if (here == WaterAccess.None) { ByRegion.TryAdd(region, WaterAccess.None); continue; }
-                if (!ByRegion.TryGetValue(region, out var best) || here > best) ByRegion[region] = here;
+                cache.Map = map;
+                cache.StateCount = stamp;
+                cache.MapRevision = campaign.MapRevision;
+                cache.ByRegion.Clear();
+                for (var province = 1; province <= map.ProvinceCount; province++)
+                {
+                    var region = map.ProvinceToState[province];
+                    if (region == 0) continue;
+                    var here = byProvince[province];
+                    if (here == WaterAccess.None) { cache.ByRegion.TryAdd(region, WaterAccess.None); continue; }
+                    if (!cache.ByRegion.TryGetValue(region, out var best) || here > best) cache.ByRegion[region] = here;
+                }
             }
+            return cache.ByRegion.GetValueOrDefault(stateMapIndex);
         }
-        return ByRegion.GetValueOrDefault(stateMapIndex);
     }
 
     public static WaterAccess OfRegion(Campaign campaign, ScenarioState state) =>
@@ -137,15 +134,13 @@ public static class Waterfront
     // every switch.
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ProvinceTopology, WaterAccess[]> Known = new();
 
-    private static void Refresh(ProvinceTopology map)
+    private static WaterAccess[] ProvinceAccess(ProvinceTopology map)
     {
-        if (map is null || ReferenceEquals(_map, map)) return;
-        _map = map;
-        _regionStamp = -1;
+        if (_lastProvinceCache is { } hit && ReferenceEquals(hit.Map, map)) return hit.Access;
         if (Known.TryGetValue(map, out var known))
         {
-            _byProvince = known;
-            return;
+            _lastProvinceCache = new ProvinceCacheEntry(map, known);
+            return known;
         }
 
         var access = new WaterAccess[map.ProvinceCount + 1];
@@ -187,7 +182,8 @@ public static class Waterfront
                 access[province] = WaterAccess.Inland;
         }
 
-        _byProvince = access;
         Known.AddOrUpdate(map, access);
+        _lastProvinceCache = new ProvinceCacheEntry(map, access);
+        return access;
     }
 }

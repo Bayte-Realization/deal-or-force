@@ -44,7 +44,7 @@ public static class CivilWarPersistence
         var ticked = 0;
         foreach (var war in c.Wars)
         {
-            if (++ticked % 4 == 0) yield return 0;
+            if (++ticked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
             if (war.Ended || !war.CivilConflict || c.ProvinceMap is null) continue;
             var due = StageDue(c, war);
             if (due <= war.EscalationStage || war.AttackerLosses + war.DefenderLosses <= .001f ||

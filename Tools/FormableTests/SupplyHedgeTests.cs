@@ -35,19 +35,19 @@ static class SupplyHedgeTests
         buyer = new Nation
         {
             Id = 0, MapIndex = 1, Tag = "BUY", Name = "Buyer", Population = 2_000_000,
-            Stability = 0.8f, Gdp = 100f, Treasury = 80f,
+            Stability = 0.8f, Gdp = 100f, Treasury = 80f, WeeklyTaxIncome = 10f,
             CapitalLatitude = 52f, CapitalLongitude = 13f
         };
         monopolist = new Nation
         {
             Id = 1, MapIndex = 2, Tag = "MON", Name = "Monopolist", Population = 2_000_000,
-            Stability = 0.8f, Gdp = 100f, Treasury = 80f,
+            Stability = 0.8f, Gdp = 100f, Treasury = 80f, WeeklyTaxIncome = 10f,
             CapitalLatitude = 52.4f, CapitalLongitude = 13.2f
         };
         alternate = new Nation
         {
             Id = 2, MapIndex = 3, Tag = "ALT", Name = "Alternate", Population = 2_000_000,
-            Stability = 0.8f, Gdp = 100f, Treasury = 80f,
+            Stability = 0.8f, Gdp = 100f, Treasury = 80f, WeeklyTaxIncome = 10f,
             CapitalLatitude = -33f, CapitalLongitude = 151f
         };
         campaign.Nations.Add(buyer);
@@ -196,17 +196,17 @@ static class SupplyHedgeTests
         var buyerCash = buyer.Treasury;
         var alternateCash = alternate.Treasury;
         Check(AiStatecraft.TryHedgeSupply(campaign, buyer), "the paper is offered to the player who can sell");
-        var paper = campaign.DealOffers.Single(offer => offer.Pending && offer.ToId == alternate.Id);
-        Check(paper.From.TradeAgreement && !paper.To.TradeAgreement && paper.From.Cash == 0f && paper.To.Cash == 0f &&
-            (paper.From.Regions?.Length ?? 0) == 0 && (paper.To.Regions?.Length ?? 0) == 0 &&
-            paper.FromProvinces.Length == 0 && paper.ToProvinces.Length == 0,
+        var pending = CampaignDiplomacy.Peek(campaign, buyer.Id, alternate.Id);
+        Check(campaign.DealOffers.Count == 0 && pending?.AgreementOfferedBy == buyer.Id &&
+            pending.AgreementOfferedKind == AgreementKind.TradeAgreement && pending.AgreementOfferedTrade is not null,
             "the paper is a trade agreement and no land");
-        Check(CampaignDiplomacy.Peek(campaign, buyer.Id, alternate.Id)?.TradeAgreement != true,
+        Check(pending.TradeAgreement != true,
             "nothing is signed before the player agrees");
         Check(buyer.Treasury == buyerCash && alternate.Treasury == alternateCash, "treasuries wait for the signature");
         Check(campaign.ProvinceMap.ProvinceToNation.SequenceEqual(owners), "the player's provinces stay");
-        var signed = DealNegotiations.Respond(campaign, alternate.Id, paper.Id, DealReply.Accept);
-        Check(signed.Accepted, "the player can sign the agreement (" + signed.Note + ")");
+        var signed = new AnswerAgreementCommand { IssuerId = alternate.Id, TargetId = buyer.Id, Accept = true };
+        signed.Apply(campaign);
+        Check(signed.Result == AgreementResult.Signed, "the player can sign the agreement (" + signed.Reason + ")");
         Check(CampaignDiplomacy.Peek(campaign, buyer.Id, alternate.Id)?.TradeAgreement == true, "signing writes the agreement");
         Check(buyer.Treasury == buyerCash && alternate.Treasury == alternateCash, "signing the agreement moves no cash");
         Check(campaign.ProvinceMap.ProvinceToNation.SequenceEqual(owners), "signing the agreement moves no land");

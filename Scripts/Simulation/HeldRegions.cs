@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -52,12 +53,14 @@ public sealed partial class ScenarioState
 /// </summary>
 public static class HeldRegions
 {
-    private static Campaign _for;
-    private static int _revision = int.MinValue;
-    private static readonly Dictionary<int, List<ScenarioState>> HeldBy = new();
-    private static readonly Dictionary<int, int> Controlled = new();
-    private static readonly Dictionary<int, int> Total = new();
-    private static readonly List<ScenarioState> Scratch = new();
+    private sealed class Board
+    {
+        public int Revision = int.MinValue;
+        public readonly Dictionary<int, List<ScenarioState>> HeldBy = new();
+    }
+
+    private static readonly ConditionalWeakTable<Campaign, Board> Boards = new();
+    [ThreadStatic] private static List<ScenarioState> _scratch;
 
     /// <summary>
     /// Work out who administers what, once per map change: a region whose provinces are mostly
@@ -67,10 +70,10 @@ public static class HeldRegions
     public static void Refresh(Campaign c)
     {
         if (c?.ProvinceMap is null || c.ProvinceController is null) return;
-        if (ReferenceEquals(_for, c) && _revision == c.MapRevision) return;
-        _for = c;
-        _revision = c.MapRevision;
-        foreach (var list in HeldBy.Values) list.Clear();
+        var board = Boards.GetOrCreateValue(c);
+        if (board.Revision == c.MapRevision) return;
+        board.Revision = c.MapRevision;
+        foreach (var list in board.HeldBy.Values) list.Clear();
         var map = c.ProvinceMap;
         var controllers = c.ProvinceController;
         var share = Math.Clamp(c.Defines.HeldRegionControlShare, 0.01f, 1f);
@@ -106,7 +109,7 @@ public static class HeldRegions
                 state.HeldSinceDay = c.ElapsedDays;
             }
             if (holder < 0) continue;
-            if (!HeldBy.TryGetValue(holder, out var held)) HeldBy[holder] = held = new List<ScenarioState>();
+            if (!board.HeldBy.TryGetValue(holder, out var held)) board.HeldBy[holder] = held = new List<ScenarioState>();
             held.Add(state);
         }
     }
@@ -127,24 +130,28 @@ public static class HeldRegions
 
     /// <summary>
     /// The regions whose economy answers to this country: its own, less those another holds,
-    /// and those it holds of others. A list reused between calls - read it before asking again.
+    /// and those it holds of others. A thread-local list reused between calls - read it before asking again.
     /// </summary>
-    public static List<ScenarioState> EconomyOf(Campaign c, Nation nation, bool refresh = true)
+    public static List<ScenarioState> EconomyOf(Campaign c, Nation nation, bool refresh = true) =>
+        FillEconomyOf(c, nation, _scratch ??= new List<ScenarioState>(), refresh);
+
+    internal static List<ScenarioState> FillEconomyOf(Campaign c, Nation nation, List<ScenarioState> into, bool refresh = true)
     {
-        Scratch.Clear();
+        into.Clear();
         if (refresh) Refresh(c);
         var working = c.Defines.HeldRegionsWorkForHolder;
         foreach (var state in c.StatesOf(nation))
-            if (!working || !Administered(c, state)) Scratch.Add(state);
+            if (!working || !Administered(c, state)) into.Add(state);
         // A UI projection reads the last committed administration, not Refresh's
         // cached lists: building a tooltip must not set HeldById/HeldSinceDay.
-        if (working && refresh && HeldBy.TryGetValue(nation.Id, out var held))
+        if (working && refresh && Boards.TryGetValue(c, out var board) &&
+            board.HeldBy.TryGetValue(nation.Id, out var held))
             foreach (var state in held)
-                if (Administered(c, state)) Scratch.Add(state);
+                if (Administered(c, state)) into.Add(state);
         if (working && !refresh)
             foreach (var state in c.States)
-                if (state.HeldById == nation.Id && state.NationMapIndex != nation.MapIndex && Administered(c, state)) Scratch.Add(state);
-        return Scratch;
+                if (state.HeldById == nation.Id && state.NationMapIndex != nation.MapIndex && Administered(c, state)) into.Add(state);
+        return into;
     }
 
     /// <summary>Why this country may not hold a vote on joining in a region it holds, or empty.</summary>

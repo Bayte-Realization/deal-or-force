@@ -857,7 +857,7 @@ public static class SubjectInteractions
         var checkedAll = 0;
         foreach (var sponsor in campaign.Nations)
         {
-            if (++checkedAll % 32 == 0) yield return 0;
+            if (++checkedAll % 32 == 0 || Campaign.StageOverdue()) yield return 0;
             if (sponsor.IsHuman || sponsor.IsSubject || sponsor.Movement is not null || sponsor.Population < 10_000_000 || sponsor.Treasury < 0.8f)
                 continue;
             var roll = Escalation.Roll(campaign.Seed, sponsor.Id, 0x7A3, campaign.ElapsedDays, 0x2);
@@ -1329,7 +1329,7 @@ public static class CountryRelease
         {
             for (var ni = 0; ni < TickNationsScratch.Count; ni++)
             {
-                if (ni > 0 && ni % 32 == 0) yield return 0;
+                if (ni > 0 && (ni % 32 == 0 || Campaign.StageOverdue())) yield return 0;
                 var nation = TickNationsScratch[ni];
                 // A human overlord who holds the colonial office is run on the same review as
                 // every other overlord; one who keeps it hands-on is skipped as before.

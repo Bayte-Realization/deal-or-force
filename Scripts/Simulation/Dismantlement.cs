@@ -8,9 +8,9 @@ namespace DealOrForce.Simulation;
 /// or forced follow-up war. Cash, debt and arrears are partitioned, never duplicated.</summary>
 public static class Dismantlement
 {
-    public static string Culture(Campaign c, int[] regions) => regions.Select(id => c.States.Find(s => s.MapIndex == id))
+    public static string Culture(Campaign c, int[] regions) => regions.Select(id => c.StateByMapIndex(id))
         .Where(s => s is not null).OrderByDescending(s => s.Population)
-        .Select(s => EconomySystem.Cultures(s).FirstOrDefault().Culture).FirstOrDefault() ?? "";
+        .Select(s => EconomySystem.DominantCulture(s).Culture).FirstOrDefault() ?? "";
 
     public static string Refusal(Campaign c, Nation parent, int[] regions, bool peace = false)
     {

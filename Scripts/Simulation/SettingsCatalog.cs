@@ -74,17 +74,7 @@ public sealed class SettingDefinition
 }
 
 /// <summary>
-/// The options screen, as data.
-///
-/// A settings screen is the one part of a game that is pure list, and writing it as a list
-/// in C# means every new option is a code change and a mod can neither add one nor hide
-/// one. Here the screen is built from `common/settings`: the categories, the order, the
-/// words, the ranges and the defaults all come out of the file, and the code's only job is
-/// to know what to *do* about an id it recognises.
-///
-/// An option a mod invents still works as far as this goes - it is drawn, it is saved, and
-/// the mod's own script can read it back out of <see cref="PlayerSettings"/>. What a mod
-/// cannot do is make the base game understand a new id, which is the honest boundary.
+/// Data-driven options catalogue loaded from `common/settings`.
 /// </summary>
 public static class SettingsCatalog
 {
@@ -269,9 +259,32 @@ public static class SettingsCatalog
         return playerValue;
     }
 
+    /// <summary>Maps legacy saved choice tokens to neutral canonical identifiers.</summary>
+    public static string NormalizeChoice(string id, string value)
+    {
+        if (string.IsNullOrEmpty(value)) return value ?? "";
+        if (string.Equals(id, "mouse_scheme", StringComparison.OrdinalIgnoreCase))
+            return value.Trim().ToLowerInvariant() switch
+            {
+                "aoh" or "direct_pan" => "direct_pan",
+                "paradox" or "box_select" => "box_select",
+                _ => value
+            };
+        if (string.Equals(id, "ui_shell_message_preset", StringComparison.OrdinalIgnoreCase))
+            return value.Trim().ToLowerInvariant() switch
+            {
+                "paradox" or "focus" => "focus",
+                "aoh" or "dispatch" => "dispatch",
+                "calm" => "calm",
+                _ => value
+            };
+        return value;
+    }
+
     /// <summary>Write an option where it lives: on the campaign if it is the campaign's, otherwise for the player.</summary>
     public static void Store(string id, string value)
     {
+        value = NormalizeChoice(id, value);
         var definition = Of(id);
         var campaign = CurrentCampaign?.Invoke();
         if (definition is { Campaign: true } && campaign is not null) campaign.Settings[id] = value;
@@ -328,6 +341,7 @@ public static class SettingsCatalog
         var fallback = definition?.DefaultValue ?? "";
         var value = PlayerSettings.Text(id, fallback);
         value = CampaignValue(definition, value) ?? value;
+        value = NormalizeChoice(id, value);
         // A value the option no longer offers - a resolution a new monitor does not have, a
         // language a mod stopped shipping - is not a value.
         if (definition is not null && definition.Values.Count > 0 &&

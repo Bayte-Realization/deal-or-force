@@ -175,7 +175,7 @@ public static class MovementAi
             var targetChance = 0f;
             for (var ci = 0; ci < uprisingCandidates.Count; ci++)
             {
-                if (ci > 0 && ci % 8 == 0) yield return 0;
+                if (ci > 0 && (ci % 8 == 0 || Campaign.StageOverdue())) yield return 0;
                 var region = uprisingCandidates[ci];
                 if (region.NationMapIndex == nation.MapIndex) continue;
                 if (forHire ? region.Stability > 0.35f
@@ -209,6 +209,12 @@ public static class MovementAi
         var readyRecognition = state.ReadyOnDay.GetValueOrDefault("recognition", 0) <= campaign.ElapsedDays;
         if (readyRecognition && done < 2)
         {
+            // The index the walk reads is rebuilt after every sweep of the long campaign, and
+            // building it is a walk of every relation in the world, awake and asleep - a hundred
+            // and thirty thousand in a century-old save, fifty milliseconds in one stage, which
+            // was the worst frame at the top speed. Built here in slices instead; the walk then
+            // finds it ready.
+            foreach (var _ in EnsureOpinionIndexStages(campaign)) yield return 0;
             Nation asked;
             float warmest;
             using (SimProfiler.Measure("      mov:think:recognition"))
@@ -298,7 +304,7 @@ public static class MovementAi
                     });
                     for (var hi = 0; hi < candidates.Count; hi++)
                     {
-                        if (hi > 0 && hi % 8 == 0) yield return 0;
+                        if (hi > 0 && (hi % 8 == 0 || Campaign.StageOverdue())) yield return 0;
                         var candidate = candidates[hi];
                         if (!MovementActions.CanDo(campaign, nation, "hospital", candidate.Region.MapIndex, -1)) continue;
                         TryAction(campaign, nation, ref done, "hospital", candidate.Region.MapIndex);
@@ -345,7 +351,7 @@ public static class MovementAi
             if (people <= 0) continue;
             // The cadence of the stage is kept before the prune, so a cheaper loop does not
             // become a longer stage.
-            if (++groundVisited % 64 == 0) yield return 0;
+            if (++groundVisited % 64 == 0 || Campaign.StageOverdue()) yield return 0;
             // A region's score cannot exceed its own people times the homeland weight, however
             // well everything else falls out - support is a share and the weight is at most
             // three. So a region that cannot beat the best so far by that ceiling does not need
@@ -483,6 +489,47 @@ public static class MovementAi
     static bool CanRecognise(Campaign campaign, Nation nation, MovementState state, Nation other) =>
         other is not null && other.Movement is null && other.Id != nation.Id &&
         !state.RecognisedBy.Contains(other.Id) && campaign.HasOwnedLand(other);
+
+    /// <summary>
+    /// The same index <see cref="LinksOf"/> builds, built a slice at a time. The relations are
+    /// taken in the order LinksOf takes them - the awake table, then the sleeping one - from a
+    /// copy of both, so a frame between two slices cannot pull the table out from under the walk.
+    /// A relation made between two slices (the interface may make one) would be missing from the
+    /// copy, so the counts are checked at the end, and a table that changed is indexed again in
+    /// one go, as LinksOf would have. What the index holds decides nothing by its order: the walk
+    /// that reads it breaks ties by the country's id.
+    /// </summary>
+    internal static IEnumerable<int> EnsureOpinionIndexStages(Campaign campaign)
+    {
+        if (campaign is null) yield break;
+        var index = OpinionIndexes.GetValue(campaign, static _ => new OpinionIndex());
+        if (index.Built) yield break;
+        var awake = campaign.Relations.Count;
+        var asleep = campaign.DormantRelations.Count;
+        var rows = System.Buffers.ArrayPool<DiplomaticRelation>.Shared.Rent(Math.Max(1, awake + asleep));
+        try
+        {
+            campaign.Relations.Values.CopyTo(rows, 0);
+            campaign.DormantRelations.Values.CopyTo(rows, awake);
+            for (var i = 0; i < awake + asleep; i++)
+            {
+                if ((i & 1023) == 1023 && Campaign.StageOverdue()) yield return 0;
+                // Somebody asked LinksOf between two slices and it built the whole index itself.
+                if (index.Built) yield break;
+                AddRelation(index, rows[i]);
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<DiplomaticRelation>.Shared.Return(rows, clearArray: true);
+        }
+        if (campaign.Relations.Count != awake || campaign.DormantRelations.Count != asleep)
+        {
+            foreach (var relation in campaign.Relations.Values) AddRelation(index, relation);
+            foreach (var relation in campaign.DormantRelations.Values) AddRelation(index, relation);
+        }
+        index.Built = true;
+    }
 
     static List<DiplomaticRelation> LinksOf(Campaign campaign, int nationId)
     {

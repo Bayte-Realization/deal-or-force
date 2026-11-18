@@ -31,6 +31,7 @@ public static class Loc
         new(StringComparer.OrdinalIgnoreCase);
 
     private static string _language = DefaultLanguage;
+    internal static int Revision { get; private set; }
 
     /// <summary>Raised when the language changes, so open panels can rebuild their text.</summary>
     public static event Action LanguageChanged;
@@ -45,6 +46,7 @@ public static class Loc
             var next = string.IsNullOrWhiteSpace(value) ? DefaultLanguage : value.Trim().ToLowerInvariant();
             if (string.Equals(next, _language, StringComparison.OrdinalIgnoreCase)) return;
             _language = next;
+            Revision++;
             LanguageChanged?.Invoke();
         }
     }
@@ -178,6 +180,7 @@ public static class Loc
     public static void ResetCatalog(List<string> errors = null)
     {
         Tables.Clear();
+        Revision++;
         var root = FindLocalizationRoot();
         if (root is not null) LoadDirectory(root, errors);
 
@@ -265,6 +268,45 @@ public static class Loc
                 continue;
             }
             table[entry.Name] = entry.Value.GetString() ?? "";
+        }
+        Revision++;
+    }
+
+    internal static bool TryGet(string key, out string text)
+    {
+        if (string.IsNullOrEmpty(key)) { text = ""; return false; }
+        var has = false;
+        if (Tables.TryGetValue(_language, out var table) && table.TryGetValue(key, out var local))
+        {
+            has = true;
+            if (local.Length > 0) { text = local; return true; }
+        }
+        if (Tables.TryGetValue(DefaultLanguage, out var fallback) && fallback.TryGetValue(key, out var english))
+        {
+            has = true;
+            if (english.Length > 0) { text = english; return true; }
+        }
+        text = key;
+        return has;
+    }
+
+    internal static void CollectPoliticsStems(HashSet<string> stems)
+    {
+        stems.Clear();
+        ScanTable(Tables.GetValueOrDefault(_language), stems);
+        if (!string.Equals(_language, DefaultLanguage, StringComparison.OrdinalIgnoreCase))
+            ScanTable(Tables.GetValueOrDefault(DefaultLanguage), stems);
+
+        static void ScanTable(Dictionary<string, string> table, HashSet<string> target)
+        {
+            if (table is null) return;
+            foreach (var key in table.Keys)
+            {
+                var gov = key.IndexOf(".government.", StringComparison.Ordinal);
+                if (gov > 0) target.Add(key[..gov]);
+                var ideo = key.IndexOf(".ideology.", StringComparison.Ordinal);
+                if (ideo > 0) target.Add(key[..ideo]);
+            }
         }
     }
 

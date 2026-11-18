@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace DealOrForce.Simulation;
 
@@ -203,7 +205,7 @@ public static class NavalOperations
         var ticked = 0;
         foreach (var fleet in campaign.Fleets)
         {
-            if (++ticked % 32 == 0) yield return 0;
+            if (++ticked % 32 == 0 || Campaign.StageOverdue()) yield return 0;
             var nation = campaign.NationById(fleet.NationId);
             if (nation is null) continue;
             // A fleet sunk to its last hull is rebuilt in its home port, so it still needs one.
@@ -313,27 +315,70 @@ public static class NavalOperations
         return NationAt(campaign, mapIndex);
     }
 
-    private static Campaign _indexed;
-    private static Nation[] _byMapIndex = Array.Empty<Nation>();
+    private sealed class MapIndexSnapshot
+    {
+        public readonly Nation[] ByMapIndex;
+        public readonly int NationsCount;
+
+        public MapIndexSnapshot(Nation[] byMapIndex, int nationsCount)
+        {
+            ByMapIndex = byMapIndex;
+            NationsCount = nationsCount;
+        }
+    }
+
+    private sealed class NavalBoard
+    {
+        public volatile MapIndexSnapshot MapIndex = new(Array.Empty<Nation>(), -1);
+
+        public int HarbourRevision = -1;
+        public int HarbourNationsCount = -1;
+        public float[] HarbourLat = Array.Empty<float>();
+        public float[] HarbourLon = Array.Empty<float>();
+        public int[] HarbourStart = Array.Empty<int>();
+        public int[] HarbourEnd = Array.Empty<int>();
+        public Dictionary<int, (int Start, int End)> HarbourOverflow;
+        public ProvinceTopology HarbourMap;
+
+        public int ReachesRevision = -1;
+        public readonly Dictionary<long, (float Latitude, float Longitude, int Week, float Reach)> Reaches = new();
+    }
+
+    private static readonly ConditionalWeakTable<Campaign, NavalBoard> Boards = new();
 
     /// <summary>The country painted with a map index, or null for nobody.</summary>
     public static Nation NationAt(Campaign campaign, int mapIndex)
     {
         if (campaign is null || mapIndex <= 0) return null;
+        var board = Boards.GetOrCreateValue(campaign);
+        var nationsCount = campaign.Nations.Count;
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            if (attempt == 1 || !ReferenceEquals(_indexed, campaign))
+            var snap = board.MapIndex;
+            var stale = snap.NationsCount != nationsCount;
+            var found = mapIndex < snap.ByMapIndex.Length ? snap.ByMapIndex[mapIndex] : null;
+            if (!stale && found is not null && found.MapIndex == mapIndex) return found;
+            if (attempt == 1) return null;
+            if (stale || found is null || found.MapIndex != mapIndex)
             {
-                _indexed = campaign;
-                var top = 0;
-                foreach (var nation in campaign.Nations) top = Math.Max(top, nation.MapIndex);
-                var index = new Nation[top + 1];
-                foreach (var nation in campaign.Nations)
-                    if (nation.MapIndex > 0) index[nation.MapIndex] = nation;
-                _byMapIndex = index;
+                lock (board)
+                {
+                    snap = board.MapIndex;
+                    var count = campaign.Nations.Count;
+                    if (snap.NationsCount == count && mapIndex < snap.ByMapIndex.Length &&
+                        snap.ByMapIndex[mapIndex] is { } existing && existing.MapIndex == mapIndex)
+                        return existing;
+                    var top = 0;
+                    for (var i = 0; i < count; i++) top = Math.Max(top, campaign.Nations[i].MapIndex);
+                    var rebuilt = new Nation[top + 1];
+                    for (var i = 0; i < count; i++)
+                    {
+                        var nation = campaign.Nations[i];
+                        if (nation.MapIndex > 0) rebuilt[nation.MapIndex] = nation;
+                    }
+                    board.MapIndex = new MapIndexSnapshot(rebuilt, count);
+                }
             }
-            var found = mapIndex < _byMapIndex.Length ? _byMapIndex[mapIndex] : null;
-            if (found is not null && found.MapIndex == mapIndex) return found;
         }
         return null;
     }
@@ -714,7 +759,330 @@ public static class NavalOperations
     /// runs, which is toward the victim's ports, and one in another ocean takes little. And a
     /// country with no coast has no merchant fleet to sink.
     /// </summary>
-    public static void ApplyCommerceEffects(Campaign campaign, Nation nation, Breakdown trade)
+    internal sealed class CommerceBatch
+    {
+        public static readonly CommerceBatch Inactive = new();
+        public bool Active;
+        public ProvinceTopology Map;
+        public float[] HarbourLat = Array.Empty<float>();
+        public float[] HarbourLon = Array.Empty<float>();
+        public int[] HarbourStart = Array.Empty<int>();
+        public int[] HarbourEnd = Array.Empty<int>();
+        public Dictionary<int, (int Start, int End)> HarbourOverflow;
+        public bool[] AtWar = Array.Empty<bool>();
+        public HashSet<int> AtWarOverflow;
+        public HashSet<long> HostilePairs;
+        public float[] Guarded = Array.Empty<float>();
+        public Dictionary<int, float> GuardedOverflow;
+        public Fleet[] ThreatFleets = Array.Empty<Fleet>();
+
+        public bool IsAtWar(int nationId) =>
+            (uint)nationId < (uint)AtWar.Length ? AtWar[nationId] :
+            AtWarOverflow is not null && AtWarOverflow.Contains(nationId);
+
+        public bool AreOpposed(int left, int right) =>
+            HostilePairs is not null && HostilePairs.Contains(((long)left << 32) | (uint)right);
+
+        public float GetGuarded(int nationId) =>
+            (uint)nationId < (uint)Guarded.Length ? Guarded[nationId] :
+            GuardedOverflow is not null && GuardedOverflow.TryGetValue(nationId, out var g) ? g : 0f;
+    }
+
+    private sealed class HarbourIndex
+    {
+        public int Revision = -1;
+        public int NationsCount = -1;
+        public ProvinceTopology Map;
+        public float[] Lat = Array.Empty<float>();
+        public float[] Lon = Array.Empty<float>();
+        public int[] Start = Array.Empty<int>();
+        public int[] End = Array.Empty<int>();
+        public Dictionary<int, (int Start, int End)> Overflow;
+    }
+
+    private const int DenseNationIdLimit = 4096;
+
+    private static HarbourIndex BuildHarbourIndex(Campaign campaign)
+    {
+        var map = campaign.ProvinceMap;
+        var index = new HarbourIndex
+        {
+            Revision = campaign.MapRevision,
+            NationsCount = campaign.Nations.Count,
+            Map = map
+        };
+        if (map is null) return index;
+
+        if (campaign.Nations.Count > 0) NationAt(campaign, campaign.Nations[0].MapIndex);
+        var board = Boards.GetOrCreateValue(campaign);
+        var byMap = board.MapIndex.ByMapIndex;
+        var harbours = SeaLanes.Harbours(map);
+        var provinces = harbours.Province;
+        var count = provinces.Length;
+        var controllers = campaign.ProvinceController;
+        var ownerMap = map.ProvinceToNation;
+
+        var maxDenseId = -1;
+        for (var i = 0; i < campaign.Nations.Count; i++)
+        {
+            var id = campaign.Nations[i].Id;
+            if (id >= 0 && id < DenseNationIdLimit && id > maxDenseId) maxDenseId = id;
+        }
+        var denseLen = maxDenseId + 1;
+        var counts = denseLen > 0 ? new int[denseLen] : Array.Empty<int>();
+        Dictionary<int, List<int>> overflowLists = null;
+        var matchedHolders = new int[count];
+
+        for (var i = 0; i < count; i++)
+        {
+            var province = provinces[i];
+            var mapIndex = controllers is not null && province < controllers.Length
+                ? controllers[province]
+                : ownerMap[province];
+            var holder = mapIndex > 0 && mapIndex < byMap.Length ? byMap[mapIndex] : null;
+            if (holder is null || holder.MapIndex != mapIndex) holder = NationAt(campaign, mapIndex);
+            if (holder is null) { matchedHolders[i] = int.MinValue; continue; }
+            var id = holder.Id;
+            matchedHolders[i] = id;
+            if ((uint)id < (uint)denseLen) counts[id]++;
+            else
+            {
+                overflowLists ??= new Dictionary<int, List<int>>();
+                if (!overflowLists.TryGetValue(id, out var list)) overflowLists[id] = list = new List<int>();
+                list.Add(i);
+            }
+        }
+
+        var start = new int[denseLen];
+        var end = new int[denseLen];
+        var write = new int[denseLen];
+        var cursor = 0;
+        for (var id = 0; id < denseLen; id++)
+        {
+            start[id] = cursor;
+            end[id] = cursor;
+            write[id] = cursor;
+            cursor += counts[id];
+        }
+
+        Dictionary<int, (int Start, int End)> overflowRanges = null;
+        if (overflowLists is not null)
+        {
+            overflowRanges = new Dictionary<int, (int Start, int End)>(overflowLists.Count);
+            foreach (var (id, list) in overflowLists)
+            {
+                overflowRanges[id] = (cursor, cursor + list.Count);
+                cursor += list.Count;
+            }
+        }
+
+        var lat = new float[cursor];
+        var lon = new float[cursor];
+        var srcLat = harbours.Latitude;
+        var srcLon = harbours.Longitude;
+
+        for (var i = 0; i < count; i++)
+        {
+            var id = matchedHolders[i];
+            if ((uint)id >= (uint)denseLen) continue;
+            var dst = write[id]++;
+            end[id] = write[id];
+            lat[dst] = srcLat[i];
+            lon[dst] = srcLon[i];
+        }
+        if (overflowLists is not null)
+        {
+            foreach (var (id, list) in overflowLists)
+            {
+                var pos = overflowRanges[id].Start;
+                foreach (var srcIndex in list)
+                {
+                    lat[pos] = srcLat[srcIndex];
+                    lon[pos] = srcLon[srcIndex];
+                    pos++;
+                }
+            }
+        }
+
+        index.Lat = lat;
+        index.Lon = lon;
+        index.Start = start;
+        index.End = end;
+        index.Overflow = overflowRanges;
+        return index;
+    }
+
+    private static HarbourIndex EnsureHarbourIndex(Campaign campaign, bool force = false)
+    {
+        var board = Boards.GetOrCreateValue(campaign);
+        var map = campaign.ProvinceMap;
+        var rev = campaign.MapRevision;
+        var nCount = campaign.Nations.Count;
+        lock (board)
+        {
+            if (force || board.HarbourRevision != rev || board.HarbourNationsCount != nCount || !ReferenceEquals(board.HarbourMap, map))
+            {
+                var rebuilt = BuildHarbourIndex(campaign);
+                board.HarbourLat = rebuilt.Lat;
+                board.HarbourLon = rebuilt.Lon;
+                board.HarbourStart = rebuilt.Start;
+                board.HarbourEnd = rebuilt.End;
+                board.HarbourOverflow = rebuilt.Overflow;
+                board.HarbourMap = rebuilt.Map;
+                board.HarbourNationsCount = nCount;
+                board.HarbourRevision = rev;
+            }
+            return new HarbourIndex
+            {
+                Revision = board.HarbourRevision,
+                NationsCount = board.HarbourNationsCount,
+                Map = board.HarbourMap,
+                Lat = board.HarbourLat,
+                Lon = board.HarbourLon,
+                Start = board.HarbourStart,
+                End = board.HarbourEnd,
+                Overflow = board.HarbourOverflow
+            };
+        }
+    }
+
+    /// <summary>
+    /// Precomputes wartime pairs, escorts, raiding/blockading fleets, and owned-harbour CSR once
+    /// before a market nation sweep so each nation only inspects its own coasts.
+    /// </summary>
+    internal static CommerceBatch BeginCommerceBatch(Campaign campaign)
+    {
+        if (campaign is null || !campaign.FeatureEnabled("navy")) return CommerceBatch.Inactive;
+
+        var openWars = Warfare.OpenWars(campaign);
+        var anyWar = false;
+        var maxId = -1;
+        for (var i = 0; i < campaign.Nations.Count; i++)
+        {
+            var id = campaign.Nations[i].Id;
+            if (id >= 0 && id < DenseNationIdLimit && id > maxId) maxId = id;
+        }
+        var denseLen = maxId + 1;
+        var atWar = new bool[denseLen];
+        HashSet<int> atWarOverflow = null;
+        HashSet<long> hostilePairs = null;
+
+        for (var i = 0; i < openWars.Count; i++)
+        {
+            var war = openWars[i];
+            if (war.Ended) continue;
+            anyWar = true;
+            hostilePairs ??= new HashSet<long>();
+            foreach (var attacker in war.Side(true))
+            {
+                if ((uint)attacker < (uint)denseLen) atWar[attacker] = true;
+                else (atWarOverflow ??= new HashSet<int>()).Add(attacker);
+                foreach (var defender in war.Side(false))
+                {
+                    if ((uint)defender < (uint)denseLen) atWar[defender] = true;
+                    else (atWarOverflow ??= new HashSet<int>()).Add(defender);
+                    hostilePairs.Add(((long)attacker << 32) | (uint)defender);
+                    hostilePairs.Add(((long)defender << 32) | (uint)attacker);
+                }
+            }
+        }
+
+        if (!anyWar) return CommerceBatch.Inactive;
+
+        var defines = campaign.Defines;
+        var guarded = new float[denseLen];
+        Dictionary<int, float> guardedOverflow = null;
+        List<Fleet> threats = null;
+        foreach (var fleet in campaign.Fleets)
+        {
+            if (fleet.Hulls <= 0) continue;
+            if (fleet.Mission == FleetMission.Escort)
+            {
+                var add = fleet.Presence * defines.FleetEscortValue;
+                if ((uint)fleet.NationId < (uint)denseLen) guarded[fleet.NationId] += add;
+                else (guardedOverflow ??= new Dictionary<int, float>())[fleet.NationId] =
+                    (guardedOverflow?.GetValueOrDefault(fleet.NationId) ?? 0f) + add;
+                continue;
+            }
+            if (fleet.Mission != FleetMission.Raid && fleet.Mission != FleetMission.Blockade) continue;
+            var fleetAtWar = (uint)fleet.NationId < (uint)denseLen
+                ? atWar[fleet.NationId]
+                : atWarOverflow is not null && atWarOverflow.Contains(fleet.NationId);
+            if (!fleetAtWar) continue;
+            (threats ??= new List<Fleet>()).Add(fleet);
+        }
+
+        if (threats is null || threats.Count == 0) return CommerceBatch.Inactive;
+
+        var harbours = EnsureHarbourIndex(campaign, force: true);
+        return new CommerceBatch
+        {
+            Active = true,
+            Map = campaign.ProvinceMap,
+            HarbourLat = harbours.Lat,
+            HarbourLon = harbours.Lon,
+            HarbourStart = harbours.Start,
+            HarbourEnd = harbours.End,
+            HarbourOverflow = harbours.Overflow,
+            AtWar = atWar,
+            AtWarOverflow = atWarOverflow,
+            HostilePairs = hostilePairs,
+            Guarded = guarded,
+            GuardedOverflow = guardedOverflow,
+            ThreatFleets = threats.ToArray()
+        };
+    }
+
+    private static float ReachFromHarbours(
+        float fleetLat, float fleetLon, int nationId,
+        float[] lat, float[] lon, int[] start, int[] end, Dictionary<int, (int Start, int End)> overflow)
+    {
+        int lo, hi;
+        if ((uint)nationId < (uint)start.Length)
+        {
+            lo = start[nationId];
+            hi = end[nationId];
+        }
+        else if (overflow is null || !overflow.TryGetValue(nationId, out var range))
+        {
+            return float.PositiveInfinity;
+        }
+        else
+        {
+            lo = range.Start;
+            hi = range.End;
+        }
+
+        var reach = float.PositiveInfinity;
+        for (var i = lo; i < hi; i++)
+        {
+            var distance = Distance(fleetLat, fleetLon, lat[i], lon[i]);
+            if (distance < reach) reach = distance;
+        }
+        return reach;
+    }
+
+    private static void AccumulateThreatEffect(Defines defines, Fleet fleet, float reach, ref float raided, ref float blockaded)
+    {
+        if (fleet.Mission == FleetMission.Raid)
+        {
+            var range = MathF.Max(1f, defines.FleetRaidRangeDegrees);
+            var found = reach <= range
+                ? 1f
+                : MathF.Max(defines.FleetRaidFloor, 1f - (reach - range) / (range * 2f));
+            if (float.IsPositiveInfinity(reach)) found = 0f;
+            raided += fleet.Presence * defines.FleetRaidValue * found;
+        }
+        else if (reach <= defines.FleetBlockadeRangeDegrees)
+        {
+            blockaded += fleet.Presence * defines.FleetBlockadeValue;
+        }
+    }
+
+    public static void ApplyCommerceEffects(Campaign campaign, Nation nation, Breakdown trade) =>
+        ApplyCommerceEffects(campaign, nation, trade, null);
+
+    internal static void ApplyCommerceEffects(Campaign campaign, Nation nation, Breakdown trade, CommerceBatch commerce)
     {
         if (!campaign.FeatureEnabled("navy")) return;
         var defines = campaign.Defines;
@@ -722,30 +1090,42 @@ public static class NavalOperations
         var guarded = 0f;
         var blockaded = 0f;
 
-        foreach (var fleet in campaign.Fleets)
+        if (commerce is not null)
         {
-            if (fleet.Hulls <= 0) continue;
-            if (fleet.NationId == nation.Id)
+            if (!commerce.Active || !commerce.IsAtWar(nation.Id)) return;
+            guarded = commerce.GetGuarded(nation.Id);
+            var threats = commerce.ThreatFleets;
+            var hasMap = commerce.Map is not null;
+            for (var i = 0; i < threats.Length; i++)
             {
-                if (fleet.Mission == FleetMission.Escort)
-                    guarded += fleet.Presence * defines.FleetEscortValue;
-                continue;
+                var fleet = threats[i];
+                if (!commerce.AreOpposed(nation.Id, fleet.NationId)) continue;
+                var reach = hasMap
+                    ? ReachFromHarbours(
+                        fleet.Latitude, fleet.Longitude, nation.Id,
+                        commerce.HarbourLat, commerce.HarbourLon,
+                        commerce.HarbourStart, commerce.HarbourEnd, commerce.HarbourOverflow)
+                    : 0f;
+                AccumulateThreatEffect(defines, fleet, reach, ref raided, ref blockaded);
             }
-            if (fleet.Mission != FleetMission.Raid && fleet.Mission != FleetMission.Blockade) continue;
-            if (!AtWar(campaign, nation.Id, fleet.NationId)) continue;
+        }
+        else
+        {
+            foreach (var fleet in campaign.Fleets)
+            {
+                if (fleet.Hulls <= 0) continue;
+                if (fleet.NationId == nation.Id)
+                {
+                    if (fleet.Mission == FleetMission.Escort)
+                        guarded += fleet.Presence * defines.FleetEscortValue;
+                    continue;
+                }
+                if (fleet.Mission != FleetMission.Raid && fleet.Mission != FleetMission.Blockade) continue;
+                if (!AtWar(campaign, nation.Id, fleet.NationId)) continue;
 
-            var reach = CoastReach(campaign, fleet, nation);
-            if (fleet.Mission == FleetMission.Raid)
-            {
-                var range = MathF.Max(1f, defines.FleetRaidRangeDegrees);
-                var found = reach <= range
-                    ? 1f
-                    : MathF.Max(defines.FleetRaidFloor, 1f - (reach - range) / (range * 2f));
-                if (float.IsPositiveInfinity(reach)) found = 0f;
-                raided += fleet.Presence * defines.FleetRaidValue * found;
+                var reach = CoastReach(campaign, fleet, nation);
+                AccumulateThreatEffect(defines, fleet, reach, ref raided, ref blockaded);
             }
-            else if (reach <= defines.FleetBlockadeRangeDegrees)
-                blockaded += fleet.Presence * defines.FleetBlockadeValue;
         }
 
         var protection = M.Clamp01(guarded / MathF.Max(0.01f, raided + blockaded + guarded));
@@ -755,10 +1135,6 @@ public static class NavalOperations
         trade?.Add("Shipping lost to enemy navies", -lost);
     }
 
-    private static Campaign _reachesCampaign;
-    private static int _reachesRevision = -1;
-    private static readonly Dictionary<long, (float Latitude, float Longitude, int Week, float Reach)> Reaches = new();
-
     /// <summary>
     /// Degrees from a fleet to the nearest harbour a country holds; infinity for a country
     /// with no coast; zero on a campaign with no map, where every fleet is everywhere.
@@ -767,29 +1143,31 @@ public static class NavalOperations
     {
         var map = campaign.ProvinceMap;
         if (map is null) return 0f;
-        if (!ReferenceEquals(_reachesCampaign, campaign) || _reachesRevision != campaign.MapRevision)
-        {
-            Reaches.Clear();
-            _reachesCampaign = campaign;
-            _reachesRevision = campaign.MapRevision;
-        }
+        var board = Boards.GetOrCreateValue(campaign);
         var key = ((long)fleet.Id << 32) | (uint)nation.MapIndex;
         var week = campaign.ElapsedDays / 7;
-        if (Reaches.TryGetValue(key, out var known) && known.Week == week &&
-            MathF.Abs(known.Latitude - fleet.Latitude) < 0.05f && MathF.Abs(known.Longitude - fleet.Longitude) < 0.05f)
-            return known.Reach;
-
-        var reach = float.PositiveInfinity;
-        foreach (var province in SeaLanes.CoastalProvinces(map))
+        lock (board)
         {
-            var holder = HolderOf(campaign, province);
-            if (holder is null || holder.Id != nation.Id) continue;
-            if (!SeaLanes.TryHarbourPoint(map, province, out var latitude, out var longitude)) continue;
-            var distance = Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
-            if (distance < reach) reach = distance;
+            if (board.ReachesRevision != campaign.MapRevision)
+            {
+                board.Reaches.Clear();
+                board.ReachesRevision = campaign.MapRevision;
+            }
+            if (board.Reaches.TryGetValue(key, out var known) && known.Week == week &&
+                MathF.Abs(known.Latitude - fleet.Latitude) < 0.05f && MathF.Abs(known.Longitude - fleet.Longitude) < 0.05f)
+                return known.Reach;
         }
-        if (Reaches.Count > 4096) Reaches.Clear();
-        Reaches[key] = (fleet.Latitude, fleet.Longitude, week, reach);
+
+        var harbours = EnsureHarbourIndex(campaign);
+        var reach = ReachFromHarbours(
+            fleet.Latitude, fleet.Longitude, nation.Id,
+            harbours.Lat, harbours.Lon, harbours.Start, harbours.End, harbours.Overflow);
+
+        lock (board)
+        {
+            if (board.Reaches.Count > 4096) board.Reaches.Clear();
+            board.Reaches[key] = (fleet.Latitude, fleet.Longitude, week, reach);
+        }
         return reach;
     }
 

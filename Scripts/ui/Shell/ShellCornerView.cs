@@ -89,7 +89,7 @@ internal sealed class ShellCornerView
         flagBtn.AddThemeStyleboxOverride("normal", pocketNormal);
         flagBtn.AddThemeStyleboxOverride("hover", pocketNormal);
         flagBtn.AddThemeStyleboxOverride("pressed", _ctx.PressedWellStyle());
-        flagBtn.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); _ctx.ToggleScreen?.Invoke("Nation"); };
+        flagBtn.Pressed += () => { _ctx.PlayCue?.Invoke("shell_plate_tap"); _ctx.ToggleScreen?.Invoke("Nation"); };
         flagBtn.MouseEntered += () =>
         {
             var nationName = _ctx.World?.Player?.DisplayName ?? Loc.Get("Country");

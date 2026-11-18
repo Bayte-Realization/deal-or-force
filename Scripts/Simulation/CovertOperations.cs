@@ -364,7 +364,7 @@ public static class CovertOperations
         var scanned = 0;
         foreach (var owner in c.Nations)
         {
-            if (++scanned % 16 == 0) yield return 0;
+            if (++scanned % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (owner.CovertQuietUntil.Count > 0 && day % 7 == 0)
                 foreach (var targetId in owner.CovertQuietUntil.Where(p => p.Value <= day).Select(p => p.Key).ToList())
                     owner.CovertQuietUntil.Remove(targetId);

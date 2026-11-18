@@ -71,41 +71,44 @@ public partial class DealOrForceGame
         AddChild(_menuLayer);
 
         var panel = TexturedPanel(_menuLayer);
+        MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true, padX: 0, padY: 0);
         // Runtime-created Controls need explicit anchors and offsets. Setting
         // Position after a preset leaves them relative to (0, 0) on some
         // Godot 4.x builds, which pushed this panel off-screen.
         Ui.Place(panel, "menu.main");
 
-        var rows = PanelRows(panel, 28, 24, 9);
+        var rows = PanelRows(panel, 26, 22, 8);
         var logo = new TextureRect
         {
             Texture = Art("brand_logo_banner", "res://game/gfx/interface/brand_logo_banner.png"),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            CustomMinimumSize = new Vector2(0, 184),
+            CustomMinimumSize = new Vector2(0, 178),
             MouseFilter = Control.MouseFilterEnum.Ignore,
             TooltipText = Ui.Tip(Tr("Deal or Force"))
         };
         rows.AddChild(logo);
-        rows.AddChild(Title(
-            "Choose a world. Shape its future.",
-            15,
-            Ui.Colour("text.muted")));
+        var tagline = Title("Choose a world. Shape its future.", 15, MenuChromeTheme.PaperDim);
+        MenuChromeTheme.StyleExistingLabel(tagline, 15, MenuChromeTheme.PaperDim, serif: true);
+        rows.AddChild(tagline);
 
         // The heading that used to sit here said "Scenarios & workshop" over two status
         // lines about the world that is loaded and the mods that are not. It named a
         // section that is not on this screen - the workshop is a window reached from a
         // campaign - and a player reading the menu top to bottom was told they were
         // looking at something they were not. The two lines say what they are.
-        _scenarioSummary = Title("Preparing campaign data…", 14, Ui.Colour("text.hint"));
+        _scenarioSummary = Title("Preparing campaign data…", 13, MenuChromeTheme.PaperDim);
         rows.AddChild(_scenarioSummary);
 
-        _modStatus = Title(_modLoader.StatusLine, 12, Ui.Colour("text.faint"));
+        _modStatus = Title(_modLoader.StatusLine, 12, MenuChromeTheme.PaperFaint);
         _modStatus.TooltipText = Ui.Tip(Tr("Development mods: res://mods · installed mods: ") +
                                         ProjectSettings.GlobalizePath("user://mods"));
         rows.AddChild(_modStatus);
+        rows.AddChild(MenuChromeTheme.CreateEngravedRule("LegacyMenuDivider", 2f));
 
-        rows.AddChild(ActionButton("Singleplayer", OpenScenarioLibrary, 330, 46, true));
+        var singleplayer = ActionButton("Singleplayer", OpenScenarioLibrary, 330, 46, true);
+        MenuChromeTheme.StylePrimaryCta(singleplayer, 16, serif: true);
+        rows.AddChild(singleplayer);
         var modActions = ModFrontendMenu.Create(_modLoader.FrontendActions, id =>
         {
             _modLoader.TryRunFrontendAction(id, out var note);
@@ -115,39 +118,51 @@ public partial class DealOrForceGame
         });
         modActions.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomLeft);
         modActions.OffsetLeft = 24; modActions.OffsetRight = 214;
-        modActions.OffsetTop = -70; modActions.OffsetBottom = -34;
+        modActions.OffsetTop = -74; modActions.OffsetBottom = -42;
         _menuLayer.AddChild(modActions);
-        rows.AddChild(ActionButton("Load latest campaign", LoadLatestSave, 330, 42));
 
-        var multiplayer = ActionButton("Multiplayer · LAN / IP", OpenNetworkMultiplayer, 330, 42);
+        var loadLatest = ActionButton("Load latest campaign", LoadLatestSave, 330, 40);
+        MenuChromeTheme.StyleWellButton(loadLatest, selected: false, fontSize: 14);
+        rows.AddChild(loadLatest);
+
+        var multiplayer = ActionButton("Multiplayer · LAN / IP", OpenNetworkMultiplayer, 330, 40);
+        MenuChromeTheme.StyleWellButton(multiplayer, selected: false, fontSize: 14);
         multiplayer.TooltipText = Ui.Tip(Tr("Host or join a campaign over LAN, by IPv4 address, or through a virtual LAN such as Radmin VPN."));
         rows.AddChild(multiplayer);
 
-        _mainProjectionButton = ActionButton("Map view: 3D globe", ToggleProjection, 330, 42);
+        _mainProjectionButton = ActionButton("Map view: 3D globe", ToggleProjection, 330, 38);
+        MenuChromeTheme.StyleWellButton(_mainProjectionButton, selected: false, fontSize: 13);
         _mainProjectionButton.TooltipText = Ui.Tip(Tr("Switch between globe and classic infinitely wrapping map (F2)."));
         rows.AddChild(_mainProjectionButton);
-        _smoothingButton = ActionButton(SmoothingButtonLabel(), ToggleMapSmoothing, 330, 42);
+        _smoothingButton = ActionButton(SmoothingButtonLabel(), ToggleMapSmoothing, 330, 38);
+        MenuChromeTheme.StyleWellButton(_smoothingButton, selected: false, fontSize: 13);
         _smoothingButton.TooltipText = Ui.Tip(
             Tr("Smoothing rebuilds country, region and terrain boundaries so the map has no visible " +
             "texel grid. Turn it off for the raster exactly as authored - pixels and all - which " +
             "is also the cheaper picture on a slower machine (F3)."));
         rows.AddChild(_smoothingButton);
-        rows.AddChild(ActionButton("Settings", ShowSettings, 330, 42));
-        _languageButton = ActionButton(LanguageButtonLabel(), CycleLanguage, 330, 42);
+        var settingsBtn = ActionButton("Settings", ShowSettings, 330, 38);
+        MenuChromeTheme.StyleWellButton(settingsBtn, selected: false, fontSize: 13);
+        rows.AddChild(settingsBtn);
+        _languageButton = ActionButton(LanguageButtonLabel(), CycleLanguage, 330, 38);
+        MenuChromeTheme.StyleWellButton(_languageButton, selected: false, fontSize: 13);
         _languageButton.TooltipText = Ui.Tip(Tr("Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder."));
         rows.AddChild(_languageButton);
-        rows.AddChild(ActionButton("Quit to desktop", () => LeaveConfirmation.QuitToDesktop(this, inCampaign: false), 330, 42));
+        var quitBtn = ActionButton("Quit to desktop", () => LeaveConfirmation.QuitToDesktop(this, inCampaign: false), 330, 38);
+        MenuChromeTheme.StyleWellButton(quitBtn, selected: false, fontSize: 13);
+        rows.AddChild(quitBtn);
 
-        _navigationHint = Title("Right-drag to turn the globe · wheel to zoom · WASD to move.", 13,
-            Ui.Colour("text.hint"));
+        _navigationHint = Title("Right-drag to turn the globe · wheel to zoom · WASD to move.", 12,
+            MenuChromeTheme.PaperFaint);
         _navigationHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_navigationHint);
-        var version = Title(GameBuildInfo.VersionLabel, 12, Ui.Colour("text.caption"));
+        var version = Title(GameBuildInfo.VersionLabel, 12, MenuChromeTheme.PaperFaint);
+        MenuChromeTheme.StyleExistingLabel(version, 12, MenuChromeTheme.PaperFaint, tabular: true);
         version.Name = "GameVersion"; version.HorizontalAlignment = HorizontalAlignment.Right;
         version.MouseFilter = Control.MouseFilterEnum.Ignore; version.ClipText = true;
         version.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomWide);
         version.OffsetLeft = 24; version.OffsetRight = -24;
-        version.OffsetTop = -40; version.OffsetBottom = -18;
+        version.OffsetTop = -34; version.OffsetBottom = -12;
         _menuLayer.AddChild(version);
     }
 

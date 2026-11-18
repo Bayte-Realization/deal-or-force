@@ -60,7 +60,7 @@ public static partial class Corridors
         {
             for (var i = 0; i < TickNationsScratch.Count; i++)
             {
-                if (i > 0 && i % 8 == 0) yield return 0;
+                if (i > 0 && (i % 8 == 0 || Campaign.StageOverdue())) yield return 0;
                 var nation = TickNationsScratch[i];
                 if ((c.ElapsedDays + (long)nation.Id * 11) % every != 0) continue;
                 if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;

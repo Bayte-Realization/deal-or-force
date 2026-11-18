@@ -163,7 +163,7 @@ public static class Coups
         var tick = 0;
         foreach (var nation in c.Nations.ToArray())
         {
-            if (++tick % 8 == 0) yield return 0;
+            if (++tick % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             // A faction's coup is its own leader's business; the RSF is not overthrown by its officers.
             if (nation.Movement is not null || nation.FactionId.Length > 0 || nation.Population <= 0 || c.Fallen.Contains(nation.Id)) continue;
             // A dependency's army is its sovereign's: Pitcairn has no officers to plot with.
