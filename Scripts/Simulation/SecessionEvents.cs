@@ -56,26 +56,6 @@ public static class SecessionEvents
     public static readonly List<SecessionReport> Recent = new();
 
     /// <summary>
-    /// Which world <see cref="Recent"/> was written for.
-    ///
-    /// Two campaigns can exist in one process - a multiplayer client rebuilding from a
-    /// snapshot beside the one it is replacing - and a static list belongs to whichever of
-    /// them wrote to it last. Nothing in the simulation reads either of these, so this
-    /// cannot put two peers in different worlds; it can put the wrong window on the screen,
-    /// and an interface that checks this does not.
-    /// </summary>
-    public static Campaign RecentWorld;
-
-    /// <summary>Scratch, reused across the week. This runs against every country in the world.</summary>
-    private static readonly Dictionary<int, ScenarioState> ByRegion = new();
-    private static readonly Dictionary<int, List<int>> Adjacent = new();
-    private static Campaign _adjCampaign;
-    private static ProvinceTopology _adjMap;
-    private static int _adjOwnershipRevision = int.MinValue;
-    private static int _adjStateCount = -1;
-    private static readonly Dictionary<int, List<int>> GlobalAdjacent = new();
-
-    /// <summary>
     /// Runs every day and does its work weekly, rather than being called weekly: the
     /// clearing has to happen on the days the working does not.
     /// </summary>
@@ -90,7 +70,6 @@ public static class SecessionEvents
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(SecessionEvents))) yield break;
         if (campaign?.ProvinceMap is null) yield break;
         Recent.Clear();
-        RecentWorld = campaign;
 
         // The pressure below is authored per week, so it is added once a week whatever the
         // step length - which is the same rule the rest of the day pass follows and the
@@ -156,7 +135,7 @@ public static class SecessionEvents
         foreach (var _ in BuildAdjacencyStages(campaign, owned)) yield return 0;
 
         var core = Core(campaign, parent, ripe, out var culture);
-        core = Cap(parent, core);
+        core = Cap(campaign, parent, core);
         if (core.Count >= owned.Length)
         {
             var keep = core.FirstOrDefault(s => s.MapIndex == parent.CapitalStateMapIndex)
@@ -214,17 +193,18 @@ public static class SecessionEvents
     private static IEnumerable<int> BuildAdjacencyStages(Campaign campaign, ScenarioState[] owned)
     {
         var topology = campaign.ProvinceMap;
-        if (!ReferenceEquals(_adjCampaign, campaign) || !ReferenceEquals(_adjMap, topology) ||
-            _adjOwnershipRevision != campaign.OwnershipRevision || _adjStateCount != campaign.States.Count)
+        var cache = campaign.Caches.Secession;
+        if (!ReferenceEquals(cache.Map, topology) ||
+            cache.OwnershipRevision != campaign.OwnershipRevision || cache.StateCount != campaign.States.Count)
         {
-            foreach (var list in GlobalAdjacent.Values) list.Clear();
+            foreach (var list in cache.GlobalAdjacent.Values) list.Clear();
             for (var province = 1; province <= topology.ProvinceCount; province++)
             {
                 if (province % 4096 == 0) yield return 0;
                 var here = topology.ProvinceToState[province];
                 if (here <= 0) continue;
-                if (!GlobalAdjacent.TryGetValue(here, out var list))
-                    GlobalAdjacent[here] = list = new List<int>();
+                if (!cache.GlobalAdjacent.TryGetValue(here, out var list))
+                    cache.GlobalAdjacent[here] = list = new List<int>();
                 // Drawn borders: a breakaway takes regions that touch on the map, not ones a ferry
                 // runs between (ProvinceTopology.LandNeighbors).
                 foreach (var next in topology.LandNeighbors[province])
@@ -234,28 +214,27 @@ public static class SecessionEvents
                     if (!list.Contains(there)) list.Add(there);
                 }
             }
-            _adjCampaign = campaign;
-            _adjMap = topology;
-            _adjOwnershipRevision = campaign.OwnershipRevision;
-            _adjStateCount = campaign.States.Count;
+            cache.Map = topology;
+            cache.OwnershipRevision = campaign.OwnershipRevision;
+            cache.StateCount = campaign.States.Count;
             yield return 0;
         }
 
-        ByRegion.Clear();
-        Adjacent.Clear();
+        cache.ByRegion.Clear();
+        cache.Adjacent.Clear();
         foreach (var state in owned)
         {
-            ByRegion[state.MapIndex] = state;
-            Adjacent[state.MapIndex] = new List<int>();
+            cache.ByRegion[state.MapIndex] = state;
+            cache.Adjacent[state.MapIndex] = new List<int>();
         }
         foreach (var state in owned)
         {
-            if (!GlobalAdjacent.TryGetValue(state.MapIndex, out var all)) continue;
-            var neighbours = Adjacent[state.MapIndex];
+            if (!cache.GlobalAdjacent.TryGetValue(state.MapIndex, out var all)) continue;
+            var neighbours = cache.Adjacent[state.MapIndex];
             for (var i = 0; i < all.Count; i++)
             {
                 var there = all[i];
-                if (ByRegion.ContainsKey(there)) neighbours.Add(there);
+                if (cache.ByRegion.ContainsKey(there)) neighbours.Add(there);
             }
         }
     }
@@ -296,7 +275,7 @@ public static class SecessionEvents
 
         foreach (var (people, states) in byCulture)
         {
-            foreach (var bloc in Contiguous(states))
+            foreach (var bloc in Contiguous(campaign, states))
             {
                 // A people whose own state is next door does not found a second one: Ukrainians
                 // on ground Russia took are Ukraine's lost land (LostLands), not a "Republic of
@@ -316,7 +295,7 @@ public static class SecessionEvents
         // Federal regions share their political rejection, not necessarily one language.
         // Keep them separate from an ethnic bloc and apply the same connectivity and
         // subsequent population cap as every other secession.
-        foreach (var bloc in Contiguous(federal))
+        foreach (var bloc in Contiguous(campaign, federal))
         {
             var here = bloc.Sum(state => state.Population);
             if (best.Count > 0 && here <= bestPeople) continue;
@@ -344,7 +323,7 @@ public static class SecessionEvents
     /// come back for the rest after the cooling-off period - which is how a country that is
     /// genuinely coming apart comes apart, in pieces and over years.
     /// </summary>
-    private static List<ScenarioState> Cap(Nation parent, List<ScenarioState> core)
+    private static List<ScenarioState> Cap(Campaign campaign, Nation parent, List<ScenarioState> core)
     {
         var cap = SecessionCore.Weights.MaximumShare;
         if (core.Count == 0 || parent.Population <= 0 || cap <= 0f) return core;
@@ -370,7 +349,7 @@ public static class SecessionEvents
             ScenarioState next = null;
             foreach (var state in core)
             {
-                if (taken.Contains(state.MapIndex) || !Touches(taken, state.MapIndex)) continue;
+                if (taken.Contains(state.MapIndex) || !Touches(campaign, taken, state.MapIndex)) continue;
                 if (carried + state.Population > ceiling) continue;
                 if (next is null || state.SecessionPressure > next.SecessionPressure) next = state;
             }
@@ -383,8 +362,9 @@ public static class SecessionEvents
     }
 
     /// <summary>Groups of regions that can reach each other over the country's own ground.</summary>
-    private static List<List<ScenarioState>> Contiguous(List<ScenarioState> states)
+    private static List<List<ScenarioState>> Contiguous(Campaign campaign, List<ScenarioState> states)
     {
+        var cache = campaign.Caches.Secession;
         var wanted = new HashSet<int>();
         foreach (var state in states) wanted.Add(state.MapIndex);
 
@@ -399,11 +379,11 @@ public static class SecessionEvents
             queue.Enqueue(start.MapIndex);
             while (queue.Count > 0)
             {
-                if (!Adjacent.TryGetValue(queue.Dequeue(), out var neighbours)) continue;
+                if (!cache.Adjacent.TryGetValue(queue.Dequeue(), out var neighbours)) continue;
                 foreach (var other in neighbours)
                 {
                     if (!wanted.Contains(other) || !seen.Add(other)) continue;
-                    group.Add(ByRegion[other]);
+                    group.Add(cache.ByRegion[other]);
                     queue.Enqueue(other);
                 }
             }
@@ -449,7 +429,7 @@ public static class SecessionEvents
                 // The national capital cannot be accreted into a peripheral border secession.
                 if (state.MapIndex == parent.CapitalStateMapIndex) continue;
                 if (taken.Contains(state.MapIndex)) continue;
-                if (!Touches(core, state.MapIndex)) continue;
+                if (!Touches(campaign, core, state.MapIndex)) continue;
                 if (!Belongs(campaign, parent, state, culture, weights.JoinPeopleShare)) continue;
 
                 var willing = MathF.Max(
@@ -534,8 +514,8 @@ public static class SecessionEvents
         return km <= campaign.Defines.DiasporaReachKm;
     }
 
-    private static bool Touches(HashSet<int> taken, int region) =>
-        Adjacent.TryGetValue(region, out var neighbours) && neighbours.Any(taken.Contains);
+    private static bool Touches(Campaign campaign, HashSet<int> taken, int region) =>
+        campaign.Caches.Secession.Adjacent.TryGetValue(region, out var neighbours) && neighbours.Any(taken.Contains);
 
     /// <summary>
     /// Keep it a secession. Past the authored share of the country, the regions that only

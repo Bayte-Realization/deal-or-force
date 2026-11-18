@@ -85,7 +85,7 @@ public partial class DealOrForceGame
     /// renderer and the driver, so the log carries their counters beside it to show which grows.
     /// </summary>
     /// <summary>Where the memory is (MemoryReport); for tools that drive the game, and the console's `memory`.</summary>
-    public string MemoryReport(int top = 25) => DealOrForce.MemoryReport.Build(top);
+    [DealOrForce.Simulation.ToolHook] public string MemoryReport(int top = 25) => DealOrForce.MemoryReport.Build(top);
 
     private static long PrivateBytes()
     {

@@ -32,6 +32,12 @@ internal sealed class CampaignCaches
     private ExclaveSurveyCache _exclaves;
     private WaterfrontRegionCache _waterfrontRegions;
     private PeaceShapeNearCache _peaceShapeNear;
+    private ArmyDispositionCache _armyDisposition;
+    private CorridorPoreCache _corridorPores;
+    private CoupNationMapCache _coupNationMap;
+    private SecessionAdjacencyCache _secession;
+    private ShipbuildingSlipwaysCache _shipbuildingSlipways;
+    private SupportEnabledMemoCache _supportEnabledMemo;
 
     public AiStrategyPostureCache AiStrategyPosture => LazyInitializer.EnsureInitialized(ref _aiStrategyPosture)!;
     public AiTemperamentCache AiTemperament => LazyInitializer.EnsureInitialized(ref _aiTemperament)!;
@@ -45,6 +51,12 @@ internal sealed class CampaignCaches
     public ExclaveSurveyCache Exclaves => LazyInitializer.EnsureInitialized(ref _exclaves)!;
     public WaterfrontRegionCache WaterfrontRegions => LazyInitializer.EnsureInitialized(ref _waterfrontRegions)!;
     public PeaceShapeNearCache PeaceShapeNear => LazyInitializer.EnsureInitialized(ref _peaceShapeNear)!;
+    public ArmyDispositionCache ArmyDisposition => LazyInitializer.EnsureInitialized(ref _armyDisposition)!;
+    public CorridorPoreCache CorridorPores => LazyInitializer.EnsureInitialized(ref _corridorPores)!;
+    public CoupNationMapCache CoupNationMap => LazyInitializer.EnsureInitialized(ref _coupNationMap)!;
+    public SecessionAdjacencyCache Secession => LazyInitializer.EnsureInitialized(ref _secession)!;
+    public ShipbuildingSlipwaysCache ShipbuildingSlipways => LazyInitializer.EnsureInitialized(ref _shipbuildingSlipways)!;
+    public SupportEnabledMemoCache SupportEnabledMemo => LazyInitializer.EnsureInitialized(ref _supportEnabledMemo)!;
 
     internal sealed class AiStrategyPostureCache
     {
@@ -245,5 +257,89 @@ internal sealed class CampaignCaches
                 _entries[key] = (mapRevision, near);
             }
         }
+    }
+
+    internal sealed class ArmyDispositionCache
+    {
+        public int Day = -1;
+        public int Count = -1;
+        public readonly Dictionary<int, List<Army>> ByNation = new();
+        public readonly Stack<List<Army>> ListPool = new();
+
+        public void Clear()
+        {
+            foreach (var list in ByNation.Values)
+            {
+                list.Clear();
+                ListPool.Push(list);
+            }
+            ByNation.Clear();
+            Day = -1;
+            Count = -1;
+        }
+    }
+
+    internal sealed class CorridorPoreCache
+    {
+        public int Revision = -1;
+        public ProvinceTopology Map;
+        public int Limit = -1;
+        public ushort[] Owners = Array.Empty<ushort>();
+        public ushort[] States = Array.Empty<ushort>();
+        public bool[] Seen = Array.Empty<bool>();
+        public readonly Queue<int> Queue = new();
+        public readonly HashSet<int> Rim = new();
+        public readonly Dictionary<int, HashSet<int>> Pores = new();
+        public readonly Dictionary<int, List<HashSet<int>>> Components = new();
+        public readonly Dictionary<int, int> FirstProvince = new();
+        public readonly Dictionary<uint, int> OwnerStateCounts = new();
+        public bool Ready;
+    }
+
+    internal sealed class CoupNationMapCache
+    {
+        private readonly object _gate = new();
+        private int _day = int.MinValue;
+        private int _count = -1;
+        private readonly Dictionary<int, Nation> _byMapIndex = new();
+
+        public Nation NationAt(Campaign campaign, int mapIndex)
+        {
+            lock (_gate)
+            {
+                if (_day != campaign.ElapsedDays || _count != campaign.Nations.Count)
+                {
+                    _day = campaign.ElapsedDays;
+                    _count = campaign.Nations.Count;
+                    _byMapIndex.Clear();
+                    foreach (var nation in campaign.Nations)
+                        if (nation.MapIndex >= 0) _byMapIndex[nation.MapIndex] = nation;
+                }
+                return _byMapIndex.GetValueOrDefault(mapIndex);
+            }
+        }
+    }
+
+    internal sealed class SecessionAdjacencyCache
+    {
+        public ProvinceTopology Map;
+        public int OwnershipRevision = int.MinValue;
+        public int StateCount = -1;
+        public readonly Dictionary<int, List<int>> GlobalAdjacent = new();
+        public readonly Dictionary<int, ScenarioState> ByRegion = new();
+        public readonly Dictionary<int, List<int>> Adjacent = new();
+    }
+
+    internal sealed class ShipbuildingSlipwaysCache
+    {
+        public readonly object Gate = new();
+        public int Day = -1;
+        public readonly Dictionary<int, float> ByNation = new();
+    }
+
+    internal sealed class SupportEnabledMemoCache
+    {
+        public bool Active;
+        public readonly List<(string TypeId, bool Enabled)> Entries = new();
     }
 }

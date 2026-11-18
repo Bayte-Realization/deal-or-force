@@ -14,7 +14,7 @@ static class Verify
         var rows = File.ReadAllLines(candidatesPath).Skip(1)
             .Select(SplitCsv).Where(c => c[^1] == "dead" || c[^1] == "test-or-tool-only").ToList();
         var names = rows.Select(r => r[1]).ToHashSet();
-        bool Skip(string p) => p.Contains(@"\bin\") || p.Contains(@"\obj\") || p.Contains(@"\.godot\") || p.Contains(@"\node_modules\") || p.Contains(@"\.git\");
+        bool Skip(string p) => p.Contains(@"\bin\") || p.Contains(@"\obj\") || p.Contains(@"\.godot\") || p.Contains(@"\node_modules\") || p.Contains(@"\.git\") || p.Contains(@"\target\") || p.Contains(@"\.cache\") || p.Contains(@"\cache\") || p.Contains(@"\tmp_logs\");
         IEnumerable<string> Enum(string dir, string pattern) => Directory.Exists(dir)
             ? Directory.EnumerateFiles(dir, "*.*", SearchOption.AllDirectories).Where(p => !Skip(p) && Regex.IsMatch(p, pattern, RegexOptions.IgnoreCase) && new FileInfo(p).Length < 30_000_000)
             : Enumerable.Empty<string>();
@@ -32,7 +32,7 @@ static class Verify
         var parentDir = Path.GetDirectoryName(root);
         if (parentDir is not null)
         {
-            foreach (var wt in new[] { "dof-conquest", "dof-longrange", "dof-pockets", "dof-deals", "dof-fw-saves", "dof-perf3", "dof-mapart", "dof-newscreen", "dof-menuchrome", "dof-modding", "dof-test-fixes", "dof-refactor-split" })
+            foreach (var wt in new[] { "dof-conquest", "dof-longrange", "dof-pockets", "dof-deals", "dof-fw-saves", "dof-perf3", "dof-polyglot", "dof-mapart", "dof-newscreen", "dof-menuchrome", "dof-modding", "dof-test-fixes", "dof-refactor-split" })
             {
                 var dir = Path.Combine(parentDir, wt);
                 if (!Directory.Exists(dir)) continue;
