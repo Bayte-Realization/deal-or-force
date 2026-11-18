@@ -41,7 +41,7 @@ public partial class DealOrForceGame
         RefreshEvents = RefreshEventInterface,
         RefreshLocalisedText = RefreshLocalisedText,
         LayoutCampaignShell = LayoutCampaignShell,
-        RepaintPresentation = () => RepaintPresentation(this),
+        RepaintPresentation = () => PresentationSkinRepaint.Repaint(this, (s, c) => PanelStyle((PanelSurface)s, c), ShellEdgeStyle),
         TogglePause = TogglePause,
         SetSpeed = speed => SetSpeed(speed),
         ToggleFreeCamera = ToggleFreeCamera,

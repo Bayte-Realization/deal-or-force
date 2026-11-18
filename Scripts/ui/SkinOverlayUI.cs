@@ -30,6 +30,6 @@ public partial class DealOrForceGame
         else SkinOverlays.Rebuild(wanted, skins, packages, errors);
         foreach (var error in errors) GD.PushWarning("[skin] " + error);
         report?.AddRange(errors.Select(error => "[skin] " + error));
-        if (_hudLayer is not null) RepaintPresentation(this);
+        if (_hudLayer is not null) PresentationSkinRepaint.Repaint(this, (s, c) => PanelStyle((PanelSurface)s, c), ShellEdgeStyle);
     }
 }

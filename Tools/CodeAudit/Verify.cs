@@ -32,7 +32,7 @@ static class Verify
         var parentDir = Path.GetDirectoryName(root);
         if (parentDir is not null)
         {
-            foreach (var wt in new[] { "dof-conquest", "dof-longrange", "dof-pockets", "dof-deals", "dof-fw-saves", "dof-perf3", "dof-mapart", "dof-newscreen", "dof-menuchrome", "dof-test-fixes", "dof-refactor-split" })
+            foreach (var wt in new[] { "dof-conquest", "dof-longrange", "dof-pockets", "dof-deals", "dof-fw-saves", "dof-perf3", "dof-mapart", "dof-newscreen", "dof-menuchrome", "dof-modding", "dof-test-fixes", "dof-refactor-split" })
             {
                 var dir = Path.Combine(parentDir, wt);
                 if (!Directory.Exists(dir)) continue;

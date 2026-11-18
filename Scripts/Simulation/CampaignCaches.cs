@@ -31,6 +31,7 @@ internal sealed class CampaignCaches
     private SecularFrontierCache _secularFrontier;
     private ExclaveSurveyCache _exclaves;
     private WaterfrontRegionCache _waterfrontRegions;
+    private PeaceShapeNearCache _peaceShapeNear;
 
     public AiStrategyPostureCache AiStrategyPosture => LazyInitializer.EnsureInitialized(ref _aiStrategyPosture)!;
     public AiTemperamentCache AiTemperament => LazyInitializer.EnsureInitialized(ref _aiTemperament)!;
@@ -43,6 +44,7 @@ internal sealed class CampaignCaches
     public SecularFrontierCache SecularFrontier => LazyInitializer.EnsureInitialized(ref _secularFrontier)!;
     public ExclaveSurveyCache Exclaves => LazyInitializer.EnsureInitialized(ref _exclaves)!;
     public WaterfrontRegionCache WaterfrontRegions => LazyInitializer.EnsureInitialized(ref _waterfrontRegions)!;
+    public PeaceShapeNearCache PeaceShapeNear => LazyInitializer.EnsureInitialized(ref _peaceShapeNear)!;
 
     internal sealed class AiStrategyPostureCache
     {
@@ -215,5 +217,33 @@ internal sealed class CampaignCaches
         public int StateCount = -1;
         public int MapRevision = -1;
         public readonly Dictionary<int, WaterAccess> ByRegion = new();
+    }
+
+    internal sealed class PeaceShapeNearCache
+    {
+        private readonly object _gate = new();
+        private readonly Dictionary<long, (int Revision, bool Near)> _entries = new();
+
+        public bool TryGet(long key, int mapRevision, out bool near)
+        {
+            lock (_gate)
+            {
+                if (_entries.TryGetValue(key, out var known) && known.Revision == mapRevision)
+                {
+                    near = known.Near;
+                    return true;
+                }
+                near = false;
+                return false;
+            }
+        }
+
+        public void Store(long key, int mapRevision, bool near)
+        {
+            lock (_gate)
+            {
+                _entries[key] = (mapRevision, near);
+            }
+        }
     }
 }
