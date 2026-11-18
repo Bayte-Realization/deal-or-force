@@ -44,24 +44,23 @@ public static class MovementPower
 {
     private static readonly Dictionary<int, float> ByHost = new();
     private static readonly string[] MarchStrikeActions = { "march", "strike" };
-    private static readonly Dictionary<int, ScenarioState> StateByMapIndex = new();
-    private static Campaign _stateIndexCampaign;
-    private static int _stateIndexRevision = -1;
-    private static int _stateIndexCount = -1;
 
     /// <summary>Regions by map index, rebuilt when the map or region list changes.</summary>
     internal static ScenarioState StateOf(Campaign campaign, int mapIndex)
     {
-        if (!ReferenceEquals(_stateIndexCampaign, campaign) ||
-            _stateIndexRevision != campaign.MapRevision || _stateIndexCount != campaign.States.Count)
+        if (campaign is null) return null;
+        var cache = campaign.Caches.MovementStates;
+        lock (cache.Gate)
         {
-            StateByMapIndex.Clear();
-            foreach (var state in campaign.States) StateByMapIndex[state.MapIndex] = state;
-            _stateIndexCampaign = campaign;
-            _stateIndexRevision = campaign.MapRevision;
-            _stateIndexCount = campaign.States.Count;
+            if (cache.MapRevision != campaign.MapRevision || cache.StateCount != campaign.States.Count)
+            {
+                cache.ByMapIndex.Clear();
+                foreach (var state in campaign.States) cache.ByMapIndex[state.MapIndex] = state;
+                cache.MapRevision = campaign.MapRevision;
+                cache.StateCount = campaign.States.Count;
+            }
+            return cache.ByMapIndex.GetValueOrDefault(mapIndex);
         }
-        return StateByMapIndex.GetValueOrDefault(mapIndex);
     }
 
     /// <summary>

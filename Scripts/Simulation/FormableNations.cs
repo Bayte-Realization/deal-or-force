@@ -381,32 +381,30 @@ public static class FormableNations
         }
     }
 
-    private static ProvinceTopology _peopleMap;
-    private static Campaign _peopleCampaign;
-    private static int _peopleMapRevision = int.MinValue;
-    private static Dictionary<int, int> _stateLandProvinceTotals;
-
     public static Dictionary<int, int> StateLandProvinceTotals(Campaign campaign)
     {
         if (campaign?.ProvinceMap is null || campaign.States.Count == 0) return new Dictionary<int, int>();
         var map = campaign.ProvinceMap;
-        // Land provinces per region change only when regions are re-cut (OwnershipRevision), not
-        // when a controller takes one in battle.
-        if (!ReferenceEquals(_peopleMap, map) || !ReferenceEquals(_peopleCampaign, campaign) ||
-            _peopleMapRevision != campaign.OwnershipRevision || _stateLandProvinceTotals is null)
+        var cache = campaign.Caches.StateLandTotals;
+        lock (cache.Gate)
         {
-            _peopleMap = map;
-            _peopleCampaign = campaign;
-            _peopleMapRevision = campaign.OwnershipRevision;
-            _stateLandProvinceTotals = new Dictionary<int, int>(campaign.States.Count);
-            for (var province = 1; province <= map.ProvinceCount; province++)
+            // Land provinces per region change only when regions are re-cut (OwnershipRevision), not
+            // when a controller takes one in battle.
+            if (!ReferenceEquals(cache.Map, map) || cache.OwnershipRevision != campaign.OwnershipRevision || cache.Totals is null)
             {
-                if (map.WaterByProvince[province]) continue;
-                var state = map.ProvinceToState[province];
-                _stateLandProvinceTotals[state] = _stateLandProvinceTotals.GetValueOrDefault(state) + 1;
+                cache.Map = map;
+                cache.OwnershipRevision = campaign.OwnershipRevision;
+                var totals = new Dictionary<int, int>(campaign.States.Count);
+                for (var province = 1; province <= map.ProvinceCount; province++)
+                {
+                    if (map.WaterByProvince[province]) continue;
+                    var state = map.ProvinceToState[province];
+                    totals[state] = totals.GetValueOrDefault(state) + 1;
+                }
+                cache.Totals = totals;
             }
+            return cache.Totals;
         }
-        return _stateLandProvinceTotals;
     }
 
     [ThreadStatic] private static Dictionary<int, int> _peopleInsideScratch;

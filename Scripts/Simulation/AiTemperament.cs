@@ -82,29 +82,20 @@ public static class AiTemperament
             M.Max(0.05f, 1f + (M.Clamp01(trait) - 0.5f) * 2f * M.Max(0f, spread));
     }
 
-    private static readonly Dictionary<int, Character> Characters = new();
-    private static Campaign _characterCampaign;
-    private static int _characterDay = int.MinValue;
-
     /// <summary>
     /// This government's character, worked out once a day for whoever asks.
     ///
-    /// Stamped with the campaign as well as the day, for the reason every other day-cache in the
-    /// simulation is: a client rebuilding from a host's snapshot holds two campaigns at once, and
-    /// a table that only knows the day would answer one of them with the other's countries.
+    /// Stored per campaign inside <see cref="CampaignCaches"/> so a client rebuilding from a host's
+    /// snapshot never shares temperament state with the live world.
     /// </summary>
     public static Character Of(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null) return Character.Plain;
-        if (!ReferenceEquals(_characterCampaign, campaign) || _characterDay != campaign.ElapsedDays)
-        {
-            _characterCampaign = campaign;
-            _characterDay = campaign.ElapsedDays;
-            Characters.Clear();
-        }
-        if (Characters.TryGetValue(nation.Id, out var cached)) return cached;
+        var cache = campaign.Caches.AiTemperament;
+        var day = campaign.ElapsedDays;
+        if (cache.TryGet(day, nation.Id, out var cached)) return cached;
         var drawn = Draw(campaign, nation);
-        Characters[nation.Id] = drawn;
+        cache.Store(day, nation.Id, drawn);
         return drawn;
     }
 

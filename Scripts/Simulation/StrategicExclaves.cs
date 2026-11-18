@@ -22,21 +22,13 @@ public sealed partial class Defines
 /// </summary>
 public static class StrategicExclaves
 {
-    private sealed record Survey(Dictionary<int, float> Importance, int[] Posts);
-    private static Campaign _campaign;
-    private static ProvinceTopology _map;
-    private static int _revision = -1, _capitalRevision = -1;
-    private static readonly Dictionary<int, Survey> Surveys = new();
+    internal sealed record Survey(Dictionary<int, float> Importance, int[] Posts);
 
     private static Survey Of(Campaign c, Nation n)
     {
-        if (!ReferenceEquals(_campaign, c) || !ReferenceEquals(_map, c.ProvinceMap) ||
-            _revision != c.MapRevision || _capitalRevision != c.CapitalRevision)
-        {
-            Surveys.Clear(); _campaign = c; _map = c.ProvinceMap;
-            _revision = c.MapRevision; _capitalRevision = c.CapitalRevision;
-        }
-        if (Surveys.TryGetValue(n.MapIndex, out var known)) return known;
+        var map = c.ProvinceMap;
+        var cache = c.Caches.Exclaves;
+        if (cache.TryGet(map, c.MapRevision, c.CapitalRevision, n.MapIndex, out var known)) return known;
         var values = new Dictionary<int, float>();
         var posts = new Dictionary<int, (int Province, int Size, int Score)>();
         var pieces = Corridors.Pieces(c, n);
@@ -49,17 +41,17 @@ public static class StrategicExclaves
             if (ReferenceEquals(piece, main)) continue;
             var foreignBorder = false;
             foreach (var p in piece)
-                foreach (var q in _map.Neighbors[p])
-                    if (!_map.IsWater(q) && _map.ProvinceToNation[q] > 0 &&
-                        _map.ProvinceToNation[q] != n.MapIndex) foreignBorder = true;
+                foreach (var q in map.Neighbors[p])
+                    if (!map.IsWater(q) && map.ProvinceToNation[q] > 0 &&
+                        map.ProvinceToNation[q] != n.MapIndex) foreignBorder = true;
             if (!foreignBorder) continue;
             foreach (var p in piece)
             {
-                var coastal = SeaLanes.TryHarbourPoint(_map, p, out _, out _);
+                var coastal = SeaLanes.TryHarbourPoint(map, p, out _, out _);
                 values[p] = coastal ? 1f : .6f;
-                var region = _map.ProvinceToState[p];
+                var region = map.ProvinceToState[p];
                 var score = coastal ? 100 : 0;
-                foreach (var q in _map.Neighbors[p]) if (piece.Contains(q)) score++;
+                foreach (var q in map.Neighbors[p]) if (piece.Contains(q)) score++;
                 // One post per region: prefer its substantial landmass to a detached spit.
                 if (!posts.TryGetValue(region, out var old) || piece.Count > old.Size ||
                     piece.Count == old.Size && (score > old.Score || score == old.Score && p < old.Province))
@@ -68,7 +60,9 @@ public static class StrategicExclaves
         }
         var ordered = new List<(int Province, int Size, int Score)>(posts.Values);
         ordered.Sort((a, b) => a.Size != b.Size ? b.Size.CompareTo(a.Size) : a.Province.CompareTo(b.Province));
-        return Surveys[n.MapIndex] = new Survey(values, ordered.ConvertAll(p => p.Province).ToArray());
+        var survey = new Survey(values, ordered.ConvertAll(p => p.Province).ToArray());
+        cache.Store(map, c.MapRevision, c.CapitalRevision, n.MapIndex, survey);
+        return survey;
     }
 
     public static float Importance(Campaign c, int province)
