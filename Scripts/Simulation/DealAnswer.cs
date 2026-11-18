@@ -125,7 +125,7 @@ public static class DealAnswerKinds
             {
                 if (!MechanicFeatures.ValidId(id)) throw new FormatException("every answer kind needs a plain id");
                 var current = Find(id);
-                if (entry.TryGetProperty("remove", out var remove) && remove.ValueKind == JsonValueKind.True)
+                if (GameDataLoader.IsRemoved(entry, $"common/deals:{id}"))
                 {
                     Entries.Remove(id);
                     continue;

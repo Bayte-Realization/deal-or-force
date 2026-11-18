@@ -1,0 +1,10 @@
+{
+  "id": "example_sounds",
+  "name": "Example: interface cues and map ambience",
+  "version": "1.0.0",
+  "supported_game_version": "0.6.*",
+  "enabled": false,
+  "load_order": 145,
+  "dependencies": [],
+  "gdscript_entry": ""
+}

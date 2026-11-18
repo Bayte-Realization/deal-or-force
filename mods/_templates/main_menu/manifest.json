@@ -1,0 +1,10 @@
+{
+  "id": "example_main_menu",
+  "name": "Example: main menu backdrop and soundtrack",
+  "version": "1.0.0",
+  "supported_game_version": "0.6.*",
+  "enabled": false,
+  "load_order": 160,
+  "dependencies": [],
+  "gdscript_entry": ""
+}

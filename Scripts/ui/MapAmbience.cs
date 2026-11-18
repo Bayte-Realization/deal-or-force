@@ -46,17 +46,17 @@ public sealed partial class MapAmbience : Node
 
     public override void _Ready()
     {
-        _high = Loop("wind_high.ogg");
+        var high = string.IsNullOrEmpty(SoundCatalog.HighWindFile) ? Folder + "wind_high.ogg" : SoundCatalog.HighWindFile;
+        var front = string.IsNullOrEmpty(SoundCatalog.FrontFile) ? Folder + "front_far.ogg" : SoundCatalog.FrontFile;
+        _high = Loop(high, "wind_high");
         foreach (var (name, file) in SoundCatalog.AmbienceBeds) _beds[name] = Loop(file, name);
-        _front = Loop("front_far.ogg");
+        _front = Loop(front, "front_far");
     }
-
-    private AudioStreamPlayer Loop(string file) => Loop(Folder + file, file.Replace(".ogg", ""));
 
     private AudioStreamPlayer Loop(string path, string name)
     {
         var player = new AudioStreamPlayer { Name = "Ambience_" + name, VolumeDb = -80f };
-        if (ResourceLoader.Exists(path) && GD.Load<AudioStream>(path) is AudioStream stream)
+        if (AudioAssets.Load(path) is AudioStream stream)
         {
             // The library and the map may share an imported recording. Only this
             // private playback copy loops; browsing it must not become endless.

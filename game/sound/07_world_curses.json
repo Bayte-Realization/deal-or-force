@@ -11,6 +11,7 @@
   },
   "map_ambience": {
     "beds": { "frozen_wind": "audio/curses/curse_frozen_wind.ogg" },
-    "frozen": "frozen_wind"
+    "frozen": "frozen_wind",
+    "static_noise": "audio/curses/curse_static.ogg"
   }
 }

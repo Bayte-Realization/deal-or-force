@@ -78,6 +78,12 @@ public static class StrategicDoctrineCatalog
                 if (!MechanicFeatures.ValidId(entry.Name) || entry.Value.ValueKind != JsonValueKind.Object)
                     throw new ArgumentException("invalid strategy");
                 var e = entry.Value;
+                if (GameDataLoader.IsRemoved(e, $"common/strategic_doctrines:{entry.Name}"))
+                {
+                    Entries.Remove(entry.Name);
+                    Revision++;
+                    continue;
+                }
                 string Text(string key, string fallback) => e.TryGetProperty(key, out var v)
                     ? v.ValueKind == JsonValueKind.String ? v.GetString()
                         : throw new ArgumentException(key + " must be a string")

@@ -208,7 +208,7 @@ public static class FormableNations
             {
                 var e = entry.Value;
                 if (e.ValueKind != JsonValueKind.Object) throw new FormatException("expected object");
-                if (e.TryGetProperty("disabled", out var disabled) && disabled.ValueKind == JsonValueKind.True)
+                if (GameDataLoader.IsRemoved(e, $"common/formable_nations:{entry.Name}"))
                 { definitions.Remove(entry.Name); continue; }
                 var old = definitions.GetValueOrDefault(entry.Name);
                 string Text(string key, string fallback) => e.TryGetProperty(key, out var x) ? x.GetString() : fallback;

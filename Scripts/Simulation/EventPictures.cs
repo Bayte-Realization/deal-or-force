@@ -21,7 +21,7 @@ public static class EventPictures
     public static string PathFor(CampaignEventDefinition definition)
     {
         if (definition is null) return "";
-        _byEvent ??= Load();
+        EnsureLoaded();
         var picture = definition.Picture.Length > 0 ? definition.Picture : _byEvent.GetValueOrDefault(definition.Id, "");
         return Resolve(picture);
     }
@@ -37,25 +37,40 @@ public static class EventPictures
     }
 
     /// <summary>Every event the table names, and its picture.</summary>
-    public static IReadOnlyDictionary<string, string> Table => _byEvent ??= Load();
+    public static IReadOnlyDictionary<string, string> Table { get { EnsureLoaded(); return _byEvent; } }
 
     /// <summary>Read the base game's table again.</summary>
-    public static void ResetCatalog() => _byEvent = Load();
-
-    private static Dictionary<string, string> Load()
+    public static void ResetCatalog()
     {
-        var table = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        _byEvent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var document in GameDataLoader.DataDocuments("common", "event_pictures"))
             using (document)
-                Merge(document.RootElement, table);
-        return table;
+                Merge(document.RootElement);
     }
 
-    private static void Merge(JsonElement root, Dictionary<string, string> table)
+    private static void EnsureLoaded()
     {
-        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("events", out var events) ||
-            events.ValueKind != JsonValueKind.Object) return;
-        foreach (var entry in events.EnumerateObject().Where(e => e.Value.ValueKind == JsonValueKind.String))
-            table[entry.Name] = entry.Value.GetString().Trim();
+        if (_byEvent is not null) return;
+        ResetCatalog();
+    }
+
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        EnsureLoaded();
+        if (root.ValueKind != JsonValueKind.Object) return;
+        var events = root.TryGetProperty("events", out var wrapped) && wrapped.ValueKind == JsonValueKind.Object
+            ? wrapped
+            : root;
+        foreach (var entry in events.EnumerateObject())
+        {
+            if (entry.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/event_pictures:{entry.Name}"))
+            {
+                _byEvent.Remove(entry.Name);
+                continue;
+            }
+            if (entry.Value.ValueKind == JsonValueKind.String)
+                _byEvent[entry.Name] = entry.Value.GetString().Trim();
+        }
     }
 }

@@ -38,14 +38,15 @@ public static class WorldLayers
     public static void ResetCatalog(List<string> errors = null)
     {
         Switches.Clear();
+        _loaded = true;
         foreach (var document in GameDataLoader.DataDocuments("common", "world_layers"))
             using (document)
                 Merge(document.RootElement, errors);
-        _loaded = true;
     }
 
     public static void Merge(JsonElement root, List<string> errors = null)
     {
+        if (!_loaded) ResetCatalog();
         if (root.ValueKind != JsonValueKind.Object) return;
         foreach (var entry in root.EnumerateObject())
         {

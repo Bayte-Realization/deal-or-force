@@ -104,7 +104,7 @@ public partial class LoadingScreen : Control
         }
         _paper = new TextureRect
         {
-            Texture = GD.Load<Texture2D>("res://game/gfx/interface/panels/panel_dossier.png"),
+            Texture = Picture(SpriteCatalog.TextureOf("panel_dossier", "res://game/gfx/interface/panels/panel_dossier.png")),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
             Modulate = new Color(1, 1, 1, 0.12f), MouseFilter = MouseFilterEnum.Ignore
@@ -175,7 +175,7 @@ public partial class LoadingScreen : Control
     private static Texture2D WorldPicture()
     {
         var path = SpriteCatalog.TextureOf("menu_world", MenuWorld.ShippedPath);
-        return !string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
+        return string.IsNullOrWhiteSpace(path) ? null : Picture(path);
     }
 
     private static Label Text(string text, int size, Color color)
@@ -239,6 +239,7 @@ public partial class LoadingScreen : Control
     /// <summary>An imported picture, or a mod's loose file read as it is.</summary>
     internal static Texture2D Picture(string path)
     {
+        if (string.IsNullOrWhiteSpace(path)) return null;
         if (ResourceLoader.Exists(path)) return GD.Load<Texture2D>(path);
         var loose = path.StartsWith("res://", System.StringComparison.Ordinal) ? ProjectSettings.GlobalizePath(path) : path;
         if (!System.IO.File.Exists(loose)) return null;

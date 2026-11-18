@@ -169,12 +169,17 @@ public static class TradeDesk
             }
     }
 
-    public static void Merge(JsonElement root)
+    public static void Merge(JsonElement root, List<string> errors = null)
     {
         if (root.ValueKind != JsonValueKind.Object) return;
         foreach (var entry in root.EnumerateObject())
         {
             if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/trade:{entry.Name}"))
+            {
+                Settings.Remove(entry.Name);
+                continue;
+            }
             var known = Of(entry.Name);
             Settings[entry.Name] = new TradeSettingDefinition
             {

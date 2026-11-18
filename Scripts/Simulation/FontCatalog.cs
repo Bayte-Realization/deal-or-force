@@ -69,9 +69,7 @@ public static class FontCatalog
         string[] files;
         try
         {
-            files = StructuredData.Files(directory, SearchOption.AllDirectories)
-                .OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            files = GameDataLoader.TopLevelDataFiles(directory, "fonts", errors);
         }
         catch (Exception exception)
         {
@@ -108,6 +106,12 @@ public static class FontCatalog
         {
             var role = declaration.Name;
             var value = declaration.Value;
+
+            if (value.ValueKind == JsonValueKind.Object && GameDataLoader.IsRemoved(value, $"{origin}:{role}"))
+            {
+                Faces.Remove(role);
+                continue;
+            }
 
             if (value.ValueKind == JsonValueKind.String)
             {

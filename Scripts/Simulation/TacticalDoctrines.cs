@@ -276,6 +276,17 @@ public static class TacticalDoctrineCatalog
                 if (!MechanicFeatures.ValidId(entry.Name) || entry.Value.ValueKind != JsonValueKind.Object)
                     throw new ArgumentException("invalid Doctrine branch");
                 var e = entry.Value;
+                if (GameDataLoader.IsRemoved(e, $"common/tactical_doctrines:{entry.Name}"))
+                {
+                    if (Entries.Remove(entry.Name, out var removed))
+                    {
+                        foreach (var node in removed.Nodes) ByNode.Remove(node.Id);
+                        _ordered = null;
+                        _bySlot.Clear();
+                        Revision++;
+                    }
+                    continue;
+                }
                 var append = e.TryGetProperty("append_nodes", out var additions);
                 var previous = append ? Entries.GetValueOrDefault(entry.Name) : null;
                 if (append && previous is null)

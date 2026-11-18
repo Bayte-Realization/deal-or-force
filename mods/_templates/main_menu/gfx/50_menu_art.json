@@ -1,0 +1,6 @@
+{
+  "sprites": {
+    "menu_world": "res://game/gfx/atmosphere/night_signal.png",
+    "brand_logo_banner": { "tint": "#dfd1b4" }
+  }
+}

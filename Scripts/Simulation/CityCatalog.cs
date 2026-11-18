@@ -323,7 +323,7 @@ public static class CityCatalog
                     if (!value.TryGetProperty("latitude", out _) && !value.TryGetProperty("longitude", out _))
                     {
                         // Taking off a city that is already off is no mistake worth a line.
-                        var takesOff = value.TryGetProperty("removed", out var off) && off.ValueKind == JsonValueKind.True ||
+                        var takesOff = GameDataLoader.IsRemoved(value, $"map_data/cities:{entry.Name}") ||
                                        value.TryGetProperty("tier", out var low) && low.TryGetInt32(out var below) && below < 0;
                         if (!takesOff)
                             errors?.Add($"City '{entry.Name}' is not on the map and the file gives it no latitude and longitude, so it was not added.");
@@ -345,10 +345,9 @@ public static class CityCatalog
                 {
                     if (rank < 0) removed.Add(city); else removed.Remove(city);
                 }
-                if (value.TryGetProperty("removed", out var gone) &&
-                    gone.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                if (GameDataLoader.TryReadRemoveFlag(value, out var gone, $"map_data/cities:{entry.Name}"))
                 {
-                    if (gone.GetBoolean()) removed.Add(city); else removed.Remove(city);
+                    if (gone) removed.Add(city); else removed.Remove(city);
                 }
                 // "country" is not read either: a city belongs to the ground it stands on (RegionOf).
             }

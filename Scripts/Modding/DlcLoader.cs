@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DealOrForce.Simulation;
-using Godot;
 
 namespace DealOrForce.Modding;
 
@@ -85,7 +84,9 @@ public static class DlcEntitlements
         // The shipped file first, then the player's - so a real purchase always wins over
         // whatever a development build happened to leave lying about.
         Read(GameDataLoader.InstallFile("dlc", "entitlements.json"));
-        Read(ProjectSettings.GlobalizePath("user://entitlements.json"));
+        var userEntitlements = ModPlatform.GlobalizePath("user://entitlements.json");
+        if (!string.IsNullOrWhiteSpace(userEntitlements) && !userEntitlements.StartsWith("user://", StringComparison.OrdinalIgnoreCase))
+            Read(userEntitlements);
     }
 
     private static void Read(string path)
@@ -108,7 +109,7 @@ public static class DlcEntitlements
         }
         catch (Exception exception)
         {
-            GD.PushWarning($"[dlc] {path}: {exception.Message}");
+            ModPlatform.PushWarning($"[dlc] {path}: {exception.Message}");
         }
     }
 
@@ -174,9 +175,11 @@ public sealed class DlcLoader
         var found = new Dictionary<string, DlcPackage>(StringComparer.OrdinalIgnoreCase);
         foreach (var root in GameDataLoader.InstallFolders("dlc"))
             DiscoverRoot(root, "res://dlc", found);
-        DiscoverRoot(ProjectSettings.GlobalizePath("user://dlc"), "user://dlc", found);
+        var userDlc = ModPlatform.GlobalizePath("user://dlc");
+        if (!string.IsNullOrWhiteSpace(userDlc) && !userDlc.StartsWith("user://", StringComparison.OrdinalIgnoreCase))
+            DiscoverRoot(userDlc, "user://dlc", found);
 
-        var selection = LauncherSelection.Read();
+        var selection = ModPlatform.ReadSelection();
         foreach (var package in found.Values)
         {
             package.Owned = DlcEntitlements.Has(package.Manifest.Entitlement);
@@ -208,7 +211,7 @@ public sealed class DlcLoader
                 var manifest = JsonSerializer.Deserialize<DlcManifest>(File.ReadAllText(descriptor), JsonOptions);
                 if (manifest is null || string.IsNullOrWhiteSpace(manifest.Id))
                 {
-                    GD.PushWarning($"[dlc] ignored {descriptor}: no id.");
+                    ModPlatform.PushWarning($"[dlc] ignored {descriptor}: no id.");
                     continue;
                 }
                 manifest.Name = string.IsNullOrWhiteSpace(manifest.Name) ? manifest.Id : manifest.Name;
@@ -221,7 +224,7 @@ public sealed class DlcLoader
             }
             catch (Exception exception)
             {
-                GD.PushWarning($"[dlc] ignored {descriptor}: {exception.Message}");
+                ModPlatform.PushWarning($"[dlc] ignored {descriptor}: {exception.Message}");
             }
         }
     }

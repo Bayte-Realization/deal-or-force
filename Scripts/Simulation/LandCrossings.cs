@@ -202,6 +202,11 @@ public static class LandCrossingCatalog
                 errors?.Add($"crossings/{entry.Name}: a crossing is an object with \"from\", \"to\" and \"kind\".");
                 continue;
             }
+            if (GameDataLoader.IsRemoved(entry.Value, $"map_data/crossings:{entry.Name}"))
+            {
+                ById.Remove(entry.Name);
+                continue;
+            }
             if (!ById.TryGetValue(entry.Name, out var crossing))
                 ById[entry.Name] = crossing = new LandCrossing { Id = entry.Name, Name = entry.Name };
             var value = entry.Value;

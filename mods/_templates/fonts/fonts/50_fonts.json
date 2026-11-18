@@ -1,0 +1,10 @@
+{
+  "fonts": {
+    "ui.display": {
+      "system_families": ["Palatino Linotype", "Georgia", "Noto Serif", "Liberation Serif", "DejaVu Serif"]
+    },
+    "ui.default": {
+      "system_families": ["Segoe UI Variable Text", "Segoe UI", "Noto Sans", "DejaVu Sans", "Arial"]
+    }
+  }
+}

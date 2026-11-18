@@ -158,6 +158,9 @@ static class Program
         if (args.Length == 0) ApplicationExitTests.Run();
         if (args.Contains("--mod-scalars-only")) { ModScalarAccessTests.Run(); return; }
         if (args.Contains("--modder-examples-only")) { ModderExamplesTests.Run(); return; }
+        if (args.Contains("--mod-reach-only")) { ModReachTests.Run(); return; }
+        if (args.Contains("--content-shape-only")) { ContentShapeTests.Run(); return; }
+        if (args.Length == 0) ContentShapeTests.Run();
         if (args.Contains("--music-transport-only")) { MusicTransportTests.Run(); return; }
         if (args.Length == 0) MusicTransportTests.Run();
         if (args.Contains("--morale-terms-only")) { MoraleTermsTests.Run(); return; }

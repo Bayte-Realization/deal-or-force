@@ -8,7 +8,6 @@ using System.Runtime.Loader;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DealOrForce.Simulation;
-using Godot;
 
 namespace DealOrForce.Modding;
 
@@ -81,12 +80,11 @@ public sealed class ModLoader
     private readonly ModFrontendActionCatalog _frontendActions = new();
     private readonly List<ModPackage> _availableMods = new();
     private readonly List<(IGlobalityMod Instance, ModContext Context)> _csharp = new();
-    private readonly List<(GodotObject Instance, string ModId)> _gdscript = new();
-    private readonly List<(RefCounted Instance, string ModId, Godot.Collections.Dictionary Api)> _engineScripts = new();
     private readonly List<ManagedModLoadContext> _managedContexts = new();
     private readonly List<WorkerModBackend> _workers = new();
     private readonly List<string> _log = new();
-    private ModApi _api;
+    private IModScriptRuntime _scriptRuntime;
+    private object _api;
 
     /// <summary>
     /// The content packs that ship with the game.
@@ -116,9 +114,14 @@ public sealed class ModLoader
             // The folder, not the engine's shorthand: "user://mods" is exact and means nothing
             // to a player looking for it. After the folder junction this path is inside the one
             // game folder under Documents, which is a place a person can open.
+            var userFolder = ModPlatform.GlobalizePath("user://mods");
+            if (string.IsNullOrWhiteSpace(userFolder) || userFolder.StartsWith("user://", StringComparison.OrdinalIgnoreCase))
+            {
+                var fallbackFolder = ModPlatform.UserModsDirectory();
+                if (!string.IsNullOrWhiteSpace(fallbackFolder)) userFolder = fallbackFolder;
+            }
             var mods = EnabledCount == 0
-                ? Simulation.Loc.Format("no external mods · open {0} or res://mods",
-                    ProjectSettings.GlobalizePath("user://mods"))
+                ? Simulation.Loc.Format("no external mods · open {0} or res://mods", userFolder)
                 : Simulation.Loc.Format("{0} mod(s) loaded", EnabledCount);
             return packs + mods +
                 (ErrorCount > 0 ? " · " + Simulation.Loc.Format("{0} warning(s)", ErrorCount) : "");
@@ -129,30 +132,43 @@ public sealed class ModLoader
     /// Find packages on disk and decide which are enabled. Does not read common/ and does not touch a campaign.
     /// user://mods with the same id replaces the copy that shipped beside the game. <c>_</c> folders are skipped.
     /// </summary>
-    public void Discover()
+    public void Discover() => Discover(null, null, true);
+
+    /// <summary>
+    /// Find packages under explicit root directories (when supplied) or the standard game/user mod folders.
+    /// Keeps manifest parsing, load-order sorting, dependency resolution and virtual roots identical
+    /// across the live game and headless test harnesses.
+    /// </summary>
+    public void Discover(IEnumerable<string> modRoots, ContentSelection selection = null, bool includeDlc = false)
     {
         _frontendActions.ResetDeclarations(Array.Empty<(string, IEnumerable<ModFrontendActionDeclaration>)>());
         _packages.Clear();
         _availableMods.Clear();
         _log.Clear();
 
-        // Development mods ship beside the project. Installed/user mods with the same
-        // id win, allowing local updates without touching the base installation.
-        //
-        // An installed game has more than one folder called mods - the one that travelled
-        // with the data and the one beside the executable, which is the one a player can
-        // actually find - and they arrive here nearest-first. Later wins by id, which is
-        // the right way round: what the player put there outranks what shipped.
         var candidates = new Dictionary<string, ModPackage>(StringComparer.OrdinalIgnoreCase);
-        foreach (var root in GameDataLoader.InstallFolders("mods"))
-            DiscoverRoot(root, "res://mods", candidates);
-        DiscoverRoot(ProjectSettings.GlobalizePath("user://mods"), "user://mods", candidates);
-        // The workshop writes to the public Documents folder, not a possibly unrelated
-        // Godot user-dir fallback. Prefer that same canonical location as the launcher.
-        if (!string.Equals(Path.GetFullPath(GamePaths.Mods), Path.GetFullPath(ProjectSettings.GlobalizePath("user://mods")), StringComparison.OrdinalIgnoreCase))
-            DiscoverRoot(GamePaths.Mods, "user://mods", candidates);
+        if (modRoots is not null)
+        {
+            foreach (var root in modRoots)
+                DiscoverRoot(root, "res://mods", candidates);
+        }
+        else
+        {
+            foreach (var root in GameDataLoader.InstallFolders("mods"))
+                DiscoverRoot(root, "res://mods", candidates);
+            var userMods = ModPlatform.GlobalizePath("user://mods");
+            if (!string.IsNullOrWhiteSpace(userMods) && !userMods.StartsWith("user://", StringComparison.OrdinalIgnoreCase))
+                DiscoverRoot(userMods, "user://mods", candidates);
+            // The workshop writes to the public Documents folder, not a possibly unrelated
+            // Godot user-dir fallback. Prefer that same canonical location as the launcher.
+            var folderMods = ModPlatform.UserModsDirectory();
+            if (!string.IsNullOrWhiteSpace(folderMods) &&
+                (string.IsNullOrWhiteSpace(userMods) || userMods.StartsWith("user://", StringComparison.OrdinalIgnoreCase) ||
+                 !string.Equals(Path.GetFullPath(folderMods), Path.GetFullPath(userMods), StringComparison.OrdinalIgnoreCase)))
+                DiscoverRoot(folderMods, "user://mods", candidates);
+        }
 
-        var selection = LauncherSelection.Read();
+        selection ??= ModPlatform.ReadSelection();
         var orderedMods = candidates.Values
             .OrderBy(p => selection.Order(p.Manifest.Id, p.Manifest.LoadOrder))
             .ThenBy(p => p.Manifest.Id, StringComparer.OrdinalIgnoreCase);
@@ -162,33 +178,61 @@ public sealed class ModLoader
             p.Manifest.Dependencies ?? new())), out var dependencyErrors);
         foreach (var error in dependencyErrors) Write($"Mod {error.Key} skipped: {error.Value}");
 
-        // Base game, then content packs, then mods. Later wins, so a mod may overrule a
-        // pack the player has paid for - which is the right way round: they own both.
-        Dlc.Discover();
-        foreach (var pack in Dlc.Active)
-            _packages.Add(new ModPackage
-            {
-                Manifest = new ModManifest
+        if (includeDlc)
+        {
+            // Base game, then content packs, then mods. Later wins, so a mod may overrule a
+            // pack the player has paid for - which is the right way round: they own both.
+            Dlc.Discover();
+            foreach (var pack in Dlc.Active)
+                _packages.Add(new ModPackage
                 {
-                    Id = pack.Manifest.Id,
-                    Name = pack.Manifest.Name,
-                    Version = pack.Manifest.Version
-                },
-                PhysicalRoot = pack.PhysicalRoot,
-                VirtualRoot = pack.VirtualRoot,
-                IsContentPack = true
-            });
-        foreach (var pack in Dlc.Packages)
-            Write(pack.Active
-                ? $"Content pack {pack.Manifest.Name} {pack.Manifest.Version} active."
-                : $"Content pack {pack.Manifest.Name} present but not active" +
-                  (pack.Errors.Count > 0 ? $" ({pack.Errors[0]})" : " (not owned)") + ".");
+                    Manifest = new ModManifest
+                    {
+                        Id = pack.Manifest.Id,
+                        Name = pack.Manifest.Name,
+                        Version = pack.Manifest.Version
+                    },
+                    PhysicalRoot = pack.PhysicalRoot,
+                    VirtualRoot = pack.VirtualRoot,
+                    IsContentPack = true
+                });
+            foreach (var pack in Dlc.Packages)
+                Write(pack.Active
+                    ? $"Content pack {pack.Manifest.Name} {pack.Manifest.Version} active."
+                    : $"Content pack {pack.Manifest.Name} present but not active" +
+                      (pack.Errors.Count > 0 ? $" ({pack.Errors[0]})" : " (not owned)") + ".");
+        }
 
         _packages.AddRange(enabledIds.Select(id => candidates[id]));
         _frontendActions.ResetDeclarations(_packages.Where(p => !p.IsContentPack)
             .Select(p => (p.Manifest.Id, (IEnumerable<ModFrontendActionDeclaration>)p.Manifest.FrontendActions)),
             (id, error) => _packages.FirstOrDefault(p => !p.IsContentPack && string.Equals(p.Manifest.Id, id, StringComparison.OrdinalIgnoreCase))?.Errors.Add(error));
         Write($"Discovery complete: {ContentPackCount} content pack(s), {EnabledCount} enabled mod(s).");
+    }
+
+    /// <summary>
+    /// Reset and layer enabled packages' localisation, interface skins/layouts, sprites, sound,
+    /// music, media libraries and fonts without touching any campaign simulation data or history.
+    /// Called both on the main menu and at the start of <see cref="ApplyCampaignData"/>.
+    /// </summary>
+    public void ApplyPresentation()
+    {
+        GameDataLoader.DrainWarnings();
+        Loc.ResetCatalog();
+        InterfaceSkin.ResetCatalog();
+        SpriteCatalog.Load();
+        SoundCatalog.Load();
+        MusicCatalog.Load();
+        MediaLibraryCatalog.Load();
+        FontCatalog.Load();
+        foreach (var package in _packages)
+        {
+            ApplyLocalization(package);
+            ApplySkin(package);
+            ApplySprites(package);
+            ApplyAudio(package);
+        }
+        foreach (var warning in GameDataLoader.DrainWarnings()) Write(warning);
     }
 
     public void ApplyCampaignData(Campaign campaign)
@@ -208,45 +252,29 @@ public sealed class ModLoader
         WorldMapTables.ResetCatalog();
         TerritorialTopology.ResetCatalog();
         HydrologyCatalog.ResetCatalog();
+        LandCrossingCatalog.ResetCatalog();
+        LakeRegions.ResetCatalog();
         MapRasterCatalog.ResetCatalog();
         TerrainCatalog.ResetCatalog();
         // The cities and the townspeople table are map data a mod lays its own files over
         // (ApplyMapData), so they start again from the base game's like the rest.
         CityCatalog.Reset();
         StatePartition.ResetTownspeople();
-        Loc.ResetCatalog();
-        InterfaceSkin.ResetCatalog();
-        SpriteCatalog.Load();
-        SoundCatalog.Load();
-        MusicCatalog.Load();
-        MediaLibraryCatalog.Load();
-        FontCatalog.Load();
-        SubjectCatalog.ResetCatalog();
-        TechnologyCatalog.ResetCatalog();
-        SeaPassageCatalog.ResetCatalog();
+        ApplyPresentation();
         ProvinceOwnership.ResetCatalog();
-        CountryMerges.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
         ProductionChains.ResetCatalog();
         BudgetCore.ResetCatalog();
         GovernmentFocusCatalog.ResetCatalog();
         TradePolicyCatalog.ResetCatalog();
-        TradeDesk.ResetCatalog();
-        PeaceTermCatalog.ResetCatalog();
-        InflationCore.ResetCatalog();
-        CentralBank.ResetCatalog();
         foreach (var (_, reset, _) in Tunables) reset();
-        GovernmentCatalog.ResetCatalog();
-        RulerTraits.ResetCatalog();
-        IdeologyCatalog.ResetCatalog();
         ScriptLibrary.ResetCatalog();
         DecisionCatalog.ResetCatalog();
         PromiseCatalog.ResetCatalog();
         GoalCatalog.ResetCatalog();
         EventCatalog.ResetCatalog();
         ModifierCatalog.ResetCatalog();
-        InternationalOrganizations.ResetCatalog();
         OpinionCatalog.ResetCatalog();
         DemographyCatalog.ResetCatalog();
         AiStrategyCatalog.ResetCatalog();
@@ -276,10 +304,6 @@ public sealed class ModLoader
             ApplyTunables(package);
             ApplyAiStrategies(package);
             ApplyMapData(package);
-            ApplyLocalization(package);
-            ApplySkin(package);
-            ApplySprites(package);
-            ApplyAudio(package);
             ApplyCountries(package, campaign);
             ApplyProvinceOwnership(package);
         }
@@ -293,6 +317,7 @@ public sealed class ModLoader
         // History last, and after the reseed: `history/states` corrects particular regions,
         // and a correction applied before the deal is a correction dealt away.
         foreach (var package in _packages) ApplyHistory(package, campaign);
+        foreach (var warning in GameDataLoader.DrainWarnings()) Write(warning);
     }
 
     private void ApplyBuildings(ModPackage package)
@@ -309,6 +334,11 @@ public sealed class ModLoader
                     continue;
                 }
                 var value = entry.Value;
+                if (GameDataLoader.IsRemoved(value, $"common/buildings:{entry.Name}"))
+                {
+                    BuildingCatalog.Remove(entry.Name);
+                    continue;
+                }
                 string Text(string key) => value.TryGetProperty(key, out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
                 float? Number(string key) => value.TryGetProperty(key, out var e) && e.TryGetSingle(out var n) ? n : null;
                 int? Integer(string key) => value.TryGetProperty(key, out var e) && e.TryGetInt32(out var n) ? n : null;
@@ -432,7 +462,34 @@ public sealed class ModLoader
         ("coups", () => Coups.ResetCatalog(), Coups.Merge),
         ("addresses", () => AddressToNation.ResetCatalog(), AddressToNation.Merge),
         ("covert_operations", () => CovertOperations.ResetCatalog(), CovertOperations.Merge),
-        ("rulers", () => Rulers.ResetCatalog(), Rulers.MergeCommon)
+        ("rulers", () => Rulers.ResetCatalog(), Rulers.MergeCommon),
+        ("governments", () => GovernmentCatalog.ResetCatalog(), GovernmentCatalog.Merge),
+        ("ideologies", () => IdeologyCatalog.ResetCatalog(), IdeologyCatalog.Merge),
+        ("technologies", () => TechnologyCatalog.ResetCatalog(), TechnologyCatalog.Merge),
+        ("tactical_doctrines", () => TacticalDoctrineCatalog.ResetCatalog(), TacticalDoctrineCatalog.Merge),
+        ("strategic_doctrines", () => StrategicDoctrineCatalog.ResetCatalog(), StrategicDoctrineCatalog.Merge),
+        ("support", () => SupportTypeCatalog.ResetCatalog(), SupportTypeCatalog.Merge),
+        ("subjects", () => SubjectCatalog.ResetCatalog(), SubjectCatalog.Merge),
+        ("organizations", () => InternationalOrganizations.ResetCatalog(), InternationalOrganizations.Merge),
+        ("peace_terms", () => PeaceTermCatalog.ResetCatalog(), PeaceTermCatalog.Merge),
+        ("trade", () => TradeDesk.ResetCatalog(), TradeDesk.Merge),
+        ("inflation", () => { InflationCore.ResetCatalog(); CentralBank.ResetCatalog(); },
+            (root, errors) => { InflationCore.Merge(root, errors); CentralBank.Merge(root, errors); }),
+        ("sea_lanes", () => SeaPassageCatalog.ResetCatalog(), SeaPassageCatalog.Merge),
+        ("country_merges", () => CountryMerges.ResetCatalog(), (root, _) => CountryMerges.Merge(root)),
+        ("building_rules", () => BuildingRules.ResetCatalog(), BuildingRules.Merge),
+        ("character_names", () => PersonNameCatalog.ResetCatalog(), PersonNameCatalog.Merge),
+        ("dynasties", () => DynastyCatalog.ResetCatalog(), DynastyCatalog.Merge),
+        ("generals", () => Generals.ResetCatalog(), Generals.Merge),
+        ("elections", () => ElectoralPolitics.ResetCatalog(), ElectoralPolitics.Merge),
+        ("event_pictures", () => EventPictures.ResetCatalog(), EventPictures.Merge),
+        ("naming", () => LandAtlas.ResetCatalog(), LandAtlas.Merge),
+        ("lands", () => { }, LandAtlas.Merge),
+        ("world_layers", () => WorldLayers.ResetCatalog(), WorldLayers.Merge),
+        ("economic_shocks", () => TreasuryDynamics.ResetCatalog(), TreasuryDynamics.Merge),
+        ("deterrence", () => Deterrence.ResetCatalog(), Deterrence.Merge),
+        ("diagnostics", () => DiagnosticLogs.ResetCatalog(), DiagnosticLogs.Merge),
+        ("performance", () => QualityProfiles.ResetCatalog(), QualityProfiles.Merge)
     };
 
     /// <summary>One mod's copy of each of those folders, layered over what is loaded.</summary>
@@ -491,6 +548,9 @@ public sealed class ModLoader
         foreach (var path in DataFiles(package, "history", "pops"))
         try { DemographyCatalog.LoadPops(StructuredData.ReadJson(path), package.Errors); read = true; }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+        foreach (var path in DataFiles(package, "history", "faiths"))
+        try { DemographyCatalog.LoadFaithSettings(StructuredData.ReadJson(path), package.Errors); read = true; }
+        catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
         return read;
     }
 
@@ -511,18 +571,33 @@ public sealed class ModLoader
     private void ApplyMapData(ModPackage package)
     {
         TerrainCatalog.ApplyDirectory(package.PhysicalRoot, package.Errors);
-        MapRasterCatalog.ApplyDirectory(Path.Combine(package.PhysicalRoot, "map_data"), package.Errors);
-        foreach (var path in DataFiles(package, "map_data"))
+        var mapRoot = Path.Combine(package.PhysicalRoot, "map_data");
+        MapRasterCatalog.ApplyDirectory(mapRoot, package.Errors);
+        foreach (var path in GameDataLoader.TopLevelDataFiles(mapRoot, "map_data", package.Errors,
+                     "cities", "townspeople", "state_regions", "crossings", "lakes", "hydrography", "water_settings"))
         try
         {
-            var json = StructuredData.ReadJson(path);
-            // Two folders of map_data have catalogues of their own. Their files used to fall
-            // through to the region overrides, which found nothing in them: a mod's cities and
-            // its townspeople table were read and dropped.
             var folder = Path.GetFileName(Path.GetDirectoryName(path)) ?? "";
+            if (folder.Equals("water_settings", StringComparison.OrdinalIgnoreCase)) continue;
+            if (folder.Equals("map_data", StringComparison.OrdinalIgnoreCase) &&
+                (Path.GetFileNameWithoutExtension(path).Equals("terrain_settings", StringComparison.OrdinalIgnoreCase) ||
+                 Path.GetFileNameWithoutExtension(path).Equals("water_settings", StringComparison.OrdinalIgnoreCase)))
+                continue;
+            var json = StructuredData.ReadJson(path);
             if (folder.Equals("cities", StringComparison.OrdinalIgnoreCase)) CityCatalog.Merge(json, package.Errors);
             else if (folder.Equals("townspeople", StringComparison.OrdinalIgnoreCase)) StatePartition.MergeTownspeople(json, package.Errors);
-            else if (HydrologyCatalog.LooksLikeGeoJson(json)) HydrologyCatalog.LoadGeoJson(json, package.Errors);
+            else if (folder.Equals("crossings", StringComparison.OrdinalIgnoreCase))
+            {
+                using var doc = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
+                LandCrossingCatalog.Merge(doc.RootElement, package.Errors);
+            }
+            else if (folder.Equals("lakes", StringComparison.OrdinalIgnoreCase))
+            {
+                using var doc = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
+                LakeRegions.Merge(doc.RootElement, package.Errors);
+            }
+            else if (folder.Equals("hydrography", StringComparison.OrdinalIgnoreCase) || HydrologyCatalog.LooksLikeGeoJson(json))
+                HydrologyCatalog.LoadGeoJson(json, package.Errors);
             else TerritorialTopology.LoadOverrides(json, package.Errors);
         }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
@@ -607,12 +682,37 @@ public sealed class ModLoader
 
     private void ApplyHistory(ModPackage package, Campaign campaign)
     {
-        foreach (var path in DataFiles(package, "history", "countries"))
+        foreach (var path in DataFiles(package, "common", "states"))
+        try
+        {
+            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), GameDataLoader.ForgivingJson);
+            StateDefinitions.Apply(campaign, document.RootElement);
+        }
+        catch (Exception exception) { package.Errors.Add($"states/{Path.GetFileName(path)}: {exception.Message}"); }
+
+        foreach (var path in BookmarkDataFiles(package, "countries"))
         try { HistoryDataLoader.ApplyCountries(campaign, StructuredData.ReadJson(path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
-        foreach (var path in DataFiles(package, "history", "states"))
+        foreach (var path in BookmarkDataFiles(package, "states"))
         try { HistoryDataLoader.ApplyStates(campaign, StructuredData.ReadJson(path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+        foreach (var path in BookmarkDataFiles(package, "diplomacy"))
+        try { HistoryDataLoader.ApplyDiplomacy(campaign, StructuredData.ReadJson(path), package.Errors); }
+        catch (Exception exception) { package.Errors.Add($"diplomacy/{Path.GetFileName(path)}: {exception.Message}"); }
+        foreach (var path in BookmarkDataFiles(package, "conflicts"))
+        try { ConflictHistory.Apply(campaign, StructuredData.ReadJson(path), package.Errors); }
+        catch (Exception exception) { package.Errors.Add($"conflicts/{Path.GetFileName(path)}: {exception.Message}"); }
+
+        var mergedFactions = false;
+        foreach (var path in BookmarkDataFiles(package, "factions"))
+        try
+        {
+            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), GameDataLoader.ForgivingJson);
+            Factions.Merge(document.RootElement, package.Errors);
+            mergedFactions = true;
+        }
+        catch (Exception exception) { package.Errors.Add($"factions/{Path.GetFileName(path)}: {exception.Message}"); }
+        if (mergedFactions) Factions.Found(campaign);
 
         // The order of battle: how many soldiers a country keeps, and the ships it starts
         // the bookmark with. Both were readable only from the base game's own folder, so a
@@ -671,14 +771,7 @@ public sealed class ModLoader
         foreach (var context in _managedContexts) context.Unload();
         _managedContexts.Clear();
         _workers.Clear();
-        foreach (var (instance, _) in _gdscript) instance.Dispose();
-        _gdscript.Clear();
-        foreach (var plugin in _engineScripts)
-        {
-            plugin.Instance.Dispose();
-            plugin.Api.Dispose();
-        }
-        _engineScripts.Clear();
+        _scriptRuntime?.Stop();
         _api = null;
     }
 
@@ -686,19 +779,19 @@ public sealed class ModLoader
     /// Construct code mods after <see cref="ApplyCampaignData"/>. Each package may load all four kinds.
     /// A throw inside one package is recorded on that package and does not cancel the next package.
     /// </summary>
-    public void StartCode(ModApi api, Campaign campaign)
+    public void StartCode(object api, Campaign campaign)
     {
         StopCode();
         _api = api;
-        _api.Bind(campaign);
+        ModPlatform.BindApi(_api, campaign);
         _frontendActions.BeginRuntime();
         foreach (var package in _packages)
         {
             LoadCsharp(package, campaign);
-            LoadGdscript(package, campaign);
-            LoadEngineScript(package, campaign);
             LoadWorker(package, campaign);
         }
+        _scriptRuntime ??= ModPlatform.CreateScriptRuntime();
+        _scriptRuntime?.Start(_packages, _api, campaign, Try, Write);
     }
 
     public Func<byte[]> CaptureCrossoverSurface { get; set; }
@@ -734,24 +827,7 @@ public sealed class ModLoader
             Try(packageId: plugin.Context.ModId, () => plugin.Instance.OnDayAdvanced(plugin.Context));
         }
 
-        foreach (var plugin in _gdscript)
-            if (plugin.Instance.HasMethod("on_day_advanced"))
-                Try(plugin.ModId, () => plugin.Instance.Call("on_day_advanced", _api));
-
-        for (var index = 0; index < _engineScripts.Count;)
-        {
-            var plugin = _engineScripts[index];
-            var healthy = false;
-            Try(plugin.ModId, () =>
-            {
-                EngineScriptMod.Invoke(plugin.Instance, "on_day_advanced", plugin.Api);
-                healthy = true;
-            });
-            if (healthy) { index++; continue; }
-            plugin.Instance.Dispose();
-            plugin.Api.Dispose();
-            _engineScripts.RemoveAt(index);
-        }
+        _scriptRuntime?.OnDayAdvanced(Try);
     }
 
     private void DiscoverRoot(string physicalRoot, string virtualRoot, Dictionary<string, ModPackage> candidates)
@@ -1072,71 +1148,6 @@ public sealed class ModLoader
     }
 
     /// <summary>
-    /// Instantiate <c>gdscript_entry</c> from inside the package. Optional hooks are
-    /// <c>on_load</c>, <c>on_campaign_created</c>, and later <c>on_day_advanced</c>, each given <see cref="ModApi"/>.
-    /// A path that leaves the package is refused. The script is not a second campaign.
-    /// </summary>
-    private void LoadGdscript(ModPackage package, Campaign campaign)
-    {
-        if (string.IsNullOrWhiteSpace(package.Manifest.GdscriptEntry)) return;
-        if (!IsSafeRelativePath(package.Manifest.GdscriptEntry))
-        {
-            package.Errors.Add("GDScript entry must stay inside the mod directory.");
-            return;
-        }
-        var resourcePath = $"{package.VirtualRoot}/{package.Manifest.GdscriptEntry.Replace('\\', '/')}";
-
-        Try(package.Manifest.Id, () =>
-        {
-            var script = ResourceLoader.Load<GDScript>(resourcePath);
-            if (script is null || !script.CanInstantiate())
-                throw new InvalidOperationException($"Cannot instantiate {resourcePath}");
-            var instance = script.New().AsGodotObject();
-            if (instance is null) throw new InvalidOperationException($"{resourcePath} returned no instance");
-            _gdscript.Add((instance, package.Manifest.Id));
-            if (instance.HasMethod("on_load")) instance.Call("on_load", _api);
-            if (instance.HasMethod("on_campaign_created")) instance.Call("on_campaign_created", _api);
-        });
-    }
-
-    /// <summary>
-    /// Luau via <see cref="EngineScriptMod"/>. Refused when more than one human seat is seated.
-    /// The script must stay inside the package. A failed hook removes this entry on the next day.
-    /// </summary>
-    private void LoadEngineScript(ModPackage package, Campaign campaign)
-    {
-        if (string.IsNullOrWhiteSpace(package.Manifest.EngineScriptEntry)) return;
-        if (campaign.HumanSeats.Count > 1)
-        { package.Errors.Add("Experimental engine-script mods are single-player only."); return; }
-        var path = SafePath(package, package.Manifest.EngineScriptEntry);
-        if (path is null || !File.Exists(path))
-        { package.Errors.Add("Engine script must exist inside the mod directory."); return; }
-        Try(package.Manifest.Id, () =>
-        {
-            var instance = EngineScriptMod.Load(path);
-            var retained = false;
-            Godot.Collections.Dictionary bridge = null;
-            try
-            {
-                bridge = EngineScriptMod.CreateApi(_api);
-                EngineScriptMod.Invoke(instance, "on_load", bridge);
-                EngineScriptMod.Invoke(instance, "on_campaign_created", bridge);
-                _engineScripts.Add((instance, package.Manifest.Id, bridge));
-                retained = true;
-            }
-            finally
-            {
-                if (!retained)
-                {
-                    instance.Dispose();
-                    bridge?.Dispose();
-                }
-            }
-            Write($"[{package.Manifest.Id}] engine script active: {Path.GetFileName(path)}");
-        });
-    }
-
-    /// <summary>
     /// Start one external worker (Go, Rust, or anything that speaks protocol 1 on stdin).
     /// The executable and the optional script must both sit inside the package.
     /// The worker is not a lockstep peer: the first multiplayer seat disables it.
@@ -1157,14 +1168,20 @@ public sealed class ModLoader
     }
 
     /// <summary>
-    /// Every JSON, YAML, and YML file under one category folder, all directories.
-    /// <c>StructuredData</c> turns YAML into the same JSON the catalogue already parses.
-    /// File name order is the catalogue's concern; this only lists the files.
+    /// Top-level JSON, YAML, and YML files inside one category folder.
+    /// Files inside deeper subfolders are ignored with a warning on the package so modders see
+    /// immediately why a nested folder did not load.
     /// </summary>
     private static IEnumerable<string> DataFiles(ModPackage package, params string[] parts)
     {
         var directory = parts.Aggregate(package.PhysicalRoot, Path.Combine);
-        return StructuredData.Files(directory, SearchOption.AllDirectories);
+        return GameDataLoader.TopLevelDataFiles(directory, string.Join("/", parts), package.Errors);
+    }
+
+    private static IEnumerable<string> BookmarkDataFiles(ModPackage package, string folder)
+    {
+        var directory = Path.Combine(package.PhysicalRoot, "history", folder);
+        return GameDataLoader.TopLevelDataFiles(directory, $"history/{folder}", package.Errors, "2024");
     }
 
     private static string SafePath(ModPackage package, string relative)
@@ -1214,7 +1231,7 @@ public sealed class ModLoader
     private void Write(string line)
     {
         _log.Add(line);
-        GD.Print($"[mods] {line}");
+        ModPlatform.Print($"[mods] {line}");
     }
 
     private static string Normalize(string value) =>

@@ -64,7 +64,7 @@ public static class FormableProclamationAi
                 if (!MechanicFeatures.ValidId(entry.Name) || entry.Value.ValueKind != JsonValueKind.Object)
                     throw new FormatException("invalid formable preference");
                 var value = entry.Value;
-                if (value.TryGetProperty("disabled", out var disabled) && disabled.ValueKind == JsonValueKind.True)
+                if (GameDataLoader.IsRemoved(value, $"common/formable_ai:{entry.Name}"))
                 { Preferences.Remove(entry.Name); continue; }
                 var old = Preference(entry.Name);
                 string[] Ids(string key, string[] fallback) => value.TryGetProperty(key, out var list)

@@ -4,11 +4,11 @@ Every colour the interface draws with is a named token, so a reskin is a JSON fi
 fork. Copy this directory out of `_templates`, give the folder and the manifest a unique
 id, set `"enabled": true`, and start the game.
 
-1. `interface/skin.json` overrides tokens by name. List only what you want to change.
+1. `interface/00_skin.json` overrides tokens by name. List only what you want to change.
 2. Tokens are named by role, not by appearance — retinting `text.caption` moves every
    section heading in the game at once.
 3. The full token list, with the values the base game uses, is in
-   `game/interface/skin.json`. Copy from there.
+   `game/interface/00_skin.json`. Copy from there.
 4. Values are `#rgb`, `#rrggbb` or `#rrggbbaa`. A malformed value costs that one token and
    is reported in the mod's error list; the rest of the skin still loads.
 5. `//` comments are allowed.
@@ -21,7 +21,7 @@ delete it if you do not. It works the same way — the key is the English source
 
 ## Layout
 
-Panels are named rectangles too. `interface/skin.json` takes a `layout` section: four
+Panels are named rectangles too. `interface/00_skin.json` takes a `layout` section: four
 anchors as fractions of the screen, then four offsets in pixels — Godot's own model, left,
 top, right, bottom. Anchors and offsets are independent, so a panel that only needs to be
 wider lists the offsets and keeps the anchors.

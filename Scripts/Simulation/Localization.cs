@@ -212,7 +212,7 @@ public static class Loc
                      .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
             var language = Path.GetFileName(folder);
-            var files = StructuredData.Files(folder, SearchOption.TopDirectoryOnly);
+            var files = GameDataLoader.TopLevelDataFiles(folder, $"localization/{language}", errors);
             // Read the files together. Merge stays in file-name order, so a later file still wins.
             var texts = new string[files.Length];
             var faults = new Exception[files.Length];

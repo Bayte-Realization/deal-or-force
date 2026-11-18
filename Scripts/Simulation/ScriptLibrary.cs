@@ -218,9 +218,7 @@ public static class ScriptLibrary
         string[] files;
         try
         {
-            files = StructuredData.Files(directory, SearchOption.TopDirectoryOnly)
-                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            files = GameDataLoader.TopLevelDataFiles(directory, category, errors);
         }
         catch (Exception exception)
         {

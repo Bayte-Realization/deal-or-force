@@ -61,18 +61,33 @@ public static class Deterrence
     private static void Ensure()
     {
         if (_holders is not null) return;
-        var holders = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        _holders = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var document in GameDataLoader.DataDocuments("common", "deterrence"))
         using (document)
+            Merge(document.RootElement);
+    }
+
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        Ensure();
+        if (root.ValueKind != JsonValueKind.Object) return;
+        var rows = root.TryGetProperty("holders", out var wrapped) && wrapped.ValueKind == JsonValueKind.Object
+            ? wrapped
+            : root;
+        foreach (var row in rows.EnumerateObject())
         {
-            if (document.RootElement.ValueKind != JsonValueKind.Object ||
-                !document.RootElement.TryGetProperty("holders", out var rows) ||
-                rows.ValueKind != JsonValueKind.Object) continue;
-            foreach (var row in rows.EnumerateObject())
-                if (row.Value.ValueKind == JsonValueKind.Number && row.Value.TryGetInt32(out var tier) && tier > 0)
-                    holders[row.Name] = tier;
+            if (row.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+            if (GameDataLoader.IsRemoved(row.Value, $"common/deterrence:{row.Name}"))
+            {
+                _holders.Remove(row.Name);
+                continue;
+            }
+            if (row.Value.ValueKind == JsonValueKind.Number && row.Value.TryGetInt32(out var tier))
+            {
+                if (tier > 0) _holders[row.Name] = tier;
+                else _holders.Remove(row.Name);
+            }
         }
-        _holders = holders;
     }
 
     /// <summary>

@@ -281,6 +281,20 @@ public static class LandAtlas
         return lands;
     }
 
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return;
+        var lands = Lands;
+        var byId = new Dictionary<string, LandDefinition>(StringComparer.OrdinalIgnoreCase);
+        foreach (var existing in lands) byId[existing.Id] = existing;
+        var entries = root.TryGetProperty("lands", out var wrapped) && wrapped.ValueKind == JsonValueKind.Object
+            ? wrapped
+            : root;
+        Merge(entries, lands, byId);
+        lands.Sort((a, b) => a.Order != b.Order ? a.Order.CompareTo(b.Order)
+            : string.CompareOrdinal(a.Id, b.Id));
+    }
+
     private static void Merge(JsonElement entries, List<LandDefinition> lands,
         Dictionary<string, LandDefinition> byId)
     {
@@ -288,6 +302,11 @@ public static class LandAtlas
         {
             if (entry.Name.StartsWith("//", StringComparison.Ordinal) ||
                 entry.Value.ValueKind != JsonValueKind.Object) continue;
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/naming:{entry.Name}"))
+            {
+                if (byId.Remove(entry.Name, out var removed)) lands.Remove(removed);
+                continue;
+            }
             if (!byId.TryGetValue(entry.Name, out var land))
                 byId[entry.Name] = land = new LandDefinition { Id = entry.Name, Order = lands.Count };
             // Later files win, the way every other category loads: drop the old row and put

@@ -64,8 +64,10 @@ public partial class DealOrForceGame
         _curseCaption.OffsetTop = 150; _curseCaption.OffsetBottom = 180;
 
         _curseNoise = new AudioStreamPlayer { Name = "CurseStatic", VolumeDb = -80f };
-        const string noise = "res://game/sound/audio/curses/curse_static.ogg";
-        if (ResourceLoader.Exists(noise) && GD.Load<AudioStream>(noise) is AudioStream stream)
+        var noise = string.IsNullOrEmpty(SoundCatalog.StaticNoiseFile)
+            ? "res://game/sound/audio/curses/curse_static.ogg"
+            : SoundCatalog.StaticNoiseFile;
+        if (AudioAssets.Load(noise) is AudioStream stream)
         {
             stream = (AudioStream)stream.Duplicate();
             if (stream is AudioStreamOggVorbis ogg) ogg.Loop = true;

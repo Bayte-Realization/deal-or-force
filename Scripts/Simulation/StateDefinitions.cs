@@ -33,21 +33,7 @@ public static class StateDefinitions
     public static void Apply(Campaign campaign)
     {
         if (campaign is null) return;
-
-        // Built once. The old country overlay walks the whole list per entry, which is fine
-        // for 261 of them and would be 1,826 × 1,826 string comparisons here.
-        var byKey = new Dictionary<string, ScenarioState>(StringComparer.OrdinalIgnoreCase);
-        var ambiguous = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var state in campaign.States)
-        {
-            if (!string.IsNullOrWhiteSpace(state.Id)) byKey[state.Id] = state;
-            if (string.IsNullOrWhiteSpace(state.Iso)) continue;
-            // A code that turns out to name a second region is withdrawn rather than
-            // resolved: quietly renaming one of five provinces is worse than not
-            // renaming any of them, and the id always works.
-            if (!byKey.TryAdd(state.Iso, state) && !ambiguous.Add(state.Iso)) continue;
-        }
-        foreach (var code in ambiguous) byKey.Remove(code);
+        var byKey = BuildKeyMap(campaign);
 
         foreach (var document in GameDataLoader.DataDocuments("common", "states"))
             using (document)
@@ -58,11 +44,28 @@ public static class StateDefinitions
     public static int Apply(Campaign campaign, string json)
     {
         if (campaign is null || string.IsNullOrWhiteSpace(json)) return 0;
-        var byKey = new Dictionary<string, ScenarioState>(StringComparer.OrdinalIgnoreCase);
-        foreach (var state in campaign.States)
-            if (!string.IsNullOrWhiteSpace(state.Id)) byKey[state.Id] = state;
         using var document = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
-        return Merge(document.RootElement, byKey);
+        return Apply(campaign, document.RootElement);
+    }
+
+    public static int Apply(Campaign campaign, JsonElement root)
+    {
+        if (campaign is null) return 0;
+        return Merge(root, BuildKeyMap(campaign));
+    }
+
+    private static Dictionary<string, ScenarioState> BuildKeyMap(Campaign campaign)
+    {
+        var byKey = new Dictionary<string, ScenarioState>(StringComparer.OrdinalIgnoreCase);
+        var ambiguous = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var state in campaign.States)
+        {
+            if (!string.IsNullOrWhiteSpace(state.Id)) byKey[state.Id] = state;
+            if (string.IsNullOrWhiteSpace(state.Iso)) continue;
+            if (!byKey.TryAdd(state.Iso, state) && !ambiguous.Add(state.Iso)) continue;
+        }
+        foreach (var code in ambiguous) byKey.Remove(code);
+        return byKey;
     }
 
     /// <summary>How many regions this file actually spoke for.</summary>

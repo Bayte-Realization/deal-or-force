@@ -175,12 +175,19 @@ public static class GovernmentCatalog
         foreach (var entry in root.EnumerateObject())
         {
             if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/governments:{entry.Name}"))
+            {
+                Definitions.RemoveAll(existing =>
+                    string.Equals(existing.Id, entry.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+                continue;
+            }
             var definition = Read(entry.Name, entry.Value, errors);
             if (definition is null) continue;
             Definitions.RemoveAll(existing =>
                 string.Equals(existing.Id, definition.Id, StringComparison.OrdinalIgnoreCase));
             Definitions.Add(definition);
         }
+        Sort();
     }
 
     public static void Validate(JsonElement root, List<string> problems)
@@ -288,6 +295,7 @@ public static class IdeologyCatalog
     public static void ResetCatalog(List<string> errors = null)
     {
         Definitions.Clear();
+        ById.Clear();
         foreach (var document in GameDataLoader.DataDocuments("common", "ideologies"))
             using (document)
                 Merge(document.RootElement, errors);
@@ -309,12 +317,19 @@ public static class IdeologyCatalog
         foreach (var entry in root.EnumerateObject())
         {
             if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/ideologies:{entry.Name}"))
+            {
+                Definitions.RemoveAll(existing =>
+                    string.Equals(existing.Id, entry.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+                continue;
+            }
             var definition = Read(entry.Name, entry.Value, errors);
             if (definition is null) continue;
             Definitions.RemoveAll(existing =>
                 string.Equals(existing.Id, definition.Id, StringComparison.OrdinalIgnoreCase));
             Definitions.Add(definition);
         }
+        Sort();
     }
 
     public static void Validate(JsonElement root, List<string> problems)

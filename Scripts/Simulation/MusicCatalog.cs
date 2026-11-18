@@ -110,9 +110,7 @@ public static class MusicCatalog
         string[] files;
         try
         {
-            files = StructuredData.Files(directory, SearchOption.AllDirectories)
-                .OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            files = GameDataLoader.TopLevelDataFiles(directory, "music", errors);
         }
         catch (Exception exception)
         {
@@ -167,7 +165,7 @@ public static class MusicCatalog
                 errors?.Add($"{origin}: track '{name}' is neither a path nor a declaration");
                 continue;
             }
-            if (value.TryGetProperty("remove", out var remove) && remove.ValueKind == JsonValueKind.True)
+            if (GameDataLoader.IsRemoved(value, $"{origin}:{name}"))
             { Tracks.Remove(name); continue; }
 
             if (!value.TryGetProperty("file", out var declared) || declared.ValueKind != JsonValueKind.String)

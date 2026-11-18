@@ -182,11 +182,17 @@ public static class Rulers
 
     public static void MergeCommon(JsonElement root, List<string> errors = null)
     {
+        EnsureLoaded();
         if (root.ValueKind != JsonValueKind.Object) return;
         if (root.TryGetProperty("offices", out var offices) && offices.ValueKind == JsonValueKind.Object)
             foreach (var entry in offices.EnumerateObject())
             {
                 if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+                if (GameDataLoader.IsRemoved(entry.Value, $"common/rulers:offices.{entry.Name}"))
+                {
+                    Offices.Remove(entry.Name);
+                    continue;
+                }
                 var v = entry.Value;
                 Offices[entry.Name] = new RulerOfficeRule
                 {
@@ -204,6 +210,12 @@ public static class Rulers
             foreach (var entry in traits.EnumerateObject())
             {
                 if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+                if (GameDataLoader.IsRemoved(entry.Value, $"common/rulers:traits.{entry.Name}"))
+                {
+                    if (Traits.Remove(entry.Name, out var removedTrait))
+                        TraitList.Remove(removedTrait);
+                    continue;
+                }
                 var v = entry.Value;
                 if (!Traits.TryGetValue(entry.Name, out var trait))
                 {
