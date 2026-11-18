@@ -33,7 +33,16 @@ static class ShellCoherenceTests
         var offenders = new List<string>();
         foreach (var (key, rect) in panels)
         {
-            foreach (var (w, h) in new[] { (1280f, 720f), (1920f, 1080f) })
+            // Responsive breakpoint panels (`shell.<name>` with a dedicated `shell.compact.<name>`
+            // override in 90_shell.json) only apply at >=1600x900; their `shell.compact.*`
+            // counterparts serve 1280x720.
+            var hasCompactOverride = key.StartsWith("shell.", StringComparison.Ordinal) &&
+                !key.StartsWith("shell.compact.", StringComparison.Ordinal) &&
+                InterfaceSkin.HasLayout("shell.compact." + key["shell.".Length..]);
+            var viewports = hasCompactOverride
+                ? new[] { (1920f, 1080f) }
+                : new[] { (1280f, 720f), (1920f, 1080f) };
+            foreach (var (w, h) in viewports)
             {
                 var (left, top, right, bottom) = Pixels(rect, w, h);
                 if (left < -0.5f || top < -0.5f || right > w + 0.5f || bottom > h + 0.5f ||

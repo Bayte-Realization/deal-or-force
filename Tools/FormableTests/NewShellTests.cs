@@ -39,14 +39,19 @@ static class NewShellTests
         Check(SettingsCatalog.Of(ShellMessages.PresetSetting) is not null &&
               ShellMessages.ParsePreset(SettingsCatalog.Chosen(ShellMessages.PresetSetting)) == ShellMessagePreset.Calm,
             "message preset defaults to Calm (Спокойно)");
-        Check(SettingsCatalog.Of("mouse_scheme") is null && SettingsCatalog.Of("rmb_everywhere") is null,
-            "46_ui_shell.json avoids overlapping controls-ux setting IDs");
+        var root = GameDataLoader.DataFolder();
+        var shellSettingsText = File.ReadAllText(Path.Combine(root, "common", "settings", "46_ui_shell.json"));
+        using (var shellDoc = System.Text.Json.JsonDocument.Parse(shellSettingsText))
+        {
+            var shellKeys = shellDoc.RootElement.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+            Check(!shellKeys.Contains("mouse_scheme") && !shellKeys.Contains("rmb_everywhere"),
+                "46_ui_shell.json avoids overlapping controls-ux setting IDs");
+        }
         Check(InterfaceSkin.Metric(InterfaceSkin.MaterialSwitch, 0f) < 0.5f,
             "90_shell.json leaves classic ui.materials = 0 intact");
         Check(InterfaceSkin.Has("shell.paper") && InterfaceSkin.Has("shell.plate_top") && InterfaceSkin.Has("shell.brass_hi"),
             "90_shell.json declares paper, dark plate, and brass tokens");
 
-        var root = GameDataLoader.DataFolder();
         Check(File.Exists(Path.Combine(root, "fonts", "SourceSerif4-Regular.ttf")) &&
               File.Exists(Path.Combine(root, "fonts", "SourceSerif4-SemiBold.ttf")) &&
               File.Exists(Path.Combine(root, "fonts", "SourceSerif4-Bold.ttf")),
