@@ -82,7 +82,7 @@ public static class CampaignFingerprint
             { Mix(id); Mix(regions.Count); foreach (var region in regions.OrderBy(r => r)) Mix(region); }
         }
         if (!campaign.Defines.PocketResistanceEnabled || campaign.Defines.PocketResistanceMinStrength != .25f ||
-            campaign.Defines.PocketResistanceMinSupply != .10f)
+            campaign.Defines.PocketResistanceMinSupply != 0f)
         {
             MixText("pocket_resistance_rules"); Mix(campaign.Defines.PocketResistanceEnabled ? 1 : 0);
             MixFloat(campaign.Defines.PocketResistanceMinStrength); MixFloat(campaign.Defines.PocketResistanceMinSupply);
@@ -1202,6 +1202,15 @@ public static class CampaignFingerprint
             if (army.PocketStores >= 0f) { MixText("pocket_stores"); Mix(army.Id); MixFloat(army.PocketStores); Mix(army.PocketSinceDay); }
             if (army.HoldoutSinceDay >= 0) { MixText("holdout"); Mix(army.Id); Mix(army.HoldoutSinceDay); }
             if (army.ReliefDistance != -1) { MixText("relief_distance"); Mix(army.Id); Mix(army.ReliefDistance); }
+            if (army.LivingOffLand) { MixText("living_off_land"); Mix(army.Id); }
+        }
+        // Fighters in hiding (Partisans): nothing mixed for a country that has none.
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.FightersGoneToGround.Count == 0) continue;
+            MixText("gone_to_ground"); Mix(nation.Id);
+            foreach (var (region, men) in nation.FightersGoneToGround.OrderBy(pair => pair.Key))
+            { Mix(region); MixFloat(men); }
         }
         foreach (var item in campaign.PendingEvents.OrderBy(e => e.Id))
             if (item.Options.Any(o => o.SecessionTargetId >= 0))
@@ -1220,6 +1229,28 @@ public static class CampaignFingerprint
             { MixText("world_war"); Mix(war.WorldWarDay); }
             if (war.PendingOffer is { BeneficiaryId: >= 0 } offer)
             { MixText("peace_beneficiary"); Mix(offer.BeneficiaryId); }
+            if (war.PendingOfferFromId >= 0)
+            {
+                MixText("pending_peace_offer");
+                Mix(war.PendingOfferFromId);
+                Mix(war.PendingOfferIsWritten ? 1 : 0);
+                Mix((int)war.PendingOfferTerms);
+                Mix(war.PendingOfferDay);
+                Mix(war.PendingOfferExpiresDay);
+                if (war.PendingOffer is { } pending)
+                {
+                    Mix(pending.Provinces.Count);
+                    foreach (var province in pending.Provinces.OrderBy(id => id)) Mix(province);
+                    Mix(pending.ReleaseRegions ? 1 : 0);
+                    Mix(pending.Reparations ? 1 : 0);
+                    Mix(pending.TradeConcessions ? 1 : 0);
+                    Mix(pending.Demilitarise ? 1 : 0);
+                    Mix(pending.Humiliate ? 1 : 0);
+                    Mix(pending.LongTruce ? 1 : 0);
+                    Mix(pending.Unconditional ? 1 : 0);
+                    MixText(pending.Subjugate);
+                }
+            }
             // The spacing of settlements put to a player (PeaceOffers.ToPlayerBlockReason).
             // Only a war a player is in ever sets these, so a world nobody plays mixes nothing.
             if (war.LastOfferToPlayerDay >= 0 || war.RefusedOfferDay >= 0)

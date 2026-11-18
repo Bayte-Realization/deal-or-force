@@ -59,6 +59,13 @@ public static class Program
             return contentFailures == 0 ? 0 : 1;
         }
 
+        // `--profiler-overhead`: what one SimProfiler.Measure scope costs, in this build. A late
+        // day opens about fifty thousand scopes, so this is how a change to the profiler itself
+        // (Tracy, docs/PROFILING_2026_11_17_RU.md) is judged: a whole day's time on a shared
+        // machine moves by ten per cent between identical runs and cannot see a few nanoseconds.
+        if (args.Contains("--profiler-overhead"))
+            return ProfilerOverhead();
+
         // `--creation-profile`: where creating the world goes, phase by phase, cold and then warm -
         // the loading screen's longest stage, measured where nothing else is running.
         if (args.Contains("--creation-profile"))
@@ -528,6 +535,9 @@ public static class Program
                 secessionAt + 2 < args.Length && !args[secessionAt + 2].StartsWith("--") ? args[secessionAt + 2] : "");
         // `--factions`: the de facto powers of 2024 at the start and after the run (FactionReport).
         if (Array.IndexOf(args, "--factions") >= 0) return mapped ? FactionReport.Run(campaign, days) : 2;
+        // `--pockets`: what becomes of cut-off formations and of the forces of risings and
+        // factions - who starved untouched, who was broken, how long each pocket lasted (PocketReport).
+        if (Array.IndexOf(args, "--pockets") >= 0) return mapped ? PocketReport.Run(campaign, days) : 2;
         // `--world-stability`: every five years, the spread of stability and living standards of
         // the countries of a million people or more - the drift a century can hide.
         if (Array.IndexOf(args, "--world-stability") >= 0 && mapped)
@@ -1794,6 +1804,45 @@ public static class Program
             ? "All checks passed."
             : $"{failures} check(s) FAILED.");
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Nanoseconds per SimProfiler.Measure scope: 64 distinct names (a day uses a few hundred,
+    /// so the dictionary is not a one-entry toy), a million scopes a sample, five warm-up samples
+    /// and 21 measured. The checksum is the profiler's own run count, read back at the end, so
+    /// the scopes cannot be optimised away. Allocation is per thread and should be zero.
+    /// </summary>
+    private static int ProfilerOverhead()
+    {
+        var names = Enumerable.Range(0, 64).Select(index => "overhead:" + index).ToArray();
+        const int scopes = 1_000_000;
+        var samples = new List<double>();
+        long allocated = 0;
+        for (var sample = 0; sample < 26; sample++)
+        {
+            SimProfiler.Reset();
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var clock = Stopwatch.StartNew();
+            for (var index = 0; index < scopes; index++)
+                using (SimProfiler.Measure(names[index & 63])) { }
+            clock.Stop();
+            var allocatedNow = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            if (sample < 5) continue;
+            samples.Add(clock.Elapsed.TotalMilliseconds * 1_000_000.0 / scopes);
+            allocated += allocatedNow;
+        }
+        var checksum = SimProfiler.All.Sum(entry => (long)entry.Runs);
+        samples.Sort();
+        var tracy =
+#if DOF_TRACY
+            TracyBridge.On ? (TracyBridge.Live ? "compiled in, on, viewer attached" : "compiled in, on, no viewer") : "compiled in, off";
+#else
+            "not compiled";
+#endif
+        Console.WriteLine($"PROFILER_OVERHEAD tracy={tracy} samples={samples.Count} scopes/sample={scopes:N0} " +
+                          $"median={samples[samples.Count / 2]:0.0} ns p95={samples[(int)(samples.Count * 0.95)]:0.0} ns " +
+                          $"min={samples[0]:0.0} ns allocated_per_sample={allocated / samples.Count} B checksum={checksum}");
+        return checksum == scopes ? 0 : 1;
     }
 
     /// <summary>

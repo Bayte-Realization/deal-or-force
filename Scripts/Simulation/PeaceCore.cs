@@ -145,6 +145,13 @@ public static class PeaceNegotiation
         if (war is null || war.Ended || !war.Involves(proposerId)) return 0f;
         if (terms == PeaceTerms.Capitulate) return 100f;
         if (terms == PeaceTerms.WhitePeace && WarWeariness.NoContactPeaceReady(campaign, war)) return 100f;
+        // The line as the border, offered to a side with a computer's member of the war of the weak
+        // that would keep nothing by it and still fights on: it would be signed out of existence
+        // (Factions.SideKeepsNothingByTheLine). Not past the five years at which the world ends any
+        // war nobody is playing (WarWeariness.ExhaustionPeaceDue): that end is the guard against a
+        // war that never ends, and it is drawn on the line like any deadlock.
+        if (terms == PeaceTerms.StatusQuo && campaign.ElapsedDays - war.StartedDay < campaign.Defines.PeaceForcedEndDays &&
+            Factions.SideKeepsNothingByTheLine(campaign, war, !war.IsAttacking(proposerId))) return 0f;
 
         // Which side is proposing, not which country started it: in a coalition war an ally
         // proposing terms is proposing them for its whole side.
@@ -236,12 +243,12 @@ public static class PeaceNegotiation
         return MathF.Max(0f, stalemateDiscount);
     }
 
-    public static string BlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
+    public static string HardBlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
     {
-        if (war is null || war.Ended || !war.Involves(nationId)) return Loc.Get("No active war");
+        if (campaign is null || war is null || war.Ended || !war.Involves(nationId)) return Loc.Get("No active war");
 
-        // The same two gates for every term, with the numbers coming off the term rather
-        // than out of a switch that stated each pair twice.
+        // The same hard gates for every term (objective and minimum duration), shared by
+        // proposing a settlement and signing a menu offer the other side already proposed.
         var definition = PeaceTermCatalog.Of(terms);
         if (terms == PeaceTerms.EnforceWarGoal && war.ClaimedStateMapIndex < 0)
             return Loc.Get("This war has no territorial objective");
@@ -249,7 +256,15 @@ public static class PeaceNegotiation
         var fought = campaign.ElapsedDays - war.StartedDay;
         if (definition.MinimumDays > 0 && fought < definition.MinimumDays)
             return Loc.Format("The war has not lasted {0} days", definition.MinimumDays);
+        return "";
+    }
 
+    public static string BlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
+    {
+        var hard = HardBlockReason(campaign, war, nationId, terms);
+        if (hard.Length > 0) return hard;
+
+        var definition = PeaceTermCatalog.Of(terms);
         var acceptance = Acceptance(campaign, war, nationId, terms);
         if (definition.MinimumAcceptance > 0f && acceptance < definition.MinimumAcceptance)
             return Loc.Format("Opponent acceptance {0}% (requires {1}%)",
@@ -272,9 +287,60 @@ public static class PeaceNegotiation
         return owner is not null && war.Opposes(nationId, owner.Id);
     }
 
-    public static void Resolve(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms)
+    /// <summary>
+    /// Whether the peace of a deadlock (<see cref="PeaceTerms.StatusQuo"/>) signed today would
+    /// leave this side owning no province at all: every holder's enemy ground drawn into a
+    /// border exactly as <see cref="Resolve"/> draws it - tidied, then rounded to whole regions
+    /// (PeaceShape.SettleProvinces) - and nothing of its own either kept or gained. A read.
+    ///
+    /// Holding a province is not the same as keeping one. The rounding hands a region to whoever
+    /// holds most of it, so the Arakan Army, with eight formations and four provinces held inside
+    /// Myanmar's regions, signed "each side keeps the ground it held" and owned nothing the next
+    /// morning (SimBench 730 --pockets, seed 20260830, 17 November 2026).
+    /// </summary>
+    internal static bool StatusQuoLeavesNothing(Campaign campaign, StrategicWar war, Nation side)
     {
-        var block = BlockReason(campaign, war, proposerId, terms);
+        var controllers = campaign?.ProvinceController;
+        var map = campaign?.ProvinceMap;
+        if (controllers is null || map is null || war is null || side is null) return false;
+        var heldBy = new Dictionary<int, List<int>>();
+        foreach (var pair in war.OriginalController)
+        {
+            if (pair.Key <= 0 || pair.Key >= controllers.Length) continue;
+            var holder = campaign.NationByMapIndex(controllers[pair.Key]);
+            if (holder is null || controllers[pair.Key] == pair.Value || !war.Involves(holder.Id) ||
+                !EnemyGround(campaign, war, pair.Key, holder.Id)) continue;
+            if (!heldBy.TryGetValue(holder.Id, out var list)) heldBy[holder.Id] = list = new List<int>();
+            list.Add(pair.Key);
+        }
+        var lost = new HashSet<int>();
+        foreach (var (holderId, held) in heldBy)
+        {
+            if (campaign.NationById(holderId) is not { } holder) continue;
+            var tidied = PeaceShape.SettleProvinces(campaign, war, PeaceConference.Tidy(campaign, war, held, holder.MapIndex), holder);
+            if (holder.Id == side.Id)
+            {
+                if (tidied.Count > 0) return false;
+                continue;
+            }
+            foreach (var province in tidied) lost.Add(province);
+        }
+        for (var province = 1; province <= map.ProvinceCount; province++)
+            if (map.ProvinceToNation[province] == side.MapIndex && !map.IsWater(province) &&
+                !campaign.DestroyedProvinces.Contains(province) && !lost.Contains(province)) return false;
+        return true;
+    }
+
+    public static void Resolve(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms) =>
+        Resolve(campaign, war, proposerId, terms, requireAcceptance: true);
+
+    internal static void Resolve(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms,
+        bool requireAcceptance)
+    {
+        if (campaign is null || war is null) return;
+        var block = requireAcceptance
+            ? BlockReason(campaign, war, proposerId, terms)
+            : HardBlockReason(campaign, war, proposerId, terms);
         war.LastNegotiation = block.Length == 0 ? "Agreement reached" : block;
         war.LastPeaceProposalDay = campaign.ElapsedDays;
         if (block.Length > 0) return;

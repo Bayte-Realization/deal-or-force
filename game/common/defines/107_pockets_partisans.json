@@ -1,0 +1,103 @@
+// Pockets that weaken instead of dying, and fighters among their own people
+// (Scripts/Simulation/StrandedGarrisons.cs, LogisticsCore.cs, Attrition.cs, Partisans.cs).
+//
+// The owner, 16 November 2026: "Divisions in pockets should weaken, but not die by themselves -
+// they should die exactly when their morale is driven down to 0%. And they should still have
+// some supply, which runs out." And: "Partisans work strangely - they die right where they rose."
+// SimBench 730 --pockets, seeds 20260830 / 4242, before: 35 / 20 formations starved in a pocket
+// nobody ever attacked, an untouched pocket lived 31 / 43 days, and four in five of the rising
+// formations that were ever cut off were cut off on ground their own side held.
+// docs/POCKETS_SUPPLY_2026_11_16_RU.md has the before and after.
+{
+  // --- a pocket goes hungry down to a floor, and stops there ---
+  // The strength hunger leaves a formation with. Above PocketResistanceMinStrength (0.25), so a
+  // starved pocket may still fight to the end, and far above DivisionBrokenStrength (0.06),
+  // where a formation is buried. With EncircledStrengthLoss at 1 % a day (00_combat.json) and
+  // its acceleration, a full division is on this floor about a month after its stores ran out.
+  "PocketHungerStrengthFloor": 0.35,
+  // The organisation ("morale") it settles at: low, not nothing. It was the rout threshold,
+  // 0.055. An assault takes 5-13 % a day, so a starved pocket holds one to three days of one.
+  "PocketHungerOrganisationFloor": 0.25,
+  // The supply it settles at: what is found, bartered and taken from the dead. It was nothing,
+  // which is no fighting power at all. Under the 0.20 an assault needs: it defends, it cannot attack.
+  "PocketHungerSupplyFloor": 0.15,
+  // A cut-off formation rests at this share of an ordinary day's recovery: half while its stores
+  // last, a quarter once they are gone, and never above the ceiling its hungry days have set.
+  // Both were nothing, so a pocket that beat off an assault stayed as spent as it was left.
+  "PocketRecoveryWithStores": 0.5,
+  "PocketRecoveryHungry": 0.25,
+  // Extra men a pocket on its floor loses each week to desertion, with no floor under it: from
+  // the hunger floor to nothing takes about two years. The insurance against a pocket nobody
+  // attacks standing on the map for ever - not the way a pocket is beaten.
+  "PocketHungerDesertionWeekly": 0.015,
+  // The daily chance a hungry pocket with no relief coming gives up of its own accord. Nothing:
+  // a roll that removes a formation nobody attacked is the pocket "dying by itself". The rule
+  // stays for mods, and for a negotiated surrender to be built on. It was 0.12.
+  "PocketSurrenderDailyChance": 0.0,
+
+  // --- the land feeds its own (Partisans.LiveOffTheLand) ---
+  // A formation of a rising (a breakaway, a movement in arms, a faction, a civil-war front) that
+  // no road reaches is not cut off where the people around it are its own: they feed it.
+  "PartisanSupplyEnabled": true,
+  // How far the people of the region must stand behind it, 0 to 1, for this rule and the next.
+  "PartisanSupportFloor": 0.35,
+  // What a region of the rising's own homeland always gives, whoever lives there now.
+  "PartisanHomelandSupport": 0.6,
+  // Outside the homeland, the share that counts of what kinship or the region's anger gives:
+  // at a half, the rising's own people have to be seven in ten of the region.
+  "PartisanAbroadSupportShare": 0.5,
+  // People of a region, at full support, who keep one division in the field. Tuned so the
+  // smallest faction of 2024 (ninety thousand people) feeds the two or three formations it has
+  // and one with millions feeds dozens: it binds only on a crowd on a scrap of ground.
+  "PartisanPeoplePerDivision": 30000,
+  // The supply they settle at when the land can feed everybody. Under the 0.75 of a garrison on
+  // its stores (a depot against gardens), over the 0.5 below which men start to leave.
+  "PartisanForageSupply": 0.65,
+  // The share of that in a province the enemy controls: a garrison in the town, a curfew.
+  "PartisanOccupiedGroundShare": 0.5,
+
+  // --- the home front of the war of the weak (WarWeariness.MoodOf) ---
+  // A rising, faction or breakaway that still has the formations it fights on with
+  // (FactionFightOnFormations, in the field or in hiding) is not told "the front is collapsing"
+  // because the strong hold its towns: that is its war on the first day. It loses its war at home
+  // when its fighters are gone. Read as a state's, HTS felt the front collapse from its second
+  // month and signed at war support 0.17 with eleven formations in the field; the SDF at 0.04
+  // with nineteen (SimBench 730 --pockets, seed 4242, 17 November 2026). The long war still weighs.
+  "RisingHomeFrontByArms": true,
+  // Nor does it fall the week the strong take its last town: a side of the war of the weak that
+  // owns no region and still fights on (formations and will, as FactionFightOnFormations and
+  // FactionFightOnSupport ask of a side holding nothing) keeps its war and its army, and falls the
+  // week either is gone (Factions.FightsOnWithoutGround). It does not sign a peace that leaves it
+  // nothing - the line drawn into a border that hands its towns to the government, a treaty
+  // taking its last province - and coming out of a peace with ground and formations it is a small
+  // statelet, not a rump folded back in. Without it HTS capitulated with ten formations in the
+  // field at war support 0.95 when Idlib was taken; Myanmar's armies signed their last provinces
+  // away on day 546 and fell with them; the Arakan Army, kept two regions by a deadlock, was
+  // reabsorbed whole the next day (SimBench 730 --pockets, both seeds, 17 November 2026).
+  "RisingsFightOnWithoutGround": true,
+
+  // --- slip away, go to ground and come back (Partisans.SlipAwayProvince, TryGoToGround, TickStages) ---
+  // A rising's formation broken among its own people with no ground of its side behind it
+  // slips into a neighbouring province where no enemy stands, whoever holds the town - its own
+  // people's first, where it is fed; among strangers it is an ordinary pocket - and stays on the
+  // map. Without it the scatter below came at the very moment and place of the old surrender,
+  // and the formation still vanished in the battle where it rose (136 of them in five years of
+  // seed 20260830, reviewed 17 November).
+  "GuerrillaSlipAwayEnabled": true,
+  // One with every way out watched scatters into the villages instead of surrendering whole.
+  "GuerrillaGoToGroundEnabled": true,
+  // The share of its men who get away. The other four in ten are the price of the lost battle:
+  // dead (SurrenderKilledShare) and prisoners. One detachment comes back about twice.
+  "GuerrillaGoToGroundShare": 0.6,
+  // Each week, the chance a region's hidden fighters field a detachment: about a month between
+  // going to ground and coming back. Whatever the side's war support: they used to wait for it
+  // to be over the line at which a faction gives up, so they never came when they were needed.
+  "GuerrillaReformWeeklyChance": 0.25,
+  // The least they field, as a share of a militia formation (common/militia, 9000 men).
+  "GuerrillaReformMinShare": 0.5,
+  // The organisation a detachment comes back with. A fresh militia has 0.45; these mustered in a hurry.
+  "GuerrillaReformOrganisation": 0.35,
+  // The share of the hidden who go back to their lives each week: 27,000 are under one
+  // detachment in sixty weeks, 9,000 in twenty-three. The time an occupier pays for in garrisons.
+  "GuerrillaBankDecayWeekly": 0.03
+}

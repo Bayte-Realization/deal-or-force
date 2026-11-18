@@ -1,12 +1,12 @@
-﻿[English](README.md) · [Русский](README.ru.md)
+[English](README.md) · [Русский](README.ru.md)
 
 # Deal or Force
 
 **A grand strategy game about the whole world, from the morning of 1 January 2024.**
 Every country on the map is yours to play, and every one of them is simulated the same way.
-Version **0.7.1.2** (EntertAlpha).
+Version **0.7.2.3-dev** (EntertAlpha).
 
-[![Release](https://img.shields.io/badge/release-EntertAlpha%200.7.1.2-2f6fb3)](docs/CHANGELOG_0.7.1.2_EN.md)
+[![Release](https://img.shields.io/badge/release-EntertAlpha%200.7.2.3--dev-2f6fb3)](docs/CHANGELOG_0.7.2.3_EN.md)
 [![Engine](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED.md)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED.md)
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-3a7f3a)](LICENSE)
@@ -26,14 +26,19 @@ Version **0.7.1.2** (EntertAlpha).
   Extract the whole archive and run `Deal or Force Launcher.exe`.
 - **From source** — see [Building and running](#building-and-running) below.
 - It is EntertAlpha: a lot works, and a lot is still being rebuilt. What is not done yet is
-  written down at the end of every [changelog](docs/CHANGELOG_0.7.1.2_EN.md), not hidden.
+  written down at the end of every [changelog](docs/CHANGELOG_0.7.2.3_EN.md), not hidden.
 - It is built by one person, openly with the help of AI.
 
 Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 [X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
 [Telegram](https://t.me/+39SNXyA92aBmYzhi) · [devlog](https://bayte-realization.itch.io/deal-or-force/devlog)
 
-## New in 0.7.1.2
+## New in 0.7.2.3-dev
+
+This development build adds city-based capitals and a city chooser, the date and alert plate,
+long-campaign save and memory housekeeping, demographic group folding and further simulation
+caching. Built with Godot 4.8 Beta 3 .NET.
+
 
 - **See where the money goes** — a ledger of every income and expense for a country, a movement
   and an organisation; crises and disasters cut income for a time instead of taking the treasury.
@@ -47,7 +52,7 @@ Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
   ones turn red by themselves. "Scenarios / editor" is back in the main menu.
 
 Everything item by item, with how it was checked and what is not done, is in the
-[changelog](docs/CHANGELOG_0.7.1.2_EN.md).
+[changelog](docs/CHANGELOG_0.7.2.3_EN.md).
 
 ## The game
 
@@ -199,7 +204,7 @@ Everything below exists in English and in Russian; a `_RU` suffix is the Russian
 
 | | |
 |---|---|
-| [Changelog 0.7.1.2](docs/CHANGELOG_0.7.1.2_EN.md) · [0.6.6.0](docs/CHANGELOG_0.6.6.0_EN.md) | **what changed in the current release, how it was checked, what is not done** |
+| [Changelog 0.7.2.3](docs/CHANGELOG_0.7.2.3_EN.md) · [0.6.6.0](docs/CHANGELOG_0.6.6.0_EN.md) | **what changed in the current release, how it was checked, what is not done** |
 | [Overhaul programme](docs/OVERHAUL_PROGRAMME_2026_11_14_RU.md) | the fifteen fronts of the rework and what "done" means for each (Russian) |
 | [Deal rework](docs/DEALS_REWORK_2026_11_14_RU.md) | what is wrong with deals today and the plan for them, step by step (Russian) |
 | [TUTORIAL](docs/TUTORIAL.md) | **your first campaign, hand held** |

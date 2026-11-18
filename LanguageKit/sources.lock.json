@@ -1,26 +1,41 @@
 {
   "schema_version": 1,
   "engine": {
-    "version": "4.8.beta2.mono.official.cafc17a19",
-    "directory": "C:/GodotEngineNet 4.8-Beta2",
-    "executable": "Godot_v4.8-beta2_mono_win64_console.exe",
-    "gui_sha256": "6B894EF7578A8999266ECDBC267BCD424CAADB16B8F15E0F6DEE4D3FC0596524",
+    "version": "4.8.beta3.mono.official.c51ff06e8",
+    "directory": "C:/GodotEngineNet 4.8-Beta3",
+    "executable": "Godot_v4.8-beta3_mono_win64_console.exe",
+    "gui_sha256": "669BD63DFD44277AA30A6F2DA8CC7041660C20BC5FDD38E2041341D30CC03C64",
     "platform": "windows-x86_64"
   },
   "verification": {
-    "rust": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
-    "zig": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
-    "go": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
-    "fsharp": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-11-14", "note": "adapters/fsharp build.ps1 + probe.ps1: LANGUAGE_KIT_PASS exit 0; projects/AllSix combined_probe.gd -- fsharp: LANGUAGE_WORKBENCH_PASS failures=0 exit 0; GodotSharp 4.8.0-beta.2 (cafc17a19). See reports/fsharp-beta2-2026-11-14.md" },
-    "luau": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-11-14", "note": "adapters/luau build.ps1 (bindings from the Beta2 API dump, editor + template_release) + workbench/verify-beta2.ps1 -Languages luau: debug and exported-release LANGUAGE_KIT_PASS, exit 0. Game flavor -Suffixes lua-and-luau also passed the EngineScriptMod hook sequence on mods/_templates/luau_engine. See adapters/luau/README.md" },
-    "python": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "failed-teardown", "date": "2026-10-29", "note": "py4godot 4.7-alpha21 executes small integers, but fails the 64-bit boundary and leaks registered classes/resources; not approved" }
+    "rust": { "engine": "4.8.beta3.mono.official.c51ff06e8", "stage": "runtime-smoke", "date": "2026-11-16", "note": "gdext v0.5.5 rebuilt with api-custom from this engine (godot-rust prints API v4.8.beta3); workbench/verify-beta3.ps1: RUST_PROBE PASS weighted_sum=20 empty=0, exit 0. See reports/beta3-2026-11-16.md" },
+    "zig": { "engine": "4.8.beta3.mono.official.c51ff06e8", "stage": "runtime-smoke", "date": "2026-11-16", "note": "gdzig rebuilt with Zig 0.17.0; bindings come from gdzig's vendored 4.7.2 API snapshot, not a beta3 dump. ZIG_PROBE PASS signed=20 zero=0 negative=-20 int64=4294967297, exit 0" },
+    "go": { "engine": "4.8.beta3.mono.official.c51ff06e8", "stage": "runtime-smoke", "date": "2026-11-16", "note": "graphics.gd rebuilt (Go 1.27.3, Zig cc); uses its own baked bindings. GO_PROBE PASS signed=20 zero=0 negative=-20 int64=4294967297, exit 0" },
+    "fsharp": { "engine": "4.8.beta3.mono.official.c51ff06e8", "stage": "runtime-smoke", "date": "2026-11-16", "note": "Godot.NET.Sdk/4.8.0-beta.3, GodotSharp 4.8.0+c51ff06e8: LANGUAGE_KIT_PASS language=fsharp score=42; projects/AllSix combined_probe.gd -- fsharp: LANGUAGE_WORKBENCH_PASS failures=0" },
+    "luau": { "engine": "4.8.beta3.mono.official.c51ff06e8", "stage": "runtime-smoke", "date": "2026-11-16", "note": "rebuilt from the beta3 API dump (sha256 D5B1F03A...), editor + template_release; verify-beta3.ps1 -Languages luau: debug and exported-release LANGUAGE_KIT_PASS. Game flavor lua-and-luau: LUAU_ENGINE_MOD_PASS with mods/_templates/luau_engine, debug and release" },
+    "lua": { "engine": "4.8.beta3.mono.official.c51ff06e8", "stage": "runtime-smoke", "date": "2026-11-16", "note": "lua-gdextension rebuilt (editor target only; binds against its bundled godot-cpp 4.6 API). LANGUAGE_KIT_PASS language=lua script=true methods=true instances=true restricted_state=true table_keys=true. First result for this adapter since Beta1" },
+    "odin": { "engine": "4.8.beta3.mono.official.c51ff06e8", "stage": "runtime-smoke", "date": "2026-11-16", "note": "rebuilt with Odin dev-2026-10-nightly:84bc3fc (toolchain lock odin-dev-2026-10): ODIN_PROBE PASS weighted_sum3=20 zero=0; strict probe ODIN_PROBE_BETA2 PASS vector=20,0,-20,4294967297,6*2^40 instances=10000, no leaks. First rebuild since Beta1" },
+    "sandbox": { "engine": "4.8.beta3.mono.official.c51ff06e8", "stage": "runtime-smoke", "date": "2026-11-16", "note": "godot-sandbox main 4f9c73d6 (after v0.60: indirect banned calls refused, connect() checked), whole addon from source: host DLL with w64devkit 2.10.1 (sha256 d39311f7...), gdscript.elf with Zig 0.17.0 + strip-debug.py (compile exported). SANDBOX_PROBE:PASS sum=42 restrictions=true. Smoke test only; the security fixes are covered by upstream unit tests (CI run 43373963201), not by this probe" },
+    "nim": { "engine": "4.8.beta3.mono.official.c51ff06e8", "stage": "runtime-smoke-prebuilt", "date": "2026-11-16", "note": "Beta1-built DLL in projects/AllSix loaded by beta3: LANGUAGE_WORKBENCH_PASS languages=nim failures=0. Not rebuilt: no Nim compiler on this machine" },
+    "kotlin": { "engine": "4.8.beta3.mono.official.c51ff06e8", "stage": "runtime-smoke-prebuilt", "date": "2026-11-16", "note": "Beta1-built godot-jvm in projects/AllSix loaded by beta3 with JDK 25: LANGUAGE_WORKBENCH_PASS languages=kotlin failures=0. Not rebuilt" },
+    "python": { "engine": "4.8.beta3.mono.official.c51ff06e8", "stage": "failed-teardown", "date": "2026-11-16", "note": "py4godot 4.7-alpha21 unchanged on beta3: PYTHON_PROBE expected 4294967297, got 1; 3 ObjectDB instances leaked, 1 resource in use, PyLanguage/PyScriptExtension/PyResourceFormatLoader/Saver still registered at exit. godot4-meson parser: 8 tests OK on the beta3 dump, no runtime claim" }
+  },
+  "verification_history": {
+    "4.8.beta2.mono.official.cafc17a19": {
+      "rust": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
+      "zig": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
+      "go": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
+      "fsharp": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-11-14", "note": "adapters/fsharp build.ps1 + probe.ps1: LANGUAGE_KIT_PASS exit 0; projects/AllSix combined_probe.gd -- fsharp: LANGUAGE_WORKBENCH_PASS failures=0 exit 0; GodotSharp 4.8.0-beta.2 (cafc17a19). See reports/fsharp-beta2-2026-11-14.md" },
+      "luau": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-11-14", "note": "adapters/luau build.ps1 (bindings from the Beta2 API dump, editor + template_release) + workbench/verify-beta2.ps1 -Languages luau: debug and exported-release LANGUAGE_KIT_PASS, exit 0. Game flavor -Suffixes lua-and-luau also passed the EngineScriptMod hook sequence on mods/_templates/luau_engine. See adapters/luau/README.md" },
+      "python": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "failed-teardown", "date": "2026-10-29", "note": "py4godot 4.7-alpha21 executes small integers, but fails the 64-bit boundary and leaks registered classes/resources; not approved" }
+    }
   },
   "sources": [
     { "id": "rust", "url": "https://github.com/godot-rust/gdext.git", "commit": "0b680b4d59c4790d4673b2293110687d2e5261c7", "license": "MPL-2.0", "release": "v0.5.5" },
     { "id": "nim", "url": "https://github.com/godot-nim/gdext-nim.git", "commit": "15b69a92ba2642f2bea117e01e3bbcd112c9f57d", "license": "MIT" },
     { "id": "odin", "url": "https://github.com/dresswithpockets/odin-godot.git", "commit": "93395901a76f62a9f2adff76c2eb38a185d91513", "license": "Apache-2.0" },
     { "id": "kotlin", "url": "https://github.com/utopia-rise/godot-jvm.git", "commit": "5d39c7e3fbe5be78853837e3c89676e7a92c9ec9", "license": "MIT" },
-    { "id": "sandbox", "url": "https://github.com/libriscv/godot-sandbox.git", "commit": "b43ed1619abc12a669c59cb0aa25c4582873a7b9", "license": "BSD-3-Clause" },
+    { "id": "sandbox", "url": "https://github.com/libriscv/godot-sandbox.git", "commit": "4f9c73d683f6ae734c87773d01938448ab3c3d50", "license": "BSD-3-Clause", "note": "main after v0.60 (security fixes); whole addon built from source, gdscript.elf with Zig" },
     { "id": "luau", "url": "https://github.com/Fumohouse/godot-luau-script.git", "commit": "7942ce6def8023596ca0cb8d819b032eb40a4bce", "license": "MIT", "archived": true },
     { "id": "lua", "url": "https://github.com/gilzoide/lua-gdextension.git", "commit": "58cb05e62557741ff646f0096fa4fdc8d09b1ae3", "license": "MIT", "note": "Lua/LuaJIT, not Luau" },
     { "id": "zig", "url": "https://github.com/gdzig/gdzig.git", "commit": "c1b0cc3c7befc4c2483624d078e1e650b07b2dfa", "license": "MIT", "note": "vendored API snapshot is Godot 4.7.2; Zig 0.17.0" },
@@ -36,8 +51,8 @@
     { "id": "kotlin", "source": "kotlin", "integration": "JVM-GDExtension", "trust": "trusted-native-jvm", "verified": true },
     { "id": "sandbox", "source": "sandbox", "integration": "sandbox-GDExtension", "trust": "host-extension-must-be-trusted", "optional": true, "verified": true },
     { "id": "lua", "source": "lua", "integration": "ScriptLanguageExtension", "trust": "trusted-native", "optional": true, "verified": true },
-    { "id": "zig", "source": "zig", "integration": "GDExtension", "trust": "trusted-native", "optional": true, "verified": false, "requires": ["zig"], "status": "Beta2 runtime smoke passed with Zig 0.17.0; full API/export/hot reload unverified" },
-    { "id": "go", "source": "go", "integration": "GDExtension-cgo", "trust": "trusted-native", "optional": true, "verified": false, "requires": ["go", "gcc"], "status": "Beta2 runtime smoke passed with portable Go 1.27.3 and Zig cc; system Go remains 1.21.4" },
+    { "id": "zig", "source": "zig", "integration": "GDExtension", "trust": "trusted-native", "optional": true, "verified": false, "requires": ["zig"], "status": "Beta3 runtime smoke passed with Zig 0.17.0 (vendored 4.7.2 bindings); full API/export/hot reload unverified" },
+    { "id": "go", "source": "go", "integration": "GDExtension-cgo", "trust": "trusted-native", "optional": true, "verified": false, "requires": ["go", "gcc"], "status": "Beta3 runtime smoke passed with portable Go 1.27.3 and Zig cc; system Go remains 1.21.4" },
     { "id": "python", "source": "python", "integration": "GDExtension-Cython", "trust": "trusted-native", "optional": true, "verified": false, "requires": ["python", "meson", "ninja"], "status": "py4godot release small arithmetic passed, int64/teardown failed; quarantined experimental. godot4-meson API parser patch is a separate track, not a runtime pass" }
   ]
 }

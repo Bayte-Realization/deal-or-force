@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('go','zig','rust')][string[]]$Languages=@('go','zig','rust'),
+    [ValidateSet('go','zig','rust','odin','w64devkit')][string[]]$Languages=@('go','zig','rust'),
     [string]$Destination=(Join-Path (Split-Path -Parent $PSScriptRoot) '.cache/toolchains')
 )
 $ErrorActionPreference='Stop'
@@ -11,7 +11,8 @@ foreach($language in ($Languages | Select-Object -Unique)){
     $asset=@($lock.assets | Where-Object {$_.id -eq $language -or $_.id.StartsWith($language+'-')})
     if($asset.Count -ne 1){throw 'Ambiguous toolchain lock.'}; $asset=$asset[0]
     $root=Get-KitPath $Destination $asset.id
-    $archive=Get-KitPath $Destination ($asset.id+$(if($asset.kind -eq 'zip'){'.zip'}else{'/rustup-init.exe'}))
+    $suffix=switch($asset.kind){'zip'{'.zip'}'7z-sfx'{'.7z.exe'}default{'/rustup-init.exe'}}
+    $archive=Get-KitPath $Destination ($asset.id+$suffix)
     Assert-KitInstallPath $root; Assert-KitInstallPath $archive
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $archive) | Out-Null
     if(-not(Test-Path -LiteralPath $archive)){
@@ -23,6 +24,11 @@ foreach($language in ($Languages | Select-Object -Unique)){
     if((Get-FileHash -LiteralPath $archive).Hash -ne $asset.sha256){throw "Checksum mismatch: $($asset.id). Existing installation preserved."}
     if($asset.kind -eq 'zip'){
         if(-not(Test-Path -LiteralPath $root)){Expand-Archive -LiteralPath $archive -DestinationPath $root}
+    } elseif($asset.kind -eq '7z-sfx'){
+        # A 7-Zip self-extractor: unpack it as an archive, never run the downloaded executable.
+        $sevenZip=@((Get-Command 7z -ErrorAction SilentlyContinue | ForEach-Object Source), (Join-Path $env:ProgramFiles '7-Zip/7z.exe')) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+        if(-not $sevenZip){throw "Install 7-Zip to unpack $($asset.id); the self-extractor is not executed."}
+        if(-not(Test-Path -LiteralPath $root)){ & $sevenZip x $archive "-o$root" -y | Out-Null; if($LASTEXITCODE -ne 0){throw "Unpacking $($asset.id) failed."} }
     } else {
         $beforeCargo=$env:CARGO_HOME; $beforeRustup=$env:RUSTUP_HOME
         try{

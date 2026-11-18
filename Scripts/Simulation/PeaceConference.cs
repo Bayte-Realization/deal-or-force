@@ -261,6 +261,25 @@ public static class PeaceConference
                 return Loc.Get("A country you are annexing whole cannot also answer to you");
         }
 
+        // A computer's side of the war of the weak that would go on fighting with no ground at all
+        // does not sign away the last of what it owns, whatever the score says: that treaty is its
+        // end, and the war is lost in the field, not on points (Factions.FightsOnWithoutGround).
+        // Myanmar's armies, the Arakan Army and HTS signed exactly this when the lock on the 2024
+        // civil wars opened on day 540 - "Myanmar took four provinces in Southern Sagaing" - and
+        // their formations, still in the field, fell with their countries a week later (SimBench
+        // 730 --pockets, 17 November 2026). The unconditional settlement of a decided civil war is
+        // no exception: it is decided by ground held (AiPeaceOutcomes), and ground is exactly what
+        // the war of the weak is not decided by. A side overrun in the field has no army and is
+        // not asked this.
+        // Every member of the beaten side is asked, not only its leader, which signs for them all;
+        // one the treaty takes nothing from has nothing to sign away.
+        foreach (var memberId in war.EnemiesOf(demand.ProposerId))
+            if (campaign.NationById(memberId) is { IsHuman: false } member && Factions.FightsOnWithoutGround(campaign, member) &&
+                rounded.Provinces.Any(province => topology.ProvinceToNation[province] == member.MapIndex) &&
+                !Enumerable.Range(1, topology.ProvinceCount).Any(province =>
+                    topology.ProvinceToNation[province] == member.MapIndex && !rounded.Provinces.Contains(province)))
+                return Loc.Get("They will not sign away the last of their ground while they still have an army in the field");
+
         var ledger = new PeaceLedger(campaign, war, demand.ProposerId, demand.BeneficiaryId);
         var budget = ledger.Budget;
 

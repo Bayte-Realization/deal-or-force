@@ -48,6 +48,17 @@ public sealed partial class Defines
     /// weighted by people) and a friend abroad who would shelter it.
     /// </summary>
     public float MovementUndergroundBase { get; set; } = 0.25f;
+    /// <summary>
+    /// Whether a side of the war of the weak that has lost the last region it owned, and still
+    /// fights on (Factions.FightsOn as if it held nothing), is a side under arms rather than a
+    /// fallen country: it does not fall, its war is not ended for it, and its formations are
+    /// not laid down with a state that is not there (Factions.FightsOnWithoutGround). With it,
+    /// such a side does not sign a peace that leaves it nothing - the line as the border, or a
+    /// treaty taking the last of its ground (Factions.KeepsNothingByTheLine, PeaceConference) -
+    /// and one that came out of a peace with ground and an army is not folded back into the
+    /// state it fought (Factions.SettleCivilWarSurvivors). Off, each of those is as it was.
+    /// </summary>
+    public bool RisingsFightOnWithoutGround { get; set; } = true;
     public float MovementUndergroundRadicalism { get; set; } = 0.9f;
     public float MovementUndergroundSanctuary { get; set; } = 0.15f;
     /// <summary>Its following at home when it goes: this much, plus as much again as the region is radical.</summary>
@@ -268,6 +279,9 @@ public static class MovementFall
             // entry can no longer exempt a stateless straggler from the fall decision.
             if ((nation.Population <= 0 && (!campaign.Homelands.ContainsKey(nation.Id) || nation.CollapseAnnounced)) ||
                 campaign.StatesOf(nation).Length > 0) continue;
+            // A rising that has lost its last town and is still fighting has not fallen: it falls
+            // the week its fighters or its will are gone (Factions.FightsOnWithoutGround).
+            if (Factions.FightsOnWithoutGround(campaign, nation)) continue;
             campaign.Fallen.Add(nation.Id);
             // A country that never held ground of its own was a line on a map, not a state, and
             // has no government to send abroad. Nothing the world is built from is one any more
@@ -376,6 +390,9 @@ public static class MovementFall
                 // A movement that never had ground fights from among its people; this is for
                 // the country that lost what it had - or the government it sent abroad.
                 if (leader.Movement is not null && !campaign.Fallen.Contains(leader.Id)) continue;
+                // Nor is this for a side of the war of the weak still under arms: it has lost its
+                // towns, not its war (Factions.FightsOnWithoutGround).
+                if (Factions.FightsOnWithoutGround(campaign, leader)) continue;
                 var standing = false;
                 foreach (var ally in war.Side(attackers))
                     if (ally != leader.Id && campaign.NationById(ally) is { } friend && campaign.StatesOf(friend).Length > 0)

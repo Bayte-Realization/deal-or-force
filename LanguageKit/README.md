@@ -1,4 +1,9 @@
-# Godot 4.8 Beta2 language kit
+# Godot 4.8 Beta3 language kit
+
+**16 November 2026: every language has a Beta3 result** (target `4.8.beta3.mono.official.c51ff06e8`).
+Rust, Luau, Zig, Go, Lua, Odin, Sandbox and F# were rebuilt and probed; Nim and Kotlin's
+older DLLs load and pass; py4godot still fails. See [the Beta3 report](reports/beta3-2026-11-16.md).
+The text below is the Beta2 summary it supersedes.
 
 Portable integration sources for **Luau, F#, Nim, Odin, Rust and Kotlin** on
 `4.8.beta2.mono.official.cafc17a19`, Windows x86_64. Lua and Godot Sandbox
@@ -30,7 +35,7 @@ Use PowerShell 7 and the console executable of the .NET editor. No global PATH
 change is required; portable compiler paths can be supplied to each build recipe.
 
 ```powershell
-./language-kit.ps1 -Action Doctor -EngineDirectory 'C:/GodotEngineNet 4.8-Beta2'
+./language-kit.ps1 -Action Doctor -EngineDirectory 'C:/GodotEngineNet 4.8-Beta3'
 ./tests/kit-tests.ps1
 ./language-kit.ps1 -Action Fetch -Languages rust,nim,odin,kotlin,luau,sandbox,lua
 ./language-kit.ps1 -Action Fetch -Languages zig,go,python      # recipe-only tracks
@@ -57,7 +62,7 @@ Do not translate an import/shutdown access violation into a successful test.
 ## Install beside an existing editor
 
 ```powershell
-./language-kit.ps1 -Action InstallKit -EngineDirectory 'C:/GodotEngineNet 4.8-Beta2'
+./language-kit.ps1 -Action InstallKit -EngineDirectory 'C:/GodotEngineNet 4.8-Beta3'
 ```
 
 Copies source recipes, templates, patches, reports and licenses to `LanguageKit/`.
