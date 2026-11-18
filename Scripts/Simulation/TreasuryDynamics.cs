@@ -229,7 +229,7 @@ public static class TreasuryDynamics
         var ticked = 0;
         foreach (var nation in c.Nations)
         {
-            if (++ticked % 8 == 0) yield return 0;
+            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if (nation.Movement is not null || nation.Population <= 0 || nation.Gdp <= 0f) continue;
             Erode(c, nation);
             SpendDown(c, nation);

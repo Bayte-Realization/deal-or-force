@@ -96,7 +96,7 @@ public static class WarEmergency
             if (war is null || war.Ended) continue;
             WarsWalked++;
             LastWarId = war.Id;
-            if (++ticked % 4 == 0) yield return 0;
+            if (++ticked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
             // A limited border war does not need a general mobilisation, but the emergency
             // triggers below are still about holes and occupied ground; a limited war with
             // its line held never reaches the branch that acts.

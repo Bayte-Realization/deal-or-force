@@ -53,7 +53,7 @@ public static class MovementLifecycle
         foreach (var definition in MovementCatalog.All)
         {
             if (!definition.CanEmerge || definition.Template) continue;
-            if (reviewed > 0 && reviewed % 4 == 0) yield return 0;
+            if (reviewed > 0 && (reviewed % 4 == 0 || Campaign.StageOverdue())) yield return 0;
             reviewed++;
             var nation = campaign.Nations.FirstOrDefault(n => n.Movement?.Id == definition.Id);
             var pressure = Pressure(campaign, definition);

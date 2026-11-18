@@ -175,7 +175,7 @@ public static class Statecraft
         var tick = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++tick % 8 == 0) yield return 0;
+            if (++tick % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             using (SimProfiler.Measure("  dip:coalition"))
             {
             if (nation.Notoriety < CoalitionThreshold || nation.Population <= 0) continue;

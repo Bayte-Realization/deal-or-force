@@ -247,7 +247,7 @@ public static class ModifierSystem
         var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++ticked % 16 == 0) yield return 0;
+            if (++ticked % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             var changed = false;
             for (var index = nation.Modifiers.Count - 1; index >= 0; index--)
             {
@@ -266,7 +266,7 @@ public static class ModifierSystem
         ticked = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++ticked % 16 == 0) yield return 0;
+            if (++ticked % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (nation.Modifiers.Count == 0) continue;
 
             for (var index = nation.Modifiers.Count - 1; index >= 0; index--)

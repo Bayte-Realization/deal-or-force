@@ -570,7 +570,7 @@ public static class NuclearPosture
         var holders = c.Nations.Where(n => n.Population > 0 && IsHolder(c, n)).OrderBy(n => n.Id).ToList();
         for (var idx = 0; idx < holders.Count; idx++)
         {
-            if (idx > 0 && idx % 4 == 0) yield return 0;
+            if (idx > 0 && (idx % 4 == 0 || Campaign.StageOverdue())) yield return 0;
             var n = holders[idx];
             if (n.IsHuman) continue;
             var wanted = 5;
@@ -615,7 +615,7 @@ public static class NuclearPosture
         yield return 0;
         for (var i = 0; i < holders.Count; i++)
         {
-            if (i > 0 && i % 4 == 0) yield return 0;
+            if (i > 0 && (i % 4 == 0 || Campaign.StageOverdue())) yield return 0;
             for (var j = i + 1; j < holders.Count; j++)
             {
                 var a = holders[i]; var b = holders[j];

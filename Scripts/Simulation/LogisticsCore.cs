@@ -45,7 +45,8 @@ public static class LogisticsSystem
 
     // Scratch, reused across nations and days of ONE campaign. A second Campaign in the
     // same process used to clear these lists and then read the first campaign's provinces.
-    // The live tick stays single-threaded. A later pure job would still need its own scratch.
+    // The traces themselves run side by side, each on a scratch of its own (WorkerScratch);
+    // the per-campaign board holds only what all of them read.
     private sealed class Scratch
     {
         public int[] Distance = Array.Empty<int>();
@@ -72,9 +73,37 @@ public static class LogisticsSystem
         public readonly HashSet<int> OpenBasins = new();
         // The fleets blockading the country being traced, found once for all its formations.
         public readonly List<Fleet> Blockaders = new();
+        // The countries to trace today, in the list's order (shared board only).
+        public readonly List<(Nation Nation, List<Army> Armies, List<int> Held)> Due = new();
     }
 
     private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
+
+    /// <summary>Countries traced between two seams of the stage.</summary>
+    private const int TraceHandful = 64;
+
+    /// <summary>
+    /// The per-country half of the scratch, one per thread that traces. The shared board keeps
+    /// who holds what and whose armies are where, which every trace reads; this keeps what one
+    /// trace writes. Its generation stamp is its own, so a scratch that traced another campaign
+    /// on the same thread (a test, a bench) carries nothing over: an entry counts only if it
+    /// bears the stamp of the trace now running, and the regions' land count is kept per map.
+    /// </summary>
+    [ThreadStatic] private static Scratch _worker;
+
+    private static Scratch WorkerScratch(int length)
+    {
+        var work = _worker ??= new Scratch();
+        if (work.Distance.Length < length)
+        {
+            work.Distance = new int[length];
+            work.Source = new int[length];
+            work.Stamp = new int[length];
+            work.Reach = new int[length];
+            work.Generation = 0;
+        }
+        return work;
+    }
 
     /// <summary>
     /// Provinces the last supply trace recorded for one map flag in this campaign.
@@ -87,21 +116,31 @@ public static class LogisticsSystem
         return board.Controlled.TryGetValue((ushort)mapIndex, out var list) ? list : Array.Empty<int>();
     }
 
-    /// <summary>How many land provinces of each region the country holds now, and (once per map) how many each region has.</summary>
+    /// <summary>
+    /// How many land provinces each region has, counted once per map on the campaign's shared
+    /// board. Asked on the stepping thread before the traces are handed out, and only on a day
+    /// a trace would have asked it, so it is counted on the same day it always was: a count
+    /// kept per worker would be taken whenever that worker first traced, and two workers could
+    /// then disagree about the same region.
+    /// </summary>
+    private static void EnsureLandCounted(Campaign campaign, Scratch shared)
+    {
+        var topology = campaign.ProvinceMap;
+        if (ReferenceEquals(shared.LandCounted, topology)) return;
+        shared.LandInState.Clear();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+            if (!topology.IsWater(province))
+            {
+                var state = topology.ProvinceToState[province];
+                shared.LandInState[state] = shared.LandInState.GetValueOrDefault(state) + 1;
+            }
+        shared.LandCounted = topology;
+    }
+
+    /// <summary>How many land provinces of each region the country holds now.</summary>
     private static void CountHeld(Campaign campaign, List<int> territory, Scratch board)
     {
         var topology = campaign.ProvinceMap;
-        if (!ReferenceEquals(board.LandCounted, topology))
-        {
-            board.LandInState.Clear();
-            for (var province = 1; province <= topology.ProvinceCount; province++)
-                if (!topology.IsWater(province))
-                {
-                    var state = topology.ProvinceToState[province];
-                    board.LandInState[state] = board.LandInState.GetValueOrDefault(state) + 1;
-                }
-            board.LandCounted = topology;
-        }
         board.HeldInState.Clear();
         foreach (var province in territory)
             if (!topology.IsWater(province))
@@ -119,13 +158,13 @@ public static class LogisticsSystem
     /// formation in it from the far side of the old border, and the front there sat
     /// under-supplied - unreinforced, worn out - for as long as the war lasted.
     /// </summary>
-    private static void ForwardDepot(Campaign campaign, int province, bool connected, Scratch board)
+    private static void ForwardDepot(Campaign campaign, int province, bool connected, Scratch board, Scratch shared)
     {
         if (!connected || campaign.Defines.ForwardDepotHeldShare > 1f) return;
         var topology = campaign.ProvinceMap;
         var state = topology.ProvinceToState[province];
         if (board.HubByState.ContainsKey(state)) return;
-        var land = board.LandInState.GetValueOrDefault(state);
+        var land = shared.LandInState.GetValueOrDefault(state);
         if (land <= 0 || board.HeldInState.GetValueOrDefault(state) < land * campaign.Defines.ForwardDepotHeldShare) return;
         board.HubByState[state] = province;
         board.IsForwardHub[state] = true;
@@ -181,30 +220,44 @@ public static class LogisticsSystem
         }
 
         var length = topology.ProvinceCount + 1;
-        if (board.Distance.Length < length)
-        {
-            board.Distance = new int[length];
-            board.Source = new int[length];
-            board.Stamp = new int[length];
-            board.Reach = new int[length];
-            board.Generation = 0;
-        }
 
         yield return 0;
-        var work = 0;
+        // The countries with an army in the field, in the list's order, and then their traces
+        // side by side (DeterministicParallel). A country's trace reads the map, the wars, the
+        // fleets and its own ground, and writes only its own formations and its own
+        // reinforcement capacity, which no other country's trace reads - so each answer is the
+        // one the serial walk gave it, to the bit, on one thread or nine. Every worker has a
+        // scratch of its own (WorkerScratch); the shared board above is only read from here on.
+        //
+        // The few shared tables a trace asks for that are made on first asking are made now, on
+        // this thread, so no worker is the one that builds them.
+        campaign.NationsByMapIndex();
+        campaign.StateByMapIndex(1);
+        if (campaign.Nations.Count > 0) campaign.StatesOf(campaign.Nations[0]);
+        Warfare.LiveWars(campaign);
+        Warfare.OpenWars(campaign);
+        MilitaryBootstrap.Personnel("", 0);
+        SeaLanes.CoastalProvinceArray(topology);
+        var due = board.Due;
+        due.Clear();
         foreach (var nation in campaign.Nations)
         {
-            if (!board.ArmiesByNation.TryGetValue(nation.Id, out var armies) || armies.Count == 0)
-            {
-                if (++work >= 1200) { work = 0; yield return 0; }
-                continue;
-            }
+            if (!board.ArmiesByNation.TryGetValue(nation.Id, out var armies) || armies.Count == 0) continue;
             board.Controlled.TryGetValue((ushort)nation.MapIndex, out var held);
-            var cost = 8 + (held?.Count ?? 0) + armies.Count * 4;
-            if (work > 0 && work + cost >= 1200) { work = 0; yield return 0; }
-            work += cost;
-            UpdateNation(campaign, nation, armies, held, board);
-            if (work >= 1200) { work = 0; yield return 0; }
+            due.Add((nation, armies, held));
+            if (held is { Count: > 0 }) EnsureLandCounted(campaign, board);
+        }
+        // In handfuls, with a seam between them: a late world has three hundred countries in the
+        // field, and the whole trace in one piece was a stage of its own on one thread.
+        for (var start = 0; start < due.Count; start += TraceHandful)
+        {
+            var end = Math.Min(due.Count, start + TraceHandful);
+            DeterministicParallel.For(campaign, start, end, index =>
+            {
+                var (nation, armies, held) = due[index];
+                UpdateNation(campaign, nation, armies, held, WorkerScratch(length), board);
+            }, minItems: 4);
+            if (end < due.Count) yield return 0;
         }
         } // The trace above is every third day. The clock below is every day.
 
@@ -212,7 +265,8 @@ public static class LogisticsSystem
         AgeCutOff(campaign);
     }
 
-    private static void UpdateNation(Campaign campaign, Nation nation, List<Army> armies, List<int> territory, Scratch board)
+    private static void UpdateNation(Campaign campaign, Nation nation, List<Army> armies, List<int> territory, Scratch board,
+        Scratch shared)
     {
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
@@ -259,7 +313,7 @@ public static class LogisticsSystem
             if (topology.IsWater(province)) continue;
             if (!insurgent && topology.ProvinceToNation[province] != nation.MapIndex)
             {
-                ForwardDepot(campaign, province, reach[province] == generation, board);
+                ForwardDepot(campaign, province, reach[province] == generation, board, shared);
                 continue;
             }
             var isConnected = reach[province] == generation;

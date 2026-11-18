@@ -222,7 +222,7 @@ public static class SubjectBlocs
         var checkedAll = 0;
         foreach (var owner in campaign.Nations.ToArray())
         {
-            if (++checkedAll % 32 == 0) yield return 0;
+            if (++checkedAll % 32 == 0 || Campaign.StageOverdue()) yield return 0;
             if (owner.IsHuman || owner.IsSubject || owner.Movement is not null || owner.Population < 5_000_000) continue;
             if (!overlordsWithSubjects.Contains(owner.Id)) continue;
             var subjects = SubjectSystem.SubjectsOf(campaign, owner)

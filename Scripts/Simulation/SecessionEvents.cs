@@ -104,7 +104,7 @@ public static class SecessionEvents
         var scanned = 0;
         foreach (var nation in nations)
         {
-            if (++scanned % 4 == 0) yield return 0;
+            if (++scanned % 4 == 0 || Campaign.StageOverdue()) yield return 0;
             if (nation.Population <= 0) continue;
 
             var ripe = (List<ScenarioState>)null;

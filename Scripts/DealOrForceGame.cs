@@ -54,8 +54,10 @@ public partial class DealOrForceGame : Control
     private Label _navigationHint = null!;
     private Label _scenarioSummary = null!;
     private Nation _selectedNation;
-    private double _dayAccumulator;
-    private double _clockStepSeconds;
+    /// <summary>The frame's share of simulation and the time owed to it (SimulationFrameClock). Not saved.</summary>
+    private readonly SimulationFrameClock _frameClock = new();
+    private Action _frameBeforeCall;
+    private Func<bool, bool> _frameAfterCall;
     private int _speed = 1;
     private int _lastAutosaveDay = -1;
     private string _openScreen = "";
@@ -172,21 +174,6 @@ public partial class DealOrForceGame : Control
         // Reported whether or not time is running: a measurement that only arrives when
         // everything is already going well is no use for finding out why it is not.
         ReportFrameCost(delta);
-        // A step the smoothed clock has begun is carried on even under pause: pausing stops the
-        // next step, never half of this one.
-        if (_campaign.IsPaused && !_campaign.MidStep) { _dayAccumulator = 0; return; }
-        // Real seconds one step of the simulation is worth. The speed setting is still in
-        // days, because that is what a player thinks in; a campaign stepping six hours at a
-        // time simply takes four steps to spend one day's worth of them.
-        var secondsPerDay = _campaign.Defines.SecondsForSpeed(_speed) * _campaign.TickScale;
-        // A new cadence must not reinterpret time queued under the old one (including
-        // console edits). A 24-hour remainder used to become 24 hourly steps at once.
-        if (secondsPerDay != _clockStepSeconds) _dayAccumulator = 0;
-        _clockStepSeconds = secondsPerDay;
-        _dayAccumulator = SimulationPacing.Accumulate(_dayAccumulator, delta, secondsPerDay,
-            _campaign.Defines.MaxDaysPerFrame);
-        var days = 0;
-
         // Time is given a slice of the frame rather than a number of days.
         //
         // The loop used to run up to four days whatever they cost. A campaign day is
@@ -207,76 +194,40 @@ public partial class DealOrForceGame : Control
         // the frame does not keep starting the stages after that one until the budget is blown.
         // The clock moves on when the step is done: the same world, with the heavy stage on its
         // own frame instead of stacked on the stages that already filled the slice.
-        var budget = System.Diagnostics.Stopwatch.StartNew();
-        var baseSlice = _campaign.Defines.FrameSimulationBudgetMs;
-        var fastSlice = _campaign.Defines.FastSpeedSimulationBudgetMs;
-        var smoothFastSlice = _campaign.Defines.SmoothFastSpeedSimulationBudgetMs;
-        var uncheckedFastSlice = _campaign.Defines.UncheckedSpeedSimulationBudgetMs;
-        var cap = _campaign.Defines.MaxDaysPerFrame;
+        // The loop itself is SimulationFrameClock, so SimBench drives the same scheduler frame by
+        // frame on a save; what stays here is what only a running game has: the network flag, the
+        // autosave and what a fault does to the screen.
         var smooth = SettingsCatalog.Flag("smooth_ticks");
-        var frameBudget = baseSlice <= 0f ? 0f
-            : smooth
-                ? (_speed >= 5 ? System.Math.Max(baseSlice, smoothFastSlice)
-                    : _speed == 4 ? System.Math.Max(baseSlice, System.Math.Min(smoothFastSlice, baseSlice * 1.5f))
-                    : baseSlice)
-                : (_speed >= 5 ? System.Math.Max(fastSlice, uncheckedFastSlice)
-                    : _speed == 4 ? System.Math.Max(baseSlice, fastSlice)
-                    : System.Math.Max(27f, baseSlice * 3f));
-        while ((_campaign.MidStep || _dayAccumulator >= secondsPerDay) && days < cap &&
-               (days == 0 || budget.Elapsed.TotalMilliseconds < frameBudget))
+        try
         {
-            if (!_campaign.MidStep) _dayAccumulator -= secondsPerDay;
-            if (_networkConnected && _networkIsHost && _networkGameStarted) _applyingNetworkCommand = true;
-            var heavyCall = false;
-            try
+            // Made once: two fresh closures a frame are garbage the collector meets sixty times a second.
+            _frameBeforeCall ??= () =>
             {
-                var finished = true;
+                if (_networkConnected && _networkIsHost && _networkGameStarted) _applyingNetworkCommand = true;
                 _simulating = true;
-                using (SimProfiler.Measure("campaign.day"))
-                {
-                    if (baseSlice > 0f)
-                    {
-                        var slice = System.Math.Max(1.0, frameBudget - budget.Elapsed.TotalMilliseconds);
-                        var callStarted = smooth ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
-                        // Half the slice is the heavy ceiling. Smooth time off passes no ceiling,
-                        // so the same budget still runs every stage that fits and the step's result
-                        // is unchanged.
-                        finished = smooth
-                            ? _campaign.StepFor(slice, slice * 0.5)
-                            : _campaign.StepFor(slice);
-                        if (smooth)
-                            heavyCall = System.Diagnostics.Stopwatch.GetElapsedTime(callStarted).TotalMilliseconds >= slice * 0.5;
-                    }
-                    else if (smooth)
-                        finished = _campaign.StepFor(1.0, 0.5);
-                    else if (_campaign.MidStep)
-                        finished = _campaign.StepFor(double.PositiveInfinity);
-                    else _campaign.Tick();
-                }
-                _simulating = false;
-                // The rest of this step belongs to the next frame.
-                if (!finished) { _applyingNetworkCommand = false; break; }
-            }
-            catch (System.Exception exception) when (exception is not System.OutOfMemoryException && exception is not System.AccessViolationException)
+            };
+            _frameAfterCall ??= finished =>
             {
                 _simulating = false;
                 _applyingNetworkCommand = false;
-                _dayAccumulator = 0;
-                _campaign.BlockSimulation(exception.Message, exception);
-                DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + exception);
-                var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, _campaign, exception.Message);
-                ShowCampaignFault(Simulation.Loc.Format(
-                    "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.", _campaign.Date.Display()),
-                    path, exception.Message);
-                return;
-            }
+                if (!finished) return true;
+                if (_campaign.SimulationFault.Length > 0) return false;
+                MaybeAutosave();
+                return true;
+            };
+            _frameClock.RunFrame(_campaign, delta, _speed, smooth, _frameBeforeCall, _frameAfterCall);
+        }
+        catch (System.Exception exception) when (exception is not System.OutOfMemoryException && exception is not System.AccessViolationException)
+        {
+            _simulating = false;
             _applyingNetworkCommand = false;
-            if (_campaign.SimulationFault.Length > 0) return;
-            MaybeAutosave();
-            days++;
-            // The step finished on a stage that already took half the slice. Autosave has
-            // seen that boundary. The next step waits for another frame.
-            if (heavyCall) break;
+            _frameClock.Reset();
+            _campaign.BlockSimulation(exception.Message, exception);
+            DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + exception);
+            var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, _campaign, exception.Message);
+            ShowCampaignFault(Simulation.Loc.Format(
+                "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.", _campaign.Date.Display()),
+                path, exception.Message);
         }
     }
 
@@ -305,7 +256,7 @@ public partial class DealOrForceGame : Control
         }
         catch (System.Exception exception) when (exception is not System.OutOfMemoryException && exception is not System.AccessViolationException)
         {
-            _dayAccumulator = 0;
+            _frameClock.Reset();
             campaign.BlockSimulation(exception.Message, exception);
             DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + exception);
             var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, campaign, exception.Message);
@@ -1530,7 +1481,7 @@ public partial class DealOrForceGame : Control
             return;
         }
         _campaign.IsPaused = !_campaign.IsPaused;
-        _dayAccumulator = 0;
+        _frameClock.Reset();
         PlayStrategicCue(_campaign.IsPaused ? "game_pause" : "game_resume");
         _pause.Text = _campaign.IsPaused ? "▶" : "II";
         StyleButton(_pause, _campaign.IsPaused);
@@ -1566,7 +1517,7 @@ public partial class DealOrForceGame : Control
             return;
         }
         _speed = Mathf.Clamp(speed, 1, 5);
-        _dayAccumulator = 0;
+        _frameClock.Reset();
         if (_campaign.IsPaused && resume)
         {
             PlayStrategicCue("game_resume");

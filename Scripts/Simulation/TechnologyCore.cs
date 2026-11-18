@@ -650,7 +650,7 @@ public static partial class ResearchSystem
         var tick = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++tick % 4 == 0) yield return 0;
+            if (++tick % 4 == 0 || Campaign.StageOverdue()) yield return 0;
             using (SimProfiler.Measure("research"))
             {
             if (nation.Population <= 0) continue;

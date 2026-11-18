@@ -436,7 +436,7 @@ public static class SubmissionSystem
         var scanned = 0;
         foreach (var asker in campaign.Nations)
         {
-            if (++scanned % 8 == 0) yield return 0;
+            if (++scanned % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if (asker.IsHuman || asker.IsSubject || asker.Population <= 0) continue;
             if (campaign.ElapsedDays % 30 != (Math.Abs(asker.Id) + 11) % 30) continue;
             if (Chance(asker.Id, month) >= defines.SubmissionAiChancePerMonth) continue;
@@ -449,7 +449,7 @@ public static class SubmissionSystem
             var probed = 0;
             foreach (var target in campaign.Nations)
             {
-                if (++probed % 64 == 0) yield return 0;
+                if (++probed % 64 == 0 || Campaign.StageOverdue()) yield return 0;
                 if (target.Id == asker.Id || target.IsHuman) continue;
                 // Only countries that already like the asker are worth the walk across the room.
                 var relation = CampaignDiplomacy.Peek(campaign, asker.Id, target.Id);

@@ -164,7 +164,7 @@ public static class UnionCohesion
             var highestScore = -1f;
             for (var si = 0; si < states.Length; si++)
             {
-                if (si > 0 && si % 4 == 0) yield return 0;
+                if (si > 0 && (si % 4 == 0 || Campaign.StageOverdue())) yield return 0;
                 var state = states[si];
                 if (!TryScoreCandidate(campaign, nation, state, landlessHotspots, out var score)) continue;
                 if (angriest is null || score > highestScore)

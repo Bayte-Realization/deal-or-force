@@ -175,7 +175,7 @@ public static class AddressToNation
         var scanned = 0;
         foreach (var nation in c.Nations)
         {
-            if (++scanned % 32 == 0) yield return 0;
+            if (++scanned % 32 == 0 || Campaign.StageOverdue()) yield return 0;
             if (nation.AddressPromise.Length == 0 || nation.AddressPromiseDueDay > c.ElapsedDays) continue;
             Settle(c, nation);
         }

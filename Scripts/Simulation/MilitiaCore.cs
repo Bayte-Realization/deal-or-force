@@ -260,7 +260,7 @@ public static class MilitiaCore
         var tick = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++tick % 8 == 0) yield return 0;
+            if (++tick % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             Enemies.Clear();
             CollectEnemies(campaign, nation, Enemies, warMembers);
             if (Enemies.Count == 0)

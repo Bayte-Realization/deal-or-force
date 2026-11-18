@@ -839,6 +839,61 @@ public sealed partial class Campaign
     private bool _runningStages;
     private long _stepStartedHours;
 
+    /// <summary>
+    /// When the stage now running was resumed (a Stopwatch timestamp). See <see cref="StageOverdue"/>.
+    /// Of the thread, not of the campaign: stages run on the thread that steps, one at a time,
+    /// and a loop that asks has no campaign variable it can be sure of. Not saved.
+    /// </summary>
+    [ThreadStatic] private static long _stageStarted;
+
+    /// <summary>
+    /// How long one stage may run before a loop that asks <see cref="StageOverdue"/> hands the
+    /// frame back. Not a define and not saved: it decides how many frames carry a step, never
+    /// what the step does.
+    /// </summary>
+    public static double StageSliceMilliseconds = 4.0;
+
+    /// <summary>
+    /// True when the stage now running has had its slice: a staged loop asks this between two
+    /// of its items and yields when it is true. Then the slice starts again, so a loop walked by
+    /// a plain foreach (a system's own Tick) also yields only every few milliseconds.
+    ///
+    /// A yield is not part of the world. The step runs the same items in the same order whether
+    /// it yields between every one of them or never - nothing else in the simulation runs at a
+    /// yield, and commands wait for the next step - so a loop may yield by the clock, which a
+    /// world must never depend on, and two runs that yielded in different places are still the
+    /// same world. That is what lets this replace the counts ("every 32 countries") that were
+    /// tuned for a world of 260 countries and turned into 40-millisecond stages in a century-old
+    /// save. Counted yields stay where they are; this is the ceiling over them.
+    /// </summary>
+    [ThreadStatic] private static bool _heavyNext;
+
+    /// <summary>
+    /// When the frame that is stepping began (a Stopwatch timestamp), set by SimulationFrameClock
+    /// for the length of one frame and zero otherwise; a frame can make several StepFor calls,
+    /// and the headroom below is the frame's, not one call's. Not saved.
+    /// </summary>
+    [ThreadStatic] public static long FrameStarted;
+
+    /// <summary>How much of a frame may already be spent before a heavy piece is sent to the next one.</summary>
+    public static double HeavyHeadroomMilliseconds = 2.0;
+
+    /// <summary>
+    /// Said by a staged loop just before it yields ahead of a piece it expects to be long and
+    /// cannot cut (one country's war council, one country's new name): a bounded smooth step
+    /// then ends the frame here, unless the frame is still fresh, so the piece starts the next
+    /// frame. Like a yield, it changes when the frame ends and nothing the step does.
+    /// </summary>
+    public static void HeavyNext() => _heavyNext = true;
+
+    public static bool StageOverdue()
+    {
+        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        if ((now - _stageStarted) * 1000.0 < StageSliceMilliseconds * System.Diagnostics.Stopwatch.Frequency) return false;
+        _stageStarted = now;
+        return true;
+    }
+
     /// <summary>Whether a step has been begun by StepFor and is not finished yet.</summary>
     public bool MidStep => _step is not null;
 
@@ -894,12 +949,22 @@ public sealed partial class Campaign
             while (true)
             {
                 var stageStarted = heavyBounded ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
+                _stageStarted = heavyBounded ? stageStarted : System.Diagnostics.Stopwatch.GetTimestamp();
+                _heavyNext = false;
                 if (!stages.MoveNext()) { finished = true; break; }
                 // An unbounded step never takes the heavy break. The ceiling is a second
                 // stop only for a call that asked for one.
                 if (bounded && System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds >= milliseconds) break;
                 if (heavyBounded &&
                     System.Diagnostics.Stopwatch.GetElapsedTime(stageStarted).TotalMilliseconds >= heavyStageMilliseconds)
+                    break;
+                // The stage just finished said the next one is a single piece that cannot be cut
+                // (HeavyNext). If this frame has already spent its headroom, that piece waits for
+                // the next frame and starts it, instead of landing on top of the stages that
+                // filled this one: the frame then costs the piece, not the piece plus a slice.
+                if (heavyBounded && _heavyNext &&
+                    System.Diagnostics.Stopwatch.GetElapsedTime(FrameStarted != 0 ? FrameStarted : started).TotalMilliseconds >=
+                    HeavyHeadroomMilliseconds)
                     break;
             }
         }
@@ -966,15 +1031,17 @@ public sealed partial class Campaign
         DiagnosticLogs.SetDay(ElapsedDays);
         if (DiagnosticLogs.Enabled) DiagnosticLogs.Write("simulation", $"DAY_BEGIN date={Date} pending_commands={Commands.Count}");
 
+        // Three parts named apart: a quarter of a millisecond every hour was billed to "orders"
+        // in a world where nobody was giving any, and the table could not say which part it was.
         using (SimProfiler.Measure("step:orders"))
         {
-            Commands.ApplyAll(this);
-            EvaluateFeatureUnlocks();
+            using (SimProfiler.Measure("  orders:apply")) Commands.ApplyAll(this);
+            using (SimProfiler.Measure("  orders:unlocks")) EvaluateFeatureUnlocks();
 
             // The long-range reach index, rebuilt fresh from the orders the step has just
             // applied: the fighting below asks it who reaches into each battle, and a client
             // restored from a snapshot must hold the same answer a host does at the same hour.
-            SupportCore.PrepareStep(this);
+            using (SimProfiler.Measure("  orders:support")) SupportCore.PrepareStep(this);
         }
 
         // What the step covers, and how many whole days it crosses. A day boundary is what
@@ -2688,6 +2755,20 @@ public sealed partial class Campaign
 
     /// <summary>Whether anything has happened that the interface has not drawn yet.</summary>
     public bool InterfaceDirty { get; private set; }
+
+    /// <summary>
+    /// A change the player's interface should show. Outside a step it redraws now, as it always
+    /// did: a player's own click on a law answers at once. Inside one - a government nobody
+    /// plays falling in the middle of the day - it waits for the frame's flush like every other
+    /// change of the day: the whole interface redrawn inside a simulation stage was a frame the
+    /// game held for a country the player was not looking at. The interface only reads, so when
+    /// it redraws changes nothing in the world.
+    /// </summary>
+    internal void NotifyInterface()
+    {
+        if (_runningStages) InterfaceDirty = true;
+        else Changed?.Invoke();
+    }
 
     /// <summary>Redraw once for everything that has happened since the last frame.</summary>
     public void FlushInterfaceChanges()

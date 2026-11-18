@@ -584,7 +584,7 @@ public static partial class AiStatecraft
         var seenPartners = 0;
         foreach (var other in Circle)
         {
-            if (++seenPartners % 8 == 0) yield return 0;
+            if (++seenPartners % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             using (SimProfiler.Measure("  ai:diplomacy"))
             using (SimProfiler.Measure("    dip:opinions"))
             {
@@ -954,10 +954,20 @@ public static partial class AiStatecraft
             {
                 if (existing.Ended || !existing.Involves(nation.Id)) continue;
                 // In trouble, ask somebody in before deciding whether to ask the enemy for terms.
-                SeekRescue(campaign, nation, existing);
+                // Either can be a long piece for a country in a big war (StageCosts): announced,
+                // it starts a frame instead of finishing one.
+                if (StageCosts.Heavy("war:rescue", nation.Id)) { Campaign.HeavyNext(); yield return 0; }
+                var rescueStarted = StageCosts.Start();
+                using (SimProfiler.Measure("    war:rescue")) SeekRescue(campaign, nation, existing);
+                StageCosts.Stop("war:rescue", nation.Id, rescueStarted);
                 yield return 0;
                 if (!existing.Ended && existing.Involves(nation.Id))
-                    Negotiate(campaign, nation, existing);
+                {
+                    if (StageCosts.Heavy("war:negotiate", nation.Id)) { Campaign.HeavyNext(); yield return 0; }
+                    var negotiateStarted = StageCosts.Start();
+                    using (SimProfiler.Measure("    war:negotiate")) Negotiate(campaign, nation, existing);
+                    StageCosts.Stop("war:negotiate", nation.Id, negotiateStarted);
+                }
                 yield return 0;
             }
             yield break;
@@ -976,19 +986,22 @@ public static partial class AiStatecraft
 
         // A partition agreed with allies is this week's business when it happens: the same
         // government cannot go shopping for a private war on top of carving up a neighbour.
-        if (TryCoordinatePartition(campaign, nation)) yield break;
+        bool partitioned;
+        using (SimProfiler.Measure("    war:partition")) partitioned = TryCoordinatePartition(campaign, nation);
+        if (partitioned) yield break;
         yield return 0;
 
         // First, whatever we already decided to do about somebody. A country with a plan
         // spends its week on the plan rather than on shopping for a different war.
-        PursueWarPlan(campaign, nation);
+        using (SimProfiler.Measure("    war:plan")) PursueWarPlan(campaign, nation);
 
         if (nation.WarSupport < defines.AiWarSupportFloor) yield break;
         if (nation.Stability < defines.AiWarStabilityFloor) yield break;
 
         Nation target = null;
         var bestJudgement = float.MinValue;
-        var reachableList = Reachable(campaign, nation);
+        IReadOnlyList<int> reachableList;
+        using (SimProfiler.Measure("    war:reach")) reachableList = Reachable(campaign, nation);
         var reachableCount = reachableList.Count;
         if (reachableCount > 0)
         {
@@ -998,7 +1011,7 @@ public static partial class AiStatecraft
             {
                 for (var ri = 0; ri < reachableCount; ri++)
                 {
-                    if (ri > 0 && ri % 6 == 0) yield return 0;
+                    if (ri > 0 && (ri % 6 == 0 || Campaign.StageOverdue())) yield return 0;
                     var mapIndex = rentedTargets[ri];
                     var other = ByMapIndex(campaign, mapIndex);
                     if (other is null || other.Id == nation.Id) continue;
@@ -1019,7 +1032,8 @@ public static partial class AiStatecraft
                     // What it is worth, minus what it costs. Subtracted rather than multiplied,
                     // because the price has to be able to win the argument outright - and under the
                     // old multiplicative rule nothing ever could.
-                    var judgement = WarJudgement(campaign, nation, other);
+                    float judgement;
+                    using (SimProfiler.Measure("    war:judge")) judgement = WarJudgement(campaign, nation, other);
                     // A small, kindred or simply helpless neighbour is worth more than the ordinary
                     // border arithmetic says. This is appetite, not a free cause: WarPrice still
                     // charges the notoriety and the restraint, and CasusBelli still has to name it.
@@ -1032,7 +1046,9 @@ public static partial class AiStatecraft
                         judgement -= defines.AiOverseasCaution;
                     if (judgement > 0f) Count("wanted");
                     if (!TerritorialClaims.PreferTarget(campaign, nation, other, judgement, target, bestJudgement)) continue;
-                    if (judgement > 0f && !CanStageWar(campaign, nation, other)) { Count("unreachable_or_unready"); continue; }
+                    bool stageable;
+                    using (SimProfiler.Measure("    war:stageable")) stageable = judgement <= 0f || CanStageWar(campaign, nation, other);
+                    if (!stageable) { Count("unreachable_or_unready"); continue; }
                     bestJudgement = judgement;
                     target = other;
                 }
@@ -1082,7 +1098,9 @@ public static partial class AiStatecraft
             yield break;
         }
         Count("targeted");
-        if (!PreparationComplete(campaign, nation, target)) { Count("preparing"); yield break; }
+        bool prepared;
+        using (SimProfiler.Measure("    war:prepared")) prepared = PreparationComplete(campaign, nation, target);
+        if (!prepared) { Count("preparing"); yield break; }
 
         // Even a country that wants a war does not start one on a particular Tuesday.
         // The die keeps the map from lurching every time a balance of power tips.
@@ -1113,7 +1131,10 @@ public static partial class AiStatecraft
         // every fresh world handed over the same weak neighbours on their first AI day,
         // even when the government would never have committed to the threatened war.
         // A player's own papers and the recipient's assessment are unchanged.
-        if (annexation is null && TryUltimatumFirst(campaign, nation, target))
+        bool asked = false;
+        if (annexation is null)
+            using (SimProfiler.Measure("    war:ultimatum")) asked = TryUltimatumFirst(campaign, nation, target);
+        if (asked)
         {
             Count("asked_before_war");
             yield break;

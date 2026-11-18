@@ -237,7 +237,7 @@ public static class MovementMethods
             if (state is null || state.Dissolved) continue;
             var definition = Movements.DefinitionOf(movement);
             if (definition is null || definition.Has("for_hire") || definition.Has("humanitarian")) continue;
-            if (++ticked % 4 == 0) yield return 0;
+            if (++ticked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
             MovementTraits.Review(c, movement);
             var before = StageOf(c, movement);
             var target = TargetFromPulls(PullsOf(c, movement, definition, crackdownsByTarget, armsByClient));

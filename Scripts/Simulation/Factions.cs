@@ -337,7 +337,7 @@ public static class Factions
         var ticked = 0;
         foreach (var faction in campaign.Nations.ToArray())
         {
-            if (++ticked % 4 == 0) yield return 0;
+            if (++ticked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
             if (campaign.Fallen.Contains(faction.Id)) continue;
             var parent = campaign.NationById(faction.SecededFromId);
             if (parent is null || campaign.Fallen.Contains(parent.Id) || parent.Movement is not null) continue;

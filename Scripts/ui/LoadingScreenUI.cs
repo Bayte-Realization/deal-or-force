@@ -141,7 +141,7 @@ public partial class DealOrForceGame
         _loadingScreen = null;
         if (_globe is not null) _globe.LoadingInputBlocked = false;
         _isLoading = false;
-        _dayAccumulator = 0;
+        _frameClock.Reset();
         if (GodotObject.IsInstanceValid(_loadingPreviousFocus) && _loadingPreviousFocus.IsVisibleInTree())
             _loadingPreviousFocus.GrabFocus();
     }

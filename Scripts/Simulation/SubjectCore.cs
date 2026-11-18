@@ -607,7 +607,7 @@ public static class SubjectSystem
         var activeSubjects = 0;
         foreach (var subject in campaign.Nations)
         {
-            if (++tick % 32 == 0) yield return 0;
+            if (++tick % 32 == 0 || Campaign.StageOverdue()) yield return 0;
             if (!subject.IsSubject) continue;
             if (activeSubjects++ > 0) yield return 0;
             var type = SubjectCatalog.Of(subject.SubjectType);

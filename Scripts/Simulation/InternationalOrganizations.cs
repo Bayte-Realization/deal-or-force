@@ -502,7 +502,7 @@ public static class InternationalOrganizations
         var ticked = 0;
         foreach (var org in Active(c).ToArray())
         {
-            if (++ticked % 4 == 0) yield return 0;
+            if (++ticked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
             // A live mod reload can remove a charter. Freeze its institution, do not crash
             // an assembly or silently reinterpret its voting rule.
             if (Charter(org.CharterId) is null) continue;

@@ -115,7 +115,7 @@ public static class Shipbuilding
         var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++ticked % 8 == 0) yield return 0;
+            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if (!ordersByNation.TryGetValue(nation.Id, out var orderedFleets)) continue;
             using (SimProfiler.Measure("  ship:progress"))
             {

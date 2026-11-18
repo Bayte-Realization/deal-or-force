@@ -451,6 +451,8 @@ public static class MovementRules
         internal int CultureStampTick;
         internal readonly List<(int RelId, int CultId, string RawCulture, long Size)> RegionRelCultList = new();
         internal ulong[] StateDemographySigs = Array.Empty<ulong>();
+        /// <summary>Today's stamps, taken side by side before they are compared; scratch, not saved.</summary>
+        internal ulong[] FreshSigs = Array.Empty<ulong>();
         internal int[][] StateCultIds = Array.Empty<int[]>();
         internal int[][] StateRelIds = Array.Empty<int[]>();
         internal readonly List<int> DirtySlots = new();
@@ -636,9 +638,17 @@ public static class MovementRules
                     if (!ReferenceEquals(previous[i], orderedStates[i])) { sameRegions = false; break; }
                 }
             }
+            // Every region's stamp, side by side (DeterministicParallel): a stamp reads only that
+            // region's people and the index's own table of names, which nothing writes while
+            // the stamps are taken, and the regions that changed are then listed on this thread
+            // in the same ascending order as before. Two thousand regions of a late world, two
+            // hundred and seventy thousand groups, every day: the whole of it was on one thread.
+            var fresh = cache.FreshSigs.Length >= totalStates ? cache.FreshSigs : cache.FreshSigs = new ulong[totalStates];
+            DeterministicParallel.For(campaign, 0, totalStates,
+                i => fresh[i] = StateDemographySignature(cache, orderedStates[i]), minItems: 256);
             for (var i = 0; i < totalStates; i++)
             {
-                if (StateDemographySignature(cache, orderedStates[i]) != cache.StateDemographySigs[i])
+                if (fresh[i] != cache.StateDemographySigs[i])
                     dirtySlots.Add(i);
             }
             if (cache.OwnershipRevision != ownership && !sameRegions)
@@ -1244,7 +1254,21 @@ public static class MovementRules
 
     internal static IEnumerable<int> EnsurePeopleIndexedStages(Campaign campaign, bool insideMovRules)
     {
-        EnsurePeopleCache(campaign);
+        // The stamps that decide what is dirty were the unnamed twenty milliseconds the profile
+        // put "after mov:people": named now, beside the index they decide about.
+        if (insideMovRules)
+        {
+            using (SimProfiler.Measure("movements"))
+            using (SimProfiler.Measure("  mov:rules"))
+            using (SimProfiler.Measure("    mov:people"))
+            using (SimProfiler.Measure("      mov:people:stamp"))
+                EnsurePeopleCache(campaign);
+        }
+        else
+        {
+            using (SimProfiler.Measure("        mov:people:stamp"))
+                EnsurePeopleCache(campaign);
+        }
         var cache = campaign.MovementPeople;
         if (cache.Indexed) yield break;
         cache.IndexBuilds++;

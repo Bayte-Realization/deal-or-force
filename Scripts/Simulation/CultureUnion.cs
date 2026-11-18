@@ -150,7 +150,7 @@ public static class CultureUnion
         {
             var initiator = eligible[i];
             if (c.Fallen.Contains(initiator.Id)) continue;
-            if (++ticked % 8 == 0) yield return 0;
+            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             for (var j = 0; j < eligible.Count; j++)
             {
                 var partner = eligible[j];

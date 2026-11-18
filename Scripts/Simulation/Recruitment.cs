@@ -203,7 +203,7 @@ public static class RecruitmentSystem
         var ticked = 0;
         foreach (var order in c.Recruitment.ToArray())
         {
-            if (++ticked % 16 == 0) yield return 0;
+            if (++ticked % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (order.LastProcessedDay >= c.ElapsedDays) continue;
             order.LastProcessedDay = c.ElapsedDays;
             var province = DeploymentProvince(c, order.NationId, order.StateMapIndex);

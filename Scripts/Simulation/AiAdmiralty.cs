@@ -81,7 +81,7 @@ public static class AiAdmiralty
         var ticked = 0;
         foreach (var fleet in campaign.Fleets)
         {
-            if (++ticked % 16 == 0) yield return 0;
+            if (++ticked % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (fleet.Hulls <= 0) continue;
             var nation = campaign.NationById(fleet.NationId);
             // A player's navy is the player's - unless they have handed it to the admiralty,

@@ -170,7 +170,7 @@ public static class DealNegotiations
         var ticked = 0;
         foreach (var paper in c.DealOffers.Where(o => o.Pending).ToArray())
         {
-            if (++ticked % 32 == 0) yield return 0;
+            if (++ticked % 32 == 0 || Campaign.StageOverdue()) yield return 0;
             if (paper.ExpiresDay <= c.ElapsedDays) Close(c, paper, DealOfferState.Expired, "The offer has expired.");
             else if (!c.FeatureEnabled("deals")) Close(c, paper, DealOfferState.Invalidated, "Deals are disabled in this campaign.");
             else if (c.NationById(paper.ToId)?.IsHuman != true)

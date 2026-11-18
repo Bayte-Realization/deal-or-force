@@ -1460,23 +1460,35 @@ public static class NationNaming
         var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++scanned % 32 == 0) yield return 0;
+            if (++scanned % 32 == 0 || Campaign.StageOverdue()) yield return 0;
             if (string.IsNullOrEmpty(nation.FoundNameKind) || !string.IsNullOrWhiteSpace(nation.CustomName)) continue;
-            if (nation.Movement is null || !nation.Movement.Landless) Refit(campaign, nation, "ground");
-            if (nation.NameSettledDay >= 0)
-            {
-                if (nation.Government != "provisional_government" &&
-                    campaign.ElapsedDays - nation.PoliticsChangedDay >= campaign.Defines.NameFormFollowsDays &&
-                    !string.Equals(FormFor(nation.Government, nation.Ideology, nation.DeclaredReligion, nation.DeclaredCulture),
-                        nation.FoundNameForm, StringComparison.OrdinalIgnoreCase))
-                    Settle(campaign, nation, "regime");
-                continue;
-            }
-            if (campaign.ElapsedDays < campaign.Defines.FoundingNameSettleDays) continue;
-            if (nation.Stability < campaign.Defines.FoundingSettleStability) continue;
-            if (nation.Government == "provisional_government") continue;
-            Settle(campaign, nation, "settled");
+            // One large founded country's look at its ground is thirty or forty milliseconds of
+            // walking its peoples, and cannot be cut. The one that took that long last month
+            // starts a frame of its own (StageCosts).
+            if (StageCosts.Heavy("naming", nation.Id)) { Campaign.HeavyNext(); yield return 0; }
+            var started = StageCosts.Start();
+            Review(campaign, nation);
+            StageCosts.Stop("naming", nation.Id, started);
         }
+    }
+
+    /// <summary>One founded country's month: its name against its ground, then its form against its politics.</summary>
+    private static void Review(Campaign campaign, Nation nation)
+    {
+        if (nation.Movement is null || !nation.Movement.Landless) Refit(campaign, nation, "ground");
+        if (nation.NameSettledDay >= 0)
+        {
+            if (nation.Government != "provisional_government" &&
+                campaign.ElapsedDays - nation.PoliticsChangedDay >= campaign.Defines.NameFormFollowsDays &&
+                !string.Equals(FormFor(nation.Government, nation.Ideology, nation.DeclaredReligion, nation.DeclaredCulture),
+                    nation.FoundNameForm, StringComparison.OrdinalIgnoreCase))
+                Settle(campaign, nation, "regime");
+            return;
+        }
+        if (campaign.ElapsedDays < campaign.Defines.FoundingNameSettleDays) return;
+        if (nation.Stability < campaign.Defines.FoundingSettleStability) return;
+        if (nation.Government == "provisional_government") return;
+        Settle(campaign, nation, "settled");
     }
 }
 

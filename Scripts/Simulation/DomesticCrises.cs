@@ -158,7 +158,7 @@ public static partial class DomesticCrises
         var tick = 0;
         foreach (var nation in c.Nations)
         {
-            if (++tick % 8 == 0) yield return 0;
+            if (++tick % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             var memory = nation.DomesticCrisis ??= new();
             if (memory.LastReviewDay == c.ElapsedDays) continue;
             // Start at the current conditions; a legacy save never accrues years of backdated crises.

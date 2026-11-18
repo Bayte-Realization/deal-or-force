@@ -295,7 +295,7 @@ public static class ProxyWars
         var delivered = 0;
         foreach (var s in c.Sponsorships)
         {
-            if (++delivered % 64 == 0) yield return 0;
+            if (++delivered % 64 == 0 || Campaign.StageOverdue()) yield return 0;
             if (s.Ended) continue;
             var sponsor = c.NationById(s.SponsorId);
             var client = c.NationById(s.ClientId);
@@ -370,7 +370,7 @@ public static class ProxyWars
         var ticked = 0;
         foreach (var sponsor in c.Nations)
         {
-            if (++ticked % 8 == 0) yield return 0;
+            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if ((sponsor.Id + c.ElapsedDays) % cycle != 0) continue;
             if (sponsor.IsHuman || sponsor.Movement is not null || sponsor.Population <= 0) continue;
             var mine = Active(c).Where(s => s.SponsorId == sponsor.Id).ToList();

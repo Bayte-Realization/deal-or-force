@@ -62,7 +62,7 @@ public static class MovementMergers
         var gone = new HashSet<int>();
         for (var i = 0; i < active.Count; i++)
         {
-            if (i > 0 && i % 16 == 0) yield return 0;
+            if (i > 0 && (i % 16 == 0 || Campaign.StageOverdue())) yield return 0;
             for (var j = i + 1; j < active.Count; j++)
             {
                 var a = active[i]; var b = active[j];

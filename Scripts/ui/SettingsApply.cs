@@ -136,7 +136,7 @@ public partial class DealOrForceGame
                 if (_campaign is not null)
                 {
                     _campaign.Defines.HoursPerTick = Math.Clamp(Whole("hours_per_tick"), 1, 240);
-                    _dayAccumulator = 0;
+                    _frameClock.Reset();
                     if (!_applyingEverySetting && _startupComplete) Refresh();
                 }
                 break;

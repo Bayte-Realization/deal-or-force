@@ -129,7 +129,7 @@ public static class LostLands
         var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++scanned % 16 == 0) yield return 0;
+            if (++scanned % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (!nation.IsHuman || nation.Population <= 0 || nation.Movement is not null) continue;
             if (!MovementRules.OnItsDay(campaign, nation.Id, cycle)) continue;
             if (campaign.ElapsedDays - nation.LostLandAskedDay < campaign.Defines.LostLandAskCooldownDays) continue;

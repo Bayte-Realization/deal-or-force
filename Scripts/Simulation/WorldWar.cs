@@ -200,7 +200,7 @@ public static class WorldWar
         var ticked = 0;
         foreach (var nation in c.Nations)
         {
-            if (++ticked % 16 == 0) yield return 0;
+            if (++ticked % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null) continue;
             if (Warfare.OpenWars(c).Any(w => !w.Ended && w.WorldWarDay >= 0 && w.Involves(nation.Id))) continue;
             nation.Stability = M.Clamp01(nation.Stability - shock);

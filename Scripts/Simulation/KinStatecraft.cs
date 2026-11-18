@@ -681,7 +681,7 @@ public static class KinStatecraft
                 else if (list[index].Share < share) list[index] = new Candidate(host, region, share);
             }
             }
-            if (++scanned % 48 == 0) yield return 0;
+            if (++scanned % 48 == 0 || Campaign.StageOverdue()) yield return 0;
         }
     }
 

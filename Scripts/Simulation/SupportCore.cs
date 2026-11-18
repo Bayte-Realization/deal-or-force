@@ -270,8 +270,26 @@ public static class SupportCore
         campaign.FeatureEnabled(MechanicFeatures.Of(type.Kind)) &&
         (string.IsNullOrEmpty(type.RequiredFeature) || campaign.FeatureEnabled(type.RequiredFeature));
 
-    public static bool Enabled(Campaign campaign, string typeId) =>
-        SupportTypeCatalog.TryGet(typeId, out var type) && Enabled(campaign, type);
+    public static bool Enabled(Campaign campaign, string typeId)
+    {
+        // Inside PrepareStep the same few kinds are asked about once per formation, twice, every
+        // hour: each answer is a catalogue lookup and four feature switches read by name, and
+        // nothing in the step's preparation turns a switch. So the answer per kind is kept for
+        // the length of that call (and only that call, on that thread) - the same answer.
+        if (_enabledMemoFor is not null && ReferenceEquals(_enabledMemoFor, campaign) && typeId is not null)
+        {
+            var memo = _enabledMemo;
+            for (var index = 0; index < memo.Count; index++)
+                if (string.Equals(memo[index].TypeId, typeId, StringComparison.Ordinal)) return memo[index].Enabled;
+            var answer = SupportTypeCatalog.TryGet(typeId, out var known) && Enabled(campaign, known);
+            memo.Add((typeId, answer));
+            return answer;
+        }
+        return SupportTypeCatalog.TryGet(typeId, out var type) && Enabled(campaign, type);
+    }
+
+    [ThreadStatic] private static Campaign _enabledMemoFor;
+    [ThreadStatic] private static List<(string TypeId, bool Enabled)> _enabledMemo;
 
     /// <summary>
     /// Rebuild the by-nation reach index, once at the top of every step.
@@ -285,8 +303,19 @@ public static class SupportCore
     /// </summary>
     internal static void PrepareStep(Campaign campaign)
     {
-        SupportRepatriation.Reconcile(campaign);
-        IndexReach(campaign);
+        var memo = _enabledMemo ??= new List<(string TypeId, bool Enabled)>(8);
+        memo.Clear();
+        _enabledMemoFor = campaign;
+        try
+        {
+            SupportRepatriation.Reconcile(campaign);
+            IndexReach(campaign);
+        }
+        finally
+        {
+            _enabledMemoFor = null;
+            memo.Clear();
+        }
     }
 
     public static void IndexReach(Campaign campaign)

@@ -956,10 +956,19 @@ public static class EconomySystem
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(EconomySystem))) yield break;
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) yield break;
+        if (campaign.ElapsedDays == 0) yield break;
+        var every = Math.Max(1, campaign.Defines.EconomyTickDays);
+        var marketDay = campaign.ElapsedDays % campaign.Defines.EconomyTickDays == 0;
+        // EconomyWeekStaggered (off as shipped): every country still closes its week once a
+        // week, on a day of its own, against the latest market, instead of all of them on the
+        // market's day - a seventh of the countries a day. The heavy weekly step loses most of
+        // its country half. The world it makes is not the shipped one; see the define.
+        var staggered = campaign.Defines.EconomyWeekStaggered;
+        if (!marketDay && !staggered) yield break;
         // The market pass had no top-level scope of its own: a hundred and fifty milliseconds
         // of a late week vanished into the day's unmeasured remainder instead of naming the
         // system that spent them.
+        if (marketDay)
         using (var market = MarketSystem.TickStages(campaign).GetEnumerator())
         {
             while (true)
@@ -972,7 +981,8 @@ public static class EconomySystem
         }
         for (var index = 0; index < campaign.Nations.Count; index++)
         {
-            if (index > 0 && index % EconomyStageCountries == 0) yield return 0;
+            if (index > 0 && (index % EconomyStageCountries == 0 || Campaign.StageOverdue())) yield return 0;
+            if (staggered && index % every != campaign.ElapsedDays % every) continue;
             using var stage = SimProfiler.Measure("economy");
             var nation = campaign.Nations[index];
             // A retired country (LongCampaign) keeps no books: no ledger to close, nothing to zero.
@@ -1818,6 +1828,18 @@ public static class ConstructionSystem
 
 public sealed partial class Defines
 {
+    /// <summary>
+    /// Off as shipped. On, each country closes its economic week (budget, growth, its regions'
+    /// households) on a weekday of its own - its place in the list modulo the week - against the
+    /// most recent market, instead of every country on the market's day. Every country still
+    /// closes exactly one week a week. It takes most of the country half out of the week's heavy
+    /// step, at the price of a different world: a country's budget then reads a market from up
+    /// to six days earlier, and the daily passes in between read a world where some countries
+    /// have closed their week and some have not. Measured for the owner in
+    /// docs/PERFORMANCE_PASS_3_2026_11_18_RU.md; not part of the same-world contract.
+    /// </summary>
+    public bool EconomyWeekStaggered { get; set; }
+
     /// <summary>The weekly share of the gap between a country's living standard and what its
     /// economy carries that closes (EconomySystem.EconomicLiving): about a year and a third to halve it.</summary>
     public float LivingReversionPerWeek { get; set; } = 0.01f;

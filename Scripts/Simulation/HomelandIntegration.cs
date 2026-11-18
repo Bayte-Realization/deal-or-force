@@ -66,7 +66,7 @@ public static class HomelandIntegration
         var scanned = 0;
         foreach (var region in c.States)
         {
-            if (++scanned % 64 == 0) yield return 0;
+            if (++scanned % 64 == 0 || Campaign.StageOverdue()) yield return 0;
             if (!MovementRules.OnItsDay(c, region.MapIndex, Cycle)) continue;
             if (region.Unclaimed || region.Population <= 0) continue;
             if (region.TrackedOwnerMapIndex != region.NationMapIndex)

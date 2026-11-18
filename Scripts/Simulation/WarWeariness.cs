@@ -121,7 +121,7 @@ public static class WarWeariness
         var weekIndex = 0;
         for (var index = 0; index < week.Count; index++)
         {
-            if (++weekIndex % 4 == 0) yield return 0;
+            if (++weekIndex % 4 == 0 || Campaign.StageOverdue()) yield return 0;
             var war = week[index];
             if (war.Ended) continue;
             // How it is going, felt at home: a side losing badly stops believing in it, and a side

@@ -123,12 +123,16 @@ public static class MilitaryExperience
         var perStability = defines.PoliticalPointsStabilityWeight / 7f * scale;
         var baseline = MathF.Max(0.0001f, defines.BaselineMilitarySpending);
         yield return 0;
-        var ticked = 0;
-        foreach (var nation in campaign.Nations)
+        // Every living country side by side (DeterministicParallel): a country's lesson is read
+        // off its own budget, its own strategy and the four counts above, which nothing in this
+        // loop writes, and it is written to its own experience, credit, treasury and ledger week
+        // only. No country reads another's, so the order of the countries is not part of the
+        // answer, and each country's sums are the same additions in the same order as before -
+        // the same bits on one thread or nine. This runs every hour of every day.
+        var living = campaign.ActiveNations;
+        DeterministicParallel.For(campaign, 0, living.Count, index =>
         {
-            if (++ticked % 16 == 0) yield return 0;
-            // A retired country (LongCampaign) trains nobody and earns no political credit.
-            if (campaign.IsRetired(nation)) continue;
+            var nation = living[index];
             // Money above what the army costs anyway is what buys training value: a budget at
             // the baseline teaches nobody anything new, and a cut teaches nobody faster.
             var funding = MathF.Max(0f, nation.MilitarySpending / baseline - 1f) *
@@ -153,7 +157,7 @@ public static class MilitaryExperience
             nation.PoliticalPoints += political + perStability * M.Clamp01(nation.Stability);
             if (drills > 0)
                 { var ledgerBefore = nation.Treasury; nation.Treasury -= drills * defines.TrainingCostPerDivisionWeek / 7f * scale; MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
-        }
+        });
 
         // A week's cabinet business, not a daily one: which governments keep their army sharp.
         yield return 0;

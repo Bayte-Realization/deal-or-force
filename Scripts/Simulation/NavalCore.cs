@@ -203,7 +203,7 @@ public static class NavalOperations
         var ticked = 0;
         foreach (var fleet in campaign.Fleets)
         {
-            if (++ticked % 32 == 0) yield return 0;
+            if (++ticked % 32 == 0 || Campaign.StageOverdue()) yield return 0;
             var nation = campaign.NationById(fleet.NationId);
             if (nation is null) continue;
             // A fleet sunk to its last hull is rebuilt in its home port, so it still needs one.

@@ -240,7 +240,7 @@ public static class WarDamage
         var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++ticked % 2 == 0) yield return 0;
+            if (++ticked % 2 == 0 || Campaign.StageOverdue()) yield return 0;
             // What Arrive remembers of the regions is for one country's turn (Arrivals).
             _arrivals?.Forget();
             var states = campaign.StatesOf(nation);
@@ -252,7 +252,8 @@ public static class WarDamage
                 if (state.Displaced.Count > 0) anyDisplaced = true;
             }
             if (anyDisplaced)
-                foreach (var state in states) Return(campaign, states, state);
+                using (SimProfiler.Measure("  wd:return"))
+                    foreach (var state in states) Return(campaign, states, state);
             if (!anyDamage) continue;
             if (!recounted) { Recount(campaign, ledger); recounted = true; }
             if (atWar is null)
@@ -266,7 +267,7 @@ public static class WarDamage
                         if (war.Involves(other.Id)) atWar.Add(other.Id);
                 }
             }
-            NeighboursAtPeace(campaign, nation, atWar, abroad);
+            using (SimProfiler.Measure("  wd:abroad")) NeighboursAtPeace(campaign, nation, atWar, abroad);
 
             ScenarioState worst = null;
             foreach (var state in states)
@@ -275,7 +276,8 @@ public static class WarDamage
                 if (damage <= 0f) continue;
 
                 state.StandardOfLiving = M.Clamp01(state.StandardOfLiving - damage * defines.WarDamageLivingPerWeek);
-                Flee(campaign, states, state, (long)(state.Population * damage * defines.WarDamageFleePerWeek), abroad);
+                using (SimProfiler.Measure("  wd:flee"))
+                    Flee(campaign, states, state, (long)(state.Population * damage * defines.WarDamageFleePerWeek), abroad);
 
                 // Proportional, so a ruin is rebuilt fastest where there is most to rebuild, and
                 // a last thousandth a week, so the last of it is rebuilt at all.

@@ -845,7 +845,7 @@ public static partial class Warfare
         var seen = 0;
         foreach (var army in InWar(war.Id))
         {
-            if (++seen % 6 == 0) yield return 0;
+            if (++seen % 6 == 0 || Campaign.StageOverdue()) yield return 0;
             // A formation with nothing to resolve - holding, in reserve, marching, fighting, not
             // yet ready - is passed before the measuring starts. Two in three are, every hour
             // (87 thousand of 129 thousand over fourteen late days), and each used to open and

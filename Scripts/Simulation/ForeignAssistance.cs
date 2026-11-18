@@ -181,7 +181,7 @@ public static partial class ForeignAssistance
         var reviewed = 0;
         for (var idx = 0; idx < c.Nations.Count; idx++)
         {
-            if (++reviewed % 8 == 0) yield return 0;
+            if (++reviewed % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             var requester = c.Nations[idx];
             if (requester.IsHuman || requester.Population <= 0 || requester.Movement is not null) continue;
             if (((long)c.ElapsedDays + requester.Id) % cadence != 0) continue;

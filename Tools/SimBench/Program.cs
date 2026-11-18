@@ -1854,7 +1854,76 @@ public static class Program
         // By the calendar, not by the argument: the profile warms up for three days and follows
         // its measured days with two thirty-day probes, so "after 30 days" was after 93.
         LongCampaignReport.Census(campaign, $"after {campaign.ElapsedDays - loadedOn} day(s)");
+        // `--frames 5,3 [--frame-days N]`: after everything above (so the fingerprint it printed
+        // still compares with a run without it), the game's own scheduler frame by frame.
+        var framesAt = Array.IndexOf(given, "--frames");
+        if (framesAt >= 0 && framesAt + 1 < given.Length)
+        {
+            var frameDaysAt = Array.IndexOf(given, "--frame-days");
+            var frameDays = frameDaysAt >= 0 && frameDaysAt + 1 < given.Length && int.TryParse(given[frameDaysAt + 1], out var fd) ? fd : 20;
+            foreach (var part in given[framesAt + 1].Split(',', StringSplitOptions.RemoveEmptyEntries))
+                if (int.TryParse(part, out var speed)) FramesAtSpeed(campaign, speed, frameDays);
+        }
         return result;
+    }
+
+    /// <summary>
+    /// What a player at this speed feels, headless: <see cref="SimulationFrameClock"/> - the loop
+    /// DealOrForceGame._Process runs - driven one frame at a time with smooth time on, as shipped.
+    ///
+    /// A frame's delta is what the game's would be: a sixtieth of a second, or longer when the
+    /// last frame's simulation itself took longer (the drawing is not here, so this is the floor
+    /// of the real frame, never more than it). The number per frame is the simulation's share of
+    /// it - the time the picture waited for the world. That is the number a hitch is.
+    /// </summary>
+    private static void FramesAtSpeed(Campaign campaign, int speed, int days)
+    {
+        campaign.IsPaused = false;
+        var clock = new SimulationFrameClock();
+        var frames = new List<double>();
+        var worst = new List<(double Ms, int Day, string Parts)>();
+        var before = new Dictionary<string, double>();
+        var stopAt = campaign.ElapsedDays + days;
+        var startDay = campaign.ElapsedDays;
+        var delta = 1.0 / 60.0;
+        var seconds = 0.0;
+        while (campaign.ElapsedDays < stopAt && string.IsNullOrEmpty(campaign.SimulationFault) && frames.Count < 2_000_000)
+        {
+            before.Clear();
+            foreach (var sample in SimProfiler.All) before[sample.Name] = sample.TotalMilliseconds;
+            var gen2 = GC.CollectionCount(2);
+            var pause = GC.GetTotalPauseDuration();
+            var started = Stopwatch.GetTimestamp();
+            clock.RunFrame(campaign, delta, speed, smooth: true);
+            var ms = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            frames.Add(ms);
+            seconds += delta;
+            if (ms >= 25.0 && (worst.Count < 12 || ms > worst[^1].Ms))
+            {
+                var parts = SimProfiler.All
+                    .Select(sample => (Name: sample.Name, Ms: sample.TotalMilliseconds - before.GetValueOrDefault(sample.Name)))
+                    .Where(item => item.Ms >= 1.0 && item.Name != "campaign.day")
+                    .OrderByDescending(item => item.Ms).Take(6)
+                    .Select(item => $"{item.Name.Trim()} {item.Ms:0}").ToList();
+                var collected = GC.CollectionCount(2) - gen2;
+                var paused = (GC.GetTotalPauseDuration() - pause).TotalMilliseconds;
+                if (paused >= 1) parts.Add($"gc {paused:0} ms ({collected} gen2)");
+                worst.Add((ms, campaign.ElapsedDays, string.Join(", ", parts)));
+                worst.Sort((left, right) => right.Ms.CompareTo(left.Ms));
+                if (worst.Count > 12) worst.RemoveAt(12);
+            }
+            delta = Math.Max(1.0 / 60.0, ms / 1000.0);
+        }
+        if (frames.Count == 0) return;
+        var sorted = frames.OrderBy(ms => ms).ToList();
+        double At(double share) => sorted[Math.Min(sorted.Count - 1, (int)(sorted.Count * share))];
+        var budget = SimulationFrameClock.FrameBudgetMs(campaign.Defines, speed, smooth: true);
+        Console.WriteLine($"FRAMES speed {speed} (smooth, {budget:0} ms slice, {campaign.ElapsedDays - startDay} days): {frames.Count:N0} frames; " +
+                          $"median {At(0.5):0.00} ms, p99 {At(0.99):0.00}, p99.9 {At(0.999):0.00}, worst {sorted[^1]:0.0}; " +
+                          $"over 33 ms {frames.Count(ms => ms > 33.3):N0}, over 50 ms {frames.Count(ms => ms > 50.0):N0}; " +
+                          $"{(campaign.ElapsedDays - startDay) / Math.Max(0.001, seconds):0.00} days a second.");
+        foreach (var (ms, day, parts) in worst)
+            Console.WriteLine($"  frame {ms:0.0} ms on day {day}: {parts}");
     }
 
     /// <summary>

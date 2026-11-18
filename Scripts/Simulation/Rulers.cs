@@ -608,7 +608,7 @@ public static class Rulers
         var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++scanned % 16 == 0) yield return 0;
+            if (++scanned % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null || campaign.Fallen.Contains(nation.Id)) continue;
             var office = OfficeOf(nation);
             PoliticalAppointments.ReviewMinisters(campaign, nation, every);

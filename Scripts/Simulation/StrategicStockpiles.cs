@@ -434,7 +434,7 @@ public static class StrategicStockpiles
         var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
-            if (++ticked % 8 == 0) yield return 0;
+            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null) continue;
             if (!nation.StockpilesSeeded) EnsureSeeded(campaign, nation);
             else EnsureArsenal(campaign, nation);

@@ -260,13 +260,18 @@ public static class LandArrangementSystem
             TickScratch.Add(c.LandArrangements[i]);
         for (var i = 0; i < TickScratch.Count; i++)
         {
-            if (i > 0 && i % 16 == 0) yield return 0;
+            if (i > 0 && (i % 16 == 0 || Campaign.StageOverdue())) yield return 0;
             var arrangement = TickScratch[i];
             var owner = c.NationById(arrangement.OwnerId);
             var holder = c.NationById(arrangement.HolderId);
             if (owner is null || holder is null) continue;
+            // One arrangement's week can be a long piece (a presence over many regions); the one
+            // that was long last week starts a frame of its own (StageCosts).
+            if (StageCosts.Heavy("land arrangement", arrangement.Id)) { Campaign.HeavyNext(); yield return 0; }
+            var started = StageCosts.Start();
             if (arrangement.Kind == Lease) LeaseWeek(c, arrangement, owner, holder);
             else PresenceWeek(c, arrangement, owner, holder);
+            StageCosts.Stop("land arrangement", arrangement.Id, started);
         }
         TickScratch.Clear();
         for (var i = 0; i < c.LeaseOffers.Count; i++)
