@@ -28,6 +28,8 @@ public partial class DealOrForceGame
         _aidButton = ActionButton("Send aid", SendSelectedAid, 0, 32);
         _embargoButton = ActionButton("Embargo", ToggleSelectedEmbargo, 0, 32);
         row.AddChild(_tradeAgreementButton);
+        // Its terms and "Terms..." under it (TradeTermsCountryUI): the button asks for the ordinary ones.
+        AttachTradeTermsRow(row, _tradeAgreementButton, () => _selectedNation);
         row.AddChild(_pactButton);
         AddMilitaryAccessControls(row, () => _selectedNation, "Quick");
         // A deal is the treaty a player writes: with the others, before aid and sanctions, in
@@ -125,6 +127,7 @@ public partial class DealOrForceGame
         RefreshAgreementButton(_tradeAgreementButton, nation, relation, AgreementKind.TradeAgreement,
             "Propose trade agreement", "Cancel trade agreement",
             Tr("Walk out of it. Their routes to you lose what the agreement bought them, and they will remember it for two years."));
+        RefreshTradeTermsRow(_tradeAgreementButton, nation, relation);
         RefreshAgreementButton(_pactButton, nation, relation, AgreementKind.NonAggressionPact,
             "Propose non-aggression pact", "Break non-aggression pact",
             Simulation.Loc.Format(
@@ -159,6 +162,16 @@ public partial class DealOrForceGame
             button.Text = Tr(cancel);
             button.Disabled = false;
             button.TooltipText = Ui.Tip(cancelTip);
+            if (kind == AgreementKind.TradeAgreement)
+            {
+                // The price is on the button: walking out of a term early costs by what is left of it,
+                // and leaving a guarantee that was not kept costs nothing.
+                var price = TradeExitPrice(relation, player);
+                button.Text = Simulation.Loc.Format("Exit trade agreement ({0})", price);
+                button.TooltipText = Ui.Tip(Simulation.Loc.Format(
+                    "Walk out of it now: {0}. A term cut short is remembered by what was left of it; an agreement with no end costs what cancelling always did; a guarantee they did not keep for eight weeks may be left for free.",
+                    price));
+            }
             return;
         }
         // They asked. The button is the answer, and leaving it alone is also an answer: the
@@ -171,9 +184,13 @@ public partial class DealOrForceGame
                 ? Tr("Accept trade agreement")
                 : Tr("Accept non-aggression pact");
             button.Disabled = false;
-            button.TooltipText = Ui.Tip(Simulation.Loc.Format(
+            var asked = Simulation.Loc.Format(
                 "They asked {0} day(s) ago. Signing it takes effect at once; leaving it unanswered lets it lapse in {1} day(s).",
-                waited, left));
+                waited, left);
+            // What they asked for: the terms are part of the question.
+            if (kind == AgreementKind.TradeAgreement)
+                asked += "\n" + TradeTermsText.Describe(_campaign, relation.AgreementOfferedTrade ?? TradeTerms.Legacy(), player, nation);
+            button.TooltipText = Ui.Tip(asked);
             return;
         }
         button.Text = Tr(propose);
@@ -182,6 +199,12 @@ public partial class DealOrForceGame
         if (!can)
         {
             button.TooltipText = Ui.Tip(refusal);
+            return;
+        }
+        if (kind == AgreementKind.TradeAgreement)
+        {
+            // The button is a deal with one term, answered by the deal table's count.
+            button.TooltipText = Ui.Tip(TradeAnswerTip(player, nation, TradeTermsCatalog.Ordinary(_campaign, player, nation)));
             return;
         }
         var why = new Simulation.Breakdown();

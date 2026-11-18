@@ -3,6 +3,10 @@
 //     import_access   multiplier on what the country can buy abroad
 //     export_access   multiplier on what it can sell abroad
 //     tariff          share of the value of trade the customs house keeps
+//     agreement_aversion  how much the stance dislikes cutting its tariff in a trade agreement, in
+//                     deal points for a whole cut on every good (Scripts/Simulation/TradeTermsValue.cs).
+//                     It is the character of the stance at the deal table: a protectionist opens its
+//                     market reluctantly and dearly, an open market almost for nothing.
 //
 // A stance is a trade-off with no free side: the country that buys most easily collects
 // almost no duty, and the one that collects most duty can barely buy. An id the game does
@@ -14,7 +18,8 @@
     "description": "Goods move freely both ways and the customs house collects almost nothing.",
     "import_access": 1.18,
     "export_access": 1.08,
-    "tariff": 0.01
+    "tariff": 0.01,
+    "agreement_aversion": 0
   },
 
   "balanced_trade": {
@@ -22,7 +27,8 @@
     "description": "Ordinary duties, ordinary access. What a country does when it has not decided.",
     "import_access": 1.0,
     "export_access": 0.92,
-    "tariff": 0.05
+    "tariff": 0.05,
+    "agreement_aversion": 4
   },
 
   "strategic_autarky": {
@@ -30,7 +36,8 @@
     "description": "The border is a policy instrument. Duty is heavy, and so is the cost of everything the country cannot make itself.",
     "import_access": 0.58,
     "export_access": 0.52,
-    "tariff": 0.14
+    "tariff": 0.14,
+    "agreement_aversion": 18
   },
 
   "protectionism": {
@@ -38,6 +45,7 @@
     "description": "Sell to the world at full pressure and buy back only what the border lets through. Duty is heavy, and so is the price of whatever still gets in.",
     "import_access": 0.70,
     "export_access": 1.14,
-    "tariff": 0.13
+    "tariff": 0.13,
+    "agreement_aversion": 12
   }
 }

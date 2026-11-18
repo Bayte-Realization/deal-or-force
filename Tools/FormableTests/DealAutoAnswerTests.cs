@@ -129,9 +129,13 @@ static class DealAutoAnswerTests
             "a bare pact is a pact, whichever column it was put in");
         Check(DealAnswerKinds.Classify(D(new() { TradeAgreement = true }, new()))?.Id == "trade_agreement",
             "a bare trade agreement is a trade agreement");
-        Check(DealAnswerKinds.Classify(D(new() { Cash = 3 }, new()))?.Id == "gift" &&
-              DealAnswerKinds.Classify(D(new() { Cash = 3, TradeAgreement = true }, new()))?.Id == "gift",
-            "money or promises asked for nothing are a gift");
+        Check(DealAnswerKinds.Classify(D(new() { Cash = 3 }, new()))?.Id == "gift",
+            "money asked for nothing is a gift");
+        // A trade agreement binds both importers (TradeTerms), so money with one is money for a
+        // treaty the recipient signs too - not a gift. It used to be a tick in the giver's column.
+        Check(DealAnswerKinds.Classify(D(new() { Cash = 3, TradeAgreement = true }, new()))?.Id == "treaty_for_money" &&
+              DealAnswerKinds.Classify(new Ultimatum.Deal(new() { Cash = 3 }, new()) { Trade = TradeTerms.Legacy() })?.Id == "treaty_for_money",
+            "money with a trade agreement is money for a treaty both sign");
         Check(DealAnswerKinds.Classify(D(new() { NonAggression = true }, new() { Cash = 3 })) is null,
             "paying for their pact matches no kind and so always waits for the player");
 
@@ -394,16 +398,25 @@ static class DealAutoAnswerTests
         }
         Check(agreed > 0 && agreed < tables.Count, "the sample holds deals a government signs and deals it refuses");
         var relation = CampaignDiplomacy.Get(c, ai.Id, player.Id);
-        Check(DealAnswer.GovernmentSignsAgreement(c, ai, player, AgreementKind.TradeAgreement) ==
-              (AgreementSystem.Willingness(c, ai, player, AgreementKind.TradeAgreement) >= AgreementSystem.Needed(c, AgreementKind.TradeAgreement)) &&
+        Check(DealAnswer.GovernmentSignsAgreement(c, ai, player, AgreementKind.NonAggressionPact) ==
+              (AgreementSystem.Willingness(c, ai, player, AgreementKind.NonAggressionPact) >= AgreementSystem.Needed(c, AgreementKind.NonAggressionPact)) &&
               relation.AgreementLapsedBy < 0,
-            "a government's answer to an agreement is its old willingness bar");
+            "a government's answer to a pact is its old willingness bar");
+        // A trade agreement is a deal with one term now (TradeTerms): the button's answer is the
+        // deal table's answer to the same ordinary terms, not a second bar beside it.
+        var ordinary = TradeTermsCatalog.Ordinary(c, player, ai);
+        Check(DealAnswer.GovernmentSignsAgreement(c, ai, player, AgreementKind.TradeAgreement) ==
+              Ultimatum.AssessNegotiatedDeal(c, player, ai, DealAnswer.AgreementDeal(AgreementKind.TradeAgreement, ordinary)).Acceptable,
+            "a government's answer to a trade agreement is the deal table's answer to the same terms");
     }
 
     private static void AgreementOffersFollowTheRules()
     {
         var c = World(); var ai = N(c, 0); var player = N(c, 1);
         Rule(c, player.Id, "trade_agreement", AutoAnswerMode.Beneficial);
+        // The player's ministry counts the terms as a government does (TradeTermsValue): with no
+        // trade between the two, the agreement is worth what the player's country thinks of them.
+        CampaignDiplomacy.Get(c, ai.Id, player.Id).Opinion = 70f;
         var trade = new ProposeAgreementCommand { IssuerId = ai.Id, TargetId = player.Id, Kind = AgreementKind.TradeAgreement };
         c.Commands.Enqueue(trade); c.Commands.ApplyAll(c);
         var relation = CampaignDiplomacy.Get(c, ai.Id, player.Id);

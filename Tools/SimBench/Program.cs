@@ -338,6 +338,9 @@ public static class Program
         if (Array.IndexOf(args, "--construction") >= 0) return mapped ? ConstructionEconomyReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
         if (Array.IndexOf(args, "--kin") >= 0) return mapped ? KinBenchReport.Run(campaign, days) : 2;
+        // `--deals`: deals and trade agreements put, signed and refused, what a player would get,
+        // and one market week routed with and without every trade agreement (DealReport).
+        if (Array.IndexOf(args, "--deals") >= 0) return mapped ? DealReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--exiles") >= 0) return mapped ? ExileReport.Run(campaign, days) : 2;
         // `--movement-births`: when new movements appear, and of what kind (MovementBirthReport).
         if (Array.IndexOf(args, "--movement-births") >= 0) return mapped ? MovementBirthReport.Run(campaign, days) : 2;

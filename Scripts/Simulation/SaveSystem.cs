@@ -1553,6 +1553,9 @@ public static partial class SaveSystem
             campaign.DormantRelations.Clear();
             foreach (var entry in Relations)
                 (entry.Value.Dormant ? campaign.DormantRelations : campaign.Relations)[entry.Key] = entry.Value;
+            // A trade agreement saved before it had terms is given the old ones (half the tariff off
+            // everything, for good), and terms without the flag are dropped: the two never part.
+            TradeTermsLifecycle.Normalize(campaign);
             campaign.TradeRoutesDay = TradeRoutesDay;
             Replace(campaign.TradeRoutes, TradeRoutes);
             campaign.History.Restore(History, campaign.Defines);

@@ -11,6 +11,16 @@
     "max_stacks": 2
   },
 
+  // Walked out of a trade agreement before its term ran out. Scaled by the share of the term still
+  // to run (never below TradeAgreementBreakOpinionMin): a term nearly over is nearly free to leave.
+  "broke_trade_agreement": {
+    "name": "Broke our trade agreement",
+    "opinion": -25,
+    "days": 1095,
+    "decays": true,
+    "max_stacks": 2
+  },
+
   // Broke a promise not to attack. The one thing a pact is for, and it is gone.
   "broke_non_aggression_pact": {
     "name": "Broke our non-aggression pact",

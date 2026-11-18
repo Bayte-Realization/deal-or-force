@@ -184,6 +184,8 @@ public partial class DealOrForceGame
             var worth = DealWorthLine(paper);
             var state = Tr(OfferStateKey(paper));
             if (paper.ByRule) state = Loc.Format("{0} by rule", state);
+            // A renewal is the same agreement asked again at its term's end, not a new question.
+            if (paper.Trade is { Renewal: true }) state = Loc.Format("Renewal · {0}", state);
             if (worth.Length > 0) state += "\n" + worth;
             var row = ActionButton(Loc.Format("{0} · {1}\n{2}", paper.ToId == player.Id ? Tr("Incoming") : Tr("Outgoing"),
                 counterpart?.DisplayName ?? "?", state), () =>
@@ -390,7 +392,8 @@ public partial class DealOrForceGame
     {
         if (!paper.Pending || paper.ToId != _campaign.Player.Id || paper.ExpiresDay <= _campaign.ElapsedDays) return;
         var target = _campaign.NationById(paper.FromId);
-        OpenDealComposer(target);
+        // The trade terms are the pair's, not a half's: they open in the shared strip as written.
+        OpenDealComposer(target, Ultimatum.TradeOf(paper.Terms));
         _dealCounterParentId = paper.Id;
         void LoadHalf(Ultimatum.Side half, bool give)
         {
@@ -399,7 +402,6 @@ public partial class DealOrForceGame
             foreach (var choice in _dealComposer.FindChildren(give ? "DealGiveRegion_*" : "DealAskRegion_*", "CheckBox", true, false).OfType<CheckBox>())
                 if (int.TryParse(choice.Name.ToString().Split('_').Last(), out var region)) choice.SetPressedNoSignal(chosen.Contains(region));
             (give ? _dealGivePact : _dealAskPact).SetPressedNoSignal(half.NonAggression);
-            (give ? _dealGiveTrade : _dealAskTrade).SetPressedNoSignal(half.TradeAgreement);
             (give ? _dealGiveEmbargo : _dealAskEmbargo).SetPressedNoSignal(half.LiftEmbargo);
             (give ? _dealGiveRelease : _dealAskRelease).SetPressedNoSignal(half.ReleaseRegions);
             (give ? _dealGiveCash : _dealAskCash).Value = half.Cash;

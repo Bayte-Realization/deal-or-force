@@ -1,0 +1,37 @@
+// Named sets of trade terms (Scripts/Simulation/TradeTerms.cs, TradeTermsCatalog). The deal window
+// shows them as one-press chips; the computer composes its proposals from the ones with an "order",
+// trying them in that order (TradeTermsComposer) and picking the best for itself among those the
+// partner would sign.
+//
+// Everything is written from the proposer's seat:
+//   ours / theirs   the tariff cut each side gives the other's goods (0..1), and which goods
+//     scope         all            every good
+//                   best_for_us    the partner's good we need most (our shortfall against their spare)
+//                   best_for_them  our good the partner needs most
+//                   top3_theirs    the three partner goods we need most
+//                   guarantee_good the good the guarantee is about
+//   guarantee       to "us" (the partner promises us), "them" (we promise them) or "none", and the share
+//   years           the term; 0 is no end
+// A preset whose scope finds no good for a pair does not fit that pair and is skipped.
+// "concession" is the unequal treaty of a lost war (peace conference, peace offer, ultimatum): the
+// loser takes its whole tariff off the winner's goods and gets nothing back. It is never composed.
+{
+  "trade_presets": [
+    { "id": "ordinary", "name": "Ordinary", "order": 1,
+      "ours": { "cut": 0.5, "scope": "all" }, "theirs": { "cut": 0.5, "scope": "all" }, "years": 0 },
+    { "id": "free_trade", "name": "Free trade", "order": 2,
+      "ours": { "cut": 1.0, "scope": "all" }, "theirs": { "cut": 1.0, "scope": "all" }, "years": 10 },
+    { "id": "goods_for_goods", "name": "Goods for goods", "order": 3,
+      "ours": { "cut": 1.0, "scope": "best_for_us" }, "theirs": { "cut": 1.0, "scope": "best_for_them" }, "years": 5 },
+    { "id": "open_our_market", "name": "Open our market", "order": 4,
+      "ours": { "cut": 1.0, "scope": "top3_theirs" }, "theirs": { "cut": 0 }, "years": 2 },
+    { "id": "supply_guarantee", "name": "Supply guarantee", "order": 5,
+      "ours": { "cut": 1.0, "scope": "guarantee_good" }, "theirs": { "cut": 0 },
+      "guarantee": { "to": "us", "share": 0.25 }, "years": 5 },
+    { "id": "guarantee_for_access", "name": "Guarantee for access", "order": 6,
+      "ours": { "cut": 0.5, "scope": "all" }, "theirs": { "cut": 0 },
+      "guarantee": { "to": "us", "share": 0.25 }, "years": 5 },
+    { "id": "concession", "name": "Trade concessions",
+      "ours": { "cut": 0 }, "theirs": { "cut": 1.0, "scope": "all" }, "years": 10 }
+  ]
+}

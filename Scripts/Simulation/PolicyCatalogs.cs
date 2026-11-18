@@ -214,6 +214,12 @@ public sealed class TradePolicyDefinition
     public float ImportAccess = 1f;
     public float ExportAccess = 1f;
     public float Tariff;
+    /// <summary>
+    /// How much this stance dislikes writing a trade agreement down, in deal points for a whole cut
+    /// of its tariff on everything (TradeTermsValue). The character of a trade policy: protectionists
+    /// open their market reluctantly and dearly, open markets almost for nothing.
+    /// </summary>
+    public float AgreementAversion;
 }
 
 public static class TradePolicyCatalog
@@ -311,6 +317,7 @@ public static class TradePolicyCatalog
                 case "import_access": definition.ImportAccess = number; break;
                 case "export_access": definition.ExportAccess = number; break;
                 case "tariff": definition.Tariff = number; break;
+                case "agreement_aversion": definition.AgreementAversion = number; break;
                 default:
                     errors?.Add($"trade policy `{id}`: `{field.Name}` is not a field a stance has.");
                     break;

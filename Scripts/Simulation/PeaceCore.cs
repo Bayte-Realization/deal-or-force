@@ -376,8 +376,12 @@ public static class PeaceNegotiation
         if (terms == PeaceTerms.TradeConcessions)
         {
             var tradeRelation = CampaignDiplomacy.Get(campaign, proposerId, war.EnemyLeaderOf(proposerId));
-            tradeRelation.TradeAgreement = true;
-            OpinionSystem.Remember(campaign, tradeRelation, "trade_agreement");
+            // The unequal treaty, as at a conference: the loser opens its market to the winner.
+            var winner = campaign.NationById(proposerId);
+            var beaten = campaign.NationById(war.EnemyLeaderOf(proposerId));
+            AgreementSystem.Sign(campaign, tradeRelation, AgreementKind.TradeAgreement,
+                TradeTermsCatalog.Concession(campaign, winner, beaten, 10));
+            DealTally.Count("trade_agreement.source.peace_offer");
         }
 
         if (terms == PeaceTerms.DemilitarizedSettlement)

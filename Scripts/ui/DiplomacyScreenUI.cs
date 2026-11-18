@@ -273,6 +273,7 @@ public partial class DealOrForceGame
         _diplomacyGuaranteeRequestButton.Name = "WideRequestGuarantee";
         _diplomacyTradeButton = AddDiplomacyAction("AGREEMENTS", "Trade agreement",
             () => ToggleAgreement(AgreementKind.TradeAgreement, DiplomacyTarget(), _diplomacyFeedback));
+        AttachTradeTermsRow(_diplomacyActionRows, _diplomacyTradeButton, DiplomacyTarget);
         _diplomacyPactButton = AddDiplomacyAction("AGREEMENTS", "Non-aggression pact",
             () => ToggleAgreement(AgreementKind.NonAggressionPact, DiplomacyTarget(), _diplomacyFeedback));
         AddMilitaryAccessControls(_diplomacyActionRows, DiplomacyTarget, "Wide");
