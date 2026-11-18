@@ -1,6 +1,6 @@
 param(
     [ValidateSet('Doctor', 'Fetch', 'Build', 'Probe', 'InstallKit')][string]$Action = 'Doctor',
-    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta2',
+    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta3',
     # The six reviewed languages. zig, go, python, lua and sandbox are opt-in: ask for them by
     # name (`-Languages zig`) even though their pins and recipes ship in this kit.
     [string[]]$Languages = @('luau', 'fsharp', 'nim', 'odin', 'rust', 'kotlin'),
@@ -42,13 +42,24 @@ switch ($Action) {
             $status = if ($statusProperty) { [string]$statusProperty.Value } else { '' }
             $requiresProperty = $adapter.PSObject.Properties['requires']
             $requires = if ($requiresProperty) { @($requiresProperty.Value) } else { @() }
-            # Historical Beta1 results do not turn into Beta2 verification when
-            # the engine pin changes. Only exact-engine evidence gets this label.
+            # Results on an older engine do not turn into verification when the
+            # engine pin changes. Only exact-engine evidence gets a verified label;
+            # older evidence is named with its engine so it is not mistaken for this one.
             $evidence = if ($lock.PSObject.Properties['verification']) { $lock.verification.PSObject.Properties[$adapter.id] } else { $null }
+            $past = $null
+            if ($lock.PSObject.Properties['verification_history']) {
+                foreach ($older in $lock.verification_history.PSObject.Properties) {
+                    $entry = $older.Value.PSObject.Properties[$adapter.id]
+                    if ($entry) { $past = $entry.Value; break }
+                }
+            }
             $verdict = if ($evidence -and $evidence.Value.engine -eq $engine.Version) {
                 if ($evidence.Value.stage -eq 'runtime-smoke') { 'RUNTIME-SMOKE-VERIFIED' }
+                # An older build of the extension loaded and passed on this engine, but was not rebuilt here.
+                elseif ($evidence.Value.stage -eq 'runtime-smoke-prebuilt') { 'RUNTIME-SMOKE-VERIFIED-PREBUILT (older DLL, not rebuilt for this engine)' }
                 else { 'REJECTED-' + $evidence.Value.stage }
-            } elseif ($verified) { 'HISTORICAL-ONLY (Beta1; selected engine unverified)' } else { 'RECIPE-ONLY' }
+            } elseif ($past) { "HISTORICAL-ONLY ($($past.engine) $($past.stage) $($past.date); selected engine unverified)" }
+            elseif ($verified) { 'HISTORICAL-ONLY (Beta1; selected engine unverified)' } else { 'RECIPE-ONLY' }
             $line = "ADAPTER $($adapter.id) $($adapter.integration) $verdict"
             if ($status.Length -gt 0) { $line += " -- $status" }
             Write-Host $line

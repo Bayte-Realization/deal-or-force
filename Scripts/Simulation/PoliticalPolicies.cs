@@ -186,6 +186,8 @@ public static class PoliticalPolicies
         var reformDay = c.ElapsedDays > 0 && c.ElapsedDays % 90 == 0;
         foreach (var n in c.Nations)
         {
+            // A retired country (LongCampaign) reviews no policy.
+            if (c.IsRetired(n)) continue;
             n.LawsActive = lawsEnabled; n.AgendasActive = agendasEnabled;
             if (n.LastPolicyReviewDay == c.ElapsedDays) continue;
             n.LastPolicyReviewDay = c.ElapsedDays;

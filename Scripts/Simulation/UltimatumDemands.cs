@@ -497,11 +497,11 @@ public static partial class Ultimatum
         war.AttackerAllies.Count == 0 && war.DefenderAllies.Count == 0;
 
     static StrategicWar BilateralWar(Campaign c, Nation left, Nation right) =>
-        c.Wars.FirstOrDefault(war => !war.Ended && LeadersOnly(war, left.Id, right.Id));
+        Warfare.OpenWars(c).FirstOrDefault(war => !war.Ended && LeadersOnly(war, left.Id, right.Id));
 
     static bool PeaceBetween(Campaign c, Nation demander, Nation target, PeaceTerms terms, out string reason)
     {
-        var wider = c.Wars.Any(war => !war.Ended && war.Involves(demander.Id) && war.Involves(target.Id) &&
+        var wider = Warfare.OpenWars(c).Any(war => !war.Ended && war.Involves(demander.Id) && war.Involves(target.Id) &&
             !LeadersOnly(war, demander.Id, target.Id));
         var war = BilateralWar(c, demander, target);
         if (war is null)

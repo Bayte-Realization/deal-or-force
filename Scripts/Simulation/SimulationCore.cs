@@ -501,6 +501,14 @@ public sealed partial class Campaign
     public readonly List<ScenarioState> States = new();
     public readonly List<Army> Armies = new();
     public readonly List<ArmyGroup> ArmyGroups = new();
+    /// <summary>
+    /// The id the next army group is founded under, once one has been struck off (Generals.NewGroupId).
+    /// 0 until then: an id is the highest standing one plus one, which is all a world that only ever
+    /// adds groups needs. Kept because a group that is struck off can be the one with the highest id,
+    /// and its id handed out again would give the new group the old one's first commander (the draw
+    /// is seeded by the id) and pass it any order still queued for the old one.
+    /// </summary>
+    public int NextArmyGroupId;
     public readonly List<Fleet> Fleets = new();
     public readonly List<StrategicWar> Wars = new();
 
@@ -913,6 +921,10 @@ public sealed partial class Campaign
         // Notify only after clearing the iterator. A hook may issue commands or save;
         // neither should recurse into the day whose last stage just returned.
         if (finished && ElapsedHours != startedHours) StepCompleted?.Invoke(this);
+        // A step that crossed midnight closes a simulation day on Tracy's timeline. Marked
+        // here, once the step is whole, rather than inside the day loop: a frame that ended
+        // halfway through a bounded StepFor would cut a day in two.
+        if (finished && ElapsedHours / 24 != startedHours / 24) TracyBridge.SimulationDay();
         return finished;
     }
 
@@ -1459,6 +1471,8 @@ public sealed partial class Campaign
             HeldRegions.AiMonth(this);
             // A government relieves the commander who keeps losing (Generals).
             Generals.AiMonth(this);
+            // And strikes off the army groups nobody serves in any more (Generals.Tidy).
+            using (SimProfiler.Measure("army groups")) Generals.Tidy(this);
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
             // In stages, like the economy before it (BrainDrain.Stages).
@@ -1599,6 +1613,18 @@ public sealed partial class Campaign
                 {
                     bool more;
                     using (SimProfiler.Measure("desertion")) more = desertion.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            // Fighters of a rising who scattered after a lost battle: weekly, they drift home
+            // or take the field again where nobody is standing (Partisans).
+            using (var partisans = Partisans.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("partisans")) more = partisans.MoveNext();
                     if (!more) break;
                     yield return 0;
                 }
@@ -2121,6 +2147,8 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("reunion")) StatePartition.Reunify(this);
             // The relations of countries with nobody left go to sleep; a restored country's wake.
             using (SimProfiler.Measure("relation dormancy")) RelationDormancy.Sweep(this);
+            // And every fourth week the long dead are retired and what they left behind is struck (LongCampaign).
+            using (SimProfiler.Measure("long campaign")) LongCampaign.Sweep(this);
 
             // And last, where each government now sits: a region ceded today takes its
             // capital with it, and the country moves to what it has left.
@@ -2668,6 +2696,9 @@ public sealed partial class Campaign
         if (ProvinceMap is not null)
             foreach (var n in Nations)
                 if (n.Movement is not null) MovementRules.SynchroniseTerritory(this, n);
+        // And the same for the fallen list: a country back on the map is not fallen, by
+        // whichever road its ground came back (MovementFall.ReturnTheLanded).
+        MovementFall.ReturnTheLanded(this);
         InterfaceDirty = true;
     }
 
@@ -2796,10 +2827,23 @@ public static class SimProfiler
         private readonly string _name;
         private readonly long _started;
         private readonly long _allocated;
+#if DOF_TRACY
+        // The same scope as a Tracy zone (TracyBridge), opened only in a profiling build that
+        // was started with DOF_TRACY=1 and has a viewer attached. Ordinary builds do not have
+        // this field at all.
+        private readonly Tracy.PInvoke.TracyCZoneCtx _zone;
+        private readonly bool _traced;
+#endif
 
         public Scope(string name)
         {
             _name = name;
+#if DOF_TRACY
+            // Decided once per scope, so a viewer connecting or leaving mid-scope can never
+            // produce an end without its beginning.
+            _traced = TracyBridge.Live;
+            _zone = _traced ? TracyBridge.Begin(name) : default;
+#endif
             _allocated = GC.GetAllocatedBytesForCurrentThread();
             _started = Stopwatch.GetTimestamp();
         }
@@ -2808,6 +2852,9 @@ public static class SimProfiler
         {
             var elapsed = (Stopwatch.GetTimestamp() - _started) * 1000.0 / Stopwatch.Frequency;
             var allocated = GC.GetAllocatedBytesForCurrentThread() - _allocated;
+#if DOF_TRACY
+            if (_traced) TracyBridge.End(_zone, allocated);
+#endif
             if (!Samples.TryGetValue(_name, out var sample))
             {
                 sample = new Sample { Name = _name };

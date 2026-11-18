@@ -140,17 +140,49 @@ public static class StateIdentity
         }
     }
 
+    // One call's answers by name object (ReligionShare). Per thread: a caller may be a worker.
+    private const int FaithMemo = 8;
+    [ThreadStatic] private static string[] _faithSeen;
+    [ThreadStatic] private static bool[] _faithAnswer;
+
     /// <summary>How much of the country a faith is, by the people actually holding it.</summary>
     public static float ReligionShare(Campaign campaign, Nation nation, string religionId)
     {
         var total = 0L;
         var counted = 0L;
+        // Counted straight off the groups. This used to ask each region for its faiths as a
+        // sorted list (EconomySystem.Religions) and add that up: a dictionary, a list and a sort
+        // a region, for every country with a declared faith, every morning (EnsureDeclared) -
+        // 3.5 % of a late campaign's day to learn two whole numbers. The same people are
+        // counted under the same faith. "Is this the declared faith" is a comparison of names
+        // and of the families they belong to, and a world has a dozen faiths and a quarter of a
+        // million groups: the answer is kept by the name object for the length of the call, a
+        // handful of them at a time, and a name not among them is simply asked again.
+        var seen = _faithSeen ??= new string[FaithMemo];
+        var answers = _faithAnswer ??= new bool[FaithMemo];
+        Array.Clear(seen, 0, FaithMemo);
+        var next = 0;
         foreach (var state in campaign.StatesOf(nation))
         {
-            foreach (var (religion, size) in EconomySystem.Religions(state))
+            if (state is null) continue;
+            var groups = state.PopulationGroups;
+            for (var index = 0; index < groups.Count; index++)
             {
-                total += size;
-                if (SameFaith(religion, religionId)) counted += size;
+                var group = groups[index];
+                if (group.Size <= 0) continue;
+                total += group.Size;
+                // A group of no named faith was listed as "?", and is compared as that.
+                var religion = string.IsNullOrEmpty(group.Religion) ? "?" : group.Religion;
+                var slot = 0;
+                while (slot < FaithMemo && !ReferenceEquals(seen[slot], religion)) slot++;
+                if (slot == FaithMemo)
+                {
+                    slot = next;
+                    next = (next + 1) % FaithMemo;
+                    seen[slot] = religion;
+                    answers[slot] = SameFaith(religion, religionId);
+                }
+                if (answers[slot]) counted += group.Size;
             }
         }
         return total <= 0 ? 0f : counted / (float)total;
@@ -161,12 +193,25 @@ public static class StateIdentity
     {
         var total = 0L;
         var counted = 0L;
+        // Straight off the groups, as ReligionShare is and for the same reason.
+        string run = null;
+        var runMatches = false;
         foreach (var state in campaign.StatesOf(nation))
         {
-            foreach (var (culture, size) in EconomySystem.Cultures(state))
+            if (state is null) continue;
+            var groups = state.PopulationGroups;
+            for (var index = 0; index < groups.Count; index++)
             {
-                total += size;
-                if (culture.Equals(cultureId, StringComparison.OrdinalIgnoreCase)) counted += size;
+                var group = groups[index];
+                if (group.Size <= 0) continue;
+                total += group.Size;
+                var culture = group.Culture;
+                if (!ReferenceEquals(culture, run) || run is null)
+                {
+                    run = culture;
+                    runMatches = (string.IsNullOrEmpty(culture) ? "?" : culture).Equals(cultureId, StringComparison.OrdinalIgnoreCase);
+                }
+                if (runMatches) counted += group.Size;
             }
         }
         return total <= 0 ? 0f : counted / (float)total;
@@ -251,6 +296,8 @@ public static class StateIdentity
         var weekly = strain ? campaign.Defines.StateIdentityStrainWeekly / 7f : 0f;
         foreach (var nation in campaign.Nations)
         {
+            // A retired country (LongCampaign) has no throne and no people for it to strain against.
+            if (campaign.IsRetired(nation)) continue;
             if (nation.Population <= 0 || nation.DeclaredReligion.Length > 0 || nation.DeclaredCulture.Length > 0)
             {
                 // A declaration against the grain is not a one-off cost: while the throne

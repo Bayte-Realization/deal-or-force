@@ -117,7 +117,7 @@ public static class MovementMergers
         foreach (var movement in active)
         {
             if (movement.Movement is not { Dissolved: false } state || movement.FoundedCultures.Count == 0) continue;
-            if (c.Wars.Any(w => !w.Ended && w.Involves(movement.Id))) continue;   // not in the middle of its own war
+            if (Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(movement.Id))) continue;   // not in the middle of its own war
             var host = Movements.HostOf(c, movement);
             // The governments it stands against: whoever rules the ground its following lives on.
             // A movement never folds into the state it is fighting - the TPLF does not become

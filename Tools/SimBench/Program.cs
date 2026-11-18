@@ -59,6 +59,13 @@ public static class Program
             return contentFailures == 0 ? 0 : 1;
         }
 
+        // `--profiler-overhead`: what one SimProfiler.Measure scope costs, in this build. A late
+        // day opens about fifty thousand scopes, so this is how a change to the profiler itself
+        // (Tracy, docs/PROFILING_2026_11_17_RU.md) is judged: a whole day's time on a shared
+        // machine moves by ten per cent between identical runs and cannot see a few nanoseconds.
+        if (args.Contains("--profiler-overhead"))
+            return ProfilerOverhead();
+
         // `--creation-profile`: where creating the world goes, phase by phase, cold and then warm -
         // the loading screen's longest stage, measured where nothing else is running.
         if (args.Contains("--creation-profile"))
@@ -387,8 +394,22 @@ public static class Program
                                       $"expected {firstDay + day}; {campaign.SimulationFault}");
                     return 1;
                 }
+                // Both numbers: the whole world, and the world without the long-campaign clock
+                // (when each dead country was first found gone) - the one to hold a build or a
+                // run without the diet against, where only the diet keeps that clock.
                 if (day % 30 == 0 || day == fingerprintDays)
-                    Console.WriteLine($"FINGERPRINT day {day}: {CampaignFingerprint.Of(campaign)}");
+                    Console.WriteLine($"FINGERPRINT day {day}: {CampaignFingerprint.Of(campaign)} " +
+                                      $"(without the retirement clock {CampaignFingerprint.Of(campaign, longCampaignClock: false)})");
+            }
+            // What the world came to, in the numbers a world-changing switch is judged by.
+            LongCampaignReport.Census(campaign, $"after {fingerprintDays} day(s)");
+            // What folding did on the way (PopulationFolding), for a run that has it on.
+            {
+                long groups = 0, people = 0;
+                foreach (var state in campaign.States) { groups += state.PopulationGroups.Count; people += state.Population; }
+                Console.WriteLine($"GROUPS after {fingerprintDays} day(s): {groups:N0} of {people:N0} people; folded {campaign.FoldedGroups:N0} group(s), " +
+                                  $"counted under another trade {campaign.FoldedTradePeople:N0}, another faith {campaign.FoldedFaithPeople:N0}, " +
+                                  $"another people {campaign.FoldedCulturePeople:N0}.");
             }
             return 0;
         }
@@ -514,6 +535,9 @@ public static class Program
                 secessionAt + 2 < args.Length && !args[secessionAt + 2].StartsWith("--") ? args[secessionAt + 2] : "");
         // `--factions`: the de facto powers of 2024 at the start and after the run (FactionReport).
         if (Array.IndexOf(args, "--factions") >= 0) return mapped ? FactionReport.Run(campaign, days) : 2;
+        // `--pockets`: what becomes of cut-off formations and of the forces of risings and
+        // factions - who starved untouched, who was broken, how long each pocket lasted (PocketReport).
+        if (Array.IndexOf(args, "--pockets") >= 0) return mapped ? PocketReport.Run(campaign, days) : 2;
         // `--world-stability`: every five years, the spread of stability and living standards of
         // the countries of a million people or more - the drift a century can hide.
         if (Array.IndexOf(args, "--world-stability") >= 0 && mapped)
@@ -1783,6 +1807,45 @@ public static class Program
     }
 
     /// <summary>
+    /// Nanoseconds per SimProfiler.Measure scope: 64 distinct names (a day uses a few hundred,
+    /// so the dictionary is not a one-entry toy), a million scopes a sample, five warm-up samples
+    /// and 21 measured. The checksum is the profiler's own run count, read back at the end, so
+    /// the scopes cannot be optimised away. Allocation is per thread and should be zero.
+    /// </summary>
+    private static int ProfilerOverhead()
+    {
+        var names = Enumerable.Range(0, 64).Select(index => "overhead:" + index).ToArray();
+        const int scopes = 1_000_000;
+        var samples = new List<double>();
+        long allocated = 0;
+        for (var sample = 0; sample < 26; sample++)
+        {
+            SimProfiler.Reset();
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var clock = Stopwatch.StartNew();
+            for (var index = 0; index < scopes; index++)
+                using (SimProfiler.Measure(names[index & 63])) { }
+            clock.Stop();
+            var allocatedNow = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            if (sample < 5) continue;
+            samples.Add(clock.Elapsed.TotalMilliseconds * 1_000_000.0 / scopes);
+            allocated += allocatedNow;
+        }
+        var checksum = SimProfiler.All.Sum(entry => (long)entry.Runs);
+        samples.Sort();
+        var tracy =
+#if DOF_TRACY
+            TracyBridge.On ? (TracyBridge.Live ? "compiled in, on, viewer attached" : "compiled in, on, no viewer") : "compiled in, off";
+#else
+            "not compiled";
+#endif
+        Console.WriteLine($"PROFILER_OVERHEAD tracy={tracy} samples={samples.Count} scopes/sample={scopes:N0} " +
+                          $"median={samples[samples.Count / 2]:0.0} ns p95={samples[(int)(samples.Count * 0.95)]:0.0} ns " +
+                          $"min={samples[0]:0.0} ns allocated_per_sample={allocated / samples.Count} B checksum={checksum}");
+        return checksum == scopes ? 0 : 1;
+    }
+
+    /// <summary>
     /// Days of the world with the profiler reset first, reported by total time. Each pass is
     /// shown with its share of the whole, its mean cost and how often it ran - a cheap pass
     /// run every hour and a dear one run every month look the same in a mean and nothing
@@ -1803,7 +1866,47 @@ public static class Program
         Console.WriteLine($"Retained world: nations={campaign.Nations.Count:N0}, relations={campaign.Relations.Count:N0}, " +
                           $"wars={campaign.Wars.Count:N0} (ended={campaign.Wars.Count(w => w.Ended):N0}), " +
                           $"regions={campaign.States.Count:N0}, armies={campaign.Armies.Count:N0}.");
-        return Profile(campaign, days);
+        // The run's `--define`s are for the world being measured, which here is the loaded one.
+        var given = Environment.GetCommandLineArgs();
+        for (var index = 0; index + 1 < given.Length; index++)
+        {
+            if (given[index] != "--define") continue;
+            var pair = given[index + 1].Split('=', 2);
+            if (pair.Length == 2 && typeof(Defines).GetProperty(pair[0]) is { CanWrite: true } property)
+                property.SetValue(campaign.Defines, Convert.ChangeType(pair[1], property.PropertyType, CultureInfo.InvariantCulture));
+        }
+        // `--diet`: weigh the world, put it through the long-campaign sweep now, weigh it again
+        // (LongCampaignReport). Otherwise it is only weighed, and the sweep comes on its own day.
+        if (Array.IndexOf(Environment.GetCommandLineArgs(), "--group-census") >= 0)
+        {
+            LongCampaignReport.GroupCensus(campaign);
+            return 0;
+        }
+        // `--fold-now`: fold the slivers once and stop (LongCampaignReport.FoldNow).
+        if (Array.IndexOf(Environment.GetCommandLineArgs(), "--fold-now") >= 0)
+        {
+            LongCampaignReport.FoldNow(campaign);
+            LongCampaignReport.GroupCensus(campaign);
+            return 0;
+        }
+        if (Array.IndexOf(Environment.GetCommandLineArgs(), "--diet") >= 0)
+            LongCampaignReport.Diet(campaign, Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, "diet_out"));
+        else LongCampaignReport.Census(campaign, "as loaded");
+        // `--fold-first`: fold the slivers before the clock starts. The weekly cycle folds a
+        // region the week its turn comes, so a thirty-day profile of a century-old save measures
+        // the folding itself; this measures the day after it, which is every day from then on.
+        if (Array.IndexOf(Environment.GetCommandLineArgs(), "--fold-first") >= 0)
+        {
+            LongCampaignReport.FoldNow(campaign);
+            LongCampaignReport.Census(campaign, "after the fold");
+            LongCampaignReport.Sizes(campaign, Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, "diet_out"), "folded");
+        }
+        var loadedOn = campaign.ElapsedDays;
+        var result = Profile(campaign, days);
+        // By the calendar, not by the argument: the profile warms up for three days and follows
+        // its measured days with two thirty-day probes, so "after 30 days" was after 93.
+        LongCampaignReport.Census(campaign, $"after {campaign.ElapsedDays - loadedOn} day(s)");
+        return result;
     }
 
     /// <summary>
@@ -2064,6 +2167,24 @@ public static class Program
         return 0;
     }
 
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentThread();
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool GetThreadTimes(IntPtr thread, out long creation, out long exit, out long kernel, out long user);
+
+    /// <summary>Processor time the calling thread has been given, in milliseconds; zero where the system will not say.</summary>
+    private static double ThreadCpuMilliseconds()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows() && GetThreadTimes(GetCurrentThread(), out _, out _, out var kernel, out var user))
+                return (kernel + user) / 10_000.0;
+        }
+        catch (Exception) { }
+        return 0;
+    }
+
     private static int Profile(Campaign campaign, int days)
     {
         campaign.IsPaused = false;
@@ -2073,6 +2194,11 @@ public static class Program
         var allocatedBefore = GC.GetTotalAllocatedBytes(true);
         var gcBefore = (GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2));
         var pauseBefore = GC.GetTotalPauseDuration();
+        // And the processor time behind the wall time. On a machine doing other work the clock
+        // on the wall swings by a fifth from one run to the next; the time this thread was
+        // actually given swings far less, and is what two builds are compared by.
+        var threadCpuBefore = ThreadCpuMilliseconds();
+        var processCpuBefore = Process.GetCurrentProcess().TotalProcessorTime.TotalMilliseconds;
         var run = Stopwatch.StartNew();
         // Step by step rather than a day at a time, timing each: what a player feels is not the
         // mean but the worst frame, and a frame at the top speed is twelve steps.
@@ -2083,15 +2209,37 @@ public static class Program
         // kept for the three worst.
         var before = new Dictionary<string, double>();
         var heaviest = new List<(double Ms, int Day, List<(string Name, double Ms)> Parts)>();
+        // And the same totals by the kind of step. "Naval is 8 % of the run" does not say whether
+        // that is a little every hour or everything on one day of the week, and the two are cured
+        // differently: an hour's step, a step that opens an ordinary day, a step that opens the
+        // week's heavy day. Slot 7 is the hours; 0-6 the day-opening steps by day of the week.
+        var kindMs = new double[8];
+        var kindSteps = new int[8];
+        var kindBytes = new long[8];
+        var kindParts = new Dictionary<string, double>[8];
+        for (var kind = 0; kind < 8; kind++) kindParts[kind] = new Dictionary<string, double>();
         while (campaign.ElapsedDays < until)
         {
             before.Clear();
             foreach (var sample in SimProfiler.All) before[sample.Name] = sample.TotalMilliseconds;
             var day = campaign.ElapsedDays;
+            var bytesBefore = GC.GetTotalAllocatedBytes(false);
             step.Restart();
             campaign.Tick();
             var took = step.Elapsed.TotalMilliseconds;
             steps.Add(took);
+            {
+                var kind = campaign.ElapsedDays != day ? day % 7 : 7;
+                kindSteps[kind]++;
+                kindMs[kind] += took;
+                kindBytes[kind] += GC.GetTotalAllocatedBytes(false) - bytesBefore;
+                var into = kindParts[kind];
+                foreach (var sample in SimProfiler.All)
+                {
+                    var spent = sample.TotalMilliseconds - before.GetValueOrDefault(sample.Name);
+                    if (spent > 0) into[sample.Name] = into.GetValueOrDefault(sample.Name) + spent;
+                }
+            }
             if (heaviest.Count < 3 || took > heaviest[^1].Ms)
             {
                 var parts = SimProfiler.All
@@ -2107,6 +2255,12 @@ public static class Program
             Console.WriteLine($"  heavy step {ms:0.0} ms on day {day} (day of week {day % 7}): " +
                               string.Join(", ", parts.Select(part => $"{part.Name.Trim()} {part.Ms:0.0}")));
         run.Stop();
+        {
+            var threadCpu = ThreadCpuMilliseconds() - threadCpuBefore;
+            var processCpu = Process.GetCurrentProcess().TotalProcessorTime.TotalMilliseconds - processCpuBefore;
+            Console.WriteLine($"CPU: the simulation's own thread {threadCpu / Math.Max(1, days):0.0} ms a day, " +
+                              $"every thread of the process {processCpu / Math.Max(1, days):0.0} ms a day (wall {run.Elapsed.TotalMilliseconds / Math.Max(1, days):0.0}).");
+        }
         var allocated = GC.GetTotalAllocatedBytes(true) - allocatedBefore;
         if (steps.Count > 0)
         {
@@ -2118,6 +2272,37 @@ public static class Program
                 worstFrame = Math.Max(worstFrame, steps.Skip(start).Take(frame).Sum());
             Console.WriteLine($"Steps: {steps.Count:N0} of {campaign.TickHours}h; median {At(0.5):0.00} ms, p95 {At(0.95):0.00}, " +
                               $"p99 {At(0.99):0.00}, worst {sorted[^1]:0.0}; worst {frame} steps together (a frame at the top speed) {worstFrame:0.0} ms.");
+        }
+        // By the kind of step: where a day's cost sits.
+        {
+            var heavyDay = 0;
+            for (var weekday = 1; weekday < 7; weekday++)
+                if (kindSteps[weekday] > 0 && kindMs[weekday] / kindSteps[weekday] >
+                    (kindSteps[heavyDay] > 0 ? kindMs[heavyDay] / kindSteps[heavyDay] : 0)) heavyDay = weekday;
+            void Kind(string label, Func<int, bool> which)
+            {
+                double ms = 0; var count = 0; long bytes = 0;
+                var parts = new Dictionary<string, double>();
+                for (var kind = 0; kind < 8; kind++)
+                {
+                    if (!which(kind)) continue;
+                    ms += kindMs[kind]; count += kindSteps[kind]; bytes += kindBytes[kind];
+                    foreach (var (name, spent) in kindParts[kind]) parts[name] = parts.GetValueOrDefault(name) + spent;
+                }
+                if (count == 0) return;
+                Console.WriteLine($"STEPKIND {label}: {count:N0} step(s), {ms:N0} ms in all ({ms / Math.Max(1, days):0.0} ms a day of the run), " +
+                                  $"{ms / count:0.00} ms a step, {bytes / 1024.0 / count:N0} kB a step.");
+                foreach (var (name, spent) in parts.Where(part => !part.Key.StartsWith(" ", StringComparison.Ordinal))
+                             .OrderByDescending(part => part.Value).Take(45))
+                    Console.WriteLine($"    {name,-26} {spent,9:N0} ms  {spent / count,9:0.000} ms a step  {spent / ms,6:P1}");
+                // And the scopes inside them, which is where a pass says what it was doing.
+                foreach (var (name, spent) in parts.Where(part => part.Key.StartsWith(" ", StringComparison.Ordinal) && part.Value / count >= 0.5)
+                             .OrderByDescending(part => part.Value).Take(70))
+                    Console.WriteLine($"    inside: {name.Trim(),-26} {spent,9:N0} ms  {spent / count,9:0.000} ms a step");
+            }
+            Kind("an hour inside a day", kind => kind == 7);
+            Kind("opening an ordinary day", kind => kind < 7 && kind != heavyDay);
+            Kind($"opening the week's heavy day (day of week {heavyDay})", kind => kind == heavyDay);
         }
         // Report this phase BEFORE the two additional 30-day probes. Mixing their
         // profiler totals into a denominator of only `days` overstated every share.

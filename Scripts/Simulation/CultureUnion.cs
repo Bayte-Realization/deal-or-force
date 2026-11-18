@@ -79,7 +79,7 @@ public static class CultureUnion
         if (initiator.IsSubject || partner.IsSubject || initiator.Movement is not null || partner.Movement is not null)
             return Loc.Get("Both countries must be sovereign to unite by consent.");
         if (CampaignDiplomacy.AtWar(c, initiator.Id, partner.Id) ||
-            c.Wars.Any(w => !w.Ended && (w.Involves(initiator.Id) || w.Involves(partner.Id))))
+            Warfare.OpenWars(c).Any(w => !w.Ended && (w.Involves(initiator.Id) || w.Involves(partner.Id))))
             return Loc.Get("Union is a peace-time act; neither country may be at war.");
         if (partner.IsHuman && c.HumanSeats.Count > 1) return Loc.Get("Human countries cannot merge in multiplayer.");
         if ((CampaignDiplomacy.Peek(c, initiator.Id, partner.Id)?.Opinion ?? 0f) < c.Defines.CultureUnionMinimumOpinion)
@@ -174,7 +174,7 @@ public static class CultureUnion
     private static List<Nation> KindredList(Campaign c)
     {
         var atWar = new HashSet<int>();
-        foreach (var w in c.Wars)
+        foreach (var w in Warfare.OpenWars(c))
         {
             if (w.Ended) continue;
             atWar.Add(w.AttackerId);

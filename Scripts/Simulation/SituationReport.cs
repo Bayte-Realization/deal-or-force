@@ -582,7 +582,7 @@ public static class SituationReport
             !FullWar(c, relation));
         if (hot is not null) return hot;
         StrategicWar soonest = null;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || !war.Limited || war.LimitedUntilDay < 0) continue;
             if (war.AttackerId != n.Id && war.DefenderId != n.Id) continue;

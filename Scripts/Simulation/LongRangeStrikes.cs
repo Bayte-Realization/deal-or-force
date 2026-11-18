@@ -205,7 +205,7 @@ public static class LongRangeStrikes
     {
         var sides = new Sides();
         sides.Own.Add(nationId);
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || !war.Involves(nationId)) continue;
             var attacking = war.Side(true).Contains(nationId);
@@ -625,7 +625,7 @@ public static class LongRangeStrikes
             if (atWar is null)
             {
                 atWar = new HashSet<int>();
-                foreach (var war in c.Wars)
+                foreach (var war in Warfare.OpenWars(c))
                 {
                     if (war.Ended || war.CivilConflict) continue;
                     foreach (var id in war.Side(true)) atWar.Add(id);

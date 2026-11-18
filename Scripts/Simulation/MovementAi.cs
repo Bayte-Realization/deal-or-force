@@ -40,9 +40,8 @@ public static class MovementAi
             !float.IsFinite(chance) || chance < c.Defines.MovementAiHomelandOpeningChance) return basic;
         var host = MovementRules.OwnerOf(c,region);
         var hostAtWar = false;
-        for (var wi = 0; wi < c.Wars.Count; wi++)
+        foreach (var w in Warfare.OpenWars(c))
         {
-            var w = c.Wars[wi];
             if (host is not null && !w.Ended && w.Involves(host.Id)) { hostAtWar = true; break; }
         }
         if (host is null || host.Id == movement.Id ||
@@ -409,6 +408,15 @@ public static class MovementAi
     {
         if (campaign is null || relation is null || !OpinionIndexes.TryGetValue(campaign, out var index) || !index.Built) return;
         AddRelation(index, relation);
+    }
+
+    /// <summary>
+    /// Relations were dropped from the campaign's tables (LongCampaign): the index is built again
+    /// from the tables the next time it is asked, so it holds no relation the campaign has let go.
+    /// </summary>
+    internal static void ForgetRelationIndex(Campaign campaign)
+    {
+        if (campaign is not null) OpinionIndexes.Remove(campaign);
     }
 
     internal static bool SharesOpinionIndex(Campaign left, Campaign right)

@@ -17,5 +17,12 @@
   // Governments the computer runs relieve a commander with at least this many defeats and at
   // least twice the victories plus one, when an abler officer is put forward.
   "AiRelievesFailedCommanders": true,
-  "AiCommanderReliefDefeats": 3
+  "AiCommanderReliefDefeats": 3,
+  // An army group with no formation of its own country under it for this many days is struck off
+  // (Generals.Tidy). Long enough for new formations to be put under it - a new one joins its
+  // country's smallest group, an empty one first - and for a detachment to come back; short enough
+  // that a long campaign does not keep the headquarters of every army it ever lost (a 107-year
+  // campaign carried 1 204 groups, 1 032 of them empty). At once for a country that is gone. A
+  // group the player made and has never filled is kept.
+  "ArmyGroupEmptyDays": 30
 }

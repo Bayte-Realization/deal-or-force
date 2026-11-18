@@ -263,7 +263,7 @@ public static class WarInterventions
         var mine = AiStatecraft.StrengthOf(c, donor);
         var enemyStrength = CampaignIntel.EstimatedStrength(c, donorId, enemy, refreshAssessment: false);
         willingness += Math.Clamp(mine / MathF.Max(0.01f, enemyStrength) - 0.75f, -0.8f, 0.8f);
-        if (c.Wars.Any(w => !w.Ended && w.Involves(donorId))) willingness -= 0.6f;
+        if (Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(donorId))) willingness -= 0.6f;
         // Arms and money are one decision; troops against a nuclear power are another. The
         // reckoning above priced the United States joining Ukraine's war by the size of the two
         // armies, and found it worth doing by spring 2024. Every enemy holder counts once.
@@ -411,14 +411,9 @@ public static class WarInterventions
 
     private static StrategicWar WarFor(Campaign c, int requesterId, int warId)
     {
-        if (warId >= 0)
-        {
-            foreach (var war in c.Wars)
-                if (war.Id == warId) return war;
-            return null;
-        }
+        if (warId >= 0) return Warfare.WarById(c, warId);
         StrategicWar found = null;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (war.Ended || !war.Involves(requesterId)) continue;
             if (found is null || war.Id < found.Id) found = war;

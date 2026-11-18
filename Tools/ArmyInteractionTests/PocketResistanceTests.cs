@@ -45,18 +45,31 @@ static class PocketResistanceTests
 
     static void OpenRetreatAndToggle()
     {
-        foreach (var mode in new[] { "open", "disabled", "starved" })
+        // "starved" used to fold by default: stores gone and supply under 0.10 ended the last
+        // stand at the rout threshold. Since 16 November 2026 a pocket fights to the end hungry
+        // as well as fed (PocketResistanceMinSupply 0), so the folding case is now the rule a
+        // mod sets, and the shipped case is checked beside it.
+        foreach (var mode in new[] { "open", "disabled", "starved under a mod's supply rule" })
         {
             var c = Fixture(); var a = Unit(c, 0, 0, 2); var d = Unit(c, 1, 1, 3);
             Unit(c, 2, 0, 4); d.Organisation = .02f; d.PocketStores = 12;
             if (mode == "open") { c.Armies.RemoveAt(2); c.SetProvinceController(4, 502); }
             if (mode == "disabled") c.Defines.PocketResistanceEnabled = false;
-            if (mode == "starved") { d.PocketStores = 0; d.SupplyLevel = 0; }
+            if (mode.StartsWith("starved")) { d.PocketStores = 0; d.SupplyLevel = 0; c.Defines.PocketResistanceMinSupply = .10f; }
             var battle = Battle(c, a, d); Warfare.Tick(c);
             Check(battle.Ended && c.ProvinceController[3] == 500,
                 mode + ": normal defeat is not turned into an immortal pocket");
             if (mode == "open") Check(c.Armies.Contains(d) && d.ProvinceId == 4 &&
                 c.Wars[0].DefenderCaptured == 0, "an allied exit still permits an ordinary retreat");
+        }
+        {
+            var c = Fixture(); var a = Unit(c, 0, 0, 2); var d = Unit(c, 1, 1, 3);
+            // On its hunger floor: stores gone, supply at the trickle hunger leaves it, morale
+            // low and not spent - the state a pocket nobody attacked for a month is found in.
+            Unit(c, 2, 0, 4); d.Organisation = .08f; d.PocketStores = 0; d.SupplyLevel = c.Defines.PocketHungerSupplyFloor;
+            var battle = Battle(c, a, d); Warfare.Tick(c);
+            Check(!battle.Ended && c.Armies.Contains(d) && c.ProvinceController[3] == 501,
+                "starved, as shipped: a hungry pocket with morale left still makes its last stand");
         }
     }
 

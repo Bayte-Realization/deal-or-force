@@ -241,6 +241,8 @@ public static class WarDamage
         foreach (var nation in campaign.Nations)
         {
             if (++ticked % 2 == 0) yield return 0;
+            // What Arrive remembers of the regions is for one country's turn (Arrivals).
+            _arrivals?.Forget();
             var states = campaign.StatesOf(nation);
             var anyDamage = false;
             var anyDisplaced = false;
@@ -511,24 +513,117 @@ public static class WarDamage
         }
     }
 
+    /// <summary>
+    /// Who a region's groups are, for the length of one country's week: the first group of each
+    /// kind, as a walk down the list would meet it.
+    ///
+    /// Every group that flees is settled over every region that can take it, and each arrival
+    /// looked for its own kind by walking the region's whole list - a region a century old holds
+    /// hundreds of groups, a country and its neighbours hundreds of regions, so one ruined
+    /// region cost millions of comparisons a week and the pass 120-240 ms of the week's heavy
+    /// step. Looked up instead, in the regions that are asked often: a region is walked, as
+    /// before, the first WalksBeforeTable times it is asked, and gets its table after that -
+    /// most regions take in a handful of the fleeing. For the length of one country's turn and
+    /// no longer: kept for the whole week's pass the tables were thirty megabytes that stayed,
+    /// for one turn they are the few a single country's refugees fill. The pass rests between
+    /// countries and nothing is trusted across a rest; within a turn nothing but Arrive
+    /// lengthens a region's list, and a region whose list is not the length, or does not end
+    /// with the group, this left it with is read again.
+    /// </summary>
+    private sealed class Arrivals
+    {
+        public readonly Dictionary<ScenarioState, Kinds> ByState = new();
+        public readonly List<Kinds> Spare = new();
+
+        public void Forget()
+        {
+            if (ByState.Count == 0) return;
+            // The emptied tables are kept for the next country: handed back to the collector
+            // they were eleven megabytes of garbage in the week's heaviest step.
+            foreach (var kinds in ByState.Values)
+            {
+                kinds.First.Clear();
+                kinds.Asked = 0;
+                kinds.Listed = -1;
+                kinds.Last = null;
+                Spare.Add(kinds);
+            }
+            ByState.Clear();
+        }
+    }
+
+    private sealed class Kinds
+    {
+        public readonly Dictionary<(SocialClass, Sector, string, string, string), PopulationGroup> First = new();
+        public int Asked;
+        public int Listed = -1;
+        public PopulationGroup Last;
+    }
+
+    /// <summary>How many times a region is walked in a week before it is given a table.</summary>
+    private const int WalksBeforeTable = 32;
+
+    [ThreadStatic] private static Arrivals _arrivals;
+
     private static void Arrive(ScenarioState state, PopulationGroup like, long people)
     {
         state.Population += people;
-        foreach (var group in state.PopulationGroups)
+        var arrivals = _arrivals ??= new Arrivals();
+        var groups = state.PopulationGroups;
+        if (!arrivals.ByState.TryGetValue(state, out var kinds))
         {
-            if (group.Class != like.Class || group.Sector != like.Sector ||
-                !string.Equals(group.Culture, like.Culture, StringComparison.Ordinal) ||
-                !string.Equals(group.Religion, like.Religion, StringComparison.Ordinal) ||
-                !string.Equals(group.Profession, like.Profession, StringComparison.Ordinal)) continue;
-            group.Size += people;
+            if (arrivals.Spare.Count > 0) { kinds = arrivals.Spare[^1]; arrivals.Spare.RemoveAt(arrivals.Spare.Count - 1); }
+            else kinds = new Kinds();
+            arrivals.ByState[state] = kinds;
+        }
+        if (++kinds.Asked <= WalksBeforeTable)
+        {
+            // The walk itself, as it always was.
+            foreach (var group in groups)
+            {
+                if (group.Class != like.Class || group.Sector != like.Sector ||
+                    !string.Equals(group.Culture, like.Culture, StringComparison.Ordinal) ||
+                    !string.Equals(group.Religion, like.Religion, StringComparison.Ordinal) ||
+                    !string.Equals(group.Profession, like.Profession, StringComparison.Ordinal)) continue;
+                group.Size += people;
+                return;
+            }
+            groups.Add(new PopulationGroup
+            {
+                Class = like.Class, Sector = like.Sector, Culture = like.Culture, Religion = like.Religion,
+                Profession = like.Profession, Size = people, Employment = like.Employment, Wealth = like.Wealth,
+                StandardOfLiving = like.StandardOfLiving, Radicalism = like.Radicalism,
+            });
             return;
         }
-        state.PopulationGroups.Add(new PopulationGroup
+        if (kinds.Listed != groups.Count || (groups.Count > 0 && !ReferenceEquals(kinds.Last, groups[^1])))
+        {
+            // In the list's order and the first of a kind kept: the group a walk would have found.
+            kinds.First.Clear();
+            for (var index = 0; index < groups.Count; index++)
+            {
+                var group = groups[index];
+                kinds.First.TryAdd((group.Class, group.Sector, group.Culture, group.Religion, group.Profession), group);
+            }
+            kinds.Listed = groups.Count;
+            kinds.Last = groups.Count > 0 ? groups[^1] : null;
+        }
+        var kind = (like.Class, like.Sector, like.Culture, like.Religion, like.Profession);
+        if (kinds.First.TryGetValue(kind, out var found))
+        {
+            found.Size += people;
+            return;
+        }
+        var arrived = new PopulationGroup
         {
             Class = like.Class, Sector = like.Sector, Culture = like.Culture, Religion = like.Religion,
             Profession = like.Profession, Size = people, Employment = like.Employment, Wealth = like.Wealth,
             StandardOfLiving = like.StandardOfLiving, Radicalism = like.Radicalism,
-        });
+        };
+        groups.Add(arrived);
+        kinds.First.Add(kind, arrived);
+        kinds.Listed = groups.Count;
+        kinds.Last = arrived;
     }
 
     private static Ledger LedgerOf(Campaign campaign) => Ledgers.GetValue(campaign, _ => new Ledger());

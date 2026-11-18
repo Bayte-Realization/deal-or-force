@@ -57,6 +57,8 @@ public static class EquipmentLogistics
         if (n is null || n.Population <= 0 || n.Movement is not null || n.MilitarySpending <= 0)
             return "No funded national equipment delivery.";
         if (army.EmbarkedFleetId >= 0) return "Equipment deliveries resume after landing.";
+        // The villages feed a formation the road does not reach; they do not make guns for it.
+        if (army.LivingOffLand) return "Living off the land: food and cartridges reach it, replacement equipment does not.";
         if (army.CutOff || !float.IsFinite(army.SupplyLevel) || army.SupplyLevel < c.Defines.EquipmentMinimumSupply ||
             c.ProvinceMap is null || army.ProvinceId <= 0 || army.ProvinceId > c.ProvinceMap.ProvinceCount ||
             c.ProvinceMap.IsWater(army.ProvinceId) || MilitaryAccess.MustReturn(c, army))

@@ -127,7 +127,7 @@ public static class MoneyLedgerView
         var estimated = closed is null || closed.Length != lines.Count;
         var atWar = false;
         if (estimated)
-            foreach (var war in campaign.Wars)
+            foreach (var war in Warfare.OpenWars(campaign))
                 if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
         for (var index = 0; index < lines.Count; index++)
         {

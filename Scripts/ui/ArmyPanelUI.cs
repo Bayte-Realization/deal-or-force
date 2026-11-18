@@ -544,6 +544,11 @@ public partial class DealOrForceGame
                 divisions.Select(army => army.ArmyGroupId).Distinct().Count());
         // A formation crossing the sea says where in the crossing it is.
         if (SeaLiftCaption(divisions[0]) is { Length: > 0 } crossing) _armyPanelSubtitle.Text = crossing + " · " + _armyPanelSubtitle.Text;
+        // And one in a pocket says how long its stores will last - the shortest among those
+        // selected. In the line that is already there, and only while it is true: the panel
+        // has rows enough.
+        if (Simulation.StrandedGarrisons.SelectionLine(_campaign, divisions) is { Length: > 0 } pocket)
+            _armyPanelSubtitle.Text = pocket + " · " + _armyPanelSubtitle.Text;
         _armyPanelSubtitle.TooltipText = Ui.Tip(CommanderCaption(group) + (group is null ? "" :
             "\n" + Tr(Simulation.Generals.Trait(group.CommanderTrait).Description) +
             "\n" + Tr("Every commander, and relieving one: Military → Generals.")));
@@ -709,13 +714,23 @@ public partial class DealOrForceGame
         return frame;
     }
 
-    /// <summary>One mark that says what is wrong with this division, if anything is.</summary>
+    /// <summary>
+    /// One mark that says what is wrong with this division, if anything is. A division in a
+    /// pocket carries a number beside its mark: the days its stores will last, and a nought in
+    /// the colour of bad news once they are gone. The stores were always counted and never
+    /// shown, so a pocket read as a formation that might be gone on any morning.
+    /// </summary>
     private Control StatusPip(Army army)
     {
+        var stores = Simulation.StrandedGarrisons.StoresBadge(_campaign, army);
         var (glyph, token, help) =
-            army.CutOff ? ("⊘", "state.negative", LogisticsSystem.DescribeSupply(_campaign, army)) :
+            army.CutOff ? (stores.Text.Length > 0 ? "⊘ " + stores.Text : "⊘",
+                stores.Severity == Simulation.StrandedGarrisons.BadgeNegative ? "state.negative" : "state.warning",
+                LogisticsSystem.DescribeSupply(_campaign, army)) :
             army.InBattle ? ("⚔", "state.warning", "In battle") :
             army.LastMoveResult == ArmyMoveResult.RouteInterrupted ? ("!", "state.warning", "Route interrupted by changed territorial control. Issue a new destination.") :
+            // Fed by the people around it, not by a road: not a fault, so not a warning colour.
+            army.LivingOffLand ? ("≈", "state.info", LogisticsSystem.DescribeSupply(_campaign, army)) :
             army.SupplyCongestion < 0.999f ? ("△", "state.warning", LogisticsSystem.DescribeSupply(_campaign, army)) :
             army.SupplyLevel < 0.45f ? ("△", "state.warning", "Short of supply") :
             army.Organisation < 0.35f ? ("↓", "state.critical", "Organisation is spent") :
@@ -729,7 +744,7 @@ public partial class DealOrForceGame
 
         var pip = Title(glyph, 12, Ui.Colour(token));
         pip.Name = "SupplyStatus_" + army.Id;
-        pip.CustomMinimumSize = new Vector2(16, 0);
+        pip.CustomMinimumSize = new Vector2(army.CutOff && stores.Text.Length > 0 ? 34 : 16, 0);
         pip.HorizontalAlignment = HorizontalAlignment.Center;
         pip.TooltipText = Ui.Tip(help, Mathf.Min(Ui.TooltipMeasure, 72));
         pip.MouseFilter = MouseFilterEnum.Stop;

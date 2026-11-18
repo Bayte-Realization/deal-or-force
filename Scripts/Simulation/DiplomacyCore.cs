@@ -412,6 +412,12 @@ public static class CampaignDiplomacy
             attacker.DecisionAvailableDay.Remove(SecessionResponse.Prefix + defender.Id);
             campaign.PendingEvents.RemoveAll(e => e.NationId == attacker.Id && e.Options.Any(o => o.SecessionTargetId == defender.Id));
         }
+        // Worked out once, BEFORE recording "declared_war_on_us" on the pair or adding the war,
+        // so the declaration itself is never misread as the pre-war casus belli. It is what the
+        // attacker's standing is charged for and what the player is owed when asking why the map
+        // moved — the same string answers both, so the ledger cannot say one thing and notoriety
+        // have been paid for another.
+        var cause = justification ?? Statecraft.CasusBelli(campaign, attacker, defender);
         if (relation.Stance == DiplomaticStance.Allied) campaign.NoteAllianceChange();
         relation.Stance = DiplomaticStance.AtWar;
         OpinionSystem.Remember(campaign, relation, "declared_war_on_us");
@@ -434,11 +440,6 @@ public static class CampaignDiplomacy
         campaign.Wars.Add(war);
         campaign.MarkWarsChanged();
         campaign.Chronicle.Record(campaign, "war_started", attackerId, defenderId);
-        // Worked out once, at the declaration, and kept on the war. It is what the attacker's
-        // standing is charged for, and it is what the player is owed when they ask why the map
-        // moved - the same string answers both, so the ledger cannot say one thing and the
-        // notoriety have been paid for another.
-        var cause = justification ?? Statecraft.CasusBelli(campaign, attacker, defender);
         war.Justification = cause;
         Statecraft.RecordDeclaration(campaign, attacker, defender, cause);
         Warfare.RebuildFronts(campaign);

@@ -440,7 +440,7 @@ public static class SubmissionSystem
             if (asker.IsHuman || asker.IsSubject || asker.Population <= 0) continue;
             if (campaign.ElapsedDays % 30 != (Math.Abs(asker.Id) + 11) % 30) continue;
             if (Chance(asker.Id, month) >= defines.SubmissionAiChancePerMonth) continue;
-            if (campaign.Wars.Any(war => !war.Ended && war.Involves(asker.Id))) continue;
+            if (Warfare.OpenWars(campaign).Any(war => !war.Ended && war.Involves(asker.Id))) continue;
             if (SubjectSystem.SubjectsOf(campaign, asker).Count >= defines.SubmissionAiMaxSubjects) continue;
 
             Nation best = null;

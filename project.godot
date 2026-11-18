@@ -19,7 +19,7 @@ curved_lines_2d/fill_in_parent_shape_with_brush=false
 [application]
 
 config/name="Deal or Force"
-config/version="0.7.1.2"
+config/version="0.7.2.3"
 run/main_scene="res://Scenes/MainMenu.tscn"
 config/project_settings_override="user://graphics_override.cfg"
 config/features=PackedStringArray("4.8", "C#", "Forward Plus")
@@ -34,6 +34,9 @@ MCPRuntimeServer="*res://addons/godot_mcp_toolkit/runtime/mcp_runtime_server.gd"
 Ezcha="*res://addons/ezcha_network/lib/singleton.gd"
 LitManager="*res://addons/lit/runtime/lit_manager.gd"
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
+MCPScreenshot="*res://addons/godot_mcp/mcp_screenshot_service.gd"
+MCPInputService="*res://addons/godot_mcp/mcp_input_service.gd"
+MCPGameInspector="*res://addons/godot_mcp/mcp_game_inspector_service.gd"
 
 [dialogue_manager]
 
@@ -53,7 +56,7 @@ project/assembly_name="DealOrForce"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://Tools/EditorCompatibility/Ziva/plugin.cfg", "res://addons/GD-Sync/plugin.cfg", "res://addons/GDQuest_GDScript_formatter/plugin.cfg", "res://addons/anthonyec.camera_preview/plugin.cfg", "res://addons/asset_placer/plugin.cfg", "res://addons/curved_lines_2d/plugin.cfg", "res://addons/ezcha_network/plugin.cfg", "res://addons/godot_ai/plugin.cfg", "res://addons/godot_mcp_toolkit/plugin.cfg", "res://addons/godotsteam/plugin.cfg", "res://addons/lit/plugin.cfg", "res://addons/orca/plugin.cfg", "res://addons/script-ide/plugin.cfg")
+enabled=PackedStringArray("res://Tools/EditorCompatibility/Ziva/plugin.cfg", "res://addons/GD-Sync/plugin.cfg", "res://addons/GDQuest_GDScript_formatter/plugin.cfg", "res://addons/anthonyec.camera_preview/plugin.cfg", "res://addons/asset_placer/plugin.cfg", "res://addons/curved_lines_2d/plugin.cfg", "res://addons/ezcha_network/plugin.cfg", "res://addons/godot_ai/plugin.cfg", "res://addons/godot_mcp/plugin.cfg", "res://addons/godot_mcp_toolkit/plugin.cfg", "res://addons/godotsteam/plugin.cfg", "res://addons/lit/plugin.cfg", "res://addons/orca/plugin.cfg", "res://addons/script-ide/plugin.cfg")
 
 [physics]
 

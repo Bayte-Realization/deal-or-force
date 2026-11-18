@@ -51,7 +51,8 @@ public partial class ExportVerification
         }
         for (var day = 3; day <= 16; day++) Morning(day);
         var isolated = c.Armies[0]; var rear = c.Armies[1];
-        Check(isolated.CutOff && isolated.DaysCutOff == 14 && isolated.SupplyLevel == 0 && !rear.CutOff,
+        Check(isolated.CutOff && isolated.DaysCutOff == 14 &&
+            MathF.Abs(isolated.SupplyLevel - c.Defines.PocketHungerSupplyFloor) < 0.0005f && !rear.CutOff,
             "actual province graph keeps only the evacuated rear supplied after fourteen mornings");
         var kit = isolated.Equipment;
         EquipmentLogistics.ReplenishDay(c);

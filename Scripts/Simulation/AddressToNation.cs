@@ -137,7 +137,7 @@ public static class AddressToNation
         if (nation.Movement is not null) return Loc.Get("A movement speaks to its followers, not to a nation.");
         var wait = nation.LastAddressDay + Math.Max(1, c.Defines.AddressCooldownDays) - c.ElapsedDays;
         if (wait > 0) return Loc.Format("The last address was too recent: {0} day(s) to wait.", wait);
-        if (address.RequiresWar && !c.Wars.Any(w => !w.Ended && w.Involves(nation.Id))) return Loc.Get("Only a country at war can be promised victory.");
+        if (address.RequiresWar && !Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(nation.Id))) return Loc.Get("Only a country at war can be promised victory.");
         if (address.Promise.Length > 0 && nation.AddressPromise.Length > 0 && nation.AddressPromiseDueDay > c.ElapsedDays)
             return Loc.Format("An earlier promise is still to be kept: {0} day(s) left.", nation.AddressPromiseDueDay - c.ElapsedDays);
         return "";
@@ -226,7 +226,7 @@ public static class AddressToNation
             if (nation.IsHuman || nation.Movement is not null || nation.Population <= 0) continue;
             // Not again until the people have nearly forgotten the last one: about a year.
             if (Effectiveness(c, nation) < 0.8f) continue;
-            var atWar = c.Wars.Any(w => !w.Ended && w.Involves(nation.Id));
+            var atWar = Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(nation.Id));
             string id = null;
             if (atWar && nation.WarSupport < 0.35f) id = "victory";
             else if (nation.Stability < 0.3f) id = "order";

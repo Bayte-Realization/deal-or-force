@@ -213,7 +213,7 @@ public static class StrategicHudBrief
     private static void Wars(Campaign campaign, Nation nation, List<Line> lines)
     {
         var found = new List<Line>();
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended || !war.Involves(nation.Id)) continue;
             var attacking = war.IsAttacking(nation.Id);
@@ -244,7 +244,7 @@ public static class StrategicHudBrief
 
     private static bool Fighting(Campaign campaign, int a, int b)
     {
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (!war.Ended && war.Opposes(a, b)) return true;
         return false;
     }

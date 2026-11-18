@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The F# contender: line-by-line ports of the three kernels, loaded in the same process. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>LanguageBench.FSharp</AssemblyName>
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
+    <Optimize>true</Optimize>
+    <Deterministic>true</Deterministic>
+    <WarningLevel>3</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="10.1.402" />
+    <Compile Include="Kernels.fs" />
+  </ItemGroup>
+</Project>

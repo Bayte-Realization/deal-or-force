@@ -85,6 +85,9 @@ public static class EngineScriptMod
             if (status != GDExtensionManager.LoadStatus.Ok && status != GDExtensionManager.LoadStatus.AlreadyLoaded)
                 throw new InvalidOperationException($"Luau extension failed to load ({status}). Restart Godot after installation.");
         }
+        // Adapters built before 14 November 2026 own .lua only; say so instead of "No loader found".
+        if (Array.IndexOf(ResourceLoader.GetRecognizedExtensionsForType("Script"), suffix.TrimStart('.')) < 0)
+            throw new InvalidOperationException($"The installed Luau adapter does not load {suffix} scripts. Rebuild it with Tools/LanguageAdapters/install-luau.ps1 -Activate (it loads .lua and .luau), or name the entry .lua.");
         var script = ResourceLoader.Load<Script>(physicalPath, cacheMode: ResourceLoader.CacheMode.Ignore);
         if (script is null || !script.CanInstantiate() || script.GetClass() != "LuauScript")
             throw new InvalidOperationException($"Cannot instantiate Luau script: {physicalPath}");

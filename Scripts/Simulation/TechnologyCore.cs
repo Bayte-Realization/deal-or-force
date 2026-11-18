@@ -627,7 +627,7 @@ public static partial class ResearchSystem
                 if (deterrent is not null) return deterrent;
             }
         }
-        var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
+        var atWar = Warfare.OpenWars(campaign).Any(war => !war.Ended && war.Involves(nation.Id));
         return AvailableTo(nation)
             .OrderBy(technology => survey is null ? CostFor(campaign, nation, technology) : CostFor(campaign, survey, nation, technology))
             .ThenBy(technology => (technology.Category is "military" or "logistics") == atWar ? 0 : 1)

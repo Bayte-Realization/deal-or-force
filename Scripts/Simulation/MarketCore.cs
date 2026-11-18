@@ -429,7 +429,8 @@ public static class MarketSystem
         {
             using (SimProfiler.Measure("    mkt:balance"))
                 for (var index = start; index < Math.Min(campaign.Nations.Count, start + BalanceStageCountries); index++)
-                    CalculateNationalBalance(campaign, campaign.Nations[index]);
+                    // A retired country (LongCampaign) has no market: it is not given sixty quotes of nothing.
+                    if (!campaign.IsRetired(campaign.Nations[index])) CalculateNationalBalance(campaign, campaign.Nations[index]);
             yield return 0;
         }
 
@@ -514,6 +515,7 @@ public static class MarketSystem
         for (var index = from; index < to; index++)
         {
             var nation = campaign.Nations[index];
+            if (campaign.IsRetired(nation)) continue;
             var weight = 0f;
             var shortages = 0f;
             var trade = 0f;
