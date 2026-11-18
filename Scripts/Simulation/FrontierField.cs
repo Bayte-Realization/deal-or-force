@@ -31,7 +31,7 @@ namespace DealOrForce.Simulation;
 public static class FrontierField
 {
     /// <summary>Distances are kept up to this many cells; everything further is "inland".</summary>
-    public const float Cap = 8f;
+    public const float Cap = 20f;
 
     /// <summary>How much the Gaussian rounds the staircase off, in cells.</summary>
     public const float Smoothing = 1.0f;

@@ -1,9 +1,11 @@
-# Languages for Godot 4.8 Beta2 .NET
+# Languages for Godot 4.8 Beta3 .NET
 
 [English](GUIDE.md) · [Русский](GUIDE_RU.md)
 
-Installed target: Windows x86-64, `4.8.beta2.mono.official.cafc17a19`
-(`C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe`).
+Installed target: Windows x86-64, `4.8.beta3.mono.official.c51ff06e8`
+(`C:/GodotEngineNet 4.8-Beta3/Godot_v4.8-beta3_mono_win64_console.exe`).
+Beta3 results of 16 November: [reports/beta3-2026-11-16.md](reports/beta3-2026-11-16.md).
+The tables below still describe the Beta2 pass unless they say otherwise.
 The October 16 joint run was `4.8.beta1.mono.official.4d10419ca`
 ([reports/native-bindings.md](reports/native-bindings.md)). This kit is a lab. It is not
 on the campaign tick. F# assault rules stay. Do not read a binding as a faster simulation:
@@ -55,7 +57,7 @@ Godot.exe. The languages do not get the whole 4.8 API automatically.
 The kit is installed next to the editor:
 
 ```text
-C:/GodotEngineNet 4.8-Beta2/LanguageKit/
+C:/GodotEngineNet 4.8-Beta3/LanguageKit/
   Open Workbench.cmd
   projects/AllSix/       # the local built workbench, not in Git
   adapters/             # examples, recipes, patches, licences
@@ -74,7 +76,7 @@ sources; the computational regression is run separately:
 ./tests/kit-tests.ps1
 # For an already built workbench, from the LanguageKit folder:
 $env:JAVA_HOME = 'C:/Program Files/Eclipse Adoptium/jdk-25.0.2.10-hotspot'
-& 'C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe' `
+& 'C:/GodotEngineNet 4.8-Beta3/Godot_v4.8-beta3_mono_win64_console.exe' `
   --headless --path ./projects/AllSix --script res://combined_probe.gd -- `
   fsharp luau rust nim odin kotlin
 ```

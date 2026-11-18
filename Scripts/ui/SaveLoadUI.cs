@@ -457,6 +457,10 @@ public partial class DealOrForceGame
         _selectedProvinceId = 0;
         _openScreen = "";
         _globe.SelectArmy(-1);
+        // Formation ids are handed out in order from the seed, so a selection carried into
+        // another save of the same scenario names real formations there - the same nation's,
+        // never selected in this world - and the next right-click would send them.
+        ClearSupportMapSelection();
         ClearDetail();
         ResetTrends();
         _lastAutosaveDay = -1;

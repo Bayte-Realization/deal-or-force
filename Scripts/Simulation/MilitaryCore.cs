@@ -584,13 +584,18 @@ public sealed class SplitArmyCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }
     public int ArmyId { get; init; }
+    /// <summary>Optional exact division count to detach; <= 0 keeps default half split.</summary>
+    public float DetachDivisions { get; init; } = -1f;
+    public int CreatedArmyId { get; private set; } = -1;
 
     public void Apply(Campaign campaign)
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null || army.NationId != IssuerId || army.InBattle || army.Divisions < 2f) return;
-        var detached = MathF.Floor(army.Divisions * 2f) / 4f;
+        var detached = DetachDivisions > 0f
+            ? MathF.Floor(DetachDivisions * 2f) / 2f
+            : MathF.Floor(army.Divisions * 2f) / 4f;
         if (detached < 1f || army.Divisions - detached < 1f) return;
         army.Divisions -= detached;
         army.OrderKind = ArmyOrder.Manual;
@@ -632,6 +637,7 @@ public sealed class SplitArmyCommand : ICampaignCommand
             Latitude = army.Latitude,
             Longitude = army.Longitude
         });
+        CreatedArmyId = id;
         campaign.MarkStrategicChange();
     }
 }

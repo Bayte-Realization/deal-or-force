@@ -129,6 +129,10 @@ static class Program
         if (args.Length == 0) ModSimulationPassTests.Run();
         if (args.Contains("--gpu-atlas-contract-only")) { GpuAtlasContractTests.Run(); return; }
         if (args.Length == 0) GpuAtlasContractTests.Run();
+        if (args.Contains("--map-look-only")) { MapLookTests.Run(); return; }
+        if (args.Length == 0) MapLookTests.Run();
+        if (args.Contains("--map-labels-only")) { MapLabelPriorityTests.Run(); return; }
+        if (args.Length == 0) MapLabelPriorityTests.Run();
         if (args.Contains("--release-0530-only")) { Release0530Tests.Run(); return; }
         if (args.Length == 0) Release0530Tests.Run();
         if (args.Contains("--country-name-settings-only")) { CountryNameSettingTests.Run(); return; }
@@ -291,7 +295,14 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--icon-categories-only")) { IconCategoryTests.Run(); return; }
         if (args.Contains("--hud-resources-only")) { HudResourceTests.Run(); return; }
         if (args.Contains("--date-plate-only")) { DatePlateTests.Run(); return; }
+        if (args.Contains("--controls-ergonomics-only")) { ControlsErgonomicsTests.RunControlsErgonomicsOnly(); return; }
+        if (args.Contains("--quick-amount-only")) { ControlsErgonomicsTests.RunQuickAmountOnly(); return; }
         if (args.Contains("--alert-list-only")) { AlertListTests.Run(); return; }
+        if (args.Contains("--new-shell-rest-only")) { NewShellTests.RunRestLayout(); return; }
+        if (args.Contains("--alert-dedupe-only")) { NewShellTests.RunAlertDedupe(); return; }
+        if (args.Contains("--hotkey-map-only")) { NewShellTests.RunHotkeyMap(); return; }
+        if (args.Contains("--messages-only")) { NewShellTests.RunMessages(); return; }
+        if (args.Contains("--shell-date-plate-only")) { NewShellTests.RunDatePlate(); return; }
         if (args.Contains("--war-toll-only")) { WarTollTests.Run(); return; }
         if (args.Contains("--research-route-only")) { ResearchRouteTests.Run(); return; }
         if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); ResearchRouteTests.Run(); return; }
@@ -502,6 +513,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--ai-doctrine-only")) { AiDoctrineTests.Run(); return; }
         if (args.Contains("--ai-temperament-only")) { AiTemperamentTests.Run(); return; }
         if (args.Contains("--casus-belli-only")) { CasusBelliTests.Run(); return; }
+        if (args.Contains("--parity-wave1-only")) { ParityWave1Tests.Run(); return; }
         if (args.Contains("--scenario-manifest-only")) { ScenarioManifestTests.Run(); return; }
         if (args.Contains("--country-history-only")) { CountryHistoryTests.Run(); return; }
         if (args.Contains("--country-definition-only")) { CountryDefinitionTests.Run(); return; }
@@ -566,6 +578,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         MovementCatalogTests.Run();
         MovementRepresentationTests.Run();
         WarStalemateTests.Run();
+        ParityWave1Tests.Run();
         CoalitionAdvanceTests.Run();
         MarketShortageTests.Run();
         MovementPowerStateTests.Run();
@@ -673,6 +686,7 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         HudResourceTests.Run();
         DatePlateTests.Run();
         AlertListTests.Run();
+        NewShellTests.RunAll();
         WarTollTests.Run();
         DiplomacyPreviewTests.Run();
         ProductionUnitsTests.Run();

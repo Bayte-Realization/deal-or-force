@@ -32,6 +32,10 @@ static class MapStyleSettingTests
                 "styles are live video preferences, not rules or renderer selections");
             Check(style.Values.SequenceEqual(new[] { "balanced", "vivid", "relief" }) &&
                 SettingsCatalog.Chosen(style.Id) == "balanced", "original balanced style is the default");
+            var look = SettingsCatalog.Of("map_look");
+            Check(look is { Category: "video", Kind: SettingKind.Choice, Campaign: false, NeedsRestart: false } &&
+                  look.Values.SequenceEqual(new[] { "atlas", "classic" }) && SettingsCatalog.Chosen(look.Id) == "atlas",
+                "the map look is a live video preference: atlas by default, classic one value away");
             Check(clouds is { Kind: SettingKind.Slider, Minimum: 0, Maximum: 1, Step: .05f, DefaultNumber: 1 },
                 "cloud control retains the original sky by default and permits a clear map");
             Check(lighting is { Kind: SettingKind.Toggle, Default: true, NeedsRestart: false, Campaign: false },
@@ -45,7 +49,8 @@ static class MapStyleSettingTests
             Check(SettingsCatalog.Chosen(style.Id) == "balanced", "unknown style falls back safely to balanced");
             Loc.ResetCatalog();
             Loc.Language = "russian";
-            foreach (var caption in new[] { style.Name, style.Description, clouds.Name, clouds.Description, lighting.Name, lighting.Description }.Concat(style.Labels))
+            foreach (var caption in new[] { style.Name, style.Description, clouds.Name, clouds.Description, lighting.Name, lighting.Description,
+                         look.Name, look.Description }.Concat(style.Labels).Concat(look.Labels))
                 Check(Loc.Get(caption) != caption, "Russian caption is present: " + caption);
             Check(Loc.Get("Balanced") == "Сбалансированная" && Loc.Get("Relief") == "Рельеф",
                 "style captions do not overwrite army stance or editor terminology");

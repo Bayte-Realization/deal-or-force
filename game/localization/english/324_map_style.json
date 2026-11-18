@@ -7,5 +7,9 @@
   "map.style.vivid": "Vivid",
   "map.style.relief": "Relief",
   "Cloud veil strength": "Cloud veil strength",
-  "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not.": "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not."
+  "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not.": "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not.",
+  "Map look": "Map look",
+  "Atlas: warm paper and ink, with a paper map from far away. Classic: the previous look. Changes immediately, without reducing detail or changing gameplay.": "Atlas: warm paper and ink, with a paper map from far away. Classic: the previous look. Changes immediately, without reducing detail or changing gameplay.",
+  "map.look.atlas": "Atlas",
+  "map.look.classic": "Classic"
 }

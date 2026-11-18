@@ -257,6 +257,10 @@ public static class Program
             if (a.TypeId != b.TypeId) return $"formation {a.Id} type {a.TypeId} against {b.TypeId}";
             if (a.StateMapIndex != b.StateMapIndex) return $"formation {a.Id} state {a.StateMapIndex} against {b.StateMapIndex}";
             if (a.BaseProvinceId != b.BaseProvinceId) return $"formation {a.Id} base {a.BaseProvinceId} against {b.BaseProvinceId}";
+            if (a.ProvinceId != b.ProvinceId) return $"formation {a.Id} province {a.ProvinceId} against {b.ProvinceId}";
+            if (!a.Route.SequenceEqual(b.Route)) return $"formation {a.Id} route {string.Join(",", a.Route)} against {string.Join(",", b.Route)}";
+            if (a.MoveProgress != b.MoveProgress || a.DeployDaysLeft != b.DeployDaysLeft || a.CutOff != b.CutOff)
+                return $"formation {a.Id} progress {a.MoveProgress}/{a.DeployDaysLeft}/{a.CutOff} against {b.MoveProgress}/{b.DeployDaysLeft}/{b.CutOff}";
             if (MathF.Abs(a.Strength - b.Strength) > 1e-6f) return $"formation {a.Id} strength {a.Strength} against {b.Strength}";
             if (MathF.Abs(a.Experience - b.Experience) > 1e-6f) return $"formation {a.Id} experience {a.Experience} against {b.Experience}";
             if (a.Mission != b.Mission) return $"formation {a.Id} mission {a.Mission} against {b.Mission}";

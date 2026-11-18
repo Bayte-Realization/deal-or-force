@@ -369,6 +369,19 @@ public partial class DealOrForceGame
         // budget - and because the rate it shows is what everything below is borrowed at.
         BuildCentralBank(rows);
 
+        var zeroRow = new HFlowContainer { Name = "ZeroBudgetRow" };
+        zeroRow.AddThemeConstantOverride("h_separation", 8);
+        zeroRow.AddThemeConstantOverride("v_separation", 4);
+        rows.AddChild(zeroRow);
+        var zeroTaxBtn = ActionButton("Balance to zero (taxes)", () => ExecuteZeroBudgetAction(adjustTaxes: true), 210, 30);
+        zeroTaxBtn.Name = "BalanceToZeroTaxes";
+        Tip(zeroTaxBtn, "Adjust tax rates smoothly to bring the weekly budget as close to zero as possible (Ctrl+Z undoes).");
+        zeroRow.AddChild(zeroTaxBtn);
+        var zeroSpendBtn = ActionButton("Balance to zero (spending)", () => ExecuteZeroBudgetAction(adjustTaxes: false), 230, 30);
+        zeroSpendBtn.Name = "BalanceToZeroSpending";
+        Tip(zeroSpendBtn, "Adjust spending lines smoothly to bring the weekly budget as close to zero as possible (Ctrl+Z undoes).");
+        zeroRow.AddChild(zeroSpendBtn);
+
         StateSection(rows, "REVENUE",
             "Everything the state levies. Each one raises money and costs something else - investment, " +
             "living standards, or the patience of the people paying - and all of them are charged " +

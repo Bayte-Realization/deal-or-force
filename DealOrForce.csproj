@@ -1,4 +1,4 @@
-<Project Sdk="Godot.NET.Sdk/4.8.0-beta.2">
+<Project Sdk="Godot.NET.Sdk/4.8.0-beta.3">
   <Import Project="GameVersion.props" />
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -120,6 +120,7 @@
       nothing could ask for them. The list matches SpriteCatalog.PictureExtensions.
     -->
     <Content Include="game\**\*.svg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="game\**\*.ttf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.jpg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.jpeg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.webp" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
@@ -136,6 +137,7 @@
     <Content Include="game\**\*.csv" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.map" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="game\**\*.gdshader" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!--
       `dlc/` used to be published here, and is not any more. A content pack is paid content and
       the first public alpha is free, so shipping one inactive would hand every player both the

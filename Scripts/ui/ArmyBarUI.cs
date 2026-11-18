@@ -103,6 +103,11 @@ public partial class DealOrForceGame
     private void RefreshArmyBar(bool force = false)
     {
         if (_armyBar is null || _campaign?.Player is null) return;
+        if (IsNewShellActive)
+        {
+            if (_armyBar.Visible) _armyBar.Visible = false;
+            return;
+        }
         var player = _campaign.Player;
         var show = _hudLayer is { Visible: true } && player.IsHuman &&
                    _campaign.Armies.Any(army => army.NationId == player.Id);
@@ -235,6 +240,13 @@ public partial class DealOrForceGame
         count.ClipText = false;
         count.TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming;
         head.AddChild(count);
+        var groupBadge = divisions.Select(a => _controlGroups.BadgeForArmy(a.Id)).FirstOrDefault(b => b.Length > 0) ?? "";
+        if (groupBadge.Length > 0)
+        {
+            var badge = BarLabel($"[{groupBadge}]", 11, Ui.Colour("controls.focus_border"));
+            badge.AddThemeFontOverride("font", Ui.NumberFont);
+            head.AddChild(badge);
+        }
         column.AddChild(head);
 
         var line = BarLabel(StatusCaption(status) + (group is null ? "" : " · " + group.Commander),

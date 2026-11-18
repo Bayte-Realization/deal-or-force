@@ -44,6 +44,23 @@
 //                    Ballistic missiles high, cruise missiles middling, slow drones low -
 //                    which is why drones come in swarms that saturate a screen.
 //
+// How the formation moves and where it stands (LongRangeMovement.cs). Left out, each takes
+// the default for its kind:
+//   movement         "land" or "air". Land drives by road at a division's pace, by train
+//                    inland away from the front, by ship port to port where there is no
+//                    road. Air flies straight ferry legs. Aircraft fly; everything else -
+//                    guns, missile brigades, SAMs, and drone crews, whose launchers and
+//                    ground stations travel on trucks - drives.
+//   speed            pace against a division's march, 1.0 by default. Towed guns and
+//                    radars are slower than a column of trucks.
+//   deploy_days      days between arriving and working: 1, a SAM brigade 2 - its radars
+//                    have to be sited and tied in with the neighbours.
+//   ferry_km         the longest single ferry flight. Left out it is three times the
+//                    range, between 600 and 4,000 km (108_long_range_movement.json).
+//   basing           what the formation takes of its region's basing capacity: 1, an air
+//                    wing 2 (it needs a runway), a bomber regiment 3. A crowded region is
+//                    allowed; its formations recover readiness more slowly.
+//
 // The stock game's eleven kinds are balanced against a division's fire of about one, so
 // that a country's whole long-range establishment over one battle is worth roughly a
 // third again of the divisions actually standing in it - decisive when it is aimed,
@@ -54,6 +71,8 @@
     "kind": "ground",
     "icon": "artillery",
     "range_km": 45,
+    // Towed howitzers: slower on the road than a column of trucks.
+    "speed": 0.8,
     "support_fire": 6.0,
     "interdiction": 1.5,
     "recon": 0.5,
@@ -91,6 +110,9 @@
     "kind": "air_defence",
     "icon": "sam",
     "range_km": 130,
+    // Launchers, radars and command posts on the road together, and two days to site them.
+    "speed": 0.8,
+    "deploy_days": 2,
     "air_defence": 10.0,
     "recon": 1.0,
     "recruitment_cost": 0.80,
@@ -162,6 +184,8 @@
     "kind": "air",
     "icon": "air",
     "range_km": 1600,
+    // A heavy bomber's runway, hardstands and fuel farm: three batteries' worth of room.
+    "basing": 3,
     "support_fire": 6.0,
     "interdiction": 6.0,
     "recon": 2.0,

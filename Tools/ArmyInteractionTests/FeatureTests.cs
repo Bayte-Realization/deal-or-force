@@ -39,8 +39,8 @@ static class FeatureTests
         var order = new SetSupportMissionCommand { IssuerId = rus.Id, FormationId = wing.Id, Mission = SupportCore.MissionAirSuperiority };
         order.Apply(c);
         Check(order.Refusal.Length > 0 && wing.Mission == mission, "disabled mission rejected authoritatively");
-        var rebase = SupportCore.PreviewRebase(c, rus.Id, new[] { wing.Id }, wing.StateMapIndex);
-        Check(rebase.Refusal.Length > 0, "disabled rebase rejected");
+        var rebase = LongRangeMovement.PreviewRelocate(c, rus.Id, new[] { wing.Id }, LongRangeMovement.At(wing));
+        Check(rebase.Count == 1 && rebase[0].Refusal == LongRangeMovement.RefuseDisabled, "disabled relocation rejected");
         Check(SupportCore.Validate(c, rus.Id, wing.StateMapIndex, wing.TypeId).Contains("disabled"), "disabled recruitment rejected before spending");
         wing.Strength = .6f;
         var exp = wing.Experience;

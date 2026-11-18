@@ -12,7 +12,7 @@
   },
   "metrics": {
     "support.overlay_distance": 17,
-    "support.marker_distance": 9.2,
+    "support.marker_distance": 10.8,
     "support.selected_scale": 1.10,
     "support.counter_scale": 1.15,
     "support.stack_spacing_x": 76,

@@ -350,6 +350,8 @@ public static class Program
         // `--movement-births`: when new movements appear, and of what kind (MovementBirthReport).
         if (Array.IndexOf(args, "--movement-births") >= 0) return mapped ? MovementBirthReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--wars") >= 0) return mapped ? WarStuckReport.Run(campaign, days) : 2;
+        // `--long-range`: what the world does with its long-range forces - moves, strikes, reach (LongRangeReport).
+        if (Array.IndexOf(args, "--long-range") >= 0) return mapped ? LongRangeReport.Run(campaign, days) : 2;
         // `--border-probe A B`: one border of a war, every fifteen days (BorderProbeReport).
         var borderAt = Array.IndexOf(args, "--border-probe");
         if (borderAt >= 0 && borderAt + 2 < args.Length)

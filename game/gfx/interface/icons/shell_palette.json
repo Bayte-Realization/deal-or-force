@@ -1,0 +1,40 @@
+{
+  "sprites": {
+    "icon_shell_pin": {
+      "source_colour": "#f2eee4"
+    },
+    "icon_shell_eye": {
+      "source_colour": "#f2eee4"
+    },
+    "icon_shell_more": {
+      "source_colour": "#f2eee4"
+    },
+    "icon_shell_play": {
+      "source_colour": "#f2eee4"
+    },
+    "icon_shell_pause": {
+      "source_colour": "#f2eee4"
+    },
+    "icon_shell_menu": {
+      "source_colour": "#f2eee4"
+    },
+    "icon_shell_tick": {
+      "source_colour": "#f2eee4"
+    },
+    "icon_shell_front": {
+      "source_colour": "#f2eee4"
+    },
+    "icon_shell_capital": {
+      "source_colour": "#f2eee4"
+    },
+    "icon_shell_2d": {
+      "source_colour": "#f2eee4"
+    },
+    "icon_shell_3d": {
+      "source_colour": "#f2eee4"
+    },
+    "icon_shell_scroll": {
+      "source_colour": "#f2eee4"
+    }
+  }
+}

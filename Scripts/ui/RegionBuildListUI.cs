@@ -186,7 +186,6 @@ public partial class DealOrForceGame
             var room = Math.Max(0, limit - running);
             var batch = ActionButton("+5", () => RegionCardBuild(captured, 5), 34, 21);
             batch.Disabled = refusal.Length > 0 || room < 2;
-            batch.TooltipText = Ui.Tip(Simulation.Loc.Format("Queue up to {0} at once; the national limit leaves room for {1}.", 5, room));
             row.AddChild(batch);
 
             var tip = Tr(definition.Name) + "\n" + Simulation.Loc.Get(definition.Description) + "\n\n" +
@@ -197,8 +196,33 @@ public partial class DealOrForceGame
             if (Waterfront.NeedsWater(kind))
                 tip += "\n" + Tr("Needs a coast, a lake or a navigable river. On inland water it is worth less.");
             if (refusal.Length > 0) tip += "\n\n" + refusal;
-            build.TooltipText = Ui.Tip(tip);
-            name.TooltipText = build.TooltipText;
+
+            EverywhereButtonHelper.Attach(build, null, () => ExecuteEverywhereConstructionAction(captured, 1), () =>
+            {
+                var plan = Simulation.Controls.QuickAmountRules.PlanEverywhereConstruction(_campaign, _campaign.Player, null, captured, 1);
+                var every = plan.Items.Count == 0
+                    ? plan.Refusal
+                    : Simulation.Loc.Format(
+                        Simulation.Controls.ControlSchemeRules.RmbEverywhereEnabled
+                            ? "Click: apply to active region\nShift+click / Right-click: apply Everywhere ({0} region(s), {1} total, {2})"
+                            : "Click: apply to active region\nShift+click: apply Everywhere ({0} region(s), {1} total, {2})",
+                        plan.Items.Count, plan.TotalBuildings, Fmt.Money(plan.TotalCost));
+                return tip + "\n\n" + every;
+            });
+            EverywhereButtonHelper.Attach(batch, null, () => ExecuteEverywhereConstructionAction(captured, 5), () =>
+            {
+                var plan = Simulation.Controls.QuickAmountRules.PlanEverywhereConstruction(_campaign, _campaign.Player, null, captured, 5);
+                var baseTip = Simulation.Loc.Format("Queue up to {0} at once; the national limit leaves room for {1}.", 5, room);
+                var every = plan.Items.Count == 0
+                    ? plan.Refusal
+                    : Simulation.Loc.Format(
+                        Simulation.Controls.ControlSchemeRules.RmbEverywhereEnabled
+                            ? "Click: apply to active region\nShift+click / Right-click: apply Everywhere ({0} region(s), {1} total, {2})"
+                            : "Click: apply to active region\nShift+click: apply Everywhere ({0} region(s), {1} total, {2})",
+                        plan.Items.Count, plan.TotalBuildings, Fmt.Money(plan.TotalCost));
+                return baseTip + "\n\n" + every;
+            });
+            name.TooltipText = Ui.Tip(tip);
         }
     }
 
@@ -313,7 +337,7 @@ public partial class DealOrForceGame
                     RecruitmentSystem.BatchPerLocalBarracks, RecruitmentSystem.BatchPerBarracks.ToString("0.#", culture)));
                 Add("Recruitment queue", Simulation.Loc.Format("+{0}, +{1} at war",
                     RecruitmentSystem.QueuePerBarracks, RecruitmentSystem.QueuePerBarracksAtWar));
-                Add("Support formations here", "+" + SupportCore.PostsPerBarracks);
+                Add("Long-range basing here", "+" + defines.LongRangeBasingPerBarracks);
                 summary.Add(Simulation.Loc.Get("reinforcements"));
                 break;
             case BuildingKind.University:

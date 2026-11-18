@@ -132,9 +132,11 @@ static class Program
         if (args.Contains("--map-peace-only")) { MapAndPeaceRegressionTests.Run(map); return; }
         if (args.Contains("--country-merges-map-only")) { CountryMergeTests.Run(c); return; }
         if (args.Contains("--sea-lift-only")) { SeaLiftTests.Run(c); return; }
-        if (args.Contains("--support-only")) { SupportTests.Run(c); return; }
+        if (args.Contains("--support-only")) { SupportTests.Run(map); return; }
+        if (args.Contains("--long-range-movement-only")) { LongRangeMovementTests.Run(map); return; }
         if (args.Contains("--airwar-only")) { AirWarTests.Run(c); return; }
-        if (args.Contains("--long-range-only")) { LongRangeTests.Run(c); return; }
+        // The whole long-range group: strikes, basing and the old region orders, movement on the map.
+        if (args.Contains("--long-range-only")) { LongRangeTests.Run(c); SupportTests.Run(map); LongRangeMovementTests.Run(map); return; }
         if (args.Contains("--militia-only")) { MilitiaSeatTests.Run(c); return; }
         if (args.Contains("--gaza-only")) { HeldGroundTests.Run(c); return; }
         if (args.Contains("--ally-ground-only")) { AllyGroundTests.Run(c); return; }
@@ -384,5 +386,8 @@ static class Program
         CombatAttritionRefactorTests.Run();
         CoalitionCombatTests.Run();
         ModifierTests.Run(map);
+        // Long-range forces: basing and the old region orders, then movement on the map.
+        SupportTests.Run(map);
+        LongRangeMovementTests.Run(map);
     }
 }

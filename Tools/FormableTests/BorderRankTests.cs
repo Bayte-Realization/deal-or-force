@@ -396,10 +396,9 @@ static class BorderRankTests
     {
         var scripts = Path.Combine(GameDataLoader.DataFolder(), "..", "Scripts");
         var globe = File.ReadAllText(Path.Combine(scripts, "gfx", "GlobePresentation.cs"));
-        var start = globe.IndexOf("Code = @\"shader_type spatial;", StringComparison.Ordinal) + "Code = @\"".Length;
-        var end = globe.IndexOf("\n}\"", start, StringComparison.Ordinal);
-        Check(start > 20 && end > start, "the full map shader is located in GlobePresentation.cs");
-        var full = globe[start..(end + 2)];
+        var full = MapShaderSource.LoadFull();
+        Check(full.StartsWith("shader_type spatial;", StringComparison.Ordinal) && full.TrimEnd().EndsWith("}", StringComparison.Ordinal),
+            "the full map shader is loaded from game/shaders/globe_map.gdshader");
         var safe = CompatibilityMapShader.Source;
 
         Check(full.Contains("float has_nation_border = step(0.5, abs(near_nation - other_nation)) * step(0.5, near_nation);"),
@@ -419,8 +418,13 @@ static class BorderRankTests
         var saturated = full.IndexOf("political.rgb, political_saturation);", StringComparison.Ordinal);
         Check(patch > 0 && mixed > patch && saturated > mixed && Count(full, "plate_catch_up(") == 2,
             "full map: the catch-up table touches the far plate sample alone, before the mix and the saturation");
-        Check(Count(full, "political.rgb = mix(political.rgb, ") == 3,
-            "full map: after the mix only occupation, the map modes and the resource view repaint the ground");
+        // The fourth is the atlas look's paper for land nobody holds: keyed to the same holder ids
+        // the paint is (near_nation / other_nation through nation_at), so it follows moved owners
+        // exactly as the country colours do, not a per-province overlay of its own.
+        Check(Count(full, "political.rgb = mix(political.rgb, ") == 4 &&
+              full.Contains("political.rgb = mix(political.rgb, look_unowned, unowned_share);") &&
+              full.Contains("float unowned_share = abs(near_nation - 65535.0) < 0.5"),
+            "full map: after the mix only occupation, the map modes, the resource view and the atlas's unowned paper repaint the ground");
 
         Check(full.Contains("base = mix(base, country_border_color,") &&
               full.Contains("country_edge * max(detail_mix, country_border_far_weight) * political.a * country_border_opacity);") &&
@@ -462,7 +466,7 @@ static class BorderRankTests
               safe.Contains("provincial * (1.0 - national) * province_detail"),
             "safe map: one ink for every country border, and the higher rank drawn alone");
 
-        Check(Balanced(full.Replace("\" + OccupationShaderFunctions + @\"", "").Replace("\" + SeamSamplingFunctions() + @\"", "")) &&
+        Check(Balanced(full) &&
               Balanced(safe),
             "both shader sources keep balanced brackets after the edit");
         var packed = PackedMapShader.Build(MapColorSpaceShader.Build(full));

@@ -91,8 +91,6 @@ public sealed partial class GlobePresentation
         var shader = new Shader { Code = AtmosphereShader };
         var material = new ShaderMaterial { Shader = shader, RenderPriority = 12 };
         material.SetShaderParameter("limb_color", Ui.Colour("globe.atmosphere"));
-        material.SetShaderParameter("strength", 0.45f);
-        material.SetShaderParameter("falloff", 4.5f);
         _atmosphereLayer = new MeshInstance3D
         {
             Name = "AtmosphereRim",
@@ -108,6 +106,26 @@ public sealed partial class GlobePresentation
             GIMode = GeometryInstance3D.GIModeEnum.Disabled
         };
         world.AddChild(_atmosphereLayer);
+        ApplyAtmosphereLook();
+    }
+
+    private void ApplyAtmosphereLook()
+    {
+        if (!IsInstanceValid(_atmosphereLayer) || _atmosphereLayer.MaterialOverride is not ShaderMaterial material) return;
+        var polish = MapLabelPriority.AtmospherePolish(_mapLookAtlas, RenderingServer.GetCurrentRenderingMethod(), 0f);
+        if (polish.WarmLampRim)
+        {
+            material.SetShaderParameter("tabletop_warmth", polish.RimWarmth);
+            material.SetShaderParameter("lamp_rim_color", Color.FromHtml(Simulation.MapLook.ColourHex("map.look_lamp")));
+            material.SetShaderParameter("strength", 0.42f);
+            material.SetShaderParameter("falloff", 4.2f);
+        }
+        else
+        {
+            material.SetShaderParameter("tabletop_warmth", 0f);
+            material.SetShaderParameter("strength", 0.45f);
+            material.SetShaderParameter("falloff", 4.5f);
+        }
     }
 
     /// <summary>Keep the lit side of the halo on the lit side of the planet, and hide it flat.</summary>
@@ -126,6 +144,9 @@ uniform vec4 limb_color : source_color = vec4(0.45, 0.68, 0.95, 1.0);
 uniform float strength = 0.62;
 uniform float falloff = 3.1;
 uniform vec3 sun_direction = vec3(0.2, 0.6, 0.75);
+uniform float tabletop_warmth = 0.0;
+uniform vec3 lamp_rim_color : source_color = vec3(1.0, 0.89, 0.69);
+uniform vec3 lamp_direction = vec3(-0.62, 0.62, 0.48);
 void fragment() {
     vec3 n = normalize(NORMAL);
     // Zero facing the camera, one at the silhouette: the halo is the edge, not a wash.
@@ -135,7 +156,8 @@ void fragment() {
     // the globe stops looking lit by anything.
     vec3 world_n = normalize((MODEL_MATRIX * vec4(n, 0.0)).xyz);
     float lit = smoothstep(-0.28, 0.55, dot(world_n, normalize(sun_direction)));
-    ALBEDO = limb_color.rgb;
-    ALPHA = rim * strength * mix(0.18, 1.0, lit);
+    float lamp = smoothstep(-0.15, 0.75, dot(world_n, normalize(lamp_direction)));
+    ALBEDO = mix(limb_color.rgb, lamp_rim_color, tabletop_warmth * lamp);
+    ALPHA = rim * strength * mix(0.18, 1.0, max(lit, lamp * tabletop_warmth));
 }";
 }

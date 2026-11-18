@@ -55,7 +55,7 @@ function Find-Godot {
             if ($path -and (Test-Path -LiteralPath $path)) { return $path }
         } catch { }
     }
-    return 'C:\GodotEngineNet 4.8-Beta2\Godot_v4.8-beta2_mono_win64_console.exe'
+    return 'C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_mono_win64_console.exe'
 }
 
 function Invoke-Build {
@@ -76,11 +76,11 @@ function Find-MatchingGodot {
     # already refuses a mismatched engine; play and import must do the same, or a wrong
     # editor is started and its MCP bridge hangs before the game ever reports readiness.
     $version = (& $candidate --version | Select-Object -Last 1).Trim()
-    $sdk = ([xml](Get-Content (Join-Path $project 'DealOrForce.csproj') -Raw)).Project.Sdk
-    if ($sdk -match '/(?<major>\d+)\.(?<minor>\d+)') {
-        $wanted = "$($Matches.major).$($Matches.minor)."
+    . (Join-Path $PSScriptRoot 'EngineVersion.ps1')
+    $wanted = Get-ExpectedEngineVersionPrefix (Join-Path $project 'DealOrForce.csproj')
+    if ($wanted) {
         if (-not $version.StartsWith($wanted, [StringComparison]::Ordinal)) {
-            $fallback = 'C:\GodotEngineNet 4.8-Beta2\Godot_v4.8-beta2_mono_win64_console.exe'
+            $fallback = 'C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_mono_win64_console.exe'
             if (-not (Test-Path -LiteralPath $fallback)) {
                 throw "Godot $version does not match the project's $wanted SDK, and no matching fallback exists."
             }

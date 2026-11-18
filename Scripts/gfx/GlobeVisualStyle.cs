@@ -29,5 +29,9 @@ public sealed partial class GlobePresentation
         _cloudOpacityScale = SettingsCatalog.Of("map_cloud_opacity") is null ? 1f
             : Math.Clamp(SettingsCatalog.Number("map_cloud_opacity"), 0f, 1f);
         UpdateWeather(0);
+        // The atlas look rides on the same call: every place that reapplies the style (the
+        // settings page, the terrain upload) must reapply the look too, or loading would put
+        // the classic uniforms back under a player who chose the atlas.
+        ApplyMapLook();
     }
 }

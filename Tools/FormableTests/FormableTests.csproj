@@ -16,6 +16,8 @@
   <ItemGroup><Compile Include="../../Scripts/Presentation/CompatibilityMapShader.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Presentation/PackedMapShader.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Presentation/MapColorSpaceShader.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/MapShaderSource.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/MapLabelPriority.cs" /><Compile Include="../../Scripts/Presentation/RiverLabelLayout.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Presentation/MapPanScale.cs" /><Compile Include="../../Scripts/Presentation/TerritoryLabelLayout.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Presentation/CameraInertia.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Presentation/DecisionReadability.cs" /></ItemGroup>

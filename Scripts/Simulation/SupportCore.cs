@@ -57,10 +57,40 @@ public sealed class SupportFormation
     public int Id;
     public int NationId;
     public string TypeId = "artillery_brigade";
-    /// <summary>The region the formation is based in. Bases are why ground is worth taking.</summary>
+    /// <summary>The region of the province the formation stands in - derived from <see cref="ProvinceId"/>,
+    /// kept because the panel groups by it and old saves carry it.</summary>
     public int StateMapIndex;
-    /// <summary>The province the range is measured from: a controlled province of the base region.</summary>
+    /// <summary>The province the range is measured from, and only while the formation is deployed
+    /// there: -1 on the road, at sea, in the air, deploying or cut off. A formation that projects
+    /// nothing has no point to project from.</summary>
     public int BaseProvinceId = -1;
+
+    /// <summary>
+    /// Where the formation stands now: the last province it reached. 0 in a save written before
+    /// formations moved - LongRangeMovement.Settle reads the old base, or the government's seat
+    /// for one that had been parked off the map, and fills it in on the first step.
+    /// </summary>
+    public int ProvinceId;
+    /// <summary>The provinces still ahead, in order. Empty: standing.</summary>
+    public List<int> Route = new();
+    /// <summary>How each step of <see cref="Route"/> is made, as a <see cref="SupportMoveMode"/>, index for index.</summary>
+    public List<int> RouteModes = new();
+    /// <summary>0 to 1: how far along the first step of the route the formation has come.</summary>
+    public float MoveProgress;
+    /// <summary>
+    /// The straits that were shut to its country when it put to sea on the passage it is making
+    /// (SeaLanes.ShutMask), so the course it sails stays the course it set out on whatever
+    /// opens or shuts behind it. 0 when it is not at sea - and in a save written before ships
+    /// followed the water, which then sails the open course between the same two harbours.
+    /// </summary>
+    public long SeaCourseMask;
+    /// <summary>Days still to go before an arrived formation works: dug in, radars up, links made.</summary>
+    public int DeployDaysLeft;
+    /// <summary>Standing on ground it may not stand on with no way out: visible, doing nothing, looking daily.</summary>
+    public bool CutOff;
+    /// <summary>Has paid the overrun loss for the ground it is standing on, so a second look at the
+    /// same lost province does not charge it again. Cleared when it stands on its own side's ground.</summary>
+    public bool Overrun;
     /// <summary>0 to 1: crews, airframes, barrels and readiness together. Recovers with the arms market.</summary>
     public float Strength = 1f;
     public float Experience;
@@ -153,6 +183,26 @@ public sealed record SupportTypeDefinition(
     /// which is why it is thrown in swarms, and why a swarm saturates a screen a few cannot.
     /// </summary>
     public float Evasion { get; init; }
+
+    /// <summary>
+    /// How the formation goes from one place to another (LongRangeMovement): "land" by road, rail
+    /// and, where there is no road, by ship between ports; "air" in straight ferry legs. Guns,
+    /// missile brigades and drone crews drive - a drone's launchers and ground station travel on
+    /// trucks, the drone itself is not flown across half a country. Aircraft fly.
+    /// </summary>
+    public SupportMoveMode Movement { get; init; } = SupportMoveMode.Land;
+
+    /// <summary>Pace against a division's march, 1 = the same column of trucks. Towed guns and radars are slower.</summary>
+    public float Speed { get; init; } = 1f;
+
+    /// <summary>Days between arriving and working: guns dug in, radars sited, links up.</summary>
+    public int DeployDays { get; init; } = 1;
+
+    /// <summary>The longest single ferry flight in km; 0 derives it from the reach (LongRangeFerryRangeFactor).</summary>
+    public float FerryKm { get; init; }
+
+    /// <summary>What the formation takes of a region's basing capacity: a battery wants a field, a wing a runway.</summary>
+    public float Basing { get; init; } = 1f;
 }
 
 /// <summary>Paradox-style common/support catalogue, consumed by simulation and rendering.</summary>
@@ -242,7 +292,16 @@ public static class SupportTypeCatalog
             Munition = value.TryGetProperty("munition", out var munition) && munition.ValueKind == JsonValueKind.String
                 ? munition.GetString() ?? "" : earlier?.Munition ?? "",
             MunitionPerSalvo = MathF.Max(0f, Number("munition_per_salvo", earlier?.MunitionPerSalvo ?? 0f)),
-            Evasion = M.Clamp01(Number("evasion", earlier?.Evasion ?? 0f))
+            Evasion = M.Clamp01(Number("evasion", earlier?.Evasion ?? 0f)),
+            // Movement defaults by kind, so a mod's new aircraft flies and its new gun drives
+            // without either having to say so; a file that names it wins.
+            Movement = value.TryGetProperty("movement", out var movement) && movement.ValueKind == JsonValueKind.String &&
+                       Enum.TryParse<SupportMoveMode>(movement.GetString(), true, out var mode) && mode is SupportMoveMode.Land or SupportMoveMode.Air
+                ? mode : earlier?.Movement ?? (kind == SupportKind.Air ? SupportMoveMode.Air : SupportMoveMode.Land),
+            Speed = M.Clamp(Number("speed", earlier?.Speed ?? 1f), 0.1f, 5f),
+            DeployDays = Math.Clamp(Whole("deploy_days", earlier?.DeployDays ?? (kind == SupportKind.AirDefence ? 2 : 1)), 0, 60),
+            FerryKm = MathF.Max(0f, Number("ferry_km", earlier?.FerryKm ?? 0f)),
+            Basing = M.Clamp(Number("basing", earlier?.Basing ?? (kind == SupportKind.Air ? 2f : 1f)), 0f, 20f)
         };
         return definition;
     }
@@ -314,6 +373,10 @@ public static class SupportCore
         // Warfare can change control after the step's initial reach index.
         SupportRepatriation.Reconcile(campaign);
         yield return 0;
+        // The day's road, rail, sea and air before anything is trained or fires: a formation
+        // that arrives today is deploying tonight, and one still on the road fires nothing.
+        LongRangeMovement.Advance(campaign);
+        yield return 0;
         Train(campaign);
         yield return 0;
         AirReconnaissance.Expose(campaign);
@@ -327,6 +390,10 @@ public static class SupportCore
         Recover(campaign);
         yield return 0;
         CommandByAir(campaign);
+        yield return 0;
+        // Where the computer's formations stand, after it has decided what they fly: the same
+        // relocation order a player gives, so neither side is moved by a better rule.
+        LongRangeMovement.Reposition(campaign);
         yield return 0;
         LongRangeStrikes.Procure(campaign);
     }
@@ -394,20 +461,66 @@ public static class SupportCore
     public static int BuildDaysOf(Nation nation, SupportTypeDefinition type) =>
         Math.Max(1, (int)MathF.Round(type.BuildDays / NationalModifiers.Factor(nation, "recruitment_speed")));
 
-    /// <summary>Support formations each barracks lets its region host.</summary>
-    public const int PostsPerBarracks = 2;
-
-    /// <summary>How many formations a region can host: two of anything, and two more per barracks.</summary>
+    /// <summary>
+    /// What a region can base without crowding: a base allowance, more for every barracks, and
+    /// more for every leading city its owner still holds - a city is the airfields, depots and
+    /// rail yards a brigade moves into. Not a ceiling any more: going over it is allowed and
+    /// paid for in readiness (<see cref="CrowdingOf"/>). One figure for everybody standing there,
+    /// the owner and its allies alike.
+    /// </summary>
     public static int CapacityOf(Campaign campaign, ScenarioState state)
     {
-        if (state is null) return 0;
-        return 2 + PostsPerBarracks * state.Buildings.GetValueOrDefault(BuildingKind.Barracks);
+        if (state is null || campaign is null) return 0;
+        var defines = campaign.Defines;
+        return Math.Max(0, defines.LongRangeBasingBase +
+            defines.LongRangeBasingPerBarracks * state.Buildings.GetValueOrDefault(BuildingKind.Barracks) +
+            defines.LongRangeBasingPerCity * HeldCitiesOf(campaign, state));
     }
 
-    /// <summary>Formations already based in a region, against what the region can host.</summary>
-    public static int PostsUsed(Campaign campaign, int stateMapIndex, int exceptFormationId = -1) =>
-        campaign.SupportFormations.Count(formation =>
-            formation.StateMapIndex == stateMapIndex && formation.Id != exceptFormationId && Enabled(campaign, formation.TypeId));
+    /// <summary>Leading cities of the region on ground its owner controls.</summary>
+    public static int HeldCitiesOf(Campaign campaign, ScenarioState state)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null || state is null || state.NationMapIndex <= 0) return 0;
+        var controllers = campaign.ProvinceController ?? map.ProvinceToNation;
+        var under = CityCatalog.ProvincesOf(map);
+        var leading = Math.Min(under.Length, CityCatalog.LeadingCount);
+        var held = 0;
+        for (var index = 0; index < leading; index++)
+        {
+            var province = under[index];
+            if (province <= 0 || province > map.ProvinceCount || map.ProvinceToState[province] != state.MapIndex) continue;
+            if (controllers[province] == state.NationMapIndex) held++;
+        }
+        return held;
+    }
+
+    /// <summary>What one formation of this kind takes of a region's basing capacity.</summary>
+    public static float BasingOf(string typeId) =>
+        SupportTypeCatalog.TryGet(typeId, out var type) ? type.Basing : 1f;
+
+    /// <summary>
+    /// What is standing in a region against its capacity: every formation that has arrived there
+    /// (deployed, deploying, or cut off - a column on the road through it is not based there) by
+    /// its weight, and every order in training that will stand up there.
+    /// </summary>
+    public static float BasingUsed(Campaign campaign, int stateMapIndex, int exceptFormationId = -1)
+    {
+        var used = 0f;
+        foreach (var formation in campaign.SupportFormations)
+        {
+            if (formation.Id == exceptFormationId || formation.Route.Count > 0 || !Enabled(campaign, formation.TypeId)) continue;
+            if (formation.StateMapIndex != stateMapIndex) continue;
+            used += BasingOf(formation.TypeId);
+        }
+        foreach (var order in campaign.SupportOrders)
+            if (order.StateMapIndex == stateMapIndex && Enabled(campaign, order.TypeId)) used += BasingOf(order.TypeId);
+        return used;
+    }
+
+    /// <summary>The readiness a crowded region still repairs: capacity / used, 1 when there is room.</summary>
+    public static float CrowdingOf(float capacity, float used) =>
+        used <= capacity || used <= 0f ? 1f : MathF.Max(0f, capacity) / used;
 
     /// <summary>A controlled province of the region, which the range is measured from. -1 if there is none.</summary>
     public static int BaseProvinceOf(Campaign campaign, Nation nation, int stateMapIndex)
@@ -506,6 +619,7 @@ public static class SupportCore
                 TypeId = order.TypeId,
                 StateMapIndex = order.StateMapIndex,
                 BaseProvinceId = province,
+                ProvinceId = province,
                 Strength = 1f,
                 Experience = 0.10f,
                 Mission = MissionStandby
@@ -519,17 +633,28 @@ public static class SupportCore
     /// <summary>Readiness again, out of the arms on the national market: a wing without planes does not fly.</summary>
     private static void Recover(Campaign campaign)
     {
+        // Crowding by region, worked out once for the pass: a hundred formations asking for
+        // their region's capacity one by one would walk the city list a hundred times.
+        var crowding = new Dictionary<int, float>();
         foreach (var formation in campaign.SupportFormations)
         {
             var nation = campaign.NationById(formation.NationId);
             if (nation is null || !Enabled(campaign, formation.TypeId) || Displaced(campaign, formation)) continue;
+            if (!crowding.TryGetValue(formation.StateMapIndex, out var crowded))
+            {
+                var state = campaign.StateByMapIndex(formation.StateMapIndex);
+                crowded = crowding[formation.StateMapIndex] = state is null ? 1f
+                    : CrowdingOf(CapacityOf(campaign, state), BasingUsed(campaign, state.MapIndex));
+            }
             var arms = nation.Market.TryGetValue(Commodity.Arms, out var quote) ? quote.Satisfaction : 1f;
             var equipment = 0.50f + 0.50f * M.Clamp01(arms);
             // Standing by repairs faster: a formation working its missions wears and a
             // formation resting does not, and the difference is a decision worth having.
             var resting = formation.Mission == MissionStandby ? 1.6f : 1f;
+            // Over capacity, repairs are shared: twice the formations on the same airfields and
+            // depots repair at half the rate - the price of crowding, instead of a refusal.
             formation.Strength = M.Clamp01(formation.Strength +
-                campaign.Defines.SupportRegenPerDay * equipment * resting * NationalModifiers.Factor(nation, "support_recovery") *
+                campaign.Defines.SupportRegenPerDay * equipment * resting * crowded * NationalModifiers.Factor(nation, "support_recovery") *
                 (formation.Strength < 1f ? 1f : 0f));
             // Experience drifts toward what the formation is doing, slowly, the way it does.
             var target = formation.Mission == MissionStandby ? 0.15f : 0.45f;
@@ -543,12 +668,15 @@ public static class SupportCore
     private static void CommandByAir(Campaign campaign)
     {
         if (campaign.ElapsedDays % 30 != 0) return;
-        var wars = new Dictionary<int, int>();
+        // Everybody on both sides, not only the two leaders: a country that joined a war kept
+        // every formation it had on standby until the war ended, while still buying missiles
+        // and air defence for it by the whole coalition (LongRangeStrikes.Procure).
+        var wars = new HashSet<int>();
         foreach (var war in campaign.Wars)
         {
             if (war.Ended) continue;
-            wars[war.AttackerId] = war.Id;
-            wars[war.DefenderId] = war.Id;
+            foreach (var id in war.Side(true)) wars.Add(id);
+            foreach (var id in war.Side(false)) wars.Add(id);
         }
         foreach (var formation in campaign.SupportFormations)
         {
@@ -557,12 +685,14 @@ public static class SupportCore
             if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type) || !Enabled(campaign, type)) continue;
             // Emergency evacuation is handled for ALL countries on every step, not
             // just for AI countries on this monthly mission-planning day.
-            var atWar = wars.ContainsKey(formation.NationId);
+            var atWar = wars.Contains(formation.NationId);
             // A wing worn down over the front is pulled out to recover, and goes back when it has
             // - with room between the two, so it does not flicker in and out every month.
             var resting = formation.Mission == MissionStandby;
             var fit = formation.Strength >= (resting ? 0.75f : 0.45f);
-            formation.Mission = !atWar || !fit || type.Kind == SupportKind.AirDefence || formation.BaseProvinceId <= 0
+            // A formation on the road keeps the mission it will fly on arrival; only one cut off
+            // with nowhere to go rests, because it has nothing to fly from.
+            formation.Mission = !atWar || !fit || type.Kind == SupportKind.AirDefence || formation.CutOff
                 ? MissionStandby
                 : RoleOf(campaign, nation, type);
         }
@@ -617,23 +747,39 @@ public static class SupportCore
         return 6371f * 2f * MathF.Asin(MathF.Min(1f, MathF.Sqrt(haversine)));
     }
 
-    /// <summary>A base is displaced when the province it measures from is no longer the country's
-    /// own ground. The formation still exists; it projects nothing until it is rebased.</summary>
+    /// <summary>
+    /// Not working: on the road, at sea, in the air, deploying, cut off - or standing on ground
+    /// that is neither the country's own nor a country's that lets its troops in. The formation
+    /// still exists and is on the map; it projects nothing until it is deployed again. Which
+    /// region the province belongs to no longer matters: a battery may stand in any province.
+    /// </summary>
     public static bool Displaced(Campaign campaign, SupportFormation formation)
     {
         var map = campaign.ProvinceMap;
-        if (map is null || formation.BaseProvinceId <= 0 || formation.BaseProvinceId > map.ProvinceCount) return true;
-        var controllers = campaign.ProvinceController ?? map.ProvinceToNation;
+        if (map is null || formation.Route.Count > 0 || formation.DeployDaysLeft > 0 || formation.CutOff) return true;
+        // A formation written before positions existed stands where its base was.
+        var at = formation.ProvinceId > 0 ? formation.ProvinceId : formation.BaseProvinceId;
+        if (at <= 0 || at > map.ProvinceCount || formation.BaseProvinceId != at || map.IsWater(at)) return true;
         var nation = campaign.NationById(formation.NationId);
-        return nation is null || controllers[formation.BaseProvinceId] != nation.MapIndex ||
-            map.IsWater(formation.BaseProvinceId) || map.ProvinceToState[formation.BaseProvinceId] != formation.StateMapIndex;
+        if (nation is null) return true;
+        var controller = (campaign.ProvinceController ?? map.ProvinceToNation)[at];
+        return controller != nation.MapIndex && !MilitaryAccess.CanEnter(campaign, nation.Id, controller);
     }
 
-    /// <summary>Whether the formation reaches a province at all: a base that holds, inside the radius.</summary>
+    /// <summary>
+    /// How far a formation of this kind reaches: its range, plus half a province. Range is
+    /// measured from the centre of the base to the centre of the target, and a province is about
+    /// 65 km across - so a 45 km gun line measured that way did not reach the next province at
+    /// all, while the real one fires to the edge of it.
+    /// </summary>
+    public static float ReachKm(Campaign campaign, SupportTypeDefinition type) =>
+        type is null ? 0f : type.RangeKm + MathF.Max(0f, campaign?.Defines.LongRangeReachSlackKm ?? 0f);
+
+    /// <summary>Whether the formation reaches a province at all: deployed, inside the reach.</summary>
     public static bool InRange(Campaign campaign, SupportFormation formation, SupportTypeDefinition type, int province)
     {
         if (!Enabled(campaign, type) || Displaced(campaign, formation) || province <= 0 || province > campaign.ProvinceMap.ProvinceCount) return false;
-        return DistanceKm(campaign, formation.BaseProvinceId, province) <= type.RangeKm;
+        return DistanceKm(campaign, formation.BaseProvinceId, province) <= ReachKm(campaign, type);
     }
 
     /// <summary>The country's most populous region, for a formation that has lost its own.</summary>
@@ -651,40 +797,28 @@ public static class SupportCore
         return best;
     }
 
-    /// <summary>Move a formation to a region the country holds, onto a province of it.</summary>
+    /// <summary>
+    /// The province an order naming only a region goes to: the one the region's bases used to be
+    /// put in (<see cref="ChooseBase"/>). Kept for the replays and network peers that still send
+    /// region orders - they now travel there like any other relocation.
+    /// </summary>
+    public static int RegionOrderProvince(Campaign campaign, int issuer, int stateMapIndex)
+    {
+        var nation = campaign.NationById(issuer);
+        var state = campaign.StateByMapIndex(stateMapIndex);
+        if (nation is null || state is null || state.NationMapIndex != nation.MapIndex) return -1;
+        return BaseProvinceOf(campaign, nation, stateMapIndex);
+    }
+
+    /// <summary>Send a formation to a region the country holds, to the province its bases used to take.</summary>
     public static string Rebase(Campaign campaign, SupportFormation formation, int stateMapIndex)
     {
         if (formation is null) return "No such formation.";
-        var plan = PreviewRebase(campaign, formation.NationId, new[] { formation.Id }, stateMapIndex);
-        if (plan.Refusal.Length > 0) return plan.Refusal;
-        formation.StateMapIndex = stateMapIndex;
-        formation.BaseProvinceId = plan.BaseProvinceId;
-        campaign.MarkStrategicChange();
-        return "";
-    }
-
-    /// <summary>Read-only, shared by map previews and commands. Training reserves real posts.
-    /// A group is accepted whole or refused whole; stale/foreign ids never silently disappear.</summary>
-    public sealed record RebasePreview(int BaseProvinceId, int Moving, int Free, int Reserved, string Refusal);
-
-    public static RebasePreview PreviewRebase(Campaign campaign, int issuer, IEnumerable<int> formationIds, int stateMapIndex)
-    {
-        var ids = formationIds?.Distinct().OrderBy(id => id).Take(4097).ToArray() ?? Array.Empty<int>();
-        var nation = campaign.NationById(issuer);
-        var state = campaign.States.Find(s => s.MapIndex == stateMapIndex);
-        RebasePreview Reject(string reason) => new(-1, 0, 0, 0, reason);
-        if (ids.Length == 0 || ids.Length > 4096) return Reject("No such formation.");
-        var formations = ids.Select(id => campaign.SupportFormations.Find(f => f.Id == id && f.NationId == issuer)).ToArray();
-        if (formations.Any(f => f is null)) return Reject("No such formation.");
-        if (formations.Any(f => !Enabled(campaign, f.TypeId))) return Reject("This mechanic is disabled in this scenario.");
-        if (nation is null || state is null || state.NationMapIndex != nation.MapIndex)
-            return Reject("Choose a region the country holds.");
-        var province = BaseProvinceOf(campaign, nation, stateMapIndex);
-        if (province <= 0) return Reject("That region has no controlled province to base in.");
-        var reserved = campaign.SupportOrders.Count(o => o.StateMapIndex == stateMapIndex && Enabled(campaign, o.TypeId));
-        var free = Math.Max(0, CapacityOf(campaign, state) - PostsUsed(campaign, stateMapIndex) - reserved);
-        var moving = formations.Count(f => f.StateMapIndex != stateMapIndex);
-        return new(province, moving, free, reserved, moving > free ? "Not enough posts for the whole selection." : "");
+        var province = RegionOrderProvince(campaign, formation.NationId, stateMapIndex);
+        if (province <= 0) return "Choose a region the country holds.";
+        var order = new RelocateSupportCommand { IssuerId = formation.NationId, FormationIds = new[] { formation.Id }, ProvinceId = province };
+        order.Apply(campaign);
+        return order.Refusal;
     }
 
     // ------------------------------------------------------------------ the reach into a battle
@@ -862,8 +996,10 @@ public static class SupportCore
             foreach (var typeId in types)
             {
                 if (!SupportTypeCatalog.TryGet(typeId, out var type) || !Enabled(campaign, type)) continue;
+                // Spread by weight within capacity, so the world opens uncrowded: a wing takes a
+                // runway's worth of room, a battery a field's.
                 var state = states.FirstOrDefault(candidate =>
-                    PostsUsed(campaign, candidate.MapIndex) < CapacityOf(campaign, candidate) &&
+                    BasingUsed(campaign, candidate.MapIndex) + type.Basing <= CapacityOf(campaign, candidate) &&
                     bases.ContainsKey((nation.MapIndex, candidate.MapIndex)));
                 if (state is null) break;
                 var province = bases[(nation.MapIndex, state.MapIndex)];
@@ -874,6 +1010,7 @@ public static class SupportCore
                     TypeId = typeId,
                     StateMapIndex = state.MapIndex,
                     BaseProvinceId = province,
+                    ProvinceId = province,
                     Strength = 0.85f + 0.15f * M.Clamp01(nation.Gdp / 500f),
                     Experience = nation.Gdp >= 200f ? 0.35f : 0.20f,
                     Mission = MissionStandby
@@ -892,10 +1029,10 @@ public static class SupportCore
         if (!SupportTypeCatalog.TryGet(typeId, out var type)) return "No such formation type.";
         if (!Enabled(campaign, type)) return "This mechanic is disabled in this scenario.";
         if (BaseProvinceOf(campaign, nation, stateMapIndex) <= 0) return "That region has no controlled province.";
-        if (campaign.SupportOrders.Count(order => order.NationId == issuer && Enabled(campaign, order.TypeId)) >= 8) return "Training capacity reached: 8 orders.";
-        if (PostsUsed(campaign, stateMapIndex) + campaign.SupportOrders.Count(order =>
-                order.NationId == issuer && order.StateMapIndex == stateMapIndex && Enabled(campaign, order.TypeId)) >= CapacityOf(campaign, state))
-            return "That region has no post free.";
+        // The training queue is a define now, shown in the panel; a full region is not a refusal
+        // any more - it is crowding, which the readiness pays for (CrowdingOf).
+        if (campaign.SupportOrders.Count(order => order.NationId == issuer && Enabled(campaign, order.TypeId)) >=
+            Math.Max(1, campaign.Defines.SupportTrainingSlots)) return "Training capacity reached.";
         if (nation.Treasury < CostOf(nation, type)) return "Insufficient treasury.";
         if (nation.ManpowerReserve < type.Personnel) return "Insufficient manpower reserve.";
         return "";
@@ -979,6 +1116,7 @@ public sealed class SetSupportMissionCommand : ICampaignCommand
     }
 }
 
+/// <summary>The old one-formation region order: now a relocation to the province its region's bases took.</summary>
 public sealed class RebaseSupportCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }
@@ -996,7 +1134,11 @@ public sealed class RebaseSupportCommand : ICampaignCommand
     }
 }
 
-/// <summary>One replay/network order, with authoritative all-or-nothing validation.</summary>
+/// <summary>
+/// The old group order by region, kept so replays and peers that send it still play: it becomes
+/// one relocation of every member to the province <see cref="SupportCore.ChooseBase"/> would have
+/// picked, each travelling its own way, each refusal named.
+/// </summary>
 public sealed class RebaseSupportGroupCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }
@@ -1009,17 +1151,11 @@ public sealed class RebaseSupportGroupCommand : ICampaignCommand
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
         Moved = 0;
-        var plan = SupportCore.PreviewRebase(campaign, IssuerId, FormationIds, StateMapIndex);
-        Refusal = plan.Refusal;
-        if (Refusal.Length > 0) return;
-        foreach (var id in FormationIds.Distinct().OrderBy(id => id))
-        {
-            var formation = campaign.SupportFormations.Find(f => f.Id == id && f.NationId == IssuerId);
-            if (formation.StateMapIndex == StateMapIndex && formation.BaseProvinceId == plan.BaseProvinceId) continue;
-            formation.StateMapIndex = StateMapIndex;
-            formation.BaseProvinceId = plan.BaseProvinceId;
-            Moved++;
-        }
-        if (Moved > 0) campaign.MarkStrategicChange();
+        var province = SupportCore.RegionOrderProvince(campaign, IssuerId, StateMapIndex);
+        if (province <= 0) { Refusal = "Choose a region the country holds."; return; }
+        var order = new RelocateSupportCommand { IssuerId = IssuerId, FormationIds = FormationIds ?? Array.Empty<int>(), ProvinceId = province };
+        order.Apply(campaign);
+        Refusal = order.Refusal;
+        Moved = order.Moved;
     }
 }

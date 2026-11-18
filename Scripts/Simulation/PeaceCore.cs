@@ -243,12 +243,12 @@ public static class PeaceNegotiation
         return MathF.Max(0f, stalemateDiscount);
     }
 
-    public static string BlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
+    public static string HardBlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
     {
-        if (war is null || war.Ended || !war.Involves(nationId)) return Loc.Get("No active war");
+        if (campaign is null || war is null || war.Ended || !war.Involves(nationId)) return Loc.Get("No active war");
 
-        // The same two gates for every term, with the numbers coming off the term rather
-        // than out of a switch that stated each pair twice.
+        // The same hard gates for every term (objective and minimum duration), shared by
+        // proposing a settlement and signing a menu offer the other side already proposed.
         var definition = PeaceTermCatalog.Of(terms);
         if (terms == PeaceTerms.EnforceWarGoal && war.ClaimedStateMapIndex < 0)
             return Loc.Get("This war has no territorial objective");
@@ -256,7 +256,15 @@ public static class PeaceNegotiation
         var fought = campaign.ElapsedDays - war.StartedDay;
         if (definition.MinimumDays > 0 && fought < definition.MinimumDays)
             return Loc.Format("The war has not lasted {0} days", definition.MinimumDays);
+        return "";
+    }
 
+    public static string BlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
+    {
+        var hard = HardBlockReason(campaign, war, nationId, terms);
+        if (hard.Length > 0) return hard;
+
+        var definition = PeaceTermCatalog.Of(terms);
         var acceptance = Acceptance(campaign, war, nationId, terms);
         if (definition.MinimumAcceptance > 0f && acceptance < definition.MinimumAcceptance)
             return Loc.Format("Opponent acceptance {0}% (requires {1}%)",
@@ -323,9 +331,16 @@ public static class PeaceNegotiation
         return true;
     }
 
-    public static void Resolve(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms)
+    public static void Resolve(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms) =>
+        Resolve(campaign, war, proposerId, terms, requireAcceptance: true);
+
+    internal static void Resolve(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms,
+        bool requireAcceptance)
     {
-        var block = BlockReason(campaign, war, proposerId, terms);
+        if (campaign is null || war is null) return;
+        var block = requireAcceptance
+            ? BlockReason(campaign, war, proposerId, terms)
+            : HardBlockReason(campaign, war, proposerId, terms);
         war.LastNegotiation = block.Length == 0 ? "Agreement reached" : block;
         war.LastPeaceProposalDay = campaign.ElapsedDays;
         if (block.Length > 0) return;

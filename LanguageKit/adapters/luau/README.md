@@ -1,4 +1,4 @@
-# Luau ScriptLanguage (GDExtension), Godot 4.8 beta2
+# Luau ScriptLanguage (GDExtension), Godot 4.8 beta3
 
 This adapter embeds Luau, **not Lua 5.4 or LuaJIT**, and registers a native
 `ScriptLanguageExtension`. The user-suggested gilzoide/lua-gdextension implements
@@ -31,12 +31,12 @@ The two suffix patches exclude each other: build them from separate checkouts.
 ## Build and probe
 
 ```powershell
-$engine = 'C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe'
-git clone --no-checkout https://github.com/Fumohouse/godot-luau-script.git .cache/sources-beta2/luau-distinct
-git -C .cache/sources-beta2/luau-distinct checkout --detach 7942ce6def8023596ca0cb8d819b032eb40a4bce
-./adapters/luau/build.ps1 -GodotExecutable $engine -SourceDirectory .cache/sources-beta2/luau-distinct `
-    -OutputDirectory .cache/verified-beta2/luau/addon -Suffixes luau -Jobs 8
-./workbench/verify-beta2.ps1 -Languages luau        # = probe.ps1 -OutputDirectory .cache/verified-beta2/luau -Release
+$engine = 'C:/GodotEngineNet 4.8-Beta3/Godot_v4.8-beta3_mono_win64_console.exe'
+git clone --no-checkout https://github.com/Fumohouse/godot-luau-script.git .cache/sources-beta3/luau-distinct
+git -C .cache/sources-beta3/luau-distinct checkout --detach 7942ce6def8023596ca0cb8d819b032eb40a4bce
+./adapters/luau/build.ps1 -GodotExecutable $engine -SourceDirectory .cache/sources-beta3/luau-distinct `
+    -OutputDirectory .cache/verified-beta3/luau/addon -Suffixes luau -Jobs 8
+./workbench/verify-beta3.ps1 -Languages luau        # = probe.ps1 -OutputDirectory .cache/verified-beta3/luau -Release
 ```
 
 `build.ps1` builds `editor` and `template_release` (`-Targets` narrows it), writes
@@ -96,3 +96,11 @@ the game pass method/C# Callables. Properties, signals, hot reload and editor to
 beyond script registration are not covered by the probe. Only Windows x86_64 is built.
 No binaries are committed. MIT upstream `LICENSE.txt` / `COPYRIGHT.txt` are copied with
 the addon; upstream icons are not bundled.
+
+## Godot 4.8-beta3 (16 November 2026)
+
+Rebuilt from the Beta3 API dump (`api_sha256=D5B1F03A…456E`), editor and template_release, with the
+same five patches. Kit flavor: debug and exported-release `LANGUAGE_KIT_PASS`. Game flavor
+(`-Suffixes lua-and-luau`, probe with `mods/_templates/luau_engine/corecode`): `LUAU_ENGINE_MOD_PASS`
+and `LUAU_MODULE_PASS module=war_damage.mod.lua` in debug and exported release. Details in
+`reports/beta3-2026-11-16.md`.

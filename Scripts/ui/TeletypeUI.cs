@@ -123,6 +123,7 @@ public partial class DealOrForceGame
             body.AddChild(_teletypeMarkets);
         }
 
+        if (IsNewShellActive) { HideTeletype(); return; }
         _teletypeShowing = line;
         _teletypeMasthead.Text = Loc.Get("Stop press") + "  ·  " + Loc.Format("Campaign day {0}", line.Day);
         _teletypeHeadline.Text = line.Text;

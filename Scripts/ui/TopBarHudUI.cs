@@ -413,7 +413,7 @@ public partial class DealOrForceGame
         // and a borrowed figure has to stand on the plate whatever the data put there.
         PaintResourceStates(player);
         ArrangeResourcePlate();
-        if (_hudFlagMount is not null) _hudFlagMount.Visible = _identityFlag is { Visible: true };
+        if (_hudFlagMount is not null) _hudFlagMount.Visible = !IsNewShellActive && _identityFlag is { Visible: true };
         foreach (var stat in _hudStats) FitHudStat(stat);
         NoteFigureTips();
 
