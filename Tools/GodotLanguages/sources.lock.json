@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
   "engine": {
-    "version": "4.8.beta2.mono.official.cafc17a19",
-    "directory": "C:/GodotEngineNet 4.8-Beta2",
-    "executable": "Godot_v4.8-beta2_mono_win64_console.exe",
-    "gui_sha256": "6B894EF7578A8999266ECDBC267BCD424CAADB16B8F15E0F6DEE4D3FC0596524",
+    "version": "4.8.beta3.mono.official.c51ff06e8",
+    "directory": "C:/GodotEngineNet 4.8-Beta3",
+    "executable": "Godot_v4.8-beta3_mono_win64_console.exe",
+    "gui_sha256": "669BD63DFD44277AA30A6F2DA8CC7041660C20BC5FDD38E2041341D30CC03C64",
     "platform": "windows-x86_64"
   },
   "sources": [
@@ -15,7 +15,7 @@
     { "id": "nim", "url": "https://github.com/godot-nim/gdext-nim.git", "commit": "15b69a92ba2642f2bea117e01e3bbcd112c9f57d", "license": "MIT", "status": "production" },
     { "id": "odin", "url": "https://github.com/dresswithpockets/odin-godot.git", "commit": "93395901a76f62a9f2adff76c2eb38a185d91513", "license": "Apache-2.0", "status": "upcoming" },
     { "id": "kotlin", "url": "https://github.com/utopia-rise/godot-jvm.git", "commit": "5d39c7e3fbe5be78853837e3c89676e7a92c9ec9", "license": "MIT", "status": "production" },
-    { "id": "sandbox", "url": "https://github.com/libriscv/godot-sandbox.git", "commit": "b43ed1619abc12a669c59cb0aa25c4582873a7b9", "license": "BSD-3-Clause", "status": "production", "note": "C++/Rust/Zig sandboxed; the modding answer" },
+    { "id": "sandbox", "url": "https://github.com/libriscv/godot-sandbox.git", "commit": "4f9c73d683f6ae734c87773d01938448ab3c3d50", "license": "BSD-3-Clause", "status": "production", "note": "C++/Rust/Zig sandboxed; the modding answer. main after v0.60 (security fixes), whole addon built from source" },
     { "id": "luau", "url": "https://github.com/Fumohouse/godot-luau-script.git", "commit": "7942ce6def8023596ca0cb8d819b032eb40a4bce", "license": "MIT", "archived": true, "note": "source archived; our Luau worker is native, this adapter is dormant" },
     { "id": "lua", "url": "https://github.com/gilzoide/lua-gdextension.git", "commit": "58cb05e62557741ff646f0096fa4fdc8d09b1ae3", "license": "MIT", "status": "production", "note": "Lua/LuaJIT, not Luau" }
   ],

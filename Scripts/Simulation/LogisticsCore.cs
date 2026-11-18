@@ -59,6 +59,9 @@ public static class LogisticsSystem
         public readonly List<int> Roots = new();
         public readonly Dictionary<int, int> HubByState = new();
         public readonly Dictionary<int, float> DemandBySource = new();
+        // Divisions of the country being traced that no road reached, by the region they stand
+        // in: what the people of that region are asked to feed (Partisans.LiveOffTheLand).
+        public readonly Dictionary<int, float> Unreached = new();
         public readonly Dictionary<int, ScenarioState> StateById = new();
         public readonly Dictionary<ushort, List<int>> Controlled = new();
         public readonly Dictionary<int, List<Army>> ArmiesByNation = new();
@@ -272,8 +275,22 @@ public static class LogisticsSystem
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null || territory is null || territory.Count == 0)
         {
+            // A side holding no ground at all has no road to trace. A rising in that state is
+            // not therefore starving: its men are in the villages (see below, and Partisans).
+            var landless = topology is not null && controllers is not null && Partisans.MayForage(campaign, nation);
+            if (landless)
+            {
+                CollectCorridors(campaign, nation, board);
+                board.Unreached.Clear();
+                foreach (var army in armies)
+                    if (!Visiting(campaign, nation, army)) CountUnreached(topology, army, board);
+            }
             foreach (var army in armies)
-                if (!ProvisionVisitor(campaign, nation, army)) SetStranded(army);
+            {
+                if (ProvisionVisitor(campaign, nation, army)) continue;
+                if (landless && Forage(campaign, nation, army, board)) continue;
+                SetStranded(army);
+            }
             return;
         }
 
@@ -385,6 +402,28 @@ public static class LogisticsSystem
                 UnitTypeCatalog.Get(army.TemplateId).SupplyUse;
         }
 
+        // The land feeds its own. A rising's supply grows from one seat, so any ground it
+        // holds that an enemy province separates from that seat was a pocket - on its own
+        // ground, among its own people - and four in five of the rising formations that were
+        // ever cut off were cut off exactly so (SimBench --pockets, November 2026). Before a
+        // formation of a rising is marked cut off, at any of the three places below, the
+        // people around it are asked first. What they are asked to feed is every division of
+        // the side the road did not reach in their region, counted here, once, so that the
+        // tenth formation to crowd into a valley eats from the same pot as the first.
+        var forage = Partisans.MayForage(campaign, nation);
+        if (forage)
+        {
+            board.Unreached.Clear();
+            foreach (var army in armies)
+            {
+                if (Visiting(campaign, nation, army)) continue;
+                var at = army.ProvinceId;
+                if (at > 0 && at < stamp.Length && stamp[at] == generation &&
+                    !board.IsIsolatedHub.GetValueOrDefault(source[at])) continue;
+                CountUnreached(topology, army, board);
+            }
+        }
+
         // Who is blockading this country is the same answer for every formation of it, and
         // finding it out is a walk of the fleets with a walk of the war record for each one
         // on that mission. Asked per formation it was 2.3 microseconds each - 115 ms of the
@@ -400,6 +439,7 @@ public static class LogisticsSystem
             if (army.EmbarkedFleetId >= 0)
             {
                 army.CutOff = false;
+                army.LivingOffLand = false;
                 army.DaysCutOff = 0;
                 army.SupplyDistance = 0;
                 army.SupplyCongestion = 1f;
@@ -409,7 +449,7 @@ public static class LogisticsSystem
             var province = army.ProvinceId;
             if (province <= 0 || province >= stamp.Length || stamp[province] != generation)
             {
-                SetStranded(army);
+                if (!(forage && Forage(campaign, nation, army, board))) SetStranded(army);
                 continue;
             }
             var sourceState = source[province];
@@ -451,10 +491,14 @@ public static class LogisticsSystem
             // Only a restored route may reset the daily reserve clock.
             if (board.IsIsolatedHub.GetValueOrDefault(sourceState))
             {
+                if (forage && Forage(campaign, nation, army, board)) continue;
+                army.LivingOffLand = false;
                 army.CutOff = true;
                 continue;
             }
             army.CutOff = false;
+            // The road, or a ship, reached it: depots feed it now, not the villages.
+            army.LivingOffLand = false;
             army.DaysCutOff = 0;
             army.SupplyLevel = M.Lerp(army.SupplyLevel, target, 0.34f);
         }
@@ -741,9 +785,45 @@ public static class LogisticsSystem
         }
     }
 
+    private static void CountUnreached(ProvinceTopology topology, Army army, Scratch board)
+    {
+        var at = army.ProvinceId;
+        if (army.EmbarkedFleetId >= 0 || at <= 0 || at > topology.ProvinceCount) return;
+        var region = topology.ProvinceToState[at];
+        board.Unreached[region] = board.Unreached.GetValueOrDefault(region) + army.Divisions;
+    }
+
+    /// <summary>
+    /// Ask the people around a formation the road did not reach whether they will feed it. On
+    /// ground an enemy holds they feed it half as well: there is a garrison in the town.
+    /// </summary>
+    private static bool Forage(Campaign campaign, Nation nation, Army army, Scratch board)
+    {
+        var topology = campaign.ProvinceMap;
+        var at = army.ProvinceId;
+        if (at <= 0 || at > topology.ProvinceCount || at >= campaign.ProvinceController.Length) return false;
+        var standing = board.Unreached.GetValueOrDefault(topology.ProvinceToState[at]);
+        var amongFriends = Passable(nation, campaign.ProvinceController[at], board);
+        return Partisans.LiveOffTheLand(campaign, nation, army, standing, amongFriends);
+    }
+
+    /// <summary>
+    /// Whether the country is in a war today. A pocket is a thing of war: a formation of a
+    /// country at peace with everybody, standing in an enclave no road of its own reaches, is
+    /// not being starved by anyone, and does not go hungry or eat its stores (AgeCutOff).
+    /// </summary>
+    public static bool Besieged(Campaign campaign, int nationId)
+    {
+        var wars = Warfare.LiveWars(campaign);
+        for (var index = 0; index < wars.Count; index++)
+            if (!wars[index].Ended && wars[index].Involves(nationId)) return true;
+        return false;
+    }
+
     private static void SetStranded(Army army)
     {
         army.CutOff = true;
+        army.LivingOffLand = false;
         army.SupplyDistance = -1;
         army.SupplySourceStateMapIndex = -1;
         army.SupplyCongestion = 0f;
@@ -754,20 +834,30 @@ public static class LogisticsSystem
 
     private static bool ProvisionVisitor(Campaign c, Nation nation, Army army)
     {
-        var at = army.ProvinceId;
-        if (army.EmbarkedFleetId >= 0 || at <= 0 || at >= c.ProvinceController.Length) return false;
-        var controller = c.ProvinceController[at];
-        if (controller == nation.MapIndex || controller == 0 ||
-            !c.NationsByMapIndex().TryGetValue(controller, out var host) || MilitaryAccess.Hostile(c, nation.Id, host.Id)) return false;
+        if (!Visiting(c, nation, army)) return false;
         // The host provisions an authorised visitor or an interned column awaiting return;
         // this is not a friendly land trace into an enemy pocket.
         MilitaryAccess.Provision(army);
         return true;
     }
 
+    /// <summary>Whether the formation stands on the ground of a host that is not its enemy. A read.</summary>
+    private static bool Visiting(Campaign c, Nation nation, Army army)
+    {
+        var at = army.ProvinceId;
+        if (army.EmbarkedFleetId >= 0 || at <= 0 || at >= c.ProvinceController.Length) return false;
+        var controller = c.ProvinceController[at];
+        return controller != nation.MapIndex && controller != 0 &&
+               c.NationsByMapIndex().TryGetValue(controller, out var host) && !MilitaryAccess.Hostile(c, nation.Id, host.Id);
+    }
+
     /// <summary>
-    /// One campaign day inside a closed pocket. Supply and organisation close on the floor
-    /// across <see cref="Defines.SupplyCutoffDays"/>; the formation is not removed.
+    /// One campaign day inside a closed pocket. Supply and organisation close on their hunger
+    /// floors across <see cref="Defines.SupplyCutoffDays"/> and stop there
+    /// (PocketHungerSupplyFloor, PocketHungerOrganisationFloor); the formation is not removed.
+    /// The floors used to be nothing and the rout threshold, which is a formation with no
+    /// fighting power standing one shove from a rout: it could not be said to be holding
+    /// anything, and with the daily wasting (Attrition) it was gone in three weeks untouched.
     ///
     /// Not from the first morning. A pocket lives first off what was stockpiled where it stands
     /// (StrandedGarrisons.AssessStores): the day the ring closes its stores are counted, each day
@@ -775,12 +865,18 @@ public static class LogisticsSystem
     /// in - and only when they are gone does the hunger clock, <see cref="Army.DaysCutOff"/>,
     /// start. A pocket that was a death sentence from the first hour gave nobody time to relieve
     /// it and made every rising's garrison starve where it stood.
+    ///
+    /// And only in a war. A country fighting nobody draws nothing from its stores, and its
+    /// hunger clock runs backwards a day at a time: an enclave in peacetime trades through the
+    /// neighbour around it, and the first morning of the next war must not find it already
+    /// starved by a siege that ended years ago.
     /// </summary>
     private static void AgeCutOff(Campaign campaign)
     {
         var span = Math.Max(1, campaign.Defines.SupplyCutoffDays);
         var add = Math.Max(1, campaign.TickHours / 24);
-        var orgFloor = campaign.Defines.BattleBreakOrganisation;
+        var orgFloor = M.Clamp01(campaign.Defines.PocketHungerOrganisationFloor);
+        var supplyFloor = M.Clamp01(campaign.Defines.PocketHungerSupplyFloor);
         var storesOn = campaign.Defines.StrandedGarrisonsEnabled;
         Dictionary<int, float> cutOffDivisions = null;
         foreach (var army in campaign.Armies)
@@ -794,33 +890,39 @@ public static class LogisticsSystem
             }
             if (army.Divisions <= 0f || army.EmbarkedFleetId >= 0) continue;
             if (MilitaryAccess.MustReturn(campaign, army)) continue;
-            if (storesOn)
+            if (storesOn && army.PocketStores < 0f)
             {
-                if (army.PocketStores < 0f)
-                {
-                    army.PocketStores = StrandedGarrisons.AssessStores(campaign, army);
-                    army.PocketSinceDay = campaign.ElapsedDays;
-                }
-                if (army.PocketStores > 0f)
-                {
-                    cutOffDivisions ??= StrandedGarrisons.CutOffDivisions(campaign);
-                    var draw = add * StrandedGarrisons.DailyDraw(campaign, army, cutOffDivisions);
-                    army.PocketStores = MathF.Max(0f, army.PocketStores - draw);
-                    // Rationed, not starving: the stores keep it near a fixed level of supply.
-                    army.SupplyLevel = M.Lerp(army.SupplyLevel, campaign.Defines.PocketStoresSupplyLevel, 0.25f);
-                    continue;
-                }
+                army.PocketStores = StrandedGarrisons.AssessStores(campaign, army);
+                army.PocketSinceDay = campaign.ElapsedDays;
+            }
+            // Nobody is besieging a country at peace: the stores keep, the clock unwinds, and
+            // the formation is kept where rationing would keep it.
+            if (!Besieged(campaign, army.NationId))
+            {
+                army.DaysCutOff = Math.Max(0, army.DaysCutOff - add);
+                army.SupplyLevel = M.Lerp(army.SupplyLevel, campaign.Defines.PocketStoresSupplyLevel, 0.25f);
+                continue;
+            }
+            if (storesOn && army.PocketStores > 0f)
+            {
+                cutOffDivisions ??= StrandedGarrisons.CutOffDivisions(campaign);
+                var draw = add * StrandedGarrisons.DailyDraw(campaign, army, cutOffDivisions);
+                army.PocketStores = MathF.Max(0f, army.PocketStores - draw);
+                // Rationed, not starving: the stores keep it near a fixed level of supply.
+                army.SupplyLevel = M.Lerp(army.SupplyLevel, campaign.Defines.PocketStoresSupplyLevel, 0.25f);
+                continue;
             }
             var before = army.DaysCutOff;
             army.DaysCutOff = before + add;
             if (before >= span)
             {
-                army.SupplyLevel = 0f;
+                // What is found, bartered and taken from the dead: never less, never more.
+                army.SupplyLevel = supplyFloor;
                 if (army.Organisation > orgFloor) army.Organisation = orgFloor;
                 continue;
             }
             var close = Math.Clamp(add / (float)(span - before), 0f, 1f);
-            army.SupplyLevel = BleedDown(army.SupplyLevel, 0f, close);
+            army.SupplyLevel = BleedDown(army.SupplyLevel, supplyFloor, close);
             army.Organisation = BleedDown(army.Organisation, orgFloor, close);
         }
     }
@@ -828,15 +930,17 @@ public static class LogisticsSystem
     /// <summary>
     /// Keep a closed pocket from climbing back above the dry-out. Recovery and a delivery
     /// both run after the morning clock; neither may put a spent grouping back into an attack.
+    /// The ceilings come down to the hunger floors and rest there, so a pocket that has beaten
+    /// off an assault comes round to its floor again - and no higher.
     /// </summary>
     public static void HoldCauldron(Campaign campaign, Army army)
     {
         if (campaign is null || army is null || !army.CutOff || army.DaysCutOff <= 0) return;
         var span = Math.Max(1, campaign.Defines.SupplyCutoffDays);
         var spent = Math.Clamp(army.DaysCutOff / (float)span, 0f, 1f);
-        var orgFloor = campaign.Defines.BattleBreakOrganisation;
+        var orgFloor = M.Clamp01(campaign.Defines.PocketHungerOrganisationFloor);
         var orgCeiling = orgFloor + (1f - orgFloor) * (1f - spent);
-        var supplyCeiling = 1f - spent;
+        var supplyCeiling = MathF.Max(M.Clamp01(campaign.Defines.PocketHungerSupplyFloor), 1f - spent);
         if (army.Organisation > orgCeiling) army.Organisation = orgCeiling;
         if (army.SupplyLevel > supplyCeiling) army.SupplyLevel = supplyCeiling;
     }
@@ -856,6 +960,8 @@ public static class LogisticsSystem
     {
         if (army is null) return "";
         var span = Math.Max(1, campaign?.Defines.SupplyCutoffDays ?? 14);
+        // Fed by the people around it: there is no hub and no road to describe.
+        if (army.LivingOffLand && !army.CutOff) return Partisans.ForageLine(campaign, army);
         if (army.CutOff)
         {
             var inPocket = army.PocketSinceDay >= 0 && campaign is not null
@@ -869,12 +975,13 @@ public static class LogisticsSystem
             if (relief.Length > 0) head += " " + relief;
             var stores = DepotDays(campaign, army);
             if (stores.Length > 0) head += " " + stores;
-            // Living off local stores: the hunger clock has not started.
-            if (army.PocketStores > 0f) return Finish(campaign, army, head);
-            if (army.DaysCutOff >= span)
-                return Finish(campaign, army, head + " " + Loc.Get("Organisation is spent and it cannot keep attacking."));
-            return Finish(campaign, army, head + " " + Loc.Format("{0} days until supply and organisation are spent.",
-                Math.Max(0, span - army.DaysCutOff)));
+            // What happens next and what ends it, in so many words: a pocket is the one
+            // place a player has to choose between waiting, relieving and breaking out, and
+            // the old line ("days until supply and organisation are spent") read as a death
+            // sentence with a date on it.
+            var fate = StrandedGarrisons.FateLine(campaign, army);
+            if (fate.Length > 0) head += " " + fate;
+            return Finish(campaign, army, head);
         }
         var openStores = DepotDays(campaign, army);
         var openTail = openStores.Length > 0 ? " " + openStores : "";

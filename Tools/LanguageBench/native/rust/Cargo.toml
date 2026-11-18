@@ -1,0 +1,23 @@
+[package]
+name = "lb_rust"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+# The usual release flags for a shipped native library: full optimisation, one codegen unit,
+# fat LTO, abort on panic (a panic must never unwind into .NET). No target-cpu here: the
+# baseline build is what would ship to every player's machine; build.ps1 makes a second,
+# x86-64-v3 (AVX2) build through RUSTFLAGS and labels it so.
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "fat"
+panic = "abort"
+debug = false
+
+[dependencies]

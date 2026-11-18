@@ -57,6 +57,11 @@ public static class SupplyDaysTests
             .Invoke(c, new object[] { map });
         typeof(Campaign).GetProperty(nameof(Campaign.ProvinceController)).GetSetMethod(true)
             .Invoke(c, new object[] { controller });
+        // At war with somebody off the map. Since 16 November 2026 a pocket is a thing of war:
+        // a country fighting nobody does not go hungry in its enclave, and the clock below is
+        // the clock of a besieged one (LogisticsSystem.Besieged).
+        c.Wars.Add(new StrategicWar { Id = 1, Name = "Cauldron war", AttackerId = 0, DefenderId = 2 });
+        c.MarkWarsChanged();
         c.Armies.Clear();
         c.Armies.Add(new Army
         {
@@ -109,11 +114,14 @@ public static class SupplyDaysTests
         Check(cut.Armies.Contains(army) && army.Divisions > 0f,
             "the first day of the cauldron does not remove the formation");
         for (var day = 1; day < 14; day++) LogisticsSystem.Tick(cut);
-        Check(army.DaysCutOff == cut.Defines.SupplyCutoffDays && army.SupplyLevel <= 0.001f &&
-               army.Organisation <= cut.Defines.BattleBreakOrganisation + 0.0001f,
-            "after the defined days the stores are gone and organisation is on the floor " +
+        // The floors are hunger's own (PocketHungerSupplyFloor, PocketHungerOrganisationFloor):
+        // they used to be nothing and the rout threshold, a formation one shove from gone.
+        Check(army.DaysCutOff == cut.Defines.SupplyCutoffDays &&
+               MathF.Abs(army.SupplyLevel - cut.Defines.PocketHungerSupplyFloor) <= 0.001f &&
+               MathF.Abs(army.Organisation - cut.Defines.PocketHungerOrganisationFloor) <= 0.0001f,
+            "after the defined days the stores are gone and supply and organisation are on the hunger floor " +
             $"(days={army.DaysCutOff} supply={army.SupplyLevel:0.000} org={army.Organisation:0.000} " +
-            $"floor={cut.Defines.BattleBreakOrganisation:0.000})");
+            $"floor={cut.Defines.PocketHungerOrganisationFloor:0.000})");
         Check(cut.Armies.Count == 1 && army.Divisions > 0f && army.Strength == 1f,
             "the dry grouping is still in the order of battle");
 

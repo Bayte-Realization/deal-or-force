@@ -73,6 +73,12 @@ public static class Desertion
             var unpaid = nation.DebtCondition is DebtCondition.Default or DebtCondition.Insolvent || nation.Treasury < 0f ? 1f : 0f;
             var rate = WarRhythm.Desertion(nation.WarSupport, army.Cohesion, army.SupplyLevel, army.Organisation, unpaid,
                 GuerrillaWar.Spirit(campaign, war, nation), defines.DesertionBaseWeekly, defines.DesertionCapWeekly);
+            // A pocket on its hunger floor loses a few more, and this is the one loss in a
+            // pocket with no floor under it: hunger stops at a third of the formation, the
+            // men walking away do not. It is what ends a pocket everybody forgot - in years,
+            // not weeks (PocketHungerDesertionWeekly).
+            if (army.CutOff && army.PocketStores == 0f && army.DaysCutOff >= defines.SupplyCutoffDays)
+                rate = MathF.Min(defines.DesertionCapWeekly, rate + MathF.Max(0f, defines.PocketHungerDesertionWeekly));
             var men = (int)MathF.Floor(army.Personnel * rate);
             if (men <= 0) continue;
             var complement = army.Divisions * MilitaryBootstrap.DivisionSize;

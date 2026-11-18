@@ -570,7 +570,14 @@ public static class Factions
             {
                 var survivingArmies = campaign.Armies.Count(a => a.NationId == participant.Id && a.Strength > 0.05f);
                 var remainingStates = campaign.StatesOf(participant);
-                if (survivingArmies == 0 || remainingStates.Length <= 2 || !campaign.HasOwnedLand(participant))
+                // A side of the war of the weak that came out of the peace with ground of its own and
+                // the formations it fights on with is a small statelet, not a rump to fold back in:
+                // Idlib, the Wa hills. The rule below took the Arakan Army whole, eight formations
+                // and its two regions, the day after a deadlock had left it both (SimBench 730
+                // --pockets, seed 20260830, 17 November 2026). Two regions and no army still is.
+                var holdsOn = campaign.Defines.RisingsFightOnWithoutGround && survivingArmies > 0 &&
+                              campaign.HasOwnedLand(participant) && HoldsOnByArms(campaign, participant);
+                if (!holdsOn && (survivingArmies == 0 || remainingStates.Length <= 2 || !campaign.HasOwnedLand(participant)))
                 {
                     var whole = Reintegration.Everything(campaign, participant);
                     if (whole.Count > 0)
@@ -647,7 +654,9 @@ public static class Factions
             if (rebelStates.Any(s => TerritorialClaims.TitleOf(campaign, rebel, s) == TerritorialTitle.Homeland) &&
                 !rebelStates.Any(s => TerritorialClaims.TitleOf(campaign, parent, s) == TerritorialTitle.Homeland)) continue;
 
-            var hasDivisions = campaign.Armies.Any(a => a.NationId == rebel.Id && a.Strength > 0.05f);
+            // Nobody in the field and nobody in hiding who could take it again (Partisans).
+            var hasDivisions = campaign.Armies.Any(a => a.NationId == rebel.Id && a.Strength > 0.05f) ||
+                               Partisans.DetachmentsInHiding(campaign, rebel) > 0;
             if (hasDivisions) continue;
 
             var foreignWars = Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(rebel.Id) && !w.Involves(parent.Id));
@@ -692,18 +701,112 @@ public static class Factions
     /// </summary>
     public static bool FightsOn(Campaign campaign, Nation faction, float held)
     {
-        // Every rising and breakaway, not only the insurgencies the 2024 history names: a war
-        // of the weak is not given up because the strong hold the towns (GuerrillaWar).
-        if (campaign is null || faction is null) return false;
-        if (Of(faction) is not { Insurgency: true } &&
-            !(campaign.Defines.RisingsFightOn && (faction.SecededFromId >= 0 || !string.IsNullOrEmpty(faction.FoundedInRevolt) ||
-                                                  faction.Name.StartsWith("rising:", StringComparison.Ordinal)))) return false;
-        if (held >= 0.999f && faction.WarSupport <= campaign.Defines.FactionFightOnSupport * 2f) return false;
+        if (!WagesAWarOfTheWeak(campaign, faction)) return false;
+        var standing = Standing(campaign, faction);
+        var enough = Math.Max(1, campaign.Defines.FactionFightOnFormations);
+        // A side that holds none of its own ground needs twice the conviction to go on - when it
+        // is down to its last two or three formations. With twice the least it fights on with,
+        // in the field or in hiding, the ordinary bar is enough: that is how a war of the weak
+        // goes on when the strong hold the towns. Under this clause alone the Arakan Army gave up
+        // with fifty-five thousand men in hiding, the ADF with seven formations in the field and
+        // HTS with eleven, each with a third of its people still for the war (SimBench --pockets,
+        // November 2026).
+        if (held >= 0.999f && standing < 2 * enough &&
+            faction.WarSupport <= campaign.Defines.FactionFightOnSupport * 2f) return false;
         if (faction.WarSupport <= campaign.Defines.FactionFightOnSupport) return false;
-        var standing = 0;
+        return standing >= campaign.Defines.FactionFightOnFormations;
+    }
+
+    /// <summary>
+    /// Whether this side fights the war of the weak: every rising and breakaway, not only the
+    /// insurgencies the 2024 history names - a war of the weak is not given up because the
+    /// strong hold the towns (GuerrillaWar).
+    /// </summary>
+    public static bool WagesAWarOfTheWeak(Campaign campaign, Nation faction) =>
+        campaign is not null && faction is not null &&
+        (Of(faction) is { Insurgency: true } ||
+         campaign.Defines.RisingsFightOn && (faction.SecededFromId >= 0 || !string.IsNullOrEmpty(faction.FoundedInRevolt) ||
+                                             faction.Name.StartsWith("rising:", StringComparison.Ordinal)));
+
+    /// <summary>
+    /// Its formations in the field, and the detachments it could still field from hiding: a
+    /// rising whose last formation scattered into the villages this week has not given up.
+    /// </summary>
+    public static int Standing(Campaign campaign, Nation faction)
+    {
+        if (campaign is null || faction is null) return 0;
+        var standing = Partisans.DetachmentsInHiding(campaign, faction);
         foreach (var army in campaign.Armies)
             if (army.NationId == faction.Id && army.Strength > 0f) standing++;
-        return standing >= campaign.Defines.FactionFightOnFormations;
+        return standing;
+    }
+
+    /// <summary>
+    /// A side of the war of the weak with at least the formations it fights on with, in the
+    /// field or in hiding (<see cref="FightsOn"/>). Its home front reads its fighters, not its
+    /// towns (WarWeariness.MoodOf).
+    /// </summary>
+    public static bool HoldsOnByArms(Campaign campaign, Nation faction) =>
+        WagesAWarOfTheWeak(campaign, faction) && Standing(campaign, faction) >= Math.Max(1, campaign.Defines.FactionFightOnFormations);
+
+    /// <summary>
+    /// A side of the war of the weak with no region of its own left that is still at war and
+    /// still fights on as a side holding nothing does (<see cref="FightsOn"/> with all of it
+    /// lost): the formations, in the field or in hiding, and the people behind the war. The
+    /// three rules that end a country which owns no ground - its fall (MovementFall.Decide),
+    /// the war ended for it that week (MovementFall.EndLostWars) and its army laid down with
+    /// its state (CapitalCore) - ask this first, and leave such a side to be beaten in the field.
+    ///
+    /// They were written for a state overrun, and they read a rising's last town as its last
+    /// soldier. HTS, ten formations in the field and war support 0.95, capitulated the week the
+    /// government took Idlib, and its formations laid down their arms where they stood - where it
+    /// had held out to the end of the run before this branch (SimBench 730 --pockets, seed 4242,
+    /// 17 November 2026). A war of the weak is lost when the fighters or the will are gone; the
+    /// day either goes, this answers no and the old rules end it the same week.
+    /// </summary>
+    public static bool FightsOnWithoutGround(Campaign campaign, Nation faction)
+    {
+        if (campaign?.Defines is not { RisingsFightOnWithoutGround: true } || faction is null) return false;
+        var atWar = false;
+        var wars = Warfare.LiveWars(campaign);
+        for (var index = 0; index < wars.Count && !atWar; index++)
+            atWar = !wars[index].Ended && wars[index].Involves(faction.Id);
+        return atWar && FightsOn(campaign, faction, 1f);
+    }
+
+    /// <summary>
+    /// Whether the peace of a deadlock in this war - the line as the border
+    /// (PeaceTerms.StatusQuo) - would leave this side nothing: no province of its own kept and
+    /// none gained once the line is drawn into whole regions (PeaceNegotiation.StatusQuoLeavesNothing),
+    /// while it is a side of the war of the weak that would fight on with nothing
+    /// (<see cref="FightsOnWithoutGround"/>). To it that peace is a capitulation under a kinder
+    /// name, and a computer in its place neither offers it nor accepts it (AiStatecraft.Negotiate,
+    /// PeaceNegotiation.Acceptance).
+    ///
+    /// Without this the fall that <see cref="FightsOnWithoutGround"/> held off came back by the
+    /// treaty: HTS, kept in the war with ten formations and war support 0.93, signed "each side
+    /// keeps the ground it held" on day 543 holding none, and its formations fell with it three
+    /// days later (SimBench 730 --pockets, seed 4242, 17 November 2026). A white peace, which
+    /// gives ground back, is still a peace it may take.
+    /// </summary>
+    public static bool KeepsNothingByTheLine(Campaign campaign, StrategicWar war, Nation side) =>
+        FightsOnWithoutGround(campaign, side) && PeaceNegotiation.StatusQuoLeavesNothing(campaign, war, side);
+
+    /// <summary>
+    /// Whether any computer-run member of one side of this war would keep nothing by the line
+    /// (<see cref="KeepsNothingByTheLine"/>). A coalition's leader signs for all of it, and the
+    /// Arakan Army, eight formations and war support 0.81, was signed out of existence by the
+    /// National Unity Government's last formation accepting the line for the whole side (SimBench
+    /// 730 --pockets, seed 20260830, 17 November 2026). The member who would lose everything
+    /// holds the side back from that peace.
+    /// </summary>
+    public static bool SideKeepsNothingByTheLine(Campaign campaign, StrategicWar war, bool attackers)
+    {
+        if (campaign is null || war is null) return false;
+        foreach (var id in war.Side(attackers))
+            if (campaign.NationById(id) is { IsHuman: false } member && KeepsNothingByTheLine(campaign, war, member))
+                return true;
+        return false;
     }
 
     private static Nation Found(Campaign campaign, FactionDefinition definition)

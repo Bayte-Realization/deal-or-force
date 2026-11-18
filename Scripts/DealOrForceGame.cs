@@ -131,6 +131,9 @@ public partial class DealOrForceGame : Control
 
     public override void _Process(double delta)
     {
+        // Tracy's frame boundary (TracyBridge): first, before the early return, so a loading
+        // screen still shows up as frames. Compiled away in every build without DOF_TRACY.
+        TracyBridge.InterfaceFrame();
         if (_isLoading || !_startupComplete) return;
         // Before anything else in the frame: a machine that cannot hold thirty frames a second
         // has to be allowed to spend less on this frame, not the one after a settings screen.

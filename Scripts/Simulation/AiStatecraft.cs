@@ -1381,6 +1381,12 @@ public static partial class AiStatecraft
         // winning, and it is also how a player gets three modal dialogs in a row.
         if (war.PendingOfferFromId >= 0) return;
 
+        // A side with a member of the war of the weak that would keep nothing by the line and
+        // still fights on has no peace to put forward: every one it would write is the line as the
+        // border, which leaves that member nothing (Factions.SideKeepsNothingByTheLine). Its war is
+        // ended in the field, or by a white peace somebody else offers it.
+        if (Factions.SideKeepsNothingByTheLine(campaign, war, war.IsAttacking(nation.Id))) return;
+
         // Asked before the reclaiming return below. That return keeps a government fighting
         // for the rest of its own country, and it is also how a stalled civil war never put
         // a paper down: the side that was ahead left, and the side that was behind was still
@@ -1508,6 +1514,10 @@ public static partial class AiStatecraft
         var side = new HashSet<int>(war.Side(attackers));
         foreach (var army in campaign.Armies)
             if (side.Contains(army.NationId)) return false;
+        // Nor fighters who scattered and can still take the field (Partisans): a rising with
+        // no formation on the map and a detachment's worth of rifles hidden is not overrun.
+        foreach (var id in side)
+            if (Partisans.DetachmentsInHiding(campaign, campaign.NationById(id)) > 0) return false;
         for (var province = 1; province < control.Length; province++)
             if (control[province] == own) return false;
         return true;
