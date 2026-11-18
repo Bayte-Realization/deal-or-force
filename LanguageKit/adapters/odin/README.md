@@ -59,3 +59,21 @@ $g = 'C:\GodotEngineNet 4.8-Beta2\Godot_v4.8-beta2_mono_win64_console.exe'
 & $g --headless --verbose --path tmp_logs/languages/odin-beta2/probe --script res://probe_beta2.gd
 python -I tmp_logs/languages/odin-beta2/check_interface.py tmp_logs/languages/odin-beta2/probe/addons/dof_odin/dof_odin.dll tmp_logs/languages/odin-beta2/api/gdextension_interface.h
 ```
+
+## Godot 4.8-beta3 status (16 November 2026)
+
+Status: **rebuilt and verified**. The Odin compiler is now in `toolchains.windows.lock.json`
+(`odin-dev-2026-10`, official release zip, SHA-256 `B6B2E426…C2011`, `odin version` →
+`dev-2026-10-nightly:84bc3fc`). With the odin-godot pin `9339590` fetched into
+`.cache/sources-beta3/odin`, `build.ps1` produced a new `dof_odin.dll` (123 904 bytes,
+SHA-256 `96177065EBD291F16A9F9162B5B66B6BDBB6A2C0A401DCB6A3E40874184C3FC0`). On
+`4.8.beta3.mono.official.c51ff06e8`:
+
+- `probe.ps1`: `ODIN_PROBE PASS weighted_sum3=20 zero=0`, `ODIN_RUNTIME_EXIT=0`.
+- The stricter Beta2 probe on the new DLL: `ODIN_PROBE_BETA2 PASS vector=20,0,-20,4294967297,6*2^40 call=ok callv=ok instances=10000`,
+  verbose log without error, leak or orphan lines.
+- The GDExtension interface header is byte-identical between Beta2 and Beta3, so the
+  interface analysis above (four deprecated calls, all still served) holds unchanged.
+
+Still open: moving the four deprecated calls to their replacements, a `PackedInt64Array`
+probe method, and the C-ABI kernels in `kernels/`. See `reports/beta3-2026-11-16.md`.

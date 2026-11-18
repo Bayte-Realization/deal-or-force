@@ -1,12 +1,12 @@
-﻿[English](README.md) · [Русский](README.ru.md)
+[English](README.md) · [Русский](README.ru.md)
 
 # Deal or Force
 
 **Глобальная стратегия про весь мир — с утра 1 января 2024 года.**
 Играть можно за любую страну на карте, и каждая из них живёт по одним и тем же правилам.
-Версия **0.7.1.2** (EntertAlpha).
+Версия **0.7.2.3-dev** (EntertAlpha).
 
-[![Выпуск](https://img.shields.io/badge/выпуск-EntertAlpha%200.7.1.2-2f6fb3)](docs/CHANGELOG_0.7.1.2_RU.md)
+[![Выпуск](https://img.shields.io/badge/выпуск-EntertAlpha%200.7.2.3--dev-2f6fb3)](docs/CHANGELOG_0.7.2.3_RU.md)
 [![Движок](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED_RU.md)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED_RU.md)
 [![Лицензия](https://img.shields.io/badge/лицензия-GPL--3.0--or--later-3a7f3a)](LICENSE)
@@ -26,14 +26,19 @@
   Распакуйте архив целиком и запустите `Deal or Force Launcher.exe`.
 - **Из исходников** — см. [Сборка и запуск](#сборка-и-запуск) ниже.
 - Это EntertAlpha: многое работает, многое ещё перестраивается. Что не доделано, честно
-  написано в конце каждого [списка изменений](docs/CHANGELOG_0.7.1.2_RU.md).
+  написано в конце каждого [списка изменений](docs/CHANGELOG_0.7.2.3_RU.md).
 - Игру делает один человек — открыто, с помощью ИИ.
 
 Следить за проектом: [YouTube](https://www.youtube.com/@BayteRealization) ·
 [X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
 [Telegram](https://t.me/+39SNXyA92aBmYzhi) · [девлог](https://bayte-realization.itch.io/deal-or-force/devlog)
 
-## Нового в 0.7.1.2
+## Нового в 0.7.2.3-dev
+
+В этой версии для разработки: столицы как конкретные города с выбором при переносе,
+плашка даты и тревог, облегчение долгих сохранений и памяти, объединение мелких групп
+населения и дополнительные кэши симуляции. Основа - Godot 4.8 Beta 3 .NET.
+
 
 - **Видно, куда уходят деньги** — журнал доходов и расходов у страны, движения и организации;
   кризисы и бедствия бьют по доходу на срок, а не забирают деньги из казны.
@@ -48,7 +53,7 @@
   неделю; плохие краснеют сами. «Сценарии / редактор» снова в главном меню.
 
 Всё по пунктам, с проверками и тем, что не сделано, — в
-[списке изменений](docs/CHANGELOG_0.7.1.2_RU.md).
+[списке изменений](docs/CHANGELOG_0.7.2.3_RU.md).
 
 ## Об игре
 
@@ -200,7 +205,7 @@ OpenGL, затем OpenGL через Direct3D 11 (ANGLE), который рис�
 
 | | |
 |---|---|
-| [Изменения 0.7.1.2](docs/CHANGELOG_0.7.1.2_RU.md) · [0.6.6.0](docs/CHANGELOG_0.6.6.0_RU.md) | **что изменилось в текущем выпуске, чем проверено и что не сделано** |
+| [Изменения 0.7.2.3](docs/CHANGELOG_0.7.2.3_RU.md) · [0.6.6.0](docs/CHANGELOG_0.6.6.0_RU.md) | **что изменилось в текущем выпуске, чем проверено и что не сделано** |
 | [Программа переработки](docs/OVERHAUL_PROGRAMME_2026_11_14_RU.md) | пятнадцать фронтов переработки и что значит «сделано» для каждого |
 | [Переработка сделок](docs/DEALS_REWORK_2026_11_14_RU.md) | что не так со сделками сейчас и план по шагам |
 | [TUTORIAL_RU](docs/TUTORIAL_RU.md) | **первая кампания — за руку, с примерами** |

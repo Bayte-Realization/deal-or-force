@@ -4,7 +4,25 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-  <ItemGroup>
+  <!-- Source checkout: builds the game project and the F# template beside this test. -->
+  <ItemGroup Condition="'$(GameAssembly)' == ''">
     <ProjectReference Include="../../mods/_templates/fsharp_mod/corecode/ExampleFSharpMod.fsproj" />
+  </ItemGroup>
+  <!-- Exported game (run-corecode-load.ps1): compile against its DealOrForce.dll and GodotSharp.dll
+       without copying them; Program resolves both from the game's data folder at run time, so the
+       host contract is the shipped one, not a rebuild. Nothing here compiles DealOrForce.csproj. -->
+  <ItemGroup Condition="'$(GameAssembly)' != ''">
+    <Reference Include="DealOrForce">
+      <HintPath>$(GameAssembly)</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GodotSharp">
+      <HintPath>$([System.IO.Path]::GetDirectoryName('$(GameAssembly)'))/GodotSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>GameAssembly</_Parameter1>
+      <_Parameter2>$(GameAssembly)</_Parameter2>
+    </AssemblyAttribute>
   </ItemGroup>
 </Project>

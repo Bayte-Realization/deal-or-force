@@ -66,9 +66,10 @@ if ([IO.Path]::GetFileName($Godot).EndsWith('_console.exe', [StringComparison]::
 }
 $engineVersion = (& $Godot --version | Select-Object -Last 1).Trim()
 $sdkVersion = ([xml](Get-Content (Join-Path $project 'DealOrForce.csproj') -Raw)).Project.Sdk
-if (($sdkVersion -match '/(?<major>\d+)\.(?<minor>\d+)') -and
-    -not $engineVersion.StartsWith("$($Matches.major).$($Matches.minor).", [StringComparison]::Ordinal)) {
-    throw "Engine $engineVersion does not match SDK $sdkVersion. Do not export the 4.8 branch with the 4.7 editor."
+. (Join-Path $PSScriptRoot 'EngineVersion.ps1')
+$expectedEngine = Get-ExpectedEngineVersionPrefix (Join-Path $project 'DealOrForce.csproj')
+if (-not $engineVersion.StartsWith($expectedEngine, [StringComparison]::Ordinal)) {
+    throw "Engine $engineVersion does not match SDK $sdkVersion (wants $expectedEngine*). Export with that exact Godot build and its $($expectedEngine)mono templates."
 }
 
 function Assert-BuildChild([string]$Target) {

@@ -6,6 +6,21 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="ExampleMod.fs" />
+  </ItemGroup>
+  <!-- Inside the source checkout: compile against the game project. This builds the whole game,
+       so prefer -p:GameAssembly=... while an editor has the project open. -->
+  <ItemGroup Condition="'$(GameAssembly)' == ''">
     <ProjectReference Include="../../../../DealOrForce.csproj" />
   </ItemGroup>
+  <!-- Against an installed or exported game: reference its DealOrForce.dll, never copy it.
+       The host hands its own copy to ManagedModLoadContext, which keeps IGlobalityMod one type. -->
+  <ItemGroup Condition="'$(GameAssembly)' != ''">
+    <Reference Include="DealOrForce">
+      <HintPath>$(GameAssembly)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="CheckGameAssembly" BeforeTargets="ResolveReferences" Condition="'$(GameAssembly)' != '' and !Exists('$(GameAssembly)')">
+    <Error Text="GameAssembly must name the installed game's data_DealOrForce_windows_x86_64/DealOrForce.dll." />
+  </Target>
 </Project>

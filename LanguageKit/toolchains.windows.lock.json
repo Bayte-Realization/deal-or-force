@@ -3,6 +3,8 @@
   "assets": [
     { "id": "go-1.27.3", "url": "https://go.dev/dl/go1.27.3.windows-amd64.zip", "sha256": "F26081F438319757F8A1B46D7D0B2C5EC7583D4038E485E0AA725CFDE7885FFF", "kind": "zip", "executable": "go/bin/go.exe" },
     { "id": "zig-0.17.0", "url": "https://ziglang.org/download/0.17.0/zig-x86_64-windows-0.17.0.zip", "sha256": "B5663F69581DCF391293FBF16C06CB80D81D806545CE618B4D0BAB7F0EB8C428", "kind": "zip", "executable": "zig-x86_64-windows-0.17.0/zig.exe" },
-    { "id": "rust", "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe", "sha256": "00F139DA614DCED87D3C3D4121C43EEBDAC3C1BF8A5EE86B9D80DFD71C8D70FD", "kind": "rustup", "toolchain": "1.99.1", "executable": "cargo/bin/cargo.exe" }
+    { "id": "rust", "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe", "sha256": "00F139DA614DCED87D3C3D4121C43EEBDAC3C1BF8A5EE86B9D80DFD71C8D70FD", "kind": "rustup", "toolchain": "1.99.1", "executable": "cargo/bin/cargo.exe" },
+    { "id": "odin-dev-2026-10", "url": "https://github.com/odin-lang/Odin/releases/download/dev-2026-10/odin-windows-amd64-dev-2026-10.zip", "sha256": "B6B2E426A8B6F147B74EC7E18BEF8DF27CF40FE16193159DF7CA09A0CC0C2011", "kind": "zip", "executable": "dist/odin.exe", "note": "odin version: dev-2026-10-nightly:84bc3fc; links with the MSVC tools found by vswhere" },
+    { "id": "w64devkit-2.10.1", "url": "https://github.com/skeeto/w64devkit/releases/download/v2.10.1/w64devkit-x64-2.10.1.7z.exe", "sha256": "ADD1EDF984CE4D473CFEB7C52E0AB38DB73A855BBA6C7F564D5E16648EB2896A", "kind": "7z-sfx", "executable": "w64devkit/bin/g++.exe", "note": "MinGW-w64 GCC 16.2.0 for the Sandbox adapter; unpacked with 7-Zip, the self-extractor is never run" }
   ]
 }

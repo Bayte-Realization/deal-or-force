@@ -7,8 +7,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $version = (& $GodotExecutable --version | Out-String).Trim()
-if ($LASTEXITCODE -or $version -notmatch '^4\.8\.beta1\.mono\.') {
-    throw "This recipe targets tested Godot 4.8 beta1 .NET, found: $version"
+if ($LASTEXITCODE -or $version -notmatch '^4\.8\.beta[13]\.mono\.') {
+    throw "This recipe targets tested Godot 4.8 beta1/beta3 .NET, found: $version"
 }
 $source = (Resolve-Path -LiteralPath $SourceDirectory).Path
 $commit = (& git -C $source rev-parse HEAD | Out-String).Trim()
