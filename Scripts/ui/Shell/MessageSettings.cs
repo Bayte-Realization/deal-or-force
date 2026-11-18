@@ -96,7 +96,7 @@ public partial class DealOrForceGame
         var close = ActionButton("×", CloseShellRecentNewsModal, 32, 28);
         header.AddChild(close);
 
-        // Quick preset bar: Calm (default) / Paradox / AoH
+        // Quick preset bar: Calm (default) / Focus / Dispatch
         var presetRow = new HBoxContainer();
         presetRow.AddThemeConstantOverride("separation", 6);
         vBox.AddChild(presetRow);
@@ -112,8 +112,8 @@ public partial class DealOrForceGame
         presetRow.AddChild(presetLbl);
 
         AddPresetBtn(presetRow, ShellMessagePreset.Calm, "calm", "Calm");
-        AddPresetBtn(presetRow, ShellMessagePreset.Paradox, "paradox", "Paradox (auto-pause)");
-        AddPresetBtn(presetRow, ShellMessagePreset.Aoh, "aoh", "AoH (map feed)");
+        AddPresetBtn(presetRow, ShellMessagePreset.Focus, "focus", "Focus (auto-pause)");
+        AddPresetBtn(presetRow, ShellMessagePreset.Dispatch, "dispatch", "Dispatch (map feed)");
 
         var scroll = new ScrollContainer
         {

@@ -13,6 +13,7 @@ static class CodeHealthTests
         Console.WriteLine("PASS code health: " + label);
     }
 
+    [TestSuite("--code-health-only", Description = "JIT warmup target resolution, zero Godot in Simulation, and .cs.uid integrity.")]
     public static void Run()
     {
         var root = FindRepoRoot();

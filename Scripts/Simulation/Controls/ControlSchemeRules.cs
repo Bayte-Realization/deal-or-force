@@ -4,8 +4,8 @@ namespace DealOrForce.Simulation.Controls;
 
 public enum MouseControlScheme
 {
-    AoH,
-    Paradox
+    DirectPan,
+    BoxSelect
 }
 
 public enum MapPointerButton
@@ -53,10 +53,15 @@ public static class ControlSchemeRules
     public const float EdgePanMarginPx = 14f;
     public const float EdgePanSpeedPxPerSec = 720f;
 
+    public static MouseControlScheme ParseMouseScheme(string value) =>
+        (value ?? "").Trim().ToLowerInvariant() switch
+        {
+            "box_select" or "paradox" => MouseControlScheme.BoxSelect,
+            _ => MouseControlScheme.DirectPan
+        };
+
     public static MouseControlScheme ActiveMouseScheme =>
-        string.Equals(SettingsCatalog.Chosen("mouse_scheme"), "paradox", StringComparison.OrdinalIgnoreCase)
-            ? MouseControlScheme.Paradox
-            : MouseControlScheme.AoH;
+        ParseMouseScheme(SettingsCatalog.Chosen("mouse_scheme"));
 
     public static bool RmbEverywhereEnabled =>
         SettingsCatalog.Of("rmb_everywhere") is null || SettingsCatalog.Flag("rmb_everywhere");
@@ -237,8 +242,7 @@ public static class ControlSchemeRules
 }
 
 /// <summary>
-/// Stateful click-vs-drag tracker for AoH / Paradox mouse schemes with strict 8 px and 120 ms thresholds.
-/// Pure C# so both GlobePresentation and headless FormableTests exercise the exact same state machine.
+/// Stateful click-vs-drag tracker for Direct Pan / Box Select mouse schemes (8 px and 120 ms thresholds).
 /// </summary>
 public sealed class MapGestureSession
 {
@@ -282,24 +286,21 @@ public sealed class MapGestureSession
                 BoxRegions = true;
                 BoxStarted = true;
             }
-            else if (scheme == MouseControlScheme.Paradox)
+            else if (scheme == MouseControlScheme.BoxSelect)
             {
                 BoxStarted = true;
             }
         }
         else if (button == MapPointerButton.Middle)
         {
-            if (scheme == MouseControlScheme.AoH)
+            if (scheme == MouseControlScheme.DirectPan)
                 BoxStarted = true;
             else
                 PanStarted = true;
         }
     }
 
-    /// <summary>
-    /// Updates pointer motion and returns true when a pan camera delta should be applied.
-    /// Returns false while still below threshold (e.g. RMB before 8 px AND 120 ms).
-    /// </summary>
+    /// <summary>Updates pointer motion and returns true when a pan camera delta should be applied.</summary>
     public bool UpdateMotion(float x, float y, double nowMs, float thresholdPx, double thresholdMs,
         out float panDeltaX, out float panDeltaY)
     {
@@ -336,12 +337,12 @@ public sealed class MapGestureSession
 
         if (Button == MapPointerButton.Left)
         {
-            if (BoxRegions || Scheme == MouseControlScheme.Paradox)
+            if (BoxRegions || Scheme == MouseControlScheme.BoxSelect)
             {
                 BoxStarted = true;
                 return false;
             }
-            // AoH scheme: LMB-drag pans/rotates map once drag threshold is crossed.
+            // Direct Pan scheme: LMB-drag pans/rotates map once drag threshold is crossed.
             if (!PanStarted && MaxDisplacementPx >= thresholdPx)
             {
                 PanStarted = true;
@@ -360,7 +361,7 @@ public sealed class MapGestureSession
 
         if (Button == MapPointerButton.Middle)
         {
-            if (Scheme == MouseControlScheme.AoH)
+            if (Scheme == MouseControlScheme.DirectPan)
             {
                 BoxStarted = true;
                 return false;
@@ -386,7 +387,7 @@ public sealed class MapGestureSession
 
         if (pan) return LmbReleaseOutcome.PanEnded;
         if (regions) return LmbReleaseOutcome.BoxRegionSelect;
-        if (scheme == MouseControlScheme.Paradox && disp >= thresholdPx) return LmbReleaseOutcome.BoxArmySelect;
+        if (scheme == MouseControlScheme.BoxSelect && disp >= thresholdPx) return LmbReleaseOutcome.BoxArmySelect;
         if (disp < thresholdPx) return LmbReleaseOutcome.ClickSelect;
         return LmbReleaseOutcome.PanEnded;
     }
@@ -400,7 +401,7 @@ public sealed class MapGestureSession
         var scheme = Scheme;
         Reset();
 
-        if (pan || scheme == MouseControlScheme.Paradox) return MmbReleaseOutcome.PanEnded;
+        if (pan || scheme == MouseControlScheme.BoxSelect) return MmbReleaseOutcome.PanEnded;
         return disp >= thresholdPx ? MmbReleaseOutcome.BoxArmySelect : MmbReleaseOutcome.ClickArmySelect;
     }
 

@@ -306,16 +306,24 @@ static class NewShellTests
         Check(peaceCalm.PauseClock && peaceCalm.ShowNewspaperCard && peaceCalm.AddAlertRow, "Calm pauses on player peace offer");
         Check(!shortageCalm.PauseClock && !shortageCalm.ShowNewspaperCard && shortageCalm.AddAlertRow, "Calm routes routine shortage to alert row only");
 
-        // Paradox (auto-pause)
-        var defconParadox = ShellMessages.Resolve(ShellMessagePreset.Paradox, ShellMessageEvent.DefconChanged, true, 2);
-        var researchParadox = ShellMessages.Resolve(ShellMessagePreset.Paradox, ShellMessageEvent.ResearchFinished, true, 2);
-        Check(defconParadox.PauseClock && researchParadox.PauseClock, "Paradox preset auto-pauses on DEFCON shift and finished research");
+        // Focus (auto-pause)
+        var defconFocus = ShellMessages.Resolve(ShellMessagePreset.Focus, ShellMessageEvent.DefconChanged, true, 2);
+        var researchFocus = ShellMessages.Resolve(ShellMessagePreset.Focus, ShellMessageEvent.ResearchFinished, true, 2);
+        Check(defconFocus.PauseClock && researchFocus.PauseClock, "Focus preset auto-pauses on DEFCON shift and finished research");
 
-        // AoH (map flow)
-        var peaceAoh = ShellMessages.Resolve(ShellMessagePreset.Aoh, ShellMessageEvent.PeaceOffer, true, 2);
+        // Dispatch (map feed)
+        var peaceDispatch = ShellMessages.Resolve(ShellMessagePreset.Dispatch, ShellMessageEvent.PeaceOffer, true, 2);
         var encirclementSpeed5 = ShellMessages.Resolve(ShellMessagePreset.Calm, ShellMessageEvent.ArmyEncircled, true, 5);
-        Check(!peaceAoh.PauseClock && peaceAoh.ShowNewspaperCard, "AoH keeps flow on peace offer card");
+        Check(!peaceDispatch.PauseClock && peaceDispatch.ShowNewspaperCard, "Dispatch keeps flow on peace offer card");
         Check(encirclementSpeed5.PauseClock && encirclementSpeed5.Speed5SafetyPause, "Speed 5 triggers safety pause on player encirclement");
+
+        // Legacy saved preset aliases
+        Check(ShellMessages.ParsePreset("focus") == ShellMessagePreset.Focus &&
+              ShellMessages.ParsePreset("paradox") == ShellMessagePreset.Focus,
+            "Focus preset parses both focus and legacy paradox");
+        Check(ShellMessages.ParsePreset("dispatch") == ShellMessagePreset.Dispatch &&
+              ShellMessages.ParsePreset("aoh") == ShellMessagePreset.Dispatch,
+            "Dispatch preset parses both dispatch and legacy aoh");
     }
 
     public static void RunDatePlate()
@@ -336,7 +344,15 @@ static class NewShellTests
         Check(float.IsFinite(tension) && tension >= 0f && tension <= 100f, $"WorldWar tension is bounded 0..100 ({tension:0.0})");
 
         SettingsCatalog.Store("ui_shell", "new");
-        SettingsCatalog.Store("ui_shell_message_preset", "paradox");
+        SettingsCatalog.Store("ui_shell_message_preset", "focus");
+        Check(string.Equals(SettingsCatalog.Chosen("ui_shell_message_preset"), "focus", StringComparison.Ordinal),
+            "ui_shell_message_preset stores focus cleanly");
+        PlayerSettings.Set("ui_shell_message_preset", "paradox");
+        Check(string.Equals(SettingsCatalog.Chosen("ui_shell_message_preset"), "focus", StringComparison.Ordinal),
+            "legacy ui_shell_message_preset=paradox migrates cleanly to focus");
+        PlayerSettings.Set("ui_shell_message_preset", "aoh");
+        Check(string.Equals(SettingsCatalog.Chosen("ui_shell_message_preset"), "dispatch", StringComparison.Ordinal),
+            "legacy ui_shell_message_preset=aoh migrates cleanly to dispatch");
         SettingsCatalog.Store("ui_shell_minimap", true);
         SettingsCatalog.Store("ui_shell", "classic");
         SettingsCatalog.Store("ui_shell_message_preset", "calm");
