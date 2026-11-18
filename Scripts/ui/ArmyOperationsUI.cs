@@ -75,10 +75,10 @@ public partial class DealOrForceGame
         _selectedNation = _campaign.NationById(army.NationId);
         _globe.SelectArmy(army.Id);
         ShowSelectedArmy();
-        SetArmyFeedback((army.InBattle ? Tr("In combat: H leaves battle immediately. RMB on the formation's current province breaks off an attack and holds a defence. Other map orders wait; Alt+H cancels only the queue.") + " " : "") + Tr("RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
-              "the ground · Shift+click adds a division, Ctrl+click removes one.  " +
-              "H halt · Ctrl+H off the plan · Shift+H back on it · Ctrl+B rail them there · Ctrl+K consolidate · " +
-              "Ctrl+G guard an area · Ctrl+F plan cohesion."));
+        SetArmyFeedback((army.InBattle ? Tr("In combat: H leaves battle immediately. RMB on the formation's current province breaks off an attack and holds a defence. Other map orders wait; Alt+H cancels only the queue.") + " " : "") + Tr("RMB march · Shift+RMB waypoint · Alt+RMB split & move · Ctrl+RMB support · " +
+              "Shift-click adds · H halt · Ctrl+H off plan · Shift+H back · Ctrl+B rail · G consolidate · " +
+              ". next idle \u00b7 Ctrl+Alt+H brake all."));
+        RecordHistoryArmies();
     }
 
     private void OnArmiesBoxPicked(IReadOnlyList<Army> armies)
@@ -116,7 +116,8 @@ public partial class DealOrForceGame
         SetArmyFeedback(Simulation.Loc.Format(
                             Simulation.Plural.Key("{0:N0} division selected.", _selectedArmies.Count),
                             _selectedArmies.Count) + " " +
-                        Simulation.Loc.Get("RMB gives one shared destination; Shift+RMB queues a waypoint."));
+                        Simulation.Loc.Get("RMB march · Shift+RMB waypoint · Alt+RMB split & move · G consolidate · Ctrl+6..0 bind group."));
+        RecordHistoryArmies();
     }
 
     /// <summary>

@@ -148,6 +148,7 @@ public partial class DealOrForceGame : Control
         SyncCountryFactsHeight();
         TickNuclearAlert(delta);
         MaintainArmyBar(delta);
+        MaintainControlsErgonomics();
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible)
             // Nobody's eyes: an observer of the whole world sees the whole world. Watching one country, he sees what it sees.
             && !WatchingWorld;
@@ -412,6 +413,18 @@ public partial class DealOrForceGame : Control
                 GetViewport().SetInputAsHandled();
                 EscapeAuthorWindow();
             }
+            return;
+        }
+        if (inputEvent is InputEventMouseButton historyClick && HandleMouseHistoryButton(historyClick))
+        {
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (inputEvent is InputEventKey { Pressed: true, Echo: false } qaPopupKey &&
+            ((_splitMovePopup is { IsPopupOpen: true } && _splitMovePopup.HandleKey(qaPopupKey)) ||
+             HandleFocusedQuickAmountKey(qaPopupKey)))
+        {
+            GetViewport().SetInputAsHandled();
             return;
         }
         // Space is a sacred strategy-game time key: it never activates a focused
@@ -700,9 +713,16 @@ public partial class DealOrForceGame : Control
             var letter = Letter(splitKey);
             if (letter == Key.X && _selectedFleet is not null && _fleetPanel is { Visible: true })
             { SplitSelectedFleet(); GetViewport().SetInputAsHandled(); return; }
-            if (letter == Key.K && _selectedFleet is not null && _fleetPanel is { Visible: true })
-            { MergeSelectedFleets(); GetViewport().SetInputAsHandled(); return; }
             if (letter == Key.X && SplitSupportSelection()) { GetViewport().SetInputAsHandled(); return; }
+        }
+
+        // Ctrl+Alt+H emergency brake and unified physical-layout shortcuts run cleanly before individual letters.
+        if (inputEvent is InputEventKey { Pressed: true, Echo: false } controlsKey &&
+            controlsKey.Keycode != Key.Escape &&
+            HandleControlsShortcut(controlsKey))
+        {
+            GetViewport().SetInputAsHandled();
+            return;
         }
 
         // B: building icons on the map, on and off - with nothing selected, so a selection keeps its letters.
@@ -737,11 +757,6 @@ public partial class DealOrForceGame : Control
                 // Control on the right button already means "support this attack".
                 case Key.B when Input.IsKeyPressed(Key.Ctrl):
                     ToggleStrategicRedeployment();
-                    GetViewport().SetInputAsHandled();
-                    return;
-
-                case Key.K when Input.IsKeyPressed(Key.Ctrl):
-                    ConsolidateSelectedDivisions();
                     GetViewport().SetInputAsHandled();
                     return;
 
@@ -817,8 +832,14 @@ public partial class DealOrForceGame : Control
         // Context menus and HUD docks on the map (province card, fleet inspector, army
         // roster, resource atlas, movement card, side dossier, country/region selection):
         // Escape puts them away one layer at a time before ever reaching the pause menu.
+        else if (_splitMovePopup is { IsPopupOpen: true })
+            _splitMovePopup.ClosePopup();
+        else if (_quickRecruitLayer is { Visible: true })
+            CloseQuickRecruitPopup();
         else if (_provinceCardLayer is not null && IsInstanceValid(_provinceCardLayer) && _provinceCardLayer.Visible)
             CloseProvinceCard();
+        else if (_compactProvincePopover is { Visible: true })
+            CloseCompactProvincePopover();
         else if (_fleetPanel is { Visible: true })
             CloseFleetPanel();
         else if (_armyPanel is { Visible: true })
@@ -1065,10 +1086,12 @@ public partial class DealOrForceGame : Control
         Timed("new_shell", BuildNewShell);
         Resized += LayoutCampaignShell;
         LayoutCampaignShell();
+        BuildControlsErgonomics();
     }
 
     private void BeginSession()
     {
+        ResetControlsSessionState();
         _globe.HighlightNation(-1);
         _globe.ClearSelection();
         _observerMode = _campaign.HumanSeats.Count == 0 && !_campaign.Nations.Any(n => n.IsHuman);
@@ -1096,6 +1119,7 @@ public partial class DealOrForceGame : Control
         _situationReturn = "";
         if (_sovereignFinanceLayer is not null) _sovereignFinanceLayer.Visible = false;
         if (!Simulation.MechanicFeatures.ScreenEnabled(_campaign, screen)) return;
+        RecordHistoryScreen(screen);
         _sideScreenBuiltKey = $"{screen}|{_dossierTab}|{_campaign?.Player?.Id}|" +
             (_campaign is null ? 0 : _campaign.ElapsedDays / SideScreenInterval(screen));
         if (screen == "Diplomacy") MarkFirstStep("diplomacy");
@@ -1512,6 +1536,15 @@ public partial class DealOrForceGame : Control
         // The long-range forces panel takes a click on the map for itself: where the selected
         // formations are rebased, or the base a new one is raised into.
         if (TrySupportMapPick(pick)) return;
+        QuickAmountManager.DismissAll();
+        if (!_globe.CountrySelectionOnly && _selectedArmies.Count > 0 && !_globe.SupportCommandMode)
+        {
+            // §5.2 Keep the Army Panel open when clicking a region while armies are selected.
+            ShowCompactProvinceInfoPopover(pick);
+            return;
+        }
+        CloseCompactProvincePopover();
+        RecordHistoryRegion(pick);
         // The diplomatic and war layers now answer for the country that was picked.
         _globe.SetMapModeSubject(pick.Nation);
 

@@ -1,0 +1,117 @@
+// Canonical skin tokens and physical-layout hotkeys for Deal or Force.
+// Physical key positions map identically across QWERTY and Russian JCUKEN.
+// 1 key = 1 meaning per scope (verified by HotkeyCatalog.FindCollisions in FormableTests).
+{
+  "colours": {
+    "controls.focus_border": "#54a6f2",
+    "controls.keycap_paper": "#f4eedc",
+    "controls.keycap_border": "#7c6d4e",
+    "controls.keycap_shadow": "#2a2316",
+    "controls.keycap_ink": "#181a1f",
+    "controls.undo_fill": "#172536e8",
+    "controls.undo_border": "#54a6f2",
+    "controls.everywhere_fill": "#20344c",
+    "controls.everywhere_border": "#54a6f2"
+  },
+  "metrics": {
+    "controls.quick_amount_width": 344,
+    "controls.undo_toast_bottom": 96
+  },
+  "hotkeys": {
+    // --- Time & speed (global) ---
+    "time_pause": { "scope": "global", "key": "Space", "category": "time", "order": 10, "label": "Pause / Resume", "description": "Pause or resume the campaign clock", "hud_target": "date_plate_pause", "badge": "Space", "visible_button": true },
+    "speed_1": { "scope": "global", "key": "Key1", "category": "time", "order": 20, "label": "Speed 1", "description": "Set game speed to 1", "visible_button": false },
+    "speed_2": { "scope": "global", "key": "Key2", "category": "time", "order": 21, "label": "Speed 2", "description": "Set game speed to 2", "visible_button": false },
+    "speed_3": { "scope": "global", "key": "Key3", "category": "time", "order": 22, "label": "Speed 3", "description": "Set game speed to 3", "visible_button": false },
+    "speed_4": { "scope": "global", "key": "Key4", "category": "time", "order": 23, "label": "Speed 4", "description": "Set game speed to 4", "visible_button": false },
+    "speed_5": { "scope": "global", "key": "Key5", "category": "time", "order": 24, "label": "Speed 5", "description": "Set game speed to 5", "visible_button": false },
+    "speed_up": { "scope": "global", "key": "Equal", "category": "time", "order": 30, "label": "Faster", "description": "Increase simulation speed by one step", "badge": "+", "visible_button": false },
+    "speed_down": { "scope": "global", "key": "Minus", "category": "time", "order": 31, "label": "Slower", "description": "Decrease simulation speed by one step", "badge": "−", "visible_button": false },
+
+    // --- System & history (global) ---
+    "help_handbook": { "scope": "global", "key": "F1", "category": "system", "order": 40, "label": "Handbook", "description": "Open the in-game encyclopedia and controls reference", "hud_target": "help_button", "visible_button": true },
+    "search_navigator": { "scope": "global", "key": "K", "ctrl": true, "category": "system", "order": 42, "label": "Search", "description": "Find any country, region, movement, or army", "hud_target": "search_button", "badge": "Ctrl+K", "visible_button": true },
+    "search_navigator_slash": { "scope": "global", "key": "Slash", "category": "system", "order": 43, "label": "Quick search", "description": "Find any country, region, movement, or army (/)", "badge": "/", "visible_button": false },
+    "quick_save": { "scope": "global", "key": "F5", "category": "system", "order": 44, "label": "Quick save", "description": "Write an immediate quick save", "visible_button": false },
+    "quick_load": { "scope": "global", "key": "F9", "category": "system", "order": 45, "label": "Quick load", "description": "Load the latest quick save", "visible_button": false },
+    "hide_interface": { "scope": "global", "key": "F9", "ctrl": true, "category": "system", "order": 46, "label": "Hide HUD", "description": "Toggle interface visibility for screenshots", "visible_button": false },
+    "toggle_observer": { "scope": "global", "key": "F7", "category": "system", "order": 47, "label": "Observer mode", "description": "Switch between playing and observing the world", "visible_button": false },
+    "toggle_fullscreen": { "scope": "global", "key": "F11", "category": "system", "order": 48, "label": "Fullscreen", "description": "Toggle borderless fullscreen window", "visible_button": false },
+    "history_back": { "scope": "global", "key": "Left", "alt": true, "category": "camera", "order": 50, "label": "Back", "description": "Return to the previous panel or selection (Mouse Button 4)", "badge": "Alt+←", "visible_button": false },
+    "history_forward": { "scope": "global", "key": "Right", "alt": true, "category": "camera", "order": 51, "label": "Forward", "description": "Move forward in panel history (Mouse Button 5)", "badge": "Alt+→", "visible_button": false },
+
+    // --- Camera & map toggles ---
+    "toggle_projection": { "scope": "global", "key": "F2", "category": "camera", "order": 60, "label": "3D / 2D map", "description": "Switch between the 3D globe and 2D flat map", "hud_target": "projection_button", "visible_button": true },
+    "toggle_smoothing": { "scope": "global", "key": "F3", "category": "camera", "order": 61, "label": "Map smoothing", "description": "Toggle border shader smoothing", "visible_button": false },
+    "toggle_showcase_pan": { "scope": "global", "key": "F6", "category": "camera", "order": 62, "label": "Showcase pan", "description": "Toggle automatic slow camera orbit", "hud_target": "showcase_button", "visible_button": true },
+    "toggle_free_camera": { "scope": "global", "key": "F10", "category": "camera", "order": 63, "label": "Free camera", "description": "Enter or leave cinematic free-flight camera", "visible_button": false },
+    "focus_capital": { "scope": "global", "key": "Home", "category": "camera", "order": 64, "label": "Home capital", "description": "Center the camera on your capital", "visible_button": false },
+
+    // --- Campaign top/rail screens (canonical §5.3 QWERTY/JCUKEN rail order Q / E R T Y U I O P L) ---
+    "screen_nation": { "scope": "campaign", "key": "Q", "category": "screens", "order": 100, "label": "Nation", "description": "Open the Nation overview screen", "hud_target": "nav_nation", "visible_button": true },
+    "screen_state_affairs": { "scope": "campaign", "key": "E", "category": "screens", "order": 101, "label": "State Affairs", "description": "Open Budget, taxes & central bank", "hud_target": "nav_state_affairs", "visible_button": true },
+    "screen_economy": { "scope": "campaign", "key": "R", "category": "screens", "order": 102, "label": "Economy", "description": "Open Economy, industry & buildings", "hud_target": "nav_economy", "visible_button": true },
+    "screen_trade": { "scope": "campaign", "key": "T", "category": "screens", "order": 103, "label": "Trade", "description": "Open Trade & stockpiles", "hud_target": "nav_trade", "visible_button": true },
+    "screen_production": { "scope": "campaign", "key": "Y", "category": "screens", "order": 104, "label": "Production", "description": "Open Production lines & templates", "hud_target": "nav_production", "visible_button": true },
+    "screen_research": { "scope": "campaign", "key": "U", "category": "screens", "order": 105, "label": "Research", "description": "Open Technology & research tree", "hud_target": "nav_research", "visible_button": true },
+    "screen_military": { "scope": "campaign", "key": "I", "category": "screens", "order": 106, "label": "Military", "description": "Open Military & recruitment", "hud_target": "nav_military", "visible_button": true },
+    "screen_diplomacy": { "scope": "campaign", "key": "O", "category": "screens", "order": 107, "label": "Diplomacy", "description": "Open Diplomacy & foreign relations", "hud_target": "nav_diplomacy", "visible_button": true },
+    "screen_wars": { "scope": "campaign", "key": "P", "category": "screens", "order": 108, "label": "Wars", "description": "Open Active Wars & peace treaties", "hud_target": "nav_wars", "visible_button": true },
+    "screen_ledger": { "scope": "campaign", "key": "L", "category": "screens", "order": 109, "label": "Ledger", "description": "Open Statistical Ledger", "hud_target": "nav_ledger", "visible_button": true },
+
+    // --- Map layers & outliner (canonical §5.3 bottom row Z X C V N + M drawer + J outliner + B icons) ---
+    "toggle_outliner": { "scope": "campaign", "key": "J", "category": "map", "order": 150, "label": "Outliner", "description": "Collapse or expand the situation outliner", "hud_target": "outliner_toggle", "visible_button": true },
+    "map_mode_political": { "scope": "campaign", "key": "Z", "category": "map", "order": 151, "label": "Political", "description": "Switch map to Political mode", "hud_target": "map_mode_political", "visible_button": true },
+    "map_mode_diplomatic": { "scope": "campaign", "key": "X", "category": "map", "order": 152, "label": "Diplomacy", "description": "Switch map to Diplomatic mode", "hud_target": "map_mode_diplomatic", "visible_button": true },
+    "map_mode_economy": { "scope": "campaign", "key": "C", "category": "map", "order": 153, "label": "Economy", "description": "Switch map to Economy mode", "hud_target": "map_mode_economy", "visible_button": true },
+    "map_mode_resources": { "scope": "campaign", "key": "V", "category": "map", "order": 154, "label": "Resources", "description": "Switch map to Resources mode", "hud_target": "map_mode_resources", "visible_button": true },
+    "map_mode_wars": { "scope": "campaign", "key": "N", "category": "map", "order": 155, "label": "Wars", "description": "Switch map to Wars mode", "hud_target": "map_mode_wars", "visible_button": true },
+    "toggle_map_layers": { "scope": "campaign", "key": "M", "category": "map", "order": 156, "label": "Map layers", "description": "Open or close the map mode drawer", "hud_target": "map_layers", "visible_button": true },
+    "toggle_region_icons": { "scope": "campaign", "key": "B", "category": "map", "order": 157, "label": "Map icons", "description": "Show or hide building icons on regions", "hud_target": "map_region_icons", "visible_button": true },
+
+    // --- Army control groups, selection & emergency brake (global/selection) ---
+    "cycle_idle_army": { "scope": "global", "key": "Period", "category": "army", "order": 200, "label": "Next idle army", "description": "Select the next stationary army without orders and focus the camera", "badge": ".", "visible_button": false },
+    "select_armies_screen": { "scope": "global", "key": "A", "ctrl": true, "category": "army", "order": 201, "label": "Armies on screen", "description": "Select all player armies currently visible in the viewport", "badge": "Ctrl+A", "visible_button": false },
+    "select_armies_world": { "scope": "global", "key": "A", "ctrl": true, "shift": true, "category": "army", "order": 202, "label": "All armies", "description": "Select every player army worldwide", "badge": "Ctrl+Shift+A", "visible_button": false },
+    "halt_all_armies": { "scope": "global", "key": "H", "ctrl": true, "alt": true, "category": "army", "order": 203, "label": "Emergency brake", "description": "Cancel movement orders for every player army at once", "badge": "Ctrl+Alt+H", "visible_button": false },
+    "group_bind_6": { "scope": "global", "key": "Key6", "ctrl": true, "category": "army", "order": 210, "label": "Bind group 6", "description": "Assign selected armies to control group 6", "visible_button": false },
+    "group_bind_7": { "scope": "global", "key": "Key7", "ctrl": true, "category": "army", "order": 211, "label": "Bind group 7", "description": "Assign selected armies to control group 7", "visible_button": false },
+    "group_bind_8": { "scope": "global", "key": "Key8", "ctrl": true, "category": "army", "order": 212, "label": "Bind group 8", "description": "Assign selected armies to control group 8", "visible_button": false },
+    "group_bind_9": { "scope": "global", "key": "Key9", "ctrl": true, "category": "army", "order": 213, "label": "Bind group 9", "description": "Assign selected armies to control group 9", "visible_button": false },
+    "group_bind_0": { "scope": "global", "key": "Key0", "ctrl": true, "category": "army", "order": 214, "label": "Bind group 0", "description": "Assign selected armies to control group 0", "visible_button": false },
+    "group_recall_6": { "scope": "global", "key": "Key6", "category": "army", "order": 215, "label": "Group 6", "description": "Select group 6 (press twice to glide camera to centroid)", "visible_button": false },
+    "group_recall_7": { "scope": "global", "key": "Key7", "category": "army", "order": 216, "label": "Group 7", "description": "Select group 7 (press twice to glide camera to centroid)", "visible_button": false },
+    "group_recall_8": { "scope": "global", "key": "Key8", "category": "army", "order": 217, "label": "Group 8", "description": "Select group 8 (press twice to glide camera to centroid)", "visible_button": false },
+    "group_recall_9": { "scope": "global", "key": "Key9", "category": "army", "order": 218, "label": "Group 9", "description": "Select group 9 (press twice to glide camera to centroid)", "visible_button": false },
+    "group_recall_0": { "scope": "global", "key": "Key0", "category": "army", "order": 219, "label": "Group 0", "description": "Select group 0 (press twice to glide camera to centroid)", "visible_button": false },
+
+    // --- Selected armies (selection) & fleets (fleet) ---
+    "army_merge": { "scope": "selection", "key": "G", "category": "army", "order": 230, "label": "Merge armies", "description": "Consolidate selected armies in the same province", "hud_target": "army_merge", "visible_button": true },
+    "army_split": { "scope": "selection", "key": "X", "ctrl": true, "category": "army", "order": 231, "label": "Split in half", "description": "Halve the selected army into two formations", "hud_target": "army_split", "visible_button": true },
+    "army_halt": { "scope": "selection", "key": "H", "category": "army", "order": 232, "label": "Halt selected", "description": "Stop selected formations in place", "visible_button": false },
+    "army_detach": { "scope": "selection", "key": "H", "ctrl": true, "category": "army", "order": 233, "label": "Detach from plan", "description": "Remove selected armies from their battle plan", "visible_button": false },
+    "army_return_plan": { "scope": "selection", "key": "H", "shift": true, "category": "army", "order": 234, "label": "Return to plan", "description": "Return selected armies to their assigned battle plan", "visible_button": false },
+    "army_cancel_queue": { "scope": "selection", "key": "H", "alt": true, "category": "army", "order": 235, "label": "Clear waypoints", "description": "Clear queued waypoints on selected armies", "visible_button": false },
+    "army_redeploy": { "scope": "selection", "key": "B", "ctrl": true, "category": "army", "order": 236, "label": "Strategic redeploy", "description": "Toggle fast rail/strategic redeployment", "visible_button": false },
+    "army_area_defence": { "scope": "selection", "key": "G", "ctrl": true, "category": "army", "order": 237, "label": "Area defence", "description": "Assign area defence around a region", "visible_button": false },
+    "army_cohesion": { "scope": "selection", "key": "F", "ctrl": true, "category": "army", "order": 238, "label": "Plan cohesion", "description": "Cycle battle plan cohesion strictness", "visible_button": false },
+    "army_disband": { "scope": "selection", "key": "Delete", "category": "army", "order": 239, "label": "Disband", "description": "Disband selected divisions (asks for confirmation)", "visible_button": false },
+    "fleet_merge": { "scope": "fleet", "key": "G", "category": "army", "order": 245, "label": "Merge fleets", "description": "Merge selected fleets in the same sea zone", "visible_button": false },
+    "fleet_split": { "scope": "fleet", "key": "X", "ctrl": true, "category": "army", "order": 246, "label": "Split fleet", "description": "Split the selected fleet in half", "visible_button": false },
+
+    // --- QuickAmount & batch undo (quick_amount holds A S D F only while focused) ---
+    "qa_25": { "scope": "quick_amount", "key": "A", "category": "quick_amount", "order": 300, "label": "Set 25%", "description": "Select 25% of maximum capacity while QuickAmount is focused", "badge": "A · 25%", "visible_button": false },
+    "qa_50": { "scope": "quick_amount", "key": "S", "category": "quick_amount", "order": 301, "label": "Set 50%", "description": "Select 50% of maximum capacity while QuickAmount is focused", "badge": "S · 50%", "visible_button": false },
+    "qa_75": { "scope": "quick_amount", "key": "D", "category": "quick_amount", "order": 302, "label": "Set 75%", "description": "Select 75% of maximum capacity while QuickAmount is focused", "badge": "D · 75%", "visible_button": false },
+    "qa_100": { "scope": "quick_amount", "key": "F", "category": "quick_amount", "order": 303, "label": "Set 100%", "description": "Select 100% of maximum capacity while QuickAmount is focused", "badge": "F · 100%", "visible_button": false },
+    "qa_apply": { "scope": "quick_amount", "key": "Enter", "category": "quick_amount", "order": 304, "label": "Apply value", "description": "Confirm the selected QuickAmount action", "visible_button": false },
+    "qa_close": { "scope": "quick_amount", "key": "Escape", "category": "quick_amount", "order": 305, "label": "Close QuickAmount", "description": "Close QuickAmount and immediately return WASD to the camera", "visible_button": false },
+    "batch_undo": { "scope": "global", "key": "Z", "ctrl": true, "category": "quick_amount", "order": 310, "label": "Undo mass action", "description": "Cancel unstarted items from the last Everywhere or Zero-budget action (stays valid until your next order)", "badge": "Ctrl+Z", "visible_button": false },
+
+    // --- Free camera (F10) ---
+    "fc_orbit": { "scope": "free_camera", "key": "G", "category": "camera", "order": 350, "label": "Free orbit", "description": "Lock/unlock orbit around the target point in Free Camera", "visible_button": false },
+    "fc_auto_orbit": { "scope": "free_camera", "key": "T", "category": "camera", "order": 351, "label": "Auto-orbit", "description": "Toggle automatic showcase rotation in Free Camera", "visible_button": false },
+    "fc_smoothing": { "scope": "free_camera", "key": "C", "category": "camera", "order": 352, "label": "Camera inertia", "description": "Toggle velocity smoothing in Free Camera", "visible_button": false },
+    "fc_hud": { "scope": "free_camera", "key": "H", "category": "camera", "order": 353, "label": "Free camera telemetry", "description": "Show or hide coordinates in Free Camera", "visible_button": false }
+  }
+}

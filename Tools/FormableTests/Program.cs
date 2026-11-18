@@ -293,6 +293,8 @@ if (args.Contains("--heap-census")) { HeapCensusTests.Run(args); return; }
         if (args.Contains("--icon-categories-only")) { IconCategoryTests.Run(); return; }
         if (args.Contains("--hud-resources-only")) { HudResourceTests.Run(); return; }
         if (args.Contains("--date-plate-only")) { DatePlateTests.Run(); return; }
+        if (args.Contains("--controls-ergonomics-only")) { ControlsErgonomicsTests.RunControlsErgonomicsOnly(); return; }
+        if (args.Contains("--quick-amount-only")) { ControlsErgonomicsTests.RunQuickAmountOnly(); return; }
         if (args.Contains("--alert-list-only")) { AlertListTests.Run(); return; }
         if (args.Contains("--new-shell-rest-only")) { NewShellTests.RunRestLayout(); return; }
         if (args.Contains("--alert-dedupe-only")) { NewShellTests.RunAlertDedupe(); return; }

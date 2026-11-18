@@ -166,6 +166,7 @@ public static class SettingsRows
             "number" => value.ToString("0.##", CultureInfo.CurrentCulture),
             "days" => Loc.Format("{0} day(s)", value.ToString("0", CultureInfo.CurrentCulture)),
             "pixels" => Loc.Format("{0} px", value.ToString("0", CultureInfo.CurrentCulture)),
+            "milliseconds" => Loc.Format("{0} ms", value.ToString("0", CultureInfo.CurrentCulture)),
             _ => value.ToString("P0", CultureInfo.CurrentCulture)
         };
 
