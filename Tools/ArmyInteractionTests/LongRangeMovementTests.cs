@@ -115,6 +115,12 @@ static class LongRangeMovementTests
         Codec(map);
         Computer(map);
         Determinism(map);
+        Halt(map);
+        SeaFollowsTheWater(map);
+        ShutStrait(map);
+        StopAhead(map);
+        StaleSelection(map);
+        SelectionWiring();
     }
 
     // ------------------------------------------------------------------ selection
@@ -540,7 +546,7 @@ static class LongRangeMovementTests
                     Day(c); days++;
                     var now = LongRangeMovement.Position(c, gun);
                     Check(mode == SupportMoveMode.Sea ? Distance(last, now) <= c.Defines.LongRangeSeaKmPerDay + 1f
-                        : gun.ProvinceId == wasAt || map.Neighbors[wasAt].Contains(gun.ProvinceId), $"{tag}: on the way home, day {days}: no jump");
+                        : gun.ProvinceId == wasAt || map.Neighbors[wasAt].Contains(gun.ProvinceId), $"{tag}: on the way home, day {days}: no jump (mode {mode}, {wasAt} -> {gun.ProvinceId}, {Distance(last, now):0} km, progress {gun.MoveProgress:0.000}, route {string.Join(',', gun.Route)} modes {string.Join(',', gun.RouteModes)})");
                     last = now;
                 }
                 Check(!gun.CutOff && Controls(c)[gun.ProvinceId] == rus.MapIndex && !SupportCore.Displaced(c, gun),
@@ -645,6 +651,10 @@ static class LongRangeMovementTests
               NetworkCommandCodec.TryDecode(wireType, wire, out var decoded) && decoded is RelocateSupportCommand back &&
               back.IssuerId == order.IssuerId && back.ProvinceId == near && back.Append && back.FormationIds.SequenceEqual(order.FormationIds),
             "the relocation order goes through the network and replay codec unchanged");
+        var halt = new RelocateSupportCommand { IssuerId = rus.Id, FormationIds = new[] { ours.Id }, Halt = true };
+        Check(NetworkCommandCodec.TryEncode(halt, out var haltType, out var haltWire) &&
+              NetworkCommandCodec.TryDecode(haltType, haltWire, out var haltBack) && haltBack is RelocateSupportCommand { Halt: true },
+            "the halt order goes through the codec as a halt");
         var plain = new RelocateSupportCommand { IssuerId = rus.Id, FormationIds = order.FormationIds, ProvinceId = near };
         plain.Apply(c);
         Check(plain.Moved == 1 && plain.Refused == 2 && plain.Refusal.Contains("#" + theirs.Id) && plain.Refusal.Contains("#" + int.MaxValue) &&
@@ -708,5 +718,376 @@ static class LongRangeMovementTests
         Check(a.SupportFormations.Select(f => (f.Id, f.ProvinceId, f.Route.Count, f.MoveProgress))
                 .SequenceEqual(b.SupportFormations.Select(f => (f.Id, f.ProvinceId, f.Route.Count, f.MoveProgress))),
             "ninety days of movement give the same fingerprint and the same columns in both worlds");
+    }
+
+    // ------------------------------------------------------------------ 14. halt
+
+    static int Exclave(Campaign c, Nation rus)
+    {
+        var map = c.ProvinceMap; var controls = Controls(c);
+        return Enumerable.Range(1, map.ProvinceCount).Where(p => !map.IsWater(p) && controls[p] == rus.MapIndex &&
+            map.CenterOf(p).Longitude < 23f && map.CenterOf(p).Latitude > 54f && map.CenterOf(p).Latitude < 56f).OrderBy(p => p).FirstOrDefault();
+    }
+
+    static IEnumerable<int> Ours(Campaign c, Nation nation) =>
+        Enumerable.Range(1, c.ProvinceMap.ProvinceCount).Where(p => !c.ProvinceMap.IsWater(p) && Controls(c)[p] == nation.MapIndex);
+
+    static RelocateSupportCommand HaltOrder(Campaign c, Nation issuer, params SupportFormation[] formations)
+    {
+        var order = new RelocateSupportCommand { IssuerId = issuer.Id, FormationIds = formations.Select(f => f.Id).ToArray(), Halt = true };
+        order.Apply(c);
+        return order;
+    }
+
+    /// <summary>
+    /// HALT, the button: "finishes the step it is making and deploys there". It used to send each
+    /// formation to the province it last reached, and a column part-way along a step planned the
+    /// way back from the end of it - a ship six days out landed, re-embarked and sailed home.
+    /// </summary>
+    static void Halt(ProvinceTopology map)
+    {
+        var c = World(map);
+        var rus = c.NationByTag("RUS");
+        c.SupportFormations.Clear();
+        var capital = rus.CapitalProvinceId > 0 ? rus.CapitalProvinceId : CapitalCore.SupplyOriginProvinceId(c, rus);
+
+        // At sea: it lands at the harbour ahead and deploys there.
+        var exclave = Exclave(c, rus);
+        var ship = Put(c, rus, "artillery_brigade", capital);
+        Order(c, rus, exclave, false, ship);
+        for (var day = 0; day < 80 && !(LongRangeMovement.OverWater(ship) && ship.MoveProgress > .3f); day++) Day(c);
+        Check(LongRangeMovement.OverWater(ship) && (SupportMoveMode)ship.RouteModes[0] == SupportMoveMode.Sea, "halt: a brigade is at sea");
+        var harbour = ship.Route[0]; var leftFrom = ship.ProvinceId; var share = ship.MoveProgress;
+        var halted = HaltOrder(c, rus, ship);
+        Check(halted.Moved == 1 && ship.Route.Count == 1 && ship.Route[0] == harbour && ship.MoveProgress == share,
+            "halt at sea: the route becomes the harbour ahead alone, and the share sailed is kept - no way back is planned");
+        var last = ship.MoveProgress; var days = 0;
+        while (ship.Route.Count > 0 && days < 60)
+        {
+            Day(c); days++;
+            Check(ship.ProvinceId == leftFrom || ship.ProvinceId == harbour, $"halt at sea, day {days}: it never turns for the port it left");
+            if (ship.Route.Count > 0) { Check(ship.MoveProgress > last, $"halt at sea, day {days}: still sailing on"); last = ship.MoveProgress; }
+        }
+        for (var day = 0; day < 10 && SupportCore.Displaced(c, ship); day++) Day(c);
+        Check(ship.ProvinceId == harbour && ship.BaseProvinceId == harbour, "halted at sea, it lands at the harbour ahead and deploys there");
+
+        // On the road, part-way along its first step - the state the daily march leaves a column
+        // in between two provinces: the province ahead, and none back.
+        var target = Steps(c, capital, (ushort)rus.MapIndex, 6).Where(p => p.Value == 6).Select(p => p.Key).Min();
+        var gun = Put(c, rus, "artillery_brigade", capital);
+        Order(c, rus, target, false, gun);
+        gun.MoveProgress = .4f;
+        var ahead = gun.Route[0];
+        HaltOrder(c, rus, gun);
+        Check(gun.Route.Count == 1 && gun.Route[0] == ahead && gun.MoveProgress == .4f, "halt on the road: it finishes the step it is on");
+        for (var day = 0; day < 20 && SupportCore.Displaced(c, gun); day++)
+        {
+            Day(c);
+            Check(gun.ProvinceId == capital || gun.ProvinceId == ahead, "halt on the road: one province forward, none back");
+        }
+        Check(gun.ProvinceId == ahead && gun.BaseProvinceId == ahead, "and deploys in the province ahead");
+
+        // In the air, part-way along a ferry leg: the airfield ahead.
+        var wing = Put(c, rus, "fighter_wing", capital);
+        var field = Ours(c, rus).Where(p => SupportCore.DistanceKm(c, capital, p) is > 1540f and < 1640f).Min();
+        Order(c, rus, field, false, wing);
+        Day(c);
+        Check(LongRangeMovement.OverWater(wing) && wing.Route[0] == field, "halt: a wing is part-way along its ferry leg");
+        HaltOrder(c, rus, wing);
+        Check(wing.Route.Count == 1 && wing.Route[0] == field && wing.ProvinceId == capital, "halt in the air: it flies on to the airfield ahead");
+        for (var day = 0; day < 6 && SupportCore.Displaced(c, wing); day++) Day(c);
+        Check(wing.BaseProvinceId == field, "and works from there, not from the field it left");
+
+        // Not yet moving: it deploys where it stands.
+        var still = Put(c, rus, "artillery_brigade", capital);
+        Order(c, rus, target, false, still);
+        Check(still.Route.Count > 0 && still.MoveProgress == 0f, "halt: a battery has its orders and has not set off");
+        HaltOrder(c, rus, still);
+        Check(still.Route.Count == 0 && still.ProvinceId == capital, "halted before it set off, it stays where it stands");
+    }
+
+    // ------------------------------------------------------------------ 15. the sea is water
+
+    static bool OnWaterOrNearEnd(ProvinceTopology map, LongRangeMovement.SeaCourse course, (float Latitude, float Longitude) point) =>
+        SeaLanes.IsWaterAt(map, point.Latitude, point.Longitude) ||
+        Distance(point, course.Points[0]) < 250f || Distance(point, course.Points[1]) < 250f ||
+        Distance(point, course.Points[^2]) < 250f || Distance(point, course.Points[^1]) < 250f;
+
+    /// <summary>
+    /// A passage is the water a ship sails, not the straight line between two ports: the card
+    /// is at sea every day of it, and the days are the course's kilometres.
+    /// </summary>
+    static void SeaFollowsTheWater(ProvinceTopology map)
+    {
+        var c = World(map);
+        var rus = c.NationByTag("RUS");
+        c.SupportFormations.Clear();
+        var capital = rus.CapitalProvinceId > 0 ? rus.CapitalProvinceId : CapitalCore.SupplyOriginProvinceId(c, rus);
+        var exclave = Exclave(c, rus);
+        var f = Put(c, rus, "artillery_brigade", capital);
+        var plan = LongRangeMovement.PreviewRelocate(c, rus.Id, new[] { f.Id }, exclave).Single();
+        var seaIndex = plan.Modes.IndexOf((int)SupportMoveMode.Sea);
+        Check(plan.Accepted && seaIndex >= 0, "to Kaliningrad by sea");
+        var departure = seaIndex == 0 ? capital : plan.Route[seaIndex - 1];
+        var arrival = plan.Route[seaIndex];
+        var shut = SeaLanes.ShutMask(c, rus.Id);
+        var course = LongRangeMovement.CourseOf(c, departure, arrival, shut);
+        Check(course is not null && course.Points.Count >= 4, "the passage has a course: quay, the water, the far quay");
+        var dry = 0;
+        for (var i = 0; i <= 200; i++) if (!OnWaterOrNearEnd(map, course, course.At(i / 200f))) dry++;
+        Check(dry == 0, $"every point of the course is on the water, the quays apart: {dry} of 201 on land");
+        Check(course.Total >= SupportCore.DistanceKm(c, departure, arrival) - 1f, "the course is never shorter than the straight line");
+        Check(plan.Days >= course.Total / c.Defines.LongRangeSeaKmPerDay + 2 * c.Defines.LongRangePortDays,
+            $"the days are the course's kilometres at sea plus the days in port: {plan.Days} d for {course.Total:0} km");
+        var back = LongRangeMovement.CourseOf(c, arrival, departure, shut);
+        Check(back is not null && MathF.Abs(back.Total - course.Total) < 1f && Distance(back.At(.3f), course.At(.7f)) < 2f,
+            "the way back is the way out reversed: a ship turned about at sea sails home the way it came");
+
+        // Sailing it: every day the card is on the water or at a quay, and no day is a jump.
+        Order(c, rus, exclave, false, f);
+        var last = LongRangeMovement.Position(c, f); var days = 0; var seaDays = 0;
+        var trail = new List<(float Latitude, float Longitude)>();
+        while (SupportCore.Displaced(c, f) && days < 160)
+        {
+            var mode = f.RouteModes.Count > 0 ? (SupportMoveMode)f.RouteModes[0] : SupportMoveMode.Land;
+            Day(c); days++;
+            var now = LongRangeMovement.Position(c, f);
+            if (f.Route.Count > 0 && f.MoveProgress > 0f && (SupportMoveMode)f.RouteModes[0] == SupportMoveMode.Sea)
+            {
+                seaDays++;
+                Check(OnWaterOrNearEnd(map, course, now), $"day {days}: at sea means on the water");
+                LongRangeMovement.Trail(c, f, trail);
+                Check(trail.Count >= 2 && trail[0] == now, $"day {days}: the route drawn starts where the card is");
+            }
+            if (mode == SupportMoveMode.Sea) Check(Distance(last, now) <= c.Defines.LongRangeSeaKmPerDay + 1f, $"day {days}: no jump at sea");
+            last = now;
+        }
+        Check(seaDays > 0 && f.BaseProvinceId == exclave, $"it sailed {seaDays} days on the water and deployed in Kaliningrad");
+    }
+
+    /// <summary>
+    /// The owner's case: Russia at war, the Bosporus shut to belligerents, a brigade in the south
+    /// sent to Kaliningrad. The old passage was one straight Sea step from a Black Sea port over
+    /// Ukraine and Poland in about eight days; now no Black Sea harbour may be the start of it.
+    /// </summary>
+    static void ShutStrait(ProvinceTopology map)
+    {
+        var c = World(map);
+        var rus = c.NationByTag("RUS"); var ukr = c.NationByTag("UKR");
+        EnsureWar(c, rus, ukr);
+        c.SupportFormations.Clear();
+        var controls = Controls(c);
+        var shut = SeaLanes.ShutMask(c, rus.Id);
+        var bosporus = SeaPassageCatalog.All.ToList().FindIndex(p => p.Id == "bosporus");
+        Check(bosporus >= 0 && (shut & (1L << bosporus)) != 0, "at war, the Bosporus is shut to Russia");
+        var exclave = Exclave(c, rus);
+        var coastal = SeaLanes.CoastalProvinces(map).ToHashSet();
+        var south = Enumerable.Range(1, map.ProvinceCount).Where(p => coastal.Contains(p) && controls[p] == rus.MapIndex &&
+            map.CenterOf(p).Latitude is > 43f and < 47.5f && map.CenterOf(p).Longitude is > 33f and < 41f &&
+            SeaLanes.WaterOf(c, 0, p) >= 0 && SeaLanes.WaterOf(c, 0, p) == SeaLanes.WaterOf(c, 0, exclave) &&
+            SeaLanes.WaterOf(c, shut, p) != SeaLanes.WaterOf(c, shut, exclave)).OrderBy(p => p).FirstOrDefault();
+        Check(south > 0, "a Russian Black Sea or Azov harbour province exists on this map");
+        Check(SeaLanes.HarbourBasin(map, south) == SeaLanes.HarbourBasin(map, exclave),
+            "the Black Sea and the Baltic are one basin - which is all the old passage asked");
+        Check(LongRangeMovement.CourseOf(c, south, exclave, shut) is null && LongRangeMovement.CourseOf(c, south, exclave, 0) is not null,
+            "no course runs through a shut strait; with it open there is one");
+        var f = Put(c, rus, "artillery_brigade", south);
+        var plan = LongRangeMovement.PreviewRelocate(c, rus.Id, new[] { f.Id }, exclave).Single();
+        if (plan.Accepted)
+        {
+            var at = south; var sailsFromBlackSea = false;
+            for (var i = 0; i < plan.Route.Count; i++)
+            {
+                if (plan.Modes[i] == (int)SupportMoveMode.Sea)
+                {
+                    sailsFromBlackSea |= SeaLanes.WaterOf(c, shut, at) == SeaLanes.WaterOf(c, shut, south);
+                    var leg = LongRangeMovement.CourseOf(c, at, plan.Route[i], shut);
+                    Check(leg is not null && leg.Points.All(p => Distance(p, (41.1f, 29.0f)) > 120f),
+                        "the passage it takes has a course, and the course keeps clear of the Bosporus");
+                }
+                at = plan.Route[i];
+            }
+            Check(!sailsFromBlackSea, "it does not put to sea on the Black Sea: the way out of it is shut");
+            Check(plan.Days > 12, $"and the journey is a journey: {plan.Days} days, not the eight of a straight line");
+        }
+        else Check(plan.Refusal is LongRangeMovement.RefuseStrait or LongRangeMovement.RefuseNoRoute, "or it is refused: " + plan.RefusalText);
+
+        // Ordered at peace, the strait shut before it sails: it does not sail through it.
+        var p2 = World(map);
+        var rus2 = p2.NationByTag("RUS"); var ukr2 = p2.NationByTag("UKR");
+        foreach (var w in p2.Wars) w.Ended = true;
+        p2.SupportFormations.Clear();
+        var g = Put(p2, rus2, "artillery_brigade", south);
+        var peaceful = LongRangeMovement.PreviewRelocate(p2, rus2.Id, new[] { g.Id }, exclave).Single();
+        if (SeaLanes.ShutMask(p2, rus2.Id) == 0 && peaceful.Accepted && peaceful.Modes.Count > 0 && peaceful.Modes[0] == (int)SupportMoveMode.Sea)
+        {
+            Order(p2, rus2, exclave, false, g);
+            EnsureWar(p2, rus2, ukr2);
+            var nowShut = SeaLanes.ShutMask(p2, rus2.Id);
+            Check(nowShut != 0, "war shuts the strait before the ship sails");
+            Day(p2);
+            var atSea = g.Route.Count > 0 && g.MoveProgress > 0f && g.RouteModes[0] == (int)SupportMoveMode.Sea;
+            Check(!atSea || g.SeaCourseMask == nowShut && LongRangeMovement.CourseOf(p2, LongRangeMovement.At(g), g.Route[0], nowShut) is not null,
+                "a passage not yet begun when the strait shut is not sailed through it: the way is looked for again");
+        }
+        else Console.WriteLine("NOTE long-range movement: at peace this map's southern port does not ship straight to Kaliningrad; the order above covers the shut strait");
+    }
+
+    // ------------------------------------------------------------------ 16. only the goal fell
+
+    /// <summary>
+    /// A wing on the first of several hops, a ship at sea toward an inland province: when only
+    /// the final destination falls, the airfield or the harbour ahead is still ours, and the
+    /// formation lands there and deploys - it does not fly or sail all the way back.
+    /// </summary>
+    static void StopAhead(ProvinceTopology map)
+    {
+        var c = World(map);
+        var rus = c.NationByTag("RUS");
+        c.SupportFormations.Clear();
+        var controls = Controls(c);
+        var capital = rus.CapitalProvinceId > 0 ? rus.CapitalProvinceId : CapitalCore.SupplyOriginProvinceId(c, rus);
+        var ours = Ours(c, rus).ToList();
+        var stranger = c.Nations.First(n => n.MapIndex > 0 && n.Id != rus.Id && !MilitaryAccess.CanEnter(c, rus.Id, (ushort)n.MapIndex) &&
+                                            !MilitaryAccess.Hostile(c, rus.Id, n.Id));
+        var wing = Put(c, rus, "fighter_wing", capital);
+        var ferry = LongRangeMovement.FerryKm(c, SupportTypeCatalog.Get(wing.TypeId));
+        var first = ours.Where(p => SupportCore.DistanceKm(c, capital, p) is > 1540f and < 1640f).Min();
+        var last = ours.Where(p => SupportCore.DistanceKm(c, first, p) is > 600f && SupportCore.DistanceKm(c, first, p) < MathF.Min(1400f, ferry) &&
+                                   SupportCore.DistanceKm(c, capital, p) > SupportCore.DistanceKm(c, capital, first) + 300f)
+            .OrderBy(p => p).FirstOrDefault();
+        Check(last > 0, "a second hop exists beyond the first");
+        Order(c, rus, first, false, wing);
+        Order(c, rus, last, true, wing);
+        Day(c);
+        Check(LongRangeMovement.OverWater(wing) && wing.Route.Count == 2 && wing.ProvinceId == capital, "the wing is on its first hop");
+        var held = controls[last];
+        c.SetProvinceController(last, (ushort)stranger.MapIndex);
+        try
+        {
+            Day(c);
+            Check(!wing.Route.Contains(capital) &&
+                  (wing.ProvinceId == first && wing.Route.Count == 0 || wing.ProvinceId == capital && wing.Route.SequenceEqual(new[] { first })),
+                "the last airfield fell: the wing flies on to the first, it does not turn for home");
+            for (var day = 0; day < 6 && SupportCore.Displaced(c, wing); day++) Day(c);
+            Check(wing.ProvinceId == first && wing.BaseProvinceId == first, "and deploys at the airfield ahead");
+        }
+        finally { c.SetProvinceController(last, held); }
+
+        // At sea toward a province inland of the harbour.
+        var ship = Put(c, rus, "artillery_brigade", capital);
+        var inland = -1;
+        foreach (var candidate in ours.Where(p => map.CenterOf(p).Longitude < 23f && map.CenterOf(p).Latitude is > 54f and < 56f).OrderBy(p => p))
+        {
+            var plan = LongRangeMovement.PreviewRelocate(c, rus.Id, new[] { ship.Id }, candidate).Single();
+            var sea = plan.Modes.IndexOf((int)SupportMoveMode.Sea);
+            if (plan.Accepted && sea >= 0 && sea < plan.Route.Count - 1) { inland = candidate; break; }
+        }
+        if (inland < 0)
+        {
+            Console.WriteLine("NOTE long-range movement: no Kaliningrad province lies inland of its arrival harbour on this map; the sea case rests on the wing's");
+            return;
+        }
+        Order(c, rus, inland, false, ship);
+        for (var day = 0; day < 80 && !(LongRangeMovement.OverWater(ship) && ship.MoveProgress > .3f); day++) Day(c);
+        Check(LongRangeMovement.OverWater(ship) && ship.Route.Count > 1, "a brigade is at sea toward an inland province");
+        var harbour = ship.Route[0]; var leftFrom = ship.ProvinceId;
+        var heldInland = controls[inland];
+        c.SetProvinceController(inland, (ushort)stranger.MapIndex);
+        try
+        {
+            Day(c);
+            Check(!ship.Route.Contains(leftFrom) &&
+                  (ship.ProvinceId == harbour && ship.Route.Count == 0 || ship.ProvinceId == leftFrom && ship.Route.SequenceEqual(new[] { harbour })),
+                "the destination inland fell: the ship sails on to the harbour ahead, it does not sail home");
+            for (var day = 0; day < 40 && SupportCore.Displaced(c, ship); day++) Day(c);
+            Check(ship.ProvinceId == harbour && ship.BaseProvinceId == harbour, "and lands and deploys there");
+        }
+        finally { c.SetProvinceController(inland, heldInland); }
+    }
+
+    // ------------------------------------------------------------------ 17. a stale selection
+
+    /// <summary>
+    /// The seat changed in a hot-seat game with formations selected: the next player's
+    /// right-click must not be swallowed by "Not our formation", nor move anything not theirs.
+    /// </summary>
+    static void StaleSelection(ProvinceTopology map)
+    {
+        var c = World(map);
+        var rus = c.NationByTag("RUS"); var ukr = c.NationByTag("UKR");
+        c.SupportFormations.Clear();
+        var a = Put(c, rus, "artillery_brigade", CapitalCore.SupplyOriginProvinceId(c, rus));
+        var b = Put(c, rus, "mlrs_battalion", CapitalCore.SupplyOriginProvinceId(c, rus));
+        var mine = Put(c, ukr, "artillery_brigade", CapitalCore.SupplyOriginProvinceId(c, ukr));
+        var selection = new HashSet<int> { a.Id, b.Id };
+        LongRangeMovement.KeepCommandable(c, ukr.Id, selection);
+        Check(selection.Count == 0, "the last seat's formations are not the next seat's selection");
+        selection = new HashSet<int> { a.Id, mine.Id, 999999 };
+        LongRangeMovement.KeepCommandable(c, ukr.Id, selection);
+        Check(selection.SetEquals(new[] { mine.Id }), "a mixed or stale selection keeps only what this player may command");
+        selection = new HashSet<int> { a.Id, b.Id };
+        LongRangeMovement.KeepCommandable(c, rus.Id, selection);
+        Check(selection.Count == 2, "and its own selection is left alone");
+    }
+
+    // ------------------------------------------------------------------ 18. the interface's wiring
+
+    static string Source(string relative)
+    {
+        DirectoryInfo Find(string start)
+        {
+            var directory = new DirectoryInfo(start);
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Scripts/MainMenuScene.cs"))) directory = directory.Parent;
+            return directory;
+        }
+        var root = Find(AppContext.BaseDirectory) ?? Find(Directory.GetCurrentDirectory()) ??
+                   throw new Exception("FAIL long-range movement: game sources not found above the test output");
+        return File.ReadAllText(Path.Combine(root.FullName, relative));
+    }
+
+    /// <summary>The text of one method: from its signature to the next member at the same indentation.</summary>
+    static string Body(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        if (start < 0) throw new Exception("FAIL long-range movement: not found: " + signature);
+        var end = source.Length;
+        foreach (var marker in new[] { "\n    private ", "\n    public ", "\n    internal ", "\n    /// <summary>", "\n    /// <param" })
+        {
+            var next = source.IndexOf(marker, start + signature.Length, StringComparison.Ordinal);
+            if (next > 0 && next < end) end = next;
+        }
+        return source[start..end];
+    }
+
+    /// <summary>
+    /// The selection rules live in the interface, which the tests cannot click; what they can
+    /// read is that every way to pick divisions, every way the world or the seat changes, the
+    /// right button and HALT go through the rules the simulation tests above pin.
+    /// </summary>
+    static void SelectionWiring()
+    {
+        var operations = Source("Scripts/ui/ArmyOperationsUI.cs");
+        var support = Source("Scripts/ui/SupportScreenUI.cs");
+        Check(Body(operations, "private void OnArmiesBoxPicked(").Contains("PickArmies(armies, formationsTaken: false)"),
+            "a click on a stack, the army bar and select-all pick divisions without formations");
+        var pick = Body(operations, "private void PickArmies(");
+        Check(pick.Contains("if (!formationsTaken)") && pick.Contains("ClearSupportMapSelection()"),
+            "and a plain pick of divisions lets the selected formations go, as a single click does");
+        Check(Body(support, "private void OnSelectionBoxPicked(").Contains("PickArmies(divisions, formationsTaken: true)"),
+            "a drawn box, which took its formations itself, does not let them go again");
+        var command = Body(operations, "private void OnProvinceCommanded(");
+        Check(command.Contains("KeepCommandable") && command.IndexOf("KeepCommandable", StringComparison.Ordinal) <
+                  command.IndexOf("RelocateSupportSelection", StringComparison.Ordinal),
+            "the right button drops formations that are not this player's before it acts on the selection");
+        Check(Body(Source("Scripts/ui/LocalMultiplayerUI.cs"), "private void PassHotseat(").Contains("ClearSupportMapSelection()"),
+            "passing the device lets the formation selection go");
+        Check(Body(Source("Scripts/ui/SaveLoadUI.cs"), "Task RestoreCampaignFromSlot(").Contains("ClearSupportMapSelection()"),
+            "loading a save lets the formation selection go");
+        Check(Body(Source("Scripts/ui/NetworkMultiplayerUI.cs"), "private void AdoptNetworkCampaign(").Contains("ClearSupportMapSelection()"),
+            "adopting the host's world lets the formation selection go");
+        var halt = Body(support, "private void HaltSupportSelection(");
+        Check(halt.Contains("Halt = true") && !halt.Contains("ProvinceId = LongRangeMovement.At("),
+            "HALT sends the halt order, not an order back to the province last reached");
     }
 }

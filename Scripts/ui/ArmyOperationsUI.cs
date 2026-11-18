@@ -84,7 +84,17 @@ public partial class DealOrForceGame
               "Ctrl+G guard an area · Ctrl+F plan cohesion."));
     }
 
-    private void OnArmiesBoxPicked(IReadOnlyList<Army> armies)
+    /// <summary>
+    /// Several divisions picked at once without a box: a click on a stack of two or more, an
+    /// army in the army bar, select-all. A plain pick of these replaces the whole selection as a
+    /// single click does, formations included - left selected and out of sight behind the
+    /// divisions' panel, they were what the next right-click sent first.
+    /// </summary>
+    private void OnArmiesBoxPicked(IReadOnlyList<Army> armies) => PickArmies(armies, formationsTaken: false);
+
+    /// <param name="formationsTaken">The box drawn on the map has already applied the rule to the
+    /// formations in it (OnSelectionBoxPicked); every other way here picked divisions only.</param>
+    private void PickArmies(IReadOnlyList<Army> armies, bool formationsTaken)
     {
         if (!_hudLayer.Visible) return;
         var playerArmies = armies.Where(army => ArmyInteraction.CanSelect(_campaign, army)).Distinct().ToArray();
@@ -96,7 +106,13 @@ public partial class DealOrForceGame
         if (_supportLayer is { Visible: true }) CloseSupportScreen();
 
         // A box does the same three things a click does: replace, add, or take away. The
-        // formations in the same box were taken by OnSelectionBoxPicked before this.
+        // formations in the same box were taken by OnSelectionBoxPicked before this; a pick of
+        // divisions alone picks no formation, and by the same rule a plain one lets them go.
+        if (!formationsTaken)
+        {
+            if (!AddingToSelection && !RemovingFromSelection) ClearSupportMapSelection();
+            else RefreshFormationBar();
+        }
         MapSelection.Apply(_selectedArmies, playerArmies, AddingToSelection, RemovingFromSelection);
         if (_selectedArmies.Count == 0)
         {
@@ -326,7 +342,15 @@ public partial class DealOrForceGame
         if (!_hudLayer.Visible) return;
 
         // Selected long-range formations take the right button first - to any province, by their
-        // own way there - and divisions selected beside them take the same order after.
+        // own way there - and divisions selected beside them take the same order after. Only the
+        // ones still this player's: a selection left by the seat before in a hot-seat game, or
+        // by a formation since lost, would otherwise swallow the click with "Not our formation".
+        if (_supportSelected.Count > 0 && _campaign?.Player is { } commander)
+        {
+            var before = _supportSelected.Count;
+            LongRangeMovement.KeepCommandable(_campaign, commander.Id, _supportSelected);
+            if (_supportSelected.Count != before) { _globe.SelectSupportFormations(_supportSelected); RefreshFormationBar(); }
+        }
         if (_supportSelected.Count > 0 && pick.ProvinceId > 0)
         {
             RelocateSupportSelection(pick.ProvinceId, Input.IsKeyPressed(Key.Shift));

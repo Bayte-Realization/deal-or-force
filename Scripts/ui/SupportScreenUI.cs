@@ -913,7 +913,7 @@ public partial class DealOrForceGame
         var adding = AddingToSelection;
         MapSelection.Apply(_supportSelected, own, adding, removing);
         _globe.SelectSupportFormations(_supportSelected);
-        if (divisions.Count > 0) OnArmiesBoxPicked(divisions);
+        if (divisions.Count > 0) PickArmies(divisions, formationsTaken: true);
         else if (!adding && !removing) DropArmySelection();
         SupportSelectionChanged();
     }
@@ -1068,6 +1068,7 @@ public partial class DealOrForceGame
     {
         var player = _campaign?.Player;
         if (player is null || province <= 0) return;
+        LongRangeMovement.KeepCommandable(_campaign, player.Id, _supportSelected);
         var ids = _supportSelected.OrderBy(id => id).ToArray();
         if (ids.Length == 0) return;
         // The same answer the command will get, read first for the words: the command's own refusal
@@ -1106,18 +1107,25 @@ public partial class DealOrForceGame
         if (_formationBarFeedback is not null) _formationBarFeedback.Text = text;
     }
 
-    /// <summary>Stop where they are: an order to the province each stands in.</summary>
+    /// <summary>
+    /// Stop where they are: one halt order for the selection. A column part-way along a step
+    /// finishes it and deploys at its end - the simulation works that out when the order lands
+    /// (LongRangeMovement.PreviewHalt). Sending each to the province it last reached, as this
+    /// once did, turned a ship six days out round at the far port and sailed it home.
+    /// </summary>
     private void HaltSupportSelection()
     {
         var player = _campaign?.Player;
         if (player is null) return;
+        LongRangeMovement.KeepCommandable(_campaign, player.Id, _supportSelected);
+        var ids = _supportSelected.OrderBy(id => id).ToArray();
         var halted = 0;
-        foreach (var formation in _campaign.SupportFormations.Where(f => f.NationId == player.Id && _supportSelected.Contains(f.Id)).ToList())
+        if (ids.Length > 0)
         {
-            var command = new RelocateSupportCommand { IssuerId = player.Id, FormationIds = new[] { formation.Id }, ProvinceId = LongRangeMovement.At(formation) };
+            var command = new RelocateSupportCommand { IssuerId = player.Id, FormationIds = ids, Halt = true };
             _campaign.Commands.Enqueue(command);
             _campaign.Commands.ApplyAll(_campaign);
-            halted += command.Moved;
+            halted = command.Moved;
         }
         var text = Loc.Format("{0} formation(s) halted.", halted);
         if (_supportFeedback is not null) _supportFeedback.Text = text;

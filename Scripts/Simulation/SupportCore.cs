@@ -77,6 +77,13 @@ public sealed class SupportFormation
     public List<int> RouteModes = new();
     /// <summary>0 to 1: how far along the first step of the route the formation has come.</summary>
     public float MoveProgress;
+    /// <summary>
+    /// The straits that were shut to its country when it put to sea on the passage it is making
+    /// (SeaLanes.ShutMask), so the course it sails stays the course it set out on whatever
+    /// opens or shuts behind it. 0 when it is not at sea - and in a save written before ships
+    /// followed the water, which then sails the open course between the same two harbours.
+    /// </summary>
+    public long SeaCourseMask;
     /// <summary>Days still to go before an arrived formation works: dug in, radars up, links made.</summary>
     public int DeployDaysLeft;
     /// <summary>Standing on ground it may not stand on with no way out: visible, doing nothing, looking daily.</summary>

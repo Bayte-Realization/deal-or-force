@@ -406,8 +406,82 @@ public static class SeaLanes
         lock (Gate)
         {
             Prepare(map, campaign);
-            var closed = ClosedPassages(campaign, nationId);
+            return PlanLocked(ClosedPassages(campaign, nationId), fromLatitude, fromLongitude, toLatitude, toLongitude,
+                waypoints, out length);
+        }
+    }
 
+    /// <summary>
+    /// The passages shut to a country today, one bit each in catalogue order. A long-range
+    /// formation keeps the set it sailed under (SupportFormation.SeaCourseMask): a strait that
+    /// shuts or opens while the ship is out does not move a ship already at sea onto another
+    /// course, and the same set gives every peer the same course.
+    /// </summary>
+    public static long ShutMask(Campaign campaign, int nationId)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null) return 0;
+        lock (Gate)
+        {
+            Prepare(map, campaign);
+            var closed = ClosedPassages(campaign, nationId);
+            long mask = 0;
+            if (closed is not null)
+                for (var index = 0; index < closed.Length && index < 62; index++)
+                    if (closed[index]) mask |= 1L << index;
+            return mask;
+        }
+    }
+
+    private static bool[] ClosedOf(long mask)
+    {
+        if (mask == 0) return null;
+        var closed = new bool[Math.Min(62, SeaPassageCatalog.All.Count)];
+        for (var index = 0; index < closed.Length; index++) closed[index] = (mask & (1L << index)) != 0;
+        return closed;
+    }
+
+    /// <summary><see cref="Plan"/> with the shut passages given rather than asked of the diplomacy.</summary>
+    public static bool PlanUnder(Campaign campaign, long shutMask, float fromLatitude, float fromLongitude,
+        float toLatitude, float toLongitude, List<float> waypoints, out float length)
+    {
+        waypoints.Clear();
+        length = 0f;
+        var map = campaign?.ProvinceMap;
+        if (map is null) return false;
+        lock (Gate)
+        {
+            Prepare(map, campaign);
+            return PlanLocked(ClosedOf(shutMask), fromLatitude, fromLongitude, toLatitude, toLongitude, waypoints, out length);
+        }
+    }
+
+    /// <summary>
+    /// The body of water a province's harbour opens on with these passages shut: two harbours
+    /// with the same answer have a course between them, two with different answers have none.
+    /// Behind a shut Bosporus the Black Sea is its own water, though it is the ocean's basin.
+    /// -1 for a province with no harbour.
+    /// </summary>
+    public static int WaterOf(Campaign campaign, long shutMask, int province)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null) return -1;
+        lock (Gate)
+        {
+            Prepare(map, campaign);
+            if (province <= 0 || province >= _harbourPixel.Length || _harbourPixel[province] < 0) return -1;
+            var closed = ClosedOf(shutMask);
+            var node = NodeNear(_harbourPixel[province], closed, out _);
+            if (node < 0) return -1;
+            return closed is null ? _nodeBasin[node] : Components(closed)[node];
+        }
+    }
+
+    private static bool PlanLocked(bool[] closed, float fromLatitude, float fromLongitude,
+        float toLatitude, float toLongitude, List<float> waypoints, out float length)
+    {
+        length = 0f;
+        {
             var start = NodeNear(PixelAt(fromLatitude, fromLongitude), closed, out _);
             var goalPixel = PixelAt(toLatitude, toLongitude);
             var goal = NodeNear(goalPixel, closed, out var landing);

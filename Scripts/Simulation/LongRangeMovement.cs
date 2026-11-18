@@ -131,6 +131,10 @@ public static class LongRangeMovement
 
         /// <summary>The next step of a route this formation may take: its side's ground, or, withdrawing, any ground but the enemy's.</summary>
         public bool Passing(SupportFormation f, int province) => Enterable(province) || f.Overrun && Crossable(province);
+
+        private long? _shut;
+        /// <summary>The straits shut to this country today (SeaLanes.ShutMask), asked once per pass.</summary>
+        public long Shut => _shut ??= SeaLanes.ShutMask(Campaign, Nation.Id);
     }
 
     internal static Ground GroundOf(Campaign c, int nationId, Dictionary<int, Ground> cache = null, HashSet<int> battles = null)
@@ -242,7 +246,8 @@ public static class LongRangeMovement
 
     /// <summary>
     /// Where the card is drawn: between the province it left and the next one by the share of
-    /// the step made, along the straight line for a sea passage or a flight. Read-only.
+    /// the step made - along the water the ship sails for a sea passage, along the great circle
+    /// for a flight or a road step. Read-only.
     /// </summary>
     public static (float Latitude, float Longitude) Position(Campaign c, SupportFormation f)
     {
@@ -253,8 +258,194 @@ public static class LongRangeMovement
         if (f.Route.Count == 0 || f.MoveProgress <= 0f) return from;
         var next = f.Route[0];
         if (next <= 0 || next > map.ProvinceCount) return from;
-        var to = map.CenterOf(next);
-        return Between(from, to, Math.Clamp(f.MoveProgress, 0f, 1f));
+        var share = Math.Clamp(f.MoveProgress, 0f, 1f);
+        if (f.RouteModes.Count > 0 && (SupportMoveMode)f.RouteModes[0] == SupportMoveMode.Sea &&
+            CourseOf(c, at, next, f.SeaCourseMask) is { } course)
+            return course.At(share);
+        return Between(from, map.CenterOf(next), share);
+    }
+
+    /// <summary>
+    /// The way still ahead as points on the map, from where the card is now: a province centre
+    /// for each road step and flight (joined along the great circle), and every bend of the water
+    /// for a sea passage. The map draws the route through these, so the line it shows is the way
+    /// the formation will really go. Read-only.
+    /// </summary>
+    public static void Trail(Campaign c, SupportFormation f, List<(float Latitude, float Longitude)> into)
+    {
+        into.Clear();
+        var map = c?.ProvinceMap;
+        var at = At(f);
+        if (map is null || at <= 0 || at > map.ProvinceCount) return;
+        into.Add(Position(c, f));
+        long? shut = null;
+        var from = at;
+        for (var step = 0; step < f.Route.Count; step++)
+        {
+            var next = f.Route[step];
+            if (next <= 0 || next > map.ProvinceCount) break;
+            var sea = step < f.RouteModes.Count && (SupportMoveMode)f.RouteModes[step] == SupportMoveMode.Sea;
+            // The passage under way keeps the straits it sailed under; one still to come is drawn
+            // the way it would be sailed today.
+            var mask = step == 0 && f.MoveProgress > 0f ? f.SeaCourseMask : shut ??= SeaLanes.ShutMask(c, f.NationId);
+            if (sea && CourseOf(c, from, next, mask) is { } course)
+            {
+                var made = step == 0 ? Math.Clamp(f.MoveProgress, 0f, 1f) * course.Total : 0f;
+                for (var point = 1; point < course.Points.Count; point++)
+                    if (course.Km[point] > made) into.Add(course.Points[point]);
+            }
+            else into.Add(map.CenterOf(next));
+            from = next;
+        }
+    }
+
+    // ------------------------------------------------------------------ the water a ship sails
+
+    /// <summary>
+    /// One sea passage as it is sailed: from the centre of the province left, to its harbour,
+    /// along the water the navy's own charts give (SeaLanes) - round the coasts, through the
+    /// straits that are open - to the far harbour and the centre of the province reached; and
+    /// the kilometres to each point. The owner, 17 November: "through the air". A port-to-port
+    /// passage drawn and paced on the great circle crossed Ukraine and Poland on its way from
+    /// Crimea to Kaliningrad, through a Bosporus shut to belligerents, in a fifth of the
+    /// voyage's real distance.
+    /// </summary>
+    public sealed class SeaCourse
+    {
+        internal readonly List<(float Latitude, float Longitude)> PointList = new();
+        internal readonly List<float> KmList = new();
+        public IReadOnlyList<(float Latitude, float Longitude)> Points => PointList;
+        /// <summary>Kilometres from the start to each point; the first is 0.</summary>
+        public IReadOnlyList<float> Km => KmList;
+        public float Total => KmList.Count == 0 ? 0f : KmList[^1];
+
+        /// <summary>The point a share of the way along, by kilometres sailed.</summary>
+        public (float Latitude, float Longitude) At(float share)
+        {
+            if (PointList.Count == 0) return (0f, 0f);
+            var target = Math.Clamp(share, 0f, 1f) * Total;
+            for (var index = 1; index < PointList.Count; index++)
+            {
+                if (KmList[index] < target) continue;
+                var leg = KmList[index] - KmList[index - 1];
+                if (leg <= 0f) return PointList[index];
+                // Straight in latitude and longitude between two bends, which is the line the
+                // sea lanes checked for land (SeaLanes.Clear) - a great circle between the same
+                // two points can cut the corner of a cape the course was plotted round.
+                var t = (target - KmList[index - 1]) / leg;
+                var (fromLatitude, fromLongitude) = PointList[index - 1];
+                var (toLatitude, toLongitude) = PointList[index];
+                var deltaLongitude = toLongitude - fromLongitude;
+                if (deltaLongitude > 180f) deltaLongitude -= 360f;
+                else if (deltaLongitude < -180f) deltaLongitude += 360f;
+                var longitude = fromLongitude + deltaLongitude * t;
+                if (longitude > 180f) longitude -= 360f;
+                else if (longitude < -180f) longitude += 360f;
+                return (fromLatitude + (toLatitude - fromLatitude) * t, longitude);
+            }
+            return PointList[^1];
+        }
+
+        /// <summary>
+        /// The next bend, with the straight run to it cut every hundred kilometres or so. A run
+        /// straight in latitude and longitude is longer than the great circle between its ends,
+        /// by a tenth on a long northern leg; measured in short pieces the kilometres are the
+        /// kilometres the card covers, and a day's share of the voyage is a day's sailing.
+        /// </summary>
+        internal void AddAlong((float Latitude, float Longitude) point)
+        {
+            if (PointList.Count > 0)
+            {
+                var (fromLatitude, fromLongitude) = PointList[^1];
+                var deltaLongitude = point.Longitude - fromLongitude;
+                if (deltaLongitude > 180f) deltaLongitude -= 360f;
+                else if (deltaLongitude < -180f) deltaLongitude += 360f;
+                var pieces = Math.Clamp((int)MathF.Ceiling(KmBetween(PointList[^1], point) / 100f), 1, 200);
+                for (var piece = 1; piece < pieces; piece++)
+                {
+                    var t = piece / (float)pieces;
+                    var longitude = fromLongitude + deltaLongitude * t;
+                    if (longitude > 180f) longitude -= 360f;
+                    else if (longitude < -180f) longitude += 360f;
+                    Add((fromLatitude + (point.Latitude - fromLatitude) * t, longitude));
+                }
+            }
+            Add(point);
+        }
+
+        internal void Add((float Latitude, float Longitude) point)
+        {
+            KmList.Add(PointList.Count == 0 ? 0f : KmList[^1] + KmBetween(PointList[^1], point));
+            PointList.Add(point);
+        }
+    }
+
+    private static readonly SeaCourse NoCourse = new();
+    private static readonly object CourseGate = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ProvinceTopology, Dictionary<(int, int, long), SeaCourse>> Courses = new();
+    private static int _courseRevision = int.MinValue;
+    private static readonly List<float> CourseWaypoints = new();
+
+    /// <summary>
+    /// The course between two provinces' harbours with these straits shut, or null when the water
+    /// does not join them. Always plotted from the lower province id to the higher and read
+    /// backwards the other way, so a ship turned about at sea sails home exactly the way it
+    /// came - a share of the way out is the same point as one minus that share of the way back.
+    /// A pure function of the map, the two provinces and the straits, kept once worked out: the
+    /// map draws it every frame and the daily pass paces by it.
+    /// </summary>
+    public static SeaCourse CourseOf(Campaign c, int from, int to, long shut)
+    {
+        var map = c?.ProvinceMap;
+        if (map is null || from == to || from <= 0 || to <= 0 || from > map.ProvinceCount || to > map.ProvinceCount) return null;
+        lock (CourseGate)
+        {
+            if (_courseRevision != SeaPassageCatalog.Revision)
+            {
+                // A mod that moves a strait moves every course through it.
+                Courses.Clear();
+                _courseRevision = SeaPassageCatalog.Revision;
+            }
+            var known = Courses.GetOrCreateValue(map);
+            if (known.TryGetValue((from, to, shut), out var kept)) return ReferenceEquals(kept, NoCourse) ? null : kept;
+            if (known.Count > 8192) known.Clear();
+            var low = Math.Min(from, to); var high = Math.Max(from, to);
+            var forward = NoCourse;
+            if (SeaLanes.TryHarbourPoint(map, low, out var quayLatitude, out var quayLongitude) &&
+                SeaLanes.TryHarbourPoint(map, high, out var landingLatitude, out var landingLongitude) &&
+                SeaLanes.PlanUnder(c, shut, quayLatitude, quayLongitude, landingLatitude, landingLongitude, CourseWaypoints, out _))
+            {
+                forward = new SeaCourse();
+                forward.Add(map.CenterOf(low));
+                forward.Add((quayLatitude, quayLongitude));
+                for (var i = 0; i + 1 < CourseWaypoints.Count; i += 2) forward.AddAlong((CourseWaypoints[i], CourseWaypoints[i + 1]));
+                forward.Add(map.CenterOf(high));
+            }
+            var backward = NoCourse;
+            if (!ReferenceEquals(forward, NoCourse))
+            {
+                backward = new SeaCourse();
+                for (var i = forward.PointList.Count - 1; i >= 0; i--) backward.Add(forward.PointList[i]);
+            }
+            known[(low, high, shut)] = forward;
+            known[(high, low, shut)] = backward;
+            var result = from == low ? forward : backward;
+            return ReferenceEquals(result, NoCourse) ? null : result;
+        }
+    }
+
+    /// <summary>Kilometres of a sea passage: the course sailed, or, with no course, the straight line.</summary>
+    internal static float SeaKm(Campaign c, int from, int to, long shut) =>
+        CourseOf(c, from, to, shut)?.Total ?? SupportCore.DistanceKm(c, from, to);
+
+    private static float KmBetween((float Latitude, float Longitude) from, (float Latitude, float Longitude) to)
+    {
+        // SupportCore.DistanceKm's haversine, on two points rather than two province centres.
+        var radians = MathF.PI / 180f;
+        var sinLat = MathF.Sin((to.Latitude - from.Latitude) * radians * 0.5f);
+        var sinLon = MathF.Sin((to.Longitude - from.Longitude) * radians * 0.5f);
+        var haversine = sinLat * sinLat + MathF.Cos(from.Latitude * radians) * MathF.Cos(to.Latitude * radians) * sinLon * sinLon;
+        return 6371f * 2f * MathF.Asin(MathF.Min(1f, MathF.Sqrt(haversine)));
     }
 
     /// <summary>
@@ -298,7 +489,8 @@ public static class LongRangeMovement
     /// distance at the transports' pace plus the days in port at both ends; a flight its distance
     /// at the relocation pace.
     /// </summary>
-    internal static float PaceOf(Ground g, SupportTypeDefinition type, int from, int to, SupportMoveMode planned, out SupportMoveMode mode)
+    internal static float PaceOf(Ground g, SupportTypeDefinition type, int from, int to, SupportMoveMode planned, out SupportMoveMode mode,
+        long? sailing = null)
     {
         var c = g.Campaign;
         var d = c.Defines;
@@ -307,7 +499,9 @@ public static class LongRangeMovement
         {
             case SupportMoveMode.Sea:
             {
-                var km = SupportCore.DistanceKm(c, from, to);
+                // The kilometres of the water sailed, not of the line between the two ports: round
+                // Europe from the Black Sea to the Baltic is seven thousand, not sixteen hundred.
+                var km = SeaKm(c, from, to, sailing ?? g.Shut);
                 var days = km / MathF.Max(1f, d.LongRangeSeaKmPerDay) + 2f * Math.Max(0, d.LongRangePortDays);
                 return 1f / MathF.Max(1f, days);
             }
@@ -332,7 +526,8 @@ public static class LongRangeMovement
     /// them - the same pace, the same one step a day, the same carry - so the figure on the
     /// tooltip is the day the card arrives if the front holds still. Arrival plus deployment.
     /// </summary>
-    internal static int DaysFor(Ground g, SupportTypeDefinition type, int from, float progress, IReadOnlyList<int> route, IReadOnlyList<int> modes)
+    internal static int DaysFor(Ground g, SupportTypeDefinition type, int from, float progress, IReadOnlyList<int> route, IReadOnlyList<int> modes,
+        long? sailing = null)
     {
         var days = 0;
         var at = from;
@@ -340,7 +535,8 @@ public static class LongRangeMovement
         {
             var next = route[step];
             var planned = (SupportMoveMode)modes[step];
-            var pace = PaceOf(g, type, at, next, planned, out _);
+            // A passage already under way is sailed on the course it set out on.
+            var pace = PaceOf(g, type, at, next, planned, out _, step == 0 && progress > 0f ? sailing : null);
             var guard = 0;
             do { progress += pace; days++; } while (progress < Arrived && ++guard < 10000);
             progress = planned is SupportMoveMode.Land or SupportMoveMode.Rail && step + 1 < route.Count &&
@@ -360,7 +556,7 @@ public static class LongRangeMovement
         var g = GroundOf(c, f.NationId);
         if (g is null || !g.Valid(At(f))) return 0;
         if (f.RouteModes.Count != f.Route.Count) return f.Route.Count;
-        return DaysFor(g, type, At(f), f.MoveProgress, f.Route, f.RouteModes);
+        return DaysFor(g, type, At(f), f.MoveProgress, f.Route, f.RouteModes, f.SeaCourseMask);
     }
 
     // ------------------------------------------------------------------ searches
@@ -444,6 +640,11 @@ public static class LongRangeMovement
 
     /// <summary>How many of the nearest ports on each side a sea passage is chosen from.</summary>
     private const int PortsConsidered = 24;
+    /// <summary>And how many more on each other water the road reaches, past those.</summary>
+    private const int PortsPerOtherWater = 6;
+    /// <summary>The most courses one order plots: each is a search over the sea, and the floor
+    /// that orders them is close enough that the best is almost always among the first few.</summary>
+    private const int CoursesPlotted = 12;
 
     /// <summary>
     /// Plan the way from one province to another for this kind of formation. Fills the provinces
@@ -479,31 +680,41 @@ public static class LongRangeMovement
             return "";
         }
 
-        // No road: to a port, over the water, from a port. Only ports in the same sea are joined -
-        // a ship from the Black Sea does not come out in the Caspian.
+        // No road: to a port, over the water, from a port. Only ports on the same water are joined
+        // - a ship from the Black Sea does not come out in the Caspian, and does not come out
+        // in the Mediterranean either while the Bosporus is shut to it.
         var coastal = CoastalOf(g.Map);
         outbound.Run(g, from, corridor: corridor);
         var inbound = _inbound ??= new Search();
         inbound.Run(g, to, corridor: corridor);
-        var departures = Ports(outbound, coastal);
-        var arrivals = Ports(inbound, coastal);
+        var shut = g.Shut;
+        var departures = Ports(c, shut, outbound, coastal);
+        var arrivals = Ports(c, shut, inbound, coastal);
         var d = c.Defines;
-        var best = float.MaxValue;
-        int bestFrom = -1, bestTo = -1;
-        foreach (var departure in departures)
-        {
-            var basin = SeaLanes.HarbourBasin(g.Map, departure);
-            if (basin < 0) continue;
-            foreach (var arrival in arrivals)
+        // Every pair on one water, with the days it would take if the sea were a straight line -
+        // a floor under the real voyage, which is never shorter. The courses are plotted cheapest
+        // floor first, and the search stops when no unplotted pair can beat the best real voyage.
+        var pairs = new List<(float Floor, int From, int To, float Land)>();
+        foreach (var (departure, water) in departures)
+            foreach (var (arrival, arrivalWater) in arrivals)
             {
-                if (arrival == departure || SeaLanes.HarbourBasin(g.Map, arrival) != basin) continue;
-                var days = (outbound.Steps(departure) + inbound.Steps(arrival)) / MathF.Max(0.05f, d.MarchProgressPerDay) +
-                           SupportCore.DistanceKm(c, departure, arrival) / MathF.Max(1f, d.LongRangeSeaKmPerDay);
-                if (days > best || days == best && (departure > bestFrom || departure == bestFrom && arrival >= bestTo)) continue;
-                best = days; bestFrom = departure; bestTo = arrival;
+                if (arrival == departure || arrivalWater != water) continue;
+                var land = (outbound.Steps(departure) + inbound.Steps(arrival)) / MathF.Max(0.05f, d.MarchProgressPerDay);
+                pairs.Add((land + SupportCore.DistanceKm(c, departure, arrival) / MathF.Max(1f, d.LongRangeSeaKmPerDay), departure, arrival, land));
             }
+        pairs.Sort((a, b) => a.Floor != b.Floor ? a.Floor.CompareTo(b.Floor) : a.From != b.From ? a.From.CompareTo(b.From) : a.To.CompareTo(b.To));
+        var best = float.MaxValue;
+        int bestFrom = -1, bestTo = -1, plotted = 0;
+        foreach (var pair in pairs)
+        {
+            if (pair.Floor >= best || plotted >= CoursesPlotted) break;
+            plotted++;
+            if (CourseOf(c, pair.From, pair.To, shut) is not { } course) continue;
+            var days = pair.Land + course.Total / MathF.Max(1f, d.LongRangeSeaKmPerDay);
+            if (days >= best) continue;
+            best = days; bestFrom = pair.From; bestTo = pair.To;
         }
-        if (bestFrom < 0) return RefuseNoRoute;
+        if (bestFrom < 0) return pairs.Count == 0 && shut != 0 && SameSea(g.Map, departures, arrivals) ? RefuseStrait : RefuseNoRoute;
         var first = route.Count;
         outbound.PathTo(bestFrom, route);
         AddLandModes(g, type, from, route, first, modes);
@@ -517,16 +728,42 @@ public static class LongRangeMovement
         return "";
     }
 
-    private static List<int> Ports(Search search, bool[] coastal)
+    /// <summary>
+    /// The harbours a passage may start or end at, nearest by road first, with the water each opens
+    /// on: the nearest <see cref="PortsConsidered"/> of all, and the nearest few on every other water
+    /// the road reaches. Only the nearest two dozen, and a brigade in Crimea with the Bosporus shut
+    /// saw nothing but the Black Sea - its own country's Baltic ports, a long drive away, were
+    /// never asked.
+    /// </summary>
+    private static List<(int Province, int Water)> Ports(Campaign c, long shut, Search search, bool[] coastal)
     {
-        var ports = new List<int>(PortsConsidered);
+        var ports = new List<(int, int)>(PortsConsidered);
+        var perWater = new Dictionary<int, int>();
         foreach (var province in search.Reached)
         {
             if (province >= coastal.Length || !coastal[province]) continue;
-            ports.Add(province);
-            if (ports.Count >= PortsConsidered) break;
+            var water = SeaLanes.WaterOf(c, shut, province);
+            if (water < 0) continue;
+            var onThisWater = perWater.GetValueOrDefault(water);
+            if (ports.Count >= PortsConsidered && onThisWater >= PortsPerOtherWater) continue;
+            perWater[water] = onThisWater + 1;
+            ports.Add((province, water));
         }
         return ports;
+    }
+
+    /// <summary>Whether any departure and arrival share a sea once the straits are open: the refusal then names the strait.</summary>
+    private static bool SameSea(ProvinceTopology map, List<(int Province, int Water)> departures, List<(int Province, int Water)> arrivals)
+    {
+        var basins = new HashSet<int>();
+        foreach (var (province, _) in departures)
+        {
+            var basin = SeaLanes.HarbourBasin(map, province);
+            if (basin >= 0) basins.Add(basin);
+        }
+        foreach (var (province, _) in arrivals)
+            if (basins.Contains(SeaLanes.HarbourBasin(map, province))) return true;
+        return false;
     }
 
     private static void AddLandModes(Ground g, SupportTypeDefinition type, int from, List<int> route, int start, List<int> modes)
@@ -548,6 +785,7 @@ public static class LongRangeMovement
     public const string RefuseAccess = "No military access: that country does not let our troops in.";
     public const string RefuseBattle = "A battle is being fought here.";
     public const string RefuseNoRoute = "No route: neither over our own ground nor through ports.";
+    public const string RefuseStrait = "No route: the only way by sea runs through a strait shut to us.";
     public const string RefuseFerry = "Too far for one ferry flight: {0} km, ferry range {1} km. Shift+right-click adds a waypoint.";
     public const string RefuseForeign = "Not our formation.";
     public const string RefuseDisabled = "This mechanic is disabled in this scenario.";
@@ -645,12 +883,49 @@ public static class LongRangeMovement
         if (planned.Length > 0) { preview.Refusal = planned; preview.RefusalArgs = args; preview.Route.Clear(); preview.Modes.Clear(); return preview; }
 
         preview.Days = preview.Route.Count == 0 ? (formation.DeployDaysLeft > 0 ? formation.DeployDaysLeft : 0)
-            : DaysFor(g, type, At(formation), progress, preview.Route, preview.Modes);
+            : DaysFor(g, type, At(formation), progress, preview.Route, preview.Modes, formation.SeaCourseMask);
         preview.StateMapIndex = c.ProvinceMap.ProvinceToState[province];
         var state = c.StateByMapIndex(preview.StateMapIndex);
         preview.BasingCapacity = SupportCore.CapacityOf(c, state);
         preview.BasingUsed = SupportCore.BasingUsed(c, preview.StateMapIndex, formation.Id) + type.Basing;
         return preview;
+    }
+
+    /// <summary>
+    /// What "stop" means for one formation. Part-way along a step - a road, a passage, a ferry
+    /// leg - it finishes that step and deploys at its end: the province, the harbour or the
+    /// airfield ahead. An order to the province it last reached, which is what the button used
+    /// to send, planned the way back from there, so a ship six days out turned round at the far
+    /// port and sailed ten days home. Only when the province ahead may not be stood in (a battle
+    /// there, the enemy's now) does it go back to the one it left. Not moving, it deploys where
+    /// it stands. Read-only, like every preview.
+    /// </summary>
+    internal static RelocatePreview PreviewHalt(Campaign c, int issuer, int formationId,
+        Dictionary<int, Ground> grounds = null, HashSet<int> battles = null)
+    {
+        var formation = c?.SupportFormations.Find(f => f.Id == formationId && f.NationId == issuer);
+        if (c?.ProvinceMap is null || formation is null) return new RelocatePreview { FormationId = formationId, Refusal = RefuseForeign };
+        if (formation.Route.Count > 0 && formation.MoveProgress > 0f)
+        {
+            var ahead = PreviewOne(c, issuer, formationId, formation.Route[0], false, grounds, battles);
+            if (ahead.Accepted) return ahead;
+        }
+        return PreviewOne(c, issuer, formationId, At(formation), false, grounds, battles);
+    }
+
+    /// <summary>
+    /// Let go of every selected id that is not one of this country's formations any more: one
+    /// disbanded or destroyed, or the selection of the seat before in a hot-seat game. The map
+    /// asks before it acts on a selection, so a stale one neither swallows a right-click nor
+    /// moves somebody else's formations.
+    /// </summary>
+    public static void KeepCommandable(Campaign c, int issuer, ICollection<int> selection)
+    {
+        if (selection is null || selection.Count == 0) return;
+        if (c is null) { selection.Clear(); return; }
+        var own = new HashSet<int>();
+        foreach (var f in c.SupportFormations) if (f.NationId == issuer) own.Add(f.Id);
+        foreach (var id in selection.Where(id => !own.Contains(id)).ToList()) selection.Remove(id);
     }
 
     /// <summary>Put an accepted plan on the formation. True when anything changed.</summary>
@@ -662,14 +937,14 @@ public static class LongRangeMovement
             // Sent where it already stands. Deployed or deploying there: nothing to do. Stopped on
             // the road in that province, or found standing there cut off: it deploys where it is.
             if (formation.Route.Count == 0 && !formation.CutOff) return false;
-            formation.Route.Clear(); formation.RouteModes.Clear(); formation.MoveProgress = 0f;
+            formation.Route.Clear(); formation.RouteModes.Clear(); formation.MoveProgress = 0f; formation.SeaCourseMask = 0;
             formation.CutOff = false;
             formation.BaseProvinceId = -1;
             formation.DeployDaysLeft = Math.Max(0, type.DeployDays);
             if (formation.DeployDaysLeft == 0) formation.BaseProvinceId = At(formation);
             return true;
         }
-        if (!plan.KeepsStep) formation.MoveProgress = 0f;
+        if (!plan.KeepsStep) { formation.MoveProgress = 0f; formation.SeaCourseMask = 0; }
         formation.Route.Clear(); formation.Route.AddRange(plan.Route);
         formation.RouteModes.Clear(); formation.RouteModes.AddRange(plan.Modes);
         // Packing up is the first thing an order does: a battery limbering its guns fires nothing.
@@ -760,6 +1035,7 @@ public static class LongRangeMovement
     {
         f.BaseProvinceId = -1;
         f.MoveProgress = 0f;
+        f.SeaCourseMask = 0;
         f.DeployDaysLeft = Math.Max(0, type.DeployDays);
         if (f.DeployDaysLeft == 0) f.BaseProvinceId = At(f);
     }
@@ -770,16 +1046,37 @@ public static class LongRangeMovement
         var at = At(f);
         var next = f.Route[0];
         var planned = (SupportMoveMode)f.RouteModes[0];
-        // A ship or a ferry flight with no harbour or airfield of its side behind it either goes
-        // on: there is nowhere to turn back to, and it is dealt with where it comes ashore.
-        if ((!g.Passing(f, next) || !g.Enterable(f.Route[^1])) && !(OverWater(f) && !g.Enterable(at)))
+        // A passage not yet begun sails only if the water is still open to it today: a strait
+        // shut since the order was given keeps the ship in port, and the way is looked for again.
+        var sailing = planned == SupportMoveMode.Sea && f.MoveProgress <= 0f;
+        var blocked = !g.Passing(f, next) || !g.Enterable(f.Route[^1]) || sailing && CourseOf(c, at, next, g.Shut) is null;
+        if (blocked)
         {
-            // The road ahead, or the place it was going, has fallen. Find another way to the same
-            // place from here; with none, stop - and deploy here if here is ours to stand on.
-            Replan(c, g, f, type, at);
-            return;
+            if (f.MoveProgress > 0f && g.Passing(f, next) && !g.Enterable(f.Route[^1]))
+            {
+                // Only the place it was going has fallen; the province, the harbour or the
+                // airfield ahead is still its side's. It finishes the step it is on and deploys
+                // there - a wing on the first hop of four does not fly back to where it set out
+                // because the fourth airfield fell, nor a ship five days out sail five days home
+                // past an open port.
+                var mode0 = f.RouteModes[0];
+                f.Route.Clear(); f.RouteModes.Clear();
+                f.Route.Add(next); f.RouteModes.Add(mode0);
+                DiagnosticLogs.Write("orders", $"SUPPORT_STOP_AHEAD formation={f.Id} nation={g.Nation.Tag} at={next}");
+            }
+            // A ship or a ferry flight with no harbour or airfield of its side behind it either goes
+            // on: there is nowhere to turn back to, and it is dealt with where it comes ashore.
+            else if (!(OverWater(f) && !g.Enterable(at)))
+            {
+                // The road ahead has fallen, or the place it was going and it is not yet on its
+                // way. Find another way to the same place from here; with none, stop - and deploy
+                // here if here is ours to stand on.
+                Replan(c, g, f, type, at);
+                return;
+            }
         }
-        var pace = PaceOf(g, type, at, next, planned, out var mode);
+        if (sailing) f.SeaCourseMask = g.Shut;
+        var pace = PaceOf(g, type, at, next, planned, out var mode, f.SeaCourseMask);
         f.RouteModes[0] = (int)mode;
         f.MoveProgress += pace;
         if (f.MoveProgress < Arrived) return;
@@ -787,6 +1084,7 @@ public static class LongRangeMovement
         var carry = land ? Math.Clamp(f.MoveProgress - 1f, 0f, MaxCarry) : 0f;
         f.ProvinceId = next;
         f.StateMapIndex = g.Map.ProvinceToState[next];
+        f.SeaCourseMask = 0;
         f.Route.RemoveAt(0);
         f.RouteModes.RemoveAt(0);
         f.MoveProgress = land && f.Route.Count > 0 && (SupportMoveMode)f.RouteModes[0] is SupportMoveMode.Land or SupportMoveMode.Rail
@@ -826,7 +1124,7 @@ public static class LongRangeMovement
             DiagnosticLogs.Write("orders", $"SUPPORT_TURN_BACK formation={f.Id} nation={g.Nation.Tag} toward={at} goal={goal}");
             return;
         }
-        f.Route.Clear(); f.RouteModes.Clear(); f.MoveProgress = 0f;
+        f.Route.Clear(); f.RouteModes.Clear(); f.MoveProgress = 0f; f.SeaCourseMask = 0;
         if (g.Enterable(goal) && Plan(g, type, at, goal, f.Route, f.RouteModes, out _, corridor: f.Overrun).Length == 0 && f.Route.Count > 0) return;
         f.Route.Clear(); f.RouteModes.Clear();
         if (g.Enterable(at)) StartDeploying(f, type);
@@ -887,7 +1185,7 @@ public static class LongRangeMovement
         f.DeployDaysLeft = 0;
         // A road out that is still open is kept: the column is already on it.
         if (f.Route.Count > 0 && g.Passing(f, f.Route[0]) && g.Enterable(f.Route[^1])) { f.CutOff = false; return; }
-        f.Route.Clear(); f.RouteModes.Clear(); f.MoveProgress = 0f;
+        f.Route.Clear(); f.RouteModes.Clear(); f.MoveProgress = 0f; f.SeaCourseMask = 0;
         var target = SafeProvince(g, f, type, at);
         var away = target > 0 && (type.Movement == SupportMoveMode.Air && SupportCore.DistanceKm(c, at, target) > FerryKm(c, type)
             ? FerryHops(g, type, at, target, f.Route, f.RouteModes)
@@ -1386,6 +1684,7 @@ public static class LongRangeMovement
 /// ship or ferry flight - and works again once it has arrived and deployed. Every formation is
 /// judged alone, so one that cannot go does not hold back the rest; the refusal says which stayed
 /// and why. With <see cref="Append"/> the province is a waypoint after the route already given.
+/// With <see cref="Halt"/> there is no province: each stops where it is (LongRangeMovement.PreviewHalt).
 /// </summary>
 public sealed class RelocateSupportCommand : ICampaignCommand
 {
@@ -1393,6 +1692,12 @@ public sealed class RelocateSupportCommand : ICampaignCommand
     public int[] FormationIds { get; init; } = Array.Empty<int>();
     public int ProvinceId { get; init; }
     public bool Append { get; init; }
+    /// <summary>
+    /// Stop: a formation part-way along a step finishes it and deploys at its end, one standing
+    /// deploys where it stands. Worked out when the order is carried out, not when it was given,
+    /// so an order that reaches the world a tick late halts the column where it then is.
+    /// </summary>
+    public bool Halt { get; init; }
     public string Refusal { get; private set; } = "";
     public int Moved { get; private set; }
     public int Refused { get; private set; }
@@ -1408,7 +1713,9 @@ public sealed class RelocateSupportCommand : ICampaignCommand
         var battles = LongRangeMovement.BattleProvinces(campaign);
         foreach (var id in ids)
         {
-            var plan = LongRangeMovement.PreviewOne(campaign, IssuerId, id, ProvinceId, Append, grounds, battles);
+            var plan = Halt
+                ? LongRangeMovement.PreviewHalt(campaign, IssuerId, id, grounds, battles)
+                : LongRangeMovement.PreviewOne(campaign, IssuerId, id, ProvinceId, Append, grounds, battles);
             var formation = campaign.SupportFormations.Find(f => f.Id == id && f.NationId == IssuerId);
             if (!plan.Accepted || formation is null)
             {

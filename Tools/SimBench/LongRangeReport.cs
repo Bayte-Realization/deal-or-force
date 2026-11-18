@@ -42,6 +42,7 @@ internal static class LongRangeReport
         long transitDays = 0, deployingDays = 0, cutOffDays = 0;
         int landJumps = 0, landSteps = 0;
         float maxLandKm = 0f, maxAirKm = 0f, maxSeaKm = 0f;
+        long seaDays = 0, seaDaysOverLand = 0;
         var position = c.SupportFormations.ToDictionary(f => f.Id, f => (Province: LongRangeMovement.At(f), Point: LongRangeMovement.Position(c, f),
             Mode: f.RouteModes.Count > 0 ? f.RouteModes[0] : -1));
 
@@ -106,6 +107,18 @@ internal static class LongRangeReport
                     }
                     else if (mode == SupportMoveMode.Air) maxAirKm = MathF.Max(maxAirKm, dayKm);
                     else if (mode == SupportMoveMode.Sea) maxSeaKm = MathF.Max(maxSeaKm, dayKm);
+                }
+                // A ship's day at sea drawn over dry land, well away from either port: what a
+                // passage on the straight line between two harbours looked like (Crimea to
+                // Kaliningrad across Ukraine and Poland). The quay legs at each end are on land
+                // and short; past 300 km from both ends a ship on land is a ship in the air.
+                if (f.Route.Count > 0 && f.MoveProgress > 0f && f.RouteModes.Count > 0 &&
+                    (SupportMoveMode)f.RouteModes[0] == SupportMoveMode.Sea && here.Province > 0)
+                {
+                    seaDays++;
+                    var left = map.CenterOf(here.Province); var ahead = map.CenterOf(f.Route[0]);
+                    if (!SeaLanes.IsWaterAt(map, here.Point.Latitude, here.Point.Longitude) &&
+                        Km(left, here.Point) > 300f && Km(ahead, here.Point) > 300f) seaDaysOverLand++;
                 }
                 position[f.Id] = here;
                 if (atWar.Contains(f.NationId))
@@ -192,6 +205,7 @@ internal static class LongRangeReport
             "LONGRANGE_MOVEMENT land_steps={0} land_jumps_beyond_neighbour={1} max_land_day_km={2:0} max_air_day_km={3:0} max_sea_day_km={4:0} " +
             "transit_days={5} deploying_days={6} cut_off_days={7} cut_off_at_end={8}",
             landSteps, landJumps, maxLandKm, maxAirKm, maxSeaKm, transitDays, deployingDays, cutOffDays, c.SupportFormations.Count(f => f.CutOff)));
+        Console.WriteLine($"LONGRANGE_SEA sea_days={seaDays} sea_days_over_land={seaDaysOverLand}");
         foreach (var f in c.SupportFormations.Where(f => f.CutOff).OrderBy(f => f.Id).Take(12))
         {
             var nation = c.NationById(f.NationId);

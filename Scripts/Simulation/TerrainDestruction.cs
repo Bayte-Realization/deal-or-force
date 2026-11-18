@@ -47,7 +47,7 @@ public sealed partial class Campaign
         SupportFormations.RemoveAll(s => s.BaseProvinceId == province || LongRangeMovement.At(s) == province);
         // A column whose road ran through the hole stops where it is; the next day replans it.
         foreach (var formation in SupportFormations)
-            if (formation.Route.Contains(province)) { formation.Route.Clear(); formation.RouteModes.Clear(); formation.MoveProgress = 0f; }
+            if (formation.Route.Contains(province)) { formation.Route.Clear(); formation.RouteModes.Clear(); formation.MoveProgress = 0f; formation.SeaCourseMask = 0; }
         if (remaining == 1) SupportOrders.RemoveAll(o => o.StateMapIndex == stateId);
         foreach (var army in Armies)
         {

@@ -1253,6 +1253,9 @@ public static class CampaignFingerprint
             foreach (var mode in formation.RouteModes) Mix(mode);
             MixFloat(formation.MoveProgress); Mix(formation.DeployDaysLeft);
             Mix(formation.CutOff ? 1 : 0); Mix(formation.Overrun ? 1 : 0); MixFloat(formation.Strength);
+            // The straits it sailed under decide the course it is on; mixed only when some were
+            // shut, so a world with every strait open hashes as it did before ships followed the water.
+            if (formation.SeaCourseMask != 0) { MixText("sea_course"); Mix(formation.SeaCourseMask); }
         }
         var controllers = campaign.ProvinceController ?? campaign.PendingProvinceController;
         if (controllers is null) return hash;

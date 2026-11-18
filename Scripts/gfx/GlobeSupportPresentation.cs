@@ -514,6 +514,8 @@ public sealed partial class GlobePresentation
         return text;
     }
 
+    private readonly List<(float Latitude, float Longitude)> _supportTrail = new();
+
     private void BuildSupportRange()
     {
         if (!IsInstanceValid(_supportRangeNode) || _campaign?.ProvinceMap is null) return;
@@ -622,19 +624,21 @@ public sealed partial class GlobePresentation
         }
         // The roads ahead: from where the card is now through every province still to reach,
         // dashed in the arm's colour - bright for the selection, faint for the rest under the
-        // panel's overlay. A sea passage and a flight are one straight leg, cut into pieces so
-        // the line lies on the globe rather than under it.
+        // panel's overlay. A flight is one straight leg; a sea passage follows the water the
+        // ship will sail (LongRangeMovement.Trail), round the coasts and through the straits,
+        // never across the land between two ports. Each leg is cut into pieces so the line lies
+        // on the globe rather than under it.
         foreach (var (formation, selected) in paths)
         {
             if (!SupportTypeCatalog.TryGet(formation.TypeId, out var pathType)) continue;
             var colour = SupportArmColour(pathType.Kind) with { A = selected ? .92f : .30f };
-            var from = LongRangeMovement.Position(_campaign, formation);
+            LongRangeMovement.Trail(_campaign, formation, _supportTrail);
             var dash = 0;
-            foreach (var province in formation.Route)
+            for (var leg = 1; leg < _supportTrail.Count; leg++)
             {
-                if (province <= 0 || province > _campaign.ProvinceMap.ProvinceCount) break;
-                var to = _campaign.ProvinceMap.CenterOf(province);
-                var pieces = Math.Clamp((int)(SupportCore.DistanceKm(_campaign, LongRangeMovement.At(formation), province) / 40f), 2, 40);
+                var from = _supportTrail[leg - 1];
+                var to = _supportTrail[leg];
+                var pieces = Math.Clamp((int)(LegKm(from, to) / 40f), 1, 40);
                 for (var piece = 0; piece < pieces; piece++, dash++)
                 {
                     if (dash % 2 == 1) continue;
@@ -643,12 +647,20 @@ public sealed partial class GlobePresentation
                     if (_flatMap && Wraps(a, b)) continue;
                     Ribbon(a, b, colour, selected ? 1.6f : .8f);
                 }
-                from = to;
             }
         }
         if (surfaceOpen) _supportRangeMesh.SurfaceEnd();
         _supportRangeNode.Visible = MilitaryMarkersEnabled && (_flatMap || ViewDistance <=
             Ui.Metric(_supportOverlay ? "support.overlay_distance" : "support.marker_distance", _supportOverlay ? 17f : 10.8f));
+
+        static float LegKm((float Latitude, float Longitude) a, (float Latitude, float Longitude) b)
+        {
+            var radians = MathF.PI / 180f;
+            var sinLat = MathF.Sin((b.Latitude - a.Latitude) * radians * .5f);
+            var sinLon = MathF.Sin((b.Longitude - a.Longitude) * radians * .5f);
+            var h = sinLat * sinLat + MathF.Cos(a.Latitude * radians) * MathF.Cos(b.Latitude * radians) * sinLon * sinLon;
+            return 6371f * 2f * MathF.Asin(MathF.Min(1f, MathF.Sqrt(h)));
+        }
 
         Vector3 PathPoint((float Latitude, float Longitude) a, (float Latitude, float Longitude) b, float t)
         {
