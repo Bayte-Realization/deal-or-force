@@ -207,6 +207,13 @@ public partial class DealOrForceGame
     private void SyncDeskDock()
     {
         if (_deskPanel is null || !GodotObject.IsInstanceValid(_deskPanel)) return;
+        if (IsNewShellActive)
+        {
+            _deskPanel.Visible = false;
+            if (_deskTab is not null) _deskTab.Visible = false;
+            if (_outliner is not null) _outliner.Visible = false;
+            return;
+        }
         if (!_deskPanel.Visible && _deskOpen && !_deskRefreshing && !WatchingWorld && !DeskCovered())
         {
             _deskOpen = false;
@@ -253,6 +260,13 @@ public partial class DealOrForceGame
     /// </summary>
     private void RefreshSituationDesk()
     {
+        if (IsNewShellActive)
+        {
+            if (_deskPanel is not null && GodotObject.IsInstanceValid(_deskPanel)) _deskPanel.Visible = false;
+            if (_deskTab is not null && GodotObject.IsInstanceValid(_deskTab)) _deskTab.Visible = false;
+            if (_outliner is not null && GodotObject.IsInstanceValid(_outliner)) _outliner.Visible = false;
+            return;
+        }
         var player = _campaign?.Player;
         if (player is null) return;
         if (_deskPanel is null || !GodotObject.IsInstanceValid(_deskPanel)) BuildSituationDesk();

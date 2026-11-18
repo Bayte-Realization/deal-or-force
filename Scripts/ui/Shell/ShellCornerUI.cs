@@ -103,28 +103,11 @@ public partial class DealOrForceGame
         flagInner.AddChild(flagTex);
         _shellFlagTexture = flagTex;
 
-        var rankBadge = new Label
+        var statRow = new HBoxContainer
         {
-            Name = "ShellRankBadge",
-            Text = "#1",
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            MouseFilter = MouseFilterEnum.Ignore
+            Name = "ShellStatRow",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        rankBadge.AddThemeFontOverride("font", ShellFont("shell.sans", tabular: true));
-        rankBadge.AddThemeFontSizeOverride("font_size", 11);
-        rankBadge.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
-        rankBadge.AddThemeColorOverride("font_outline_color", Ui.Colour("shell.border"));
-        rankBadge.AddThemeConstantOverride("outline_size", 3);
-        rankBadge.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomRight);
-        rankBadge.OffsetLeft = -36;
-        rankBadge.OffsetTop = -16;
-        rankBadge.OffsetRight = -3;
-        rankBadge.OffsetBottom = -1;
-        flagInner.AddChild(rankBadge);
-        _shellRankLabel = rankBadge;
-
-        var statRow = new HBoxContainer { Name = "ShellStatRow" };
         statRow.AddThemeConstantOverride("separation", 6);
         topHBox.AddChild(statRow);
         _shellStatRow = statRow;
@@ -159,6 +142,44 @@ public partial class DealOrForceGame
         railRow.AddThemeConstantOverride("separation", 4);
         railMargin.AddChild(railRow);
         _shellRailRow = railRow;
+
+        // Dedicated rank plaque directly under the flag well (zero overlap with flag pixels)
+        var rankPlate = new PanelContainer
+        {
+            Name = "ShellRankPlate",
+            CustomMinimumSize = new Vector2(0, 22),
+            MouseFilter = MouseFilterEnum.Stop,
+            MouseDefaultCursorShape = CursorShape.PointingHand
+        };
+        rankPlate.AddThemeStyleboxOverride("panel", ShellWellStyle(false));
+        rankPlate.MouseEntered += () => rankPlate.AddThemeStyleboxOverride("panel", ShellWellStyle(true));
+        rankPlate.MouseExited += () => rankPlate.AddThemeStyleboxOverride("panel", ShellWellStyle(false));
+        rankPlate.GuiInput += input =>
+        {
+            if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
+            {
+                PlayStrategicCue("ui_select");
+                OpenCountryRankings(_campaign?.Player?.Id ?? -1);
+                rankPlate.AcceptEvent();
+            }
+        };
+        Tip(rankPlate, "World power rank — click to open Country Rankings.");
+        railRow.AddChild(rankPlate);
+
+        var rankBadge = new Label
+        {
+            Name = "ShellRankBadge",
+            Text = "#1",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        rankBadge.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        rankBadge.AddThemeFontOverride("font", ShellFont("shell.sans", tabular: true));
+        rankBadge.AddThemeFontSizeOverride("font_size", 11);
+        rankBadge.AddThemeColorOverride("font_color", Ui.Colour("shell.brass_hi"));
+        rankPlate.AddChild(rankBadge);
+        _shellRankLabel = rankBadge;
 
         AddShellRailButton("State Affairs", "State Affairs", "E", "icon_state_affairs", () => ToggleCampaignScreen("State Affairs"));
         AddShellRailButton("Economy", "Economy", "R", "icon_economy", () => ToggleCampaignScreen("Economy"));
@@ -371,7 +392,8 @@ public partial class DealOrForceGame
         {
             var visible = key != "War" || atWar;
             cell.Box.Visible = visible;
-            cell.Box.CustomMinimumSize = new Vector2(profile.StatCellWidth, profile.StatCellHeight);
+            cell.Box.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            cell.Box.CustomMinimumSize = new Vector2(0, profile.StatCellHeight);
             cell.Value.AddThemeFontSizeOverride("font_size", profile.Compact ? 12 : 14);
         }
 

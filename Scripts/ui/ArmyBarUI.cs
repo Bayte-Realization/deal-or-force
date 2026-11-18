@@ -103,6 +103,11 @@ public partial class DealOrForceGame
     private void RefreshArmyBar(bool force = false)
     {
         if (_armyBar is null || _campaign?.Player is null) return;
+        if (IsNewShellActive)
+        {
+            if (_armyBar.Visible) _armyBar.Visible = false;
+            return;
+        }
         var player = _campaign.Player;
         var show = _hudLayer is { Visible: true } && player.IsHuman &&
                    _campaign.Armies.Any(army => army.NationId == player.Id);

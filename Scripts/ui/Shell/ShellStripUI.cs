@@ -24,9 +24,13 @@ public partial class DealOrForceGame
         _newShellRoot.AddChild(host);
         _shellStripHost = host;
 
-        var row = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        var row = new HBoxContainer
+        {
+            Alignment = BoxContainer.AlignmentMode.Begin,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
         row.AddThemeConstantOverride("separation", 8);
-        row.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomLeft);
+        row.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         host.AddChild(row);
         _shellStripRow = row;
     }
@@ -119,6 +123,7 @@ public partial class DealOrForceGame
         var btn = new Button
         {
             CustomMinimumSize = new Vector2(158, 44),
+            SizeFlagsVertical = SizeFlags.ShrinkEnd,
             MouseDefaultCursorShape = CursorShape.PointingHand
         };
         btn.AddThemeStyleboxOverride("normal", ShellPaperTagStyle(isAlert, false));

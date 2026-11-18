@@ -178,6 +178,12 @@ public partial class DealOrForceGame
     private void RefreshCampaignAlerts(IReadOnlyList<SituationItem> report)
     {
         if (_alertListPanel is null) BuildCampaignAlerts();
+        if (IsNewShellActive)
+        {
+            if (_alertListPanel.Visible) _alertListPanel.Visible = false;
+            if (_campaignAlertPopup is { Visible: true }) _campaignAlertPopup.Hide();
+            return;
+        }
         if (_campaignAlertsWorld != _campaign || _campaignAlertsSeat != _campaign.Player.Id)
         {
             _campaignAlertSnoozes.Clear(); _campaignAlertPopup.Hide();

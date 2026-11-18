@@ -315,6 +315,7 @@ public partial class DealOrForceGame
     private void RefreshNewShell(bool force = false)
     {
         if (!_newShellBuilt || !IsNewShellActive || _campaign is null || _hudLayer is not { Visible: true }) return;
+        SetClassicChromeVisible(false);
 
         var worldChanged = !ReferenceEquals(_newShellWorld, _campaign);
         if (worldChanged)

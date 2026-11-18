@@ -147,6 +147,21 @@ static class NewShellTests
         SettingsCatalog.Store("ui_shell", "classic");
         Check(CampaignFingerprint.Of(campaign) == fpBefore,
             "switching ui_shell and running layout/map audits leaves CampaignFingerprint identical");
+
+        // Regression check: classic chrome refresh files must stay suppressed while IsNewShellActive is true
+        var uiRoot = Path.Combine(root, "..", "Scripts", "ui");
+        foreach (var file in new[] { "ArmyBarUI.cs", "CampaignAlertsUI.cs", "SituationDeskUI.cs", "TeletypeUI.cs", "HeadlinePopupsUI.cs", "TopBarHudUI.cs" })
+        {
+            var src = File.ReadAllText(Path.Combine(uiRoot, file));
+            Check(src.Contains("IsNewShellActive", StringComparison.Ordinal),
+                $"classic chrome refresh guards against IsNewShellActive in {file}");
+        }
+        var stripSrc = File.ReadAllText(Path.Combine(uiRoot, "Shell", "ShellStripUI.cs"));
+        Check(!stripSrc.Contains("LayoutPreset.BottomLeft", StringComparison.Ordinal),
+            "ShellStripUI anchors strip row inside host rather than BottomLeft downward overflow");
+        var cornerSrc = File.ReadAllText(Path.Combine(uiRoot, "Shell", "ShellCornerUI.cs"));
+        Check(!cornerSrc.Contains("flagInner.AddChild(rankBadge)", StringComparison.Ordinal),
+            "ShellCornerUI keeps rank badge outside flagInner so natural flags stay unobstructed");
     }
 
     public static void RunAlertDedupe()

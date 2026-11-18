@@ -95,11 +95,11 @@ public static class ShellLayout
         }
 
         var topDefault = compact
-            ? new ShellRect(12f, 12f, atWar ? 732f : 652f, 56f)
-            : new ShellRect(16f, 16f, atWar ? 940f : 836f, 64f);
+            ? new ShellRect(12f, 12f, atWar ? 708f : 632f, 56f)
+            : new ShellRect(16f, 16f, atWar ? 908f : 800f, 64f);
         var railDefault = compact
-            ? new ShellRect(12f, 68f, 52f, 488f)
-            : new ShellRect(16f, 80f, 64f, 540f);
+            ? new ShellRect(12f, 68f, 52f, 514f)
+            : new ShellRect(16f, 80f, 64f, 570f);
         var dateDefault = compact
             ? new ShellRect(Math.Max(760f, w - 376f), 12f, 364f, 90f)
             : new ShellRect(Math.Max(980f, w - 432f), 16f, 416f, 102f);
@@ -119,7 +119,7 @@ public static class ShellLayout
         var top = Resolve("top_plate", topDefault);
         if (!atWar)
         {
-            var trimmed = compact ? 652f : 836f;
+            var trimmed = compact ? 632f : 800f;
             if (top.W > trimmed) top = top with { W = trimmed };
         }
         var rail = Resolve("rail", railDefault);
