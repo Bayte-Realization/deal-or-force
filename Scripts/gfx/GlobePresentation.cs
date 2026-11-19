@@ -733,7 +733,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
             using (Simulation.SimProfiler.Measure("f:army motion")) UpdateArmyMarkerMotion((float)delta);
         if (visualDue)
             UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f && Simulation.WorldLayers.On("capitals"), CityHorizon());
-        var armyLod = _flatMap || ViewDistance <= 10.8f;
         _militaryVisualAccumulator += delta;
         var armySyncInterval = (_campaign is { IsPaused: false, Speed: >= 5 }) ? 0.22 : 0.12;
         if (MilitaryMarkersEnabled && _mapApplied && _campaign is not null && _militaryVisualAccumulator >= armySyncInterval)
@@ -745,10 +744,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (visualDue)
             using (Simulation.SimProfiler.Measure("f:army vis"))
             {
-                UpdateMarkerVisibility(_armyRoot, _armyMarkers, armyLod && MilitaryMarkersEnabled,
-                    _flatMap ? 0f : GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length()) + .002f);
-                if (NewShellVisibleArmyIds is { } visibleArmies)
-                    ApplyNewShellArmyVisibility(visibleArmies);
+                RefreshArmyMarkerVisibility();
                 UpdateCounterScale();
             }
         if (MilitaryMarkersEnabled && visualDue)
@@ -3110,6 +3106,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
     }
 
 
+    private void RefreshArmyMarkerVisibility()
+    {
+        if (!IsInstanceValid(_camera)) return;
+        UpdateMarkerVisibility(_armyRoot, _armyMarkers, MilitaryMarkersEnabled && (_flatMap || ViewDistance <= 10.8f),
+            _flatMap ? 0f : GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length()) + .002f);
+        if (NewShellVisibleArmyIds is { } visibleArmies)
+            ApplyNewShellArmyVisibility(visibleArmies);
+    }
+
     private void UpdateMarkerVisibility(
         Node3D root,
         List<(Node3D Node, Vector3 Normal)> markers,
@@ -3304,7 +3309,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
             }
             else
             {
-                if (!marker.Node.Visible) marker.Node.Visible = true;
                 if (marker.Node.GetParent() != _armyRoot)
                 {
                     marker.Node.GetParent()?.RemoveChild(marker.Node);
@@ -3395,6 +3399,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
         PruneArmyCounterTextureCaches();
         CoverSharedProvinces(campaign);
+        // Reconciliation and the visibility tick run at different rates. Cull new and
+        // reused counters before rendering, including the overlays that ignore depth.
+        RefreshArmyMarkerVisibility();
 
         _armyStructureFingerprint = ArmyStructureFingerprint(campaign);
     }

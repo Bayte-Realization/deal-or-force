@@ -8,6 +8,42 @@ namespace DealOrForce;
 
 public partial class ExportVerification
 {
+    private async Task VerifyArmyCounterHorizon(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        game.Call("BeginObserving");
+        SettingsCatalog.Store("map_divisions", "all");
+        SettingsCatalog.Store("ui_shell", "new");
+        game.Call("ApplySetting", "ui_shell");
+        world.IsPaused = true;
+        game.VerificationContinuityView(false, -31.5f, 108f, 5.85f);
+        await Wait(.65);
+
+        // Capture the actual gap between an army reconciliation and the next visibility tick.
+        game.VerificationMapProcessing = false;
+        try
+        {
+            var before = game.VerificationArmyHorizon();
+            Check(before.TotalBehind > 0 && before.VisibleBehind == 0,
+                $"Indian Ocean has counters on the far side, initially hidden ({before.TotalBehind})");
+            await Capture("army-horizon-before-refresh");
+            game.VerificationReconcileArmyCounters();
+            var after = game.VerificationArmyHorizon();
+            Check(after.TotalBehind > 0 && after.VisibleBehind == 0,
+                $"counter refresh keeps the far side hidden ({after.VisibleBehind}/{after.TotalBehind} visible)");
+            await Capture("army-horizon-after-refresh");
+        }
+        finally { game.VerificationMapProcessing = true; }
+
+        var army = world.Armies.First(a => a.NationId == world.Player.Id && a.ProvinceId > 0);
+        var centre = world.ProvinceMap.CenterOf(army.ProvinceId);
+        game.VerificationContinuityView(false, centre.Latitude, centre.Longitude, 5.8f);
+        await Wait(.65);
+        var front = game.VerificationArmyCounterScale(army);
+        Check(front.Visible && front.Width > 0, "a home army counter on the near side remains visible");
+        await Capture("army-horizon-near-side");
+    }
+
     private async Task VerifyArmyCounterScale(DealOrForceGame game)
     {
         var world = game.VerificationWorld;
@@ -99,6 +135,9 @@ public partial class ExportVerification
 
 public partial class DealOrForceGame
 {
+    internal (int TotalBehind, int VisibleBehind) VerificationArmyHorizon() => _globe.VerificationArmyHorizon();
+    internal void VerificationReconcileArmyCounters() => _globe.VerificationReconcileArmyCounters();
+
     internal (bool Visible, float Width, float MaxDrift) VerificationArmyCounterScale(Army army) =>
         _globe.VerificationArmyCounterScale(army);
 
@@ -110,6 +149,19 @@ public partial class DealOrForceGame
 
 public sealed partial class GlobePresentation
 {
+    internal (int TotalBehind, int VisibleBehind) VerificationArmyHorizon()
+    {
+        var viewNormal = _camera.GlobalPosition.Normalized();
+        var behind = _armyMarkers.Where(marker => marker.Normal.Dot(viewNormal) < -.1f);
+        return (behind.Count(), behind.Count(marker => marker.Node.IsVisibleInTree()));
+    }
+
+    internal void VerificationReconcileArmyCounters()
+    {
+        ReconcileArmyMarkers(_campaign);
+        UpdateMilitaryPresentation();
+    }
+
     internal (bool Visible, float Width, float MaxDrift) VerificationArmyCounterScale(Army army)
     {
         ReconcileArmyMarkers(_campaign);
