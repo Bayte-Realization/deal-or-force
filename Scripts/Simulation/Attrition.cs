@@ -203,12 +203,6 @@ public static class Attrition
     /// in a war. A country at peace with everybody is not besieged in its own enclave; it
     /// buys bread through the neighbour (LogisticsSystem.AgeCutOff).
     /// </summary>
-    private static void StarveThePockets(Campaign campaign)
-    {
-        foreach (var _ in StarveThePocketsStages(campaign)) { }
-    }
-
-    /// <summary>The same starving pass, yielded between batches of formations.</summary>
     private static IEnumerable<int> StarveThePocketsStages(Campaign campaign)
     {
         var defines = campaign.Defines;
@@ -262,12 +256,6 @@ public static class Attrition
     /// has lost. Keeping it in the order of battle is what made every engagement inconclusive
     /// and every front a treadmill.
     /// </summary>
-    private static void BuryTheBroken(Campaign campaign)
-    {
-        foreach (var _ in BuryTheBrokenStages(campaign)) { }
-    }
-
-    /// <summary>The same burial pass, yielded between its two sweeps.</summary>
     private static IEnumerable<int> BuryTheBrokenStages(Campaign campaign)
     {
         var floor = campaign.Defines.DivisionBrokenStrength;

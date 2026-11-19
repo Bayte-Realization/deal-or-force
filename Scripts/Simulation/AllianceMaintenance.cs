@@ -119,9 +119,6 @@ public static class AllianceMaintenance
         yield return 0;
     }
 
-    public static bool CanReaffirm(Campaign c, Nation a, Nation b) =>
-        AlliancePrograms.CanStart(c, a, b, "coordination", out _);
-
     public static bool Reaffirm(Campaign c, Nation a, Nation b)
     {
         return AlliancePrograms.Start(c, a, b, "coordination");

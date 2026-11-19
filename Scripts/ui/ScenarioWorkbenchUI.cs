@@ -120,9 +120,6 @@ public partial class DealOrForceGame
         _authorPausedBefore = false;
     }
 
-    /// <summary>Whether the workshop is up, so escape knows it is the thing to answer to.</summary>
-    private bool AuthorWindowOpen => IsInstanceValid(_authorCanvas);
-
     /// <summary>Escape takes the window's own way out, whichever one that is.</summary>
     private void EscapeAuthorWindow()
     {

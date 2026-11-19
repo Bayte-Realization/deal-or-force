@@ -475,19 +475,6 @@ public static class DefconSystem
     }
 
     /// <summary>
-    /// Short localized DEFCON name (e.g. "DEFCON 5").
-    /// </summary>
-    public static string LevelName(int level) => level switch
-    {
-        5 => "DEFCON 5",
-        4 => "DEFCON 4",
-        3 => "DEFCON 3",
-        2 => "DEFCON 2",
-        1 => "DEFCON 1",
-        _ => "DEFCON 5"
-    };
-
-    /// <summary>
     /// Localized badge text with readiness status subtitle (e.g. "DEFCON 3 · Rapid Alert").
     /// </summary>
     public static string LevelBadge(int level) => level switch

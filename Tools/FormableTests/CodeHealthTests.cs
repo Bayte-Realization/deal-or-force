@@ -78,6 +78,20 @@ static class CodeHealthTests
             $"0 missing Scripts/**/*.cs.uid sidecars (missing {missingUids.Count}: {string.Join(", ", missingUids.Take(5))})");
         Check(duplicateUids.Count == 0,
             $"0 duplicate Scripts/**/*.cs.uid values (duplicates {duplicateUids.Count}: {string.Join(", ", duplicateUids.Take(5))})");
+
+        // 4. Zero strong static Campaign fields in Scripts/Simulation (prevents memory-pinning old worlds).
+        var staticCampaignFields = new List<string>();
+        foreach (var type in typeof(Campaign).Assembly.GetTypes())
+        {
+            if (type.Namespace is null || !type.Namespace.StartsWith("DealOrForce.Simulation", StringComparison.Ordinal)) continue;
+            foreach (var field in type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.DeclaredOnly))
+            {
+                if (field.FieldType == typeof(Campaign))
+                    staticCampaignFields.Add($"{type.Name}.{field.Name}");
+            }
+        }
+        Check(staticCampaignFields.Count == 0,
+            $"0 static Campaign fields in DealOrForce.Simulation (found {staticCampaignFields.Count}: {string.Join(", ", staticCampaignFields)})");
     }
 
     static bool IsIgnoredBuildPath(string path) =>

@@ -267,29 +267,13 @@ public static class Coups
         return false;
     }
 
-    private static Campaign _mapCampaign;
-    private static int _mapDay = int.MinValue;
-    private static int _mapCount = -1;
-    private static readonly Dictionary<int, Nation> NationByMap = new();
-
     /// <summary>
     /// The daily map index for a neighbour. The old loop asked every nation in the world
     /// whether its map index matched, for every neighbour of every country, on every coup
     /// review; that is a quadratic scan hiding in a fifteen-millisecond step.
     /// </summary>
-    private static Nation NationAt(Campaign c, int mapIndex)
-    {
-        if (!ReferenceEquals(_mapCampaign, c) || _mapDay != c.ElapsedDays || _mapCount != c.Nations.Count)
-        {
-            _mapCampaign = c;
-            _mapDay = c.ElapsedDays;
-            _mapCount = c.Nations.Count;
-            NationByMap.Clear();
-            foreach (var nation in c.Nations)
-                if (nation.MapIndex >= 0) NationByMap[nation.MapIndex] = nation;
-        }
-        return NationByMap.GetValueOrDefault(mapIndex);
-    }
+    private static Nation NationAt(Campaign c, int mapIndex) =>
+        c?.Caches.CoupNationMap.NationAt(c, mapIndex);
 
     /// <summary>The army takes power.</summary>
     public static void Seize(Campaign c, Nation nation)

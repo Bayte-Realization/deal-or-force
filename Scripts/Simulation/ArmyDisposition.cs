@@ -43,11 +43,6 @@ public static class ArmyDisposition
     private static readonly List<Army> Free = new();
     private static readonly Dictionary<int, float> Load = new();
     private static readonly Dictionary<int, float> Capacity = new();
-    private static readonly Dictionary<int, List<Army>> ArmiesByNation = new();
-    private static readonly Stack<List<Army>> ArmyListPool = new();
-    private static Campaign _armiesFor;
-    private static int _armiesDay = -1;
-    private static int _armiesCount = -1;
 
     private static readonly HashSet<int> _disposeHeld = new();
     private static readonly Dictionary<int, List<Army>> _disposeHeapsByProv = new();
@@ -96,40 +91,26 @@ public static class ArmyDisposition
         }
         finally
         {
-            ClearArmies();
+            campaign.Caches.ArmyDisposition.Clear();
         }
     }
 
     private static IReadOnlyList<Army> ArmiesOf(Campaign campaign, int nationId)
     {
-        if (!ReferenceEquals(_armiesFor, campaign) || _armiesDay != campaign.ElapsedDays ||
-            _armiesCount != campaign.Armies.Count)
+        var cache = campaign.Caches.ArmyDisposition;
+        if (cache.Day != campaign.ElapsedDays || cache.Count != campaign.Armies.Count)
         {
-            ClearArmies();
-            _armiesFor = campaign;
-            _armiesDay = campaign.ElapsedDays;
-            _armiesCount = campaign.Armies.Count;
+            cache.Clear();
+            cache.Day = campaign.ElapsedDays;
+            cache.Count = campaign.Armies.Count;
             foreach (var army in campaign.Armies)
             {
-                if (!ArmiesByNation.TryGetValue(army.NationId, out var list))
-                    ArmiesByNation[army.NationId] = list = ArmyListPool.Count > 0 ? ArmyListPool.Pop() : new List<Army>();
+                if (!cache.ByNation.TryGetValue(army.NationId, out var list))
+                    cache.ByNation[army.NationId] = list = cache.ListPool.Count > 0 ? cache.ListPool.Pop() : new List<Army>();
                 list.Add(army);
             }
         }
-        return ArmiesByNation.TryGetValue(nationId, out var owned) ? owned : Array.Empty<Army>();
-    }
-
-    private static void ClearArmies()
-    {
-        foreach (var list in ArmiesByNation.Values)
-        {
-            list.Clear();
-            ArmyListPool.Push(list);
-        }
-        ArmiesByNation.Clear();
-        _armiesFor = null;
-        _armiesDay = -1;
-        _armiesCount = -1;
+        return cache.ByNation.TryGetValue(nationId, out var owned) ? owned : Array.Empty<Army>();
     }
 
     private static IEnumerable<int> ReviewStages(Campaign campaign, Nation nation)

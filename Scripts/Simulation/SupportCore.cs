@@ -339,21 +339,22 @@ public static class SupportCore
         // Inside PrepareStep the same few kinds are asked about once per formation, twice, every
         // hour: each answer is a catalogue lookup and four feature switches read by name, and
         // nothing in the step's preparation turns a switch. So the answer per kind is kept for
-        // the length of that call (and only that call, on that thread) - the same answer.
-        if (_enabledMemoFor is not null && ReferenceEquals(_enabledMemoFor, campaign) && typeId is not null)
+        // the length of that call (and only that call) - the same answer.
+        if (campaign is not null && typeId is not null)
         {
-            var memo = _enabledMemo;
-            for (var index = 0; index < memo.Count; index++)
-                if (string.Equals(memo[index].TypeId, typeId, StringComparison.Ordinal)) return memo[index].Enabled;
-            var answer = SupportTypeCatalog.TryGet(typeId, out var known) && Enabled(campaign, known);
-            memo.Add((typeId, answer));
-            return answer;
+            var memo = campaign.Caches.SupportEnabledMemo;
+            if (memo.Active)
+            {
+                var entries = memo.Entries;
+                for (var index = 0; index < entries.Count; index++)
+                    if (string.Equals(entries[index].TypeId, typeId, StringComparison.Ordinal)) return entries[index].Enabled;
+                var answer = SupportTypeCatalog.TryGet(typeId, out var known) && Enabled(campaign, known);
+                entries.Add((typeId, answer));
+                return answer;
+            }
         }
         return SupportTypeCatalog.TryGet(typeId, out var type) && Enabled(campaign, type);
     }
-
-    [ThreadStatic] private static Campaign _enabledMemoFor;
-    [ThreadStatic] private static List<(string TypeId, bool Enabled)> _enabledMemo;
 
     /// <summary>
     /// Rebuild the by-nation reach index, once at the top of every step.
@@ -367,9 +368,9 @@ public static class SupportCore
     /// </summary>
     internal static void PrepareStep(Campaign campaign)
     {
-        var memo = _enabledMemo ??= new List<(string TypeId, bool Enabled)>(8);
-        memo.Clear();
-        _enabledMemoFor = campaign;
+        var memo = campaign.Caches.SupportEnabledMemo;
+        memo.Entries.Clear();
+        memo.Active = true;
         try
         {
             SupportRepatriation.Reconcile(campaign);
@@ -377,8 +378,8 @@ public static class SupportCore
         }
         finally
         {
-            _enabledMemoFor = null;
-            memo.Clear();
+            memo.Active = false;
+            memo.Entries.Clear();
         }
     }
 
@@ -814,21 +815,6 @@ public static class SupportCore
     {
         if (!Enabled(campaign, type) || Displaced(campaign, formation) || province <= 0 || province > campaign.ProvinceMap.ProvinceCount) return false;
         return DistanceKm(campaign, formation.BaseProvinceId, province) <= ReachKm(campaign, type);
-    }
-
-    /// <summary>The country's most populous region, for a formation that has lost its own.</summary>
-    public static int HomeStateOf(Campaign campaign, int nationId)
-    {
-        var nation = campaign.NationById(nationId);
-        if (nation is null) return -1;
-        var best = -1;
-        var bestPopulation = -1L;
-        foreach (var state in campaign.States)
-        {
-            if (state.NationMapIndex != nation.MapIndex) continue;
-            if (state.Population > bestPopulation) { bestPopulation = state.Population; best = state.MapIndex; }
-        }
-        return best;
     }
 
     /// <summary>

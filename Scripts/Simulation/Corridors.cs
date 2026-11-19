@@ -128,7 +128,7 @@ public static partial class Corridors
     {
         if (c?.ProvinceMap is null || stateMapIndex == 0) return 0;
         EnsurePores(c);
-        return _firstProvince.GetValueOrDefault(stateMapIndex);
+        return c.Caches.CorridorPores.FirstProvince.GetValueOrDefault(stateMapIndex);
     }
 
     [ThreadStatic] private static List<(HashSet<int> Piece, bool HasCapital)> _piecesScratch;
@@ -154,7 +154,7 @@ public static partial class Corridors
         if (map is null || nation is null) return new List<HashSet<int>>();
         EnsurePores(c);
         var pieces = new List<HashSet<int>>();
-        if (!_components.TryGetValue(nation.MapIndex, out var cached) || cached.Count == 0) return pieces;
+        if (!c.Caches.CorridorPores.Components.TryGetValue(nation.MapIndex, out var cached) || cached.Count == 0) return pieces;
         var capital = nation.CapitalStateMapIndex;
         var scratch = _piecesScratch ??= new List<(HashSet<int> Piece, bool HasCapital)>(cached.Count);
         scratch.Clear();
@@ -422,9 +422,10 @@ public static partial class Corridors
         var list = _wholeResult ??= new List<int>();
         list.Clear();
         var ownerShift = (uint)owner << 16;
+        var ownerCounts = c.Caches.CorridorPores.OwnerStateCounts;
         foreach (var entry in inGround)
         {
-            var totalOwned = _ownerStateCounts.GetValueOrDefault(ownerShift | (uint)entry.Key);
+            var totalOwned = ownerCounts.GetValueOrDefault(ownerShift | (uint)entry.Key);
             if (entry.Value == totalOwned)
                 list.Add(entry.Key);
         }
@@ -503,20 +504,7 @@ public static partial class Corridors
         return "";
     }
 
-    static Campaign _poreCampaign;
-    static int _poreRevision = -1;
-    static ProvinceTopology _poreMap;
-    static int _poreLimit = -1;
-    static ushort[] _poreOwners = Array.Empty<ushort>(), _poreStates = Array.Empty<ushort>();
-    static bool[] _poreSeen = Array.Empty<bool>();
-    static readonly Queue<int> _poreQueue = new();
-    static readonly HashSet<int> _poreRim = new();
-    static readonly Dictionary<int, HashSet<int>> _pores = new();
-    static readonly Dictionary<int, List<HashSet<int>>> _components = new();
-    static readonly Dictionary<int, int> _firstProvince = new();
-    static readonly Dictionary<uint, int> _ownerStateCounts = new();
     static readonly HashSet<int> NoPore = new();
-    static bool _poreReady;
 
     static void EnsurePores(Campaign c)
     {
@@ -532,50 +520,46 @@ public static partial class Corridors
     {
         var map = c?.ProvinceMap;
         if (map is null) yield break;
-        if (_poreReady && ReferenceEquals(_poreCampaign, c) && _poreRevision == c.MapRevision) yield break;
+        var cache = c.Caches.CorridorPores;
+        if (cache.Ready && cache.Revision == c.MapRevision) yield break;
         var limit = Math.Max(1, c.Defines.PeaceCompactHoleProvinces);
         // A new revision is usually a capture - who controls a province, which this index never
         // reads. It is rebuilt only when what it does read moved: who owns the land, which
         // region it lies in, the map itself, the hole size. Otherwise the rebuild would make the
         // same sets in the same order, and the world's clusters in fresh sets every hour of a war
         // were the most garbage any daily system made.
-        if (_poreReady && ReferenceEquals(_poreCampaign, c) && ReferenceEquals(_poreMap, map) && _poreLimit == limit &&
-            map.ProvinceToNation.AsSpan().SequenceEqual(_poreOwners) &&
-            map.ProvinceToState.AsSpan().SequenceEqual(_poreStates))
+        if (cache.Ready && ReferenceEquals(cache.Map, map) && cache.Limit == limit &&
+            map.ProvinceToNation.AsSpan().SequenceEqual(cache.Owners) &&
+            map.ProvinceToState.AsSpan().SequenceEqual(cache.States))
         {
-            _poreRevision = c.MapRevision;
+            cache.Revision = c.MapRevision;
             yield break;
         }
-        _poreReady = false;
-        _poreRevision = -1;
-        _poreCampaign = c;
+        cache.Ready = false;
+        cache.Revision = -1;
         var targetRevision = c.MapRevision;
-        _poreMap = map;
-        _poreLimit = limit;
-        if (_poreOwners.Length != map.ProvinceToNation.Length)
-            _poreOwners = new ushort[map.ProvinceToNation.Length];
-        Array.Copy(map.ProvinceToNation, _poreOwners, map.ProvinceToNation.Length);
-        if (_poreStates.Length != map.ProvinceToState.Length)
-            _poreStates = new ushort[map.ProvinceToState.Length];
-        Array.Copy(map.ProvinceToState, _poreStates, map.ProvinceToState.Length);
-        _pores.Clear();
-        _components.Clear();
-        _firstProvince.Clear();
-        _ownerStateCounts.Clear();
+        cache.Map = map;
+        cache.Limit = limit;
+        if (cache.Owners.Length != map.ProvinceToNation.Length) cache.Owners = new ushort[map.ProvinceToNation.Length];
+        Array.Copy(map.ProvinceToNation, cache.Owners, map.ProvinceToNation.Length);
+        if (cache.States.Length != map.ProvinceToState.Length) cache.States = new ushort[map.ProvinceToState.Length];
+        Array.Copy(map.ProvinceToState, cache.States, map.ProvinceToState.Length);
+        cache.Pores.Clear();
+        cache.Components.Clear();
+        cache.FirstProvince.Clear();
+        cache.OwnerStateCounts.Clear();
         var requiredSeen = map.ProvinceCount + 1;
-        if (_poreSeen.Length < requiredSeen)
-            _poreSeen = new bool[requiredSeen];
-        else
-            Array.Clear(_poreSeen, 0, requiredSeen);
-        var seen = _poreSeen;
-        var queue = _poreQueue;
-        var rim = _poreRim;
+        if (cache.Seen.Length < requiredSeen) cache.Seen = new bool[requiredSeen];
+        else Array.Clear(cache.Seen, 0, requiredSeen);
+        var seen = cache.Seen;
+        var queue = cache.Queue;
+        var rim = cache.Rim;
         queue.Clear();
         var workSinceYield = 0;
         for (var start = 1; start <= map.ProvinceCount; start++)
         {
             if (seen[start] || map.IsWater(start)) continue;
-            var owner = _poreOwners[start];
+            var owner = cache.Owners[start];
             if (owner == 0) { seen[start] = true; continue; }
             var cluster = new HashSet<int>();
             rim.Clear();
@@ -588,19 +572,19 @@ public static partial class Corridors
             {
                 var province = queue.Dequeue();
                 cluster.Add(province);
-                var state = _poreStates[province];
+                var state = cache.States[province];
                 if (state != 0)
                 {
-                    if (!_firstProvince.ContainsKey(state)) _firstProvince[state] = province;
+                    if (!cache.FirstProvince.ContainsKey(state)) cache.FirstProvince[state] = province;
                     var key = ownerShift | (uint)state;
-                    _ownerStateCounts[key] = _ownerStateCounts.GetValueOrDefault(key) + 1;
+                    cache.OwnerStateCounts[key] = cache.OwnerStateCounts.GetValueOrDefault(key) + 1;
                 }
                 var neighbors = map.LandNeighbors[province];
                 for (var ni = 0; ni < neighbors.Length; ni++)
                 {
                     var next = neighbors[ni];
                     if (next <= 0 || next > map.ProvinceCount || map.IsWater(next)) continue;
-                    var who = _poreOwners[next];
+                    var who = cache.Owners[next];
                     if (who == owner)
                     {
                         if (!seen[next]) { seen[next] = true; queue.Enqueue(next); }
@@ -609,23 +593,19 @@ public static partial class Corridors
                     if (who == 0) { open = true; continue; }
                     rim.Add(who);
                 }
-                if (++workSinceYield >= 2500)
-                {
-                    workSinceYield = 0;
-                    yield return 0;
-                }
+                if (++workSinceYield >= 2500) { workSinceYield = 0; yield return 0; }
             }
-            if (!_components.TryGetValue(owner, out var list))
-                _components[owner] = list = new List<HashSet<int>>();
+            if (!cache.Components.TryGetValue(owner, out var list))
+                cache.Components[owner] = list = new List<HashSet<int>>();
             list.Add(cluster);
             if (open || cluster.Count == 0 || cluster.Count > limit || rim.Count != 1) continue;
             var surrounder = 0;
             foreach (var who in rim) surrounder = who;
-            if (!_pores.TryGetValue(surrounder, out var best) || cluster.Count < best.Count)
-                _pores[surrounder] = cluster;
+            if (!cache.Pores.TryGetValue(surrounder, out var best) || cluster.Count < best.Count)
+                cache.Pores[surrounder] = cluster;
         }
-        _poreRevision = targetRevision;
-        _poreReady = true;
+        cache.Revision = targetRevision;
+        cache.Ready = true;
     }
 
     /// <summary>The smallest cluster of foreign land whose every land neighbour is this country.</summary>
@@ -633,7 +613,7 @@ public static partial class Corridors
     {
         if (c?.ProvinceMap is null || nation is null) return NoPore;
         EnsurePores(c);
-        return _pores.TryGetValue(nation.MapIndex, out var pore) ? pore : NoPore;
+        return c.Caches.CorridorPores.Pores.TryGetValue(nation.MapIndex, out var pore) ? pore : NoPore;
     }
 
     /// <summary>

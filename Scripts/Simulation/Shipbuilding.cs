@@ -80,10 +80,6 @@ public static class Shipbuilding
     public static float BuildDays(Campaign campaign, Nation nation) =>
         MathF.Max(1f, campaign.Defines.HullBuildDays) / NationalModifiers.Factor(nation, "shipbuilding_speed");
 
-    private static readonly Dictionary<int, float> SlipwaysByNation = new();
-    private static int _slipwaysDay = -1;
-    private static Campaign _slipwaysCampaign;
-
     /// <summary>Once a day.</summary>
     public static void Tick(Campaign campaign)
     {
@@ -198,32 +194,34 @@ public static class Shipbuilding
     /// </summary>
     public static float Slipways(Campaign campaign, Nation nation, MobilisationMode mode = MobilisationMode.Standard)
     {
-        if (!ReferenceEquals(_slipwaysCampaign, campaign) || _slipwaysDay != campaign.ElapsedDays)
+        var cache = campaign.Caches.ShipbuildingSlipways;
+        float baseSlips;
+        lock (cache.Gate)
         {
-            using var rebuildScope = SimProfiler.Measure("  ship:slipways-rebuild");
-            _slipwaysCampaign = campaign;
-            _slipwaysDay = campaign.ElapsedDays;
-            SlipwaysByNation.Clear();
-            var defines = campaign.Defines;
-            foreach (var fleet in campaign.Fleets)
+            if (cache.Day != campaign.ElapsedDays)
             {
-                SlipwaysByNation[fleet.NationId] = SlipwaysByNation.GetValueOrDefault(fleet.NationId) +
-                                                   fleet.Establishment * defines.SlipwaysPerEstablishedHull;
+                using var rebuildScope = SimProfiler.Measure("  ship:slipways-rebuild");
+                cache.Day = campaign.ElapsedDays;
+                cache.ByNation.Clear();
+                var defines = campaign.Defines;
+                foreach (var fleet in campaign.Fleets)
+                    cache.ByNation[fleet.NationId] = cache.ByNation.GetValueOrDefault(fleet.NationId) +
+                                                     fleet.Establishment * defines.SlipwaysPerEstablishedHull;
+                foreach (var state in campaign.States)
+                {
+                    var yards = state.Buildings.GetValueOrDefault(BuildingKind.Shipyard);
+                    var ports = state.Buildings.GetValueOrDefault(BuildingKind.Port);
+                    if (yards <= 0 && ports <= 0) continue;
+                    var owner = NavalOperations.NationAt(campaign, state.NationMapIndex);
+                    if (owner is null) continue;
+                    var yield = Waterfront.Yield(campaign, state.MapIndex, BuildingKind.Shipyard);
+                    cache.ByNation[owner.Id] = cache.ByNation.GetValueOrDefault(owner.Id) +
+                                               yards * yield * defines.SlipwaysPerShipyard +
+                                               ports * yield * SlipwaysPerPort;
+                }
             }
-            foreach (var state in campaign.States)
-            {
-                var yards = state.Buildings.GetValueOrDefault(BuildingKind.Shipyard);
-                var ports = state.Buildings.GetValueOrDefault(BuildingKind.Port);
-                if (yards <= 0 && ports <= 0) continue;
-                var owner = NavalOperations.NationAt(campaign, state.NationMapIndex);
-                if (owner is null) continue;
-                var yield = Waterfront.Yield(campaign, state.MapIndex, BuildingKind.Shipyard);
-                SlipwaysByNation[owner.Id] = SlipwaysByNation.GetValueOrDefault(owner.Id) +
-                                             yards * yield * defines.SlipwaysPerShipyard +
-                                             ports * yield * SlipwaysPerPort;
-            }
+            baseSlips = cache.ByNation.GetValueOrDefault(nation.Id);
         }
-        var baseSlips = SlipwaysByNation.GetValueOrDefault(nation.Id);
         if (mode != MobilisationMode.Standard)
         {
             if (baseSlips <= 0f && campaign?.ProvinceMap is not null)

@@ -571,14 +571,6 @@ public sealed partial class GlobePresentation
         }
     }
 
-    private static void StrokeBox(byte[] pixels, int width, float left, float top, float right, float bottom, float thickness, Color color)
-    {
-        StrokeLine(pixels, width, left, top, right, top, thickness, color);
-        StrokeLine(pixels, width, right, top, right, bottom, thickness, color);
-        StrokeLine(pixels, width, right, bottom, left, bottom, thickness, color);
-        StrokeLine(pixels, width, left, bottom, left, top, thickness, color);
-    }
-
     private static void StrokeEllipse(byte[] pixels, int width, float cx, float cy, float rx, float ry, float thickness, Color color)
     {
         var half = thickness / 2f;
@@ -603,16 +595,6 @@ public sealed partial class GlobePresentation
             var distance = MathF.Sqrt((x + 0.5f - cx) * (x + 0.5f - cx) + (y + 0.5f - cy) * (y + 0.5f - cy));
             var cover = Mathf.Clamp(radius + 0.5f - distance, 0f, 1f);
             if (cover > 0f) BlendPixel(pixels, width, x, y, color, cover);
-        }
-    }
-
-    private static void DrawCross(byte[] pixels, int width, int cx, int cy, int reach, Color color, int thickness)
-    {
-        for (var step = -reach; step <= reach; step++)
-        for (var t = -thickness; t <= thickness; t++)
-        {
-            WritePixel(pixels, width, cx + step, cy + step + t, color);
-            WritePixel(pixels, width, cx + step, cy - step + t, color);
         }
     }
 
@@ -984,19 +966,6 @@ public sealed partial class GlobePresentation
             marker.Node.SetMeta("endurance_known", detailed && assessment.Known);
             marker.Node.SetMeta("endurance_share", detailed ? share : -1f);
         }
-    }
-
-    private float SideOrganisation(List<int> ids)
-    {
-        var sum = 0f;
-        var count = 0;
-        foreach (var id in ids)
-        {
-            if (!_armyById.TryGetValue(id, out var army)) continue;
-            sum += army.Organisation;
-            count++;
-        }
-        return count == 0 ? 0f : sum / count;
     }
 
     /// <summary>Which markers the camera can see. Cheap, and camera-dependent, so per frame.</summary>

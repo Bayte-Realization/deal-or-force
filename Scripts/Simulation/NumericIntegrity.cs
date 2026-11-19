@@ -19,22 +19,10 @@ public static class NumericIntegrity
     // FieldInfo.GetValue: the weekly checkpoint read every number of every country, region,
     // army and relation by reflection, boxing each, and built a path string for every object
     // whether or not anything was wrong - twenty milliseconds of one indivisible frame.
-    private static readonly ConcurrentDictionary<Type, (FieldInfo Field, Func<object, double> Read)[]> ScalarReaders = new();
     private static readonly ConcurrentDictionary<Type, (FieldInfo[] Fields, Func<object, int> FirstBad)> ScalarCheckers = new();
     private static readonly List<DiplomaticRelation> RelationsBuffer = new();
     private static readonly object RelationsGate = new();
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, List<DiplomaticRelation>> StagedRelationsBuffers = new();
-
-    private static (FieldInfo Field, Func<object, double> Read)[] ReadersFor(Type type) =>
-        ScalarReaders.GetOrAdd(type, t => ScalarFields.GetOrAdd(t, k => k.GetFields(BindingFlags.Public | BindingFlags.Instance)
-                .Where(f => f.FieldType == typeof(float) || f.FieldType == typeof(double)).ToArray())
-            .Select(field =>
-            {
-                var boxed = System.Linq.Expressions.Expression.Parameter(typeof(object), "value");
-                var read = System.Linq.Expressions.Expression.Convert(
-                    System.Linq.Expressions.Expression.Field(System.Linq.Expressions.Expression.Convert(boxed, t), field), typeof(double));
-                return (field, System.Linq.Expressions.Expression.Lambda<Func<object, double>>(read, boxed).Compile());
-            }).ToArray());
 
     private static (FieldInfo[] Fields, Func<object, int> FirstBad) CheckerFor(Type type) =>
         ScalarCheckers.GetOrAdd(type, t =>

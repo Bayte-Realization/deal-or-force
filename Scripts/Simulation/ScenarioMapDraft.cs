@@ -28,7 +28,6 @@ public sealed class ScenarioMapDraft
     public bool Dirty => _stroke.Count > 0 || _revision != _savedRevision;
     public bool CanUndo => _undo.Count > 0;
     public bool CanRedo => _redo.Count > 0;
-    public int StrokeCount => _stroke.Count;
     public string Id { get; }
     public ScenarioSettings Settings { get; private set; }
     public bool HasSavedVersion { get; private set; }

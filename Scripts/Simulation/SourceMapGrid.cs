@@ -33,7 +33,4 @@ public static class SourceMapGrid
         }
         return ids;
     }
-
-    public static ushort[] LoadOptional(string path, int width, int height) =>
-        string.IsNullOrWhiteSpace(path) ? null : Load(path, width, height);
 }

@@ -388,11 +388,6 @@ public sealed partial class GlobePresentation
         return false;
     }
 
-    private Vector2 FindFreeCounterOffset(Rect2 room)
-    {
-        return TryFindFreeCounterOffset(room, out var offset) ? offset : Vector2.Zero;
-    }
-
     private bool TryFindFreeCounterOffset(Rect2 room, out Vector2 result, Func<Vector2,bool> allowed = null)
     {
         result = Vector2.Zero;

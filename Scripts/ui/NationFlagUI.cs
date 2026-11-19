@@ -824,9 +824,9 @@ public partial class DealOrForceGame
     /// candidate list a few hundred times a second. The answer only changes when the country
     /// does, so it is kept against the things it was worked out from.
     /// </summary>
-    private static Campaign FlagWorld;
+    private static readonly System.WeakReference<Campaign> FlagWorldRef = new(null);
+    private static Campaign FlagWorld => FlagWorldRef.TryGetTarget(out var world) ? world : null;
     private FlagClothSettingsPulse _flagClothPulse;
-
     private static readonly Dictionary<string, string> ResolvedFlags = new();
 
     /// <summary>The settings id that lets movements fly their own flags.</summary>
@@ -835,7 +835,7 @@ public partial class DealOrForceGame
     /// <summary>Point the flags at a campaign, forgetting what was worked out for the last one.</summary>
     private static void BindFlags(Campaign campaign)
     {
-        FlagWorld = campaign;
+        FlagWorldRef.SetTarget(campaign);
         ForgetFlags();
         WarmFlags(campaign);
     }

@@ -33,13 +33,6 @@ internal static class ArmyHomecoming
         return false;
     }
 
-    internal static int OrderReturns(Campaign c, Nation nation, List<Army> free, int budget)
-    {
-        var total = 0;
-        foreach (var delta in OrderReturnsStages(c, nation, free, budget)) total += delta;
-        return total;
-    }
-
     internal static IEnumerable<int> OrderReturnsStages(Campaign c, Nation nation, List<Army> free, int budget)
     {
         if (!c.Defines.ArmyHomecomingEnabled || budget <= 0) yield break;

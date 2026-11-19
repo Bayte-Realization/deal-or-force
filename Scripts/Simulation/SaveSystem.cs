@@ -984,13 +984,6 @@ public static partial class SaveSystem
         return Array.Empty<string>();
     }
 
-    private static CampaignSave ReadCompressed(byte[] stored)
-    {
-        using var input = new MemoryStream(stored);
-        using var gzip = new GZipStream(input, CompressionMode.Decompress);
-        return JsonSerializer.Deserialize<CampaignSave>(gzip, JsonOptions);
-    }
-
     private static bool IsFramed(FileStream file)
     {
         if (file.Length < 4) return false;
@@ -1072,13 +1065,6 @@ public static partial class SaveSystem
 
     private static bool IsBrotli(byte[] stored) =>
         stored is { Length: >= 4 } && System.Text.Encoding.ASCII.GetString(stored, 0, 4) == BrotliMagic;
-
-    private static CampaignSave ReadBrotli(byte[] stored)
-    {
-        using var input = new MemoryStream(stored, 4, stored.Length - 4);
-        using var brotli = new BrotliStream(input, CompressionMode.Decompress);
-        return JsonSerializer.Deserialize<CampaignSave>(brotli, JsonOptions);
-    }
 
     /// <summary>Both editable JSON and optional gzip use the same .bdfsave extension.
     /// Legacy .bdfsave.json files also work; sniff contents instead of trusting the name.</summary>
