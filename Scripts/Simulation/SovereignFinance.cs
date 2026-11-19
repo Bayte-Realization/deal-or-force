@@ -74,15 +74,16 @@ public static class SovereignFinance
         if (!review) return;
         NormalizeAccounts(c, n);
         if (!n.DebtMechanicActive) return;
-        var terms = Rules.EconomyRules.EvaluateCreditTerms(
+        EconomyRulesHook.EvaluateCreditTerms(
             n.PublicDebt, n.Gdp, n.Stability, n.Inflation,
             n.DebtArrears, n.PaymentArrears,
             n.DebtCondition >= DebtCondition.Default,
             n.CreditConfidence,
             NationalModifiers.Factor(n, "borrowing_cost"),
-            c.Defines.DebtMaximumSpread);
-        if (review) n.CreditConfidence = terms.NextConfidence;
-        n.DebtSpreadAnnual = terms.AnnualSpread;
+            c.Defines.DebtMaximumSpread,
+            out _, out var nextConfidence, out var annualSpread);
+        if (review) n.CreditConfidence = nextConfidence;
+        n.DebtSpreadAnnual = annualSpread;
         if (review) n.DebtIssuedWeekly = 0;
     }
 
@@ -91,14 +92,14 @@ public static class SovereignFinance
     public static float Outstanding(Nation n) => MathF.Max(0, n.PublicDebt) + MathF.Max(0, -n.Treasury);
 
     public static float Capacity(Campaign c, Nation n) =>
-        Rules.EconomyRules.DebtCapacity(
+        EconomyRulesHook.DebtCapacity(
             n.Gdp, c.Defines.DebtBaseCapacity, c.Defines.DebtConfidenceCapacity,
             n.CreditConfidence, NationalModifiers.Factor(n, "credit_capacity"));
 
     public static float AvailableCredit(Campaign c, Nation n)
     {
         if (!c.FeatureEnabled("public_debt") || n.DebtCondition >= DebtCondition.Default) return 0;
-        return Rules.EconomyRules.AvailableCredit(
+        return EconomyRulesHook.AvailableCredit(
             Capacity(c, n), n.PublicDebt, n.Gdp,
             c.Defines.DebtWeeklyIssueShare, n.DebtIssuedWeekly);
     }

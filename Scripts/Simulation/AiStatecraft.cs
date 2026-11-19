@@ -1888,7 +1888,7 @@ public static partial class AiStatecraft
         if (mine >= theirs) return false;
 
         var fiscal = AiFiscalPolicy.Assess(campaign, buyer, campaign.Defines.AiTreasuryFloor);
-        var offer = Rules.DiplomacyRules.BuyPeaceOffer(buyer.Treasury, fiscal.DiscretionaryCash, mine, theirs);
+        var offer = DiplomacyRulesHook.BuyPeaceOffer(buyer.Treasury, fiscal.DiscretionaryCash, mine, theirs);
         if (offer <= 0f) return false;
 
         var command = new ProposeDealCommand

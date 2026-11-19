@@ -84,7 +84,7 @@ public static class CombatTempo
     public static float EncirclementFactor(Defines defines, bool cutOff, int daysCutOff) =>
         defines is null
             ? 1f
-            : DealOrForce.Rules.CombatTempoRules.EncirclementFactor(
+            : CombatTempoRulesHook.EncirclementFactor(
                 true, cutOff, daysCutOff, defines.EncirclementMaxCombatPenalty, defines.SupplyCutoffDays);
 
     /// <summary>
@@ -93,7 +93,7 @@ public static class CombatTempo
     public static float EnvelopmentFactor(Defines defines, int attackDirections) =>
         defines is null
             ? 1f
-            : DealOrForce.Rules.CombatTempoRules.EnvelopmentFactor(
+            : CombatTempoRulesHook.EnvelopmentFactor(
                 true, attackDirections, defines.MaxAttackDirections, defines.FlankingAttackBonusPerDirection);
 
     public static float Breakthrough(Defines defines, float pressure, float planning, float supply) =>
@@ -103,7 +103,7 @@ public static class CombatTempo
         float defenderEntrenchment, int attackDirections, float terrainBreakthroughFactor) =>
         defines is null
             ? 0f
-            : DealOrForce.Rules.CombatTempoRules.Breakthrough(
+            : CombatTempoRulesHook.Breakthrough(
                 true, pressure, planning, supply, defenderEntrenchment, attackDirections, terrainBreakthroughFactor,
                 defines.BreakthroughPlanningFloor, defines.BreakthroughSupplyFloor,
                 defines.BreakthroughPressureFloor, defines.BreakthroughPressureSpan,
@@ -116,7 +116,7 @@ public static class CombatTempo
         float attackerOrg, float defenderOrg, bool desperateDefense) =>
         defines is null
             ? 0f
-            : DealOrForce.Rules.CombatTempoRules.Counterattack(
+            : CombatTempoRulesHook.Counterattack(
                 true, pressure, entrenchment, supply, attackerOrg, defenderOrg, desperateDefense,
                 defines.CounterattackEntrenchmentFloor, defines.CounterattackSupplyFloor,
                 defines.CounterattackPressureFloor, defines.CounterattackPressureSpan,

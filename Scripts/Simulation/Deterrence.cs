@@ -116,8 +116,14 @@ public static class Deterrence
     /// that wants the Cold War to crack at the seams lowers it; a mod that wants
     /// never-touch peace raises it. Zero and the wall is gone.
     /// </summary>
-    public static float MutualPrice(Campaign campaign, Nation a, Nation b) =>
-        TierOf(campaign, a) >= 1 && TierOf(campaign, b) >= 1 ? campaign.Defines.AiMutualDeterrencePrice : 0f;
+    public static float MutualPrice(Campaign campaign, Nation a, Nation b)
+    {
+        DiplomacyRulesHook.EvaluateDeterrence(
+            TierOf(campaign, a), TierOf(campaign, b),
+            campaign.Defines.AiMutualDeterrencePrice, campaign.Defines.MutualDeterrenceEnabled,
+            out var mutualPrice, out _);
+        return mutualPrice;
+    }
 
     /// <summary>
     /// The shadow over a war both sides could end the world from, as a pressure 0..4: the
@@ -143,7 +149,11 @@ public static class Deterrence
         if (attacker is null || defender is null) return 0f;
         var attackerTier = TierOf(campaign, attacker);
         var defenderTier = TierOf(campaign, defender);
-        return attackerTier >= 1 && defenderTier >= 1 ? Math.Min(4, attackerTier * defenderTier) : 0f;
+        DiplomacyRulesHook.EvaluateDeterrence(
+            attackerTier, defenderTier,
+            campaign.Defines.AiMutualDeterrencePrice, campaign.Defines.MutualDeterrenceEnabled,
+            out _, out var brinkmanship);
+        return brinkmanship;
     }
 }
 

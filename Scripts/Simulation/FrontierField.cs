@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DealOrForce.Simulation.Kernels;
 
 namespace DealOrForce.Simulation;
 
@@ -42,6 +43,24 @@ public static class FrontierField
     /// because the world does; north and south stop.
     /// </summary>
     public static byte[] Build(ushort[] authoredHolders, ushort[] cellToProvince, int width, int height,
+        ushort[] owners, ushort[] authoredOwners)
+    {
+        if (authoredHolders is null || cellToProvince is null) throw new ArgumentNullException(nameof(authoredHolders));
+        if (width <= 0 || height <= 0)
+            throw new ArgumentException("The field dimensions must be positive.");
+        var cells = checked(width * height);
+        if (authoredHolders.Length < cells || cellToProvince.Length < cells)
+            throw new ArgumentException("The grids are smaller than the field asked for.");
+
+        if (NativeKernelsLoader.EnableRasterDefault &&
+            NativeRasterBake.TryBuildFrontier(authoredHolders, cellToProvince, width, height, owners, authoredOwners, Cap, Smoothing, out var nativeBytes) &&
+            nativeBytes is not null)
+            return nativeBytes;
+
+        return BuildManaged(authoredHolders, cellToProvince, width, height, owners, authoredOwners);
+    }
+
+    internal static byte[] BuildManaged(ushort[] authoredHolders, ushort[] cellToProvince, int width, int height,
         ushort[] owners, ushort[] authoredOwners)
     {
         if (authoredHolders is null || cellToProvince is null) throw new ArgumentNullException(nameof(authoredHolders));

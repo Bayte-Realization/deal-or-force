@@ -145,14 +145,14 @@ public static class DemographicCycle
 {
     /// <summary>How much of a region is of working age: neither too young nor past it.</summary>
     public static float WorkingShare(ScenarioState state) =>
-        state is null ? 0.62f : Rules.DemographyRules.WorkingShare(state.YoungShare, state.OldShare);
+        state is null ? 0.62f : DemographyRulesHook.WorkingShare(state.YoungShare, state.OldShare);
 
     /// <summary>
     /// A country's own newborns: the further the young share has fallen below the reference, the
     /// fewer of them there are. 1 at the reference and above, never below a third.
     /// </summary>
     public static float FertilityFactor(ScenarioState state) =>
-        state is null ? 1f : Rules.DemographyRules.FertilityFactor(state.YoungShare);
+        state is null ? 1f : DemographyRulesHook.FertilityFactor(state.YoungShare);
 
     /// <summary>
     /// A country's own deaths: an old population dies at a higher rate even where medicine is good,
@@ -160,7 +160,7 @@ public static class DemographicCycle
     /// </summary>
     public static float MortalityFactor(ScenarioState state, Defines defines) =>
         state is null || defines is null ? 1f :
-            Rules.DemographyRules.MortalityFactor(state.OldShare, defines.DemographyReferenceOldShare, defines.DemographyMortalityOldWeight);
+            DemographyRulesHook.MortalityFactor(state.OldShare, defines.DemographyReferenceOldShare, defines.DemographyMortalityOldWeight);
 
     /// <summary>
     /// Once per household review, region by region: the bins move. Piggybacking on that review is
@@ -232,13 +232,14 @@ public static class DemographicCycle
                 if (state.LastDemographyDay == state.LastHouseholdReviewDay) return;
                 state.LastDemographyDay = state.LastHouseholdReviewDay;
                 System.Threading.Interlocked.Exchange(ref changed, 1);
-                var stepped = Rules.DemographyRules.StepCohorts(
+                DemographyRulesHook.StepCohorts(
                     state.Population, state.ReviewBirths, state.ReviewDeaths,
                     state.YoungShare, state.OldShare,
                     defines.DemographyMaturationAnnual, defines.DemographyAgeingAnnual,
-                    defines.DemographyMortalityOldWeight, interval);
-                state.YoungShare = stepped.YoungShare;
-                state.OldShare = stepped.OldShare;
+                    defines.DemographyMortalityOldWeight, interval,
+                    out var nextYoungShare, out var nextOldShare, out _);
+                state.YoungShare = nextYoungShare;
+                state.OldShare = nextOldShare;
                 MoveCultures(campaign, state, shield);
             });
             if (changed != 0) anyChanged = true;

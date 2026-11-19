@@ -34,6 +34,10 @@
   <ItemGroup><Compile Include="../../Scripts/Boot/WarScoreRulesFSharpBoot.cs"/></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Boot/PeaceRulesFSharpBoot.cs"/></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Boot/WarRhythmRulesFSharpBoot.cs"/></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Boot/EconomyRulesFSharpBoot.cs"/></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Boot/DemographyRulesFSharpBoot.cs"/></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Boot/DiplomacyRulesFSharpBoot.cs"/></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Boot/CombatTempoRulesFSharpBoot.cs"/></ItemGroup>
   <!-- The managed F# pure rule is part of the game now; the test stand references the same
        net8.0 target the simulation sources compile against. -->
   <ItemGroup><ProjectReference Include="../../Scripts/Rules/DealOrForce.Rules.fsproj" /></ItemGroup>

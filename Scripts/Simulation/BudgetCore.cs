@@ -635,7 +635,7 @@ public static class BudgetCore
             var rate = ReferenceEquals(line, overridden) ? overriddenRate : RateOf(nation, line);
             burden += rate * line.Yield * ScaleOf(line);
         }
-        return 1f / (1f + TaxEvasion * MathF.Max(0f, burden - TaxTolerance));
+        return EconomyRulesHook.TaxCompliance(true, burden, TaxEvasion, TaxTolerance);
     }
 
     /// <summary>The same question a panel asks, with the slots filled for it.</summary>
@@ -660,26 +660,27 @@ public static class BudgetCore
     {
         if (nation is null || line is null) return 0f;
         FillSlots(nation, atWar);
-        var amount = BasisOf(nation, line, weeklyOutput) * rate * YieldOf(nation, line, weeklyOutput) * ScaleOf(line);
-        if (nation.DebtMechanicActive && line.Id == "debt_interest")
-            amount += nation.PublicDebt * nation.DebtSpreadAnnual / 52f;
-        // At the rate being asked about, not the one the country has set - otherwise the
-        // slider would promise money that the rate it is promising it for would evade.
-        if (IsLevy(line)) amount *= Compliance(nation, weeklyOutput, line, rate) * NationalModifiers.Factor(nation, "tax_efficiency");
-        return line.Charge == BudgetBasis.TradeBalance ? amount : MathF.Max(0f, amount);
+        var isLevy = IsLevy(line);
+        var compliance = isLevy ? Compliance(nation, weeklyOutput, line, rate) : 1f;
+        var taxEfficiency = isLevy ? NationalModifiers.Factor(nation, "tax_efficiency") : 1f;
+        return EconomyRulesHook.EvaluateBudgetLineAmount(
+            BasisOf(nation, line, weeklyOutput), rate, YieldOf(nation, line, weeklyOutput), ScaleOf(line),
+            nation.DebtMechanicActive && line.Id == "debt_interest", nation.PublicDebt, nation.DebtSpreadAnnual,
+            isLevy, compliance, taxEfficiency, line.Charge == BudgetBasis.TradeBalance);
     }
 
     private static float AmountFromSlots(Nation nation, BudgetLine line, float weeklyOutput,
         float compliance)
     {
-        var amount = BasisOf(nation, line, weeklyOutput) * RateOf(nation, line) * YieldOf(nation, line, weeklyOutput) * ScaleOf(line);
-        if (nation.DebtMechanicActive && line.Id == "debt_interest")
-            amount += nation.PublicDebt * nation.DebtSpreadAnnual / 52f;
-        if (IsLevy(line)) amount *= compliance * NationalModifiers.Factor(nation, "tax_efficiency");
+        var isLevy = IsLevy(line);
+        var taxEfficiency = isLevy ? NationalModifiers.Factor(nation, "tax_efficiency") : 1f;
         // A trade balance is allowed to be a loss; nothing else is allowed to be negative,
         // because a tax that pays money out because the country is miserable is a bug
         // wearing a formula's clothes.
-        return line.Charge == BudgetBasis.TradeBalance ? amount : MathF.Max(0f, amount);
+        return EconomyRulesHook.EvaluateBudgetLineAmount(
+            BasisOf(nation, line, weeklyOutput), RateOf(nation, line), YieldOf(nation, line, weeklyOutput), ScaleOf(line),
+            nation.DebtMechanicActive && line.Id == "debt_interest", nation.PublicDebt, nation.DebtSpreadAnnual,
+            isLevy, compliance, taxEfficiency, line.Charge == BudgetBasis.TradeBalance);
     }
 
     /// <summary>

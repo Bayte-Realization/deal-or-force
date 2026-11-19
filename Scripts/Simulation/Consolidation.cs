@@ -127,7 +127,7 @@ public static class Consolidation
         var ideology = PoliticsCore.IdeologyOf(nation);
         var nationalist = string.Equals(nation.Ideology, "nationalism", StringComparison.OrdinalIgnoreCase);
         var restraint = AiStatecraft.Restraint(c, nation);
-        return Rules.DiplomacyRules.ConsolidationAmbition(ideology.Authority, nationalist, nation.Stability, restraint);
+        return DiplomacyRulesHook.ConsolidationAmbition(ideology.Authority, nationalist, nation.Stability, restraint);
     }
 
     private static void Review(Campaign c, Nation founder)
@@ -344,7 +344,7 @@ public static class Consolidation
         var theirs = owners.GetValueOrDefault(other.MapIndex) / (float)total;
         // Kindred holders only: a union is never a reason to fight a foreign people.
         var kinship = PeacefulFormation.CulturalAffinity(nation, other);
-        return Rules.DiplomacyRules.ConsolidationWarValue(
+        return DiplomacyRulesHook.ConsolidationWarValue(
             nation.ConsolidationAmbition, c.Defines.ConsolidationForceAmbition,
             theirs, kinship, c.Defines.AiConsolidationAppetite);
     }

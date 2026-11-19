@@ -10,6 +10,12 @@ type SovereignCreditTerms =
       NextConfidence: single
       AnnualSpread: single }
 
+/// Value-only result for market import markup and customs duty evaluation.
+[<Struct>]
+type TradeCostOutcome =
+    { ImportMarkup: single
+      Duty: single }
+
 /// Pure deterministic sovereign finance and macroeconomic rules.
 /// No Godot, IO, RNG or reference to mutable campaign state.
 [<AbstractClass; Sealed>]
@@ -18,6 +24,14 @@ type EconomyRules private () =
     static member private Clamp01(v: single) : single =
         if not (Single.IsFinite v) then 0.0f
         else Math.Clamp(v, 0.0f, 1.0f)
+
+    static member private ClampExact(value: single, minVal: single, maxVal: single) : single =
+        if value < minVal then minVal
+        elif value > maxVal then maxVal
+        else value
+
+    static member private Clamp01Exact(value: single) : single =
+        EconomyRules.ClampExact(value, 0.0f, 1.0f)
 
     /// Evaluates sovereign credit confidence and annual borrowing spread (SovereignFinance.Prepare).
     static member EvaluateCreditTerms(publicDebt: single,
@@ -67,3 +81,50 @@ type EconomyRules private () =
                                   debtIssuedWeekly: single) : single =
         let weeklyCap = gdp * Math.Clamp(weeklyIssueShare, 0.0f, 0.05f) - debtIssuedWeekly
         MathF.Max(0.0f, MathF.Min(capacity - publicDebt, weeklyCap))
+
+    /// Evaluates effective import markup multiplier and customs duty for one market quote.
+    static member EvaluateTradeCost(imports: single,
+                                    relieved: single,
+                                    price: single,
+                                    importMarkupDefine: single,
+                                    reliefDefine: single,
+                                    tariffRate: single) : TradeCostOutcome =
+        let importMarkup =
+            if imports > 0.001f then
+                let ratio = EconomyRules.Clamp01Exact(relieved / imports)
+                let cut = EconomyRules.Clamp01Exact(reliefDefine * ratio)
+                1.0f + (importMarkupDefine - 1.0f) * (1.0f - cut)
+            else
+                1.0f
+        let duty = MathF.Max(0.0f, imports - relieved) * price * tariffRate
+        { ImportMarkup = importMarkup
+          Duty = duty }
+
+    /// Evaluates tax compliance factor from cumulative levy burden, evasion rate, and tolerance.
+    static member TaxCompliance(hasPopulation: bool,
+                                burden: single,
+                                taxEvasion: single,
+                                taxTolerance: single) : single =
+        if not hasPopulation || taxEvasion <= 0.0f then
+            1.0f
+        else
+            1.0f / (1.0f + taxEvasion * MathF.Max(0.0f, burden - taxTolerance))
+
+    /// Evaluates weekly budget line amount after interest, levy compliance, and sign rules.
+    static member EvaluateBudgetLineAmount(basis: single,
+                                           rate: single,
+                                           yieldValue: single,
+                                           scale: single,
+                                           isDebtInterest: bool,
+                                           publicDebt: single,
+                                           debtSpreadAnnual: single,
+                                           isLevy: bool,
+                                           compliance: single,
+                                           taxEfficiency: single,
+                                           allowNegative: bool) : single =
+        let mutable amount = basis * rate * yieldValue * scale
+        if isDebtInterest then
+            amount <- amount + publicDebt * debtSpreadAnnual / 52.0f
+        if isLevy then
+            amount <- amount * (compliance * taxEfficiency)
+        if allowNegative then amount else MathF.Max(0.0f, amount)
