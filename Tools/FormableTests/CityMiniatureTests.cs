@@ -33,6 +33,49 @@ static class CityMiniatureTests
                   parsed.Normals.Length == parsed.TriangleCount * 9 &&
                   parsed.ColorsRgba.Length == parsed.TriangleCount * 12,
                 modelName + " vertex/normal/RGBA streams are complete for single-draw MultiMesh upload");
+
+            // Verify 100% Godot CW outward front-face winding: dot(cross(v1-v0, v2-v0), n0) <= 0
+            var allCw = true;
+            for (var t = 0; t < parsed.TriangleCount; t++)
+            {
+                var p = t * 9;
+                var e1x = parsed.Positions[p + 3] - parsed.Positions[p];
+                var e1y = parsed.Positions[p + 4] - parsed.Positions[p + 1];
+                var e1z = parsed.Positions[p + 5] - parsed.Positions[p + 2];
+                var e2x = parsed.Positions[p + 6] - parsed.Positions[p];
+                var e2y = parsed.Positions[p + 7] - parsed.Positions[p + 1];
+                var e2z = parsed.Positions[p + 8] - parsed.Positions[p + 2];
+                var cx = e1y * e2z - e1z * e2y;
+                var cy = e1z * e2x - e1x * e2z;
+                var cz = e1x * e2y - e1y * e2x;
+                var dot = cx * parsed.Normals[p] + cy * parsed.Normals[p + 1] + cz * parsed.Normals[p + 2];
+                if (dot > 0f) { allCw = false; break; }
+            }
+            Check(allCw, modelName + " winds 100% of triangles clockwise outward for Godot cull_back");
+        }
+
+        // Verify upright column-basis orientation math across Northern/Southern & Eastern/Western hemispheres
+        foreach (var (cityName, lat, lon) in new[] {
+                     ("Warsaw", 52.23f, 21.01f),
+                     ("Tokyo", 35.68f, 139.69f),
+                     ("Sydney", -33.87f, 151.21f),
+                     ("Buenos Aires", -34.60f, -58.38f) })
+        {
+            foreach (var bearing in new[] { 0f, 1.15f, 3.85f })
+            {
+                var (c0, c1, c2, normal) = CityMiniatureLayout.GlobeBasisColumns(lat, lon, bearing, 0.14f, 5f);
+                // Column-vector basis multiplication: Basis(c0, c1, c2) * (0, 0, 1) == c2
+                var c2Len = MathF.Sqrt(c2.X * c2.X + c2.Y * c2.Y + c2.Z * c2.Z);
+                var upDotNormal = (c2.X * normal.X + c2.Y * normal.Y + c2.Z * normal.Z) / MathF.Max(c2Len, 1e-6f);
+                var ortho0 = MathF.Abs(c0.X * normal.X + c0.Y * normal.Y + c0.Z * normal.Z);
+                var ortho1 = MathF.Abs(c1.X * normal.X + c1.Y * normal.Y + c1.Z * normal.Z);
+                // Positive right-handed determinant preserves CW triangle winding on the sphere
+                var det = c0.X * (c1.Y * c2.Z - c1.Z * c2.Y)
+                        - c1.X * (c0.Y * c2.Z - c0.Z * c2.Y)
+                        + c2.X * (c0.Y * c1.Z - c0.Z * c1.Y);
+                Check(upDotNormal > 0.9999f && ortho0 < 1e-4f && ortho1 < 1e-4f && det > 0f,
+                    "upright right-handed column basis verified at " + cityName + " (bearing=" + bearing.ToString("F2") + ")");
+            }
         }
 
         // Verify 8x4 = 32 spatial chunk indexing across full globe (-90..+90, -180..+180)
@@ -91,11 +134,22 @@ static class CityMiniatureTests
         Check(placedA.All(p => CityMiniatureLayout.FootprintOnLand(map, null, p.Latitude, p.Longitude, p.FootprintDeg, p.LongitudeScale)),
             "every placed miniature center and 4 footprint corners stand strictly on land");
 
+        // Verify Zipf regional rank prevents 14 small towns in one region from starving its primary city
+        var denseCities = new List<CityDefinition>();
+        for (var i = 0; i < 15; i++)
+            denseCities.Add(new CityDefinition { Id = "town_" + i, Name = "Town " + i, Latitude = 48.0f + i * 0.55f, Longitude = 10.0f + (i % 4) * 2.5f });
+        var denseAnchors = denseCities.Select(c => new CityCatalog.MapAnchor(
+            CityCatalog.ProvinceUnder(map, c.Latitude, c.Longitude), c.Latitude, c.Longitude)).ToArray();
+        var densePlaced = CityMiniatureLayout.BuildPlacements(
+            denseCities, denseAnchors, new bool[15], new Dictionary<int, long> { [1] = 1_400_000 }, map, null);
+        Check(densePlaced.Length is >= 2 and <= 5 && densePlaced.Any(p => p.CityIndex == 0),
+            "Zipf regional urban distribution places primary regional cities even when 15 towns share a state (" + densePlaced.Length + " placed)");
+
         var rendererCode = File.ReadAllText(Path.Combine(GameDataLoader.DataFolder(), "..", "Scripts", "gfx", "CityMiniatureRenderer.cs"));
         Check(rendererCode.Contains("public sealed class CityMiniatureRenderer") &&
               !rendererCode.Contains("partial class GlobePresentation") &&
               rendererCode.Contains("Task.Run(") &&
-              rendererCode.Contains(").Transposed()"),
-            "CityMiniatureRenderer is a standalone cohesive class building upright column-aligned 8x4 MultiMesh chunks on a worker thread");
+              !rendererCode.Contains(".Transposed()"),
+            "CityMiniatureRenderer is a standalone cohesive class using direct column vectors on a worker thread");
     }
 }

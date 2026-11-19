@@ -263,7 +263,6 @@ public sealed class CityMiniatureRenderer
         for (var i = 0; i < placements.Length; i++) perChunk[placements[i].ChunkIndex].Add(placements[i]);
 
         var chunks = new ChunkSlice[CityMiniatureLayout.ChunkCount];
-        var angular = GlobeRadius * MathF.PI / 180f;
         for (var c = 0; c < CityMiniatureLayout.ChunkCount; c++)
         {
             var (cLat, cLon) = CityMiniatureLayout.ChunkCenterDegrees(c);
@@ -285,21 +284,21 @@ public sealed class CityMiniatureRenderer
                 var cb = MathF.Cos(p.BearingRad);
                 var sb = MathF.Sin(p.BearingRad);
 
-                var globeW = p.FootprintDeg * angular * 1.35f;
-                var (east, north, normal) = SurfaceAxes(p.Latitude, p.Longitude);
+                var (c0, c1, c2, normal) = CityMiniatureLayout.GlobeBasisColumns(
+                    p.Latitude, p.Longitude, p.BearingRad, p.FootprintDeg, GlobeRadius);
                 var gRot = new Basis(
-                    (east * cb + north * sb) * globeW,
-                    (-east * sb + north * cb) * globeW,
-                    normal * (globeW * 1.15f)).Transposed();
-                var gOrigin = normal * (GlobeRadius * 1.00018f);
+                    new Vector3(c0.X, c0.Y, c0.Z),
+                    new Vector3(c1.X, c1.Y, c1.Z),
+                    new Vector3(c2.X, c2.Y, c2.Z));
+                var gOrigin = new Vector3(normal.X, normal.Y, normal.Z) * (GlobeRadius * 1.00018f);
                 byKindGlobe[k].Add(new Transform3D(gRot, gOrigin));
 
                 var flatW = p.FootprintDeg * 1.35f * (FlatMapWidth / 360f / p.LongitudeScale);
                 var flatD = p.FootprintDeg * 1.35f * (FlatMapHeight / 180f);
                 var fRot = new Basis(
-                    new Vector3(cb * flatW, sb * flatD, 0f),
-                    new Vector3(-sb * flatW, cb * flatD, 0f),
-                    new Vector3(0f, 0f, flatD * 1.15f)).Transposed();
+                    new Vector3(cb, sb, 0f) * flatW,
+                    new Vector3(-sb, cb, 0f) * flatD,
+                    new Vector3(0f, 0f, flatD * 1.15f));
                 var fOrigin = new Vector3(p.Longitude / 360f * FlatMapWidth, p.Latitude / 180f * FlatMapHeight, FlatLineZ);
                 byKindFlat[k].Add(new Transform3D(fRot, fOrigin));
 
@@ -459,19 +458,6 @@ public sealed class CityMiniatureRenderer
         var lon = Mathf.DegToRad(longitude + 180f);
         var h = Mathf.Cos(lat);
         return new Vector3(h * Mathf.Sin(lon), Mathf.Sin(lat), h * Mathf.Cos(lon)) * radius;
-    }
-
-    private static (Vector3 East, Vector3 North, Vector3 Normal) SurfaceAxes(float latitude, float longitude)
-    {
-        var latRad = Mathf.DegToRad(latitude);
-        var lonRad = Mathf.DegToRad(longitude + 180f);
-        var normal = SpherePoint(latitude, longitude, 1f).Normalized();
-        var east = new Vector3(Mathf.Cos(lonRad), 0f, -Mathf.Sin(lonRad)).Normalized();
-        var north = new Vector3(
-            -Mathf.Sin(latRad) * Mathf.Sin(lonRad),
-            Mathf.Cos(latRad),
-            -Mathf.Sin(latRad) * Mathf.Cos(lonRad)).Normalized();
-        return (east, north, normal);
     }
 
     private const string MiniatureShaderCode = @"shader_type spatial;

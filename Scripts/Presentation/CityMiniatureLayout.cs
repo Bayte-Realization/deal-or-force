@@ -23,8 +23,10 @@ public static class CityMiniatureLayout
     public const int LonBins = 8;
     public const int LatBins = 4;
     public const int ChunkCount = LonBins * LatBins;
-    public const int MaxTotalInstances = 960;
+    public const int MaxInstancesPerChunk = 96;
+    public const int MaxTotalInstances = 2400;
     public const long MinimumUrbanPopulation = 120_000;
+    private const float MinSeparationDeg = 0.22f;
 
     public static readonly string[] ModelNames =
     {
@@ -121,9 +123,29 @@ public static class CityMiniatureLayout
                 hasWindow |= glow > 0.5f;
                 for (var t = 2; t < p.Length - 1; t++)
                 {
+                    // Godot ArrayMesh + cull_back winds front faces clockwise (CW), whereas Wavefront
+                    // OBJ exports anticlockwise (CCW: dot(cross(v1-v0, v2-v0), vn) > 0). Swap corners
+                    // whenever CCW relative to outward normal so 100% of triangles wind CW outward.
+                    var (v0, n0) = ReadCorner(p[1], rawVerts, rawNorms);
+                    var (v1, _) = ReadCorner(p[t], rawVerts, rawNorms);
+                    var (v2, _) = ReadCorner(p[t + 1], rawVerts, rawNorms);
+                    var e1x = v1.X - v0.X; var e1y = v1.Y - v0.Y; var e1z = v1.Z - v0.Z;
+                    var e2x = v2.X - v0.X; var e2y = v2.Y - v0.Y; var e2z = v2.Z - v0.Z;
+                    var cx = e1y * e2z - e1z * e2y;
+                    var cy = e1z * e2x - e1x * e2z;
+                    var cz = e1x * e2y - e1y * e2x;
+                    var dot = cx * n0.X + cy * n0.Y + cz * n0.Z;
                     EmitCorner(p[1], rawVerts, rawNorms, positions, normals, colors, r, g, b, glow);
-                    EmitCorner(p[t], rawVerts, rawNorms, positions, normals, colors, r, g, b, glow);
-                    EmitCorner(p[t + 1], rawVerts, rawNorms, positions, normals, colors, r, g, b, glow);
+                    if (dot > 0f)
+                    {
+                        EmitCorner(p[t + 1], rawVerts, rawNorms, positions, normals, colors, r, g, b, glow);
+                        EmitCorner(p[t], rawVerts, rawNorms, positions, normals, colors, r, g, b, glow);
+                    }
+                    else
+                    {
+                        EmitCorner(p[t], rawVerts, rawNorms, positions, normals, colors, r, g, b, glow);
+                        EmitCorner(p[t + 1], rawVerts, rawNorms, positions, normals, colors, r, g, b, glow);
+                    }
                 }
             }
         }
@@ -162,7 +184,10 @@ public static class CityMiniatureLayout
             citiesPerState[st] = citiesPerState.GetValueOrDefault(st) + 1;
         }
 
-        var candidates = new List<(long Score, Placement Item)>(512);
+        var seenInState = new Dictionary<int, int>(citiesPerState.Count);
+        var perChunkCandidates = new List<(long Score, Placement Item)>[ChunkCount];
+        for (var c = 0; c < ChunkCount; c++) perChunkCandidates[c] = new List<(long, Placement)>(64);
+
         for (var i = 0; i < cities.Count; i++)
         {
             var anchor = anchors[i];
@@ -170,48 +195,81 @@ public static class CityMiniatureLayout
             if (pid <= 0 || pid > map.ProvinceCount) continue;
             if (destroyedProvinces is not null && destroyedProvinces.Contains(pid)) continue;
 
-            var cap = isCapital is not null && i < isCapital.Length && isCapital[i];
             var stIdx = map.ProvinceToState[pid];
+            var rankInState = seenInState.GetValueOrDefault(stIdx, 0);
+            seenInState[stIdx] = rankInState + 1;
+
+            var cap = isCapital is not null && i < isCapital.Length && isCapital[i];
             var sharing = Math.Max(1, citiesPerState.GetValueOrDefault(stIdx, 1));
+            // CityCatalog orders cities by regional prominence: distribute regional urban population
+            // by Zipf rank 1 / ((r + 1) * H_N) so primary cities are not diluted by small towns.
             var people = stateUrbanPop is not null && stateUrbanPop.TryGetValue(stIdx, out var urban)
-                ? urban / sharing
+                ? (long)(urban / ((rankInState + 1.0) * HarmonicSum(sharing)))
                 : 0L;
             if (!cap && people < MinimumUrbanPopulation) continue;
 
             var seed = HashCity(cities[i].Id);
             var popFactor = Math.Clamp((float)Math.Log10(Math.Max(50_000, people)) - 4.7f, 0f, 2.6f);
-            var footprintDeg = (cap ? 0.135f : 0.095f) + popFactor * 0.026f;
+            var footprintDeg = (cap ? 0.145f : 0.112f) + popFactor * 0.028f;
             var lonScale = Math.Max(0.14f, MathF.Cos(anchor.Latitude * (MathF.PI / 180f)));
 
-            if (!FootprintOnLand(map, destroyedProvinces, anchor.Latitude, anchor.Longitude, footprintDeg, lonScale))
+            var placeLat = anchor.Latitude;
+            var placeLon = anchor.Longitude;
+            if (!FootprintOnLand(map, destroyedProvinces, placeLat, placeLon, footprintDeg, lonScale) &&
+                !TryNudgeOntoShore(map, destroyedProvinces, pid, ref placeLat, ref placeLon, footprintDeg, lonScale))
                 continue;
 
+            var coastal = NearSeaCoast(map, anchor.Latitude, anchor.Longitude, lonScale, out var seaBearing) ||
+                          NearSeaCoast(map, placeLat, placeLon, lonScale, out seaBearing);
             var kind = cap
                 ? CityMiniatureKind.CapitalMonument
-                : NearSeaCoast(map, anchor.Latitude, anchor.Longitude, lonScale)
+                : coastal
                     ? CityMiniatureKind.PortHarbor
                     : CityMiniatureKind.CityCluster;
 
-            var baseHeight = (cap ? 0.0115f : 0.0078f) + popFactor * 0.0022f;
-            var bearing = (seed & 1023u) * (MathF.Tau / 1024f);
+            var baseHeight = (cap ? 0.0120f : 0.0088f) + popFactor * 0.0024f;
+            var bearing = kind == CityMiniatureKind.PortHarbor
+                ? seaBearing + MathF.PI * 0.5f
+                : (seed & 1023u) * (MathF.Tau / 1024f);
             var shade = 0.88f + ((seed >> 10) & 15u) * 0.012f;
-            var chunk = ChunkIndexOf(anchor.Latitude, anchor.Longitude);
+            var chunk = ChunkIndexOf(placeLat, placeLon);
             var score = (cap ? 1_000_000_000L : 0L) + Math.Clamp(people, 0L, 500_000_000L);
 
-            candidates.Add((score, new Placement(
-                i, chunk, kind, anchor.Latitude, anchor.Longitude,
+            perChunkCandidates[chunk].Add((score, new Placement(
+                i, chunk, kind, placeLat, placeLon,
                 footprintDeg, lonScale, baseHeight, bearing, shade)));
         }
 
-        candidates.Sort(static (a, b) =>
+        var selected = new List<(long Score, Placement Item)>(1024);
+        for (var c = 0; c < ChunkCount; c++)
+        {
+            var bucket = perChunkCandidates[c];
+            if (bucket.Count == 0) continue;
+            bucket.Sort(static (a, b) =>
+            {
+                var cmp = b.Score.CompareTo(a.Score);
+                return cmp != 0 ? cmp : a.Item.CityIndex.CompareTo(b.Item.CityIndex);
+            });
+            var accepted = new List<Placement>(Math.Min(bucket.Count, MaxInstancesPerChunk));
+            for (var i = 0; i < bucket.Count && accepted.Count < MaxInstancesPerChunk; i++)
+            {
+                var cand = bucket[i].Item;
+                var isCap = cand.Kind == CityMiniatureKind.CapitalMonument;
+                if (!isCap && OverlapsAccepted(accepted, cand)) continue;
+                accepted.Add(cand);
+                selected.Add(bucket[i]);
+            }
+        }
+
+        selected.Sort(static (a, b) =>
         {
             var cmp = b.Score.CompareTo(a.Score);
             return cmp != 0 ? cmp : a.Item.CityIndex.CompareTo(b.Item.CityIndex);
         });
 
-        var take = Math.Min(candidates.Count, MaxTotalInstances);
+        var take = Math.Min(selected.Count, MaxTotalInstances);
         var result = new Placement[take];
-        for (var i = 0; i < take; i++) result[i] = candidates[i].Item;
+        for (var i = 0; i < take; i++) result[i] = selected[i].Item;
         return result;
     }
 
@@ -232,15 +290,67 @@ public static class CityMiniatureLayout
         return true;
     }
 
-    private static bool NearSeaCoast(ProvinceTopology map, float lat, float lon, float lonScale)
+    private static bool TryNudgeOntoShore(
+        ProvinceTopology map, HashSet<int> destroyed, int expectedProvince,
+        ref float lat, ref float lon, float footprintDeg, float lonScale)
     {
-        const float probeDeg = 0.22f;
-        for (var dir = 0; dir < 8; dir++)
+        for (var ring = 1; ring <= 3; ring++)
         {
-            var angle = dir * (MathF.PI * 0.25f);
-            var plat = Math.Clamp(lat + MathF.Sin(angle) * probeDeg, -89.8f, 89.8f);
-            var plon = WrapLon(lon + MathF.Cos(angle) * probeDeg / lonScale);
-            if (CityCatalog.ProvinceUnder(map, plat, plon) == 0) return true;
+            var step = footprintDeg * (0.38f * ring);
+            for (var dir = 0; dir < 8; dir++)
+            {
+                var angle = dir * (MathF.PI * 0.25f);
+                var nlat = Math.Clamp(lat + MathF.Sin(angle) * step, -89.7f, 89.7f);
+                var nlon = WrapLon(lon + MathF.Cos(angle) * step / lonScale);
+                if (CityCatalog.ProvinceUnder(map, nlat, nlon) != expectedProvince && ring == 1) continue;
+                if (FootprintOnLand(map, destroyed, nlat, nlon, footprintDeg, lonScale))
+                {
+                    lat = nlat;
+                    lon = nlon;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static bool NearSeaCoast(ProvinceTopology map, float lat, float lon, float lonScale, out float seaAngle)
+    {
+        foreach (var probeDeg in new[] { 0.18f, 0.30f })
+        {
+            for (var dir = 0; dir < 16; dir++)
+            {
+                var angle = dir * (MathF.Tau / 16f);
+                var plat = Math.Clamp(lat + MathF.Sin(angle) * probeDeg, -89.8f, 89.8f);
+                var plon = WrapLon(lon + MathF.Cos(angle) * probeDeg / lonScale);
+                if (CityCatalog.ProvinceUnder(map, plat, plon) == 0)
+                {
+                    seaAngle = angle;
+                    return true;
+                }
+            }
+        }
+        seaAngle = 0f;
+        return false;
+    }
+
+    private static double HarmonicSum(int n)
+    {
+        var sum = 0.0;
+        var count = Math.Max(1, n);
+        for (var k = 1; k <= count; k++) sum += 1.0 / k;
+        return sum;
+    }
+
+    private static bool OverlapsAccepted(List<Placement> accepted, in Placement candidate)
+    {
+        var minSq = MinSeparationDeg * MinSeparationDeg;
+        for (var i = 0; i < accepted.Count; i++)
+        {
+            var prev = accepted[i];
+            var dLat = candidate.Latitude - prev.Latitude;
+            var dLon = (candidate.Longitude - prev.Longitude) * candidate.LongitudeScale;
+            if (dLat * dLat + dLon * dLon < minSq) return true;
         }
         return false;
     }
@@ -276,14 +386,47 @@ public static class CityMiniatureLayout
             _ => (0.78f, 0.77f, 0.75f, 0f, true, false)
         };
 
-    private static void EmitCorner(
+    /// <summary>
+    /// Computes the three column vectors (Col0 = rotated East, Col1 = rotated North, Col2 = outward
+    /// sphere Normal) and unit sphere normal for Godot's column-vector Basis(c0, c1, c2) constructor.
+    /// </summary>
+    public static ((float X, float Y, float Z) Col0, (float X, float Y, float Z) Col1, (float X, float Y, float Z) Col2, (float X, float Y, float Z) Normal)
+        GlobeBasisColumns(float latitude, float longitude, float bearingRad, float footprintDeg, float globeRadius = 5f)
+    {
+        var latRad = latitude * (MathF.PI / 180f);
+        var lonRad = (longitude + 180f) * (MathF.PI / 180f);
+        var cosLat = MathF.Cos(latRad);
+        var sinLat = MathF.Sin(latRad);
+        var cosLon = MathF.Cos(lonRad);
+        var sinLon = MathF.Sin(lonRad);
+
+        var nx = cosLat * sinLon;
+        var ny = sinLat;
+        var nz = cosLat * cosLon;
+
+        var ex = cosLon;
+        var ey = 0f;
+        var ez = -sinLon;
+
+        var nox = -sinLat * sinLon;
+        var noy = cosLat;
+        var noz = -sinLat * cosLon;
+
+        var cb = MathF.Cos(bearingRad);
+        var sb = MathF.Sin(bearingRad);
+        var w = footprintDeg * (globeRadius * MathF.PI / 180f) * 1.35f;
+        var h = w * 1.15f;
+
+        var c0 = ((ex * cb + nox * sb) * w, (ey * cb + noy * sb) * w, (ez * cb + noz * sb) * w);
+        var c1 = ((-ex * sb + nox * cb) * w, (-ey * sb + noy * cb) * w, (-ez * sb + noz * cb) * w);
+        var c2 = (nx * h, ny * h, nz * h);
+        return (c0, c1, c2, (nx, ny, nz));
+    }
+
+    private static ((float X, float Y, float Z) V, (float X, float Y, float Z) N) ReadCorner(
         string spec,
         List<(float X, float Y, float Z)> rawVerts,
-        List<(float X, float Y, float Z)> rawNorms,
-        List<float> positions,
-        List<float> normals,
-        List<float> colors,
-        float r, float g, float b, float glow)
+        List<(float X, float Y, float Z)> rawNorms)
     {
         var slash = spec.IndexOf('/');
         var vIdxStr = slash >= 0 ? spec.Substring(0, slash) : spec;
@@ -299,6 +442,19 @@ public static class CityMiniatureLayout
 
         (float X, float Y, float Z) v = rawVerts.Count > 0 ? rawVerts[vi] : (0f, 0f, 0f);
         (float X, float Y, float Z) n = ni >= 0 && ni < rawNorms.Count ? rawNorms[ni] : (0f, 0f, 1f);
+        return (v, n);
+    }
+
+    private static void EmitCorner(
+        string spec,
+        List<(float X, float Y, float Z)> rawVerts,
+        List<(float X, float Y, float Z)> rawNorms,
+        List<float> positions,
+        List<float> normals,
+        List<float> colors,
+        float r, float g, float b, float glow)
+    {
+        var (v, n) = ReadCorner(spec, rawVerts, rawNorms);
         positions.Add(v.X); positions.Add(v.Y); positions.Add(v.Z);
         normals.Add(n.X); normals.Add(n.Y); normals.Add(n.Z);
         colors.Add(r); colors.Add(g); colors.Add(b); colors.Add(glow);

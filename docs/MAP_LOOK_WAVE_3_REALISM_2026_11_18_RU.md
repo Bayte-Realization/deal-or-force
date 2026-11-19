@@ -40,7 +40,7 @@
   - `city_cluster.obj` — **114 треугольников** (асимметричный городской квартал с башней ратуши, черепичными и сланцевыми крышами);
   - `port_harbor.obj` — **148 треугольников** (каменный мол, портовый маяк с фонарём и пакгаузы).
 - Архитектура строго без `partial class GlobePresentation`:
-  - `Scripts/Presentation/CityMiniatureLayout.cs` (`public static class CityMiniatureLayout`, без зависимостей от Godot) — парсер `.obj` и расчёт размещений с проверкой суши по центру и 4 углам (`FootprintOnLand`), классификацией столиц/портов/городов и разбивкой на **32 пространственных чанка (`8×4` по долготе и широте)** в фоновом потоке (`Task.Run`).
+  - `Scripts/Presentation/CityMiniatureLayout.cs` (`public static class CityMiniatureLayout`, без зависимостей от Godot) — парсер `.obj` с принудительной обмоткой граней по часовой стрелке (CW) под `cull_back` Godot, правосторонняя столбцовая ориентация `GlobeBasisColumns` без лишнего транспонирования, распределение городского населения региона по рангу Ципфа (`1 / ((r + 1) * H_N)`), береговой сдвиг `TryNudgeOntoShore`, проверка суши по центру и 4 углам (`FootprintOnLand`), классификация столиц/портов/городов и справедливый отбор до `96` миниатюр в каждом из **32 пространственных чанков (`8×4` по долготе и широте)** в фоновом потоке (`Task.Run`).
   - `Scripts/gfx/CityMiniatureRenderer.cs` (`public sealed class CityMiniatureRenderer`) — рендерер чанкованных `MultiMeshInstance3D` с GPU-масштабированием в вершинном шейдере и отсечением за горизонтом/фрустумом за `O(32)` на главном потоке (**0 циклов по городам на main thread**).
 
 ## 5. Результаты верификации
@@ -49,7 +49,7 @@
 - Гигиена дерева: `MISSING_CS_UID = 0` (включая `Scripts/` и `Tools/FormableTests/CityMiniatureTests.cs.uid`), `MISSING_ASSET_IMPORT = 0` (`capital_monument.obj.import`, `city_cluster.obj.import`, `port_harbor.obj.import`), `SIM_GODOT_USING = 0`, `0` упоминаний сторонних игр в настройках и локализации.
 - `Tools/audit-localization.ps1 -Fail`: exit `0` (`27 531` ключей в `418` файлах, `0` конфликтов / плейсхолдеров / пустых значений).
 - Headless-наборы:
-  - `--map-look-only` (включая `CityMiniatureTests`): **`208` PASS** (`EXIT = 0`);
+  - `--map-look-only` (включая `CityMiniatureTests`: 100% CW-обмотка треугольников всех 3 `.obj`, правосторонний столбцовый базис в 4 полушариях и ранговое распределение Ципфа): **`224` PASS** (`EXIT = 0`);
   - `--gpu-atlas-contract-only` (12 сэмплеров Compatibility + `MapStyleSettingTests` + миграция `map_look_default_v3`): **`74` PASS** (`EXIT = 0`);
   - `--map-labels-only`: **`51` PASS** (`EXIT = 0`);
   - `--frontier-field-only`: **`17` PASS** (`EXIT = 0`);
