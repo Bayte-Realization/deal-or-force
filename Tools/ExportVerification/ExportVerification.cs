@@ -253,6 +253,13 @@ public partial class ExportVerification : Node
                     ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
+                if (args.Contains("--verify-army-counter-scale-only"))
+                {
+                    await VerifyArmyCounterScale(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (DisplayServer.GetName() != "headless") await VerifyMapSurface(game);
                 if (args.Contains("--verify-player-feedback-only"))
                 {

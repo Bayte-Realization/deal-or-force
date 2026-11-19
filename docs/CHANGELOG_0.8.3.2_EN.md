@@ -4,6 +4,11 @@
 
 Major visual craft, structural UI redesign, campaign peace logic, and deep Speed-5/GC performance release built on top of 0.7.2.3.
 
+## 20 November 2026 hotfix
+
+- Army counters keep a stable size as stacks refresh at a fixed camera. Globe counters use their actual camera depth, and flat-map counters follow the map zoom.
+- Reused counters for newly visible stacks start at the correct location. A formation crossing into a new province still eases from its previous position.
+
 ## Highlights in EntertAlpha 0.8.3.2
 
 ### Uniform Multi-Surface Texture Pack, Structural UI Redesign & Full Moddability

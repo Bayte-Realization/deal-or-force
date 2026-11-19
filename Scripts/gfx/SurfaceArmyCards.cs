@@ -22,13 +22,10 @@ public sealed partial class GlobePresentation
     private void SizeSurfaceArmyCounter(ArmyStackMarker marker)
     {
         var width = SurfaceCounterWidth(marker.Node);
-        if (MathF.Abs(marker.Node.Scale.X - width) > 0.00015f)
-        {
-            if (marker.Node.Scale.X <= 0.0001f || MathF.Abs(marker.Node.Scale.X - width) > 0.25f)
-                marker.Node.Scale = Vector3.One * width;
-            else
-                marker.Node.Scale = marker.Node.Scale.Lerp(Vector3.One * width, 0.30f);
-        }
+        // Camera and position already move smoothly. Derive the scale directly so an
+        // extra reconcile or density pass cannot change it at the same position.
+        if (MathF.Abs(marker.Node.Scale.X - width) > 0.000001f)
+            marker.Node.Scale = Vector3.One * width;
     }
 
     // One world footprint and one screen ceiling for all military cards. Individual
@@ -37,9 +34,7 @@ public sealed partial class GlobePresentation
     {
         if (!IsInstanceValid(_camera)) return .06f;
         var camTransform = _camera.GlobalTransform;
-        var pos = node is not null && IsInstanceValid(node) && node.IsInsideTree()
-            ? node.GlobalPosition
-            : node is not null ? node.Position : camTransform.Origin - camTransform.Basis.Z * 5f;
+        var pos = node.IsInsideTree() ? node.GlobalPosition : node.Position;
         var rel = pos - camTransform.Origin;
         var depth = Math.Max(.001f, -rel.Dot(camTransform.Basis.Z));
         var viewportH = Math.Max(1f, Size.Y);

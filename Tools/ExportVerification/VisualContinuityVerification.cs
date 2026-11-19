@@ -8,6 +8,28 @@ namespace DealOrForce;
 
 public partial class ExportVerification
 {
+    private async Task VerifyArmyCounterScale(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        world.IsPaused = true;
+        var army = world.Armies.First(a => a.NationId == world.Player.Id && a.ProvinceId > 0);
+        var centre = world.ProvinceMap.CenterOf(army.ProvinceId);
+        var before = CampaignFingerprint.Of(world);
+        foreach (var flat in new[] { false, true })
+        foreach (var distance in new[] { 5.35f, 7.4f })
+        {
+            game.VerificationContinuityView(flat, centre.Latitude, centre.Longitude, distance);
+            await Wait(.6);
+            var result = game.VerificationArmyCounterScale(army);
+            GD.Print($"ARMY_COUNTER_SCALE flat={flat} distance={distance} width={result.Width:F6} max_drift={result.MaxDrift:F7}");
+            Check(result.Visible, "stationary army counter is visible at its province");
+            Check(result.Width > 0f && result.MaxDrift < .00001f,
+                "rebuilding army counters preserves the projected size at a fixed camera");
+            await Capture($"army-counter-scale-{(flat ? "flat" : "globe")}-{(distance < 6 ? "near" : "far")}");
+        }
+        Check(before == CampaignFingerprint.Of(world), "army counter refreshes preserve the campaign fingerprint");
+    }
+
     private async Task VerifyVisualContinuity(DealOrForceGame game)
     {
         var world=game.VerificationWorld;
@@ -77,6 +99,9 @@ public partial class ExportVerification
 
 public partial class DealOrForceGame
 {
+    internal (bool Visible, float Width, float MaxDrift) VerificationArmyCounterScale(Army army) =>
+        _globe.VerificationArmyCounterScale(army);
+
     internal bool VerificationMapProcessing {set=>_globe.SetProcess(value);}
     internal float VerificationRiverInset {set=>_globe.VerificationRiverInset=value;}
     internal void VerificationContinuityView(bool flat,float latitude,float longitude,float distance)=>
@@ -85,6 +110,22 @@ public partial class DealOrForceGame
 
 public sealed partial class GlobePresentation
 {
+    internal (bool Visible, float Width, float MaxDrift) VerificationArmyCounterScale(Army army)
+    {
+        ReconcileArmyMarkers(_campaign);
+        var key = ArmyPresentationBucket(_campaign, army);
+        if (!_armyStacks.TryGetValue(key, out var marker)) return default;
+        UpdateCounterScale(force: true);
+        var width = _flatMap ? _counterWorldPixel * _counterFlatFar : SurfaceCounterWidth(marker.Node);
+        var maxDrift = MathF.Abs(marker.Node.Scale.X - width);
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            ReconcileArmyMarkers(_campaign);
+            maxDrift = MathF.Max(maxDrift, MathF.Abs(marker.Node.Scale.X - width));
+        }
+        return (marker.Node.IsVisibleInTree() && marker.Plate.IsVisibleInTree(), width, maxDrift);
+    }
+
     internal float VerificationRiverInset {set=>_globeMaterial.SetShaderParameter("river_inset",value);}
     internal void VerificationContinuityView(bool flat,float latitude,float longitude,float distance)
     {

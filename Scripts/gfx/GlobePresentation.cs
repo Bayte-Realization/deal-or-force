@@ -3253,6 +3253,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     marker.LastMetaProvinceId = -1;
                     marker.ActualFingerprint = 0;
                     marker.DisplayFingerprint = 0;
+                    marker.LayoutInitialized = false;
+                    marker.LayoutOffset = Vector2.Zero;
+                    marker.MotionSettled = false;
                     _armyMarkerPool.Push(marker);
                 }
                 else
@@ -3296,17 +3299,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 var initialLoc = ArmyPresentationLocation(marker.Stack);
                 marker.Normal = SurfacePoint(initialLoc.Latitude, initialLoc.Longitude, 1f);
                 CreateArmyStackMarker(marker, nation, lead, templateId);
-                SizeArmyCounter(marker);
-                if (_previousArmyPositions.TryGetValue(lead.Id, out var prevPos) && prevPos != Vector3.Zero)
-                {
-                    marker.DisplayPosition = prevPos;
-                    // This is the same formation crossing into a new province bucket. Start
-                    // the ease from the pixel it already occupied instead of snapping it to
-                    // the new province centre. A genuinely new formation has no previous
-                    // position and still appears at its target immediately.
-                    marker.MotionSettled = true;
-                    marker.Node.Position = prevPos;
-                }
                 InvalidateFlatCounterDensity();
             }
             else
@@ -3318,41 +3310,34 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     _armyRoot.AddChild(marker.Node);
                 }
                 marker.Node.Name = $"DivisionStack_{nation.Tag}_{lead.ProvinceId}_{lead.Id}";
-                marker.Node.Scale = _flatMap
-                    ? Vector3.One * _counterWorldPixel * _counterFlatFar
-                    : Vector3.One * SurfaceCounterWidth(null);
 
-                if (marker.NationId != nation.Id ||
+                var textureChanged = marker.NationId != nation.Id ||
                     marker.FlagVisualId != NationalFlagVisualId(nation) ||
-                    !string.Equals(marker.TemplateId, templateId, StringComparison.Ordinal))
+                    !string.Equals(marker.TemplateId, templateId, StringComparison.Ordinal);
+                if (textureChanged)
                 {
                     marker.FullPlateTexture = ArmyCounterTexture(nation, templateId);
-                    if (marker.Plate is not null && IsInstanceValid(marker.Plate))
-                        marker.Plate.Texture = marker.FullPlateTexture;
-                    SizeArmyCounter(marker);
                     marker.NationId = nation.Id;
                     marker.TemplateId = templateId;
                 }
-
-                if (_previousArmyPositions.TryGetValue(lead.Id, out var prevPos) && prevPos != Vector3.Zero)
-                {
-                    marker.DisplayPosition = prevPos;
-                    marker.MotionSettled = true;
-                    marker.Node.Position = prevPos;
-                }
+                if (textureChanged || !marker.LayoutInitialized || marker.FlatLayout != _flatMap)
+                    SizeArmyCounter(marker);
             }
             marker.FlagVisualId = NationalFlagVisualId(nation);
             if (marker.Node is null) continue;
 
             var location = ArmyPresentationLocation(marker.Stack);
             var position = ArmyMarkerPosition(marker);
-            // The target is written here; the drawn node eases toward it in
-            // UpdateArmyMarkerMotion. Writing the node directly is what made a division
-            // crossing a border teleport one province in a single frame.
-            if (marker.TargetPosition != position || !marker.MotionSettled)
+            marker.TargetPosition = position;
+            if (!marker.MotionSettled)
             {
-                marker.TargetPosition = position;
-                if (!marker.MotionSettled) InvalidateFlatCounterDensity();
+                // A new province bucket starts at the formation's last drawn position
+                // when available. An unrelated node from the pool starts at the new target.
+                marker.DisplayPosition = _previousArmyPositions.TryGetValue(lead.Id, out var previous)
+                    && previous != Vector3.Zero ? previous : position;
+                marker.Node.Position = marker.DisplayPosition;
+                marker.MotionSettled = true;
+                InvalidateFlatCounterDensity();
             }
             marker.Normal = SurfacePoint(location.Latitude, location.Longitude, 1f);
             OrientSurfaceArmyCard(marker);
@@ -3474,10 +3459,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             var node = new Node3D
             {
                 Name = $"DivisionStack_{nation.Tag}_{lead.ProvinceId}_{lead.Id}",
-                Position = initialPos,
-                Scale = _flatMap
-                    ? Vector3.One * _counterWorldPixel * _counterFlatFar
-                    : Vector3.One * SurfaceCounterWidth(null)
+                Position = initialPos
             };
             _armyRoot.AddChild(node);
             marker.Node = node;
