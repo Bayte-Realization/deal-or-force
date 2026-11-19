@@ -1,0 +1,39 @@
+// Four quiet hand sounds for the new campaign screen.
+//
+// Generated for Deal or Force with Creative Claw / ElevenLabs Sound Effects v2 on
+// 18 November 2026 (44.1 kHz stereo PCM WAV), peak-trimmed to -6.5 dBFS for the
+// interface cues and -4.5 dBFS for the dispatch. Provenance: audio/README.md.
+//
+// Dry, physical, short: a plate pressed, a drawer opened, a map lens turned, a
+// dispatch laid on the desk. Nothing here is a chime - the interface direction asks
+// for object sounds, not notification tones (docs/INTERFACE_DIRECTION_2026_11_15_RU.md).
+// A mod replaces any of them by naming the same key with its own file.
+{
+  "cues": {
+    "shell_plate_tap": {
+      "file": "audio/interface/shell_plate_tap.wav",
+      "channel": "interface",
+      "volume_db": -3,
+      "cooldown_ms": 90
+    },
+    "shell_drawer_slide": {
+      "file": "audio/interface/shell_drawer_slide.wav",
+      "channel": "interface",
+      "volume_db": -2,
+      "cooldown_ms": 250
+    },
+    "shell_map_lens": {
+      "file": "audio/interface/shell_map_lens.wav",
+      "channel": "interface",
+      "volume_db": -3,
+      "cooldown_ms": 200
+    },
+    "shell_dispatch_seal": {
+      "file": "audio/interface/shell_dispatch_seal.wav",
+      "channel": "notification",
+      "volume_db": -4,
+      "cooldown_ms": 4000,
+      "yields_to_anything_playing": true
+    }
+  }
+}

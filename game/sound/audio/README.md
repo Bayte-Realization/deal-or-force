@@ -32,3 +32,14 @@ The three `interface/support_*.wav` cues were generated for this game with Creat
 | `support_mission` | Change its mission | https://cdn.creativeclaw.co/u/c8554121/audio/fc077033-0f3f-4ceb-87d7-3623801f8b07.pcm |
 | `support_ready` | Training finishes | https://cdn.creativeclaw.co/u/c8554121/audio/1a7b3d30-c07d-416d-b443-08691ddd4ff8.pcm |
 | `world_event` | A modern wire-service tone when a split, a new country or a scandal reaches the rail | https://cdn.creativeclaw.co/u/c8554121/audio/3f452598-76f7-4143-96cd-076f67282c8e.wav |
+
+The four `interface/shell_*.wav` cues were generated for the new campaign screen with
+Creative Claw / ElevenLabs Sound Effects v2 (44.1 kHz stereo PCM), peak-trimmed to
+-6.5 dBFS (interface) and -4.5 dBFS (dispatch), and are declared in `09_shell_tactile.json`:
+
+| Cue | Purpose | Length | Source asset |
+| --- | --- | ---: | --- |
+| `shell_plate_tap` | Press a plate or rail button | 0.48 s | https://cdn.creativeclaw.co/u/c8554121/audio/d6c334b8-b091-4338-886d-3b0a08928b0c.wav |
+| `shell_drawer_slide` | Open a drawer or side panel | 0.68 s | https://cdn.creativeclaw.co/u/c8554121/audio/e321afd7-4c0a-4a60-9bf9-ecd9373629a8.wav |
+| `shell_map_lens` | Change map mode | 0.60 s | https://cdn.creativeclaw.co/u/c8554121/audio/0f62c008-5dac-4197-9f9a-f7aaa0c34acb.wav |
+| `shell_dispatch_seal` | A dispatch or news clipping arrives | 1.36 s | https://cdn.creativeclaw.co/u/c8554121/audio/c5e3b7a3-cbf5-4a3c-886c-5108335075d5.wav |
