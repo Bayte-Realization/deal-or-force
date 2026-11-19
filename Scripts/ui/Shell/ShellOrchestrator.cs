@@ -25,11 +25,20 @@ internal sealed class ShellOrchestrator
     public ShellEconomyWorkspaceView EconomyWorkspace { get; }
 
     private long _refreshHour = long.MinValue;
+    private int _refreshDay = int.MinValue;
     private int _refreshRevision = int.MinValue;
+    private ulong _lastHeavyRefreshMsec;
     private Campaign _lastWorld;
     private bool _lastPaused;
     private int _lastSpeed = -1;
     private bool _lastAlt;
+    private bool _modalObscured;
+    private readonly bool _isMobileRuntime = OS.HasFeature("mobile") || OS.GetName() is "Android" or "iOS";
+
+    private float _cachedProfileW = -1f;
+    private float _cachedProfileH = -1f;
+    private bool _cachedProfileWar;
+    private ShellLayoutProfile _cachedProfile;
 
     public double LastRefreshMs { get; private set; }
 
@@ -39,7 +48,7 @@ internal sealed class ShellOrchestrator
     public ShellOrchestrator(ShellContext ctx)
     {
         Context = ctx;
-        InterfaceSkin.Changed += () => Context.ClearCaches();
+        InterfaceSkin.Changed += () => { Context.ClearCaches(); _cachedProfile = null; };
         Messages = new ShellMessageModalView(ctx);
         Corner = new ShellCornerView(ctx);
         DatePlate = new ShellDatePlateView(ctx, () => Messages.Toggle());
@@ -61,21 +70,58 @@ internal sealed class ShellOrchestrator
         EconomyWorkspace.Build();
     }
 
-    public void ResetCadence() => _refreshHour = long.MinValue;
+    public void ResetCadence()
+    {
+        _refreshHour = long.MinValue;
+        _refreshDay = int.MinValue;
+        _refreshRevision = int.MinValue;
+        _lastHeavyRefreshMsec = 0;
+        _cachedProfile = null;
+    }
+
+    public void SetModalObscured(bool obscured)
+    {
+        if (_modalObscured == obscured) return;
+        _modalObscured = obscured;
+        Alerts.SetModalObscured(obscured);
+        MapBar.SetModalObscured(obscured);
+        if (obscured) Messages.Close();
+    }
+
+    private static bool IsPlayerAtWar(Campaign world)
+    {
+        if (world?.Player is not { } player) return false;
+        var open = Warfare.OpenWars(world);
+        for (var i = 0; i < open.Count; i++)
+        {
+            var w = open[i];
+            if (!w.Ended && w.Involves(player.Id)) return true;
+        }
+        return false;
+    }
 
     public ShellLayoutProfile CurrentProfile()
     {
         var vp = Context.GetViewportSize();
-        var world = Context.World;
-        var atWar = world?.Player is { } player && Warfare.OpenWars(world).Any(w => !w.Ended && w.Involves(player.Id));
-        return ShellLayout.ForViewport(vp.X, vp.Y, atWar);
+        var atWar = IsPlayerAtWar(Context.World);
+        if (_cachedProfile is not null &&
+            MathF.Abs(_cachedProfileW - vp.X) < 0.5f &&
+            MathF.Abs(_cachedProfileH - vp.Y) < 0.5f &&
+            _cachedProfileWar == atWar)
+            return _cachedProfile;
+
+        _cachedProfileW = vp.X;
+        _cachedProfileH = vp.Y;
+        _cachedProfileWar = atWar;
+        _cachedProfile = ShellLayout.ForViewport(vp.X, vp.Y, atWar);
+        return _cachedProfile;
     }
 
     public void LayoutAll()
     {
-        var world = Context.World;
-        var atWar = world?.Player is { } player && Warfare.OpenWars(world).Any(w => !w.Ended && w.Involves(player.Id));
-        var profile = ShellLayout.ForViewport(Context.GetViewportSize().X, Context.GetViewportSize().Y, atWar);
+        _cachedProfile = null;
+        var atWar = IsPlayerAtWar(Context.World);
+        var profile = CurrentProfile();
         Corner.Layout(profile, atWar);
         DatePlate.Layout(profile);
         Messages.Layout(profile);
@@ -94,28 +140,46 @@ internal sealed class ShellOrchestrator
         {
             _lastWorld = world;
             _refreshHour = long.MinValue;
+            _refreshDay = int.MinValue;
+            _refreshRevision = int.MinValue;
+            _lastHeavyRefreshMsec = 0;
         }
 
         var pausedChanged = _lastPaused != world.IsPaused;
         var speedChanged = _lastSpeed != speed;
-        var stepOrRevChanged = force || worldChanged || _refreshHour != world.ElapsedHours || _refreshRevision != world.MapRevision;
+        var hourChanged = _refreshHour != world.ElapsedHours;
+        var dayOrRevChanged = _refreshDay != world.ElapsedDays || _refreshRevision != world.MapRevision;
         _lastPaused = world.IsPaused;
         _lastSpeed = speed;
 
-        if (stepOrRevChanged)
+        var obscured = Context.IsAnyModalOpen?.Invoke() ?? false;
+        if (obscured != _modalObscured)
+            SetModalObscured(obscured);
+
+        var nowMsec = Time.GetTicksMsec();
+        var minIntervalMsec = (ulong)(_isMobileRuntime ? 350 : 220);
+        var heavyDue = force || worldChanged ||
+            (dayOrRevChanged && (world.IsPaused || pausedChanged || nowMsec - _lastHeavyRefreshMsec >= minIntervalMsec));
+
+        if (heavyDue)
         {
-            _refreshHour = world.ElapsedHours;
+            _refreshDay = world.ElapsedDays;
             _refreshRevision = world.MapRevision;
+            _lastHeavyRefreshMsec = nowMsec;
             Corner.Refresh();
             Alerts.Refresh();
             Strip.Refresh();
             WorkPanel.Refresh();
             EconomyWorkspace.Refresh();
         }
-        if (stepOrRevChanged || pausedChanged || speedChanged)
+        if (force || worldChanged || hourChanged || pausedChanged || speedChanged)
+        {
+            _refreshHour = world.ElapsedHours;
             DatePlate.Refresh();
+        }
+        if (force || worldChanged || pausedChanged)
+            MapBar.Refresh();
 
-        MapBar.Refresh();
         LastRefreshMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
     }
 
@@ -136,11 +200,11 @@ internal sealed class ShellOrchestrator
         Strip.TickDivisionVisibility(delta);
     }
 
-    public void CloseTransientPopovers()
+    public void CloseTransientPopovers(bool includeNews = true)
     {
         MapBar.ClosePopover();
         Messages.Close();
-        Alerts.DismissNewsCard();
+        if (includeNews) Alerts.DismissNewsCard();
     }
 
     public void FitWorkspaceLayer(Control layer)
@@ -150,12 +214,13 @@ internal sealed class ShellOrchestrator
         var toLayer = layer.GetGlobalTransformWithCanvas().AffineInverse() * Context.Root.GetGlobalTransformWithCanvas();
         var wsMin = toLayer * new Vector2(profile.FullWorkspace.X, profile.FullWorkspace.Y);
         var wsMax = toLayer * new Vector2(profile.FullWorkspace.Right, profile.FullWorkspace.Bottom);
-        var shadeMin = toLayer * new Vector2(profile.LeftRail.Right, profile.TopPlate.Bottom);
+        var topSafe = Math.Max(profile.TopPlate.Bottom, Math.Max(profile.DatePlate.Bottom, profile.CornerNode.Bottom));
+        var shadeMin = toLayer * new Vector2(profile.LeftRail.Right, topSafe);
         var shadeMax = toLayer * new Vector2(profile.ViewportWidth, profile.Strip.Y - 4f);
 
         foreach (var child in layer.GetChildren())
         {
-            if (child is Control shade && shade.HasMeta("rail_shade"))
+            if (child is Control shade && (shade.HasMeta("rail_shade") || (child is ColorRect && child.GetIndex() == 0)))
             {
                 shade.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
                 shade.OffsetLeft = shadeMin.X;

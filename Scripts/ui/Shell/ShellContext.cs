@@ -146,6 +146,7 @@ internal sealed class ShellContext
     }
 
     public Func<string, Texture2D> ResolveFlag { get; set; }
+    public Func<LeaderProfile, string, int, int, Control> BuildLeaderPortrait { get; set; }
 
     public Texture2D FlagTexture(string tag)
     {
@@ -251,29 +252,37 @@ internal sealed class ShellContext
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
+        var lastSize = new Vector2(-1f, -1f);
+        Vector2[] cachedPts = null;
         line.Draw += () =>
         {
-            var w = line.Size.X;
+            var sz = line.Size;
+            var w = sz.X;
             if (w <= 6f) return;
-            long r = seed * 7919L + 104729L;
-            float Next()
+            if (cachedPts is null || MathF.Abs(sz.X - lastSize.X) > 0.5f || MathF.Abs(sz.Y - lastSize.Y) > 0.5f)
             {
-                r = (r * 9301L + 49297L) % 233280L;
-                return (float)(r / 233280.0 - 0.5);
+                lastSize = sz;
+                long r = seed * 7919L + 104729L;
+                float Next()
+                {
+                    r = (r * 9301L + 49297L) % 233280L;
+                    return (float)(r / 233280.0 - 0.5);
+                }
+                var drift = Next() * 0.65f;
+                var x0 = 1f + MathF.Abs(Next()) * 3f;
+                var x1 = MathF.Max(x0 + 4f, w - 1f - MathF.Abs(Next()) * 4f);
+                var midY = height * 0.5f;
+                var pts = new List<Vector2> { new(x0, midY + Next() * 0.35f) };
+                for (var t = x0 + 16f; t < x1; t += 16f + Next() * 5f)
+                {
+                    var y2 = midY + drift * MathF.Sin(t / MathF.Max(1f, w) * MathF.PI) + Next() * 0.3f;
+                    pts.Add(new Vector2(t, y2));
+                }
+                pts.Add(new Vector2(x1, midY + Next() * 0.35f));
+                cachedPts = pts.ToArray();
             }
-            var drift = Next() * 0.65f;
-            var x0 = 1f + MathF.Abs(Next()) * 3f;
-            var x1 = MathF.Max(x0 + 4f, w - 1f - MathF.Abs(Next()) * 4f);
-            var midY = height * 0.5f;
-            var pts = new List<Vector2> { new(x0, midY + Next() * 0.35f) };
-            for (var t = x0 + 16f; t < x1; t += 16f + Next() * 5f)
-            {
-                var y2 = midY + drift * MathF.Sin(t / MathF.Max(1f, w) * MathF.PI) + Next() * 0.3f;
-                pts.Add(new Vector2(t, y2));
-            }
-            pts.Add(new Vector2(x1, midY + Next() * 0.35f));
             var col = Ui.Colour(colourToken, 0.86f);
-            line.DrawPolyline(pts.ToArray(), col, thickness, antialiased: true);
+            line.DrawPolyline(cachedPts, col, thickness, antialiased: true);
         };
         return line;
     }
@@ -347,5 +356,65 @@ internal sealed class ShellContext
         {
             item.Modulate = tint.A > 0f ? tint : MaterialStyles.IconTone("shell");
         }
+    }
+
+    /// <summary>
+    /// Attaches a crisp architectural perimeter frame (dark outer hairline + primary ivory/white
+    /// frame + subtle inner highlight) over chamfered or rectangular shell plates.
+    /// </summary>
+    public Control AttachPlateFrame(
+        Control host,
+        string colorToken = "shell.outliner_border",
+        string widthMetric = "shell.outliner_border_width",
+        float defaultWidth = 1.6f,
+        float inset = 1.6f,
+        float chamfer = 5.0f)
+    {
+        if (host is null) return null;
+        if (host.GetNodeOrNull<Control>("ShellPlateFrame") is { } existing)
+            return existing;
+
+        var frame = new Control
+        {
+            Name = "ShellPlateFrame",
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        frame.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        frame.Draw += () =>
+        {
+            var sz = frame.Size;
+            if (sz.X <= 8f || sz.Y <= 8f) return;
+            var strokeW = Math.Clamp(InterfaceSkin.Metric(widthMetric, defaultWidth), 0f, 4f);
+            if (strokeW <= 0.05f) return;
+
+            var outer = ChamferedRing(sz.X, sz.Y, 0.5f, chamfer);
+            frame.DrawPolyline(outer, Ui.Colour("shell.border"), 1.0f, antialiased: true);
+
+            var mainRing = ChamferedRing(sz.X, sz.Y, inset, MathF.Max(1.5f, chamfer - inset * 0.45f));
+            frame.DrawPolyline(mainRing, Ui.Colour(colorToken), strokeW, antialiased: true);
+
+            var glintPad = inset + strokeW * 0.85f;
+            var innerRing = ChamferedRing(sz.X, sz.Y, glintPad, MathF.Max(1f, chamfer - glintPad * 0.45f));
+            frame.DrawPolyline(innerRing, Ui.Colour("shell.paper", 0.14f), 0.9f, antialiased: true);
+        };
+        host.Resized += frame.QueueRedraw;
+        host.AddChild(frame);
+        return frame;
+    }
+
+    private static Vector2[] ChamferedRing(float w, float h, float pad, float chamfer)
+    {
+        var x0 = pad;
+        var y0 = pad;
+        var x1 = MathF.Max(x0 + 2f, w - pad);
+        var y1 = MathF.Max(y0 + 2f, h - pad);
+        var c = Math.Clamp(chamfer, 0f, MathF.Min(x1 - x0, y1 - y0) * 0.25f);
+        if (c <= 0.5f)
+            return new Vector2[] { new(x0, y0), new(x1, y0), new(x1, y1), new(x0, y1), new(x0, y0) };
+        return new Vector2[]
+        {
+            new(x0 + c, y0), new(x1 - c, y0), new(x1, y0 + c), new(x1, y1 - c),
+            new(x1 - c, y1), new(x0 + c, y1), new(x0, y1 - c), new(x0, y0 + c), new(x0 + c, y0)
+        };
     }
 }

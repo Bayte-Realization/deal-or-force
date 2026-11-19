@@ -624,22 +624,43 @@ public partial class DealOrForceGame
             // bars inside the button pushed the row wider than the panel and clipped the
             // right-hand bar off the edge.
             var line = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            line.AddThemeConstantOverride("separation", 6);
+            line.AddThemeConstantOverride("separation", 4);
             _armyRoster.AddChild(line);
 
+            var rowFlat = new StyleBoxEmpty
+            {
+                ContentMarginLeft = 2,
+                ContentMarginRight = 4,
+                ContentMarginTop = 2,
+                ContentMarginBottom = 2
+            };
+            var rowHover = new StyleBoxFlat
+            {
+                BgColor = Ui.Colour("button.fill_hover", 0.55f),
+                ContentMarginLeft = 2,
+                ContentMarginRight = 4,
+                ContentMarginTop = 2,
+                ContentMarginBottom = 2
+            };
+            rowHover.SetCornerRadiusAll(2);
             var row = new Button
             {
-                // The name gives way, not the bars: a division whose name is cut short is
-                // still readable, a strength bar clipped off the panel edge is not.
-                CustomMinimumSize = new Vector2(120, 26),
+                // The name uses available width and Godot ellipsis only when needed, while
+                // compact right-side condition bars stay guaranteed inside the roster frame.
+                CustomMinimumSize = new Vector2(64, 26),
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 SizeFlagsStretchRatio = 1f,
                 Alignment = HorizontalAlignment.Left,
                 ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
                 TooltipText = Ui.Tip(DivisionTooltip(army)),
                 Flat = true,
-                Text = Simulation.Loc.Format(" {0}  {1}", CounterGlyph(template.CounterSymbol), Shorten(army.Name, 20))
+                Text = Simulation.Loc.Format(" {0}  {1}", CounterGlyph(template.CounterSymbol), army.Name)
             };
+            row.AddThemeStyleboxOverride("normal", rowFlat);
+            row.AddThemeStyleboxOverride("pressed", rowFlat);
+            row.AddThemeStyleboxOverride("focus", rowFlat);
+            row.AddThemeStyleboxOverride("hover", rowHover);
             row.AddThemeColorOverride("font_color", Ui.Colour("text.body"));
             row.AddThemeColorOverride("font_hover_color", Ui.Colour("button.text_hover"));
             row.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
@@ -648,25 +669,24 @@ public partial class DealOrForceGame
             line.AddChild(row);
             _armyRosterRows[army.Id] = row;
 
-            line.AddChild(Bar(army.Organisation, 54,
+            line.AddChild(Bar(army.Organisation, 32,
                 army.Organisation < 0.35f ? "state.negative" :
                 army.InBattle ? "state.warning" : "state.info",
                 Simulation.Loc.Format("Organisation {0:P0} — how much fight is left in it",
                     army.Organisation)));
-            line.AddChild(Bar(army.Strength, 40,
+            line.AddChild(Bar(army.Strength, 26,
                 army.Strength < 0.55f ? "state.warning" : "state.positive",
                 Simulation.Loc.Format("Fighting strength {0:P0} — {1:N0} of {2:N0} men",
                     army.Strength, army.Personnel, army.MaxPersonnel)));
-            var equipmentBar = Bar(army.Equipment, 40, "combat.equipment",
+            var equipmentBar = Bar(army.Equipment, 26, "combat.equipment",
                 Simulation.Loc.Format("Equipment: {0:P0}", army.Equipment) + "\n" + EquipmentLogistics.Description(_campaign, army), tooltipMeasure: 72);
             equipmentBar.Name = "EquipmentBar_" + army.Id;
             line.AddChild(equipmentBar);
             var reason = Simulation.StaffReasons.Explain(_campaign, army);
-            var reasonMark = Title(Simulation.StaffReasons.Label(_campaign, army), 11, Ui.Colour("text.caption"));
+            var reasonMark = Fixed(Title(Simulation.StaffReasons.Label(_campaign, army), 10, Ui.Colour("text.caption")), 52);
             reasonMark.Name = "StaffReason_" + army.Id;
-            reasonMark.ClipText = true;
             reasonMark.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-            reasonMark.CustomMinimumSize = new Vector2(96, 16);
+            reasonMark.CustomMinimumSize = new Vector2(52, 16);
             reasonMark.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
             reasonMark.TooltipText = Ui.Tip(reason);
             line.AddChild(reasonMark);
@@ -744,7 +764,7 @@ public partial class DealOrForceGame
 
         var pip = Title(glyph, 12, Ui.Colour(token));
         pip.Name = "SupplyStatus_" + army.Id;
-        pip.CustomMinimumSize = new Vector2(army.CutOff && stores.Text.Length > 0 ? 34 : 16, 0);
+        pip.CustomMinimumSize = new Vector2(army.CutOff && stores.Text.Length > 0 ? 28 : 14, 0);
         pip.HorizontalAlignment = HorizontalAlignment.Center;
         pip.TooltipText = Ui.Tip(help, Mathf.Min(Ui.TooltipMeasure, 72));
         pip.MouseFilter = MouseFilterEnum.Stop;

@@ -33,6 +33,7 @@ public partial class DealOrForceGame
         header.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
         rows.AddChild(header);
         ChromePlateArt.AttachHeaderFrieze(header, 0.28f);
+        ChromePlateArt.AttachCornerOrnaments(header, cornerSize: 16f);
         var margin = new MarginContainer { Name = "ScreenHeaderMargin" };
         margin.AddThemeConstantOverride("margin_left", 0);
         margin.AddThemeConstantOverride("margin_right", 0);
@@ -76,15 +77,16 @@ public partial class DealOrForceGame
         return header;
     }
 
-    private static HSeparator ChromeRule(string name, string colourToken = "surface.line_faint")
+    private static void ApplySculptedButtonVolume(Button button, bool primary,
+        int padLeft = 10, int padTop = 4, int padRight = 10, int padBottom = 4)
     {
-        var rule = new HSeparator { Name = name };
-        rule.AddThemeStyleboxOverride("separator", new StyleBoxLine
-        {
-            Color = Ui.Colour(colourToken),
-            Thickness = 1
-        });
-        return rule;
+        var normal = ChromePlateArt.BuildSculptedButtonStyle(0, primary, padLeft, padTop, padRight, padBottom);
+        if (normal is null) return;
+        button.AddThemeStyleboxOverride("normal", normal);
+        button.AddThemeStyleboxOverride("hover", ChromePlateArt.BuildSculptedButtonStyle(1, primary, padLeft, padTop, padRight, padBottom) ?? normal);
+        button.AddThemeStyleboxOverride("pressed", ChromePlateArt.BuildSculptedButtonStyle(2, primary, padLeft, padTop, padRight, padBottom) ?? normal);
+        button.AddThemeStyleboxOverride("hover_pressed", ChromePlateArt.BuildSculptedButtonStyle(2, primary, padLeft, padTop, padRight, padBottom) ?? normal);
+        button.AddThemeStyleboxOverride("disabled", ChromePlateArt.BuildSculptedButtonStyle(3, primary, padLeft, padTop, padRight, padBottom) ?? normal);
     }
 
     /// <summary>The display-face title a <see cref="ScreenHeader"/> created, for a head whose words change.</summary>
@@ -114,6 +116,7 @@ public partial class DealOrForceGame
     private Button TabButton(Container strip, string label, System.Action action, int width, bool selected = false)
     {
         var button = ActionButton(label, action, width, (int)Ui.Metric("tab.height", 32), selected);
+        ApplySculptedButtonVolume(button, selected, padLeft: 10, padTop: 4, padRight: 10, padBottom: 4);
         button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.tab", 13));
         strip.AddChild(button);
         return button;
@@ -157,7 +160,7 @@ public partial class DealOrForceGame
             count.AddThemeFontOverride("font", Ui.NumberFont);
             line.AddChild(count);
         }
-        block.AddChild(ChromeRule("SectionRuleLine"));
+        block.AddChild(ChromePlateArt.CreateEngravedMedallionDivider("SectionRuleLine", 0f, height: 14f));
         return block;
     }
 
@@ -207,6 +210,7 @@ public partial class DealOrForceGame
         words.AddChild(line);
 
         var button = ActionButton(actionCaption, action, 0, 30);
+        ApplySculptedButtonVolume(button, primary: false, padLeft: 10, padTop: 4, padRight: 10, padBottom: 4);
         button.Name = name + "_Action";
         row.AddChild(button);
         if (!string.IsNullOrEmpty(tooltip)) button.TooltipText = Ui.Tip(tooltip);

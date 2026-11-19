@@ -52,6 +52,10 @@ internal sealed class ShellWorkPanelView
     private int _targetProvinceId = -1;
     private ShellLayoutProfile _profile;
     private string _lastBuildSig = "";
+    private string _lastTabSig = "";
+    private (ProvinceTopology Map, int Rev, Dictionary<int, int> Counts) _stateProvinceCache;
+    private readonly Dictionary<int, int> _rankByNationCache = new();
+    private (Campaign World, int Day, int Rev) _rankCacheStamp;
 
     public bool IsVisible => _panel is { Visible: true };
     public bool IsPinned => _pinned;
@@ -74,9 +78,35 @@ internal sealed class ShellWorkPanelView
             _ctx.NineSlice("plate_brass_9s", 16, 14, 12, 14, 10, "shell.body_top", "shell.brass_hi", 3));
         _ctx.Root.AddChild(_panel);
 
+        var frame = new Control
+        {
+            Name = "WorkPanelFrame",
+            ClipContents = true,
+            CustomMinimumSize = Vector2.Zero,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill
+        };
+        _panel.AddChild(frame);
+
+        if (_ctx.LoadTexture(SpriteCatalog.TextureOf("shell_dossier_header", "res://game/gfx/interface/shell/dossier_paper_header.png")) is { } hdrTex)
+        {
+            var hdrBg = new TextureRect
+            {
+                Texture = hdrTex,
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.Scale,
+                Modulate = new Color(1f, 1f, 1f, 0.20f),
+                MouseFilter = Control.MouseFilterEnum.Ignore
+            };
+            hdrBg.AnchorRight = 1f;
+            hdrBg.OffsetBottom = 92f;
+            frame.AddChild(hdrBg);
+        }
+
         var rootCol = new VBoxContainer();
         rootCol.AddThemeConstantOverride("separation", 6);
-        _panel.AddChild(rootCol);
+        rootCol.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        frame.AddChild(rootCol);
 
         BuildHeader(rootCol);
         BuildFiguresRow(rootCol);
@@ -271,7 +301,7 @@ internal sealed class ShellWorkPanelView
                 };
                 _figuresRow.AddChild(sep);
             }
-            var item = new HBoxContainer();
+            var item = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
             item.AddThemeConstantOverride("separation", 5);
             _figuresRow.AddChild(item);
 
@@ -282,7 +312,13 @@ internal sealed class ShellWorkPanelView
             item.AddChild(b);
             _figMainLabels[i] = b;
 
-            var s = new Label { VerticalAlignment = VerticalAlignment.Bottom };
+            var s = new Label
+            {
+                VerticalAlignment = VerticalAlignment.Bottom,
+                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+                ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+            };
             s.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
             s.AddThemeFontSizeOverride("font_size", 11);
             s.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
@@ -332,12 +368,15 @@ internal sealed class ShellWorkPanelView
 
     public void ApplyDock(ShellLayoutProfile profile, ShellDockGeometry dock)
     {
+        var compactChanged = _profile is null || _profile.Compact != profile.Compact;
         _profile = profile;
         if (_panel is null) return;
+        _panel.CustomMinimumSize = Vector2.Zero;
         ShellContext.PlaceRect(_panel, dock.LeftPanel);
         var compact = profile.Compact;
         _titleLabel.AddThemeFontSizeOverride("font_size", compact ? 18 : 22);
         _figMainLabels[0].AddThemeFontSizeOverride("font_size", compact ? 15 : 18);
+        if (compactChanged) _lastTabSig = "";
     }
 
     public void Refresh()
@@ -375,10 +414,10 @@ internal sealed class ShellWorkPanelView
         var ruler = Rulers.HeadOfState(world, nation);
         _subtitleLabel.Text = $"{Loc.Get(PoliticsCore.GovernmentOf(nation).Name)} · {Loc.Get(ruler.Title)} {ruler.Name}";
 
-        var gdpRank = 1 + world.Nations.Count(n => n.Population > 0 && true && n.Id != nation.Id && n.Gdp > nation.Gdp);
+        var overallRank = ResolveOverallRank(world, nation.Id);
         var armyDivs = (int)MathF.Ceiling(world.Armies.Where(a => a.NationId == nation.Id).Sum(a => a.Divisions));
         SetFigures(
-            ($"№ {gdpRank}", Loc.Get("shell.by_gdp")),
+            ($"№ {overallRank}", Loc.Get("shell.overall_rank")),
             ($"{(int)MathF.Round(nation.Stability * 100f)}%", Loc.Get("Stability")),
             ($"{armyDivs} {Loc.Get("shell.div_short")}", Loc.Get("Army")));
 
@@ -387,6 +426,7 @@ internal sealed class ShellWorkPanelView
 
         if (_activeTab == 0)
         {
+            ShellRegionVisualsView.PopulateCountryRulerCard(_ctx, _bodyRows, world, nation);
             AddSectionHeader(Loc.Get("shell.sec_key_figures"), Fmt.People(nation.Population));
             AddKvRow(Loc.Get("GDP"), Fmt.Money(nation.Gdp));
             AddKvRow(Loc.Get("Treasury"), isOwn ? Fmt.Money(nation.Treasury) : "—");
@@ -394,9 +434,8 @@ internal sealed class ShellWorkPanelView
             AddKvRow(Loc.Get("Manpower"), Fmt.People(nation.ManpowerReserve));
 
             AddSectionHeader(Loc.Get("Neighbours"), Loc.Get("GDP"));
-            var ownStates = world.StatesOf(nation).Select(s => s.MapIndex).ToHashSet();
             var neighbors = world.Nations
-                .Where(n => n.Population > 0 && true && n.Id != nation.Id)
+                .Where(n => n.Population > 0 && n.Id != nation.Id)
                 .OrderByDescending(n => n.Region == nation.Region ? 1 : 0)
                 .ThenByDescending(n => n.Gdp)
                 .Take(6)
@@ -413,6 +452,7 @@ internal sealed class ShellWorkPanelView
         }
         else if (_activeTab == 1)
         {
+            ShellRegionVisualsView.PopulateCountryRulerCard(_ctx, _bodyRows, world, nation);
             AddSectionHeader(Loc.Get("Society"));
             AddKvRow(Loc.Get("Stability"), Fmt.Percent(nation.Stability));
             AddKvRow(Loc.Get("Standard of living"), Fmt.Percent(nation.StandardOfLiving));
@@ -423,8 +463,7 @@ internal sealed class ShellWorkPanelView
         {
             AddSectionHeader(Loc.Get("Decisions"));
             AddKvRow(Loc.Get("Political capital"), $"{nation.PoliticalPoints:0.0}");
-            var note = CreateNoteLabel(Loc.Get("shell.open_decisions_hint"));
-            _bodyRows.AddChild(note);
+            _bodyRows.AddChild(CreateNoteLabel(Loc.Get("shell.open_decisions_hint")));
         }
         else
         {
@@ -456,9 +495,7 @@ internal sealed class ShellWorkPanelView
         var isOwn = owner is not null && world.Player?.Id == owner.Id;
 
         _titleLabel.Text = state.DisplayName;
-        var provCount = world.ProvinceMap is not null
-            ? Enumerable.Range(1, world.ProvinceMap.ProvinceCount).Count(p => world.ProvinceMap.ProvinceToState[p] == state.MapIndex)
-            : 1;
+        var provCount = CountStateProvinces(world, state.MapIndex);
         _subtitleLabel.Text = $"{owner?.DisplayName ?? "—"} · {provCount} {Loc.Get("shell.provinces_count")}";
 
         var estGdp = RegionalStatistics.EstimatedGdp(world, state);
@@ -471,35 +508,15 @@ internal sealed class ShellWorkPanelView
         SetFolderTabs(new[] { "Overview", "Population", "shell.tab_build", "shell.tab_recruit" });
         ClearBodyAndFooter();
 
-        // Clickable owner country link row at top of region dossier (matching state-3.jpg "Сербия -> к стране ›")
         if (owner is not null)
         {
             var capturedOwner = owner;
             AddCountryComparisonRow(owner, "", Loc.Get("shell.to_country_link"), "shell.paper_muted", () => OpenCountry(capturedOwner));
         }
 
-        if (_activeTab == 0 || _activeTab == 1)
-        {
-            AddSectionHeader(Loc.Get("Region"));
-            AddKvRow(Loc.Get("Population"), Fmt.PeopleExact(state.Population));
-            AddKvRow(Loc.Get("Radicalism"), Fmt.Percent(state.Radicalism), state.Radicalism > 0.25f ? "shell.state.warning" : "shell.paper");
-            AddKvRow(Loc.Get("Infrastructure"), state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure).ToString(CultureInfo.InvariantCulture));
-            if (_targetProvinceId > 0)
-                AddKvRow(Loc.Get("Province"), $"#{_targetProvinceId}");
-        }
-
-        if (isOwn && (_activeTab == 0 || _activeTab == 2))
-        {
-            AddSectionHeader(Loc.Get("shell.tab_build"), Loc.Get("shell.shift_everywhere_hint"));
-            ShellRegionBuildTabView.PopulateBuildRows(_ctx, _bodyRows, _feedbackLabel, world, owner, state, () => { _lastBuildSig = ""; Refresh(); });
-        }
-
-        if (isOwn && _activeTab == 3)
-        {
-            AddSectionHeader(Loc.Get("shell.tab_recruit"));
-            AddKvRow(Loc.Get("Manpower"), Fmt.People(owner.ManpowerReserve));
-            _bodyRows.AddChild(CreateNoteLabel(Loc.Get("shell.recruit_workbench_hint")));
-        }
+        ShellRegionVisualsView.PopulateRegion(
+            _ctx, _bodyRows, _feedbackLabel, world, owner, state, _targetProvinceId, provCount, _activeTab, isOwn,
+            () => { _lastBuildSig = ""; Refresh(); });
 
         if (isOwn)
         {
@@ -511,6 +528,45 @@ internal sealed class ShellWorkPanelView
             AddFooterButton(Loc.Get("Country"), primary: false, () => OpenCountry(owner));
             AddFooterButton(Loc.Get("Diplomacy"), primary: true, () => { Close(); _ctx.OpenScreen?.Invoke("Diplomacy"); });
         }
+    }
+
+    private int ResolveOverallRank(Campaign world, int nationId)
+    {
+        if (!ReferenceEquals(_rankCacheStamp.World, world) || _rankCacheStamp.Day != world.ElapsedDays ||
+            _rankCacheStamp.Rev != world.MapRevision)
+        {
+            if (world.MidStep)
+                return _rankByNationCache.GetValueOrDefault(nationId, 1);
+
+            var weights = new CountryRankings.Weights(
+                Ui.Metric("rankings.weight.economy", 40),
+                Ui.Metric("rankings.weight.population", 15),
+                Ui.Metric("rankings.weight.field_power", 30),
+                Ui.Metric("rankings.weight.technology", 15));
+            _rankByNationCache.Clear();
+            foreach (var r in CountryRankings.Read(world, weights))
+                _rankByNationCache[r.NationId] = r.OverallRank;
+            _rankCacheStamp = (world, world.ElapsedDays, world.MapRevision);
+        }
+        return _rankByNationCache.GetValueOrDefault(nationId, 1);
+    }
+
+    private int CountStateProvinces(Campaign world, int stateMapIndex)
+    {
+        if (world.ProvinceMap is not { } map) return 1;
+        if (!ReferenceEquals(_stateProvinceCache.Map, map) || _stateProvinceCache.Rev != world.MapRevision)
+        {
+            var counts = _stateProvinceCache.Counts ?? new Dictionary<int, int>();
+            counts.Clear();
+            var arr = map.ProvinceToState;
+            for (var p = 1; p <= map.ProvinceCount && p < arr.Length; p++)
+            {
+                var stIdx = arr[p];
+                counts[stIdx] = counts.GetValueOrDefault(stIdx) + 1;
+            }
+            _stateProvinceCache = (map, world.MapRevision, counts);
+        }
+        return Math.Max(1, _stateProvinceCache.Counts.GetValueOrDefault(stateMapIndex));
     }
 
     private void ShowFlagEmblem(string tag)
@@ -549,9 +605,17 @@ internal sealed class ShellWorkPanelView
 
     private void SetFolderTabs(string[] tabKeys)
     {
-        foreach (var ch in _tabsRow.GetChildren()) ch.QueueFree();
-        _tabButtons.Clear();
         if (_activeTab >= tabKeys.Length) _activeTab = 0;
+        var tabSig = string.Join("|", tabKeys) + $"|{_activeTab}|{_profile?.Compact ?? false}|{Loc.Language}";
+        if (_lastTabSig == tabSig && _tabButtons.Count == tabKeys.Length) return;
+        _lastTabSig = tabSig;
+
+        foreach (var ch in _tabsRow.GetChildren())
+        {
+            _tabsRow.RemoveChild(ch);
+            ch.QueueFree();
+        }
+        _tabButtons.Clear();
 
         var onStyle = _ctx.NineSlice("tab_folder_9s", 10, 8, 5, 8, 5);
         var offStyle = _ctx.PressedWellStyle(padX: 8, padY: 5);
@@ -560,17 +624,18 @@ internal sealed class ShellWorkPanelView
         {
             var idx = i;
             var on = i == _activeTab;
+            var compact = _profile?.Compact == true;
             var b = new Button
             {
                 Text = Loc.Get(tabKeys[i]),
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-                CustomMinimumSize = new Vector2(0, _profile.Compact ? 28 : 32),
+                CustomMinimumSize = new Vector2(0, compact ? 28 : 32),
                 ClipText = true,
                 MouseDefaultCursorShape = Control.CursorShape.PointingHand,
                 FocusMode = Control.FocusModeEnum.None
             };
             b.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
-            b.AddThemeFontSizeOverride("font_size", _profile.Compact ? 12 : 14);
+            b.AddThemeFontSizeOverride("font_size", compact ? 12 : 14);
             b.AddThemeStyleboxOverride("normal", on ? onStyle : offStyle);
             b.AddThemeStyleboxOverride("hover", on ? onStyle : offStyle);
             b.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_faint"));
@@ -588,96 +653,37 @@ internal sealed class ShellWorkPanelView
 
     private void ClearBodyAndFooter()
     {
-        foreach (var ch in _bodyRows.GetChildren()) ch.QueueFree();
-        foreach (var ch in _footerRow.GetChildren()) ch.QueueFree();
+        foreach (var ch in _bodyRows.GetChildren()) { _bodyRows.RemoveChild(ch); ch.QueueFree(); }
+        foreach (var ch in _footerRow.GetChildren()) { _footerRow.RemoveChild(ch); ch.QueueFree(); }
     }
 
-    private void AddSectionHeader(string title, string rightNote = "")
-    {
-        var h = new HBoxContainer();
-        h.AddThemeConstantOverride("separation", 6);
-        var lbl = new Label { Text = title };
-        lbl.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
-        lbl.AddThemeFontSizeOverride("font_size", 14);
-        lbl.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
-        h.AddChild(lbl);
-
-        var rule = new ColorRect
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
-            CustomMinimumSize = new Vector2(12, 1),
-            Color = Ui.Colour("shell.engrave")
-        };
-        h.AddChild(rule);
-
-        if (!string.IsNullOrEmpty(rightNote))
-        {
-            var r = new Label { Text = rightNote };
-            r.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-            r.AddThemeFontSizeOverride("font_size", 11);
-            r.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
-            h.AddChild(r);
-        }
-        _bodyRows.AddChild(h);
-    }
+    private void AddSectionHeader(string title, string rightNote = "") =>
+        ShellRegionVisualsView.AddSectionHeader(_ctx, _bodyRows, title, rightNote);
 
     private void AddKvRow(string key, string value, string valueColorTok = "shell.paper")
     {
         var panel = new PanelContainer { CustomMinimumSize = new Vector2(0, 28) };
-        var box = new StyleBoxFlat
-        {
-            BgColor = new Color(0f, 0f, 0f, 0f),
-            BorderColor = Ui.Colour("shell.paper", 0.08f),
-            BorderWidthBottom = 1,
-            ContentMarginLeft = 4,
-            ContentMarginRight = 4
-        };
+        var box = new StyleBoxFlat { BgColor = new Color(0f, 0f, 0f, 0f), BorderColor = Ui.Colour("shell.paper", 0.08f), BorderWidthBottom = 1, ContentMarginLeft = 4, ContentMarginRight = 4 };
         panel.AddThemeStyleboxOverride("panel", box);
-
         var row = new HBoxContainer();
         panel.AddChild(row);
-
-        var k = new Label
-        {
-            Text = key,
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            VerticalAlignment = VerticalAlignment.Center,
-            ClipText = true
-        };
+        var k = new Label { Text = key, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center, ClipText = true };
         k.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
         k.AddThemeFontSizeOverride("font_size", 13);
         k.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
         row.AddChild(k);
-
-        var v = new Label
-        {
-            Text = value,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center
-        };
+        var v = new Label { Text = value, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         v.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
         v.AddThemeFontSizeOverride("font_size", 13);
         v.AddThemeColorOverride("font_color", Ui.Colour(valueColorTok));
         row.AddChild(v);
-
         _bodyRows.AddChild(panel);
     }
 
     private void AddCountryComparisonRow(Nation nation, string midStat, string rightStat, string rightColorTok, Action onClick)
     {
-        var btn = new Button
-        {
-            CustomMinimumSize = new Vector2(0, 28),
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            FocusMode = Control.FocusModeEnum.None
-        };
-        var normal = new StyleBoxFlat
-        {
-            BgColor = Ui.Colour("shell.paper", 0.03f),
-            BorderColor = Ui.Colour("shell.paper", 0.08f),
-            BorderWidthBottom = 1
-        };
+        var btn = new Button { CustomMinimumSize = new Vector2(0, 28), MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None };
+        var normal = new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.03f), BorderColor = Ui.Colour("shell.paper", 0.08f), BorderWidthBottom = 1 };
         var hover = new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.08f) };
         btn.AddThemeStyleboxOverride("normal", normal);
         btn.AddThemeStyleboxOverride("hover", hover);
@@ -691,23 +697,12 @@ internal sealed class ShellWorkPanelView
 
         var fl = new TextureRect
         {
-            Texture = _ctx.FlagTexture(nation.Tag),
-            CustomMinimumSize = new Vector2(21, 14),
-            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
-            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            MouseFilter = Control.MouseFilterEnum.Ignore
+            Texture = _ctx.FlagTexture(nation.Tag), CustomMinimumSize = new Vector2(21, 14), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, MouseFilter = Control.MouseFilterEnum.Ignore
         };
         row.AddChild(fl);
 
-        var nm = new Label
-        {
-            Text = nation.DisplayName,
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            VerticalAlignment = VerticalAlignment.Center,
-            ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
-        };
+        var nm = new Label { Text = nation.DisplayName, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center, ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         nm.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
         nm.AddThemeFontSizeOverride("font_size", 13);
         nm.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
@@ -727,7 +722,6 @@ internal sealed class ShellWorkPanelView
         r.AddThemeFontSizeOverride("font_size", 12);
         r.AddThemeColorOverride("font_color", Ui.Colour(rightColorTok));
         row.AddChild(r);
-
         _bodyRows.AddChild(btn);
     }
 
@@ -745,13 +739,7 @@ internal sealed class ShellWorkPanelView
         if (primary && _footerRow.GetChildCount() > 0)
             _footerRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
 
-        var btn = new Button
-        {
-            Text = caption,
-            CustomMinimumSize = new Vector2(primary ? 136 : 96, primary ? 38 : 34),
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            FocusMode = Control.FocusModeEnum.None
-        };
+        var btn = new Button { Text = caption, CustomMinimumSize = new Vector2(primary ? 136 : 96, primary ? 38 : 34), MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None };
         var style = primary
             ? _ctx.NineSlice("button_brass_cta_9s", 10, 14, 5, 14, 5, "shell.plate_top", "shell.brass_hi", 3)
             : _ctx.NineSlice("button_umber_9s", 10, 12, 4, 12, 4, "shell.plate_bottom", "shell.engrave", 3);
@@ -761,11 +749,7 @@ internal sealed class ShellWorkPanelView
         btn.AddThemeFontOverride("font", _ctx.Font(primary ? "shell.serif_semibold" : "shell.sans"));
         btn.AddThemeFontSizeOverride("font_size", primary ? 15 : 13);
         btn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
-        btn.Pressed += () =>
-        {
-            _ctx.PlayCue?.Invoke("ui_select");
-            onClick();
-        };
+        btn.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); onClick(); };
         _footerRow.AddChild(btn);
     }
 

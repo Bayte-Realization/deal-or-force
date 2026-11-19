@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
+using DealOrForce.Simulation.Shell;
 using Godot;
 
 namespace DealOrForce;
@@ -14,11 +16,11 @@ namespace DealOrForce;
 /// </summary>
 public partial class DealOrForceGame
 {
-    private const double HeadlineLifeSeconds = 9.0;
     private const double HeadlineFadeSeconds = 0.6;
 
     private VBoxContainer _headlineStack;
     private readonly HeadlineQueue _headlineQueue = new();
+    private readonly ShellNewsPacer _headlinePacer = new();
     private readonly List<(PanelContainer Card, double Age)> _headlineCards = new();
     private long _headlineSeen = -1;
     private Campaign _headlineWorld;
@@ -32,14 +34,21 @@ public partial class DealOrForceGame
             if (_headlineStack is not null && IsInstanceValid(_headlineStack)) _headlineStack.Visible = false;
             return;
         }
+        if (IsAnyShellModalOpen())
+        {
+            if (_headlineStack is not null && IsInstanceValid(_headlineStack)) _headlineStack.Visible = false;
+            return;
+        }
         _headlineClock += delta;
         if (_headlineStack is null || !IsInstanceValid(_headlineStack)) BuildHeadlineStack();
+        _headlineStack.Visible = true;
 
         // A loaded or new campaign starts with what is already history, not with a backlog of it.
         if (!ReferenceEquals(_headlineWorld, _campaign))
         {
             _headlineWorld = _campaign;
             _headlineQueue.Clear();
+            _headlinePacer.Reset();
             _headlineSeen = _campaign.Chronicle.Entries.Count > 0 ? _campaign.Chronicle.Entries[^1].Sequence : 0;
             foreach (var (card, _) in _headlineCards) if (IsInstanceValid(card)) card.QueueFree();
             _headlineCards.Clear();
@@ -58,9 +67,27 @@ public partial class DealOrForceGame
         }
         _headlineSeen = newest;
 
-        if (_headlineQueue.Next(_headlineClock, _headlineCards.Count) is { } next) ShowHeadline(next);
-
         var mouse = GetViewport().GetMousePosition();
+        var anyHovered = false;
+        for (var i = 0; i < _headlineCards.Count; i++)
+        {
+            var c = _headlineCards[i].Card;
+            if (IsInstanceValid(c) && c.GetGlobalRect().HasPoint(mouse)) { anyHovered = true; break; }
+        }
+        _headlinePacer.Tick(delta, anyHovered, paused: false);
+
+        var maxVisible = Math.Clamp((int)MathF.Round(InterfaceSkin.Metric("shell.news_max_visible", 2f)), 1, 3);
+        var canAdvance = _headlineCards.Count == 0 ||
+                         (!anyHovered && (_headlinePacer.Active is null || _headlinePacer.Active.Age >= ShellNewsPacer.MinDwellSec));
+        if (canAdvance && _headlineQueue.Next(_headlineClock, _headlineCards.Count, maxVisible) is { } next)
+        {
+            var urgent = ShellNewsPacer.IsUrgentKind(next.Line.Kind) || next.Tie == HeadlineTie.Own && next.Importance >= 3;
+            var prio = ShellNewsPacer.ClassifyPriority(next.Line, urgent, next.Tie != HeadlineTie.World, next.Importance);
+            _headlinePacer.Offer(next.Line, HeadlinePopups.Reason(next.Tie, ""), prio, urgent);
+            ShowHeadline(next);
+        }
+
+        var lifeSec = Math.Max(ShellNewsPacer.MinDwellSec, ShellNewsPacer.LifetimeSec);
         for (var index = _headlineCards.Count - 1; index >= 0; index--)
         {
             var (card, age) = _headlineCards[index];
@@ -68,7 +95,7 @@ public partial class DealOrForceGame
             // Read while the mouse is on it: it waits.
             if (!card.GetGlobalRect().HasPoint(mouse)) age += delta;
             _headlineCards[index] = (card, age);
-            var left = HeadlineLifeSeconds - age;
+            var left = lifeSec - age;
             card.Modulate = card.Modulate with { A = Mathf.Clamp((float)(left / HeadlineFadeSeconds), 0f, 1f) };
             if (left > 0) continue;
             card.QueueFree();

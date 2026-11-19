@@ -103,6 +103,10 @@
     "button.focus_width": 2,
     "panel.texture_margin": 16,
     "shell.space_texture": 1,
+    "shell.ornament_alpha": 0.62,
+    "shell.divider_alpha": 0.78,
+    "shell.button_texture_enabled": 1.0,
+    "shell.plate_bevel_px": 2.0,
     "news.feed_rows": 3,
     "menu.backdrop_brightness": 0.42,
     "menu.globe_brightness": 1.0

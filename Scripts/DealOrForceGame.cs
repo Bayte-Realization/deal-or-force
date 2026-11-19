@@ -199,7 +199,7 @@ public partial class DealOrForceGame : Control
         // The loop itself is SimulationFrameClock, so SimBench drives the same scheduler frame by
         // frame on a save; what stays here is what only a running game has: the network flag, the
         // autosave and what a fault does to the screen.
-        var smooth = SettingsCatalog.Flag("smooth_ticks");
+        var smooth = SettingsCatalog.Flag("smooth_ticks") || (_isMobileRuntime && _speed >= 2);
         try
         {
             // Made once: two fresh closures a frame are garbage the collector meets sixty times a second.
@@ -431,10 +431,12 @@ public partial class DealOrForceGame : Control
             GetViewport().SetInputAsHandled();
             return;
         }
-        if (IsNewShellActive && key.Keycode == Key.Escape && HasOpenShellTransientPopover)
+        if (IsNewShellActive && key.Keycode == Key.Escape && HasOpenShellTransientPopover &&
+            !IsSystemModalBlockingCampaignInput() &&
+            _subjectsModalLayer is not { Visible: true } && _recruitmentLayer is not { Visible: true })
         {
             if (IsNewShellEconomyOpen) CloseNewShellEconomyWorkspace();
-            else CloseShellTransientPopovers();
+            else CloseShellTransientPopovers(includeNews: false);
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -486,7 +488,7 @@ public partial class DealOrForceGame : Control
             GetViewport().SetInputAsHandled();
             return;
         }
-        if (key.Keycode == Key.Escape && _recruitmentLayer is { Visible: true })
+        if (key.Keycode == Key.Escape && !IsSystemModalBlockingCampaignInput() && _recruitmentLayer is { Visible: true })
         { _recruitmentLayer.Hide(); GetViewport().SetInputAsHandled(); return; }
         if (_developerConsoleLayer is { Visible: true })
         {
@@ -497,13 +499,13 @@ public partial class DealOrForceGame : Control
             }
             return;
         }
-        if (key.Keycode == Key.Escape && _researchLayer is { Visible: true })
+        if (key.Keycode == Key.Escape && !IsSystemModalBlockingCampaignInput() && _researchLayer is { Visible: true })
         { CloseResearchScreen(); GetViewport().SetInputAsHandled(); return; }
-        if (key.Keycode == Key.Escape && _doctrineLayer is { Visible: true })
+        if (key.Keycode == Key.Escape && !IsSystemModalBlockingCampaignInput() && _doctrineLayer is { Visible: true })
         { CloseDoctrineScreen(); GetViewport().SetInputAsHandled(); return; }
         // Escape takes back a strike target waiting for its region first, then lets the selected
         // formations go, then closes the panel - one layer a press, the way divisions are let go.
-        if (key.Keycode == Key.Escape && _supportLayer is { Visible: true })
+        if (key.Keycode == Key.Escape && !IsSystemModalBlockingCampaignInput() && _supportLayer is { Visible: true })
         {
             if (_supportTargetArmed) CancelSupportRebase();
             else if (_supportSelected.Count > 0) ClearSupportMapSelection();
@@ -593,9 +595,17 @@ public partial class DealOrForceGame : Control
         // frequent act in the game - changing how fast time runs - was five 27-pixel buttons
         // and nothing else. A digit sets that speed and lets time run, exactly as its button
         // does; plus and minus step the speed and leave a paused clock paused, so a player can
-        // choose the pace before letting go. Not while the pause menu is up (time must not
+        // choose the pace before letting go. Not while a system modal is up (time must not
         // start behind it), and not with a modifier held, which belongs to other shortcuts.
-        if (_campaign is not null && _hudLayer is { Visible: true } && _pauseMenuLayer is not { Visible: true }
+        var modalBlocking = IsSystemModalBlockingCampaignInput();
+        if (IsNewShellActive && key.Keycode == Key.Escape && !key.Echo &&
+            _campaign is not null && _hudLayer is { Visible: true } && _newShellBuilt && _shell is not null)
+        {
+            HandleNewShellEscape();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (_campaign is not null && _hudLayer is { Visible: true } && !modalBlocking
             && !key.Echo && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed)
         {
             if (IsNewShellActive && HandleNewShellHotkey(key)) { GetViewport().SetInputAsHandled(); return; }
@@ -609,11 +619,20 @@ public partial class DealOrForceGame : Control
             }
         }
         if (key.Keycode != Key.Space && key.PhysicalKeycode != Key.Space) return;
+        if (modalBlocking) return;
 
         if (_campaign is not null && _hudLayer is { Visible: true })
             TogglePause();
         GetViewport().SetInputAsHandled();
     }
+
+    private bool IsSystemModalBlockingCampaignInput() =>
+        _pauseMenuLayer is { Visible: true } || _settingsLayer is { Visible: true } ||
+        _saveLoadLayer is { Visible: true } || _networkLayer is { Visible: true } ||
+        _handoverLayer is { Visible: true } || _pickerLayer is { Visible: true } ||
+        _mediaLibraryLayer is { Visible: true } || _handbookLayer is { Visible: true } ||
+        _peaceLayer is { Visible: true } || _peaceOfferLayer is { Visible: true } ||
+        _defconLayer is { Visible: true } || _eventLayer is { Visible: true };
 
     /// <summary>
     /// Which key was pressed, by where it is rather than by what it types.
@@ -1139,6 +1158,11 @@ public partial class DealOrForceGame : Control
         }
         if (screen == "Support") { OpenSupportScreen(); UpdateScreenButtons(); return; }
         if (TryOpenNewShellScreen(screen)) return;
+        if (IsNewShellActive)
+        {
+            if (IsNewShellEconomyOpen) CloseNewShellEconomyWorkspace();
+            if (_shell?.WorkPanel.IsVisible == true) CloseNewShellWorkPanel(unpinnedOnly: false);
+        }
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
         if (_diplomacyLayer is not null) _diplomacyLayer.Visible = false;
@@ -1594,7 +1618,7 @@ public partial class DealOrForceGame : Control
         if (_campaign?.Player is null) return;
         _globe?.RefreshCountryNames();
         SyncObserverCommandGate();
-        RefreshWorldStrip();
+        if (!IsNewShellActive) RefreshWorldStrip();
 
         var player = _campaign.Player;
         RefreshTopBar(player);

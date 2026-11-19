@@ -4,20 +4,21 @@
 
 **A grand strategy game about the whole world, from the morning of 1 January 2024.**
 Every country on the map is yours to play, and every one of them is simulated the same way.
-Version **0.7.2.3-dev** (EntertAlpha).
+Version **0.8.3.2** (EntertAlpha).
 
-[![Release](https://img.shields.io/badge/release-EntertAlpha%200.7.2.3--dev-2f6fb3)](docs/CHANGELOG_0.7.2.3_EN.md)
+[![Release](https://img.shields.io/badge/release-EntertAlpha%200.8.3.2-2f6fb3)](docs/CHANGELOG_0.8.3.2_EN.md)
 [![Engine](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED.md)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED.md)
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-3a7f3a)](LICENSE)
 [![itch.io](https://img.shields.io/badge/play-itch.io-fa5c5c?logo=itchdotio&logoColor=white)](https://bayte-realization.itch.io/deal-or-force)
 
-![The main menu: a live planet wearing the game's own map](docs/screenshots/0.6.6/menu-planet.jpg)
+![The main menu: a live planet wearing the game's own map](docs/screenshots/0.8.3.2/menu-planet.jpg)
 
 | | |
 |---|---|
-| ![The campaign map from afar](docs/screenshots/0.6.6/map-globe.jpg) | ![The country picker](docs/screenshots/0.6.6/country-picker.jpg) |
-| ![The flat map](docs/screenshots/0.6.6/map-flat.jpg) | ![A campaign](docs/screenshots/0.6.6/campaign.jpg) |
+| ![The campaign map from afar](docs/screenshots/0.8.3.2/map-globe.jpg) | ![The country picker](docs/screenshots/0.8.3.2/country-picker.jpg) |
+| ![The flat map](docs/screenshots/0.8.3.2/map-flat.jpg) | ![Country dossier with ruler portrait and news dispatch](docs/screenshots/0.8.3.2/campaign.jpg) |
+| ![Visual region dossier with terrain and telemetry gauges](docs/screenshots/0.8.3.2/region-dossier.jpg) | ![Regional demographics, employment and stacked identity bars](docs/screenshots/0.8.3.2/region-population.jpg) |
 
 ## Play it
 
@@ -26,33 +27,35 @@ Version **0.7.2.3-dev** (EntertAlpha).
   Extract the whole archive and run `Deal or Force Launcher.exe`.
 - **From source** — see [Building and running](#building-and-running) below.
 - It is EntertAlpha: a lot works, and a lot is still being rebuilt. What is not done yet is
-  written down at the end of every [changelog](docs/CHANGELOG_0.7.2.3_EN.md), not hidden.
+  written down at the end of every [changelog](docs/CHANGELOG_0.8.3.2_EN.md), not hidden.
 - It is built by one person, openly with the help of AI.
 
 Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 [X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
 [Telegram](https://t.me/+39SNXyA92aBmYzhi) · [devlog](https://bayte-realization.itch.io/deal-or-force/devlog)
 
-## New in 0.7.2.3-dev
+## New in EntertAlpha 0.8.3.2
 
-This development build adds city-based capitals and a city chooser, the date and alert plate,
-long-campaign save and memory housekeeping, demographic group folding and further simulation
-caching. Built with Godot 4.8 Beta 3 .NET.
+Built on **Godot 4.8 Beta 3 .NET** and **.NET 10**. Full itemized verification notes live in
+[CHANGELOG 0.8.3.2](docs/CHANGELOG_0.8.3.2_EN.md).
 
-
-- **See where the money goes** — a ledger of every income and expense for a country, a movement
-  and an organisation; crises and disasters cut income for a time instead of taking the treasury.
-- **No more "shortage of everything"** — countries import what they lack (it used to be about
-  half), the world grows enough grain, and a scarce good is shared instead of going to the giants.
-- **Factories produce, construction moves** — a built factory makes goods; several sites at once,
-  cheaper and faster, with its own line in the ledger.
-- **Watch the world** — a campaign with no country, the world's figures across the top.
-- **Deals by standing orders** — the ministry signs, refuses or brings each kind of paper as told.
-- **A new top bar** — the flag on its plaque and all twelve figures with the week's change; the bad
-  ones turn red by themselves. "Scenarios / editor" is back in the main menu.
-
-Everything item by item, with how it was checked and what is not done, is in the
-[changelog](docs/CHANGELOG_0.7.2.3_EN.md).
+- **Unified tactile slate-pewter UI & moddable chrome** — sculpted matte plates, chamfered corner
+  ornaments, beveled buttons, engraved dividers and crisp white right-outliner perimeter framing,
+  with all skins, textures and timings documented in `game/interface/README.md`.
+- **Ruler portrait cards in every country dossier** — inspect the head of state's framed portrait,
+  age, trait, ideology and head of government on both domestic and foreign nations.
+- **Visual, width-locked region dossiers** — terrain cards with combat/supply multipliers, engraved
+  telemetry gauges, stacked age/culture/faith bars, active construction progress and visible
+  garrisons with zero width jitter at Speed 5.
+- **Decisions on the left rail & overall world rank** — direct one-click access to Decisions with
+  a live available badge count, plus overall world power ranking (`№ X overall`) across top HUD
+  and country dossiers.
+- **Calm Speed-5 dispatches & strict modal stacking** — rate-limited priority newspaper queue
+  (`ShellNewsPacer`) with hover/pin freeze and a dedicated `×` close button (`Esc` closes only
+  modals/panels, never opening the Pause Menu over Save/Load or Settings).
+- **Modern map typography & Android / low-spec performance** — crisp sans-serif city labels,
+  eliminated dual-HUD refresh overhead, coalesced Speed-5 cadence, O(1) state province caching, and
+  adaptive mobile/Android quality defaults.
 
 ## The game
 
@@ -204,7 +207,7 @@ Everything below exists in English and in Russian; a `_RU` suffix is the Russian
 
 | | |
 |---|---|
-| [Changelog 0.7.2.3](docs/CHANGELOG_0.7.2.3_EN.md) · [0.6.6.0](docs/CHANGELOG_0.6.6.0_EN.md) | **what changed in the current release, how it was checked, what is not done** |
+| [Changelog 0.8.3.2](docs/CHANGELOG_0.8.3.2_EN.md) · [0.7.2.3](docs/CHANGELOG_0.7.2.3_EN.md) | **what changed in the current release, how it was checked, what is not done** |
 | [Overhaul programme](docs/OVERHAUL_PROGRAMME_2026_11_14_RU.md) | the fifteen fronts of the rework and what "done" means for each (Russian) |
 | [Deal rework](docs/DEALS_REWORK_2026_11_14_RU.md) | what is wrong with deals today and the plan for them, step by step (Russian) |
 | [TUTORIAL](docs/TUTORIAL.md) | **your first campaign, hand held** |

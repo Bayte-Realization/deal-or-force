@@ -231,6 +231,22 @@ public partial class DealOrForceGame
 
     private void RefreshTopBar(Nation player)
     {
+        // The week and the half-year behind the figures belong to one country. A hotseat pass or a
+        // network seat change hands the bar to another on the same day, and without this the
+        // "week's change" would be country B today minus country A last week.
+        if (!ReferenceEquals(_trendsNation, player))
+        {
+            ResetTrends();
+            _trendsNation = player;
+        }
+        var day = _campaign.ElapsedDays;
+        _treasuryTrend.Sample(day, player.Treasury);
+        _gdpTrend.Sample(day, player.Gdp);
+        _populationTrend.Sample(day, player.Population);
+        _stabilityTrend.Sample(day, player.Stability);
+        _manpowerTrend.Sample(day, player.ManpowerReserve);
+        if (IsNewShellActive) return;
+
         _identity.Text = CountryNames.Compact(player);
         _identity.TooltipText = Ui.Tip(player.DisplayName);
         var identityFont = _identity.GetThemeFont("font");
@@ -269,21 +285,6 @@ public partial class DealOrForceGame
             }
         }
         RefreshDatePlate(player);
-
-        // The week and the half-year behind the figures belong to one country. A hotseat pass or a
-        // network seat change hands the bar to another on the same day, and without this the
-        // "week's change" would be country B today minus country A last week.
-        if (!ReferenceEquals(_trendsNation, player))
-        {
-            ResetTrends();
-            _trendsNation = player;
-        }
-        var day = _campaign.ElapsedDays;
-        _treasuryTrend.Sample(day, player.Treasury);
-        _gdpTrend.Sample(day, player.Gdp);
-        _populationTrend.Sample(day, player.Population);
-        _stabilityTrend.Sample(day, player.Stability);
-        _manpowerTrend.Sample(day, player.ManpowerReserve);
 
         // The treasury's line is what the week does to it - the weekly balance, the number a player
         // acts on - and the bare movement of the last seven days only until the first week has closed.
@@ -765,6 +766,16 @@ public partial class DealOrForceGame
     /// <summary>The screen currently open, highlighted in the navigation rail.</summary>
     private void UpdateScreenButtons()
     {
+        if (IsNewShellActive)
+        {
+            if (_newShellBuilt && _shell is not null)
+            {
+                SyncNewShellModalState();
+                SyncNewShellLeftAndBottomDock();
+                _shell.Corner.Refresh();
+            }
+            return;
+        }
         var open =
             _situationLayer is { Visible: true } ? "Situation" :
             _sovereignFinanceLayer is { Visible: true } ? "Economy" :

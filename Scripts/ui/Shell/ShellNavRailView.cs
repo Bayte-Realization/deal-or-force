@@ -10,7 +10,7 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// 64px vertical navigation rail along the left arm of the L-corner: 10 workspace doors grouped by
+/// 64px vertical navigation rail along the left arm of the L-corner: 11 workspace doors grouped by
 /// engraved hairline dividers, active left-underline well, informative counts/dots, and slide-out hover tag.
 /// </summary>
 internal sealed class ShellNavRailView
@@ -21,10 +21,13 @@ internal sealed class ShellNavRailView
     private readonly List<PanelContainer> _keycaps = new();
 
     private PanelContainer _hoverTag;
+    private Control _hoverKeyBox;
     private Label _hoverTitle;
     private Label _hoverKey;
     private Label _hoverSubtitle;
     private ShellLayoutProfile _profile;
+    private StyleBoxEmpty _emptyStyle;
+    private (Campaign World, int Day, int PlayerId, int PpFloor, long ChronicleSeq, int Count) _decisionsCache;
 
     private sealed class RailItemNodes
     {
@@ -38,6 +41,10 @@ internal sealed class ShellNavRailView
         public Label BadgeText;
         public PanelContainer Keycap;
         public int GroupBreakAfter;
+        public bool? LastActive;
+        public int LastBadgeCount = -1;
+        public bool LastBadgeDot;
+        public string LastLang = "";
     }
 
     public ShellNavRailView(ShellContext ctx)
@@ -47,9 +54,11 @@ internal sealed class ShellNavRailView
 
     public void Build()
     {
+        _emptyStyle ??= new StyleBoxEmpty();
         var specs = new (string Screen, string Title, string Sub, string Key, string Icon, int BreakAfter)[]
         {
-            ("State Affairs", "shell.rail_gov", "shell.sub_gov", "E", "icon_laws", 1),
+            ("State Affairs", "shell.rail_gov", "shell.sub_gov", "E", "icon_laws", 0),
+            ("Decisions", "Decisions", "shell.sub_decisions", "", "icon_decisions", 1),
             ("Economy", "Economy", "shell.sub_eco", "R", "icon_economy", 0),
             ("Trade", "Trade", "shell.sub_trade", "T", "icon_trade", 0),
             ("Production", "Industry", "shell.sub_ind", "Y", "icon_industry", 0),
@@ -61,6 +70,8 @@ internal sealed class ShellNavRailView
             ("Search", "Search", "shell.sub_search", "Ctrl+K", "icon_search", 0)
         };
 
+        var hover = new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.08f) };
+        hover.SetCornerRadiusAll(3);
         foreach (var s in specs)
         {
             var capturedScreen = s.Screen;
@@ -70,16 +81,13 @@ internal sealed class ShellNavRailView
                 MouseDefaultCursorShape = Control.CursorShape.PointingHand,
                 FocusMode = Control.FocusModeEnum.None
             };
-            var empty = new StyleBoxEmpty();
-            var hover = new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.08f) };
-            hover.SetCornerRadiusAll(3);
-            btn.AddThemeStyleboxOverride("normal", empty);
+            btn.AddThemeStyleboxOverride("normal", _emptyStyle);
             btn.AddThemeStyleboxOverride("hover", hover);
             btn.AddThemeStyleboxOverride("pressed", _ctx.PressedWellStyle(underlineLeft: true));
 
             btn.Pressed += () =>
             {
-                _ctx.PlayCue?.Invoke("shell_plate_tap");
+                HideHoverTag(); _ctx.PlayCue?.Invoke("shell_plate_tap");
                 if (capturedScreen == "Search") _ctx.ToggleNavigator?.Invoke();
                 else _ctx.ToggleScreen?.Invoke(capturedScreen);
             };
@@ -118,9 +126,13 @@ internal sealed class ShellNavRailView
             badge.AddChild(badgeLbl);
             btn.AddChild(badge);
 
-            var kbd = _ctx.CreateKeycapBadge(s.Key == "Ctrl+K" ? "/" : s.Key);
-            btn.AddChild(kbd);
-            _keycaps.Add(kbd);
+            PanelContainer kbd = null;
+            if (!string.IsNullOrEmpty(s.Key))
+            {
+                kbd = _ctx.CreateKeycapBadge(s.Key == "Ctrl+K" ? "/" : s.Key);
+                btn.AddChild(kbd);
+                _keycaps.Add(kbd);
+            }
 
             var item = new RailItemNodes
             {
@@ -189,6 +201,7 @@ internal sealed class ShellNavRailView
         kbStyle.SetCornerRadiusAll(2);
         keyBox.AddThemeStyleboxOverride("panel", kbStyle);
         head.AddChild(keyBox);
+        _hoverKeyBox = keyBox;
 
         _hoverKey = new Label();
         _hoverKey.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
@@ -206,7 +219,9 @@ internal sealed class ShellNavRailView
     public void ShowHoverTag(string title, string hotkey, string subtitle, float globalY, float globalX)
     {
         _hoverTitle.Text = title;
-        _hoverKey.Text = hotkey;
+        var hasKey = !string.IsNullOrEmpty(hotkey);
+        _hoverKeyBox.Visible = hasKey;
+        if (hasKey) _hoverKey.Text = hotkey;
         _hoverSubtitle.Text = subtitle;
         _hoverSubtitle.Visible = !string.IsNullOrWhiteSpace(subtitle);
         _hoverTag.ResetSize();
@@ -224,11 +239,13 @@ internal sealed class ShellNavRailView
     {
         _profile = profile;
         var compact = profile.Compact;
-        var curY = compact ? 94f : 140f;
-        var btnH = compact ? 40f : 54f;
+        var curY = compact ? 92f : 136f;
+        var btnH = compact ? 37f : 49f;
         var btnW = compact ? 42f : 56f;
         const float btnX = 4f;
-        var iconDim = compact ? 21f : 27f;
+        var iconDim = compact ? 20f : 26f;
+        var gap = compact ? 2f : 3f;
+        var ruleStep = compact ? 5f : 6f;
         var ruleIdx = 0;
 
         for (var i = 0; i < _railItems.Count; i++)
@@ -238,63 +255,124 @@ internal sealed class ShellNavRailView
             it.Icon.Position = new Vector2((btnW - iconDim) * 0.5f, (btnH - iconDim) * 0.5f);
             it.Icon.Size = new Vector2(iconDim, iconDim);
             it.Badge.Position = new Vector2(btnW - (compact ? 17f : 21f), compact ? 2f : 3f);
-            it.Keycap.Position = new Vector2(btnW - 20f, btnH - 18f);
+            if (it.Keycap is not null) it.Keycap.Position = new Vector2(btnW - 20f, btnH - 18f);
 
-            curY += btnH + (compact ? 2f : 4f);
+            curY += btnH + gap;
             if (it.GroupBreakAfter > 0 && ruleIdx < _railRules.Count)
             {
                 var rule = _railRules[ruleIdx++];
                 ShellContext.PlaceRect(rule, new ShellRect(compact ? 6f : 8f, curY + (compact ? 1f : 2f), profile.LeftRail.W - (compact ? 12f : 16f), 2f));
                 rule.QueueRedraw();
-                curY += compact ? 6f : 8f;
+                curY += ruleStep;
             }
         }
     }
 
-    public void Refresh(Campaign world, Nation player, StrategicWar[] openWars, string openScreen)
+    public void Refresh(Campaign world, Nation player, IReadOnlyList<StrategicWar> openWars, string openScreen)
     {
-        var incomingDeals = world.DealOffers.Count(d => d.Pending && d.ToId == player.Id);
-        var pendingEvents = world.PendingEvents.Count(e => e.NationId == player.Id);
-        var researchIdle = string.IsNullOrEmpty(player.CurrentResearch);
-        var idleArmies = world.Armies.Count(a => a.NationId == player.Id && a.FrontLineId < 0 && a.AssignedWarId < 0 && !a.DirectOrder && !a.Training && !a.InBattle);
-        var doctrineReady = player.ArmyExperience >= 20f || player.AirExperience >= 20f || player.NavalExperience >= 20f;
-        var emptyStyle = new StyleBoxEmpty();
-
-        foreach (var it in _railItems)
+        var incomingDeals = 0;
+        for (var i = 0; i < world.DealOffers.Count; i++)
         {
+            var d = world.DealOffers[i];
+            if (d.Pending && d.ToId == player.Id) incomingDeals++;
+        }
+        var pendingEvents = 0;
+        for (var i = 0; i < world.PendingEvents.Count; i++)
+            if (world.PendingEvents[i].NationId == player.Id) pendingEvents++;
+
+        var researchIdle = string.IsNullOrEmpty(player.CurrentResearch);
+        var idleArmies = 0;
+        if (openWars.Count > 0)
+        {
+            for (var i = 0; i < world.Armies.Count; i++)
+            {
+                var a = world.Armies[i];
+                if (a.NationId == player.Id && a.FrontLineId < 0 && a.AssignedWarId < 0 && !a.DirectOrder && !a.Training && !a.InBattle)
+                    idleArmies++;
+            }
+        }
+        var doctrineReady = player.ArmyExperience >= 20f || player.AirExperience >= 20f || player.NavalExperience >= 20f;
+        var availDecisions = ResolveAvailableDecisionsCount(world, player);
+        var lang = Loc.Language;
+        _emptyStyle ??= new StyleBoxEmpty();
+
+        for (var i = 0; i < _railItems.Count; i++)
+        {
+            var it = _railItems[i];
             var active = string.Equals(openScreen, it.Screen, StringComparison.Ordinal);
-            it.Button.AddThemeStyleboxOverride("normal", active ? _ctx.PressedWellStyle(underlineLeft: true) : emptyStyle);
-            it.Button.TooltipText = Ui.Tip(it.Screen == "Search"
-                ? HotkeyCatalog.TipWithShortcut("navigator", it.SubKey)
-                : $"{Loc.Get(it.TitleKey)} ({it.Hotkey})\n{Loc.Get(it.SubKey)}");
+            if (it.LastActive != active)
+            {
+                it.LastActive = active;
+                it.Button.AddThemeStyleboxOverride("normal", active ? _ctx.PressedWellStyle(underlineLeft: true) : _emptyStyle);
+            }
+            if (it.LastLang != lang)
+            {
+                it.LastLang = lang;
+                var keySuffix = string.IsNullOrEmpty(it.Hotkey) ? "" : $" ({it.Hotkey})";
+                it.Button.TooltipText = Ui.Tip(it.Screen == "Search"
+                    ? HotkeyCatalog.TipWithShortcut("navigator", it.SubKey)
+                    : $"{Loc.Get(it.TitleKey)}{keySuffix}\n{Loc.Get(it.SubKey)}");
+            }
 
             var count = it.Screen switch
             {
-                "Wars" => openWars.Length,
+                "Wars" => openWars.Count,
                 "Diplomacy" => incomingDeals,
                 "State Affairs" => pendingEvents,
-                "Military" when openWars.Length > 0 => idleArmies,
+                "Decisions" => availDecisions,
+                "Military" when openWars.Count > 0 => idleArmies,
                 _ => 0
             };
             var dot = (it.Screen == "Research" && researchIdle) || (it.Screen == "Military" && count == 0 && doctrineReady);
-            it.Badge.Visible = count > 0 || dot;
-            if (count > 0)
+            if (it.LastBadgeCount != count || it.LastBadgeDot != dot)
             {
-                it.BadgeText.Visible = true;
-                it.BadgeText.Text = count > 9 ? "9+" : count.ToString(CultureInfo.InvariantCulture);
-                it.Badge.CustomMinimumSize = new Vector2(18, 18);
-            }
-            else if (dot)
-            {
-                it.BadgeText.Visible = false;
-                it.Badge.CustomMinimumSize = new Vector2(9, 9);
+                it.LastBadgeCount = count;
+                it.LastBadgeDot = dot;
+                it.Badge.Visible = count > 0 || dot;
+                if (count > 0)
+                {
+                    it.BadgeText.Visible = true;
+                    it.BadgeText.Text = count > 9 ? "9+" : count.ToString(CultureInfo.InvariantCulture);
+                    it.Badge.CustomMinimumSize = new Vector2(18, 18);
+                }
+                else if (dot)
+                {
+                    it.BadgeText.Visible = false;
+                    it.Badge.CustomMinimumSize = new Vector2(9, 9);
+                }
             }
         }
+    }
+
+    private int ResolveAvailableDecisionsCount(Campaign world, Nation player)
+    {
+        var ppFloor = (int)MathF.Floor(player.PoliticalPoints);
+        var entries = world.Chronicle.Entries;
+        var tailSeq = entries.Count > 0 ? entries[^1].Sequence : 0L;
+        if (ReferenceEquals(_decisionsCache.World, world) &&
+            _decisionsCache.Day == world.ElapsedDays &&
+            _decisionsCache.PlayerId == player.Id &&
+            _decisionsCache.PpFloor == ppFloor &&
+            _decisionsCache.ChronicleSeq == tailSeq)
+            return _decisionsCache.Count;
+
+        var count = 0;
+        var all = DecisionCatalog.All;
+        for (var i = 0; i < all.Count; i++)
+        {
+            if (!DecisionCatalog.IsBlocked(world, player, all[i]))
+                count++;
+        }
+        _decisionsCache = (world, world.ElapsedDays, player.Id, ppFloor, tailSeq, count);
+        return count;
     }
 
     public void SyncKeycapVisibility(bool visible)
     {
-        foreach (var k in _keycaps)
+        for (var i = 0; i < _keycaps.Count; i++)
+        {
+            var k = _keycaps[i];
             if (k.Visible != visible) k.Visible = visible;
+        }
     }
 }

@@ -85,7 +85,7 @@ public partial class DealOrForceGame
 
         var shade = new ColorRect
         {
-            Color = new Color(0.015f, 0.026f, 0.041f, 0.72f),
+            Color = Ui.Colour("surface.background", 0.72f),
             MouseFilter = MouseFilterEnum.Stop
         };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);

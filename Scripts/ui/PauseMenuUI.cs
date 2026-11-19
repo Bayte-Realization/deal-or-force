@@ -116,7 +116,14 @@ public partial class DealOrForceGame
 
     private void ShowPauseMenu()
     {
-        if (!_hudLayer.Visible || _handoverLayer is { Visible: true }) return;
+        if (!_hudLayer.Visible ||
+            _handoverLayer is { Visible: true } ||
+            _saveLoadLayer is { Visible: true } ||
+            _settingsLayer is { Visible: true } ||
+            _networkLayer is { Visible: true } ||
+            _pickerLayer is { Visible: true } ||
+            _mediaLibraryLayer is { Visible: true })
+            return;
         _leaveButton.Text = Tr("Return to main menu");
         _campaign.IsPaused = true;
         _pause.Text = "▶";

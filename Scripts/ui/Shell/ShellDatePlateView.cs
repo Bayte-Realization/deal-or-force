@@ -71,6 +71,7 @@ internal sealed class ShellDatePlateView
         BuildSpeedChevrons(canvas);
         BuildWorldStrip(canvas);
         BuildMenuButton(canvas);
+        _ctx.AttachPlateFrame(_plate);
     }
 
     private void BuildDateLine(Control canvas)

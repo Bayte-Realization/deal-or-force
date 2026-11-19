@@ -99,6 +99,7 @@ public partial class DealOrForceGame
 
     private void RefreshStrategicHud()
     {
+        if (IsNewShellActive) { RefreshNuclearAlert(); return; }
         if (_campaign?.Player is null || _outlinerRows is null) return;
         var player = _campaign.Player;
         var playerBattles = _campaign.Battles.Count(battle => !battle.Ended &&

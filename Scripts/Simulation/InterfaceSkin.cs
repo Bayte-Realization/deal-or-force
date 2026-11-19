@@ -72,17 +72,17 @@ public static class InterfaceSkin
         // The production page's own palette: the card its lines sit on, the two economies
         // the war-industry slider moves between, and the states a factory cell can be in.
         // Mirrors game/gui/28_production_units.json, which ships the same values.
-        ("production.card",           "#172630"),
-        ("production.border",         "#374a54"),
-        ("production.inset",          "#0c151b"),
-        ("production.empty_border",  "#4d626b"),
-        ("production.empty_icon",    "#37454c"),
-        ("production.blocked",        "#252e34"),
+        ("production.card",           "#1E1D1B"),
+        ("production.border",         "#46423D"),
+        ("production.inset",          "#11100F"),
+        ("production.empty_border",  "#4E4A44"),
+        ("production.empty_icon",    "#3A3733"),
+        ("production.blocked",        "#252320"),
         ("production.civilian",       "#a5c588"),
         ("production.civilian_fill",  "#293b2f"),
         ("production.military",       "#dac082"),
         ("production.military_fill",  "#443b26"),
-        ("production.hover",          "#394749"),
+        ("production.hover",          "#2E2C29"),
         ("production.focus",          "#f5dfa2"),
         ("state.warning",       "#e7b058"),
         ("state.info",          "#77c9e8"),
@@ -95,12 +95,12 @@ public static class InterfaceSkin
         ("state.critical",      "#b473e0"),
 
         // Surfaces
-        ("surface.background",  "#070b11"),
-        ("surface.panel_tint",  "#d6dee8fa"),
+        ("surface.background",  "#0A0A09"),
+        ("surface.panel_tint",  "#F2F0ECfa"),
         ("surface.overlay",     "#171615"),
-        ("surface.inset",       "#0b1118"),
-        ("surface.line",        "#34404d"),
-        ("surface.line_faint",  "#252f3ba8"),
+        ("surface.inset",       "#0F0E0E"),
+        ("surface.line",        "#3D3B38"),
+        ("surface.line_faint",  "#2E2C29"),
         // Named by screens written after this list, and missing from it. An unknown token comes
         // back magenta on purpose, but on a panel *ground* that is not a wrong pixel: the whole
         // full-screen workspace is filled with it, which is how the budget and the state-affairs
@@ -109,23 +109,23 @@ public static class InterfaceSkin
         // the territory preview asks for. A ground that is still misspelt is now caught by
         // AtlasSurfaceSkin.Attach rather than shown.
         ("surface.base",        "#191817"),
-        ("surface.raised",      "#222120"),
+        ("surface.raised",      "#252422"),
         ("surface.panel",       "#1D1C1B"),
-        ("brand.paper",         "#e9e4d9"),
+        ("brand.paper",         "#ECEAE4"),
 
         // Buttons
-        ("button.text",             "#edf2f7"),
-        ("button.text_hover",       "#f5f7fa"),
-        ("button.text_pressed",     "#cfe1f7"),
-        ("button.text_disabled",    "#667586"),
+        ("button.text",             "#F2F0EC"),
+        ("button.text_hover",       "#FAF9F6"),
+        ("button.text_pressed",     "#F2F0EC"),
+        ("button.text_disabled",    "#6E6B65"),
         ("button.fill",             "#222120"),
         ("button.fill_hover",       "#2E2D2B"),
         ("button.fill_pressed",     "#111010"),
-        ("button.fill_disabled",    "#10161e"),
-        ("button.border",           "#3b4856"),
-        ("button.border_hover",     "#7c8997"),
-        ("button.border_pressed",   "#5f97d6"),
-        ("button.border_disabled",  "#29333d"),
+        ("button.fill_disabled",    "#161514"),
+        ("button.border",           "#3D3B38"),
+        ("button.border_hover",     "#7E7971"),
+        ("button.border_pressed",   "#F2F0EC"),
+        ("button.border_disabled",  "#262523"),
         ("button.primary_fill",         "#242321"),
         ("button.primary_fill_hover",   "#302E2C"),
         ("button.primary_fill_pressed", "#141312"),
@@ -194,11 +194,12 @@ public static class InterfaceSkin
         //
         // shell.space is what the globe hangs against when a skin supplies no sky of its
         // own, which is why it is a shade deeper than globe.space rather than equal to it.
-        ("shell.background",    "#0d141df8"),
-        ("shell.border",        "#35424f"),
-        ("shell.row",           "#121b25"),
-        ("shell.row_alternate", "#18232e"),
-        ("shell.space",         "#060b12"),
+        ("shell.background",    "#191817"),
+        ("shell.border",        "#3D3B38"),
+        ("shell.outliner_border", "#DEDBD4"),
+        ("shell.row",           "#1E1D1C"),
+        ("shell.row_alternate", "#252422"),
+        ("shell.space",         "#080808"),
 
         // Globe
         ("globe.space",                  "#030914"),
@@ -233,8 +234,8 @@ public static class InterfaceSkin
         ("combat.strength",        "#4fb477"),
         ("combat.supply",          "#a6bdc9"),
         ("combat.cohesion",        "#b6bfa5"),
-        ("combat.badge_background", "#101c26"),
-        ("combat.bar_background",  "#0b151e"),
+        ("combat.badge_background", "#171615"),
+        ("combat.bar_background",  "#11100F"),
 
         // Chart series. Six hues that stay apart from each other at small sizes; a mod
         // adding a seventh good picks its colour from here rather than inventing one.
@@ -285,7 +286,7 @@ public static class InterfaceSkin
         ("material.plate.border",  "#0e0c0a"),
         ("material.plate.engrave", "#3a332b"),
         ("material.well.fill",     "#15130f"),
-        ("accent.primary",         "#6da7e6"),
+        ("accent.primary",         "#9B958C"),
         ("icon.category.economy",   "#c9a65a"),
         ("icon.category.military",  "#9aa8b6"),
         ("icon.category.diplomacy", "#5fb3a6"),
@@ -295,10 +296,19 @@ public static class InterfaceSkin
 
     private static readonly (string Key, float Value)[] DefaultMetrics =
     {
-        ("button.corner_radius",  3f),
-        ("button.border_width",   1f),
-        ("button.focus_width",    2f),
-        ("panel.texture_margin", 16f),
+        ("button.corner_radius",       3f),
+        ("button.border_width",        1f),
+        ("button.focus_width",         2f),
+        ("panel.texture_margin",      16f),
+        ("shell.ornament_alpha",      0.62f),
+        ("shell.divider_alpha",       0.78f),
+        ("shell.button_texture_enabled", 1.0f),
+        ("shell.plate_bevel_px",      2.0f),
+        ("shell.outliner_border_width", 1.6f),
+        ("shell.news_min_dwell_sec",  2.8f),
+        ("shell.news_cooldown_sec",   1.2f),
+        ("shell.news_audio_cooldown_sec", 3.5f),
+        ("shell.news_max_queue",      6f),
     };
 
     /// <summary>

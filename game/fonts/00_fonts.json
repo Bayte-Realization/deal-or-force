@@ -22,6 +22,6 @@
     "ui.default": { "system_families": ["Segoe UI Variable Text", "Segoe UI", "Noto Sans", "DejaVu Sans", "Arial"] },
     "ui.display": { "system_families": ["Georgia", "Noto Serif", "Liberation Serif", "DejaVu Serif"] },
     "map.countries": { "system_families": ["Georgia", "Noto Serif", "Liberation Serif"] },
-    "map.cities": { "system_families": ["Georgia", "Noto Serif", "Liberation Serif"] }
+    "map.cities": { "system_families": ["Segoe UI Variable Small", "Segoe UI Variable Text", "Segoe UI", "Noto Sans", "DejaVu Sans", "Arial"] }
   }
 }

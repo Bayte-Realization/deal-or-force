@@ -8,8 +8,8 @@ static class VersionLabelTests
     {
         var label = GameBuildInfo.VersionLabel;
         var version = GameBuildInfo.Version;
-        if (!string.Equals(label, "EntertAlpha 0.7.2.3-dev", StringComparison.Ordinal) ||
-            !string.Equals(version, "0.7.2.3", StringComparison.Ordinal) ||
+        if (!string.Equals(label, "EntertAlpha 0.8.3.2", StringComparison.Ordinal) ||
+            !string.Equals(version, "0.8.3.2", StringComparison.Ordinal) ||
             label.StartsWith("DoF ", StringComparison.Ordinal) ||
             label.StartsWith("ReimAlpha 2", StringComparison.Ordinal))
             throw new System.Exception("FAIL version label: menu shows " + label);

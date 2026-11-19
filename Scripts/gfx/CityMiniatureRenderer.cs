@@ -472,16 +472,17 @@ void vertex() {
     VERTEX.xy *= xy_fade;
     VERTEX.z *= clamp(zoom_scale, 0.0, 1.0);
     window_mask = COLOR.a;
-    world_norm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+    world_norm = normalize((MODEL_MATRIX * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
 }
 void fragment() {
     float is_window = clamp(window_mask, 0.0, 1.0);
-    ALBEDO = COLOR.rgb;
-    ROUGHNESS = mix(0.76, 0.32, is_window);
+    vec3 stone = COLOR.rgb * 0.80;
+    ALBEDO = mix(stone, vec3(0.14, 0.16, 0.18), is_window * 0.72);
+    ROUGHNESS = mix(0.86, 0.45, is_window);
     METALLIC = 0.0;
-    SPECULAR = 0.28;
+    SPECULAR = 0.14;
     float sun_dot = dot(normalize(world_norm), normalize(sun_direction));
-    float twilight = flat_map > 0.5 ? 0.38 : clamp(1.0 - smoothstep(-0.18, 0.42, sun_dot), 0.28, 1.0);
-    EMISSION = vec3(0.95, 0.93, 0.88) * is_window * twilight * 0.42;
+    float night = flat_map > 0.5 ? 0.04 : (1.0 - smoothstep(-0.35, 0.08, sun_dot));
+    EMISSION = vec3(0.88, 0.78, 0.62) * is_window * night * 0.14;
 }";
 }

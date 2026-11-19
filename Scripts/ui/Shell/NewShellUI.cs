@@ -16,6 +16,10 @@ public partial class DealOrForceGame
     private bool _newShellBuilt;
     private ShellOrchestrator _shell;
     private bool _newShellLastLeftVisible;
+    private bool _newShellModalWasOpen;
+    private readonly System.Collections.Generic.List<(Control Node, bool ClassicDefaultVisible)> _classicChromeCache = new();
+    private bool _classicChromeCached;
+    private bool? _classicChromeLastVisible;
 
     [ToolHook] internal double LastRefreshNewShellMs => _shell?.LastRefreshMs ?? 0.0;
 
@@ -83,6 +87,7 @@ public partial class DealOrForceGame
     private void BindShellContextActions(ShellContext ctx)
     {
         ctx.ResolveFlag = FlagTexture;
+        ctx.BuildLeaderPortrait = BuildLeaderPortraitBadge;
         ctx.OpenScreen = OpenScreen;
         ctx.ToggleScreen = ToggleCampaignScreen;
         ctx.SetMapMode = mode => { _globe?.SetMapMode(mode); RefreshNewShell(force: true); };
@@ -139,6 +144,7 @@ public partial class DealOrForceGame
         _openScreen = "Economy";
         _newShellRoot?.MoveToFront();
         _shell?.EconomyWorkspace.Open();
+        SyncNewShellModalState();
         SyncNewShellLeftAndBottomDock();
         RefreshNewShell(force: true);
     }
@@ -147,6 +153,7 @@ public partial class DealOrForceGame
     {
         _shell?.EconomyWorkspace.Close();
         if (_openScreen == "Economy") _openScreen = "";
+        SyncNewShellModalState();
         SyncNewShellLeftAndBottomDock();
     }
 
@@ -188,9 +195,10 @@ public partial class DealOrForceGame
         if (!_newShellBuilt) BuildNewShell();
         if (IsNewShellEconomyOpen) CloseNewShellEconomyWorkspace();
         CloseNewShellWorkPanel(unpinnedOnly: true);
-        _shell?.Alerts.DismissNewsCard();
-        _newShellRoot?.MoveToFront();
+        _newShellModalWasOpen = true;
+        _shell?.SetModalObscured(true);
         SyncNewShellLeftAndBottomDock();
+        layer?.MoveToFront();
     }
 
     internal void FitNewShellWorkspaceLayer(Control layer) => _shell?.FitWorkspaceLayer(layer);
@@ -246,10 +254,19 @@ public partial class DealOrForceGame
         if (_armyPanel is { Visible: true } && _shell.WorkPanel.IsVisible && !_shell.WorkPanel.IsPinned)
             _shell.WorkPanel.Close();
 
-        var anyLeft = (_armyPanel is { Visible: true }) || (_sidePanel is { Visible: true }) ||
-                      (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) || _shell.WorkPanel.IsVisible;
+        var modalOpen = IsAnyShellModalOpen();
+        if (modalOpen)
+        {
+            if (_planningBar is { Visible: true } && IsInstanceValid(_planningBar))
+                _planningBar.Visible = false;
+            if (_armyPanel is { Visible: true } && IsInstanceValid(_armyPanel))
+                _armyPanel.Visible = false;
+        }
+
+        var anyLeft = !modalOpen && ((_armyPanel is { Visible: true }) || (_sidePanel is { Visible: true }) ||
+                      (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) || _shell.WorkPanel.IsVisible);
         var pbarW = _planningBar is not null && IsInstanceValid(_planningBar) ? Math.Max(340f, _planningBar.GetCombinedMinimumSize().X) : 520f;
-        var dock = ShellDockRules.ComputeLeftAndBottomDock(profile, anyLeft, IsAnyShellModalOpen(), pbarW);
+        var dock = ShellDockRules.ComputeLeftAndBottomDock(profile, anyLeft, modalOpen, pbarW);
         var leftRect = dock.LeftPanel with { X = profile.LeftPanel.X };
         if (profile.Compact)
         {
@@ -258,19 +275,53 @@ public partial class DealOrForceGame
             leftRect = leftRect with { W = cappedW };
         }
 
-        foreach (var lp in new Control[] { _armyPanel, _sidePanel, _fleetPanel, _countryCard })
-        {
-            if (lp is not null && IsInstanceValid(lp) && lp.Visible)
-            {
-                lp.ClipContents = true;
-                ShellContext.PlaceRect(lp, leftRect);
-            }
-        }
+        PlaceLeftPanelIfVisible(_armyPanel, leftRect);
+        PlaceLeftPanelIfVisible(_sidePanel, leftRect);
+        PlaceLeftPanelIfVisible(_fleetPanel, leftRect);
+        PlaceLeftPanelIfVisible(_countryCard, leftRect);
 
         _shell.WorkPanel.ApplyDock(profile, dock with { LeftPanel = leftRect });
         _shell.Strip.ApplyDock(profile, dock);
-        if (_planningBar is not null && IsInstanceValid(_planningBar) && _planningBar.Visible)
+        if (!modalOpen && _planningBar is not null && IsInstanceValid(_planningBar) && _planningBar.Visible)
             ShellContext.PlaceRect(_planningBar, dock.PlanningBar);
+    }
+
+    private static void PlaceLeftPanelIfVisible(Control lp, ShellRect rect)
+    {
+        if (lp is { Visible: true } && IsInstanceValid(lp))
+        {
+            lp.ClipContents = true;
+            ShellContext.PlaceRect(lp, rect);
+        }
+    }
+
+    private static bool LeftPanelDrifted(Control lp, float expectedX, bool compact, float compactRightCap) =>
+        lp is { Visible: true } && IsInstanceValid(lp) &&
+        (MathF.Abs(lp.OffsetLeft - expectedX) > 2f || (compact && lp.OffsetRight > compactRightCap));
+
+    private void RebuildClassicChromeCache()
+    {
+        _classicChromeCache.Clear();
+        _classicChromeCached = true;
+        if (_hudLayer is null) return;
+        var seen = new System.Collections.Generic.HashSet<Control>();
+        foreach (var name in ClassicChromeNodeNames)
+        {
+            if (_hudLayer.FindChild(name, true, false) is Control node && IsInstanceValid(node) && seen.Add(node))
+                _classicChromeCache.Add((node, name is not ("MapModeDrawer" or "HudResourceDrawer" or "SituationDesk")));
+        }
+        AddClassicNode(_headlineStack);
+        AddClassicNode(_alertListPanel);
+        AddClassicNode(_outliner);
+        AddClassicNode(_hudTopPanel);
+        AddClassicNode(_hudDatePlate);
+        AddClassicNode(_mapControlsPanel);
+        AddClassicNode(_armyBar);
+        void AddClassicNode(Control c)
+        {
+            if (c is not null && IsInstanceValid(c) && seen.Add(c))
+                _classicChromeCache.Add((c, true));
+        }
     }
 
     private void ApplyUiShellSetting()
@@ -278,6 +329,7 @@ public partial class DealOrForceGame
         if (_hudLayer is null) return;
         if (!_newShellBuilt) BuildNewShell();
         var isNew = IsNewShellActive;
+        if (!isNew) _classicChromeCached = false;
         SetClassicChromeVisible(!isNew);
         if (_newShellRoot is not null && IsInstanceValid(_newShellRoot))
         {
@@ -292,19 +344,18 @@ public partial class DealOrForceGame
     private void SetClassicChromeVisible(bool visible)
     {
         if (_hudLayer is null) return;
-        foreach (var name in ClassicChromeNodeNames)
+        if (!_classicChromeCached) RebuildClassicChromeCache();
+        _classicChromeLastVisible = visible;
+        var mode = visible ? ProcessModeEnum.Inherit : ProcessModeEnum.Disabled;
+        for (var i = 0; i < _classicChromeCache.Count; i++)
         {
-            if (_hudLayer.FindChild(name, true, false) is not Control node || !IsInstanceValid(node)) continue;
-            node.Visible = visible && name is not ("MapModeDrawer" or "HudResourceDrawer" or "SituationDesk");
-            node.ProcessMode = visible ? ProcessModeEnum.Inherit : ProcessModeEnum.Disabled;
+            var (node, showWhenClassic) = _classicChromeCache[i];
+            if (!IsInstanceValid(node)) continue;
+            var targetVis = visible && showWhenClassic;
+            if (node.Visible != targetVis) node.Visible = targetVis;
+            if (node.ProcessMode != mode) node.ProcessMode = mode;
         }
-        foreach (var ctrl in new Control[] { _headlineStack, _alertListPanel, _outliner, _hudTopPanel, _hudDatePlate, _mapControlsPanel, _armyBar })
-        {
-            if (ctrl is null || !IsInstanceValid(ctrl)) continue;
-            ctrl.Visible = visible;
-            ctrl.ProcessMode = visible ? ProcessModeEnum.Inherit : ProcessModeEnum.Disabled;
-        }
-        if (!visible && _mapModeDrawerLayer is not null && IsInstanceValid(_mapModeDrawerLayer))
+        if (!visible && _mapModeDrawerLayer is { Visible: true } && IsInstanceValid(_mapModeDrawerLayer))
             _mapModeDrawerLayer.Visible = false;
     }
 
@@ -318,29 +369,24 @@ public partial class DealOrForceGame
     private void RefreshNewShell(bool force = false)
     {
         if (!_newShellBuilt || !IsNewShellActive || _campaign is null || _hudLayer is not { Visible: true }) return;
-        SetClassicChromeVisible(false);
+        if (_classicChromeLastVisible != false) SetClassicChromeVisible(false);
+        SyncNewShellModalState();
         _shell?.Refresh(_campaign, _speed, force);
-        SyncNewShellLeftAndBottomDock();
+        if (force) SyncNewShellLeftAndBottomDock();
     }
 
     private void TickNewShell(double delta)
     {
         if (!_newShellBuilt || !IsNewShellActive || _campaign is null || _hudLayer is not { Visible: true } || _shell is null) return;
+        SyncNewShellModalState();
         var anyLeft = (_armyPanel is { Visible: true }) || (_sidePanel is { Visible: true }) ||
                       (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) || _shell.WorkPanel.IsVisible;
         var profile = _shell.CurrentProfile();
-        var leftDrifted = false;
         var compactRightCap = profile.Compact ? Math.Min(profile.NewsCard.X, profile.AlertColumn.X) - 10f : float.PositiveInfinity;
-        foreach (var lp in new Control[] { _armyPanel, _sidePanel, _fleetPanel, _countryCard })
-        {
-            if (lp is { Visible: true } && IsInstanceValid(lp) &&
-                (MathF.Abs(lp.OffsetLeft - profile.LeftPanel.X) > 2f ||
-                 (profile.Compact && lp.OffsetRight > compactRightCap)))
-            {
-                leftDrifted = true;
-                break;
-            }
-        }
+        var leftDrifted = LeftPanelDrifted(_armyPanel, profile.LeftPanel.X, profile.Compact, compactRightCap) ||
+                          LeftPanelDrifted(_sidePanel, profile.LeftPanel.X, profile.Compact, compactRightCap) ||
+                          LeftPanelDrifted(_fleetPanel, profile.LeftPanel.X, profile.Compact, compactRightCap) ||
+                          LeftPanelDrifted(_countryCard, profile.LeftPanel.X, profile.Compact, compactRightCap);
         if (anyLeft != _newShellLastLeftVisible || leftDrifted)
         {
             _newShellLastLeftVisible = anyLeft;
@@ -348,6 +394,41 @@ public partial class DealOrForceGame
         }
         _shell.Tick(delta);
     }
+
+    private void SyncNewShellModalState()
+    {
+        if (!_newShellBuilt || !IsNewShellActive || _shell is null) return;
+        var fullCover = IsFullCoverModalOpen();
+        if (_newShellRoot is not null && IsInstanceValid(_newShellRoot))
+        {
+            var wantRoot = !fullCover && _hudLayer is { Visible: true };
+            if (_newShellRoot.Visible != wantRoot) _newShellRoot.Visible = wantRoot;
+        }
+        var modalOpen = IsAnyShellModalOpen();
+        if (modalOpen != _newShellModalWasOpen)
+        {
+            _newShellModalWasOpen = modalOpen;
+            _shell.SetModalObscured(modalOpen);
+            SyncNewShellLeftAndBottomDock();
+            if (!modalOpen)
+            {
+                RefreshArmyPanel();
+                RefreshPlanningBar();
+            }
+        }
+        if (modalOpen)
+        {
+            if (_planningBar is { Visible: true } && IsInstanceValid(_planningBar))
+                _planningBar.Visible = false;
+            if (_armyPanel is { Visible: true } && IsInstanceValid(_armyPanel))
+                _armyPanel.Visible = false;
+        }
+    }
+
+    private bool IsFullCoverModalOpen() =>
+        _pauseMenuLayer is { Visible: true } || _settingsLayer is { Visible: true } ||
+        _saveLoadLayer is { Visible: true } || _pickerLayer is { Visible: true } ||
+        _handoverLayer is { Visible: true } || _mediaLibraryLayer is { Visible: true };
 
     private void RefreshNewShellLocalised()
     {
@@ -357,16 +438,21 @@ public partial class DealOrForceGame
         RefreshNewShell(force: true);
     }
 
-    internal void CloseShellTransientPopovers() => _shell?.CloseTransientPopovers();
+    internal void CloseShellTransientPopovers(bool includeNews = true) => _shell?.CloseTransientPopovers(includeNews);
 
     private bool IsAnyShellModalOpen() =>
         IsNewShellEconomyOpen || _handbookLayer is { Visible: true } || _peaceLayer is { Visible: true } ||
-        _defconLayer is { Visible: true } || _pauseMenuLayer is { Visible: true } || _settingsLayer is { Visible: true } ||
-        _saveLoadLayer is { Visible: true } || _pickerLayer is { Visible: true } || _stateAffairsLayer is { Visible: true } ||
-        _sovereignFinanceLayer is { Visible: true } || _ledgerLayer is { Visible: true } || _warLedgerLayer is { Visible: true } ||
-        _diplomacyLayer is { Visible: true } || _conflictsLayer is { Visible: true } || _policyLayer is { Visible: true } ||
-        _tradeScreenLayer is { Visible: true } || _productionLayer is { Visible: true } || _supportLayer is { Visible: true } ||
-        _researchLayer is { Visible: true } || _doctrineLayer is { Visible: true };
+        _peaceOfferLayer is { Visible: true } || _defconLayer is { Visible: true } || _pauseMenuLayer is { Visible: true } ||
+        _settingsLayer is { Visible: true } || _saveLoadLayer is { Visible: true } || _pickerLayer is { Visible: true } ||
+        _stateAffairsLayer is { Visible: true } || _sovereignFinanceLayer is { Visible: true } || _ledgerLayer is { Visible: true } ||
+        _warLedgerLayer is { Visible: true } || _diplomacyLayer is { Visible: true } || _conflictsLayer is { Visible: true } ||
+        _policyLayer is { Visible: true } || _tradeScreenLayer is { Visible: true } || _productionLayer is { Visible: true } ||
+        _supportLayer is { Visible: true } || _researchLayer is { Visible: true } || _doctrineLayer is { Visible: true } ||
+        _recruitmentLayer is { Visible: true } || _situationLayer is { Visible: true } || _eventLayer is { Visible: true } ||
+        _handoverLayer is { Visible: true } || _countryRankingsLayer is { Visible: true } || _navigatorLayer is { Visible: true } ||
+        _subjectsModalLayer is { Visible: true } || _releaseModalLayer is { Visible: true } || _mediaLibraryLayer is { Visible: true } ||
+        _dealComposer is { Visible: true } || _ultimatumComposer is { Visible: true } || _warDeclaration is { Visible: true } ||
+        _allianceProposalReview is { Visible: true } || _nuclearStrikeComposer is { Visible: true };
 
     private bool HandleNewShellHotkey(InputEventKey key)
     {
@@ -384,12 +470,48 @@ public partial class DealOrForceGame
 
     private bool HandleNewShellEscape()
     {
+        // 1) Mandatory dialogs block Pause.
+        if (_handoverLayer is { Visible: true } || _eventLayer is { Visible: true }) return true;
+
+        // 2) Close topmost system modal if visible.
+        if (_mediaLibraryLayer is { Visible: true }) { CloseMediaLibrary(); return true; }
+        if (_settingsLayer is { Visible: true }) { HideSettings(); return true; }
+        if (_saveLoadLayer is { Visible: true }) { HideSaveLoadInterface(); return true; }
+        if (_networkLayer is { Visible: true }) { CloseNetworkMultiplayer(); return true; }
+        if (_handbookLayer is { Visible: true }) { CloseHandbook(); return true; }
+        if (_peaceLayer is { Visible: true }) { ClosePeaceConference(); return true; }
+        if (_peaceOfferLayer is { Visible: true }) { ClosePeaceOffer(); return true; }
+        if (_defconLayer is { Visible: true }) { CloseDefconOverview(); return true; }
+        if (_pauseMenuLayer is { Visible: true }) { HidePauseMenu(); return true; }
+
+        // 3) Close topmost composer / popup if visible.
+        if (IsInstanceValid(_nuclearStrikeComposer) && _nuclearStrikeComposer.Visible) { CloseNuclearStrikeReview(); return true; }
+        if (IsInstanceValid(_warDeclaration) && _warDeclaration.Visible) { CloseWarDeclaration(); return true; }
+        if (IsInstanceValid(_allianceProposalReview) && _allianceProposalReview.Visible) { CloseAllianceProposalReview(); return true; }
+        if (IsInstanceValid(_dealComposer) && _dealComposer.Visible) { CloseDealComposer(); return true; }
+        if (IsInstanceValid(_ultimatumComposer) && _ultimatumComposer.Visible) { CloseUltimatumComposer(); return true; }
+        if (_countryRankingsLayer is { Visible: true }) { CloseCountryRankings(); return true; }
+        if (_subjectsModalLayer is { Visible: true }) { CloseSubjectsModal(); return true; }
+        if (_releaseModalLayer is { Visible: true }) { CloseReleaseCountryModal(); return true; }
+        if (_recruitmentLayer is { Visible: true }) { _recruitmentLayer.Hide(); return true; }
+        if (_situationLayer is { Visible: true }) { CloseSituationRoom(); return true; }
+
+        // 4) Close shell popovers & panels (Escape NEVER closes the News Card).
         if (_shell.Messages.IsVisible) { _shell.Messages.Close(); return true; }
         if (_shell.MapBar.IsPopoverOpen) { _shell.MapBar.ClosePopover(); return true; }
         if (_shell.EconomyWorkspace.IsVisible) { CloseNewShellEconomyWorkspace(); return true; }
-        if (_shell.Alerts.IsNewsCardVisible) { _shell.Alerts.DismissNewsCard(); return true; }
         if (_shell.WorkPanel.IsVisible) { CloseNewShellWorkPanel(unpinnedOnly: false); return true; }
         if (CloseVisibleCampaignScreen()) return true;
+        if (_splitMovePopup is { IsPopupOpen: true }) { _splitMovePopup.ClosePopup(); return true; }
+        if (_quickRecruitLayer is { Visible: true }) { CloseQuickRecruitPopup(); return true; }
+        if (_provinceCardLayer is not null && IsInstanceValid(_provinceCardLayer) && _provinceCardLayer.Visible) { CloseProvinceCard(); return true; }
+        if (_compactProvincePopover is { Visible: true }) { CloseCompactProvincePopover(); return true; }
+        if (_fleetPanel is { Visible: true }) { CloseFleetPanel(); SyncNewShellLeftAndBottomDock(); return true; }
+        if (_armyPanel is { Visible: true }) { ClearArmySelectionAndClose(); if (_supportSelected.Count > 0) ClearSupportMapSelection(); SyncNewShellLeftAndBottomDock(); return true; }
+        if (_movementPanel is { Visible: true }) { CloseMovementPanel(); return true; }
+        if (_sidePanel is { Visible: true }) { if (_dossierReturnArmyIds is not null) ReturnToArmyOrders(); else CloseSidePanel(); SyncNewShellLeftAndBottomDock(); return true; }
+
+        // 5) Only if none of the above were visible -> Pause menu.
         ShowPauseMenu();
         return true;
     }

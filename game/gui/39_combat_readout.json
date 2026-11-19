@@ -5,8 +5,8 @@
     "combat.strength": "#4fb477",
     "combat.supply": "#a6bdc9",
     "combat.cohesion": "#b6bfa5",
-    "combat.badge_background": "#101c26",
-    "combat.bar_background": "#0b151e"
+    "combat.badge_background": "#171615",
+    "combat.bar_background": "#11100F"
   },
   "metrics": {
     "combat.map_marker_pixels": 36,

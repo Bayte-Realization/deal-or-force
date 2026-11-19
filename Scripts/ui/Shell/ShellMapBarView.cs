@@ -35,15 +35,27 @@ internal sealed class ShellMapBarView
     private Button _projectionBtn;
 
     // Live 256x128 political/land/sea corner minimap (on by default per ui_shell_minimap = true)
+    private const int MinimapW = 256, MinimapH = 128;
     private PanelContainer _minimapPanel;
     private Control _minimapCanvas;
     private ImageTexture _minimapTexture;
     private Campaign _minimapWorld;
     private int _minimapRevision = int.MinValue;
     private bool _minimapDragging;
+    private ulong _minimapLastBuildMsec;
     private (float Lat, float Lon, float Span) _lastCamView;
+    private readonly int[] _minimapOwnerGrid = new int[MinimapW * MinimapH];
+    private readonly byte[] _minimapBytes = new byte[MinimapW * MinimapH * 4];
+    private byte[] _minimapPalR = Array.Empty<byte>(), _minimapPalG = Array.Empty<byte>(), _minimapPalB = Array.Empty<byte>();
+    private bool[] _minimapPalHas = Array.Empty<bool>();
+    private readonly bool _isMobileRuntime = OS.HasFeature("mobile") || OS.GetName() is "Android" or "iOS";
 
     private ShellLayoutProfile _profile;
+    private bool _modalObscured;
+    private StyleBoxEmpty _layerEmpty;
+    private StyleBoxFlat _layerHover;
+    private StrategicMapMode? _lastMedallionMode;
+    private bool? _lastMoreOn, _lastAltVisible, _lastShowMini;
 
     private sealed class MedallionNodes
     {
@@ -116,6 +128,7 @@ internal sealed class ShellMapBarView
 
         BuildPopover();
         BuildMinimap();
+        _ctx.AttachPlateFrame(_bar);
     }
 
     private MedallionNodes CreateMedallion(string name, string iconName, string hotkey, string tip, Action onPress)
@@ -329,10 +342,11 @@ internal sealed class ShellMapBarView
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
         };
-        var empty = new StyleBoxEmpty();
-        var hover = new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.06f) };
-        btn.AddThemeStyleboxOverride("normal", empty);
-        btn.AddThemeStyleboxOverride("hover", hover);
+        _layerEmpty ??= new StyleBoxEmpty();
+        _layerHover ??= new StyleBoxFlat();
+        _layerHover.BgColor = Ui.Colour("shell.paper", 0.06f);
+        btn.AddThemeStyleboxOverride("normal", _layerEmpty);
+        btn.AddThemeStyleboxOverride("hover", _layerHover);
 
         var capSetting = setting;
         btn.Pressed += () =>
@@ -463,16 +477,26 @@ internal sealed class ShellMapBarView
         _minimapCanvas.GuiInput += OnMinimapInput;
         _minimapPanel.AddChild(_minimapCanvas);
         _minimapPanel.TooltipText = Ui.Tip(Loc.Get("Click on the minimap to jump the camera there."));
+        _ctx.AttachPlateFrame(_minimapPanel, chamfer: 4.0f);
+    }
+
+    public void SetModalObscured(bool obscured)
+    {
+        _modalObscured = obscured;
+        if (obscured)
+        {
+            if (_popover is not null) _popover.Visible = false;
+            if (_minimapPanel is not null) _minimapPanel.Visible = false;
+            return;
+        }
+        Refresh();
     }
 
     public void TogglePopover()
     {
+        if (_modalObscured || (_ctx.IsAnyModalOpen?.Invoke() ?? false)) { ClosePopover(); return; }
         _popover.Visible = !_popover.Visible;
-        if (_popover.Visible)
-        {
-            _popover.MoveToFront();
-            RefreshPopover();
-        }
+        if (_popover.Visible) { _popover.MoveToFront(); RefreshPopover(); }
         Refresh();
     }
 
@@ -490,35 +514,24 @@ internal sealed class ShellMapBarView
 
         var medSz = profile.MapButtonSize;
         _medallionRow.AddThemeConstantOverride("separation", compact ? 4 : 8);
-        foreach (var (_, med) in _quickButtons)
-            LayoutSingleMedallion(med, medSz, compact);
+        foreach (var (_, med) in _quickButtons) LayoutSingleMedallion(med, medSz, compact);
         LayoutSingleMedallion(_moreMedallion, medSz, compact);
 
         var miniW = compact ? 196f : 260f;
         var miniH = compact ? 98f : 130f;
-        ShellContext.PlaceRect(_minimapPanel, new ShellRect(
-            profile.MapBar.Right - miniW,
-            profile.MapBar.Y - miniH - 6f,
-            miniW,
-            miniH));
+        ShellContext.PlaceRect(_minimapPanel, new ShellRect(profile.MapBar.Right - miniW, profile.MapBar.Y - miniH - 6f, miniW, miniH));
 
         var popW = compact ? 304f : 388f;
         var popH = compact ? 330f : 420f;
-        ShellContext.PlaceRect(_popover, new ShellRect(
-            Math.Max(12f, profile.MapBar.Right - popW),
-            Math.Max(70f, profile.MapBar.Y - popH - 8f),
-            popW,
-            popH));
+        ShellContext.PlaceRect(_popover, new ShellRect(Math.Max(12f, profile.MapBar.Right - popW), Math.Max(70f, profile.MapBar.Y - popH - 8f), popW, popH));
     }
 
     private static void LayoutSingleMedallion(MedallionNodes med, float sz, bool compact)
     {
         med.Button.CustomMinimumSize = new Vector2(sz, sz);
         var pad = compact ? 7f : 9f;
-        med.Icon.OffsetLeft = pad;
-        med.Icon.OffsetRight = -pad;
-        med.Icon.OffsetTop = pad;
-        med.Icon.OffsetBottom = -pad;
+        med.Icon.OffsetLeft = pad; med.Icon.OffsetRight = -pad;
+        med.Icon.OffsetTop = pad; med.Icon.OffsetBottom = -pad;
         med.ActiveUnderline.Position = new Vector2(sz * 0.28f, sz + 2f);
         med.ActiveUnderline.Size = new Vector2(sz * 0.44f, 2f);
         med.Keycap.Position = new Vector2(sz - 14f, sz - 14f);
@@ -527,28 +540,36 @@ internal sealed class ShellMapBarView
     public void Refresh()
     {
         var activeMode = _ctx.GetMapMode?.Invoke() ?? StrategicMapMode.Political;
-        var normalBox = _ctx.NineSlice("round_bezel", 0, 0, 0, 0, 0, "shell.plate_top", "shell.engrave", 24);
-        var activeBox = _ctx.NineSlice("round_bezel_active", 0, 0, 0, 0, 0, "shell.well_top", "shell.paper_muted", 24);
-
-        foreach (var (mode, med) in _quickButtons)
-        {
-            var on = mode == activeMode;
-            med.Button.AddThemeStyleboxOverride("normal", on ? activeBox : normalBox);
-            med.Button.AddThemeStyleboxOverride("hover", on ? activeBox : normalBox);
-            med.ActiveUnderline.Visible = on;
-            med.Keycap.Visible = _ctx.AltKeycapsVisible;
-        }
-
         var moreOn = IsPopoverOpen;
-        _moreMedallion.Button.AddThemeStyleboxOverride("normal", moreOn ? activeBox : normalBox);
-        _moreMedallion.ActiveUnderline.Visible = moreOn;
-        _moreMedallion.Keycap.Visible = _ctx.AltKeycapsVisible;
+        var altVis = _ctx.AltKeycapsVisible;
+        var obscured = _modalObscured || (_ctx.IsAnyModalOpen?.Invoke() ?? false);
+        if (obscured && _popover is { Visible: true }) { _popover.Visible = false; moreOn = false; }
+        var showMini = !obscured && SettingsCatalog.Flag("ui_shell_minimap");
 
-        var showMini = SettingsCatalog.Flag("ui_shell_minimap");
-        _minimapPanel.Visible = showMini;
-        if (showMini) _minimapCanvas.QueueRedraw();
+        if (_lastMedallionMode != activeMode || _lastMoreOn != moreOn || _lastAltVisible != altVis || _lastShowMini != showMini)
+        {
+            _lastMedallionMode = activeMode;
+            _lastMoreOn = moreOn;
+            _lastAltVisible = altVis;
+            _lastShowMini = showMini;
 
-        if (IsPopoverOpen) RefreshPopover();
+            var normalBox = _ctx.NineSlice("round_bezel", 0, 0, 0, 0, 0, "shell.plate_top", "shell.engrave", 24);
+            var activeBox = _ctx.NineSlice("round_bezel_active", 0, 0, 0, 0, 0, "shell.well_top", "shell.paper_muted", 24);
+            foreach (var (mode, med) in _quickButtons)
+            {
+                var on = mode == activeMode;
+                med.Button.AddThemeStyleboxOverride("normal", on ? activeBox : normalBox);
+                med.Button.AddThemeStyleboxOverride("hover", on ? activeBox : normalBox);
+                med.ActiveUnderline.Visible = on;
+                med.Keycap.Visible = altVis;
+            }
+            _moreMedallion.Button.AddThemeStyleboxOverride("normal", moreOn ? activeBox : normalBox);
+            _moreMedallion.ActiveUnderline.Visible = moreOn;
+            _moreMedallion.Keycap.Visible = altVis;
+            _minimapPanel.Visible = showMini;
+            if (showMini) _minimapCanvas.QueueRedraw();
+        }
+        if (!obscured && moreOn) RefreshPopover();
     }
 
     private void RefreshPopover()
@@ -599,7 +620,6 @@ internal sealed class ShellMapBarView
         _projectionBtn.Text = $"{Loc.Get(isFlat ? "shell.proj_3d_globe" : "shell.proj_2d_map")} (F2)";
         _projectionBtn.AddThemeStyleboxOverride("normal", chipNormal);
         _projectionBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
-
         foreach (var lr in _layerRows) lr.TogglePill.QueueRedraw();
     }
 
@@ -624,103 +644,83 @@ internal sealed class ShellMapBarView
         if (ReferenceEquals(_minimapWorld, world) && _minimapRevision == world.MapRevision && _minimapTexture is not null)
             return;
 
+        var paused = _ctx.IsPaused?.Invoke() ?? true;
+        if (!paused && _minimapTexture is not null && ReferenceEquals(_minimapWorld, world) &&
+            Time.GetTicksMsec() - _minimapLastBuildMsec < (ulong)(_isMobileRuntime ? 750 : 450))
+            return;
+
         _minimapWorld = world;
         _minimapRevision = world.MapRevision;
+        _minimapLastBuildMsec = Time.GetTicksMsec();
 
-        const int mw = 256;
-        const int mh = 128;
         var maxIdx = 1;
         for (var i = 0; i < world.Nations.Count; i++)
             if (world.Nations[i].MapIndex > maxIdx) maxIdx = world.Nations[i].MapIndex;
 
-        var palR = new byte[maxIdx + 1];
-        var palG = new byte[maxIdx + 1];
-        var palB = new byte[maxIdx + 1];
-        var playerMapIdx = world.Player?.MapIndex ?? -1;
+        var palLen = maxIdx + 1;
+        if (_minimapPalR.Length < palLen)
+        {
+            _minimapPalR = new byte[palLen]; _minimapPalG = new byte[palLen];
+            _minimapPalB = new byte[palLen]; _minimapPalHas = new bool[palLen];
+        }
+        else Array.Clear(_minimapPalHas, 0, palLen);
 
+        var playerMapIdx = world.Player?.MapIndex ?? -1;
         for (var i = 0; i < world.Nations.Count; i++)
         {
             var n = world.Nations[i];
             if (n.MapIndex <= 0 || n.MapIndex > maxIdx) continue;
             var col = Color.FromString(string.IsNullOrEmpty(n.Color) ? "#6e6c66" : n.Color, new Color(0.43f, 0.42f, 0.40f));
-            // Slightly desaturate non-player fills for cartographic restraint; brighten player territory
-            col = n.MapIndex == playerMapIdx
-                ? col.Lightened(0.14f)
-                : col.Lerp(new Color(0.28f, 0.28f, 0.27f), 0.22f);
-            palR[n.MapIndex] = (byte)Math.Clamp((int)(col.R * 255f), 0, 255);
-            palG[n.MapIndex] = (byte)Math.Clamp((int)(col.G * 255f), 0, 255);
-            palB[n.MapIndex] = (byte)Math.Clamp((int)(col.B * 255f), 0, 255);
+            col = n.MapIndex == playerMapIdx ? col.Lightened(0.14f) : col.Lerp(new Color(0.28f, 0.28f, 0.27f), 0.22f);
+            _minimapPalR[n.MapIndex] = (byte)Math.Clamp((int)(col.R * 255f), 0, 255);
+            _minimapPalG[n.MapIndex] = (byte)Math.Clamp((int)(col.G * 255f), 0, 255);
+            _minimapPalB[n.MapIndex] = (byte)Math.Clamp((int)(col.B * 255f), 0, 255);
+            _minimapPalHas[n.MapIndex] = true;
         }
 
         var cells = map.CellToProvince;
         var controllers = world.ProvinceController;
         var owners = map.ProvinceToNation;
-        var ownerGrid = new int[mw * mh];
-
-        for (var y = 0; y < mh; y++)
+        for (var y = 0; y < MinimapH; y++)
         {
-            var sy = Math.Clamp((int)((y + 0.5f) / mh * map.Height), 0, map.Height - 1);
+            var sy = Math.Clamp((int)((y + 0.5f) / MinimapH * map.Height), 0, map.Height - 1);
             var rowOff = sy * map.Width;
-            for (var x = 0; x < mw; x++)
+            for (var x = 0; x < MinimapW; x++)
             {
-                var sx = Math.Clamp((int)((x + 0.5f) / mw * map.Width), 0, map.Width - 1);
+                var sx = Math.Clamp((int)((x + 0.5f) / MinimapW * map.Width), 0, map.Width - 1);
                 var prov = cells[rowOff + sx];
-                if (prov <= 0 || prov > map.ProvinceCount || map.IsWater(prov))
-                {
-                    ownerGrid[y * mw + x] = 0;
-                    continue;
-                }
+                if (prov <= 0 || prov > map.ProvinceCount || map.IsWater(prov)) { _minimapOwnerGrid[y * MinimapW + x] = 0; continue; }
                 var ctrl = controllers is not null && prov < controllers.Length && controllers[prov] > 0
-                    ? controllers[prov]
-                    : (prov < owners.Length ? owners[prov] : 0);
-                ownerGrid[y * mw + x] = ctrl > 0 && ctrl <= maxIdx ? ctrl : -1;
+                    ? controllers[prov] : (prov < owners.Length ? owners[prov] : 0);
+                _minimapOwnerGrid[y * MinimapW + x] = ctrl > 0 && ctrl <= maxIdx ? ctrl : -1;
             }
         }
 
-        var bytes = new byte[mw * mh * 4];
-        for (var y = 0; y < mh; y++)
+        for (var y = 0; y < MinimapH; y++)
         {
-            for (var x = 0; x < mw; x++)
+            for (var x = 0; x < MinimapW; x++)
             {
-                var idx = y * mw + x;
-                var o = ownerGrid[idx];
+                var idx = y * MinimapW + x;
+                var o = _minimapOwnerGrid[idx];
                 var bOff = idx * 4;
                 if (o == 0)
                 {
-                    // Deep neutral bathymetrical ocean with subtle latitude falloff
-                    var latShade = 1f - 0.18f * MathF.Abs((y / (float)mh) * 2f - 1f);
-                    bytes[bOff] = (byte)(17 * latShade);
-                    bytes[bOff + 1] = (byte)(24 * latShade);
-                    bytes[bOff + 2] = (byte)(32 * latShade);
-                    bytes[bOff + 3] = 255;
+                    var latShade = 1f - 0.18f * MathF.Abs((y / (float)MinimapH) * 2f - 1f);
+                    _minimapBytes[bOff] = (byte)(17 * latShade); _minimapBytes[bOff + 1] = (byte)(24 * latShade);
+                    _minimapBytes[bOff + 2] = (byte)(32 * latShade); _minimapBytes[bOff + 3] = 255;
                     continue;
                 }
-
-                byte r = o > 0 ? palR[o] : (byte)86;
-                byte g = o > 0 ? palG[o] : (byte)85;
-                byte b = o > 0 ? palB[o] : (byte)82;
-
-                // Crisp 1px coastline & international border darkening
-                var edge = (x > 0 && ownerGrid[idx - 1] != o) || (y > 0 && ownerGrid[idx - mw] != o);
-                if (edge)
-                {
-                    r = (byte)(r * 0.52f);
-                    g = (byte)(g * 0.52f);
-                    b = (byte)(b * 0.52f);
-                }
-
-                bytes[bOff] = r;
-                bytes[bOff + 1] = g;
-                bytes[bOff + 2] = b;
-                bytes[bOff + 3] = 255;
+                var has = o > 0 && o < _minimapPalHas.Length && _minimapPalHas[o];
+                byte r = has ? _minimapPalR[o] : (byte)86, g = has ? _minimapPalG[o] : (byte)85, b = has ? _minimapPalB[o] : (byte)82;
+                if ((x > 0 && _minimapOwnerGrid[idx - 1] != o) || (y > 0 && _minimapOwnerGrid[idx - MinimapW] != o))
+                { r = (byte)(r * 0.52f); g = (byte)(g * 0.52f); b = (byte)(b * 0.52f); }
+                _minimapBytes[bOff] = r; _minimapBytes[bOff + 1] = g; _minimapBytes[bOff + 2] = b; _minimapBytes[bOff + 3] = 255;
             }
         }
 
-        using var img = Image.CreateFromData(mw, mh, false, Image.Format.Rgba8, bytes);
-        if (_minimapTexture is null)
-            _minimapTexture = ImageTexture.CreateFromImage(img);
-        else
-            _minimapTexture.Update(img);
+        using var img = Image.CreateFromData(MinimapW, MinimapH, false, Image.Format.Rgba8, _minimapBytes);
+        if (_minimapTexture is null) _minimapTexture = ImageTexture.CreateFromImage(img);
+        else _minimapTexture.Update(img);
         _minimapCanvas?.QueueRedraw();
     }
 
@@ -731,17 +731,13 @@ internal sealed class ShellMapBarView
         if (w <= 4f || h <= 4f) return;
 
         EnsureMinimapTextureCurrent();
-        if (_minimapTexture is not null)
-            _minimapCanvas.DrawTextureRect(_minimapTexture, new Rect2(0, 0, w, h), tile: false);
-        else
-            _minimapCanvas.DrawRect(new Rect2(0, 0, w, h), new Color(0.07f, 0.10f, 0.13f, 1f));
+        if (_minimapTexture is not null) _minimapCanvas.DrawTextureRect(_minimapTexture, new Rect2(0, 0, w, h), tile: false);
+        else _minimapCanvas.DrawRect(new Rect2(0, 0, w, h), new Color(0.07f, 0.10f, 0.13f, 1f));
 
-        // Subtle graticule lines over ocean/land
         var gridCol = new Color(1f, 1f, 1f, 0.06f);
         _minimapCanvas.DrawLine(new Vector2(0, h * 0.5f), new Vector2(w, h * 0.5f), gridCol, 1f);
         _minimapCanvas.DrawLine(new Vector2(w * 0.5f, 0), new Vector2(w * 0.5f, h), gridCol, 1f);
 
-        // Live camera viewport frame (.vp in style.css)
         var (lat, lon, span) = _ctx.GetCameraMinimapView?.Invoke() ?? (20f, 0f, 60f);
         var cx = ((lon + 180f) / 360f) * w;
         var cy = ((90f - lat) / 180f) * h;
@@ -764,11 +760,7 @@ internal sealed class ShellMapBarView
         }
         else if (ev is InputEventMouseMotion mm && _minimapDragging)
         {
-            if ((mm.ButtonMask & MouseButtonMask.Left) == 0)
-            {
-                _minimapDragging = false;
-                return;
-            }
+            if ((mm.ButtonMask & MouseButtonMask.Left) == 0) { _minimapDragging = false; return; }
             PanCameraFromMinimapPoint(mm.Position);
             _minimapCanvas.AcceptEvent();
         }
@@ -780,8 +772,7 @@ internal sealed class ShellMapBarView
         var h = MathF.Max(1f, _minimapCanvas.Size.Y);
         var lon = Math.Clamp((localPos.X / w) * 360f - 180f, -180f, 180f);
         var lat = Math.Clamp(90f - (localPos.Y / h) * 180f, -78f, 78f);
-        var keepDist = Math.Clamp(_ctx.GetViewDistance?.Invoke() ?? 6.5f, 3.2f, 12f);
-        _ctx.FocusLatLon?.Invoke(lat, lon, keepDist);
+        _ctx.FocusLatLon?.Invoke(lat, lon, Math.Clamp(_ctx.GetViewDistance?.Invoke() ?? 6.5f, 3.2f, 12f));
         _minimapCanvas.QueueRedraw();
     }
 }

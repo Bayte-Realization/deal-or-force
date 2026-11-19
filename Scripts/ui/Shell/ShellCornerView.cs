@@ -10,7 +10,7 @@ namespace DealOrForce;
 
 /// <summary>
 /// Seamless top-left L-corner plate: one continuous chamfered graphite & brushed-titanium frame
-/// joining the recessed natural-aspect flag pocket (Q), GDP rank line, 2-row telemetry cells, and 64px rail.
+/// joining the recessed natural-aspect flag pocket (Q), overall rank line, 2-row telemetry cells, and 64px rail.
 /// </summary>
 internal sealed class ShellCornerView
 {
@@ -33,8 +33,11 @@ internal sealed class ShellCornerView
     private ShellLayoutProfile _profile;
     private bool _atWar;
     private string _lastTag = "";
-    private (Campaign World, int Day, int Rev, int Rank) _rankCache;
+    private (Campaign World, int Day, int Rev, int PlayerId, string Lang, int Rank, double Score) _rankCache;
     private (Campaign World, int NationId, int SampleDay, float SampleGdp, float GrowthPct) _gdpSample;
+    private StyleBoxEmpty _emptyStyle;
+    private StyleBoxFlat _cellHoverStyle;
+    private readonly List<StrategicWar> _openWarsBuf = new(8);
     private readonly Dictionary<string, StatCellNodes> _cells = new(StringComparer.Ordinal);
 
     private sealed class StatCellNodes
@@ -60,17 +63,18 @@ internal sealed class ShellCornerView
 
     public void Build()
     {
+        _emptyStyle ??= new StyleBoxEmpty();
+        _cellHoverStyle ??= new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.07f) };
         _backdrop = new Control { Name = "ShellLCornerBackdrop", MouseFilter = Control.MouseFilterEnum.Ignore };
         _backdrop.Draw += DrawSeamlessLCorner;
         _ctx.Root.AddChild(_backdrop);
 
-        var emptyBox = new StyleBoxEmpty();
         _topHitBox = new PanelContainer { Name = "ShellTopPlate", MouseFilter = Control.MouseFilterEnum.Stop };
-        _topHitBox.AddThemeStyleboxOverride("panel", emptyBox);
+        _topHitBox.AddThemeStyleboxOverride("panel", _emptyStyle);
         _ctx.Root.AddChild(_topHitBox);
 
         _railHitBox = new PanelContainer { Name = "ShellRailPlate", MouseFilter = Control.MouseFilterEnum.Stop };
-        _railHitBox.AddThemeStyleboxOverride("panel", emptyBox);
+        _railHitBox.AddThemeStyleboxOverride("panel", _emptyStyle);
         _ctx.Root.AddChild(_railHitBox);
 
         BuildFlagAndRank();
@@ -90,7 +94,7 @@ internal sealed class ShellCornerView
         flagBtn.AddThemeStyleboxOverride("normal", pocketNormal);
         flagBtn.AddThemeStyleboxOverride("hover", pocketNormal);
         flagBtn.AddThemeStyleboxOverride("pressed", _ctx.PressedWellStyle());
-        flagBtn.Pressed += () => { _ctx.PlayCue?.Invoke("shell_plate_tap"); _ctx.ToggleScreen?.Invoke("Nation"); };
+        flagBtn.Pressed += () => { _rail.HideHoverTag(); _ctx.PlayCue?.Invoke("shell_plate_tap"); _ctx.ToggleScreen?.Invoke("Nation"); };
         flagBtn.MouseEntered += () =>
         {
             var nationName = _ctx.World?.Player?.DisplayName ?? Loc.Get("Country");
@@ -161,7 +165,7 @@ internal sealed class ShellCornerView
 
         _rankSubLabel = new Label
         {
-            Text = Loc.Get("shell.by_gdp"),
+            Text = Loc.Get("shell.overall_rank"),
             VerticalAlignment = VerticalAlignment.Center, MouseFilter = Control.MouseFilterEnum.Ignore
         };
         _rankSubLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
@@ -202,13 +206,13 @@ internal sealed class ShellCornerView
             MouseFilter = Control.MouseFilterEnum.Stop,
             MouseDefaultCursorShape = Control.CursorShape.PointingHand
         };
-        var emptyStyle = new StyleBoxEmpty();
-        var hoverStyle = new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.07f) };
-        box.AddThemeStyleboxOverride("panel", emptyStyle);
+        _emptyStyle ??= new StyleBoxEmpty();
+        _cellHoverStyle ??= new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.07f) };
+        box.AddThemeStyleboxOverride("panel", _emptyStyle);
 
         var cell = new StatCellNodes { Id = id, ScreenMatch = screenMatch, Box = box };
-        box.MouseEntered += () => { if (!cell.LastActive) box.AddThemeStyleboxOverride("panel", hoverStyle); };
-        box.MouseExited += () => { box.AddThemeStyleboxOverride("panel", cell.LastActive ? _ctx.PressedWellStyle(underlineBottom: true) : emptyStyle); };
+        box.MouseEntered += () => { if (!cell.LastActive) box.AddThemeStyleboxOverride("panel", _cellHoverStyle); };
+        box.MouseExited += () => { box.AddThemeStyleboxOverride("panel", cell.LastActive ? _ctx.PressedWellStyle(underlineBottom: true) : _emptyStyle); };
         box.GuiInput += ev =>
         {
             if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
@@ -299,7 +303,7 @@ internal sealed class ShellCornerView
         ShellContext.PlaceRect(_rankHost, rankRect);
         _rankNumLabel.AddThemeFontSizeOverride("font_size", compact ? 11 : 14);
         _rankSubLabel.Visible = !compact;
-        _rankSubLabel.Text = Loc.Get("shell.by_gdp");
+        _rankSubLabel.Text = Loc.Get("shell.overall_rank");
         _rankActiveUnderline.Position = new Vector2(rankRect.W * 0.18f, rankRect.H - 3f);
         _rankActiveUnderline.Size = new Vector2(rankRect.W * 0.64f, 2.5f);
         _flagKbd.Position = new Vector2(flagRect.Right - 18f, flagRect.Bottom - 16f);
@@ -353,8 +357,14 @@ internal sealed class ShellCornerView
         var world = _ctx.World;
         if (world?.Player is not { } player) return;
 
-        var openWars = Warfare.OpenWars(world).Where(w => !w.Ended && w.Involves(player.Id)).ToArray();
-        var atWar = openWars.Length > 0;
+        _openWarsBuf.Clear();
+        var allOpenWars = Warfare.OpenWars(world);
+        for (var i = 0; i < allOpenWars.Count; i++)
+        {
+            var w = allOpenWars[i];
+            if (!w.Ended && w.Involves(player.Id)) _openWarsBuf.Add(w);
+        }
+        var atWar = _openWarsBuf.Count > 0;
         if (atWar != _atWar)
             Layout(ShellLayout.ForViewport(_ctx.GetViewportSize().X, _ctx.GetViewportSize().Y, atWar), atWar);
 
@@ -369,16 +379,22 @@ internal sealed class ShellCornerView
         _rankActiveUnderline.Visible = countryOpen;
         _flagButton.ButtonPressed = countryOpen;
 
-        var rank = ResolveGdpRank(world, player);
-        var rankStr = $"№ {rank}";
+        var (rank, score, rankChanged) = ResolveOverallRank(world, player);
+        var rankStr = rank > 0 ? $"№ {rank}" : "№ —";
         if (_rankNumLabel.Text != rankStr) _rankNumLabel.Text = rankStr;
+        if (rankChanged)
+        {
+            _rankHost.TooltipText = Ui.Tip(rank > 0
+                ? $"{Loc.Format("Overall rank #{0} · index {1}/100", rank, score.ToString("0.0"))}\n{Loc.Get("World power rank — click to open Country Rankings.")}"
+                : $"{Loc.Get("Country rankings · no visible territorial statistics")}\n{Loc.Get("World power rank — click to open Country Rankings.")}");
+        }
 
-        RefreshCells(world, player, openWars, openScreen);
-        _rail.Refresh(world, player, openWars, openScreen);
+        RefreshCells(world, player, _openWarsBuf, openScreen);
+        _rail.Refresh(world, player, _openWarsBuf, openScreen);
         SyncKeycapVisibility();
     }
 
-    private void RefreshCells(Campaign world, Nation player, StrategicWar[] openWars, string openScreen)
+    private void RefreshCells(Campaign world, Nation player, IReadOnlyList<StrategicWar> openWars, string openScreen)
     {
         var debt = SovereignFinance.Outstanding(player);
         var debtRatio = debt / MathF.Max(0.01f, player.Gdp);
@@ -423,7 +439,7 @@ internal sealed class ShellCornerView
             "shell.paper", "", "shell.state.positive",
             $"{Loc.Get("Political capital")}: {player.PoliticalPoints:0.0}", openScreen == "State Affairs");
 
-        if (openWars.Length > 0)
+        if (openWars.Count > 0)
         {
             var lead = openWars[0];
             var score = (int)MathF.Round(lead.IsAttacking(player.Id) ? lead.WarScore : -lead.WarScore);
@@ -431,7 +447,7 @@ internal sealed class ShellCornerView
             UpdateCell("War", $"{wsPct}%", "",
                 wsPct < 40 ? "shell.state.negative_text" : "shell.state.warning_text",
                 $"{score:+#;-#;0}", score >= 0 ? "shell.state.positive" : "shell.state.negative",
-                $"{Loc.Get("Wars")}: {openWars.Length} · {Loc.Get("War score")}: {score:+#;-#;0}%", openScreen == "Wars");
+                $"{Loc.Get("Wars")}: {openWars.Count} · {Loc.Get("War score")}: {score:+#;-#;0}%", openScreen == "Wars");
         }
     }
 
@@ -454,7 +470,8 @@ internal sealed class ShellCornerView
         if (c.LastActive != active)
         {
             c.LastActive = active;
-            c.Box.AddThemeStyleboxOverride("panel", active ? _ctx.PressedWellStyle(underlineBottom: true) : new StyleBoxEmpty());
+            _emptyStyle ??= new StyleBoxEmpty();
+            c.Box.AddThemeStyleboxOverride("panel", active ? _ctx.PressedWellStyle(underlineBottom: true) : _emptyStyle);
         }
     }
 
@@ -496,18 +513,44 @@ internal sealed class ShellCornerView
         return _gdpSample.GrowthPct;
     }
 
-    private int ResolveGdpRank(Campaign world, Nation player)
+    private (int Rank, double Score, bool Changed) ResolveOverallRank(Campaign world, Nation player)
     {
-        if (ReferenceEquals(_rankCache.World, world) && _rankCache.Day == world.ElapsedDays && _rankCache.Rev == world.MapRevision)
-            return _rankCache.Rank;
-        var higher = 1;
-        for (var i = 0; i < world.Nations.Count; i++)
+        var lang = Loc.Language;
+        if (ReferenceEquals(_rankCache.World, world) && _rankCache.Day == world.ElapsedDays &&
+            _rankCache.Rev == world.MapRevision && _rankCache.PlayerId == player.Id)
         {
-            var other = world.Nations[i];
-            if (other.Id != player.Id && other.Population > 0 && other.Gdp > 0f && other.Gdp > player.Gdp) higher++;
+            var langChanged = !string.Equals(_rankCache.Lang, lang, StringComparison.Ordinal);
+            if (langChanged)
+                _rankCache = (world, _rankCache.Day, _rankCache.Rev, player.Id, lang, _rankCache.Rank, _rankCache.Score);
+            return (_rankCache.Rank, _rankCache.Score, langChanged);
         }
-        _rankCache = (world, world.ElapsedDays, world.MapRevision, higher);
-        return higher;
+
+        if (world.MidStep)
+        {
+            if (ReferenceEquals(_rankCache.World, world) && _rankCache.PlayerId == player.Id && _rankCache.Rank >= 0)
+                return (_rankCache.Rank, _rankCache.Score, false);
+            return (0, 0.0, false);
+        }
+
+        var weights = new CountryRankings.Weights(
+            Ui.Metric("rankings.weight.economy", 40),
+            Ui.Metric("rankings.weight.population", 15),
+            Ui.Metric("rankings.weight.field_power", 30),
+            Ui.Metric("rankings.weight.technology", 15));
+        var rows = CountryRankings.Read(world, weights);
+        var rank = 0;
+        var score = 0.0;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].NationId == player.Id)
+            {
+                rank = rows[i].OverallRank;
+                score = rows[i].Overall;
+                break;
+            }
+        }
+        _rankCache = (world, world.ElapsedDays, world.MapRevision, player.Id, lang, rank, score);
+        return (rank, score, true);
     }
 
     private static (string Fig, string Unit) SplitMoney(float billions)

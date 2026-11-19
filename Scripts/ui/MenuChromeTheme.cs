@@ -277,6 +277,7 @@ internal static class MenuChromeTheme
         ChromePlateArt.AttachPlateWeave(panel, 0.08f);
 
         if (!brassCorners) return;
+        ChromePlateArt.AttachCornerOrnaments(panel);
         if (panel.GetNodeOrNull<MenuChromeBrassFrame>("MenuChromeBrassFrame") is null)
         {
             var frame = new MenuChromeBrassFrame { Name = "MenuChromeBrassFrame", ZIndex = 4 };
@@ -307,7 +308,12 @@ internal static class MenuChromeTheme
         button.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
     }
 
-    internal static Control CreateEngravedRule(string name = "EngravedRule", float verticalMargin = 2f)
+    internal static Control CreateEngravedRule(string name = "EngravedRule", float verticalMargin = 2f) =>
+        name == "SettingsRowRule"
+            ? CreateHairlineRule(name, verticalMargin)
+            : ChromePlateArt.CreateEngravedMedallionDivider(name, verticalMargin);
+
+    internal static Control CreateHairlineRule(string name = "EngravedRule", float verticalMargin = 2f)
     {
         var rule = new MenuChromeEngravedRule
         {
@@ -323,19 +329,19 @@ internal static class MenuChromeTheme
     internal static void StylePrimaryCta(Button button, int fontSize = 16, bool serif = true)
     {
         if (button is null) return;
-        var normal = GradientPlateBox(
+        var normal = ChromePlateArt.BuildSculptedButtonStyle(0, true, 16, 6, 16, 6) ?? GradientPlateBox(
             PlateTop.Darkened(0.10f), PlateBottom.Darkened(0.18f), BorderDark,
             innerTopLine: new Color(Paper, 0.14f), innerBottomLine: new Color(0f, 0f, 0f, 0.55f),
             brassEdge: BrassHi, borderThickness: 2, padLeft: 16, padTop: 6, padRight: 16, padBottom: 6);
-        var hover = GradientPlateBox(
+        var hover = ChromePlateArt.BuildSculptedButtonStyle(1, true, 16, 6, 16, 6) ?? GradientPlateBox(
             PlateHover, PlateBottom, BorderDark,
             innerTopLine: new Color(Highlight, 0.20f), innerBottomLine: new Color(0f, 0f, 0f, 0.45f),
             brassEdge: BrassHi.Lightened(0.14f), borderThickness: 2, padLeft: 16, padTop: 6, padRight: 16, padBottom: 6);
-        var pressed = GradientPlateBox(
+        var pressed = ChromePlateArt.BuildSculptedButtonStyle(2, true, 16, 7, 16, 5) ?? GradientPlateBox(
             WellTop.Lightened(0.06f), WellBottom, BorderDark,
             innerTopLine: new Color(0f, 0f, 0f, 0.65f), innerBottomLine: new Color(Brass, 0.25f),
             brassEdge: Brass, borderThickness: 2, padLeft: 16, padTop: 7, padRight: 16, padBottom: 5);
-        var disabled = GradientPlateBox(
+        var disabled = ChromePlateArt.BuildSculptedButtonStyle(3, true, 16, 6, 16, 6) ?? GradientPlateBox(
             PlateBottom.Darkened(0.18f), WellBottom, BorderDark,
             innerTopLine: null, innerBottomLine: null,
             brassEdge: BrassShadow, borderThickness: 1, padLeft: 16, padTop: 6, padRight: 16, padBottom: 6);
@@ -358,22 +364,22 @@ internal static class MenuChromeTheme
     internal static void StyleWellButton(Button button, bool selected = false, int fontSize = 14)
     {
         if (button is null) return;
-        var normal = selected
+        var normal = ChromePlateArt.BuildSculptedButtonStyle(0, selected, 14, 5, 14, 5) ?? (selected
             ? GradientPlateBox(WellTop, WellBottom.Lightened(0.04f), BorderDark,
                 innerTopLine: new Color(0f, 0f, 0f, 0.70f), innerBottomLine: new Color(Paper, 0.90f),
                 brassEdge: Brass, borderThickness: 1, padLeft: 14, padTop: 5, padRight: 14, padBottom: 5)
             : GradientPlateBox(WellTop, WellBottom, BorderDark,
                 innerTopLine: new Color(0f, 0f, 0f, 0.60f), innerBottomLine: new Color(Paper, 0.08f),
-                brassEdge: RuleLight, borderThickness: 1, padLeft: 14, padTop: 5, padRight: 14, padBottom: 5);
-        var hover = GradientPlateBox(
+                brassEdge: RuleLight, borderThickness: 1, padLeft: 14, padTop: 5, padRight: 14, padBottom: 5));
+        var hover = ChromePlateArt.BuildSculptedButtonStyle(1, selected, 14, 5, 14, 5) ?? GradientPlateBox(
             WellBottom.Lightened(0.08f), PlateBottom, BorderDark,
             innerTopLine: new Color(Paper, 0.06f), innerBottomLine: new Color(Paper, 0.12f),
             brassEdge: Brass, borderThickness: 1, padLeft: 14, padTop: 5, padRight: 14, padBottom: 5);
-        var pressed = GradientPlateBox(
+        var pressed = ChromePlateArt.BuildSculptedButtonStyle(2, selected, 14, 6, 14, 4) ?? GradientPlateBox(
             WellTop, WellTop.Lightened(0.04f), BorderDark,
             innerTopLine: new Color(0f, 0f, 0f, 0.75f), innerBottomLine: new Color(Paper, 0.85f),
             brassEdge: BrassHi, borderThickness: 1, padLeft: 14, padTop: 6, padRight: 14, padBottom: 4);
-        var disabled = GradientPlateBox(
+        var disabled = ChromePlateArt.BuildSculptedButtonStyle(3, selected, 14, 5, 14, 5) ?? GradientPlateBox(
             WellTop, WellTop, BorderDark,
             brassEdge: BrassShadow, borderThickness: 1, padLeft: 14, padTop: 5, padRight: 14, padBottom: 5);
 
@@ -395,18 +401,18 @@ internal static class MenuChromeTheme
     internal static void StylePlateButton(Button button, bool active = false, int fontSize = 13)
     {
         if (button is null) return;
-        var normal = active
+        var normal = ChromePlateArt.BuildSculptedButtonStyle(0, active, 12, 4, 12, 4) ?? (active
             ? GradientPlateBox(WellTop.Lightened(0.05f), WellBottom, BorderDark,
                 innerTopLine: new Color(0f, 0f, 0f, 0.65f), innerBottomLine: new Color(Paper, 0.90f),
                 brassEdge: BrassHi, borderThickness: 1, padLeft: 12, padTop: 4, padRight: 12, padBottom: 4)
             : GradientPlateBox(PlateTop, PlateBottom, BorderDark,
                 innerTopLine: new Color(Paper, 0.12f), innerBottomLine: new Color(0f, 0f, 0f, 0.45f),
-                brassEdge: RuleLight, borderThickness: 1, padLeft: 12, padTop: 4, padRight: 12, padBottom: 4);
-        var hover = GradientPlateBox(
+                brassEdge: RuleLight, borderThickness: 1, padLeft: 12, padTop: 4, padRight: 12, padBottom: 4));
+        var hover = ChromePlateArt.BuildSculptedButtonStyle(1, active, 12, 4, 12, 4) ?? GradientPlateBox(
             PlateHover, PlateBottom.Lightened(0.05f), BorderDark,
             innerTopLine: new Color(Paper, 0.16f), innerBottomLine: new Color(0f, 0f, 0f, 0.40f),
             brassEdge: Brass, borderThickness: 1, padLeft: 12, padTop: 4, padRight: 12, padBottom: 4);
-        var pressed = GradientPlateBox(
+        var pressed = ChromePlateArt.BuildSculptedButtonStyle(2, active, 12, 5, 12, 3) ?? GradientPlateBox(
             WellTop, WellBottom, BorderDark,
             innerTopLine: new Color(0f, 0f, 0f, 0.70f), innerBottomLine: new Color(Paper, 0.80f),
             brassEdge: BrassHi, borderThickness: 1, padLeft: 12, padTop: 5, padRight: 12, padBottom: 3);
@@ -429,14 +435,14 @@ internal static class MenuChromeTheme
     internal static void StyleTabButton(Button button, bool active, int fontSize = 13)
     {
         if (button is null) return;
-        var normal = active
+        var normal = ChromePlateArt.BuildSculptedButtonStyle(0, active, 12, 5, 12, 5) ?? (active
             ? GradientPlateBox(PlateHover, BodyTop, BorderDark,
                 innerTopLine: new Color(BrassHi, 0.90f), innerBottomLine: null,
                 brassEdge: Brass, borderThickness: 1, padLeft: 12, padTop: 5, padRight: 12, padBottom: 5)
             : GradientPlateBox(PlateBottom, WellBottom, BorderDark,
                 innerTopLine: new Color(Paper, 0.06f), innerBottomLine: null,
-                brassEdge: RuleLight, borderThickness: 1, padLeft: 12, padTop: 5, padRight: 12, padBottom: 5);
-        var hover = GradientPlateBox(
+                brassEdge: RuleLight, borderThickness: 1, padLeft: 12, padTop: 5, padRight: 12, padBottom: 5));
+        var hover = ChromePlateArt.BuildSculptedButtonStyle(1, active, 12, 5, 12, 5) ?? GradientPlateBox(
             PlateTop, BodyTop, BorderDark,
             innerTopLine: new Color(Paper, 0.14f), innerBottomLine: null,
             brassEdge: Brass, borderThickness: 1, padLeft: 12, padTop: 5, padRight: 12, padBottom: 5);
@@ -711,7 +717,7 @@ public partial class MenuChromeBrassFrame : Node2D
         var w = size.X;
         var h = size.Y;
         var len = MathF.Min(18f, MathF.Min(w, h) * 0.18f);
-        var thick = 2f;
+        var thick = Math.Clamp(InterfaceSkin.Metric("shell.plate_bevel_px", 2.0f), 1f, 4f);
         var hi = MenuChromeTheme.BrassHi;
         var mid = MenuChromeTheme.Brass;
         var shadow = MenuChromeTheme.BrassShadow;
@@ -719,6 +725,7 @@ public partial class MenuChromeBrassFrame : Node2D
 
         // Subtle warm light catch along top inside edge.
         DrawLine(new Vector2(len + 2f, 1.5f), new Vector2(w - len - 2f, 1.5f), new Color(MenuChromeTheme.Paper, 0.11f), 1f);
+        if (_host.GetNodeOrNull<Control>("CornerOrnamentsOverlay") is { Visible: true }) return;
 
         // Chamfered 2px antique-brass corner trim (top-left, top-right, bottom-left, bottom-right).
         // Top-left (brightest toward upper-left key light)

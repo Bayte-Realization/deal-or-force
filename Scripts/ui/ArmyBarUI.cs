@@ -96,6 +96,13 @@ public partial class DealOrForceGame
         _armyBarClock += delta;
         if (_armyBarClock < 0.25) return;
         _armyBarClock = 0;
+        if (IsNewShellActive)
+        {
+            if (_armyBar.Visible) _armyBar.Visible = false;
+            if (_selectedArmies.Count > 0 || _drawingKind is not null || _erasingPlans || _planningBar is { Visible: true })
+                RefreshPlanningBar();
+            return;
+        }
         RefreshArmyBar();
         RefreshPlanningBar();
     }

@@ -343,6 +343,7 @@ public sealed partial class GlobePresentation
         public int Limit;
         public int FontSize;
         public float TextPixels;
+        public float CapitalTextPixels;
         public Font Font;
         /// <summary>How many cities from the head of the catalogue are lettered at this zoom.</summary>
         public int Candidates;
@@ -383,8 +384,9 @@ public sealed partial class GlobePresentation
     private void PlaceCities(Vector2I viewport)
     {
         var limit = Math.Clamp((int)InterfaceSkin.Metric(_flatMap ? "map.flat_city_label_limit" : "map.city_label_limit", _flatMap ? 90f : 140f), 0, 400);
-        var fontSize = Math.Clamp((int)InterfaceSkin.Metric("map.city_font_size", 28f), 12, 64);
-        var textPixels = Math.Clamp(InterfaceSkin.Metric(_flatMap ? "map.flat_city_text_pixels" : "map.city_text_pixels", _flatMap ? 12f : 13f), 8f, 28f);
+        var fontSize = Math.Clamp((int)InterfaceSkin.Metric("map.city_font_size", 44f), 12, 64);
+        var textPixels = Math.Clamp(InterfaceSkin.Metric(_flatMap ? "map.flat_city_text_pixels" : "map.city_text_pixels", _flatMap ? 12f : 12.5f), 8f, 28f);
+        var capitalTextPixels = Math.Clamp(InterfaceSkin.Metric(_flatMap ? "map.flat_city_capital_text_pixels" : "map.city_capital_text_pixels", textPixels + 1.3f), textPixels, 32f);
         var font = PresentationFonts.For("map.cities");
         var distance = ViewDistance;
         var band = 0;
@@ -440,6 +442,7 @@ public sealed partial class GlobePresentation
             Limit = limit,
             FontSize = fontSize,
             TextPixels = textPixels,
+            CapitalTextPixels = capitalTextPixels,
             Font = font,
             Candidates = candidates,
             DotPixels = Math.Clamp(InterfaceSkin.Metric("map.city_dot_pixels", 8f), 3f, 24f),
@@ -711,7 +714,7 @@ public sealed partial class GlobePresentation
             if (string.IsNullOrWhiteSpace(name) && city >= 0) name = _cities[city].DisplayName;
             if (string.IsNullOrWhiteSpace(name)) continue;
 
-            var tierPixels = pass.TextPixels;
+            var tierPixels = pass.CapitalTextPixels;
             var textWidth = CityTextWidth(pass.Font, pass.FontSize, name) * tierPixels / pass.FontSize;
             const float starSize = 12f;
             var side = TakeLabelRoom(screen, starSize, textWidth, tierPixels, city, out _);
@@ -761,7 +764,7 @@ public sealed partial class GlobePresentation
         // One lettering and one dot for every city. A capital differs by its mark and its colour,
         // and only for as long as it is one.
         var capital = IsCapitalNow(index);
-        var tierPixels = pass.TextPixels;
+        var tierPixels = capital ? pass.CapitalTextPixels : pass.TextPixels;
         var name = city.DisplayName;
         var textWidth = CityTextWidth(pass.Font, pass.FontSize, name) * tierPixels / pass.FontSize;
         var dot = capital ? pass.CapitalMarkPixels : pass.DotPixels;
@@ -932,7 +935,8 @@ public sealed partial class GlobePresentation
         pin.Name.Text = name;
         pin.Name.Font = font;
         pin.Name.FontSize = fontSize;
-        pin.Name.OutlineSize = Math.Max(4, fontSize / 4);
+        var outlineRatio = Math.Clamp(InterfaceSkin.Metric("map.city_outline_ratio", 0.14f), 0.06f, 0.30f);
+        pin.Name.OutlineSize = Math.Max(2, (int)MathF.Round(fontSize * outlineRatio));
         pin.Name.FixedSize = !_flatMap;
         pin.Dot.FixedSize = !_flatMap;
         // The colour and the mark are set on every placement (PlaceCity): they follow the capitals.
@@ -1063,7 +1067,8 @@ public sealed partial class GlobePresentation
         pin.Name.Text = name;
         pin.Name.Font = font;
         pin.Name.FontSize = fontSize;
-        pin.Name.OutlineSize = Math.Max(4, fontSize / 4);
+        var outlineRatio = Math.Clamp(InterfaceSkin.Metric("map.city_outline_ratio", 0.14f), 0.06f, 0.30f);
+        pin.Name.OutlineSize = Math.Max(2, (int)MathF.Round(fontSize * outlineRatio));
         pin.Name.FixedSize = !_flatMap;
         pin.Dot.FixedSize = !_flatMap;
         pin.Name.Modulate = Ui.Colour("globe.city_capital");

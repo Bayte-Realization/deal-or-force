@@ -36,20 +36,26 @@ internal sealed class ShellAlertColumnView
     // Torn-edge Newspaper Clipping Card (paper.jpg + newspaper_card_9s)
     private PanelContainer _newsCard;
     private Label _newsKickerLabel;
+    private Label _newsQueueLabel;
     private TextureRect _newsPinIcon;
     private Label _newsPinText;
     private Control _newsTimerRule;
     private Label _newsHeadlineLabel;
     private Label _newsLeadLabel;
-    private NewsFeed.Line _activeNews;
-    private double _newsAge;
-    private bool _newsPinned;
+    private readonly ShellNewsPacer _newsPacer = new();
+    private readonly List<NewsFeed.Line> _newsBatchBuffer = new(12);
+    private Campaign _newsWorld;
+    private double _newsClock;
     private long _newsSeenSeq;
+    private long _newsDisplayedSeq = -1;
+    private int _newsDisplayedQueued = -1;
+    private bool _newsDisplayedPinned;
+    private bool _modalObscured;
+    private StyleBoxEmpty _rowEmptyStyle;
+    private StyleBoxFlat _rowHoverStyle;
 
     private ShellLayoutProfile _profile;
     private string _lastSnapSig = "";
-
-    public bool IsNewsCardVisible => _newsCard is { Visible: true };
 
     public ShellAlertColumnView(ShellContext ctx, ShellMessageModalView messages)
     {
@@ -82,23 +88,55 @@ internal sealed class ShellAlertColumnView
 
         BuildOutlinerSection();
         BuildNewspaperCard();
+        _ctx.AttachPlateFrame(_sheet);
+    }
+
+    private void EnsureRowStyles()
+    {
+        _rowEmptyStyle ??= new StyleBoxEmpty();
+        _rowHoverStyle ??= new StyleBoxFlat();
+        _rowHoverStyle.BgColor = Ui.Colour("shell.paper", 0.06f);
+    }
+
+    private Label MakeLabel(string text, string fontKey, int size, string colorKey, bool tabular = false,
+        HorizontalAlignment align = HorizontalAlignment.Left, bool clip = false, bool expand = false)
+    {
+        var lbl = new Label
+        {
+            Text = text,
+            HorizontalAlignment = align,
+            VerticalAlignment = VerticalAlignment.Center,
+            AutowrapMode = TextServer.AutowrapMode.Off,
+            ClipText = clip,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        if (expand) lbl.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        if (clip) lbl.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        lbl.AddThemeFontOverride("font", _ctx.Font(fontKey, tabular));
+        lbl.AddThemeFontSizeOverride("font_size", size);
+        lbl.AddThemeColorOverride("font_color", Ui.Colour(colorKey));
+        return lbl;
+    }
+
+    private Button MakeRowButton(string name, float height)
+    {
+        EnsureRowStyles();
+        var btn = new Button
+        {
+            Name = name,
+            CustomMinimumSize = new Vector2(0, height),
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+            FocusMode = Control.FocusModeEnum.None
+        };
+        btn.AddThemeStyleboxOverride("normal", _rowEmptyStyle);
+        btn.AddThemeStyleboxOverride("hover", _rowHoverStyle);
+        btn.AddThemeStyleboxOverride("pressed", _rowHoverStyle);
+        return btn;
     }
 
     private void BuildOutlinerSection()
     {
-        var empty = new StyleBoxEmpty();
-        var hover = new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.06f) };
-
-        _outlinerToggleBtn = new Button
-        {
-            Name = "ShellOutlinerToggle",
-            CustomMinimumSize = new Vector2(0, 30),
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            FocusMode = Control.FocusModeEnum.None
-        };
-        _outlinerToggleBtn.AddThemeStyleboxOverride("normal", empty);
-        _outlinerToggleBtn.AddThemeStyleboxOverride("hover", hover);
-        _outlinerToggleBtn.AddThemeStyleboxOverride("pressed", hover);
+        _outlinerToggleBtn = MakeRowButton("ShellOutlinerToggle", 30);
         _outlinerToggleBtn.Pressed += ToggleOutliner;
         _outlinerToggleBtn.TooltipText = Ui.Tip(Loc.Get("Toggle Watching outliner (J)"));
         _sheetStack.AddChild(_outlinerToggleBtn);
@@ -106,70 +144,33 @@ internal sealed class ShellAlertColumnView
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddThemeConstantOverride("separation", 7);
         row.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        row.OffsetLeft = 12;
-        row.OffsetRight = -12;
+        row.OffsetLeft = 12; row.OffsetRight = -12;
         _outlinerToggleBtn.AddChild(row);
 
         var eyeIcon = new TextureRect
         {
-            Texture = _ctx.Icon("icon_shell_eye"),
-            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            CustomMinimumSize = new Vector2(15, 15),
-            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
-            Modulate = Ui.Colour("shell.paper_muted"),
-            MouseFilter = Control.MouseFilterEnum.Ignore
+            Texture = _ctx.Icon("icon_shell_eye"), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, CustomMinimumSize = new Vector2(15, 15),
+            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter, Modulate = Ui.Colour("shell.paper_muted"), MouseFilter = Control.MouseFilterEnum.Ignore
         };
         row.AddChild(eyeIcon);
 
-        _outlinerCountLabel = new Label
-        {
-            Text = Loc.Get("Watching"),
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            VerticalAlignment = VerticalAlignment.Center,
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-        _outlinerCountLabel.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold", tabular: true));
-        _outlinerCountLabel.AddThemeFontSizeOverride("font_size", 13);
-        _outlinerCountLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
+        _outlinerCountLabel = MakeLabel(Loc.Get("Watching"), "shell.serif_semibold", 13, "shell.paper_muted", tabular: true, expand: true);
         row.AddChild(_outlinerCountLabel);
-
         _outlinerKbd = _ctx.CreateKeycapBadge("J");
         row.AddChild(_outlinerKbd);
-
-        _outlinerArrowLabel = new Label
-        {
-            Text = "▸",
-            VerticalAlignment = VerticalAlignment.Center,
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-        _outlinerArrowLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-        _outlinerArrowLabel.AddThemeFontSizeOverride("font_size", 12);
-        _outlinerArrowLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
+        _outlinerArrowLabel = MakeLabel("▸", "shell.sans", 12, "shell.paper_faint");
         row.AddChild(_outlinerArrowLabel);
 
-        _outlinerScroll = new ScrollContainer
-        {
-            Name = "ShellOutlinerScroll",
-            Visible = false,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
-            CustomMinimumSize = new Vector2(0, 0)
-        };
+        _outlinerScroll = new ScrollContainer { Name = "ShellOutlinerScroll", Visible = false, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, VerticalScrollMode = ScrollContainer.ScrollMode.Auto };
         _sheetStack.AddChild(_outlinerScroll);
 
         var pad = new MarginContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        pad.AddThemeConstantOverride("margin_left", 12);
-        pad.AddThemeConstantOverride("margin_right", 12);
-        pad.AddThemeConstantOverride("margin_top", 2);
-        pad.AddThemeConstantOverride("margin_bottom", 6);
+        pad.AddThemeConstantOverride("margin_left", 12); pad.AddThemeConstantOverride("margin_right", 12);
+        pad.AddThemeConstantOverride("margin_top", 2); pad.AddThemeConstantOverride("margin_bottom", 6);
         _outlinerScroll.AddChild(pad);
 
-        _outlinerRows = new VBoxContainer
-        {
-            Name = "ShellOutlinerRows",
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-        };
+        _outlinerRows = new VBoxContainer { Name = "ShellOutlinerRows", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _outlinerRows.AddThemeConstantOverride("separation", 3);
         pad.AddChild(_outlinerRows);
     }
@@ -178,11 +179,9 @@ internal sealed class ShellAlertColumnView
     {
         _newsCard = new PanelContainer
         {
-            Name = "ShellNewspaperCard",
-            Visible = false,
-            MouseFilter = Control.MouseFilterEnum.Stop,
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            ZIndex = 20
+            Name = "ShellNewspaperCard", Visible = false, ClipContents = true,
+            MouseFilter = Control.MouseFilterEnum.Stop, MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+            TooltipText = Ui.Tip(Loc.Get("shell.news_card_tip")), ZIndex = 20
         };
         _newsCard.AddThemeStyleboxOverride("panel",
             _ctx.NineSlice("newspaper_card_9s", 16, 14, 10, 16, 12, "shell.news_paper", "shell.paper_tag_edge", 2));
@@ -190,15 +189,11 @@ internal sealed class ShellAlertColumnView
         {
             if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
             {
-                _ctx.PlayCue?.Invoke("ui_select");
-                _newsPinned = !_newsPinned;
-                UpdateNewsPinVisual();
-                _newsCard.AcceptEvent();
+                _ctx.PlayCue?.Invoke("ui_select"); _newsPacer.TogglePinned(); UpdateNewsPinVisual(); _newsCard.AcceptEvent();
             }
             else if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right })
             {
-                DismissNewsCard();
-                _newsCard.AcceptEvent();
+                DismissNewsCard(clearQueue: false); _newsCard.AcceptEvent();
             }
         };
         _ctx.Root.AddChild(_newsCard);
@@ -206,97 +201,84 @@ internal sealed class ShellAlertColumnView
         {
             var grain = new TextureRect
             {
-                Texture = paperGrain,
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.Tile,
-                Modulate = new Color(1f, 1f, 1f, 0.16f),
-                MouseFilter = Control.MouseFilterEnum.Ignore
+                Texture = paperGrain, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.Tile,
+                Modulate = new Color(1f, 1f, 1f, 0.16f), MouseFilter = Control.MouseFilterEnum.Ignore
             };
             grain.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
             _newsCard.AddChild(grain);
         }
 
-        var col = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        var col = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Pass };
         col.AddThemeConstantOverride("separation", 3);
         _newsCard.AddChild(col);
 
-        var kickRow = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        var kickRow = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Pass };
         kickRow.AddThemeConstantOverride("separation", 6);
         col.AddChild(kickRow);
 
-        _newsKickerLabel = new Label
-        {
-            Text = Loc.Get("Dispatch"),
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            ClipText = true,
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-        _newsKickerLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-        _newsKickerLabel.AddThemeFontSizeOverride("font_size", 11);
-        _newsKickerLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.ink_faint"));
+        _newsKickerLabel = MakeLabel(Loc.Get("Dispatch"), "shell.sans", 11, "shell.ink_faint", clip: true, expand: true);
         kickRow.AddChild(_newsKickerLabel);
+
+        _newsQueueLabel = MakeLabel("", "shell.sans", 11, "shell.ink_faint", tabular: true);
+        _newsQueueLabel.Name = "ShellNewsQueueCount";
+        _newsQueueLabel.Visible = false;
+        kickRow.AddChild(_newsQueueLabel);
 
         _newsPinIcon = new TextureRect
         {
-            Texture = _ctx.Icon("icon_shell_pin"),
-            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            CustomMinimumSize = new Vector2(13, 13),
-            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
-            Modulate = Ui.Colour("shell.ink"),
-            MouseFilter = Control.MouseFilterEnum.Ignore
+            Texture = _ctx.Icon("icon_shell_pin"), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, CustomMinimumSize = new Vector2(13, 13),
+            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter, Modulate = Ui.Colour("shell.ink"), MouseFilter = Control.MouseFilterEnum.Ignore
         };
         kickRow.AddChild(_newsPinIcon);
 
-        _newsPinText = new Label
-        {
-            Text = "",
-            Visible = false,
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-        _newsPinText.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-        _newsPinText.AddThemeFontSizeOverride("font_size", 11);
-        _newsPinText.AddThemeColorOverride("font_color", Ui.Colour("shell.ink"));
+        _newsPinText = MakeLabel("", "shell.sans", 11, "shell.ink");
+        _newsPinText.Visible = false;
         kickRow.AddChild(_newsPinText);
 
-        // Shrinking ink rule directly under the kicker (matching style.css .clip .headline .timer)
-        _newsTimerRule = new Control
+        var closeBtn = new Button
         {
-            CustomMinimumSize = new Vector2(0, 2),
-            MouseFilter = Control.MouseFilterEnum.Ignore
+            Name = "ShellNewsCloseButton", CustomMinimumSize = new Vector2(20, 20), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None,
+            TooltipText = Ui.Tip(Loc.Get("shell.news_close_tip"))
         };
+        var closeHover = new StyleBoxFlat { BgColor = Ui.Colour("shell.ink", 0.12f) };
+        closeHover.SetCornerRadiusAll(3);
+        closeBtn.AddThemeStyleboxOverride("normal", _rowEmptyStyle ??= new StyleBoxEmpty());
+        closeBtn.AddThemeStyleboxOverride("hover", closeHover);
+        closeBtn.AddThemeStyleboxOverride("pressed", closeHover);
+        closeBtn.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); DismissNewsCard(clearQueue: Input.IsKeyPressed(Key.Shift)); };
+        var closeIco = new TextureRect
+        {
+            Texture = _ctx.Icon("icon_shell_close"), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, Modulate = Ui.Colour("shell.ink"), MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        closeIco.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        closeIco.OffsetLeft = 4; closeIco.OffsetRight = -4; closeIco.OffsetTop = 4; closeIco.OffsetBottom = -4;
+        closeBtn.AddChild(closeIco);
+        kickRow.AddChild(closeBtn);
+
+        _newsTimerRule = new Control { CustomMinimumSize = new Vector2(0, 2), MouseFilter = Control.MouseFilterEnum.Ignore };
         _newsTimerRule.Draw += () =>
         {
             var w = _newsTimerRule.Size.X;
             _newsTimerRule.DrawLine(new Vector2(0, 0), new Vector2(w, 0), Ui.Colour("shell.plate_top", 0.30f), 1f);
-            if (!_newsPinned)
+            if (!_newsPacer.IsPinned && _newsPacer.Active is { } cur)
             {
-                var maxLife = InterfaceSkin.Metric("shell.news_lifetime_sec", 9f);
-                var frac = Math.Clamp(1f - (float)(_newsAge / Math.Max(1f, maxLife)), 0f, 1f);
+                var maxLife = Math.Max(ShellNewsPacer.MinDwellSec, ShellNewsPacer.LifetimeSec);
+                var frac = Math.Clamp(1f - (float)(cur.Age / Math.Max(1f, maxLife)), 0f, 1f);
                 _newsTimerRule.DrawRect(new Rect2(0, 0, w * frac, 2f), Ui.Colour("shell.ink_faint"));
             }
         };
         col.AddChild(_newsTimerRule);
 
-        _newsHeadlineLabel = new Label
-        {
-            Text = "",
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            MaxLinesVisible = 2,
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
+        _newsHeadlineLabel = new Label { Text = "", AutowrapMode = TextServer.AutowrapMode.WordSmart, MaxLinesVisible = 2, MouseFilter = Control.MouseFilterEnum.Ignore };
         _newsHeadlineLabel.AddThemeFontOverride("font", _ctx.Font("shell.serif_bold"));
         _newsHeadlineLabel.AddThemeFontSizeOverride("font_size", 20);
         _newsHeadlineLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.ink"));
         col.AddChild(_newsHeadlineLabel);
 
-        _newsLeadLabel = new Label
-        {
-            Text = "",
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            MaxLinesVisible = 2,
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
+        _newsLeadLabel = new Label { Text = "", AutowrapMode = TextServer.AutowrapMode.WordSmart, MaxLinesVisible = 2, MouseFilter = Control.MouseFilterEnum.Ignore };
         _newsLeadLabel.AddThemeFontOverride("font", _ctx.Font("shell.serif"));
         _newsLeadLabel.AddThemeFontSizeOverride("font_size", 12);
         _newsLeadLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.ink_muted"));
@@ -311,28 +293,77 @@ internal sealed class ShellAlertColumnView
         Refresh();
     }
 
-    public void DismissNewsCard()
+    public void DismissNewsCard() => DismissNewsCard(clearQueue: true);
+    public void DismissNewsCard(bool clearQueue)
     {
         if (_newsCard is not null) _newsCard.Visible = false;
-        _newsPinned = false;
+        _newsPacer.Dismiss(clearQueue);
+        _newsDisplayedSeq = -1;
+        _newsDisplayedQueued = -1;
+    }
+
+    public void SetModalObscured(bool obscured)
+    {
+        _modalObscured = obscured;
+        if (obscured)
+        {
+            if (_sheet is not null) _sheet.Visible = false;
+            if (_newsCard is not null) _newsCard.Visible = false;
+            return;
+        }
+        Refresh();
+        if (_newsPacer.Active is { } cur && _newsCard is not null)
+            PresentActiveNews(cur, playAudioCue: false);
     }
 
     public void Layout(ShellLayoutProfile profile)
     {
+        var compactChanged = _profile is null || _profile.Compact != profile.Compact;
         _profile = profile;
-        var compact = profile.Compact;
         _sheet.Position = new Vector2(profile.AlertColumn.X, profile.AlertColumn.Y);
         _sheet.CustomMinimumSize = new Vector2(profile.AlertColumn.W, 0);
-        _sheet.Size = new Vector2(profile.AlertColumn.W, _sheet.GetCombinedMinimumSize().Y);
+        FitSheetBounds();
+        PlaceNewsCard();
+        if (compactChanged) _lastSnapSig = "";
+    }
 
+    private void PlaceNewsCard()
+    {
+        if (_newsCard is null) return;
+        var profile = _profile;
+        if (profile is null)
+        {
+            var vp = _ctx.GetViewportSize();
+            var world = _ctx.World;
+            var atWar = world?.Player is { } player && Warfare.OpenWars(world).Any(w => !w.Ended && w.Involves(player.Id));
+            profile = ShellLayout.ForViewport(vp.X, vp.Y, atWar);
+            _profile = profile;
+        }
+        _newsCard.CustomMinimumSize = new Vector2(profile.NewsCard.W, 0f);
         ShellContext.PlaceRect(_newsCard, profile.NewsCard);
+        var compact = profile.Compact;
         _newsHeadlineLabel.AddThemeFontSizeOverride("font_size", compact ? 15 : 20);
         _newsLeadLabel.AddThemeFontSizeOverride("font_size", compact ? 11 : 12);
-        _lastSnapSig = "";
+    }
+
+    private void FitSheetBounds()
+    {
+        if (_sheet is null || _profile is null) return;
+        _sheet.ResetSize();
+        var minH = _sheet.GetCombinedMinimumSize().Y;
+        _sheet.OffsetLeft = _profile.AlertColumn.X;
+        _sheet.OffsetTop = _profile.AlertColumn.Y;
+        _sheet.OffsetRight = _profile.AlertColumn.Right;
+        _sheet.OffsetBottom = _profile.AlertColumn.Y + minH;
+        _sheet.Size = new Vector2(_profile.AlertColumn.W, minH);
     }
 
     public void Refresh()
     {
+        var obscured = _modalObscured || (_ctx.IsAnyModalOpen?.Invoke() ?? false);
+        if (_sheet is not null) _sheet.Visible = !obscured;
+        if (obscured) return;
+
         var world = _ctx.World;
         if (world?.Player is not { } player) return;
 
@@ -348,7 +379,7 @@ internal sealed class ShellAlertColumnView
             _snoozes,
             _watchedGoods);
 
-        var sig = $"{_outlinerOpen}|{Loc.Language}|{_profile.Compact}|" +
+        var sig = $"{_outlinerOpen}|{Loc.Language}|{_profile?.Compact}|" +
                   string.Join(";", snap.Alerts.Select(a => $"{a.TopicKey}:{a.IsViewed}:{a.DeadlineLabel}")) + "|" +
                   string.Join(";", snap.OutlinerGroups.SelectMany(g => g.Rows).Select(r => $"{r.TopicKey}:{r.Value}"));
         if (_lastSnapSig == sig) return;
@@ -358,23 +389,16 @@ internal sealed class ShellAlertColumnView
         RebuildOutlinerRows(snap);
 
         // Fit unified sheet height tightly to its actual contents — zero empty hanging box!
-        _sheet.ResetSize();
-        var minH = _sheet.GetCombinedMinimumSize().Y;
-        _sheet.OffsetLeft = _profile.AlertColumn.X;
-        _sheet.OffsetTop = _profile.AlertColumn.Y;
-        _sheet.OffsetRight = _profile.AlertColumn.Right;
-        _sheet.OffsetBottom = _profile.AlertColumn.Y + minH;
-        _sheet.Size = new Vector2(_profile.AlertColumn.W, minH);
+        FitSheetBounds();
     }
 
     private void RebuildAlertRows(ShellAlertSnapshot snap, Campaign world)
     {
         foreach (var ch in _alertRows.GetChildren()) ch.QueueFree();
 
-        var compact = _profile.Compact;
+        var compact = _profile?.Compact ?? false;
         var rowH = compact ? 30f : 38f;
-        var emptyStyle = new StyleBoxEmpty();
-        var hoverStyle = new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.06f) };
+        EnsureRowStyles();
 
         for (var i = 0; i < snap.Alerts.Count; i++)
         {
@@ -388,15 +412,7 @@ internal sealed class ShellAlertColumnView
             }
 
             var item = snap.Alerts[i];
-            var btn = new Button
-            {
-                CustomMinimumSize = new Vector2(0, rowH),
-                MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-                FocusMode = Control.FocusModeEnum.None
-            };
-            btn.AddThemeStyleboxOverride("normal", emptyStyle);
-            btn.AddThemeStyleboxOverride("hover", hoverStyle);
-            btn.AddThemeStyleboxOverride("pressed", hoverStyle);
+            var btn = MakeRowButton("", rowH);
 
             var captured = item;
             btn.Pressed += () =>
@@ -459,49 +475,20 @@ internal sealed class ShellAlertColumnView
             };
             h.AddChild(ico);
 
-            var titleLbl = new Label
-            {
-                Text = item.Title,
-                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-                VerticalAlignment = VerticalAlignment.Center,
-                AutowrapMode = TextServer.AutowrapMode.Off,
-                ClipText = true,
-                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-                MouseFilter = Control.MouseFilterEnum.Ignore
-            };
-            titleLbl.AddThemeFontOverride("font", _ctx.Font("shell.serif"));
-            titleLbl.AddThemeFontSizeOverride("font_size", compact ? 12 : 14);
-            titleLbl.AddThemeColorOverride("font_color", Ui.Colour(item.IsViewed ? "shell.paper_muted" : "shell.paper"));
+            var titleLbl = MakeLabel(item.Title, "shell.serif", compact ? 12 : 14,
+                item.IsViewed ? "shell.paper_muted" : "shell.paper", clip: true, expand: true);
             h.AddChild(titleLbl);
 
             if (!string.IsNullOrEmpty(item.DeadlineLabel))
-            {
-                var fd = new Label
-                {
-                    Text = item.DeadlineLabel,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    AutowrapMode = TextServer.AutowrapMode.Off,
-                    MouseFilter = Control.MouseFilterEnum.Ignore
-                };
-                fd.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
-                fd.AddThemeFontSizeOverride("font_size", compact ? 11 : 13);
-                fd.AddThemeColorOverride("font_color",
-                    Ui.Colour(item.Severity == ShellAlertSeverity.Critical ? "shell.state.negative_text" : "shell.paper"));
-                h.AddChild(fd);
-            }
+                h.AddChild(MakeLabel(item.DeadlineLabel, "shell.sans", compact ? 11 : 13,
+                    item.Severity == ShellAlertSeverity.Critical ? "shell.state.negative_text" : "shell.paper",
+                    tabular: true, align: HorizontalAlignment.Right));
 
             var mark = new Label
             {
-                Text = item.Severity switch
-                {
-                    ShellAlertSeverity.Critical => "●",
-                    ShellAlertSeverity.Warning => "▲",
-                    _ => "◆"
-                },
+                Text = item.Severity switch { ShellAlertSeverity.Critical => "●", ShellAlertSeverity.Warning => "▲", _ => "◆" },
                 CustomMinimumSize = new Vector2(12, 0),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 MouseFilter = Control.MouseFilterEnum.Ignore
             };
             mark.AddThemeFontSizeOverride("font_size", compact ? 10 : 11);
@@ -527,9 +514,8 @@ internal sealed class ShellAlertColumnView
         _outlinerScroll.Visible = showBody;
         if (!showBody) return;
 
-        var compact = _profile.Compact;
-        var emptyStyle = new StyleBoxEmpty();
-        var hoverStyle = new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.06f) };
+        var compact = _profile?.Compact ?? false;
+        EnsureRowStyles();
         var rendered = 0;
 
         foreach (var grp in snap.OutlinerGroups)
@@ -556,19 +542,8 @@ internal sealed class ShellAlertColumnView
             foreach (var row in grp.Rows)
             {
                 var captured = row;
-                var rb = new Button
-                {
-                    CustomMinimumSize = new Vector2(0, compact ? 24 : 28),
-                    MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-                    FocusMode = Control.FocusModeEnum.None
-                };
-                rb.AddThemeStyleboxOverride("normal", emptyStyle);
-                rb.AddThemeStyleboxOverride("hover", hoverStyle);
-                rb.Pressed += () =>
-                {
-                    _ctx.PlayCue?.Invoke("ui_select");
-                    RouteTopic(captured.RouteKind, captured.TargetId);
-                };
+                var rb = MakeRowButton("", compact ? 24 : 28);
+                rb.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); RouteTopic(captured.RouteKind, captured.TargetId); };
 
                 var rh = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
                 rh.AddThemeConstantOverride("separation", 6);
@@ -576,42 +551,19 @@ internal sealed class ShellAlertColumnView
                 rh.OffsetLeft = 4; rh.OffsetRight = -4;
                 rb.AddChild(rh);
 
-                var rl = new Label
-                {
-                    Text = row.Title,
-                    SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    AutowrapMode = TextServer.AutowrapMode.Off,
-                    ClipText = true,
-                    TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
-                };
-                rl.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-                rl.AddThemeFontSizeOverride("font_size", compact ? 11 : 13);
-                rl.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
-                rh.AddChild(rl);
-
-                var rv = new Label
-                {
-                    Text = row.Value,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    AutowrapMode = TextServer.AutowrapMode.Off
-                };
-                rv.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
-                rv.AddThemeFontSizeOverride("font_size", compact ? 11 : 12);
-                rv.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
-                rh.AddChild(rv);
-
+                rh.AddChild(MakeLabel(row.Title, "shell.sans", compact ? 11 : 13, "shell.paper", clip: true, expand: true));
+                rh.AddChild(MakeLabel(row.Value, "shell.sans", compact ? 11 : 12, "shell.paper_muted", tabular: true, align: HorizontalAlignment.Right));
                 _outlinerRows.AddChild(rb);
                 rendered++;
             }
         }
 
         // Cap visible scroll viewport height so open Outliner never collides with the bottom-right Minimap or MapBar!
+        var prof = _profile ?? ShellLayout.ForViewport(_ctx.GetViewportSize().X, _ctx.GetViewportSize().Y, false);
         var miniTop = SettingsCatalog.Flag("ui_shell_minimap")
-            ? _profile.MapBar.Y - (_profile.Compact ? 110f : 144f)
-            : _profile.MapBar.Y - 12f;
-        var availBelowAlerts = Math.Max(72f, miniTop - _profile.AlertColumn.Y - (snap.Alerts.Count * (_profile.Compact ? 32f : 40f)) - 44f);
+            ? prof.MapBar.Y - (prof.Compact ? 110f : 144f)
+            : prof.MapBar.Y - 12f;
+        var availBelowAlerts = Math.Max(72f, miniTop - prof.AlertColumn.Y - (snap.Alerts.Count * (prof.Compact ? 32f : 40f)) - 44f);
         var maxVisibleH = Math.Min(compact ? 148f : 196f, availBelowAlerts);
         var estH = Math.Min(maxVisibleH, rendered * (compact ? 26f : 31f) + snap.OutlinerGroups.Count * 22f + 10f);
         _outlinerScroll.CustomMinimumSize = new Vector2(0, estH);
@@ -621,47 +573,84 @@ internal sealed class ShellAlertColumnView
     {
         var world = _ctx.World;
         if (world is null) return;
+        _newsClock += double.IsFinite(delta) && delta > 0.0 ? delta : 0.0;
 
-        if (_ctx.IsAnyModalOpen?.Invoke() ?? false)
+        if (!ReferenceEquals(_newsWorld, world))
+        {
+            _newsWorld = world;
+            _newsPacer.Reset();
+            _newsSeenSeq = world.Chronicle.Entries.Count > 0 ? world.Chronicle.Entries[^1].Sequence : 0;
+            _newsDisplayedSeq = -1;
+            _newsDisplayedQueued = -1;
+            if (_newsCard is not null) _newsCard.Visible = false;
+        }
+
+        // NewsFeed.Lines yields newest-first; ingest oldest->newest so chronological order stays intact.
+        var entries = world.Chronicle.Entries;
+        if (entries.Count > 0 && entries[^1].Sequence > _newsSeenSeq)
+        {
+            _newsBatchBuffer.Clear();
+            foreach (var line in NewsFeed.Lines(world, _newsSeenSeq, 12))
+                _newsBatchBuffer.Add(line);
+            for (var i = _newsBatchBuffer.Count - 1; i >= 0; i--)
+            {
+                var line = _newsBatchBuffer[i];
+                if (line.Sequence > _newsSeenSeq) _newsSeenSeq = line.Sequence;
+                _messages.RecordLine(line);
+
+                var involvesPlayer = HeadlinePopups.TieOf(world, line) != HeadlineTie.World;
+                var evt = ShellMessageModalView.ClassifyNewsKind(line.Kind);
+                var delivery = _messages.Resolve(evt, involvesPlayer);
+
+                if (delivery.PauseClock && !(_ctx.IsPaused?.Invoke() ?? true))
+                    _ctx.TogglePause?.Invoke();
+
+                if (delivery.ShowNewspaperCard)
+                {
+                    var urgent = delivery.PauseClock || delivery.Speed5SafetyPause || ShellNewsPacer.IsUrgentKind(line.Kind);
+                    var prio = ShellNewsPacer.ClassifyPriority(line, urgent, involvesPlayer, NewsFeed.Importance(line.Kind));
+                    _newsPacer.Offer(line, delivery.PauseClock ? "Urgent dispatch" : "Dispatch", prio, urgent);
+                }
+            }
+        }
+
+        var obscured = _modalObscured || (_ctx.IsAnyModalOpen?.Invoke() ?? false);
+        if (obscured)
         {
             if (_newsCard is { Visible: true }) _newsCard.Visible = false;
             return;
         }
 
-        foreach (var line in NewsFeed.Lines(world, _newsSeenSeq, 12))
+        var hovered = _newsCard is { Visible: true } &&
+                      _newsCard.GetViewport() is { } vp &&
+                      _newsCard.GetGlobalRect().HasPoint(vp.GetMousePosition());
+        var paused = _ctx.IsPaused?.Invoke() ?? true;
+        var step = _newsPacer.Tick(delta, hovered, paused);
+
+        if (step.Current is null)
         {
-            if (line.Sequence > _newsSeenSeq) _newsSeenSeq = line.Sequence;
-            _messages.RecordLine(line);
-
-            var involvesPlayer = HeadlinePopups.TieOf(world, line) != HeadlineTie.World;
-            var evt = ShellMessageModalView.ClassifyNewsKind(line.Kind);
-            var delivery = _messages.Resolve(evt, involvesPlayer);
-
-            if (delivery.PauseClock && !(_ctx.IsPaused?.Invoke() ?? true))
-                _ctx.TogglePause?.Invoke();
-
-            if (delivery.ShowNewspaperCard && !_newsPinned)
-                ShowNewsCard(line, delivery.PauseClock ? "Urgent dispatch" : "Dispatch");
+            if (_newsCard is { Visible: true }) _newsCard.Visible = false;
+            _newsDisplayedSeq = -1;
+            return;
         }
 
-        if (_newsCard is { Visible: true } && !_newsPinned && !(_ctx.IsPaused?.Invoke() ?? true))
-        {
-            _newsAge += delta;
-            _newsTimerRule.QueueRedraw();
-            var maxLife = InterfaceSkin.Metric("shell.news_lifetime_sec", 9f);
-            if (_newsAge >= maxLife)
-                _newsCard.Visible = false;
-        }
+        if (step.Changed || !_newsCard.Visible || _newsDisplayedSeq != step.Current.Sequence)
+            PresentActiveNews(step.Current, playAudioCue: step.Changed);
+        else
+            SyncQueueLabel(step.QueuedCount);
+
+        if (!step.Frozen) _newsTimerRule.QueueRedraw();
     }
 
-    private void ShowNewsCard(NewsFeed.Line line, string reasonKey)
+    private void PresentActiveNews(ShellNewsItem item, bool playAudioCue)
     {
-        _activeNews = line;
-        _newsAge = 0;
-        _newsPinned = false;
+        PlaceNewsCard();
         var world = _ctx.World;
+        var line = item.Line;
+        _newsDisplayedSeq = item.Sequence;
+
         var dateTxt = world is not null ? LandArrangementSystem.DateOfDay(world, line.Day) : "";
-        var reasonTxt = string.IsNullOrEmpty(reasonKey) ? Loc.Get("Dispatch") : Loc.Get(reasonKey);
+        var reasonTxt = string.IsNullOrEmpty(item.ReasonKey) ? Loc.Get("Dispatch") : Loc.Get(item.ReasonKey);
         _newsKickerLabel.Text = string.IsNullOrEmpty(dateTxt) ? reasonTxt : $"{reasonTxt} · {dateTxt}";
 
         // Split sentence into crisp headline + detail lead when possible
@@ -680,15 +669,36 @@ internal sealed class ShellAlertColumnView
             _newsLeadLabel.Visible = false;
         }
 
-        UpdateNewsPinVisual();
-        _ctx.PlayCue?.Invoke("shell_dispatch_seal");
+        SyncQueueLabel(_newsPacer.QueuedCount);
+        UpdateNewsPinVisual(force: true);
+        if (playAudioCue && _newsPacer.ShouldPlayNewsCue(_newsClock, item.Urgent))
+            _ctx.PlayCue?.Invoke("shell_dispatch_seal");
         _newsCard.Visible = true;
         _newsTimerRule.QueueRedraw();
     }
 
-    private void UpdateNewsPinVisual()
+    private void SyncQueueLabel(int queued)
     {
-        _newsPinText.Visible = _newsPinned;
+        if (_newsQueueLabel is null || _newsDisplayedQueued == queued) return;
+        _newsDisplayedQueued = queued;
+        _newsQueueLabel.Visible = queued > 0;
+        if (queued > 0)
+        {
+            _newsQueueLabel.Text = $"+{queued}";
+            _newsCard.TooltipText = Ui.Tip($"{Loc.Format("shell.news_queued_fmt", queued)}\n{Loc.Get("shell.news_card_tip")}");
+        }
+        else
+        {
+            _newsCard.TooltipText = Ui.Tip(Loc.Get("shell.news_card_tip"));
+        }
+    }
+
+    private void UpdateNewsPinVisual(bool force = false)
+    {
+        var pinned = _newsPacer.IsPinned;
+        if (!force && _newsDisplayedPinned == pinned) return;
+        _newsDisplayedPinned = pinned;
+        _newsPinText.Visible = pinned;
         _newsPinText.Text = Loc.Get("shell.pinned");
         _newsTimerRule.QueueRedraw();
     }

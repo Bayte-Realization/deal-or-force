@@ -14,8 +14,10 @@
     "map.province_border_width": 1.0,
     "map.province_border_opacity": 0.36,
     "map.province_border_halo": 0.0,
-    "map.city_font_size": 28,
-    "map.city_text_pixels": 13,
+    "map.city_font_size": 44,
+    "map.city_text_pixels": 12.5,
+    "map.city_capital_text_pixels": 13.8,
+    "map.city_outline_ratio": 0.14,
     "map.city_label_limit": 140,
     // Every city is drawn alike: one dot, one lettering. A city that is a country's capital at
     // the moment has the capital's mark (and globe.city_capital for its name) instead.

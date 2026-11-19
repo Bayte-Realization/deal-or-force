@@ -262,9 +262,9 @@ public partial class DealOrForceGame
     {
         if (IsNewShellActive)
         {
-            if (_deskPanel is not null && GodotObject.IsInstanceValid(_deskPanel)) _deskPanel.Visible = false;
-            if (_deskTab is not null && GodotObject.IsInstanceValid(_deskTab)) _deskTab.Visible = false;
-            if (_outliner is not null && GodotObject.IsInstanceValid(_outliner)) _outliner.Visible = false;
+            if (_deskPanel is { Visible: true } && GodotObject.IsInstanceValid(_deskPanel)) _deskPanel.Visible = false;
+            if (_deskTab is { Visible: true } && GodotObject.IsInstanceValid(_deskTab)) _deskTab.Visible = false;
+            if (_outliner is { Visible: true } && GodotObject.IsInstanceValid(_outliner)) _outliner.Visible = false;
             return;
         }
         var player = _campaign?.Player;
