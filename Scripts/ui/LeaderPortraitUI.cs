@@ -164,18 +164,14 @@ public partial class DealOrForceGame
         }
     }
 
-    private static string SlugLeaderName(string name)
+    internal static string SlugLeaderName(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "default";
         var chars = name.Trim().ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray();
         return new string(chars);
     }
 
-    /// <summary>
-    /// Builds a compact HOI4/Vic3/EU5-inspired Grand Strategy header block for a country,
-    /// showing its flag, formal title, Head of State & Head of Government portraits, traits,
-    /// and a visual ideology/stability summary bar.
-    /// </summary>
+    /// <summary>Builds a compact Grand Strategy header block for a country and its executive leadership.</summary>
     private Control BuildGrandStrategyLeaderHeader(Nation nation, bool compact = false)
     {
         var box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };

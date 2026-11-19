@@ -17,8 +17,8 @@
     }
   },
   "colours": {
-    "planning_bar.background": "#0d1822ee",
-    "planning_bar.border": "#2a3e50"
+    "planning_bar.background": "#1E1D1Cf2",
+    "planning_bar.border": "#3D3B38"
   },
   "metrics": {
     "planning_bar.button_height": 30,

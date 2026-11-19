@@ -70,7 +70,7 @@ public partial class DealOrForceGame
         {
             ClearRuntimeChildren(_diplomacyLeaderPortraitSlot);
             var hos = Rulers.HeadOfState(_campaign, nation);
-            var badge = BuildLeaderPortraitBadge(hos, nation.Color, 48, 58);
+            var badge = BuildDiplomacyLeaderBadge(nation, hos, 48, 58);
             badge.TooltipText = Ui.Tip($"{Tr(hos.Title)}: {hos.Name} ({Simulation.Loc.Format("{0} yrs", hos.Age)})\n{Tr("Trait")}: {Tr(hos.TraitName)}");
             _diplomacyLeaderPortraitSlot.AddChild(badge);
         }

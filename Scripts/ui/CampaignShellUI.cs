@@ -31,14 +31,7 @@ public partial class DealOrForceGame
         return style;
     }
 
-    /// <summary>
-    /// The edge alone: the same line the shell draws, with nothing behind it, for a window whose
-    /// surface is already painted by artwork. Screens outside the campaign use the old panel
-    /// textures, which are a fine surface and a very faint frame - on their own the country picker,
-    /// the workshop and the settings read as flat dark rectangles with no edge at all. Drawing this
-    /// over the artwork gives them the line the game's own panels have, without replacing the art
-    /// the screens were painted with (DealOrForceGame.TexturedPanel).
-    /// </summary>
+    /// <summary>Edge-only border for artwork-painted windows outside the campaign HUD.</summary>
     private static StyleBoxFlat ShellEdgeStyle()
     {
         var style = new StyleBoxFlat
@@ -92,8 +85,10 @@ public partial class DealOrForceGame
         "Research"      => (_researchLayer?.Visible == true, CloseResearchScreen),
         "Conflicts"     => (_conflictsLayer?.Visible == true, CloseConflictsScreen),
         // An Economy that is only the sovereign-finance window; when that is closed, Economy is
-        // an ordinary side panel and falls through to the last case with it.
+        // an ordinary side panel (or the full-screen Economy workspace in the new shell).
         "Economy" when _sovereignFinanceLayer?.Visible == true => (true, CloseSovereignFinance),
+        "Economy" when IsNewShellActive && IsNewShellEconomyOpen => (true, CloseNewShellEconomyWorkspace),
+        "Nation" when IsNewShellActive && IsNewShellNationOpen => (true, () => CloseNewShellWorkPanel(unpinnedOnly: false)),
         // Everything without a layer of its own - the country card, the region dossier - shares
         // the one side panel.
         _ => (_sidePanel?.Visible == true && _openScreen == screen, CloseSidePanel),
@@ -122,7 +117,7 @@ public partial class DealOrForceGame
     /// </summary>
     private static readonly string[] WorkspaceScreens =
     {
-        "State Affairs", "Ledger", "Wars", "Diplomacy", "Laws", "Doctrines",
+        "State Affairs", "Economy", "Ledger", "Wars", "Diplomacy", "Laws", "Doctrines",
         "Trade", "Production", "Support", "Research", "Conflicts",
     };
 
@@ -138,11 +133,7 @@ public partial class DealOrForceGame
         return false;
     }
 
-    /// <summary>
-    /// Raises one workspace layer above the map and side docks while closing the other full
-    /// workspaces and keeping the left navigation rail above its backdrop shade, so the player
-    /// can switch directly from one workspace to another with a single click on the rail.
-    /// </summary>
+    /// <summary>Raises one workspace layer while closing the other full workspaces.</summary>
     private void RaiseWorkspaceLayer(Control layer)
     {
         foreach (var other in new[]
@@ -157,23 +148,15 @@ public partial class DealOrForceGame
         if (layer is null) return;
         layer.Visible = true;
         layer.MoveToFront();
-        _hudNavigationPanel?.MoveToFront();
+        if (IsNewShellActive) OnNewShellWorkspaceRaised(layer);
+        else _hudNavigationPanel?.MoveToFront();
         FitWorkspaceNavigationInset(layer);
         if (_handbookLayer is { Visible: true }) _handbookLayer.MoveToFront();
     }
 
-    // The navigation rail has a physical-pixel width floor at 720p, whereas the
-    // authored ledger rectangle follows the stretched canvas. Reserve its actual
-    // footprint, not the reference-resolution width. Reapply the mod's rectangle
-    // before clamping so repeated opening/resizing never accumulates an inset.
-    //
-    // Every workspace, not three of them. The rail is as wide as its longest caption, and in
-    // Russian ("ГОСУДАРСТВЕННЫЕ ДЕЛА") that is sixty pixels wider than in English: the Production
-    // screen, placed for the English rail, slid its title and its left column under the rail -
-    // a Russian player saw "ИЗВОДСТВО" and asked how to drag the window out. A shade marked
-    // "rail_shade" starts where the rail ends, so the rail is never half dimmed either.
     private void FitWorkspaceNavigationInset(Control layer)
     {
+        if (IsNewShellActive) { FitNewShellWorkspaceLayer(layer); return; }
         if (layer is not { Visible: true } || _hudNavigationPanel is null) return;
         var local = layer.GetGlobalTransformWithCanvas().AffineInverse();
         var railEnd = local * (_hudNavigationPanel.GetGlobalTransformWithCanvas() * _hudNavigationPanel.Size);

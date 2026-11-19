@@ -1,127 +1,103 @@
+using System;
 using DealOrForce.Simulation.Shell;
 using Godot;
 
 namespace DealOrForce;
 
-public partial class DealOrForceGame
+/// <summary>
+/// Standalone physical keycode / Russian JCUKEN hotkey resolver for the Wave 2 campaign shell.
+/// </summary>
+internal static class HotkeyMap
 {
-    private bool IsAnyShellModalOpen() =>
-        _handbookLayer is { Visible: true }
-        || _peaceLayer is { Visible: true }
-        || _defconLayer is { Visible: true }
-        || _pauseMenuLayer is { Visible: true }
-        || _settingsLayer is { Visible: true }
-        || _saveLoadLayer is { Visible: true }
-        || _pickerLayer is { Visible: true }
-        || _stateAffairsLayer is { Visible: true }
-        || _sovereignFinanceLayer is { Visible: true }
-        || _ledgerLayer is { Visible: true }
-        || _warLedgerLayer is { Visible: true }
-        || _diplomacyLayer is { Visible: true }
-        || _conflictsLayer is { Visible: true }
-        || _policyLayer is { Visible: true }
-        || _tradeScreenLayer is { Visible: true }
-        || _productionLayer is { Visible: true }
-        || _supportLayer is { Visible: true }
-        || _researchLayer is { Visible: true }
-        || _doctrineLayer is { Visible: true };
-
-    private bool HandleNewShellHotkey(InputEventKey key)
+    public static bool HandleKey(
+        ShellContext ctx,
+        InputEventKey key,
+        Key resolvedPhysicalLetter,
+        bool textFocused,
+        Func<bool> closeTopmostShellOverlay)
     {
-        if (!IsNewShellActive || _campaign is null || _hudLayer is not { Visible: true })
-            return false;
-
-        var letter = Letter(key);
-        var raw = letter switch
-        {
-            Key.Space => "Space",
-            Key.Escape => "Escape",
-            Key.Home => "Home",
-            Key.Slash => "Slash",
-            Key.Equal or Key.Plus or Key.KpAdd => "Equal",
-            Key.Minus or Key.KpSubtract => "Minus",
-            >= Key.Key0 and <= Key.Key9 => ((char)('0' + (letter - Key.Key0))).ToString(),
-            >= Key.Kp0 and <= Key.Kp9 => ((char)('0' + (letter - Key.Kp0))).ToString(),
-            >= Key.A and <= Key.Z => ((char)('A' + (letter - Key.A))).ToString(),
-            _ => ""
-        };
-
-        var textFocused = GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
-        var modalOpen = IsAnyShellModalOpen();
+        if (ctx?.World is null) return false;
+        var raw = NormalizeKeyName(resolvedPhysicalLetter);
+        if (raw.Length == 0) return false;
 
         if (!ShellHotkeys.TryResolve(
                 raw,
                 key.CtrlPressed || key.MetaPressed,
                 key.AltPressed,
                 textFocused,
-                _freeCameraMode,
-                modalOpen,
+                ctx.IsFreeCameraMode?.Invoke() ?? false,
+                ctx.IsAnyModalOpen?.Invoke() ?? false,
                 out var action))
             return false;
 
-        switch (action)
+        return DispatchScreenOrMap(ctx, action) || DispatchClockOrClose(ctx, action, closeTopmostShellOverlay);
+    }
+
+    private static string NormalizeKeyName(Key k) => k switch
+    {
+        Key.Space => "Space",
+        Key.Escape => "Escape",
+        Key.Home => "Home",
+        Key.Slash => "Slash",
+        Key.Equal or Key.Plus or Key.KpAdd => "Equal",
+        Key.Minus or Key.KpSubtract => "Minus",
+        >= Key.Key0 and <= Key.Key9 => ((char)('0' + (k - Key.Key0))).ToString(),
+        >= Key.Kp0 and <= Key.Kp9 => ((char)('0' + (k - Key.Kp0))).ToString(),
+        >= Key.A and <= Key.Z => ((char)('A' + (k - Key.A))).ToString(),
+        _ => ""
+    };
+
+    private static bool DispatchScreenOrMap(ShellContext ctx, ShellHotkeyAction action)
+    {
+        var screen = action switch
         {
-            case ShellHotkeyAction.Country: ToggleCampaignScreen("Nation"); break;
-            case ShellHotkeyAction.StateAffairs: ToggleCampaignScreen("State Affairs"); break;
-            case ShellHotkeyAction.Economy: ToggleCampaignScreen("Economy"); break;
-            case ShellHotkeyAction.Trade: ToggleCampaignScreen("Trade"); break;
-            case ShellHotkeyAction.Production: ToggleCampaignScreen("Production"); break;
-            case ShellHotkeyAction.Research: ToggleCampaignScreen("Research"); break;
-            case ShellHotkeyAction.Military: ToggleCampaignScreen("Military"); break;
-            case ShellHotkeyAction.Diplomacy: ToggleCampaignScreen("Diplomacy"); break;
-            case ShellHotkeyAction.Wars: ToggleCampaignScreen("Wars"); break;
-            case ShellHotkeyAction.Ledger: ToggleCampaignScreen("Ledger"); break;
-            case ShellHotkeyAction.Search: ToggleNavigator(); break;
+            ShellHotkeyAction.Country => "Nation",
+            ShellHotkeyAction.StateAffairs => "State Affairs",
+            ShellHotkeyAction.Economy => "Economy",
+            ShellHotkeyAction.Trade => "Trade",
+            ShellHotkeyAction.Production => "Production",
+            ShellHotkeyAction.Research => "Research",
+            ShellHotkeyAction.Military => "Military",
+            ShellHotkeyAction.Diplomacy => "Diplomacy",
+            ShellHotkeyAction.Wars => "Wars",
+            ShellHotkeyAction.Ledger => "Ledger",
+            _ => ""
+        };
+        if (screen.Length > 0) { ctx.ToggleScreen?.Invoke(screen); return true; }
+        if (action == ShellHotkeyAction.Search) { ctx.ToggleNavigator?.Invoke(); return true; }
 
-            case ShellHotkeyAction.MapPolitical:
-                _globe?.SetMapMode(StrategicMapMode.Political);
-                RefreshShellMapBar();
-                break;
-            case ShellHotkeyAction.MapDiplomatic:
-                _globe?.SetMapMode(StrategicMapMode.Diplomatic);
-                RefreshShellMapBar();
-                break;
-            case ShellHotkeyAction.MapEconomy:
-                _globe?.SetMapMode(StrategicMapMode.Economy);
-                RefreshShellMapBar();
-                break;
-            case ShellHotkeyAction.MapResources:
-                _globe?.SetMapMode(StrategicMapMode.Resources);
-                RefreshShellMapBar();
-                break;
-            case ShellHotkeyAction.MapWar:
-                _globe?.SetMapMode(StrategicMapMode.Wars);
-                RefreshShellMapBar();
-                break;
-            case ShellHotkeyAction.MapMore:
-                ToggleShellMapMorePopover();
-                break;
-            case ShellHotkeyAction.ToggleOutliner:
-                ToggleShellOutliner();
-                break;
+        return action switch
+        {
+            ShellHotkeyAction.MapPolitical => SetMode(ctx, StrategicMapMode.Political),
+            ShellHotkeyAction.MapDiplomatic => SetMode(ctx, StrategicMapMode.Diplomatic),
+            ShellHotkeyAction.MapEconomy => SetMode(ctx, StrategicMapMode.Economy),
+            ShellHotkeyAction.MapResources => SetMode(ctx, StrategicMapMode.Resources),
+            ShellHotkeyAction.MapWar => SetMode(ctx, StrategicMapMode.Wars),
+            _ => false
+        };
+    }
 
-            case ShellHotkeyAction.TogglePause:
-                TogglePause();
-                RefreshShellDatePlate();
-                break;
-            case ShellHotkeyAction.Speed1: SetSpeed(1, resume: false); RefreshShellDatePlate(); break;
-            case ShellHotkeyAction.Speed2: SetSpeed(2, resume: false); RefreshShellDatePlate(); break;
-            case ShellHotkeyAction.Speed3: SetSpeed(3, resume: false); RefreshShellDatePlate(); break;
-            case ShellHotkeyAction.Speed4: SetSpeed(4, resume: false); RefreshShellDatePlate(); break;
-            case ShellHotkeyAction.Speed5: SetSpeed(5, resume: false); RefreshShellDatePlate(); break;
-            case ShellHotkeyAction.SpeedFaster: SetSpeed(_speed + 1, resume: false); RefreshShellDatePlate(); break;
-            case ShellHotkeyAction.SpeedSlower: SetSpeed(_speed - 1, resume: false); RefreshShellDatePlate(); break;
-            case ShellHotkeyAction.FocusCapital:
-                FocusOwnCapital();
-                break;
-            case ShellHotkeyAction.MenuOrClose:
-                if (_shellRecentNewsPanel is { Visible: true })
-                { CloseShellRecentNewsModal(); return true; }
-                if (_shellMapMorePopover is { Visible: true })
-                { CloseShellMapMorePopover(); return true; }
-                return false;
-        }
-
+    private static bool SetMode(ShellContext ctx, StrategicMapMode mode)
+    {
+        ctx.SetMapMode?.Invoke(mode);
         return true;
     }
+
+    private static bool DispatchClockOrClose(ShellContext ctx, ShellHotkeyAction action, Func<bool> closeOverlay) => action switch
+    {
+        ShellHotkeyAction.TogglePause => InvokeTrue(ctx.TogglePause),
+        ShellHotkeyAction.Speed1 => SetSpeedTrue(ctx, 1),
+        ShellHotkeyAction.Speed2 => SetSpeedTrue(ctx, 2),
+        ShellHotkeyAction.Speed3 => SetSpeedTrue(ctx, 3),
+        ShellHotkeyAction.Speed4 => SetSpeedTrue(ctx, 4),
+        ShellHotkeyAction.Speed5 => SetSpeedTrue(ctx, 5),
+        ShellHotkeyAction.SpeedFaster => SetSpeedTrue(ctx, (ctx.GetSpeed?.Invoke() ?? 1) + 1),
+        ShellHotkeyAction.SpeedSlower => SetSpeedTrue(ctx, (ctx.GetSpeed?.Invoke() ?? 1) - 1),
+        ShellHotkeyAction.FocusCapital => InvokeTrue(ctx.FocusOwnCapital),
+        ShellHotkeyAction.MenuOrClose => closeOverlay?.Invoke() ?? false,
+        _ => false
+    };
+
+    private static bool InvokeTrue(Action fn) { fn?.Invoke(); return true; }
+    private static bool SetSpeedTrue(ShellContext ctx, int s) { ctx.SetSpeed?.Invoke(s); return true; }
 }

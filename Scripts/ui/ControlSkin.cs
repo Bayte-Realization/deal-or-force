@@ -17,11 +17,9 @@ internal static class ControlSkin
 {
     private const int Size = 20;
     private static bool _applied;
+    static ControlSkin() => Simulation.InterfaceSkin.Changed += () => { _applied = false; Apply(); };
 
-    /// <summary>
-    /// Written into the engine's default theme rather than set on a root control: half the
-    /// interface lives on canvas layers, and a theme does not cross into one.
-    /// </summary>
+    /// <summary>Applies skin tokens to the engine default theme across all canvas layers.</summary>
     public static void Apply()
     {
         if (_applied) return;

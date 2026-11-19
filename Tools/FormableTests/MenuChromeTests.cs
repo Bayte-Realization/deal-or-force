@@ -50,18 +50,18 @@ static class MenuChromeTests
         InterfaceSkin.ResetCatalog();
         FontCatalog.Load();
 
-        Check(InterfaceSkin.Colour("shell.plate_top").Equals("#332c25", StringComparison.OrdinalIgnoreCase),
-            "90_shell.json declares warm umber plate_top #332c25");
-        Check(InterfaceSkin.Colour("shell.plate_bottom").Equals("#221d19", StringComparison.OrdinalIgnoreCase),
-            "90_shell.json declares warm umber plate_bottom #221d19");
-        Check(InterfaceSkin.Colour("shell.well_top").Equals("#0e0b08", StringComparison.OrdinalIgnoreCase),
-            "90_shell.json declares sunken well_top #0e0b08");
-        Check(InterfaceSkin.Colour("shell.brass_hi").Equals("#a48d68", StringComparison.OrdinalIgnoreCase),
-            "90_shell.json declares antique brass highlight #a48d68");
-        Check(InterfaceSkin.Colour("shell.paper").Equals("#efe4c8", StringComparison.OrdinalIgnoreCase),
-            "90_shell.json declares warm paper ink #efe4c8");
-        Check(InterfaceSkin.Colour("shell.rule").Equals("#3b3228", StringComparison.OrdinalIgnoreCase),
-            "90_shell.json declares warm rule #3b3228");
+        Check(InterfaceSkin.Colour("shell.plate_top").Equals("#222120", StringComparison.OrdinalIgnoreCase),
+            "90_shell.json declares neutral charcoal-graphite plate_top #222120");
+        Check(InterfaceSkin.Colour("shell.plate_bottom").Equals("#171615", StringComparison.OrdinalIgnoreCase),
+            "90_shell.json declares neutral charcoal-graphite plate_bottom #171615");
+        Check(InterfaceSkin.Colour("shell.well_top").Equals("#0C0C0B", StringComparison.OrdinalIgnoreCase),
+            "90_shell.json declares sunken obsidian well_top #0C0C0B");
+        Check(InterfaceSkin.Colour("shell.brass_hi").Equals("#9B958C", StringComparison.OrdinalIgnoreCase),
+            "90_shell.json declares brushed titanium highlight #9B958C");
+        Check(InterfaceSkin.Colour("shell.paper").Equals("#F2F0EC", StringComparison.OrdinalIgnoreCase),
+            "90_shell.json declares neutral alabaster ink #F2F0EC");
+        Check(InterfaceSkin.Colour("shell.rule").Equals("#302E2C", StringComparison.OrdinalIgnoreCase),
+            "90_shell.json declares neutral hairline rule #302E2C");
 
         var dataRoot = GameDataLoader.DataFolder();
         var repoRoot = Path.GetFullPath(Path.Combine(dataRoot, ".."));

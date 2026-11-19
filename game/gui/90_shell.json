@@ -1,19 +1,23 @@
 {
   "layout": {
-    "shell.top_plate": { "anchors": [0, 0, 0, 0], "offsets": [16, 16, 924, 80] },
-    "shell.rail": { "anchors": [0, 0, 0, 0], "offsets": [16, 80, 80, 650] },
-    "shell.date_plate": { "anchors": [0, 0, 0, 0], "offsets": [1488, 16, 1904, 118] },
-    "shell.alert_column": { "anchors": [0, 0, 0, 0], "offsets": [1564, 126, 1904, 780] },
-    "shell.map_bar": { "anchors": [0, 0, 0, 0], "offsets": [1544, 1004, 1904, 1064] },
-    "shell.strip": { "anchors": [0, 0, 0, 0], "offsets": [92, 996, 1520, 1064] },
-    "shell.news_card": { "anchors": [0, 0, 0, 0], "offsets": [92, 856, 512, 984] },
+    "shell.top_plate": { "anchors": [0, 0, 0, 0], "offsets": [0, 0, 1168, 70] },
+    "shell.rail": { "anchors": [0, 0, 0, 0], "offsets": [0, 70, 64, 792] },
+    "shell.date_plate": { "anchors": [0, 0, 0, 0], "offsets": [1472, 8, 1912, 92] },
+    "shell.alert_column": { "anchors": [0, 0, 0, 0], "offsets": [1536, 94, 1912, 760] },
+    "shell.map_bar": { "anchors": [0, 0, 0, 0], "offsets": [1600, 1016, 1912, 1072] },
+    "shell.strip": { "anchors": [0, 0, 0, 0], "offsets": [72, 1004, 1584, 1072] },
+    "shell.news_card": { "anchors": [0, 0, 0, 0], "offsets": [700, 82, 1240, 196] },
+    "shell.left_panel": { "anchors": [0, 0, 0, 0], "offsets": [72, 134, 544, 988] },
+    "shell.full_workspace": { "anchors": [0, 0, 0, 0], "offsets": [80, 134, 1904, 992] },
 
-    "shell.compact.top_plate": { "anchors": [0, 0, 0, 0], "offsets": [12, 12, 720, 68] },
-    "shell.compact.rail": { "anchors": [0, 0, 0, 0], "offsets": [12, 68, 64, 582] },
-    "shell.compact.date_plate": { "anchors": [0, 0, 0, 0], "offsets": [904, 12, 1268, 102] },
-    "shell.compact.alert_column": { "anchors": [0, 0, 0, 0], "offsets": [968, 110, 1268, 598] },
-    "shell.compact.map_bar": { "anchors": [0, 0, 0, 0], "offsets": [956, 652, 1268, 708] },
-    "shell.compact.strip": { "anchors": [0, 0, 0, 0], "offsets": [76, 652, 940, 708] },
-    "shell.compact.news_card": { "anchors": [0, 0, 0, 0], "offsets": [76, 540, 436, 642] }
+    "shell.compact.top_plate": { "anchors": [0, 0, 0, 0], "offsets": [0, 0, 816, 48] },
+    "shell.compact.rail": { "anchors": [0, 0, 0, 0], "offsets": [0, 48, 50, 552] },
+    "shell.compact.date_plate": { "anchors": [0, 0, 0, 0], "offsets": [952, 6, 1274, 64] },
+    "shell.compact.alert_column": { "anchors": [0, 0, 0, 0], "offsets": [990, 66, 1274, 546] },
+    "shell.compact.map_bar": { "anchors": [0, 0, 0, 0], "offsets": [1058, 674, 1274, 714] },
+    "shell.compact.strip": { "anchors": [0, 0, 0, 0], "offsets": [58, 668, 1044, 714] },
+    "shell.compact.news_card": { "anchors": [0, 0, 0, 0], "offsets": [460, 56, 830, 132] },
+    "shell.compact.left_panel": { "anchors": [0, 0, 0, 0], "offsets": [58, 94, 390, 628] },
+    "shell.compact.full_workspace": { "anchors": [0, 0, 0, 0], "offsets": [58, 94, 1268, 660] }
   }
 }
