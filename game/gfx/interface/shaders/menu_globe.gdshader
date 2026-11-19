@@ -13,7 +13,7 @@ uniform sampler2D night_lights : filter_linear_mipmap, repeat_enable;
 // Where the sun stands, in the camera's own space: the camera does not turn, so the light
 // stays put while the planet turns under it and the dusk line crosses the continents.
 uniform vec3 sun_direction = vec3(-0.76, 0.32, 0.42);
-uniform vec3 air_colour : source_color = vec3(0.56, 0.57, 0.59);
+uniform vec3 air_colour : source_color = vec3(0.32, 0.50, 0.76);
 uniform vec3 lamp_colour : source_color = vec3(0.95, 0.89, 0.80);
 uniform float brightness = 1.0;
 
@@ -40,13 +40,13 @@ void fragment() {
 
 	vec3 facing_normal = normalize(NORMAL);
 	float lit = dot(facing_normal, normalize(sun_direction));
-	float day = pow(clamp(lit * 1.7 + 0.06, 0.0, 1.0), 0.8);
-	vec3 colour = surface * (0.022 + 1.12 * day);
+	float day = smoothstep(-0.10, 0.78, lit);
+	vec3 colour = surface * (0.032 + 0.96 * day);
 	// The cities come on as the ground goes dark, a little before full night.
-	float dark = clamp(-lit * 3.0 + 0.25, 0.0, 1.0);
-	colour += lamps * dark * lamp_colour * 0.62;
+	float dark = clamp(-lit * 3.0 + 0.22, 0.0, 1.0);
+	colour += lamps * dark * lamp_colour * 0.58;
 	// Air: the edge of the ball is looked at through more of it.
-	float rim = pow(1.0 - clamp(dot(facing_normal, VIEW), 0.0, 1.0), 3.2);
-	colour += rim * air_colour * (0.25 + 0.9 * clamp(lit + 0.35, 0.0, 1.0));
+	float rim = pow(1.0 - clamp(dot(facing_normal, VIEW), 0.0, 1.0), 5.2);
+	colour += rim * air_colour * (0.04 + 0.20 * clamp(lit + 0.15, 0.0, 1.0));
 	ALBEDO = colour * brightness;
 }

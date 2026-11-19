@@ -195,8 +195,8 @@ public sealed partial class GlobePresentation
         _cloudShadeMaterial.SetShaderParameter("realistic_cumulus", realisticCumulus ? 1f : 0f);
         _cloudMaterial.SetShaderParameter("presence", clouds);
         _cloudShadeMaterial.SetShaderParameter("presence", clouds);
-        _cloudMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale);
-        _cloudShadeMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale);
+        _cloudMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale * 0.38f);
+        _cloudShadeMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale * 0.38f);
         _cloudMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
         _cloudShadeMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
         _cloudMaterial.SetShaderParameter("detail_strength", readability.DetailStrength);
@@ -362,7 +362,7 @@ void fragment() {
     // Seen from close by, the haze is the horizon itself; keep it, but quieter.
     float height = clamp((length(centre) - inner) / (inner * 1.4), 0.0, 1.0);
     vec3 rayleigh = mix(vec3(0.24, 0.48, 0.92), vec3(0.46, 0.72, 1.0), horizon_band);
-    ALBEDO = rayleigh * glow * mix(0.38, 0.90, height);
+    ALBEDO = rayleigh * glow * mix(0.15, 0.36, height);
     ALPHA = 1.0;
 }";
 

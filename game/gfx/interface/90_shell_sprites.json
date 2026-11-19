@@ -1,5 +1,6 @@
 {
   "sprites": {
+    "leader_anonymous": "res://game/gfx/interface/shell/portrait_cameo_anonymous.png",
     "shell_button_brass_cta_9s": "res://game/gfx/interface/shell/button_brass_cta_9s.png",
     "shell_button_brass_cta_9s_2x": "res://game/gfx/interface/shell/button_brass_cta_9s@2x.png",
     "shell_button_umber_9s": "res://game/gfx/interface/shell/button_umber_9s.png",
@@ -10,6 +11,7 @@
     "shell_flag_pocket_9s_2x": "res://game/gfx/interface/shell/flag_pocket_9s@2x.png",
     "shell_header_brass_9s": "res://game/gfx/interface/shell/header_brass_9s.png",
     "shell_header_brass_9s_2x": "res://game/gfx/interface/shell/header_brass_9s@2x.png",
+    "shell_header_frieze": "res://game/gfx/interface/shell/header_frieze_band.png",
     "shell_newspaper_card_9s": "res://game/gfx/interface/shell/newspaper_card_9s.png",
     "shell_newspaper_card_9s_2x": "res://game/gfx/interface/shell/newspaper_card_9s@2x.png",
     "shell_paper": "res://game/gfx/interface/shell/paper.jpg",
@@ -19,6 +21,7 @@
     "shell_plate_brass_9s_2x": "res://game/gfx/interface/shell/plate_brass_9s@2x.png",
     "shell_plate_umber_9s": "res://game/gfx/interface/shell/plate_umber_9s.png",
     "shell_plate_umber_9s_2x": "res://game/gfx/interface/shell/plate_umber_9s@2x.png",
+    "shell_plate_weave": "res://game/gfx/interface/shell/plate_slate_weave.png",
     "shell_round_bezel": "res://game/gfx/interface/shell/round_bezel.png",
     "shell_round_bezel_2x": "res://game/gfx/interface/shell/round_bezel@2x.png",
     "shell_round_bezel_active": "res://game/gfx/interface/shell/round_bezel_active.png",

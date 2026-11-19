@@ -250,11 +250,24 @@ public partial class DealOrForceGame
                       (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) || _shell.WorkPanel.IsVisible;
         var pbarW = _planningBar is not null && IsInstanceValid(_planningBar) ? Math.Max(340f, _planningBar.GetCombinedMinimumSize().X) : 520f;
         var dock = ShellDockRules.ComputeLeftAndBottomDock(profile, anyLeft, IsAnyShellModalOpen(), pbarW);
+        var leftRect = dock.LeftPanel with { X = profile.LeftPanel.X };
+        if (profile.Compact)
+        {
+            var maxRight = Math.Min(profile.NewsCard.X - 12f, profile.AlertColumn.X - 12f);
+            var cappedW = Math.Max(240f, Math.Min(leftRect.W, maxRight - leftRect.X));
+            leftRect = leftRect with { W = cappedW };
+        }
 
         foreach (var lp in new Control[] { _armyPanel, _sidePanel, _fleetPanel, _countryCard })
-            if (lp is not null && IsInstanceValid(lp) && lp.Visible) ShellContext.PlaceRect(lp, dock.LeftPanel);
+        {
+            if (lp is not null && IsInstanceValid(lp) && lp.Visible)
+            {
+                lp.ClipContents = true;
+                ShellContext.PlaceRect(lp, leftRect);
+            }
+        }
 
-        _shell.WorkPanel.ApplyDock(profile, dock);
+        _shell.WorkPanel.ApplyDock(profile, dock with { LeftPanel = leftRect });
         _shell.Strip.ApplyDock(profile, dock);
         if (_planningBar is not null && IsInstanceValid(_planningBar) && _planningBar.Visible)
             ShellContext.PlaceRect(_planningBar, dock.PlanningBar);
@@ -314,8 +327,25 @@ public partial class DealOrForceGame
     {
         if (!_newShellBuilt || !IsNewShellActive || _campaign is null || _hudLayer is not { Visible: true } || _shell is null) return;
         var anyLeft = (_armyPanel is { Visible: true }) || (_sidePanel is { Visible: true }) ||
-                      (_fleetPanel is { Visible: true }) || _shell.WorkPanel.IsVisible;
-        if (anyLeft != _newShellLastLeftVisible) { _newShellLastLeftVisible = anyLeft; SyncNewShellLeftAndBottomDock(); }
+                      (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) || _shell.WorkPanel.IsVisible;
+        var profile = _shell.CurrentProfile();
+        var leftDrifted = false;
+        var compactRightCap = profile.Compact ? Math.Min(profile.NewsCard.X, profile.AlertColumn.X) - 10f : float.PositiveInfinity;
+        foreach (var lp in new Control[] { _armyPanel, _sidePanel, _fleetPanel, _countryCard })
+        {
+            if (lp is { Visible: true } && IsInstanceValid(lp) &&
+                (MathF.Abs(lp.OffsetLeft - profile.LeftPanel.X) > 2f ||
+                 (profile.Compact && lp.OffsetRight > compactRightCap)))
+            {
+                leftDrifted = true;
+                break;
+            }
+        }
+        if (anyLeft != _newShellLastLeftVisible || leftDrifted)
+        {
+            _newShellLastLeftVisible = anyLeft;
+            SyncNewShellLeftAndBottomDock();
+        }
         _shell.Tick(delta);
     }
 

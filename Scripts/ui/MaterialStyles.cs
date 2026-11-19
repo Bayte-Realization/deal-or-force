@@ -132,6 +132,7 @@ internal static class MaterialStyles
     internal static void Undress(Control control)
     {
         if (control is not (PanelContainer or Panel) || !control.HasMeta(MaterialMeta)) return;
+        if (string.Equals(control.GetMeta(MaterialMeta).AsString(), "menu_chrome", StringComparison.Ordinal)) return;
         control.RemoveMeta(MaterialMeta);
         if (control.HasMeta(OriginalMeta) && control.GetMeta(OriginalMeta).AsGodotObject() is StyleBox original)
             control.AddThemeStyleboxOverride("panel", original);

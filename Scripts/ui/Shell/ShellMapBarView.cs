@@ -642,7 +642,7 @@ internal sealed class ShellMapBarView
         {
             var n = world.Nations[i];
             if (n.MapIndex <= 0 || n.MapIndex > maxIdx) continue;
-            var col = new Color(string.IsNullOrEmpty(n.Color) ? "#6e6c66" : n.Color);
+            var col = Color.FromString(string.IsNullOrEmpty(n.Color) ? "#6e6c66" : n.Color, new Color(0.43f, 0.42f, 0.40f));
             // Slightly desaturate non-player fills for cartographic restraint; brighten player territory
             col = n.MapIndex == playerMapIdx
                 ? col.Lightened(0.14f)

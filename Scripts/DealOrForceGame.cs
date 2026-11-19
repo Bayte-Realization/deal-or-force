@@ -1722,35 +1722,12 @@ public partial class DealOrForceGame : Control
     }
 
 
-    /// <summary>
-    /// One restrained frame for campaign windows. Surface roles change depth and padding,
-    /// while the shell palette remains moddable and brass marks only an interruption.
-    /// </summary>
-    private static StyleBoxFlat CampaignPanelStyle(PanelSurface surface)
+    private static (string Sprite, string Shipped, bool Strip) PanelSpriteAsset(PanelSurface surface)
     {
-        var style = ShellPanelStyle();
-        var modal = surface == PanelSurface.Modal;
-        style.BgColor = Ui.Colour(modal ? "surface.raised" : "shell.background");
-        style.BorderColor = Ui.Colour(modal ? "button.primary_border" : "surface.line", modal ? 0.78f : 1f);
-        style.SetBorderWidthAll(1);
-        style.SetCornerRadiusAll(modal ? 4 : 3);
-        style.SetContentMarginAll(modal ? 8 : 4);
-        style.ShadowColor = Ui.Colour("surface.background", surface switch
-        {
-            PanelSurface.Modal => 0.72f,
-            PanelSurface.Dossier => 0.50f,
-            PanelSurface.Command => 0.42f,
-            _ => 0.30f
-        });
-        style.ShadowSize = surface switch
-        {
-            PanelSurface.Modal => 12,
-            PanelSurface.Dossier => 8,
-            PanelSurface.Command => 6,
-            _ => 4
-        };
-        style.ShadowOffset = new Vector2(0, modal ? 4 : 2);
-        return style;
+        var command = surface is PanelSurface.Command or PanelSurface.CommandStrip;
+        var strip = surface == PanelSurface.CommandStrip;
+        var sprite = strip ? "panel_command_strip" : command ? "panel_command_frame" : "panel_dossier";
+        return (sprite, $"res://game/gfx/interface/panels/{sprite}.png", strip);
     }
 
     private PanelContainer TexturedPanel(Node parent, PanelSurface surface = PanelSurface.Dossier)
@@ -1764,8 +1741,12 @@ public partial class DealOrForceGame : Control
         panel.SetMeta("skin_campaign_surface", inCampaign);
         panel.AddThemeStyleboxOverride("panel", PanelStyle(surface, inCampaign));
         parent.AddChild(panel);
-        AtlasSurfaceSkin.Attach(panel, surface is PanelSurface.Command or PanelSurface.CommandStrip
+        var finish = AtlasSurfaceSkin.Attach(panel, surface is PanelSurface.Command or PanelSurface.CommandStrip
             ? AtlasSurfaceSkin.Level.Instrument : AtlasSurfaceSkin.Level.Document);
+        var (sprite, shipped, _) = PanelSpriteAsset(surface);
+        if (finish is not null && SpriteCatalog.TextureOf(sprite, shipped).Equals(shipped, StringComparison.OrdinalIgnoreCase))
+            finish.Visible = false;
+        ChromePlateArt.AttachPlateWeave(panel, 0.07f);
         if (!inCampaign)
         {
             var edge = new Panel
@@ -1777,6 +1758,11 @@ public partial class DealOrForceGame : Control
             edge.AddThemeStyleboxOverride("panel", ShellEdgeStyle());
             panel.AddChild(edge);
             panel.MoveChild(edge, 1);
+            if (surface is PanelSurface.Modal or PanelSurface.Dossier &&
+                panel.GetNodeOrNull<MenuChromeBrassFrame>("MenuChromeBrassFrame") is null)
+            {
+                panel.AddChild(new MenuChromeBrassFrame { Name = "MenuChromeBrassFrame", ZIndex = 4 });
+            }
         }
         panel.Resized += panel.QueueRedraw;
         panel.Draw += () =>
@@ -2423,16 +2409,13 @@ public partial class DealOrForceGame : Control
     private StyleBox PanelStyle(PanelSurface surface, bool inCampaign = false)
     {
         var command = surface is PanelSurface.Command or PanelSurface.CommandStrip;
-        var strip = surface == PanelSurface.CommandStrip;
-        var sprite = strip ? "panel_command_strip" : command ? "panel_command_frame" : "panel_dossier";
-        var shipped = $"res://game/gfx/interface/panels/{sprite}.png";
+        var (sprite, shipped, strip) = PanelSpriteAsset(surface);
         var path = SpriteCatalog.TextureOf(sprite, shipped);
         if (path.Equals(shipped, StringComparison.OrdinalIgnoreCase))
         {
-            var style = CampaignPanelStyle(surface);
-            if (!inCampaign)
-                style.BgColor = Ui.Colour(surface == PanelSurface.Modal ? "surface.raised" : "surface.overlay");
-            return style;
+            var padX = strip ? 6 : surface == PanelSurface.Modal ? 8 : 4;
+            var padY = strip ? 4 : surface == PanelSurface.Modal ? 8 : 4;
+            return MenuChromeTheme.ModalPlateBox(padX, padY);
         }
         var textureMargin = strip ? 20f : command ? 48f : 28f;
         var contentHorizontal = strip ? 6f : command ? 28f : surface == PanelSurface.Modal ? 14f : 6f;

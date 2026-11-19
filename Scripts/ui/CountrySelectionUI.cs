@@ -41,24 +41,27 @@ public partial class DealOrForceGame
         AddChild(_pickerLayer);
 
         var heading = TexturedPanel(_pickerLayer);
-        MenuChromeTheme.StyleArchitecturalPlate(heading, brassCorners: true, padX: 0, padY: 0);
         Ui.Place(heading, "picker.heading");
+        MenuChromeTheme.StyleArchitecturalPlate(heading, brassCorners: true, padX: 0, padY: 0);
         _pickerHeadingPanel = heading;
         var headingRows = PanelRows(heading, 18, 10, 3);
         _pickerHeading = Title("SELECT A COUNTRY", 24, MenuChromeTheme.Paper);
-        _pickerHeading.ClipText = true;
-        _pickerHeading.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         MenuChromeTheme.StyleExistingLabel(_pickerHeading, 24, MenuChromeTheme.Paper, serif: true);
+        _pickerHeading.AutowrapMode = TextServer.AutowrapMode.Off;
+        _pickerHeading.ClipText = false;
+        _pickerHeading.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         headingRows.AddChild(_pickerHeading);
         _pickerSubheading = Title("1 January 2024 · click the political map or search", 12, MenuChromeTheme.PaperDim);
-        _pickerSubheading.ClipText = true;
-        _pickerSubheading.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         MenuChromeTheme.StyleExistingLabel(_pickerSubheading, 12, MenuChromeTheme.PaperDim);
+        _pickerSubheading.AutowrapMode = TextServer.AutowrapMode.Off;
+        _pickerSubheading.ClipText = false;
+        _pickerSubheading.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _pickerSubheading.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         headingRows.AddChild(_pickerSubheading);
 
         var panel = TexturedPanel(_pickerLayer);
-        MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true, padX: 0, padY: 0);
         Ui.Place(panel, "picker.country");
+        MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true, padX: 0, padY: 0);
         _pickerCountryPanel = panel;
         var rows = PanelRows(panel, 18, 14, 7);
 
@@ -170,8 +173,8 @@ public partial class DealOrForceGame
 
         var actions = TexturedPanel(_pickerLayer);
         actions.Name = "CountryPickerActions"; _pickerActionsPanel = actions;
-        MenuChromeTheme.StyleArchitecturalPlate(actions, brassCorners: true, padX: 0, padY: 0);
         Ui.Place(actions, "picker.actions");
+        MenuChromeTheme.StyleArchitecturalPlate(actions, brassCorners: true, padX: 0, padY: 0);
         var actionMargin = Margin(actions, 10, 8);
         // A MarginContainer gives its one child the whole rectangle, so the rows stack in a
         // box of their own inside it: the buttons, and the seed row underneath them.

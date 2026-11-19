@@ -881,12 +881,13 @@ public partial class DealOrForceGame
         };
         var border = new StyleBoxFlat
         {
-            BgColor = Ui.Colour("surface.inset"),
-            BorderColor = Ui.Colour("surface.line"),
+            BgColor = MenuChromeTheme.WellTop,
+            BorderColor = MenuChromeTheme.BrassHi,
             ContentMarginLeft = 1, ContentMarginRight = 1,
             ContentMarginTop = 1, ContentMarginBottom = 1
         };
         border.SetBorderWidthAll(1);
+        border.SetCornerRadiusAll(2);
         frame.AddThemeStyleboxOverride("panel", border);
 
         var rect = new TextureRect

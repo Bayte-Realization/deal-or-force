@@ -265,13 +265,16 @@ internal static class MenuChromeTheme
         if (panel.HasMeta("skin_panel_surface")) panel.RemoveMeta("skin_panel_surface");
         if (panel.GetNodeOrNull<Node>("AtlasMaterial") is { } oldAtlas)
         {
+            panel.RemoveChild(oldAtlas);
             oldAtlas.QueueFree();
         }
         if (panel.GetNodeOrNull<Node>("ShellEdge") is { } oldEdge)
         {
+            panel.RemoveChild(oldEdge);
             oldEdge.QueueFree();
         }
         panel.AddThemeStyleboxOverride("panel", ModalPlateBox(padX, padY));
+        ChromePlateArt.AttachPlateWeave(panel, 0.08f);
 
         if (!brassCorners) return;
         if (panel.GetNodeOrNull<MenuChromeBrassFrame>("MenuChromeBrassFrame") is null)
@@ -587,24 +590,11 @@ internal static class MenuChromeTheme
         var pocket = new PanelContainer
         {
             Name = "NaturalFlagPocket",
-            CustomMinimumSize = new Vector2(maxWidth + 4f, maxHeight + 4f),
             SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
             MouseFilter = Control.MouseFilterEnum.Pass,
             TooltipText = Ui.Tip(tooltip)
         };
-        var pocketStyle = new StyleBoxFlat
-        {
-            BgColor = WellTop,
-            BorderColor = BorderDark,
-            ContentMarginLeft = 2,
-            ContentMarginRight = 2,
-            ContentMarginTop = 2,
-            ContentMarginBottom = 2
-        };
-        pocketStyle.SetBorderWidthAll(1);
-        pocketStyle.SetCornerRadiusAll(2);
-        pocket.AddThemeStyleboxOverride("panel", pocketStyle);
 
         var center = new CenterContainer
         {
@@ -637,7 +627,6 @@ internal static class MenuChromeTheme
     internal static void UpdateFlagPocket(Control pocket, string tag, Texture2D texture, float maxWidth, float maxHeight)
     {
         if (pocket is null) return;
-        pocket.CustomMinimumSize = new Vector2(maxWidth + 4f, maxHeight + 4f);
         var edge = pocket.FindChild("FlagEdge", true, false) as PanelContainer;
         var rect = pocket.FindChild("FlagTexture", true, false) as TextureRect;
         if (edge is null || rect is null) return;
@@ -653,11 +642,27 @@ internal static class MenuChromeTheme
         {
             var empty = new StyleBoxEmpty();
             empty.SetContentMarginAll(0);
+            pocket.CustomMinimumSize = new Vector2(fit.Width, fit.Height);
+            pocket.AddThemeStyleboxOverride("panel", empty);
             edge.AddThemeStyleboxOverride("panel", empty);
             edge.CustomMinimumSize = new Vector2(fit.Width, fit.Height);
         }
         else
         {
+            var pocketStyle = new StyleBoxFlat
+            {
+                BgColor = WellTop,
+                BorderColor = BrassHi,
+                ContentMarginLeft = 2,
+                ContentMarginRight = 2,
+                ContentMarginTop = 2,
+                ContentMarginBottom = 2
+            };
+            pocketStyle.SetBorderWidthAll(1);
+            pocketStyle.SetCornerRadiusAll(2);
+            pocket.CustomMinimumSize = new Vector2(fit.Width + 6f, fit.Height + 6f);
+            pocket.AddThemeStyleboxOverride("panel", pocketStyle);
+
             var frame = new StyleBoxFlat
             {
                 DrawCenter = false,

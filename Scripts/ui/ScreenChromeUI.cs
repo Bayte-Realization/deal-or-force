@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -28,10 +29,11 @@ public partial class DealOrForceGame
     private PanelContainer ScreenHeader(VBoxContainer rows, string title, string subtitle,
         bool upper = false, params Control[] right)
     {
-        var header = new PanelContainer { Name = "ScreenHeader" };
+        var header = new PanelContainer { Name = "ScreenHeader", ClipContents = true };
         header.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
         rows.AddChild(header);
-        var margin = new MarginContainer();
+        ChromePlateArt.AttachHeaderFrieze(header, 0.28f);
+        var margin = new MarginContainer { Name = "ScreenHeaderMargin" };
         margin.AddThemeConstantOverride("margin_left", 0);
         margin.AddThemeConstantOverride("margin_right", 0);
         margin.AddThemeConstantOverride("margin_top", 4);
@@ -48,6 +50,7 @@ public partial class DealOrForceGame
         head.Name = "ScreenHeaderTitle";
         // A page title is read, not scanned: it may take the width it needs and wrap once.
         head.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        MenuChromeTheme.StyleExistingLabel(head, 26, MenuChromeTheme.Paper, serif: true, bold: false);
         words.AddChild(head);
         if (!string.IsNullOrEmpty(subtitle))
         {
@@ -69,7 +72,7 @@ public partial class DealOrForceGame
             line.AddChild(figures);
         }
 
-        rows.AddChild(ChromeRule("ScreenHeaderRule", "surface.line"));
+        rows.AddChild(MenuChromeTheme.CreateEngravedRule("ScreenHeaderRule", 2f));
         return header;
     }
 
@@ -119,7 +122,10 @@ public partial class DealOrForceGame
     /// <summary>Insert a leading badge or flag before the words column inside a <see cref="ScreenHeader"/>.</summary>
     private static void PrependToScreenHeader(PanelContainer header, Control leading)
     {
-        if (header?.GetChild(0) is MarginContainer margin && margin.GetChild(0) is HBoxContainer line && leading is not null)
+        if (header is null || leading is null) return;
+        var margin = header.GetNodeOrNull<MarginContainer>("ScreenHeaderMargin")
+            ?? header.GetChildren().OfType<MarginContainer>().FirstOrDefault();
+        if (margin?.GetChildCount() > 0 && margin.GetChild(0) is HBoxContainer line)
         {
             leading.SizeFlagsVertical = SizeFlags.ShrinkCenter;
             line.AddChild(leading);

@@ -89,7 +89,7 @@ public partial class MenuGlobe : Control
 
         var sun = new Vector3(-0.76f, 0.32f, 0.42f).Normalized();
         var ground = MenuChromeTheme.BackdropColor.Darkened(0.45f);
-        var twilight = MenuChromeTheme.BrassHi.Lerp(new Color(0.62f, 0.65f, 0.69f), 0.35f);
+        var twilight = new Color(0.32f, 0.50f, 0.76f);
         var lampTone = new Color(0.95f, 0.89f, 0.80f);
         var starTone = MenuChromeTheme.Paper;
 
@@ -129,13 +129,14 @@ public partial class MenuGlobe : Control
         }
         _planet.AddChild(ball);
 
-        var air = Shell("Air", Radius * 1.075f, 96, 48, "menu_globe_air");
+        var air = Shell("Air", Radius * 1.032f, 96, 48, "menu_globe_air");
         if (air.MaterialOverride is ShaderMaterial airMaterial)
         {
             airMaterial.SetShaderParameter("sun_direction", sun);
             airMaterial.SetShaderParameter("air_colour", twilight);
             airMaterial.SetShaderParameter("planet_radius", Radius);
-            airMaterial.SetShaderParameter("strength", 0.38f);
+            airMaterial.SetShaderParameter("thickness", 0.11f);
+            airMaterial.SetShaderParameter("strength", 0.14f);
         }
         _viewport.AddChild(air);
 

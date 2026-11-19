@@ -169,7 +169,7 @@ public partial class ExportVerification : Node
                 if (args.Contains("--verify-release-0530-only"))
                     Check(game.FindChild("NetworkMultiplayer", true, false) is Control { Visible: true },
                         "real cold main-menu multiplayer intent reaches the lobby without a picker null reference");
-                game.Call("BeginSession");
+                using var _uiShellScope = EnterClassicUiShellAndBeginSession(game);
                 if (args.Contains("--verify-recruitment-placement-only") || args.Contains("--verify-alliance-review-only"))
                 {
                     Check(DisplayServer.GetName() != "headless", "recruitment/alliance verification uses a real rendered viewport");
@@ -643,7 +643,7 @@ public partial class ExportVerification : Node
                 }
                 Check(Loc.Get("chronicle.denunciation") != "chronicle.denunciation", "chronicle caption has a translation");
                 await Capture("map");
-                await VerifyLedgerCharts(game);
+                await VerifyLedgerAndNewShell(game);
             }
         }
         catch (Exception error)

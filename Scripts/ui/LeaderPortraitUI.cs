@@ -35,21 +35,15 @@ public partial class DealOrForceGame
         };
         var frameStyle = new StyleBoxFlat
         {
-            BgColor = Ui.Colour("surface.inset"),
-            BorderColor = Ui.Colour("text.accent"),
-            BorderWidthLeft = 2,
-            BorderWidthRight = 2,
-            BorderWidthTop = 2,
-            BorderWidthBottom = 2,
-            CornerRadiusTopLeft = 4,
-            CornerRadiusTopRight = 4,
-            CornerRadiusBottomLeft = 4,
-            CornerRadiusBottomRight = 4,
+            BgColor = MenuChromeTheme.WellTop,
+            BorderColor = MenuChromeTheme.Brass,
             ContentMarginLeft = 2,
             ContentMarginRight = 2,
             ContentMarginTop = 2,
             ContentMarginBottom = 2
         };
+        frameStyle.SetBorderWidthAll(1);
+        frameStyle.SetCornerRadiusAll(2);
         frame.AddThemeStyleboxOverride("panel", frameStyle);
 
         var rect = new TextureRect
@@ -95,8 +89,7 @@ public partial class DealOrForceGame
 
         if (!PortraitCache.TryGetValue(anonymousKey, out var anonymous))
         {
-            var silhouettePath = SpriteCatalog.TextureOf("leader_anonymous");
-            if (string.IsNullOrEmpty(silhouettePath)) silhouettePath = "res://game/gfx/leaders/leader_anonymous.png";
+            var silhouettePath = SpriteCatalog.TextureOf("leader_anonymous", "res://game/gfx/interface/shell/portrait_cameo_anonymous.png");
             if (LoadLeaderPhoto(silhouettePath) is { } silhouette)
             {
                 anonymous = RememberPortrait(anonymousKey, silhouette);
@@ -135,12 +128,20 @@ public partial class DealOrForceGame
             !path.StartsWith("res://", StringComparison.Ordinal) && !path.StartsWith("user://", StringComparison.Ordinal)) return null;
         try
         {
-            if (path.StartsWith("res://", StringComparison.Ordinal))
+            if (path.StartsWith("res://", StringComparison.Ordinal) || path.StartsWith("user://", StringComparison.Ordinal))
             {
                 if (ResourceLoader.Exists(path)) return GD.Load<Texture2D>(path);
                 // Game data/mod PNGs are loose files in a release too. A missing
                 // .import sidecar is not a missing portrait and needs no editor.
                 path = ProjectSettings.GlobalizePath(path);
+            }
+            if (System.IO.File.Exists(path))
+            {
+                var info = new System.IO.FileInfo(path);
+                if (info.Length > 32L * 1024 * 1024) return null;
+                using var looseImage = Image.LoadFromFile(path);
+                if (looseImage is null || looseImage.IsEmpty()) return null;
+                return ScaleAndCreatePortraitTexture(looseImage);
             }
             if (!Godot.FileAccess.FileExists(path))
                 return ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
@@ -148,20 +149,25 @@ public partial class DealOrForceGame
                 if (file is null || file.GetLength() > 32UL * 1024 * 1024) return null;
             using var image = new Image();
             if (image.Load(path) != Error.Ok || image.IsEmpty()) return null;
-            if (image.IsCompressed() && image.Decompress() != Error.Ok) return null;
-            var size = image.GetSize();
-            if (size.X > 512 || size.Y > 512)
-            {
-                var scale = 512f / Math.Max(size.X, size.Y);
-                image.Resize(Math.Max(1, (int)(size.X * scale)), Math.Max(1, (int)(size.Y * scale)), Image.Interpolation.Lanczos);
-            }
-            return ImageTexture.CreateFromImage(image);
+            return ScaleAndCreatePortraitTexture(image);
         }
         catch (Exception error)
         {
             DiagnosticLogs.Write("errors", "LEADER_PHOTO_REJECTED path=" + path + " error=" + error.Message);
             return null;
         }
+    }
+
+    private static Texture2D ScaleAndCreatePortraitTexture(Image image)
+    {
+        if (image.IsCompressed() && image.Decompress() != Error.Ok) return null;
+        var size = image.GetSize();
+        if (size.X > 512 || size.Y > 512)
+        {
+            var scale = 512f / Math.Max(size.X, size.Y);
+            image.Resize(Math.Max(1, (int)(size.X * scale)), Math.Max(1, (int)(size.Y * scale)), Image.Interpolation.Lanczos);
+        }
+        return ImageTexture.CreateFromImage(image);
     }
 
     internal static string SlugLeaderName(string name)

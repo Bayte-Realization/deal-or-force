@@ -97,7 +97,7 @@ public static class InterfaceSkin
         // Surfaces
         ("surface.background",  "#070b11"),
         ("surface.panel_tint",  "#d6dee8fa"),
-        ("surface.overlay",     "#080e16f2"),
+        ("surface.overlay",     "#171615"),
         ("surface.inset",       "#0b1118"),
         ("surface.line",        "#34404d"),
         ("surface.line_faint",  "#252f3ba8"),
@@ -108,9 +108,9 @@ public static class InterfaceSkin
         // workspaces, `surface.raised` a card lifted off it, and `surface.panel` the neutral fill
         // the territory preview asks for. A ground that is still misspelt is now caught by
         // AtlasSurfaceSkin.Attach rather than shown.
-        ("surface.base",        "#101720"),
-        ("surface.raised",      "#18222d"),
-        ("surface.panel",       "#111923"),
+        ("surface.base",        "#191817"),
+        ("surface.raised",      "#222120"),
+        ("surface.panel",       "#1D1C1B"),
         ("brand.paper",         "#e9e4d9"),
 
         // Buttons
@@ -118,18 +118,18 @@ public static class InterfaceSkin
         ("button.text_hover",       "#f5f7fa"),
         ("button.text_pressed",     "#cfe1f7"),
         ("button.text_disabled",    "#667586"),
-        ("button.fill",             "#151e28"),
-        ("button.fill_hover",       "#1b2733"),
-        ("button.fill_pressed",     "#0d141c"),
+        ("button.fill",             "#222120"),
+        ("button.fill_hover",       "#2E2D2B"),
+        ("button.fill_pressed",     "#111010"),
         ("button.fill_disabled",    "#10161e"),
         ("button.border",           "#3b4856"),
         ("button.border_hover",     "#7c8997"),
         ("button.border_pressed",   "#5f97d6"),
         ("button.border_disabled",  "#29333d"),
-        ("button.primary_fill",         "#1d4477"),
-        ("button.primary_fill_hover",   "#27569a"),
-        ("button.primary_fill_pressed", "#16335a"),
-        ("button.primary_border",       "#6da7e6"),
+        ("button.primary_fill",         "#242321"),
+        ("button.primary_fill_hover",   "#302E2C"),
+        ("button.primary_fill_pressed", "#141312"),
+        ("button.primary_border",       "#9B958C"),
 
         // Map modes. A total conversion repainting the political map does it here.
         // The light edge of everything that stands on the map: unit counters, fleet chips, the

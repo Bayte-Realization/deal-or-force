@@ -33,9 +33,9 @@ public sealed partial class GlobePresentation
     private MeshInstance3D _atmosphereLayer;
 
     /// <summary>Contrast and saturation, in per cent of the renderer's own picture.</summary>
-    private const float GradeContrast = 1.05f;
-    private const float GradeSaturation = 1.04f;
-    private const float GradeBrightness = 1.0f;
+    private const float GradeContrast = 1.06f;
+    private const float GradeSaturation = 1.05f;
+    private const float GradeBrightness = 0.99f;
 
     /// <summary>How thick the shell is, as a share of the planet's radius.</summary>
     private const float AtmosphereThickness = 0.0135f;
@@ -119,26 +119,26 @@ public sealed partial class GlobePresentation
         {
             material.SetShaderParameter("tabletop_warmth", 0f);
             material.SetShaderParameter("strength", 0f);
-            material.SetShaderParameter("falloff", 4.5f);
+            material.SetShaderParameter("falloff", 5.2f);
         }
         else if (polish.RayleighMieHalo)
         {
             material.SetShaderParameter("tabletop_warmth", 0f);
-            material.SetShaderParameter("strength", 0.58f);
-            material.SetShaderParameter("falloff", 3.5f);
+            material.SetShaderParameter("strength", 0.18f);
+            material.SetShaderParameter("falloff", 4.8f);
         }
         else if (polish.WarmLampRim)
         {
             material.SetShaderParameter("tabletop_warmth", polish.RimWarmth);
             material.SetShaderParameter("lamp_rim_color", Color.FromHtml(Simulation.MapLook.ColourHex("map.look_lamp")));
-            material.SetShaderParameter("strength", 0.42f);
-            material.SetShaderParameter("falloff", 4.2f);
+            material.SetShaderParameter("strength", 0.14f);
+            material.SetShaderParameter("falloff", 5.0f);
         }
         else
         {
             material.SetShaderParameter("tabletop_warmth", 0f);
-            material.SetShaderParameter("strength", 0.45f);
-            material.SetShaderParameter("falloff", 4.5f);
+            material.SetShaderParameter("strength", 0.15f);
+            material.SetShaderParameter("falloff", 5.2f);
         }
     }
 
@@ -155,8 +155,8 @@ public sealed partial class GlobePresentation
     private const string AtmosphereShader = @"shader_type spatial;
 render_mode unshaded, blend_add, cull_back, depth_draw_never, shadows_disabled, fog_disabled;
 uniform vec4 limb_color : source_color = vec4(0.45, 0.68, 0.95, 1.0);
-uniform float strength = 0.62;
-uniform float falloff = 3.1;
+uniform float strength = 0.18;
+uniform float falloff = 4.8;
 uniform vec3 sun_direction = vec3(0.2, 0.6, 0.75);
 uniform float tabletop_warmth = 0.0;
 uniform float rayleigh_mie = 0.0;
