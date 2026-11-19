@@ -1,3 +1,6 @@
+using System;
+using System.Linq;
+using DealOrForce.Simulation;
 using Godot;
 
 namespace DealOrForce;
@@ -6,6 +9,14 @@ public partial class DealOrForceGame
 {
     private Control _pauseMenuLayer = null!;
     private PanelContainer _pausePanel = null!;
+    private PanelContainer _pauseLiveCard = null!;
+    private TextureRect _pauseFlagRect = null!;
+    private Control _pausePortraitHost = null!;
+    private Label _pauseLeaderTitleName = null!;
+    private Label _pauseNationName = null!;
+    private Label _pauseDateLabel = null!;
+    private Label _pauseRankBadge = null!;
+    private Label _pauseWarBadge = null!;
 
     private void BuildPauseMenu()
     {
@@ -21,65 +32,154 @@ public partial class DealOrForceGame
         };
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _pauseMenuLayer.AddChild(veil);
+        ChromePlateArt.AttachModalBackdrop(veil);
 
         var panel = TexturedPanel(_pauseMenuLayer, PanelSurface.Modal);
         MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true);
+        ChromePlateArt.AttachSurfaceTexture(panel, "leather", 0.34f);
         Ui.Place(panel, "modal.pause");
         _pausePanel = panel;
 
-        var rows = PanelRows(panel, 28, 22, 10);
+        var scroll = new ScrollContainer
+        {
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        scroll.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        panel.AddChild(scroll);
+
+        var rows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        rows.AddThemeConstantOverride("separation", 8);
+        scroll.AddChild(rows);
+
         AddPauseHeader(rows);
-        rows.AddChild(PausePrimaryAction("Resume campaign", HidePauseMenu));
-        rows.AddChild(PauseWellAction("Quick save  [F5]", QuickSave));
-        rows.AddChild(PauseWellAction("Save / load campaign", ShowSaveLoadInterface));
-        // Settings and the music side by side: both are about how the game sounds and looks, and the
-        // panel has to stay within 720 pixels with the two entries the top bar gave up (step 3 of
-        // the interface plan). The music button is the game's one soundtrack entry; it opens the
-        // player over this menu and hands focus back here when it closes.
+        BuildPauseLiveCard(rows);
+
+        var btnResume = PausePrimaryAction("Resume campaign", HidePauseMenu);
+        ChromePlateArt.ApplyMenuButtonIcon(btnResume, "icon_menu_resume");
+        rows.AddChild(btnResume);
+
+        var btnQuickSave = PauseWellAction("Quick save  [F5]", QuickSave);
+        rows.AddChild(btnQuickSave);
+
+        var btnSaveLoad = PauseWellAction("Save / load campaign", ShowSaveLoadInterface);
+        ChromePlateArt.ApplyMenuButtonIcon(btnSaveLoad, "icon_menu_load");
+        rows.AddChild(btnSaveLoad);
+
         var settingsRow = PauseMenuPair(rows);
         var settings = PauseWellAction("Settings", ShowSettings, 0);
         settings.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        ChromePlateArt.ApplyMenuButtonIcon(settings, "icon_menu_settings");
         settingsRow.AddChild(settings);
-        _mediaButton = MusicShortcut(0, 40);
-        MenuChromeTheme.StyleWellButton(_mediaButton, false, 13);
+
+        _mediaButton = MusicShortcut(0, 38);
+        MenuChromeTheme.StyleWellButton(_mediaButton, false, 12);
         _mediaButton.ClipText = true;
         _mediaButton.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         _mediaButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         settingsRow.AddChild(_mediaButton);
+
         var watch = PauseWellAction("Watch the world  [F7]", () => { HidePauseMenu(); ToggleObserverMode(); });
         watch.TooltipText = Ui.Tip(Tr("Observer mode: no events, nothing stops the clock, and the panels get out of the way. For watching a world run, and for recording one."));
         rows.AddChild(watch);
-        // Help was reachable from a small button on the top bar and from F1, and from neither
-        // of the two menus a lost player actually opens. The top bar's Handbook and Find have
-        // moved here (and onto F1 and Ctrl+K, which never changed), side by side.
+
         var helpRow = PauseMenuPair(rows);
         var handbook = PauseWellAction("Handbook  [F1]", () => { HidePauseMenu(); OpenHandbook(); }, 0);
         handbook.Name = "PauseOpenHandbook";
         handbook.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        ChromePlateArt.ApplyMenuButtonIcon(handbook, "icon_menu_handbook");
         Tip(handbook, "What every screen is for and what its figures mean (F1).");
         helpRow.AddChild(handbook);
+
         var find = PauseWellAction("Find  [Ctrl+K]", () => { HidePauseMenu(); OpenNavigator(); }, 0);
         find.Name = "PauseOpenNavigator";
         find.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        ChromePlateArt.ApplyMenuButtonIcon(find, "icon_search");
         Tip(find, "Every screen in the campaign, searchable (Ctrl+K).");
         helpRow.AddChild(find);
-        // One click used to throw the campaign away. Leaving now asks a plain "Are you sure?"
-        // (LeaveConfirmation), and so does quitting to the desktop, which used not to ask at all.
+
+        rows.AddChild(ChromePlateArt.CreateEngravedMedallionDivider("PauseMenuRuleBottom", 1f, 10f));
+
         _leaveButton = PauseWellAction("Return to main menu", () => LeaveConfirmation.ReturnToMainMenu(this, ReturnToMainMenu));
         _leaveButton.TooltipText = Ui.Tip(Tr("Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping."));
         rows.AddChild(_leaveButton);
-        rows.AddChild(PauseWellAction("Quit to desktop", () => LeaveConfirmation.QuitToDesktop(this, inCampaign: true)));
+
+        var btnQuit = PauseWellAction("Quit to desktop", () => LeaveConfirmation.QuitToDesktop(this, inCampaign: true));
+        ChromePlateArt.ApplyMenuButtonIcon(btnQuit, "icon_menu_quit");
+        rows.AddChild(btnQuit);
+    }
+
+    private void BuildPauseLiveCard(VBoxContainer rows)
+    {
+        _pauseLiveCard = new PanelContainer { Name = "PauseLiveCard", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _pauseLiveCard.AddThemeStyleboxOverride("panel", ChromePlateArt.BuildCardWrapperStyle(8, 6, 8, 6) ?? MenuChromeTheme.GradientPlateBox(
+            MenuChromeTheme.BodyTop, MenuChromeTheme.BodyBottom, MenuChromeTheme.BrassShadow, borderThickness: 1));
+        rows.AddChild(_pauseLiveCard);
+
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+        _pauseLiveCard.AddChild(row);
+
+        _pausePortraitHost = new Control { CustomMinimumSize = new Vector2(44, 54), SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        row.AddChild(_pausePortraitHost);
+
+        var infoCol = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        infoCol.AddThemeConstantOverride("separation", 2);
+        row.AddChild(infoCol);
+
+        var line1 = new HBoxContainer();
+        line1.AddThemeConstantOverride("separation", 6);
+        infoCol.AddChild(line1);
+
+        _pauseFlagRect = new TextureRect
+        {
+            CustomMinimumSize = new Vector2(24, 16),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
+        };
+        line1.AddChild(_pauseFlagRect);
+
+        _pauseNationName = new Label { ClipText = true, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        MenuChromeTheme.StyleExistingLabel(_pauseNationName, 13, MenuChromeTheme.Paper, serif: true);
+        line1.AddChild(_pauseNationName);
+
+        _pauseLeaderTitleName = new Label { ClipText = true };
+        MenuChromeTheme.StyleExistingLabel(_pauseLeaderTitleName, 11, MenuChromeTheme.PaperDim, serif: false);
+        infoCol.AddChild(_pauseLeaderTitleName);
+
+        var badgesRow = new HBoxContainer();
+        badgesRow.AddThemeConstantOverride("separation", 8);
+        infoCol.AddChild(badgesRow);
+
+        _pauseDateLabel = new Label();
+        MenuChromeTheme.StyleExistingLabel(_pauseDateLabel, 10, MenuChromeTheme.PaperFaint, tabular: true);
+        badgesRow.AddChild(_pauseDateLabel);
+
+        _pauseRankBadge = new Label();
+        MenuChromeTheme.StyleExistingLabel(_pauseRankBadge, 10, MenuChromeTheme.BrassHi, tabular: true);
+        badgesRow.AddChild(_pauseRankBadge);
+
+        _pauseWarBadge = new Label();
+        MenuChromeTheme.StyleExistingLabel(_pauseWarBadge, 10, MenuChromeTheme.PaperDim, tabular: false);
+        badgesRow.AddChild(_pauseWarBadge);
     }
 
     private void AddPauseHeader(VBoxContainer rows)
     {
-        var title = Title("CAMPAIGN PAUSED", 25, MenuChromeTheme.Paper);
-        MenuChromeTheme.StyleExistingLabel(title, 25, MenuChromeTheme.Paper, serif: true);
+        var headBox = new PanelContainer { Name = "PauseHeaderBox" };
+        headBox.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
+        rows.AddChild(headBox);
+        ChromePlateArt.AttachHeaderFiligree(headBox, 0.36f);
+
+        var title = Title("CAMPAIGN PAUSED", 22, MenuChromeTheme.Paper);
+        MenuChromeTheme.StyleExistingLabel(title, 22, MenuChromeTheme.Paper, serif: true);
         title.ClipText = true;
         title.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        rows.AddChild(title);
+        headBox.AddChild(title);
 
-        var sub = Title("The simulation is stopped. Your campaign remains in memory.", 13, MenuChromeTheme.PaperDim);
+        var sub = Title("The simulation is stopped. Your campaign remains in memory.", 12, MenuChromeTheme.PaperDim);
         sub.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(sub);
         rows.AddChild(MenuChromeTheme.CreateEngravedRule("PauseMenuRule", 2f));
@@ -131,15 +231,45 @@ public partial class DealOrForceGame
         if (_pausePanel is not null)
         {
             var view = Size.X > 100 && Size.Y > 100 ? Size : GetViewportRect().Size;
-            var halfW = Mathf.Min(230f, (view.X - 48f) * 0.5f);
-            var halfH = Mathf.Min(280f, (view.Y - 40f) * 0.5f);
+            var halfW = Mathf.Min(240f, (view.X - 48f) * 0.5f);
+            var halfH = Mathf.Min(310f, (view.Y - 40f) * 0.5f);
             _pausePanel.OffsetLeft = -halfW;
             _pausePanel.OffsetRight = halfW;
             _pausePanel.OffsetTop = -halfH;
             _pausePanel.OffsetBottom = halfH;
         }
+
+        UpdatePauseLiveCard();
         _pauseMenuLayer.Visible = true;
         _pauseMenuLayer.MoveToFront();
+    }
+
+    private void UpdatePauseLiveCard()
+    {
+        if (_campaign?.Player is not { } player || _pauseLiveCard is null) return;
+        _pauseFlagRect.Texture = FlagTextureFor(player.Tag);
+        _pauseNationName.Text = player.DisplayName;
+
+        var ruler = Rulers.HeadOfState(_campaign, player);
+        _pauseLeaderTitleName.Text = $"{Loc.Get(ruler.Title)} {ruler.Name}";
+
+        foreach (var ch in _pausePortraitHost.GetChildren()) ch.QueueFree();
+        var portrait = BuildLeaderPortraitBadge(ruler, player.Color, 44, 54);
+        _pausePortraitHost.AddChild(portrait);
+
+        _pauseDateLabel.Text = _campaign.Date.Display();
+
+        var rankRows = CountryRankings.Read(_campaign, CountryRankings.Weights.Default);
+        var rankRow = rankRows.FirstOrDefault(r => r.NationId == player.Id);
+        var rank = rankRow?.OverallRank ?? 1;
+        _pauseRankBadge.Text = $"№ {rank} {Loc.Get("shell.overall_rank")}";
+
+        var openWars = Warfare.OpenWars(_campaign).Count(w => !w.Ended && w.Involves(player.Id));
+        _pauseWarBadge.Text = openWars > 0
+            ? Loc.Format("shell.active_theatres_badge", openWars)
+            : Loc.Get("shell.peace_status_badge");
+        _pauseWarBadge.AddThemeColorOverride("font_color",
+            openWars > 0 ? MenuChromeTheme.Warning : MenuChromeTheme.PaperFaint);
     }
 
     private void HidePauseMenu() => _pauseMenuLayer.Visible = false;

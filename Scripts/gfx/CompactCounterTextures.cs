@@ -101,6 +101,7 @@ public sealed partial class GlobePresentation
     /// <summary>Keep only cards that this reconciliation left on an army marker.</summary>
     private void PruneArmyCounterTextureCaches()
     {
+        if (_armyCounterTextures.Count <= 1024) return;
         _liveArmyCounterTextureIds.Clear();
         foreach (var marker in _armyStacks.Values)
             if (marker.FullPlateTexture is not null)

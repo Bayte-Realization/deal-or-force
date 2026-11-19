@@ -240,6 +240,33 @@ internal sealed class ShellContext
         return box;
     }
 
+    public StyleBox BorderedBox(
+        string bgToken = "shell.plate_bottom",
+        string borderToken = "shell.engrave",
+        int borderWidth = 1,
+        int radius = 3,
+        int padLeft = 8,
+        int padTop = 7,
+        int padRight = 8,
+        int padBottom = 7)
+    {
+        var key = $"bordered_box|{bgToken}|{borderToken}|{borderWidth}|{radius}|{padLeft}|{padTop}|{padRight}|{padBottom}";
+        if (_styleCache.TryGetValue(key, out var cached)) return cached;
+        var box = new StyleBoxFlat
+        {
+            BgColor = Ui.Colour(bgToken),
+            BorderColor = Ui.Colour(borderToken),
+            ContentMarginLeft = padLeft,
+            ContentMarginRight = padRight,
+            ContentMarginTop = padTop,
+            ContentMarginBottom = padBottom
+        };
+        box.SetBorderWidthAll(borderWidth);
+        box.SetCornerRadiusAll(radius);
+        _styleCache[key] = box;
+        return box;
+    }
+
     /// <summary>
     /// Deterministic hand-ruled pen stroke matching app.js ruled(x, y, w, seed) so dates, alerts,
     /// and dossier figures read like ink on ledger stock rather than flat digital hairlines.

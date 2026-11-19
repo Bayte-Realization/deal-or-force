@@ -77,6 +77,7 @@ internal sealed class ShellWorkPanelView
         _panel.AddThemeStyleboxOverride("panel",
             _ctx.NineSlice("plate_brass_9s", 16, 14, 12, 14, 10, "shell.body_top", "shell.brass_hi", 3));
         _ctx.Root.AddChild(_panel);
+        ChromePlateArt.AttachSurfaceTexture(_panel, "linen", 0.30f);
 
         var frame = new Control
         {
@@ -426,65 +427,33 @@ internal sealed class ShellWorkPanelView
 
         if (_activeTab == 0)
         {
-            ShellRegionVisualsView.PopulateCountryRulerCard(_ctx, _bodyRows, world, nation);
-            AddSectionHeader(Loc.Get("shell.sec_key_figures"), Fmt.People(nation.Population));
-            AddKvRow(Loc.Get("GDP"), Fmt.Money(nation.Gdp));
-            AddKvRow(Loc.Get("Treasury"), isOwn ? Fmt.Money(nation.Treasury) : "—");
-            AddKvRow(Loc.Get("Inflation"), Fmt.Percent(nation.Inflation), nation.Inflation > 0.08f ? "shell.state.warning" : "shell.paper");
-            AddKvRow(Loc.Get("Manpower"), Fmt.People(nation.ManpowerReserve));
-
-            AddSectionHeader(Loc.Get("Neighbours"), Loc.Get("GDP"));
-            var neighbors = world.Nations
-                .Where(n => n.Population > 0 && n.Id != nation.Id)
-                .OrderByDescending(n => n.Region == nation.Region ? 1 : 0)
-                .ThenByDescending(n => n.Gdp)
-                .Take(6)
-                .ToArray();
-
-            foreach (var nb in neighbors)
-            {
-                var captured = nb;
-                var rel = (int)MathF.Round(CampaignDiplomacy.ReadOrNeutral(world, nation.Id, nb.Id).Opinion);
-                AddCountryComparisonRow(nb, Fmt.Money(nb.Gdp), $"{rel:+#;-#;0}",
-                    rel < -15 ? "shell.state.negative_text" : (rel > 20 ? "shell.state.positive" : "shell.paper_muted"),
-                    () => OpenCountry(captured));
-            }
+            ShellCountryDossierView.PopulateOverview(_ctx, _bodyRows, world, nation, isOwn, OpenCountry);
         }
         else if (_activeTab == 1)
         {
-            ShellRegionVisualsView.PopulateCountryRulerCard(_ctx, _bodyRows, world, nation);
-            AddSectionHeader(Loc.Get("Society"));
-            AddKvRow(Loc.Get("Stability"), Fmt.Percent(nation.Stability));
-            AddKvRow(Loc.Get("Standard of living"), Fmt.Percent(nation.StandardOfLiving));
-            AddKvRow(Loc.Get("Ideology"), Loc.Get(PoliticsCore.IdeologyOf(nation).Name));
-            AddKvRow(Loc.Get("War support"), Fmt.Percent(nation.WarSupport));
+            ShellCountryDossierView.PopulateSociety(_ctx, _bodyRows, world, nation);
         }
         else if (_activeTab == 2)
         {
-            AddSectionHeader(Loc.Get("Decisions"));
-            AddKvRow(Loc.Get("Political capital"), $"{nation.PoliticalPoints:0.0}");
-            _bodyRows.AddChild(CreateNoteLabel(Loc.Get("shell.open_decisions_hint")));
+            ShellCountryDossierView.PopulateDecisions(_ctx, _bodyRows, world, nation);
         }
         else
         {
-            AddSectionHeader(Loc.Get("Diplomacy"));
-            var wars = Warfare.OpenWars(world).Where(w => !w.Ended && w.Involves(nation.Id)).ToArray();
-            AddKvRow(Loc.Get("Wars"), wars.Length.ToString(CultureInfo.InvariantCulture), wars.Length > 0 ? "shell.state.negative_text" : "shell.paper");
-            if (!isOwn && world.Player is { } pl)
-            {
-                var op = (int)MathF.Round(CampaignDiplomacy.ReadOrNeutral(world, pl.Id, nation.Id).Opinion);
-                AddKvRow(Loc.Get("Opinion"), $"{op:+#;-#;0}", op < 0 ? "shell.state.negative_text" : "shell.state.positive");
-            }
+            ShellCountryDossierView.PopulateDiplomacy(_ctx, _bodyRows, world, nation, isOwn);
         }
 
         if (isOwn)
         {
             AddFooterButton(Loc.Get("Laws"), primary: false, () => { Close(); _ctx.OpenScreen?.Invoke("Laws"); });
             AddFooterButton(Loc.Get("Decisions"), primary: true, () => { Close(); _ctx.OpenScreen?.Invoke("Decisions"); });
+            AddFooterButton(Loc.Get("Economy"), primary: false, () => { Close(); _ctx.OpenScreen?.Invoke("Economy"); });
+            AddFooterButton(Loc.Get("Trade"), primary: false, () => { Close(); _ctx.OpenScreen?.Invoke("Trade"); });
+            AddFooterButton(Loc.Get("Military"), primary: false, () => { Close(); _ctx.OpenScreen?.Invoke("Military"); });
         }
         else
         {
             AddFooterButton(Loc.Get("Reports"), primary: false, () => { Close(); _ctx.OpenScreen?.Invoke("Ledger"); });
+            AddFooterButton(Loc.Get("Trade"), primary: false, () => { Close(); _ctx.OpenScreen?.Invoke("Trade"); });
             AddFooterButton(Loc.Get("Diplomacy"), primary: true, () => { Close(); _ctx.OpenScreen?.Invoke("Diplomacy"); });
         }
     }
@@ -657,29 +626,6 @@ internal sealed class ShellWorkPanelView
         foreach (var ch in _footerRow.GetChildren()) { _footerRow.RemoveChild(ch); ch.QueueFree(); }
     }
 
-    private void AddSectionHeader(string title, string rightNote = "") =>
-        ShellRegionVisualsView.AddSectionHeader(_ctx, _bodyRows, title, rightNote);
-
-    private void AddKvRow(string key, string value, string valueColorTok = "shell.paper")
-    {
-        var panel = new PanelContainer { CustomMinimumSize = new Vector2(0, 28) };
-        var box = new StyleBoxFlat { BgColor = new Color(0f, 0f, 0f, 0f), BorderColor = Ui.Colour("shell.paper", 0.08f), BorderWidthBottom = 1, ContentMarginLeft = 4, ContentMarginRight = 4 };
-        panel.AddThemeStyleboxOverride("panel", box);
-        var row = new HBoxContainer();
-        panel.AddChild(row);
-        var k = new Label { Text = key, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center, ClipText = true };
-        k.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-        k.AddThemeFontSizeOverride("font_size", 13);
-        k.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
-        row.AddChild(k);
-        var v = new Label { Text = value, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        v.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
-        v.AddThemeFontSizeOverride("font_size", 13);
-        v.AddThemeColorOverride("font_color", Ui.Colour(valueColorTok));
-        row.AddChild(v);
-        _bodyRows.AddChild(panel);
-    }
-
     private void AddCountryComparisonRow(Nation nation, string midStat, string rightStat, string rightColorTok, Action onClick)
     {
         var btn = new Button { CustomMinimumSize = new Vector2(0, 28), MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None };
@@ -725,29 +671,26 @@ internal sealed class ShellWorkPanelView
         _bodyRows.AddChild(btn);
     }
 
-    private Label CreateNoteLabel(string text)
-    {
-        var lbl = new Label { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart };
-        lbl.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-        lbl.AddThemeFontSizeOverride("font_size", 12);
-        lbl.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
-        return lbl;
-    }
-
     private void AddFooterButton(string caption, bool primary, Action onClick)
     {
-        if (primary && _footerRow.GetChildCount() > 0)
-            _footerRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
-
-        var btn = new Button { Text = caption, CustomMinimumSize = new Vector2(primary ? 136 : 96, primary ? 38 : 34), MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None };
+        var btn = new Button
+        {
+            Text = caption,
+            CustomMinimumSize = new Vector2(0, primary ? 36 : 34),
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+            FocusMode = Control.FocusModeEnum.None
+        };
         var style = primary
-            ? _ctx.NineSlice("button_brass_cta_9s", 10, 14, 5, 14, 5, "shell.plate_top", "shell.brass_hi", 3)
-            : _ctx.NineSlice("button_umber_9s", 10, 12, 4, 12, 4, "shell.plate_bottom", "shell.engrave", 3);
+            ? _ctx.NineSlice("button_brass_cta_9s", 10, 8, 5, 8, 5, "shell.plate_top", "shell.brass_hi", 3)
+            : _ctx.NineSlice("button_umber_9s", 10, 8, 4, 8, 4, "shell.plate_bottom", "shell.engrave", 3);
         btn.AddThemeStyleboxOverride("normal", style);
         btn.AddThemeStyleboxOverride("hover", style);
-        btn.AddThemeStyleboxOverride("pressed", _ctx.PressedWellStyle(padX: 12, padY: 4));
+        btn.AddThemeStyleboxOverride("pressed", _ctx.PressedWellStyle(padX: 8, padY: 4));
         btn.AddThemeFontOverride("font", _ctx.Font(primary ? "shell.serif_semibold" : "shell.sans"));
-        btn.AddThemeFontSizeOverride("font_size", primary ? 15 : 13);
+        btn.AddThemeFontSizeOverride("font_size", primary ? 14 : 12);
         btn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         btn.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); onClick(); };
         _footerRow.AddChild(btn);

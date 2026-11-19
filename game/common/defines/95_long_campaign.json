@@ -64,7 +64,9 @@
   // whole diet off - the table is exactly as it was. As shipped it leaves that save 185,328
   // groups; what it costs and what it buys is measured in
   // docs/PERFORMANCE_LONG_CAMPAIGN_2026_11_16_RU.md.
-  "FoldSliverGroups": false,
+  "FoldSliverGroups": true,
+  "StaggerWeeklyEconomy": true,
+  "AiCalmCadenceDays": 7,
 
   // A trade's sliver: at most this many people AND at most this share of its region. It joins
   // another trade of the same people and the same faith: the same class in the same sector when

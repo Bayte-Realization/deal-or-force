@@ -122,7 +122,7 @@ public partial class DealOrForceGame
         _hudLayer.AddChild(_supportLayer);
         Resized += () => { if (_supportLayer.Visible) RefreshSupportScreen(); };
 
-        var panel = TexturedPanel(_supportLayer); panel.Name = "SupportForcesPanel";
+        var panel = TexturedPanel(_supportLayer, PanelSurface.Command); panel.Name = "SupportForcesPanel";
         Ui.Place(panel, "hud.support_panel");
         var rows = PanelRows(panel, 16, 12, 7);
 
@@ -428,6 +428,7 @@ public partial class DealOrForceGame
         _globe.SelectSupportFormations(_supportSelected);
         RefreshSupportScreen();
         UpdateScreenButtons();
+        RefreshNewShell(force: true);
         // The selection carries into the panel; its bar on the map gives way to it.
         RefreshFormationBar();
     }
@@ -441,6 +442,7 @@ public partial class DealOrForceGame
         _globe.SupportRebaseArmed = false;
         if (_openScreen == "Support") _openScreen = "";
         UpdateScreenButtons();
+        RefreshNewShell(force: true);
         // The selection outlives the panel, the way a division's outlives its roster.
         RefreshFormationBar();
     }

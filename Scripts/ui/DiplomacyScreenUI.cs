@@ -106,6 +106,7 @@ public partial class DealOrForceGame
         _diplomacyLayer.AddChild(shade);
 
         var panel = TexturedPanel(_diplomacyLayer);
+        ChromePlateArt.AttachSurfaceTexture(panel, "laid_paper");
         panel.Name = "DiplomacyWorkspacePanel";
         Ui.Place(panel, "modal.diplomacy");
 

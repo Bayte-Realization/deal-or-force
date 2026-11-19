@@ -22,70 +22,6 @@ internal static class ShellRegionVisualsView
 
     public readonly record struct StackSegment(string Label, double Value, Color Swatch, string Tooltip);
 
-    public static void PopulateCountryRulerCard(
-        ShellContext ctx,
-        VBoxContainer parent,
-        Campaign world,
-        Nation nation)
-    {
-        var ruler = Rulers.HeadOfState(world, nation);
-        var gov = Rulers.HeadOfGovernment(world, nation);
-
-        var card = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        var box = new StyleBoxFlat
-        {
-            BgColor = Ui.Colour("shell.plate_bottom", 0.92f),
-            BorderColor = Ui.Colour("shell.engrave"),
-            ContentMarginLeft = 8,
-            ContentMarginRight = 8,
-            ContentMarginTop = 7,
-            ContentMarginBottom = 7
-        };
-        box.SetBorderWidthAll(1);
-        box.SetCornerRadiusAll(3);
-        card.AddThemeStyleboxOverride("panel", box);
-        parent.AddChild(card);
-
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 10);
-        card.AddChild(row);
-
-        var portrait = ctx.BuildLeaderPortrait?.Invoke(ruler, nation.Color, 54, 66);
-        if (portrait is not null)
-        {
-            portrait.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-            row.AddChild(portrait);
-        }
-
-        var col = new VBoxContainer
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
-        };
-        col.AddThemeConstantOverride("separation", 2);
-        row.AddChild(col);
-
-        var titleText = string.IsNullOrWhiteSpace(ruler.Title) ? Loc.Get("Head of state") : Loc.Get(ruler.Title);
-        var metaTop = ruler.Age > 0
-            ? $"{titleText} · {Loc.Format("shell.ruler_age_fmt", ruler.Age)}"
-            : titleText;
-        col.AddChild(MakeLabel(ctx, metaTop, "shell.sans", 11, "shell.paper_faint", clip: true));
-
-        var nameText = string.IsNullOrWhiteSpace(ruler.Name) ? "—" : ruler.Name;
-        col.AddChild(MakeLabel(ctx, nameText, "shell.serif_semibold", 16, "shell.paper", clip: true));
-
-        var ideology = Loc.Get(PoliticsCore.IdeologyOf(nation).Name);
-        var trait = string.IsNullOrWhiteSpace(ruler.TraitName) ? "" : $" · {Loc.Get(ruler.TraitName)}";
-        col.AddChild(MakeLabel(ctx, ideology + trait, "shell.sans", 11, "shell.paper_muted", clip: true));
-
-        if (!string.IsNullOrWhiteSpace(gov.Name) &&
-            !string.Equals(gov.Name, ruler.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            var govLine = $"{Loc.Get("Head of government")}: {gov.Name}";
-            col.AddChild(MakeLabel(ctx, govLine, "shell.sans", 11, "shell.paper_faint", clip: true));
-        }
-    }
-
     public static void PopulateRegion(
         ShellContext ctx,
         VBoxContainer bodyRows,
@@ -332,7 +268,8 @@ internal static class ShellRegionVisualsView
         top.AddThemeConstantOverride("separation", 8);
         col.AddChild(top);
 
-        var badgeTex = ctx.LoadTexture(SpriteCatalog.TextureOf("icon_atlas_terrain", "res://game/gfx/interface/shell/icon_atlas_terrain.png"));
+        var terrainKey = $"icon_terrain_{terrain.Id.ToLowerInvariant()}";
+        var badgeTex = ctx.Icon(terrainKey) ?? ctx.Icon("icon_atlas_terrain");
         if (badgeTex is not null)
         {
             var ico = new TextureRect
@@ -398,7 +335,7 @@ internal static class ShellRegionVisualsView
         col.AddChild(val);
     }
 
-    private static void AddMeterRow(
+    internal static void AddMeterRow(
         ShellContext ctx,
         VBoxContainer parent,
         string iconName,
@@ -641,7 +578,8 @@ internal static class ShellRegionVisualsView
             foreach (var proj in queue.Take(5))
             {
                 var def = BuildingCatalog.Get(proj.Building);
-                AddMeterRow(ctx, bodyRows, "icon_industry", Loc.Get(def.Name), proj.Progress,
+                var bldKey = $"icon_building_{proj.Building.ToString().ToLowerInvariant()}";
+                AddMeterRow(ctx, bodyRows, ctx.Icon(bldKey) is not null ? bldKey : "icon_industry", Loc.Get(def.Name), proj.Progress,
                     Fmt.Percent(proj.Progress), Ui.Colour("shell.state.info"),
                     $"{Loc.Get(def.Name)} · {Fmt.Money(proj.Cost)} · {proj.DurationDays}");
             }
@@ -684,6 +622,18 @@ internal static class ShellRegionVisualsView
             var r = new HBoxContainer();
             r.AddThemeConstantOverride("separation", 4);
             chip.AddChild(r);
+            var bldIco = ctx.Icon($"icon_building_{entry.Kind.ToString().ToLowerInvariant()}") ?? ctx.Icon("icon_industry");
+            if (bldIco is not null)
+            {
+                r.AddChild(new TextureRect
+                {
+                    Texture = bldIco,
+                    CustomMinimumSize = new Vector2(16, 16),
+                    ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                    StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                    SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
+                });
+            }
             r.AddChild(MakeLabel(ctx, Loc.Get(def.Name), "shell.sans", 11, "shell.paper_muted", clip: true, expand: true));
             r.AddChild(MakeLabel(ctx, $"×{entry.Count}", "shell.sans", 11, "shell.paper", tabular: true));
         }
@@ -703,7 +653,8 @@ internal static class ShellRegionVisualsView
         foreach (var d in deposits)
         {
             var def = CommodityCatalog.Get(d.Key);
-            AddMeterRow(ctx, bodyRows, "icon_trade", Loc.Get(def.Name),
+            var gKey = $"icon_good_{d.Key.ToString().ToLowerInvariant()}";
+            AddMeterRow(ctx, bodyRows, ctx.Icon(gKey) is not null ? gKey : "icon_trade", Loc.Get(def.Name),
                 Math.Clamp(d.Value / maxVal, 0.08f, 1f), Fmt.Number(d.Value),
                 Ui.Colour("shell.brass_hi"), Loc.Get(def.Name));
         }

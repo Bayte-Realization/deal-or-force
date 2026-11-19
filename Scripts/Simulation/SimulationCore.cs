@@ -599,7 +599,7 @@ public sealed partial class Campaign
     /// pass called outside <see cref="Tick"/> - by the bench, by a test - behaves as it always
     /// has.
     /// </summary>
-    public bool StepOpensNewDay { get; private set; } = true;
+    public bool StepOpensNewDay { get; internal set; } = true;
 
     /// <summary>
     /// How much of a day one step covers. Every rate written "per day" is multiplied by
@@ -607,6 +607,7 @@ public sealed partial class Campaign
     /// </summary>
     public float TickScale => TickHours / 24f;
     public bool IsPaused { get; set; } = true;
+    public int Speed { get; set; } = 1;
     public Nation Player { get; private set; }
     public int ActiveSeat { get; private set; }
     public bool IsHotseat => HumanSeats.Count > 1;

@@ -35,7 +35,7 @@ public partial class DealOrForceGame
     private static readonly string[] ClassicChromeNodeNames =
     {
         "CampaignTopBar", "HudFlagMount", "HudResourceDrawer", "CampaignNavigation", "DatePlate",
-        "AlertList", "CampaignAlertPopup", "Outliner", "SituationDesk", "SituationDeskTab",
+        "AlertList", "CampaignAlertPopup", "Outliner", "StrategicOutliner", "SituationDesk", "SituationDeskTab",
         "MapControls", "MapModeDrawer", "ArmyBar", "TeletypeBand", "HeadlinePopups"
     };
 

@@ -84,6 +84,7 @@ public partial class DealOrForceGame
         _warLedgerLayer.AddChild(shade);
 
         _warLedgerPanel = TexturedPanel(_warLedgerLayer);
+        ChromePlateArt.AttachSurfaceTexture(_warLedgerPanel, "blueprint");
         Ui.Place(_warLedgerPanel, "modal.war_ledger");
         _warLedgerPlacedBottom = _warLedgerPanel.OffsetBottom;
 
@@ -217,6 +218,7 @@ public partial class DealOrForceGame
         _openScreen = "Wars";
         _sidePanel.Visible = false;
         RaiseWorkspaceLayer(_warLedgerLayer);
+        FitWorkspaceNavigationInset(_warLedgerLayer);
         ShowWarLedgerList();
     }
 
@@ -243,6 +245,7 @@ public partial class DealOrForceGame
         _warListScroll.Visible = true;
         _warDetailScroll.Visible = false;
         _warLedgerTitle.Text = Tr("WARS OF THE WORLD");
+        FitWorkspaceNavigationInset(_warLedgerLayer);
         RefreshWarLedger();
     }
 
@@ -257,6 +260,7 @@ public partial class DealOrForceGame
         _warReadouts.Visible = false;
         _warListScroll.Visible = false;
         _warDetailScroll.Visible = true;
+        FitWorkspaceNavigationInset(_warLedgerLayer);
         RefreshWarLedger();
     }
 
@@ -269,6 +273,11 @@ public partial class DealOrForceGame
     /// </summary>
     private void FitWarLedger(float content)
     {
+        if (IsNewShellActive || _warLedgerPanel.AnchorBottom <= _warLedgerPanel.AnchorTop)
+        {
+            // Under New Shell or when top-left anchored by FitWorkspaceLayer, preserve placed bounds.
+            return;
+        }
         if (Ui.Metric("war_ledger.fit_content", 1f) <= 0f || _warLedgerLayer.Size.Y <= 0f)
         {
             _warLedgerPanel.OffsetBottom = _warLedgerPlacedBottom;

@@ -1030,8 +1030,8 @@ static class LongCampaignTests
         var w = BuildSlivers();
         var c = w.C;
         var d = c.Defines;
-        Check(!new Defines().FoldSliverGroups && !PopulationFolding.Enabled(Build().C),
-            "folding ships switched off: a world nobody touched keeps every group it has");
+        Check(new Defines().FoldSliverGroups && PopulationFolding.Enabled(Build().C),
+            "folding ships switched on: professions and micro-slivers fold into larger groups");
         Check(PopulationFolding.Enabled(c) && d.FoldTradeSliverPeople == 2500 && d.FoldPeopleSliverPeople == 100,
             "switched on, its thresholds as shipped are a trade's sliver 2,500 people, a people's 100");
 
@@ -1211,8 +1211,8 @@ static class LongCampaignTests
         var nobody = Weeks(defines => { defines.FoldTradeSliverPeople = 0; defines.FoldPeopleSliverPeople = 0; });
         var on = Weeks(defines => defines.FoldSliverGroups = true);
         var shipped = Weeks(_ => { });
-        Check(shipped.C.FoldedGroups == 0 && CampaignFingerprint.Of(shipped.C) == CampaignFingerprint.Of(off.C),
-            "as shipped nothing is folded: three weeks are the same three weeks as with the switch off");
+        Check(shipped.C.FoldedGroups == on.C.FoldedGroups && CampaignFingerprint.Of(shipped.C) == CampaignFingerprint.Of(on.C),
+            "as shipped slivers fold by default: three weeks are the same three weeks as with the switch on");
         Check(off.C.FoldedGroups == 0 && nobody.C.FoldedGroups == 0 && CampaignFingerprint.Of(off.C) == CampaignFingerprint.Of(nobody.C),
             "switched off, or with thresholds that catch nobody, three weeks of the world are the same three weeks");
         Check(on.C.FoldedGroups > 0 && on.Groups < off.Groups,

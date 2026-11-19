@@ -63,6 +63,15 @@
     "shell.max_rest_buttons": 40.0,
     "shell.max_rest_panels": 6.0,
     "shell.max_map_signs": 20.0,
-    "shell.next_hint_days": 60.0
+    "shell.next_hint_days": 60.0,
+    "shell.portrait_bezel_alpha": 0.92,
+    "shell.card_wrapper_enabled": 1.0,
+    "shell.dossier_grain_alpha": 0.34,
+    "shell.surface_texture_alpha": 0.32,
+    "shell.modal_backdrop_alpha": 0.88,
+    "shell.header_filigree_alpha": 0.55,
+    "shell.tab_strip_alpha": 0.92,
+    "shell.menu_icons_enabled": 1.0,
+    "shell.menu_sidebar_art_alpha": 0.34
   }
 }

@@ -19,6 +19,9 @@ Version **0.8.3.2** (EntertAlpha).
 | ![The campaign map from afar](docs/screenshots/0.8.3.2/map-globe.jpg) | ![The country picker](docs/screenshots/0.8.3.2/country-picker.jpg) |
 | ![The flat map](docs/screenshots/0.8.3.2/map-flat.jpg) | ![Country dossier with ruler portrait and news dispatch](docs/screenshots/0.8.3.2/campaign.jpg) |
 | ![Visual region dossier with terrain and telemetry gauges](docs/screenshots/0.8.3.2/region-dossier.jpg) | ![Regional demographics, employment and stacked identity bars](docs/screenshots/0.8.3.2/region-population.jpg) |
+| ![Global War Ledger with frontlines and casualties](docs/screenshots/0.8.3.2/war-ledger.jpg) | ![Live campaign Pause Desk with ornate ruler portrait](docs/screenshots/0.8.3.2/pause-desk.jpg) |
+
+![Long-Range Forces panel opened directly from the left navigation rail](docs/screenshots/0.8.3.2/long-range-forces.jpg)
 
 ## Play it
 
@@ -39,23 +42,22 @@ Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 Built on **Godot 4.8 Beta 3 .NET** and **.NET 10**. Full itemized verification notes live in
 [CHANGELOG 0.8.3.2](docs/CHANGELOG_0.8.3.2_EN.md).
 
-- **Unified tactile slate-pewter UI & moddable chrome** — sculpted matte plates, chamfered corner
-  ornaments, beveled buttons, engraved dividers and crisp white right-outliner perimeter framing,
-  with all skins, textures and timings documented in `game/interface/README.md`.
-- **Ruler portrait cards in every country dossier** — inspect the head of state's framed portrait,
-  age, trait, ideology and head of government on both domestic and foreign nations.
-- **Visual, width-locked region dossiers** — terrain cards with combat/supply multipliers, engraved
-  telemetry gauges, stacked age/culture/faith bars, active construction progress and visible
-  garrisons with zero width jitter at Speed 5.
-- **Decisions on the left rail & overall world rank** — direct one-click access to Decisions with
-  a live available badge count, plus overall world power ranking (`№ X overall`) across top HUD
-  and country dossiers.
-- **Calm Speed-5 dispatches & strict modal stacking** — rate-limited priority newspaper queue
-  (`ShellNewsPacer`) with hover/pin freeze and a dedicated `×` close button (`Esc` closes only
-  modals/panels, never opening the Pause Menu over Save/Load or Settings).
-- **Modern map typography & Android / low-spec performance** — crisp sans-serif city labels,
-  eliminated dual-HUD refresh overhead, coalesced Speed-5 cadence, O(1) state province caching, and
-  adaptive mobile/Android quality defaults.
+- **Uniform 5-surface tactile UI pack & 100 % moddable chrome** — seamlessly tiled matte leather,
+  slate twill, laid diplomatic paper, technical blueprint grid, and archival linen surfaces across
+  every menu, HUD plate, dossier, and fullscreen workspace, paired with rescaled menu/terrain/good
+  icons (`90_shell_sprites.json`, `90_shell.json`, `game/interface/README.md`).
+- **Redesigned Command Desks, Pause Desk, Save Archive & Society Profile** — Main Menu Continue
+  dossier card with nation flag, Live Campaign Pause Desk with ornate ruler cameo bezel and
+  geodesic backdrop, instant Save Archive search/filtering, Country Dossier `Society` profile
+  meters alongside `Wars of the World` full-width front cards, and a direct **Long-Range Forces**
+  (`Support`) button with active readiness counter right on the left navigation rail.
+- **Total-Occupation & 100% War-Score Forced Peace** — completely occupied countries (including
+  junior coalition partners via separate peace) and inter-state wars reaching `±100%` war score now
+  settle decisively instead of dragging on indefinitely, while preserving human player choice.
+- **Deep Speed-5 & Late-Campaign Optimization** — pooled `ArmyStackMarker` subtrees (`f:army sync`),
+  warm army counter texture cache, throttled battle-marker & GPU map uploads, cooperative slice
+  yields eliminating Speed-5 stalls (`worst 661.9 ms -> 27.3 ms`, `0` frames `> 33 ms`), default
+  sliver-group folding, staggered weekly economy, and `7`-day calm peacetime AI cadence.
 
 ## The game
 

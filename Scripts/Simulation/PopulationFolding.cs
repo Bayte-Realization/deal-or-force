@@ -14,7 +14,7 @@ public sealed partial class Defines
     /// their nearest kin - and a change of that kind is the owner's to switch on with the
     /// numbers in front of him; the pass that wrote it was cut short before it was reviewed.
     /// </summary>
-    public bool FoldSliverGroups { get; set; } = false;
+    public bool FoldSliverGroups { get; set; } = true;
 
     /// <summary>A trade's sliver: at most this many people ...</summary>
     public int FoldTradeSliverPeople { get; set; } = 2500;

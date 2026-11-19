@@ -52,6 +52,119 @@ static class OverrunWarTests
         Check(CampaignFingerprint.Of(c) == CampaignFingerprint.Of(twin), "the surrender is deterministic");
 
         Underground();
+        ForcedPeaceOnTotalOccupationAndFullScore();
+    }
+
+    /// <summary>
+    /// When ForcePeaceOnTotalOccupationOrFullScore is true, 100% occupation or 100% score ends wars decisive-day.
+    /// </summary>
+    static void ForcedPeaceOnTotalOccupationAndFullScore()
+    {
+        var cells = new ushort[] { 1001, 1002, 1003 };
+        var owners = new ushort[] { 501, 502, 503 };
+
+        // 1. 100%-occupied AI leader immediately settles peace (even with surviving army and before AiMinimumWarDays)
+        {
+            var c = new Campaign(42);
+            var a = new Nation { Tag = "ATK", MapIndex = 501, Name = "Attacker", Population = 1000000 };
+            var d = new Nation { Tag = "DEF", MapIndex = 502, Name = "Defender", Population = 1000000 };
+            c.AddNation(a);
+            c.AddNation(d);
+            var sa = new ScenarioState { MapIndex = 1001, NationMapIndex = 501, NationId = "ATK", Population = 1000000 };
+            var sd = new ScenarioState { MapIndex = 1002, NationMapIndex = 502, NationId = "DEF", Population = 1000000 };
+            c.States.Add(sa);
+            c.States.Add(sd);
+            c.AttachProvinceTopology(ProvinceTopology.Build(new ushort[] { 1001, 1002 }, new ushort[] { 501, 502 }, 2, 1, _ => false));
+            // Occupy defender province (index 2) by attacker (501)
+            c.ProvinceController[2] = 501;
+
+            var war = new StrategicWar { Id = 501, AttackerId = a.Id, DefenderId = d.Id, StartedDay = c.ElapsedDays };
+            c.Wars.Add(war);
+            // DEF still has an active army in the field
+            c.Armies.Add(new Army { Id = 901, NationId = d.Id, ProvinceId = 0, StateMapIndex = 1002, Divisions = 5, Strength = 10f, Organisation = 1f });
+
+            Check(PeaceNegotiation.IsTotallyOccupiedInWar(c, war, d), "defender is totally occupied");
+            AiStatecraft.Negotiate(c, a, war);
+            Check(war.Ended && war.WinnerId == a.Id, "100%-occupied AI leader immediately settles decisive peace");
+        }
+
+        // 2. 100% war score between AI leaders immediately settles peace
+        {
+            var c = new Campaign(43);
+            var a = new Nation { Tag = "AT2", MapIndex = 501, Name = "Attacker2", Population = 1000000 };
+            var d = new Nation { Tag = "DE2", MapIndex = 502, Name = "Defender2", Population = 1000000 };
+            c.AddNation(a);
+            c.AddNation(d);
+            var sa = new ScenarioState { MapIndex = 1001, NationMapIndex = 501, NationId = "AT2", Population = 1000000 };
+            var sd = new ScenarioState { MapIndex = 1002, NationMapIndex = 502, NationId = "DE2", Population = 1000000 };
+            c.States.Add(sa);
+            c.States.Add(sd);
+            c.AttachProvinceTopology(ProvinceTopology.Build(new ushort[] { 1001, 1002 }, new ushort[] { 501, 502 }, 2, 1, _ => false));
+
+            var war = new StrategicWar { Id = 502, AttackerId = a.Id, DefenderId = d.Id, StartedDay = c.ElapsedDays, WarScore = 100f };
+            c.Wars.Add(war);
+
+            AiStatecraft.Negotiate(c, a, war);
+            Check(war.Ended && war.WinnerId == a.Id, "100% war score between AI leaders immediately settles peace");
+        }
+
+        // 3. 100%-occupied junior coalition partner immediately signs separate peace
+        {
+            var c = new Campaign(44);
+            var a = new Nation { Tag = "AT3", MapIndex = 501, Name = "Attacker3", Population = 1000000 };
+            var d = new Nation { Tag = "DE3", MapIndex = 502, Name = "Defender3", Population = 1000000 };
+            var j = new Nation { Tag = "JUN", MapIndex = 503, Name = "JuniorAlly", Population = 500000 };
+            c.AddNation(a);
+            c.AddNation(d);
+            c.AddNation(j);
+            var sa = new ScenarioState { MapIndex = 1001, NationMapIndex = 501, NationId = "AT3", Population = 1000000 };
+            var sd = new ScenarioState { MapIndex = 1002, NationMapIndex = 502, NationId = "DE3", Population = 1000000 };
+            var sj = new ScenarioState { MapIndex = 1003, NationMapIndex = 503, NationId = "JUN", Population = 500000 };
+            c.States.Add(sa);
+            c.States.Add(sd);
+            c.States.Add(sj);
+            c.AttachProvinceTopology(ProvinceTopology.Build(cells, owners, 3, 1, _ => false));
+            // Occupy junior ally's province (whichever province is owned by j.MapIndex)
+            for (var p = 1; p <= c.ProvinceMap.ProvinceCount; p++)
+            {
+                if (c.ProvinceMap.ProvinceToNation[p] == j.MapIndex)
+                    c.ProvinceController[p] = 501;
+            }
+
+            var war = new StrategicWar { Id = 503, AttackerId = a.Id, DefenderId = d.Id, StartedDay = c.ElapsedDays };
+            war.DefenderAllies.Add(j.Id);
+            c.Wars.Add(war);
+            c.StepOpensNewDay = true;
+
+            Check(PeaceNegotiation.IsTotallyOccupiedInWar(c, war, j), "junior ally is totally occupied");
+            SeparatePeace.Tick(c);
+            Check(!war.DefenderAllies.Contains(j.Id), "100%-occupied junior partner immediately concludes separate peace");
+        }
+
+        // 4. Human victor immediately receives enemy capitulation offer without auto-closing silently
+        {
+            var c = new Campaign(45);
+            var human = new Nation { Tag = "HUM", MapIndex = 501, Name = "HumanVictor", Population = 1000000, IsHuman = true };
+            var enemy = new Nation { Tag = "ENM", MapIndex = 502, Name = "EnemyBeaten", Population = 1000000 };
+            c.AddNation(human);
+            c.AddNation(enemy);
+            c.ConfigureSinglePlayer(human.Id);
+            var sh = new ScenarioState { MapIndex = 1001, NationMapIndex = 501, NationId = "HUM", Population = 1000000 };
+            var se = new ScenarioState { MapIndex = 1002, NationMapIndex = 502, NationId = "ENM", Population = 1000000 };
+            c.States.Add(sh);
+            c.States.Add(se);
+            c.AttachProvinceTopology(ProvinceTopology.Build(new ushort[] { 1001, 1002 }, new ushort[] { 501, 502 }, 2, 1, _ => false));
+            // Occupy enemy province (index 2)
+            c.ProvinceController[2] = 501;
+
+            var war = new StrategicWar { Id = 504, AttackerId = human.Id, DefenderId = enemy.Id, StartedDay = c.ElapsedDays };
+            c.Wars.Add(war);
+
+            AiStatecraft.Negotiate(c, enemy, war);
+            Check(!war.Ended, "war with human victor does not silently auto-close without player receipt");
+            Check(war.PendingOfferFromId == enemy.Id, "human victor immediately receives enemy capitulation offer");
+            Check(war.PendingOfferTerms == PeaceTerms.Capitulate, "offer received is capitulation");
+        }
     }
 
     /// <summary>A beaten rising goes to ground in its furious homeland and can rise again from it.</summary>

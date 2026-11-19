@@ -136,6 +136,34 @@ public static class PeaceTermCatalog
 
 public static class PeaceNegotiation
 {
+    /// <summary>
+    /// Checks whether all non-water provinces owned by <paramref name="nation"/> are controlled
+    /// by nations opposing <paramref name="nation"/> in <paramref name="war"/>, with ownedLand > 0.
+    /// Completely zero-alloc.
+    /// </summary>
+    public static bool IsTotallyOccupiedInWar(Campaign campaign, StrategicWar war, Nation nation)
+    {
+        if (campaign?.ProvinceMap is null || war is null || war.Ended || nation is null) return false;
+        var map = campaign.ProvinceMap;
+        var controls = campaign.ProvinceController;
+        if (controls is null) return false;
+        var provCount = map.ProvinceCount;
+        var ownedLand = 0;
+        var nationMapIndex = nation.MapIndex;
+
+        for (var p = 1; p <= provCount; p++)
+        {
+            if (map.ProvinceToNation[p] != nationMapIndex) continue;
+            if (map.IsWater(p)) continue;
+            ownedLand++;
+            var controllerMapIndex = controls[p];
+            if (controllerMapIndex == nationMapIndex) return false;
+            var controller = campaign.NationByMapIndex(controllerMapIndex);
+            if (controller is null || !war.Opposes(nation.Id, controller.Id)) return false;
+        }
+        return ownedLand > 0;
+    }
+
     public static float DemandCost(PeaceTerms terms) => PeaceTermCatalog.Of(terms).Cost;
 
     public static string Description(PeaceTerms terms) => Loc.Get(PeaceTermCatalog.Of(terms).Description);
@@ -145,6 +173,15 @@ public static class PeaceNegotiation
         if (war is null || war.Ended || !war.Involves(proposerId)) return 0f;
         if (terms == PeaceTerms.Capitulate) return 100f;
         if (terms == PeaceTerms.WhitePeace && WarWeariness.NoContactPeaceReady(campaign, war)) return 100f;
+        if (campaign?.Defines is { ForcePeaceOnTotalOccupationOrFullScore: true })
+        {
+            var responderId = war.EnemyLeaderOf(proposerId);
+            var responder = campaign.NationById(responderId);
+            var responderScore = war.IsAttacking(responderId) ? war.WarScore : -war.WarScore;
+            if ((responderScore <= -99.5f && (!war.CivilConflict || war.Stalled)) ||
+                (responder is not null && IsTotallyOccupiedInWar(campaign, war, responder)))
+                return 100f;
+        }
         // The line as the border, offered to a side with a computer's member of the war of the weak
         // that would keep nothing by it and still fights on: it would be signed out of existence
         // (Factions.SideKeepsNothingByTheLine). Not past the five years at which the world ends any

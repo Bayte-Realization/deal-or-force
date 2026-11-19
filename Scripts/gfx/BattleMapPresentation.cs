@@ -19,7 +19,7 @@ public sealed partial class GlobePresentation
         SpriteCatalog.Changed += InvalidateBattleSymbol;
     }
 
-    public override void _ExitTree() => SpriteCatalog.Changed -= InvalidateBattleSymbol;
+    public override void _ExitTree() { ClearArmyMarkerPool(); SpriteCatalog.Changed -= InvalidateBattleSymbol; base._ExitTree(); }
 
     private void InvalidateBattleSymbol()
     {

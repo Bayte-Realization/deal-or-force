@@ -149,6 +149,7 @@ public partial class MainMenuScene : Control
         panel.AnchorBottom = 0f;
         AddChild(panel);
         _menu = panel;
+        ChromePlateArt.AttachSurfaceTexture(panel, "leather", 0.36f);
 
         var rows = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         rows.AddThemeConstantOverride("separation", 8);
@@ -166,47 +167,122 @@ public partial class MainMenuScene : Control
         };
         rows.AddChild(_logoRect);
 
-        rows.AddChild(MenuCaption("Choose a world. Shape its future.", 15, MenuChromeTheme.PaperDim, serif: true));
+        var headerBox = new PanelContainer { Name = "MenuHeaderBox" };
+        headerBox.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
+        rows.AddChild(headerBox);
+        ChromePlateArt.AttachHeaderFiligree(headerBox, 0.40f);
+        headerBox.AddChild(MenuCaption("Choose a world. Shape its future.", 15, MenuChromeTheme.PaperDim, serif: true));
         rows.AddChild(MenuChromeTheme.CreateEngravedRule("CommandHeaderRule", 3f));
 
-        // What a player came for is the first, lit button - and that depends on who they are.
-        // Somebody with a campaign on disk came back to it, so "Continue" leads and a new game
-        // steps down to an ordinary row; somebody with no saves has exactly one thing to do.
-        // The old pair was "Singleplayer" (always lit) and "Load latest campaign" (never lit),
-        // which made a returning player read two labels to find the one they wanted.
-        // Only the names of the files are looked at: reading their headers is the archive's job.
-        //
-        // Three weights, because eight equal rows made the player read all eight: the one lit
-        // action, then the other ways into a game, then - smaller and two to a row - the things
-        // that are not playing.
         var saveRoot = DealOrForceGame.ResolveSaveRoot();
-        var hasSaves = System.IO.Directory.Exists(saveRoot)
-            && System.IO.Directory.EnumerateFiles(saveRoot, "*.bdfsave*").Any();
-        if (hasSaves) rows.AddChild(MenuAction("Continue", () => Enter(MenuIntent.LoadLatest), 52, true));
-        rows.AddChild(MenuAction("New campaign", () => Enter(MenuIntent.NewCampaign), hasSaves ? 42 : 52, !hasSaves));
-        rows.AddChild(MenuAction("Load campaign", ShowArchive, 42));
-        // Scenarios and their editors are what this game is built on; "New campaign" goes
-        // straight to the country picker (one built-in scenario), so they get their own door
-        // here instead of hiding behind a button on the picker's bar.
-        rows.AddChild(MenuAction("Scenarios / editor", () => Enter(MenuIntent.Scenarios), 42));
-        rows.AddChild(MenuAction("Multiplayer · LAN / IP", () => Enter(MenuIntent.Multiplayer), 42));
+        var saves = System.IO.Directory.Exists(saveRoot)
+            ? SaveSystem.List(saveRoot)
+            : new List<SaveMetadata>();
+        var hasSaves = saves.Count > 0;
+        var latestSave = hasSaves ? saves[0] : null;
 
-        rows.AddChild(MenuChromeTheme.CreateEngravedRule("CommandUtilityRule", 3f));
+        if (latestSave is not null)
+        {
+            var heroCard = new PanelContainer { Name = "HeroContinueCard", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            heroCard.AddThemeStyleboxOverride("panel", ChromePlateArt.BuildCardWrapperStyle(14, 10, 14, 10) ?? MenuChromeTheme.GradientPlateBox(
+                MenuChromeTheme.PlateHover, MenuChromeTheme.PlateBottom, MenuChromeTheme.Brass,
+                innerTopLine: new Color(MenuChromeTheme.Highlight, 0.08f), borderThickness: 1));
+            rows.AddChild(heroCard);
+
+            var heroCol = new VBoxContainer();
+            heroCol.AddThemeConstantOverride("separation", 4);
+            heroCard.AddChild(heroCol);
+
+            var heroTop = new HBoxContainer();
+            heroTop.AddThemeConstantOverride("separation", 8);
+            heroCol.AddChild(heroTop);
+
+            var flagTex = !string.IsNullOrEmpty(latestSave.NationTag) ? DealOrForceGame.FlagTextureFor(latestSave.NationTag) : null;
+            if (flagTex is not null)
+            {
+                var flagRect = new TextureRect
+                {
+                    Texture = flagTex,
+                    CustomMinimumSize = new Vector2(28, 18),
+                    ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                    StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+                    SizeFlagsVertical = SizeFlags.ShrinkCenter
+                };
+                heroTop.AddChild(flagRect);
+            }
+
+            var heroTitle = new Label
+            {
+                Text = Loc.Get("shell.hero_continue_title"),
+                ClipText = true,
+                SizeFlagsHorizontal = SizeFlags.ExpandFill
+            };
+            MenuChromeTheme.StyleExistingLabel(heroTitle, 12, MenuChromeTheme.BrassHi, serif: false, bold: true);
+            heroTop.AddChild(heroTitle);
+
+            var heroCampName = string.IsNullOrWhiteSpace(latestSave.DisplayName)
+                ? (string.IsNullOrWhiteSpace(latestSave.Slot) ? latestSave.NationName : latestSave.Slot)
+                : latestSave.DisplayName;
+            var heroParts = new List<string>(3);
+            if (!string.IsNullOrWhiteSpace(heroCampName)) heroParts.Add(heroCampName);
+            if (!string.IsNullOrWhiteSpace(latestSave.NationName) &&
+                !heroCampName.Contains(latestSave.NationName, StringComparison.OrdinalIgnoreCase))
+                heroParts.Add(latestSave.NationName);
+            if (!string.IsNullOrWhiteSpace(latestSave.GameDate) &&
+                !heroCampName.Contains(latestSave.GameDate, StringComparison.OrdinalIgnoreCase))
+                heroParts.Add(latestSave.GameDate);
+            var heroSub = string.Join(" · ", heroParts);
+            var heroDesc = new Label
+            {
+                Text = heroSub,
+                ClipText = true
+            };
+            MenuChromeTheme.StyleExistingLabel(heroDesc, 13, MenuChromeTheme.Paper, serif: true);
+            heroCol.AddChild(heroDesc);
+
+            var continueBtn = MenuAction("Continue", () => Enter(MenuIntent.LoadLatest), 44, true);
+            ChromePlateArt.ApplyMenuButtonIcon(continueBtn, "icon_menu_continue");
+            heroCol.AddChild(continueBtn);
+            rows.AddChild(ChromePlateArt.CreateEngravedMedallionDivider("HeroMedallionDivider", 1f, 12f));
+        }
+
+        var btnNew = MenuAction("New campaign", () => Enter(MenuIntent.NewCampaign), hasSaves ? 38 : 48, !hasSaves);
+        ChromePlateArt.ApplyMenuButtonIcon(btnNew, "icon_menu_new");
+        rows.AddChild(btnNew);
+
+        var btnLoad = MenuAction("Load campaign", ShowArchive, 38);
+        ChromePlateArt.ApplyMenuButtonIcon(btnLoad, "icon_menu_load");
+        rows.AddChild(btnLoad);
+
+        var btnScen = MenuAction("Scenarios / editor", () => Enter(MenuIntent.Scenarios), 38);
+        ChromePlateArt.ApplyMenuButtonIcon(btnScen, "icon_menu_scenarios");
+        rows.AddChild(btnScen);
+
+        var btnMulti = MenuAction("Multiplayer · LAN / IP", () => Enter(MenuIntent.Multiplayer), 38);
+        ChromePlateArt.ApplyMenuButtonIcon(btnMulti, "icon_menu_multiplayer");
+        rows.AddChild(btnMulti);
+
+        rows.AddChild(ChromePlateArt.CreateEngravedMedallionDivider("CommandUtilityRule", 2f, 14f));
         var quiet = new GridContainer { Columns = 2 };
         quiet.AddThemeConstantOverride("h_separation", 8);
         quiet.AddThemeConstantOverride("v_separation", 8);
         rows.AddChild(quiet);
-        _language = MenuAction(LanguageLabel(), CycleLanguage, 36);
-        foreach (var button in new[]
-                 {
-                     MenuAction("Settings", ShowSettings, 36),
-                     _language,
-                     MenuAction("Credits", ShowCredits, 36),
-                     MenuAction("Quit to desktop", () => LeaveConfirmation.QuitToDesktop(this, inCampaign: false), 36)
-                 })
+        _language = MenuAction(LanguageLabel(), CycleLanguage, 34);
+        ChromePlateArt.ApplyMenuButtonIcon(_language, "icon_menu_language");
+
+        var btnSettings = MenuAction("Settings", ShowSettings, 34);
+        ChromePlateArt.ApplyMenuButtonIcon(btnSettings, "icon_menu_settings");
+
+        var btnCredits = MenuAction("Credits", ShowCredits, 34);
+        ChromePlateArt.ApplyMenuButtonIcon(btnCredits, "icon_menu_credits");
+
+        var btnQuit = MenuAction("Quit to desktop", () => LeaveConfirmation.QuitToDesktop(this, inCampaign: false), 34);
+        ChromePlateArt.ApplyMenuButtonIcon(btnQuit, "icon_menu_quit");
+
+        foreach (var button in new[] { btnSettings, _language, btnCredits, btnQuit })
         {
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            button.AddThemeFontSizeOverride("font_size", 13);
+            button.AddThemeFontSizeOverride("font_size", 12);
             button.ClipText = true;
             quiet.AddChild(button);
         }

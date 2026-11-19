@@ -1,0 +1,21 @@
+{
+  "shell.cap_wars_count": "Wars: {0}",
+  "shell.search_campaigns_placeholder": "Search saved campaigns…",
+  "shell.campaigns_count_fmt": "{0} campaign(s)",
+  "shell.quick_actions": "Quick Actions",
+  "shell.society_profile": "SOCIETY PROFILE",
+  "shell.standing_kpis": "STANDING & KPIS",
+  "shell.government_form": "Government",
+  "shell.national_ideology": "Ideology",
+  "shell.dominant_culture": "Primary Culture",
+  "shell.dominant_faith": "State Religion",
+  "shell.leader_cabinet": "GOVERNMENT & LEADERSHIP",
+  "shell.hero_continue_title": "RESUME RECENT CAMPAIGN",
+  "shell.hero_continue_desc": "Return directly to the ongoing simulation",
+  "shell.system_menu_header": "SYSTEM & INTERFACE",
+  "shell.campaign_menu_header": "COMMAND & CAMPAIGN",
+  "shell.active_theatres_badge": "Active Theatres: {0}",
+  "shell.peace_status_badge": "State of Peace",
+  "shell.rail_support": "Long-range forces",
+  "shell.sub_support": "Artillery, rockets, aircraft, drones and air defence"
+}

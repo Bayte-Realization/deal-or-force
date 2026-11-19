@@ -242,18 +242,18 @@ internal sealed class ShellOrchestrator
             var ay1 = authored.AnchorBottom * vh + authored.OffsetBottom;
 
             var preserveWidth = key is "modal.production" or "hud.support_panel" or "modal.pause" or "modal.event" or "modal.peace_offer" or "modal.handover";
-            var x0 = Math.Max(profile.FullWorkspace.X, ax0);
-            var x1 = preserveWidth ? Math.Min(profile.FullWorkspace.Right, x0 + Math.Max(320f, ax1 - ax0)) : Math.Min(profile.FullWorkspace.Right, Math.Max(x0 + 480f, ax1));
-            var y0 = Math.Max(profile.FullWorkspace.Y, ay0);
-            var y1 = Math.Min(profile.FullWorkspace.Bottom, Math.Max(y0 + 260f, ay1));
+            var x0 = preserveWidth ? Math.Max(profile.FullWorkspace.X, ax0) : profile.FullWorkspace.X;
+            var x1 = preserveWidth ? Math.Min(profile.FullWorkspace.Right, x0 + Math.Max(320f, ax1 - ax0)) : profile.FullWorkspace.Right;
+            var y0 = preserveWidth ? Math.Max(profile.FullWorkspace.Y, ay0) : profile.FullWorkspace.Y;
+            var y1 = preserveWidth ? Math.Min(profile.FullWorkspace.Bottom, Math.Max(y0 + 260f, ay1)) : profile.FullWorkspace.Bottom;
 
             var p0 = toLayer * new Vector2(x0, y0);
             var p1 = toLayer * new Vector2(x1, y1);
             panel.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-            panel.OffsetLeft = MathF.Round(Math.Min(wsMax.X - 240f, Math.Max(wsMin.X, p0.X)));
-            panel.OffsetTop = MathF.Round(Math.Min(wsMax.Y - 200f, Math.Max(wsMin.Y, p0.Y)));
-            panel.OffsetRight = MathF.Round(Math.Min(wsMax.X, p1.X));
-            panel.OffsetBottom = MathF.Round(Math.Min(wsMax.Y, p1.Y));
+            panel.OffsetLeft = MathF.Round(preserveWidth ? Math.Min(wsMax.X - 240f, Math.Max(wsMin.X, p0.X)) : wsMin.X);
+            panel.OffsetTop = MathF.Round(preserveWidth ? Math.Min(wsMax.Y - 200f, Math.Max(wsMin.Y, p0.Y)) : wsMin.Y);
+            panel.OffsetRight = MathF.Round(preserveWidth ? Math.Min(wsMax.X, p1.X) : wsMax.X);
+            panel.OffsetBottom = MathF.Round(preserveWidth ? Math.Min(wsMax.Y, p1.Y) : wsMax.Y);
         }
     }
 

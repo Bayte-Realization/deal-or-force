@@ -86,6 +86,8 @@ public static class SeparatePeace
         var member = c.NationById(memberId);
         if (member is null || !war.Involves(memberId)) return Loc.Get("Not in that war.");
         if (IsLeader(war, memberId)) return Loc.Get("A war's leader ends it with a peace for its whole side.");
+        if (c?.Defines is { ForcePeaceOnTotalOccupationOrFullScore: true } && PeaceNegotiation.IsTotallyOccupiedInWar(c, war, member))
+            return "";
         if (c.ElapsedDays - war.StartedDay < Math.Max(0, d.SeparatePeaceMinimumDays))
             return Loc.Format("The war has not lasted {0} days", d.SeparatePeaceMinimumDays);
         // A dependency that came on its overlord's orders goes home on them too.
@@ -143,6 +145,8 @@ public static class SeparatePeace
     public static float Wish(Campaign c, StrategicWar war, Nation member)
     {
         if (member is null || war is null || war.Ended || !war.Involves(member.Id) || IsLeader(war, member.Id)) return 0f;
+        if (c?.Defines is { ForcePeaceOnTotalOccupationOrFullScore: true } && PeaceNegotiation.IsTotallyOccupiedInWar(c, war, member))
+            return 100f;
         var attacking = war.IsAttacking(member.Id);
         var sideScore = attacking ? war.WarScore : -war.WarScore;
         var leaderId = attacking ? war.AttackerId : war.DefenderId;
@@ -173,6 +177,9 @@ public static class SeparatePeace
     {
         if (Refusal(c, war, memberId).Length > 0) return 0f;
         var member = c.NationById(memberId);
+        if (c?.Defines is { ForcePeaceOnTotalOccupationOrFullScore: true } && member is not null &&
+            terms == SeparatePeaceTerms.Concede && PeaceNegotiation.IsTotallyOccupiedInWar(c, war, member))
+            return 100f;
         var enemyLeader = c.NationById(war.EnemyLeaderOf(memberId));
         if (member is null || enemyLeader is null) return 0f;
         var holds = OccupiedShare(c, war, member);
@@ -402,24 +409,44 @@ public static class SeparatePeace
     public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign c)
     {
         if (c?.Defines is not { SeparatePeaceEnabled: true } d || !c.StepOpensNewDay) yield break;
+        var forcePeace = d.ForcePeaceOnTotalOccupationOrFullScore;
         foreach (var war in Warfare.OpenWars(c))
         {
             yield return 0;
             if (war.Ended || war.AttackerAllies.Count + war.DefenderAllies.Count == 0) continue;
-            // Weekly, each war on its own day.
-            if ((c.ElapsedDays + war.Id) % 7 != 0) continue;
-            if (c.ElapsedDays - war.StartedDay < Math.Max(0, d.SeparatePeaceMinimumDays)) continue;
+            var weekly = (c.ElapsedDays + war.Id) % 7 == 0;
+            if (!weekly && !forcePeace) continue;
+            var hasMinDays = c.ElapsedDays - war.StartedDay >= Math.Max(0, d.SeparatePeaceMinimumDays);
+            if (!hasMinDays && !forcePeace) continue;
+
             foreach (var memberId in war.AttackerAllies.Concat(war.DefenderAllies).OrderBy(id => id).ToArray())
             {
                 if (war.Ended || !war.Involves(memberId)) continue;
                 var member = c.NationById(memberId);
                 if (member is null || Refusal(c, war, memberId).Length > 0) continue;
+                var totallyOccupied = forcePeace && PeaceNegotiation.IsTotallyOccupiedInWar(c, war, member);
+                if (!weekly && !totallyOccupied) continue;
+                if (!hasMinDays && !totallyOccupied) continue;
+
                 var wish = Wish(c, war, member);
                 var attacking = war.IsAttacking(memberId);
                 var leader = c.NationById(attacking ? war.AttackerId : war.DefenderId);
                 var enemyLeader = c.NationById(war.EnemyLeaderOf(memberId));
                 if (leader is null || enemyLeader is null) continue;
                 var cooldownKey = "separate_peace/" + war.Id;
+
+                if (totallyOccupied)
+                {
+                    if (enemyLeader.IsHuman && !c.NobodyPlays)
+                    {
+                        Offer(c, war, enemyLeader, member, SeparatePeaceTerms.Concede, fromMember: true);
+                    }
+                    else
+                    {
+                        Sign(c, war, memberId, SeparatePeaceTerms.Concede);
+                    }
+                    continue;
+                }
 
                 // The leader holds a wavering ally with money before it goes.
                 if (!leader.IsHuman && wish >= d.SeparatePeaceAiThreshold - 15f && leader.Treasury > leader.Gdp * .02f)
@@ -464,6 +491,11 @@ public static class SeparatePeace
     /// <summary>The terms a member asks for, in its order: free if it can, paying if it must, ground only when desperate.</summary>
     private static IEnumerable<SeparatePeaceTerms> PreferredTerms(Campaign c, StrategicWar war, Nation member)
     {
+        if (c?.Defines is { ForcePeaceOnTotalOccupationOrFullScore: true } && PeaceNegotiation.IsTotallyOccupiedInWar(c, war, member))
+        {
+            yield return SeparatePeaceTerms.Concede;
+            yield break;
+        }
         yield return SeparatePeaceTerms.WhiteExit;
         if (member.Treasury > member.Gdp * c.Defines.SeparatePeaceIndemnityShare) yield return SeparatePeaceTerms.Indemnity;
         if (Wish(c, war, member) >= 75f && OccupiedShare(c, war, member) > .05f) yield return SeparatePeaceTerms.Concede;

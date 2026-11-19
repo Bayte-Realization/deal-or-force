@@ -1130,7 +1130,7 @@ public partial class DealOrForceGame : Control
             return;
         }
         // Wars are a screen of their own now, not a paragraph per war in the side panel.
-        if (screen == "Wars")
+        if (screen is "Wars" or "War")
         {
             OpenWarLedger();
             UpdateScreenButtons();
@@ -1191,6 +1191,7 @@ public partial class DealOrForceGame : Control
         var player = _campaign.Player;
         var nation = _selectedNation ?? player;
         _sideTitle.Text = Tr(screen);
+        _sideBody.Text = "";
         ShowSideFlag(screen is "Economy" or "Military" ? player.Tag : screen is "Nation" or "Diplomacy" ? nation.Tag : "");
         ClearDetail();
         RefreshSideLinks(screen);
@@ -1770,7 +1771,13 @@ public partial class DealOrForceGame : Control
         var (sprite, shipped, _) = PanelSpriteAsset(surface);
         if (finish is not null && SpriteCatalog.TextureOf(sprite, shipped).Equals(shipped, StringComparison.OrdinalIgnoreCase))
             finish.Visible = false;
-        ChromePlateArt.AttachPlateWeave(panel, 0.07f);
+        var panelSurfaceKind = surface switch
+        {
+            PanelSurface.Command or PanelSurface.CommandStrip => "blueprint",
+            PanelSurface.Modal => "slate",
+            _ => "laid_paper"
+        };
+        ChromePlateArt.AttachSurfaceTexture(panel, panelSurfaceKind);
         if (!inCampaign)
         {
             var edge = new Panel

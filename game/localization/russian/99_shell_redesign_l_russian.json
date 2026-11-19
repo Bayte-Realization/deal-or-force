@@ -1,0 +1,21 @@
+{
+  "shell.cap_wars_count": "Войн: {0}",
+  "shell.search_campaigns_placeholder": "Поиск сохранённых кампаний…",
+  "shell.campaigns_count_fmt": "Кампаний: {0}",
+  "shell.quick_actions": "Быстрые действия",
+  "shell.society_profile": "ПРОФИЛЬ ОБЩЕСТВА",
+  "shell.standing_kpis": "ПОЛОЖЕНИЕ И ПОКАЗАТЕЛИ",
+  "shell.government_form": "Форма правления",
+  "shell.national_ideology": "Идеология",
+  "shell.dominant_culture": "Основная культура",
+  "shell.dominant_faith": "Гос. конфессия",
+  "shell.leader_cabinet": "ПРАВИТЕЛЬ И КАБИНЕТ",
+  "shell.hero_continue_title": "ПРОДОЛЖИТЬ КАМПАНИЮ",
+  "shell.hero_continue_desc": "Вернуться напрямую в активную симуляцию",
+  "shell.system_menu_header": "СИСТЕМА И ИНТЕРФЕЙС",
+  "shell.campaign_menu_header": "УПРАВЛЕНИЕ И КАМПАНИЯ",
+  "shell.active_theatres_badge": "Театров войны: {0}",
+  "shell.peace_status_badge": "В состоянии мира",
+  "shell.rail_support": "Дальнобойные войска",
+  "shell.sub_support": "Артиллерия, ракеты, авиация, дроны и ПВО"
+}

@@ -72,10 +72,12 @@ internal sealed class ShellCornerView
         _topHitBox = new PanelContainer { Name = "ShellTopPlate", MouseFilter = Control.MouseFilterEnum.Stop };
         _topHitBox.AddThemeStyleboxOverride("panel", _emptyStyle);
         _ctx.Root.AddChild(_topHitBox);
+        ChromePlateArt.AttachSurfaceTexture(_topHitBox, "leather", 0.28f);
 
         _railHitBox = new PanelContainer { Name = "ShellRailPlate", MouseFilter = Control.MouseFilterEnum.Stop };
         _railHitBox.AddThemeStyleboxOverride("panel", _emptyStyle);
         _ctx.Root.AddChild(_railHitBox);
+        ChromePlateArt.AttachSurfaceTexture(_railHitBox, "leather", 0.28f);
 
         BuildFlagAndRank();
         BuildCellsBed();
@@ -317,10 +319,10 @@ internal sealed class ShellCornerView
 
         var iconSz = compact ? 18f : 24f;
         var ix = compact ? 6f : 9f;
-        var iy = compact ? 6f : 7f;
+        var iy = compact ? 5f : 6f;
         var vx = compact ? 28f : 38f;
-        var vy = compact ? 3f : 5f;
-        var cy = compact ? 24f : 36f;
+        var vy = compact ? 2f : 4f;
+        var cy = compact ? 22f : 31f;
 
         var visibleOrder = new[] { "Treasury", "GDP", "Debt", "Inflation", "Stability", "Manpower", "Capital", "War" };
         for (var i = 0; i < visibleOrder.Length; i++)
@@ -444,9 +446,11 @@ internal sealed class ShellCornerView
             var lead = openWars[0];
             var score = (int)MathF.Round(lead.IsAttacking(player.Id) ? lead.WarScore : -lead.WarScore);
             var wsPct = (int)MathF.Round(player.WarSupport * 100f);
+            if (_cells.TryGetValue("War", out var warCell) && warCell.Caption is not null)
+                warCell.Caption.Text = Loc.Format("shell.cap_wars_count", openWars.Count);
             UpdateCell("War", $"{wsPct}%", "",
                 wsPct < 40 ? "shell.state.negative_text" : "shell.state.warning_text",
-                $"{score:+#;-#;0}", score >= 0 ? "shell.state.positive" : "shell.state.negative",
+                $"{score:+#;-#;0}%", score >= 0 ? "shell.state.positive" : "shell.state.negative",
                 $"{Loc.Get("Wars")}: {openWars.Count} · {Loc.Get("War score")}: {score:+#;-#;0}%", openScreen == "Wars");
         }
     }

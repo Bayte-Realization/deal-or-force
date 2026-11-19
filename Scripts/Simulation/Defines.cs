@@ -42,6 +42,14 @@ namespace DealOrForce.Simulation;
 /// </summary>
 public sealed partial class Defines
 {
+	/// <summary>Forces peace when a country is 100% occupied in a war or side war score reaches 100% (+/-99.5%).</summary>
+	public bool ForcePeaceOnTotalOccupationOrFullScore { get; set; } = true;
+
+	/// <summary>Staggers weekly per-nation and per-region economic passes across all days of the week.</summary>
+	public bool StaggerWeeklyEconomy { get; set; } = true;
+
+	/// <summary>Cadence in days for calm peacetime AI nations and calm landless movements to evaluate heavy scans.</summary>
+	public int AiCalmCadenceDays { get; set; } = 7;
 	/// <summary>
 	/// How long a formation is left to reach the post it was sent to before the front
 	/// planner may send it somewhere else.

@@ -170,7 +170,7 @@ public static class ShellLayout
         bool undoCellVisible = false, int alertRowCount = -1, int outlinerButtonCount = 0, int stripTagCount = 2)
     {
         const int maxOpenAlerts = 3, maxFoldedAlerts = 4, peaceAlerts = 2, maxStripTags = 4;
-        const int baseHudButtons = 26, baseHudPanels = 4, newsCardButtons = 2;
+        const int baseHudButtons = 27, baseHudPanels = 4, newsCardButtons = 2;
         var profile = ForViewport(width, height, state == ShellCampaignState.War);
         var maxAlerts = outlinerOpen ? maxOpenAlerts : maxFoldedAlerts;
         var alerts = alertRowCount >= 0 ? Math.Min(alertRowCount, maxAlerts)

@@ -30,7 +30,10 @@ public partial class DealOrForceGame
     private Label _saveStatus = null!;
     private Label _saveFolderLine = null!;
     private LineEdit _saveNameField = null!;
+    private LineEdit _saveSearchField = null!;
+    private Label _saveCountPill = null!;
     private VBoxContainer _saveList = null!;
+    private string _saveSearchQuery = "";
 
     private string _saveRoot;
 
@@ -81,9 +84,11 @@ public partial class DealOrForceGame
         var veil = new ColorRect { Color = MenuChromeTheme.VeilColor, MouseFilter = MouseFilterEnum.Stop };
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _saveLoadLayer.AddChild(veil);
+        ChromePlateArt.AttachModalBackdrop(veil);
 
         var panel = TexturedPanel(_saveLoadLayer, PanelSurface.Modal);
         MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true);
+        ChromePlateArt.AttachSurfaceTexture(panel, "laid_paper");
         Ui.Place(panel, "modal.save_load");
         var rows = ScrollablePanelRows(panel, 28, 24, 10);
         var openFolder = ActionButton("Open folder", OpenSaveFolder, 128, 32);
@@ -122,6 +127,25 @@ public partial class DealOrForceGame
 
         _saveStatus = Title("", 13, MenuChromeTheme.BrassHi);
         rows.AddChild(_saveStatus);
+
+        var filterRow = new HBoxContainer();
+        filterRow.AddThemeConstantOverride("separation", 8);
+        rows.AddChild(filterRow);
+
+        _saveSearchField = new LineEdit
+        {
+            PlaceholderText = Loc.Get("shell.search_campaigns_placeholder"),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 32),
+            ClearButtonEnabled = true
+        };
+        MenuChromeTheme.StyleLineEdit(_saveSearchField);
+        _saveSearchField.TextChanged += q => { _saveSearchQuery = q.Trim(); RefreshSaveSlots(); };
+        filterRow.AddChild(_saveSearchField);
+
+        _saveCountPill = Title("", 11, MenuChromeTheme.BrassHi);
+        _saveCountPill.VerticalAlignment = VerticalAlignment.Center;
+        filterRow.AddChild(_saveCountPill);
 
         var listCaption = Title("SAVED CAMPAIGNS", 11, MenuChromeTheme.PaperFaint);
         rows.AddChild(listCaption);
@@ -191,6 +215,18 @@ public partial class DealOrForceGame
         }
 
         var saves = SaveSystem.List(SaveRoot);
+        if (!string.IsNullOrWhiteSpace(_saveSearchQuery))
+        {
+            saves = saves.Where(s =>
+                (s.DisplayName?.Contains(_saveSearchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (s.Slot?.Contains(_saveSearchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (s.NationName?.Contains(_saveSearchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (s.NationTag?.Contains(_saveSearchQuery, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
+        }
+
+        if (_saveCountPill is not null)
+            _saveCountPill.Text = Loc.Format("shell.campaigns_count_fmt", saves.Count);
+
         if (saves.Count == 0)
         {
             _saveList.AddChild(RowLabel("No campaigns saved yet.", 13, MenuChromeTheme.PaperDim));
@@ -210,7 +246,7 @@ public partial class DealOrForceGame
         };
         var alternate = _saveList.GetChildCount() % 2 == 1;
         var card = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        card.AddThemeStyleboxOverride("panel", MenuChromeTheme.GradientPlateBox(
+        card.AddThemeStyleboxOverride("panel", ChromePlateArt.BuildCardWrapperStyle(10, 8, 10, 8) ?? MenuChromeTheme.GradientPlateBox(
             alternate ? MenuChromeTheme.BodyBottom : MenuChromeTheme.BodyTop,
             alternate ? MenuChromeTheme.WellBottom : MenuChromeTheme.BodyBottom,
             MenuChromeTheme.RuleLight,
@@ -227,6 +263,20 @@ public partial class DealOrForceGame
         edgeStyle.SetCornerRadiusAll(1);
         edge.AddThemeStyleboxOverride("panel", edgeStyle);
         row.AddChild(edge);
+
+        var flagTex = !string.IsNullOrEmpty(save.NationTag) ? FlagTextureFor(save.NationTag) : null;
+        if (flagTex is not null)
+        {
+            var flagRect = new TextureRect
+            {
+                Texture = flagTex,
+                CustomMinimumSize = new Vector2(28, 18),
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter
+            };
+            row.AddChild(flagRect);
+        }
 
         var title = save.Slot switch
         {
@@ -249,12 +299,14 @@ public partial class DealOrForceGame
         MenuChromeTheme.StyleExistingLabel(heading, 15, MenuChromeTheme.Paper, serif: true);
         textCol.AddChild(heading);
 
+        var formatPill = save.Slot.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? "JSON" : "BDF3";
         var meta = new Label
         {
-            Text = Simulation.Loc.Format("{0} · {1} · {2} · {3} KiB",
+            Text = Simulation.Loc.Format("{0} · {1} · {2} · {3} KiB · [{4}]",
                 save.NationName + seedSuffix, save.GameDate,
                 save.SavedUtc.ToLocalTime().ToString("g"),
-                (save.CompressedBytes / 1024f).ToString("0")),
+                (save.CompressedBytes / 1024f).ToString("0"),
+                formatPill),
             AutowrapMode = TextServer.AutowrapMode.Off,
             ClipText = true,
             TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis

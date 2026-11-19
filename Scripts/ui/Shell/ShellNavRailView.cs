@@ -10,7 +10,7 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// 64px vertical navigation rail along the left arm of the L-corner: 11 workspace doors grouped by
+/// 64px vertical navigation rail along the left arm of the L-corner: 12 workspace doors grouped by
 /// engraved hairline dividers, active left-underline well, informative counts/dots, and slide-out hover tag.
 /// </summary>
 internal sealed class ShellNavRailView
@@ -64,6 +64,7 @@ internal sealed class ShellNavRailView
             ("Production", "Industry", "shell.sub_ind", "Y", "icon_industry", 0),
             ("Research", "Science", "shell.sub_sci", "U", "icon_research", 1),
             ("Military", "Army", "shell.sub_army", "I", "icon_military", 0),
+            ("Support", "shell.rail_support", "shell.sub_support", "", "icon_artillery", 0),
             ("Diplomacy", "Diplomacy", "shell.sub_dip", "O", "icon_diplomacy", 0),
             ("Wars", "Wars", "shell.sub_wars", "P", "icon_wars", 1),
             ("Ledger", "Reports", "shell.sub_reports", "L", "icon_ledger", 1),
@@ -240,12 +241,12 @@ internal sealed class ShellNavRailView
         _profile = profile;
         var compact = profile.Compact;
         var curY = compact ? 92f : 136f;
-        var btnH = compact ? 37f : 49f;
+        var btnH = compact ? 34f : 49f;
         var btnW = compact ? 42f : 56f;
         const float btnX = 4f;
         var iconDim = compact ? 20f : 26f;
         var gap = compact ? 2f : 3f;
-        var ruleStep = compact ? 5f : 6f;
+        var ruleStep = compact ? 4f : 6f;
         var ruleIdx = 0;
 
         for (var i = 0; i < _railItems.Count; i++)
@@ -282,6 +283,7 @@ internal sealed class ShellNavRailView
 
         var researchIdle = string.IsNullOrEmpty(player.CurrentResearch);
         var idleArmies = 0;
+        var idleSupport = 0;
         if (openWars.Count > 0)
         {
             for (var i = 0; i < world.Armies.Count; i++)
@@ -290,7 +292,15 @@ internal sealed class ShellNavRailView
                 if (a.NationId == player.Id && a.FrontLineId < 0 && a.AssignedWarId < 0 && !a.DirectOrder && !a.Training && !a.InBattle)
                     idleArmies++;
             }
+            for (var i = 0; i < world.SupportFormations.Count; i++)
+            {
+                var f = world.SupportFormations[i];
+                if (f.NationId == player.Id && !f.CutOff && f.Route.Count == 0 &&
+                    string.Equals(f.Mission, "standby", StringComparison.Ordinal))
+                    idleSupport++;
+            }
         }
+        var supportEnabled = MechanicFeatures.ScreenEnabled(world, "Support");
         var doctrineReady = player.ArmyExperience >= 20f || player.AirExperience >= 20f || player.NavalExperience >= 20f;
         var availDecisions = ResolveAvailableDecisionsCount(world, player);
         var lang = Loc.Language;
@@ -299,6 +309,8 @@ internal sealed class ShellNavRailView
         for (var i = 0; i < _railItems.Count; i++)
         {
             var it = _railItems[i];
+            if (it.Screen == "Support" && it.Button.Visible != supportEnabled)
+                it.Button.Visible = supportEnabled;
             var active = string.Equals(openScreen, it.Screen, StringComparison.Ordinal);
             if (it.LastActive != active)
             {
@@ -321,6 +333,7 @@ internal sealed class ShellNavRailView
                 "State Affairs" => pendingEvents,
                 "Decisions" => availDecisions,
                 "Military" when openWars.Count > 0 => idleArmies,
+                "Support" when openWars.Count > 0 => idleSupport,
                 _ => 0
             };
             var dot = (it.Screen == "Research" && researchIdle) || (it.Screen == "Military" && count == 0 && doctrineReady);

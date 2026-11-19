@@ -74,6 +74,7 @@ internal sealed class ShellAlertColumnView
         _sheet.AddThemeStyleboxOverride("panel",
             _ctx.NineSlice("plate_umber_9s", 14, 0, 6, 0, 6, "shell.plate_bottom", "shell.border", 3));
         _ctx.Root.AddChild(_sheet);
+        ChromePlateArt.AttachSurfaceTexture(_sheet, "laid_paper", 0.26f);
 
         _sheetStack = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Pass };
         _sheetStack.AddThemeConstantOverride("separation", 0);
@@ -123,11 +124,11 @@ internal sealed class ShellAlertColumnView
         EnsureRowStyles();
         var btn = new Button
         {
-            Name = name,
             CustomMinimumSize = new Vector2(0, height),
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
         };
+        if (!string.IsNullOrEmpty(name)) btn.Name = name;
         btn.AddThemeStyleboxOverride("normal", _rowEmptyStyle);
         btn.AddThemeStyleboxOverride("hover", _rowHoverStyle);
         btn.AddThemeStyleboxOverride("pressed", _rowHoverStyle);
@@ -272,7 +273,14 @@ internal sealed class ShellAlertColumnView
         };
         col.AddChild(_newsTimerRule);
 
-        _newsHeadlineLabel = new Label { Text = "", AutowrapMode = TextServer.AutowrapMode.WordSmart, MaxLinesVisible = 2, MouseFilter = Control.MouseFilterEnum.Ignore };
+        _newsHeadlineLabel = new Label
+        {
+            Text = "",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            MaxLinesVisible = 3,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
         _newsHeadlineLabel.AddThemeFontOverride("font", _ctx.Font("shell.serif_bold"));
         _newsHeadlineLabel.AddThemeFontSizeOverride("font_size", 20);
         _newsHeadlineLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.ink"));
@@ -342,8 +350,11 @@ internal sealed class ShellAlertColumnView
         _newsCard.CustomMinimumSize = new Vector2(profile.NewsCard.W, 0f);
         ShellContext.PlaceRect(_newsCard, profile.NewsCard);
         var compact = profile.Compact;
-        _newsHeadlineLabel.AddThemeFontSizeOverride("font_size", compact ? 15 : 20);
+        _newsHeadlineLabel.AddThemeFontSizeOverride("font_size", compact ? 14 : 16);
         _newsLeadLabel.AddThemeFontSizeOverride("font_size", compact ? 11 : 12);
+        _newsCard.ResetSize();
+        var cardHeight = Math.Clamp(_newsCard.GetCombinedMinimumSize().Y, compact ? 84f : 100f, compact ? 116f : 148f);
+        _newsCard.Size = new Vector2(profile.NewsCard.W, cardHeight);
     }
 
     private void FitSheetBounds()
@@ -649,7 +660,13 @@ internal sealed class ShellAlertColumnView
         var line = item.Line;
         _newsDisplayedSeq = item.Sequence;
 
-        var dateTxt = world is not null ? LandArrangementSystem.DateOfDay(world, line.Day) : "";
+        string dateTxt = "";
+        if (world is not null)
+        {
+            var start = new HistoricalDate(world.Date.Year, world.Date.Month, world.Date.Day).AddDays(-world.ElapsedDays);
+            var date = start.AddDays(Math.Clamp(line.Day, -36500, 365000));
+            dateTxt = new GameDate(date.Year, date.Month, date.Day).Display();
+        }
         var reasonTxt = string.IsNullOrEmpty(item.ReasonKey) ? Loc.Get("Dispatch") : Loc.Get(item.ReasonKey);
         _newsKickerLabel.Text = string.IsNullOrEmpty(dateTxt) ? reasonTxt : $"{reasonTxt} · {dateTxt}";
 
@@ -706,10 +723,15 @@ internal sealed class ShellAlertColumnView
     private void RouteTopic(string screen, int targetId)
     {
         if (screen == "Space") { _ctx.TogglePause?.Invoke(); return; }
-        if (screen == "Wars")
+        if (screen is "Wars" or "War")
         {
             _ctx.OpenWarLedger?.Invoke();
             if (targetId >= 0) _ctx.ShowWarDetail?.Invoke(targetId);
+            return;
+        }
+        if (screen == "Defcon")
+        {
+            if (!_messages.IsVisible) _messages.Toggle();
             return;
         }
         if (screen == "SovereignFinance") { _ctx.OpenSovereignFinance?.Invoke(); return; }

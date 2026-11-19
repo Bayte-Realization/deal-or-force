@@ -33,6 +33,7 @@ public partial class DealOrForceGame
         header.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
         rows.AddChild(header);
         ChromePlateArt.AttachHeaderFrieze(header, 0.28f);
+        ChromePlateArt.AttachHeaderFiligree(header, 0.36f);
         ChromePlateArt.AttachCornerOrnaments(header, cornerSize: 16f);
         var margin = new MarginContainer { Name = "ScreenHeaderMargin" };
         margin.AddThemeConstantOverride("margin_left", 0);
@@ -108,6 +109,14 @@ public partial class DealOrForceGame
         var strip = new HFlowContainer { Name = name };
         strip.AddThemeConstantOverride("h_separation", (int)Ui.Metric("tab.gap", 6));
         strip.AddThemeConstantOverride("v_separation", (int)Ui.Metric("tab.gap", 6));
+        if (ChromePlateArt.BuildTabStripStyle() is { } tabStripStyle)
+        {
+            var host = new PanelContainer { Name = name + "Host" };
+            host.AddThemeStyleboxOverride("panel", tabStripStyle);
+            rows.AddChild(host);
+            host.AddChild(strip);
+            return strip;
+        }
         rows.AddChild(strip);
         return strip;
     }

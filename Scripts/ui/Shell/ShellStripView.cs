@@ -20,6 +20,15 @@ internal sealed class ShellStripView
     private PanelContainer _stripPlate;
     private HBoxContainer _stripRow;
     private readonly HashSet<int> _visibleArmyIds = new();
+    private readonly HashSet<int> _warNationIds = new();
+
+    private readonly List<StrategicWar> _openWarsScratch = new();
+    private readonly List<Army> _playerArmiesScratch = new();
+    private readonly HashSet<int> _selectedIdsScratch = new();
+    private readonly List<int> _selectedIdsSortedScratch = new();
+    private readonly List<ArmyGroup> _playerGroupsScratch = new();
+    private readonly List<Army> _groupArmiesScratch = new();
+    private readonly List<Army> _topArmiesScratch = new();
 
     private ShellLayoutProfile _profile;
     private ShellDockGeometry _dock;
@@ -74,32 +83,72 @@ internal sealed class ShellStripView
         var world = _ctx.World;
         if (world?.Player is not { } player || _dock is null) return;
 
-        var openWars = Warfare.OpenWars(world).Where(w => !w.Ended && w.Involves(player.Id)).ToArray();
-        var playerArmies = world.Armies.Where(a => a.NationId == player.Id).ToArray();
-        var selectedIds = (_ctx.GetSelectedArmies?.Invoke() ?? Array.Empty<Army>()).Select(a => a.Id).ToHashSet();
+        _openWarsScratch.Clear();
+        var allWars = Warfare.OpenWars(world);
+        for (var i = 0; i < allWars.Count; i++)
+        {
+            var w = allWars[i];
+            if (!w.Ended && w.Involves(player.Id)) _openWarsScratch.Add(w);
+        }
+
+        _playerArmiesScratch.Clear();
+        var totalDivisions = 0;
+        for (var i = 0; i < world.Armies.Count; i++)
+        {
+            var a = world.Armies[i];
+            if (a.NationId == player.Id)
+            {
+                _playerArmiesScratch.Add(a);
+                totalDivisions += (int)MathF.Ceiling(a.Divisions);
+            }
+        }
+
+        _selectedIdsScratch.Clear();
+        if (_ctx.GetSelectedArmies?.Invoke() is { } selArmies)
+        {
+            for (var i = 0; i < selArmies.Count; i++)
+                _selectedIdsScratch.Add(selArmies[i].Id);
+        }
         var undoRec = BatchActionUndo.Peek(world, player.Id);
 
+        _selectedIdsSortedScratch.Clear();
+        foreach (var id in _selectedIdsScratch) _selectedIdsSortedScratch.Add(id);
+        _selectedIdsSortedScratch.Sort();
+
         var sig = $"{_dock.CompactStripTokens}|{_profile.Compact}|{Loc.Language}|{undoRec?.SummaryText}|" +
-                  $"{string.Join(",", selectedIds.OrderBy(x => x))}|" +
-                  $"{openWars.Length}|{playerArmies.Length}:{playerArmies.Sum(a => (int)MathF.Ceiling(a.Divisions))}";
+                  $"{string.Join(",", _selectedIdsSortedScratch)}|" +
+                  $"{_openWarsScratch.Count}|{_playerArmiesScratch.Count}:{totalDivisions}";
         if (_lastStripSig == sig) return;
         _lastStripSig = sig;
 
-        foreach (var ch in _stripRow.GetChildren()) ch.QueueFree();
+        foreach (var ch in _stripRow.GetChildren())
+        {
+            _stripRow.RemoveChild(ch);
+            ch.QueueFree();
+        }
 
         var maxSlots = undoRec is not null ? 3 : 4;
         var added = 0;
 
         // 1. Active Front bundle tags first while at war
-        foreach (var war in openWars.Take(2))
+        var warsToTake = Math.Min(2, _openWarsScratch.Count);
+        for (var wi = 0; wi < warsToTake; wi++)
         {
             if (added >= maxSlots) break;
+            var war = _openWarsScratch[wi];
             var capturedWar = war;
-            var enemyId = war.EnemiesOf(player.Id).FirstOrDefault();
+            var enemyId = -1;
+            var enemies = war.EnemiesOf(player.Id).ToArray();
+            if (enemies.Length > 0) enemyId = enemies[0];
             var enemyName = world.NationById(enemyId)?.DisplayName ?? Loc.Get("Front");
             var score = (int)MathF.Round(war.IsAttacking(player.Id) ? war.WarScore : -war.WarScore);
-            var frontDivs = (int)MathF.Ceiling(playerArmies.Where(a => a.AssignedWarId == war.Id).Sum(a => a.Divisions));
-            if (frontDivs <= 0) frontDivs = (int)MathF.Ceiling(playerArmies.Sum(a => a.Divisions));
+            var frontDivs = 0;
+            for (var ai = 0; ai < _playerArmiesScratch.Count; ai++)
+            {
+                var a = _playerArmiesScratch[ai];
+                if (a.AssignedWarId == war.Id) frontDivs += (int)MathF.Ceiling(a.Divisions);
+            }
+            if (frontDivs <= 0) frontDivs = totalDivisions;
 
             AddWovenPaperTag(
                 isFront: true,
@@ -122,16 +171,33 @@ internal sealed class ShellStripView
         }
 
         // 2. Field Armies / Army Groups as luggage-style woven linen tags
-        var groups = world.ArmyGroups.Where(g => g.NationId == player.Id).ToArray();
-        if (groups.Length > 0 && added < maxSlots)
+        _playerGroupsScratch.Clear();
+        for (var gi = 0; gi < world.ArmyGroups.Count; gi++)
         {
-            foreach (var grp in groups.Take(maxSlots - added))
+            var g = world.ArmyGroups[gi];
+            if (g.NationId == player.Id) _playerGroupsScratch.Add(g);
+        }
+        if (_playerGroupsScratch.Count > 0 && added < maxSlots)
+        {
+            var groupsToTake = Math.Min(maxSlots - added, _playerGroupsScratch.Count);
+            for (var gi = 0; gi < groupsToTake; gi++)
             {
-                var grpArmies = playerArmies.Where(a => a.ArmyGroupId == grp.Id).ToArray();
-                if (grpArmies.Length == 0) continue;
-                var lead = grpArmies[0];
-                var divs = (int)MathF.Ceiling(grpArmies.Sum(a => a.Divisions));
-                var sel = grpArmies.Any(a => selectedIds.Contains(a.Id));
+                var grp = _playerGroupsScratch[gi];
+                _groupArmiesScratch.Clear();
+                var divs = 0;
+                var sel = false;
+                for (var ai = 0; ai < _playerArmiesScratch.Count; ai++)
+                {
+                    var a = _playerArmiesScratch[ai];
+                    if (a.ArmyGroupId == grp.Id)
+                    {
+                        _groupArmiesScratch.Add(a);
+                        divs += (int)MathF.Ceiling(a.Divisions);
+                        if (!sel && _selectedIdsScratch.Contains(a.Id)) sel = true;
+                    }
+                }
+                if (_groupArmiesScratch.Count == 0) continue;
+                var lead = _groupArmiesScratch[0];
                 var (glyph, orderTxt, stripe) = DescribeArmyOrder(world, lead);
                 var nm = string.IsNullOrWhiteSpace(grp.Name) ? $"{Loc.Get("Army Group")} {grp.Id}" : grp.Name;
 
@@ -151,16 +217,21 @@ internal sealed class ShellStripView
                 added++;
             }
         }
-        else if (playerArmies.Length > 0 && added < maxSlots)
+        else if (_playerArmiesScratch.Count > 0 && added < maxSlots)
         {
-            foreach (var army in playerArmies.OrderByDescending(a => a.Divisions).Take(maxSlots - added))
+            _topArmiesScratch.Clear();
+            _topArmiesScratch.AddRange(_playerArmiesScratch);
+            _topArmiesScratch.Sort(static (a, b) => b.Divisions.CompareTo(a.Divisions));
+            var armiesToTake = Math.Min(maxSlots - added, _topArmiesScratch.Count);
+            for (var ai = 0; ai < armiesToTake; ai++)
             {
+                var army = _topArmiesScratch[ai];
                 var capturedArmy = army;
                 var divs = Math.Max(1, (int)MathF.Ceiling(army.Divisions));
-                var sel = selectedIds.Contains(army.Id);
+                var sel = _selectedIdsScratch.Contains(army.Id);
                 var (glyph, orderTxt, stripe) = DescribeArmyOrder(world, army);
                 var title = string.IsNullOrWhiteSpace(army.Name)
-                    ? (world.States.FirstOrDefault(s => s.MapIndex == army.StateMapIndex)?.DisplayName ?? Loc.Get("Army"))
+                    ? (world.StateByMapIndex(army.StateMapIndex)?.DisplayName ?? Loc.Get("Army"))
                     : army.Name;
 
                 AddWovenPaperTag(
@@ -190,7 +261,7 @@ internal sealed class ShellStripView
 
     private static (string Glyph, string Text, Color Stripe) DescribeArmyOrder(Campaign world, Army army)
     {
-        var stateName = world.States.FirstOrDefault(s => s.MapIndex == army.StateMapIndex)?.DisplayName ?? "";
+        var stateName = world.StateByMapIndex(army.StateMapIndex)?.DisplayName ?? "";
         if (army.InBattle)
             return ("icon_shell_fight", $"{Loc.Get("Live")} · {stateName}", Ui.Colour("shell.state.negative"));
         if (army.DirectOrder)
@@ -493,19 +564,19 @@ internal sealed class ShellStripView
         // At far continental/orbital zoom: keep ALL player + ALL active-war/front armies visible,
         // filtering only distant peacetime neutral garrisons so active fronts are never culled.
         var openWars = Warfare.OpenWars(world);
-        var warNationIds = new HashSet<int>();
+        _warNationIds.Clear();
         for (var ni = 0; ni < world.Nations.Count; ni++)
         {
             var nid = world.Nations[ni].Id;
             for (var wi = 0; wi < openWars.Count; wi++)
-                if (!openWars[wi].Ended && openWars[wi].Involves(nid)) { warNationIds.Add(nid); break; }
+                if (!openWars[wi].Ended && openWars[wi].Involves(nid)) { _warNationIds.Add(nid); break; }
         }
 
         _visibleArmyIds.Clear();
         for (var i = 0; i < world.Armies.Count; i++)
         {
             var a = world.Armies[i];
-            if (a.NationId == player.Id || a.InBattle || a.AssignedWarId >= 0 || warNationIds.Contains(a.NationId))
+            if (a.NationId == player.Id || a.InBattle || a.AssignedWarId >= 0 || _warNationIds.Contains(a.NationId))
                 _visibleArmyIds.Add(a.Id);
         }
         _ctx.SetMergedVisibleArmies?.Invoke(_visibleArmyIds);

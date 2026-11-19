@@ -55,6 +55,7 @@ public partial class DealOrForceGame
             MouseFilter = MouseFilterEnum.Ignore
         };
         frame.AddChild(rect);
+        ChromePlateArt.AttachPortraitBezel(frame);
         return frame;
     }
 

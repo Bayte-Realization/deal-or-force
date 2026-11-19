@@ -99,6 +99,7 @@ internal sealed class ShellMapBarView
         _bar.AddThemeStyleboxOverride("panel",
             _ctx.NineSlice("plate_umber_9s", 14, 8, 6, 8, 8, "shell.plate_bottom", "shell.border", 3));
         _ctx.Root.AddChild(_bar);
+        ChromePlateArt.AttachSurfaceTexture(_bar, "blueprint", 0.26f);
 
         _medallionRow = new HBoxContainer
         {
@@ -467,6 +468,7 @@ internal sealed class ShellMapBarView
         _minimapPanel.AddThemeStyleboxOverride("panel",
             _ctx.NineSlice("plate_brass_9s", 10, 4, 4, 4, 4, "shell.well_top", "shell.brass", 2));
         _ctx.Root.AddChild(_minimapPanel);
+        ChromePlateArt.AttachSurfaceTexture(_minimapPanel, "blueprint", 0.20f);
 
         _minimapCanvas = new Control
         {

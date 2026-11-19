@@ -43,6 +43,7 @@ public partial class DealOrForceGame
         var heading = TexturedPanel(_pickerLayer);
         Ui.Place(heading, "picker.heading");
         MenuChromeTheme.StyleArchitecturalPlate(heading, brassCorners: true, padX: 0, padY: 0);
+        ChromePlateArt.AttachHeaderFiligree(heading, 0.36f);
         _pickerHeadingPanel = heading;
         var headingRows = PanelRows(heading, 18, 10, 3);
         _pickerHeading = Title("SELECT A COUNTRY", 24, MenuChromeTheme.Paper);
@@ -62,6 +63,7 @@ public partial class DealOrForceGame
         var panel = TexturedPanel(_pickerLayer);
         Ui.Place(panel, "picker.country");
         MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true, padX: 0, padY: 0);
+        ChromePlateArt.AttachSurfaceTexture(panel, "slate");
         _pickerCountryPanel = panel;
         var rows = PanelRows(panel, 18, 14, 7);
 

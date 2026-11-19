@@ -253,7 +253,7 @@ public static class ShellAlerts
             var enemyName = campaign.NationById(enemyId)?.DisplayName ?? Loc.Get("Enemy");
             var score = (int)Math.Round(war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore);
             warRows.Add(new("outliner:" + topic, topic, enemyName, $"{score:+#;-#;0}%",
-                ShellAlertSeverity.Important, "War", war.Id));
+                ShellAlertSeverity.Important, "Wars", war.Id));
         }
         if (warRows.Count > 0)
             groups.Add(new("wars", Loc.Get("Wars"), warRows));

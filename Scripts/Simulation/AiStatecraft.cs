@@ -149,6 +149,7 @@ public static partial class AiStatecraft
         {
             while (true)
             {
+                if (Campaign.StageOverdue()) yield return 0;
                 bool more;
                 using (SimProfiler.Measure("    ai:foundations.proclaim")) more = proclamations.MoveNext();
                 if (!more) break;
@@ -159,6 +160,7 @@ public static partial class AiStatecraft
         {
             while (true)
             {
+                if (Campaign.StageOverdue()) yield return 0;
                 bool more;
                 using (SimProfiler.Measure("    ai:foundations.union")) more = unions.MoveNext();
                 if (!more) break;
@@ -405,10 +407,59 @@ public static partial class AiStatecraft
         }
     }
 
+    internal static bool InAnyWar(Campaign campaign, int nationId)
+    {
+        var openWars = Warfare.OpenWars(campaign);
+        for (var i = 0; i < openWars.Count; i++)
+        {
+            var w = openWars[i];
+            if (!w.Ended && w.Involves(nationId)) return true;
+        }
+        return false;
+    }
+
+    internal static bool HasPendingPeaceOffer(Campaign campaign, int nationId)
+    {
+        var openWars = Warfare.OpenWars(campaign);
+        for (var i = 0; i < openWars.Count; i++)
+        {
+            var w = openWars[i];
+            if (!w.Ended && w.Involves(nationId) && w.PendingOfferFromId >= 0) return true;
+        }
+        return false;
+    }
+
+    internal static bool HasPendingUltimatum(Campaign campaign, int nationId)
+    {
+        if (campaign.UltimatumPapers.Count == 0) return false;
+        for (var i = 0; i < campaign.UltimatumPapers.Count; i++)
+        {
+            var paper = campaign.UltimatumPapers[i];
+            if (paper.Pending && (paper.FromId == nationId || paper.ToId == nationId)) return true;
+        }
+        return false;
+    }
+
+    internal static bool IsCalmAi(Campaign campaign, Nation nation)
+    {
+        if (nation.IsHuman) return false;
+        if (nation.WarPlanTargetId > 0) return false;
+        if (nation.DomesticCrisis is { } crisis && (crisis.CoupPressure > 0.35f || crisis.DaysAboveThreshold > 0)) return false;
+        if (InAnyWar(campaign, nation.Id)) return false;
+        if (HasPendingPeaceOffer(campaign, nation.Id)) return false;
+        if (HasPendingUltimatum(campaign, nation.Id)) return false;
+        return true;
+    }
+
     private static bool ThinksToday(Campaign campaign, Nation nation)
     {
         var day = campaign.ElapsedDays + nation.Id;
         if (nation.IsHuman) return day % 30 == 0 || (day % 7 == 0 && Delegation.Holds(nation, Delegation.Diplomacy));
+        var cadence = campaign.Defines.AiCalmCadenceDays;
+        if (cadence > 1 && IsCalmAi(campaign, nation))
+        {
+            return (nation.Id + campaign.ElapsedDays) % cadence == 0;
+        }
         return day % 7 == 0 || day % 30 == 0 || day % 11 == 0;
     }
 
@@ -428,6 +479,28 @@ public static partial class AiStatecraft
             yield break;
         }
 
+        var calmCadence = campaign.Defines.AiCalmCadenceDays;
+        if (calmCadence > 1 && IsCalmAi(campaign, nation))
+        {
+            foreach (var _ in DiplomacyStages(campaign, nation)) yield return 0;
+            yield return 0;
+            if ((campaign.ElapsedDays + nation.Id) % 30 == 0)
+            {
+                if (Campaign.StageOverdue()) yield return 0;
+                using (SimProfiler.Measure("  ai:economy")) Economy(campaign, nation);
+                yield return 0;
+            }
+            using var calmWarSteps = WarmakingStages(campaign, nation).GetEnumerator();
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("  ai:warmaking")) more = calmWarSteps.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+            yield break;
+        }
+
         // Staggered: a nation thinks about its neighbours once a week and about its
         // budget once a month, on its own day, so the cost is spread rather than spiked.
         if ((campaign.ElapsedDays + nation.Id) % 7 == 0)
@@ -437,6 +510,7 @@ public static partial class AiStatecraft
         }
         if ((campaign.ElapsedDays + nation.Id) % 30 == 0)
         {
+            if (Campaign.StageOverdue()) yield return 0;
             using (SimProfiler.Measure("  ai:economy")) Economy(campaign, nation);
             yield return 0;
         }
@@ -1352,6 +1426,45 @@ public static partial class AiStatecraft
         // hundred and twenty divisions assigned to it, Germany all of Liechtenstein, Italy San
         // Marino. One province was not war score enough to write a treaty with, and the white
         // peace the beaten side could offer would have handed it back.
+        if (campaign.Defines is { ForcePeaceOnTotalOccupationOrFullScore: true } && war.PendingOfferFromId < 0)
+        {
+            var attLeader = campaign.NationById(war.AttackerId);
+            var defLeader = campaign.NationById(war.DefenderId);
+            var attOcc = attLeader is not null && PeaceNegotiation.IsTotallyOccupiedInWar(campaign, war, attLeader);
+            var defOcc = defLeader is not null && PeaceNegotiation.IsTotallyOccupiedInWar(campaign, war, defLeader);
+            var fullScoreAttacker = war.WarScore >= 99.5f && (!war.CivilConflict || war.Stalled);
+            var fullScoreDefender = war.WarScore <= -99.5f && (!war.CivilConflict || war.Stalled);
+
+            if (attOcc || defOcc || fullScoreAttacker || fullScoreDefender)
+            {
+                var victor = (fullScoreAttacker || defOcc) ? attLeader : defLeader;
+                var beaten = (victor == attLeader) ? defLeader : attLeader;
+
+                if (victor is not null && beaten is not null)
+                {
+                    if (victor.IsHuman)
+                    {
+                        PeaceOffers.Put(campaign, war, beaten, victor, PeaceTerms.Capitulate);
+                        return;
+                    }
+
+                    var victorLedger = new PeaceLedger(campaign, war, victor.Id);
+                    var decisiveDemand = new PeaceDemand { WarId = war.Id, ProposerId = victor.Id, Unconditional = true };
+                    var hasDecisive = WriteDecisiveSettlement(campaign, victor, war, victorLedger, decisiveDemand);
+
+                    if (hasDecisive && PeaceConference.BlockReason(campaign, war, decisiveDemand).Length == 0)
+                    {
+                        PeaceOffers.Put(campaign, war, victor, beaten, decisiveDemand);
+                    }
+                    else
+                    {
+                        PeaceOffers.Put(campaign, war, beaten, victor, PeaceTerms.Capitulate);
+                    }
+                    return;
+                }
+            }
+        }
+
         if (war.PendingOfferFromId < 0 &&
             campaign.ElapsedDays - war.LastPeaceProposalDay >= defines.AiPeaceProposalInterval)
             foreach (var attackers in new[] { true, false })

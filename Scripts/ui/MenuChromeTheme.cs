@@ -274,10 +274,11 @@ internal static class MenuChromeTheme
             oldEdge.QueueFree();
         }
         panel.AddThemeStyleboxOverride("panel", ModalPlateBox(padX, padY));
-        ChromePlateArt.AttachPlateWeave(panel, 0.08f);
+        ChromePlateArt.AttachSurfaceTexture(panel, "slate");
 
         if (!brassCorners) return;
-        ChromePlateArt.AttachCornerOrnaments(panel);
+        if (padX <= 8 && padY <= 8)
+            ChromePlateArt.AttachCornerOrnaments(panel);
         if (panel.GetNodeOrNull<MenuChromeBrassFrame>("MenuChromeBrassFrame") is null)
         {
             var frame = new MenuChromeBrassFrame { Name = "MenuChromeBrassFrame", ZIndex = 4 };

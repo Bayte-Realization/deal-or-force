@@ -120,6 +120,15 @@ public static class PeaceOffers
         PeaceDemand demand, PeaceTerms terms)
     {
         if (campaign is null || war is null) return Loc.Get("There is no war to end");
+        if (campaign.Defines is { ForcePeaceOnTotalOccupationOrFullScore: true })
+        {
+            var att = campaign.NationById(war.AttackerId);
+            var def = campaign.NationById(war.DefenderId);
+            if ((System.Math.Abs(war.WarScore) >= 99.5f && (!war.CivilConflict || war.Stalled)) ||
+                (att is not null && PeaceNegotiation.IsTotallyOccupiedInWar(campaign, war, att)) ||
+                (def is not null && PeaceNegotiation.IsTotallyOccupiedInWar(campaign, war, def)))
+                return "";
+        }
         var defines = campaign.Defines;
         var today = campaign.ElapsedDays;
         var lastAsked = System.Math.Max(war.LastOfferToPlayerDay, war.RefusedOfferDay);

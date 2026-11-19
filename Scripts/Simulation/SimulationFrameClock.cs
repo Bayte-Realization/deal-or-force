@@ -67,6 +67,7 @@ public sealed class SimulationFrameClock
         Action beforeCall = null, Func<bool, bool> afterCall = null)
     {
         if (campaign is null) return 0;
+        campaign.Speed = speed;
         // A step the smoothed clock has begun is carried on even under pause: pausing stops the
         // next step, never half of this one.
         if (campaign.IsPaused && !campaign.MidStep) { Pending = 0; return 0; }

@@ -67,15 +67,42 @@ internal static class ChromePlateArt
         return loaded;
     }
 
-    /// <summary>Attaches or updates the subtle tiled slate weave overlay behind plate contents.</summary>
-    internal static void AttachPlateWeave(Control host, float alpha = 0.08f) =>
-        AttachOverlayTexture(
-            host,
-            "PlateWeaveOverlay",
-            "shell_plate_weave",
-            "res://game/gfx/interface/shell/plate_slate_weave.png",
-            TextureRect.StretchModeEnum.Tile,
-            alpha);
+    /// <summary>Attaches or updates a seamlessly tiled matte surface texture across a panel or menu.</summary>
+    internal static void AttachSurfaceTexture(Control host, string surfaceKind = "slate", float alpha = -1f)
+    {
+        if (host is null) return;
+        var (spriteId, fallback) = surfaceKind switch
+        {
+            "linen" or "grain" => ("shell_dossier_grain", "res://game/gfx/interface/panels/dossier_body_grain.png"),
+            "blueprint" or "grid" => ("shell_surface_blueprint", "res://game/gfx/interface/panels/surface_blueprint_grid.png"),
+            "laid_paper" or "paper" => ("shell_surface_laid_paper", "res://game/gfx/interface/panels/surface_laid_paper.png"),
+            "leather" or "desk" => ("shell_surface_leather", "res://game/gfx/interface/panels/surface_command_leather.png"),
+            "sidebar" => ("shell_menu_sidebar_art", "res://game/gfx/interface/panels/main_menu_sidebar_art.png"),
+            _ => ("shell_surface_slate", "res://game/gfx/interface/panels/surface_slate_twill.png")
+        };
+        var metricKey = surfaceKind switch
+        {
+            "linen" or "grain" => "shell.dossier_grain_alpha",
+            "sidebar" => "shell.menu_sidebar_art_alpha",
+            _ => "shell.surface_texture_alpha"
+        };
+        var effectiveAlpha = alpha >= 0f
+            ? Math.Clamp(alpha, 0f, 1f)
+            : Math.Clamp(InterfaceSkin.Metric(metricKey, 0.32f), 0f, 1f);
+
+        var tex = LoadSpriteTexture(spriteId, fallback);
+        if (host.GetNodeOrNull<TextureRect>("PlateWeaveOverlay") is { } oldWeave) oldWeave.Visible = false;
+        if (host.GetNodeOrNull<TextureRect>("DossierGrainOverlay") is { } oldGrain) oldGrain.Visible = false;
+
+        var overlay = host.GetNodeOrNull<ChromeSurfaceOverlay>("SurfaceTextureOverlay");
+        if (overlay is null)
+        {
+            overlay = new ChromeSurfaceOverlay { Name = "SurfaceTextureOverlay", ZIndex = 0 };
+            host.AddChild(overlay);
+            host.MoveChild(overlay, 0);
+        }
+        overlay.Configure(tex, effectiveAlpha);
+    }
 
     /// <summary>Attaches or updates the architectural masthead frieze behind a screen header.</summary>
     internal static void AttachHeaderFrieze(Control header, float alpha = 0.28f) =>
@@ -223,8 +250,8 @@ internal static class ChromePlateArt
     {
         EnsureHooks();
         if (InterfaceSkin.Metric("shell.button_texture_enabled", 1.0f) < 0.5f) return null;
-        var path = SpriteCatalog.TextureOf("shell_button_bevel", "res://game/gfx/interface/shell/button_bevel_sheen.png");
-        var tex = LoadSpriteTexture("shell_button_bevel", "res://game/gfx/interface/shell/button_bevel_sheen.png");
+        var path = SpriteCatalog.TextureOf("shell_button_bevel", "res://game/gfx/interface/panels/button_bevel_uniform_9s.png");
+        var tex = LoadSpriteTexture("shell_button_bevel", "res://game/gfx/interface/panels/button_bevel_uniform_9s.png");
         if (tex is null) return null;
 
         var bevelPx = Math.Clamp(InterfaceSkin.Metric("shell.plate_bevel_px", 2.0f), 1f, 6f);
@@ -253,6 +280,159 @@ internal static class ChromePlateArt
             ContentMarginBottom = padBottom
         };
         return StyleCache[key] = box;
+    }
+
+    /// <summary>
+    /// Builds a cached 9-slice card wrapper style (<c>shell_card_wrapper</c>) with clean procedural fallback.
+    /// </summary>
+    internal static StyleBox BuildCardWrapperStyle(
+        int padLeft = 8, int padTop = 6, int padRight = 8, int padBottom = 6, float alpha = -1f)
+    {
+        EnsureHooks();
+        if (InterfaceSkin.Metric("shell.card_wrapper_enabled", 1.0f) < 0.5f) return null;
+        var effectiveAlpha = alpha >= 0f ? Math.Clamp(alpha, 0f, 1f) : 1f;
+        var path = SpriteCatalog.TextureOf("shell_card_wrapper", "res://game/gfx/interface/shell/newspaper_card_9s.png");
+        var tex = LoadSpriteTexture("shell_card_wrapper", "res://game/gfx/interface/shell/newspaper_card_9s.png");
+        if (tex is null) return null;
+
+        var key = $"card|{path}|{padLeft},{padTop},{padRight},{padBottom}|{effectiveAlpha:0.##}";
+        if (StyleCache.TryGetValue(key, out var cached)) return cached;
+
+        var box = new StyleBoxTexture
+        {
+            Texture = tex,
+            ModulateColor = new Color(1f, 1f, 1f, effectiveAlpha),
+            TextureMarginLeft = 14,
+            TextureMarginTop = 14,
+            TextureMarginRight = 14,
+            TextureMarginBottom = 14,
+            ContentMarginLeft = padLeft,
+            ContentMarginTop = padTop,
+            ContentMarginRight = padRight,
+            ContentMarginBottom = padBottom
+        };
+        return StyleCache[key] = box;
+    }
+
+    /// <summary>
+    /// Builds a cached tab strip container style (<c>shell_tab_strip</c>) with procedural fallback.
+    /// </summary>
+    internal static StyleBox BuildTabStripStyle(
+        int padLeft = 6, int padTop = 3, int padRight = 6, int padBottom = 3, float alpha = -1f)
+    {
+        EnsureHooks();
+        var effectiveAlpha = alpha >= 0f
+            ? Math.Clamp(alpha, 0f, 1f)
+            : Math.Clamp(InterfaceSkin.Metric("shell.tab_strip_alpha", 0.85f), 0f, 1f);
+        var path = SpriteCatalog.TextureOf("shell_tab_strip", "res://game/gfx/interface/shell/tab_folder_9s.png");
+        var tex = LoadSpriteTexture("shell_tab_strip", "res://game/gfx/interface/shell/tab_folder_9s.png");
+        if (tex is null || effectiveAlpha <= 0.005f) return null;
+
+        var key = $"tabstrip|{path}|{padLeft},{padTop},{padRight},{padBottom}|{effectiveAlpha:0.##}";
+        if (StyleCache.TryGetValue(key, out var cached)) return cached;
+
+        var box = new StyleBoxTexture
+        {
+            Texture = tex,
+            ModulateColor = new Color(1f, 1f, 1f, effectiveAlpha),
+            TextureMarginLeft = 8,
+            TextureMarginTop = 6,
+            TextureMarginRight = 8,
+            TextureMarginBottom = 6,
+            ContentMarginLeft = padLeft,
+            ContentMarginTop = padTop,
+            ContentMarginRight = padRight,
+            ContentMarginBottom = padBottom
+        };
+        return StyleCache[key] = box;
+    }
+
+    /// <summary>Attaches or updates the deep atmospheric modal backdrop behind fullscreen dialogs.</summary>
+    internal static void AttachModalBackdrop(Control host, float alpha = -1f)
+    {
+        if (host is null) return;
+        var effectiveAlpha = alpha >= 0f
+            ? Math.Clamp(alpha, 0f, 1f)
+            : Math.Clamp(InterfaceSkin.Metric("shell.modal_backdrop_alpha", 0.88f), 0f, 1f);
+        AttachOverlayTexture(
+            host,
+            "ModalBackdropOverlay",
+            "shell_modal_backdrop",
+            "res://game/gfx/interface/panels/modal_cartography_backdrop.png",
+            TextureRect.StretchModeEnum.KeepAspectCovered,
+            effectiveAlpha);
+    }
+
+    /// <summary>Attaches or updates the symmetrical ornate filigree band behind headers.</summary>
+    internal static void AttachHeaderFiligree(Control host, float alpha = -1f)
+    {
+        if (host is null) return;
+        var effectiveAlpha = alpha >= 0f
+            ? Math.Clamp(alpha, 0f, 1f)
+            : Math.Clamp(InterfaceSkin.Metric("shell.header_filigree_alpha", 0.55f), 0f, 1f);
+        AttachOverlayTexture(
+            host,
+            "HeaderFiligreeOverlay",
+            "shell_header_filigree",
+            "res://game/gfx/interface/panels/header_emblem_filigree.png",
+            TextureRect.StretchModeEnum.KeepAspectCentered,
+            effectiveAlpha);
+    }
+
+    /// <summary>
+    /// Attaches or updates the ornate cameo bezel frame over a leader or ruler portrait.
+    /// </summary>
+    internal static void AttachPortraitBezel(Control host, float alpha = -1f)
+    {
+        if (host is null) return;
+        var effectiveAlpha = alpha >= 0f
+            ? Math.Clamp(alpha, 0f, 1f)
+            : Math.Clamp(InterfaceSkin.Metric("shell.portrait_bezel_alpha", 0.92f), 0f, 1f);
+        var tex = LoadSpriteTexture("shell_portrait_bezel", "res://game/gfx/interface/shell/round_bezel.png");
+        var existing = host.GetNodeOrNull<TextureRect>("PortraitBezelOverlay");
+        if (tex is null || effectiveAlpha <= 0.005f)
+        {
+            if (existing is not null) existing.Visible = false;
+            return;
+        }
+        if (existing is null)
+        {
+            existing = new TextureRect
+            {
+                Name = "PortraitBezelOverlay",
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                TextureFilter = CanvasItem.TextureFilterEnum.LinearWithMipmaps,
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+                ZIndex = 5
+            };
+            existing.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+            host.AddChild(existing);
+        }
+        existing.Texture = tex;
+        existing.Modulate = new Color(1f, 1f, 1f, effectiveAlpha);
+        existing.Visible = true;
+        host.MoveChild(existing, host.GetChildCount() - 1);
+    }
+
+    /// <summary>
+    /// Applies an icon to an outer menu action button when <c>shell.menu_icons_enabled &gt;= 0.5</c>.
+    /// </summary>
+    internal static void ApplyMenuButtonIcon(Button btn, string iconId, string fallbackPath = "")
+    {
+        if (btn is null || string.IsNullOrWhiteSpace(iconId)) return;
+        if (InterfaceSkin.Metric("shell.menu_icons_enabled", 1.0f) < 0.5f) return;
+        var fallback = string.IsNullOrEmpty(fallbackPath)
+            ? $"res://game/gfx/interface/icons/{iconId}.png"
+            : fallbackPath;
+        var tex = LoadSpriteTexture(iconId, fallback);
+        if (tex is not null)
+        {
+            btn.Icon = tex;
+            btn.ExpandIcon = true;
+            btn.AddThemeConstantOverride("icon_max_width", 20);
+            btn.AddThemeConstantOverride("h_separation", 10);
+        }
     }
 
     private static void AttachOverlayTexture(

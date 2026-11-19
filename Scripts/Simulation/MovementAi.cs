@@ -60,14 +60,17 @@ public static class MovementAi
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(MovementAi))) yield break;
         if (campaign.ElapsedDays == 0) yield break;
         var week = Math.Max(1, campaign.Defines.EconomyTickDays);
+        var cadence = campaign.Defines.AiCalmCadenceDays;
         // On the same day as its week (MovementRules.Tick), so it acts on what that week made
         // of it. The walk goes by index (Id == index): a think can found a nation, and the
         // founder takes its turn tomorrow rather than stretching this pass.
         for (var id = 0; id < campaign.Nations.Count; id++)
         {
             var nation = campaign.Nations[id];
-            if (nation.Movement is not { Dissolved: false } || nation.IsHuman ||
-                !MovementRules.OnItsDay(campaign, id, week)) continue;
+            if (nation.Movement is not { Dissolved: false } || nation.IsHuman) continue;
+            var calm = cadence > 1 && nation.Movement.Landless && !AiStatecraft.InAnyWar(campaign, id);
+            var cycle = calm ? cadence : week;
+            if (!MovementRules.OnItsDay(campaign, id, cycle)) continue;
             if (MovementRules.NeedsPeopleIndex(campaign))
             {
                 using var indexStages = MovementRules.EnsurePeopleIndexedStages(campaign, insideMovRules: false).GetEnumerator();

@@ -869,6 +869,7 @@ public sealed partial class GlobePresentation
     private readonly HashSet<int> _activeBattleIds = new();
     private readonly List<int> _finishedBattleIds = new();
     private readonly Dictionary<int, Simulation.Army> _armyById = new();
+    private long _lastBattleRebuildStamp;
 
     /// <summary>
     /// Which battles are on the map, and how they are going.
@@ -886,8 +887,14 @@ public sealed partial class GlobePresentation
         var viewer = FogOfWarActive && _campaign.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
         var active = 0;
         foreach (var battle in _campaign.Battles) if (!battle.Ended) active++;
-        if (_battleMarkerDay != _campaign.ElapsedHours || _battleViewer != viewer || _battleMarkerCount != active)
+        var fastSim = _campaign is { IsPaused: false, Speed: >= 5 };
+        var timeSinceLast = System.Diagnostics.Stopwatch.GetElapsedTime(_lastBattleRebuildStamp).TotalSeconds;
+        var dueByTime = !fastSim || timeSinceLast >= 0.25;
+        var structureChanged = _battleViewer != viewer || _battleMarkerCount != active;
+
+        if (structureChanged || (_battleMarkerDay != _campaign.ElapsedHours && dueByTime))
         {
+            _lastBattleRebuildStamp = System.Diagnostics.Stopwatch.GetTimestamp();
             _battleViewer = viewer;
             _battleMarkerDay = _campaign.ElapsedHours;
             _battleMarkerCount = active;
@@ -942,10 +949,28 @@ public sealed partial class GlobePresentation
             var origin = 0;
             // Participants are stable identities, not visual counter positions. Prefer a
             // deterministic adjacent attacking province; internal battles keep the centre.
-            foreach (var armyId in battle.Attackers.OrderBy(id => id))
-                if (_armyById.TryGetValue(armyId, out var army) &&
+            int bestArmyId = int.MaxValue;
+            (float Latitude, float Longitude) bestBorder = default;
+            int bestOrigin = 0;
+            bool foundBorder = false;
+
+            foreach (var armyId in battle.Attackers)
+            {
+                if (armyId < bestArmyId &&
+                    _armyById.TryGetValue(armyId, out var army) &&
                     _battleAnchors.TryFind(battle.ProvinceId, army.ProvinceId, out var border))
-                { location = border; origin = army.ProvinceId; break; }
+                {
+                    bestArmyId = armyId;
+                    bestBorder = border;
+                    bestOrigin = army.ProvinceId;
+                    foundBorder = true;
+                }
+            }
+            if (foundBorder)
+            {
+                location = bestBorder;
+                origin = bestOrigin;
+            }
             marker.Normal = SurfacePoint(location.Latitude, location.Longitude, 1f).Normalized();
             _battleMarkers[battle.Id] = marker;
             marker.Node.SetMeta("province_id", battle.ProvinceId);
@@ -960,9 +985,15 @@ public sealed partial class GlobePresentation
             var share = assessment.ShareFor(attacks);
             var tone = !detailed || !assessment.Known ? "text.muted" : !own ? "state.info" :
                 share > .55f ? "state.positive" : share < .45f ? "state.negative" : "state.warning";
-            _battleReadouts[battle.Id] = (detailed && assessment.Known ? $"{share * 100:0}" : "?", share, tone);
-            marker.Node.GetNode<SurfaceBattleBadge>("SurfaceBadge").SetReadout(_battleReadouts[battle.Id].Text, share, tone,
-                BattleSymbolFor(SpriteCatalog.TextureOf("icon_battle", "res://game/gfx/interface/icons/icon_battle.png")));
+            var text = detailed && assessment.Known ? $"{share * 100:0}" : "?";
+            var prevReadout = _battleReadouts.GetValueOrDefault(battle.Id);
+            _battleReadouts[battle.Id] = (text, share, tone);
+
+            if (prevReadout.Text != text || MathF.Abs(prevReadout.Share - share) > 0.001f || prevReadout.Tone != tone)
+            {
+                marker.Node.GetNode<SurfaceBattleBadge>("SurfaceBadge").SetReadout(text, share, tone,
+                    BattleSymbolFor(SpriteCatalog.TextureOf("icon_battle", "res://game/gfx/interface/icons/icon_battle.png")));
+            }
             marker.Node.SetMeta("endurance_known", detailed && assessment.Known);
             marker.Node.SetMeta("endurance_share", detailed ? share : -1f);
         }

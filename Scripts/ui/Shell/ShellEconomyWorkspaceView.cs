@@ -95,6 +95,7 @@ internal sealed class ShellEconomyWorkspaceView
         _panel.AddThemeStyleboxOverride("panel",
             _ctx.NineSlice("plate_brass_9s", 16, 18, 12, 18, 12, "shell.body_top", "shell.brass_hi", 3));
         _layer.AddChild(_panel);
+        ChromePlateArt.AttachSurfaceTexture(_panel, "linen", 0.30f);
 
         var rootCol = new VBoxContainer();
         rootCol.AddThemeConstantOverride("separation", 8);

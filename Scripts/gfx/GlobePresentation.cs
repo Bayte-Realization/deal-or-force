@@ -140,6 +140,25 @@ public sealed partial class GlobePresentation : SubViewportContainer
         public bool MotionSettled;
     }
 
+    private readonly Stack<ArmyStackMarker> _armyMarkerPool = new();
+    private double _controllerUploadTimer;
+
+    private void ClearArmyMarkerPool()
+    {
+        while (_armyMarkerPool.Count > 0)
+        {
+            var marker = _armyMarkerPool.Pop();
+            if (marker.Node is not null && IsInstanceValid(marker.Node))
+            {
+                marker.Node.GetParent()?.RemoveChild(marker.Node);
+                marker.Node.QueueFree();
+            }
+        }
+    }
+
+    // Army marker pool cleanup called during presentation reset
+
+
     private readonly Dictionary<(int, int, int, int), ArmyStackMarker> _armyStacks = new();
     private readonly List<(int, int, int, int)> _vanishedStacks = new();
     private readonly Dictionary<string, int> _templateVotes = new();
@@ -430,6 +449,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 GD.Print($"[dof] topology region {repair.SubjectTag}: {repair.ConnectedComponents} connected component(s)");
         }
 
+        ClearArmyMarkerPool();
         _colorByMapIndex.Clear();
         _nationColourSources.Clear();
         _nationByMapIndex.Clear();
@@ -715,7 +735,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
             UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f && Simulation.WorldLayers.On("capitals"), CityHorizon());
         var armyLod = _flatMap || ViewDistance <= 10.8f;
         _militaryVisualAccumulator += delta;
-        if (MilitaryMarkersEnabled && _mapApplied && _campaign is not null && _militaryVisualAccumulator >= 0.12)
+        var armySyncInterval = (_campaign is { IsPaused: false, Speed: >= 5 }) ? 0.22 : 0.12;
+        if (MilitaryMarkersEnabled && _mapApplied && _campaign is not null && _militaryVisualAccumulator >= armySyncInterval)
         {
             _militaryVisualAccumulator = 0;
             using (Simulation.SimProfiler.Measure("f:army sync")) SyncArmyMarkers();
@@ -746,8 +767,14 @@ public sealed partial class GlobePresentation : SubViewportContainer
         using (Simulation.SimProfiler.Measure("f:sealift")) UpdateSeaLiftPreview();
         using (Simulation.SimProfiler.Measure("f:supply lines")) UpdateSupplyLines();
         using (Simulation.SimProfiler.Measure("f:strait crossings")) UpdateStraitCrossings();
-        if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision)
+        _controllerUploadTimer += delta;
+        var fastSim = _campaign is { IsPaused: false, Speed: >= 5 };
+        var uploadDue = !fastSim || _controllerUploadTimer >= 0.17;
+        if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision && uploadDue)
+        {
+            _controllerUploadTimer = 0;
             using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
+        }
         if (_mapApplied && _campaign is not null &&
             (_labelTask is not null || _labelRevision != _campaign.MapRevision))
             using (Simulation.SimProfiler.Measure("f:label place")) RefreshCountryLabelPlacement();
@@ -3196,7 +3223,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             if (!CanShowArmy(army) || !_shownNations.Contains(army.NationId)) continue;
             if (!_armyStacks.TryGetValue(bucket, out var marker))
             {
-                marker = new ArmyStackMarker();
+                marker = _armyMarkerPool.Count > 0 ? _armyMarkerPool.Pop() : new ArmyStackMarker();
                 _armyStacks[bucket] = marker;
             }
             marker.Seen = true;
@@ -3211,10 +3238,30 @@ public sealed partial class GlobePresentation : SubViewportContainer
             var marker = _armyStacks[bucket];
             if (marker.Node is not null && IsInstanceValid(marker.Node))
             {
-                // Detach now so a replacement with the same lead ID does not
-                // inherit an anonymous name while the old node awaits deletion.
-                marker.Node.GetParent()?.RemoveChild(marker.Node);
-                marker.Node.QueueFree();
+                if (_armyMarkerPool.Count < 512)
+                {
+                    marker.Node.Visible = false;
+                    if (marker.Glow is not null && IsInstanceValid(marker.Glow))
+                        marker.Glow.Visible = false;
+                    marker.Stack.Clear();
+                    marker.DisplayStack.Clear();
+                    marker.Seen = false;
+                    marker.CountText = "";
+                    marker.ShownDivisions = -1;
+                    marker.ShownMenTenths = -1;
+                    marker.ConditionKey = -1;
+                    marker.LastMetaProvinceId = -1;
+                    marker.ActualFingerprint = 0;
+                    marker.DisplayFingerprint = 0;
+                    _armyMarkerPool.Push(marker);
+                }
+                else
+                {
+                    // Detach now so a replacement with the same lead ID does not
+                    // inherit an anonymous name while the old node awaits deletion.
+                    marker.Node.GetParent()?.RemoveChild(marker.Node);
+                    marker.Node.QueueFree();
+                }
             }
             _armyStacks.Remove(bucket);
         }
@@ -3262,14 +3309,37 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 }
                 InvalidateFlatCounterDensity();
             }
-            else if (marker.NationId != nation.Id ||
-                     marker.FlagVisualId != NationalFlagVisualId(nation) ||
-                     !string.Equals(marker.TemplateId, templateId, StringComparison.Ordinal))
+            else
             {
-                marker.FullPlateTexture = ArmyCounterTexture(nation, templateId);
-                SizeArmyCounter(marker);
-                marker.NationId = nation.Id;
-                marker.TemplateId = templateId;
+                if (!marker.Node.Visible) marker.Node.Visible = true;
+                if (marker.Node.GetParent() != _armyRoot)
+                {
+                    marker.Node.GetParent()?.RemoveChild(marker.Node);
+                    _armyRoot.AddChild(marker.Node);
+                }
+                marker.Node.Name = $"DivisionStack_{nation.Tag}_{lead.ProvinceId}_{lead.Id}";
+                marker.Node.Scale = _flatMap
+                    ? Vector3.One * _counterWorldPixel * _counterFlatFar
+                    : Vector3.One * SurfaceCounterWidth(null);
+
+                if (marker.NationId != nation.Id ||
+                    marker.FlagVisualId != NationalFlagVisualId(nation) ||
+                    !string.Equals(marker.TemplateId, templateId, StringComparison.Ordinal))
+                {
+                    marker.FullPlateTexture = ArmyCounterTexture(nation, templateId);
+                    if (marker.Plate is not null && IsInstanceValid(marker.Plate))
+                        marker.Plate.Texture = marker.FullPlateTexture;
+                    SizeArmyCounter(marker);
+                    marker.NationId = nation.Id;
+                    marker.TemplateId = templateId;
+                }
+
+                if (_previousArmyPositions.TryGetValue(lead.Id, out var prevPos) && prevPos != Vector3.Zero)
+                {
+                    marker.DisplayPosition = prevPos;
+                    marker.MotionSettled = true;
+                    marker.Node.Position = prevPos;
+                }
             }
             marker.FlagVisualId = NationalFlagVisualId(nation);
             if (marker.Node is null) continue;

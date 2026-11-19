@@ -67,6 +67,7 @@ public partial class DealOrForceGame
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _researchLayer.AddChild(shade);
         var panel = TexturedPanel(_researchLayer);
+        ChromePlateArt.AttachSurfaceTexture(panel, "blueprint");
         panel.Name = "ResearchPanel";
         Ui.Place(panel, "modal.research");
         var rows = PanelRows(panel, 18, 14, 8);

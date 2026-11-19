@@ -62,6 +62,7 @@ internal sealed class ShellDatePlateView
         _plate.AddThemeStyleboxOverride("panel",
             _ctx.NineSlice("plate_umber_9s", 14, 0, 0, 0, 0, "shell.plate_bottom", "shell.border", 3));
         _ctx.Root.AddChild(_plate);
+        ChromePlateArt.AttachSurfaceTexture(_plate, "blueprint", 0.26f);
 
         var canvas = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
         canvas.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);

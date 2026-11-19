@@ -86,6 +86,15 @@ At startup and on catalogue reload (`SkinOverlays.Rebuild` / `InterfaceSkin.Rese
 | `shell.max_rest_buttons` | `40.0` | Shell action cap | Maximum resting shell buttons. |
 | `shell.max_rest_panels` | `6.0` | Shell panel cap | Maximum resting shell panels. |
 | `shell.next_hint_days` | `60.0` | `ShellContext` | Interval (campaign days) between unobtrusive advisor hints. |
+| `shell.portrait_bezel_alpha` | `0.92` | `LeaderPortraitUI` / `ChromePlateArt` | Alpha multiplier (`0..1`) for the sculpted ornate portrait cameo bezel (`shell_portrait_bezel`). |
+| `shell.card_wrapper_enabled` | `1.0` | `ChromePlateArt.BuildCardWrapperStyle` | Enables sculpted 9-slice card wrapper frame (`shell_card_wrapper`) for dossier and hero cards. |
+| `shell.dossier_grain_alpha` | `0.34` | `ChromePlateArt.AttachDossierGrain` | Alpha multiplier (`0..1`) for archival linen weave texture overlay (`shell_dossier_grain`). |
+| `shell.surface_texture_alpha` | `0.32` | `ChromePlateArt.AttachSurfaceTexture` | Alpha multiplier (`0..1`) for tiled matte panel/menu surface textures (`shell_surface_slate`, `shell_surface_blueprint`, `shell_surface_laid_paper`, `shell_surface_leather`, `shell_dossier_grain`). |
+| `shell.modal_backdrop_alpha` | `0.88` | `ChromePlateArt.AttachModalBackdrop` | Alpha multiplier (`0..1`) for fullscreen modal cartographic meridian vignette (`shell_modal_backdrop`). |
+| `shell.header_filigree_alpha` | `0.55` | `ChromePlateArt.AttachHeaderFiligree` | Alpha multiplier (`0..1`) for architectural compass-and-rule header filigree (`shell_header_filigree`). |
+| `shell.tab_strip_alpha` | `0.92` | `ChromePlateArt.BuildTabStripStyle` | Alpha multiplier (`0..1`) for recessed brushed folder tab strip channel (`shell_tab_strip`). |
+| `shell.menu_icons_enabled` | `1.0` | `MenuChromeTheme.ApplyMenuButtonIcon` | Enables crisp vector alabaster domain & menu action icons across buttons. |
+| `shell.menu_sidebar_art_alpha` | `0.34` | `MainMenuScene` / `MainMenuUI` | Alpha multiplier (`0..1`) for tiled engraved ledger-twill column backdrop (`shell_menu_sidebar_art`). |
 
 ---
 
@@ -105,7 +114,7 @@ At startup and on catalogue reload (`SkinOverlays.Rebuild` / `InterfaceSkin.Rese
 - `shell_button_brass_cta_9s` / `_2x`, `shell_button_umber_9s` / `_2x`, `shell_tab_folder_9s` / `_2x`
 - `shell_well_recessed_9s` / `_2x`, `shell_flag_pocket_9s` / `_2x`, `shell_paper_tag_9s` / `_2x`
 - `shell_newspaper_card_9s` / `_2x`, `shell_corner_joint` / `_2x`, `shell_round_bezel` / `_2x`, `shell_round_bezel_active` / `_2x`
-- `shell_header_frieze`, `shell_plate_weave`, `shell_paper`, `leader_anonymous`
+- `shell_header_frieze`, `shell_plate_weave`, `shell_surface_slate`, `shell_surface_blueprint`, `shell_surface_laid_paper`, `shell_surface_leather`, `shell_dossier_grain`, `shell_card_wrapper`, `shell_portrait_bezel`, `shell_modal_backdrop`, `shell_header_filigree`, `shell_tab_strip`, `shell_menu_sidebar_art`, `shell_paper`, `leader_anonymous`
 
 **Governance Icons (`56_governance_palette.json`)**:
 `icon_agenda`, `icon_alliance_commitment`, `icon_credit_confidence`, `icon_debt_default`, `icon_lake_logistics`, `icon_laws`, `icon_public_debt`, `icon_river_crossing`

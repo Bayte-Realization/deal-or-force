@@ -273,12 +273,29 @@ public static class PeaceConference
         // not asked this.
         // Every member of the beaten side is asked, not only its leader, which signs for them all;
         // one the treaty takes nothing from has nothing to sign away.
+        var beatenId = war.EnemyLeaderOf(demand.ProposerId);
+        var beaten = campaign.NationById(beatenId);
+        var beatenScore = beaten is null ? 0f : (war.IsAttacking(beatenId) ? war.WarScore : -war.WarScore);
+        var beatenTotallyOcc = beaten is not null && PeaceNegotiation.IsTotallyOccupiedInWar(campaign, war, beaten);
+        var forcePeace = campaign.Defines.ForcePeaceOnTotalOccupationOrFullScore && (beatenTotallyOcc || beatenScore <= -99.5f);
+
         foreach (var memberId in war.EnemiesOf(demand.ProposerId))
+        {
             if (campaign.NationById(memberId) is { IsHuman: false } member && Factions.FightsOnWithoutGround(campaign, member) &&
                 rounded.Provinces.Any(province => topology.ProvinceToNation[province] == member.MapIndex) &&
                 !Enumerable.Range(1, topology.ProvinceCount).Any(province =>
                     topology.ProvinceToNation[province] == member.MapIndex && !rounded.Provinces.Contains(province)))
-                return Loc.Get("They will not sign away the last of their ground while they still have an army in the field");
+            {
+                if (forcePeace && demand.Unconditional && PeaceNegotiation.IsTotallyOccupiedInWar(campaign, war, member))
+                {
+                    // Waived under total occupation forced peace with unconditional settlement
+                }
+                else
+                {
+                    return Loc.Get("They will not sign away the last of their ground while they still have an army in the field");
+                }
+            }
+        }
 
         var ledger = new PeaceLedger(campaign, war, demand.ProposerId, demand.BeneficiaryId);
         var budget = ledger.Budget;
@@ -291,7 +308,7 @@ public static class PeaceConference
         // front of them was bigger than the thing that was priced. One rounding, used by
         // both.
         var cost = ledger.Cost(rounded);
-        if (!demand.Unconditional && cost > budget)
+        if (!demand.Unconditional && cost > budget && !forcePeace)
             return Loc.Format("They will not sign: the demand is worth {0:0} and the war is worth {1:0}", cost, budget);
         return "";
     }

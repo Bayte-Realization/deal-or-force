@@ -28,5 +28,6 @@
   "PeaceCostTradeConcessions": 11,
   "PeaceCostDemilitarise": 22,
   "PeaceCostHumiliate": 26,
-  "PeaceCostLongTruce": 9
+  "PeaceCostLongTruce": 9,
+  "ForcePeaceOnTotalOccupationOrFullScore": true
 }
