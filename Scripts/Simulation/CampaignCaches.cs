@@ -57,6 +57,8 @@ internal sealed class CampaignCaches
     public SecessionAdjacencyCache Secession => LazyInitializer.EnsureInitialized(ref _secession)!;
     public ShipbuildingSlipwaysCache ShipbuildingSlipways => LazyInitializer.EnsureInitialized(ref _shipbuildingSlipways)!;
     public SupportEnabledMemoCache SupportEnabledMemo => LazyInitializer.EnsureInitialized(ref _supportEnabledMemo)!;
+    public LongRangeMovement.RepositionScratch RepositionScratch { get; } = new();
+    public int NextKinScanRunId;
 
     internal sealed class AiStrategyPostureCache
     {

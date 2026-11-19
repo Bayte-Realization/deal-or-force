@@ -37,8 +37,11 @@ public static class CommodityLeverage
         var routes = TradeNetwork.RoutesTouching(c, buyer.Id);
         if (routes.Count == 0) return 0f;
 
-        var size = 0;
-        foreach (var commodity in CommodityCatalog.All) size = Math.Max(size, (int)commodity + 1);
+        var snap = CommodityCatalog.Snapshot;
+        var allGoods = snap.AllGoods;
+        var byIndex = snap.ByIndex;
+        var size = byIndex.Length;
+        if (size <= 0) return 0f;
         Span<float> totalVolume = size <= 256 ? stackalloc float[size] : new float[size];
         Span<float> sellerVolume = size <= 256 ? stackalloc float[size] : new float[size];
         totalVolume.Clear();
@@ -49,7 +52,7 @@ public static class CommodityLeverage
             var r = routes[i];
             if (r.BuyerId != buyer.Id) continue;
             var index = (int)r.Commodity;
-            if (index < 0 || index >= size || !float.IsFinite(r.Volume) || r.Volume <= 0f) continue;
+            if ((uint)index >= (uint)size || !float.IsFinite(r.Volume) || r.Volume <= 0f) continue;
             totalVolume[index] += r.Volume;
             if (r.SellerId == seller.Id) { sellerVolume[index] += r.Volume; any = true; }
         }
@@ -58,9 +61,10 @@ public static class CommodityLeverage
         var totalWeightedLeverage = 0f;
         var totalWeight = 0f;
 
-        foreach (var commodity in CommodityCatalog.All)
+        for (var gi = 0; gi < allGoods.Length; gi++)
         {
-            var tier = CommodityCatalog.Get(commodity).Leverage;
+            var commodity = allGoods[gi];
+            var tier = byIndex[(int)commodity].Leverage;
             if (tier == CommodityLeverageTier.None) continue;
 
             buyer.Market.TryGetValue(commodity, out var quote);

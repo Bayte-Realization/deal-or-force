@@ -42,7 +42,7 @@ public static class CivilWarFronts
         // The governments with more than one rising against them at once.
         var risings = new Dictionary<int, List<Nation>>();
         var warsScanned = 0;
-        foreach (var war in c.Wars)
+        foreach (var war in Warfare.OpenWars(c))
         {
             if (++warsScanned % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (war.Ended || !war.CivilConflict) continue;

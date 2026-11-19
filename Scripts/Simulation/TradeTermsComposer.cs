@@ -62,10 +62,10 @@ public static class TradeTermsComposer
     /// </summary>
     public static List<Candidate> Ranked(Campaign c, Nation proposer, Nation partner, List<TradeTerms> candidates)
     {
-        var ranked = new List<Candidate>();
+        var ranked = new List<Candidate>(candidates.Count);
         if (candidates.Count == 0) return ranked;
-        var ours = TradeTermsValue.Read(c, proposer, partner);
-        var theirs = TradeTermsValue.Read(c, partner, proposer);
+        var ours = TradeTermsValue.ReadScratchOurs(c, proposer, partner);
+        var theirs = TradeTermsValue.ReadScratchTheirs(c, partner, proposer);
         var grudge = Ultimatum.GrudgePenalty(c, proposer, partner);
         var previousSignable = false;
         for (var i = 0; i < candidates.Count; i++)

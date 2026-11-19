@@ -90,11 +90,12 @@ public static class WorldWar
     private static IEnumerable<int> RecogniseStages(Campaign c)
     {
         HashSet<int> powers = null;
-        var count = c.Wars.Count;
+        var openWars = Warfare.OpenWars(c);
+        var count = openWars.Count;
         var seen = 0;
         for (var index = 0; index < count; index++)
         {
-            var war = c.Wars[index];
+            var war = openWars[index];
             if (!war.Ended && !war.CivilConflict && war.WorldWarDay < 0 && war.BelligerentCount >= 2)
             {
                 powers ??= WorldPowers(c);

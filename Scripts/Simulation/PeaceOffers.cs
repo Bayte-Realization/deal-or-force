@@ -196,7 +196,7 @@ public static class PeaceOffers
     {
         var waiting = new List<StrategicWar>();
         if (campaign is null) return waiting;
-        foreach (var war in campaign.Wars)
+        foreach (var war in Warfare.OpenWars(campaign))
             if (AwaitingAnswer(war, nationId))
                 waiting.Add(war);
         waiting.Sort((left, right) => left.PendingOfferDay.CompareTo(right.PendingOfferDay));
