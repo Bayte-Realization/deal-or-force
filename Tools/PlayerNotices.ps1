@@ -28,3 +28,22 @@ function Write-PlayerNotices([string]$ProjectRoot, [string]$OutputDirectory) {
         }
     }
 }
+
+# The launcher's "What's new" tab looks for these two names beside the executable.
+function Copy-PlayerChangelogs([string]$ProjectRoot, [string]$OutputDirectory) {
+    $versionFile = Join-Path $ProjectRoot 'GameVersion.props'
+    $version = ([xml](Get-Content -LiteralPath $versionFile -Raw)).Project.PropertyGroup.Version
+    $names = [ordered]@{ EN = 'CHANGELOG.md'; RU = 'CHANGELOG.ru.md' }
+    $sources = @{}
+    foreach ($language in $names.Keys) {
+        $source = Join-Path $ProjectRoot "docs/CHANGELOG_${version}_$language.md"
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or
+            [string]::IsNullOrWhiteSpace([IO.File]::ReadAllText($source))) {
+            throw "Missing or empty release notes: $source"
+        }
+        $sources[$language] = $source
+    }
+    foreach ($language in $names.Keys) {
+        Copy-Item -LiteralPath $sources[$language] -Destination (Join-Path $OutputDirectory $names[$language])
+    }
+}

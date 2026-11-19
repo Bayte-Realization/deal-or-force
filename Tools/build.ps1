@@ -341,6 +341,7 @@ foreach ($notice in @('LICENSE', 'LICENSE-EXCEPTIONS.md', 'README.md', 'README.r
 }
 # Keep attribution, including an opt-in native adapter, in one readable file.
 Write-PlayerNotices -ProjectRoot $project -OutputDirectory $out
+Copy-PlayerChangelogs -ProjectRoot $project -OutputDirectory $out
 
 # Where the game will look: its own folder, then up to seven parents. Anything below the
 # build folder counts, because that is what ships.
