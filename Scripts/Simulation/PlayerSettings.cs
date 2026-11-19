@@ -37,9 +37,12 @@ public static class PlayerSettings
     /// </summary>
     public static void UseDirectory(string directory)
     {
+        var existed = !string.IsNullOrEmpty(directory) &&
+                      File.Exists(System.IO.Path.Combine(directory, FileName));
         _directory = directory;
         _loaded = false;
         Load();
+        if (existed) MapLook.MigrateDefaultsIfNeeded();
     }
 
     /// <summary>Whether Godot has said where the file lives yet.</summary>

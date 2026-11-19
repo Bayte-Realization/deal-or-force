@@ -18,7 +18,7 @@ public partial class DealOrForceGame
 uniform float strength = 0.38;
 uniform vec4 tint : source_color = vec4(0.02, 0.03, 0.05, 1.0);
 uniform float warmth = 0.0;
-uniform vec4 warm_tint : source_color = vec4(0.08, 0.055, 0.035, 1.0);
+uniform vec4 warm_tint : source_color = vec4(0.055, 0.055, 0.058, 1.0);
 void fragment() {
     vec2 p = (UV - 0.5) * vec2(1.0, 0.82);
     float fall = smoothstep(mix(0.30, 0.34, warmth), mix(0.78, 0.82, warmth), length(p) * 1.18);
@@ -46,8 +46,8 @@ void fragment() {
     internal void UpdateMapVignetteLook()
     {
         if (!IsInstanceValid(_mapVignetteMaterial)) return;
-        var polish = MapLabelPriority.AtmospherePolish(
-            Simulation.MapLook.Atlas(),
+        var polish = MapLabelPriority.AtmospherePolishForMood(
+            Simulation.MapLook.Mode(),
             RenderingServer.GetCurrentRenderingMethod(),
             Ui.Metric("map.vignette", 0.38f));
         _mapVignetteMaterial.SetShaderParameter("strength", polish.VignetteStrength);

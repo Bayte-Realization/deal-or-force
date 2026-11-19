@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using DealOrForce;
+using DealOrForce.Presentation;
 using DealOrForce.Simulation;
 
 /// <summary>
@@ -29,6 +30,7 @@ static class MapLookTests
         Paper();
         Switch();
         ShaderContract();
+        CityMiniatureTests.Run();
     }
 
     private static void Tokens()
@@ -37,14 +39,17 @@ static class MapLookTests
         // The design's table, as revised after the first review (docs/MAP_LOOK_WAVE_1_2026_11_18_RU.md).
         var table = new Dictionary<string, string>
         {
-            ["map.look_paper"] = "#e6d9bb", ["map.look_shade"] = "#4a4f5e", ["map.look_lamp"] = "#fff1d2",
+            ["map.look_paper"] = "#eceae4", ["map.look_shade"] = "#4d5463", ["map.look_lamp"] = "#faf9f6",
             ["map.look_sea_deep"] = "#18323f", ["map.look_sea_mid"] = "#234b58", ["map.look_sea_shelf"] = "#3d6b70",
-            ["map.look_sea_coast"] = "#6a9690", ["map.look_sea_chart"] = "#2a4450", ["map.look_foam"] = "#ece5d2",
-            ["map.look_coast_ink"] = "#2e4048", ["map.look_unowned"] = "#d8ccb0",
-            ["map.look_label_fill"] = "#efe4c8", ["map.look_label_outline"] = "#11161c",
-            ["map.look_capital_fill"] = "#f7eed6", ["map.look_region_fill"] = "#e6d9bb",
-            ["map.look_river_fill"] = "#a8cedd", ["map.look_river_outline"] = "#0f1e29",
+            ["map.look_sea_coast"] = "#6a9690", ["map.look_sea_chart"] = "#2a4450", ["map.look_foam"] = "#f2f1ee",
+            ["map.look_coast_ink"] = "#2e4048", ["map.look_unowned"] = "#dfddd6",
+            ["map.look_label_fill"] = "#f5f6f8", ["map.look_label_outline"] = "#111318",
+            ["map.look_capital_fill"] = "#f8f9fb", ["map.look_region_fill"] = "#eceef2",
+            ["map.look_river_fill"] = "#b4d6e4", ["map.look_river_outline"] = "#0f1c26",
         };
+        Check(InterfaceSkin.Colour("globe.label").Equals("#f5f6f8", StringComparison.OrdinalIgnoreCase) &&
+              InterfaceSkin.Colour("globe.label_outline").Equals("#111318", StringComparison.OrdinalIgnoreCase),
+            "globe.label and globe.label_outline use crisp neutral ivory-white #f5f6f8 on #111318 ink with zero yellow cast");
         Check(MapLook.DefaultColours.Length == table.Count &&
               MapLook.DefaultColours.All(entry => table.TryGetValue(entry.Token, out var hex) &&
                   string.Equals(hex, entry.Hex, StringComparison.OrdinalIgnoreCase)),
@@ -69,7 +74,7 @@ static class MapLookTests
                 "game/gui/78_map_look.json ships " + token + " at the compiled value");
 
         Check(MapLook.GroundShowNearDefault == 0.30f && MapLook.CoverFarDefault == 0.95f &&
-              MapLook.SaturationFarDefault == 0.80f && MapLook.ReliefFarDefault == 0.45f && MapLook.ReliefTintDefault == 0.60f &&
+              MapLook.SaturationFarDefault == 0.80f && MapLook.ReliefFarDefault == 0.45f && MapLook.ReliefTintDefault == 0.28f &&
               MapLook.PaperFromDistanceDefault == 17f && MapLook.PaperFullDistanceDefault == 22f &&
               MapLook.FlatPaperFromZoomDefault == 9.0f && MapLook.FlatPaperFullZoomDefault == 11.5f &&
               MapLook.FarBandDefault == 0.36f && MapLook.FarBandPixelsDefault == 4.5f && MapLook.FoamDefault == 0.55f &&
@@ -82,9 +87,11 @@ static class MapLookTests
             Check(float.IsNaN(InterfaceSkin.Metric(gone, float.NaN)), "the retired token " + gone + " is no longer shipped");
 
         var style = MapLook.Current();
-        Check(Near(style.Paper, LinearColour.FromHex("#e6d9bb", default)) && Near(style.CoastInk, LinearColour.FromHex("#2e4048", default)) &&
-              Near(style.SeaDeep, new LinearColour(0.0091f, 0.0319f, 0.0497f), 0.0002f),
-            "colours reach the shader as linear light");
+        Check(Near(style.Paper, LinearColour.FromHex("#eceae4", default)) && Near(style.CoastInk, LinearColour.FromHex("#2e4048", default)) &&
+              Near(style.SeaDeep, new LinearColour(0.0091f, 0.0319f, 0.0497f), 0.0002f) &&
+              MathF.Abs(style.Paper.R - style.Paper.B) < 0.08f &&
+              MathF.Abs(style.Lamp.R - style.Lamp.B) < 0.05f,
+            "colours reach the shader as linear neutral archival cotton and D65 light with zero yellow cast");
         // The brightness order of the design: land paper over coastal water over open sea; inks darkest.
         float L(LinearColour c) => MapLook.Luminance(c);
         Check(L(style.Paper) > L(style.SeaCoast) && L(style.SeaCoast) > L(style.SeaShelf) && L(style.SeaShelf) > L(style.SeaMid) &&
@@ -181,13 +188,39 @@ static class MapLookTests
             SettingsCatalog.CurrentCampaign = null;
             PlayerSettings.UseDirectory(folder);
             SettingsCatalog.ResetCatalog(new List<string>());
-            Check(MapLook.Atlas(), "the atlas is the default look");
+            Check(MapLook.Mode() == MapLook.RealisticValue && MapLook.IsRealistic() && MapLook.Atlas(),
+                "realistic is the shipped default mood and enables the cartographic look");
+            Check(MapLook.EffectivePoliticalFill() == MapLook.FillTranslucent &&
+                  Near(MapLook.PoliticalFillTranslucency(MapLook.EffectivePoliticalFill()), 1f),
+                "realistic defaults to Imperator-style translucent country interiors");
+            SettingsCatalog.Store(MapLook.Setting, MapLook.PaperValue);
+            Check(MapLook.IsPaper() && MapLook.Atlas() &&
+                  MapLook.EffectivePoliticalFill() == MapLook.FillClassicOpaque,
+                "paper mood defaults to opaque paper paint unless overridden");
+            var style = MapLook.Current();
+            Check(MapLook.PaperMixForMode(MapLook.PaperValue, false, 5.4f, style) == 1f &&
+                  MapLook.PaperMixForMode(MapLook.PaperValue, true, 0.5f, style) == 1f,
+                "paper mood keeps paper_mix at 1.0 across all globe and flat zoom levels");
+            Check(MapLook.PaperMixForMode(MapLook.RealisticValue, false, 18.0f, style) == 0f &&
+                  MapLook.PaperMixForMode(MapLook.RealisticValue, false, 25.0f, style) == 1f,
+                "realistic mood keeps physical ground up to d=18 and transitions smoothly to orbital chart");
             SettingsCatalog.Store(MapLook.Setting, MapLook.ClassicValue);
-            Check(!MapLook.Atlas(), "classic switches the look off with one value");
+            Check(!MapLook.Atlas() && MapLook.PaperMixForMode(MapLook.ClassicValue, false, 24f, style) == 0f,
+                "classic switches the look off with one value");
             SettingsCatalog.Store(MapLook.Setting, MapLook.AtlasValue);
-            Check(MapLook.Atlas(), "and atlas switches it back");
+            Check(MapLook.Atlas() && !MapLook.IsRealistic() && !MapLook.IsPaper(),
+                "and atlas switches to the hybrid middle-to-paper mood");
+            SettingsCatalog.Store(MapLook.PoliticalFillSetting, MapLook.FillBalanced);
+            Check(MapLook.EffectivePoliticalFill(MapLook.AtlasValue) == MapLook.FillBalanced &&
+                  MapLook.EffectivePoliticalFill(MapLook.RealisticValue) == MapLook.FillBalanced &&
+                  Near(MapLook.PoliticalFillTranslucency(MapLook.FillBalanced), 0.5f),
+                "an explicit political fill choice works across every map mood");
+            SettingsCatalog.Store(MapLook.PoliticalFillSetting, MapLook.FillClassicOpaque);
+            Check(MapLook.EffectivePoliticalFill(MapLook.RealisticValue) == MapLook.FillClassicOpaque &&
+                  MapLook.PoliticalFillTranslucency(MapLook.FillClassicOpaque) == 0f,
+                "realistic mood can run with solid classic_opaque country colours");
             SettingsCatalog.Store(MapLook.Setting, "no-such-look");
-            Check(MapLook.Atlas(), "an unknown stored value falls back to the default, the atlas");
+            Check(MapLook.Atlas() && MapLook.IsRealistic(), "an unknown stored value falls back to the default, realistic");
         }
         finally
         {
@@ -268,5 +301,12 @@ static class MapLookTests
         Check(fonts.Contains("MultichannelSignedDistanceField = true") && fonts.Contains("MapMsdfPixelRange = 40") &&
               fonts.Contains("IsMapLabelRole(role)"),
             "dynamic map label fonts use MSDF with pixel range >= 2x max outline while leaving small UI fonts hinted");
+        Check(full.Contains("uniform float realistic_look = 0.0;") &&
+              full.Contains("uniform float political_fill_translucency = 0.0;") &&
+              full.Contains("beer_transmittance") &&
+              full.Contains("schlick_fresnel") &&
+              full.Contains("snow_threshold") &&
+              full.Contains("river_glint"),
+            "Wave 3 physical ocean, snowpack, river glint and translucent political fill uniforms are present and off by default");
     }
 }

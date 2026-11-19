@@ -9,7 +9,14 @@
   "Cloud veil strength": "Плотность облачной пелены",
   "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not.": "Сохраняет движущиеся облака, но позволяет сделать их прозрачнее, чтобы лучше читать политическую карту. Меняются только декоративные облака и их тени — не туман войны и не разведданные.",
   "Map look": "Облик карты",
-  "Atlas: warm paper and ink, with a paper map from far away. Classic: the previous look. Changes immediately, without reducing detail or changing gameplay.": "Атлас — тёплая бумага и чернила, бумажная карта издалека; Классика — прежний вид. Применяется сразу, без снижения детализации и изменения игровых правил.",
-  "map.look.atlas": "Атлас",
-  "map.look.classic": "Классика"
+  "Realistic: physical terrain, bathymetric ocean and atmospheric lighting. Paper: warm cabinet paper chart at every zoom. Atlas: hybrid look turning into paper from afar. Classic: the previous map. Changes immediately, without restarting or changing gameplay.": "Реалистичная — физический рельеф, глубоководный океан и атмосфера; Бумажная — тёплая кабинетная карта на любом масштабе; Атлас — переход к бумаге издалека; Классика — прежний вид. Применяется сразу, без перезапуска и изменения правил.",
+  "map.look.realistic": "Реалистичная (AAA)",
+  "map.look.paper": "Бумажная карта (везде)",
+  "map.look.atlas": "Атлас (бумага издалека)",
+  "map.look.classic": "Классика",
+  "Country colour fill": "Заливка стран",
+  "How opaque country colours are over physical terrain and paper. Solid keeps full political paint; Balanced lets mountain relief and biomes breathe; Translucent opens country interiors in the style of a physical atlas while keeping borders bold. Changes immediately.": "Плотность цвета стран поверх рельефа и бумаги. Сплошная сохраняет плотную окраску; Полупрозрачная открывает горы и ландшафты; Прозрачная даёт живой физический рельеф внутри границ при насыщенном контуре державы. Применяется сразу.",
+  "map.fill.classic_opaque": "Сплошная",
+  "map.fill.balanced": "Полупрозрачная",
+  "map.fill.translucent": "Прозрачная (рельеф)"
 }

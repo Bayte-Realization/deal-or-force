@@ -288,7 +288,12 @@ public static class SettingsCatalog
         var definition = Of(id);
         var campaign = CurrentCampaign?.Invoke();
         if (definition is { Campaign: true } && campaign is not null) campaign.Settings[id] = value;
-        else PlayerSettings.Set(id, value);
+        else
+        {
+            PlayerSettings.Set(id, value);
+            if (id == MapLook.Setting && PlayerSettings.Located)
+                PlayerSettings.Set(MapLook.MigrationKeyV3, true);
+        }
     }
 
     public static void Store(string id, bool value) =>

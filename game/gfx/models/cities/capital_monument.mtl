@@ -1,0 +1,22 @@
+# Blender 5.3.0 PBR City Miniature Materials
+newmtl stone_light
+Kd 0.8700 0.8600 0.8400
+Ke 0.0000 0.0000 0.0000
+newmtl stone_warm
+Kd 0.7700 0.7600 0.7400
+Ke 0.0000 0.0000 0.0000
+newmtl stone_cool
+Kd 0.6600 0.6700 0.6800
+Ke 0.0000 0.0000 0.0000
+newmtl terracotta
+Kd 0.6800 0.3800 0.3000
+Ke 0.0000 0.0000 0.0000
+newmtl slate_roof
+Kd 0.3000 0.3400 0.3900
+Ke 0.0000 0.0000 0.0000
+newmtl brass_dome
+Kd 0.5800 0.6000 0.6100
+Ke 0.0000 0.0000 0.0000
+newmtl window_amber
+Kd 0.9400 0.9300 0.8900
+Ke 0.9500 0.9300 0.8800

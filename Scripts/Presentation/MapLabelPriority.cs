@@ -27,11 +27,13 @@ public readonly record struct AtmospherePolishState(
     bool WarmLampRim,
     float RimWarmth,
     float VignetteStrength,
-    float VignetteWarmth);
+    float VignetteWarmth,
+    bool RayleighMieHalo = false,
+    bool MuteSpaceRim = false);
 
 /// <summary>
 /// Pure-C# cartographic label hierarchy, collision avoidance, zoom-band alpha ramps,
-/// smooth fade stepping, and PC-only atmosphere gating for the atlas map look.
+/// smooth fade stepping, and PC-only atmosphere gating for the atlas and realistic map looks.
 /// </summary>
 public static class MapLabelPriority
 {
@@ -41,16 +43,39 @@ public static class MapLabelPriority
         string.Equals(renderingMethod?.Trim(), "forward_plus", StringComparison.OrdinalIgnoreCase);
 
     public static AtmospherePolishState AtmospherePolish(
-        bool atlasLook, string renderingMethod, float baseVignetteStrength)
+        bool atlasLook, string renderingMethod, float baseVignetteStrength) =>
+        AtmospherePolishForMood(atlasLook ? "atlas" : "classic", renderingMethod, baseVignetteStrength);
+
+    public static AtmospherePolishState AtmospherePolishForMood(
+        string mood, string renderingMethod, float baseVignetteStrength)
     {
         var clampedVignette = Math.Clamp(baseVignetteStrength, 0f, 1f);
-        if (!atlasLook || !IsForwardPlusRenderer(renderingMethod))
-            return new AtmospherePolishState(false, 0f, clampedVignette, 0f);
-        return new AtmospherePolishState(
-            WarmLampRim: true,
-            RimWarmth: 0.55f,
-            VignetteStrength: Math.Clamp(clampedVignette * 0.90f, 0f, 1f),
-            VignetteWarmth: 0.65f);
+        var forwardPlus = IsForwardPlusRenderer(renderingMethod);
+        return (mood ?? "").Trim().ToLowerInvariant() switch
+        {
+            "paper" => new AtmospherePolishState(
+                WarmLampRim: false,
+                RimWarmth: 0f,
+                VignetteStrength: Math.Clamp(clampedVignette * 0.94f, 0f, 1f),
+                VignetteWarmth: 0.80f,
+                RayleighMieHalo: false,
+                MuteSpaceRim: true),
+            "realistic" when forwardPlus => new AtmospherePolishState(
+                WarmLampRim: false,
+                RimWarmth: 0.18f,
+                VignetteStrength: Math.Clamp(clampedVignette * 0.84f, 0f, 1f),
+                VignetteWarmth: 0.35f,
+                RayleighMieHalo: true,
+                MuteSpaceRim: false),
+            "atlas" when forwardPlus => new AtmospherePolishState(
+                WarmLampRim: true,
+                RimWarmth: 0.55f,
+                VignetteStrength: Math.Clamp(clampedVignette * 0.90f, 0f, 1f),
+                VignetteWarmth: 0.65f,
+                RayleighMieHalo: false,
+                MuteSpaceRim: false),
+            _ => new AtmospherePolishState(false, 0f, clampedVignette, 0f)
+        };
     }
 
     public static float CountryMinimumCells(bool flat, float distanceOrZoom) => flat

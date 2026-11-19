@@ -145,23 +145,26 @@ uniform float map_mode = 0.0;
 // of paper from far away. Every term it adds stands behind atlas_look, and both switches start at
 // nought, so a material nobody has configured - and the classic setting - draws the old map.
 uniform float atlas_look = 0.0;
+// 1 in the physical AAA mood ("realistic"); 0 in atlas, paper and classic.
+uniform float realistic_look = 0.0;
+// Optional Imperator-style interior translucency (0 = solid, 0.5 = balanced, 1 = translucent).
+uniform float political_fill_translucency = 0.0;
 // 0 close in, 1 where the map has become paper; worked out from the camera once a frame.
 uniform float paper_mix = 0.0;
 // Linear colours; the defaults are the design's starting table, the game sets them from the skin.
-uniform vec3 look_paper = vec3(0.7913, 0.6939, 0.4969);
-// The colours the relief leans towards: a cool shade and a warm lamp, as in Imhof's relief
-// shading. Only their hue is used - the brightness of a slope is the old grey hillshade's.
-uniform vec3 look_shade = vec3(0.0685, 0.0782, 0.1119);
-uniform vec3 look_lamp = vec3(1.0, 0.8796, 0.6445);
-uniform float look_relief_tint = 0.60;
+uniform vec3 look_paper = vec3(0.8388, 0.8228, 0.7758);
+// Cool Rayleigh slate shadow and neutral D65 daylight highlight (brightness stays exact grey hillshade).
+uniform vec3 look_shade = vec3(0.0742, 0.0887, 0.1248);
+uniform vec3 look_lamp = vec3(0.9560, 0.9473, 0.9216);
+uniform float look_relief_tint = 0.28;
 uniform vec3 look_sea_deep = vec3(0.0091, 0.0319, 0.0497);
 uniform vec3 look_sea_mid = vec3(0.0168, 0.0704, 0.0976);
 uniform vec3 look_sea_shelf = vec3(0.0467, 0.1470, 0.1620);
 uniform vec3 look_sea_coast = vec3(0.1441, 0.3050, 0.2789);
 uniform vec3 look_sea_chart = vec3(0.0232, 0.0578, 0.0802);
-uniform vec3 look_foam = vec3(0.8388, 0.7835, 0.6445);
+uniform vec3 look_foam = vec3(0.8879, 0.8796, 0.8550);
 uniform vec3 look_coast_ink = vec3(0.0273, 0.0513, 0.0648);
-uniform vec3 look_unowned = vec3(0.6867, 0.6038, 0.4342);
+uniform vec3 look_unowned = vec3(0.7379, 0.7231, 0.6724);
 uniform float look_ground_show_near = 0.30;
 uniform float look_cover_far = 0.95;
 uniform float look_saturation_far = 0.80;
@@ -944,6 +947,16 @@ void fragment() {
         vec3 atlas_sea = mix(look_sea_deep, look_sea_mid, slope_rise);
         atlas_sea = mix(atlas_sea, look_sea_shelf, shelf * 0.82);
         atlas_sea = mix(atlas_sea, look_sea_coast, littoral * 0.55);
+        if (realistic_look > 0.5) {
+            // Physical Beer-Lambert bathymetric absorption: red attenuates fastest, green over the
+            // continental shelf, cobalt blue in the abyss, with carbonate shoal backscatter near shore.
+            float water_col_depth = pow(clamp(1.0 - sea_floor, 0.0, 1.0), 0.58) * 5.2;
+            vec3 beer_transmittance = exp(-vec3(0.58, 0.145, 0.040) * water_col_depth);
+            vec3 shoal_floor = vec3(0.24, 0.48, 0.47) * beer_transmittance;
+            vec3 abyss_scatter = mix(vec3(0.007, 0.025, 0.058), vec3(0.022, 0.098, 0.132), slope_rise);
+            vec3 physical_sea = abyss_scatter + shoal_floor * (0.18 + 0.68 * shelf + 0.34 * littoral);
+            atlas_sea = mix(atlas_sea, physical_sea, 1.0 - paper_mix);
+        }
         // From far away a printed chart has no gradients, only steps: one tone, a shade lighter
         // over the slope and again over the shelf. Each step is as soft as one pixel of depth.
         // The steps are about two and a half L* apart (0.72 / 0.86 / 1.0): any closer and they
@@ -977,7 +990,8 @@ void fragment() {
         waves = mix(waves, sea_wave_field(wave_polar_at, vec3(0.0105, -0.0180, 0.0072)), sea_polar);
     }
     vec3 water = sea * (0.74 + rim * 0.26);
-    water *= 1.0 + waves * 0.085 * wave_fade;
+    float ocean_motion_gate = 1.0 - paper_mix * step(0.5, atlas_look);
+    water *= 1.0 + waves * 0.085 * wave_fade * ocean_motion_gate;
     // Sun glint riding the sharpest of the three - the crests catching light, which is what
     // tells the eye this is a surface and not a fill. Kept at low zoom too: a flat map has
     // no rim to speak of, and gating it on the limb would delete it where players live.
@@ -990,10 +1004,26 @@ void fragment() {
         vec2 wave_polar_at = sea_polar_at + warp * 26.0;
         crest = mix(crest, sea_crest_field(wave_polar_at), sea_polar);
     }
-    float glint = pow(clamp(crest * 0.5 + 0.5, 0.0, 1.0), 6.0);
+    float glint = pow(clamp(crest * 0.5 + 0.5, 0.0, 1.0), 6.0) * ocean_motion_gate;
     // The atlas has one light on its water - the lamp's - so the crests catch its foam colour
     // rather than a cold cyan beside a warm highlight.
     water += mix(vec3(0.58, 0.75, 0.84), look_foam, step(0.5, atlas_look)) * glint * 0.18 * wave_fade;
+    if (realistic_look > 0.5 && PROJECTION_MATRIX[3][3] < 0.5 && paper_mix < 0.999) {
+        // Schlick Fresnel (F0 = 0.02 for water IOR 1.333) sky reflection + warm GGX solar path.
+        vec3 n_view = normalize(NORMAL);
+        vec3 v_dir = normalize(VIEW);
+        float ndotv = clamp(dot(n_view, v_dir), 0.0, 1.0);
+        float schlick_fresnel = 0.02 + 0.98 * pow(1.0 - ndotv, 5.0);
+        vec3 sky_reflect = vec3(0.22, 0.40, 0.66) * schlick_fresnel * 0.34;
+        vec3 sun_view_dir = normalize(vec3(-0.42, 0.56, 0.71));
+        vec3 half_vec = normalize(v_dir + sun_view_dir);
+        float ndoth = clamp(dot(n_view, half_vec), 0.0, 1.0);
+        float alpha2 = 0.048; // roughness ~0.22 squared twice
+        float denom = ndoth * ndoth * (alpha2 - 1.0) + 1.0;
+        float ggx_sun = alpha2 / max(3.1415927 * denom * denom, 0.001);
+        vec3 solar_path = vec3(0.98, 0.985, 1.00) * min(ggx_sun * 0.055, 0.28) * (0.65 + 0.55 * glint);
+        water = (water + sky_reflect + solar_path) * (1.0 - paper_mix) + water * paper_mix;
+    }
     // Foam & coastal ink: a pale surf line where the sea meets the shore, framed by a subtle
     // cartographic coastal shadow so continents stand out crisply from the ocean.
     float shore_band = max(fwidth(political.a) * 2.2, 0.022);
@@ -1091,6 +1121,7 @@ void fragment() {
     vec4 resource = texture(resource_colors, resource_uv);
     political.rgb = mix(political.rgb, resource.rgb, resource_mode * resource.a);
     vec3 base = mix(water, political.rgb, political.a);
+    float snow_surface_mask = 0.0;
     if (terrain_ready > 0.5) {
         vec2 province_uv = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
         // Where one ground meets another, reconstructed rather than stepped, and walked off
@@ -1106,6 +1137,7 @@ void fragment() {
         bool paper_only = atlas_look > 0.5 && paper_mix > 0.999 && terrain_mode < 0.5;
         vec3 ground = look_paper;
         vec3 relief_tint = look_paper;
+        vec2 micro_slope = vec2(0.0);
         if (!paper_only) {
             float near_slot;
             float other_slot;
@@ -1153,9 +1185,21 @@ void fragment() {
                 vec3 tile_mean = textureLod(terrain_tiles, vec3(fine_uv, near_slot), 7.0).rgb;
                 float grain_shift = dot(fine - tile_mean, vec3(0.2126, 0.7152, 0.0722));
                 ground *= 1.0 + terrain_detail * province_detail * grain_shift * 2.2;
+                if (realistic_look > 0.5) {
+                    // Derivative-clamped micro-normal from tile chroma/luma contrast (0 extra samplers,
+                    // pole-safe via fine_uv, and mip-clamped so subpixel frequencies never shimmer).
+                    float mip_footprint = max(length(fdx), length(fdy)) * 28.0;
+                    float micro_fade = (1.0 - smoothstep(0.35, 1.35, mip_footprint)) * (1.0 - paper_mix);
+                    micro_slope = clamp(vec2(fine.r - fine.b, fine.g - tile_mean.g) * 1.45, vec2(-0.22), vec2(0.22)) * micro_fade;
+                }
             }
             relief_tint = seam_sample_relief_color(UV).rgb;
             ground = mix(ground, relief_tint, relief_color_opacity);
+            if (realistic_look > 0.5) {
+                // De-yellow natural terrain albedo under D65 daylight: lift chlorophyll green and cool
+                // slate shadow slightly so flat plains never read as muddy sepia-brown under country paint.
+                ground *= mix(vec3(1.0), vec3(0.94, 1.02, 1.05), (1.0 - paper_mix) * 0.55);
+            }
         }
         if (atlas_look > 0.5) {
             // From far away the ground becomes the paper the atlas is printed on. Plain paper: a
@@ -1207,10 +1251,61 @@ void fragment() {
         float north = seam_sample_relief_height(vec2(UV.x, clamp(UV.y - ht.y, 0.0, 1.0))).r;
         float south = seam_sample_relief_height(vec2(UV.x, clamp(UV.y + ht.y, 0.0, 1.0))).r;
         float elev = (west + east + north + south) * 0.25;
-        vec2 slope = clamp(vec2(west - east, south - north) * relief_strength * 8.5, vec2(-0.85), vec2(0.85));
+        vec2 slope = clamp(vec2(west - east, south - north) * relief_strength * 8.5 + micro_slope, vec2(-0.88), vec2(0.88));
         float slope_mag = length(slope);
+        float snow_cover = 0.0;
+        if (realistic_look > 0.5 && paper_mix < 0.999) {
+            // Physical elevation x latitude snowpacks: snowline lowers toward polar latitudes,
+            // sheds off sheer vertical cliffs, and softens across ragged alpine treelines.
+            float abs_lat = abs(0.5 - clamp(UV.y, 0.0, 1.0)) * 2.0;
+            float snow_noise = (atlas_noise(UV, 320.0, flat_projection) - 0.5) * 0.09;
+            float snow_threshold = clamp(0.76 - pow(abs_lat, 1.65) * 0.44 + snow_noise, 0.25, 0.78);
+            float cliff_shed = 1.0 - smoothstep(0.62, 0.90, slope_mag);
+            snow_cover = smoothstep(snow_threshold - 0.06, snow_threshold + 0.08, elev) * cliff_shed * (1.0 - paper_mix) * political.a;
+            snow_surface_mask = snow_cover;
+            ground = mix(ground, vec3(0.92, 0.945, 0.98), snow_cover * 0.85);
+        }
+        if (political_fill_translucency > 0.001 && map_mode < 0.5 && resource_mode < 0.5) {
+            // Optional Imperator-style open interiors (works in realistic, paper, atlas and classic):
+            // valleys, taiga, steppes, deserts and snowpacks breathe in country interiors while the
+            // 20-cell distance band keeps sovereign borders richly pigmented and mid-zoom countries clear.
+            float interior_span = min(frontier_cap * 0.90, frontier_offset + max(look_far_band_pixels * 2.3 * id_aa, 6.2));
+            float coastal_soft = 1.0 - smoothstep(0.45, 0.96, textureLod(political_map, UV, 2.0).a);
+            float border_band = pow(max(1.0 - smoothstep(frontier_offset * 0.45, interior_span, frontier_cells_all), 0.0), 1.22)
+                * frontier_ready * (1.0 - 0.35 * coastal_soft);
+            float near_open = mix(0.42, 0.48, flat_projection);
+            float mid_open = mix(0.50, 0.56, flat_projection);
+            float open_terrain_cover = mix(mix(mid_open, near_open, province_detail), 0.85, border_band);
+            float open_paper_cover = mix(0.64, 0.90, border_band);
+            float target_open_cover = atlas_look > 0.5
+                ? mix(open_terrain_cover, open_paper_cover, paper_mix)
+                : open_terrain_cover;
+            colour_cover = mix(colour_cover, target_open_cover, political_fill_translucency);
+            vec3 crisp_nation = mix(vec3(dot(political.rgb, vec3(0.2126, 0.7152, 0.0722))), political.rgb,
+                mix(1.0, 1.18, political_fill_translucency * (1.0 - paper_mix)));
+            colored_ground = mix(ground, clamp(crisp_nation, vec3(0.0), vec3(1.0)) * ground_light, colour_cover);
+            land_surface = terrain_mode > 1.5 ? relief_tint : (terrain_mode > 0.5 ? ground : colored_ground);
+            base = mix(water, land_surface, political.a);
+        } else if (snow_cover > 0.001) {
+            colored_ground = mix(ground, political.rgb * ground_light, colour_cover);
+            land_surface = terrain_mode > 1.5 ? relief_tint : (terrain_mode > 0.5 ? ground : colored_ground);
+            base = mix(water, land_surface, political.a);
+        }
         vec3 relief_normal = normalize(vec3(slope * political.a, 1.0));
-        NORMAL_MAP = normalize(vec3(slope * political.a * 0.62, 1.0)) * 0.5 + 0.5;
+        float normal_scale = mix(0.62, mix(0.92, 0.28, paper_mix), realistic_look);
+        vec3 land_normal_map = normalize(vec3(slope * political.a * normal_scale, 1.0)) * 0.5 + 0.5;
+        if (realistic_look > 0.5 && paper_mix < 0.999 && political.a < 0.999) {
+            // Dual-octave seam-safe analytical ocean wave normals for dynamic sun glints.
+            vec2 wave_p = mix(wave_at, sea_polar_at + warp * 26.0, sea_polar);
+            vec2 w_grad1 = vec2(cos(wave_p.x * wave_fx.x + wave_p.y * 0.0145 + TIME * 0.22) * wave_fx.x,
+                                cos(wave_p.x * wave_fx.x + wave_p.y * 0.0145 + TIME * 0.22) * 0.0145);
+            vec2 w_grad2 = vec2(cos(wave_p.x * wave_fx.y + wave_p.y * 0.0210 - TIME * 0.17) * wave_fx.y,
+                                cos(wave_p.x * wave_fx.y + wave_p.y * 0.0210 - TIME * 0.17) * 0.0210);
+            vec2 sea_slope = (w_grad1 * 4.2 + w_grad2 * 2.8) * wave_fade * (1.0 - paper_mix);
+            vec3 sea_normal_map = normalize(vec3(sea_slope, 1.0)) * 0.5 + 0.5;
+            land_normal_map = mix(sea_normal_map, land_normal_map, political.a);
+        }
+        NORMAL_MAP = land_normal_map;
         NORMAL_MAP_DEPTH = 1.0;
         // West and north are -x and +y in the surface's own frame; the light stands high over
         // the north-west. Flat ground keeps its colour exactly: the shade is the difference a
@@ -1235,6 +1330,11 @@ void fragment() {
             vec3 relief_tint_colour = hillshade < 1.0 ? look_shade : look_lamp;
             vec3 relief_lean = relief_tint_colour / max(dot(relief_tint_colour, vec3(0.2126, 0.7152, 0.0722)), 0.0001) - 1.0;
             shaded = max(shaded + relief_lean * dot(shaded, vec3(0.2126, 0.7152, 0.0722)) * abs(hillshade - 1.0) * look_relief_tint, vec3(0.0));
+            if (realistic_look > 0.5 && paper_mix < 0.999) {
+                // Cool Rayleigh sky-hemisphere fill in shadow valleys + sunlit snow sheen.
+                vec3 sky_hemi = vec3(0.34, 0.50, 0.76) * (0.5 + 0.5 * relief_normal.z) * clamp(flat_lit - lit, 0.0, 0.55) * 0.11;
+                shaded += (sky_hemi + vec3(0.95, 0.96, 0.99) * snow_cover * 0.08) * (1.0 - paper_mix);
+            }
             // On the paper map the relief stays as a soft wash.
             base = mix(base, shaded + look_lamp * 0.106 * alpine_ridge,
                 political.a * relief_shading * (terrain_mode > 1.5 ? 1.0 : 0.88) * mix(1.0, look_relief_far, paper_mix));
@@ -1346,6 +1446,11 @@ void fragment() {
     river_opacity = max(river_opacity, 0.85);
     river_opacity = mix(river_opacity, max(river_opacity, 0.92), prominent_river);
     base = mix(base, river_color, river_water * river_opacity * (1.0 - lake_water));
+    if (realistic_look > 0.5 && PROJECTION_MATRIX[3][3] < 0.5 && paper_mix < 0.999 && inland_coverage > 0.001) {
+        // Sun-glinting physical rivers & lakes: catch warm sunlight as the 3D globe rotates.
+        float river_glint = pow(max(dot(reflect(-normalize(VIEW), normalize(NORMAL)), normalize(vec3(-0.42, 0.56, 0.71))), 0.0), 14.0);
+        base += vec3(0.97, 0.98, 1.00) * river_glint * 0.44 * inland_coverage * (1.0 - paper_mix);
+    }
     // A thin green-brown bank, so the water sits in a valley rather than lying on the land like
     // paint - and not a black outline, which is what a border is drawn with.
     base = mix(base, base * vec3(0.78, 0.86, 0.74), river_bank * river_opacity * 0.50 * (1.0 - lake_water));
@@ -1523,8 +1628,10 @@ void fragment() {
         // along a coast, which has its own ink already. Not in Compatibility, which has no field
         // (frontier_ready stays nought there).
         float band_end = min(frontier_cap * 0.85, frontier_offset + look_far_band_pixels * id_aa);
+        float zoom_band_gate = mix(clamp((id_span - 0.8) / 1.2, 0.0, 1.0), 1.0,
+            max(realistic_look, political_fill_translucency) * (1.0 - paper_mix));
         float raw_far_band = (1.0 - smoothstep(frontier_offset, band_end, frontier_cells_all)) * frontier_ready
-            * clamp((id_span - 0.8) / 1.2, 0.0, 1.0) * political.a * (1.0 - step(0.5, terrain_mode))
+            * zoom_band_gate * political.a * (1.0 - step(0.5, terrain_mode))
             * (1.0 - 0.5 * coast_far);
         float far_band = pow(max(raw_far_band, 0.0), 1.35);
         base = mix(base, saturated_nation * 0.80, far_band * look_far_band);
@@ -1622,10 +1729,19 @@ void fragment() {
         plan_color * plan_on * 0.16 +
         vec3(0.095, 0.024, 0.006) * front_edge * front_pulse * front_march +
         inland_water * (lake_water * 0.035 + river_water * 0.025);
-    // Sea glint as a soft sheen rather than a white disc: the open Pacific read as fog at 0.48/0.36.
-    ROUGHNESS = mix(0.56, mix(0.84, 0.40, inland_coverage), political.a);
+    // Sea glint as a soft sheen rather than a white disc; in realistic mode rivers drop roughness
+    // to 0.16 and ocean to 0.24 so rivers and shoals glint physically, while paper mutes shine.
+    float sea_rough = mix(0.56, mix(0.24, 0.92, paper_mix), realistic_look);
+    float river_rough = mix(0.40, mix(0.16, 0.90, paper_mix), realistic_look);
+    float land_rough = mix(0.84, 0.66, snow_surface_mask);
+    ROUGHNESS = mix(sea_rough, mix(land_rough, river_rough, inland_coverage), political.a);
+    ROUGHNESS = mix(ROUGHNESS, 0.94, paper_mix * step(0.5, atlas_look));
     METALLIC = 0.0;
-    SPECULAR = mix(0.26, mix(0.12, 0.40, inland_coverage), political.a);
+    float sea_spec = mix(0.26, mix(0.54, 0.02, paper_mix), realistic_look);
+    float river_spec = mix(0.40, mix(0.68, 0.02, paper_mix), realistic_look);
+    float land_spec = mix(0.12, 0.34, snow_surface_mask);
+    SPECULAR = mix(sea_spec, mix(land_spec, river_spec, inland_coverage), political.a);
+    SPECULAR *= 1.0 - paper_mix * step(0.5, atlas_look);
     // A flat map is a map: under the orthographic camera the sun's glint on the water landed as
     // a white haze across whole seas (the Sea of Japan, the open Pacific). The globe keeps it.
     SPECULAR *= 1.0 - step(0.5, PROJECTION_MATRIX[3][3]);
