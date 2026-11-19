@@ -423,15 +423,24 @@ public static class MarketSystem
     /// proportion to the cut: a trade agreement's cut is a cut in what the importer pays, not only
     /// in what its customs house collects. 1 + (markup - 1) x (1 - relief x relieved / imports).
     /// </summary>
-    public static float ImportMarkupOf(Defines defines, MarketQuote quote) =>
-        quote.Imports > 0.001f
-            ? 1f + (defines.ImportMarkup - 1f) *
-              (1f - M.Clamp01(defines.TradeAgreementMarkupRelief * M.Clamp01(quote.Relieved / quote.Imports)))
-            : 1f;
+    public static float ImportMarkupOf(Defines defines, MarketQuote quote)
+    {
+        EconomyRulesHook.EvaluateTradeCost(
+            quote.Imports, quote.Relieved, 0f,
+            defines.ImportMarkup, defines.TradeAgreementMarkupRelief, 0f,
+            out var importMarkup, out _);
+        return importMarkup;
+    }
 
     /// <summary>The week's duty on one good, before the treasury's share: forgone on the relieved part.</summary>
-    public static float DutyOf(Nation nation, MarketQuote quote) =>
-        MathF.Max(0f, quote.Imports - quote.Relieved) * quote.Price * TradePolicyRules.TariffRate(nation.TradePolicy);
+    public static float DutyOf(Nation nation, MarketQuote quote)
+    {
+        EconomyRulesHook.EvaluateTradeCost(
+            quote.Imports, quote.Relieved, quote.Price,
+            1f, 0f, TradePolicyRules.TariffRate(nation.TradePolicy),
+            out _, out var duty);
+        return duty;
+    }
 
     private static void Recalculate(Campaign campaign, bool adjustPrice)
     {

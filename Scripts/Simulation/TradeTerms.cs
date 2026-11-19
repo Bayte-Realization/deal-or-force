@@ -356,7 +356,7 @@ public static class TradeTermsCatalog
             try
             {
                 if (!MechanicFeatures.ValidId(id)) throw new FormatException("every preset needs a plain id");
-                if (entry.TryGetProperty("remove", out var remove) && remove.ValueKind == JsonValueKind.True)
+                if (GameDataLoader.IsRemoved(entry, $"common/deals:{id}"))
                 {
                     Presets.Remove(id);
                     continue;

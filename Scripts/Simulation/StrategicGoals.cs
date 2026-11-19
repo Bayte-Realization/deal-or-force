@@ -65,6 +65,11 @@ public static class GoalCatalog
             errors?.Add($"goal '{id}': expected an object.");
             return false;
         }
+        if (GameDataLoader.IsRemoved(value, $"common/goals:{id}"))
+        {
+            Definitions.RemoveAll(definition => definition.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+            return true;
+        }
 
         var milestones = new List<GoalMilestone>();
         if (value.TryGetProperty("milestones", out var declared) && declared.ValueKind == JsonValueKind.Array)

@@ -94,6 +94,11 @@ public static class DecisionCatalog
             errors?.Add($"decision '{id}': expected an object.");
             return false;
         }
+        if (GameDataLoader.IsRemoved(value, $"common/decisions:{id}"))
+        {
+            Definitions.RemoveAll(definition => string.Equals(definition.Id, id, StringComparison.OrdinalIgnoreCase));
+            return true;
+        }
 
         string Text(string key) =>
             value.TryGetProperty(key, out var found) && found.ValueKind == JsonValueKind.String

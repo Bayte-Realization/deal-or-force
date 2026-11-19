@@ -61,18 +61,33 @@ public static class Deterrence
     private static void Ensure()
     {
         if (_holders is not null) return;
-        var holders = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        _holders = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var document in GameDataLoader.DataDocuments("common", "deterrence"))
         using (document)
+            Merge(document.RootElement);
+    }
+
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        Ensure();
+        if (root.ValueKind != JsonValueKind.Object) return;
+        var rows = root.TryGetProperty("holders", out var wrapped) && wrapped.ValueKind == JsonValueKind.Object
+            ? wrapped
+            : root;
+        foreach (var row in rows.EnumerateObject())
         {
-            if (document.RootElement.ValueKind != JsonValueKind.Object ||
-                !document.RootElement.TryGetProperty("holders", out var rows) ||
-                rows.ValueKind != JsonValueKind.Object) continue;
-            foreach (var row in rows.EnumerateObject())
-                if (row.Value.ValueKind == JsonValueKind.Number && row.Value.TryGetInt32(out var tier) && tier > 0)
-                    holders[row.Name] = tier;
+            if (row.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+            if (GameDataLoader.IsRemoved(row.Value, $"common/deterrence:{row.Name}"))
+            {
+                _holders.Remove(row.Name);
+                continue;
+            }
+            if (row.Value.ValueKind == JsonValueKind.Number && row.Value.TryGetInt32(out var tier))
+            {
+                if (tier > 0) _holders[row.Name] = tier;
+                else _holders.Remove(row.Name);
+            }
         }
-        _holders = holders;
     }
 
     /// <summary>
@@ -101,8 +116,14 @@ public static class Deterrence
     /// that wants the Cold War to crack at the seams lowers it; a mod that wants
     /// never-touch peace raises it. Zero and the wall is gone.
     /// </summary>
-    public static float MutualPrice(Campaign campaign, Nation a, Nation b) =>
-        TierOf(campaign, a) >= 1 && TierOf(campaign, b) >= 1 ? campaign.Defines.AiMutualDeterrencePrice : 0f;
+    public static float MutualPrice(Campaign campaign, Nation a, Nation b)
+    {
+        DiplomacyRulesHook.EvaluateDeterrence(
+            TierOf(campaign, a), TierOf(campaign, b),
+            campaign.Defines.AiMutualDeterrencePrice, campaign.Defines.MutualDeterrenceEnabled,
+            out var mutualPrice, out _);
+        return mutualPrice;
+    }
 
     /// <summary>
     /// The shadow over a war both sides could end the world from, as a pressure 0..4: the
@@ -128,7 +149,11 @@ public static class Deterrence
         if (attacker is null || defender is null) return 0f;
         var attackerTier = TierOf(campaign, attacker);
         var defenderTier = TierOf(campaign, defender);
-        return attackerTier >= 1 && defenderTier >= 1 ? Math.Min(4, attackerTier * defenderTier) : 0f;
+        DiplomacyRulesHook.EvaluateDeterrence(
+            attackerTier, defenderTier,
+            campaign.Defines.AiMutualDeterrencePrice, campaign.Defines.MutualDeterrenceEnabled,
+            out _, out var brinkmanship);
+        return brinkmanship;
     }
 }
 

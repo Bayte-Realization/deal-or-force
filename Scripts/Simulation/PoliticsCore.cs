@@ -166,8 +166,11 @@ public static class GovernmentCatalog
         Sort();
     }
 
-    public static void Merge(JsonElement root, List<string> errors = null) =>
-        DataCatalogLoader.MergeNamedDefinitions(root, Definitions, (id, element) => Read(id, element, errors), d => d.Id);
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        DataCatalogLoader.MergeNamedDefinitions(root, Definitions, (id, element) => Read(id, element, errors), d => d.Id, "common/governments");
+        Sort();
+    }
 
     public static void Validate(JsonElement root, List<string> problems) =>
         DataCatalogLoader.ValidateNamedDefinitions(root, (id, element) => Read(id, element, problems));
@@ -292,8 +295,11 @@ public static class IdeologyCatalog
         Sort();
     }
 
-    public static void Merge(JsonElement root, List<string> errors = null) =>
-        DataCatalogLoader.MergeNamedDefinitions(root, Definitions, (id, element) => Read(id, element, errors), d => d.Id);
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        DataCatalogLoader.MergeNamedDefinitions(root, Definitions, (id, element) => Read(id, element, errors), d => d.Id, "common/ideologies");
+        Sort();
+    }
 
     public static void Validate(JsonElement root, List<string> problems) =>
         DataCatalogLoader.ValidateNamedDefinitions(root, (id, element) => Read(id, element, problems));

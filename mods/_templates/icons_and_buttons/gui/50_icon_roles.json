@@ -1,0 +1,11 @@
+{
+  "campaign": {
+    "icons": {
+      "hud.TREASURY": "balance"
+    },
+    "icon_categories": {
+      "hud.GDP": "state",
+      "nav.Military": "economy"
+    }
+  }
+}

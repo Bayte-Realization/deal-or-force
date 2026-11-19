@@ -103,6 +103,11 @@ public static class Generals
                 errors?.Add($"common/generals: '{entry.Name}' is not a temperament.");
                 continue;
             }
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/generals:{entry.Name}"))
+            {
+                Traits.RemoveAll(existing => string.Equals(existing.Id, entry.Name, StringComparison.OrdinalIgnoreCase));
+                continue;
+            }
             string Text(string key) => entry.Value.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : "";
             float Number(string key, float fallback) => entry.Value.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetSingle() : fallback;
             var trait = new GeneralTrait(entry.Name, Text("name"), Text("description"),
@@ -111,6 +116,7 @@ public static class Generals
             Traits.RemoveAll(existing => existing.Id == trait.Id);
             Traits.Add(trait);
         }
+        _weights = Traits.Sum(trait => MathF.Max(0f, trait.Weight));
     }
 
     public static GeneralTrait Trait(string id) =>

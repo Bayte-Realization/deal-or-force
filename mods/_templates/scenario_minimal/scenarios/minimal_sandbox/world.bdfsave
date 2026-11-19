@@ -1,0 +1,39 @@
+{
+  "FormatVersion": 2,
+  "MapDataVersion": "2024.11.09-a",
+  "ProvinceCount": 1,
+  "ProvinceOwner": [0, 1],
+  "ProvinceState": [0, 1],
+  "ProvinceController": [0, 1],
+  "ProvinceOccupation": [0, 0],
+  "Date": { "Year": 1995, "Month": 1, "Day": 1, "Hour": 0 },
+  "PlayerId": 0,
+  "Nations": [
+    {
+      "Id": 0,
+      "MapIndex": 1,
+      "Tag": "ALF",
+      "Iso": "ALF",
+      "Name": "Alpha",
+      "CapitalName": "Alphia",
+      "Government": "presidential_republic",
+      "Ideology": "liberalism",
+      "Population": 10000000,
+      "Gdp": 200.0,
+      "Treasury": 50.0,
+      "Stability": 0.7
+    }
+  ],
+  "States": [
+    {
+      "Id": "alf_01",
+      "Name": "Alphia",
+      "MapIndex": 1,
+      "NationMapIndex": 1,
+      "NationId": "ALF",
+      "Population": 10000000
+    }
+  ],
+  "Armies": [],
+  "ScenarioTerritories": {}
+}

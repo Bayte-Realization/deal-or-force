@@ -1,7 +1,7 @@
 // Example reskin: an atlas on a table instead of a screen in a war room.
 //
 // Only the tokens listed here change. Everything left out keeps the value the base game
-// gives it in game/interface/skin.json, so a reskin stays small and survives updates that
+// gives it in game/interface/00_skin.json, so a reskin stays small and survives updates that
 // add new tokens.
 {
   "colors": {
@@ -47,7 +47,7 @@
   // that only needs to be wider lists the offsets and inherits the anchors.
   //
   // The full set of panel names, with the rectangles the base game gives them, is in
-  // game/interface/skin.json. In game, `skin hud.` lists them with their current values.
+  // game/interface/00_skin.json. In game, `skin hud.` lists them with their current values.
   "layout": {
     // A wider ledger, and the army roster moved to the right-hand side.
     "modal.ledger":    { "anchors": [0.03, 0.08, 0.97, 0.94] },

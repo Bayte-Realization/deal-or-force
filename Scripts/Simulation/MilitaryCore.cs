@@ -1712,7 +1712,7 @@ public static class MilitaryBootstrap
         string[] files;
         try
         {
-            files = StructuredData.Files(directory, System.IO.SearchOption.AllDirectories);
+            files = GameDataLoader.TopLevelDataFiles(directory, "history/units", errors, "2024");
         }
         catch (Exception exception)
         {

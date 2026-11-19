@@ -102,12 +102,9 @@ public partial class LoadingScreen : Control
             drift.TweenProperty(_scene, "scale", new Vector2(1.045f, 1.045f), 24).SetTrans(Tween.TransitionType.Sine);
             drift.TweenProperty(_scene, "scale", Vector2.One, 24).SetTrans(Tween.TransitionType.Sine);
         }
-        var dossierPath = SpriteCatalog.TextureOf("panel_dossier", "res://game/gfx/interface/panels/panel_dossier.png");
         _paper = new TextureRect
         {
-            Texture = !string.IsNullOrWhiteSpace(dossierPath) && ResourceLoader.Exists(dossierPath)
-                ? GD.Load<Texture2D>(dossierPath)
-                : null,
+            Texture = Picture(SpriteCatalog.TextureOf("panel_dossier", "res://game/gfx/interface/panels/panel_dossier.png")),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
             Modulate = MenuChromeTheme.PaperDim with { A = 0.05f }, MouseFilter = MouseFilterEnum.Ignore
@@ -195,7 +192,7 @@ public partial class LoadingScreen : Control
     private static Texture2D WorldPicture()
     {
         var path = SpriteCatalog.TextureOf("menu_world", MenuWorld.ShippedPath);
-        return !string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
+        return string.IsNullOrWhiteSpace(path) ? null : Picture(path);
     }
 
     private static Label Text(string text, int size, Color color, bool serif = false, bool display = false)
@@ -260,6 +257,7 @@ public partial class LoadingScreen : Control
     /// <summary>An imported picture, or a mod's loose file read as it is.</summary>
     internal static Texture2D Picture(string path)
     {
+        if (string.IsNullOrWhiteSpace(path)) return null;
         if (ResourceLoader.Exists(path)) return GD.Load<Texture2D>(path);
         var loose = path.StartsWith("res://", System.StringComparison.Ordinal) ? ProjectSettings.GlobalizePath(path) : path;
         if (!System.IO.File.Exists(loose)) return null;

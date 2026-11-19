@@ -234,6 +234,11 @@ public static class SpriteCatalog
                 case JsonValueKind.Object:
                 {
                     var value = declaration.Value;
+                    if (GameDataLoader.IsRemoved(value, $"{origin}:{name}"))
+                    {
+                        Sprites.Remove(name);
+                        break;
+                    }
                     var texture = "";
                     foreach (var key in new[] { "texture", "texturefile", "file", "path" })
                         if (value.TryGetProperty(key, out var found) && found.ValueKind == JsonValueKind.String)

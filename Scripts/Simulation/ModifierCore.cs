@@ -151,6 +151,11 @@ public static class ModifierCatalog
                 errors?.Add($"Modifier '{entry.Name}' must be an object.");
                 continue;
             }
+            if (GameDataLoader.IsRemoved(value, $"common/modifiers:{entry.Name}"))
+            {
+                Definitions.Remove(entry.Name);
+                continue;
+            }
 
             Definitions[entry.Name] = new ModifierDefinition
             {

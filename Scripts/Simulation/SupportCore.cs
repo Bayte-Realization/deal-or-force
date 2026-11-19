@@ -225,6 +225,11 @@ public static class SupportTypeCatalog
         foreach (var property in root.EnumerateObject())
         {
             if (property.Value.ValueKind != JsonValueKind.Object) continue;
+            if (GameDataLoader.IsRemoved(property.Value, $"common/support:{property.Name}"))
+            {
+                Definitions.Remove(property.Name);
+                continue;
+            }
             // Key by key, like every other catalogue: a mod that wants longer-legged rocket
             // artillery writes { "mlrs_battalion": { "range_km": 120 } } and keeps the rest.
             // Replacing the whole entry made that one line a rocket battery with no fire.

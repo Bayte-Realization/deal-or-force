@@ -1,0 +1,10 @@
+{
+  "id": "example_era_skin",
+  "name": "Example: era overlay skin (bronze atlas)",
+  "version": "1.0.0",
+  "supported_game_version": "0.6.*",
+  "enabled": false,
+  "load_order": 170,
+  "dependencies": [],
+  "gdscript_entry": ""
+}

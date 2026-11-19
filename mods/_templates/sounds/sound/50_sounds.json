@@ -1,0 +1,19 @@
+{
+  "channels": {
+    "interface": { "volume_db": -12, "priority": 0, "independent": true }
+  },
+  "cues": {
+    "ui_select": {
+      "file": "res://game/sound/audio/atlas/atlas_confirm.wav",
+      "channel": "interface",
+      "cooldown_ms": 80,
+      "volume_db": -2
+    }
+  },
+  "map_ambience": {
+    "beds": {
+      "mountain_wind": "res://game/sound/audio/ambience/mountain_snow.ogg"
+    },
+    "high_wind": "res://game/sound/audio/ambience/mountain_snow.ogg"
+  }
+}

@@ -323,6 +323,20 @@ public static class BuildingCatalog
         return true;
     }
 
+    /// <summary>Remove a registered building kind by id so mods can disable entries cleanly via "remove": true.</summary>
+    public static bool Remove(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return false;
+        if (TryParse(id, out var kind))
+        {
+            Definitions.Remove(kind);
+            Ids.Remove(kind);
+            foreach (var key in Named.Where(kv => kv.Value == kind).Select(kv => kv.Key).ToArray())
+                Named.Remove(key);
+        }
+        return true;
+    }
+
     public static bool Override(BuildingKind kind, string name, float? cost, int? days,
         float? capacityGain, string description, bool? needsWater = null, float? jobs = null)
     {

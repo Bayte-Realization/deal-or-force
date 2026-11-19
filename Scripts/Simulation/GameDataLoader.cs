@@ -79,6 +79,124 @@ public static class GameDataLoader
         }
     }
 
+    private static readonly object WarningLock = new();
+    private static readonly List<string> PendingWarnings = new();
+
+    /// <summary>Record a non-fatal content or legacy-schema warning for diagnostics and mod logs.</summary>
+    public static void RecordWarning(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+        lock (WarningLock)
+        {
+            if (PendingWarnings.Count < 512) PendingWarnings.Add(message);
+        }
+        DiagnosticLogs.Write("errors", message);
+    }
+
+    /// <summary>Drain recorded data warnings (legacy keys, ignored nested files) since the last drain.</summary>
+    public static IReadOnlyList<string> DrainWarnings()
+    {
+        lock (WarningLock)
+        {
+            if (PendingWarnings.Count == 0) return Array.Empty<string>();
+            var snapshot = PendingWarnings.ToArray();
+            PendingWarnings.Clear();
+            return snapshot;
+        }
+    }
+
+    /// <summary>
+    /// Uniform entry-deletion check across dictionary catalogues. Canonical key is
+    /// <c>"remove": true</c>; legacy aliases <c>"removed"</c> and <c>"disabled"</c> are still
+    /// honoured and logged via <see cref="RecordWarning"/> so existing mods keep working cleanly.
+    /// </summary>
+    public static bool TryReadRemoveFlag(JsonElement value, out bool remove, string origin = null)
+    {
+        remove = false;
+        if (value.ValueKind != JsonValueKind.Object) return false;
+        if (value.TryGetProperty("remove", out var canonical) &&
+            canonical.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            remove = canonical.GetBoolean();
+            return true;
+        }
+        foreach (var legacy in new[] { "removed", "disabled" })
+        {
+            if (value.TryGetProperty(legacy, out var alias) &&
+                alias.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                remove = alias.GetBoolean();
+                RecordWarning($"{(string.IsNullOrEmpty(origin) ? "data" : origin)}: legacy key '{legacy}' used for deletion — prefer '\"remove\": true'.");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>True when an object entry declares <c>"remove": true</c> (or a logged legacy alias).</summary>
+    public static bool IsRemoved(JsonElement value, string origin = null) =>
+        TryReadRemoveFlag(value, out var remove, origin) && remove;
+
+    /// <summary>
+    /// Enumerate data files (<c>*.json</c>/<c>*.yaml</c>/<c>*.yml</c>) at top level of
+    /// <paramref name="directory"/> (plus optionally direct children of named
+    /// <paramref name="allowedSubfolders"/>, e.g. <c>2024</c> in <c>history/*</c>). Data files
+    /// placed inside other or deeper subfolders are skipped with a clear warning so modders see
+    /// immediately why nested folders were not loaded.
+    /// </summary>
+    public static string[] TopLevelDataFiles(string directory, string categoryLabel,
+        ICollection<string> warnings, params string[] allowedSubfolders)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+            return Array.Empty<string>();
+
+        var results = new List<string>(StructuredData.Files(directory, SearchOption.TopDirectoryOnly));
+        var allowed = allowedSubfolders is { Length: > 0 }
+            ? new HashSet<string>(allowedSubfolders, StringComparer.OrdinalIgnoreCase)
+            : null;
+
+        foreach (var subfolder in Directory.EnumerateDirectories(directory)
+                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            var folderName = Path.GetFileName(subfolder);
+            if (allowed is not null && allowed.Contains(folderName))
+            {
+                results.AddRange(StructuredData.Files(subfolder, SearchOption.TopDirectoryOnly));
+                foreach (var deeper in Directory.EnumerateDirectories(subfolder)
+                             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+                    foreach (var nested in StructuredData.Files(deeper, SearchOption.AllDirectories))
+                        WarnNestedDataFile(warnings, categoryLabel, directory, nested);
+            }
+            else
+            {
+                foreach (var nested in StructuredData.Files(subfolder, SearchOption.AllDirectories))
+                    WarnNestedDataFile(warnings, categoryLabel, directory, nested);
+            }
+        }
+
+        return results.OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    /// <summary>Report nested non-JSON files (such as <c>*.csv</c>) found inside subfolders when top-level only is supported.</summary>
+    public static void WarnNestedFilesWithExtension(string directory, string pattern, string categoryLabel,
+        ICollection<string> warnings)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
+        foreach (var subfolder in Directory.EnumerateDirectories(directory)
+                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            foreach (var nested in Directory.EnumerateFiles(subfolder, pattern, SearchOption.AllDirectories)
+                         .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+                WarnNestedDataFile(warnings, categoryLabel, directory, nested);
+    }
+
+    private static void WarnNestedDataFile(ICollection<string> warnings, string categoryLabel, string root, string file)
+    {
+        var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
+        var message = $"{categoryLabel}: nested file '{relative}' was ignored; place data files directly inside {categoryLabel}/ (not deeper subfolders).";
+        warnings?.Add(message);
+        RecordWarning(message);
+    }
+
 
     /// <summary>
     /// Every category some catalogue has asked for, as it asked for it.

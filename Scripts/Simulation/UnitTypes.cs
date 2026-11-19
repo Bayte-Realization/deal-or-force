@@ -82,6 +82,11 @@ public static class UnitTypeCatalog
     public static bool Override(string id, JsonElement value)
     {
         if (string.IsNullOrWhiteSpace(id) || value.ValueKind != JsonValueKind.Object) return false;
+        if (GameDataLoader.IsRemoved(value, $"common/units:{id}"))
+        {
+            Definitions.Remove(id);
+            return true;
+        }
         var current = Definitions.TryGetValue(id, out var existing) ? existing : Fallback(id);
         var next = Read(id, value, current);
         if (next is null) return false;

@@ -86,6 +86,12 @@ public static class FontCatalog
             var role = declaration.Name;
             var value = declaration.Value;
 
+            if (value.ValueKind == JsonValueKind.Object && GameDataLoader.IsRemoved(value, $"{origin}:{role}"))
+            {
+                Faces.Remove(role);
+                continue;
+            }
+
             if (value.ValueKind == JsonValueKind.String)
             {
                 Faces[role] = new Face(role, GameDataLoader.ResolveAssetPath(value.GetString(), assetRoot));

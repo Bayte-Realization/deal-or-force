@@ -386,6 +386,11 @@ public static class EventCatalog
         foreach (var entry in document.RootElement.EnumerateObject())
         {
             var value = entry.Value;
+            if (GameDataLoader.IsRemoved(value, $"events:{entry.Name}"))
+            {
+                Definitions.RemoveAll(e => string.Equals(e.Id, entry.Name, StringComparison.OrdinalIgnoreCase));
+                continue;
+            }
             if (!value.TryGetProperty("title", out var title) || !value.TryGetProperty("description", out var description))
             {
                 errors?.Add($"Event '{entry.Name}' requires title and description.");

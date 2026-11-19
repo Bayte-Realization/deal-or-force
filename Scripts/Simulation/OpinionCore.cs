@@ -62,6 +62,11 @@ public static class OpinionCatalog
                 errors?.Add($"opinion_modifiers: '{entry.Name}' is not a declaration");
                 continue;
             }
+            if (GameDataLoader.IsRemoved(value, $"common/opinion_modifiers:{entry.Name}"))
+            {
+                Definitions.Remove(entry.Name);
+                continue;
+            }
             if (!value.TryGetProperty("opinion", out var opinion) || !opinion.TryGetSingle(out var weight))
             {
                 errors?.Add($"opinion_modifiers: '{entry.Name}' says nothing about opinion");

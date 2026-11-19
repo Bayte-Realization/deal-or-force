@@ -467,9 +467,7 @@ public static class LogisticsSystem
                           damageFactor * enclaveFactor *
                           WaterConditions.RoadThroughput(campaign, centre.Latitude);
             var demand = MathF.Max(0.01f, board.DemandBySource.GetValueOrDefault(sourceState));
-            var congestion = M.Clamp(capacity / demand, 0.08f, 1f);
             var traceRange = Math.Max(1, campaign.Defines.SupplyTraceRange);
-            var distanceFactor = M.Clamp(1f - distance[province] / (float)traceRange * 0.62f, 0.22f, 1f);
             var lakeMultiplier = WaterConditions.LakeSupplyMultiplier(campaign, province);
 
             // A fleet sitting off the coast takes what arrives by sea. This is the one
@@ -481,9 +479,12 @@ public static class LogisticsSystem
                 blockadersKnown = true;
             }
             var blockade = NavalOperations.BlockadePressure(campaign, board.Blockaders, centre.Latitude, centre.Longitude);
-            var blockadeFactor = 1f - blockade * campaign.Defines.FleetBlockadeSupplyPenalty;
-            var target = M.Clamp01(congestion * distanceFactor * lakeMultiplier * blockadeFactor *
-                                   topology.TerrainAt(province).Supply * NationalModifiers.Factor(nation, "supply"));
+            CombatTempoRulesHook.EvaluateSupplyDelivery(
+                capacity, demand, distance[province], traceRange, lakeMultiplier,
+                blockade, campaign.Defines.FleetBlockadeSupplyPenalty,
+                topology.TerrainAt(province).Supply, NationalModifiers.Factor(nation, "supply"),
+                army.SupplyLevel,
+                out var congestion, out _, out _, out _, out var nextSupplyLevel);
             army.SupplyDistance = distance[province];
             army.SupplySourceStateMapIndex = sourceState;
             army.SupplyCongestion = congestion;
@@ -500,7 +501,7 @@ public static class LogisticsSystem
             // The road, or a ship, reached it: depots feed it now, not the villages.
             army.LivingOffLand = false;
             army.DaysCutOff = 0;
-            army.SupplyLevel = M.Lerp(army.SupplyLevel, target, 0.34f);
+            army.SupplyLevel = nextSupplyLevel;
         }
 
         var barracksTotal = 0;

@@ -249,6 +249,12 @@ public static class SubjectCatalog
                 continue;
             }
 
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/subjects:{entry.Name}"))
+            {
+                Types.Remove(entry.Name);
+                continue;
+            }
+
             if (!Types.TryGetValue(entry.Name, out var type))
                 Types[entry.Name] = type = new SubjectType { Id = entry.Name, Name = Titled(entry.Name) };
 

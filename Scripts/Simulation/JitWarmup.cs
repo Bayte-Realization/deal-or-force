@@ -38,6 +38,9 @@ internal static class JitWarmup
         (typeof(BrainDrain), nameof(BrainDrain.Stages)), (typeof(Consolidation), nameof(Consolidation.TickStages)),
         (typeof(AssaultRules), nameof(AssaultRules.Assess)), (typeof(WarRhythmRules), nameof(WarRhythmRules.OffensivePulse)),
         (typeof(WarRhythmRules), nameof(WarRhythmRules.BattleFortune)),
+        (typeof(EconomyRules), nameof(EconomyRules.EvaluateCreditTerms)), (typeof(EconomyRules), nameof(EconomyRules.EvaluateTradeCost)),
+        (typeof(DemographyRules), nameof(DemographyRules.StepCohorts)), (typeof(DiplomacyRules), nameof(DiplomacyRules.EvaluateDeterrence)),
+        (typeof(CombatTempoRules), nameof(CombatTempoRules.EvaluateSupplyDelivery)),
     };
 
     internal static void PrepareWeeklyPasses()

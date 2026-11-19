@@ -270,6 +270,12 @@ public static class ProductionChains
                 errors?.Add($"Production recipe '{entry.Name}' must be an object.");
                 continue;
             }
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/production:{entry.Name}"))
+            {
+                Regional.RemoveAll(existing => string.Equals(existing.Id, entry.Name, StringComparison.OrdinalIgnoreCase));
+                National.RemoveAll(existing => string.Equals(existing.Id, entry.Name, StringComparison.OrdinalIgnoreCase));
+                continue;
+            }
             var recipe = Read(entry.Name, entry.Value, errors);
             if (recipe is null) continue;
             // An override may move a recipe between scopes. Keep one ID, not both copies.

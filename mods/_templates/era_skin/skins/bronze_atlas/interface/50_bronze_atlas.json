@@ -1,0 +1,9 @@
+{
+  "colors": {
+    "material.plate.top": "#4b3d2c",
+    "material.plate.bottom": "#2f261b",
+    "material.plate.border": "#19140e",
+    "material.plate.engrave": "#755f42",
+    "accent.primary": "#c99c4a"
+  }
+}

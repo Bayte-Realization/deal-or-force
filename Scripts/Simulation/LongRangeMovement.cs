@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using DealOrForce.Simulation.Kernels;
 
 namespace DealOrForce.Simulation;
 
@@ -1608,7 +1609,20 @@ public static class LongRangeMovement
     /// measure is inside it in fact. Ties never matter: a shortest distance is the same however
     /// equal-cost provinces are popped.
     /// </summary>
-    private static Dictionary<int, float> DistanceField(Campaign c, ProvinceTopology map, List<int> sources, float bound, out List<int> within)
+    internal static Dictionary<int, float> DistanceField(Campaign c, ProvinceTopology map, List<int> sources, float bound, out List<int> within)
+    {
+        if (NativeKernelsLoader.EnableDistanceFieldDefault &&
+            NativeProvinceGraph.ForMap(map) is { } nativeGraph &&
+            nativeGraph.TryDistanceField(sources, bound, out var nativeDistances, out var nativeWithin) &&
+            nativeDistances is not null && nativeWithin is not null)
+        {
+            within = nativeWithin;
+            return nativeDistances;
+        }
+        return DistanceFieldManaged(c, map, sources, bound, out within);
+    }
+
+    internal static Dictionary<int, float> DistanceFieldManaged(Campaign c, ProvinceTopology map, List<int> sources, float bound, out List<int> within)
     {
         var distance = new Dictionary<int, float>();
         within = new List<int>();

@@ -167,35 +167,55 @@ public static class TreasuryDynamics
     public static void ResetCatalog(List<string> errors = null)
     {
         Shocks.Clear();
-        var byId = new Dictionary<string, EconomicShockDefinition>(StringComparer.OrdinalIgnoreCase);
+        _loaded = true;
         foreach (var document in GameDataLoader.DataDocuments("common", "economic_shocks"))
             using (document)
-                foreach (var entry in document.RootElement.EnumerateObject())
+                Merge(document.RootElement, errors);
+    }
+
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        Load();
+        if (root.ValueKind != JsonValueKind.Object) return;
+        var byId = new Dictionary<string, EconomicShockDefinition>(StringComparer.OrdinalIgnoreCase);
+        foreach (var existing in Shocks) byId[existing.Id] = existing;
+        foreach (var entry in root.EnumerateObject())
+        {
+            if (entry.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+            if (entry.Value.ValueKind != JsonValueKind.Object)
+            {
+                errors?.Add($"common/economic_shocks: '{entry.Name}' must be an object.");
+                continue;
+            }
+            if (GameDataLoader.IsRemoved(entry.Value, $"common/economic_shocks:{entry.Name}"))
+            {
+                byId.Remove(entry.Name);
+                continue;
+            }
+            if (!byId.TryGetValue(entry.Name, out var shock))
+                byId[entry.Name] = shock = new EconomicShockDefinition { Id = entry.Name, Name = entry.Name };
+            foreach (var field in entry.Value.EnumerateObject())
+            {
+                switch (field.Name)
                 {
-                    if (entry.Value.ValueKind != JsonValueKind.Object) { errors?.Add($"common/economic_shocks: '{entry.Name}' must be an object."); continue; }
-                    if (!byId.TryGetValue(entry.Name, out var shock)) byId[entry.Name] = shock = new EconomicShockDefinition { Id = entry.Name, Name = entry.Name };
-                    foreach (var field in entry.Value.EnumerateObject())
-                    {
-                        switch (field.Name)
+                    case "name": shock.Name = field.Value.GetString() ?? shock.Name; break;
+                    case "annual_chance": shock.AnnualChance = Math.Max(0f, field.Value.GetSingle()); break;
+                    case "cost":
+                        if (field.Value.ValueKind == JsonValueKind.Array && field.Value.GetArrayLength() == 2)
                         {
-                            case "name": shock.Name = field.Value.GetString() ?? shock.Name; break;
-                            case "annual_chance": shock.AnnualChance = Math.Max(0f, field.Value.GetSingle()); break;
-                            case "cost":
-                                if (field.Value.ValueKind == JsonValueKind.Array && field.Value.GetArrayLength() == 2)
-                                {
-                                    shock.CostMin = Math.Max(0f, field.Value[0].GetSingle());
-                                    shock.CostMax = Math.Max(shock.CostMin, field.Value[1].GetSingle());
-                                }
-                                break;
-                            case "damage": shock.Damage = M.Clamp01(field.Value.GetSingle()); break;
-                            case "deaths": shock.Deaths = M.Clamp01(field.Value.GetSingle()); break;
-                            case "stability": shock.Stability = M.Clamp01(field.Value.GetSingle()); break;
-                            default: errors?.Add($"common/economic_shocks: '{entry.Name}' has no field '{field.Name}'."); break;
+                            shock.CostMin = Math.Max(0f, field.Value[0].GetSingle());
+                            shock.CostMax = Math.Max(shock.CostMin, field.Value[1].GetSingle());
                         }
-                    }
+                        break;
+                    case "damage": shock.Damage = M.Clamp01(field.Value.GetSingle()); break;
+                    case "deaths": shock.Deaths = M.Clamp01(field.Value.GetSingle()); break;
+                    case "stability": shock.Stability = M.Clamp01(field.Value.GetSingle()); break;
+                    default: errors?.Add($"common/economic_shocks: '{entry.Name}' has no field '{field.Name}'."); break;
                 }
+            }
+        }
+        Shocks.Clear();
         Shocks.AddRange(byId.Values.OrderBy(s => s.Id, StringComparer.Ordinal));
-        _loaded = true;
     }
 
     private static void Load()

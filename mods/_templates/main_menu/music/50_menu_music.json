@@ -1,0 +1,10 @@
+{
+  "tracks": {
+    "menu_theme": {
+      "file": "res://game/music/audio/afterimage_republic.ogg",
+      "when": "menu",
+      "weight": 4,
+      "volume_db": -2
+    }
+  }
+}
