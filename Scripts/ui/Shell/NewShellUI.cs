@@ -116,6 +116,7 @@ public partial class DealOrForceGame
         ctx.SplitSelectionInHalf = SplitSelectionInHalf;
         ctx.MergeSelectedArmies = () => OpenScreen("Military");
         ctx.ClearArmySelection = ClearArmySelectionAndClose;
+        ctx.ClearRegionSelection = ClearRegionSelection;
         ctx.RefreshAll = () => { Refresh(); RefreshNewShell(force: true); };
     }
 

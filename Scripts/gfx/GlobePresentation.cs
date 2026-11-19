@@ -1083,7 +1083,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
         return FinishPick(nation, latitude, longitude, cell, provinceId, updateSelection, out pick);
     }
 
-    internal bool VerificationPickAt(Vector2 pixel, out GlobePick pick) => TryPick(pixel, out pick, false);
+    internal bool VerificationPickAt(Vector2 pixel, out GlobePick pick, bool updateSelection = false) =>
+        TryPick(pixel, out pick, updateSelection);
 
     /// <summary>
     /// Where on the Earth a pixel of the screen is: latitude and longitude, the raster cell,

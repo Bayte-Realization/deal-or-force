@@ -170,6 +170,13 @@ public partial class ExportVerification : Node
                     Check(game.FindChild("NetworkMultiplayer", true, false) is Control { Visible: true },
                         "real cold main-menu multiplayer intent reaches the lobby without a picker null reference");
                 using var _uiShellScope = EnterClassicUiShellAndBeginSession(game);
+                if (args.Contains("--verify-region-selection-close-only"))
+                {
+                    await VerifyRegionSelectionClose(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (args.Contains("--verify-recruitment-placement-only") || args.Contains("--verify-alliance-review-only"))
                 {
                     Check(DisplayServer.GetName() != "headless", "recruitment/alliance verification uses a real rendered viewport");

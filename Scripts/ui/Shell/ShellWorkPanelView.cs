@@ -242,6 +242,7 @@ internal sealed class ShellWorkPanelView
             UpdatePinButtonState();
         });
         _closeBtn = CreateHeaderIconButton("icon_shell_close", Loc.Get("Close"), Close);
+        _closeBtn.Name = "CloseShellWorkPanel";
 
         head.AddChild(_backBtn);
         head.AddChild(_pinBtn);
@@ -331,6 +332,7 @@ internal sealed class ShellWorkPanelView
     public void OpenCountry(Nation nation)
     {
         if (nation is null) return;
+        if (_mode == DossierMode.Region) _ctx.ClearRegionSelection?.Invoke();
         _mode = DossierMode.Country;
         if (_targetNationId != nation.Id) _activeTab = 0;
         _targetNationId = nation.Id;
@@ -361,6 +363,7 @@ internal sealed class ShellWorkPanelView
 
     public void Close()
     {
+        if (_mode == DossierMode.Region) _ctx.ClearRegionSelection?.Invoke();
         _mode = DossierMode.None;
         _pinned = false;
         if (_panel is not null) _panel.Visible = false;

@@ -8,6 +8,7 @@ Major visual craft, structural UI redesign, campaign peace logic, and deep Speed
 
 - Army counters keep a stable size as stacks refresh at a fixed camera. Globe counters use their actual camera depth, and flat-map counters follow the map zoom.
 - Reused counters for newly visible stacks start at the correct location. A formation crossing into a new province still eases from its previous position.
+- Closing the region dossier clears both the region and the province highlight on the map.
 
 ## Highlights in EntertAlpha 0.8.3.2
 

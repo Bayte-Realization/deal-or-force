@@ -66,6 +66,7 @@ internal sealed class ShellContext
     public Action SplitSelectionInHalf { get; set; }
     public Action MergeSelectedArmies { get; set; }
     public Action ClearArmySelection { get; set; }
+    public Action ClearRegionSelection { get; set; }
     public Action RefreshAll { get; set; }
 
     public bool ExplicitRegionIconsToggle { get; set; }
