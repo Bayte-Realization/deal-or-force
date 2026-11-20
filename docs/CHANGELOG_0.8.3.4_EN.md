@@ -6,6 +6,7 @@ This cumulative changelog covers the 0.8 EntertAlpha series, from the 19 Novembe
 
 ## 0.8.3.4 · Map, menus and launcher
 
+- The realistic map look is called **Realism** in Display settings.
 - **Pause menu ornaments stay with their panel.** The pause frame and portrait trim follow the menu draw order when Settings or Sound and artwork covers them. The same rule applies to shared frames and ornaments in other menus.
 - **Region selection ends when the dossier closes.** The close button and Escape both remove the highlight from the region and the picked province. Going from the region dossier to the country dossier also clears the ground selection.
 - **Army counters stay steady at a fixed camera.** On the globe their size follows their actual camera depth. On the flat map the same zoom compensation applies during creation, refresh and layout.
@@ -26,7 +27,7 @@ This cumulative changelog covers the 0.8 EntertAlpha series, from the 19 Novembe
 
 ## 0.8.3.2 · Map, artwork and audio
 
-- Switch the map look live between Realistic, Paper, Atlas and Classic. Political fill has opaque, balanced and translucent settings so the terrain and borders can be read at the preferred contrast.
+- Switch the map look live between Realism, Paper, Atlas and Classic. Political fill has opaque, balanced and translucent settings so the terrain and borders can be read at the preferred contrast.
 - The realistic view adds graduated ocean depth, more natural highlights, finer waves, elevation-dependent snow and river shading. A neutral palette reduces yellow haze, and clearer lettering makes city names easier to read.
 - Cities, capitals and ports have distinct 3D miniatures. City silhouettes and coastal placements were corrected. The Bosphorus and Dardanelles are represented as water with their crossings and sea passages defined in map data.
 - The desks and workspaces use five matte finishes drawn from leather, slate twill, archive linen, laid paper and blueprint grid. Corner ornaments, ruler bezels, tab strips and an expanded set of terrain, menu and building icons share the same visual style.

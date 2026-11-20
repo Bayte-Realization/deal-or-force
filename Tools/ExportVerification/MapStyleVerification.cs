@@ -91,6 +91,14 @@ public partial class ExportVerification
                 game.VerificationScrollToStyle(style);
                 await Wait(.2);
                 await Capture("map-style-options-" + language + "-" + size.X);
+                var look = game.VerificationMapStyleRow("Map look");
+                var lookChoice = look?.GetChildren().OfType<OptionButton>().FirstOrDefault();
+                var expectedLook = language == "russian" ? "Реализм" : "Realism";
+                Check(lookChoice is { ItemCount: 4 } && lookChoice.GetItemText(0) == expectedLook,
+                    "map look dropdown shows " + expectedLook + " at " + size.X);
+                game.VerificationScrollToStyle(look);
+                await Wait(.2);
+                await Capture("map-look-options-" + language + "-" + size.X);
             }
         }
         finally

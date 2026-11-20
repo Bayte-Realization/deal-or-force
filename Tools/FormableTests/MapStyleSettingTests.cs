@@ -90,9 +90,10 @@ static class MapStyleSettingTests
                 Check(Loc.Get(caption) != caption, "Russian caption is present: " + caption);
             Check(Loc.Get("Balanced") == "Сбалансированная" && Loc.Get("Relief") == "Рельеф",
                 "style and fill captions do not overwrite army stance or editor terminology");
+            Check(Loc.Get(look.Labels.First()) == "Реализм", "Russian map look caption is Реализм");
             Loc.Language = "english";
             Check(style.Labels.Select(Loc.Get).SequenceEqual(new[] { "Balanced", "Vivid", "Relief" }) &&
-                  look.Labels.Select(Loc.Get).SequenceEqual(new[] { "Realistic (AAA)", "Paper chart (always)", "Atlas (paper from afar)", "Classic" }) &&
+                  look.Labels.Select(Loc.Get).SequenceEqual(new[] { "Realism", "Paper chart (always)", "Atlas (paper from afar)", "Classic" }) &&
                   fill.Labels.Select(Loc.Get).SequenceEqual(new[] { "Solid", "Balanced", "Translucent" }),
                 "namespaced mood and political fill labels resolve cleanly in English");
         }
