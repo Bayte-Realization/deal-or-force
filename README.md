@@ -4,9 +4,9 @@
 
 **A grand strategy game about the whole world, from the morning of 1 January 2024.**
 Every country on the map is yours to play, and every one of them is simulated the same way.
-Version **0.8.3.2** (EntertAlpha).
+Version **0.8.3.4** (EntertAlpha).
 
-[![Release](https://img.shields.io/badge/release-EntertAlpha%200.8.3.2-2f6fb3)](docs/CHANGELOG_0.8.3.2_EN.md)
+[![Release](https://img.shields.io/badge/release-EntertAlpha%200.8.3.4-2f6fb3)](docs/CHANGELOG_0.8.3.4_EN.md)
 [![Engine](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED.md)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED.md)
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-3a7f3a)](LICENSE)
@@ -25,23 +25,26 @@ Version **0.8.3.2** (EntertAlpha).
 
 ## Play it
 
-- **Windows builds** (64-bit, English and Russian) are on
-  [itch.io](https://bayte-realization.itch.io/deal-or-force), every release since 0.5.2.2.
+- **Published Windows builds** (64-bit, English and Russian) are on
+  [itch.io](https://bayte-realization.itch.io/deal-or-force).
   Extract the whole archive and run `Deal or Force Launcher.exe`.
 - **From source** — see [Building and running](#building-and-running) below.
-- It is EntertAlpha: a lot works, and a lot is still being rebuilt. What is not done yet is
-  written down at the end of every [changelog](docs/CHANGELOG_0.8.3.2_EN.md), not hidden.
+- The [cumulative 0.8 changelog](docs/CHANGELOG_0.8.3.4_EN.md) covers the new interface, game
+  rules and performance work, along with the latest fixes.
 - It is built by one person, openly with the help of AI.
 
 Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 [X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
 [Telegram](https://t.me/+39SNXyA92aBmYzhi) · [devlog](https://bayte-realization.itch.io/deal-or-force/devlog)
 
-## New in EntertAlpha 0.8.3.2
+## New in EntertAlpha 0.8.3.4
 
-Built on **Godot 4.8 Beta 3 .NET** and **.NET 10**. Full itemized verification notes live in
-[CHANGELOG 0.8.3.2](docs/CHANGELOG_0.8.3.2_EN.md).
+Built on **Godot 4.8 Beta 3 .NET** and **.NET 10**. The full history of the 0.8 series is in
+[CHANGELOG 0.8.3.4](docs/CHANGELOG_0.8.3.4_EN.md).
 
+- **Map and menu fixes** — army counters stay steady at a fixed zoom and no longer flash through
+  the far side of the globe. Closing a region's dossier clears the map highlight, and menu
+  ornaments stay behind the window that covers them.
 - **Uniform 5-surface tactile UI pack & 100 % moddable chrome** — seamlessly tiled matte leather,
   slate twill, laid diplomatic paper, technical blueprint grid, and archival linen surfaces across
   every menu, HUD plate, dossier, and fullscreen workspace, paired with rescaled menu/terrain/good
@@ -56,7 +59,7 @@ Built on **Godot 4.8 Beta 3 .NET** and **.NET 10**. Full itemized verification n
   settle decisively instead of dragging on indefinitely, while preserving human player choice.
 - **Deep Speed-5 & Late-Campaign Optimization** — pooled `ArmyStackMarker` subtrees (`f:army sync`),
   warm army counter texture cache, throttled battle-marker & GPU map uploads, cooperative slice
-  yields eliminating Speed-5 stalls (`worst 661.9 ms -> 27.3 ms`, `0` frames `> 33 ms`), default
+  yields reducing stalls in a Speed 5 benchmark (`worst 661.9 ms -> 27.3 ms`), default
   sliver-group folding, staggered weekly economy, and `7`-day calm peacetime AI cadence.
 
 ## The game
@@ -209,7 +212,7 @@ Everything below exists in English and in Russian; a `_RU` suffix is the Russian
 
 | | |
 |---|---|
-| [Changelog 0.8.3.2](docs/CHANGELOG_0.8.3.2_EN.md) · [0.7.2.3](docs/CHANGELOG_0.7.2.3_EN.md) | **what changed in the current release, how it was checked, what is not done** |
+| [Changelog 0.8.3.4](docs/CHANGELOG_0.8.3.4_EN.md) · [0.7.2.3](docs/CHANGELOG_0.7.2.3_EN.md) | **cumulative 0.8 release notes and previous changelog** |
 | [Overhaul programme](docs/OVERHAUL_PROGRAMME_2026_11_14_RU.md) | the fifteen fronts of the rework and what "done" means for each (Russian) |
 | [Deal rework](docs/DEALS_REWORK_2026_11_14_RU.md) | what is wrong with deals today and the plan for them, step by step (Russian) |
 | [TUTORIAL](docs/TUTORIAL.md) | **your first campaign, hand held** |

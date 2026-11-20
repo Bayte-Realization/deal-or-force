@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using DealOrForce.Simulation;
 using Godot;
@@ -46,6 +47,66 @@ public partial class ExportVerification
         Check((game.FindChild("ShellMinimap", true, false) as Control)?.Visible == true,
             "new shell live minimap is visible in shipped release");
         await Capture("new-shell-rest");
+    }
+
+    private async Task VerifyMenuLayering(DealOrForceGame game)
+    {
+        SettingsCatalog.Store("ui_shell", "new");
+        game.Call("ApplySetting", "ui_shell");
+        game.Call("ShowPauseMenu");
+        await Wait(.25);
+        var pause = game.FindChild("PauseMenu", true, false) as Control;
+        var settingsButton = pause?.FindChild("PauseOpenSettings", true, false) as Button;
+        var mediaButton = pause?.FindChild("OpenMediaLibrary", true, false) as Button;
+        var archiveButton = pause?.FindChild("PauseOpenSaveArchive", true, false) as Button;
+        Check(pause is { Visible: true } && settingsButton is not null && mediaButton is not null && archiveButton is not null,
+            "the pause menu and its Settings, Media and Save Archive actions are available");
+        if (pause is not { Visible: true } || settingsButton is null || mediaButton is null || archiveButton is null) return;
+
+        bool DrawnAbove(Control upper, Control lower) =>
+            upper is { Visible: true } && lower.Visible && upper.GetParent() == lower.GetParent() &&
+            upper.ZIndex == lower.ZIndex && upper.GetIndex() > lower.GetIndex();
+
+        var ornaments = pause.FindChildren("*", "CanvasItem", true, false).OfType<CanvasItem>()
+            .Where(node => node.IsVisibleInTree() && node.Name.ToString() is
+                "CornerOrnamentsOverlay" or "MenuChromeBrassFrame" or "PortraitBezelOverlay").ToArray();
+        var decorationKinds = ornaments.Select(node => node.Name).Distinct().Count();
+        Check(decorationKinds == 3 && ornaments.All(node => node.ZIndex == 0 && !node.TopLevel),
+            "the pause ornaments and portrait bezel draw in their own panel's order");
+        await Capture("stack-pause");
+
+        settingsButton.EmitSignal(BaseButton.SignalName.Pressed);
+        await Wait(.2);
+        var settings = game.FindChild("Settings", true, false) as Control;
+        Check(DrawnAbove(settings, pause), "Settings covers the pause menu");
+        await Capture("stack-pause-settings");
+
+        var mediaFromSettings = settings?.FindChild("OpenMediaLibrarySettings", true, false) as Button;
+        Check(mediaFromSettings is not null, "Settings has the Sound and artwork action");
+        if (mediaFromSettings is null) return;
+        mediaFromSettings.EmitSignal(BaseButton.SignalName.Pressed);
+        await Wait(.25);
+        var media = game.FindChild("MediaLibrary", true, false) as Control;
+        Check(DrawnAbove(media, settings) && DrawnAbove(media, pause), "Sound and artwork covers Settings and the pause menu together");
+        await Capture("stack-pause-settings-media");
+        game.Call("CloseMediaLibrary");
+        Check(media is { Visible: false } && DrawnAbove(settings, pause), "closing Sound and artwork returns to Settings");
+        game.Call("HideSettings");
+        Check(settings is { Visible: false } && pause.Visible, "closing Settings returns to the pause menu");
+
+        mediaButton.EmitSignal(BaseButton.SignalName.Pressed);
+        await Wait(.2);
+        Check(DrawnAbove(media, pause), "Sound and artwork also covers the pause menu directly");
+        await Capture("stack-pause-media");
+        game.Call("CloseMediaLibrary");
+
+        archiveButton.EmitSignal(BaseButton.SignalName.Pressed);
+        await Wait(.2);
+        var archive = game.FindChild("SaveLoad", true, false) as Control;
+        Check(archive is { Visible: true } && !pause.Visible, "the save archive replaces the pause menu while open");
+        await Capture("stack-pause-archive");
+        game.Call("HideSaveLoadInterface");
+        Check(archive is { Visible: false } && pause.Visible, "closing the save archive returns to the pause menu");
     }
 
     private async Task VerifyRegionSelectionClose(DealOrForceGame game)

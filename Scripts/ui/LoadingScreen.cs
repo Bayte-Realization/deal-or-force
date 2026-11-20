@@ -124,7 +124,7 @@ public partial class LoadingScreen : Control
             innerBottomLine: MenuChromeTheme.RuleDark,
             brassEdge: MenuChromeTheme.RuleLight,
             borderThickness: 1));
-        _card.AddChild(new MenuChromeBrassFrame { Name = "DossierBrassFrame", ZIndex = 2 });
+        _card.AddChild(new MenuChromeBrassFrame { Name = "DossierBrassFrame" });
         AddChild(_card);
         // The dark umber plate is there so the words read cleanly over a picture; the plain chart needs none.
         _card.Visible = pictured;

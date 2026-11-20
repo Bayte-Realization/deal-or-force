@@ -1792,7 +1792,7 @@ public partial class DealOrForceGame : Control
             if (surface is PanelSurface.Modal or PanelSurface.Dossier &&
                 panel.GetNodeOrNull<MenuChromeBrassFrame>("MenuChromeBrassFrame") is null)
             {
-                panel.AddChild(new MenuChromeBrassFrame { Name = "MenuChromeBrassFrame", ZIndex = 4 });
+                panel.AddChild(new MenuChromeBrassFrame { Name = "MenuChromeBrassFrame" });
             }
         }
         panel.Resized += panel.QueueRedraw;

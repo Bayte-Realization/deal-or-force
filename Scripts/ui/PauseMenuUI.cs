@@ -64,11 +64,13 @@ public partial class DealOrForceGame
         rows.AddChild(btnQuickSave);
 
         var btnSaveLoad = PauseWellAction("Save / load campaign", ShowSaveLoadInterface);
+        btnSaveLoad.Name = "PauseOpenSaveArchive";
         ChromePlateArt.ApplyMenuButtonIcon(btnSaveLoad, "icon_menu_load");
         rows.AddChild(btnSaveLoad);
 
         var settingsRow = PauseMenuPair(rows);
         var settings = PauseWellAction("Settings", ShowSettings, 0);
+        settings.Name = "PauseOpenSettings";
         settings.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         ChromePlateArt.ApplyMenuButtonIcon(settings, "icon_menu_settings");
         settingsRow.AddChild(settings);

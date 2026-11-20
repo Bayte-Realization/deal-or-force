@@ -281,7 +281,7 @@ internal static class MenuChromeTheme
             ChromePlateArt.AttachCornerOrnaments(panel);
         if (panel.GetNodeOrNull<MenuChromeBrassFrame>("MenuChromeBrassFrame") is null)
         {
-            var frame = new MenuChromeBrassFrame { Name = "MenuChromeBrassFrame", ZIndex = 4 };
+            var frame = new MenuChromeBrassFrame { Name = "MenuChromeBrassFrame" };
             panel.AddChild(frame);
         }
     }
@@ -689,6 +689,7 @@ internal static class MenuChromeTheme
 /// <summary>
 /// Non-intrusive architectural frame overlay drawn across full parent bounds:
 /// subtle top light hairline and chamfered antique-brass corner trim.
+/// Uses the host's draw order so it stays behind any modal opened above the host.
 /// </summary>
 public partial class MenuChromeBrassFrame : Node2D
 {

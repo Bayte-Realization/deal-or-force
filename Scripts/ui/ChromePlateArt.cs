@@ -136,8 +136,7 @@ internal static class ChromePlateArt
             overlay = new Control
             {
                 Name = "CornerOrnamentsOverlay",
-                MouseFilter = Control.MouseFilterEnum.Ignore,
-                ZIndex = 3
+                MouseFilter = Control.MouseFilterEnum.Ignore
             };
             overlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
             host.AddChild(overlay);
@@ -403,8 +402,7 @@ internal static class ChromePlateArt
                 ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
                 TextureFilter = CanvasItem.TextureFilterEnum.LinearWithMipmaps,
-                MouseFilter = Control.MouseFilterEnum.Ignore,
-                ZIndex = 5
+                MouseFilter = Control.MouseFilterEnum.Ignore
             };
             existing.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
             host.AddChild(existing);
