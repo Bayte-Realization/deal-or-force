@@ -124,10 +124,11 @@ public partial class ExportVerification : Node
                     throw new InvalidOperationException("Style verification requires an isolated documents profile.");
                 SettingsCatalog.Store("fresh_world_each_game", false);
             }
-            if (args.Contains("--verify-recruitment-placement-only") || args.Contains("--verify-alliance-review-only"))
+            if (args.Contains("--verify-recruitment-placement-only") || args.Contains("--verify-alliance-review-only") ||
+                args.Contains("--verify-placement-resources-only"))
             {
                 if (string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("DOF_VERIFICATION_DOCUMENTS")))
-                    throw new InvalidOperationException("Recruitment/alliance verification requires an isolated documents profile.");
+                    throw new InvalidOperationException("Recruitment, alliance and placement resource verification require an isolated documents profile.");
                 SettingsCatalog.Store("fresh_world_each_game", false);
             }
             if (args.Contains("--verify-release-0530-only")) MainMenuScene.Wanted = MenuIntent.Multiplayer;
@@ -170,6 +171,13 @@ public partial class ExportVerification : Node
                     Check(game.FindChild("NetworkMultiplayer", true, false) is Control { Visible: true },
                         "real cold main-menu multiplayer intent reaches the lobby without a picker null reference");
                 using var _uiShellScope = EnterClassicUiShellAndBeginSession(game);
+                if (args.Contains("--verify-placement-resources-only"))
+                {
+                    await VerifyPlacementResources(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (args.Contains("--verify-campaign-topbar-only"))
                 {
                     await VerifyCampaignTopBar(game);

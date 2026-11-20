@@ -34,6 +34,95 @@ public partial class ExportVerification
         await Wait(.3);
     }
 
+    private async Task VerifyPlacementResources(DealOrForceGame game)
+    {
+        var c = game.VerificationWorld;
+        var player = c.NationByTag("RUS");
+        var other = c.NationByTag("USA");
+        c.ConfigureSinglePlayer(player.Id);
+        c.IsPaused = true;
+        var own = c.StatesOf(player).First(state => !LakeRegions.IsWaterState(state) &&
+            RecruitmentSystem.DeploymentProvince(c, player.Id, state.MapIndex) > 0 &&
+            ConstructionAdmission.Refusal(c, player, state, BuildingKind.CivilianIndustry).Length == 0);
+        var foreign = c.StatesOf(other).First(state => !LakeRegions.IsWaterState(state));
+        SettingsCatalog.Store("ui_shell", "new");
+        game.Call("ApplySetting", "ui_shell");
+        game.VerificationSelectPlayerCountry();
+        game.VerificationContinuityView(false, player.CapitalLatitude, player.CapitalLongitude, 5.4f);
+        await Wait(.25);
+
+        var treasury = game.FindChild("ShellStat_Treasury", true, false) as Control;
+        var manpower = game.FindChild("ShellStat_Manpower", true, false) as Control;
+        var treasuryFigure = treasury?.FindChildren("*", "Label", true, false).OfType<Label>().FirstOrDefault();
+        var manpowerFigure = manpower?.FindChildren("*", "Label", true, false).OfType<Label>().FirstOrDefault();
+        Check(treasuryFigure is not null && manpowerFigure is not null, "new shell shows treasury and manpower cells");
+        if (treasuryFigure is null || manpowerFigure is null) return;
+
+        foreach (var (language, size) in new[] { ("english", new Vector2I(1920, 1080)), ("russian", new Vector2I(1280, 720)) })
+        {
+            Loc.Language = language;
+            GetTree().Root.Size = size;
+            player.Treasury = 80f;
+            player.ManpowerReserve = 200_000f;
+            game.Call("RefreshLocalisedText");
+            game.VerificationBeginRecruitmentTool("motorized_corps", 2, MobilisationMode.Standard);
+            await Wait(.25);
+            var clock = c.ElapsedHours;
+            var treasuryBefore = player.Treasury;
+            var manpowerBefore = player.ManpowerReserve;
+            var beforeFigure = treasuryFigure.Text;
+            var beforeReserve = manpowerFigure.Text;
+            game.VerificationRecruitmentPick(other, foreign);
+            await Wait(.15);
+            Check(player.Treasury == treasuryBefore && treasuryFigure.Text == beforeFigure,
+                "refused region leaves the displayed treasury unchanged: " + language);
+
+            for (var attempt = 1; attempt <= 2; attempt++)
+            {
+                game.VerificationRecruitmentPick(player, own);
+                await Wait(.15);
+                Check(c.ElapsedHours == clock && game.FindChild("RecruitmentPlacement", true, false) is Control { Visible: true } &&
+                    player.Treasury < treasuryBefore && player.ManpowerReserve < manpowerBefore &&
+                    treasuryFigure.Text != beforeFigure && manpowerFigure.Text != beforeReserve &&
+                    treasury.TooltipText.Contains(Fmt.MoneyExact(player.Treasury)) &&
+                    manpower.TooltipText.Contains(Fmt.PeopleExact(player.ManpowerReserve)),
+                    $"treasury and manpower update after placement click {attempt} without closing the tool: {language}");
+                treasuryBefore = player.Treasury;
+                manpowerBefore = player.ManpowerReserve;
+                beforeFigure = treasuryFigure.Text;
+                beforeReserve = manpowerFigure.Text;
+            }
+            await Capture("placement-treasury-recruitment-" + language);
+
+            c.Construction.RemoveAll(p => p.NationId == player.Id);
+            game.VerificationStartConstructionTool();
+            game.VerificationConstructionPick(player, own);
+            await Wait(.15);
+            var project = c.Construction.LastOrDefault(p => p.NationId == player.Id);
+            Check(project is { Paid: 0f } && player.Treasury == treasuryBefore && treasuryFigure.Text == beforeFigure,
+                "queueing a building reserves a project without charging the contract up front: " + language);
+            ConstructionSystem.Tick(c);
+            c.MarkStrategicChange();
+            await Wait(.15);
+            Check(c.ElapsedHours == clock && game.FindChild("ConstructionPlacement", true, false) is Control { Visible: true } &&
+                project is { Paid: > 0f } && player.Treasury < treasuryBefore &&
+                treasury.TooltipText.Contains(Fmt.MoneyExact(player.Treasury)),
+                "construction payment refreshes the treasury while placement stays open: " + language);
+            await Capture("placement-treasury-construction-" + language);
+
+            own.WarDamage = .5f;
+            own.LastFoughtDay = c.ElapsedDays - c.Defines.WarDamageSafeDays;
+            own.RebuildingUntilDay = -1;
+            treasuryBefore = player.Treasury;
+            c.Commands.Enqueue(new RebuildRegionCommand { IssuerId = player.Id, StateMapIndex = own.MapIndex });
+            c.Commands.ApplyAll(c);
+            await Wait(.15);
+            Check(c.ElapsedHours == clock && player.Treasury < treasuryBefore &&
+                treasury.TooltipText.Contains(Fmt.MoneyExact(player.Treasury)),
+                "paying for regional reconstruction refreshes the treasury without advancing time: " + language);
+        }
+    }
+
     private async Task VerifyRecruitmentPlacement(DealOrForceGame game)
     {
         var c = game.VerificationWorld; c.IsPaused = true;

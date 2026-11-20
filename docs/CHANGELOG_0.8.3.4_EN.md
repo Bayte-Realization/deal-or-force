@@ -6,6 +6,7 @@ This cumulative changelog covers the 0.8 EntertAlpha series, from the 19 Novembe
 
 ## 0.8.3.4 · Map, menus and launcher
 
+- **The treasury and manpower update while placing orders on the map.** Recruitment shows the deduction after each accepted click, construction payments appear as the work is funded, and reconstruction charges show as soon as they are paid.
 - **The campaign top bar shrinks when the last war ends.** The row of national figures and its outer frame now resize together.
 - The realistic map look is called **Realism** in Display settings.
 - **Pause menu ornaments stay with their panel.** The pause frame and portrait trim follow the menu draw order when Settings or Sound and artwork covers them. The same rule applies to shared frames and ornaments in other menus.

@@ -161,6 +161,8 @@ internal sealed class ShellOrchestrator
         var heavyDue = force || worldChanged ||
             (dayOrRevChanged && (world.IsPaused || pausedChanged || nowMsec - _lastHeavyRefreshMsec >= minIntervalMsec));
 
+        // Orders can charge the treasury and reserve without advancing the clock or changing the map.
+        Corner.RefreshResources(world.Player);
         if (heavyDue)
         {
             _refreshDay = world.ElapsedDays;

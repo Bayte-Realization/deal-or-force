@@ -35,6 +35,7 @@ internal sealed class ShellCornerView
     private string _lastTag = "";
     private (Campaign World, int Day, int Rev, int PlayerId, string Lang, int Rank, double Score) _rankCache;
     private (Campaign World, int NationId, int SampleDay, float SampleGdp, float GrowthPct) _gdpSample;
+    private (float Treasury, float Balance, float Manpower, string Language, string Screen)? _resourceReadout;
     private StyleBoxEmpty _emptyStyle;
     private StyleBoxFlat _cellHoverStyle;
     private readonly List<StrategicWar> _openWarsBuf = new(8);
@@ -52,6 +53,7 @@ internal sealed class ShellCornerView
         public Label Delta;
         public Control SepGroove;
         public string LastSig = "";
+        public string LastTooltip = "";
         public bool LastActive;
     }
 
@@ -398,11 +400,13 @@ internal sealed class ShellCornerView
         SyncKeycapVisibility();
     }
 
-    private void RefreshCells(Campaign world, Nation player, IReadOnlyList<StrategicWar> openWars, string openScreen)
+    public void RefreshResources(Nation player)
     {
-        var debt = SovereignFinance.Outstanding(player);
-        var debtRatio = debt / MathF.Max(0.01f, player.Gdp);
-        var overdue = player.DebtArrears + player.PaymentArrears;
+        if (player is null) return;
+        var openScreen = _ctx.GetOpenScreen?.Invoke() ?? "";
+        var readout = (player.Treasury, player.WeeklyBalance, player.ManpowerReserve, Loc.Language, openScreen);
+        if (_resourceReadout is { } previous && previous.Equals(readout)) return;
+        _resourceReadout = readout;
 
         var (trFig, trUnit) = SplitMoney(player.Treasury);
         var (balDelta, _) = SplitMoney(MathF.Abs(player.WeeklyBalance));
@@ -412,6 +416,17 @@ internal sealed class ShellCornerView
             trDeltaTxt, player.WeeklyBalance >= 0 ? "shell.state.positive" : "shell.state.negative",
             $"{Loc.Get("Treasury")}: {Fmt.MoneyExact(player.Treasury)}\n{Loc.Get("Balance")}: {Fmt.MoneyDelta(player.WeeklyBalance)}/{Loc.Get("week")}",
             openScreen == "Economy");
+
+        var (manFig, manUnit) = SplitPeople((long)Math.Max(0, player.ManpowerReserve));
+        UpdateCell("Manpower", manFig, manUnit, "shell.paper", "", "shell.state.positive",
+            $"{Loc.Get("Manpower")}: {Fmt.PeopleExact(player.ManpowerReserve)}", openScreen == "Military");
+    }
+
+    private void RefreshCells(Campaign world, Nation player, IReadOnlyList<StrategicWar> openWars, string openScreen)
+    {
+        var debt = SovereignFinance.Outstanding(player);
+        var debtRatio = debt / MathF.Max(0.01f, player.Gdp);
+        var overdue = player.DebtArrears + player.PaymentArrears;
 
         var (gdpFig, gdpUnit) = SplitMoney(player.Gdp);
         var growthPct = SampleGdpDeltaPct(world, player);
@@ -434,10 +449,6 @@ internal sealed class ShellCornerView
             player.Stability < 0.35f ? "shell.state.negative_text" : (player.Stability < 0.50f ? "shell.state.warning_text" : "shell.paper"),
             player.Stability < 0.50f ? "▼" : "", "shell.state.negative",
             $"{Loc.Get("Stability")}: {Fmt.Percent(player.Stability)}", openScreen == "Laws");
-
-        var (manFig, manUnit) = SplitPeople((long)Math.Max(0, player.ManpowerReserve));
-        UpdateCell("Manpower", manFig, manUnit, "shell.paper", "", "shell.state.positive",
-            $"{Loc.Get("Manpower")}: {Fmt.PeopleExact(player.ManpowerReserve)}", openScreen == "Military");
 
         UpdateCell("Capital", ((int)MathF.Round(player.PoliticalPoints)).ToString(CultureInfo.InvariantCulture), "",
             "shell.paper", "", "shell.state.positive",
@@ -471,6 +482,10 @@ internal sealed class ShellCornerView
             c.Delta.Text = delta;
             c.Delta.Visible = delta.Length > 0;
             if (delta.Length > 0) c.Delta.AddThemeColorOverride("font_color", Ui.Colour(deltaColorTok));
+        }
+        if (c.LastTooltip != tip)
+        {
+            c.LastTooltip = tip;
             c.Box.TooltipText = Ui.Tip(tip);
         }
         if (c.LastActive != active)
