@@ -49,6 +49,7 @@ public partial class DealOrForceGame
         _dealCompleted = false;
         if (IsInstanceValid(_dealReturnFocus) && _dealReturnFocus.IsVisibleInTree()) _dealReturnFocus.GrabFocus();
         _dealReturnFocus = null;
+        if (IsNewShellActive && _hudLayer is { Visible: true }) RefreshNewShell(force: true);
     }
 
     private Ultimatum.Side DealGiveSide() => new()

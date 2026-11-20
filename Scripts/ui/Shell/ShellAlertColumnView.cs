@@ -16,6 +16,7 @@ internal sealed class ShellAlertColumnView
 {
     private readonly ShellContext _ctx;
     private readonly ShellMessageModalView _messages;
+    private readonly ShellInboxBarView _inboxBar;
 
     private PanelContainer _sheet;
     private VBoxContainer _sheetStack;
@@ -61,6 +62,7 @@ internal sealed class ShellAlertColumnView
     {
         _ctx = ctx;
         _messages = messages;
+        _inboxBar = new ShellInboxBarView(ctx);
     }
 
     public void Build()
@@ -79,6 +81,8 @@ internal sealed class ShellAlertColumnView
         _sheetStack = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Pass };
         _sheetStack.AddThemeConstantOverride("separation", 0);
         _sheet.AddChild(_sheetStack);
+
+        _inboxBar.Build(_sheetStack);
 
         _alertRows = new VBoxContainer { Name = "ShellAlertRows", MouseFilter = Control.MouseFilterEnum.Pass };
         _alertRows.AddThemeConstantOverride("separation", 0);
@@ -330,6 +334,7 @@ internal sealed class ShellAlertColumnView
         _profile = profile;
         _sheet.Position = new Vector2(profile.AlertColumn.X, profile.AlertColumn.Y);
         _sheet.CustomMinimumSize = new Vector2(profile.AlertColumn.W, 0);
+        _inboxBar.SetCompact(profile.Compact);
         FitSheetBounds();
         PlaceNewsCard();
         if (compactChanged) _lastSnapSig = "";
@@ -379,6 +384,7 @@ internal sealed class ShellAlertColumnView
         if (world?.Player is not { } player) return;
 
         _outlinerKbd.Visible = _ctx.AltKeycapsVisible;
+        var inboxChanged = _inboxBar.Refresh();
 
         var snap = ShellAlerts.BuildSnapshot(
             world,
@@ -390,10 +396,14 @@ internal sealed class ShellAlertColumnView
             _snoozes,
             _watchedGoods);
 
-        var sig = $"{_outlinerOpen}|{Loc.Language}|{_profile?.Compact}|" +
+        var sig = $"{_outlinerOpen}|{Loc.Language}|{_profile?.Compact}|{_inboxBar.LastCount}|" +
                   string.Join(";", snap.Alerts.Select(a => $"{a.TopicKey}:{a.IsViewed}:{a.DeadlineLabel}")) + "|" +
                   string.Join(";", snap.OutlinerGroups.SelectMany(g => g.Rows).Select(r => $"{r.TopicKey}:{r.Value}"));
-        if (_lastSnapSig == sig) return;
+        if (_lastSnapSig == sig)
+        {
+            if (inboxChanged) FitSheetBounds();
+            return;
+        }
         _lastSnapSig = sig;
 
         RebuildAlertRows(snap, world);
@@ -574,7 +584,8 @@ internal sealed class ShellAlertColumnView
         var miniTop = SettingsCatalog.Flag("ui_shell_minimap")
             ? prof.MapBar.Y - (prof.Compact ? 110f : 144f)
             : prof.MapBar.Y - 12f;
-        var availBelowAlerts = Math.Max(72f, miniTop - prof.AlertColumn.Y - (snap.Alerts.Count * (prof.Compact ? 32f : 40f)) - 44f);
+        var inboxH = _inboxBar.IsVisible ? ShellInboxBarView.HeightForLayout(compact) : 0f;
+        var availBelowAlerts = Math.Max(72f, miniTop - prof.AlertColumn.Y - inboxH - (snap.Alerts.Count * (prof.Compact ? 32f : 40f)) - 44f);
         var maxVisibleH = Math.Min(compact ? 148f : 196f, availBelowAlerts);
         var estH = Math.Min(maxVisibleH, rendered * (compact ? 26f : 31f) + snap.OutlinerGroups.Count * 22f + 10f);
         _outlinerScroll.CustomMinimumSize = new Vector2(0, estH);

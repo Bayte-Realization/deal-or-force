@@ -86,14 +86,27 @@ public partial class DealOrForceGame
             CloseStateAffairs();
             OpenScreen("Laws");
         }, 0, 32, iconPath: "res://game/gfx/interface/icons/icon_laws.png");
+        _stateStaffHeaderButton = ActionButton(Loc.Get("shell.tab_staff"), () =>
+        {
+            _stateStaffExpanded = !_stateStaffExpanded;
+            _stateStaffMask = -1;
+            RefreshStateAffairs();
+        }, 0, 32, iconPath: "res://game/gfx/interface/icons/icon_government.png");
+        _stateStaffHeaderButton.Name = "StateAffairsOpenStaff";
         var head = ScreenHeader(rows, "STATE AFFAIRS",
             "What the country raised, what it spent, and every lever that decides both.",
-            false, toLedger, debt, toLaws, HandbookButton("budget"), ActionButton("×", CloseStateAffairs, 38, 32));
+            false, _stateStaffHeaderButton, toLedger, debt, toLaws, HandbookButton("budget"), ActionButton("×", CloseStateAffairs, 38, 32));
         _stateAffairsTitle = HeaderTitle(head);
 
         _stateAffairsSummary = Title("", 13, Ui.Colour("text.body_soft"));
         _stateAffairsSummary.CustomMinimumSize = new Vector2(0, 52);
         rows.AddChild(_stateAffairsSummary);
+
+        StateSection(rows, "THE STAFF",
+            "shell.staff_subtitle");
+        _stateStaffRows = new VBoxContainer { Name = "StateAffairsStaffSection", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _stateStaffRows.AddThemeConstantOverride("separation", 6);
+        rows.AddChild(_stateStaffRows);
 
         StateSection(rows, "THE WEEK'S BUDGET",
             "What the country raised, what it spent, and every lever that decides both.");
@@ -114,6 +127,70 @@ public partial class DealOrForceGame
     }
 
     private CheckButton _budgetDelegated;
+    private Button _stateStaffHeaderButton = null!;
+    private VBoxContainer _stateStaffRows = null!;
+    private bool _stateStaffExpanded = true;
+    private int _stateStaffMask = -1;
+    private string _stateStaffLang = "";
+
+    private void RefreshStateAffairsStaff(Nation nation)
+    {
+        if (_stateStaffRows is null || nation is null) return;
+        var mask = _stateStaffExpanded ? 0 : (1 << 20);
+        var active = 0;
+        for (var i = 0; i < StaffPortfolios.Length; i++)
+        {
+            if (Delegation.Holds(nation, StaffPortfolios[i].Portfolio))
+            {
+                mask |= 1 << i;
+                active++;
+            }
+        }
+        if (IsInstanceValid(_stateStaffHeaderButton))
+        {
+            _stateStaffHeaderButton.Text = Loc.Format("shell.staff_active_fmt", active, StaffPortfolios.Length);
+            ApplyLedgerButtonState(_stateStaffHeaderButton, _stateStaffExpanded);
+        }
+        var lang = Loc.Language;
+        if (_stateStaffMask == mask && _stateStaffLang == lang) return;
+        _stateStaffMask = mask;
+        _stateStaffLang = lang;
+
+        foreach (Node ch in _stateStaffRows.GetChildren()) ch.QueueFree();
+        _stateStaffRows.Visible = _stateStaffExpanded;
+        if (!_stateStaffExpanded) return;
+
+        var allHeld = active == StaffPortfolios.Length;
+        var master = ActionButton(
+            allHeld ? "Take everything back" : "Hand everything to the staff",
+            () => { foreach (var (portfolio, _, _, _) in StaffPortfolios) DelegatePortfolio(portfolio, !allHeld); },
+            0, 32);
+        master.Name = "StateStaffToggleAll";
+        master.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        master.TooltipText = Ui.Tip(Tr("Every portfolio below at once. Each can still be taken back on its own."));
+        _stateStaffRows.AddChild(master);
+
+        var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        grid.AddThemeConstantOverride("h_separation", 10);
+        grid.AddThemeConstantOverride("v_separation", 4);
+        _stateStaffRows.AddChild(grid);
+        foreach (var (portfolio, on, off, tooltip) in StaffPortfolios)
+        {
+            var held = Delegation.Holds(nation, portfolio);
+            var toggle = new CheckButton
+            {
+                Name = "StateStaff_" + portfolio,
+                Text = Tr(held ? on : off),
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                AutowrapMode = TextServer.AutowrapMode.WordSmart
+            };
+            toggle.SetPressedNoSignal(held);
+            toggle.TooltipText = Ui.Tip(Tr(tooltip));
+            var captured = portfolio;
+            toggle.Toggled += delegated => DelegatePortfolio(captured, delegated);
+            grid.AddChild(toggle);
+        }
+    }
 
     private void OnBudgetDelegationToggled(bool delegated)
     {
@@ -207,6 +284,7 @@ public partial class DealOrForceGame
 
         if (_stateAffairsLayer is null || !_stateAffairsLayer.Visible || _campaign?.Player is null) return;
         var nation = _campaign.Player;
+        RefreshStateAffairsStaff(nation);
 
         _stateAffairsTitle.Text = Simulation.Loc.Format("STATE AFFAIRS · {0}", nation.DisplayName.ToUpperInvariant());
         _stateAffairsSummary.Text =

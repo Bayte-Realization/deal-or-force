@@ -17,5 +17,10 @@
   "shell.active_theatres_badge": "Active Theatres: {0}",
   "shell.peace_status_badge": "State of Peace",
   "shell.rail_support": "Long-range forces",
-  "shell.sub_support": "Artillery, rockets, aircraft, drones and air defence"
+  "shell.sub_support": "Artillery, rockets, aircraft, drones and air defence",
+  "shell.tab_staff": "AI Staff",
+  "shell.staff_subtitle": "Hand any branch of government to your AI staff, or take manual control back at any time.",
+  "shell.staff_active_fmt": "AI Staff: {0}/{1} branches active",
+  "shell.staff_manage_cta": "Configure →",
+  "shell.inbox_tooltip": "Open the Diplomatic Inbox: deals, ultimatums, alliance offers, aid, military access and standing answers."
 }

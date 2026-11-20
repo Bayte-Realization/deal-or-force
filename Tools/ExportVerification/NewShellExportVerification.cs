@@ -47,6 +47,63 @@ public partial class ExportVerification
         Check((game.FindChild("ShellMinimap", true, false) as Control)?.Visible == true,
             "new shell live minimap is visible in shipped release");
         await Capture("new-shell-rest");
+
+        var inboxBtn = game.FindChild("ShellDiplomaticInboxButton", true, false) as Button;
+        Check(inboxBtn is { Visible: true }, "new shell diplomatic inbox bar is visible in shipped release");
+        if (inboxBtn is not null)
+        {
+            inboxBtn.EmitSignal(BaseButton.SignalName.Pressed);
+            await Wait(.25);
+            var inboxPanel = game.FindChild("DiplomaticInboxPanel", true, false) as Control;
+            Check(inboxPanel is { Visible: true }, "diplomatic inbox opens cleanly from the main HUD bar");
+            await Capture("new-shell-inbox");
+            game.VerificationCloseDealInbox();
+            await Wait(.15);
+            Check(game.FindChild("DiplomaticInboxPanel", true, false) is null, "diplomatic inbox closes cleanly");
+        }
+
+        var flagBtn = game.FindChild("ShellFlagButton", true, false) as Button;
+        Check(flagBtn is { Visible: true }, "new shell flag button is visible in shipped release");
+        if (flagBtn is not null)
+        {
+            flagBtn.EmitSignal(BaseButton.SignalName.Pressed);
+            await Wait(.25);
+            var staffQuick = game.FindChild("ShellOverviewOpenStaff", true, false) as Button;
+            Check(staffQuick is { Visible: true }, "own country dossier shows AI staff quick-link");
+            if (staffQuick is not null)
+            {
+                staffQuick.EmitSignal(BaseButton.SignalName.Pressed);
+                await Wait(.25);
+                var toggleAll = game.FindChild("ShellStaffToggleAll", true, false) as Button;
+                var staffCon = game.FindChild("ShellStaff_construction", true, false) as CheckButton;
+                Check(toggleAll is { Visible: true } && staffCon is { Visible: true },
+                    "own country AI staff tab exposes all branch switches");
+                await Capture("new-shell-staff-tab");
+                if (staffCon is not null)
+                {
+                    var was = Delegation.Holds(game.VerificationWorld.Player, Delegation.Construction);
+                    staffCon.ButtonPressed = !was;
+                    await Wait(.1);
+                    Check(Delegation.Holds(game.VerificationWorld.Player, Delegation.Construction) == !was,
+                        "AI staff branch toggle updates Delegation state live");
+                    var restore = game.FindChild("ShellStaff_construction", true, false) as CheckButton;
+                    if (restore is not null) restore.ButtonPressed = was;
+                    await Wait(.1);
+                }
+            }
+            var closeDossier = game.FindChild("CloseShellWorkPanel", true, false) as Button;
+            closeDossier?.EmitSignal(BaseButton.SignalName.Pressed);
+            await Wait(.15);
+        }
+
+        game.VerificationToggleScreen("State Affairs");
+        await Wait(.25);
+        Check(game.FindChild("StateAffairsOpenStaff", true, false) is Button { Visible: true } &&
+              game.FindChild("StateStaff_construction", true, false) is CheckButton { Visible: true },
+            "State Affairs exposes full AI staff delegation controls at the top");
+        await Capture("state-affairs-staff");
+        game.CloseVisibleCampaignScreen();
+        await Wait(.15);
     }
 
     private async Task VerifyCampaignTopBar(DealOrForceGame game)
@@ -243,6 +300,9 @@ public partial class DealOrForceGame
 
     internal bool VerificationRegionSelectionCleared() =>
         _selectedState is null && _selectedProvinceId < 0 && _globe.VerificationGroundSelectionCleared();
+
+    internal void VerificationCloseDealInbox() => CloseDealComposer();
+    internal void VerificationToggleScreen(string screen) => ToggleCampaignScreen(screen);
 }
 
 public sealed partial class GlobePresentation

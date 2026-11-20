@@ -32,17 +32,26 @@ public partial class DealOrForceGame
             $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}|u:{_ultimatumInboxSelected}|{demand?.State}|{demand?.ExpiresDay}|{AssistanceInboxKey()}|{ArmsInboxKey()}|{LeaseInboxKey()}|{DealAnswerKey()}";
     }
 
+    private int _dealInboxLastShellCount = -1;
+
+    internal int CountIncomingDiplomaticInbox()
+    {
+        if (_observerMode || _campaign?.Player is null) return 0;
+        var pid = _campaign.Player.Id;
+        return DealNegotiations.Incoming(_campaign, pid)
+            + ForeignAssistance.Incoming(_campaign, pid)
+            + ArmsShipmentRequests.Incoming(_campaign, pid)
+            + Ultimatum.Incoming(_campaign, pid)
+            + MilitaryAccess.Incoming(_campaign, pid)
+            + LeaseOffersIncoming()
+            + DiplomaticActs.Incoming(_campaign, pid)
+            + AllyRivalShift.Incoming(_campaign, pid)
+            + AgreementSystem.OfferedTo(_campaign, _campaign.Player).Count;
+    }
+
     private void RefreshNegotiationNotifications()
     {
-        var count = _observerMode ? 0 : DealNegotiations.Incoming(_campaign, _campaign.Player.Id)
-            + ForeignAssistance.Incoming(_campaign, _campaign.Player.Id)
-            + ArmsShipmentRequests.Incoming(_campaign, _campaign.Player.Id)
-            + Ultimatum.Incoming(_campaign, _campaign.Player.Id)
-            + MilitaryAccess.Incoming(_campaign, _campaign.Player.Id)
-            + LeaseOffersIncoming()
-            + DiplomaticActs.Incoming(_campaign, _campaign.Player.Id)
-            + AllyRivalShift.Incoming(_campaign, _campaign.Player.Id)
-            + AgreementSystem.OfferedTo(_campaign, _campaign.Player).Count;
+        var count = CountIncomingDiplomaticInbox();
         var incoming = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.DealOffers
             .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
         var ultimatums = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.UltimatumPapers
@@ -64,6 +73,11 @@ public partial class DealOrForceGame
         // went in step 4 of the interface plan. The chip keeps the plate's width (DatePlateUI), so
         // its coming and going moves nothing else.
         RefreshDatePlateDeals(count);
+        if (IsNewShellActive && _dealInboxLastShellCount != count)
+        {
+            _dealInboxLastShellCount = count;
+            RefreshNewShell(force: true);
+        }
         if (IsInstanceValid(_diplomacyInboxButton))
             _diplomacyInboxButton.Text = count > 0 ? Loc.Format("Diplomatic inbox ({0})", count) : Tr("Diplomatic inbox");
         if (_dealInboxVisible && IsInstanceValid(_dealComposer)) RefreshDealInbox();
@@ -81,8 +95,15 @@ public partial class DealOrForceGame
         _hudLayer.AddChild(_dealComposer);
         var shade = new ColorRect { Color = Ui.Colour("surface.overlay"), MouseFilter = MouseFilterEnum.Stop };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); _dealComposer.AddChild(shade);
-        var panel = TexturedPanel(_dealComposer); panel.Name = "DiplomaticInboxPanel";
+        var panel = TexturedPanel(_dealComposer);
+        ChromePlateArt.AttachSurfaceTexture(panel, "laid_paper");
+        panel.Name = "DiplomaticInboxPanel";
         Ui.Place(panel, "modal.deal");
+        if (IsNewShellActive)
+        {
+            OnNewShellWorkspaceRaised(_dealComposer);
+            FitNewShellWorkspaceLayer(_dealComposer);
+        }
         var rows = PanelRows(panel, 20, 16, 12);
         ScreenHeader(rows, "DIPLOMATIC INBOX",
             "Diplomatic letters await your decision. Reading is not consent; review the live terms before approving any transfer.",

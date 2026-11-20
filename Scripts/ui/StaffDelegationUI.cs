@@ -14,7 +14,7 @@ namespace DealOrForce;
 /// </summary>
 public partial class DealOrForceGame
 {
-    private static readonly (string Portfolio, string On, string Off, string Tooltip)[] StaffPortfolios =
+    internal static readonly (string Portfolio, string On, string Off, string Tooltip)[] StaffPortfolios =
     {
         (Delegation.Construction, "The works ministry plans construction", "Let the works ministry plan construction",
             "Selects and pays for regional projects using the same planner and fiscal reserve as other countries. Separate from tax and spending; taking it back does not cancel existing projects."),
@@ -89,7 +89,7 @@ public partial class DealOrForceGame
         }
     }
 
-    private void DelegatePortfolio(string portfolio, bool delegated)
+    internal void DelegatePortfolio(string portfolio, bool delegated)
     {
         if (_campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetDelegationCommand
@@ -102,5 +102,7 @@ public partial class DealOrForceGame
         // The card is rebuilt from the country, so the switch reads back what was actually set.
         if (MapSelectionShowing) ShowMapSelectionContent();
         if (_selectedFleet is not null) ShowSelectedFleet();
+        if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
+        if (IsNewShellActive) RefreshNewShell(force: true);
     }
 }

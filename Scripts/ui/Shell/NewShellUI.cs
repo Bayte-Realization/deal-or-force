@@ -118,6 +118,9 @@ public partial class DealOrForceGame
         ctx.ClearArmySelection = ClearArmySelectionAndClose;
         ctx.ClearRegionSelection = ClearRegionSelection;
         ctx.RefreshAll = () => { Refresh(); RefreshNewShell(force: true); };
+        ctx.OpenDealInbox = OpenDealInbox;
+        ctx.GetIncomingDiplomaticCount = CountIncomingDiplomaticInbox;
+        ctx.DelegatePortfolio = DelegatePortfolio;
     }
 
     private void UndoLastBatchForShell()

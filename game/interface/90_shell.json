@@ -60,7 +60,7 @@
     "shell.news_max_visible": 2.0,
     "shell.alerts_max_folded": 4.0,
     "shell.alerts_max_outliner": 3.0,
-    "shell.max_rest_buttons": 40.0,
+    "shell.max_rest_buttons": 41.0,
     "shell.max_rest_panels": 6.0,
     "shell.max_map_signs": 20.0,
     "shell.next_hint_days": 60.0,

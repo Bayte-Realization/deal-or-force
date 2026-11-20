@@ -271,11 +271,14 @@ internal sealed class ShellNavRailView
 
     public void Refresh(Campaign world, Nation player, IReadOnlyList<StrategicWar> openWars, string openScreen)
     {
-        var incomingDeals = 0;
-        for (var i = 0; i < world.DealOffers.Count; i++)
+        var incomingDeals = _ctx.GetIncomingDiplomaticCount?.Invoke() ?? 0;
+        if (_ctx.GetIncomingDiplomaticCount is null)
         {
-            var d = world.DealOffers[i];
-            if (d.Pending && d.ToId == player.Id) incomingDeals++;
+            for (var i = 0; i < world.DealOffers.Count; i++)
+            {
+                var d = world.DealOffers[i];
+                if (d.Pending && d.ToId == player.Id) incomingDeals++;
+            }
         }
         var pendingEvents = 0;
         for (var i = 0; i < world.PendingEvents.Count; i++)

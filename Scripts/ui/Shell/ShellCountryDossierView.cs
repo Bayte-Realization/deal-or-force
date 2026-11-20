@@ -73,12 +73,16 @@ internal static class ShellCountryDossierView
         Campaign world,
         Nation nation,
         bool isOwn,
-        Action<Nation> openCountry)
+        Action<Nation> openCountry,
+        Action openStaffTab = null)
     {
         PopulateRulerCard(ctx, bodyRows, world, nation);
 
         ShellRegionVisualsView.AddSectionHeader(ctx, bodyRows, Loc.Get("shell.standing_kpis"));
         AddStandingGrid(ctx, bodyRows, world, nation, isOwn);
+
+        if (isOwn && openStaffTab is not null)
+            AddStaffQuickLink(ctx, bodyRows, nation, openStaffTab);
 
         ShellRegionVisualsView.AddSectionHeader(ctx, bodyRows, Loc.Get("Neighbours"), Loc.Get("GDP"));
         var neighbors = world.Nations
@@ -173,12 +177,172 @@ internal static class ShellCountryDossierView
         var wars = Warfare.OpenWars(world).Where(w => !w.Ended && w.Involves(nation.Id)).ToArray();
         AddKvRow(ctx, bodyRows, Loc.Get("Wars"), wars.Length.ToString(CultureInfo.InvariantCulture),
             wars.Length > 0 ? "shell.state.negative_text" : "shell.paper");
-        if (!isOwn && world.Player is { } pl)
+        if (isOwn)
+        {
+            var inboxCount = ctx.GetIncomingDiplomaticCount?.Invoke() ?? 0;
+            AddKvRow(ctx, bodyRows, Loc.Get("Diplomatic inbox"), inboxCount.ToString(CultureInfo.InvariantCulture),
+                inboxCount > 0 ? "shell.state.warning_text" : "shell.paper");
+            var inboxBtn = new Button
+            {
+                Name = "ShellDossierInboxButton",
+                Text = inboxCount > 0
+                    ? Loc.Format("Diplomatic inbox ({0})", inboxCount)
+                    : Loc.Get("Diplomatic inbox"),
+                Icon = ctx.Icon("icon_shell_treaty"),
+                ExpandIcon = true,
+                CustomMinimumSize = new Vector2(0, 32),
+                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+                MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+                FocusMode = Control.FocusModeEnum.None,
+                TooltipText = Ui.Tip(Loc.Get("shell.inbox_tooltip"))
+            };
+            var ctaStyle = ctx.NineSlice("button_brass_cta_9s", 10, 10, 4, 10, 4, "shell.plate_top", "shell.brass_hi", 3);
+            inboxBtn.AddThemeStyleboxOverride("normal", ctaStyle);
+            inboxBtn.AddThemeStyleboxOverride("hover", ctaStyle);
+            inboxBtn.AddThemeStyleboxOverride("pressed", ctx.PressedWellStyle(padX: 10, padY: 4));
+            inboxBtn.AddThemeFontOverride("font", ctx.Font("shell.serif_semibold"));
+            inboxBtn.AddThemeFontSizeOverride("font_size", 13);
+            inboxBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
+            inboxBtn.Pressed += () => { ctx.PlayCue?.Invoke("ui_select"); ctx.OpenDealInbox?.Invoke(); };
+            bodyRows.AddChild(inboxBtn);
+        }
+        else if (world.Player is { } pl)
         {
             var op = (int)MathF.Round(CampaignDiplomacy.ReadOrNeutral(world, pl.Id, nation.Id).Opinion);
             AddKvRow(ctx, bodyRows, Loc.Get("Opinion"), $"{op:+#;-#;0}",
                 op < 0 ? "shell.state.negative_text" : "shell.state.positive");
         }
+    }
+
+    public static void PopulateStaff(
+        ShellContext ctx,
+        VBoxContainer bodyRows,
+        Campaign world,
+        Nation nation,
+        Action onChanged)
+    {
+        var items = DealOrForceGame.StaffPortfolios;
+        var active = items.Count(entry => Delegation.Holds(nation, entry.Portfolio));
+        var allHeld = active == items.Length;
+
+        ShellRegionVisualsView.AddSectionHeader(ctx, bodyRows, Loc.Get("THE STAFF"), $"{active}/{items.Length}");
+
+        var hint = MakeLabel(ctx, Loc.Get("shell.staff_subtitle"), "shell.sans", 11, "shell.paper_muted");
+        hint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        bodyRows.AddChild(hint);
+
+        var master = new Button
+        {
+            Name = "ShellStaffToggleAll",
+            Text = Loc.Get(allHeld ? "Take everything back" : "Hand everything to the staff"),
+            CustomMinimumSize = new Vector2(0, 32),
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+            FocusMode = Control.FocusModeEnum.None,
+            TooltipText = Ui.Tip(Loc.Get("Every portfolio below at once. Each can still be taken back on its own."))
+        };
+        var masterStyle = allHeld
+            ? ctx.NineSlice("button_umber_9s", 10, 10, 4, 10, 4, "shell.plate_bottom", "shell.engrave", 3)
+            : ctx.NineSlice("button_brass_cta_9s", 10, 10, 4, 10, 4, "shell.plate_top", "shell.brass_hi", 3);
+        master.AddThemeStyleboxOverride("normal", masterStyle);
+        master.AddThemeStyleboxOverride("hover", masterStyle);
+        master.AddThemeStyleboxOverride("pressed", ctx.PressedWellStyle(padX: 10, padY: 4));
+        master.AddThemeFontOverride("font", ctx.Font("shell.serif_semibold"));
+        master.AddThemeFontSizeOverride("font_size", 13);
+        master.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
+        master.Pressed += () =>
+        {
+            ctx.PlayCue?.Invoke("ui_select");
+            foreach (var (portfolio, _, _, _) in items)
+                ctx.DelegatePortfolio?.Invoke(portfolio, !allHeld);
+            onChanged?.Invoke();
+        };
+        bodyRows.AddChild(master);
+
+        foreach (var (portfolio, on, off, tooltip) in items)
+        {
+            var held = Delegation.Holds(nation, portfolio);
+            var card = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+            card.AddThemeStyleboxOverride("panel", ctx.BorderedBox(
+                held ? "shell.plate_top" : "shell.well_bottom",
+                held ? "shell.brass_hi" : "shell.engrave",
+                1, 3, 8, 3, 8, 3));
+            bodyRows.AddChild(card);
+
+            var toggle = new CheckButton
+            {
+                Name = "ShellStaff_" + portfolio,
+                Text = Loc.Get(held ? on : off),
+                CustomMinimumSize = new Vector2(0, 28),
+                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+                AutowrapMode = TextServer.AutowrapMode.WordSmart,
+                MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+                FocusMode = Control.FocusModeEnum.None,
+                TooltipText = Ui.Tip(Loc.Get(tooltip))
+            };
+            toggle.SetPressedNoSignal(held);
+            toggle.AddThemeFontOverride("font", ctx.Font("shell.sans"));
+            toggle.AddThemeFontSizeOverride("font_size", 12);
+            toggle.AddThemeColorOverride("font_color", Ui.Colour(held ? "shell.paper" : "shell.paper_muted"));
+            var captured = portfolio;
+            toggle.Toggled += delegated =>
+            {
+                ctx.PlayCue?.Invoke("ui_select");
+                ctx.DelegatePortfolio?.Invoke(captured, delegated);
+                onChanged?.Invoke();
+            };
+            card.AddChild(toggle);
+        }
+    }
+
+    private static void AddStaffQuickLink(ShellContext ctx, VBoxContainer parent, Nation nation, Action openStaffTab)
+    {
+        var items = DealOrForceGame.StaffPortfolios;
+        var active = items.Count(entry => Delegation.Holds(nation, entry.Portfolio));
+
+        var btn = new Button
+        {
+            Name = "ShellOverviewOpenStaff",
+            CustomMinimumSize = new Vector2(0, 32),
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+            FocusMode = Control.FocusModeEnum.None,
+            TooltipText = Ui.Tip(Loc.Get("shell.staff_subtitle"))
+        };
+        var normal = ctx.BorderedBox("shell.plate_top", active > 0 ? "shell.brass_hi" : "shell.engrave", 1, 3, 8, 4, 8, 4);
+        var hover = ctx.BorderedBox("shell.plate_hover", "shell.brass_hi", 1, 3, 8, 4, 8, 4);
+        btn.AddThemeStyleboxOverride("normal", normal);
+        btn.AddThemeStyleboxOverride("hover", hover);
+        btn.AddThemeStyleboxOverride("pressed", ctx.PressedWellStyle(underlineLeft: true));
+        btn.Pressed += () => { ctx.PlayCue?.Invoke("ui_select"); openStaffTab(); };
+        parent.AddChild(btn);
+
+        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        row.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        row.OffsetLeft = 8; row.OffsetRight = -8;
+        row.AddThemeConstantOverride("separation", 6);
+        btn.AddChild(row);
+
+        var tex = ctx.Icon("icon_government");
+        if (tex is not null)
+        {
+            var ico = new TextureRect
+            {
+                Texture = tex, CustomMinimumSize = new Vector2(15, 15),
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+                MouseFilter = Control.MouseFilterEnum.Ignore
+            };
+            ShellContext.ApplyIconRelief(ico, Ui.Colour("shell.icon"), 0.55f);
+            row.AddChild(ico);
+        }
+        row.AddChild(MakeLabel(ctx, Loc.Format("shell.staff_active_fmt", active, items.Length),
+            "shell.sans", 11, active > 0 ? "shell.paper" : "shell.paper_muted", clip: true, expand: true, tabular: true));
+        row.AddChild(MakeLabel(ctx, Loc.Get("shell.staff_manage_cta"),
+            "shell.serif_semibold", 11, "shell.state.warning_text"));
     }
 
     private static void AddStandingGrid(

@@ -67,7 +67,7 @@ public static class ShellLayout
     private const float CompactLeftRight = 390f, FullLeftRight = 544f, LeftBottomClearance = 92f;
     private const float CompactNewsX = 460f, CompactNewsY = 56f, CompactNewsW = 370f, CompactNewsH = 76f;
     private const float FullNewsX = 700f, FullNewsY = 82f, FullNewsW = 540f, FullNewsH = 114f;
-    private const float DefaultButtonBudget = 40f, DefaultPanelBudget = 6f, DefaultSignBudget = 20f;
+    private const float DefaultButtonBudget = 41f, DefaultPanelBudget = 6f, DefaultSignBudget = 20f;
 
     public static int MaxRestButtons => (int)InterfaceSkin.Metric("shell.max_rest_buttons", DefaultButtonBudget);
     public static int MaxRestPanels => (int)InterfaceSkin.Metric("shell.max_rest_panels", DefaultPanelBudget);
@@ -170,7 +170,7 @@ public static class ShellLayout
         bool undoCellVisible = false, int alertRowCount = -1, int outlinerButtonCount = 0, int stripTagCount = 2)
     {
         const int maxOpenAlerts = 3, maxFoldedAlerts = 4, peaceAlerts = 2, maxStripTags = 4;
-        const int baseHudButtons = 27, baseHudPanels = 4, newsCardButtons = 2;
+        const int baseHudButtons = 28, baseHudPanels = 4, newsCardButtons = 2;
         var profile = ForViewport(width, height, state == ShellCampaignState.War);
         var maxAlerts = outlinerOpen ? maxOpenAlerts : maxFoldedAlerts;
         var alerts = alertRowCount >= 0 ? Math.Min(alertRowCount, maxAlerts)

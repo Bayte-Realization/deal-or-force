@@ -68,6 +68,9 @@ internal sealed class ShellContext
     public Action ClearArmySelection { get; set; }
     public Action ClearRegionSelection { get; set; }
     public Action RefreshAll { get; set; }
+    public Action OpenDealInbox { get; set; }
+    public Func<int> GetIncomingDiplomaticCount { get; set; }
+    public Action<string, bool> DelegatePortfolio { get; set; }
 
     public bool ExplicitRegionIconsToggle { get; set; }
     public bool AltKeycapsVisible { get; set; }

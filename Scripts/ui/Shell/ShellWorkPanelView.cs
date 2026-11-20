@@ -390,7 +390,17 @@ internal sealed class ShellWorkPanelView
         _backBtn.Disabled = !(_ctx.CanNavigateBack?.Invoke() ?? false);
         UpdatePinButtonState();
 
-        var sig = $"{_mode}|{_targetNationId}|{_targetStateMapIndex}|{_targetProvinceId}|{_activeTab}|{world.ElapsedDays}|{world.MapRevision}|{Loc.Language}";
+        var staffMask = 0;
+        if (_mode == DossierMode.Country && world.Player?.Id == _targetNationId)
+        {
+            for (var i = 0; i < DealOrForceGame.StaffPortfolios.Length; i++)
+                if (Delegation.Holds(world.Player, DealOrForceGame.StaffPortfolios[i].Portfolio))
+                    staffMask |= 1 << i;
+        }
+        var inboxCount = _mode == DossierMode.Country && world.Player?.Id == _targetNationId
+            ? (_ctx.GetIncomingDiplomaticCount?.Invoke() ?? 0)
+            : 0;
+        var sig = $"{_mode}|{_targetNationId}|{_targetStateMapIndex}|{_targetProvinceId}|{_activeTab}|{staffMask}|{inboxCount}|{world.ElapsedDays}|{world.MapRevision}|{Loc.Language}";
         if (_lastBuildSig == sig) return;
         _lastBuildSig = sig;
 
@@ -425,12 +435,15 @@ internal sealed class ShellWorkPanelView
             ($"{(int)MathF.Round(nation.Stability * 100f)}%", Loc.Get("Stability")),
             ($"{armyDivs} {Loc.Get("shell.div_short")}", Loc.Get("Army")));
 
-        SetFolderTabs(new[] { "Overview", "Society", "Decisions", "Diplomacy" });
+        SetFolderTabs(isOwn
+            ? new[] { "Overview", "Society", "shell.tab_staff", "Diplomacy" }
+            : new[] { "Overview", "Society", "Decisions", "Diplomacy" });
         ClearBodyAndFooter();
 
         if (_activeTab == 0)
         {
-            ShellCountryDossierView.PopulateOverview(_ctx, _bodyRows, world, nation, isOwn, OpenCountry);
+            ShellCountryDossierView.PopulateOverview(_ctx, _bodyRows, world, nation, isOwn, OpenCountry,
+                () => { _activeTab = 2; _lastBuildSig = ""; Refresh(); });
         }
         else if (_activeTab == 1)
         {
@@ -438,7 +451,10 @@ internal sealed class ShellWorkPanelView
         }
         else if (_activeTab == 2)
         {
-            ShellCountryDossierView.PopulateDecisions(_ctx, _bodyRows, world, nation);
+            if (isOwn)
+                ShellCountryDossierView.PopulateStaff(_ctx, _bodyRows, world, nation, () => { _lastBuildSig = ""; Refresh(); });
+            else
+                ShellCountryDossierView.PopulateDecisions(_ctx, _bodyRows, world, nation);
         }
         else
         {
