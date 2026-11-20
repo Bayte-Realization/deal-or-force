@@ -6,6 +6,7 @@ This cumulative changelog covers the 0.8 EntertAlpha series, from the 19 Novembe
 
 ## 0.8.3.4 · Map, menus and launcher
 
+- **The campaign top bar shrinks when the last war ends.** The row of national figures and its outer frame now resize together.
 - The realistic map look is called **Realism** in Display settings.
 - **Pause menu ornaments stay with their panel.** The pause frame and portrait trim follow the menu draw order when Settings or Sound and artwork covers them. The same rule applies to shared frames and ornaments in other menus.
 - **Region selection ends when the dossier closes.** The close button and Escape both remove the highlight from the region and the picked province. Going from the region dossier to the country dossier also clears the ground selection.

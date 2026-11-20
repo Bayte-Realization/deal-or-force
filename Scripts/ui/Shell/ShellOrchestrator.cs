@@ -27,6 +27,7 @@ internal sealed class ShellOrchestrator
     private long _refreshHour = long.MinValue;
     private int _refreshDay = int.MinValue;
     private int _refreshRevision = int.MinValue;
+    private int _refreshWarRevision = int.MinValue;
     private ulong _lastHeavyRefreshMsec;
     private Campaign _lastWorld;
     private bool _lastPaused;
@@ -75,6 +76,7 @@ internal sealed class ShellOrchestrator
         _refreshHour = long.MinValue;
         _refreshDay = int.MinValue;
         _refreshRevision = int.MinValue;
+        _refreshWarRevision = int.MinValue;
         _lastHeavyRefreshMsec = 0;
         _cachedProfile = null;
     }
@@ -139,16 +141,14 @@ internal sealed class ShellOrchestrator
         if (worldChanged)
         {
             _lastWorld = world;
-            _refreshHour = long.MinValue;
-            _refreshDay = int.MinValue;
-            _refreshRevision = int.MinValue;
-            _lastHeavyRefreshMsec = 0;
+            ResetCadence();
         }
 
         var pausedChanged = _lastPaused != world.IsPaused;
         var speedChanged = _lastSpeed != speed;
         var hourChanged = _refreshHour != world.ElapsedHours;
-        var dayOrRevChanged = _refreshDay != world.ElapsedDays || _refreshRevision != world.MapRevision;
+        var dayOrRevChanged = _refreshDay != world.ElapsedDays || _refreshRevision != world.MapRevision ||
+            _refreshWarRevision != world.WarRevision;
         _lastPaused = world.IsPaused;
         _lastSpeed = speed;
 
@@ -165,6 +165,7 @@ internal sealed class ShellOrchestrator
         {
             _refreshDay = world.ElapsedDays;
             _refreshRevision = world.MapRevision;
+            _refreshWarRevision = world.WarRevision;
             _lastHeavyRefreshMsec = nowMsec;
             Corner.Refresh();
             Alerts.Refresh();

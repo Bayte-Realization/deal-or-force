@@ -49,6 +49,88 @@ public partial class ExportVerification
         await Capture("new-shell-rest");
     }
 
+    private async Task VerifyCampaignTopBar(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        var originalPlayer = world.Player.Id;
+        var originalLanguage = Loc.Language;
+        var originalSize = GetTree().Root.Size;
+        var originalPause = world.IsPaused;
+        var openWars = Warfare.OpenWars(world);
+        var player = new[] { world.NationByTag("SRB"), world.Player }.Concat(world.Nations)
+            .First(n => n is not null && !openWars.Any(w => w.Involves(n.Id)));
+        var opponents = world.Nations.Where(n => n.Id != player.Id).Take(2).ToArray();
+        var nextWarId = world.Wars.Select(w => w.Id).DefaultIfEmpty().Max() + 1;
+        var first = new StrategicWar { Id = nextWarId, AttackerId = player.Id, DefenderId = opponents[0].Id, Ended = true };
+        var second = new StrategicWar { Id = nextWarId + 1, AttackerId = player.Id, DefenderId = opponents[1].Id, Ended = true };
+        try
+        {
+            world.ViewAs(player.Id);
+            world.IsPaused = true;
+            world.Wars.Add(first);
+            world.Wars.Add(second);
+            world.MarkWarsChanged();
+            SettingsCatalog.Store("ui_shell", "new");
+            game.Call("ApplySetting", "ui_shell");
+
+            var frame = game.FindChild("ShellLCornerBackdrop", true, false) as Control;
+            var plate = game.FindChild("ShellTopPlate", true, false) as Control;
+            var bed = game.FindChild("ShellCellsBed", true, false) as PanelContainer;
+            var warCell = game.FindChild("ShellStat_War", true, false) as Control;
+            Check(frame is not null && plate is not null && bed is not null && warCell is not null,
+                "campaign top bar frame, plate, stat row and war cell exist");
+            if (frame is null || plate is null || bed is null || warCell is null) return;
+
+            foreach (var language in new[] { "english", "russian" })
+            foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+            {
+                Loc.Language = language;
+                GetTree().Root.Size = size;
+                game.Call("RefreshLocalisedText");
+                await Wait(.25);
+
+                var caption = $"{language} {size.X}";
+                var peaceSize = (frame.Size.X, bed.Size.X);
+                Check(!warCell.IsVisibleInTree(), $"top bar starts at peace: {caption}");
+                await SetWars(firstEnded: false, secondEnded: false);
+                var warSize = (frame.Size.X, bed.Size.X);
+                Check(warCell.IsVisibleInTree() && warSize.Item1 > peaceSize.Item1 && warSize.Item2 > peaceSize.Item2,
+                    $"frame and stat row expand together when war begins: {caption}");
+                await Capture("campaign-topbar-war-" + language + "-" + size.X);
+
+                await SetWars(firstEnded: true, secondEnded: false);
+                Check(warCell.IsVisibleInTree() && (frame.Size.X, bed.Size.X) == warSize,
+                    $"frame and stat row stay expanded while another war remains: {caption}");
+
+                await SetWars(firstEnded: true, secondEnded: true);
+                Check(!warCell.IsVisibleInTree() && (frame.Size.X, bed.Size.X) == peaceSize &&
+                    bed.GetGlobalRect().End.X < plate.GetGlobalRect().End.X,
+                    $"frame and stat row return to the same peace widths after the last war: {caption}");
+                await Capture("campaign-topbar-peace-" + language + "-" + size.X);
+            }
+        }
+        finally
+        {
+            world.Wars.Remove(first);
+            world.Wars.Remove(second);
+            world.MarkWarsChanged();
+            world.ViewAs(originalPlayer);
+            world.IsPaused = originalPause;
+            Loc.Language = originalLanguage;
+            GetTree().Root.Size = originalSize;
+            game.Call("RefreshLocalisedText");
+        }
+
+        async Task SetWars(bool firstEnded, bool secondEnded)
+        {
+            first.Ended = firstEnded;
+            second.Ended = secondEnded;
+            world.MarkWarsChanged();
+            game.Call("Refresh");
+            await Wait(.15);
+        }
+    }
+
     private async Task VerifyMenuLayering(DealOrForceGame game)
     {
         SettingsCatalog.Store("ui_shell", "new");

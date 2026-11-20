@@ -315,7 +315,6 @@ internal sealed class ShellCornerView
         var cellW = profile.StatCellWidth;
         var bedY = compact ? 4f : 6f;
         var bedH = profile.StatCellHeight;
-        ShellContext.PlaceRect(_cellsBed, new ShellRect(cellX0 - 2f, bedY, cellCount * cellW + 4f, bedH));
 
         var iconSz = compact ? 18f : 24f;
         var ix = compact ? 6f : 9f;
@@ -349,6 +348,9 @@ internal sealed class ShellCornerView
             c.SepGroove.Size = new Vector2(2f, bedH);
             c.SepGroove.QueueRedraw();
         }
+
+        // The visible cells set the bed's minimum width. Apply the new rect after updating them.
+        ShellContext.PlaceRect(_cellsBed, new ShellRect(cellX0 - 2f, bedY, cellCount * cellW + 4f, bedH));
 
         _rail.Layout(profile);
         if (_lastTag.Length > 0) FitNaturalFlag(_lastTag);
