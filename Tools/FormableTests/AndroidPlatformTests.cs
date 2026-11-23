@@ -37,6 +37,7 @@ static class AndroidPlatformTests
         RunWaveM6UiAndTouchContractTests();
         RunBackgroundSimReadToWriteUpgradeTests();
         RunBackgroundSimStagedDeterminismTests();
+        RunBackgroundSimMobilePacingTests();
     }
 
     private static void RunPlatformProfileTests()
@@ -825,6 +826,77 @@ static class AndroidPlatformTests
         Check(cSync.ElapsedHours == cBg.ElapsedHours &&
               CampaignFingerprint.Of(cBg) == CampaignFingerprint.Of(cSync),
             $"BackgroundSimRunner staged StepFor matches synchronous Campaign.Tick fingerprint at {cBg.ElapsedHours}h");
+    }
+
+    private static void RunBackgroundSimMobilePacingTests()
+    {
+        var cBg = Campaign.CreateBootstrap(91123);
+        cBg.IsPaused = false;
+        cBg.Speed = 5;
+        using var runner = new BackgroundSimRunner
+        {
+            MobilePacing = true,
+            MinSpeed5DayIntervalMs = 25.0
+        };
+        runner.Start(cBg);
+        runner.SyncClockState(paused: false, speed: 5);
+
+        var sw = Stopwatch.StartNew();
+        var readSuccesses = 0;
+        var days = 0;
+        long hrs = 0;
+        var mid = false;
+        while (sw.ElapsedMilliseconds < 8000)
+        {
+            if (cBg.TryEnterRead(0, requestWindowOnMiss: true))
+            {
+                try
+                {
+                    readSuccesses++;
+                    days = cBg.ElapsedDays;
+                    hrs = cBg.ElapsedHours;
+                    mid = cBg.MidStep;
+                }
+                finally { cBg.ExitRead(); }
+            }
+            if (days >= 3 && hrs >= 72 && !mid) break;
+            Thread.Sleep(25);
+        }
+        var pacingElapsedMs = sw.ElapsedMilliseconds;
+
+        runner.RunWrite(c =>
+        {
+            c.IsPaused = true;
+            if (c.MidStep) c.FinishStep();
+        });
+        runner.Stop();
+
+        Check(cBg.ElapsedDays >= 3 && cBg.ElapsedHours >= 72 && !cBg.MidStep,
+            $"MobilePacing BackgroundSimRunner completed >= 3 days cleanly ({cBg.ElapsedDays}d / {cBg.ElapsedHours}h in {pacingElapsedMs} ms)");
+        Check(readSuccesses >= 2,
+            $"Mobile 30 FPS reader acquires read windows without starvation (reads={readSuccesses})");
+        Check(pacingElapsedMs >= 40,
+            $"MobilePacing enforces steady Speed-5 day pacing ({pacingElapsedMs} ms >= 40 ms for {cBg.ElapsedDays} days)");
+
+        var cSync = Campaign.CreateBootstrap(91123);
+        cSync.IsPaused = false;
+        cSync.Speed = 5;
+        while (cSync.ElapsedHours < cBg.ElapsedHours)
+            cSync.Tick();
+
+        Check(cSync.ElapsedHours == cBg.ElapsedHours &&
+              CampaignFingerprint.Of(cBg) == CampaignFingerprint.Of(cSync),
+            $"MobilePacing BackgroundSimRunner matches synchronous Campaign.Tick fingerprint at {cBg.ElapsedHours}h");
+
+        var root = FindRepoRoot();
+        var datePlate = File.ReadAllText(Path.Combine(root, "Scripts", "ui", "Shell", "ShellDatePlateView.cs"));
+        var game = File.ReadAllText(Path.Combine(root, "Scripts", "DealOrForceGame.cs"));
+        Check(datePlate.Contains("RefreshFromSnapshot(CampaignRenderSnapshot", StringComparison.Ordinal),
+            "ShellDatePlateView exposes lock-free RefreshFromSnapshot(CampaignRenderSnapshot)");
+        Check(game.Contains("MobilePacing = _isMobileRuntime", StringComparison.Ordinal) &&
+              game.Contains("MinSpeed5DayIntervalMs", StringComparison.Ordinal) &&
+              game.Contains("RefreshFromSnapshot(", StringComparison.Ordinal),
+            "DealOrForceGame wires MobilePacing, MinSpeed5DayIntervalMs, and lock-free DatePlate snapshot refresh");
     }
 
     private static string FindRepoRoot()

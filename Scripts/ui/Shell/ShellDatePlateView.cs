@@ -522,45 +522,30 @@ internal sealed class ShellDatePlateView
         if (touch) { _pauseKbd.Visible = false; _menuKbd.Visible = false; }
     }
 
+    public void RefreshFromSnapshot(CampaignRenderSnapshot snap)
+    {
+        if (snap is null) return;
+        ApplyDateAndClockState(
+            snap.Date,
+            snap.ElapsedHours,
+            snap.ElapsedDays,
+            _ctx.IsPaused?.Invoke() ?? snap.IsPaused,
+            Math.Clamp(_ctx.GetSpeed?.Invoke() ?? snap.Speed, 1, 5),
+            _ctx.IsObserverMode?.Invoke() ?? snap.ObserverMode);
+    }
+
     public void Refresh()
     {
         var world = _ctx.World;
         if (world is null) return;
 
-        var lang = Loc.Language;
-        if (_lastDateHour != world.ElapsedHours || !string.Equals(_lastDateLang, lang, StringComparison.Ordinal))
-        {
-            var langChanged = !string.Equals(_lastDateLang, lang, StringComparison.Ordinal);
-            _lastDateHour = world.ElapsedHours;
-            _lastDateLang = lang;
-            _dateLabel.Text = world.Date.Display(withTime: true);
-            if (_weekdayLabel.Visible && (_lastWeekdayDay != world.ElapsedDays || langChanged))
-            {
-                _lastWeekdayDay = world.ElapsedDays;
-                _weekdayLabel.Text = FormatWeekday(world.Date);
-            }
-        }
-
-        var paused = _ctx.IsPaused?.Invoke() ?? true;
-        var speed = Math.Clamp(_ctx.GetSpeed?.Invoke() ?? 1, 1, 5);
-        var observing = _ctx.IsObserverMode?.Invoke() ?? world.ObserverMode;
-        if (_lastPaused != paused || _lastSpeed != speed || _lastObserverMode != observing || _lastStateLang != lang)
-        {
-            _lastPaused = paused;
-            _lastSpeed = speed;
-            _lastObserverMode = observing;
-            _lastStateLang = lang;
-            _pauseGlyph.Texture = _ctx.Icon(paused ? "icon_shell_play" : "icon_shell_pause");
-            _pauseGlyph.Modulate = Ui.Colour(observing ? "shell.state.info" : (paused ? "shell.state.warning" : "shell.brass_hi"));
-            _datePauseBtn.AddThemeStyleboxOverride("normal",
-                observing ? _dateObserverStyle : (paused ? _datePausedStyle : _dateRunningStyle));
-            _stateNoteLabel.Text = observing
-                ? (paused ? Loc.Get("shell.obs.date_paused") : Loc.Format("shell.obs.date_running_fmt", speed))
-                : (paused ? Loc.Get("shell.paused_note") : Loc.Format("shell.running_note", speed));
-            _stateNoteLabel.AddThemeColorOverride("font_color", Ui.Colour(
-                observing ? "shell.state.info" : (paused ? "shell.pause_amber" : "shell.brass_hi")));
-            foreach (var c in _speedChevrons) c.QueueRedraw();
-        }
+        ApplyDateAndClockState(
+            world.Date,
+            world.ElapsedHours,
+            world.ElapsedDays,
+            _ctx.IsPaused?.Invoke() ?? true,
+            Math.Clamp(_ctx.GetSpeed?.Invoke() ?? 1, 1, 5),
+            _ctx.IsObserverMode?.Invoke() ?? world.ObserverMode);
 
         if (_lastWorldDay != world.ElapsedDays || _lastWorldWarRev != world.WarRevision || _lastDefcon < 0)
         {
@@ -588,6 +573,42 @@ internal sealed class ShellDatePlateView
         var showKbd = _ctx.AltKeycapsVisible && _profile?.TouchMode != true;
         if (_pauseKbd.Visible != showKbd) _pauseKbd.Visible = showKbd;
         if (_menuKbd.Visible != showKbd) _menuKbd.Visible = showKbd;
+    }
+
+    private void ApplyDateAndClockState(
+        GameDate date, long elapsedHours, int elapsedDays, bool paused, int speed, bool observing)
+    {
+        var lang = Loc.Language;
+        if (_lastDateHour != elapsedHours || !string.Equals(_lastDateLang, lang, StringComparison.Ordinal))
+        {
+            var langChanged = !string.Equals(_lastDateLang, lang, StringComparison.Ordinal);
+            _lastDateHour = elapsedHours;
+            _lastDateLang = lang;
+            _dateLabel.Text = date.Display(withTime: true);
+            if (_weekdayLabel.Visible && (_lastWeekdayDay != elapsedDays || langChanged))
+            {
+                _lastWeekdayDay = elapsedDays;
+                _weekdayLabel.Text = FormatWeekday(date);
+            }
+        }
+
+        if (_lastPaused != paused || _lastSpeed != speed || _lastObserverMode != observing || _lastStateLang != lang)
+        {
+            _lastPaused = paused;
+            _lastSpeed = speed;
+            _lastObserverMode = observing;
+            _lastStateLang = lang;
+            _pauseGlyph.Texture = _ctx.Icon(paused ? "icon_shell_play" : "icon_shell_pause");
+            _pauseGlyph.Modulate = Ui.Colour(observing ? "shell.state.info" : (paused ? "shell.state.warning" : "shell.brass_hi"));
+            _datePauseBtn.AddThemeStyleboxOverride("normal",
+                observing ? _dateObserverStyle : (paused ? _datePausedStyle : _dateRunningStyle));
+            _stateNoteLabel.Text = observing
+                ? (paused ? Loc.Get("shell.obs.date_paused") : Loc.Format("shell.obs.date_running_fmt", speed))
+                : (paused ? Loc.Get("shell.paused_note") : Loc.Format("shell.running_note", speed));
+            _stateNoteLabel.AddThemeColorOverride("font_color", Ui.Colour(
+                observing ? "shell.state.info" : (paused ? "shell.pause_amber" : "shell.brass_hi")));
+            foreach (var c in _speedChevrons) c.QueueRedraw();
+        }
     }
 
     private static string FormatWeekday(GameDate date)

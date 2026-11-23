@@ -165,7 +165,7 @@ internal sealed class CampaignAccessGate
         }
     }
 
-    public void ExitWrite(bool yieldToRequestedReader = false, int readerWindowMs = 18)
+    public void ExitWrite(bool yieldToRequestedReader = false, int readerWindowMs = 24)
     {
         lock (_sync)
         {
@@ -628,6 +628,8 @@ public sealed class BackgroundSimRunner : IDisposable
     private long _workerStepStartHours = -1;
 
     public CountryRankings.Weights RankingWeights { get; set; } = CountryRankings.Weights.Default;
+    public bool MobilePacing { get; set; }
+    public double MinSpeed5DayIntervalMs { get; set; }
 
     public Campaign Campaign => _campaign;
     public bool IsActive => _workerRunning && _thread is { IsAlive: true };
@@ -689,9 +691,11 @@ public sealed class BackgroundSimRunner : IDisposable
 
     public void SyncClockState(bool paused, int speed)
     {
+        var clamped = Math.Max(1, speed);
+        var changed = _pausedDesired != paused || _speedDesired != clamped;
         _pausedDesired = paused;
-        _speedDesired = Math.Max(1, speed);
-        if (!paused)
+        _speedDesired = clamped;
+        if (changed)
         {
             lock (_wakeLock) Monitor.PulseAll(_wakeLock);
         }
@@ -794,7 +798,7 @@ public sealed class BackgroundSimRunner : IDisposable
             ownerRev == _lastSnapshotOwnerRev &&
             warRev == _lastSnapshotWarRev &&
             !campaign.IsPaused &&
-            Stopwatch.GetElapsedTime(_lastSnapshotPublishedTicks).TotalMilliseconds < 33.0)
+            Stopwatch.GetElapsedTime(_lastSnapshotPublishedTicks).TotalMilliseconds < 16.0)
             return;
 
         var nextVer = Interlocked.Increment(ref _snapshotVersion);
@@ -810,6 +814,8 @@ public sealed class BackgroundSimRunner : IDisposable
     {
         var lastTickTime = Stopwatch.GetTimestamp();
         var accumulator = 0.0;
+        var lastSpeed = -1;
+        long lastSpeed5DayTicks = 0;
         try
         {
             while (!_stopRequested)
@@ -820,6 +826,7 @@ public sealed class BackgroundSimRunner : IDisposable
                 if (_pausedDesired || _pendingException is not null || campaign.IsPaused || campaign.SimulationFault.Length > 0)
                 {
                     accumulator = 0.0;
+                    lastSpeed5DayTicks = 0;
                     lastTickTime = Stopwatch.GetTimestamp();
                     lock (_wakeLock)
                     {
@@ -834,9 +841,11 @@ public sealed class BackgroundSimRunner : IDisposable
                 // so Speed 5 cannot advance past unread events before the UI pauses it.
                 if (_sawPendingPlayerEvent)
                 {
+                    accumulator = 0.0;
+                    lastSpeed5DayTicks = 0;
                     lock (_wakeLock)
                     {
-                        if (!_stopRequested) Monitor.Wait(_wakeLock, 20);
+                        if (!_stopRequested && !_pausedDesired) Monitor.Wait(_wakeLock, 20);
                     }
                     _sawPendingPlayerEvent = campaign.HasPendingPlayerEvent();
                     lastTickTime = Stopwatch.GetTimestamp();
@@ -844,30 +853,39 @@ public sealed class BackgroundSimRunner : IDisposable
                 }
 
                 var speed = Math.Max(1, _speedDesired);
+                if (speed != lastSpeed)
+                {
+                    lastSpeed = speed;
+                    accumulator = 0.0;
+                    lastSpeed5DayTicks = 0;
+                }
+
                 var continuingStep = campaign.MidStep;
                 var now = Stopwatch.GetTimestamp();
                 var dt = Stopwatch.GetElapsedTime(lastTickTime).TotalSeconds;
                 lastTickTime = now;
                 if (dt > 0.25) dt = 0.25;
 
+                var stepInterval = 0.0;
                 if (continuingStep || speed >= 5)
                 {
                     if (speed >= 5) accumulator = 0.0;
                 }
                 else
                 {
-                    var interval = Math.Max(0.002, campaign.Defines.SecondsForSpeed(speed) * (campaign.TickHours / 24.0));
-                    accumulator = Math.Min(accumulator + dt, interval * 3.0);
-                    if (accumulator < interval)
+                    stepInterval = Math.Max(0.002, campaign.Defines.SecondsForSpeed(speed) * (campaign.TickHours / 24.0));
+                    accumulator = Math.Min(accumulator + dt, stepInterval * 1.25);
+                    if (accumulator < stepInterval)
                     {
-                        var waitMs = Math.Clamp((int)((interval - accumulator) * 1000.0), 1, 16);
+                        var waitMs = Math.Clamp((int)((stepInterval - accumulator) * 1000.0), 1, 16);
                         lock (_wakeLock)
                         {
-                            if (!_stopRequested && !_pausedDesired) Monitor.Wait(_wakeLock, waitMs);
+                            if (!_stopRequested && !_pausedDesired && _speedDesired == speed)
+                                Monitor.Wait(_wakeLock, waitMs);
                         }
                         continue;
                     }
-                    accumulator -= interval;
+                    accumulator -= stepInterval;
                 }
 
                 if (campaign.AccessGate.HasWriteWaiter)
@@ -880,6 +898,8 @@ public sealed class BackgroundSimRunner : IDisposable
                 var openedDay = false;
                 var awaitingPlayer = false;
                 Exception caught = null;
+                var mobilePacing = MobilePacing;
+                var stepWorkStarted = Stopwatch.GetTimestamp();
 
                 campaign.AccessGate.EnterWrite(asBackgroundWorker: true);
                 try
@@ -893,9 +913,10 @@ public sealed class BackgroundSimRunner : IDisposable
                     {
                         campaign.Speed = speed;
                         if (!campaign.MidStep) _workerStepStartHours = campaign.ElapsedHours;
-                        // Run in bounded ~5-8 ms stages so ExitWrite yields promptly whenever the
-                        // render/UI thread requests a read window or command lock during midnight ticks.
-                        var finished = campaign.StepFor(speed >= 5 ? 8.0 : 5.0);
+                        // Run in bounded slices so ExitWrite yields promptly whenever the
+                        // render/UI thread requests a read window or command lock during heavy ticks.
+                        var sliceMs = speed >= 5 ? (mobilePacing ? 4.5 : 8.0) : (mobilePacing ? 3.0 : 5.0);
+                        var finished = campaign.StepFor(sliceMs);
                         if (finished && !campaign.MidStep)
                         {
                             if (_workerStepStartHours >= 0 && campaign.ElapsedHours != _workerStepStartHours)
@@ -914,8 +935,11 @@ public sealed class BackgroundSimRunner : IDisposable
                 }
                 finally
                 {
-                    campaign.AccessGate.ExitWrite(yieldToRequestedReader: true, readerWindowMs: 12);
+                    campaign.AccessGate.ExitWrite(yieldToRequestedReader: true, readerWindowMs: mobilePacing ? 40 : 24);
                 }
+
+                if (stepDone && speed < 5 && (continuingStep || (stepInterval > 0.0 && Stopwatch.GetElapsedTime(stepWorkStarted).TotalSeconds > stepInterval)))
+                    accumulator = 0.0;
 
                 if (caught is not null || stepDone || awaitingPlayer)
                 {
@@ -930,6 +954,28 @@ public sealed class BackgroundSimRunner : IDisposable
                         }
                         _sawPendingPlayerEvent = awaitingPlayer;
                     }
+                }
+
+                var minDayMs = MinSpeed5DayIntervalMs;
+                if (minDayMs > 0.0 && speed >= 5 && stepDone && openedDay &&
+                    caught is null && !awaitingPlayer && !_stopRequested && !_pausedDesired)
+                {
+                    if (lastSpeed5DayTicks != 0)
+                    {
+                        while (!_stopRequested && !_pausedDesired && _speedDesired >= 5)
+                        {
+                            var elapsedDayMs = Stopwatch.GetElapsedTime(lastSpeed5DayTicks).TotalMilliseconds;
+                            var remMs = (int)Math.Ceiling(minDayMs - elapsedDayMs);
+                            if (remMs <= 0) break;
+                            lock (_wakeLock)
+                            {
+                                if (!_stopRequested && !_pausedDesired && _speedDesired >= 5)
+                                    Monitor.Wait(_wakeLock, Math.Min(remMs, 16));
+                            }
+                        }
+                    }
+                    lastSpeed5DayTicks = Stopwatch.GetTimestamp();
+                    lastTickTime = lastSpeed5DayTicks;
                 }
             }
         }

@@ -233,6 +233,10 @@ public partial class DealOrForceGame : Control
                 if (readLockHeld && _campaign is not null) _campaign.ExitRead();
             }
         }
+        else if (bgActive && IsNewShellActive && _shell is not null && _campaign!.RenderSnapshot is { } snap)
+        {
+            _shell.DatePlate.RefreshFromSnapshot(snap);
+        }
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible)
             // Nobody's eyes: an observer of the whole world sees the whole world. Watching one country, he sees what it sees.
             && !WatchingWorld;
@@ -346,6 +350,9 @@ public partial class DealOrForceGame : Control
                 _simRunner.Stop();
             return;
         }
+        Campaign.StageSliceMilliseconds = _isMobileRuntime ? 1.5 : 2.5;
+        _simRunner.MobilePacing = _isMobileRuntime;
+        _simRunner.MinSpeed5DayIntervalMs = _isMobileRuntime ? 80.0 : 0.0;
         if (!ReferenceEquals(_simRunner.Campaign, _campaign) || !_simRunner.IsActive)
             _simRunner.Start(_campaign!);
         _simRunner.SyncClockState(_campaign!.IsPaused, _speed);
