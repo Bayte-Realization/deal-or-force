@@ -17,7 +17,10 @@ namespace DealOrForce;
 /// before it is drawn - a sea lane that touches land, or a road that runs over water, is not
 /// drawn at all - and rounded into a curve only where the curve stays where the lane is.
 ///
-/// The lanes are a faint dashed line that runs slowly in the direction of the trade; the
+/// The lanes are a faint dashed line that runs slowly in the direction of the trade, drawn only
+/// where the player asked about trade: in the Economy map mode, or for the country picked on
+/// the map. Drawn everywhere, eighteen lanes of parallel dashes over every sea read as rain,
+/// not as trade (23 November 2026). The ships stay in every mode: they are the trade. The
 /// vehicles are the models in game/gfx/models/trade (made in Blender; a mod adds a ship or a
 /// lorry by adding a file there), lit like the ground, a few pixels long at any distance. They
 /// stop when the clock does. The routes are drawn up again once a month, two a frame.
@@ -73,6 +76,24 @@ public sealed partial class GlobePresentation
     private readonly List<Vector3> _tradeDrawPoints = new();
     private ShaderMaterial _tradeLaneMaterial;
     private int _tradeLaneFingerprint = int.MinValue;
+    /// <summary>The country picked on the map: its own lanes are drawn in every map mode. -1 when none.</summary>
+    private int _tradeFocusNationId = -1;
+
+    /// <summary>
+    /// Whether any lane line is drawn: the layer is on and the player is looking at trade - the
+    /// Economy map mode, or a picked country. The default political map shows the ships only.
+    /// </summary>
+    private bool TradeLaneLinesWanted =>
+        Simulation.WorldLayers.On("trade_lanes") &&
+        (_mapMode == StrategicMapMode.Economy || _tradeFocusNationId >= 0);
+
+    /// <summary>The country whose own lanes are drawn outside the Economy mode; -1 for none.</summary>
+    internal void SetTradeFocusNation(int nationId)
+    {
+        if (_tradeFocusNationId == nationId) return;
+        _tradeFocusNationId = nationId;
+        _tradeLaneFingerprint = int.MinValue;
+    }
 
     private const string TradeLaneShader = @"
 shader_type spatial;
@@ -80,7 +101,6 @@ render_mode unshaded, blend_mix, cull_disabled, depth_draw_never, shadows_disabl
 uniform float period = 1.5;
 uniform float duty = 0.48;
 uniform float phase = 0.0;
-uniform float shimmer = 1.0;
 uniform float quality_tier = 0.0;
 void fragment() {
     float d = fract(UV.x / period - phase);
@@ -88,12 +108,9 @@ void fragment() {
     float head = smoothstep(duty - 0.16, duty - 0.04, d) * (1.0 - smoothstep(duty - 0.04, duty, d));
     float across = 1.0 - abs(UV.y * 2.0 - 1.0);
     float core = smoothstep(0.0, 0.58, across);
-    // Subtle orbital atmospheric shimmer along real maritime/overland trade arteries.
-    float orbital_wave = quality_tier < 1.5 ? (0.5 + 0.5 * sin(UV.x * 1.4 - phase * 6.283185)) * shimmer : 0.0;
-    vec3 col = COLOR.rgb * (0.92 + 0.36 * head + 0.20 * orbital_wave);
-    ALBEDO = col;
-    float base_alpha = max(dash, orbital_wave * 0.24 * shimmer);
-    ALPHA = COLOR.a * base_alpha * core;
+    // Ink, not light: no shimmer between the dashes (the owner's no-glow rule).
+    ALBEDO = COLOR.rgb * (0.92 + 0.36 * head);
+    ALPHA = COLOR.a * dash * core;
 }";
 
     private int _shipModelWeightTotal;
@@ -272,7 +289,7 @@ void fragment() {
             return;
         }
         if (IsInstanceValid(_tradeLaneLines))
-            _tradeLaneLines.Visible = Simulation.WorldLayers.On("trade_lanes");
+            _tradeLaneLines.Visible = TradeLaneLinesWanted;
         if (!QualityTradeTraffic || !_tradeTrafficShown || !_mapApplied || _tradeModels.Count == 0 ||
             !Simulation.WorldLayers.On("trade_traffic"))
         {
@@ -290,14 +307,12 @@ void fragment() {
         PlanTradeLanes();
         if (!_campaign.IsPaused) _tradeClock += delta;
 
-        // Zoom-tiered LOD: at orbital distance (>14.5) or on MobileLow (quality_tier >= 2), hide tiny
-        // 3D mover meshes and boost atmospheric flow shimmer along the real trade arteries instead.
+        // Zoom-tiered LOD: at orbital distance (>15.5) or on MobileLow (quality_tier >= 2), hide the
+        // tiny 3D mover meshes.
         var zoom = _flatMap ? Mathf.Clamp(_flatZoom / 1.6f, 0.45f, 2f) : Mathf.Clamp(_distance / 9f, 0.45f, 2f);
-        var orbitalShare = Mathf.SmoothStep(11.5f, 16.5f, ViewDistance);
         var moverCapPerRoute = _tradeQualityTier > 1.5f || ViewDistance > 15.5f
             ? 0
             : _tradeQualityTier > 0.5f ? 10 : TradeMoversPerRoute;
-        _tradeLaneMaterial.SetShaderParameter("shimmer", 0.35f + 0.65f * orbitalShare);
 
         var localCamNormal = !_flatMap && IsInstanceValid(_camera)
             ? (_tradeRoot.GlobalTransform.Basis.Inverse() * _camera.GlobalPosition.Normalized()).Normalized()
@@ -414,20 +429,28 @@ void fragment() {
         return (here, outward ? ahead - behind : behind - ahead);
     }
 
-    /// <summary>The lanes, faint and dashed, the dashes running from the first partner to the second.</summary>
+    /// <summary>
+    /// The lanes, faint and dashed, the dashes running from the first partner to the second: in
+    /// the Economy mode the busiest of the world, otherwise only the picked country's own.
+    /// </summary>
     private void DrawTradeLanes(float zoom)
     {
-        var fingerprint = HashCode.Combine(_tradeLanes.Count, _tradeLanesMonth, _flatMap, _flatMap ? (int)(_flatX * 4f) : 0, (int)(zoom * 8f));
+        var economy = _mapMode == StrategicMapMode.Economy;
+        var focus = economy ? -1 : _tradeFocusNationId;
+        var fingerprint = HashCode.Combine(_tradeLanes.Count, _tradeLanesMonth, _flatMap, _flatMap ? (int)(_flatX * 4f) : 0, (int)(zoom * 8f), economy, focus);
         if (fingerprint == _tradeLaneFingerprint) return;
         _tradeLaneFingerprint = fingerprint;
         _tradeLaneMesh.ClearSurfaces();
+        if (!economy && focus < 0) return;
         var halfWidth = LaneHalfWidth * zoom;
         // The lines of the busiest lanes only: where a dozen lanes share the Mediterranean, a dozen
         // lines read as rain. The ships on the rest say where they go.
-        var maxLines = Math.Min(TradeLinesDrawn, _tradeLanes.Count);
-        for (var li = 0; li < maxLines; li++)
+        var drawn = 0;
+        for (var li = 0; li < _tradeLanes.Count && drawn < TradeLinesDrawn; li++)
         {
             var lane = _tradeLanes[li];
+            if (!economy && lane.A != focus && lane.B != focus) continue;
+            drawn++;
             var colour = lane.Sea ? new Color(0.84f, 0.88f, 0.74f, 0.30f) : new Color(0.94f, 0.76f, 0.44f, 0.34f);
             _tradeDrawPoints.Clear();
             for (var i = 0; i < lane.Points.Count; i++)

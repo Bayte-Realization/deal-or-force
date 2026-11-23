@@ -234,6 +234,7 @@ public sealed partial class GlobePresentation
             _globeMaterial.SetShaderParameter("selected_province_id", (float)provinceId);
             _globeMaterial.SetShaderParameter("selection_active", 1f);
             SelectedRegionMembers(provinceId > 0 && _campaign?.ProvinceMap is not null ? regionMapIndex : -1);
+            SetTradeFocusNation(nation is { Movement: null } ? nation.Id : -1);
         }
         pick = new GlobePick(nation, state, provinceId, latitude, longitude);
         return true;
@@ -606,6 +607,7 @@ public sealed partial class GlobePresentation
         _globeMaterial?.SetShaderParameter("selected_region_id", -1f);
         _globeMaterial?.SetShaderParameter("selected_province_id", -1f);
         _globeMaterial?.SetShaderParameter("selected_region_live", 0f);
+        SetTradeFocusNation(-1);
     }
 
     private Image _selectedRegionImage;
