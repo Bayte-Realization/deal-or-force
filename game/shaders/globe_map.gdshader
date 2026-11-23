@@ -1681,16 +1681,18 @@ void fragment() {
         plan_color * plan_on * 0.16 +
         vec3(0.11, 0.026, 0.007) * front_edge * front_pulse * front_march +
         inland_water * (lake_water * 0.035 + river_water * 0.025);
-    // Calibrated physical water F0 = 0.02 (Godot SPECULAR = 0.25) and coastal shelf roughening
-    // (0.32 open sea -> 0.44 silty littoral) so sun glints softly without clipping shallow seas white.
-    float realistic_sea_rough = mix(0.32, 0.44, littoral);
+    // The sea is a map colour, not a mirror. At the physical F0 (SPECULAR 0.25, roughness 0.32)
+    // the sun's highlight sat on the sea beside the player's country as a soft white blob - east
+    // of Korea at the campaign's opening camera (23 November 2026). Now a quarter of that, on a
+    // rougher surface: what is left is a faint broad gradient of light, never a glare.
+    float realistic_sea_rough = mix(0.52, 0.60, littoral);
     float sea_rough = mix(0.56, mix(realistic_sea_rough, 0.92, paper_mix), realistic_look);
     float river_rough = mix(0.40, mix(0.22, 0.90, paper_mix), realistic_look);
     float land_rough = mix(0.84, 0.66, snow_surface_mask);
     ROUGHNESS = mix(sea_rough, mix(land_rough, river_rough, inland_coverage), political.a);
     ROUGHNESS = mix(ROUGHNESS, 0.94, paper_mix * step(0.5, atlas_look));
     METALLIC = 0.0;
-    float sea_spec = mix(0.26, mix(0.25, 0.02, paper_mix), realistic_look);
+    float sea_spec = mix(0.07, mix(0.07, 0.02, paper_mix), realistic_look);
     float river_spec = mix(0.40, mix(0.32, 0.02, paper_mix), realistic_look);
     float land_spec = mix(0.12, 0.34, snow_surface_mask);
     SPECULAR = mix(sea_spec, mix(land_spec, river_spec, inland_coverage), political.a);
