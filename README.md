@@ -3,8 +3,9 @@
 # Deal or Force
 
 **A grand strategy game about the whole world, from the morning of 1 January 2024.**
-Every country on the map is yours to play, and every one of them is simulated the same way.
-Version **0.8.5.3** (EntertAlpha).
+Every country on the map is yours to play, and the computer runs the others with the same
+commands for most actions; the [differences that remain](docs/PLAYER_AI_PARITY_2026_11_18_RU.md)
+are being closed one at a time, peace first. Version **0.8.5.3** (EntertAlpha).
 
 [![Release](https://img.shields.io/badge/release-EntertAlpha%200.8.5.3-2f6fb3)](docs/CHANGELOG_0.8.5.3_EN.md)
 [![Engine](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED.md)
@@ -42,60 +43,60 @@ Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 Built on **Godot 4.8 Beta 3 .NET** and **.NET 10**. The full history of the 0.8 series is in
 [CHANGELOG 0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md).
 
-- **Zero-freeze background simulation & Android edition** — `DoF-Sim` background thread with
-  stage-yielding `StepFor` slicing, non-blocking HUD/map reads, pre-baked map boot caches, `STORED(0)`
-  APK packaging, touch controls, and pause-menu Developer Console with soft-keyboard adaptation.
-- **Elevation-aligned 3D relief, Dossier clarity & colour fixes** — per-coordinate 3D relief
-  snapping for armies, cities, capitals, weather/fog shells; clickable Capital navigation and
-  expandable Domestic Stability factors in the Country Dossier; live Tax Efficiency warning banner
-  in Economy; and 36 distinct splinter/civil-war country colours.
-- **Major gameplay & modding wave** — Grand Projects, World Situations, National Ambitions &
-  Cabinet Directives, multi-variant Production Methods, Diseases & Disasters, expanded Doctrines,
-  Mainland Reclamation, and Mod Content Studio.
-
-- **AI staff delegation & Diplomatic Inbox** — delegate any of the 11 branches of government from
-  the dedicated **AI Staff** tab (`Q` / flag dossier, with an Overview shortcut) or the top
-  **THE STAFF** block inside **State Affairs** (`E`); the **Diplomatic Inbox** now stays pinned at
-  the top of the right HUD column beneath Date/DEFCON across all 9 incoming diplomatic channels.
-
-- **Map and menu fixes** — army counters stay steady at a fixed zoom and no longer flash through
-  the far side of the globe. Closing a region's dossier clears the map highlight, and menu
+- **The day is calculated on its own thread.** Without mods and without multiplayer, the map and
+  panels keep drawing while the next day is worked out.
+- **An early Android build.** The same simulation with touch controls for the camera and orders.
+  It is a technical preview that you install by hand; the interface is not yet scaled for phones.
+- **Terrain relief on PC.** Armies, cities, front lines, battles and labels sit at the height of
+  the ground under them.
+- **Clearer dossiers.** The country dossier has a Capital row that moves the camera there and a
+  domestic stability outlook that opens into its factors. The economy workspace warns when stacked
+  taxes push collection down. Splinter states and civil-war sides are drawn from 36 distinct colours.
+- **New mechanics, not yet balanced by measurement.** Megaprojects that allies can co-fund, world
+  situations, national ambitions and cabinet directives, switchable production methods, diseases
+  and disasters, more doctrines, a reunification mechanic for divided nations across the Taiwan
+  Strait, and the Mod Content Studio for building mod content through forms.
+- **AI staff and diplomatic inbox (0.8.3.5).** Hand any of 11 areas of government to your own staff
+  from the AI Staff tab of your country dossier (`Q`) or from State Affairs (`E`). Incoming letters
+  from all 9 diplomatic channels wait in a bar under the date at the top right.
+- **Map and menu fixes (0.8.3.4).** Army counters stay steady at a fixed zoom and no longer flash
+  through the far side of the globe. Closing a region's dossier clears the map highlight, and menu
   ornaments stay behind the window that covers them.
-- **Uniform 5-surface tactile UI pack & 100 % moddable chrome** — seamlessly tiled matte leather,
-  slate twill, laid diplomatic paper, technical blueprint grid, and archival linen surfaces across
-  every menu, HUD plate, dossier, and fullscreen workspace, paired with rescaled menu/terrain/good
-  icons (`90_shell_sprites.json`, `90_shell.json`, `game/interface/README.md`).
-- **Redesigned Command Desks, Pause Desk, Save Archive & Society Profile** — Main Menu Continue
-  dossier card with nation flag, Live Campaign Pause Desk with ornate ruler cameo bezel and
-  geodesic backdrop, instant Save Archive search/filtering, Country Dossier `Society` profile
-  meters alongside `Wars of the World` full-width front cards, and a direct **Long-Range Forces**
-  (`Support`) button with active readiness counter right on the left navigation rail.
-- **Total-Occupation & 100% War-Score Forced Peace** — completely occupied countries (including
-  junior coalition partners via separate peace) and inter-state wars reaching `±100%` war score now
-  settle decisively instead of dragging on indefinitely, while preserving human player choice.
-- **Deep Speed-5 & Late-Campaign Optimization** — pooled `ArmyStackMarker` subtrees (`f:army sync`),
-  warm army counter texture cache, throttled battle-marker & GPU map uploads, cooperative slice
-  yields reducing stalls in a Speed 5 benchmark (`worst 661.9 ms -> 27.3 ms`), default
-  sliver-group folding, staggered weekly economy, and `7`-day calm peacetime AI cadence.
+- **New campaign interface (0.8.3.2).** Five matte surfaces (leather, slate twill, laid paper,
+  blueprint grid, archive linen) that a mod can replace, a Continue card with the country's flag in
+  the main menu, a pause desk with the ruler, date and war status, a searchable save archive, a
+  Society tab in the country dossier, full-width front cards in the war ledger, and a Long-Range
+  Forces button on the left rail.
+- **Wars that end (0.8.3.2).** Full occupation or a decisive war score now settles an interstate
+  war instead of letting it drag on. A human victor receives the capitulation as an offer. A
+  defeated human player can at present have it signed for them; giving that decision back is on
+  the plan.
+- **Speed 5 (0.8.3.2).** Heavy simulation stages leave room for drawing and input. In a development
+  benchmark at the 2024 start, Speed 5 went from 2.61 to 6.53 days per second and the longest
+  simulation frame from 661.9 to 27.3 ms. In-game speed depends on the save, settings and hardware.
 
 ## The game
 
 It opens on 1 January 2024 with hundreds of countries and movements, thousands of regions
-and 35 295 provinces. Authored history sets the starting conditions; simulation rules and
+and 34 138 provinces. Authored history sets the starting conditions; simulation rules and
 events then shape the campaign. Prices come out of what is produced and shipped. A war moves
 a front province by province and has to be supplied along it. A country that governs badly
 loses regions to people who would rather leave. You can play any country on the map.
 
 ## What is in it
 
-The world is one simulation rather than a set of screens. Twenty goods are made by 39
-recipes and carried along 2 148 trade routes, so an embargo takes away goods rather than a
-number. Peace is written at a conference: every province you mean to keep is priced in war
-score, and the other side can refuse and tell you why.
+The world is one simulation rather than a set of screens. Sixty-three goods are made by 94
+recipes and traded between countries; an embargo or a war cuts the trade between the two, so
+it takes away goods rather than a number. Trade is reached by distance, not sailed through
+straits: a strait or canal held by an enemy closes to fleets and convoys, and a hostile
+supplier of a key good slows the megaprojects that need it. Peace is written at a conference:
+every province you mean to keep is priced in war score, and the screen tells you why a demand
+cannot go through.
 
 Countries answer to each other in more than one way. Alliances are proposed and can be
-turned down. A frightened country goes and asks somebody larger for a guarantee. Five kinds
-of dependency — protectorate, puppet, satellite, dominion, client — each take their own
+turned down. A frightened country goes and asks somebody larger for a guarantee. Seven kinds
+of dependency (protectorate, puppet, satellite, dominion, special administrative region,
+client state, personal union) each take their own
 tribute, bring their own obligations in war, and drift towards wanting out at their own
 pace. NATO, the CSTO and a dozen standing guarantees are on the map from the first morning,
 because they were.
@@ -117,7 +118,7 @@ that town's name.
 A war is fought from the air as well as on the ground. Artillery, rocket batteries, aircraft,
 drones and air defence are formations of their own, based in regions and sent on missions from
 a panel beside the map; they reach into the battles within their range and pay for every day
-they fly over a defended front. Seventy-one technologies spread from the countries that know
+they fly over a defended front. There are 136 technologies, and they spread from the countries that know
 them to their neighbours and partners.
 
 The map reads like an atlas: more than seven thousand cities that never print over each other,

@@ -1,121 +1,190 @@
-# Deal or Force — Press Kit & Creator Outreach Pack (EN & RU)
+# Deal or Force: press kit and creator outreach (EN and RU)
 
-> **Purpose.** Ready-to-send fact sheet, key features, creator outreach templates (PC Grand Strategy & Android / Emulator Mobile Strategy channels), and FAQ in both English and Russian. Contains **zero competitor names** and strictly verified project facts.
+> **Purpose.** A fact sheet, talking points, outreach letters for strategy creators, and a FAQ in
+> English and Russian. Checked against the code at `EntertAlpha 0.8.5.3` on 23 November 2026; the
+> sources of each number are listed at the top of
+> [`STORE_COPY_GOOGLE_PLAY_RUSTORE_EN_RU.md`](STORE_COPY_GOOGLE_PLAY_RUSTORE_EN_RU.md). No other
+> games are named.
 
 ---
 
-## 1. Fact Sheet (EN / RU)
+## 1. Fact sheet (EN / RU)
 
 | Field | English | Русский |
 |---|---|---|
 | **Title** | Deal or Force | Deal or Force |
-| **Developer** | Bayte Realization (solo developer) | Bayte Realization (соло-разработчик) |
-| **Genre** | Geopolitical Grand Strategy / Political & Military Simulation | Геополитическая гранд-стратегия / симулятор политики и войны |
-| **Platforms** | Windows PC (64-bit), Android (arm64-v8a & x86_64 emulator-ready dev builds) | Windows ПК (64-бит), Android (сборки arm64-v8a и x86_64 для эмуляторов) |
-| **Current Stage** | Public Alpha (`EntertAlpha 0.8.3.x`), Steam & Mobile store prep | Открытая альфа (`EntertAlpha 0.8.3.x`), подготовка к выходу в Steam и мобильных сторах |
-| **Engine & Tech** | Godot 4.8 (.NET 10 / C# + F# + optional Rust native kernels) | Godot 4.8 (.NET 10 / C# + F# + опциональные нативные ядра Rust) |
-| **License** | Open Source — GNU GPLv3 (`GPL-3.0-or-later`) | Открытый исходный код — GNU GPLv3 (`GPL-3.0-or-later`) |
-| **Languages** | English, Russian (28,000+ localized strings, 100% parity) | Русский, английский (28 000+ строк, полный паритет) |
-| **Playable Alpha** | https://bayte-realization.itch.io/deal-or-force | https://bayte-realization.itch.io/deal-or-force |
+| **Developer** | Bayte Realization (one person) | Bayte Realization (один человек) |
+| **Genre** | Grand strategy, modern geopolitics | Гранд-стратегия, современная геополитика |
+| **Start** | 1 January 2024, with that day's wars on the map | 1 января 2024 года, с войнами того дня на карте |
+| **Platforms** | Windows PC (64-bit). Android: an early build installed by hand, a technical preview | Windows ПК (64-бит). Android: ранняя сборка для установки вручную, технодемо |
+| **Current stage** | Public alpha (`EntertAlpha 0.8.5.3`). No Steam page yet | Открытая альфа (`EntertAlpha 0.8.5.3`). Страницы в Steam пока нет |
+| **Price** | Free | Бесплатно |
+| **Engine** | Godot 4.8 (.NET 10, C#; some rules in F#) | Godot 4.8 (.NET 10, C#; часть правил на F#) |
+| **License** | Open source, GNU GPL v3 or later | Открытый код, GNU GPL v3 или новее |
+| **Languages** | English, Russian | Русский, английский |
+| **Made with AI** | Built by one person, openly with the help of AI. Much of the art, music and sound is generated; see the disclosure in the store copy | Делает один человек, открыто и с помощью ИИ. Значительная часть графики, музыки и звуков сгенерирована; см. раскрытие в тексте магазина |
+| **Playable alpha** | https://bayte-realization.itch.io/deal-or-force | https://bayte-realization.itch.io/deal-or-force |
 | **Channels** | YouTube `@BayteRealization` · TikTok `@bayte_realization` · X `@Bayte_R` · Telegram `t.me/+39SNXyA92aBmYzhi` | YouTube `@BayteRealization` · TikTok `@bayte_realization` · X `@Bayte_R` · Telegram `t.me/+39SNXyA92aBmYzhi` |
-| **Monetization Policy for Creators** | Full permission to record, stream, clip, and monetize videos with zero embargo restrictions | Полное разрешение на запись, стримы, нарезки и монетизацию без эмбарго |
+| **For creators** | You may record, stream, clip and monetise videos. No embargo | Можно записывать, стримить, нарезать и монетизировать ролики. Без эмбарго |
 
 ---
 
-## 2. Key Talking Points & Feature Bullets
+## 2. Talking points
 
 ### English
-- **One Planetary Simulation, Symmetric Rules:** Over 35,000 provinces, 1,850 regions, 7,000+ cities, and hundreds of nations & political movements starting on 1 January 2024. Every country is simulated identically—no hidden AI cheats.
-- **Physical Supply & Maritime Chokepoints:** 63 goods, 114 production chains, and 2,000+ trade routes move through real straits and ports. Closing a chokepoint creates genuine industrial shortages and diplomatic crises.
-- **Transparent Diplomacy & Multi-Point Peace:** Every treaty offer and peace conference shows why an AI nation accepts or refuses; includes 5 dependency tiers, alliances, guarantees, embargoes, and international blocs.
-- **Strategic Megaprojects & Consortia:** Multi-stage national infrastructure wonders with optional allied co-funding and covert sabotage risks.
-- **Readable Combined-Arms Warfare:** Live battle telemetry displays tactical phases, multi-direction flanking entrenchment bypass, combined-arms synergy, supply cutoffs, pocket collapse, and long-range fire (artillery, rockets, drones, SAMs, air).
-- **Observer Mode & AI Staff Delegation:** Watch AI-only world histories with instant paused country switching, or delegate up to 11 government branches to your AI Staff.
-- **Multi-Era Total-Conversion Modding:** Declarative `scenario.json` manifests, custom calendars/eras, `replace_paths`, built-in `ModValidator`, and ready-to-clone 1914 and fantasy starter templates.
-- **PC + Android Parity:** The same pure-C# deterministic simulation core runs on desktop PC and native Android with dedicated touch gesture controls and a 4-mode tap toolbar.
+- **The world of 1 January 2024.** The war in Ukraine, Sudan's army against the Rapid Support
+  Forces, the Houthis in Yemen, the M23 in eastern Congo, the resistance in Myanmar, Syria and
+  Somalia are on the map from the first morning. 21 armed movements and de facto governments hold
+  their own ground and fight with their own forces.
+- **Any of more than 200 countries.** 34,138 provinces, 1,846 regions and more than 7,000 cities
+  on a 3D globe or a flat map. Observer mode lets the computer run every country.
+- **An economy of goods.** 63 goods made by 94 production recipes. An embargo or a war cuts trade
+  between the two countries; distance makes far partners less attractive.
+- **Megaprojects.** 16 kinds, from high-speed rail to a fusion grid, which allies can co-fund. If a
+  hostile country supplies 35% or more of a key good, the work slows down.
+- **Peace at a conference.** Every province you keep costs war score, and the screen tells you why
+  a demand cannot go through. Alliances, guarantees, pacts, embargoes and seven kinds of dependent
+  state.
+- **Readable war.** Fronts move province by province and need supply. Artillery, rockets,
+  aircraft, drones and air defence are formations of their own. A battle window shows the phase
+  and each modifier: flanking, river crossings, supply, encirclement. Fleets and convoys have to
+  sail around a strait or canal held by an enemy.
+- **Delegation.** Any of 11 areas of government can be handed to your own staff and taken back.
+- **Open for modders.** Nearly everything is JSON data that a mod overrides by load order. The
+  examples in `mods/_templates` include a 1914 starter, which runs on the 2024 map, and a
+  three-province fantasy map, as starting points for modders.
+- **Free and open source** under the GNU GPL v3.
 
 ### Русский
-- **Единая планетарная симуляция по честным правилам:** более 35 000 провинций, 1 850 регионов, свыше 7 000 городов и сотни государств и движений с утра 1 января 2024 года. Игрок и ИИ подчиняются одним правилам.
-- **Физическая экономика и морские проливы:** 63 товара, 114 производственных цепочек и свыше 2 000 торговых маршрутов. Блокада пролива реально останавливает поставки сырья, а не вычитает абстрактный модификатор.
-- **Прозрачная дипломатия и мирные конференции:** стол переговоров с предметным торгом за каждую провинцию и объяснением причин отказа ИИ; 5 видов субъектов, союзы, гарантии, эмбарго и международные организации.
-- **Стратегические мегапроекты и консорциумы:** многоэтапные национальные и совместные с союзниками стройки с экономическим эффектом и риском диверсии через разведсеть.
-- **Наглядная общевойсковая война:** живая телеметрия боя показывает фазы сражения, фланговый обход окопов, общевойсковой бонус, развал котлов и удары дальнобойных сил (артиллерия, ракеты, дроны, ПВО, авиация).
-- **Режим наблюдателя и делегирование штабу ИИ:** мгновенное переключение стран на паузе для таймлапсов и обзора мира, либо передача до 11 ветвей управления штабу ИИ.
-- **Моддинг любых эпох и открытый код GPLv3:** `scenario.json`, авторские календари, `replace_paths`, `ModValidator` и готовые шаблоны 1914 года и фэнтези-мира.
-- **ПК и Android на одном движке:** общее детерминированное C#-ядро работает на Windows и нативно на Android со специальной панелью тач-режимов.
+- **Мир 1 января 2024 года.** Война в Украине, армия Судана против Сил быстрого реагирования,
+  хуситы в Йемене, M23 на востоке Конго, сопротивление в Мьянме, Сирия и Сомали на карте с первого
+  утра. 21 вооружённое движение и непризнанная власть держат свою землю и воюют своими силами.
+- **Любая из более чем 200 стран.** 34 138 провинций, 1 846 регионов и больше 7 000 городов на
+  3D-глобусе или плоской карте. В режиме наблюдателя все страны ведёт компьютер.
+- **Экономика товаров.** 63 товара и 94 производственных рецепта. Эмбарго или война обрывают
+  торговлю между двумя странами; дальние партнёры выгодны меньше, чем близкие.
+- **Мегапроекты.** 16 видов, от скоростной железной дороги до термоядерной энергосети; союзники
+  могут строить их вскладчину. Если враждебная страна поставляет 35% или больше ключевого товара,
+  стройка замедляется.
+- **Мир за столом переговоров.** Каждая провинция, которую вы оставляете себе, стоит военного
+  счёта, а экран объясняет, почему требование не проходит. Союзы, гарантии, пакты, эмбарго и семь
+  видов зависимых государств.
+- **Понятная война.** Фронт движется по провинциям и требует снабжения. Артиллерия, ракеты,
+  авиация, беспилотники и ПВО действуют как отдельные соединения. Окно боя показывает фазу и каждый
+  модификатор: фланги, переправы, снабжение, окружение. Флоту и конвоям приходится обходить пролив
+  или канал, которым владеет противник.
+- **Делегирование.** Любое из 11 направлений управления можно передать своему штабу и забрать
+  обратно.
+- **Открыто для моддеров.** Почти всё в игре хранится в данных JSON, и мод переопределяет их по
+  порядку загрузки. Среди примеров в `mods/_templates` есть заготовка 1914 года на карте 2024-го
+  и фэнтези-карта из трёх провинций: это отправные точки для моддеров.
+- **Бесплатно и с открытым кодом** по лицензии GNU GPL v3.
 
 ---
 
-## 3. Ready-to-Send Creator Outreach Templates
+## 3. Outreach letters
 
-### 3.1. PC Grand Strategy YouTuber / Streamer (English)
-> **Subject:** Playable crisis save: blocking 1 strait derails a superpower (open-source 3D-globe grand strategy)
+### 3.1. PC strategy YouTuber or streamer (English)
+> **Subject:** A save that starts on 1 January 2024, with every war of that day on the map
 >
 > Hi [Creator Name],
 >
-> I'm the solo developer behind **Deal or Force**, an open-source geopolitical grand strategy game set on a 35,000-province 3D globe (starting 1 Jan 2024, with built-in 1914 and fantasy total-conversion templates). I watched your recent video on [specific video title] and loved how you leaned into [specific emergent chaos / diplomacy moment].
+> I'm the one person behind **Deal or Force**, a free, open-source grand strategy game that starts
+> on the morning of 1 January 2024. The war in Ukraine, Sudan's army against the RSF, the Houthis,
+> the M23 and Myanmar's resistance are already on the map, and you can play any of more than 200
+> countries. I watched your video on [specific video title] and liked how you handled
+> [specific moment].
 >
-> I think your audience would enjoy a specific challenge we built around our physical chokepoint economy and peace-table AI:
-> **"[Can a mid-sized power collapse a rival's allied megaproject by blockading a single strait—without getting crushed by a coalition?]"**
+> A start that might suit your channel: **[one sentence, e.g. "Play Sudan's government from
+> 1 January 2024: win the war with the RSF, or write a peace the other side will sign."]**
 >
-> I can send you a clean Windows build, a pre-cooked crisis save that drops straight into the action on minute one, a 1-page controls/scenario sheet, and full monetization permission—zero script, zero embargo.
+> I can send a Windows build, a save that opens on that situation, and a one-page sheet with the
+> controls. You can monetise the video; there is no script and no embargo. It is an alpha, built
+> with the help of AI, and some things will break.
 >
 > Playable alpha: https://bayte-realization.itch.io/deal-or-force
 >
-> Would you like me to send over the build and crisis save?
+> Would you like the build and the save?
 >
 > Best,
 > Bayte Realization
 
-### 3.2. Android / Mobile & Emulator Strategy Creator (English)
-> **Subject:** 35,000-province PC grand strategy running natively on Android & x86_64 emulators
+### 3.2. Android and mobile strategy creator (English)
+> **Hold this letter** until the phone build is comfortable to play. On 23 November the touch
+> targets were about 3 mm, the back gesture closed the game, and nothing had been measured on a
+> device (`docs/WEEK_REVIEW_2026_11_23_RU.md`).
+>
+> **Subject:** A 34,138-province PC grand strategy, running on Android
 >
 > Hi [Creator Name],
 >
-> I'm the solo developer of **Deal or Force**, an open-source geopolitical grand strategy game with 35,000+ provinces, 63 physical goods, diplomacy, combined-arms warfare, and Observer Mode—and we just built a native **Android APK** (supporting both `arm64-v8a` phones and native `x86_64` PC Android emulators!) running the exact same C# simulation core as the PC version, complete with a 4-mode tap toolbar and pinch-to-zoom 3D globe.
+> I'm the one person behind **Deal or Force**, a free, open-source grand strategy game that starts
+> on 1 January 2024 with that day's wars on the map. There is now an early Android build. It runs
+> the same simulation as the PC version, with touch controls for panning, pinch zoom and orders.
 >
-> Video hook that writes itself: **"Testing a full 35,000-province PC grand strategy game natively on Android—does it actually play well on touch?"**
+> A video idea: **"Does a full PC grand strategy game work on a phone?"**
 >
-> Happy to send the signed test APK + a 1-page setup guide (plus PC build if you want to compare side-by-side). Full monetization rights, no embargo, honest impressions welcome.
+> I can send the APK with a one-page install guide, and the PC build if you want to compare.
+> You can monetise the video, there is no embargo, and honest impressions are welcome.
 >
-> Want me to send the APK link?
+> Shall I send the APK link?
 >
 > Best,
 > Bayte Realization
 
-### 3.3. ПК и мобильные стратег-блогеры / Telegram-каналы (Русский)
-> **Тема:** Готовый «кризисный сейв» для ролика: 35 000 провинций, блокада пролива и живой Android-порт (Deal or Force)
+### 3.3. Русские стратегические блогеры и Telegram-каналы
+> **Тема:** Сейв с 1 января 2024 года, где все войны того дня уже на карте
 >
-> Привет, [Имя / название канала]!
+> Привет, [Имя или название канала]!
 >
-> Я соло-разработчик открытой геополитической гранд-стратегии **Deal or Force** (Bayte Realization). Смотрел ваш недавний выпуск про [конкретный ролик] — особенно зашёл момент с [конкретная деталь].
+> Я делаю в одиночку бесплатную гранд-стратегию с открытым кодом **Deal or Force** (Bayte
+> Realization). Смотрел ваш выпуск про [конкретный ролик], особенно понравился момент с
+> [конкретная деталь].
 >
-> У нас игра работает на 3D-глобусе из 35 000 провинций с реальной экономикой 63 товаров, морскими проливами, прозрачной телеметрией боёв, совместными мегапроектами, модами эпох (от 1914 до фэнтези) и уже собирается в **нативный Android APK** (для смартфонов и x86_64-эмуляторов) на том же самом движке, что и на ПК.
+> Игра начинается утром 1 января 2024 года: война в Украине, армия Судана против Сил быстрого
+> реагирования, хуситы, M23 и сопротивление в Мьянме уже на карте, а играть можно за любую из
+> более чем 200 стран. 34 138 провинций, 63 товара, мирные конференции, где цена каждой провинции
+> видна заранее, и окно боя с каждым модификатором.
 >
-> Могу прислать чистую русскую сборку (ПК и/или Android APK), **готовый сейв прямо в разгаре геополитического кризиса** (чтобы экшен начинался с первой минуты записи) и короткий бриф на 1 страницу. Никаких ограничений по сценарию, без эмбарго, полные права на монетизацию и нарезки.
+> Могу прислать русскую сборку для Windows, сейв, который открывается на остром положении, и
+> бриф на одну страницу. Сценария нет, эмбарго нет, монетизировать и нарезать можно. Это альфа,
+> сделанная с помощью ИИ, и что-то в ней будет ломаться.
 >
 > Открытая альфа: https://bayte-realization.itch.io/deal-or-force
 >
-> Прислать сборку и сейв на пробу?
+> Прислать сборку и сейв?
 >
 > С уважением,
 > Bayte Realization
 
 ---
 
-## 4. Frequently Asked Questions (EN & RU)
+## 4. FAQ (EN and RU)
 
 **Q: Is Deal or Force really open source?**
-A: Yes. The source code is licensed under GNU GPLv3 (`GPL-3.0-or-later`), built on Godot 4.8 (.NET 10). Players and modders can inspect the rules, build from source, and create deep total conversions.
+A: Yes. The source code is under the GNU GPL v3 or later and builds with Godot 4.8 and .NET 10.
+Anyone can read the rules, build the game from source and make mods.
 
 **Q: Does the AI follow the same rules as the player?**
-A: Yes. Every country on the map uses the same economy, logistics, manpower, diplomacy, and combat simulation. In Observer Mode, you can click any nation at any time to inspect its exact numbers live.
+A: For most actions the computer uses the same commands as the player. Not for all of them yet. A
+review on 18 November listed the differences, from peace terms to how often the computer
+reconsiders its plans, and they are being closed one at a time, peace first. The list is public:
+`docs/PLAYER_AI_PARITY_2026_11_18_RU.md`.
 
 **Q: How does the Android version compare to PC?**
-A: It runs the exact same pure-C# deterministic simulation engine and 3D globe map, adapted with mobile shader quality tiers, safe-area HUD insets, pinch-to-zoom/pan inertia, and a dedicated 4-mode touch toolbar (`Select`, `Order`, `Box Select`, `Map Pan`).
+A: It runs the same simulation and the same globe, with touch controls for the camera and orders.
+It is an early build that you install by hand. The interface has not been scaled for phones yet,
+and there are no measurements from devices.
 
-**В: Почему игра с открытым кодом и что это даёт игрокам?**
-О: Исходный код распространяется под лицензией GNU GPLv3. Это гарантирует прозрачность симуляции, долговечность проекта и максимальную свободу для моддеров — от простых JSON-правок до полных конверсий других эпох.
+**В: Почему у игры открытый код и что это даёт игрокам?**
+О: Исходный код распространяется по лицензии GNU GPL v3. Любой может прочитать правила
+симуляции, собрать игру сам и сделать мод, от правки пары чисел в JSON до своей карты.
 
-**В: Можно ли играть без постоянного интернета на ПК и Android?**
-О: Да, одиночная кампания полностью работает офлайн.
+**В: Компьютер играет по тем же правилам, что и игрок?**
+О: В большинстве действий компьютер пользуется теми же командами, что и игрок, но пока не во
+всех. Разбор 18 ноября перечислил расхождения, от условий мира до того, как часто компьютер
+пересматривает планы, и их закрывают по одному, начиная с мира. Список открыт:
+`docs/PLAYER_AI_PARITY_2026_11_18_RU.md`.
+
+**В: Можно ли играть без интернета?**
+О: Да, одиночная кампания работает офлайн.
