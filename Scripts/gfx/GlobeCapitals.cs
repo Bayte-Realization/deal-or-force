@@ -6,9 +6,11 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// Capital brass star halos + 1-draw-call warm dusk/twilight urban glow clusters
-/// scaled by real state population and GDP, synced seamlessly across 3D globe and flat atlas.
+/// Capital marks (one thin ink ring around the capital's star) + 1-draw-call city lights on the
+/// night side of the globe, scaled by real state population and GDP.
 /// Strictly presentation-only: zero simulation mutation, zero texture units added to globe shader.
+/// Ink, not light (23 November 2026): the brass halo with its soft glow and shimmer is now a plain
+/// stroke, and the city lights no longer glow on the day side or on the flat map.
 /// </summary>
 public sealed partial class GlobePresentation
 {
@@ -28,20 +30,18 @@ public sealed partial class GlobePresentation
     private const string CapitalHaloShader = """
 shader_type spatial;
 render_mode unshaded, blend_mix, cull_disabled, depth_draw_never, shadows_disabled;
-uniform vec3 brass_color : source_color = vec3(0.95, 0.80, 0.42);
+uniform vec3 ink_color : source_color = vec3(0.10, 0.09, 0.08);
 uniform float quality_tier = 0.0;
 void fragment() {
     vec2 p = UV * 2.0 - 1.0;
     float r = length(p);
     if (r > 1.0) discard;
-    float outer_ring = smoothstep(0.09, 0.0, abs(r - 0.78));
-    float inner_ring = smoothstep(0.06, 0.0, abs(r - 0.56));
-    float soft_glow = pow(max(1.0 - r, 0.0), 2.6) * 0.42;
-    float shimmer = quality_tier < 1.5 ? 0.92 + 0.08 * sin(TIME * 2.1) : 1.0;
-    vec3 col = mix(brass_color * 0.78, brass_color * 1.18 + vec3(0.10, 0.08, 0.03), max(outer_ring, inner_ring));
-    float alpha = clamp(max(max(outer_ring * 0.82, inner_ring * 0.48), soft_glow), 0.0, 0.90) * shimmer;
-    ALBEDO = col;
-    ALPHA = alpha;
+    float aa = max(fwidth(r), 0.01);
+    // One plain stroke: no soft glow inside it, no shimmer.
+    float ring = 1.0 - smoothstep(0.05, 0.05 + aa, abs(r - 0.80));
+    if (ring < 0.01) discard;
+    ALBEDO = ink_color;
+    ALPHA = ring * 0.85;
 }
 """;
 
@@ -63,10 +63,8 @@ void fragment() {
     float core = exp(-r * r * 5.6);
     float halo = pow(max(1.0 - r, 0.0), 2.4) * 0.45;
     float sun_dot = dot(normalize(world_norm), normalize(sun_direction));
-    // Whisper-subtle warm cartographic highlight in daylight; rich golden dusk/night metropolis glow on terminator/night.
-    float twilight = flat_map > 0.5
-        ? 0.24
-        : mix(0.20, 1.0, 1.0 - smoothstep(-0.34, 0.28, sun_dot));
+    // City lights belong to the night: nothing on the day side or on the flat map (no glow).
+    float twilight = flat_map > 0.5 ? 0.0 : 1.0 - smoothstep(-0.30, 0.05, sun_dot);
     float energy = (core * 0.72 + halo) * COLOR.a * twilight * dusk_boost * paper_fade;
     vec3 warm = mix(vec3(0.96, 0.62, 0.26), vec3(1.00, 0.88, 0.58), core);
     ALBEDO = warm * energy;
@@ -83,8 +81,6 @@ void fragment() {
             Shader = new Shader { Code = CapitalHaloShader },
             RenderPriority = 6
         };
-        var brass = Ui.Colour("globe.selection");
-        _capitalHaloMaterial.SetShaderParameter("brass_color", new Vector3(brass.R, brass.G, brass.B));
         return _capitalHaloMaterial;
     }
 
@@ -101,7 +97,7 @@ void fragment() {
     /// <summary>
     /// A capital is a mark on the map, not a sign facing the viewer. Geographic east/north
     /// are its permanent axes; only a projection change replaces that frame with flat axes.
-    /// Attaches a subtle elevated brass halo ring synced identically across globe and flat atlas.
+    /// Attaches one thin ink ring, identical on the globe and the flat atlas.
     /// </summary>
     private void PlaceCapitalMarker(Node3D node, Vector3 normal)
     {
@@ -166,14 +162,15 @@ void fragment() {
     }
 
     /// <summary>
-    /// 1-draw-call warm dusk/twilight urban glow clusters scaled by real state population and GDP.
+    /// 1-draw-call city lights on the night side, scaled by real state population and GDP.
     /// Zero invented settlements, zero per-frame allocations, cleanly muted in paper mode & MobileLow.
     /// </summary>
     private void UpdateUrbanGlowClusters()
     {
         if (_campaign is null || !_mapApplied || !IsInstanceValid(_skyWorld)) return;
         var tier = CurrentShaderQualityTier();
-        var allowed = !_mapLookPaper && tier < 1.5f && Simulation.WorldLayers.On("cities");
+        // City lights only where there is a night: on the globe with the day-night terminator on.
+        var allowed = !_mapLookPaper && tier < 1.5f && Simulation.WorldLayers.On("cities") && !_flatMap && DayNightEnabled;
         if (!allowed)
         {
             if (IsInstanceValid(_urbanGlowNode)) _urbanGlowNode.Visible = false;
@@ -211,7 +208,7 @@ void fragment() {
             _urbanGlowMaterial.SetShaderParameter("sun_direction", _daySun.GlobalBasis.Z);
         _urbanGlowMaterial.SetShaderParameter("flat_map", _flatMap ? 1f : 0f);
         _urbanGlowMaterial.SetShaderParameter("paper_fade", 1f - Math.Clamp(_cachedPaperMix, 0f, 1f));
-        _urbanGlowMaterial.SetShaderParameter("dusk_boost", DayNightEnabled ? 1.0f : 0.42f);
+        _urbanGlowMaterial.SetShaderParameter("dusk_boost", 1.0f);
 
         var rev = _campaign.MapRevision;
         var cityCount = Math.Min(_cities.Count, _cityAnchors.Length);

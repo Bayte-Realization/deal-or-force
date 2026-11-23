@@ -6,9 +6,10 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// Batched active-battle map VFX: directional crimson assault arrows from attacking provinces
-/// into active battle boundaries, plus subtle GPU-animated combat clash pulse/spark rings
-/// directly underneath active battle bubbles.
+/// Batched active-battle map marks: crimson assault arrows from attacking provinces into active
+/// battle boundaries, and one ink ring under each battle bubble (two for an encirclement).
+/// Ink, not light: until 23 November 2026 the ring was an additive pulse with spark rays and
+/// the arrows carried a marching amber band - glow the owner's map rules do not allow.
 /// Zero per-frame CPU allocations, zero extra textures on <c>globe_map.gdshader</c>, and cleanly
 /// gated by <c>quality_tier</c> for Mobile/GLES3 performance.
 /// </summary>
@@ -162,7 +163,7 @@ public sealed partial class GlobePresentation
         var halfW = MathF.Min(_flatMap ? 0.0085f : 0.0072f, segLen * 0.24f);
         var headFrac = Math.Clamp(0.36f, 0.22f, 0.45f);
         var shoulder = OnOrderSurface(p0.Lerp(p1, 1f - headFrac));
-        var col = new Color(1f, 0.24f, 0.14f, intensity);
+        var col = new Color(0.62f, 0.12f, 0.08f, intensity);
 
         // Shaft quad (2 triangles)
         var s0L = OnOrderSurface(p0 + sideDir * halfW);
@@ -206,12 +207,14 @@ public sealed partial class GlobePresentation
             right = refUp.Cross(normal).Normalized();
             up = normal.Cross(right).Normalized();
         }
-        var radius = _flatMap ? 0.055f : 0.044f;
+        // A ring just round the battle badge, not a target circle over the whole front.
+        var radius = _flatMap ? 0.016f : 0.012f;
         var p00 = center - right * radius - up * radius;
         var p10 = center + right * radius - up * radius;
         var p01 = center - right * radius + up * radius;
         var p11 = center + right * radius + up * radius;
-        var col = pocket ? new Color(1.0f, 0.16f, 0.12f, intensity) : new Color(1.0f, 0.42f, 0.16f, intensity);
+        // The shader reads a red channel above 0.4 as an encirclement and draws a second ring.
+        var col = pocket ? new Color(0.56f, 0.07f, 0.05f, intensity) : new Color(0.26f, 0.06f, 0.05f, intensity);
 
         _battleClashMesh.SurfaceSetColor(col); _battleClashMesh.SurfaceSetUV(new Vector2(0f, 0f)); _battleClashMesh.SurfaceAddVertex(p00);
         _battleClashMesh.SurfaceSetColor(col); _battleClashMesh.SurfaceSetUV(new Vector2(1f, 0f)); _battleClashMesh.SurfaceAddVertex(p10);
@@ -232,38 +235,28 @@ void fragment() {
     float mask = smoothstep(0.0, aa, edge);
     float border = smoothstep(0.11, 0.11 + aa, edge);
     float is_head = step(0.98, UV.x);
-    float march = quality_tier < 1.5
-        ? smoothstep(0.15, 0.45, fract(UV.x * 2.4 - abs(UV.y - 0.5) * 0.9 - TIME * 1.45)) * (1.0 - is_head)
-        : 0.0;
-    vec3 fill = mix(COLOR.rgb, vec3(1.0, 0.74, 0.32), march * 0.52 + is_head * 0.24);
-    ALBEDO = mix(vec3(0.08, 0.02, 0.02), fill, border);
+    // Solid ink: no marching light band, no amber head.
+    ALBEDO = mix(vec3(0.08, 0.02, 0.02), COLOR.rgb, border);
     ALPHA = mask * clamp(0.76 + is_head * 0.20, 0.0, 0.96);
 }
 """;
 
     private const string BattleClashPulseShader = """
 shader_type spatial;
-render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
 uniform float quality_tier = 0.0;
 void fragment() {
     vec2 p = UV * 2.0 - 1.0;
     float r = length(p);
     if (r > 1.0) discard;
-    float angle = atan(p.y, p.x);
-    float phase = fract(TIME * 0.65);
-    float wave_ring = 1.0 - smoothstep(0.0, 0.16, abs(r - mix(0.32, 0.92, phase)));
-    wave_ring *= (1.0 - phase) * 0.55;
-    float core_glow = pow(1.0 - r, 2.4) * (0.36 + 0.16 * sin(TIME * 5.2));
-    // Subtle directional clash spark rays on DesktopHigh only (zero textures, mobile-safe).
-    float sparks = 0.0;
-    if (quality_tier < 0.5) {
-        float ray = pow(max(sin(angle * 7.0 + TIME * 2.6) * sin(angle * 5.0 - TIME * 3.9), 0.0), 3.0);
-        sparks = ray * smoothstep(0.25, 0.58, r) * (1.0 - smoothstep(0.58, 0.94, r)) * 0.48;
-    }
-    float energy = (core_glow + wave_ring + sparks) * clamp(COLOR.a, 0.35, 1.35);
-    vec3 col = mix(COLOR.rgb, vec3(1.0, 0.88, 0.54), clamp(sparks * 1.4 + core_glow * 0.6, 0.0, 1.0));
-    ALBEDO = col * energy;
-    ALPHA = clamp(energy, 0.0, 0.85);
+    float aa = max(fwidth(r), 0.01);
+    // One still ink ring; an encirclement (red channel above 0.4) a second, inner one.
+    float ring = 1.0 - smoothstep(0.09, 0.09 + aa, abs(r - 0.80));
+    float pocket = step(0.4, COLOR.r) * (1.0 - smoothstep(0.07, 0.07 + aa, abs(r - 0.55)));
+    float mask = max(ring, pocket);
+    if (mask < 0.01) discard;
+    ALBEDO = COLOR.rgb;
+    ALPHA = mask * clamp(0.62 + 0.25 * COLOR.a, 0.0, 0.92);
 }
 """;
 }

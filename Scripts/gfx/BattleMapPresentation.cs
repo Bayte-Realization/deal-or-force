@@ -231,11 +231,12 @@ public sealed partial class GlobePresentation
             }
         }
 
-        // 2. Active Combat vivid crimson-amber glow frame around the counter.
+        // 2. In battle: a solid ink frame around the counter, dark crimson on its outer edge.
+        // Was a crimson-amber glow frame until 23 November 2026 (no glow on the map).
         if ((flags & ArmyFlagInBattle) != 0)
         {
-            var battleOuter = new Color(1.0f, 0.22f, 0.12f, 0.96f);
-            var battleInner = new Color(1.0f, 0.62f, 0.22f, 0.86f);
+            var battleOuter = new Color(0.20f, 0.04f, 0.03f, 1.0f);
+            var battleInner = new Color(0.52f, 0.09f, 0.06f, 1.0f);
             for (var x = 3; x < width - 3; x++)
             {
                 WritePixel(pixels, width, x, 0, battleOuter);

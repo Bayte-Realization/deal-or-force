@@ -180,6 +180,8 @@ uniform float look_foam_strength = 0.55;
 uniform float look_waterline = 0.0;
 uniform float look_sea_sheen = 0.30;
 uniform float look_selection_width = 1.3;
+// The selection stroke: ink, not gold light.
+uniform vec3 selection_ink : source_color = vec3(0.09, 0.075, 0.06);
 float map_id(sampler2D map_texture, vec2 uv) {
     vec4 encoded = texture(map_texture, vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0)));
     return floor(encoded.r * 255.0 + 0.5) + floor(encoded.g * 255.0 + 0.5) * 256.0;
@@ -1612,11 +1614,13 @@ void fragment() {
     // the block of ids around the line can say, so it came out clipped to a texel and unseen -
     // and a stroke suits a map of ink better than a lit edge.
     float selection_width = mix(1.0, look_selection_width, step(0.5, atlas_look));
-    float highlight_edge = 1.0 - smoothstep(border_pixels * 0.5 * selection_width, border_pixels * 3.2 * selection_width,
+    // Ink, not light (23 November 2026): a solid dark stroke on the picked country's frontier.
+    // The pale gold edge faded out over three border widths and read as a glow round the country.
+    float highlight_edge = 1.0 - smoothstep(border_pixels * 0.9 * selection_width, border_pixels * 1.8 * selection_width,
         nation_edge_pixels);
     highlight_edge *= step(0.5, abs(near_nation - other_nation)) * highlighted;
     base = mix(base, vec3(0.93, 0.81, 0.44), highlighted * 0.105);
-    base = mix(base, vec3(1.00, 0.88, 0.50), highlight_edge * 0.92);
+    base = mix(base, selection_ink, highlight_edge * 0.92);
     // A line the player drew. Blue holds it, amber takes it, grey falls back to it.
     float plan = round(front.b * 4.0);
     vec3 plan_color = plan < 1.5 ? vec3(0.24, 0.56, 0.96)
@@ -1673,13 +1677,11 @@ void fragment() {
     }
     float fog = step(0.0, fog_viewer) * (1.0 - step(0.5, known)) * political.a * fog_tint * (1.0 - resource_mode);
     base = mix(base, mix(vec3(dot(base, vec3(0.2126, 0.7152, 0.0722))), base, fog_saturation) * fog_darkness, fog);
-    float front_pulse = 0.85 + 0.15 * sin(TIME * 3.0);
-    float front_march = 0.78 + 0.22 * sin((UV.x * 420.0 + UV.y * 280.0) - TIME * 4.2);
-    ALBEDO = mix(base, vec3(1.0, 0.86, 0.34), selection_edge * 0.94);
-    EMISSION = mix(water * 0.025 * (1.0 - political.a), vec3(0.32, 0.21, 0.035), selection_edge * 0.56) +
-        vec3(0.20, 0.15, 0.045) * highlight_edge * 0.42 +
+    // The picked region's edge is the same solid ink; neither it, the picked country's edge nor
+    // a front line emits light or pulses any more (the front keeps its red stroke in ALBEDO).
+    ALBEDO = mix(base, selection_ink, selection_edge * 0.94);
+    EMISSION = water * 0.025 * (1.0 - political.a) * (1.0 - selection_edge) +
         plan_color * plan_on * 0.16 +
-        vec3(0.11, 0.026, 0.007) * front_edge * front_pulse * front_march +
         inland_water * (lake_water * 0.035 + river_water * 0.025);
     // The sea is a map colour, not a mirror. At the physical F0 (SPECULAR 0.25, roughness 0.32)
     // the sun's highlight sat on the sea beside the player's country as a soft white blob - east
