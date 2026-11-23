@@ -9,13 +9,13 @@ public static partial class AiStatecraft
     /// One campaign's memory of the weekly diplomacy pass. A second campaign in the same
     /// process has its own: the stamp is not saved and is not part of the world.
     /// </summary>
-    sealed class WeeklyScanMemory
+    internal sealed class WeeklyScanMemory
     {
         internal int Walks;
         internal readonly Dictionary<long, WeeklyStamp> Stamps = new(PairKeyComparer.Instance);
     }
 
-    struct WeeklyStamp
+    internal struct WeeklyStamp
     {
         internal bool Borders;
         internal float Opinion;
@@ -70,51 +70,87 @@ public static partial class AiStatecraft
     /// the pass used to fetch the memory of the campaign and that entry twice for every pair
     /// it left alone.
     /// </summary>
-    static bool UnchangedWeeklyPair(Campaign campaign, Nation nation, Nation other, DiplomaticRelation peeked,
-        bool borders, float myStrength, bool identityOn)
+    static bool UnchangedWeeklyPair(Campaign campaign, WeeklyScanMemory memory, Nation nation, Nation other,
+        DiplomaticRelation peeked, bool borders, float myStrength, bool identityOn)
     {
-        if (peeked is null) return false;
-        if (!WeeklyScans.TryGetValue(campaign, out var memory) ||
-            !memory.Stamps.TryGetValue(WeeklyPairKey(nation.Id, other.Id), out var stamp)) return false;
+        if (peeked is null || memory is null) return false;
+        if (!memory.Stamps.TryGetValue(WeeklyPairKey(nation.Id, other.Id), out var stamp)) return false;
         if (stamp.Borders != borders || stamp.Opinion != peeked.Opinion || stamp.Stance != peeked.Stance) return false;
         return !WeeklyPassWouldWrite(campaign, nation, other, peeked, borders, myStrength, identityOn, stamp);
     }
 
+    static bool UnchangedWeeklyPair(Campaign campaign, Nation nation, Nation other, DiplomaticRelation peeked,
+        bool borders, float myStrength, bool identityOn)
+    {
+        if (peeked is null) return false;
+        if (!WeeklyScans.TryGetValue(campaign, out var memory)) return false;
+        return UnchangedWeeklyPair(campaign, memory, nation, other, peeked, borders, myStrength, identityOn);
+    }
+
     /// <summary>
     /// The weekly opinion pass for one pair. Returns true when the pair was walked.
-    /// A pair whose border, opinion and stance are unchanged, and whose pass would write
-    /// the same opinion and the same strength estimate, is not walked. The check reads.
-    /// It does not open a relation; the walk opens one only when it is about to write,
-    /// which is the same moment the pass used to call <see cref="CampaignDiplomacy.Get"/>.
     /// </summary>
     internal static bool ReviewWeeklyPair(Campaign campaign, Nation nation, Nation other, bool borders,
-        float myStrength, bool identityOn, out DiplomaticRelation relation)
+        float myStrength, bool identityOn, out DiplomaticRelation relation) =>
+        ReviewWeeklyPair(campaign, WeeklyScanOf(campaign), nation, other, borders, myStrength, identityOn, out relation);
+
+    internal struct WeeklyPairPrecheck
+    {
+        internal DiplomaticRelation Peeked;
+        internal bool Awake;
+        internal bool Borders;
+        internal bool Unchanged;
+        internal bool HasComputed;
+        internal bool Faith;
+        internal bool AssessmentDue;
+        internal float Strength;
+        internal float Fear;
+    }
+
+    internal static WeeklyPairPrecheck PrecheckWeeklyPair(Campaign campaign, WeeklyScanMemory memory,
+        Nation nation, Nation other, bool borders, float myStrength, bool identityOn)
+    {
+        var result = new WeeklyPairPrecheck { Borders = borders };
+        if (campaign is null || nation is null || other is null || nation.Id == other.Id)
+        {
+            result.Unchanged = true;
+            return result;
+        }
+        var peeked = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id, out var awake);
+        result.Peeked = peeked;
+        result.Awake = awake;
+        if (peeked is null || memory is null) return result;
+        if (!memory.Stamps.TryGetValue(WeeklyPairKey(nation.Id, other.Id), out var stamp)) return result;
+        if (stamp.Borders != borders || stamp.Opinion != peeked.Opinion || stamp.Stance != peeked.Stance) return result;
+        if (peeked.Stance == DiplomaticStance.AtWar)
+        {
+            result.Unchanged = true;
+            return result;
+        }
+        result.Unchanged = !WeeklyPassWouldWriteSinglePass(campaign, nation, other, peeked, borders, myStrength, identityOn, stamp, ref result);
+        return result;
+    }
+
+    internal static bool CommitWeeklyPair(Campaign campaign, WeeklyScanMemory memory, Nation nation, Nation other,
+        float myStrength, bool identityOn, in WeeklyPairPrecheck pre, out DiplomaticRelation relation)
     {
         relation = null;
         if (campaign is null || nation is null || other is null || nation.Id == other.Id) return false;
-        // One lookup of the pair for both halves. An awake relation is what Get returns for
-        // the walk; only a sleeping one, or none at all, still goes through Get - which is
-        // where a relation is woken or opened, at the same moment it always was.
-        var peeked = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id, out var awake);
-        if (UnchangedWeeklyPair(campaign, nation, other, peeked, borders, myStrength, identityOn))
+        if (pre.Unchanged)
         {
-            relation = peeked;
+            relation = pre.Peeked;
             return false;
         }
-
-        relation = awake ? peeked : CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
+        var borders = pre.Borders;
+        relation = pre.Awake ? pre.Peeked : CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
         if (relation is null) return false;
         if (relation.Stance == DiplomaticStance.AtWar)
         {
             WeeklyAdditives(campaign, relation, out var warPolitics, out var warIdentity, out var warSocial);
-            RememberWeeklyPair(campaign, nation.Id, other.Id, borders, relation, warPolitics, warIdentity, warSocial);
+            RememberWeeklyPair(memory, nation.Id, other.Id, borders, relation, warPolitics, warIdentity, warSocial);
             return true;
         }
 
-        // Where this relationship naturally sits, written as the same named reasons a
-        // war or a denunciation is written in - so the standing part of an opinion can
-        // be explained to the player and retuned by a mod, rather than being five
-        // numbers in Defines.cs that nothing on any screen accounts for.
         if (borders)
             OpinionSystem.Remember(campaign, relation, "shared_border", 1f, settle: false);
         else OpinionSystem.Forget(campaign, relation, "shared_border", settle: false);
@@ -122,39 +158,43 @@ public static partial class AiStatecraft
         if (isAllied)
             OpinionSystem.Remember(campaign, relation, "alliance", 1f, settle: false);
         else OpinionSystem.Forget(campaign, relation, "alliance", settle: false);
-        if (identityOn && StateIdentity.ShareDeclaredFaith(nation, other))
+        var faith = pre.HasComputed ? pre.Faith : (identityOn && StateIdentity.ShareDeclaredFaith(nation, other));
+        if (faith)
             OpinionSystem.Remember(campaign, relation, "shared_state_faith", 1f, settle: false);
         else OpinionSystem.Forget(campaign, relation, "shared_state_faith", settle: false);
 
-        var strength = CampaignIntel.EstimatedStrength(campaign, nation.Id, other) / myStrength;
-        // And only as far as the stronger one can reach. Fear of strength was the same at
-        // every distance, so the strongest country in the world was feared at full weight
-        // by every government in its circle - France and Brazil held minus thirty-two
-        // against China for being large - and that one line was most of everything the
-        // world held against anybody. A neighbour fears it in full, a region less, the far
-        // side of the world hardly at all; an ally a quarter as much, because a strong
-        // friend is a worry and not a threat.
-        var reach = OpinionWitnesses.FearReach(campaign, nation, other);
-        if (isAllied) reach *= 0.25f;
-        var fear = M.Clamp(strength - 1f, 0f, 2f) * reach;
-        // The pair shares one relation, and only the weaker of the two is afraid. The
-        // stronger one leaves the entry alone: when each wrote its own view in turn, the
-        // weaker remembered the fear and the stronger forgot it, every week, and the
-        // reason flickered on and off the diplomacy page.
-        if (fear > 0.05f) OpinionSystem.Remember(campaign, relation, "fear_of_strength", fear, settle: false);
-        else if (strength >= 0.95f) OpinionSystem.Forget(campaign, relation, "fear_of_strength", settle: false);
-        // The settle reads politics, identity and reputation from the two countries as they
-        // stand, and the stamp records the same three: taken from the settle rather than
-        // worked out again straight after it, which was a third of what a walk cost.
+        float strength, fear;
+        if (pre.HasComputed && !pre.AssessmentDue)
+        {
+            strength = pre.Strength;
+            fear = pre.Fear;
+        }
+        else
+        {
+            strength = CampaignIntel.EstimatedStrength(campaign, nation.Id, other) / myStrength;
+            var reach = borders ? 1f : OpinionWitnesses.FearReach(campaign, nation, other);
+            if (isAllied) reach *= 0.25f;
+            fear = M.Clamp(strength - 1f, 0f, 2f) * reach;
+        }
+        if (fear > 0.05f && (borders || pre.Awake || fear >= 0.25f))
+            OpinionSystem.Remember(campaign, relation, "fear_of_strength", fear, settle: false);
+        else if (strength >= 0.95f || (!borders && !pre.Awake && fear < 0.25f))
+            OpinionSystem.Forget(campaign, relation, "fear_of_strength", settle: false);
         OpinionSystem.Settle(campaign, relation, out var politics, out var identity, out var social);
-        RememberWeeklyPair(campaign, nation.Id, other.Id, borders, relation, politics, identity, social);
+        RememberWeeklyPair(memory, nation.Id, other.Id, borders, relation, politics, identity, social);
         return true;
     }
 
-    static void RememberWeeklyPair(Campaign campaign, int a, int b, bool borders, DiplomaticRelation relation,
+    internal static bool ReviewWeeklyPair(Campaign campaign, WeeklyScanMemory memory, Nation nation, Nation other, bool borders,
+        float myStrength, bool identityOn, out DiplomaticRelation relation)
+    {
+        var pre = PrecheckWeeklyPair(campaign, memory, nation, other, borders, myStrength, identityOn);
+        return CommitWeeklyPair(campaign, memory, nation, other, myStrength, identityOn, pre, out relation);
+    }
+
+    static void RememberWeeklyPair(WeeklyScanMemory memory, int a, int b, bool borders, DiplomaticRelation relation,
         float politics, float identity, float social)
     {
-        var memory = WeeklyScanOf(campaign);
         memory.Stamps[WeeklyPairKey(a, b)] = new WeeklyStamp
         {
             Borders = borders,
@@ -169,52 +209,84 @@ public static partial class AiStatecraft
 
     /// <summary>
     /// True when walking the pair would change a saved number: the opinion, a standing
-    /// reason, a fading grudge, or the strength estimate. The three remembered facts can
-    /// still match while one of those is due.
+    /// reason, a fading grudge, or the strength estimate. Scans <c>relation.Reasons</c> once
+    /// instead of five separate passes.
     /// </summary>
     static bool WeeklyPassWouldWrite(Campaign campaign, Nation nation, Nation other, DiplomaticRelation relation,
         bool borders, float myStrength, bool identityOn, in WeeklyStamp stamp)
     {
+        var dummy = new WeeklyPairPrecheck { Borders = borders };
+        return WeeklyPassWouldWriteSinglePass(campaign, nation, other, relation, borders, myStrength, identityOn, stamp, ref dummy);
+    }
+
+    static bool WeeklyPassWouldWriteSinglePass(Campaign campaign, Nation nation, Nation other, DiplomaticRelation relation,
+        bool borders, float myStrength, bool identityOn, in WeeklyStamp stamp, ref WeeklyPairPrecheck pre)
+    {
         if (relation.Stance == DiplomaticStance.AtWar) return false;
-        if (StandingWouldWrite(relation, "shared_border", borders, 1f)) return true;
         var allied = relation.Stance == DiplomaticStance.Allied;
-        if (StandingWouldWrite(relation, "alliance", allied, 1f)) return true;
         var faith = identityOn && StateIdentity.ShareDeclaredFaith(nation, other);
-        if (StandingWouldWrite(relation, "shared_state_faith", faith, 1f)) return true;
-        if (WeeklyAssessmentDue(campaign, nation.Id, other)) return true;
+        var assessmentDue = WeeklyAssessmentDue(campaign, nation.Id, other);
+
+        // Single pass over relation.Reasons to locate all 4 standing reasons AND check expiry/decay.
+        OpinionReason heldBorder = null, heldAlliance = null, heldFaith = null, heldFear = null;
+        var reasons = relation.Reasons;
+        var today = campaign.ElapsedDays;
+        var anyDecayOrExpiry = false;
+        for (var i = 0; i < reasons.Count; i++)
+        {
+            var r = reasons[i];
+            var id = r.Id;
+            if (heldBorder is null && string.Equals(id, "shared_border", System.StringComparison.OrdinalIgnoreCase)) heldBorder = r;
+            else if (heldAlliance is null && string.Equals(id, "alliance", System.StringComparison.OrdinalIgnoreCase)) heldAlliance = r;
+            else if (heldFaith is null && string.Equals(id, "shared_state_faith", System.StringComparison.OrdinalIgnoreCase)) heldFaith = r;
+            else if (heldFear is null && string.Equals(id, "fear_of_strength", System.StringComparison.OrdinalIgnoreCase)) heldFear = r;
+
+            if (!anyDecayOrExpiry && r.ExpiresDay > 0)
+            {
+                if (OpinionCatalog.Find(id) is { } def)
+                {
+                    if (r.ExpiresDay <= today || (def.Decays && def.Days > 0))
+                        anyDecayOrExpiry = true;
+                }
+            }
+        }
+
+        if (StandingReasonWouldWrite("shared_border", heldBorder, borders, 1f)) return true;
+        if (StandingReasonWouldWrite("alliance", heldAlliance, allied, 1f)) return true;
+        if (StandingReasonWouldWrite("shared_state_faith", heldFaith, faith, 1f)) return true;
+        if (assessmentDue)
+        {
+            pre.Faith = faith;
+            pre.AssessmentDue = true;
+            pre.HasComputed = true;
+            return true;
+        }
 
         var strength = CampaignIntel.EstimatedStrength(campaign, nation.Id, other, refreshAssessment: false) / myStrength;
-        var reach = OpinionWitnesses.FearReach(campaign, nation, other);
+        var reach = borders ? 1f : OpinionWitnesses.FearReach(campaign, nation, other);
         if (allied) reach *= 0.25f;
         var fear = M.Clamp(strength - 1f, 0f, 2f) * reach;
+        pre.Faith = faith;
+        pre.AssessmentDue = false;
+        pre.Strength = strength;
+        pre.Fear = fear;
+        pre.HasComputed = true;
+
         if (fear > 0.05f)
         {
-            if (StandingWouldWrite(relation, "fear_of_strength", true, fear)) return true;
+            if (StandingReasonWouldWrite("fear_of_strength", heldFear, true, fear)) return true;
         }
-        else if (strength >= 0.95f && OpinionSystem.Has(relation, "fear_of_strength"))
+        else if (strength >= 0.95f && heldFear is not null)
             return true;
 
-        for (var index = 0; index < relation.Reasons.Count; index++)
-        {
-            var reason = relation.Reasons[index];
-            if (OpinionCatalog.Find(reason.Id) is not { } definition) continue;
-            if (reason.ExpiresDay > 0 && reason.ExpiresDay <= campaign.ElapsedDays) return true;
-            if (definition.Decays && definition.Days > 0 && reason.ExpiresDay > 0) return true;
-        }
+        if (anyDecayOrExpiry) return true;
 
         WeeklyAdditives(campaign, relation, out var politics, out var identity, out var social);
         return stamp.Politics != politics || stamp.Identity != identity || stamp.Social != social;
     }
 
-    static bool StandingWouldWrite(DiplomaticRelation relation, string id, bool present, float scale)
+    static bool StandingReasonWouldWrite(string id, OpinionReason held, bool present, float scale)
     {
-        OpinionReason held = null;
-        for (var index = 0; index < relation.Reasons.Count; index++)
-        {
-            if (!string.Equals(relation.Reasons[index].Id, id, System.StringComparison.OrdinalIgnoreCase)) continue;
-            held = relation.Reasons[index];
-            break;
-        }
         if (!present) return held is not null;
         if (held is null || held.Scale != scale) return true;
         return OpinionCatalog.Find(id) is { MaxStacks: > 1 };

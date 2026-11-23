@@ -100,9 +100,11 @@ public partial class DealOrForceGame
         }
         if (_navigationHint is not null)
         {
-            var source = flat
-                ? "Right-drag to pan · wheel to zoom · WASD to move · the world wraps horizontally."
-                : "Right-drag to turn the globe · wheel to zoom · WASD to move.";
+            var source = Platform.PlatformProfile.Current.IsTouchPrimary
+                ? "mobile.override.map_controls"
+                : flat
+                    ? "Right-drag to pan · wheel to zoom · WASD to move · the world wraps horizontally."
+                    : "Right-drag to turn the globe · wheel to zoom · WASD to move.";
             _navigationHint.Text = Tr(source);
             _navigationHint.SetMeta(LocSourceMeta, source); _navigationHint.SetMeta(LocAppliedMeta, _navigationHint.Text);
         }

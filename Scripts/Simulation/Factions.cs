@@ -328,26 +328,45 @@ public static class Factions
         foreach (var _ in TickStages(campaign)) { }
     }
 
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, List<Nation>> _weeklyFactionScratch = new();
+
     /// <summary>The same weekly faction pass, yielded between factions.</summary>
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
         if (campaign?.ProvinceMap is null) yield break;
         SettleDefenselessRebelRemnants(campaign);
         if (campaign.ElapsedDays % 7 != 4 || !campaign.FeatureEnabled("de_facto_factions")) yield break;
-        var ticked = 0;
-        foreach (var faction in campaign.Nations.ToArray())
+        var factions = _weeklyFactionScratch.GetOrCreateValue(campaign);
+        factions.Clear();
+        var nations = campaign.Nations;
+        for (var i = 0; i < nations.Count; i++)
         {
+            var n = nations[i];
+            if (n.SecededFromId >= 0 && !campaign.Fallen.Contains(n.Id)) factions.Add(n);
+        }
+        if (factions.Count == 0) yield break;
+        var ticked = 0;
+        for (var i = 0; i < factions.Count; i++)
+        {
+            var faction = factions[i];
             if (++ticked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
             if (campaign.Fallen.Contains(faction.Id)) continue;
             var parent = campaign.NationById(faction.SecededFromId);
             if (parent is null || campaign.Fallen.Contains(parent.Id) || parent.Movement is not null) continue;
-            var war = Warfare.OpenWars(campaign).FirstOrDefault(w => !w.Ended && w.Involves(faction.Id) && w.Involves(parent.Id) &&
-                                                       w.Opposes(faction.Id, parent.Id));
+            StrategicWar war = null;
+            var liveWars = Warfare.LiveWars(campaign);
+            for (var wi = 0; wi < liveWars.Count; wi++)
+            {
+                var w = liveWars[wi];
+                if (!w.Ended && w.Involves(faction.Id) && w.Involves(parent.Id) && w.Opposes(faction.Id, parent.Id))
+                { war = w; break; }
+            }
             if (war is null) continue;
             if (Of(faction) is not { ClaimsState: true } && !Reintegration.ClaimsParentState(campaign, war, faction, parent)) continue;
             if (!HoldsTheState(campaign, faction, parent)) continue;
             TakeOver(campaign, faction, parent, war);
         }
+        factions.Clear();
     }
 
     /// <summary>Whether the faction stands in the government's capital and on most of the government's ground.</summary>
@@ -385,8 +404,10 @@ public static class Factions
 
         // The fallen government's other wars end with it. What its enemies held of its ground they
         // give back to the new government, which never fought them.
-        foreach (var other in Warfare.OpenWars(campaign))
+        var live = Warfare.LiveWars(campaign);
+        for (var wi = 0; wi < live.Count; wi++)
         {
+            var other = live[wi];
             if (other.Ended || !other.Involves(parent.Id)) continue;
             foreach (var (province, was) in other.OriginalController)
                 campaign.SetProvinceController(province, was == (ushort)parent.MapIndex ? (ushort)faction.MapIndex : was);
@@ -395,9 +416,16 @@ public static class Factions
             other.WinnerId = -1;
             other.PeaceSummary = $"Ended with the fall of the government of {parent.Name}.";
             foreach (var enemyId in other.EnemiesOf(parent.Id))
-                if (CampaignDiplomacy.Peek(campaign, faction.Id, enemyId) is { Stance: DiplomaticStance.AtWar } stance &&
-                    !Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Opposes(faction.Id, enemyId)))
-                    stance.Stance = DiplomaticStance.Neutral;
+            {
+                if (CampaignDiplomacy.Peek(campaign, faction.Id, enemyId) is not { Stance: DiplomaticStance.AtWar } stance) continue;
+                var stillFighting = false;
+                for (var oi = 0; oi < live.Count; oi++)
+                {
+                    var w = live[oi];
+                    if (!w.Ended && w.Opposes(faction.Id, enemyId)) { stillFighting = true; break; }
+                }
+                if (!stillFighting) stance.Stance = DiplomaticStance.Neutral;
+            }
         }
 
         // It is the state now: its name, its seat, its colour, and the peoples it is for.
@@ -410,7 +438,7 @@ public static class Factions
         faction.FoundNameId = parent.Tag;
         faction.FoundNameBase = "";
         faction.NameSettledDay = campaign.ElapsedDays;
-        faction.Color = parent.Color;
+        InheritOrSeparateParentColor(campaign, faction, parent);
         faction.CapitalName = parent.CapitalName;
         faction.CapitalLatitude = parent.CapitalLatitude;
         faction.CapitalLongitude = parent.CapitalLongitude;
@@ -436,7 +464,8 @@ public static class Factions
         campaign.Chronicle.Record(campaign, "regime_change", faction.Id, parent.Id, place: formerName);
         campaign.MarkStrategicChange();
         campaign.MarkMapChanged();
-        DiagnosticLogs.Write("simulation", $"TAKEOVER faction={faction.Tag} former={formerName} state={parent.Tag} provinces={whole.Count}");
+        if (DiagnosticLogs.Enabled)
+            DiagnosticLogs.Write("simulation", $"TAKEOVER faction={faction.Tag} former={formerName} state={parent.Tag} provinces={whole.Count}");
     }
 
     /// <summary>
@@ -461,6 +490,14 @@ public static class Factions
             if (campaign.States.Find(s => s.MapIndex == index) is { } region &&
                 TerritorialClaims.TitleOf(campaign, parent, region) == TerritorialTitle.Homeland) shared++;
         return shared * 2 > home.Count;
+    }
+
+    private static void InheritOrSeparateParentColor(Campaign campaign, Nation successor, Nation parent)
+    {
+        successor.Color = parent.Color;
+        if (campaign.HasOwnedLand(parent) || SecessionColours.ClashesWithLivingExceptParent(campaign, successor, parent))
+            successor.Color = SecessionColours.Choose(campaign, parent, successor.Tag,
+                campaign.StatesOf(successor).Select(s => s.MapIndex));
     }
 
     public static void SettleCivilWarSurvivors(Campaign campaign, StrategicWar war)
@@ -497,7 +534,7 @@ public static class Factions
                     participant.FoundNameId = parent.Tag;
                     participant.FoundNameBase = "";
                     participant.NameSettledDay = campaign.ElapsedDays;
-                    participant.Color = parent.Color;
+                    InheritOrSeparateParentColor(campaign, participant, parent);
                     participant.CapitalName = parent.CapitalName;
                     participant.CapitalLatitude = parent.CapitalLatitude;
                     participant.CapitalLongitude = parent.CapitalLongitude;
@@ -515,8 +552,7 @@ public static class Factions
                 }
                 else if (parts.Length >= 4)
                 {
-                    participant.Name = parts[3];
-                    participant.NameProclaimed = true;
+                    SecessionEvents.AssignDistinctSurvivorIdentity(campaign, participant, parent, parts[3]);
                 }
                 if (participant.Government == "provisional_government")
                     participant.Government = participant.Ideology switch
@@ -540,7 +576,7 @@ public static class Factions
                 participant.FoundNameId = parent.Tag;
                 participant.FoundNameBase = "";
                 participant.NameSettledDay = campaign.ElapsedDays;
-                participant.Color = parent.Color;
+                InheritOrSeparateParentColor(campaign, participant, parent);
                 participant.CapitalName = parent.CapitalName;
                 participant.CapitalLatitude = parent.CapitalLatitude;
                 participant.CapitalLongitude = parent.CapitalLongitude;
@@ -605,6 +641,8 @@ public static class Factions
         }
     }
 
+    [ThreadStatic] private static List<Nation> _rebelCandidatesScratch;
+
     /// <summary>
     /// If an uprising, civil-war rebel, or breakaway has lost its army (0 divisions) and holds
     /// only a tiny rump actually occupied by its parent in their active war, settle that
@@ -614,26 +652,40 @@ public static class Factions
     internal static void SettleDefenselessRebelRemnants(Campaign campaign)
     {
         if (campaign?.ProvinceMap is null || campaign.ElapsedDays < 10) return;
-        foreach (var rebel in campaign.Nations.ToArray())
+        var candidates = _rebelCandidatesScratch ??= new List<Nation>();
+        candidates.Clear();
+        var nations = campaign.Nations;
+        for (var i = 0; i < nations.Count; i++)
         {
-            if (rebel.IsHuman || !campaign.HasOwnedLand(rebel)) continue;
+            var n = nations[i];
+            if (n.IsHuman) continue;
+            if (n.SecededFromId < 0 && string.IsNullOrEmpty(n.FoundedInRevolt) &&
+                !n.Name.StartsWith("rising:", StringComparison.Ordinal)) continue;
+            candidates.Add(n);
+        }
+        if (candidates.Count == 0) return;
+
+        var liveWars = Warfare.LiveWars(campaign);
+        for (var ci = 0; ci < candidates.Count; ci++)
+        {
+            var rebel = candidates[ci];
+            if (!campaign.HasOwnedLand(rebel)) continue;
             var parent = campaign.NationById(rebel.SecededFromId);
             if (parent is null && !string.IsNullOrEmpty(rebel.FoundedInRevolt))
             {
                 var states = campaign.StatesOf(rebel);
                 if (states.Length > 0 && states[0].CoreTags.Count > 0)
-                {
                     parent = campaign.NationByTag(states[0].CoreTags[0]);
-                }
             }
             if (parent is null && rebel.Name.StartsWith("rising:", StringComparison.Ordinal))
             {
                 var states = campaign.StatesOf(rebel);
                 if (states.Length > 0 && states[0].CoreTags.Count > 0)
                 {
-                    foreach (var core in states[0].CoreTags)
+                    var coreTags = states[0].CoreTags;
+                    for (var ki = 0; ki < coreTags.Count; ki++)
                     {
-                        if (campaign.NationByTag(core) is { } candidate && candidate.Id != rebel.Id && campaign.HasOwnedLand(candidate))
+                        if (campaign.NationByTag(coreTags[ki]) is { } candidate && candidate.Id != rebel.Id && campaign.HasOwnedLand(candidate))
                         {
                             parent = candidate;
                             break;
@@ -642,7 +694,12 @@ public static class Factions
                 }
             }
             if (parent is null || parent.Id == rebel.Id || !campaign.HasOwnedLand(parent)) continue;
-            var war = Warfare.OpenWars(campaign).FirstOrDefault(w => !w.Ended && w.Opposes(parent.Id, rebel.Id));
+            StrategicWar war = null;
+            for (var wi = 0; wi < liveWars.Count; wi++)
+            {
+                var w = liveWars[wi];
+                if (!w.Ended && w.Opposes(parent.Id, rebel.Id)) { war = w; break; }
+            }
             if (war is null) continue;
 
             var rebelStates = campaign.StatesOf(rebel);
@@ -651,15 +708,32 @@ public static class Factions
             // state that threw off an overlord, not the rump of a rising. Liechtenstein, Monaco
             // and San Marino, subjects for a few years, broke free and were "reabsorbed" the next
             // day because they have no army: twenty-five years on, every microstate in Europe was gone.
-            if (rebelStates.Any(s => TerritorialClaims.TitleOf(campaign, rebel, s) == TerritorialTitle.Homeland) &&
-                !rebelStates.Any(s => TerritorialClaims.TitleOf(campaign, parent, s) == TerritorialTitle.Homeland)) continue;
+            var rebelHomeland = false;
+            var parentHomeland = false;
+            for (var si = 0; si < rebelStates.Length; si++)
+            {
+                var st = rebelStates[si];
+                if (!rebelHomeland && TerritorialClaims.TitleOf(campaign, rebel, st) == TerritorialTitle.Homeland) rebelHomeland = true;
+                if (!parentHomeland && TerritorialClaims.TitleOf(campaign, parent, st) == TerritorialTitle.Homeland) parentHomeland = true;
+            }
+            if (rebelHomeland && !parentHomeland) continue;
 
             // Nobody in the field and nobody in hiding who could take it again (Partisans).
-            var hasDivisions = campaign.Armies.Any(a => a.NationId == rebel.Id && a.Strength > 0.05f) ||
-                               Partisans.DetachmentsInHiding(campaign, rebel) > 0;
-            if (hasDivisions) continue;
+            var hasArmies = false;
+            var armies = campaign.Armies;
+            for (var ai = 0; ai < armies.Count; ai++)
+            {
+                var a = armies[ai];
+                if (a.NationId == rebel.Id && a.Strength > 0.05f) { hasArmies = true; break; }
+            }
+            if (hasArmies || Partisans.DetachmentsInHiding(campaign, rebel) > 0) continue;
 
-            var foreignWars = Warfare.OpenWars(campaign).Any(w => !w.Ended && w.Involves(rebel.Id) && !w.Involves(parent.Id));
+            var foreignWars = false;
+            for (var wi = 0; wi < liveWars.Count; wi++)
+            {
+                var w = liveWars[wi];
+                if (!w.Ended && w.Involves(rebel.Id) && !w.Involves(parent.Id)) { foreignWars = true; break; }
+            }
             if (foreignWars) continue;
 
             var isRebel = rebel.SecededFromId == parent.Id ||
@@ -670,9 +744,17 @@ public static class Factions
             var whole = Reintegration.Everything(campaign, rebel);
             // Never manufacture victory by painting over the defender's own or a
             // protector's troops. An unopposed capture must still exist in the war ledger.
-            if (whole.Count == 0 || campaign.ProvinceController is null ||
-                !whole.All(p => campaign.ProvinceController[p] == parent.MapIndex) ||
-                !whole.Any(p => war.OriginalController.TryGetValue(p, out var before) && before == rebel.MapIndex)) continue;
+            if (whole.Count == 0 || campaign.ProvinceController is null) continue;
+            var allHeldByParent = true;
+            var anyOriginalRebel = false;
+            for (var pi = 0; pi < whole.Count; pi++)
+            {
+                var p = whole[pi];
+                if (campaign.ProvinceController[p] != parent.MapIndex) { allHeldByParent = false; break; }
+                if (!anyOriginalRebel && war.OriginalController.TryGetValue(p, out var before) && before == rebel.MapIndex)
+                    anyOriginalRebel = true;
+            }
+            if (!allHeldByParent || !anyOriginalRebel) continue;
             if (whole.Count > 0)
             {
                 foreach (var p in whole) campaign.SetProvinceController(p, (ushort)parent.MapIndex);
@@ -686,8 +768,10 @@ public static class Factions
             campaign.MarkStrategicChange();
             campaign.MarkMapChanged();
             Warfare.RebuildFronts(campaign);
-            DiagnosticLogs.Write("simulation", $"REBEL_REMNANT_REABSORBED rebel={rebel.Tag} parent={parent.Tag} provinces={whole.Count}");
+            if (DiagnosticLogs.Enabled)
+                DiagnosticLogs.Write("simulation", $"REBEL_REMNANT_REABSORBED rebel={rebel.Tag} parent={parent.Tag} provinces={whole.Count}");
         }
+        candidates.Clear();
     }
 
     /// <summary>Whether that state lists this faction as a terrorist or sanctioned organisation.</summary>

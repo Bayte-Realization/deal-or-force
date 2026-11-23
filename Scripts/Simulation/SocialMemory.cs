@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace DealOrForce.Simulation;
@@ -203,14 +203,6 @@ public static class SocialMemory
         }
     }
 
-    [ThreadStatic] private static Dictionary<string, Nation> _subjectsScratch;
-    [ThreadStatic] private static Dictionary<int, Nation> _ownersScratch;
-    [ThreadStatic] private static Dictionary<int, Nation> _byIdScratch;
-
-    private static Dictionary<string, Nation> SubjectsScratch => _subjectsScratch ??= new(StringComparer.Ordinal);
-    private static Dictionary<int, Nation> OwnersScratch => _ownersScratch ??= new();
-    private static Dictionary<int, Nation> ByIdScratch => _byIdScratch ??= new();
-
     /// <summary>A relation whose day it is, between two living countries, and where it stands in the table's walk.</summary>
     private readonly struct DueRelation
     {
@@ -235,6 +227,10 @@ public static class SocialMemory
     /// </summary>
     private sealed class RelationReviewTable
     {
+        public readonly Dictionary<string, Nation> Subjects = new(StringComparer.Ordinal);
+        public readonly DenseIntTable<Nation> Owners = new();
+        public readonly DenseIntTable<Nation> ById = new();
+
         public readonly List<DueRelation> Due = new();
 
         /// <summary>By the same index as <see cref="Due"/>: what A's image of B and B's of A are drawn towards.</summary>
@@ -286,8 +282,8 @@ public static class SocialMemory
 
     // Countries reviewed side by side in one stage. It was 64, which is over before the thread
     // pool's workers have woken: with the pool, soc:nations cost 85 ms of the 14 late days and
-    // 55 at 256 - still two stages a day, each a millisecond or two.
-    private const int NationBatchSize = 256;
+    // 55 at 256 - 512 keeps all ~444 countries in a single parallel barrier.
+    private const int NationBatchSize = 512;
 
     // The stretch of the relation table whose images are asked "are you due" together, before
     // any of them is reviewed (ReviewAudience). Not a batch for the pool any more.
@@ -318,22 +314,36 @@ public static class SocialMemory
             n.DomesticImage.Review(c.ElapsedDays, domestic, c.Defines);
             ReviewCultures(c, n);
             ReviewOrganisations(c, n);
-            if (((c.ElapsedDays / interval) + n.Id) % 52 == 0) ForgetTheGone(c, n, subjects);
+            if (((c.ElapsedDays / interval) + n.Id) % 13 == 0) ForgetTheGone(c, n, subjects);
         }
         // Scripted narratives may concern a known subject without a diplomatic relationship.
         // Rare, and the walk is long in a long campaign: every fourth review.
+        // Skip completely inert faded images without a relation so ForgetTheGone can prune them cleanly,
+        // and collect active candidates into thread-local scratch before ReviewForeign mutates PublicImages.
         if (((c.ElapsedDays / interval) + n.Id) % 4 == 0)
         {
+            var pending = UninvolvedScratch; pending.Clear();
             foreach (var pair in n.PublicImages)
             {
+                var existing = pair.Value;
+                if (existing.Status == 0 && MathF.Abs(existing.Esteem) < 0.015f &&
+                    MathF.Abs(existing.Incident) < 0.01f &&
+                    (existing.LastIncidentDay < 0 || c.ElapsedDays - existing.LastIncidentDay > 365))
+                    continue;
                 if (subjects.TryGetValue(pair.Key, out var subject) &&
                     subject.Id != n.Id &&
                     (subject.Population > 0 || subject.Movement is { Dissolved: false }) &&
                     CampaignDiplomacy.Peek(c, n.Id, subject.Id) is null)
-                    ReviewForeign(c, n, subject, null);
+                    pending.Add(subject);
             }
+            for (var i = 0; i < pending.Count; i++)
+                ReviewForeign(c, n, pending[i], null);
+            pending.Clear();
         }
     }
+
+    [ThreadStatic] private static List<Nation> _uninvolvedScratch;
+    private static List<Nation> UninvolvedScratch => _uninvolvedScratch ??= new();
 
     /// <summary>The same reviews, yielded between countries, regions and relationships.</summary>
     public static IEnumerable<int> TickStages(Campaign c)
@@ -343,63 +353,90 @@ public static class SocialMemory
         if (!habits && !images) yield break;
         if (images) PublicOutreachActions.Tick(c);
         var interval = Math.Max(1, c.Defines.SocialReviewDays);
-        var subjects = SubjectsScratch; subjects.Clear();
-        var owners = OwnersScratch; owners.Clear();
-        var byId = ByIdScratch; byId.Clear();
-        foreach (var subject in c.Nations)
+        var reviews = RelationReviews.GetValue(c, static _ => new RelationReviewTable());
+        var subjects = reviews.Subjects; subjects.Clear();
+        var owners = reviews.Owners;
+        var byId = reviews.ById;
+        var nations = c.Nations;
+        var maxMap = 0;
+        var maxId = 0;
+        for (var i = 0; i < nations.Count; i++)
         {
+            var n = nations[i];
+            if (n.MapIndex > maxMap) maxMap = n.MapIndex;
+            if (n.Id > maxId) maxId = n.Id;
+        }
+        owners.Reset(maxMap);
+        byId.Reset(maxId);
+        for (var i = 0; i < nations.Count; i++)
+        {
+            var subject = nations[i];
             subjects.TryAdd(NationKey(subject), subject);
             owners.TryAdd(subject.MapIndex, subject);
-            byId[subject.Id] = subject;
+            byId.TryAdd(subject.Id, subject);
         }
         // Warm lazy campaign caches on the coordinator thread before parallel workers read them.
         c.StatesOf(0);
-        if (c.Nations.Count > 0) c.HasOwnedLand(c.Nations[0]);
-        yield return 0;
-        var nationCount = c.Nations.Count;
+        if (nations.Count > 0) c.HasOwnedLand(nations[0]);
+        if (Campaign.StageOverdue()) yield return 0;
+        var nationCount = nations.Count;
         for (var start = 0; start < nationCount; start += NationBatchSize)
         {
             var end = Math.Min(nationCount, start + NationBatchSize);
             using (SimProfiler.Measure("  soc:nations"))
             {
-                DeterministicParallel.For(c, start, end,
-                    idx => ReviewNation(c, c.Nations[idx], subjects, interval, habits, images));
+                DeterministicParallel.ForRange(c, start, end, (from, to) =>
+                {
+                    for (var idx = from; idx < to; idx++)
+                        ReviewNation(c, nations[idx], subjects, interval, habits, images);
+                });
             }
-            if (end < nationCount) yield return 0;
+            if (end < nationCount && Campaign.StageOverdue()) yield return 0;
         }
-        yield return 0;
-        if (habits)
+        if (Campaign.StageOverdue()) yield return 0;
+        if (habits && c.States.Count > 0)
         {
-            var scanned = 0;
-            foreach (var s in c.States)
+            ControlTally.World(c, 0, 0);
+            var states = c.States;
+            var stateCount = states.Count;
+            var elapsed = c.ElapsedDays;
+            var borderHabitYears = c.Defines.BorderHabitYears;
+            const int StateBatchSize = 512;
+            for (var start = 0; start < stateCount; start += StateBatchSize)
             {
-                if (++scanned % 128 == 0) yield return 0;
-                if (!Due(c.ElapsedDays, s.MapIndex, s.LastBorderReviewDay, interval)) continue;
+                var end = Math.Min(stateCount, start + StateBatchSize);
                 using (SimProfiler.Measure("  soc:borders"))
                 {
-            var days = s.LastBorderReviewDay < 0 ? 1 : Math.Min(3650, c.ElapsedDays - s.LastBorderReviewDay);
-            s.LastBorderReviewDay = c.ElapsedDays;
-            if (s.RememberedOwner < 0)
-            {
-                // The border the scenario drew is not a conquest. Only a later change of
-                // owner starts the clock again.
-                s.RememberedOwner = s.NationMapIndex;
-                s.SettledBorderDays = (int)MathF.Round(MathF.Max(1f, c.Defines.BorderHabitYears) * 365f * 3f);
-                s.BorderHabit = Habit(s.SettledBorderDays, c.Defines.BorderHabitYears);
-            }
-            else if (s.RememberedOwner != s.NationMapIndex)
-            { s.RememberedOwner = s.NationMapIndex; s.SettledBorderDays = 0; s.BorderHabit = 0f; }
-            if (!owners.TryGetValue(s.NationMapIndex, out var owner)) continue;
-            var occupied = StabilityCore.OccupiedShare(c, s, owner);
-            // Repression, occupation and persistent hardship interrupt habituation.
-            if (occupied > 0.05f || s.Radicalism > 0.5f || s.StandardOfLiving < 0.3f)
-                s.SettledBorderDays = Math.Max(0, s.SettledBorderDays - days * 2);
-            else s.SettledBorderDays = Math.Min(365000, s.SettledBorderDays + days);
-            s.BorderHabit = Habit(s.SettledBorderDays, c.Defines.BorderHabitYears);
+                    for (var si = start; si < end; si++)
+                    {
+                        var s = states[si];
+                        if (!Due(elapsed, s.MapIndex, s.LastBorderReviewDay, interval)) continue;
+                        var days = s.LastBorderReviewDay < 0 ? 1 : Math.Min(3650, elapsed - s.LastBorderReviewDay);
+                        s.LastBorderReviewDay = elapsed;
+                        if (s.RememberedOwner < 0)
+                        {
+                            // The border the scenario drew is not a conquest. Only a later change of
+                            // owner starts the clock again.
+                            s.RememberedOwner = s.NationMapIndex;
+                            s.SettledBorderDays = (int)MathF.Round(MathF.Max(1f, borderHabitYears) * 365f * 3f);
+                            s.BorderHabit = Habit(s.SettledBorderDays, borderHabitYears);
+                        }
+                        else if (s.RememberedOwner != s.NationMapIndex)
+                        { s.RememberedOwner = s.NationMapIndex; s.SettledBorderDays = 0; s.BorderHabit = 0f; }
+                        var owner = owners.GetOrDefault(s.NationMapIndex);
+                        if (owner is null) continue;
+                        var occupied = StabilityCore.OccupiedShare(c, s, owner);
+                        // Repression, occupation and persistent hardship interrupt habituation.
+                        if (occupied > 0.05f || s.Radicalism > 0.5f || s.StandardOfLiving < 0.3f)
+                            s.SettledBorderDays = Math.Max(0, s.SettledBorderDays - days * 2);
+                        else s.SettledBorderDays = Math.Min(365000, s.SettledBorderDays + days);
+                        s.BorderHabit = Habit(s.SettledBorderDays, borderHabitYears);
+                    }
                 }
+                if (end < stateCount && Campaign.StageOverdue()) yield return 0;
             }
         }
-        yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
         if (images)
         {
             // The day's relations, found once, and then two loops long enough to be shared.
@@ -418,7 +455,6 @@ public static class SocialMemory
             // Six relations in seven are not due today, and the table's key already says which:
             // it is the two ids (CampaignDiplomacy.Get), so the day's sum is read off the key and
             // a relation that is not due is never opened.
-            var reviews = RelationReviews.GetValue(c, static _ => new RelationReviewTable());
             var due = reviews.Due;
             using (SimProfiler.Measure("  soc:relations"))
             {
@@ -429,7 +465,9 @@ public static class SocialMemory
                     position++;
                     if (((c.ElapsedDays + (int)(entry.Key >> 32) + (int)entry.Key) % interval) != 0) continue;
                     var relation = entry.Value;
-                    if (!byId.TryGetValue(relation.A, out var a) || !byId.TryGetValue(relation.B, out var b)) continue;
+                    var a = byId.GetOrDefault(relation.A);
+                    var b = byId.GetOrDefault(relation.B);
+                    if (a is null || b is null) continue;
                     var liveA = a.Population > 0 || a.Movement is { Dissolved: false };
                     var liveB = b.Population > 0 || b.Movement is { Dissolved: false };
                     if (!liveA || !liveB) continue;
@@ -441,18 +479,22 @@ public static class SocialMemory
                 if (reviews.Targets.Length < due.Count)
                     reviews.Targets = new RelationReviewResult[Math.Max(due.Count, reviews.Targets.Length * 2)];
                 var targets = reviews.Targets;
-                DeterministicParallel.For(c, 0, due.Count, i =>
+                DeterministicParallel.ForRange(c, 0, due.Count, (from, to) =>
                 {
-                    var item = due[i];
-                    var reasons = 0f;
-                    foreach (var reason in item.Relation.Reasons) reasons += OpinionSystem.Weight(c, reason);
-                    var affinity = PoliticsCore.Affinity(c, item.A.Id, item.B.Id);
-                    targets[i] = new RelationReviewResult(
-                        ComputeForeignTarget(c, item.A, item.B, item.Relation, reasons, affinity),
-                        ComputeForeignTarget(c, item.B, item.A, item.Relation, reasons, affinity));
+                    for (var i = from; i < to; i++)
+                    {
+                        var item = due[i];
+                        var reasons = 0f;
+                        var itemReasons = item.Relation.Reasons;
+                        for (var r = 0; r < itemReasons.Count; r++) reasons += OpinionSystem.Weight(c, itemReasons[r]);
+                        var affinity = PoliticsCore.Affinity(c, item.A.Id, item.B.Id);
+                        targets[i] = new RelationReviewResult(
+                            ComputeForeignTarget(c, item.A, item.B, item.Relation, reasons, affinity),
+                            ComputeForeignTarget(c, item.B, item.A, item.Relation, reasons, affinity));
+                    }
                 });
             }
-            yield return 0;
+            if (Campaign.StageOverdue()) yield return 0;
             // Then the images, a country's at a time and the countries side by side: an image
             // is kept by the country that holds it, so every review of the day that touches one
             // country's table is that country's own, and is made here in the order the walk
@@ -463,10 +505,13 @@ public static class SocialMemory
                 var end = Math.Min(audiences.Count, start + NationBatchSize);
                 using (SimProfiler.Measure("  soc:relations"))
                 {
-                    DeterministicParallel.For(c, start, end,
-                        index => ReviewAudience(c, reviews, audiences[index].Audience, audiences[index].Reviews, interval));
+                    DeterministicParallel.ForRange(c, start, end, (from, to) =>
+                    {
+                        for (var index = from; index < to; index++)
+                            ReviewAudience(c, reviews, audiences[index].Audience, audiences[index].Reviews, interval);
+                    });
                 }
-                if (end < audiences.Count) yield return 0;
+                if (end < audiences.Count && Campaign.StageOverdue()) yield return 0;
             }
         }
     }
@@ -614,10 +659,25 @@ public static class SocialMemory
         foreach (var (key, image) in audience.PublicImages)
         {
             if (!key.StartsWith("nation:", StringComparison.Ordinal) || image.Status != 0) continue;
-            if (image.LastReviewDay >= 0 && c.ElapsedDays - image.LastReviewDay < 1825) continue;
-            if (subjects.TryGetValue(key, out var subject) &&
-                (subject.Population > 0 || subject.Movement is { Dissolved: false })) continue;
-            forgotten.Add(key);
+            var hasSubject = subjects.TryGetValue(key, out var subject);
+            var alive = hasSubject && (subject.Population > 0 || subject.Movement is { Dissolved: false });
+            if (hasSubject && subject.RetiredDay >= 0)
+            {
+                forgotten.Add(key);
+                continue;
+            }
+            if (!alive)
+            {
+                if (image.LastReviewDay < 0 || c.ElapsedDays - image.LastReviewDay >= 365)
+                    forgotten.Add(key);
+                continue;
+            }
+            // Prune completely inert faded images of uninvolved living nations so PublicImages
+            // never balloons to 60k+ near-zero rows in multi-decade saves.
+            if (MathF.Abs(image.Esteem) < 0.015f && MathF.Abs(image.Incident) < 0.01f &&
+                (image.LastIncidentDay < 0 || c.ElapsedDays - image.LastIncidentDay > 365) &&
+                (image.LastReviewDay < 0 || c.ElapsedDays - image.LastReviewDay > 180))
+                forgotten.Add(key);
         }
         foreach (var key in forgotten) audience.PublicImages.Remove(key);
     }
@@ -646,9 +706,17 @@ public static class SocialMemory
     {
         // Familiarity through living together; never transfer a government's crimes to a whole people.
         var populations = CulturePopulationsScratch; populations.Clear();
-        foreach (var s in c.StatesOf(audience)) foreach (var group in s.PopulationGroups)
-            if (!string.IsNullOrWhiteSpace(group.Culture) && group.Size > 0)
-                populations[group.Culture] = populations.GetValueOrDefault(group.Culture) + group.Size;
+        var states = c.StatesOf(audience);
+        for (var si = 0; si < states.Length; si++)
+        {
+            var groups = states[si].PopulationGroups;
+            for (var gi = 0; gi < groups.Count; gi++)
+            {
+                var group = groups[gi];
+                if (!string.IsNullOrWhiteSpace(group.Culture) && group.Size > 0)
+                    CollectionsMarshal.GetValueRefOrAddDefault(populations, group.Culture, out _) += group.Size;
+            }
+        }
         var subjects = CultureSubjectsScratch; subjects.Clear();
         foreach (var key in populations.Keys) subjects.Add(key);
         foreach (var key in audience.PublicImages.Keys)
@@ -658,9 +726,11 @@ public static class SocialMemory
                 if (!populations.ContainsKey(culture)) subjects.Add(culture);
             }
         subjects.Sort(StringComparer.Ordinal);
-        foreach (var culture in subjects)
+        var popScale = (float)Math.Max(1, audience.Population);
+        for (var i = 0; i < subjects.Count; i++)
         {
-            var contact = M.Clamp(populations.GetValueOrDefault(culture) / (float)Math.Max(1, audience.Population), 0f, 1f);
+            var culture = subjects[i];
+            var contact = M.Clamp(populations.GetValueOrDefault(culture) / popScale, 0f, 1f);
             var shared = DemographyCatalog.IsPrimary(audience.Tag, culture) ? 0.15f : 0f;
             var key = CultureKey(culture);
             var image = Image(audience, key, true);

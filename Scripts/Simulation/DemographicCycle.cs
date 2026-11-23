@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace DealOrForce.Simulation;
 
@@ -178,12 +179,11 @@ public static class DemographicCycle
     /// that (Assimilate), so sixty-four are a shorter stage than sixteen were, and a loop long
     /// enough for the thread pool's workers to arrive before it is over.
     /// </summary>
-    private const int StageRegions = 64;
+    private const int StageRegions = 256;
+    [ThreadStatic] private static List<ScenarioState> _dueStatesScratch;
 
     /// <summary>
-    /// The cycle in stages: the same regions in the same order, a pause every StageRegions. It was
-    /// one pass over all eighteen hundred regions on the week's day and the single heaviest thing a
-    /// frame at the top speed carried - eighty milliseconds of a four-hundred-millisecond step.
+    /// The cycle in stages: the same regions in the same order, a pause when a batch crosses frame budget.
     /// </summary>
     public static IEnumerable<int> Stages(Campaign campaign)
     {
@@ -191,59 +191,80 @@ public static class DemographicCycle
         var defines = campaign.Defines;
         if (!defines.DemographyAgeStructureEnabled) yield break;
         var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
-        var anyChanged = false;
-        // A stage of regions at a time, and the regions of a stage side by side: each region's
-        // cohorts and the assimilation among its own people read the world and write only that
-        // region, so the thread pool works them in any order and the bytes come out the same.
-        // The world's lazily built indexes are built here first, on this thread, so no worker
-        // builds them; the kin-state answers are a per-campaign table safe to fill from several.
-        // By index and re-checked each stage: nothing in a stage adds or removes regions, but a
-        // pause is where something could. How many workers, and whether this machine has any,
-        // is DeterministicParallel's answer rather than a second copy of it here.
-        for (var first = 0; first < campaign.States.Count; first += StageRegions)
+        var states = campaign.States;
+        var stateCount = states.Count;
+        var dueStates = _dueStatesScratch ??= new List<ScenarioState>(512);
+        dueStates.Clear();
+        for (var index = 0; index < stateCount; index++)
         {
-            if (first > 0) yield return 0;
-            if (first >= campaign.States.Count) break;
-            var last = Math.Min(first + StageRegions, campaign.States.Count);
-            // Six days in seven no region has had a household review since its cohorts last
-            // moved, and the stage has nothing to do. It used to hand its sixteen regions to
-            // the thread pool all the same, for each to answer "not today": 1,464 of the 1,708
-            // stages of the 14 late days, some ten microseconds of asking apiece. The same
-            // question is asked here first, on this thread.
-            var due = false;
-            for (var index = first; index < last && !due; index++)
+            var state = states[index];
+            if (state is not null && !state.Unclaimed && state.Population > 0 &&
+                state.LastDemographyDay != state.LastHouseholdReviewDay)
             {
-                var state = campaign.States[index];
-                due = state is not null && !state.Unclaimed && state.Population > 0 &&
-                      state.LastDemographyDay != state.LastHouseholdReviewDay;
+                dueStates.Add(state);
             }
-            if (!due) continue;
-            campaign.NationsByMapIndex();
-            if (campaign.Nations.Count > 0) campaign.HasOwnedLand(campaign.Nations[0]);
-            KinTable(campaign);
-            // What folding needs to know of the whole world, read here once for the day's cycle
-            // (PopulationFolding); null when folding is off, and then nothing below differs.
-            var shield = PopulationFolding.Enabled(campaign) ? PopulationFolding.Prepare(campaign) : null;
-            var changed = 0;
-            DeterministicParallel.For(campaign, first, last, index =>
-            {
-                var state = campaign.States[index];
-                if (state is null || state.Unclaimed || state.Population <= 0) return;
-                if (state.LastDemographyDay == state.LastHouseholdReviewDay) return;
-                state.LastDemographyDay = state.LastHouseholdReviewDay;
-                System.Threading.Interlocked.Exchange(ref changed, 1);
-                DemographyRulesHook.StepCohorts(
-                    state.Population, state.ReviewBirths, state.ReviewDeaths,
-                    state.YoungShare, state.OldShare,
-                    defines.DemographyMaturationAnnual, defines.DemographyAgeingAnnual,
-                    defines.DemographyMortalityOldWeight, interval,
-                    out var nextYoungShare, out var nextOldShare, out _);
-                state.YoungShare = nextYoungShare;
-                state.OldShare = nextOldShare;
-                MoveCultures(campaign, state, shield);
-            });
-            if (changed != 0) anyChanged = true;
         }
+        if (dueStates.Count == 0) yield break;
+
+        campaign.NationsByMapIndex();
+        if (campaign.Nations.Count > 0) campaign.HasOwnedLand(campaign.Nations[0]);
+        KinTable(campaign);
+        var shield = PopulationFolding.Enabled(campaign) ? PopulationFolding.Prepare(campaign) : null;
+        var useParallel = DeterministicParallel.Enabled(campaign);
+        var anyChanged = false;
+        var dueCount = dueStates.Count;
+
+        for (var first = 0; first < dueCount; first += StageRegions)
+        {
+            if (first > 0 && Campaign.StageOverdue()) yield return 0;
+            var last = Math.Min(first + StageRegions, dueCount);
+            if (last - first >= DeterministicParallel.MinItems && useParallel)
+            {
+                DeterministicParallel.ForRange(campaign, first, last, (from, to) =>
+                {
+                    for (var index = from; index < to; index++)
+                    {
+                        var state = dueStates[index];
+                        if (state.Unclaimed || state.Population <= 0 ||
+                            state.LastDemographyDay == state.LastHouseholdReviewDay) continue;
+                        state.LastDemographyDay = state.LastHouseholdReviewDay;
+                        DemographyRulesHook.StepCohorts(
+                            state.Population, state.ReviewBirths, state.ReviewDeaths,
+                            state.YoungShare, state.OldShare,
+                            defines.DemographyMaturationAnnual, defines.DemographyAgeingAnnual,
+                            defines.DemographyMortalityOldWeight, interval,
+                            out var nextYoungShare, out var nextOldShare, out _);
+                        state.YoungShare = nextYoungShare;
+                        state.OldShare = nextOldShare;
+                        MoveCultures(campaign, state, shield);
+                        MovementRules.MarkPeopleStateDirty(campaign, state);
+                    }
+                });
+                anyChanged = true;
+            }
+            else
+            {
+                for (var index = first; index < last; index++)
+                {
+                    var state = dueStates[index];
+                    if (state.Unclaimed || state.Population <= 0 ||
+                        state.LastDemographyDay == state.LastHouseholdReviewDay) continue;
+                    state.LastDemographyDay = state.LastHouseholdReviewDay;
+                    anyChanged = true;
+                    DemographyRulesHook.StepCohorts(
+                        state.Population, state.ReviewBirths, state.ReviewDeaths,
+                        state.YoungShare, state.OldShare,
+                        defines.DemographyMaturationAnnual, defines.DemographyAgeingAnnual,
+                        defines.DemographyMortalityOldWeight, interval,
+                        out var nextYoungShare, out var nextOldShare, out _);
+                    state.YoungShare = nextYoungShare;
+                    state.OldShare = nextOldShare;
+                    MoveCultures(campaign, state, shield);
+                    MovementRules.MarkPeopleStateDirty(campaign, state);
+                }
+            }
+        }
+        dueStates.Clear();
         if (anyChanged) Aggregate(campaign);
     }
 
@@ -267,7 +288,7 @@ public static class DemographicCycle
             for (var i = 0; i < groups.Count; i++)
             {
                 var tiny = groups[i];
-                if (tiny.Size <= 0 || tiny.Size > 25) continue;
+                if (tiny.Size <= 0 || tiny.Size > 250) continue;
                 PopulationGroup host = null;
                 for (var j = 0; j < groups.Count; j++)
                 {
@@ -290,7 +311,10 @@ public static class DemographicCycle
         // A group everybody has left or assimilated out of is nobody. Kept, they piled up -
         // every migration and every assimilation leaves its emptied group behind - and every
         // weekly walk over the region's people walked them too.
-        groups.RemoveAll(static group => group.Size <= 0);
+        var write = 0;
+        for (var i = 0; i < groups.Count; i++)
+            if (groups[i].Size > 0) groups[write++] = groups[i];
+        if (write < groups.Count) groups.RemoveRange(write, groups.Count - write);
     }
 
     // One per thread: regions are worked side by side (Stages).
@@ -409,20 +433,28 @@ public static class DemographicCycle
         PeopleHere.Clear();
         string run = null;
         long runPeople = 0;
-        foreach (var group in groups)
+        for (var i = 0; i < groups.Count; i++)
         {
+            var group = groups[i];
             if (group.Size <= 0 || string.IsNullOrEmpty(group.Culture)) continue;
             if (ReferenceEquals(group.Culture, run)) { runPeople += group.Size; continue; }
-            if (run is not null) PeopleHere[run] = PeopleHere.GetValueOrDefault(run) + runPeople;
+            if (run is not null)
+                System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(PeopleHere, run, out _) += runPeople;
             run = group.Culture;
             runPeople = group.Size;
         }
-        if (run is not null) PeopleHere[run] = PeopleHere.GetValueOrDefault(run) + runPeople;
+        if (run is not null)
+            System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(PeopleHere, run, out _) += runPeople;
         if (PeopleHere.Count < 2) return;
         string majority = null;
+        long majorityPeople = 0;
         foreach (var (culture, people) in PeopleHere)
-            if (majority is null || people > PeopleHere[majority] ||
-                people == PeopleHere[majority] && string.CompareOrdinal(culture, majority) < 0) majority = culture;
+            if (majority is null || people > majorityPeople ||
+                people == majorityPeople && string.CompareOrdinal(culture, majority) < 0)
+            {
+                majority = culture;
+                majorityPeople = people;
+            }
         var national = DemographyCatalog.PrimaryCulture(owner.Tag);
         var target = !string.IsNullOrEmpty(national) &&
                      PeopleHere.GetValueOrDefault(national) >= population * defines.DemographyAssimilationNationalShare
@@ -430,19 +462,15 @@ public static class DemographicCycle
             : majority;
         var targetFamily = DemographyCatalog.Culture(target)?.Group ?? "";
         var targetFaiths = DemographyCatalog.FaithOf(target);
+        var ownerPrimary = DemographyCatalog.PrimarySet(owner.Tag);
         var schooling = Math.Clamp(0.5f + state.Literacy, 0.5f, 1.5f);
         // Angry people do not take the language of the state they are angry with.
         var calm = Math.Clamp(1f - state.Radicalism, 0.05f, 1f);
-        var policy = NationalModifiers.Factor(owner, "assimilation");
+        var policy = NationalModifiers.FactorSlot(owner, NationalModifiers.SlotAssimilation);
 
         // Built for today by the stage, on its own thread, before the regions were handed out.
         var kinTable = KinCaches.GetValue(campaign, static _ => new KinCache());
 
-        // Everything below that depends only on which people a group is - whether it shifts at
-        // all, its family, how large a part of the region it is, whether it has a state of its
-        // own - is worked out when the people changes, not for every group: the trades and
-        // classes of one people stand next to each other and hold the same name object. The
-        // same for the faith. The rate is the same product of the same numbers in the same order.
         string lastCulture = null;
         var stays = false;
         float kin = 1f, size = 1f;
@@ -461,7 +489,7 @@ public static class DemographicCycle
             {
                 lastCulture = group.Culture;
                 stays = string.Equals(lastCulture, target, StringComparison.OrdinalIgnoreCase) ||
-                        DemographyCatalog.IsPrimary(owner.Tag, lastCulture);
+                        (ownerPrimary is not null && ownerPrimary.Contains(lastCulture));
                 if (!stays)
                 {
                     var family = DemographyCatalog.Culture(lastCulture)?.Group ?? "";
@@ -545,21 +573,30 @@ public static class DemographicCycle
     /// </summary>
     public static void Aggregate(Campaign campaign)
     {
-        foreach (var nation in campaign.Nations)
+        var nations = campaign.Nations;
+        if (nations.Count == 0) return;
+        campaign.StatesOf(0);
+        var defaultYoung = campaign.Defines.DemographyYoungShareDefault;
+        var defaultOld = campaign.Defines.DemographyOldShareDefault;
+        var defaultWorking = WorkingShare(null);
+        var refOld = campaign.Defines.DemographyReferenceOldShare;
+        for (var n = 0; n < nations.Count; n++)
         {
+            var nation = nations[n];
             var states = campaign.StatesOf(nation);
             if (states.Length == 0)
             {
-                nation.YoungShare = campaign.Defines.DemographyYoungShareDefault;
-                nation.OldShare = campaign.Defines.DemographyOldShareDefault;
+                nation.YoungShare = defaultYoung;
+                nation.OldShare = defaultOld;
                 nation.ReviewBirths = nation.ReviewDeaths = nation.ReviewNetMigration = 0;
-                nation.WorkingShare = WorkingShare(null);
+                nation.WorkingShare = defaultWorking;
                 continue;
             }
             double people = 0, young = 0, old = 0;
             long births = 0, deaths = 0, migration = 0;
-            foreach (var state in states)
+            for (var s = 0; s < states.Length; s++)
             {
+                var state = states[s];
                 var size = Math.Max(0, state.Population);
                 people += size;
                 young += size * state.YoungShare;
@@ -572,7 +609,7 @@ public static class DemographicCycle
             nation.YoungShare = (float)(young / total);
             nation.OldShare = (float)(old / total);
             nation.WorkingShare = Math.Clamp(1f - nation.YoungShare - nation.OldShare, 0.05f, 0.95f);
-            nation.OldShareExcess = Math.Max(0f, nation.OldShare - campaign.Defines.DemographyReferenceOldShare);
+            nation.OldShareExcess = Math.Max(0f, nation.OldShare - refOld);
             nation.ReviewBirths = births;
             nation.ReviewDeaths = deaths;
             nation.ReviewNetMigration = migration;
@@ -591,14 +628,14 @@ public static class DemographicCycle
         var excess = nation.OldShareExcess;
         if (excess > 0.005f)
         {
-            totals["stability_weekly"] = totals.GetValueOrDefault("stability_weekly") - excess * 0.05f;
-            totals["living_weekly"] = totals.GetValueOrDefault("living_weekly") - excess * 0.04f;
+            CollectionsMarshal.GetValueRefOrAddDefault(totals, "stability_weekly", out _) -= excess * 0.05f;
+            CollectionsMarshal.GetValueRefOrAddDefault(totals, "living_weekly", out _) -= excess * 0.04f;
             return;
         }
         if (nation.YoungShare > 0.34f)
         {
-            totals["living_weekly"] = totals.GetValueOrDefault("living_weekly") - 0.004f;
-            totals["stability_weekly"] = totals.GetValueOrDefault("stability_weekly") + 0.003f;
+            CollectionsMarshal.GetValueRefOrAddDefault(totals, "living_weekly", out _) -= 0.004f;
+            CollectionsMarshal.GetValueRefOrAddDefault(totals, "stability_weekly", out _) += 0.003f;
         }
     }
 

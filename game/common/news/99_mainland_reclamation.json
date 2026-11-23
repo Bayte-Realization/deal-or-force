@@ -1,0 +1,14 @@
+{
+  "importance": {
+    "mainland_campaign_launched": 3,
+    "mainland_bridgehead": 3,
+    "mainland_rally": 3,
+    "mainland_defection": 2
+  },
+  "stings": {
+    "mainland_campaign_launched": "news_world_war",
+    "mainland_bridgehead": "news_clashes",
+    "mainland_rally": "news_new_nation",
+    "mainland_defection": "news_regime_change"
+  }
+}

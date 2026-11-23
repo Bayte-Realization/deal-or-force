@@ -40,20 +40,6 @@ public static class AirReconnaissance
         return type.RangeKm * sensors * (0.5f + 0.5f * M.Clamp01(formation.Strength));
     }
 
-    /// <summary>The map indices of every country the viewer is at war with.</summary>
-    private static HashSet<int> Enemies(Campaign c, int viewerId)
-    {
-        var enemies = new HashSet<int>();
-        foreach (var war in Warfare.OpenWars(c))
-        {
-            if (war.Ended || !war.Involves(viewerId)) continue;
-            var attacking = war.Side(true).Contains(viewerId);
-            foreach (var enemyId in war.Side(!attacking))
-                if (c.NationById(enemyId) is { } enemy) enemies.Add(enemy.MapIndex);
-        }
-        return enemies;
-    }
-
     private static bool Flying(Campaign c, SupportFormation formation, out SupportTypeDefinition type)
     {
         type = null;
@@ -61,6 +47,8 @@ public static class AirReconnaissance
                SupportTypeCatalog.TryGet(formation.TypeId, out type) && SupportCore.Enabled(c, type) &&
                type.Kind is SupportKind.Air or SupportKind.Drone && !SupportCore.Displaced(c, formation);
     }
+
+    [ThreadStatic] private static HashSet<int> _revealEnemiesScratch;
 
     /// <summary>Lift the fog over the enemy ground the viewer's reconnaissance flights reach: seen, not seen past.</summary>
     internal static void RevealInto(Campaign c, int viewerId, byte[] reach)
@@ -70,22 +58,27 @@ public static class AirReconnaissance
         var controllers = c.ProvinceController ?? map.ProvinceToNation;
         HashSet<int> enemies = null;
         List<int> hidden = null;
-        foreach (var formation in formations)
+        for (var fi = 0; fi < formations.Count; fi++)
         {
+            var formation = formations[fi];
             if (!Flying(c, formation, out var type)) continue;
             if (enemies is null)
             {
-                enemies = Enemies(c, viewerId);
+                enemies = _revealEnemiesScratch ??= new HashSet<int>();
+                enemies.Clear();
+                foreach (var war in Warfare.OpenWars(c))
+                {
+                    if (war.Ended || !war.Involves(viewerId)) continue;
+                    var attacking = war.Side(true).Contains(viewerId);
+                    foreach (var enemyId in war.Side(!attacking))
+                        if (c.NationById(enemyId) is { } enemy) enemies.Add(enemy.MapIndex);
+                }
                 if (enemies.Count == 0) return;
-                // The enemy ground still in the fog, read off the map once for all the flights.
-                // Each flight used to walk all 34,000 provinces asking a hash set whose each
-                // one was - a third of a millisecond a formation, and while a war's flights
-                // were up nearly half of every rebuild of a country's sight (intel.visibility),
-                // which the advance asks for again every hour. What a flight lifts the fog from
-                // is unchanged: a province another flight has already shown is passed over
-                // here as it was passed over there.
-                hidden = HiddenEnemyGround(reach, controllers, enemies);
+                // Walk only the provinces each enemy actually controls via CampaignIntel's
+                // cached per-controller grouping instead of scanning all 35,000 map provinces.
+                hidden = HiddenEnemyGround(c, reach, controllers, enemies);
             }
+            if (hidden.Count == 0) return;
             var sight = SightKm(c, formation, type);
             var origin = map.CenterOf(formation.BaseProvinceId);
             // A degree of latitude is 111 km anywhere: most of the map is out of sight by that alone.
@@ -101,23 +94,22 @@ public static class AirReconnaissance
     }
 
     [ThreadStatic] private static List<int> _hiddenScratch;
-    [ThreadStatic] private static bool[] _enemyMapScratch;
 
-    /// <summary>Every province an enemy controls that the viewer does not yet see, in ascending order.</summary>
-    private static List<int> HiddenEnemyGround(byte[] reach, ushort[] controllers, HashSet<int> enemies)
+    /// <summary>Every province an enemy controls that the viewer does not yet see.</summary>
+    private static List<int> HiddenEnemyGround(Campaign c, byte[] reach, ushort[] controllers, HashSet<int> enemies)
     {
         var hidden = _hiddenScratch ??= new List<int>();
         hidden.Clear();
-        // A controller is sixteen bits, so the set is a table for the walk. An index outside
-        // that range can control nothing on this map and is left out, as the set left it unmatched.
-        var isEnemy = _enemyMapScratch ??= new bool[ushort.MaxValue + 1];
-        foreach (var index in enemies)
-            if ((uint)index < (uint)isEnemy.Length) isEnemy[index] = true;
-        var end = Math.Min(reach.Length, controllers.Length);
-        for (var p = 1; p < end; p++)
-            if (reach[p] == 0 && isEnemy[controllers[p]]) hidden.Add(p);
-        foreach (var index in enemies)
-            if ((uint)index < (uint)isEnemy.Length) isEnemy[index] = false;
+        var len = reach.Length;
+        foreach (var enemyMapIndex in enemies)
+        {
+            var held = CampaignIntel.ProvincesHeldBy(c, controllers, enemyMapIndex);
+            for (var i = 0; i < held.Length; i++)
+            {
+                var p = held[i];
+                if ((uint)p < (uint)len && reach[p] == 0) hidden.Add(p);
+            }
+        }
         return hidden;
     }
 
@@ -127,64 +119,96 @@ public static class AirReconnaissance
     /// </summary>
     internal static void Expose(Campaign c)
     {
-        if (c.ProvinceMap is null || c.SupportByNation.Count == 0) return;
-        var neededCodes = new HashSet<ushort>();
-        var activeNations = new List<(int NationId, HashSet<int> Enemies, List<int> OwnIds, List<int> EnemyIds, List<SupportFormation> Flights)>();
-        foreach (var (nationId, formations) in c.SupportByNation)
-        {
-            List<SupportFormation> flights = null;
-            for (var i = 0; i < formations.Count; i++)
-                if (Flying(c, formations[i], out _))
-                    (flights ??= new List<SupportFormation>()).Add(formations[i]);
-            if (flights is null) continue;
-            var enemies = Enemies(c, nationId);
-            if (enemies.Count == 0) continue;
-            var enemyIds = new List<int>();
-            var ownIds = new List<int> { nationId };
-            foreach (var war in Warfare.OpenWars(c))
-            {
-                if (war.Ended || !war.Involves(nationId)) continue;
-                var attacking = war.Side(true).Contains(nationId);
-                enemyIds.AddRange(war.Side(!attacking));
-                ownIds.AddRange(war.Side(attacking));
-            }
-            foreach (var enemyCode in enemies)
-                if ((uint)enemyCode <= ushort.MaxValue) neededCodes.Add((ushort)enemyCode);
-            activeNations.Add((nationId, enemies, ownIds, enemyIds, flights));
-        }
-        if (activeNations.Count == 0 || neededCodes.Count == 0) return;
+        foreach (var _ in ExposeStages(c)) { }
+    }
 
+    internal static IEnumerable<int> ExposeStages(Campaign c)
+    {
+        if (c.ProvinceMap is null || c.SupportByNation.Count == 0) yield break;
         var map = c.ProvinceMap;
         var controllers = c.ProvinceController ?? map.ProvinceToNation;
-        var byController = new Dictionary<ushort, List<(int Province, float Lat)>>(neededCodes.Count);
-        var limit = Math.Min(controllers.Length - 1, map.ProvinceCount);
-        for (var p = 1; p <= limit; p++)
-        {
-            var code = controllers[p];
-            if (!neededCodes.Contains(code)) continue;
-            if (!byController.TryGetValue(code, out var bucket))
-                byController[code] = bucket = new List<(int, float)>();
-            bucket.Add((p, map.CenterOf(p).Latitude));
-        }
+        var pass = c.Caches.SupportPass;
+        var flights = pass.ExposeFlights;
+        var enemyProvs = pass.ExposeEnemyProvs;
+        var ownIds = pass.ExposeOwn;
+        var enemyIds = pass.ExposeEnemy;
+        var enemyMaps = pass.ExposeEnemyMaps;
+        var ownReach = pass.ExposeOwnReach;
+        var enemyReach = pass.ExposeEnemyReach;
+        var openWars = Warfare.OpenWars(c);
+        var exposureShare = M.Clamp01(c.Defines.ReconExposureShare);
 
-        foreach (var (_, enemies, ownIds, enemyIds, flights) in activeNations)
+        try
         {
-            foreach (var formation in flights)
+            foreach (var (nationId, formations) in c.SupportByNation)
             {
-                if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
-                var sight = SightKm(c, formation, type);
-                var origin = map.CenterOf(formation.BaseProvinceId);
-                var band = sight / 111f;
-                var nearest = -1;
-                var nearestKm = float.MaxValue;
-                foreach (var enemyCode in enemies)
+                flights.Clear();
+                for (var i = 0; i < formations.Count; i++)
+                    if (Flying(c, formations[i], out _)) flights.Add(formations[i]);
+                if (flights.Count == 0) continue;
+
+                enemyMaps.Clear();
+                ownIds.Clear();
+                enemyIds.Clear();
+                ownIds.Add(nationId);
+                for (var wi = 0; wi < openWars.Count; wi++)
                 {
-                    if ((uint)enemyCode > ushort.MaxValue ||
-                        !byController.TryGetValue((ushort)enemyCode, out var bucket)) continue;
-                    for (var i = 0; i < bucket.Count; i++)
+                    var war = openWars[wi];
+                    if (war.Ended || !war.Involves(nationId)) continue;
+                    var attacking = war.IsAttacking(nationId);
+                    foreach (var id in war.Side(attacking)) ownIds.Add(id);
+                    foreach (var id in war.Side(!attacking))
                     {
-                        var (p, lat) = bucket[i];
-                        if (MathF.Abs(lat - origin.Latitude) > band) continue;
+                        enemyIds.Add(id);
+                        if (c.NationById(id) is { } enemy) enemyMaps.Add(enemy.MapIndex);
+                    }
+                }
+                if (enemyMaps.Count == 0) continue;
+
+                var minLat = float.MaxValue;
+                var maxLat = float.MinValue;
+                var maxBand = 0f;
+                for (var fi = 0; fi < flights.Count; fi++)
+                {
+                    var formation = flights[fi];
+                    if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
+                    var band = SightKm(c, formation, type) / 111f;
+                    if (band > maxBand) maxBand = band;
+                    var lat = map.CenterOf(formation.BaseProvinceId).Latitude;
+                    if (lat < minLat) minLat = lat;
+                    if (lat > maxLat) maxLat = lat;
+                }
+                var globalMinLat = minLat - maxBand;
+                var globalMaxLat = maxLat + maxBand;
+
+                enemyProvs.Clear();
+                foreach (var enemyCode in enemyMaps)
+                {
+                    var held = CampaignIntel.ProvincesHeldBy(c, controllers, enemyCode);
+                    for (var i = 0; i < held.Length; i++)
+                    {
+                        var p = held[i];
+                        var pLat = map.CenterOf(p).Latitude;
+                        if (pLat < globalMinLat || pLat > globalMaxLat) continue;
+                        enemyProvs.Add((p, pLat));
+                    }
+                }
+                if (enemyProvs.Count == 0) continue;
+                if (Campaign.StageOverdue()) yield return 0;
+
+                for (var fi = 0; fi < flights.Count; fi++)
+                {
+                    var formation = flights[fi];
+                    if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
+                    var sight = SightKm(c, formation, type);
+                    var origin = map.CenterOf(formation.BaseProvinceId);
+                    var band = sight / 111f;
+                    var nearest = -1;
+                    var nearestKm = float.MaxValue;
+                    for (var i = 0; i < enemyProvs.Count; i++)
+                    {
+                        var (p, pLat) = enemyProvs[i];
+                        if (MathF.Abs(pLat - origin.Latitude) > band) continue;
                         var km = SupportCore.DistanceKm(c, formation.BaseProvinceId, p);
                         if (km <= sight && (km < nearestKm || (km == nearestKm && p < nearest)))
                         {
@@ -192,14 +216,26 @@ public static class AirReconnaissance
                             nearest = p;
                         }
                     }
+                    if (nearest >= 0)
+                    {
+                        SupportCore.FillReachOf(c, ownIds, nearest, ownReach);
+                        SupportCore.FillReachOf(c, enemyIds, nearest, enemyReach);
+                        var threat = SupportCore.ThreatTo(type, Mission, ownReach, enemyReach) * exposureShare;
+                        if (threat > 0f && (!c.SupportExposure.TryGetValue(formation.Id, out var worst) || threat > worst))
+                            c.SupportExposure[formation.Id] = threat;
+                    }
+                    if (fi + 1 < flights.Count && Campaign.StageOverdue()) yield return 0;
                 }
-                if (nearest < 0) continue;
-                var threat = SupportCore.ThreatTo(type, Mission, SupportCore.ReachOf(c, ownIds, nearest), SupportCore.ReachOf(c, enemyIds, nearest)) *
-                             M.Clamp01(c.Defines.ReconExposureShare);
-                if (threat <= 0f) continue;
-                if (!c.SupportExposure.TryGetValue(formation.Id, out var worst) || threat > worst)
-                    c.SupportExposure[formation.Id] = threat;
+                if (Campaign.StageOverdue()) yield return 0;
             }
+        }
+        finally
+        {
+            flights.Clear();
+            enemyProvs.Clear();
+            ownIds.Clear();
+            enemyIds.Clear();
+            enemyMaps.Clear();
         }
     }
 }

@@ -29,7 +29,7 @@ public partial class DealOrForceGame
     private void AttachTradeTermsRow(Container parent, Button tradeButton, Func<Nation> target)
     {
         if (parent is null || tradeButton is null) return;
-        var box = new VBoxContainer { Name = tradeButton.Name + "Terms" };
+        var box = new VBoxContainer { Name = tradeButton.Name + "Terms", SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         box.AddThemeConstantOverride("separation", 4);
         parent.AddChild(box);
         var line = new Label
@@ -40,8 +40,15 @@ public partial class DealOrForceGame
         line.AddThemeFontSizeOverride("font_size", 12);
         line.AddThemeColorOverride("font_color", Ui.Colour("text.muted"));
         box.AddChild(line);
-        var terms = ActionButton(Tr("Terms…"), () => OpenTradeTerms(target()), 0, 48);
+        var siblingHeight = tradeButton.CustomMinimumSize.Y >= 26f
+            ? (int)Math.Clamp(tradeButton.CustomMinimumSize.Y, 28f, 34f)
+            : 34;
+        var terms = ActionButton(Loc.Get("deal.btn.custom_trade_terms"), () => OpenTradeTerms(target()), 0, siblingHeight,
+            iconPath: "res://game/gfx/interface/icons/icon_trade.png");
         terms.Name = "TradeTermsOpen";
+        terms.ClipText = true;
+        terms.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        terms.AutowrapMode = TextServer.AutowrapMode.Off;
         terms.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         box.AddChild(terms);
         _tradeTermsRows[tradeButton] = new TradeTermsRow { Line = line, Terms = terms, Target = target };
@@ -67,7 +74,7 @@ public partial class DealOrForceGame
         var terms = relation?.TradeAgreement == true ? TradeTerms.Of(relation) : null;
         row.Line.Visible = terms is not null;
         row.Line.Text = terms is null ? "" : TermsLine(terms, player, nation);
-        row.Terms.Text = terms is null ? Tr("Terms…") : Tr("Revise");
+        row.Terms.Text = terms is null ? Loc.Get("deal.btn.custom_trade_terms") : Loc.Get("deal.btn.revise_trade_terms");
         row.Terms.TooltipText = Ui.Tip(terms is null
             ? Tr("Write the terms yourself: which goods, how much of each tariff, a supply guarantee, how many years.")
             : Tr("Put new terms on the table. They replace these if both sign; until then these stand."));

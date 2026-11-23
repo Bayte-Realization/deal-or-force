@@ -120,6 +120,15 @@ public static class OccupationResistance
         foreach (var _ in TickStages(campaign)) { }
     }
 
+    private sealed class TickResistanceScratch
+    {
+        public readonly Dictionary<int, List<Army>> Garrisons = new();
+        public readonly Stack<List<Army>> ArmyListPool = new();
+        public readonly HashSet<int> Applied = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, TickResistanceScratch> TickScratches = new();
+
     /// <summary>The same weekly slip, yielded between wars and between the provinces a large
     /// occupation ledger covers.</summary>
     public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
@@ -131,7 +140,7 @@ public static class OccupationResistance
         var occupation = campaign.ProvinceOccupation;
         if (topology is null || controllers is null || occupation is null) yield break;
 
-        Dictionary<int, ScenarioState> states = null;
+        TickResistanceScratch scratch = null;
         Dictionary<int, List<Army>> garrisons = null;
         HashSet<int> applied = null;
         // The slip follows wars still going. A war that has ended keeps its ledger and
@@ -152,23 +161,34 @@ public static class OccupationResistance
                 if (controllers[province] == pair.Value) continue;
                 var held = occupation[province];
                 if (held <= 0f) continue;
-                garrisons ??= GarrisonArmies(campaign, controllers);
-                states ??= StatesByMapIndex(campaign);
+                if (garrisons is null)
+                {
+                    scratch = TickScratches.GetOrCreateValue(campaign);
+                    FillGarrisonArmies(campaign, controllers, scratch);
+                    garrisons = scratch.Garrisons;
+                }
                 var radicalism = 0f;
-                ScenarioState region = null;
-                if (province < topology.ProvinceToState.Length &&
-                    states.TryGetValue(topology.ProvinceToState[province], out region) && region is not null)
-                    radicalism = region.Radicalism;
-                // The occupier's own people in the region are the collaboration base: where
-                // they are numerous, resistance speaks with a smaller voice.
+                ScenarioState region = province < topology.ProvinceToState.Length
+                    ? campaign.StateByMapIndex(topology.ProvinceToState[province])
+                    : null;
                 if (region is not null)
+                {
+                    radicalism = region.Radicalism;
+                    // The occupier's own people in the region are the collaboration base: where
+                    // they are numerous, resistance speaks with a smaller voice.
                     radicalism *= 1f - Collaboration(region, TagOf(campaign, controllers[province]), campaign.Defines);
+                }
                 var power = 0f;
                 if (garrisons.TryGetValue(province, out var posted))
-                    foreach (var army in posted) power += Math.Max(0f, army.Power);
+                    for (var pi = 0; pi < posted.Count; pi++) power += Math.Max(0f, posted[pi].Power);
                 var slip = Slip(held, radicalism, power, campaign.Defines);
                 if (slip <= 0f) continue;
-                applied ??= new HashSet<int>();
+                if (applied is null)
+                {
+                    scratch ??= TickScratches.GetOrCreateValue(campaign);
+                    applied = scratch.Applied;
+                    applied.Clear();
+                }
                 if (!applied.Add(province)) continue; // A coalition may record it in several war ledgers.
                 occupation[province] = MathF.Max(0f, held - slip);
                 // And the garrison bleeds where the hold is actually slipping: the same
@@ -177,8 +197,9 @@ public static class OccupationResistance
                 // the national reserve is untouched, because these men were counted out
                 // of it the day they enlisted.
                 if (posted is null) continue;
-                foreach (var army in posted)
+                for (var pi = 0; pi < posted.Count; pi++)
                 {
+                    var army = posted[pi];
                     var casualties = PartisanCasualties(army.Personnel, radicalism, held, campaign.Defines);
                     if (casualties <= 0f) continue;
                     var complement = army.Divisions * MilitaryBootstrap.DivisionSize * army.Strength;
@@ -190,6 +211,29 @@ public static class OccupationResistance
         }
     }
 
+    private static void FillGarrisonArmies(Campaign campaign, ushort[] controllers, TickResistanceScratch scratch)
+    {
+        var garrisons = scratch.Garrisons;
+        var pool = scratch.ArmyListPool;
+        foreach (var list in garrisons.Values)
+        {
+            list.Clear();
+            pool.Push(list);
+        }
+        garrisons.Clear();
+        var armies = campaign.Armies;
+        for (var i = 0; i < armies.Count; i++)
+        {
+            var army = armies[i];
+            if (army is null || army.InBattle || army.ProvinceId <= 0 || army.ProvinceId >= controllers.Length) continue;
+            var owner = campaign.NationById(army.NationId);
+            if (owner is null || owner.MapIndex != controllers[army.ProvinceId]) continue;
+            if (!garrisons.TryGetValue(army.ProvinceId, out var posted))
+                garrisons[army.ProvinceId] = posted = pool.Count > 0 ? pool.Pop() : new List<Army>(2);
+            posted.Add(army);
+        }
+    }
+
     /// <summary>
     /// The formations standing in each province on behalf of whoever holds it. An army
     /// already in battle does not count - the same convention the growth path uses, where
@@ -198,27 +242,16 @@ public static class OccupationResistance
     /// </summary>
     private static Dictionary<int, List<Army>> GarrisonArmies(Campaign campaign, ushort[] controllers)
     {
-        var mapIndexOfNation = new Dictionary<int, int>();
-        foreach (var nation in campaign.Nations)
-            if (nation is not null && !mapIndexOfNation.ContainsKey(nation.Id)) mapIndexOfNation[nation.Id] = nation.MapIndex;
         var garrisons = new Dictionary<int, List<Army>>();
         foreach (var army in campaign.Armies)
         {
             if (army is null || army.InBattle || army.ProvinceId <= 0 || army.ProvinceId >= controllers.Length) continue;
-            if (!mapIndexOfNation.TryGetValue(army.NationId, out var mapIndex)) continue;
-            if (mapIndex != controllers[army.ProvinceId]) continue;
+            var owner = campaign.NationById(army.NationId);
+            if (owner is null || owner.MapIndex != controllers[army.ProvinceId]) continue;
             if (!garrisons.TryGetValue(army.ProvinceId, out var posted)) garrisons[army.ProvinceId] = posted = new List<Army>();
             posted.Add(army);
         }
         return garrisons;
-    }
-
-    private static Dictionary<int, ScenarioState> StatesByMapIndex(Campaign campaign)
-    {
-        var states = new Dictionary<int, ScenarioState>();
-        foreach (var state in campaign.States)
-            if (state is not null) states[state.MapIndex] = state;
-        return states;
     }
 }
 

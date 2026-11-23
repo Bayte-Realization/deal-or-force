@@ -1,0 +1,22 @@
+{
+  "Features": {
+    "grand_projects": true
+  },
+  "GrandProjectsEnabled": true,
+  "GrandProjectAiEnabled": true,
+  "GrandProjectMaxActivePerNation": 1,
+  "GrandProjectMaxCompletedPerNation": 3,
+  "GrandProjectConsortiumDiscount": 0.30,
+  "GrandProjectConsortiumPartnerShare": 0.35,
+  "GrandProjectConsortiumSpeedBonus": 0.25,
+  "GrandProjectCancelSalvageShare": 0.25,
+  "GrandProjectPauseDamageThreshold": 0.45,
+  "GrandProjectOperationalDamageLimit": 0.35,
+  "GrandProjectSabotageMinIntel": 0.35,
+  "GrandProjectSabotageDelayShare": 0.28,
+  "GrandProjectSabotageCooldownDays": 120,
+  "GrandProjectSabotageCostShare": 0.20,
+  "GrandProjectSabotagePoliticalCost": 8.0,
+  "GrandProjectAiTreasuryReserveMultiplier": 2.6,
+  "GrandProjectAiMinStability": 0.55
+}

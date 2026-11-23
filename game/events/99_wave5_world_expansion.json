@@ -1,0 +1,242 @@
+// Wave 5H world expansion events tying into formable diplomacy, pan-regional movements,
+// heraldic identity debates, and constitutional devolution.
+{
+  "w5h_confederal_charter_congress": {
+    "title": "w5h.ev.confederal_congress.title",
+    "description": "w5h.ev.confederal_congress.desc",
+    "trigger": { "at_war": false, "min_stability": 0.55 },
+    "weight": 1.15,
+    "options": [
+      {
+        "title": "w5h.ev.confederal_congress.opt1",
+        "consequence": "w5h.ev.confederal_congress.con1",
+        "effects": {
+          "political_points": -10.0,
+          "market_access": 0.035,
+          "notoriety": -2.5
+        }
+      },
+      {
+        "title": "w5h.ev.confederal_congress.opt2",
+        "consequence": "w5h.ev.confederal_congress.con2",
+        "effects": {
+          "political_points": 12.0,
+          "stability": 0.015,
+          "market_access": -0.015
+        }
+      }
+    ]
+  },
+
+  "w5h_regional_language_charter": {
+    "title": "w5h.ev.language_charter.title",
+    "description": "w5h.ev.language_charter.desc",
+    "trigger": { "min_literacy": 0.50 },
+    "weight": 1.15,
+    "options": [
+      {
+        "title": "w5h.ev.language_charter.opt1",
+        "consequence": "w5h.ev.language_charter.con1",
+        "effects": {
+          "treasury_percent": -0.03,
+          "stability": 0.022,
+          "state.radicalism": -0.025
+        }
+      },
+      {
+        "title": "w5h.ev.language_charter.opt2",
+        "consequence": "w5h.ev.language_charter.con2",
+        "effects": {
+          "political_points": 8.0,
+          "state.radicalism": 0.018,
+          "stability": -0.010
+        }
+      }
+    ]
+  },
+
+  "w5h_cross_border_customs_union": {
+    "title": "w5h.ev.customs_union.title",
+    "description": "w5h.ev.customs_union.desc",
+    "trigger": { "at_war": false, "max_market_access": 0.94 },
+    "weight": 1.20,
+    "options": [
+      {
+        "title": "w5h.ev.customs_union.opt1",
+        "consequence": "w5h.ev.customs_union.con1",
+        "effects": {
+          "market_access": 0.045,
+          "productivity": 0.010,
+          "treasury_percent": -0.03
+        }
+      },
+      {
+        "title": "w5h.ev.customs_union.opt2",
+        "consequence": "w5h.ev.customs_union.con2",
+        "effects": {
+          "treasury_percent": 0.04,
+          "market_access": -0.02,
+          "credit_confidence": -0.015
+        }
+      }
+    ]
+  },
+
+  "w5h_provincial_devolution_referendum": {
+    "title": "w5h.ev.devolution_vote.title",
+    "description": "w5h.ev.devolution_vote.desc",
+    "trigger": { "max_stability": 0.74 },
+    "weight": 1.20,
+    "options": [
+      {
+        "title": "w5h.ev.devolution_vote.opt1",
+        "consequence": "w5h.ev.devolution_vote.con1",
+        "effects": {
+          "political_points": -12.0,
+          "stability": 0.030,
+          "state.radicalism": -0.030
+        }
+      },
+      {
+        "title": "w5h.ev.devolution_vote.opt2",
+        "consequence": "w5h.ev.devolution_vote.con2",
+        "effects": {
+          "political_points": 10.0,
+          "stability": -0.020,
+          "state.radicalism": 0.025
+        }
+      }
+    ]
+  },
+
+  "w5h_shared_currency_corridor": {
+    "title": "w5h.ev.currency_corridor.title",
+    "description": "w5h.ev.currency_corridor.desc",
+    "trigger": { "at_war": false, "min_gdp": 40.0 },
+    "weight": 1.10,
+    "options": [
+      {
+        "title": "w5h.ev.currency_corridor.opt1",
+        "consequence": "w5h.ev.currency_corridor.con1",
+        "effects": {
+          "credit_confidence": 0.04,
+          "inflation": -0.012,
+          "political_points": -8.0
+        }
+      },
+      {
+        "title": "w5h.ev.currency_corridor.opt2",
+        "consequence": "w5h.ev.currency_corridor.con2",
+        "effects": {
+          "treasury_percent": 0.03,
+          "inflation": 0.008,
+          "political_points": 6.0
+        }
+      }
+    ]
+  },
+
+  "w5h_pan_regional_rail_gauge": {
+    "title": "w5h.ev.rail_gauge.title",
+    "description": "w5h.ev.rail_gauge.desc",
+    "trigger": { "at_war": false, "use": [ "solvent" ] },
+    "weight": 1.15,
+    "options": [
+      {
+        "title": "w5h.ev.rail_gauge.opt1",
+        "consequence": "w5h.ev.rail_gauge.con1",
+        "effects": {
+          "treasury_percent": -0.05,
+          "construction_capacity": 0.20,
+          "market_access": 0.03
+        }
+      },
+      {
+        "title": "w5h.ev.rail_gauge.opt2",
+        "consequence": "w5h.ev.rail_gauge.con2",
+        "effects": {
+          "treasury_percent": -0.015,
+          "productivity": 0.006
+        }
+      }
+    ]
+  },
+
+  "w5h_diaspora_investment_summit": {
+    "title": "w5h.ev.diaspora_summit.title",
+    "description": "w5h.ev.diaspora_summit.desc",
+    "trigger": { "min_literacy": 0.45 },
+    "weight": 1.10,
+    "options": [
+      {
+        "title": "w5h.ev.diaspora_summit.opt1",
+        "consequence": "w5h.ev.diaspora_summit.con1",
+        "effects": {
+          "treasury_percent": 0.04,
+          "state.standard_of_living": 0.012,
+          "notoriety": -1.5
+        }
+      },
+      {
+        "title": "w5h.ev.diaspora_summit.opt2",
+        "consequence": "w5h.ev.diaspora_summit.con2",
+        "effects": {
+          "political_points": 8.0,
+          "stability": 0.012
+        }
+      }
+    ]
+  },
+
+  "w5h_heraldic_identity_convention": {
+    "title": "w5h.ev.heraldic_convention.title",
+    "description": "w5h.ev.heraldic_convention.desc",
+    "trigger": { "at_war": false, "min_stability": 0.50 },
+    "weight": 1.05,
+    "options": [
+      {
+        "title": "w5h.ev.heraldic_convention.opt1",
+        "consequence": "w5h.ev.heraldic_convention.con1",
+        "effects": {
+          "stability": 0.020,
+          "political_points": 6.0,
+          "treasury_percent": -0.02
+        }
+      },
+      {
+        "title": "w5h.ev.heraldic_convention.opt2",
+        "consequence": "w5h.ev.heraldic_convention.con2",
+        "effects": {
+          "war_support": 0.020,
+          "political_points": 4.0
+        }
+      }
+    ]
+  },
+
+  "w5h_maritime_archipelago_compact": {
+    "title": "w5h.ev.archipelago_compact.title",
+    "description": "w5h.ev.archipelago_compact.desc",
+    "trigger": { "at_war": false, "min_gdp": 25.0 },
+    "weight": 1.10,
+    "options": [
+      {
+        "title": "w5h.ev.archipelago_compact.opt1",
+        "consequence": "w5h.ev.archipelago_compact.con1",
+        "effects": {
+          "market_access": 0.035,
+          "naval_experience": 6.0,
+          "treasury_percent": -0.03
+        }
+      },
+      {
+        "title": "w5h.ev.archipelago_compact.opt2",
+        "consequence": "w5h.ev.archipelago_compact.con2",
+        "effects": {
+          "treasury_percent": 0.025,
+          "notoriety": 2.0
+        }
+      }
+    ]
+  }
+}

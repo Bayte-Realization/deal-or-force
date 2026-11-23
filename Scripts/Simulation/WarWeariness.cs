@@ -133,9 +133,9 @@ public static class WarWeariness
             // How it is going, felt at home: a side losing badly stops believing in it, and a side
             // whose front is collapsing - or half of whose country is under the enemy - stops
             // believing in anything. It is what lets a beaten country bring itself to sign.
-            foreach (var attacking in new[] { true, false })
+            for (var sideIdx = 0; sideIdx < 2; sideIdx++)
             {
-                foreach (var id in war.Side(attacking))
+                foreach (var id in war.Side(sideIdx == 0))
                     if (campaign.NationById(id) is { } side && side.Movement is null &&
                         MoodOf(campaign, war, side) is { } mood)
                         ModifierSystem.Grant(campaign, side, mood, defines.EconomyTickDays * 2);
@@ -152,9 +152,10 @@ public static class WarWeariness
             var weight = LengthWeight(defines, age);
             if (weight is not null)
             {
-                foreach (var id in war.Side(true).Concat(war.Side(false)))
-                    if (campaign.NationById(id) is { } fighting && fighting.Movement is null)
-                        ModifierSystem.Grant(campaign, fighting, weight, defines.EconomyTickDays * 2);
+                for (var sideIdx = 0; sideIdx < 2; sideIdx++)
+                    foreach (var id in war.Side(sideIdx == 0))
+                        if (campaign.NationById(id) is { } fighting && fighting.Movement is null)
+                            ModifierSystem.Grant(campaign, fighting, weight, defines.EconomyTickDays * 2);
             }
 
             // The nuclear shadow (Deterrence.Brinkmanship): a war both sides could end the
@@ -163,22 +164,26 @@ public static class WarWeariness
             // wars in limited terms is what every household under the shadow lives with.
             if (Deterrence.Brinkmanship(campaign, war) > 0f)
             {
-                foreach (var id in war.Side(true).Concat(war.Side(false)))
-                    if (campaign.NationById(id) is { } under && under.Movement is null)
-                        ModifierSystem.Grant(campaign, under, "nuclear_shadow", defines.EconomyTickDays * 2);
+                for (var sideIdx = 0; sideIdx < 2; sideIdx++)
+                    foreach (var id in war.Side(sideIdx == 0))
+                        if (campaign.NationById(id) is { } under && under.Movement is null)
+                            ModifierSystem.Grant(campaign, under, "nuclear_shadow", defines.EconomyTickDays * 2);
             }
 
             // Anti-war exhaustion & civil pressure when public support collapses
-            foreach (var id in war.Side(true).Concat(war.Side(false)))
+            for (var sideIdx = 0; sideIdx < 2; sideIdx++)
             {
-                if (campaign.NationById(id) is { } fighting && fighting.Movement is null)
+                foreach (var id in war.Side(sideIdx == 0))
                 {
-                    var fatigue = NationalFatigue(campaign, fighting);
-                    if (fatigue > 0.65f)
+                    if (campaign.NationById(id) is { } fighting && fighting.Movement is null)
                     {
-                        ModifierSystem.Grant(campaign, fighting, "anti_war_protests", defines.EconomyTickDays * 2);
-                        if ((campaign.ElapsedDays + fighting.Id * 13) % 45 == 0)
-                            campaign.Chronicle.Record(campaign, "anti_war_protests", fighting.Id);
+                        var fatigue = NationalFatigue(campaign, fighting);
+                        if (fatigue > 0.65f)
+                        {
+                            ModifierSystem.Grant(campaign, fighting, "anti_war_protests", defines.EconomyTickDays * 2);
+                            if ((campaign.ElapsedDays + fighting.Id * 13) % 45 == 0)
+                                campaign.Chronicle.Record(campaign, "anti_war_protests", fighting.Id);
+                        }
                     }
                 }
             }
@@ -250,8 +255,13 @@ public static class WarWeariness
     }
 
     /// <summary>Whether any country on either side is somebody's.</summary>
-    public static bool PlayedByAnyone(Campaign campaign, StrategicWar war) =>
-        war.Side(true).Concat(war.Side(false)).Any(id => campaign.NationById(id)?.IsHuman == true);
+    public static bool PlayedByAnyone(Campaign campaign, StrategicWar war)
+    {
+        for (var s = 0; s < 2; s++)
+            foreach (var id in war.Side(s == 0))
+                if (campaign.NationById(id)?.IsHuman == true) return true;
+        return false;
+    }
 
     /// <summary>
     /// A declaration that never became a fight. This is deliberately narrower than a
@@ -264,7 +274,12 @@ public static class WarWeariness
             campaign.ElapsedDays < war.AiNegotiationUnlockDay || PlayedByAnyone(campaign, war) ||
             war.AttackerLosses + war.DefenderLosses >= .001f || war.OriginalController.Count > 0)
             return false;
-        if (campaign.Battles.Any(battle => !battle.Ended && battle.WarId == war.Id)) return false;
+        var battles = campaign.Battles;
+        for (var bi = 0; bi < battles.Count; bi++)
+        {
+            var b = battles[bi];
+            if (!b.Ended && b.WarId == war.Id) return false;
+        }
         var age = campaign.ElapsedDays - war.StartedDay;
         if (age >= campaign.Defines.AiNoContactPeaceDays) return true;
         if (campaign.Defines.AiUnreachableWarPeaceDays <= 0 ||

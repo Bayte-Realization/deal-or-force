@@ -82,9 +82,14 @@ public partial class DealOrForceGame
         _mediaButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         settingsRow.AddChild(_mediaButton);
 
-        var watch = PauseWellAction("Watch the world  [F7]", () => { HidePauseMenu(); ToggleObserverMode(); });
-        watch.TooltipText = Ui.Tip(Tr("Observer mode: no events, nothing stops the clock, and the panels get out of the way. For watching a world run, and for recording one."));
-        rows.AddChild(watch);
+        _pauseObserverButton = PauseWellAction("shell.obs.pause_enter", () =>
+        {
+            HidePauseMenu();
+            ToggleObserverMode();
+        });
+        _pauseObserverButton.Name = "PauseToggleObserver";
+        _pauseObserverButton.TooltipText = Ui.Tip(Loc.Get("shell.obs.pause_world_tip"));
+        rows.AddChild(_pauseObserverButton);
 
         var helpRow = PauseMenuPair(rows);
         var handbook = PauseWellAction("Handbook  [F1]", () => { HidePauseMenu(); OpenHandbook(); }, 0);
@@ -100,6 +105,19 @@ public partial class DealOrForceGame
         ChromePlateArt.ApplyMenuButtonIcon(find, "icon_search");
         Tip(find, "Every screen in the campaign, searchable (Ctrl+K).");
         helpRow.AddChild(find);
+
+        if (Platform.PlatformProfile.Current?.IsTouchPrimary == true)
+        {
+            var console = PauseWellAction("Developer console", () =>
+            {
+                HidePauseMenu();
+                EnsureScreen("console", BuildDeveloperConsole);
+                ToggleDeveloperConsole();
+            });
+            console.Name = "PauseOpenConsole";
+            Tip(console, "Open the command console.");
+            rows.AddChild(console);
+        }
 
         rows.AddChild(ChromePlateArt.CreateEngravedMedallionDivider("PauseMenuRuleBottom", 1f, 10f));
 
@@ -206,6 +224,7 @@ public partial class DealOrForceGame
     }
 
     private Button _leaveButton = null!;
+    private Button _pauseObserverButton = null!;
 
     /// <summary>A row of two equal buttons, as wide as the menu's single ones.</summary>
     private static HBoxContainer PauseMenuPair(VBoxContainer rows)
@@ -226,6 +245,7 @@ public partial class DealOrForceGame
             _pickerLayer is { Visible: true } ||
             _mediaLibraryLayer is { Visible: true })
             return;
+        EnsureScreen("pause_menu", BuildPauseMenu);
         _leaveButton.Text = Tr("Return to main menu");
         _campaign.IsPaused = true;
         _pause.Text = "▶";
@@ -242,15 +262,39 @@ public partial class DealOrForceGame
         }
 
         UpdatePauseLiveCard();
+        UpdatePauseObserverButton();
         _pauseMenuLayer.Visible = true;
         _pauseMenuLayer.MoveToFront();
+    }
+
+    private void UpdatePauseObserverButton()
+    {
+        if (_pauseObserverButton is null || _campaign is null) return;
+        var observing = _observerMode || _campaign.ObserverMode;
+        if (!observing)
+        {
+            _pauseObserverButton.Text = Loc.Get("shell.obs.pause_enter");
+            _pauseObserverButton.TooltipText = Ui.Tip(Loc.Get("shell.obs.pause_world_tip"));
+            return;
+        }
+        if (_campaign.HumanSeats.Count == 0 && _observerWatched is { } watched)
+        {
+            _pauseObserverButton.Text = Loc.Format("shell.obs.pause_take_fmt", watched.DisplayName);
+            _pauseObserverButton.TooltipText = Ui.Tip(Loc.Format("shell.obs.pause_take_tip_fmt", watched.DisplayName));
+            return;
+        }
+        _pauseObserverButton.Text = Loc.Get("shell.obs.pause_leave");
+        _pauseObserverButton.TooltipText = Ui.Tip(Loc.Get("shell.obs.pause_leave_tip"));
     }
 
     private void UpdatePauseLiveCard()
     {
         if (_campaign?.Player is not { } player || _pauseLiveCard is null) return;
+        var observing = _observerMode || _campaign.ObserverMode;
         _pauseFlagRect.Texture = FlagTextureFor(player.Tag);
-        _pauseNationName.Text = player.DisplayName;
+        _pauseNationName.Text = observing
+            ? $"{player.DisplayName} · {Loc.Get("shell.obs.live_card_tag")}"
+            : player.DisplayName;
 
         var ruler = Rulers.HeadOfState(_campaign, player);
         _pauseLeaderTitleName.Text = $"{Loc.Get(ruler.Title)} {ruler.Name}";
@@ -274,7 +318,11 @@ public partial class DealOrForceGame
             openWars > 0 ? MenuChromeTheme.Warning : MenuChromeTheme.PaperFaint);
     }
 
-    private void HidePauseMenu() => _pauseMenuLayer.Visible = false;
+    private void HidePauseMenu()
+    {
+        if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
+        if (IsNewShellActive) SyncNewShellModalState();
+    }
 
     private void ReturnToMainMenu()
     {

@@ -18,11 +18,14 @@ public partial class DealOrForceGame
 
     private void BindCampaignMods()
     {
-        _modLoader.ApplyCampaignData(_campaign);
+        if (_modLoader.Packages.Count > 0 || ModOverlayPolicy.IsActive)
+        {
+            _modLoader.ApplyCampaignData(_campaign);
+            MarketSystem.Seed(_campaign);
+            _campaign.History.Reset();
+            _campaign.History.Capture(_campaign, true);
+        }
         ApplySkinOverlay();
-        MarketSystem.Seed(_campaign);
-        _campaign.History.Reset();
-        _campaign.History.Capture(_campaign, true);
         _modApi.Bind(_campaign);
         _modLoader.StartCode(_modApi, _campaign);
         if (_modStatus is null) return;

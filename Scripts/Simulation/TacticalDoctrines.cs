@@ -632,21 +632,35 @@ public static class TacticalDoctrines
     /// </summary>
     public static List<DoctrineNode> Available(Nation nation, string branchId)
     {
-        var branch = TacticalDoctrineCatalog.Find(branchId);
         var found = new List<DoctrineNode>();
-        if (branch is null) return found;
+        FillAvailable(nation, branchId, found);
+        return found;
+    }
+
+    internal static void FillAvailable(Nation nation, string branchId, List<DoctrineNode> found)
+    {
+        found.Clear();
+        var branch = TacticalDoctrineCatalog.Find(branchId);
+        if (branch is null) return;
         var track = TrackFor(nation, branch);
         var inForce = track is not null && string.Equals(track.Branch, branchId, StringComparison.Ordinal);
-        foreach (var node in branch.Nodes)
+        var nodes = branch.Nodes;
+        for (var ni = 0; ni < nodes.Count; ni++)
         {
+            var node = nodes[ni];
             if (inForce && track.Known.Contains(node.Id)) continue;
-            if (inForce && node.Excludes.Any(track.Known.Contains)) continue;
+            if (inForce && node.Excludes.Count > 0)
+            {
+                var excluded = false;
+                for (var ei = 0; ei < node.Excludes.Count; ei++)
+                    if (track.Known.Contains(node.Excludes[ei])) { excluded = true; break; }
+                if (excluded) continue;
+            }
             var ready = true;
-            foreach (var need in node.Requires)
-                if (!inForce || !track.Known.Contains(need)) { ready = false; break; }
+            for (var ri = 0; ri < node.Requires.Count; ri++)
+                if (!inForce || !track.Known.Contains(node.Requires[ri])) { ready = false; break; }
             if (ready) found.Add(node);
         }
-        return found;
     }
 
     private static bool Rewriting(Nation nation, DoctrineBranch branch)
@@ -818,7 +832,8 @@ public static class TacticalDoctrines
             if (ReferenceEquals(memory.Tracks.GetValueOrDefault(slot), activeTrack)) { primary = true; break; }
         if (!primary) return;
         memory.Branch = activeTrack.Branch;
-        memory.Known = new List<string>(activeTrack.Known);
+        memory.Known.Clear();
+        for (var i = 0; i < activeTrack.Known.Count; i++) memory.Known.Add(activeTrack.Known[i]);
         memory.LearningBranch = activeTrack.LearningBranch;
         memory.LearningNode = activeTrack.LearningNode;
         memory.LearningDoneDay = activeTrack.LearningDoneDay;
@@ -906,6 +921,8 @@ public static class TacticalDoctrines
         return best;
     }
 
+    [ThreadStatic] private static List<DoctrineNode> _aiAvailableScratch;
+
     /// <summary>
     /// A government improving its own books: for every shelf, the Doctrine its character prefers,
     /// the cheapest article open right now, and a crash course when it is at war and can pay for
@@ -915,6 +932,7 @@ public static class TacticalDoctrines
     {
         EnsureShelves(nation);
         var atWar = IsNationAtWar(campaign, nation.Id);
+        var available = _aiAvailableScratch ??= new List<DoctrineNode>(16);
         foreach (var slot in DoctrineSlots.All)
         {
             var track = nation.TacticalDoctrine.Track(slot);
@@ -925,7 +943,7 @@ public static class TacticalDoctrines
             if (Rewriting(nation, branch) && track.Known.Count > 0 &&
                 campaign.ElapsedDays - track.LastRewriteDay <
                 Math.Max(30, campaign.Defines.DoctrineAiRewriteCooldownDays)) continue;
-            var available = Available(nation, branch.Id);
+            FillAvailable(nation, branch.Id, available);
             var character = AiStrategyCatalog.Of(campaign, nation).Id;
             // A strategic course still chooses the first book. Once its usable articles are
             // learned, an authored character preference may fill the existing companion slot.
@@ -939,7 +957,7 @@ public static class TacticalDoctrines
                     : PickAuthoredBranch(slot, character, branch.Id);
                 if (additional is null) continue;
                 branch = additional;
-                available = Available(nation, branch.Id);
+                FillAvailable(nation, branch.Id, available);
             }
             var have = Experience(nation, branch.Experience);
             DoctrineNode choice = null;

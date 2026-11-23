@@ -278,11 +278,13 @@ public static partial class TerritorialTopology
         get
         {
             if (_shippedStateIndices is not null) return _shippedStateIndices;
-            _shippedStateIndices = new HashSet<int>();
+            _shippedStateIndices = new HashSet<int>(WorldMapTables.StateRows.Length);
             foreach (var row in WorldMapTables.StateRows)
             {
-                var parts = row.Split('|');
-                if (parts.Length > 0 && int.TryParse(parts[0], out var index)) _shippedStateIndices.Add(index);
+                var sep = row.IndexOf('|');
+                var span = sep >= 0 ? row.AsSpan(0, sep) : row.AsSpan();
+                if (int.TryParse(span, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var index))
+                    _shippedStateIndices.Add(index);
             }
             return _shippedStateIndices;
         }
@@ -318,6 +320,15 @@ public static partial class TerritorialTopology
         int height)
     {
         var summaries = new List<RepairSummary>(BaseRules.Count + RegionRules.Count);
+        var stateByMapIndex = new Dictionary<int, ScenarioState>(campaign.States.Count + RegionRules.Count);
+        var stateByIso = new Dictionary<string, ScenarioState>(campaign.States.Count, StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < campaign.States.Count; i++)
+        {
+            var existing = campaign.States[i];
+            stateByMapIndex.TryAdd(existing.MapIndex, existing);
+            if (!string.IsNullOrEmpty(existing.Iso)) stateByIso.TryAdd(existing.Iso, existing);
+        }
+
         foreach (var rule in RegionRules)
         {
             var nation = campaign.NationByTag(rule.NationTag);
@@ -326,8 +337,7 @@ public static partial class TerritorialTopology
                 ? nation
                 : campaign.NationByTag(rule.SourceNationTag);
             if (sourceNation is null) continue;
-            var state = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == rule.MapIndex);
-            if (state is null)
+            if (!stateByMapIndex.TryGetValue(rule.MapIndex, out var state))
             {
                 state = new ScenarioState
                 {
@@ -340,6 +350,8 @@ public static partial class TerritorialTopology
                     Kind = rule.Kind
                 };
                 campaign.States.Add(state);
+                stateByMapIndex[rule.MapIndex] = state;
+                if (!string.IsNullOrEmpty(state.Iso)) stateByIso.TryAdd(state.Iso, state);
 
                 // Somebody has to lose the people this region is about to have. A rule may
                 // name the region they come from, but naming it by hand is a thing to get
@@ -351,9 +363,8 @@ public static partial class TerritorialTopology
                     ? DominantState(control, states, width, height, (ushort)sourceNation.MapIndex, rule)
                     : -1;
                 var donor = string.IsNullOrWhiteSpace(rule.DonorIso)
-                    ? campaign.States.FirstOrDefault(candidate => candidate.MapIndex == dominant)
-                    : campaign.States.FirstOrDefault(candidate =>
-                        string.Equals(candidate.Iso, rule.DonorIso, StringComparison.OrdinalIgnoreCase));
+                    ? stateByMapIndex.GetValueOrDefault(dominant)
+                    : stateByIso.GetValueOrDefault(rule.DonorIso);
                 if (donor is not null && donor != state)
                     EconomySystem.AdjustStatePopulation(donor, -rule.Population);
                 EconomySystem.SeedState(campaign, state, nation, rule.Population);
@@ -374,8 +385,69 @@ public static partial class TerritorialTopology
             summaries.Add(new RepairSummary(rule.Name, "REGION", changed, connectedComponents, clipped));
         }
 
-        foreach (var partition in Partitions)
-            ApplyPartition(campaign, control, states, width, height, partition, summaries);
+        if (Partitions.Count > 0)
+        {
+            var stateToSlot = System.Buffers.ArrayPool<int>.Shared.Rent(ushort.MaxValue + 1);
+            Array.Clear(stateToSlot, 0, ushort.MaxValue + 1);
+            var batchBuckets = new List<int>[Partitions.Count];
+            var canBatch = new bool[Partitions.Count];
+            var anyBatch = false;
+            try
+            {
+                for (var pi = 0; pi < Partitions.Count; pi++)
+                {
+                    var partition = Partitions[pi];
+                    if (partition.Polar) continue;
+                    var nation = campaign.NationByTag(CountryMerges.OwnerOf(partition.NationTag));
+                    var donorIndex = StateIndexByIso(partition.CarveFromIso);
+                    if ((nation is null && !CountryMerges.IsMerged(partition.NationTag)) || donorIndex == 0) continue;
+
+                    canBatch[pi] = true;
+                    void MarkShare(ushort idx)
+                    {
+                        var existing = stateToSlot[idx];
+                        if (existing == 0)
+                            stateToSlot[idx] = pi + 1;
+                        else if (existing != pi + 1)
+                        {
+                            canBatch[existing - 1] = false;
+                            canBatch[pi] = false;
+                        }
+                    }
+
+                    MarkShare(donorIndex);
+                    foreach (var piece in partition.Pieces) MarkShare((ushort)piece.MapIndex);
+                    foreach (var iso in partition.AlsoCarveFromIso ?? Array.Empty<string>())
+                    {
+                        var extra = StateIndexByIso(iso);
+                        if (extra != 0) MarkShare(extra);
+                    }
+                    if (canBatch[pi])
+                    {
+                        batchBuckets[pi] = new List<int>();
+                        anyBatch = true;
+                    }
+                }
+
+                if (anyBatch)
+                {
+                    for (var cell = 0; cell < states.Length; cell++)
+                    {
+                        var slot = stateToSlot[states[cell]];
+                        if (slot > 0 && canBatch[slot - 1])
+                            batchBuckets[slot - 1].Add(cell);
+                    }
+                }
+            }
+            finally
+            {
+                System.Buffers.ArrayPool<int>.Shared.Return(stateToSlot);
+            }
+
+            for (var pi = 0; pi < Partitions.Count; pi++)
+                ApplyPartition(campaign, control, states, width, height, Partitions[pi], summaries,
+                    stateByMapIndex, canBatch[pi] ? batchBuckets[pi] : null);
+        }
 
         // Exact source-checked cells, not a bounding box that could absorb a neighbour.
         // Existing regions only: this does not create regions or renumber provinces.
@@ -414,7 +486,9 @@ public static partial class TerritorialTopology
             var neighbor = campaign.NationByTag(rule.NeighborTag);
             var through = campaign.NationByTag(rule.ThroughTag);
             if (subject is null || neighbor is null || through is null) continue;
-            var subjectState = campaign.States.FirstOrDefault(state => state.NationMapIndex == subject.MapIndex);
+            ScenarioState subjectState = null;
+            for (var si = 0; si < campaign.States.Count; si++)
+                if (campaign.States[si].NationMapIndex == subject.MapIndex) { subjectState = campaign.States[si]; break; }
             if (subjectState is null) continue;
 
             var changed = Connect(
@@ -431,8 +505,21 @@ public static partial class TerritorialTopology
             summaries.Add(new RepairSummary(rule.SubjectTag, rule.NeighborTag, changed));
         }
 
+        // On non-Windows-x64 architectures (Android ARM64, Linux, macOS ARM64), C libm / FMA
+        // rounding in polar growth can shift boundary cells by 1 ULP relative to the shipped
+        // provinces.png stamp. Reconcile before callers spawn concurrent anchor/topology jobs.
+        MapRasterCatalog.ReconcileCrossArchitectureRegions(states, control, width, height);
+
         return summaries;
     }
+
+    /// <summary>
+    /// Heal detached 1–2 province border slivers (including Abkhazia's coastal Samegrelo slivers)
+    /// deterministically on a constructed <see cref="ProvinceTopology"/> without invalidating
+    /// <c>compiled.json</c>'s source region fingerprint. Idempotent.
+    /// </summary>
+    public static IReadOnlyList<SliverHealSummary> ApplyProvinceSliverHealing(ProvinceTopology topology) =>
+        HealBorderSlivers(topology);
 
     private static Dictionary<string, ushort> _stateIndexByIso;
 
@@ -448,13 +535,25 @@ public static partial class TerritorialTopology
         if (string.IsNullOrWhiteSpace(iso)) return 0;
         if (_stateIndexByIso is null)
         {
-            _stateIndexByIso = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
+            _stateIndexByIso = new Dictionary<string, ushort>(WorldMapTables.StateRows.Length, StringComparer.OrdinalIgnoreCase);
             foreach (var row in WorldMapTables.StateRows)
             {
-                var parts = row.Split('|');
-                if (parts.Length < 4) continue;
-                if (!int.TryParse(parts[0], out var index) || index <= 0 || index > ushort.MaxValue) continue;
-                _stateIndexByIso[parts[3]] = (ushort)index;
+                var span = row.AsSpan();
+                var p0 = span.IndexOf('|');
+                if (p0 <= 0) continue;
+                var s0 = span[..p0];
+                span = span[(p0 + 1)..];
+                var p1 = span.IndexOf('|');
+                if (p1 < 0) continue;
+                span = span[(p1 + 1)..];
+                var p2 = span.IndexOf('|');
+                if (p2 < 0) continue;
+                span = span[(p2 + 1)..];
+                var p3 = span.IndexOf('|');
+                var s3 = p3 >= 0 ? span[..p3] : span;
+                if (!int.TryParse(s0, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var index) ||
+                    index <= 0 || index > ushort.MaxValue || s3.IsEmpty) continue;
+                _stateIndexByIso[s3.ToString()] = (ushort)index;
             }
         }
         return _stateIndexByIso.TryGetValue(iso, out var found) ? found : (ushort)0;

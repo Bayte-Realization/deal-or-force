@@ -164,7 +164,15 @@ public static class MovementAi
             {
                 uprisingCandidates.Clear();
                 if (forHire)
-                    uprisingCandidates.AddRange(campaign.States);
+                {
+                    var states = campaign.States;
+                    for (var si = 0; si < states.Count; si++)
+                    {
+                        var st = states[si];
+                        if (st.NationMapIndex != nation.MapIndex && st.Stability <= 0.35f)
+                            uprisingCandidates.Add(st);
+                    }
+                }
                 else
                     foreach (var (mapIndex, support) in state.Support)
                     {

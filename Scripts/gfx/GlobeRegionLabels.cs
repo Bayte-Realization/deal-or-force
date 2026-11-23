@@ -33,9 +33,17 @@ public sealed partial class GlobePresentation
     private readonly List<RegionLabelCandidate>[] _regionBuckets = CreateRegionBuckets();
     private readonly Dictionary<int, float> _regionAlphas = new();
     private readonly Dictionary<int, float> _countryAlphas = new();
+    private readonly Dictionary<int, string> _regionUpperNames = new();
+    private string _regionUpperLanguage = "";
     private readonly List<Rect2> _regionTaken = new();
     private bool _regionBucketsReady;
     private float _regionLastAlpha = -1f;
+    private string _cachedCountryFillHex = "";
+    private Color _cachedCountryFillColor = new(0.93f, 0.94f, 0.96f, 1f);
+    private string _cachedCountryOutlineHex = "";
+    private Color _cachedCountryOutlineColor = new(0.02f, 0.032f, 0.048f, 1f);
+    private string _cachedRegionFillHex = "";
+    private Color _cachedRegionFillColor = new(0.93f, 0.94f, 0.96f, 1f);
 
     private static List<RegionLabelCandidate>[] CreateRegionBuckets()
     {
@@ -44,12 +52,23 @@ public sealed partial class GlobePresentation
         return buckets;
     }
 
+    private Color AtlasColourCached(string key, ref string cachedHex, ref Color cachedColor)
+    {
+        var hex = MapLook.ColourHex(key);
+        if (!string.Equals(hex, cachedHex, StringComparison.Ordinal))
+        {
+            cachedHex = hex;
+            cachedColor = Color.FromHtml(hex);
+        }
+        return cachedColor;
+    }
+
     private Color CountryFillColour(float alpha) => _mapLookAtlas
-        ? new Color(Color.FromHtml(MapLook.ColourHex("map.look_label_fill")), alpha)
+        ? new Color(AtlasColourCached("map.look_label_fill", ref _cachedCountryFillHex, ref _cachedCountryFillColor), alpha)
         : new Color(0.93f, 0.94f, 0.96f, alpha);
 
     private Color CountryOutlineColour(float alpha) => _mapLookAtlas
-        ? new Color(Color.FromHtml(MapLook.ColourHex("map.look_label_outline")), alpha)
+        ? new Color(AtlasColourCached("map.look_label_outline", ref _cachedCountryOutlineHex, ref _cachedCountryOutlineColor), alpha)
         : new Color(0.02f, 0.032f, 0.048f, alpha);
 
     private void CreateRegionLabelLayer(Node3D world)
@@ -66,11 +85,15 @@ public sealed partial class GlobePresentation
         {
             if (!IsInstanceValid(label.Node)) continue;
             var alpha = _countryAlphas.TryGetValue(label.MapIndex, out var current) ? current : 0.88f;
-            foreach (var child in label.Node.GetChildren())
+            if (_countryGroupGlyphs.TryGetValue(label.MapIndex, out var glyphs))
             {
-                if (child is not Label3D glyph) continue;
-                glyph.Modulate = new Color(fill, alpha);
-                glyph.OutlineModulate = new Color(outline, Math.Min(0.94f, alpha * 1.05f));
+                for (var i = 0; i < glyphs.Length; i++)
+                {
+                    var glyph = glyphs[i];
+                    if (!IsInstanceValid(glyph)) continue;
+                    glyph.Modulate = new Color(fill, alpha);
+                    glyph.OutlineModulate = new Color(outline, Math.Min(0.94f, alpha * 1.05f));
+                }
             }
         }
         _regionLastAlpha = -1f;
@@ -144,10 +167,17 @@ public sealed partial class GlobePresentation
         var rootBasis = _regionLabelRoot.GlobalTransform.Basis;
         var horizon = _flatMap ? -1f : Math.Max(0.28f, CityHorizon() + 0.06f);
         var font = PresentationFonts.For("map.cities");
-        var fillBase = Color.FromHtml(MapLook.ColourHex("map.look_region_fill"));
-        var outlineBase = Color.FromHtml(MapLook.ColourHex("map.look_label_outline"));
+        var fillBase = AtlasColourCached("map.look_region_fill", ref _cachedRegionFillHex, ref _cachedRegionFillColor);
+        var outlineBase = CountryOutlineColour(1f);
         var scale = _flatMap ? Math.Clamp(_flatZoom * 0.55f, 0.45f, 1.35f) : Math.Clamp(_distance / 9.0f, 0.72f, 1.25f);
         var stepDt = (float)Math.Max(0.016, delta);
+        var rootTransform = _regionLabelRoot.GlobalTransform;
+        var lang = Simulation.Loc.Language ?? "";
+        if (!string.Equals(_regionUpperLanguage, lang, StringComparison.Ordinal))
+        {
+            _regionUpperLanguage = lang;
+            _regionUpperNames.Clear();
+        }
 
         // Determine focus lat/lon so we scan only nearby spatial buckets.
         float focusLat = 0f, focusLon = 0f;
@@ -185,45 +215,90 @@ public sealed partial class GlobePresentation
                 {
                     var item = bucket[i];
                     var horizonVisible = _flatMap || (rootBasis * item.Normal).Dot(cameraNormal) > horizon;
-                    var target = MapLabelPriority.RegionTargetAlpha(_mapLookAtlas, _flatMap, measure, item.Cells, horizonVisible);
+                    var prev = _regionAlphas.TryGetValue(item.State.MapIndex, out var a) ? a : 0f;
+                    if (!horizonVisible && prev <= 0.01f) continue;
 
-                    // Skip region names matching their country or an already-visible city pin (e.g. Saratov).
-                    var ownerMap = item.State.NationMapIndex;
-                    if (_lastLabelNames.TryGetValue(ownerMap, out var countryName) &&
-                        string.Equals(countryName, item.State.Name, StringComparison.OrdinalIgnoreCase))
-                        target = 0f;
+                    var target = horizonVisible
+                        ? MapLabelPriority.RegionTargetAlpha(_mapLookAtlas, _flatMap, measure, item.Cells, true)
+                        : 0f;
 
-                    var display = item.State.DisplayName;
-                    if (string.IsNullOrWhiteSpace(display) || _placedCityNames.Contains(display))
-                        target = 0f;
+                    string display = null;
+                    if (target > 0.01f)
+                    {
+                        // Skip region names matching their country or an already-visible city pin (e.g. Saratov).
+                        var ownerMap = item.State.NationMapIndex;
+                        if (_lastLabelNames.TryGetValue(ownerMap, out var countryName) &&
+                            string.Equals(countryName, item.State.Name, StringComparison.OrdinalIgnoreCase))
+                            target = 0f;
+                        else
+                        {
+                            display = item.State.DisplayName;
+                            if (string.IsNullOrWhiteSpace(display) || _placedCityNames.Contains(display))
+                                target = 0f;
+                        }
+                    }
 
-                    var pos = _flatMap
-                        ? FlatPoint(item.Latitude, item.Longitude, FlatTextZ - 0.002f)
-                        : SurfacePoint(item.Latitude, item.Longitude, SurfaceTextRadius - 0.002f);
-                    var worldPos = _regionLabelRoot.GlobalTransform * pos;
-                    if (_camera.IsPositionBehind(worldPos)) target = 0f;
-                    var screen = target > 0.01f ? _camera.UnprojectPosition(worldPos) : Vector2.Zero;
-                    if (target > 0.01f &&
-                        (screen.X < -60f || screen.Y < -30f || screen.X > viewport.X + 60f || screen.Y > viewport.Y + 30f))
-                        target = 0f;
+                    if (target <= 0.01f && prev <= 0.01f)
+                    {
+                        if (prev > 0f) _regionAlphas[item.State.MapIndex] = 0f;
+                        continue;
+                    }
 
+                    Vector3 pos = default;
+                    var hasPos = false;
+                    if (target > 0.01f)
+                    {
+                        var regionBias = _reliefDisplacement > 0.0001f ? 0.0015f : 0f;
+                        pos = _flatMap
+                            ? LocalFlatPoint(item.Latitude, item.Longitude, FlatTextZ - 0.002f + regionBias)
+                            : LocalSurfacePoint(item.Latitude, item.Longitude, SurfaceTextRadius - 0.002f + regionBias);
+                        hasPos = true;
+                        var worldPos = rootTransform * pos;
+                        if (_camera.IsPositionBehind(worldPos)) target = 0f;
+                        else
+                        {
+                            var screen = _camera.UnprojectPosition(worldPos);
+                            if (screen.X < -60f || screen.Y < -30f || screen.X > viewport.X + 60f || screen.Y > viewport.Y + 30f)
+                                target = 0f;
+                        }
+                    }
+
+                    string upperDisplay = null;
                     Rect2 screenBox = default;
                     if (target > 0.01f)
                     {
-                        screenBox = RegionScreenBox(item, display, font, scale, pos);
+                        if (!_regionUpperNames.TryGetValue(item.State.MapIndex, out upperDisplay))
+                        {
+                            upperDisplay = display!.ToUpperInvariant();
+                            _regionUpperNames[item.State.MapIndex] = upperDisplay;
+                        }
+                        screenBox = RegionScreenBox(item, upperDisplay, font, scale, pos);
                         if (RegionCollidesWithHigherPriority(screenBox))
                             target = 0f;
                     }
 
-                    var prev = _regionAlphas.TryGetValue(item.State.MapIndex, out var a) ? a : 0f;
                     var next = horizonVisible ? MapLabelPriority.StepOpacity(prev, target, stepDt) : 0f;
                     _regionAlphas[item.State.MapIndex] = next;
                     if (next <= 0.01f) continue;
 
+                    if (!hasPos)
+                    {
+                        var regionBias = _reliefDisplacement > 0.0001f ? 0.0015f : 0f;
+                        pos = _flatMap
+                            ? LocalFlatPoint(item.Latitude, item.Longitude, FlatTextZ - 0.002f + regionBias)
+                            : LocalSurfacePoint(item.Latitude, item.Longitude, SurfaceTextRadius - 0.002f + regionBias);
+                    }
+                    if (upperDisplay is null && !_regionUpperNames.TryGetValue(item.State.MapIndex, out upperDisplay))
+                    {
+                        display ??= item.State.DisplayName;
+                        upperDisplay = string.IsNullOrWhiteSpace(display) ? "" : display.ToUpperInvariant();
+                        _regionUpperNames[item.State.MapIndex] = upperDisplay;
+                    }
                     if (target > 0.01f) _regionTaken.Add(screenBox);
                     var label = RegionLabelAt(used++);
-                    label.Text = display.ToUpperInvariant();
-                    label.Font = font;
+                    if (!string.Equals(label.Text, upperDisplay, StringComparison.Ordinal))
+                        label.Text = upperDisplay ?? "";
+                    if (!ReferenceEquals(label.Font, font)) label.Font = font;
                     label.FontSize = 36;
                     label.OutlineSize = 6;
                     label.PixelSize = item.PixelSize;
@@ -233,7 +308,7 @@ public sealed partial class GlobePresentation
                     else label.Basis = item.SurfaceBasis;
                     label.Modulate = new Color(fillBase, next);
                     label.OutlineModulate = new Color(outlineBase, Math.Min(0.85f, next * 1.15f));
-                    label.Visible = true;
+                    if (!label.Visible) label.Visible = true;
                     if (next > maxAlpha) maxAlpha = next;
                 }
             }
@@ -244,9 +319,9 @@ public sealed partial class GlobePresentation
         _regionLabelRoot.Visible = used > 0;
     }
 
-    private Rect2 RegionScreenBox(RegionLabelCandidate item, string display, Font font, float scale, Vector3 localPos)
+    private Rect2 RegionScreenBox(RegionLabelCandidate item, string upperDisplay, Font font, float scale, Vector3 localPos)
     {
-        var halfW = CityTextWidth(font, 36, display.ToUpperInvariant()) * item.PixelSize * scale * 0.5f;
+        var halfW = CityTextWidth(font, 36, upperDisplay) * item.PixelSize * scale * 0.5f;
         var halfH = 36f * item.PixelSize * scale * 0.62f;
         Vector3 right;
         Vector3 up;
@@ -300,6 +375,7 @@ public sealed partial class GlobePresentation
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 NoDepthTest = false,
+                TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 RenderPriority = 0,
                 OutlineRenderPriority = -1,

@@ -5,6 +5,20 @@ using System.Text.Json;
 namespace DealOrForce.Simulation;
 
 /// <summary>
+/// Strategic nuclear doctrine adopted by a deterrent holder (WAR-02).
+/// Default <see cref="RetaliatoryTriad"/> preserves baseline 1.0x behavior for legacy saves.
+/// </summary>
+public enum NuclearDoctrine
+{
+    /// <summary>Balanced second-strike triad: baseline upkeep, deterrence and retaliation.</summary>
+    RetaliatoryTriad = 0,
+    /// <summary>Restrained posture: lower triad upkeep and diplomatic threat, blocks first use.</summary>
+    NoFirstUse = 1,
+    /// <summary>Forward tactical posture: heavier upkeep and threat, stronger coercion and faster alert shifts.</summary>
+    EscalationToDeescalate = 2
+}
+
+/// <summary>
 /// The reason the great powers stopped fighting each other directly in 1945, and the shape
 /// everything since has taken instead: proxy wars, sanctions, coups, patience.
 ///
@@ -91,6 +105,65 @@ public static class Deterrence
     }
 
     /// <summary>
+    /// True when the nuclear era is active in this campaign (respects MutualDeterrenceEnabled
+    /// as well as scenario era switches such as <c>disabled_features: ["nukes"]</c>).
+    /// </summary>
+    public static bool IsNuclearEraEnabled(Campaign campaign) =>
+        campaign is not null &&
+        campaign.Defines.MutualDeterrenceEnabled &&
+        campaign.FeatureEnabled("defcon") &&
+        campaign.FeatureEnabled("nuclear_posture");
+
+    /// <summary>Weekly triad upkeep multiplier for a strategic doctrine.</summary>
+    public static float UpkeepMultiplier(NuclearDoctrine doctrine) => doctrine switch
+    {
+        NuclearDoctrine.NoFirstUse => 0.75f,
+        NuclearDoctrine.EscalationToDeescalate => 1.25f,
+        _ => 1.0f
+    };
+
+    /// <summary>Diplomatic tension and threat multiplier for a strategic doctrine.</summary>
+    public static float ThreatMultiplier(NuclearDoctrine doctrine) => doctrine switch
+    {
+        NuclearDoctrine.NoFirstUse => 0.70f,
+        NuclearDoctrine.EscalationToDeescalate => 1.30f,
+        _ => 1.0f
+    };
+
+    /// <summary>Nuclear coercion pressure multiplier against enemies in wartime.</summary>
+    public static float CoercionMultiplier(NuclearDoctrine doctrine) => doctrine switch
+    {
+        NuclearDoctrine.NoFirstUse => 0.65f,
+        NuclearDoctrine.EscalationToDeescalate => 1.35f,
+        _ => 1.0f
+    };
+
+    /// <summary>Nuclear umbrella deterrence credibility multiplier for allied guarantees.</summary>
+    public static float UmbrellaMultiplier(NuclearDoctrine doctrine) => doctrine switch
+    {
+        NuclearDoctrine.NoFirstUse => 0.75f,
+        NuclearDoctrine.EscalationToDeescalate => 1.25f,
+        _ => 1.0f
+    };
+
+    /// <summary>Whether the doctrine permits nuclear first use (retaliation is always permitted).</summary>
+    public static bool AllowsFirstUse(NuclearDoctrine doctrine) => doctrine != NuclearDoctrine.NoFirstUse;
+
+    public static string DoctrineNameKey(NuclearDoctrine doctrine) => doctrine switch
+    {
+        NuclearDoctrine.NoFirstUse => "nuc.doctrine.no_first_use",
+        NuclearDoctrine.EscalationToDeescalate => "nuc.doctrine.escalation_to_deescalate",
+        _ => "nuc.doctrine.retaliatory_triad"
+    };
+
+    public static string DoctrineDescKey(NuclearDoctrine doctrine) => doctrine switch
+    {
+        NuclearDoctrine.NoFirstUse => "nuc.doctrine.no_first_use.desc",
+        NuclearDoctrine.EscalationToDeescalate => "nuc.doctrine.escalation_to_deescalate.desc",
+        _ => "nuc.doctrine.retaliatory_triad.desc"
+    };
+
+    /// <summary>
     /// What this country holds that makes attacking it directly unthinkable for another
     /// holder: the authored tier of the 2024 club, or what its research has earned it,
     /// whichever is higher. Zero is a country like any other.
@@ -102,6 +175,8 @@ public static class Deterrence
     public static int TierOf(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null || !campaign.Defines.MutualDeterrenceEnabled) return 0;
+        if (!campaign.FeatureEnabled("defcon") && !campaign.FeatureEnabled("nuclear_posture") && !campaign.FeatureEnabled("nuclear_strikes"))
+            return 0;
         var tier = 0;
         if (!string.IsNullOrEmpty(nation.Tag) && Holders.TryGetValue(nation.Tag, out var authored)) tier = authored;
         return Math.Max(tier, (int)ResearchSystem.Bonus(nation, "deterrence"));

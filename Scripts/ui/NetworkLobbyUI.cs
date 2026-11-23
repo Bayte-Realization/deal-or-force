@@ -15,7 +15,7 @@ public partial class DealOrForceGame
     {
         if (int.TryParse(_networkPort.Text.Trim(), out var port) && port >= 1024 && port <= 65535) return true;
         _networkStatus.Text = Tr("Enter a UDP port between 1024 and 65535.");
-        _networkPort.GrabFocus();
+        Ui.FocusInputIfDesktop(_networkPort);
         return false;
     }
     private string NetworkPlayerName() => string.IsNullOrWhiteSpace(_networkPlayerName.Text)

@@ -61,17 +61,24 @@ public static partial class AiStatecraft
 
         var outcome = WarInterventions.Submit(campaign, nation.Id, best.Id, war.Id);
         Count(outcome.State == WarInterventionState.Joined ? "rescue_joined" : "rescue_refused");
-        if (outcome.State == WarInterventionState.Joined)
+        if (outcome.State == WarInterventionState.Joined && DiagnosticLogs.Enabled)
             DiagnosticLogs.Write("simulation",
                 $"RESCUE {best.Tag} comes into {war.Name} for {nation.Tag} day={campaign.ElapsedDays}");
         return true;
     }
 
     /// <summary>Bound to come by more than goodwill: an alliance, a shared defence charter, or rule over us.</summary>
-    private static bool Sworn(Campaign campaign, Nation nation, Nation donor, IReadOnlyList<int> defencePartners) =>
-        nation.AnswersTo(donor.Id) ||
-        CampaignDiplomacy.Peek(campaign, nation.Id, donor.Id) is { Stance: DiplomaticStance.Allied } ||
-        (defencePartners is not null && defencePartners.Contains(donor.Id));
+    private static bool Sworn(Campaign campaign, Nation nation, Nation donor, IReadOnlyList<int> defencePartners)
+    {
+        if (nation.AnswersTo(donor.Id) ||
+            CampaignDiplomacy.Peek(campaign, nation.Id, donor.Id) is { Stance: DiplomaticStance.Allied })
+            return true;
+        if (defencePartners is null) return false;
+        var donorId = donor.Id;
+        for (var i = 0; i < defencePartners.Count; i++)
+            if (defencePartners[i] == donorId) return true;
+        return false;
+    }
 
     /// <summary>The defending leader, losing ground to a side no weaker than its own, or facing a side plainly stronger.</summary>
     internal static bool InTrouble(Campaign campaign, Nation nation, StrategicWar war)

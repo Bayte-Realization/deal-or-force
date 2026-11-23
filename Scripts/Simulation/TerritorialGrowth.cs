@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -16,7 +17,8 @@ public static partial class TerritorialTopology
     /// on its side of the water, not to whoever is nearer as the crow flies.
     /// </summary>
     private static void ApplyPartition(Campaign campaign, ushort[] control, ushort[] states,
-        int width, int height, RegionPartition partition, List<RepairSummary> summaries)
+        int width, int height, RegionPartition partition, List<RepairSummary> summaries,
+        Dictionary<int, ScenarioState> stateByMapIndex = null, List<int> precollectedGround = null)
     {
         // Whose ground is being divided. A rule may name an entry of the country table that is
         // not a country (common/country_merges): the shares are then regions of whoever holds
@@ -45,7 +47,7 @@ public static partial class TerritorialTopology
         {
             // Growing a million and a half cells is not free, and the game asks twice: once as
             // the campaign is built and once when the globe binds it, both on the one raster.
-            ApplyPartitionRegions(campaign, nation, donorIndex, carved, partition);
+            ApplyPartitionRegions(campaign, nation, donorIndex, carved, partition, stateByMapIndex);
             var polarCounts = AppliedPolar.TryGetValue(states, out var done) && done.Contains(partition.CarveFromIso)
                 ? CountShares(states, shares)
                 : GrowPolar(states, width, height, shares, partition.Pieces);
@@ -54,24 +56,36 @@ public static partial class TerritorialTopology
                 summaries.Add(new RepairSummary(piece.Name, "REGION", polarCounts.GetValueOrDefault((ushort)piece.MapIndex)));
             return;
         }
-        // A table of the shares rather than the set: this asks it of every cell in the world.
-        var sharing = new bool[ushort.MaxValue + 1];
-        foreach (var share in shares) sharing[share] = true;
-        var ground = new List<int>();
-        for (var cell = 0; cell < states.Length; cell++)
-            if (sharing[states[cell]]) ground.Add(cell);
+        List<int> ground;
+        if (precollectedGround is not null)
+        {
+            ground = precollectedGround;
+        }
+        else
+        {
+            // A table of the shares rather than the set: this asks it of every cell in the world.
+            var sharing = new bool[ushort.MaxValue + 1];
+            foreach (var share in shares) sharing[share] = true;
+            ground = new List<int>();
+            for (var cell = 0; cell < states.Length; cell++)
+                if (sharing[states[cell]]) ground.Add(cell);
+        }
         if (ground.Count == 0) return;
 
-        var donor = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == donorIndex);
+        var donor = stateByMapIndex is not null
+            ? stateByMapIndex.GetValueOrDefault(donorIndex)
+            : campaign.States.FirstOrDefault(candidate => candidate.MapIndex == donorIndex);
 
         // Each share is a region of its own, except the one that keeps the index of what is
         // being split - that one is the same region under a truer name.
         foreach (var piece in partition.Pieces)
         {
-            var state = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == piece.MapIndex);
+            var state = stateByMapIndex is not null
+                ? stateByMapIndex.GetValueOrDefault(piece.MapIndex)
+                : campaign.States.FirstOrDefault(candidate => candidate.MapIndex == piece.MapIndex);
             if (state is null)
             {
-                state = NewShare(campaign, nation, donor, piece);
+                state = NewShare(campaign, nation, donor, piece, stateByMapIndex);
             }
             else if (carved.Contains((ushort)piece.MapIndex) && !string.IsNullOrWhiteSpace(piece.Name))
             {
@@ -86,6 +100,162 @@ public static partial class TerritorialTopology
             }
         }
 
+        // Compute tight modular bounding box around ground cells so Dijkstra + TidyStrayPieces
+        // operate on compact flat arrays instead of allocating 200k-entry Dictionary/HashSet.
+        int minY = height, maxY = -1;
+        int minX1 = width, maxX1 = -1;
+        int minX2 = width, maxX2 = -1;
+        var halfW = width >> 1;
+        for (var gi = 0; gi < ground.Count; gi++)
+        {
+            var cell = ground[gi];
+            var y = cell / width;
+            var x = cell - y * width;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+            if (x < minX1) minX1 = x;
+            if (x > maxX1) maxX1 = x;
+            var sx = x + halfW;
+            if (sx >= width) sx -= width;
+            if (sx < minX2) minX2 = sx;
+            if (sx > maxX2) maxX2 = sx;
+        }
+        var boxH = maxY - minY + 1;
+        var span1 = maxX1 - minX1 + 1;
+        var span2 = maxX2 - minX2 + 1;
+        int xOrigin, boxW;
+        if (span1 <= span2)
+        {
+            xOrigin = minX1;
+            boxW = span1;
+        }
+        else
+        {
+            xOrigin = minX2 - halfW;
+            if (xOrigin < 0) xOrigin += width;
+            boxW = span2;
+        }
+        var boxLenLong = (long)boxH * boxW;
+        if (boxLenLong > 4_000_000L)
+        {
+            ApplyPartitionSparse(states, width, height, ground, partition, summaries);
+            return;
+        }
+
+        var boxLen = (int)boxLenLong;
+        var localOwner = ArrayPool<ushort>.Shared.Rent(boxLen);
+        var localReached = ArrayPool<int>.Shared.Rent(boxLen);
+        try
+        {
+            Array.Clear(localOwner, 0, boxLen);
+            Array.Fill(localReached, -1, 0, boxLen);
+            for (var gi = 0; gi < ground.Count; gi++)
+            {
+                var cell = ground[gi];
+                var y = cell / width;
+                var x = cell - y * width;
+                var col = x >= xOrigin ? x - xOrigin : x + width - xOrigin;
+                localReached[(y - minY) * boxW + col] = int.MaxValue;
+            }
+
+            // Where each share starts: the piece of ground nearest the point it was given.
+            var frontier = new PriorityQueue<int, int>();
+            foreach (var piece in partition.Pieces)
+            {
+                var seedX = LongitudeToX(piece.Longitude, width);
+                var seedY = LatitudeToY(piece.Latitude, height);
+                var best = -1;
+                var bestDistance = long.MaxValue;
+                for (var gi = 0; gi < ground.Count; gi++)
+                {
+                    var cell = ground[gi];
+                    var dy = (long)(cell / width) - seedY;
+                    var dx = (long)(cell % width) - seedX;
+                    if (dx > halfW) dx -= width;
+                    if (dx < -halfW) dx += width;
+                    var distance = dx * dx + dy * dy;
+                    if (distance >= bestDistance) continue;
+                    bestDistance = distance;
+                    best = cell;
+                }
+                if (best < 0) continue;
+                var by = best / width;
+                var bx = best - by * width;
+                var bCol = bx >= xOrigin ? bx - xOrigin : bx + width - xOrigin;
+                var bestLocal = (by - minY) * boxW + bCol;
+                if (localOwner[bestLocal] != 0) continue;
+                localOwner[bestLocal] = (ushort)piece.MapIndex;
+                localReached[bestLocal] = 0;
+                frontier.Enqueue(bestLocal, 0);
+            }
+            if (frontier.Count == 0) return;
+
+            while (frontier.TryDequeue(out var local, out var cost))
+            {
+                if (cost > localReached[local]) continue;
+                var mine = localOwner[local];
+                var row = local / boxW;
+                var col = local - row * boxW;
+                var y = minY + row;
+                for (var side = 0; side < 4; side++)
+                {
+                    var dx = side == 0 ? -1 : side == 1 ? 1 : 0;
+                    var dy = side == 2 ? -1 : side == 3 ? 1 : 0;
+                    var ny = y + dy;
+                    if ((uint)ny >= (uint)height) continue;
+                    var nRow = ny - minY;
+                    if ((uint)nRow >= (uint)boxH) continue;
+                    var nCol = col + dx;
+                    if (boxW == width)
+                    {
+                        if (nCol < 0) nCol += width;
+                        else if (nCol >= width) nCol -= width;
+                    }
+                    else if ((uint)nCol >= (uint)boxW)
+                    {
+                        continue;
+                    }
+                    var nextLocal = nRow * boxW + nCol;
+                    var seen = localReached[nextLocal];
+                    if (seen < 0) continue;
+                    var nx = xOrigin + nCol;
+                    if (nx >= width) nx -= width;
+                    var step = cost + GroundCost(nx, ny);
+                    if (seen <= step) continue;
+                    localReached[nextLocal] = step;
+                    localOwner[nextLocal] = mine;
+                    frontier.Enqueue(nextLocal, step);
+                }
+            }
+
+            TidyStrayPiecesBox(states, width, height, ground, minY, boxH, xOrigin, boxW, boxLen, localOwner, localReached);
+
+            var counts = new Dictionary<ushort, int>();
+            for (var gi = 0; gi < ground.Count; gi++)
+            {
+                var cell = ground[gi];
+                var y = cell / width;
+                var x = cell - y * width;
+                var col = x >= xOrigin ? x - xOrigin : x + width - xOrigin;
+                var index = localOwner[(y - minY) * boxW + col];
+                if (index == ushort.MaxValue || index == 0) continue;
+                states[cell] = index;
+                counts[index] = counts.GetValueOrDefault(index) + 1;
+            }
+            foreach (var piece in partition.Pieces)
+                summaries.Add(new RepairSummary(piece.Name, "REGION",
+                    counts.GetValueOrDefault((ushort)piece.MapIndex)));
+        }
+        finally
+        {
+            ArrayPool<ushort>.Shared.Return(localOwner);
+            ArrayPool<int>.Shared.Return(localReached);
+        }
+    }
+
+    private static void ApplyPartitionSparse(ushort[] states, int width, int height,
+        List<int> ground, RegionPartition partition, List<RepairSummary> summaries)
+    {
         // Where each share starts: the piece of ground nearest the point it was given.
         var owner = new Dictionary<int, ushort>(ground.Count);
         var reached = new Dictionary<int, int>(ground.Count);
@@ -114,18 +284,6 @@ public static partial class TerritorialTopology
         }
         if (frontier.Count == 0) return;
 
-        // Ground does not cost the same everywhere.
-        //
-        // Growing at one step a cell puts the border exactly halfway between two seeds,
-        // and halfway between two points is a straight line - which is what a ruled border
-        // looks like, and the whole thing this was meant to avoid. Two seeds on the same
-        // latitude produced a dead vertical edge a hundred cells long.
-        //
-        // So each cell costs a little more or a little less, from smooth noise fixed to the
-        // map rather than to the run. The front advances faster through some country than
-        // others and the border wanders, the way a border between two places that grew
-        // towards each other actually wanders. It is the same wander every time: the
-        // compiler and the game have to agree about it to the cell.
         var inside = new HashSet<int>(ground);
         while (frontier.Count > 0)
         {
@@ -155,9 +313,6 @@ public static partial class TerritorialTopology
         var counts = new Dictionary<ushort, int>();
         foreach (var (cell, index) in owner)
         {
-            // A stray with no neighbour to give it to keeps what it had. Writing the
-            // sentinel would put a region number on the map that no region answers to,
-            // and a province grown on it belongs to nowhere.
             if (index == ushort.MaxValue) continue;
             states[cell] = index;
             counts[index] = counts.GetValueOrDefault(index) + 1;
@@ -171,15 +326,19 @@ public static partial class TerritorialTopology
 
     /// <summary>The regions of a partition, made or renamed - the part every campaign needs, whoever grew the raster.</summary>
     private static void ApplyPartitionRegions(Campaign campaign, Nation nation, ushort donorIndex,
-        HashSet<ushort> carved, RegionPartition partition)
+        HashSet<ushort> carved, RegionPartition partition, Dictionary<int, ScenarioState> stateByMapIndex = null)
     {
-        var donor = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == donorIndex);
+        var donor = stateByMapIndex is not null
+            ? stateByMapIndex.GetValueOrDefault(donorIndex)
+            : campaign.States.FirstOrDefault(candidate => candidate.MapIndex == donorIndex);
         foreach (var piece in partition.Pieces)
         {
-            var state = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == piece.MapIndex);
+            var state = stateByMapIndex is not null
+                ? stateByMapIndex.GetValueOrDefault(piece.MapIndex)
+                : campaign.States.FirstOrDefault(candidate => candidate.MapIndex == piece.MapIndex);
             if (state is null)
             {
-                state = NewShare(campaign, nation, donor, piece);
+                state = NewShare(campaign, nation, donor, piece, stateByMapIndex);
             }
             else if (carved.Contains((ushort)piece.MapIndex) && !string.IsNullOrWhiteSpace(piece.Name))
             {
@@ -197,7 +356,8 @@ public static partial class TerritorialTopology
     /// history/states writes for it and nothing worked out, the same as a region made for an
     /// unowned province (ColonisationCore.EnsureAuthoredRegions).
     /// </summary>
-    private static ScenarioState NewShare(Campaign campaign, Nation nation, ScenarioState donor, RegionPiece piece)
+    private static ScenarioState NewShare(Campaign campaign, Nation nation, ScenarioState donor, RegionPiece piece,
+        Dictionary<int, ScenarioState> stateByMapIndex = null)
     {
         var state = new ScenarioState
         {
@@ -211,6 +371,7 @@ public static partial class TerritorialTopology
             Unclaimed = nation is null
         };
         campaign.States.Add(state);
+        stateByMapIndex?.TryAdd(state.MapIndex, state);
         if (donor is not null && piece.Population > 0)
             EconomySystem.AdjustStatePopulation(donor, -piece.Population);
         if (nation is not null) EconomySystem.SeedState(campaign, state, nation, piece.Population);
@@ -271,22 +432,37 @@ public static partial class TerritorialTopology
             cosine[row] = MathF.Max(0.0005f, MathF.Cos(YToLatitude(top + row, height) * MathF.PI / 180f));
         for (var local = 0; local < size; local++) ground[local] = member[states[top * width + local]];
 
-        // Where a cell is, seen from above the pole, in cells of latitude.
-        (float X, float Y) Projected(int local)
-        {
-            var row = local / width;
-            var column = local % width;
-            var fromPole = south ? height - (top + row) - 0.5f : top + row + 0.5f;
-            var angle = (column + 0.5f) / width * MathF.Tau;
-            return (fromPole * MathF.Sin(angle), fromPole * MathF.Cos(angle));
-        }
-
-        // Where every cell of the ground is, worked out once: the seeds, the costs and the bends
-        // all ask it, and the seeds asked it of the whole band once for every share.
+        // Precompute longitude trig once per column instead of 1.5M redundant Sin/Cos calls.
+        var sinCol = ArrayPool<float>.Shared.Rent(width);
+        var cosCol = ArrayPool<float>.Shared.Rent(width);
         var projectedX = new float[size];
         var projectedY = new float[size];
-        for (var local = 0; local < size; local++)
-            if (ground[local]) (projectedX[local], projectedY[local]) = Projected(local);
+        try
+        {
+            for (var col = 0; col < width; col++)
+            {
+                var angle = (col + 0.5f) / width * MathF.Tau;
+                sinCol[col] = MathF.Sin(angle);
+                cosCol[col] = MathF.Cos(angle);
+            }
+            for (var row = 0; row < rows; row++)
+            {
+                var fromPole = south ? height - (top + row) - 0.5f : top + row + 0.5f;
+                var rowBase = row * width;
+                for (var col = 0; col < width; col++)
+                {
+                    var local = rowBase + col;
+                    if (!ground[local]) continue;
+                    projectedX[local] = fromPole * sinCol[col];
+                    projectedY[local] = fromPole * cosCol[col];
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<float>.Shared.Return(sinCol);
+            ArrayPool<float>.Shared.Return(cosCol);
+        }
 
         var price = new int[size];
         for (var local = 0; local < size; local++)
@@ -679,6 +855,157 @@ public static partial class TerritorialTopology
                 }
             if (best == 0) continue;
             foreach (var cell in cells) owner[cell] = best;
+        }
+    }
+
+    private static void TidyStrayPiecesBox(ushort[] states, int width, int height,
+        List<int> ground, int minY, int boxH, int xOrigin, int boxW, int boxLen,
+        ushort[] localOwner, int[] localReached)
+    {
+        const ushort unreached = ushort.MaxValue;
+        for (var gi = 0; gi < ground.Count; gi++)
+        {
+            var cell = ground[gi];
+            var y = cell / width;
+            var x = cell - y * width;
+            var col = x >= xOrigin ? x - xOrigin : x + width - xOrigin;
+            var local = (y - minY) * boxW + col;
+            if (localOwner[local] == 0) localOwner[local] = unreached;
+        }
+
+        var visited = ArrayPool<bool>.Shared.Rent(boxLen);
+        var queue = new Queue<int>();
+        var largest = new Dictionary<ushort, int>();
+        var allCompCells = new List<int>(ground.Count);
+        var components = new List<(ushort Owner, int Start, int Length)>();
+        var shared = new Dictionary<ushort, int>();
+        try
+        {
+            Array.Clear(visited, 0, boxLen);
+            for (var gi = 0; gi < ground.Count; gi++)
+            {
+                var startCell = ground[gi];
+                var sy = startCell / width;
+                var sx = startCell - sy * width;
+                var sCol = sx >= xOrigin ? sx - xOrigin : sx + width - xOrigin;
+                var startLocal = (sy - minY) * boxW + sCol;
+                if (visited[startLocal]) continue;
+                visited[startLocal] = true;
+                var mine = localOwner[startLocal];
+                var compStart = allCompCells.Count;
+                queue.Clear();
+                queue.Enqueue(startLocal);
+                allCompCells.Add(startLocal);
+                while (queue.Count > 0)
+                {
+                    var local = queue.Dequeue();
+                    var row = local / boxW;
+                    var col = local - row * boxW;
+                    var y = minY + row;
+                    for (var side = 0; side < 4; side++)
+                    {
+                        var dx = side == 0 ? -1 : side == 1 ? 1 : 0;
+                        var dy = side == 2 ? -1 : side == 3 ? 1 : 0;
+                        var ny = y + dy;
+                        if ((uint)ny >= (uint)height) continue;
+                        var nRow = ny - minY;
+                        if ((uint)nRow >= (uint)boxH) continue;
+                        var nCol = col + dx;
+                        if (boxW == width)
+                        {
+                            if (nCol < 0) nCol += width;
+                            else if (nCol >= width) nCol -= width;
+                        }
+                        else if ((uint)nCol >= (uint)boxW)
+                        {
+                            continue;
+                        }
+                        var nextLocal = nRow * boxW + nCol;
+                        if (localReached[nextLocal] < 0 || localOwner[nextLocal] != mine || visited[nextLocal]) continue;
+                        visited[nextLocal] = true;
+                        queue.Enqueue(nextLocal);
+                        allCompCells.Add(nextLocal);
+                    }
+                }
+                var compLen = allCompCells.Count - compStart;
+                components.Add((mine, compStart, compLen));
+                if (compLen > largest.GetValueOrDefault(mine)) largest[mine] = compLen;
+            }
+
+            for (var ci = 0; ci < components.Count; ci++)
+            {
+                var (mine, compStart, compLen) = components[ci];
+                if (mine != unreached && compLen >= largest.GetValueOrDefault(mine)) continue;
+                shared.Clear();
+                var compEnd = compStart + compLen;
+                for (var idx = compStart; idx < compEnd; idx++)
+                {
+                    var local = allCompCells[idx];
+                    var row = local / boxW;
+                    var col = local - row * boxW;
+                    var y = minY + row;
+                    for (var side = 0; side < 4; side++)
+                    {
+                        var dx = side == 0 ? -1 : side == 1 ? 1 : 0;
+                        var dy = side == 2 ? -1 : side == 3 ? 1 : 0;
+                        var ny = y + dy;
+                        if ((uint)ny >= (uint)height) continue;
+                        ushort neighbour;
+                        var nRow = ny - minY;
+                        var nCol = col + dx;
+                        if (boxW == width)
+                        {
+                            if (nCol < 0) nCol += width;
+                            else if (nCol >= width) nCol -= width;
+                            if ((uint)nRow < (uint)boxH)
+                            {
+                                var nextLocal = nRow * boxW + nCol;
+                                neighbour = localReached[nextLocal] >= 0 ? localOwner[nextLocal] : states[ny * width + ((xOrigin + nCol) % width)];
+                            }
+                            else
+                            {
+                                neighbour = states[ny * width + ((xOrigin + nCol) % width)];
+                            }
+                        }
+                        else if ((uint)nRow < (uint)boxH && (uint)nCol < (uint)boxW)
+                        {
+                            var nextLocal = nRow * boxW + nCol;
+                            if (localReached[nextLocal] >= 0) neighbour = localOwner[nextLocal];
+                            else
+                            {
+                                var nx = xOrigin + nCol;
+                                if (nx >= width) nx -= width;
+                                neighbour = states[ny * width + nx];
+                            }
+                        }
+                        else
+                        {
+                            var x = xOrigin + col;
+                            if (x >= width) x -= width;
+                            var nx = (x + dx + width) % width;
+                            neighbour = states[ny * width + nx];
+                        }
+                        if (neighbour == 0 || neighbour == mine || neighbour == unreached) continue;
+                        shared[neighbour] = shared.GetValueOrDefault(neighbour) + 1;
+                    }
+                }
+                if (shared.Count == 0) continue;
+
+                var best = (ushort)0;
+                var bestEdge = 0;
+                foreach (var (neighbour, edge) in shared)
+                    if (edge > bestEdge || (edge == bestEdge && neighbour < best))
+                    {
+                        bestEdge = edge;
+                        best = neighbour;
+                    }
+                if (best == 0) continue;
+                for (var idx = compStart; idx < compEnd; idx++) localOwner[allCompCells[idx]] = best;
+            }
+        }
+        finally
+        {
+            ArrayPool<bool>.Shared.Return(visited);
         }
     }
 

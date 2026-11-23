@@ -28,6 +28,7 @@ namespace DealOrForce;
 public sealed partial class GlobePresentation
 {
     private const double PlateRepaintSeconds = 2.0;
+    private const double MobilePlateRepaintSeconds = 6.5;
 
     private ImageTexture _plateTexture;
     private Simulation.PoliticalPlateSource _plateSource;
@@ -35,6 +36,8 @@ public sealed partial class GlobePresentation
     /// <summary>The owners the plate on screen was painted from, and those of the one being painted.</summary>
     private ushort[] _plateShownOwners;
     private ushort[] _plateWorkOwners;
+    private Image _pendingPlateUpload;
+    private ushort[] _pendingPlateOwners;
 
     /// <summary>A country changed colour since the plate on screen was painted.</summary>
     private bool _plateColoursStale;
@@ -52,6 +55,9 @@ public sealed partial class GlobePresentation
         _plateSource = source;
         _plateShownOwners = owners;
         _plateWorkOwners = null;
+        _pendingPlateUpload?.Dispose();
+        _pendingPlateUpload = null;
+        _pendingPlateOwners = null;
         // Painted from the palette this campaign was bound with, a moment ago.
         _plateColoursStale = false;
     }
@@ -65,7 +71,7 @@ public sealed partial class GlobePresentation
 
     private void TryStartPlateRepaint(Simulation.ProvinceTopology topology)
     {
-        if (!_platePending || _plateWork is not null) return;
+        if (!_platePending || _plateWork is not null || _pendingPlateUpload is not null) return;
         // The picture on screen already is today's owners in today's colours: nothing to do.
         if (!_plateColoursStale && _plateShownOwners is not null &&
             topology.ProvinceToNation.AsSpan().SequenceEqual(_plateShownOwners))
@@ -74,7 +80,8 @@ public sealed partial class GlobePresentation
             return;
         }
         var now = Time.GetTicksMsec();
-        if (_plateRequestedMsec > 0 && now - _plateRequestedMsec < PlateRepaintSeconds * 1000) return;
+        var cooldownMs = (Platform.PlatformProfile.Current?.IsTouchPrimary == true ? MobilePlateRepaintSeconds : PlateRepaintSeconds) * 1000.0;
+        if (_plateRequestedMsec > 0 && now - _plateRequestedMsec < cooldownMs) return;
         _plateRequestedMsec = now;
         _platePending = false;
         _plateColoursStale = false;
@@ -86,9 +93,10 @@ public sealed partial class GlobePresentation
         var source = _plateSource;
         var shades = Simulation.MapBorderStyles.PlateShades();
         // The picture and its mipmaps are made on the worker too: the main thread only uploads.
-        // The frontier field follows the same owners in the same task, so the far stroke and
-        // the far colours always change together.
-        var frontierAuthored = FrontierFieldWanted() ? _frontierAuthored : null;
+        // Skip heavy 5760x2880 FrontierField repaints during active war on touch/mobile GPUs
+        // (close-up borders and UploadPlateCatchUp stay exact without 22 MB mipmap uploads).
+        var frontierAuthored = FrontierFieldWanted() && Platform.PlatformProfile.Current?.IsTouchPrimary != true
+            ? _frontierAuthored : null;
         _plateWork = Task.Run(() =>
         {
             var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8,
@@ -156,18 +164,38 @@ public sealed partial class GlobePresentation
     /// <summary>Called every frame: swaps a finished plate in, and starts a waiting one.</summary>
     private void PollPlateRepaint()
     {
+        if (_pendingPlateUpload is { } pendingPlate)
+        {
+            _pendingPlateUpload = null;
+            if (_plateTexture is not null) _plateTexture.Update(pendingPlate);
+            pendingPlate.Dispose();
+            _plateShownOwners = _pendingPlateOwners;
+            _pendingPlateOwners = null;
+            // The plate has caught up: the stopgap table has nothing left to say about
+            // the provinces this repaint covered.
+            UploadPlateCatchUp();
+            return;
+        }
         if (_plateWork is { IsCompleted: true } done)
         {
             _plateWork = null;
             if (done.IsCompletedSuccessfully && done.Result.Plate is { } image)
             {
-                if (_plateTexture is not null) _plateTexture.Update(image);
-                image.Dispose();
-                ApplyFrontier(done.Result.Frontier);
-                _plateShownOwners = _plateWorkOwners;
-                // The plate has caught up: the stopgap table has nothing left to say about
-                // the provinces this repaint covered.
-                UploadPlateCatchUp();
+                if (done.Result.Frontier is not null)
+                {
+                    // Stagger FrontierField GPU upload (Frame N) and Plate GPU upload (Frame N+1) across
+                    // separate frames so a single frame never uploads 32 MB of mipmapped textures at once.
+                    _pendingPlateUpload = image;
+                    _pendingPlateOwners = _plateWorkOwners;
+                    ApplyFrontier(done.Result.Frontier);
+                }
+                else
+                {
+                    if (_plateTexture is not null) _plateTexture.Update(image);
+                    image.Dispose();
+                    _plateShownOwners = _plateWorkOwners;
+                    UploadPlateCatchUp();
+                }
             }
             else if (!_plateFailureReported)
             {
@@ -178,7 +206,8 @@ public sealed partial class GlobePresentation
             }
             _plateWorkOwners = null;
         }
-        if (_platePending && _campaign?.ProvinceMap is { } topology) TryStartPlateRepaint(topology);
+        if (_platePending && _pendingPlateUpload is null && _campaign?.ProvinceMap is { } topology)
+            TryStartPlateRepaint(topology);
     }
 
     /// <summary>

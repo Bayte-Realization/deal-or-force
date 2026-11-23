@@ -1,0 +1,74 @@
+{
+  "ai_w5_federal_fiscal_compact": {
+    "base": 0,
+    "modifiers": [
+      {
+        "trigger": {
+          "max_stability": 0.68,
+          "min_political_points": 35
+        },
+        "add": 1.35
+      }
+    ]
+  },
+  "ai_w5_multilateral_crisis_summit": {
+    "base": 0,
+    "modifiers": [
+      {
+        "trigger": {
+          "max_market_access": 0.90,
+          "min_political_points": 38
+        },
+        "add": 1.15
+      }
+    ]
+  },
+  "ai_w5_postwar_rebuilding_authority": {
+    "base": 0,
+    "modifiers": [
+      {
+        "trigger": {
+          "at_war": false,
+          "min_political_points": 35
+        },
+        "add": 0.85
+      }
+    ]
+  },
+  "ai_w5_strategic_triad_modernization": {
+    "base": 0,
+    "modifiers": [
+      {
+        "trigger": {
+          "min_literacy": 0.65,
+          "min_political_points": 45
+        },
+        "add": 0.75
+      }
+    ]
+  },
+  "ai_w5_industrial_retooling_charter": {
+    "base": 0,
+    "modifiers": [
+      {
+        "trigger": {
+          "min_literacy": 0.55,
+          "min_political_points": 40
+        },
+        "add": 0.95
+      }
+    ]
+  },
+  "ai_w5_civic_consensus_dialogue": {
+    "base": 0,
+    "modifiers": [
+      {
+        "trigger": {
+          "max_stability": 0.62,
+          "min_political_points": 30
+        },
+        "add": 1.3
+      }
+    ]
+  }
+}

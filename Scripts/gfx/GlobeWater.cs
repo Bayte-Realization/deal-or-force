@@ -10,8 +10,9 @@ public sealed partial class GlobePresentation
     private void ApplyWaterPresentation(TerrainImages prepared = null)
     {
         var water = TerrainCatalog.Water;
-        using var lake = prepared?.Lake ?? WaterTileImage(water.LakeTexture, water.TileResolution);
-        using var river = prepared?.River ?? WaterTileImage(water.RiverTexture, water.TileResolution);
+        var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        using var lake = prepared?.Lake ?? WaterTileImageOrResource(water.LakeTexture, water.LakeRelative, water.TileResolution, isTouchPrimary);
+        using var river = prepared?.River ?? WaterTileImageOrResource(water.RiverTexture, water.RiverRelative, water.TileResolution, isTouchPrimary);
         if (_packedLookups is not null)
         {
             var layers = new Godot.Collections.Array<Image> { lake, river };
@@ -39,22 +40,37 @@ public sealed partial class GlobePresentation
         _globeMaterial.SetShaderParameter("water_repeat", water.TileRepeat);
         _globeMaterial.SetShaderParameter("water_ripple_strength", water.RippleStrength);
         _globeMaterial.SetShaderParameter("water_animation_speed", water.AnimationSpeed);
-        GD.Print($"[dof] inland water materials ready: inset {water.RiverInset:0.##} texels, {water.TileResolution}px tiles");
+        GD.Print($"[dof] inland water materials ready: inset {water.RiverInset:0.##} texels, {(isTouchPrimary ? Math.Clamp(water.TileResolution, 64, 128) : water.TileResolution)}px tiles");
     }
 
     private static ImageTexture LoadWaterTile(string path, int resolution) => ImageTexture.CreateFromImage(WaterTileImage(path, resolution));
 
-    private static Image WaterTileImage(string path, int resolution)
+    private static Image WaterTileImageOrResource(string path, string relative, int resolution, bool isTouchPrimary)
+    {
+        var image = File.Exists(path) ? Image.LoadFromFile(path) : TryLoadResourceImageCopy(relative);
+        return FinalizeWaterTileImage(image, path, resolution, isTouchPrimary);
+    }
+
+    private static Image WaterTileImage(string path, int resolution, bool isTouchPrimary = false)
     {
         var image = File.Exists(path) ? Image.LoadFromFile(path) : null;
+        return FinalizeWaterTileImage(image, path, resolution, isTouchPrimary);
+    }
+
+    private static Image FinalizeWaterTileImage(Image image, string path, int resolution, bool isTouchPrimary)
+    {
         if (image is null || image.IsEmpty())
         {
             GD.PushWarning($"[dof] water tile unavailable: {path}; using a quiet neutral material");
             image = Image.CreateEmpty(4, 4, false, Image.Format.Rgba8);
             image.Fill(new Color(.08f, .24f, .29f));
         }
-        image.Convert(Image.Format.Rgba8);
-        image.Resize(resolution, resolution, Image.Interpolation.Lanczos);
+        if (image.IsCompressed()) image.Decompress();
+        if (image.GetFormat() != Image.Format.Rgba8) image.Convert(Image.Format.Rgba8);
+        var side = isTouchPrimary ? Math.Clamp(resolution, 64, 128) : resolution;
+        var interp = isTouchPrimary ? Image.Interpolation.Bilinear : Image.Interpolation.Lanczos;
+        if (image.GetWidth() != side || image.GetHeight() != side)
+            image.Resize(side, side, interp);
         image.GenerateMipmaps();
         return image;
     }

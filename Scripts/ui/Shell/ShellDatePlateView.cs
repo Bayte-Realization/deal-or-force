@@ -7,9 +7,10 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// Journal-style Date & World plate (Revision 3): play/pause glyph + Source Serif 4 date + weekday +
-/// right-aligned amber italic pause note over a hand-ruled stroke, 5 chevron speed marks, DEFCON 5-lamp
-/// strip with notched 75% tension bar, and sunken Esc menu button.
+/// Journal-style Date &amp; World plate (Sovereign Brass &amp; Obsidian chrome): play/pause glyph +
+/// tabular date/hour readout + weekday + state-tinted pause/speed/observer note over a hand-ruled
+/// stroke, 5 tactile brass-outlined speed chevrons, DEFCON 5-lamp strip with notched 75% tension
+/// bar, and brass-hovered Esc menu button.
 /// </summary>
 internal sealed class ShellDatePlateView
 {
@@ -24,11 +25,19 @@ internal sealed class ShellDatePlateView
     private Label _stateNoteLabel;
     private Control _ruledStroke;
 
+    private StyleBoxFlat _dateRunningStyle;
+    private StyleBoxFlat _datePausedStyle;
+    private StyleBoxFlat _dateObserverStyle;
+    private StyleBoxFlat _dateHoverStyle;
+
     private PanelContainer _speedWell;
     private readonly Button[] _speedChevrons = new Button[5];
 
     private Button _worldBtn;
+    private HBoxContainer _worldRow;
+    private Label _defconCap;
     private Label _defconNumLabel;
+    private HBoxContainer _lampsRow;
     private readonly Control[] _defconLamps = new Control[5];
     private TextureRect _tensionGlyph;
     private Label _tensionNumLabel;
@@ -40,9 +49,16 @@ internal sealed class ShellDatePlateView
     private PanelContainer _menuKbd;
 
     private ShellLayoutProfile _profile;
-    private string _lastDateKey = "";
+    private HBoxContainer _dateRow;
+    private long _lastDateHour = long.MinValue;
+    private int _lastWeekdayDay = int.MinValue;
+    private string _lastDateLang = "";
     private bool? _lastPaused;
+    private bool? _lastObserverMode;
+    private string _lastStateLang = "";
     private int _lastSpeed = -1;
+    private int _lastWorldDay = int.MinValue;
+    private int _lastWorldWarRev = int.MinValue;
     private int _lastDefcon = -1;
     private float _lastTension = -1f;
 
@@ -57,6 +73,7 @@ internal sealed class ShellDatePlateView
         _plate = new PanelContainer
         {
             Name = "ShellDatePlate",
+            ClipContents = true,
             MouseFilter = Control.MouseFilterEnum.Stop
         };
         _plate.AddThemeStyleboxOverride("panel",
@@ -64,7 +81,7 @@ internal sealed class ShellDatePlateView
         _ctx.Root.AddChild(_plate);
         ChromePlateArt.AttachSurfaceTexture(_plate, "blueprint", 0.26f);
 
-        var canvas = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
+        var canvas = new Control { ClipContents = true, MouseFilter = Control.MouseFilterEnum.Ignore };
         canvas.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _plate.AddChild(canvas);
 
@@ -77,18 +94,21 @@ internal sealed class ShellDatePlateView
 
     private void BuildDateLine(Control canvas)
     {
-        var empty = new StyleBoxEmpty();
-        var hover = new StyleBoxFlat { BgColor = Ui.Colour("shell.paper", 0.06f) };
+        _dateRunningStyle = Ui.ChromeBox("shell.plate_top", 0.30f, "shell.engrave", 0.65f, cornerRadius: 2, borderWidth: 1);
+        _datePausedStyle = Ui.ChromeBox("shell.state.warning", 0.14f, "shell.state.warning", 0.65f, cornerRadius: 2, borderWidth: 1, leftBorderWidth: 3);
+        _dateObserverStyle = Ui.ChromeBox("shell.state.info", 0.14f, "shell.state.info", 0.72f, cornerRadius: 2, borderWidth: 1, leftBorderWidth: 3);
+        _dateHoverStyle = Ui.ChromeBox("shell.plate_hover", 0.84f, "shell.brass_hi", 0.82f, cornerRadius: 2, borderWidth: 1);
 
         _datePauseBtn = new Button
         {
             Name = "ShellDatePauseButton",
+            ClipContents = true,
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
         };
-        _datePauseBtn.AddThemeStyleboxOverride("normal", empty);
-        _datePauseBtn.AddThemeStyleboxOverride("hover", hover);
-        _datePauseBtn.AddThemeStyleboxOverride("pressed", hover);
+        _datePauseBtn.AddThemeStyleboxOverride("normal", _datePausedStyle);
+        _datePauseBtn.AddThemeStyleboxOverride("hover", _dateHoverStyle);
+        _datePauseBtn.AddThemeStyleboxOverride("pressed", _ctx.PressedWellStyle());
         _datePauseBtn.Pressed += () =>
         {
             _ctx.PlayCue?.Invoke("ui_select");
@@ -98,18 +118,19 @@ internal sealed class ShellDatePlateView
         _datePauseBtn.TooltipText = Ui.Tip(Loc.Get("Pause or resume campaign time (Space)."));
         canvas.AddChild(_datePauseBtn);
 
-        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        row.AddThemeConstantOverride("separation", 7);
+        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, ClipContents = true };
+        row.AddThemeConstantOverride("separation", 6);
         row.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        row.OffsetLeft = 6;
-        row.OffsetRight = -6;
+        row.OffsetLeft = 7;
+        row.OffsetRight = -7;
         _datePauseBtn.AddChild(row);
+        _dateRow = row;
 
         _pauseGlyph = new TextureRect
         {
-            Texture = _ctx.Icon("icon_shell_play"),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            Texture = _ctx.Icon("icon_shell_play"),
             CustomMinimumSize = new Vector2(16, 16),
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
             Modulate = Ui.Colour("shell.paper_muted"),
@@ -122,9 +143,12 @@ internal sealed class ShellDatePlateView
             Text = "1 Jan 2024",
             VerticalAlignment = VerticalAlignment.Center,
             AutowrapMode = TextServer.AutowrapMode.Off,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
-        _dateLabel.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold", tabular: true));
+        _dateLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
         _dateLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         row.AddChild(_dateLabel);
 
@@ -139,21 +163,21 @@ internal sealed class ShellDatePlateView
         _weekdayLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
         row.AddChild(_weekdayLabel);
 
-        row.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
-
         _stateNoteLabel = new Label
         {
             Text = Loc.Get("shell.paused_note"),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
             AutowrapMode = TextServer.AutowrapMode.Off,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
-        _stateNoteLabel.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
+        _stateNoteLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
         _stateNoteLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.pause_amber"));
         row.AddChild(_stateNoteLabel);
 
-        _ruledStroke = ShellContext.CreateRuledLine(5, "shell.ruled_stroke", 1.6f, 5f);
+        _ruledStroke = ShellContext.CreateRuledLine(5, "shell.brass_dim", 1.4f, 5f);
         canvas.AddChild(_ruledStroke);
 
         _pauseKbd = _ctx.CreateKeycapBadge("Space");
@@ -165,6 +189,7 @@ internal sealed class ShellDatePlateView
         _speedWell = new PanelContainer
         {
             Name = "ShellSpeedWell",
+            ClipContents = true,
             MouseFilter = Control.MouseFilterEnum.Stop
         };
         _speedWell.AddThemeStyleboxOverride("panel",
@@ -175,6 +200,7 @@ internal sealed class ShellDatePlateView
         row.AddThemeConstantOverride("separation", 2);
         _speedWell.AddChild(row);
 
+        var empty = new StyleBoxEmpty();
         for (var i = 0; i < 5; i++)
         {
             var speedVal = i + 1;
@@ -185,7 +211,6 @@ internal sealed class ShellDatePlateView
                 MouseDefaultCursorShape = Control.CursorShape.PointingHand,
                 FocusMode = Control.FocusModeEnum.None
             };
-            var empty = new StyleBoxEmpty();
             btn.AddThemeStyleboxOverride("normal", empty);
             btn.AddThemeStyleboxOverride("hover", empty);
             btn.AddThemeStyleboxOverride("pressed", empty);
@@ -207,41 +232,57 @@ internal sealed class ShellDatePlateView
         var w = btn.Size.X;
         var h = btn.Size.Y;
         if (w <= 2f || h <= 2f) return;
-        // Exact polygon(0 0, 58% 0, 100% 50%, 58% 100%, 0 100%, 42% 50%) from style.css .speed i
         Vector2[] pts =
         {
-            new(0f, 0f),
-            new(w * 0.58f, 0f),
-            new(w, h * 0.5f),
-            new(w * 0.58f, h),
-            new(0f, h),
+            new(0.5f, 1f),
+            new(w * 0.58f, 1f),
+            new(w - 0.5f, h * 0.5f),
+            new(w * 0.58f, h - 1f),
+            new(0.5f, h - 1f),
             new(w * 0.42f, h * 0.5f)
         };
         var curSpeed = Math.Clamp(_ctx.GetSpeed?.Invoke() ?? 1, 1, 5);
         var paused = _ctx.IsPaused?.Invoke() ?? true;
         Color col;
+        Color rim;
         if (btn.IsHovered())
-            col = Ui.Colour("shell.paper_faint");
+        {
+            col = Ui.Colour("shell.highlight");
+            rim = Ui.Colour("shell.brass_hi", 0.90f);
+        }
         else if (speedVal == curSpeed)
-            col = Ui.Colour("shell.paper", paused ? 0.55f : 1f);
+        {
+            col = paused ? Ui.Colour("shell.state.warning", 0.72f) : Ui.Colour("shell.brass_hi");
+            rim = Ui.Colour("shell.paper", paused ? 0.45f : 0.75f);
+        }
         else if (speedVal < curSpeed)
-            col = Ui.Colour("shell.paper_muted", paused ? 0.45f : 1f);
+        {
+            col = paused ? Ui.Colour("shell.paper_muted", 0.48f) : Ui.Colour("shell.brass", 0.90f);
+            rim = Ui.Colour("shell.border", 0.75f);
+        }
         else
-            col = Ui.Colour("shell.engrave");
+        {
+            col = Ui.Colour("shell.engrave", 0.78f);
+            rim = Ui.Colour("shell.border", 0.65f);
+        }
         btn.DrawColoredPolygon(pts, col);
+        Vector2[] closed = { pts[0], pts[1], pts[2], pts[3], pts[4], pts[5], pts[0] };
+        btn.DrawPolyline(closed, rim, 1f, antialiased: true);
     }
 
     private void BuildWorldStrip(Control canvas)
     {
         var wellNormal = _ctx.NineSlice("well_recessed_9s", 10, 6, 2, 6, 2, "shell.well_top", "shell.border", 2);
+        var wellHover = Ui.ChromeBox("shell.plate_hover", 0.90f, "shell.brass_hi", 0.80f, cornerRadius: 2, borderWidth: 1, padX: 6, padY: 2);
         _worldBtn = new Button
         {
             Name = "ShellWorldDefconButton",
+            ClipContents = true,
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
         };
         _worldBtn.AddThemeStyleboxOverride("normal", wellNormal);
-        _worldBtn.AddThemeStyleboxOverride("hover", wellNormal);
+        _worldBtn.AddThemeStyleboxOverride("hover", wellHover);
         _worldBtn.AddThemeStyleboxOverride("pressed", _ctx.PressedWellStyle());
         _worldBtn.Pressed += () =>
         {
@@ -251,12 +292,13 @@ internal sealed class ShellDatePlateView
         _worldBtn.TooltipText = Ui.Tip(Loc.Get("World nuclear alert (DEFCON) and great-power tension. Threshold notch at 75%."));
         canvas.AddChild(_worldBtn);
 
-        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        var row = new HBoxContainer { ClipContents = true, MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddThemeConstantOverride("separation", 5);
         row.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         row.OffsetLeft = 7;
         row.OffsetRight = -7;
         _worldBtn.AddChild(row);
+        _worldRow = row;
 
         var defconCap = new Label
         {
@@ -268,14 +310,17 @@ internal sealed class ShellDatePlateView
         defconCap.AddThemeFontSizeOverride("font_size", 11);
         defconCap.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
         row.AddChild(defconCap);
+        _defconCap = defconCap;
 
         _defconNumLabel = new Label
         {
             Text = "5",
+            CustomMinimumSize = new Vector2(14, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
-        _defconNumLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
+        _defconNumLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
         _defconNumLabel.AddThemeFontSizeOverride("font_size", 16);
         _defconNumLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         row.AddChild(_defconNumLabel);
@@ -284,6 +329,7 @@ internal sealed class ShellDatePlateView
         lampsRow.AddThemeConstantOverride("separation", 3);
         lampsRow.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         row.AddChild(lampsRow);
+        _lampsRow = lampsRow;
 
         for (var i = 0; i < 5; i++)
         {
@@ -306,12 +352,12 @@ internal sealed class ShellDatePlateView
                             ? Ui.Colour("shell.state.warning")
                             : Ui.Colour("shell.paper_muted");
                 lamp.DrawCircle(center, r, col);
+                lamp.DrawArc(center, r - 0.4f, 0f, MathF.Tau, 12, Ui.Colour(active ? "shell.paper" : "shell.border", active ? 0.55f : 0.70f), 1f, true);
             };
             lampsRow.AddChild(lamp);
             _defconLamps[i] = lamp;
         }
 
-        // Vertical groove (.vr) separating DEFCON lamps from World Tension
         var vr = new Control
         {
             CustomMinimumSize = new Vector2(4, 18),
@@ -321,15 +367,15 @@ internal sealed class ShellDatePlateView
         vr.Draw += () =>
         {
             vr.DrawLine(new Vector2(1, 0), new Vector2(1, vr.Size.Y), Ui.Colour("shell.sep_dark"), 1f);
-            vr.DrawLine(new Vector2(2, 0), new Vector2(2, vr.Size.Y), Ui.Colour("shell.sep_light"), 1f);
+            vr.DrawLine(new Vector2(2, 0), new Vector2(2, vr.Size.Y), Ui.Colour("shell.brass_dim", 0.55f), 1f);
         };
         row.AddChild(vr);
 
         _tensionGlyph = new TextureRect
         {
-            Texture = _ctx.Icon("icon_shell_tension"),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            Texture = _ctx.Icon("icon_shell_tension"),
             CustomMinimumSize = new Vector2(15, 15),
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
             Modulate = Ui.Colour("shell.paper_muted"),
@@ -340,10 +386,12 @@ internal sealed class ShellDatePlateView
         _tensionNumLabel = new Label
         {
             Text = "0",
+            CustomMinimumSize = new Vector2(24, 0),
+            HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
-        _tensionNumLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
+        _tensionNumLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
         _tensionNumLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         row.AddChild(_tensionNumLabel);
 
@@ -365,19 +413,21 @@ internal sealed class ShellDatePlateView
         {
             var h = _menuDivider.Size.Y;
             _menuDivider.DrawLine(new Vector2(0, 0), new Vector2(0, h), Ui.Colour("shell.sep_dark"), 1f);
-            _menuDivider.DrawLine(new Vector2(1, 0), new Vector2(1, h), Ui.Colour("shell.engrave"), 1f);
+            _menuDivider.DrawLine(new Vector2(1, 0), new Vector2(1, h), Ui.Colour("shell.brass_dim", 0.65f), 1f);
         };
         canvas.AddChild(_menuDivider);
 
         var well = _ctx.NineSlice("well_recessed_9s", 10, 0, 0, 0, 0, "shell.well_top", "shell.border", 2);
+        var wellHover = Ui.ChromeBox("shell.plate_hover", 0.90f, "shell.brass_hi", 0.80f, cornerRadius: 2, borderWidth: 1);
         _menuBtn = new Button
         {
             Name = "ShellMenuButton",
+            ClipContents = true,
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
         };
         _menuBtn.AddThemeStyleboxOverride("normal", well);
-        _menuBtn.AddThemeStyleboxOverride("hover", well);
+        _menuBtn.AddThemeStyleboxOverride("hover", wellHover);
         _menuBtn.AddThemeStyleboxOverride("pressed", _ctx.PressedWellStyle());
         _menuBtn.Pressed += () =>
         {
@@ -388,9 +438,9 @@ internal sealed class ShellDatePlateView
 
         var menuIcon = new TextureRect
         {
-            Texture = _ctx.Icon("icon_shell_menu"),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            Texture = _ctx.Icon("icon_shell_menu"),
             Modulate = Ui.Colour("shell.icon"),
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
@@ -407,46 +457,69 @@ internal sealed class ShellDatePlateView
     {
         _profile = profile;
         var compact = profile.Compact;
+        var touch = profile.TouchMode;
         ShellContext.PlaceRect(_plate, profile.DatePlate);
 
         var pw = profile.DatePlate.W;
         var ph = profile.DatePlate.H;
-        var menuW = compact ? 42f : 56f;
-        var divX = pw - menuW - (compact ? 8f : 12f);
+        var menuW = touch ? 58f : (compact ? 42f : 56f);
+        var divX = pw - menuW - (touch ? 10f : (compact ? 8f : 12f));
 
-        var d1W = divX - (compact ? 12f : 20f);
-        var d1H = compact ? 24f : 34f;
-        var d1X = compact ? 8f : 12f;
-        var d1Y = compact ? 5f : 6f;
+        var d1W = divX - (touch ? 18f : (compact ? 12f : 20f));
+        var d1H = touch ? 44f : (compact ? 24f : 34f);
+        var d1X = touch ? 10f : (compact ? 8f : 12f);
+        var d1Y = touch ? 6f : (compact ? 5f : 6f);
 
         ShellContext.PlaceRect(_datePauseBtn, new ShellRect(d1X, d1Y, d1W, d1H));
-        _dateLabel.AddThemeFontSizeOverride("font_size", compact ? 13 : 17);
-        _weekdayLabel.AddThemeFontSizeOverride("font_size", compact ? 10 : 12);
-        _stateNoteLabel.AddThemeFontSizeOverride("font_size", compact ? 11 : 13);
+        if (_dateRow is not null)
+        {
+            _dateRow.OffsetLeft = touch ? 10 : 7;
+            _dateRow.OffsetRight = touch ? -10 : -7;
+        }
+        _dateLabel.AddThemeFontSizeOverride("font_size", touch ? 16 : (compact ? 12 : 16));
+        _weekdayLabel.AddThemeFontSizeOverride("font_size", touch ? 11 : (compact ? 10 : 12));
+        _weekdayLabel.Visible = !compact && !touch;
+        _stateNoteLabel.AddThemeFontSizeOverride("font_size", touch ? 12 : (compact ? 10 : 12));
+        _stateNoteLabel.CustomMinimumSize = new Vector2(touch ? 78f : (compact ? 54f : 86f), 0f);
 
-        ShellContext.PlaceRect(_ruledStroke, new ShellRect(d1X + (compact ? 22f : 28f), d1Y + d1H - 2f, d1W - (compact ? 26f : 32f), 5f));
+        ShellContext.PlaceRect(_ruledStroke, new ShellRect(d1X + (compact && !touch ? 22f : 28f), d1Y + d1H - 1f, d1W - (compact && !touch ? 26f : 32f), 5f));
         _ruledStroke.QueueRedraw();
 
-        var botY = compact ? 32f : 45f;
-        var botH = compact ? 21f : 30f;
-        var speedW = compact ? 86f : 112f;
+        var botY = touch ? 54f : (compact ? 32f : 45f);
+        var botH = touch ? 42f : (compact ? 21f : 30f);
+        var speedW = touch ? Math.Clamp(MathF.Round((divX - 24f) * 0.48f), 164f, 184f) : (compact ? 86f : 112f);
         ShellContext.PlaceRect(_speedWell, new ShellRect(d1X, botY, speedW, botH));
+        var touchPipW = Math.Clamp(MathF.Floor((speedW - 18f) / 5f), 26f, 34f);
+        var touchPipH = Math.Max(24f, botH - 6f);
         for (var i = 0; i < 5; i++)
-            _speedChevrons[i].CustomMinimumSize = new Vector2(compact ? 13 : 17, compact ? 15 : 21);
+            _speedChevrons[i].CustomMinimumSize = touch
+                ? new Vector2(touchPipW, touchPipH)
+                : new Vector2(compact ? 13 : 17, compact ? 15 : 21);
 
-        var worldX = d1X + speedW + (compact ? 6f : 8f);
-        var worldW = Math.Max(100f, divX - worldX - (compact ? 6f : 8f));
+        var worldX = d1X + speedW + (touch ? 6f : (compact ? 6f : 8f));
+        var worldW = Math.Max(touch ? 136f : 100f, divX - worldX - (touch ? 8f : (compact ? 6f : 8f)));
         ShellContext.PlaceRect(_worldBtn, new ShellRect(worldX, botY, worldW, botH));
-        _defconNumLabel.AddThemeFontSizeOverride("font_size", compact ? 13 : 16);
-        _tensionNumLabel.AddThemeFontSizeOverride("font_size", compact ? 12 : 14);
-        var lampSz = compact ? 6 : 8;
+        if (_worldRow is not null)
+        {
+            _worldRow.OffsetLeft = touch ? 5 : 7;
+            _worldRow.OffsetRight = touch ? -5 : -7;
+            _worldRow.AddThemeConstantOverride("separation", touch ? 4 : 5);
+        }
+        if (_defconCap is not null) _defconCap.Text = touch ? "DEF" : "DEFCON";
+        if (_lampsRow is not null) _lampsRow.Visible = !touch || worldW >= 230f;
+        _tensionBar.CustomMinimumSize = new Vector2(touch ? 34f : 40f, 12f);
+        _defconNumLabel.AddThemeFontSizeOverride("font_size", touch ? 15 : (compact ? 13 : 16));
+        _tensionNumLabel.AddThemeFontSizeOverride("font_size", touch ? 13 : (compact ? 12 : 14));
+        var lampSz = touch ? 8 : (compact ? 6 : 8);
         foreach (var l in _defconLamps) l.CustomMinimumSize = new Vector2(lampSz, lampSz);
 
-        ShellContext.PlaceRect(_menuDivider, new ShellRect(divX, compact ? 7f : 10f, 2f, ph - (compact ? 14f : 20f)));
-        ShellContext.PlaceRect(_menuBtn, new ShellRect(divX + (compact ? 4f : 6f), compact ? 6f : 8f, menuW, ph - (compact ? 12f : 16f)));
+        var padV = touch ? 6f : (compact ? 6f : 8f);
+        ShellContext.PlaceRect(_menuDivider, new ShellRect(divX, padV + 2f, 2f, ph - (padV + 2f) * 2f));
+        ShellContext.PlaceRect(_menuBtn, new ShellRect(divX + (touch ? 5f : (compact ? 4f : 6f)), padV, menuW, Math.Max(touch ? 88f : 36f, ph - padV * 2f)));
 
         _pauseKbd.Position = new Vector2(d1X + d1W - 56f, d1Y + 2f);
         _menuKbd.Position = new Vector2(pw - 32f, ph - 20f);
+        if (touch) { _pauseKbd.Visible = false; _menuKbd.Visible = false; }
     }
 
     public void Refresh()
@@ -454,46 +527,67 @@ internal sealed class ShellDatePlateView
         var world = _ctx.World;
         if (world is null) return;
 
-        var dateKey = $"{world.ElapsedHours}|{Loc.Language}";
-        if (_lastDateKey != dateKey)
+        var lang = Loc.Language;
+        if (_lastDateHour != world.ElapsedHours || !string.Equals(_lastDateLang, lang, StringComparison.Ordinal))
         {
-            _lastDateKey = dateKey;
+            var langChanged = !string.Equals(_lastDateLang, lang, StringComparison.Ordinal);
+            _lastDateHour = world.ElapsedHours;
+            _lastDateLang = lang;
             _dateLabel.Text = world.Date.Display(withTime: true);
-            _weekdayLabel.Text = FormatWeekday(world.Date);
+            if (_weekdayLabel.Visible && (_lastWeekdayDay != world.ElapsedDays || langChanged))
+            {
+                _lastWeekdayDay = world.ElapsedDays;
+                _weekdayLabel.Text = FormatWeekday(world.Date);
+            }
         }
 
         var paused = _ctx.IsPaused?.Invoke() ?? true;
         var speed = Math.Clamp(_ctx.GetSpeed?.Invoke() ?? 1, 1, 5);
-        if (_lastPaused != paused || _lastSpeed != speed)
+        var observing = _ctx.IsObserverMode?.Invoke() ?? world.ObserverMode;
+        if (_lastPaused != paused || _lastSpeed != speed || _lastObserverMode != observing || _lastStateLang != lang)
         {
             _lastPaused = paused;
             _lastSpeed = speed;
+            _lastObserverMode = observing;
+            _lastStateLang = lang;
             _pauseGlyph.Texture = _ctx.Icon(paused ? "icon_shell_play" : "icon_shell_pause");
-            _stateNoteLabel.Text = paused ? Loc.Get("shell.paused_note") : Loc.Format("shell.running_note", speed);
-            _stateNoteLabel.AddThemeColorOverride("font_color", Ui.Colour(paused ? "shell.pause_amber" : "shell.paper_faint"));
+            _pauseGlyph.Modulate = Ui.Colour(observing ? "shell.state.info" : (paused ? "shell.state.warning" : "shell.brass_hi"));
+            _datePauseBtn.AddThemeStyleboxOverride("normal",
+                observing ? _dateObserverStyle : (paused ? _datePausedStyle : _dateRunningStyle));
+            _stateNoteLabel.Text = observing
+                ? (paused ? Loc.Get("shell.obs.date_paused") : Loc.Format("shell.obs.date_running_fmt", speed))
+                : (paused ? Loc.Get("shell.paused_note") : Loc.Format("shell.running_note", speed));
+            _stateNoteLabel.AddThemeColorOverride("font_color", Ui.Colour(
+                observing ? "shell.state.info" : (paused ? "shell.pause_amber" : "shell.brass_hi")));
             foreach (var c in _speedChevrons) c.QueueRedraw();
         }
 
-        var defcon = Math.Clamp(DefconSystem.CurrentLevel(world), 1, 5);
-        var tension = Math.Clamp(WorldWar.Tension(world) / 100f, 0f, 1f);
-        if (_lastDefcon != defcon || MathF.Abs(_lastTension - tension) > 0.004f)
+        if (_lastWorldDay != world.ElapsedDays || _lastWorldWarRev != world.WarRevision || _lastDefcon < 0)
         {
-            _lastDefcon = defcon;
-            _lastTension = tension;
-            _defconNumLabel.Text = defcon.ToString(CultureInfo.InvariantCulture);
-            _defconNumLabel.AddThemeColorOverride("font_color",
-                Ui.Colour(defcon <= 2 ? "shell.state.negative_text" : defcon <= 3 ? "shell.state.warning" : "shell.paper"));
-            foreach (var l in _defconLamps) l.QueueRedraw();
+            _lastWorldDay = world.ElapsedDays;
+            _lastWorldWarRev = world.WarRevision;
+            var defcon = Math.Clamp(DefconSystem.CurrentLevel(world), 1, 5);
+            var tension = Math.Clamp(WorldWar.Tension(world) / 100f, 0f, 1f);
+            if (_lastDefcon != defcon || MathF.Abs(_lastTension - tension) > 0.004f)
+            {
+                _lastDefcon = defcon;
+                _lastTension = tension;
+                _defconNumLabel.Text = defcon.ToString(CultureInfo.InvariantCulture);
+                _defconNumLabel.AddThemeColorOverride("font_color",
+                    Ui.Colour(defcon <= 2 ? "shell.state.negative_text" : defcon <= 3 ? "shell.state.warning" : "shell.paper"));
+                foreach (var l in _defconLamps) l.QueueRedraw();
 
-            var tenInt = (int)MathF.Round(tension * 100f);
-            _tensionNumLabel.Text = tenInt.ToString(CultureInfo.InvariantCulture);
-            _tensionNumLabel.AddThemeColorOverride("font_color",
-                Ui.Colour(tenInt >= 85 ? "shell.state.negative_text" : tenInt >= 75 ? "shell.state.warning" : "shell.paper"));
-            _tensionBar.QueueRedraw();
+                var tenInt = (int)MathF.Round(tension * 100f);
+                _tensionNumLabel.Text = tenInt.ToString(CultureInfo.InvariantCulture);
+                _tensionNumLabel.AddThemeColorOverride("font_color",
+                    Ui.Colour(tenInt >= 85 ? "shell.state.negative_text" : tenInt >= 75 ? "shell.state.warning" : "shell.paper"));
+                _tensionBar.QueueRedraw();
+            }
         }
 
-        _pauseKbd.Visible = _ctx.AltKeycapsVisible;
-        _menuKbd.Visible = _ctx.AltKeycapsVisible;
+        var showKbd = _ctx.AltKeycapsVisible && _profile?.TouchMode != true;
+        if (_pauseKbd.Visible != showKbd) _pauseKbd.Visible = showKbd;
+        if (_menuKbd.Visible != showKbd) _menuKbd.Visible = showKbd;
     }
 
     private static string FormatWeekday(GameDate date)
@@ -531,11 +625,15 @@ internal sealed class ShellDatePlateView
         var barH = 7f;
         var y = (h - barH) * 0.5f;
         _tensionBar.DrawRect(new Rect2(0, y, w, barH), Ui.Colour("shell.well"));
+        _tensionBar.DrawRect(new Rect2(0, y, w, barH), Ui.Colour("shell.border", 0.70f), filled: false, width: 1f);
 
         var fillW = MathF.Max(0f, w * Math.Clamp(_lastTension, 0f, 1f));
         if (fillW > 0.5f)
         {
-            // Smooth multi-stop gradient matching style.css (#6f6757 -> #a39983 -> #e7b058 -> #c94f55)
+            var c0 = Ui.Colour("shell.paper_ghost");
+            var c1 = Ui.Colour("shell.paper_faint");
+            var c2 = Ui.Colour("shell.state.warning");
+            var c3 = Ui.Colour("shell.state.negative");
             const int segs = 12;
             for (var i = 0; i < segs; i++)
             {
@@ -544,25 +642,17 @@ internal sealed class ShellDatePlateView
                 var x0 = t0 * w;
                 if (x0 >= fillW) break;
                 var x1 = MathF.Min(fillW, t1 * w);
-                var col = SampleTensionGradient((t0 + t1) * 0.5f);
+                var tm = (t0 + t1) * 0.5f;
+                var col = tm < 0.45f ? c0.Lerp(c1, tm / 0.45f)
+                    : tm < 0.75f ? c1.Lerp(c2, (tm - 0.45f) / 0.30f)
+                    : c2.Lerp(c3, (tm - 0.75f) / 0.25f);
                 _tensionBar.DrawRect(new Rect2(x0, y, x1 - x0, barH), col);
             }
         }
 
-        // Crisp 75% white/paper threshold notch with 1px dark outline
+        // Crisp 75% threshold notch with dark obsidian rim
         var notchX = MathF.Round(w * 0.75f);
-        _tensionBar.DrawRect(new Rect2(notchX - 1f, y - 3f, 4f, barH + 6f), Colors.Black);
+        _tensionBar.DrawRect(new Rect2(notchX - 1f, y - 3f, 4f, barH + 6f), Ui.Colour("shell.border"));
         _tensionBar.DrawRect(new Rect2(notchX, y - 2f, 2f, barH + 4f), Ui.Colour("shell.paper"));
-    }
-
-    private static Color SampleTensionGradient(float t)
-    {
-        var c0 = Ui.Colour("shell.paper_ghost");
-        var c1 = Ui.Colour("shell.paper_faint");
-        var c2 = Ui.Colour("shell.state.warning");
-        var c3 = Ui.Colour("shell.state.negative");
-        if (t < 0.45f) return c0.Lerp(c1, t / 0.45f);
-        if (t < 0.75f) return c1.Lerp(c2, (t - 0.45f) / 0.30f);
-        return c2.Lerp(c3, (t - 0.75f) / 0.25f);
     }
 }

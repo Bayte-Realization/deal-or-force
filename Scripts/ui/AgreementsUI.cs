@@ -20,7 +20,7 @@ public partial class DealOrForceGame
 
     private void BuildAgreementControls(VBoxContainer parent)
     {
-        var row = new VBoxContainer { Name = "AgreementActions" };
+        var row = new VBoxContainer { Name = "AgreementActions", SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         row.AddThemeConstantOverride("separation", 5);
         parent.AddChild(row);
         _tradeAgreementButton = ActionButton("Trade agreement", () => ToggleAgreement(AgreementKind.TradeAgreement), 0, 32);

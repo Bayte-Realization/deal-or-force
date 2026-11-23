@@ -26,15 +26,45 @@ internal static class FlagClothPresentation
         }
     }
 
+    private static ShaderMaterial _syncedMaterial;
+    private static bool _lastAnimateFlags;
+    private static bool _lastFabricEnabled;
+    private static float _lastWaveSpeed = float.NaN;
+    private static float _lastWaveAmplitude = float.NaN;
+    private static float _lastFoldStrength = float.NaN;
+    private static float _lastWeaveStrength = float.NaN;
+
     internal static void Synchronize()
     {
         if (_material is null) return;
-        _material.SetShaderParameter("animate_flags", SettingsCatalog.Flag("animated_flags"));
-        _material.SetShaderParameter("fabric_enabled", SettingsCatalog.Flag("flag_fabric"));
-        _material.SetShaderParameter("wave_speed", Math.Clamp(Ui.Metric("flag.wave_speed", .8f), 0, 4));
-        _material.SetShaderParameter("wave_amplitude", Math.Clamp(Ui.Metric("flag.wave_amplitude", .016f), 0, .04f));
-        _material.SetShaderParameter("fold_strength", Math.Clamp(Ui.Metric("flag.fold_strength", .16f), 0, .35f));
-        _material.SetShaderParameter("weave_strength", Math.Clamp(Ui.Metric("flag.weave_strength", .035f), 0, .1f));
+        var animateFlags = SettingsCatalog.Flag("animated_flags");
+        var fabricEnabled = SettingsCatalog.Flag("flag_fabric");
+        var waveSpeed = Math.Clamp(Ui.Metric("flag.wave_speed", .8f), 0, 4);
+        var waveAmplitude = Math.Clamp(Ui.Metric("flag.wave_amplitude", .016f), 0, .04f);
+        var foldStrength = Math.Clamp(Ui.Metric("flag.fold_strength", .16f), 0, .35f);
+        var weaveStrength = Math.Clamp(Ui.Metric("flag.weave_strength", .035f), 0, .1f);
+        if (ReferenceEquals(_syncedMaterial, _material) &&
+            animateFlags == _lastAnimateFlags &&
+            fabricEnabled == _lastFabricEnabled &&
+            waveSpeed == _lastWaveSpeed &&
+            waveAmplitude == _lastWaveAmplitude &&
+            foldStrength == _lastFoldStrength &&
+            weaveStrength == _lastWeaveStrength)
+            return;
+
+        _syncedMaterial = _material;
+        _lastAnimateFlags = animateFlags;
+        _lastFabricEnabled = fabricEnabled;
+        _lastWaveSpeed = waveSpeed;
+        _lastWaveAmplitude = waveAmplitude;
+        _lastFoldStrength = foldStrength;
+        _lastWeaveStrength = weaveStrength;
+        _material.SetShaderParameter("animate_flags", animateFlags);
+        _material.SetShaderParameter("fabric_enabled", fabricEnabled);
+        _material.SetShaderParameter("wave_speed", waveSpeed);
+        _material.SetShaderParameter("wave_amplitude", waveAmplitude);
+        _material.SetShaderParameter("fold_strength", foldStrength);
+        _material.SetShaderParameter("weave_strength", weaveStrength);
     }
 }
 

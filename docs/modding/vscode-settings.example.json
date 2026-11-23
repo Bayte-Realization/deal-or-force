@@ -1,0 +1,24 @@
+{
+  "json.schemas": [
+    {
+      "fileMatch": ["mods/*/manifest.json", "mods/_templates/*/manifest.json"],
+      "url": "./docs/modding/schemas/manifest.schema.json"
+    },
+    {
+      "fileMatch": ["mods/**/scenarios/**/scenario.json", "game/scenarios/**/scenario.json"],
+      "url": "./docs/modding/schemas/scenario.schema.json"
+    },
+    {
+      "fileMatch": ["mods/*/patches/**/*.json", "mods/_templates/*/patches/**/*.json"],
+      "url": "./docs/modding/schemas/patch.schema.json"
+    },
+    {
+      "fileMatch": ["mods/*/events/*.json", "mods/_templates/*/events/*.json", "game/events/*.json"],
+      "url": "./docs/modding/schemas/event.schema.json"
+    },
+    {
+      "fileMatch": ["mods/*/common/decisions/*.json", "mods/_templates/*/common/decisions/*.json", "game/common/decisions/*.json"],
+      "url": "./docs/modding/schemas/decision.schema.json"
+    }
+  ]
+}

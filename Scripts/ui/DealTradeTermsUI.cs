@@ -27,7 +27,7 @@ public partial class DealOrForceGame
     private bool _dealTradeIndefinite = true, _dealTradeRenewal, _dealTradeSync;
     private string _dealTradePreset = "ordinary";
     private Commodity[] _dealGuaranteeGoods = Array.Empty<Commodity>();
-    private const int DealChipHeight = 48;
+    private const int DealChipHeight = 30;
 
     /// <summary>The trade terms the strip describes, or null when the agreement is not on the table.</summary>
     private TradeTerms DealTradeDraft()
@@ -55,10 +55,10 @@ public partial class DealOrForceGame
 
     private void BuildDealTradeStrip(VBoxContainer rows, Nation player, Nation target, DiplomaticRelation relation, TradeTerms start)
     {
-        var frame = new PanelContainer { Name = "DealSharedPanel" };
+        var frame = new PanelContainer { Name = "DealSharedPanel", SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         frame.AddThemeStyleboxOverride("panel", WarInsetStyle(12, 10));
         rows.AddChild(frame);
-        var strip = new VBoxContainer();
+        var strip = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         strip.AddThemeConstantOverride("separation", 6);
         frame.AddChild(strip);
         strip.AddChild(Title(Tr("SHARED"), 13, Ui.Colour("text.accent")));
@@ -69,16 +69,19 @@ public partial class DealOrForceGame
             Name = "DealTradeAgreement", CustomMinimumSize = new(0, DealChipHeight),
             Text = _dealTradeRenewal ? Tr("Revise our trade agreement") : Tr("Trade agreement"),
             Disabled = inForce && !_dealTradeRenewal,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
             TooltipText = Ui.Tip(Tr("A term of both countries, not of one side: each importer cuts its own tariff on the other's goods. Both count the same terms from their own seat."))
         };
         strip.AddChild(_dealTradeOn);
         if (_dealTradeOn.Disabled) strip.AddChild(DealRefusal("A trade agreement is already in force. Revise it from the country page."));
-        _dealTradeBox = new VBoxContainer { Name = "DealTradeTerms", Visible = false };
+        _dealTradeBox = new VBoxContainer { Name = "DealTradeTerms", Visible = false, SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         _dealTradeBox.AddThemeConstantOverride("separation", 6);
         strip.AddChild(_dealTradeBox);
 
-        _dealPresetRow = new HFlowContainer { Name = "DealTradePresets" };
+        _dealPresetRow = new HFlowContainer { Name = "DealTradePresets", SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         _dealPresetRow.AddThemeConstantOverride("h_separation", 6);
+        _dealPresetRow.AddThemeConstantOverride("v_separation", 4);
         _dealTradeBox.AddChild(_dealPresetRow);
         foreach (var preset in TradeTermsCatalog.All.Where(p => p.Id != "concession"))
         {
@@ -99,6 +102,7 @@ public partial class DealOrForceGame
             line.AddChild(slider);
             var value = Title("", 13, Ui.Colour("text.body"));
             value.CustomMinimumSize = new(52, 0);
+            value.AddThemeFontOverride("font", PresentationFonts.Tabular());
             line.AddChild(value);
             foreach (var quick in new[] { 0, 50, 100 })
             {
@@ -129,6 +133,7 @@ public partial class DealOrForceGame
         years.AddChild(_dealYears);
         _dealYearsLabel = Title("", 13, Ui.Colour("text.body"));
         _dealYearsLabel.CustomMinimumSize = new(72, 0);
+        _dealYearsLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
         years.AddChild(_dealYearsLabel);
         foreach (var quick in new[] { 2, 5, 10, 0 })
         {
@@ -165,6 +170,7 @@ public partial class DealOrForceGame
         share.AddChild(_dealShare);
         _dealShareLabel = Title("", 13, Ui.Colour("text.body"));
         _dealShareLabel.CustomMinimumSize = new(52, 0);
+        _dealShareLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
         share.AddChild(_dealShareLabel);
         var mostShare = ActionButton(Tr("The most they'd give"), DealShareMost, 0, DealChipHeight);
         mostShare.Name = "DealTradeShareMost";
@@ -203,8 +209,9 @@ public partial class DealOrForceGame
 
     private HFlowContainer GoodsRow(string name)
     {
-        var row = new HFlowContainer { Name = name };
+        var row = new HFlowContainer { Name = name, SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         row.AddThemeConstantOverride("h_separation", 6);
+        row.AddThemeConstantOverride("v_separation", 4);
         _dealTradeBox.AddChild(row);
         return row;
     }
@@ -306,7 +313,7 @@ public partial class DealOrForceGame
         _dealShare.Editable = _dealGuarantee.Selected > 0;
         _dealGuaranteeGood.Disabled = _dealGuarantee.Selected == 0;
         foreach (var chip in _dealPresetRow.GetChildren().OfType<Button>())
-            chip.Modulate = chip.Name == "DealTradePreset_" + _dealTradePreset ? Ui.Colour("text.accent") : Colors.White;
+            chip.Modulate = chip.Name == "DealTradePreset_" + _dealTradePreset ? Ui.Colour("text.accent") : Ui.Colour("text.bright");
         if (!_dealTradeOn.ButtonPressed) return;
         FillGoodsChips(_dealOurGoodsRow, _dealOurGoods, _dealOurGoodsAll, _dealOurGoodsMore, player, target,
             v => _dealOurGoodsAll = v, v => _dealOurGoodsMore = v);

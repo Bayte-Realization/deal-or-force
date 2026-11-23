@@ -1,0 +1,101 @@
+// Wave 5 structural decisions covering POL-01 cleavages, WAR-02 strategic posture,
+// multilateral crisis summits, and post-war reconstruction compacts.
+{
+  "w5_federal_fiscal_compact": {
+    "name": "w5.dec.fiscal_compact.name",
+    "resource_costs": { "political_points": 22 },
+    "ai_resource_reserve": { "political_points": 16 },
+    "description": "w5.dec.fiscal_compact.desc",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.0020,
+    "unavailable": "w5.dec.fiscal_compact.unavail",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": {
+      "stability": 0.030,
+      "state.radicalism": -0.025,
+      "add_modifier": { "w5_fiscal_compact_spirit": 365 }
+    },
+    "ai_will_do": "ai_w5_federal_fiscal_compact"
+  },
+  "w5_multilateral_crisis_summit": {
+    "name": "w5.dec.crisis_summit.name",
+    "resource_costs": { "political_points": 24 },
+    "ai_resource_reserve": { "political_points": 18 },
+    "description": "w5.dec.crisis_summit.desc",
+    "cooldown_days": 480,
+    "gdp_cost_share": 0.0012,
+    "unavailable": "w5.dec.crisis_summit.unavail",
+    "trigger": { "min_stability": 0.40 },
+    "effects": {
+      "notoriety": -4.0,
+      "market_access": 0.03,
+      "credit_confidence": 0.03,
+      "add_modifier": { "w5_crisis_summit_accord": 300 }
+    },
+    "ai_will_do": "ai_w5_multilateral_crisis_summit"
+  },
+  "w5_postwar_rebuilding_authority": {
+    "name": "w5.dec.rebuilding_authority.name",
+    "resource_costs": { "political_points": 20 },
+    "ai_resource_reserve": { "political_points": 15 },
+    "description": "w5.dec.rebuilding_authority.desc",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.0024,
+    "unavailable": "w5.dec.rebuilding_authority.unavail",
+    "trigger": { "at_war": false, "use": [ "solvent" ] },
+    "effects": {
+      "construction_capacity": 0.30,
+      "state.standard_of_living": 0.015,
+      "add_modifier": { "w5_rebuilding_authority": 365 }
+    },
+    "ai_will_do": "ai_w5_postwar_rebuilding_authority"
+  },
+  "w5_strategic_triad_modernization": {
+    "name": "w5.dec.triad_modernization.name",
+    "resource_costs": { "political_points": 26, "air_experience": 10, "naval_experience": 10 },
+    "ai_resource_reserve": { "political_points": 18, "air_experience": 10, "naval_experience": 10 },
+    "description": "w5.dec.triad_modernization.desc",
+    "cooldown_days": 730,
+    "gdp_cost_share": 0.0025,
+    "unavailable": "w5.dec.triad_modernization.unavail",
+    "trigger": { "min_literacy": 0.55, "use": [ "solvent" ] },
+    "effects": {
+      "war_support": 0.025,
+      "notoriety": 2.5,
+      "add_modifier": { "w5_triad_modernization": 365 }
+    },
+    "ai_will_do": "ai_w5_strategic_triad_modernization"
+  },
+  "w5_industrial_retooling_charter": {
+    "name": "w5.dec.industrial_retooling.name",
+    "resource_costs": { "political_points": 20 },
+    "ai_resource_reserve": { "political_points": 16 },
+    "description": "w5.dec.industrial_retooling.desc",
+    "cooldown_days": 480,
+    "gdp_cost_share": 0.0018,
+    "unavailable": "w5.dec.industrial_retooling.unavail",
+    "trigger": { "min_literacy": 0.50 },
+    "effects": {
+      "productivity": 0.012,
+      "state.radicalism": 0.008,
+      "add_modifier": { "w5_industrial_retooling": 300 }
+    },
+    "ai_will_do": "ai_w5_industrial_retooling_charter"
+  },
+  "w5_civic_consensus_dialogue": {
+    "name": "w5.dec.civic_consensus.name",
+    "resource_costs": { "political_points": 18 },
+    "ai_resource_reserve": { "political_points": 14 },
+    "description": "w5.dec.civic_consensus.desc",
+    "cooldown_days": 420,
+    "gdp_cost_share": 0.0010,
+    "unavailable": "w5.dec.civic_consensus.unavail",
+    "trigger": { "max_stability": 0.78 },
+    "effects": {
+      "stability": 0.028,
+      "state.radicalism": -0.020,
+      "add_modifier": { "w5_civic_consensus": 300 }
+    },
+    "ai_will_do": "ai_w5_civic_consensus_dialogue"
+  }
+}

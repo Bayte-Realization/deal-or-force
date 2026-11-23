@@ -1,0 +1,100 @@
+// Wave 2 strategic geopolitical decisions — every decision pairs a meaningful structural
+// shift with explicit treasury, political/service XP, or geopolitical trade-offs.
+{
+  "strategic_supply_diversification": {
+    "name": "gp.dec.supply_div.name",
+    "resource_costs": { "political_points": 20 },
+    "ai_resource_reserve": { "political_points": 15 },
+    "description": "gp.dec.supply_div.desc",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.0022,
+    "unavailable": "gp.dec.supply_div.unavail",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": {
+      "market_access": 0.04,
+      "add_modifier": { "supply_diversification_pact": 365 }
+    },
+    "ai_will_do": "ai_supply_diversification"
+  },
+  "sovereign_export_controls": {
+    "name": "gp.dec.export_ctrl.name",
+    "resource_costs": { "political_points": 25 },
+    "ai_resource_reserve": { "political_points": 20 },
+    "description": "gp.dec.export_ctrl.desc",
+    "cooldown_days": 480,
+    "gdp_cost_share": 0.0014,
+    "unavailable": "gp.dec.export_ctrl.unavail",
+    "trigger": { "min_literacy": 0.55 },
+    "effects": {
+      "notoriety": 3.0,
+      "productivity": 0.010,
+      "add_modifier": { "export_control_regime": 270 }
+    },
+    "ai_will_do": "ai_sovereign_export_controls"
+  },
+  "maritime_convoy_charter": {
+    "name": "gp.dec.convoy.name",
+    "resource_costs": { "political_points": 15, "naval_experience": 12 },
+    "ai_resource_reserve": { "political_points": 10, "naval_experience": 10 },
+    "description": "gp.dec.convoy.desc",
+    "cooldown_days": 360,
+    "gdp_cost_share": 0.0016,
+    "unavailable": "gp.dec.convoy.unavail",
+    "trigger": { "min_available_fleet_hulls": 1 },
+    "effects": {
+      "market_access": 0.03,
+      "add_modifier": { "convoy_escort_charter": 240 }
+    },
+    "ai_will_do": "ai_maritime_convoy_charter"
+  },
+  "megaproject_fast_track_act": {
+    "name": "gp.dec.fast_track.name",
+    "resource_costs": { "political_points": 22 },
+    "ai_resource_reserve": { "political_points": 20 },
+    "description": "gp.dec.fast_track.desc",
+    "cooldown_days": 450,
+    "gdp_cost_share": 0.0018,
+    "unavailable": "gp.dec.fast_track.unavail",
+    "trigger": { "use": [ "solvent" ], "min_stability": 0.45 },
+    "effects": {
+      "construction_capacity": 0.25,
+      "stability": -0.012,
+      "add_modifier": { "fast_track_overdrive": 240 }
+    },
+    "ai_will_do": "ai_megaproject_fast_track"
+  },
+  "sovereign_debt_swap_accord": {
+    "name": "gp.dec.debt_swap.name",
+    "resource_costs": { "political_points": 30 },
+    "ai_resource_reserve": { "political_points": 15 },
+    "description": "gp.dec.debt_swap.desc",
+    "cooldown_days": 730,
+    "gdp_cost_share": 0.0,
+    "unavailable": "gp.dec.debt_swap.unavail",
+    "trigger": { "min_public_debt": 20.0 },
+    "effects": {
+      "public_debt_percent": -0.08,
+      "credit_confidence": 0.06,
+      "stability": -0.025,
+      "state.standard_of_living": -0.015,
+      "add_modifier": { "creditor_austerity_covenant": 365 }
+    },
+    "ai_will_do": "ai_sovereign_debt_swap"
+  },
+  "strategic_deterrence_drills": {
+    "name": "gp.dec.deterrence.name",
+    "resource_costs": { "political_points": 18, "army_experience": 12, "air_experience": 10 },
+    "ai_resource_reserve": { "political_points": 12, "army_experience": 15, "air_experience": 10 },
+    "description": "gp.dec.deterrence.desc",
+    "cooldown_days": 420,
+    "gdp_cost_share": 0.0015,
+    "unavailable": "gp.dec.deterrence.unavail",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": {
+      "war_support": 0.025,
+      "notoriety": 2.0,
+      "add_modifier": { "joint_deterrence_posture": 270 }
+    },
+    "ai_will_do": "ai_strategic_deterrence_drills"
+  }
+}

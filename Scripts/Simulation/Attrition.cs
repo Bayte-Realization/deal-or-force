@@ -153,10 +153,14 @@ public static class Attrition
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(Attrition))) yield break;
         if (campaign is null) yield break;
-        foreach (var _ in StarveThePocketsStages(campaign)) yield return 0;
+        if (campaign.Armies.Count < 512) StarveThePockets(campaign);
+        else foreach (var _ in StarveThePocketsStages(campaign)) yield return 0;
         yield return 0;
-        foreach (var _ in BuryTheBrokenStages(campaign)) yield return 0;
-        yield return 0;
+        if (CollectBroken(campaign))
+        {
+            foreach (var _ in BuryTheBrokenStages(campaign)) yield return 0;
+            yield return 0;
+        }
         // Starving and burying are rates and take their share of the step. Rebuilding is a
         // decision a country makes on a day - it divides the day number by its own interval -
         // so at an hourly step it must happen once on that day rather than every hour of it.
@@ -164,8 +168,14 @@ public static class Attrition
         if (campaign.StepOpensNewDay)
         {
             RebuildTheLost(campaign);
+            yield return 0;
             WarLosses.Repatriate(campaign);
         }
+    }
+
+    private static void StarveThePockets(Campaign campaign)
+    {
+        foreach (var _ in StarveThePocketsStages(campaign)) { }
     }
 
     /// <summary>
@@ -256,14 +266,22 @@ public static class Attrition
     /// has lost. Keeping it in the order of battle is what made every engagement inconclusive
     /// and every front a treadmill.
     /// </summary>
-    private static IEnumerable<int> BuryTheBrokenStages(Campaign campaign)
+    private static bool CollectBroken(Campaign campaign)
     {
         var floor = campaign.Defines.DivisionBrokenStrength;
         Broken.Clear();
-        foreach (var army in campaign.Armies)
+        var armies = campaign.Armies;
+        for (var i = 0; i < armies.Count; i++)
+        {
+            var army = armies[i];
             if (army.Divisions < 0.05f || army.Strength <= floor)
                 Broken.Add(army);
-        if (Broken.Count == 0) yield break;
+        }
+        return Broken.Count > 0;
+    }
+
+    private static IEnumerable<int> BuryTheBrokenStages(Campaign campaign)
+    {
         yield return 0;
 
         foreach (var army in Broken)
@@ -401,7 +419,7 @@ public static class Attrition
         foreach (var army in campaign.Armies)
             Standing[army.NationId] = Standing.GetValueOrDefault(army.NationId) + army.Divisions;
 
-        foreach (var nation in campaign.Nations)
+        foreach (var nation in campaign.ActiveNations)
         {
             if (nation.Population <= 0) continue;
             var strength = Standing.GetValueOrDefault(nation.Id);
@@ -584,28 +602,39 @@ public static class Attrition
         return false;
     }
 
+    private static readonly string DefaultStaffTemplateId = new RaiseArmyCommand().TemplateId;
+
     /// <summary>Where a country raises troops: the most populous region it still holds.</summary>
     /// <summary>What one division of the staff's template costs this country, as RaiseArmyCommand will charge it.</summary>
     private static float StaffDivisionCost(Campaign campaign, Nation nation)
     {
-        var template = UnitTypeCatalog.Get(new RaiseArmyCommand().TemplateId);
+        var template = UnitTypeCatalog.Get(DefaultStaffTemplateId);
         return template is null ? campaign.Defines.ArmyRebuildCost
             : RecruitmentSystem.TotalBatchCost(campaign, nation, template, 1, MobilisationMode.Standard, out _);
     }
 
     private static int HomeState(Campaign campaign, Nation nation)
     {
+        var states = campaign.StatesOf(nation);
         var best = -1;
-        var bestControlled = -1;
         var people = 0L;
-        var controlledPeople = 0L;
-        foreach (var state in campaign.StatesOf(nation))
+        for (var i = 0; i < states.Length; i++)
         {
+            var state = states[i];
             if (state.Population > people)
             {
                 people = state.Population;
                 best = state.MapIndex;
             }
+        }
+        if (best >= 0 && RecruitmentSystem.DeploymentProvince(campaign, nation.Id, best) > 0)
+            return best;
+
+        var bestControlled = -1;
+        var controlledPeople = 0L;
+        for (var i = 0; i < states.Length; i++)
+        {
+            var state = states[i];
             if (state.Population > controlledPeople &&
                 RecruitmentSystem.DeploymentProvince(campaign, nation.Id, state.MapIndex) > 0)
             {

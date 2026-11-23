@@ -1,0 +1,48 @@
+{
+  "mr.mod.national_glory.name": "Project National Glory",
+  "mr.mod.national_glory.desc": "Joint amphibious assault doctrine, mobilized reserves, and cross-strait offensive planning for a military return to the Mainland.",
+  "mr.mod.strait_armada.name": "Cross-Strait Sealift Armada",
+  "mr.mod.strait_armada.desc": "Expanded naval slipways, fast landing flotillas, and forward maritime logistics across the strait.",
+  "mr.mod.mainland_underground.name": "Mainland Civic Underground",
+  "mr.mod.mainland_underground.desc": "Clandestine radio broadcasts, coastal cells, and republican defector networks awaiting the liberation landing.",
+  "mr.mod.return_momentum.name": "Return to the Mainland",
+  "mr.mod.return_momentum.desc": "A secured mainland bridgehead has ignited an unstoppable liberation offensive, drawing volunteers and defectors to the banner.",
+  "mr.mod.regime_shock.name": "Mainland Bridgehead Shock",
+  "mr.mod.regime_shock.desc": "Enemy amphibious forces have broken onto the coastal heartland, rattling regime morale and sparking unrest across the provinces.",
+
+  "mr.dec.national_glory.name": "Revive Project National Glory",
+  "mr.dec.national_glory.desc": "Reorient the armed forces from static island defence to cross-strait amphibious reclamation, mobilizing reserves and offensive strike doctrine.",
+  "mr.dec.national_glory.unavail": "Requires Taiwan with at least 45% stability.",
+  "mr.dec.strait_armada.name": "Expand Cross-Strait Sealift Armada",
+  "mr.dec.strait_armada.desc": "Commission fast landing craft, amphibious escorts, and port logistics to carry successive divisions across the Taiwan Strait.",
+  "mr.dec.strait_armada.unavail": "Requires Taiwan with at least 40% stability.",
+  "mr.dec.mainland_underground.name": "Activate Mainland Underground",
+  "mr.dec.mainland_underground.desc": "Fund covert civic networks and sympathetic officers in Fujian, Guangdong, and Jiangnan to rally behind a landing force.",
+  "mr.dec.mainland_underground.unavail": "Requires Taiwan with at least 40% stability.",
+
+  "mr.ev.glory_council.title": "The Mainland Return Council",
+  "mr.ev.glory_council.desc": "Senior planners in Taipei present a bold blueprint reviving the historic dream of returning to the Mainland: an amphibious spearhead across the strait timed to a crisis in Beijing.",
+  "mr.ev.glory_council.opt1": "Approve Project National Glory",
+  "mr.ev.glory_council.con1": "Mobilizes trained reserves, raises offensive doctrine, and prepares the strait crossing.",
+  "mr.ev.glory_council.opt2": "Focus on the fleet and sealift first",
+  "mr.ev.glory_council.con2": "Strengthens naval readiness and shipbuilding while keeping the home front calm.",
+
+  "mr.ev.strait_window.title": "Across the Strait: The Hour Has Come",
+  "mr.ev.strait_window.desc": "With war raging across East Asia, radio stations in Taipei broadcast directly to Fujian, Guangdong, and Nanjing calling on citizens and garrisons to welcome the returning republic.",
+  "mr.ev.strait_window.opt1": "Throw everything into the Mainland offensive",
+  "mr.ev.strait_window.con1": "Mobilizes volunteers and surges offensive momentum across the front.",
+  "mr.ev.strait_window.opt2": "Coordinate coastal cells and fleet resupply",
+  "mr.ev.strait_window.con2": "Refills fleet stores and deepens mainland underground support.",
+
+  "mr.ev.coastal_ferment.title": "Restlessness Along the Southern Coast",
+  "mr.ev.coastal_ferment.desc": "Wartime strain and broadcasts from across the Taiwan Strait are stirring quiet defiance in coastal cities across Fujian and Guangdong.",
+  "mr.ev.coastal_ferment.opt1": "Impose strict coastal security measures",
+  "mr.ev.coastal_ferment.con1": "Keeps the treasury intact, but deepens stability loss and regional radicalism.",
+  "mr.ev.coastal_ferment.opt2": "Dispatch emergency subsidies to coastal provinces",
+  "mr.ev.coastal_ferment.con2": "Spends treasury and dampens war enthusiasm to calm the cities.",
+
+  "chronicle.mainland_campaign_launched": "{0} has launched a military campaign across the strait to reclaim the Mainland from {1}.",
+  "chronicle.mainland_bridgehead": "{0} has crossed the sea and secured a mainland bridgehead against {1} in {2}!",
+  "chronicle.mainland_rally": "Liberated citizens and volunteers in {2} have rallied to {0}'s banner against {1}!",
+  "chronicle.mainland_defection": "Mainland garrisons in {2} have defected from {1} to join {0}!"
+}

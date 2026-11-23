@@ -191,12 +191,12 @@ public static class MechanicFeatures
         "escalation", "proxy_wars", "de_facto_factions", "coups", "organizations", "foreign_assistance",
         "government_promises", "strategic_goals", "state_identity", "rulers", "intelligence", "world_order_emergency", "tactical_doctrines",
         "strategic_doctrines", "union_cohesion", "demographic_cycle", "land_arrangements",
-        "defcon", "nuclear_posture", "nuclear_strikes"
+        "defcon", "nuclear_posture", "nuclear_strikes", "grand_projects"
     };
 
     /// <summary>Built-in switches added after saves were fingerprinted; on by default, they add no bytes.</summary>
     public static readonly HashSet<string> LateBuiltIns = new(StringComparer.OrdinalIgnoreCase)
-        { "defcon", "nuclear_posture", "nuclear_strikes" };
+        { "defcon", "nuclear_posture", "nuclear_strikes", "grand_projects" };
 
     /// <summary>
     /// Which existing command class asks which switch. Cancel, refund, and pending-event replies

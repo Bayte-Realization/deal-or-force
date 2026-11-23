@@ -54,45 +54,81 @@ public static partial class AiStatecraft
         return mark;
     }
 
+    [ThreadStatic] private static List<Army> _stageFieldScratch;
+    [ThreadStatic] private static List<float> _stageCourseScratch;
+
     public static bool CanStageWar(Campaign c, Nation nation, Nation target)
     {
         var map = c.ProvinceMap;
         if (map is null || c.ProvinceController is null || nation is null || target is null ||
             nation.Landless || target.Landless) return false;
-        var field = c.Armies.Where(a => a.NationId == nation.Id && a.TemplateId != MilitiaCore.TemplateId &&
-            a.ProvinceId > 0 && !a.InBattle && a.EmbarkedFleetId < 0 && a.Strength > .25f &&
-            a.Organisation >= .35f && a.SupplyLevel >= .35f).ToArray();
-        if (field.Length == 0) return false;
-        var border = BorderFronts.Candidates(c, nation.Id, target.Id);
+        var field = _stageFieldScratch ??= new List<Army>(32);
+        field.Clear();
+        var armies = c.Armies;
+        var nationId = nation.Id;
+        for (var i = 0; i < armies.Count; i++)
+        {
+            var a = armies[i];
+            if (a.NationId == nationId && a.TemplateId != MilitiaCore.TemplateId &&
+                a.ProvinceId > 0 && !a.InBattle && a.EmbarkedFleetId < 0 && a.Strength > .25f &&
+                a.Organisation >= .35f && a.SupplyLevel >= .35f)
+                field.Add(a);
+        }
+        if (field.Count == 0) return false;
+        var controllers = c.ProvinceController;
+        var nationMap = (ushort)nation.MapIndex;
+        var targetMap = (ushort)target.MapIndex;
+        var border = BorderFronts.Candidates(c, nationId, target.Id);
         if (border.Count > 0)
-            foreach (var army in field)
-                if (border.Contains(army.ProvinceId) || map.FindRouteToAny(army.ProvinceId, border,
-                    (ushort)nation.MapIndex, c.ProvinceController).Length > 0) return true;
+        {
+            for (var i = 0; i < field.Count; i++)
+            {
+                var prov = field[i].ProvinceId;
+                if (border.Contains(prov) || map.FindRouteToAny(prov, border, nationMap, controllers).Length > 0)
+                    return true;
+            }
+        }
 
         // Match the admiralty's search radius/basin. Having a frigate is not a
         // route to a landlocked capital, nor to a coast held by a third country.
-        var course = new List<float>();
-        foreach (var fleet in c.Fleets)
+        var course = _stageCourseScratch ??= new List<float>(32);
+        var fleets = c.Fleets;
+        var coastal = SeaLanes.CoastalProvinces(map);
+        var minHulls = c.Defines.AiInvasionMinimumHulls;
+        var searchDegrees = c.Defines.AiInvasionSearchDegrees;
+        for (var fi = 0; fi < fleets.Count; fi++)
         {
-            if (fleet.NationId != nation.Id || fleet.Hulls < c.Defines.AiInvasionMinimumHulls ||
-                fleet.HomeProvinceId <= 0 || c.ProvinceController[fleet.HomeProvinceId] != nation.MapIndex) continue;
+            var fleet = fleets[fi];
+            if (fleet.NationId != nationId || fleet.Hulls < minHulls ||
+                fleet.HomeProvinceId <= 0 || controllers[fleet.HomeProvinceId] != nationMap) continue;
             var capacity = NavalInvasion.Capacity(c, fleet);
             // One flood from the harbour answers for every division: FindRoute walks the land the
             // country holds, and the graph runs both ways, so a division can march to the harbour
             // exactly when it stands in the harbour's stretch of that ground. Asking FindRoute for
             // each division in turn was four fifths of what this check cost.
-            var reach = FloodHarbour(map, fleet.HomeProvinceId, (ushort)nation.MapIndex, c.ProvinceController);
-            var loadable = field.Any(a => a.Divisions <= capacity &&
-                (a.ProvinceId == fleet.HomeProvinceId ||
-                 reach > 0 && a.ProvinceId > 0 && a.ProvinceId < _reachStamp.Length && _reachStamp[a.ProvinceId] == reach));
+            var reach = FloodHarbour(map, fleet.HomeProvinceId, nationMap, controllers);
+            var loadable = false;
+            for (var i = 0; i < field.Count; i++)
+            {
+                var a = field[i];
+                if (a.Divisions <= capacity &&
+                    (a.ProvinceId == fleet.HomeProvinceId ||
+                     reach > 0 && a.ProvinceId > 0 && a.ProvinceId < _reachStamp.Length && _reachStamp[a.ProvinceId] == reach))
+                {
+                    loadable = true;
+                    break;
+                }
+            }
             if (!loadable) continue;
             var basin = SeaLanes.HarbourBasin(map, fleet.HomeProvinceId);
-            foreach (var coast in SeaLanes.CoastalProvinces(map))
+            for (var ci = 0; ci < coastal.Count; ci++)
             {
-                if (c.ProvinceController[coast] != target.MapIndex || SeaLanes.HarbourBasin(map, coast) != basin ||
+                var coast = coastal[ci];
+                if (controllers[coast] != targetMap || SeaLanes.HarbourBasin(map, coast) != basin ||
                     !SeaLanes.TryHarbourPoint(map, coast, out var lat, out var lon)) continue;
-                if (NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude, lat, lon) > c.Defines.AiInvasionSearchDegrees) continue;
-                if (SeaLanes.Plan(c, nation.Id, fleet.HomeLatitude, fleet.HomeLongitude, lat, lon, course, out _)) return true;
+                if (NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude, lat, lon) > searchDegrees) continue;
+                course.Clear();
+                if (SeaLanes.Plan(c, nationId, fleet.HomeLatitude, fleet.HomeLongitude, lat, lon, course, out _)) return true;
             }
         }
         return false;

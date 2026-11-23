@@ -8,6 +8,102 @@ namespace DealOrForce;
 /// <summary>Renderer-only shoreline distances. Never fed back into movement or ownership.</summary>
 public static class HydrologySurfaceData
 {
+    /// <summary>
+    /// Compact 1-channel R8 lake signed-distance field (128 = shore, 16 steps/texel) saving 47.5 MiB VRAM
+    /// vs RGB8 at 5760x2880 (rivers render from <see cref="BuildCentreline"/>).
+    /// </summary>
+    public static byte[] BuildLakeSdf(HydrologyRaster source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (source.Width < 1 || source.Height < 1 ||
+            source.Pixels.Length != checked(source.Width * source.Height * 2))
+            throw new ArgumentException("Hydrology dimensions do not match coverage.", nameof(source));
+        var width = source.Width;
+        var height = source.Height;
+        var count = width * height;
+        var distance = new byte[count];
+        Array.Fill(distance, (byte)127);
+
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var cell = y * width + x;
+            var wet = source.Pixels[cell * 2] > 0;
+            if (Different(y * width + (x + 1 == width ? 0 : x + 1)) ||
+                Different(y * width + (x == 0 ? width - 1 : x - 1)) ||
+                (y > 0 && Different(cell - width)) ||
+                (y + 1 < height && Different(cell + width)))
+                distance[cell] = 8;
+            bool Different(int other) => (source.Pixels[other * 2] > 0) != wet;
+        }
+        for (var cell = 0; cell < count; cell++)
+        {
+            var x = cell % width;
+            if (x > 0) Relax(cell, cell - 1, 16);
+            if (cell >= width)
+            {
+                Relax(cell, cell - width, 16);
+                Relax(cell, cell - width + (x > 0 ? -1 : width - 1), 23);
+                Relax(cell, cell - width + (x + 1 < width ? 1 : 1 - width), 23);
+            }
+        }
+        for (var cell = count - 1; cell >= 0; cell--)
+        {
+            var x = cell % width;
+            if (x + 1 < width) Relax(cell, cell + 1, 16);
+            if (cell + width < count)
+            {
+                Relax(cell, cell + width, 16);
+                Relax(cell, cell + width + (x > 0 ? -1 : width - 1), 23);
+                Relax(cell, cell + width + (x + 1 < width ? 1 : 1 - width), 23);
+            }
+        }
+        if (width >= 2)
+        {
+            for (var pass = 0; pass < 2; pass++)
+            {
+                for (var y = 0; y < height; y++)
+                {
+                    var row = y * width;
+                    var last = row + width - 1;
+                    Relax(row, last, 16);
+                    Relax(last, row, 16);
+                    for (var x = 1; x < width; x++) Relax(row + x, row + x - 1, 16);
+                    for (var x = width - 2; x >= 0; x--) Relax(row + x, row + x + 1, 16);
+                }
+                for (var y = 1; y < height; y++)
+                for (var x = 0; x < width; x++)
+                {
+                    var cell = y * width + x;
+                    var up = cell - width;
+                    Relax(cell, up, 16);
+                    Relax(cell, up + (x == 0 ? width - 1 : -1), 23);
+                    Relax(cell, up + (x == width - 1 ? 1 - width : 1), 23);
+                }
+                for (var y = height - 2; y >= 0; y--)
+                for (var x = 0; x < width; x++)
+                {
+                    var cell = y * width + x;
+                    var down = cell + width;
+                    Relax(cell, down, 16);
+                    Relax(cell, down + (x == 0 ? width - 1 : -1), 23);
+                    Relax(cell, down + (x == width - 1 ? 1 - width : 1), 23);
+                }
+            }
+        }
+
+        // Reuse distance buffer in place for the R8 output to avoid a second 15.8 MiB allocation.
+        for (var cell = 0; cell < count; cell++)
+            distance[cell] = (byte)(128 + (source.Pixels[cell * 2] > 0 ? -distance[cell] : distance[cell]));
+        return distance;
+
+        void Relax(int cell, int other, int step)
+        {
+            var next = distance[other] + step;
+            if (next < distance[cell]) distance[cell] = (byte)next;
+        }
+    }
+
     // RGB: lake SDF, river SDF, authored river importance. 128 is shore, 16 steps/texel.
     // A bounded chamfer transform is linear in map area, built once on the map worker.
     public static byte[] Build(HydrologyRaster source, IReadOnlyList<RiverVisualProfile> profiles = null,

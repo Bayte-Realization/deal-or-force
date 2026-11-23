@@ -65,9 +65,11 @@ public static class AiPromises
     {
         PromiseDefinition? best = null;
         var bestShortfall = float.PositiveInfinity;
-        foreach (var definition in PromiseCatalog.All)
+        var all = PromiseCatalog.All;
+        for (var i = 0; i < all.Count; i++)
         {
-            if (GovernmentPromises.BlockReason(campaign, nation, definition).Length > 0) continue;
+            var definition = all[i];
+            if (GovernmentPromises.IsBlocked(campaign, nation, definition)) continue;
             var shortfall = definition.Check?.Shortfall(campaign, nation) ?? float.PositiveInfinity;
             if (!float.IsFinite(shortfall)) continue;
             if (best is null ||
@@ -119,16 +121,21 @@ public static class AiPromises
             switch (active.Id)
             {
                 case "mend_the_war_scars":
-                    foreach (var state in campaign.StatesOf(nation).OrderByDescending(s => s.WarDamage))
+                {
+                    var states = campaign.StatesOf(nation);
+                    ScenarioState bestScars = null;
+                    for (var si = 0; si < states.Length; si++)
                     {
-                        if (state.WarDamage <= 0.05f) break;
-                        if (WarDamage.RebuildRefusal(campaign, nation, state).Length == 0)
-                        {
-                            new RebuildRegionCommand { IssuerId = nation.Id, StateMapIndex = state.MapIndex }.Apply(campaign);
-                            break;
-                        }
+                        var candidate = states[si];
+                        if (candidate.WarDamage <= 0.05f) continue;
+                        if (bestScars is not null && candidate.WarDamage <= bestScars.WarDamage) continue;
+                        if (WarDamage.RebuildRefusal(campaign, nation, candidate).Length == 0)
+                            bestScars = candidate;
                     }
+                    if (bestScars is not null)
+                        new RebuildRegionCommand { IssuerId = nation.Id, StateMapIndex = bestScars.MapIndex }.Apply(campaign);
                     break;
+                }
                 case "settle_the_schools":
                     if (nation.Treasury > nation.Gdp * 0.02f)
                         nation.Literacy = M.Clamp01(nation.Literacy + 0.002f);

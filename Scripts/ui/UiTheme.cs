@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DealOrForce.Platform;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -159,6 +160,9 @@ internal static class Ui
     internal static string Tip(string text, int measure)
     {
         if (string.IsNullOrEmpty(text)) return text;
+        // On touch-primary devices (Android/tablets), emulated mouse hover leaves the cursor
+        // parked over the last tapped button, causing Godot tooltips to stick over the HUD.
+        if (Platform.PlatformProfile.Current?.IsTouchPrimary == true) return "";
         // Looked up before it is wrapped, and only here: a good half of the tooltips in
         // the game are handed a string that arrived as a variable and so never passed a
         // Tr of their own. Text already translated, or composed at runtime out of several
@@ -212,6 +216,36 @@ internal static class Ui
         InterfaceMaterials.SurfaceState state = InterfaceMaterials.SurfaceState.Normal) =>
         MaterialStyles.Surface(role, state);
 
+    /// <summary>
+    /// Shared Sovereign Brass &amp; Obsidian flat chrome box for HUD plates, hover states, and
+    /// framed cards. Every colour resolves through <see cref="Colour(string, float)"/>.
+    /// </summary>
+    internal static StyleBoxFlat ChromeBox(
+        string bgToken,
+        float bgAlpha,
+        string borderToken,
+        float borderAlpha = 1f,
+        int cornerRadius = 3,
+        int borderWidth = 1,
+        int padX = 0,
+        int padY = 0,
+        int leftBorderWidth = -1)
+    {
+        var box = new StyleBoxFlat
+        {
+            BgColor = Colour(bgToken, bgAlpha),
+            BorderColor = Colour(borderToken, borderAlpha),
+            ContentMarginLeft = padX,
+            ContentMarginRight = padX,
+            ContentMarginTop = padY,
+            ContentMarginBottom = padY
+        };
+        box.SetBorderWidthAll(borderWidth);
+        if (leftBorderWidth >= 0) box.BorderWidthLeft = leftBorderWidth;
+        box.SetCornerRadiusAll(cornerRadius);
+        return box;
+    }
+
     internal static string ColourToken(Color colour)
     {
         foreach (var entry in InterfaceSkin.Tokens)
@@ -221,4 +255,50 @@ internal static class Ui
 
     /// <summary>Drop every cached brush. Called automatically when a mod reloads the skin.</summary>
     internal static void Invalidate() => Cache.Clear();
+
+    /// <summary>
+    /// Focuses a search/text/numeric input on desktop while suppressing automatic virtual-keyboard
+    /// popups on touch-primary devices (phones/tablets). On touch devices, configures LineEdit so
+    /// the IME opens only on explicit user tap and closes on submit or focus exit.
+    /// </summary>
+    public static void FocusInputIfDesktop(Control input)
+    {
+        if (input is null || !GodotObject.IsInstanceValid(input)) return;
+        var touch = PlatformProfile.Current?.IsTouchPrimary == true;
+        if (input is LineEdit edit) ConfigureTouchInput(edit, touch);
+        if (touch)
+        {
+            if (input.HasFocus()) input.ReleaseFocus();
+            DisplayServer.VirtualKeyboardHide();
+            return;
+        }
+        input.GrabFocus();
+    }
+
+    /// <summary>
+    /// Ensures a <see cref="LineEdit"/> never auto-pops the mobile IME on programmatic focus and
+    /// instead shows the virtual keyboard strictly on explicit tap release, hiding on submit/blur.
+    /// </summary>
+    public static void ConfigureTouchInput(LineEdit edit, bool? isTouch = null)
+    {
+        if (edit is null || !GodotObject.IsInstanceValid(edit)) return;
+        var touch = isTouch ?? (PlatformProfile.Current?.IsTouchPrimary == true);
+        if (!touch) return;
+        edit.VirtualKeyboardShowOnFocus = false;
+        edit.FocusMode = Control.FocusModeEnum.Click;
+        if (edit.HasMeta("touch_ime_wired")) return;
+        edit.SetMeta("touch_ime_wired", true);
+        edit.GuiInput += ev =>
+        {
+            if ((ev is InputEventScreenTouch st && !st.Pressed) ||
+                (ev is InputEventMouseButton mb && !mb.Pressed && mb.ButtonIndex == MouseButton.Left))
+            {
+                edit.GrabFocus();
+                DisplayServer.VirtualKeyboardShow(edit.Text, edit.GetGlobalRect(),
+                    (DisplayServer.VirtualKeyboardType)(int)edit.VirtualKeyboardType, edit.MaxLength);
+            }
+        };
+        edit.TextSubmitted += _ => { edit.ReleaseFocus(); DisplayServer.VirtualKeyboardHide(); };
+        edit.FocusExited += () => DisplayServer.VirtualKeyboardHide();
+    }
 }

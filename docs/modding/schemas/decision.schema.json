@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dealorforce.local/schemas/decision.schema.json",
+  "title": "Deal or Force Decisions Data File",
+  "description": "Dictionary of national decisions under common/decisions/*.json keyed by unique decision ID.",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "properties": {
+      "$op": {
+        "type": "string",
+        "enum": ["inject", "replace", "create"],
+        "description": "Optional inline merge directive: inject merges fields/arrays, replace overwrites, create adds only if ID is absent."
+      },
+      "remove": { "type": "boolean", "description": "Set true to delete a base decision by ID." },
+      "name": { "type": "string", "description": "Display title or localization key." },
+      "description": { "type": "string", "description": "Tooltip text or localization key." },
+      "category": { "type": "string", "description": "Decision category grouping in the State Affairs / Decisions screen." },
+      "cost": { "type": "number", "minimum": 0, "description": "Treasury cost in billions." },
+      "gdp_cost": { "type": "number", "minimum": 0, "description": "Cost as a share of national GDP." },
+      "political_cost": { "type": "number", "minimum": 0, "description": "Political credit cost." },
+      "cooldown_days": { "type": "integer", "minimum": 0, "description": "Days before the decision may be enacted again." },
+      "once": { "type": "boolean", "default": false },
+      "ai_weight": { "type": "number", "default": 1 },
+      "trigger": {
+        "$ref": "./event.schema.json#/definitions/trigger",
+        "description": "Conditions required for the decision to appear and be enactable."
+      },
+      "effects": {
+        "$ref": "./event.schema.json#/definitions/effects",
+        "description": "Scripted effects executed when the decision is enacted."
+      }
+    }
+  },
+  "defaultSnippets": [
+    {
+      "label": "National Decision",
+      "body": {
+        "${1:mod_decision_id}": {
+          "name": "${2:Emergency Industrial Drive}",
+          "description": "${3:Mobilise reserves and accelerate megaprojects.}",
+          "political_cost": 15,
+          "cooldown_days": 365,
+          "trigger": {
+            "min_active_grand_projects": 1,
+            "has_feature": "construction"
+          },
+          "effects": {
+            "grand_project_progress": 30,
+            "stockpile.steel": 20,
+            "stability": -0.01
+          }
+        }
+      }
+    }
+  ]
+}

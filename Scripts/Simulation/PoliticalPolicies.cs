@@ -180,62 +180,92 @@ public static class PoliticalPolicies
 
     public static void Tick(Campaign c)
     {
-        NationalCourses.Tick(c);
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    internal static IEnumerable<int> TickStages(Campaign c)
+    {
+        var coursesEnumerator = NationalCourses.TickStages(c).GetEnumerator();
+        try
+        {
+            while (true)
+            {
+                bool moved;
+                using (SimProfiler.Measure("  mod:policies"))
+                    moved = coursesEnumerator.MoveNext();
+                if (!moved) break;
+                yield return 0;
+            }
+        }
+        finally
+        {
+            coursesEnumerator.Dispose();
+        }
         var lawsEnabled = c.FeatureEnabled("laws");
         var agendasEnabled = c.FeatureEnabled("political_agendas");
         var reformDay = c.ElapsedDays > 0 && c.ElapsedDays % 90 == 0;
-        foreach (var n in c.Nations)
+        var nations = c.Nations;
+        for (var start = 0; start < nations.Count; start += 64)
         {
-            // A retired country (LongCampaign) reviews no policy.
-            if (c.IsRetired(n)) continue;
-            n.LawsActive = lawsEnabled; n.AgendasActive = agendasEnabled;
-            if (n.LastPolicyReviewDay == c.ElapsedDays) continue;
-            n.LastPolicyReviewDay = c.ElapsedDays;
-            if (reformDay && !n.IsHuman && !c.Fallen.Contains(n.Id))
+            if (start > 0 && Campaign.StageOverdue()) yield return 0;
+            var end = Math.Min(nations.Count, start + 64);
+            using (SimProfiler.Measure("  mod:policies"))
             {
-                var desired = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_discipline" :
-                    n.Stability < .42f ? "security_civic_ombudsman" :
-                    n.Stability < .50f ? "security_community" :
-                    n.Ideology == "liberalism" ? "rights_association" :
-                    n.Ideology == "social_democracy" ? "labour_corporatist" :
-                    n.Ideology == "communism" ? "industry_champions" :
-                    n.Ideology == "fascism" ? InLiveWar(c, n.Id) ? "service_total_levy" : "service_reserve" :
-                    "education_technical";
-                Adopt(c, n, PoliticalPolicyCatalog.Find(desired));
-                // What a state does about its minorities changes with what it believes, and
-                // only then: a fascist state settles, a liberal one stops settling and forcing.
-                if (NationalitiesFor(n) is { } nationalities &&
-                    !string.Equals(Effective(n, nationalities).Id, nationalities.Id, StringComparison.Ordinal))
-                    Adopt(c, n, nationalities);
-                if (n.AgendasActive && n.Agenda is not { Completed: false })
+                for (var ni = start; ni < end; ni++)
                 {
-                    var promise = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_recovery" :
-                        n.Stability >= .62f && !InLiveWar(c, n.Id) ? "peace_dividend" :
-                        n.StandardOfLiving >= .61f ? "social_compact" : "national_reconciliation";
-                    if (n.DebtCondition >= DebtCondition.Stressed || n.Stability >= .56f || n.StandardOfLiving >= .61f)
-                        Adopt(c, n, PoliticalPolicyCatalog.Find(promise, true), agenda: true);
+                    var n = nations[ni];
+                    // A retired country (LongCampaign) reviews no policy.
+                    if (c.IsRetired(n)) continue;
+                    n.LawsActive = lawsEnabled; n.AgendasActive = agendasEnabled;
+                    if (n.LastPolicyReviewDay == c.ElapsedDays) continue;
+                    n.LastPolicyReviewDay = c.ElapsedDays;
+                    if (reformDay && !n.IsHuman && !c.Fallen.Contains(n.Id))
+                    {
+                        var desired = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_discipline" :
+                            n.Stability < .42f ? "security_civic_ombudsman" :
+                            n.Stability < .50f ? "security_community" :
+                            n.Ideology == "liberalism" ? "rights_association" :
+                            n.Ideology == "social_democracy" ? "labour_corporatist" :
+                            n.Ideology == "communism" ? "industry_champions" :
+                            n.Ideology == "fascism" ? InLiveWar(c, n.Id) ? "service_total_levy" : "service_reserve" :
+                            "education_technical";
+                        Adopt(c, n, PoliticalPolicyCatalog.Find(desired));
+                        // What a state does about its minorities changes with what it believes, and
+                        // only then: a fascist state settles, a liberal one stops settling and forcing.
+                        if (NationalitiesFor(n) is { } nationalities &&
+                            !string.Equals(Effective(n, nationalities).Id, nationalities.Id, StringComparison.Ordinal))
+                            Adopt(c, n, nationalities);
+                        if (n.AgendasActive && n.Agenda is not { Completed: false })
+                        {
+                            var promise = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_recovery" :
+                                n.Stability >= .62f && !InLiveWar(c, n.Id) ? "peace_dividend" :
+                                n.StandardOfLiving >= .61f ? "social_compact" : "national_reconciliation";
+                            if (n.DebtCondition >= DebtCondition.Stressed || n.Stability >= .56f || n.StandardOfLiving >= .61f)
+                                Adopt(c, n, PoliticalPolicyCatalog.Find(promise, true), agenda: true);
+                        }
+                    }
+                    if (n.LawsActive && n.Laws.Count > 0)
+                        foreach (var law in n.Laws.Values)
+                        {
+                            if (PoliticalPolicyCatalog.Find(law.Id) is not { Scope: "region" } p) continue;
+                            var region = c.StateByMapIndex(law.Region);
+                            if (region is null || region.NationMapIndex != n.MapIndex) continue; // no effects in lost/foreign territory
+                            region.Radicalism = M.Clamp01(region.Radicalism + WeeklyModifier(p, "radicalism_weekly"));
+                            region.StandardOfLiving = M.Clamp01(region.StandardOfLiving + WeeklyModifier(p, "living_weekly"));
+                            region.Stability = M.Clamp01(region.Stability + WeeklyModifier(p, "stability_weekly"));
+                        }
+                    if (!n.AgendasActive || n.Agenda is not { Completed: false } a) continue;
+                    a.ElapsedDays++;
+                    if (GoalMet(c, n, a)) a.SatisfiedDays++;
+                    if (a.ElapsedDays < a.DurationDays) continue;
+                    a.Completed = true;
+                    a.Succeeded = GoalMet(c, n, a) && a.SatisfiedDays >= Math.Max(14, a.DurationDays / 3);
+                    n.StabilityGovernance = Math.Clamp(n.StabilityGovernance + (a.Succeeded ? .015f : -.02f), -.20f, .20f);
+                    var name = PoliticalPolicyCatalog.Find(a.Id, true)?.Name ?? a.Id;
+                    c.Chronicle.Record(c, a.Succeeded ? "agenda_fulfilled" : "agenda_failed", n.Id, subject: name);
+                    NationalModifiers.Invalidate(n); c.MarkStrategicChange();
                 }
             }
-            if (n.LawsActive)
-                foreach (var law in n.Laws.Values)
-                {
-                    if (PoliticalPolicyCatalog.Find(law.Id) is not { Scope: "region" } p) continue;
-                    var region = c.StateByMapIndex(law.Region);
-                    if (region is null || region.NationMapIndex != n.MapIndex) continue; // no effects in lost/foreign territory
-                    region.Radicalism = M.Clamp01(region.Radicalism + WeeklyModifier(p, "radicalism_weekly"));
-                    region.StandardOfLiving = M.Clamp01(region.StandardOfLiving + WeeklyModifier(p, "living_weekly"));
-                    region.Stability = M.Clamp01(region.Stability + WeeklyModifier(p, "stability_weekly"));
-                }
-            if (!n.AgendasActive || n.Agenda is not { Completed: false } a) continue;
-            a.ElapsedDays++;
-            if (GoalMet(c, n, a)) a.SatisfiedDays++;
-            if (a.ElapsedDays < a.DurationDays) continue;
-            a.Completed = true;
-            a.Succeeded = GoalMet(c, n, a) && a.SatisfiedDays >= Math.Max(14, a.DurationDays / 3);
-            n.StabilityGovernance = Math.Clamp(n.StabilityGovernance + (a.Succeeded ? .015f : -.02f), -.20f, .20f);
-            var name = PoliticalPolicyCatalog.Find(a.Id, true)?.Name ?? a.Id;
-            c.Chronicle.Record(c, a.Succeeded ? "agenda_fulfilled" : "agenda_failed", n.Id, subject: name);
-            NationalModifiers.Invalidate(n); c.MarkStrategicChange();
         }
     }
 }

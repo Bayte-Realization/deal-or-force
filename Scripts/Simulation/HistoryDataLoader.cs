@@ -141,6 +141,7 @@ public static class HistoryDataLoader
                     var relation = CampaignDiplomacy.Get(campaign, guarantor.Id, sheltered.Id);
                     if (guarantor.Id == relation.A) relation.GuaranteeByA = true;
                     else relation.GuaranteeByB = true;
+                    campaign.NoteAllianceChange();
                     OpinionSystem.Remember(campaign, relation, "guaranteed_us");
                 }
             }

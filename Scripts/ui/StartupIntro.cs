@@ -37,6 +37,7 @@ public partial class StartupIntro : CanvasLayer
     {
         Layer = 90;
         ProcessMode = ProcessModeEnum.Always;
+        Platform.GodotPlatformBridge.EnsureInitialized(GetViewport()?.GetVisibleRect().Size.Y is float vh && vh > 1f ? vh : 1080f);
         _cover = new Control { Name = "StartupCover", MouseFilter = Control.MouseFilterEnum.Stop };
         AddChild(_cover); _cover.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         var back = new ColorRect { Name = "StartupBackground", Color = Ui.Colour("brand.intro_background"), MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -98,7 +99,9 @@ public partial class StartupIntro : CanvasLayer
         _studio.Visible = studio; _game.Visible = !studio;
         var image = studio ? _studio : _game;
         image.Modulate = Colors.White with { A = (float)Timeline.Opacity };
-        _hint.Text = Loc.Get("Press Esc, Space, Enter or click to skip");
+        _hint.Text = Platform.PlatformProfile.Current.IsTouchPrimary
+            ? Loc.Get("mobile.intro.tap_to_skip")
+            : Loc.Get("Press Esc, Space, Enter or click to skip");
         _loading.Visible = !studio && (!ResourcesReady || VerificationBlockWarmup);
         _loading.Text = Loc.Get(Timeline.SkipRequested ? "Skip requested. Finishing resource preparation…" : "Preparing resources…");
         if (_lastCard != Timeline.Current) { _lastCard = Timeline.Current; Layout(); }

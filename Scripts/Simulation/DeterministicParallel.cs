@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -39,7 +40,7 @@ namespace DealOrForce.Simulation;
 /// match. `Tools/FormableTests --parallel-determinism-only` does exactly that on the helper
 /// itself.
 /// </summary>
-internal static class DeterministicParallel
+public static partial class DeterministicParallel
 {
     /// <summary>
     /// How many regions, wars or goods have to be waiting before handing them out is worth
@@ -49,17 +50,20 @@ internal static class DeterministicParallel
     public const int MinItems = 16;
 
     /// <summary>
-    /// The workers one pass may use: one fewer than the machine offers, because the main
-    /// thread is inside the tick and the frame still has to be drawn, and never more than
-    /// eight, because the passes are memory-bound long before they are core-bound and the
-    /// ninth worker buys a cache fight rather than throughput.
+    /// Whether this process caps parallel workers to a mobile-friendly core slice (<c>2..4</c>) so slow
+    /// efficiency cores never stall thread-pool barriers. Defaults to <c>true</c> on Android/BlueStacks.
     /// </summary>
-    public static int Workers { get; } = Math.Max(1, Math.Min(Environment.ProcessorCount - 1, 8));
+    public static bool TouchCapEnabled { get; set; } = OperatingSystem.IsAndroid();
 
-    // Read-only after construction and reused by every pass: ParallelOptions is safe to share
-    // as long as nobody mutates it, and the old per-file copies allocated one per country per
-    // week to say the same number.
-    private static readonly ParallelOptions Options = new() { MaxDegreeOfParallelism = Workers };
+    /// <summary>
+    /// The workers one pass may use: on touch/Android capped to <c>Math.Clamp(cores / 2, 2, 4)</c> to
+    /// keep off slow E-cores; on desktop one fewer than logical processors up to eight, because passes
+    /// are memory-bound long before they are core-bound and the ninth worker buys a cache fight rather
+    /// than throughput.
+    /// </summary>
+    public static int Workers => TouchCapEnabled
+        ? Math.Clamp(Environment.ProcessorCount / 2, 2, 4)
+        : Math.Max(1, Math.Min(Environment.ProcessorCount - 1, 8));
 
     /// <summary>
     /// <c>BDOF_NO_PARALLEL=1</c> in the environment keeps every loop on the calling thread.
@@ -81,7 +85,7 @@ internal static class DeterministicParallel
     /// with one usable core has nothing to hand out.
     /// </summary>
     public static bool Enabled(Campaign campaign) =>
-        Workers > 1 && !ForceSerial && !EnvironmentSerial && campaign?.Defines is not { ParallelRegions: false };
+        EffectiveWorkers > 1 && campaign?.Defines is not { ParallelRegions: false };
 
     /// <summary>1 while a parallel loop is running, 0 otherwise. See the lease in the summary.</summary>
     private static int _inside;
@@ -141,7 +145,17 @@ internal static class DeterministicParallel
 
         try
         {
-            Parallel.For(from, toExclusive, Options, body);
+            var options = ActiveOptions();
+            var workers = options.MaxDegreeOfParallelism;
+            var chunkSize = Math.Max(1, (count + workers * 2 - 1) / (workers * 2));
+            var chunkCount = (count + chunkSize - 1) / chunkSize;
+            Parallel.For(0, chunkCount, options, chunk =>
+            {
+                var start = (int)Math.Min(toExclusive, from + (long)chunk * chunkSize);
+                var end = (int)Math.Min(toExclusive, (long)start + chunkSize);
+                for (var index = start; index < end; index++)
+                    body(index);
+            });
             Interlocked.Increment(ref _parallelRuns);
             Interlocked.Add(ref _parallelItems, count);
             return true;
@@ -217,7 +231,7 @@ internal static class DeterministicParallel
 
         try
         {
-            Parallel.For(0, count, Options, index => slots[index] = compute(index));
+            Parallel.For(0, count, ActiveOptions(), index => slots[index] = compute(index));
             // Ascending, on this thread, every time: this line is what makes the parallel pass
             // and the serial pass the same world.
             for (var index = 0; index < count; index++) apply(index, slots[index]);
@@ -238,7 +252,7 @@ internal static class DeterministicParallel
     /// </summary>
     private static bool TryLease()
     {
-        if (Workers <= 1 || ForceSerial || EnvironmentSerial) return false;
+        if (EffectiveWorkers <= 1) return false;
         return Interlocked.CompareExchange(ref _inside, 1, 0) == 0;
     }
 

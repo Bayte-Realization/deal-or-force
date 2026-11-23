@@ -1,0 +1,298 @@
+// Switchable production methods per core building class.
+// Flat snake_case IDs under common/production/ so mods override or add methods with the
+// exact same load-order rules as recipes. Each building class has a zero-overhead baseline
+// default plus specialized modernization paths with real input, energy and labor trade-offs.
+{
+  "pm_civilian_baseline": {
+    "kind": "production_method",
+    "building": "CivilianIndustry",
+    "default": true,
+    "name": "pm.civilian_baseline.name",
+    "description": "pm.civilian_baseline.desc",
+    "output_multiplier": 1.00,
+    "jobs_multiplier": 1.00,
+    "energy_multiplier": 1.00
+  },
+  "pm_civilian_mechanized": {
+    "kind": "production_method",
+    "building": "CivilianIndustry",
+    "name": "pm.civilian_mechanized.name",
+    "description": "pm.civilian_mechanized.desc",
+    "min_literacy": 0.65,
+    "output_multiplier": 1.18,
+    "jobs_multiplier": 0.88,
+    "energy_multiplier": 1.20,
+    "extra_inputs": { "Machinery": 0.14 },
+    "needs": { "Energy": 0.72, "Machinery": 0.75 }
+  },
+  "pm_civilian_automated": {
+    "kind": "production_method",
+    "building": "CivilianIndustry",
+    "name": "pm.civilian_automated.name",
+    "description": "pm.civilian_automated.desc",
+    "min_literacy": 0.85,
+    "min_productivity": 0.90,
+    "output_multiplier": 1.38,
+    "jobs_multiplier": 0.68,
+    "energy_multiplier": 1.45,
+    "extra_inputs": { "Machinery": 0.18, "Electronics": 0.12, "Semiconductors": 0.06 },
+    "needs": { "Energy": 0.65, "Electronics": 0.70, "Semiconductors": 0.72 }
+  },
+
+  "pm_power_baseline": {
+    "kind": "production_method",
+    "building": "PowerPlant",
+    "default": true,
+    "name": "pm.power_baseline.name",
+    "description": "pm.power_baseline.desc",
+    "output_multiplier": 1.00,
+    "jobs_multiplier": 1.00,
+    "energy_multiplier": 1.00
+  },
+  "pm_power_gas_turbine": {
+    "kind": "production_method",
+    "building": "PowerPlant",
+    "name": "pm.power_gas_turbine.name",
+    "description": "pm.power_gas_turbine.desc",
+    "min_literacy": 0.60,
+    "output_multiplier": 1.16,
+    "jobs_multiplier": 0.85,
+    "energy_multiplier": 1.00,
+    "extra_inputs": { "NaturalGas": 0.35 },
+    "demand_scales": { "Coal": 0.45 },
+    "needs": { "NaturalGas": 0.70 }
+  },
+  "pm_power_clean_grid": {
+    "kind": "production_method",
+    "building": "PowerPlant",
+    "name": "pm.power_clean_grid.name",
+    "description": "pm.power_clean_grid.desc",
+    "min_literacy": 0.82,
+    "min_productivity": 0.88,
+    "output_multiplier": 1.28,
+    "jobs_multiplier": 0.78,
+    "energy_multiplier": 1.00,
+    "extra_inputs": { "Batteries": 0.08, "NuclearFuel": 0.04, "Copper": 0.06 },
+    "demand_scales": { "Coal": 0.15, "NaturalGas": 0.35 },
+    "needs": { "Batteries": 0.75, "Copper": 0.80 }
+  },
+
+  "pm_agri_baseline": {
+    "kind": "production_method",
+    "building": "Agriculture",
+    "default": true,
+    "name": "pm.agri_baseline.name",
+    "description": "pm.agri_baseline.desc",
+    "output_multiplier": 1.00,
+    "jobs_multiplier": 1.00,
+    "energy_multiplier": 1.00
+  },
+  "pm_agri_mechanized": {
+    "kind": "production_method",
+    "building": "Agriculture",
+    "name": "pm.agri_mechanized.name",
+    "description": "pm.agri_mechanized.desc",
+    "min_literacy": 0.55,
+    "output_multiplier": 1.18,
+    "jobs_multiplier": 0.80,
+    "energy_multiplier": 1.15,
+    "extra_inputs": { "Fuel": 0.06, "Machinery": 0.05 },
+    "needs": { "Fuel": 0.75, "Machinery": 0.80 }
+  },
+  "pm_agri_precision": {
+    "kind": "production_method",
+    "building": "Agriculture",
+    "name": "pm.agri_precision.name",
+    "description": "pm.agri_precision.desc",
+    "min_literacy": 0.80,
+    "output_multiplier": 1.34,
+    "jobs_multiplier": 0.66,
+    "energy_multiplier": 1.25,
+    "extra_inputs": { "Fertiliser": 0.14, "Electronics": 0.04, "Fuel": 0.05 },
+    "needs": { "Fertiliser": 0.70, "Fuel": 0.80 }
+  },
+
+  "pm_extract_baseline": {
+    "kind": "production_method",
+    "building": "ExtractionIndustry",
+    "default": true,
+    "name": "pm.extract_baseline.name",
+    "description": "pm.extract_baseline.desc",
+    "output_multiplier": 1.00,
+    "jobs_multiplier": 1.00,
+    "energy_multiplier": 1.00
+  },
+  "pm_extract_deep_drill": {
+    "kind": "production_method",
+    "building": "ExtractionIndustry",
+    "name": "pm.extract_deep_drill.name",
+    "description": "pm.extract_deep_drill.desc",
+    "min_literacy": 0.60,
+    "output_multiplier": 1.20,
+    "jobs_multiplier": 0.86,
+    "energy_multiplier": 1.25,
+    "extra_inputs": { "Machinery": 0.12, "Fuel": 0.08 },
+    "needs": { "Machinery": 0.75, "Fuel": 0.80 }
+  },
+  "pm_extract_autonomous": {
+    "kind": "production_method",
+    "building": "ExtractionIndustry",
+    "name": "pm.extract_autonomous.name",
+    "description": "pm.extract_autonomous.desc",
+    "min_literacy": 0.84,
+    "min_productivity": 0.90,
+    "output_multiplier": 1.36,
+    "jobs_multiplier": 0.70,
+    "energy_multiplier": 1.40,
+    "extra_inputs": { "Machinery": 0.16, "Electronics": 0.06, "Batteries": 0.04 },
+    "needs": { "Energy": 0.72, "Machinery": 0.75, "Electronics": 0.78 }
+  },
+
+  "pm_refinery_baseline": {
+    "kind": "production_method",
+    "building": "Refinery",
+    "default": true,
+    "name": "pm.refinery_baseline.name",
+    "description": "pm.refinery_baseline.desc",
+    "output_multiplier": 1.00,
+    "jobs_multiplier": 1.00,
+    "energy_multiplier": 1.00
+  },
+  "pm_refinery_petrochemical": {
+    "kind": "production_method",
+    "building": "Refinery",
+    "name": "pm.refinery_petrochemical.name",
+    "description": "pm.refinery_petrochemical.desc",
+    "min_literacy": 0.70,
+    "output_multiplier": 1.22,
+    "jobs_multiplier": 0.88,
+    "energy_multiplier": 1.25,
+    "extra_inputs": { "NaturalGas": 0.14, "Chemicals": 0.08 },
+    "bonus_outputs": { "Plastics": 0.22, "Chemicals": 0.16 },
+    "needs": { "Oil": 0.65, "Energy": 0.75 }
+  },
+  "pm_refinery_catalytic": {
+    "kind": "production_method",
+    "building": "Refinery",
+    "name": "pm.refinery_catalytic.name",
+    "description": "pm.refinery_catalytic.desc",
+    "min_literacy": 0.82,
+    "output_multiplier": 1.32,
+    "jobs_multiplier": 0.82,
+    "energy_multiplier": 1.30,
+    "extra_inputs": { "PlatinumMetals": 0.02 },
+    "bonus_outputs": { "Fuel": 0.32 },
+    "needs": { "Oil": 0.60, "PlatinumMetals": 0.75 }
+  },
+
+  "pm_smelter_baseline": {
+    "kind": "production_method",
+    "building": "Smelter",
+    "default": true,
+    "name": "pm.smelter_baseline.name",
+    "description": "pm.smelter_baseline.desc",
+    "output_multiplier": 1.00,
+    "jobs_multiplier": 1.00,
+    "energy_multiplier": 1.00
+  },
+  "pm_smelter_electric_arc": {
+    "kind": "production_method",
+    "building": "Smelter",
+    "name": "pm.smelter_electric_arc.name",
+    "description": "pm.smelter_electric_arc.desc",
+    "min_literacy": 0.72,
+    "output_multiplier": 1.20,
+    "jobs_multiplier": 0.82,
+    "energy_multiplier": 1.45,
+    "extra_inputs": { "Graphite": 0.04 },
+    "demand_scales": { "Coal": 0.40 },
+    "needs": { "Energy": 0.65, "Graphite": 0.75 }
+  },
+  "pm_smelter_precision_alloy": {
+    "kind": "production_method",
+    "building": "Smelter",
+    "name": "pm.smelter_precision_alloy.name",
+    "description": "pm.smelter_precision_alloy.desc",
+    "min_literacy": 0.84,
+    "output_multiplier": 1.32,
+    "jobs_multiplier": 0.78,
+    "energy_multiplier": 1.50,
+    "extra_inputs": { "Chromium": 0.04, "Nickel": 0.06, "Tungsten": 0.02 },
+    "bonus_outputs": { "Steel": 0.40, "Aluminium": 0.25 },
+    "needs": { "Energy": 0.65, "Chromium": 0.78, "Nickel": 0.78 }
+  },
+
+  "pm_electronics_baseline": {
+    "kind": "production_method",
+    "building": "ElectronicsPlant",
+    "default": true,
+    "name": "pm.electronics_baseline.name",
+    "description": "pm.electronics_baseline.desc",
+    "output_multiplier": 1.00,
+    "jobs_multiplier": 1.00,
+    "energy_multiplier": 1.00
+  },
+  "pm_electronics_cleanroom": {
+    "kind": "production_method",
+    "building": "ElectronicsPlant",
+    "name": "pm.electronics_cleanroom.name",
+    "description": "pm.electronics_cleanroom.desc",
+    "min_literacy": 0.82,
+    "output_multiplier": 1.22,
+    "jobs_multiplier": 0.86,
+    "energy_multiplier": 1.30,
+    "extra_inputs": { "NobleGases": 0.02, "Gallium": 0.02, "Semiconductors": 0.08 },
+    "bonus_outputs": { "PrecisionComponents": 0.18 },
+    "needs": { "Energy": 0.68, "Semiconductors": 0.72 }
+  },
+  "pm_electronics_leading_node": {
+    "kind": "production_method",
+    "building": "ElectronicsPlant",
+    "name": "pm.electronics_leading_node.name",
+    "description": "pm.electronics_leading_node.desc",
+    "min_literacy": 0.92,
+    "min_productivity": 0.95,
+    "output_multiplier": 1.38,
+    "jobs_multiplier": 0.72,
+    "energy_multiplier": 1.55,
+    "extra_inputs": { "ChipTools": 0.015, "NobleGases": 0.03, "Gallium": 0.03 },
+    "bonus_outputs": { "Semiconductors": 0.16, "AdvancedChips": 0.06 },
+    "needs": { "Energy": 0.62, "ChipTools": 0.68, "NobleGases": 0.75 }
+  },
+
+  "pm_arms_baseline": {
+    "kind": "production_method",
+    "building": "ArmsIndustry",
+    "default": true,
+    "name": "pm.arms_baseline.name",
+    "description": "pm.arms_baseline.desc",
+    "output_multiplier": 1.00,
+    "jobs_multiplier": 1.00,
+    "energy_multiplier": 1.00
+  },
+  "pm_arms_modular": {
+    "kind": "production_method",
+    "building": "ArmsIndustry",
+    "name": "pm.arms_modular.name",
+    "description": "pm.arms_modular.desc",
+    "min_literacy": 0.70,
+    "output_multiplier": 1.20,
+    "jobs_multiplier": 0.90,
+    "energy_multiplier": 1.20,
+    "extra_inputs": { "Steel": 0.14, "PrecisionComponents": 0.08 },
+    "needs": { "Steel": 0.72, "PrecisionComponents": 0.76 }
+  },
+  "pm_arms_precision": {
+    "kind": "production_method",
+    "building": "ArmsIndustry",
+    "name": "pm.arms_precision.name",
+    "description": "pm.arms_precision.desc",
+    "min_literacy": 0.86,
+    "min_productivity": 0.90,
+    "output_multiplier": 1.34,
+    "jobs_multiplier": 0.78,
+    "energy_multiplier": 1.35,
+    "extra_inputs": { "Semiconductors": 0.08, "PrecisionComponents": 0.14, "Batteries": 0.06 },
+    "needs": { "Semiconductors": 0.70, "PrecisionComponents": 0.72 }
+  }
+}

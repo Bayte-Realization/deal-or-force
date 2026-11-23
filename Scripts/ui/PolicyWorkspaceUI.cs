@@ -130,6 +130,7 @@ public partial class DealOrForceGame
 
     private void ShowPoliticalPolicies()
     {
+        EnsureScreen("policy", BuildPolicyWorkspace);
         _sidePanel.Visible = false;
         SetArmyPanelVisible(false);
         _openScreen = "Laws";
@@ -138,11 +139,12 @@ public partial class DealOrForceGame
         _policyWorkspaceFeedback.Visible = false;
         foreach (var (id, button) in _policyTabs) StyleButton(button, id == _policyTab);
         BuildPolicyTarget(); RebuildPolicyList(); _policyBuiltDay = -1; RefreshPolicyWorkspace();
-        _policySearch.GrabFocus(); UpdateScreenButtons();
+        Ui.FocusInputIfDesktop(_policySearch); UpdateScreenButtons();
     }
 
     private void ClosePolicyWorkspace()
     {
+        if (_policyLayer is null) return;
         _policyLayer.Visible = false;
         if (_openScreen == "Laws") _openScreen = "";
         UpdateScreenButtons();
@@ -150,6 +152,7 @@ public partial class DealOrForceGame
 
     private void SelectPolicyTab(string tab)
     {
+        EnsureScreen("policy", BuildPolicyWorkspace);
         if (!_policyTabs.ContainsKey(tab)) return;
         // Compatibility entry retained for older GUI mods: one book of war, one owner.
         // Do not render laws underneath a tab labelled Doctrines.

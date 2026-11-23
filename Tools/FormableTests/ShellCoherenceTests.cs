@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
+using DealOrForce.Simulation.Shell;
 
 // The shell's own promises, checked forever:
 //   - every named panel fits on the smallest screen the game promises (1280x720),
@@ -111,6 +112,47 @@ static class ShellCoherenceTests
         Check(tabHeight is >= 28f and <= 44f, $"the tab strip height is standard ({tabHeight:0}px)");
         var rowHeight = InterfaceSkin.Metric("shell.navigation_height", 50f);
         Check(rowHeight is >= 40f and <= 60f, $"the navigation row height is standard ({rowHeight:0}px)");
+
+        // 7. New Shell layout geometry on desktop (touchMode: false) and mobile/touch (touchMode: true):
+        // Desktop must keep TouchModeBar empty; touch viewports must dock TouchModeBar immediately left
+        // of DatePlate, keep the bottom-right corner Minimap unobstructed, and have zero overlaps.
+        var desktop1080 = ShellLayout.ForViewport(1920f, 1080f, atWar: true, touchMode: false);
+        Check(desktop1080.TouchModeBar.W == 0f && desktop1080.TouchModeBar.H == 0f,
+            "desktop ShellLayout keeps TouchModeBar empty");
+        foreach (var (vw, vh) in new[] { (1280f, 720f), (1600f, 720f), (1920f, 1080f), (2400f, 1080f) })
+        {
+            foreach (var atWar in new[] { false, true })
+            {
+                var p = ShellLayout.ForViewport(vw, vh, atWar: atWar, touchMode: true);
+                var mini = ShellLayout.MinimapRect(p);
+                var tag = $"{vw:0}x{vh:0} {(atWar ? "war" : "peace")}";
+                Check(p.TouchModeBar.Inside(vw, vh) &&
+                      p.TouchModeBar.Right <= p.DatePlate.X &&
+                      MathF.Abs(p.TouchModeBar.Y - p.DatePlate.Y) < 0.5f &&
+                      MathF.Abs(p.TouchModeBar.H - p.DatePlate.H) < 0.5f,
+                    $"touch mode bar docked left of DatePlate ({tag})");
+                Check(p.TouchModeBar.W >= 156f && p.TouchModeBar.H >= 96f,
+                    $"touch mode bar fits 2x2 >=72x44 touch buttons ({tag})");
+                var hudRects = new Dictionary<string, ShellRect>(StringComparer.Ordinal)
+                {
+                    ["top_plate"] = p.TopPlate,
+                    ["left_rail"] = p.LeftRail,
+                    ["touch_mode_bar"] = p.TouchModeBar,
+                    ["date_plate"] = p.DatePlate,
+                    ["alert_column"] = p.AlertColumn,
+                    ["map_bar"] = p.MapBar,
+                    ["minimap"] = mini,
+                    ["strip"] = p.Strip,
+                    ["news_card"] = p.NewsCard
+                };
+                var (touchOverlaps, touchOffscreen) = ShellDockRules.CheckRectSet(hudRects, vw, vh);
+                Check(touchOverlaps.Count == 0 && touchOffscreen.Count == 0,
+                    $"touch HUD zero overlaps & on-screen ({tag})" +
+                    (touchOverlaps.Count + touchOffscreen.Count == 0
+                        ? ""
+                        : $" — overlaps=[{string.Join(", ", touchOverlaps)}] offscreen=[{string.Join(", ", touchOffscreen)}]"));
+            }
+        }
 
         Console.WriteLine($"shell coherence: {panels.Length} panels, {navigation.Length} rail buttons, all promises kept");
     }

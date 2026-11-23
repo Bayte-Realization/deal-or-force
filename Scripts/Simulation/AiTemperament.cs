@@ -123,31 +123,67 @@ public static class AiTemperament
     /// </summary>
     private static Character Draw(Campaign campaign, Nation nation)
     {
-        // Day zero: stable for the campaign. Salted per trait so the four are not the same
-        // number four times, which is what reading one roll four ways would give.
-        float Born(int salt) => MovementRules.Roll(campaign.Seed, nation.Id, 0, salt);
+        // Day zero baseline: deterministic FNV-1a draw keyed by (Seed, Tag, salt) so every machine
+        // agrees regardless of load order and every trait starts centred around 0.5.
+        float Born(int salt) =>
+            GeopoliticalCycle.HashToUnit(GeopoliticalCycle.HashNationEpoch(campaign.Seed, nation, 0, salt));
 
         var authority = M.Clamp01(PoliticsCore.IdeologyOf(nation).Authority);
         var restraint = M.Clamp01(AiStatecraft.Restraint(campaign, nation));
         var stability = M.Clamp01(nation.Stability);
         var doctrine = AiStrategyCatalog.Of(campaign, nation);
 
+        // Generational / century leadership drift: zero at unaged day 0 so bootstrap equilibrium
+        // stays centred, then rotates government character across decades, centuries, and ruler
+        // turnovers between peacekeeping, mercantile, expansionist, and volatile dispositions.
+        var eraOpp = 0f;
+        var eraCun = 0f;
+        var eraFore = 0f;
+        var eraVol = 0f;
+        if (campaign.ElapsedDays > 0 || nation.RulerGeneration > 0)
+        {
+            eraOpp = GeopoliticalCycle.GenerationalPivotBias(campaign, nation, 9101) * 0.24f;
+            eraCun = GeopoliticalCycle.GenerationalPivotBias(campaign, nation, 9102) * 0.24f;
+            eraFore = GeopoliticalCycle.GenerationalPivotBias(campaign, nation, 9103) * 0.22f;
+            eraVol = GeopoliticalCycle.GenerationalPivotBias(campaign, nation, 9104) * 0.22f;
+
+            switch (GeopoliticalCycle.CurrentEraRegime(campaign))
+            {
+                case GlobalEraRegime.MultipolarConcert:
+                    eraFore += 0.08f;
+                    eraVol -= 0.06f;
+                    break;
+                case GlobalEraRegime.RevisionistTide:
+                    eraOpp += 0.10f;
+                    eraCun += 0.05f;
+                    break;
+                case GlobalEraRegime.ArmedDetente:
+                    eraCun += 0.07f;
+                    eraFore += 0.06f;
+                    break;
+                case GlobalEraRegime.PostImperialTurbulence:
+                    eraVol += 0.10f;
+                    eraFore -= 0.06f;
+                    break;
+            }
+        }
+
         // Seizing an opening is a thing a government that answers to nobody does readily, and a
         // thing a doctrine already called aggressive does readily.
         var opportunism = M.Lerp(Born(9001),
-            M.Max(authority, M.Clamp01((doctrine.Aggression - 0.6f) / 0.9f)), 0.35f);
+            M.Max(authority, M.Clamp01((doctrine.Aggression - 0.6f) / 0.9f)), 0.35f) + eraOpp;
 
         // Cunning is patience with an edge: the willingness to keep a promise only as long as it
         // pays. An authoritarian arrangement has fewer constituencies to answer to.
-        var cunning = M.Lerp(Born(9002), 1f - restraint * 0.5f + authority * 0.5f, 0.4f);
+        var cunning = M.Lerp(Born(9002), 1f - restraint * 0.5f + authority * 0.5f, 0.4f) + eraCun;
 
         // Foresight is the one a country in crisis loses first. A government that may not
         // survive the year does not build for the decade; a restrained one is used to waiting.
-        var foresight = M.Lerp(Born(9003), stability * 0.6f + restraint * 0.4f, 0.45f);
+        var foresight = M.Lerp(Born(9003), stability * 0.6f + restraint * 0.4f, 0.45f) + eraFore;
 
         // And volatility is what the player is meant to notice: the same country, on the same
         // map, moving when it was not expected to. Instability and one-man rule both feed it.
-        var volatility = M.Lerp(Born(9004), (1f - stability) * 0.6f + authority * 0.4f, 0.4f);
+        var volatility = M.Lerp(Born(9004), (1f - stability) * 0.6f + authority * 0.4f, 0.4f) + eraVol;
 
         var (oppShift, cunShift, foreShift, volShift) = Rulers.TemperamentShift(campaign, nation);
         opportunism += oppShift;

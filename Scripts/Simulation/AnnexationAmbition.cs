@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DealOrForce.Simulation;
@@ -118,12 +119,32 @@ public static class AnnexationAmbition
         if (campaign?.ProvinceMap is null || us is null || them is null) return false;
         if (them.Movement is not null || them.IsSubject) return false;
         if (PeacefulFormation.CulturalAffinity(us, them) < .75f) return false;
-        var ours = WarAims.Cultures(us);
-        if (ours.Count == 0) return false;
         // A shared primary people is the claim: Austria and Germany, Albania and Kosovo,
         // Moldova and Transnistria. The share of the target's population is a question for
         // the peace table, not for whether the two states are one people.
-        return ours.Overlaps(WarAims.Cultures(them));
+        var ourPrimary = DemographyCatalog.PrimaryCultures(us.Tag);
+        var theirPrimary = DemographyCatalog.PrimaryCultures(them.Tag);
+        return AnyCultureOverlap(ourPrimary, us.FoundedCultures, theirPrimary, them.FoundedCultures);
+    }
+
+    private static bool AnyCultureOverlap(
+        IReadOnlyList<string> a1, List<string> a2,
+        IReadOnlyList<string> b1, List<string> b2)
+    {
+        for (var i = 0; i < a1.Count; i++)
+            if (ContainsCulture(b1, b2, a1[i])) return true;
+        for (var i = 0; i < a2.Count; i++)
+            if (ContainsCulture(b1, b2, a2[i])) return true;
+        return false;
+    }
+
+    private static bool ContainsCulture(IReadOnlyList<string> c1, List<string> c2, string target)
+    {
+        for (var i = 0; i < c1.Count; i++)
+            if (string.Equals(c1[i], target, StringComparison.OrdinalIgnoreCase)) return true;
+        for (var i = 0; i < c2.Count; i++)
+            if (string.Equals(c2[i], target, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     /// <summary>

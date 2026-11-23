@@ -54,7 +54,8 @@ public sealed partial class GlobePresentation
                 _cityRoot, _camera, _campaign, _cities, _cityAnchors, _cityIsCapital,
                 _mapApplied, _flatMap, _distance, _flatZoom, _flatX,
                 QualityCityLabels, CityLabelsEnabled, SettlementVerificationEnabled,
-                _mapLookMode, sunDir));
+                _mapLookMode, sunDir, LocalReliefLift,
+                (int)MathF.Round(_reliefDisplacement * 10000f) + (_reliefHeightGrid is null ? 0 : 1)));
         }
 
         var visibility = SettlementSilhouette.Visibility(_flatMap,_distance,_flatZoom);
@@ -102,8 +103,8 @@ public sealed partial class GlobePresentation
                 var width=block.Width*(_flatMap ? FlatMapWidth/360f/latitudeScale : angular);
                 var depth=block.Depth*(_flatMap ? FlatMapHeight/180f : angular);
                 var height=block.Height*visibility;
-                var basis=_flatMap ? Basis.Identity : CountryLabelSurfaceBasis(latitude,longitude,1f,0f);
-                var origin=_flatMap ? FlatPoint(latitude,longitude,FlatLineZ) : SurfacePoint(latitude,longitude,GlobeRadius*1.0002f);
+                var basis = _flatMap ? Basis.Identity : CountryLabelSurfaceBasis(latitude, longitude, 1f, 0f);
+                var origin = _flatMap ? LocalFlatPoint(latitude, longitude, FlatLineZ) : LocalSurfacePoint(latitude, longitude, GlobeRadius * 1.0002f);
                 // Footprints shrink continuously as the camera recedes; no alpha blend,
                 // per-building Node, light, physics body or new picking surface.
                 var fade=Mathf.Sqrt(visibility);

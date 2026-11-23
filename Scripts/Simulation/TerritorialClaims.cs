@@ -38,24 +38,47 @@ public static class TerritorialClaims
 {
     public static int Origin(ScenarioState state) => state.ParentMapIndex > 0 ? state.ParentMapIndex : state.MapIndex;
 
+    private static bool ContainsTag(List<string> tags, string target)
+    {
+        for (var i = 0; i < tags.Count; i++)
+            if (string.Equals(tags[i], target, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
     public static TerritorialTitle TitleOf(Campaign c, Nation nation, ScenarioState region)
     {
         if (c is null || nation is null || region is null || region.Unclaimed ||
             nation.RenouncedTerritoryOrigins.Contains(Origin(region))) return TerritorialTitle.None;
-        if (region.CoreTags.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase) ||
+        if (ContainsTag(region.CoreTags, nation.Tag) ||
             (c.Homelands.TryGetValue(nation.Id, out var home) &&
              (home.Contains(region.MapIndex) || home.Contains(Origin(region))))) return TerritorialTitle.Homeland;
-        return region.Claims.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase) ? TerritorialTitle.Claim : TerritorialTitle.None;
+        return ContainsTag(region.Claims, nation.Tag) ? TerritorialTitle.Claim : TerritorialTitle.None;
     }
 
-    public static bool HoldsOurHomeland(Campaign c, Nation nation, Nation holder) =>
-        nation is not null && holder is not null && nation.Id != holder.Id &&
-        !holder.AnswersTo(nation.Id) && !nation.AnswersTo(holder.Id) &&
-        c.StatesOf(holder).Any(s => TitleOf(c, nation, s) == TerritorialTitle.Homeland);
+    public static bool HoldsOurHomeland(Campaign c, Nation nation, Nation holder)
+    {
+        if (nation is null || holder is null || nation.Id == holder.Id ||
+            holder.AnswersTo(nation.Id) || nation.AnswersTo(holder.Id)) return false;
+        var states = c.StatesOf(holder);
+        for (var i = 0; i < states.Length; i++)
+            if (TitleOf(c, nation, states[i]) == TerritorialTitle.Homeland) return true;
+        return false;
+    }
 
-    public static ScenarioState RecoveryGoal(Campaign c, Nation nation, Nation holder) =>
-        c.StatesOf(holder).Where(s => TitleOf(c, nation, s) == TerritorialTitle.Homeland)
-            .OrderByDescending(s => s.Population).ThenBy(s => s.MapIndex).FirstOrDefault();
+    public static ScenarioState RecoveryGoal(Campaign c, Nation nation, Nation holder)
+    {
+        var states = c.StatesOf(holder);
+        ScenarioState best = null;
+        for (var i = 0; i < states.Length; i++)
+        {
+            var s = states[i];
+            if (TitleOf(c, nation, s) != TerritorialTitle.Homeland) continue;
+            if (best is null || s.Population > best.Population ||
+                (s.Population == best.Population && s.MapIndex < best.MapIndex))
+                best = s;
+        }
+        return best;
+    }
 
     /// <summary>Recovery takes precedence only among affordable, reachable positive
     /// judgements. A claim neither breaks a truce nor removes military deterrence.</summary>

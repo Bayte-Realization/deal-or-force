@@ -36,6 +36,16 @@ public sealed class ModManifest
     [JsonPropertyName("worker_script")] public string WorkerScript { get; set; } = "";
     [JsonPropertyName("worker_timeout_ms")] public int WorkerTimeoutMs { get; set; } = 500;
     [JsonPropertyName("worker_interval_days")] public int WorkerIntervalDays { get; set; } = 7;
+    [JsonPropertyName("total_conversion")] public bool TotalConversion { get; set; }
+    [JsonPropertyName("replace_paths")] public List<string> ReplacePaths { get; set; } = new();
+    [JsonPropertyName("exclude_paths")] public List<string> ExcludePaths { get; set; } = new();
+    [JsonPropertyName("scenario_id")] public string ScenarioId { get; set; } = "";
+    [JsonPropertyName("era_name")] public string EraName { get; set; } = "";
+    [JsonPropertyName("theme")] public string Theme { get; set; } = "";
+    [JsonPropertyName("music_playlist")] public string MusicPlaylist { get; set; } = "";
+    [JsonPropertyName("calendar")] public CalendarProfile Calendar { get; set; }
+    [JsonPropertyName("disabled_features")] public List<string> DisabledFeatures { get; set; } = new();
+    [JsonPropertyName("era_features")] public Dictionary<string, string> EraFeatures { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed class ModPackage
@@ -217,6 +227,7 @@ public sealed class ModLoader
     /// </summary>
     public void ApplyPresentation()
     {
+        ConfigureOverlayPolicy();
         GameDataLoader.DrainWarnings();
         Loc.ResetCatalog();
         InterfaceSkin.ResetCatalog();
@@ -235,8 +246,51 @@ public sealed class ModLoader
         foreach (var warning in GameDataLoader.DrainWarnings()) Write(warning);
     }
 
+    private void ConfigureOverlayPolicy()
+    {
+        var specs = _packages
+            .Where(p => p.Manifest is not null && (p.Manifest.TotalConversion ||
+                (p.Manifest.ReplacePaths is { Count: > 0 }) ||
+                (p.Manifest.ExcludePaths is { Count: > 0 })))
+            .Select(p => new ModLayerSpec(
+                p.Manifest.Id,
+                p.Manifest.TotalConversion,
+                p.Manifest.ReplacePaths,
+                p.Manifest.ExcludePaths))
+            .ToArray();
+
+        if (specs.Length == 0)
+            ModOverlayPolicy.Reset();
+        else
+            foreach (var error in ModOverlayPolicy.Configure(specs)) Write(error);
+
+        var patchSources = _packages
+            .Where(p => p.Manifest is not null && !string.IsNullOrWhiteSpace(p.Manifest.Id))
+            .Select(p => new ModPatchSource(p.Manifest.Id, p.PhysicalRoot))
+            .ToArray();
+        if (patchSources.Length == 0)
+        {
+            ModJsonPatcher.Reset();
+            return;
+        }
+        foreach (var diag in ModJsonPatcher.Configure(patchSources))
+            Write($"[{diag.Code}] {diag.File} ({diag.Path}): {diag.Message}");
+    }
+
+    private static string ReadPatchedModJson(ModPackage package, string category, string path)
+    {
+        var raw = StructuredData.ReadJson(path);
+        return ModJsonPatcher.IsActive
+            ? ModJsonPatcher.TransformModJson(category, Path.GetFileName(path), raw, package?.Manifest?.Id ?? "", package?.Errors)
+            : raw;
+    }
+
     public void ApplyCampaignData(Campaign campaign)
     {
+        // Configure scoped VFS replace_paths/exclude_paths BEFORE resetting base catalogues so
+        // total-conversion mods cleanly suppress replaced 2024 categories, and returning to
+        // base 2024 resets ModOverlayPolicy cleanly in the same process.
+        ConfigureOverlayPolicy();
         // МОДДЕРАМ: это загрузка содержимого для кампании, не её ежедневный tick.
         // Каталоги сбрасываются перед оверлеями; перенос ResetCatalog внутрь OnFrame
         // обнулит чужие переопределения и заново распарсит данные на каждом кадре.
@@ -287,6 +341,7 @@ public sealed class ModLoader
             // события: при необходимости переопределите и запись события/решения.
             ApplyScriptLibraries(package);
             ApplyDefines(package, campaign.Defines);
+            ApplyManifestScenarioRules(package, campaign);
             ApplyUnits(package);
             ApplyGoods(package);
             ApplyBuildings(package);
@@ -325,7 +380,7 @@ public sealed class ModLoader
         foreach (var path in DataFiles(package, "common", "buildings"))
         try
         {
-            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            using var document = JsonDocument.Parse(ReadPatchedModJson(package, "common/buildings", path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
             foreach (var entry in document.RootElement.EnumerateObject())
             {
                 if (entry.Value.ValueKind != JsonValueKind.Object)
@@ -371,7 +426,7 @@ public sealed class ModLoader
         foreach (var path in DataFiles(package, "common", "decisions"))
         try
         {
-            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            using var document = JsonDocument.Parse(ReadPatchedModJson(package, "common/decisions", path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
             foreach (var entry in document.RootElement.EnumerateObject())
             {
                 // The same reader the base game's own folder goes through. It used to be
@@ -386,7 +441,7 @@ public sealed class ModLoader
     private void ApplyEvents(ModPackage package)
     {
         foreach (var path in DataFiles(package, "events"))
-        try { EventCatalog.Load(StructuredData.ReadJson(path), package.Errors); }
+        try { EventCatalog.Load(ReadPatchedModJson(package, "events", path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
     }
 
@@ -395,7 +450,7 @@ public sealed class ModLoader
         foreach (var path in DataFiles(package, "common", "promises"))
         try
         {
-            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            using var document = JsonDocument.Parse(ReadPatchedModJson(package, "common/promises", path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
             foreach (var entry in document.RootElement.EnumerateObject())
                 PromiseCatalog.Apply(entry.Name, entry.Value, package.Errors);
         }
@@ -407,7 +462,7 @@ public sealed class ModLoader
         foreach (var path in DataFiles(package, "common", "goals"))
         try
         {
-            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            using var document = JsonDocument.Parse(ReadPatchedModJson(package, "common/goals", path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
             foreach (var entry in document.RootElement.EnumerateObject())
                 GoalCatalog.Apply(entry.Name, entry.Value, package.Errors);
         }
@@ -445,6 +500,7 @@ public sealed class ModLoader
         ("social_memory", () => SocialIncidentCatalog.ResetCatalog(), SocialIncidentCatalog.Merge),
         ("public_outreach", () => OutreachCatalog.ResetCatalog(), OutreachCatalog.Merge),
         ("alliance_programs", () => AllianceProgramCatalog.ResetCatalog(), AllianceProgramCatalog.Merge),
+        ("grand_projects", () => GrandProjectCatalog.ResetCatalog(), GrandProjectCatalog.Merge),
         // Kinds of incoming offer a player can leave a standing answer for (DealAnswer).
         ("deals", () => { DealAnswerKinds.ResetCatalog(); TradeTermsCatalog.ResetCatalog(); },
             (root, errors) => { DealAnswerKinds.Merge(root, errors); TradeTermsCatalog.MergePresets(root, errors); }),
@@ -499,7 +555,7 @@ public sealed class ModLoader
         foreach (var path in DataFiles(package, "common", folder))
         try
         {
-            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions
+            using var document = JsonDocument.Parse(ReadPatchedModJson(package, $"common/{folder}", path), new JsonDocumentOptions
             {
                 AllowTrailingCommas = true,
                 CommentHandling = JsonCommentHandling.Skip
@@ -515,7 +571,7 @@ public sealed class ModLoader
         foreach (var path in DataFiles(package, "common", "opinion_modifiers"))
         try
         {
-            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions
+            using var document = JsonDocument.Parse(ReadPatchedModJson(package, "common/opinion_modifiers", path), new JsonDocumentOptions
             {
                 AllowTrailingCommas = true,
                 CommentHandling = JsonCommentHandling.Skip
@@ -557,14 +613,14 @@ public sealed class ModLoader
     private void ApplyModifiers(ModPackage package)
     {
         foreach (var path in DataFiles(package, "common", "modifiers"))
-        try { ModifierCatalog.Load(StructuredData.ReadJson(path), package.Errors); }
+        try { ModifierCatalog.Load(ReadPatchedModJson(package, "common/modifiers", path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
     }
 
     private void ApplyAiStrategies(ModPackage package)
     {
         foreach (var path in DataFiles(package, "common", "ai_strategy"))
-        try { AiStrategyCatalog.Load(StructuredData.ReadJson(path), package.Errors); }
+        try { AiStrategyCatalog.Load(ReadPatchedModJson(package, "common/ai_strategy", path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
     }
 
@@ -685,29 +741,29 @@ public sealed class ModLoader
         foreach (var path in DataFiles(package, "common", "states"))
         try
         {
-            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), GameDataLoader.ForgivingJson);
+            using var document = JsonDocument.Parse(ReadPatchedModJson(package, "common/states", path), GameDataLoader.ForgivingJson);
             StateDefinitions.Apply(campaign, document.RootElement);
         }
         catch (Exception exception) { package.Errors.Add($"states/{Path.GetFileName(path)}: {exception.Message}"); }
 
-        foreach (var path in BookmarkDataFiles(package, "countries"))
-        try { HistoryDataLoader.ApplyCountries(campaign, StructuredData.ReadJson(path), package.Errors); }
+        foreach (var path in BookmarkDataFiles(package, "countries", campaign))
+        try { HistoryDataLoader.ApplyCountries(campaign, ReadPatchedModJson(package, "history/countries", path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
-        foreach (var path in BookmarkDataFiles(package, "states"))
-        try { HistoryDataLoader.ApplyStates(campaign, StructuredData.ReadJson(path), package.Errors); }
+        foreach (var path in BookmarkDataFiles(package, "states", campaign))
+        try { HistoryDataLoader.ApplyStates(campaign, ReadPatchedModJson(package, "history/states", path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
-        foreach (var path in BookmarkDataFiles(package, "diplomacy"))
-        try { HistoryDataLoader.ApplyDiplomacy(campaign, StructuredData.ReadJson(path), package.Errors); }
+        foreach (var path in BookmarkDataFiles(package, "diplomacy", campaign))
+        try { HistoryDataLoader.ApplyDiplomacy(campaign, ReadPatchedModJson(package, "history/diplomacy", path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"diplomacy/{Path.GetFileName(path)}: {exception.Message}"); }
-        foreach (var path in BookmarkDataFiles(package, "conflicts"))
-        try { ConflictHistory.Apply(campaign, StructuredData.ReadJson(path), package.Errors); }
+        foreach (var path in BookmarkDataFiles(package, "conflicts", campaign))
+        try { ConflictHistory.Apply(campaign, ReadPatchedModJson(package, "history/conflicts", path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"conflicts/{Path.GetFileName(path)}: {exception.Message}"); }
 
         var mergedFactions = false;
-        foreach (var path in BookmarkDataFiles(package, "factions"))
+        foreach (var path in BookmarkDataFiles(package, "factions", campaign))
         try
         {
-            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), GameDataLoader.ForgivingJson);
+            using var document = JsonDocument.Parse(ReadPatchedModJson(package, "history/factions", path), GameDataLoader.ForgivingJson);
             Factions.Merge(document.RootElement, package.Errors);
             mergedFactions = true;
         }
@@ -731,7 +787,7 @@ public sealed class ModLoader
         {
             try
             {
-                using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions
+                using var document = JsonDocument.Parse(ReadPatchedModJson(package, "common/units", path), new JsonDocumentOptions
                 {
                     AllowTrailingCommas = true,
                     CommentHandling = JsonCommentHandling.Skip
@@ -904,7 +960,7 @@ public sealed class ModLoader
         {
             try
             {
-                using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+                using var document = JsonDocument.Parse(ReadPatchedModJson(package, "common/defines", path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
                 foreach (var entry in document.RootElement.EnumerateObject())
                 {
                     var property = typeof(Defines).GetProperties(BindingFlags.Instance | BindingFlags.Public)
@@ -942,7 +998,7 @@ public sealed class ModLoader
         {
             try
             {
-                using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+                using var document = JsonDocument.Parse(ReadPatchedModJson(package, "common/countries", path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
                 foreach (var country in document.RootElement.EnumerateObject())
                 {
                     var nation = campaign.NationByTag(country.Name);
@@ -969,7 +1025,7 @@ public sealed class ModLoader
         {
             try
             {
-                using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+                using var document = JsonDocument.Parse(ReadPatchedModJson(package, "common/goods", path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
                 foreach (var good in document.RootElement.EnumerateObject())
                 {
                     if (good.Value.ValueKind != JsonValueKind.Object)
@@ -1003,7 +1059,7 @@ public sealed class ModLoader
     {
         foreach (var path in DataFiles(package, "common", "production"))
         {
-            try { ProductionChains.Merge(StructuredData.ReadJson(path), package.Errors); }
+            try { ProductionChains.Merge(ReadPatchedModJson(package, "common/production", path), package.Errors); }
             catch (Exception exception)
             {
                 package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
@@ -1029,7 +1085,7 @@ public sealed class ModLoader
     {
         foreach (var path in DataFiles(package, "common", "government_focus"))
         {
-            try { GovernmentFocusCatalog.Merge(StructuredData.ReadJson(path), package.Errors); }
+            try { GovernmentFocusCatalog.Merge(ReadPatchedModJson(package, "common/government_focus", path), package.Errors); }
             catch (Exception exception)
             {
                 package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
@@ -1037,7 +1093,7 @@ public sealed class ModLoader
         }
         foreach (var path in DataFiles(package, "common", "trade_policies"))
         {
-            try { TradePolicyCatalog.Merge(StructuredData.ReadJson(path), package.Errors); }
+            try { TradePolicyCatalog.Merge(ReadPatchedModJson(package, "common/trade_policies", path), package.Errors); }
             catch (Exception exception)
             {
                 package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
@@ -1049,7 +1105,7 @@ public sealed class ModLoader
     {
         foreach (var path in DataFiles(package, "common", "budget"))
         {
-            try { BudgetCore.Merge(StructuredData.ReadJson(path), package.Errors); }
+            try { BudgetCore.Merge(ReadPatchedModJson(package, "common/budget", path), package.Errors); }
             catch (Exception exception)
             {
                 package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
@@ -1178,10 +1234,59 @@ public sealed class ModLoader
         return GameDataLoader.TopLevelDataFiles(directory, string.Join("/", parts), package.Errors);
     }
 
-    private static IEnumerable<string> BookmarkDataFiles(ModPackage package, string folder)
+    private static void ApplyManifestScenarioRules(ModPackage package, Campaign campaign)
+    {
+        var manifest = package?.Manifest;
+        if (manifest is null || campaign is null) return;
+
+        if (manifest.Calendar is not null && !manifest.Calendar.IsDefault)
+        {
+            var calErrors = manifest.Calendar.Validate();
+            if (calErrors.Count == 0)
+                campaign.Calendar = manifest.Calendar.Clone();
+            else
+                foreach (var err in calErrors) package.Errors.Add($"manifest.calendar: {err}");
+        }
+        else if (!string.IsNullOrWhiteSpace(manifest.EraName))
+        {
+            campaign.Calendar ??= new CalendarProfile();
+            if (string.IsNullOrWhiteSpace(campaign.Calendar.EraName))
+                campaign.Calendar.EraName = manifest.EraName;
+        }
+
+        if ((manifest.DisabledFeatures is { Count: > 0 }) || (manifest.EraFeatures is { Count: > 0 }))
+            ScenarioRulesApplier.ApplyEraFeatures(campaign, manifest.DisabledFeatures, manifest.EraFeatures, package.Errors);
+
+        if (!string.IsNullOrWhiteSpace(manifest.Theme) && string.IsNullOrWhiteSpace(campaign.SkinOverlay))
+            campaign.SkinOverlay = manifest.Theme;
+
+        if (manifest.TotalConversion || !string.IsNullOrWhiteSpace(manifest.EraName) ||
+            !string.IsNullOrWhiteSpace(manifest.Theme) || !string.IsNullOrWhiteSpace(manifest.MusicPlaylist))
+        {
+            campaign.ScenarioMeta ??= new ScenarioMetadata();
+            if (string.IsNullOrWhiteSpace(campaign.ScenarioMeta.EraName) && !string.IsNullOrWhiteSpace(manifest.EraName))
+                campaign.ScenarioMeta.EraName = manifest.EraName;
+            if (string.IsNullOrWhiteSpace(campaign.ScenarioMeta.Theme) && !string.IsNullOrWhiteSpace(manifest.Theme))
+                campaign.ScenarioMeta.Theme = manifest.Theme;
+            if (string.IsNullOrWhiteSpace(campaign.ScenarioMeta.MusicPlaylist) && !string.IsNullOrWhiteSpace(manifest.MusicPlaylist))
+                campaign.ScenarioMeta.MusicPlaylist = manifest.MusicPlaylist;
+            if (manifest.TotalConversion)
+                campaign.ScenarioMeta.TotalConversion = true;
+            if (ModOverlayPolicy.IsActive && !string.IsNullOrWhiteSpace(ModOverlayPolicy.ContentSignature))
+                campaign.ScenarioMeta.ContentSignature = ModOverlayPolicy.ContentSignature;
+        }
+    }
+
+    private static IEnumerable<string> BookmarkDataFiles(ModPackage package, string folder, Campaign campaign)
     {
         var directory = Path.Combine(package.PhysicalRoot, "history", folder);
-        return GameDataLoader.TopLevelDataFiles(directory, $"history/{folder}", package.Errors, "2024");
+        var scenarioId = string.IsNullOrWhiteSpace(campaign?.ScenarioId) ? "2024" : campaign.ScenarioId;
+        var yearFolder = campaign is not null ? campaign.Date.Year.ToString(CultureInfo.InvariantCulture) : "2024";
+        if (string.Equals(scenarioId, "2024", StringComparison.OrdinalIgnoreCase))
+            return GameDataLoader.TopLevelDataFiles(directory, $"history/{folder}", package.Errors, "2024");
+        return string.Equals(scenarioId, yearFolder, StringComparison.OrdinalIgnoreCase)
+            ? GameDataLoader.TopLevelDataFiles(directory, $"history/{folder}", package.Errors, scenarioId)
+            : GameDataLoader.TopLevelDataFiles(directory, $"history/{folder}", package.Errors, scenarioId, yearFolder);
     }
 
     private static string SafePath(ModPackage package, string relative)

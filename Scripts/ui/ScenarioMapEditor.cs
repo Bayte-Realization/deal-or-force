@@ -8,7 +8,11 @@ using DealOrForce.Simulation;
 
 namespace DealOrForce;
 
-/// <summary>Standalone authored editor scene, mounted in the workshop with a detached draft.</summary>
+/// <summary>
+/// Standalone authored zero-confusion political &amp; entity map editor mounted in the workshop
+/// with a detached draft, clear active-tool banner, live cursor province readout, and live
+/// scenario health validation via <see cref="ModStudioDocument.AuditDraft"/>.
+/// </summary>
 public partial class ScenarioMapEditor : Control
 {
     public ScenarioMapDraft Draft;
@@ -24,11 +28,13 @@ public partial class ScenarioMapEditor : Control
     private ItemList _countries;
     private OptionButton _regions;
     private Label _status, _selection, _scenarioSummary;
+    private Label _modeBannerLabel, _hoverReadout, _auditSummary;
+    private PanelContainer _modeBanner, _auditCard;
     private LineEdit _search;
     private Button _undo, _redo, _select, _paint;
     private Button _sample, _editSelectedCountry, _editSelectedRegion;
     private ScenarioMapDraft.Country[] _filtered;
-    private int _owner, _inspectedProvince;
+    private int _owner, _inspectedProvince, _lastHoveredProvince = -1;
     private Button _save;
 
     private static Label Caption(string text) => new() { Text = Loc.Get(text), AutowrapMode = TextServer.AutowrapMode.WordSmart };
@@ -54,6 +60,8 @@ public partial class ScenarioMapEditor : Control
         rows.AddThemeConstantOverride("separation", 8);
         _scenarioSummary = Caption(""); _scenarioSummary.Name = "ScenarioSummary"; rows.AddChild(_scenarioSummary);
         _scenarioSummary.AddThemeColorOverride("font_color", Ui.Colour("text.accent"));
+        _scenarioSummary.AddThemeFontOverride("font", PresentationFonts.Tabular());
+
         var toolbar = new HFlowContainer { Name = "MapTools" }; rows.AddChild(toolbar);
         _select = ActionButton("MapSelect", "Select province", () => { _map.FinishStroke(); _map.PaintMode = false; RefreshStatus(); }); toolbar.AddChild(_select);
         _paint = ActionButton("MapPaint", "Paint ownership", () => { _map.PaintMode = true; RefreshStatus(); }); toolbar.AddChild(_paint);
@@ -63,16 +71,47 @@ public partial class ScenarioMapEditor : Control
         toolbar.AddChild(ActionButton("MapFocus", "Focus target country", () => _map.FocusCountry(_owner)));
         toolbar.AddChild(ActionButton("MapSettings", "Scenario settings…", EditSettings));
         toolbar.AddChild(ActionButton("MapHelp", "Controls & scope", ShowHelp));
+
+        // Zero-confusion mode banner + live cursor hover readout
+        _modeBanner = new PanelContainer { Name = "MapModeBanner", ClipContents = true };
+        rows.AddChild(_modeBanner);
+        var bannerRow = new HBoxContainer { ClipContents = true };
+        bannerRow.AddThemeConstantOverride("separation", 12);
+        _modeBanner.AddChild(bannerRow);
+        _modeBannerLabel = new Label
+        {
+            Name = "MapModeBannerLabel",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+        };
+        bannerRow.AddChild(_modeBannerLabel);
+        _hoverReadout = new Label
+        {
+            Name = "MapHoverReadout",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            AutowrapMode = TextServer.AutowrapMode.Off
+        };
+        _hoverReadout.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        _hoverReadout.AddThemeColorOverride("font_color", Ui.Colour("text.caption"));
+        bannerRow.AddChild(_hoverReadout);
+
         var columns = new HSplitContainer { Name = "MapColumns", SizeFlagsVertical = SizeFlags.ExpandFill,
-            SplitOffsets = new[] { (int)Math.Clamp(InterfaceSkin.Metric("map_editor.sidebar_width", 260), 200, 420) } };
+            SplitOffsets = new[] { (int)Math.Clamp(InterfaceSkin.Metric("map_editor.sidebar_width", 280), 210, 420) } };
         rows.AddChild(columns);
-        var inspectorScroll = new ScrollContainer { Name = "MapInspectorScroll", CustomMinimumSize = new Vector2(200, 0),
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, SizeFlagsVertical = SizeFlags.ExpandFill }; columns.AddChild(inspectorScroll);
-        var sidebar = new VBoxContainer { Name = "MapInspector", SizeFlagsHorizontal = SizeFlags.ExpandFill }; inspectorScroll.AddChild(sidebar);
+        var inspectorScroll = new ScrollContainer { Name = "MapInspectorScroll", CustomMinimumSize = new Vector2(210, 0),
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
+        columns.AddChild(inspectorScroll);
+        var sidePad = new MarginContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+        sidePad.AddThemeConstantOverride("margin_right", 14);
+        inspectorScroll.AddChild(sidePad);
+        var sidebar = new VBoxContainer { Name = "MapInspector", SizeFlagsHorizontal = SizeFlags.ExpandFill }; sidePad.AddChild(sidebar);
         sidebar.AddThemeConstantOverride("separation", 6);
         sidebar.AddChild(Caption("PAINT TARGET"));
         sidebar.AddChild(Caption("Choose where painted provinces will belong."));
-        var search = _search = new LineEdit { Name = "MapCountrySearch", PlaceholderText = Loc.Get("Find country…"), ClearButtonEnabled = true }; sidebar.AddChild(search);
+        var search = _search = new LineEdit { Name = "MapCountrySearch", PlaceholderText = Loc.Get("Find country…"), ClearButtonEnabled = true };
+        Ui.FocusInputIfDesktop(search);
+        sidebar.AddChild(search);
         _countries = new ItemList { Name = "MapCountries", CustomMinimumSize = new Vector2(200,
             (float)Math.Clamp(InterfaceSkin.Metric("map_editor.country_list_height", 150), 90, 320)) }; sidebar.AddChild(_countries);
         search.TextChanged += FilterCountries;
@@ -84,16 +123,27 @@ public partial class ScenarioMapEditor : Control
         sidebar.AddChild(ActionButton("EditScenarioRegion", "Edit target region…", () => EditEntity(false)));
         sidebar.AddChild(new HSeparator());
         sidebar.AddChild(Caption("SELECTED TERRITORY"));
-        _selection = Caption("Select a province on the map to inspect it."); _selection.Name = "MapSelection"; sidebar.AddChild(_selection);
+        _selection = Caption("Select a province on the map to inspect it."); _selection.Name = "MapSelection";
+        _selection.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        sidebar.AddChild(_selection);
         _sample = ActionButton("SampleProvinceTarget", "Use selection as paint target", UseSelectedTarget); sidebar.AddChild(_sample);
         _editSelectedCountry = ActionButton("EditSelectedCountry", "Edit selected country…", () => EditEntity(true, Draft.OwnerAt(_inspectedProvince))); sidebar.AddChild(_editSelectedCountry);
         _editSelectedRegion = ActionButton("EditSelectedRegion", "Edit selected region…", () => EditEntity(false, Draft.StateAt(_inspectedProvince))); sidebar.AddChild(_editSelectedRegion);
+
+        sidebar.AddChild(new HSeparator());
+        _auditCard = new PanelContainer { Name = "MapAuditCard", ClipContents = true };
+        sidebar.AddChild(_auditCard);
+        _auditSummary = Caption("");
+        _auditSummary.Name = "MapAuditSummary";
+        _auditSummary.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        _auditCard.AddChild(_auditSummary);
+
         _map = new ScenarioMapCanvas { Name = "PoliticalMapCanvas", Draft = Draft, Topology = Topology,
             SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(240, 200) };
-        _map.Picked = Inspect; _map.Changed = RefreshStatus; columns.AddChild(_map);
-        // Flow layout gives an autowrapped label its near-zero minimum width, making the
-        // caption thousands of pixels tall and starving the map of vertical space.
-        // Separate rows allocate the caption the full editor width at every resolution.
+        _map.Picked = Inspect; _map.Changed = RefreshStatus;
+        _map.GuiInput += OnMapCanvasHover;
+        columns.AddChild(_map);
+
         var saveRow = new VBoxContainer { Name = "MapSaveRow" }; rows.AddChild(saveRow);
         var save = _save = ActionButton("MapSave", "Save scenario to mod", Save); DealOrForceGame.StyleButton(save, true); saveRow.AddChild(save);
         save.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
@@ -107,6 +157,31 @@ public partial class ScenarioMapEditor : Control
         if (Draft.Countries.Length > 0) ChooseOwner(Draft.Countries[0].MapIndex);
         RefreshStatus();
     }
+
+    private void OnMapCanvasHover(InputEvent ev)
+    {
+        if (ev is not InputEventMouseMotion mm || _map is null || Draft is null || Topology is null || _hoverReadout is null) return;
+        var prov = _map.ProvinceAt(mm.Position);
+        if (prov == _lastHoveredProvince) return;
+        _lastHoveredProvince = prov;
+        if (prov <= 0 || prov > Draft.ProvinceCount)
+        {
+            _hoverReadout.Text = "";
+            return;
+        }
+        if (prov < Topology.WaterByProvince.Length && Topology.WaterByProvince[prov])
+        {
+            _hoverReadout.Text = Loc.Format("map_editor.live.hover_water_fmt", prov);
+            return;
+        }
+        var owner = Draft.Countries.FirstOrDefault(c => c.MapIndex == Draft.OwnerAt(prov));
+        var region = Draft.Regions.FirstOrDefault(r => r.MapIndex == Draft.StateAt(prov));
+        _hoverReadout.Text = Loc.Format("map_editor.live.hover_land_fmt",
+            prov,
+            owner is not null ? $"{Loc.Get(owner.Name)} [{owner.Tag}]" : Loc.Get("Land that belongs to nobody"),
+            region is not null ? Loc.Get(region.Name) : Loc.Get("Unknown"));
+    }
+
     private void EditEntity(bool country, int mapIndex = -1)
     {
         _map.FinishStroke();
@@ -122,7 +197,9 @@ public partial class ScenarioMapEditor : Control
         tabs.SetTabTitle(0, Loc.Get("Properties"));
         properties.AddChild(Caption("Edits apply only to this draft. Identity IDs and country ownership links are protected."));
         properties.AddChild(Caption("Name"));
-        var name = new LineEdit { Name = "EntityName", Text = source["Name"].GetValue<string>() }; properties.AddChild(name);
+        var name = new LineEdit { Name = "EntityName", Text = source["Name"].GetValue<string>() };
+        Ui.FocusInputIfDesktop(name);
+        properties.AddChild(name);
         ColorPickerButton colour = null; OptionButton government = null, ideology = null;
         TextureRect flag = null;
         Nation previewNation = null; Campaign previewWorld = null;
@@ -130,20 +207,19 @@ public partial class ScenarioMapEditor : Control
         if (country)
         {
             properties.AddChild(Caption("Map colour"));
-            colour = new ColorPickerButton { Name = "EntityMapColour", Color = Color.FromString(source["Color"].GetValue<string>(), Colors.Gray), EditAlpha = false, CustomMinimumSize = new Vector2(0, 34) }; properties.AddChild(colour);
+            colour = new ColorPickerButton { Name = "EntityMapColour", Color = Color.FromString(source["Color"].GetValue<string>(), Ui.Colour("text.muted")), EditAlpha = false, CustomMinimumSize = new Vector2(0, 34) }; properties.AddChild(colour);
             properties.AddChild(Caption("Form of government")); government = new OptionButton { Name = "EntityGovernment" }; properties.AddChild(government);
             foreach (var g in GovernmentCatalog.All) { government.AddItem(Loc.Get(g.Name)); government.SetItemMetadata(government.ItemCount - 1, g.Id); if (g.Id == source["Government"]?.GetValue<string>()) government.Select(government.ItemCount - 1); }
             properties.AddChild(Caption("Ideology")); ideology = new OptionButton { Name = "EntityIdeology" }; properties.AddChild(ideology);
             foreach (var g in IdeologyCatalog.All) { ideology.AddItem(Loc.Get(g.Name)); ideology.SetItemMetadata(ideology.ItemCount - 1, g.Id); if (g.Id == source["Ideology"]?.GetValue<string>()) ideology.Select(ideology.ItemCount - 1); }
             var flagRow = new HBoxContainer(); properties.AddChild(flagRow);
-            flag = new TextureRect { Name = "ScenarioFlagPreview", CustomMinimumSize = new Vector2(64, 42), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered }; flagRow.AddChild(flag);
+            flag = new TextureRect { Name = "ScenarioFlagPreview", Material = FlagClothPresentation.Material, CustomMinimumSize = new Vector2(64, 42), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered }; flagRow.AddChild(flag);
             var flagCaption = Caption("Flag in this scenario"); flagCaption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             flagRow.AddChild(flagCaption);
             if (OpenFlagEditor is not null)
             {
                 var tag = Draft.Countries.FirstOrDefault(c => c.MapIndex == id)?.Tag ?? "";
                 flagRow.AddChild(ActionButton("EditScenarioFlag", "Edit flag…", () => OpenFlagEditor(tag)));
-                // The flag editor saves a design that is flown at once; show it here on return.
                 window.FocusEntered += () => refreshFlag?.Invoke();
             }
             previewWorld = SaveSystem.ImportScenarioJson(Draft.Export(), Draft.Id, Draft.ProvinceCount);
@@ -167,6 +243,7 @@ public partial class ScenarioMapEditor : Control
             var numeric = new SpinBox { Name = "Entity_" + field.Key, MinValue = field.Min, MaxValue = field.Max, Step = field.Step,
                 AllowGreater = true, AllowLesser = true, Value = source[field.Key].GetValue<double>() * field.Scale,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(150, 34) };
+            numeric.GetLineEdit()?.AddThemeFontOverride("font", PresentationFonts.Tabular());
             numeric.TooltipText = field.Key + (field.Scale == 1 ? "" : $" · {Loc.Get("Stored value")} × {field.Scale}");
             grid.AddChild(numeric); numbers[field.Key] = (field, numeric);
             numeric.ValueChanged += _ => { if (!syncing) changedNumbers.Add(field.Key); };
@@ -179,7 +256,6 @@ public partial class ScenarioMapEditor : Control
         {
             var updated = source.DeepClone().AsObject();
             updated["Name"] = name.Text.Trim();
-            // Untouched values must retain their original precision, especially population and mod fields.
             foreach (var key in changedNumbers)
             {
                 var (field, box) = numbers[key];
@@ -197,7 +273,6 @@ public partial class ScenarioMapEditor : Control
         var reversingTransition = false;
         tabs.TabChanged += tab =>
         {
-            // A failed JSON -> form transition returns without overwriting the user's invalid buffer.
             if (reversingTransition) { reversingTransition = false; return; }
             try
             {
@@ -213,7 +288,7 @@ public partial class ScenarioMapEditor : Control
                     syncing = false; changedNumbers.Clear();
                     if (country)
                     {
-                        colour.Color = Color.FromString(source["Color"].GetValue<string>(), Colors.Gray);
+                        colour.Color = Color.FromString(source["Color"].GetValue<string>(), Ui.Colour("text.muted"));
                         foreach (var option in new[] { (government, "Government"), (ideology, "Ideology") })
                             for (var i = 0; i < option.Item1.ItemCount; i++) if (option.Item1.GetItemMetadata(i).AsString() == source[option.Item2]?.GetValue<string>()) option.Item1.Select(i);
                         previewNation.FormedNationId = source["FormedNationId"]?.GetValue<string>() ?? "";
@@ -290,7 +365,6 @@ public partial class ScenarioMapEditor : Control
         if (!Draft.Regions.Any(r => r.MapIndex == region && r.Owner == owner)) return;
         _search.Text = ""; FilterCountries(""); ChooseOwner(owner);
         for (var i = 0; i < _regions.ItemCount; i++) if (_regions.GetItemId(i) == region) { _regions.Select(i); _map.TargetRegion = region; break; }
-        // Sampling chooses the target; it never silently turns the paint tool on.
         RefreshStatus();
     }
     private void RefreshMap()
@@ -303,7 +377,6 @@ public partial class ScenarioMapEditor : Control
     private void RefreshStatus()
     {
         if (_status is null) return;
-        // Keep the inspector consistent after painting, undo and redo without another click.
         Inspect(_inspectedProvince);
         var settings = Draft.Settings;
         _scenarioSummary.Text = $"{Loc.Get(settings.Name)} · {new GameDate(settings.Year, settings.Month, settings.Day) { Hour = settings.Hour }.Display(true)} · {Loc.Get("World seed")} {settings.Seed}";
@@ -312,6 +385,36 @@ public partial class ScenarioMapEditor : Control
         DealOrForceGame.StyleButton(_paint, _map.PaintMode);
         _undo.Disabled = !Draft.CanUndo; _redo.Disabled = !Draft.CanRedo;
         var c = Draft.Countries.FirstOrDefault(c => c.MapIndex == _owner);
+        var r = Draft.Regions.FirstOrDefault(reg => reg.MapIndex == _map.TargetRegion);
+
+        var modeTok = _map.PaintMode ? (_map.TargetRegion > 0 ? "text.accent" : "state.warning") : "state.info";
+        _modeBanner?.AddThemeStyleboxOverride("panel",
+            Ui.ChromeBox("surface.inset", 0.96f, modeTok, 0.85f, cornerRadius: 3, borderWidth: 1, padX: 10, padY: 5, leftBorderWidth: 3));
+        if (_modeBannerLabel is not null)
+        {
+            _modeBannerLabel.AddThemeColorOverride("font_color", Ui.Colour(modeTok));
+            _modeBannerLabel.Text = _map.PaintMode
+                ? (_map.TargetRegion > 0
+                    ? Loc.Format("map_editor.live.mode_paint_fmt", Loc.Get(c?.Name ?? ""), Loc.Get(r?.Name ?? ""))
+                    : Loc.Get("map_editor.live.mode_paint_no_region"))
+                : Loc.Get("map_editor.live.mode_inspect");
+        }
+
+        var audit = ModStudioDocument.AuditDraft(Draft, Topology);
+        var auditTok = !audit.Valid ? "state.negative" : (audit.UnassignedLandProvinces > 0 || audit.LandlessCountries.Count > 0) ? "state.warning" : "state.positive";
+        _auditCard?.AddThemeStyleboxOverride("panel",
+            Ui.ChromeBox("surface.inset", 0.90f, auditTok, 0.78f, cornerRadius: 3, borderWidth: 1, padX: 8, padY: 6, leftBorderWidth: 3));
+        if (_auditSummary is not null)
+        {
+            _auditSummary.AddThemeColorOverride("font_color", Ui.Colour(auditTok));
+            _auditSummary.Text = Loc.Format("map_editor.live.audit_fmt",
+                audit.AssignedLandProvinces, audit.TotalLandProvinces, audit.CountryCount, audit.RegionCount, audit.LandlessCountries.Count);
+            if (audit.Issues.Count > 0)
+                _auditCard.TooltipText = Ui.Tip(string.Join("\n", audit.Issues.Select(i => "• " + i.Message)));
+            else
+                _auditCard.TooltipText = Ui.Tip(Loc.Get("map_editor.live.audit_ok"));
+        }
+
         _status.Text = Loc.Get(_map.PaintMode ? "Paint ownership" : "Select province") + " · " + Loc.Get(c?.Name ?? "") + " · " +
             Loc.Get(Draft.Dirty || !Draft.HasSavedVersion ? "Unsaved draft" : "Saved") +
             (_map.TargetRegion == 0 ? " · " + Loc.Get("No region available for this country.") : "");

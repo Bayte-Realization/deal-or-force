@@ -99,6 +99,15 @@ public sealed partial class TooltipKeeper : Node
 
     public override void _Process(double delta)
     {
+        // On touch-primary platforms (Android/tablets), emulated mouse hover leaves the cursor
+        // parked on the last tapped button. OnAdded/Suppress still kills Godot's native
+        // TooltipPanel globally, while skipping custom tooltips and 60 Hz hover polling here.
+        if (Platform.PlatformProfile.Current?.IsTouchPrimary == true)
+        {
+            if (_panel is not null) Hide();
+            return;
+        }
+
         var root = GetTree().Root;
         var mouse = root.GetMousePosition();
         var moved = mouse.DistanceSquaredTo(_mouse) > 0.25f;

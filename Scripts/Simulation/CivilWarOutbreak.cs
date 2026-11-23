@@ -98,19 +98,28 @@ public static class CivilWarOutbreak
         if (campaign.ElapsedDays < d.CivilWarEarliestDay || campaign.ElapsedDays % 7 != 3) yield break;
         var thisYear = StartsInLastYear(campaign);
         var scanned = 0;
-        foreach (var nation in campaign.Nations.ToArray())
+        for (var i = 0; i < campaign.Nations.Count; i++)
         {
+            var nation = campaign.Nations[i];
             if (thisYear >= d.CivilWarWorldPerYear) yield break;
             if (++scanned % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if (!Eligible(campaign, nation)) continue;
             var chance = Chance(campaign, nation);
+            if (campaign.ElapsedDays < 730)
+                chance = Math.Clamp(chance * FlashpointIntensityMultiplier(campaign, nation), 0f, 1f);
             if (!float.IsFinite(chance) || chance <= 0f) continue;
             if (Escalation.Roll(campaign.Seed, nation.Id, 0xC1C, campaign.ElapsedDays, 0x3) >= chance) continue;
             // Splitting a country is one piece of twenty to forty milliseconds - a new state, its
             // army, its war - and it is decided now, so it starts a frame of its own.
             Campaign.HeavyNext();
             yield return 0;
-            if (Break(campaign, nation) is not null) thisYear++;
+            var prevCount = campaign.Nations.Count;
+            if (Break(campaign, nation) is not null)
+            {
+                thisYear++;
+                // Break appends the rebel nation at the end of campaign.Nations, which doesn't shift indices <= i.
+                if (campaign.Nations.Count < prevCount) i = Math.Min(i, campaign.Nations.Count - 1);
+            }
         }
     }
 
@@ -147,8 +156,18 @@ public static class CivilWarOutbreak
         if (nation.LastCivilWarDay > 0 && c.ElapsedDays - nation.LastCivilWarDay < d.CivilWarCooldownDays)
             return "The country is protected from another outbreak during recovery.";
         // One civil war at a time: a state already fighting its own rebels is not split twice.
-        if (Warfare.OpenWars(c).Any(w => !w.Ended && w.CivilConflict && w.Involves(nation.Id))) return "An existing civil war must end before another outbreak.";
-        if (nation.Population < d.CivilWarMinimumPopulation || c.StatesOf(nation).Count(s => s.Population > 0) < d.CivilWarMinimumRegions)
+        var liveWars = Warfare.LiveWars(c);
+        for (var wi = 0; wi < liveWars.Count; wi++)
+        {
+            var w = liveWars[wi];
+            if (!w.Ended && w.CivilConflict && w.Involves(nation.Id))
+                return "An existing civil war must end before another outbreak.";
+        }
+        var nationStates = c.StatesOf(nation);
+        var popRegions = 0;
+        for (var si = 0; si < nationStates.Length; si++)
+            if (nationStates[si].Population > 0) popRegions++;
+        if (nation.Population < d.CivilWarMinimumPopulation || popRegions < d.CivilWarMinimumRegions)
             return "Too few residents or governed regions for a territorial civil war.";
         if (!ignoreStability && nation.Stability >= d.CivilWarStabilityThreshold) return "Institutions remain above the civil-war instability threshold.";
         return "";
@@ -165,7 +184,27 @@ public static class CivilWarOutbreak
         if (RecentMilitaryCoup(c, nation)) chance *= 2f;
         if (LosingForeignWar(c, nation)) chance *= 1.5f;
         if (nation.ImperialOverstretch > 0.05f) chance *= (1f + nation.ImperialOverstretch * 0.75f);
+        if (c.ElapsedDays >= 730)
+        {
+            var epochRamp = M.Clamp01((c.ElapsedDays - 730f) / 365f);
+            var epochScale = GeopoliticalCycle.SystemicFragmentationPressure(c, nation) *
+                             FlashpointIntensityMultiplier(c, nation) *
+                             (1f + (AiTemperament.Of(c, nation).Volatility - 0.5f) * 0.25f);
+            chance *= M.Lerp(1f, epochScale, epochRamp);
+        }
         return float.IsFinite(chance) ? Math.Clamp(chance, 0f, 1f) : 0f;
+    }
+
+    private static float FlashpointIntensityMultiplier(Campaign c, Nation nation)
+    {
+        if (c is null || nation is null || c.ElapsedDays <= 0) return 1f;
+        if (!string.Equals(nation.Tag, "SYR", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(nation.Tag, "MMR", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(nation.Tag, "COD", StringComparison.OrdinalIgnoreCase))
+            return 1f;
+        var decade = GeopoliticalCycle.DecadeIndex(c.ElapsedDays);
+        var hash = GeopoliticalCycle.HashNationEpoch(c.Seed, nation, decade, 0xF1A5);
+        return 0.78f + GeopoliticalCycle.HashToUnit(hash) * 0.54f;
     }
 
     /// <summary>
@@ -193,10 +232,14 @@ public static class CivilWarOutbreak
     /// <summary>A country at war abroad and losing has its army away from home.</summary>
     private static bool LosingForeignWar(Campaign c, Nation nation)
     {
-        foreach (var war in Warfare.OpenWars(c))
+        var liveWars = Warfare.LiveWars(c);
+        for (var i = 0; i < liveWars.Count; i++)
+        {
+            var war = liveWars[i];
             if (!war.Ended && !war.CivilConflict && war.Involves(nation.Id) &&
                 (war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore) < -10f)
                 return true;
+        }
         return false;
     }
 
@@ -228,7 +271,9 @@ public static class CivilWarOutbreak
         if (EligibilityReason(c, nation, ignoreStability).Length > 0) return null;
         var regions = RebelGround(c, nation);
         if (regions.Count == 0) return null;
-        var ideology = OppositionTo(nation.Ideology, c.Seed ^ nation.Id);
+        var oppositionSalt = unchecked((int)GeopoliticalCycle.HashNationEpoch(
+            c.Seed, nation, GeopoliticalCycle.DecadeIndex(c.ElapsedDays), 0x0902));
+        var ideology = OppositionTo(nation.Ideology, oppositionSalt);
         var template = ideology switch
         {
             "liberalism" or "social_democracy" => "transitional_council",
@@ -249,10 +294,18 @@ public static class CivilWarOutbreak
         if (report?.Seceded is null) return null;
         nation.LastCivilWarDay = c.ElapsedDays;
         Recent.Add($"{nation.Tag}->{report.Seceded.Tag} day {c.ElapsedDays} regions {regions.Count} people {report.Population}");
-        DiagnosticLogs.Write("simulation", $"CIVIL_WAR state={nation.Tag} rebels={report.Seceded.Tag} " +
-            $"regions={regions.Count} people={report.Population} stability={nation.Stability:0.00} ideology={ideology}");
+        if (DiagnosticLogs.Enabled)
+            DiagnosticLogs.Write("simulation", $"CIVIL_WAR state={nation.Tag} rebels={report.Seceded.Tag} " +
+                $"regions={regions.Count} people={report.Population} stability={nation.Stability:0.00} ideology={ideology}");
         return report;
     }
+
+    [ThreadStatic] private static List<ScenarioState> _rebelOwnedScratch;
+    [ThreadStatic] private static Dictionary<int, ScenarioState> _rebelByIndexScratch;
+    [ThreadStatic] private static Dictionary<int, HashSet<int>> _rebelAdjScratch;
+    [ThreadStatic] private static Stack<HashSet<int>> _rebelSetPool;
+    [ThreadStatic] private static HashSet<int> _rebelInsideScratch;
+    [ThreadStatic] private static HashSet<int> _rebelPassedScratch;
 
     /// <summary>
     /// The ground: the worst-governed region that is not the capital, and its neighbours in
@@ -265,43 +318,105 @@ public static class CivilWarOutbreak
         if (!float.IsFinite(d.CivilWarRebelShareMin) || !float.IsFinite(d.CivilWarRebelShareMax) ||
             d.CivilWarRebelShareMin < 0f || d.CivilWarRebelShareMax > .6f ||
             d.CivilWarRebelShareMin > d.CivilWarRebelShareMax) return new();
-        var owned = c.StatesOf(nation).Where(s => s.Population > 0 && s.MapIndex != nation.CapitalStateMapIndex &&
-            RevoltRecovery.DaysLeft(c, nation, s) == 0 &&
-            float.IsFinite(s.Stability) && float.IsFinite(s.Radicalism)).ToList();
-        if (owned.Count < 2) return new();
-        float Grievance(ScenarioState s) => s.Stability - 0.6f * s.Radicalism;
-        var byIndex = owned.ToDictionary(s => s.MapIndex);
-        var adjacent = byIndex.Keys.ToDictionary(k => k, _ => new HashSet<int>());
-        var map = c.ProvinceMap;
-        for (var p = 1; p <= map.ProvinceCount; p++)
+
+        var owned = _rebelOwnedScratch ??= new List<ScenarioState>();
+        owned.Clear();
+        var nationStates = c.StatesOf(nation);
+        for (var i = 0; i < nationStates.Length; i++)
         {
-            var here = map.ProvinceToState[p];
-            if (!adjacent.TryGetValue(here, out var set)) continue;
-            // Drawn borders: a side in a civil war is regions that touch on the map, not ones a
-            // ferry runs between (ProvinceTopology.LandNeighbors).
-            foreach (var next in map.LandNeighbors[p])
+            var s = nationStates[i];
+            if (s.Population > 0 && s.MapIndex != nation.CapitalStateMapIndex &&
+                RevoltRecovery.DaysLeft(c, nation, s) == 0 &&
+                float.IsFinite(s.Stability) && float.IsFinite(s.Radicalism))
+                owned.Add(s);
+        }
+        if (owned.Count < 2) return new();
+
+        static float Grievance(ScenarioState s) => s.Stability - 0.6f * s.Radicalism;
+
+        var byIndex = _rebelByIndexScratch ??= new Dictionary<int, ScenarioState>();
+        byIndex.Clear();
+        var adjacent = _rebelAdjScratch ??= new Dictionary<int, HashSet<int>>();
+        var setPool = _rebelSetPool ??= new Stack<HashSet<int>>();
+        foreach (var existing in adjacent.Values)
+        {
+            existing.Clear();
+            setPool.Push(existing);
+        }
+        adjacent.Clear();
+
+        for (var i = 0; i < owned.Count; i++)
+        {
+            var s = owned[i];
+            byIndex[s.MapIndex] = s;
+            adjacent[s.MapIndex] = setPool.Count > 0 ? setPool.Pop() : new HashSet<int>();
+        }
+
+        var map = c.ProvinceMap;
+        var pts = map.ProvinceToState;
+        var landNeighbors = map.LandNeighbors;
+        for (var i = 0; i < owned.Count; i++)
+        {
+            var here = owned[i].MapIndex;
+            var set = adjacent[here];
+            var provinces = map.ProvincesOfState(here);
+            for (var pi = 0; pi < provinces.Length; pi++)
             {
-                var there = map.ProvinceToState[next];
-                if (there != here && byIndex.ContainsKey(there)) set.Add(there);
+                // Drawn borders: a side in a civil war is regions that touch on the map, not ones a
+                // ferry runs between (ProvinceTopology.LandNeighbors).
+                var neighbors = landNeighbors[provinces[pi]];
+                for (var ni = 0; ni < neighbors.Length; ni++)
+                {
+                    var there = pts[neighbors[ni]];
+                    if (there != here && byIndex.ContainsKey(there)) set.Add(there);
+                }
             }
         }
         var share = d.CivilWarRebelShareMin + (d.CivilWarRebelShareMax - d.CivilWarRebelShareMin) *
             Escalation.Roll(c.Seed, nation.Id, 0x5A1, c.ElapsedDays, 0x9);
         var target = (long)(nation.Population * share);
-        var seed = owned.OrderBy(Grievance).ThenBy(s => s.MapIndex).First();
+        var seed = owned[0];
+        var seedG = Grievance(seed);
+        for (var i = 1; i < owned.Count; i++)
+        {
+            var s = owned[i];
+            var g = Grievance(s);
+            if (g < seedG || (g == seedG && s.MapIndex < seed.MapIndex))
+            {
+                seed = s;
+                seedG = g;
+            }
+        }
         var taken = new List<ScenarioState> { seed };
-        var inside = new HashSet<int> { seed.MapIndex };
+        var inside = _rebelInsideScratch ??= new HashSet<int>();
+        inside.Clear();
+        inside.Add(seed.MapIndex);
         long people = seed.Population;
         // Never the whole country less the capital: the government keeps a real state.
         var limit = Math.Max(1, (int)(owned.Count * 0.6f));
         // Whole regions, never past the most a rising may take: a region that would carry it
         // over the line is passed over for a smaller neighbour (Yemen lost 57 % in one rising).
         var ceiling = (long)(nation.Population * d.CivilWarRebelShareMax);
-        var passed = new HashSet<int>();
+        var passed = _rebelPassedScratch ??= new HashSet<int>();
+        passed.Clear();
         while (people < target && taken.Count < limit)
         {
-            var next = taken.SelectMany(s => adjacent[s.MapIndex]).Where(i => !inside.Contains(i) && !passed.Contains(i))
-                .Select(i => byIndex[i]).OrderBy(Grievance).ThenBy(s => s.MapIndex).FirstOrDefault();
+            ScenarioState next = null;
+            var nextG = float.PositiveInfinity;
+            for (var ti = 0; ti < taken.Count; ti++)
+            {
+                foreach (var idx in adjacent[taken[ti].MapIndex])
+                {
+                    if (inside.Contains(idx) || passed.Contains(idx)) continue;
+                    var cand = byIndex[idx];
+                    var g = Grievance(cand);
+                    if (next is null || g < nextG || (g == nextG && cand.MapIndex < next.MapIndex))
+                    {
+                        next = cand;
+                        nextG = g;
+                    }
+                }
+            }
             if (next is null) break;
             if (people + next.Population > ceiling) { passed.Add(next.MapIndex); continue; }
             taken.Add(next); inside.Add(next.MapIndex); people += next.Population;
@@ -347,12 +462,26 @@ public sealed class CivilWarBudgetState
         return (int)total;
     }
 
+    [ThreadStatic] private static List<int> _pruneDaysScratch;
+
     internal void Prune(int today)
     {
         StartsByDay ??= new();
         if (StartsByDay.Count == 0) return;
-        foreach (var pair in StartsByDay.Where(p => !InWindow(p.Key, today) || p.Value <= 0).ToArray())
-            StartsByDay.Remove(pair.Key);
+        List<int> stale = null;
+        foreach (var pair in StartsByDay)
+        {
+            if (InWindow(pair.Key, today) && pair.Value > 0) continue;
+            if (stale is null)
+            {
+                stale = _pruneDaysScratch ??= new List<int>(8);
+                stale.Clear();
+            }
+            stale.Add(pair.Key);
+        }
+        if (stale is null) return;
+        for (var i = 0; i < stale.Count; i++) StartsByDay.Remove(stale[i]);
+        stale.Clear();
     }
 
     internal void Record(int today)

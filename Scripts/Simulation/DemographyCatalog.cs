@@ -229,9 +229,17 @@ public static class DemographyCatalog
     public static string ReligionName(string id) => Loc.Get(Religion(id)?.Name ?? Titled(id));
 
     private static readonly Dictionary<string, ProfessionDefinition> ProfessionById = new(StringComparer.OrdinalIgnoreCase);
+    private static volatile System.Collections.Frozen.FrozenDictionary<string, ProfessionDefinition> _frozenProfessions;
+    internal static volatile int ProfessionVersion;
 
-    public static ProfessionDefinition Profession(string id) =>
-        id is not null && ProfessionById.TryGetValue(id, out var profession) ? profession : null;
+    public static ProfessionDefinition Profession(string id)
+    {
+        if (id is null) return null;
+        var frozen = _frozenProfessions;
+        if (frozen is not null)
+            return frozen.TryGetValue(id, out var cached) ? cached : null;
+        return ProfessionById.TryGetValue(id, out var profession) ? profession : null;
+    }
 
     public static string ProfessionName(string id) => Loc.Get(Profession(id)?.Name ?? Titled(id));
 
@@ -305,6 +313,8 @@ public static class DemographyCatalog
         ReligionById.Clear();
         ProfessionList.Clear();
         ProfessionById.Clear();
+        _frozenProfessions = null;
+        unchecked { ProfessionVersion++; }
         ByCountry.Clear();
         ByRegion.Clear();
         PrimaryByCountry.Clear();
@@ -735,6 +745,8 @@ public static class DemographyCatalog
             if (value.TryGetProperty("urban_rise", out var rise) &&
                 rise.TryGetSingle(out var climb) && climb > 0f) profession.UrbanRise = climb;
         }
+        _frozenProfessions = System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(ProfessionById, StringComparer.OrdinalIgnoreCase);
+        unchecked { ProfessionVersion++; }
     }
 
     private static void MergePops(JsonElement root, List<string> errors)

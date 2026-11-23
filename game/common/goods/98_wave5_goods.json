@@ -1,0 +1,20 @@
+// Strategic leverage polish for foundational industrial metals while preserving exact
+// catalog IDs, icons and calibrated 2024 market base prices.
+{
+  "Copper": {
+    "name": "Copper",
+    "icon": "Cu",
+    "base_price": 0.032,
+    "essential_weight": 0.08,
+    "leverage": "strategic",
+    "description": "Conductors for power networks, clean grids, electronics and precision components."
+  },
+  "Steel": {
+    "name": "Steel",
+    "icon": "Fe",
+    "base_price": 0.044,
+    "essential_weight": 0.12,
+    "leverage": "strategic",
+    "description": "Smelted structural metal for industrial parks, infrastructure, vehicles and military supply."
+  }
+}

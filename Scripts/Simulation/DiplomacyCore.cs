@@ -16,14 +16,57 @@ public enum DiplomaticStance
 
 public sealed partial class DiplomaticRelation
 {
+    private static int _protectorMutationVersion;
+    private static int _treatyMutationVersion;
+    internal static int ProtectorMutationVersion => System.Threading.Volatile.Read(ref _protectorMutationVersion);
+    internal static int TreatyMutationVersion => System.Threading.Volatile.Read(ref _treatyMutationVersion);
+
+    private DiplomaticStance _stance;
+    private bool _tradeAgreement;
+    private bool _nonAggressionPact;
+    private bool _guaranteeByA;
+    private bool _guaranteeByB;
+
     public int A;
     public int B;
     public float Opinion;
-    public DiplomaticStance Stance;
+    public DiplomaticStance Stance
+    {
+        get => _stance;
+        set
+        {
+            if (value == _stance) return;
+            var changedAlliance = value == DiplomaticStance.Allied || _stance == DiplomaticStance.Allied;
+            _stance = value;
+            if (changedAlliance)
+            {
+                System.Threading.Interlocked.Increment(ref _protectorMutationVersion);
+                System.Threading.Interlocked.Increment(ref _treatyMutationVersion);
+            }
+        }
+    }
     public int TruceUntil;
     public int LastActionDay = -30;
-    public bool TradeAgreement;
-    public bool NonAggressionPact;
+    public bool TradeAgreement
+    {
+        get => _tradeAgreement;
+        set
+        {
+            if (value == _tradeAgreement) return;
+            _tradeAgreement = value;
+            System.Threading.Interlocked.Increment(ref _treatyMutationVersion);
+        }
+    }
+    public bool NonAggressionPact
+    {
+        get => _nonAggressionPact;
+        set
+        {
+            if (value == _nonAggressionPact) return;
+            _nonAggressionPact = value;
+            System.Threading.Interlocked.Increment(ref _treatyMutationVersion);
+        }
+    }
 
     /// <summary>
     /// Whether each side refuses to trade with the other. Directional, because sanctions
@@ -36,8 +79,28 @@ public sealed partial class DiplomaticRelation
     public bool EmbargoByB;
 
     /// <summary>Whether each side has promised to fight for the other if it is attacked.</summary>
-    public bool GuaranteeByA;
-    public bool GuaranteeByB;
+    public bool GuaranteeByA
+    {
+        get => _guaranteeByA;
+        set
+        {
+            if (value == _guaranteeByA) return;
+            _guaranteeByA = value;
+            System.Threading.Interlocked.Increment(ref _protectorMutationVersion);
+            System.Threading.Interlocked.Increment(ref _treatyMutationVersion);
+        }
+    }
+    public bool GuaranteeByB
+    {
+        get => _guaranteeByB;
+        set
+        {
+            if (value == _guaranteeByB) return;
+            _guaranteeByB = value;
+            System.Threading.Interlocked.Increment(ref _protectorMutationVersion);
+            System.Threading.Interlocked.Increment(ref _treatyMutationVersion);
+        }
+    }
 
     /// <summary>
     /// An alliance somebody has offered and nobody has answered: who asked, and when.
@@ -457,12 +520,19 @@ public static class CampaignDiplomacy
 
     private static int ResolveWarGoal(Campaign campaign, int defenderMapIndex, int requestedState)
     {
-        var selected = campaign.States.FirstOrDefault(state => state.MapIndex == requestedState);
+        var selected = campaign.StateByMapIndex(requestedState);
         if (selected is not null && selected.NationMapIndex == defenderMapIndex) return selected.MapIndex;
-        return campaign.States.Where(state => state.NationMapIndex == defenderMapIndex)
-            .OrderByDescending(state => state.Population)
-            .ThenBy(state => state.MapIndex)
-            .FirstOrDefault()?.MapIndex ?? -1;
+        ScenarioState best = null;
+        var states = campaign.States;
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            if (state.NationMapIndex != defenderMapIndex) continue;
+            if (best is null || state.Population > best.Population ||
+                (state.Population == best.Population && state.MapIndex < best.MapIndex))
+                best = state;
+        }
+        return best?.MapIndex ?? -1;
     }
 
     // Who borders whom. This used to be answered by walking all 37 807 provinces and
@@ -722,6 +792,7 @@ public sealed class GuaranteeCommand : ICampaignCommand
         if (relation.GuaranteedBy(IssuerId) == Guarantee) return;
         if (IssuerId == relation.A) relation.GuaranteeByA = Guarantee;
         else relation.GuaranteeByB = Guarantee;
+        campaign.NoteAllianceChange();
         relation.LastActionDay = campaign.ElapsedDays;
         // A promise given to the country that asked for it is that question answered: nobody is
         // still waiting, and leaving the request standing would block the next one for a month.

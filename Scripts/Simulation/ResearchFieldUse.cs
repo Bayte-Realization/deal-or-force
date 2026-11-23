@@ -120,22 +120,31 @@ public static partial class ResearchSystem
         return MathF.Min(offered, room);
     }
 
+    [ThreadStatic] private static List<TechnologyDefinition> _practicedListScratch;
+    [ThreadStatic] private static Dictionary<BuildingKind, bool> _practicedIndustryScratch;
+    [ThreadStatic] private static HashSet<string> _practicedSeenScratch;
+
     private static List<TechnologyDefinition> Practiced(Campaign campaign, Nation nation)
     {
-        var list = new List<TechnologyDefinition>();
+        var list = _practicedListScratch ??= new List<TechnologyDefinition>();
+        list.Clear();
         if (nation.Technologies.Count == 0) return list;
         var fighting = IsFighting(campaign, nation);
         var shipping = IsShipping(nation);
-        var industry = new Dictionary<BuildingKind, bool>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var id in nation.Technologies)
+        var industry = _practicedIndustryScratch ??= new Dictionary<BuildingKind, bool>();
+        industry.Clear();
+        var seen = _practicedSeenScratch ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        seen.Clear();
+        var techs = nation.Technologies;
+        for (var i = 0; i < techs.Count; i++)
         {
+            var id = techs[i];
             if (string.IsNullOrEmpty(id) || !seen.Add(id)) continue;
             var technology = TechnologyCatalog.Of(id);
             if (technology is not null && Practices(campaign, nation, technology, fighting, shipping, industry))
                 list.Add(technology);
         }
-        list.Sort((left, right) => string.CompareOrdinal(left.Id, right.Id));
+        if (list.Count > 1) list.Sort(static (left, right) => string.CompareOrdinal(left.Id, right.Id));
         return list;
     }
 
@@ -161,13 +170,19 @@ public static partial class ResearchSystem
 
     private static bool IsFighting(Campaign campaign, Nation nation)
     {
-        foreach (var army in campaign.Armies)
+        var armies = campaign.Armies;
+        var liveWars = Warfare.LiveWars(campaign);
+        for (var ai = 0; ai < armies.Count; ai++)
         {
+            var army = armies[ai];
             if (army.NationId != nation.Id || army.Divisions <= 0f) continue;
             if (army.InBattle) return true;
             if (army.AssignedWarId < 0) continue;
-            foreach (var war in Warfare.OpenWars(campaign))
+            for (var wi = 0; wi < liveWars.Count; wi++)
+            {
+                var war = liveWars[wi];
                 if (war.Id == army.AssignedWarId && !war.Ended && war.Involves(nation.Id)) return true;
+            }
         }
         return false;
     }

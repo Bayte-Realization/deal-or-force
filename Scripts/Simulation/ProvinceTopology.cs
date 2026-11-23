@@ -796,11 +796,25 @@ public sealed class ProvinceTopology
         }
     }
 
-    public bool IsRiverCrossing(int firstProvince, int secondProvince) =>
-        _riverCrossings.ContainsKey(EdgeKey(firstProvince, secondProvince));
+    public bool IsRiverCrossing(int firstProvince, int secondProvince)
+    {
+        var rivers = RiverIntensityByProvince;
+        if (_riverCrossings.Count == 0 ||
+            (uint)firstProvince >= (uint)rivers.Length || rivers[firstProvince] == 0 ||
+            (uint)secondProvince >= (uint)rivers.Length || rivers[secondProvince] == 0)
+            return false;
+        return _riverCrossings.ContainsKey(EdgeKey(firstProvince, secondProvince));
+    }
 
-    public float RiverCrossingStrength(int firstProvince, int secondProvince) =>
-        _riverCrossings.TryGetValue(EdgeKey(firstProvince, secondProvince), out var value) ? value / 255f : 0f;
+    public float RiverCrossingStrength(int firstProvince, int secondProvince)
+    {
+        var rivers = RiverIntensityByProvince;
+        if (_riverCrossings.Count == 0 ||
+            (uint)firstProvince >= (uint)rivers.Length || rivers[firstProvince] == 0 ||
+            (uint)secondProvince >= (uint)rivers.Length || rivers[secondProvince] == 0)
+            return 0f;
+        return _riverCrossings.TryGetValue(EdgeKey(firstProvince, secondProvince), out var value) ? value / 255f : 0f;
+    }
 
     public bool HasRiver(int provinceId) => provinceId > 0 && provinceId < RiverIntensityByProvince.Length &&
         RiverIntensityByProvince[provinceId] > 0;
@@ -1130,61 +1144,97 @@ public sealed class ProvinceTopology
         out int[] centers,
         out int[][] neighbors)
     {
-        var firstCell = new int[provinceCount];
+        var originXByProv = new int[provinceCount];
         var counts = new int[provinceCount];
         var sumX = new long[provinceCount];
         var sumY = new long[provinceCount];
-        Array.Fill(firstCell, -1);
+        Array.Fill(originXByProv, -1);
+        var halfWidth = width / 2;
 
-        for (var cell = 0; cell < cellToProvince.Length; cell++)
+        // Pass 1: accumulate centroid sums with nested (y, x) loops (zero % or / per pixel).
+        for (var y = 0; y < height; y++)
         {
-            var province = cellToProvince[cell];
-            if (province <= 0) continue;
-            if (firstCell[province] < 0) firstCell[province] = cell;
-            var originX = firstCell[province] % width;
-            var x = cell % width;
-            var dx = x - originX;
-            if (dx > width / 2) dx -= width;
-            else if (dx < -width / 2) dx += width;
-            sumX[province] += originX + dx;
-            sumY[province] += cell / width;
-            counts[province]++;
+            var rowStart = y * width;
+            for (var x = 0; x < width; x++)
+            {
+                var province = cellToProvince[rowStart + x];
+                if (province <= 0) continue;
+                var originX = originXByProv[province];
+                if (originX < 0) { originX = x; originXByProv[province] = x; }
+                var dx = x - originX;
+                if (dx > halfWidth) dx -= width;
+                else if (dx < -halfWidth) dx += width;
+                sumX[province] += originX + dx;
+                sumY[province] += y;
+                counts[province]++;
+            }
+        }
+
+        // Precompute integer target (x, y) once per province instead of once per pixel.
+        var targetXByProv = new int[provinceCount];
+        var targetYByProv = new int[provinceCount];
+        for (var p = 1; p < provinceCount; p++)
+        {
+            var c = counts[p];
+            if (c <= 0) continue;
+            var tx = (int)(sumX[p] / c);
+            tx %= width;
+            if (tx < 0) tx += width;
+            targetXByProv[p] = tx;
+            targetYByProv[p] = (int)(sumY[p] / c);
         }
 
         centers = new int[provinceCount];
         Array.Fill(centers, -1);
         var best = new long[provinceCount];
         Array.Fill(best, long.MaxValue);
-        for (var cell = 0; cell < cellToProvince.Length; cell++)
-        {
-            var province = cellToProvince[cell];
-            if (province <= 0 || counts[province] == 0) continue;
-            var targetX = (int)(sumX[province] / counts[province]);
-            targetX = ((targetX % width) + width) % width;
-            var targetY = (int)(sumY[province] / counts[province]);
-            var x = cell % width;
-            var dx = Math.Abs(x - targetX);
-            dx = Math.Min(dx, width - dx);
-            var dy = cell / width - targetY;
-            var score = (long)dx * dx + (long)dy * dy;
-            if (score >= best[province]) continue;
-            best[province] = score;
-            centers[province] = cell;
-        }
+        var edges = new HashSet<long>(Math.Max(64, provinceCount * 4));
 
-        var edges = new HashSet<long>();
+        // Pass 2: pick nearest center cell AND collect horizontal/vertical neighbor edges in one pass.
         for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
         {
-            var cell = y * width + x;
-            var province = cellToProvince[cell];
-            if (province <= 0) continue;
-            AddEdge(province, cellToProvince[y * width + ((x + 1) % width)]);
-            if (y + 1 < height) AddEdge(province, cellToProvince[cell + width]);
+            var rowStart = y * width;
+            var hasBelow = y + 1 < height;
+            for (var x = 0; x < width; x++)
+            {
+                var cell = rowStart + x;
+                var province = cellToProvince[cell];
+                if (province <= 0) continue;
+
+                var dx = x - targetXByProv[province];
+                if (dx < 0) dx = -dx;
+                var wrapDx = width - dx;
+                if (wrapDx < dx) dx = wrapDx;
+                var dy = y - targetYByProv[province];
+                var score = (long)dx * dx + (long)dy * dy;
+                if (score < best[province])
+                {
+                    best[province] = score;
+                    centers[province] = cell;
+                }
+
+                var right = cellToProvince[x + 1 < width ? cell + 1 : rowStart];
+                if (right > 0 && right != province)
+                {
+                    var a = province < right ? province : right;
+                    var b = province < right ? right : province;
+                    edges.Add(((long)a << 32) | (uint)b);
+                }
+                if (hasBelow)
+                {
+                    var down = cellToProvince[cell + width];
+                    if (down > 0 && down != province)
+                    {
+                        var a = province < down ? province : down;
+                        var b = province < down ? down : province;
+                        edges.Add(((long)a << 32) | (uint)b);
+                    }
+                }
+            }
         }
 
         var lists = new List<int>[provinceCount];
-        for (var province = 0; province < provinceCount; province++) lists[province] = new List<int>();
+        for (var province = 0; province < provinceCount; province++) lists[province] = new List<int>(8);
         foreach (var edge in edges)
         {
             var a = (int)(edge >> 32);
@@ -1197,13 +1247,6 @@ public sealed class ProvinceTopology
         {
             lists[province].Sort();
             neighbors[province] = lists[province].ToArray();
-        }
-
-        void AddEdge(int a, int b)
-        {
-            if (a <= 0 || b <= 0 || a == b) return;
-            if (a > b) (a, b) = (b, a);
-            edges.Add(((long)a << 32) | (uint)b);
         }
     }
 

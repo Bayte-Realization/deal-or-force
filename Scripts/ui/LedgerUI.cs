@@ -179,6 +179,7 @@ public partial class DealOrForceGame
 
     private void OpenLedger()
     {
+        EnsureScreen("ledger", BuildLedgerInterface);
         _openScreen = "Ledger";
         _sidePanel.Visible = false;
         _ledgerViewedNationId = _ledgerViewedNationId < 0 ? _campaign.Player.Id : _ledgerViewedNationId;
@@ -191,6 +192,7 @@ public partial class DealOrForceGame
 
     private void CloseLedger()
     {
+        if (_ledgerLayer is null) return;
         _ledgerLayer.Visible = false;
         if (_openScreen == "Ledger") _openScreen = "";
     }

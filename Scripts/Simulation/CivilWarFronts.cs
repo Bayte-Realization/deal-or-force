@@ -42,43 +42,70 @@ public static class CivilWarFronts
         // The governments with more than one rising against them at once.
         var risings = new Dictionary<int, List<Nation>>();
         var warsScanned = 0;
-        foreach (var war in Warfare.OpenWars(c))
+        var openWars = Warfare.OpenWars(c);
+        for (var wi = 0; wi < openWars.Count; wi++)
         {
             if (++warsScanned % 16 == 0 || Campaign.StageOverdue()) yield return 0;
+            var war = openWars[wi];
             if (war.Ended || !war.CivilConflict) continue;
-            foreach (var (government, rebel) in new[] { (war.AttackerId, war.DefenderId), (war.DefenderId, war.AttackerId) })
+            for (var role = 0; role < 2; role++)
             {
+                var government = role == 0 ? war.AttackerId : war.DefenderId;
+                var rebel = role == 0 ? war.DefenderId : war.AttackerId;
                 var side = c.NationById(rebel);
                 if (side is null || !RoseAgainst(side, government)) continue;
                 if (!risings.TryGetValue(government, out var list)) risings[government] = list = new List<Nation>();
                 if (!list.Contains(side)) list.Add(side);
             }
         }
-        if (!risings.Values.Any(list => list.Count >= 2)) yield break;
+        var govKeys = new List<int>(risings.Count);
+        foreach (var kv in risings)
+            if (kv.Value.Count >= 2) govKeys.Add(kv.Key);
+        if (govKeys.Count == 0) yield break;
+        govKeys.Sort();
         yield return 0;
 
         var byIndex = c.NationsByMapIndex();
         var governments = 0;
-        foreach (var (government, sides) in risings.OrderBy(pair => pair.Key))
+        var indices = new HashSet<ushort>();
+        var touching = new List<(int A, int B)>();
+        var touchingSeen = new HashSet<long>();
+        for (var gi = 0; gi < govKeys.Count; gi++)
         {
             if (++governments % 2 == 0 || Campaign.StageOverdue()) yield return 0;
+            var government = govKeys[gi];
+            var sides = risings[government];
             if (sides.Count < 2) continue;
-            var indices = sides.Select(s => (ushort)s.MapIndex).ToHashSet();
-            var touching = new HashSet<(int, int)>();
-            for (var p = 1; p <= map.ProvinceCount && p < controls.Length; p++)
+            indices.Clear();
+            for (var si = 0; si < sides.Count; si++) indices.Add((ushort)sides[si].MapIndex);
+            touching.Clear();
+            touchingSeen.Clear();
+            var limit = Math.Min(map.ProvinceCount, controls.Length - 1);
+            for (var p = 1; p <= limit; p++)
             {
                 var here = controls[p];
                 if (!indices.Contains(here)) continue;
-                foreach (var q in map.Neighbors[p])
+                var neighbors = map.Neighbors[p];
+                for (var ni = 0; ni < neighbors.Length; ni++)
                 {
+                    var q = neighbors[ni];
                     if (q >= controls.Length) continue;
                     var there = controls[q];
                     if (there == here || !indices.Contains(there)) continue;
-                    touching.Add(here < there ? (here, there) : (there, here));
+                    int lo = here < there ? here : there;
+                    int hi = here < there ? there : here;
+                    var pairKey = ((long)lo << 16) | (uint)hi;
+                    if (touchingSeen.Add(pairKey)) touching.Add((lo, hi));
                 }
             }
-            foreach (var (a, b) in touching.OrderBy(t => t.Item1).ThenBy(t => t.Item2))
+            touching.Sort(static (l, r) =>
             {
+                var c1 = l.A.CompareTo(r.A);
+                return c1 != 0 ? c1 : l.B.CompareTo(r.B);
+            });
+            for (var ti = 0; ti < touching.Count; ti++)
+            {
+                var (a, b) = touching[ti];
                 var first = byIndex[(ushort)a];
                 var second = byIndex[(ushort)b];
                 if (MilitaryAccess.Hostile(c, first.Id, second.Id)) continue;
@@ -87,8 +114,15 @@ public static class CivilWarFronts
                 if (!WantDifferentThings(first, second)) continue;
                 if (MovementRules.Roll(c.Seed, first.Id * 977 + second.Id, c.ElapsedDays, 0x3F27) >= c.Defines.CivilWarThirdFrontChance * AiTemper.Aggression(c)) continue;
                 // The stronger side moves first: it is the one with something to gain.
-                var power = (Func<Nation, float>)(n => c.Armies.Where(x => x.NationId == n.Id).Sum(x => x.Divisions));
-                var (attacker, defender) = power(first) >= power(second) ? (first, second) : (second, first);
+                float pFirst = 0f, pSecond = 0f;
+                var armies = c.Armies;
+                for (var ai = 0; ai < armies.Count; ai++)
+                {
+                    var army = armies[ai];
+                    if (army.NationId == first.Id) pFirst += army.Divisions;
+                    else if (army.NationId == second.Id) pSecond += army.Divisions;
+                }
+                var (attacker, defender) = pFirst >= pSecond ? (first, second) : (second, first);
                 if (attacker.IsHuman) continue;   // a player chooses its own wars
                 var war = CampaignDiplomacy.DeclareWar(c, attacker.Id, defender.Id, justification: "civil_war", onOwnInitiative: false);
                 if (war is null) continue;

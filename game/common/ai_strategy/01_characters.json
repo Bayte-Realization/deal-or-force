@@ -89,6 +89,13 @@
       "spearhead_share": 0.06, "advance_share_attacker": 0.40, "advance_share_defender": 0.20,
       "defend_share": 0.42, "offensive_stance": "Balanced", "defensive_stance": "Cautious",
       "execute_planning_threshold": 0.40, "aggression": 0.8, "sociability": 0.6
+    },
+    // Guards its home waters fiercely while preparing amphibious thrusts and courting
+    // maritime partners to reclaim lost homeland across a strait.
+    "maritime_reclaimer": {
+      "spearhead_share": 0.22, "advance_share_attacker": 0.74, "advance_share_defender": 0.42,
+      "defend_share": 0.20, "offensive_stance": "Aggressive", "defensive_stance": "Balanced",
+      "execute_planning_threshold": 0.20, "aggression": 1.45, "sociability": 1.25
     }
   },
 
@@ -114,7 +121,7 @@
     "PRK": "fortress",
     "IRN": "fortress",
     "FIN": "fortress",
-    "TWN": "fortress",
+    "TWN": "maritime_reclaimer",
     "CHE": "trading_state",
     "SGP": "trading_state",
     "NLD": "trading_state",

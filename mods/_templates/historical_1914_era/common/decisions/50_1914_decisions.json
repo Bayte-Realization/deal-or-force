@@ -1,0 +1,22 @@
+{
+  "war_bonds_1914": {
+    "name": "Issue national war bonds",
+    "description": "Raise patriotic domestic loans to fund field armies and munitions factories.",
+    "cooldown_days": 365,
+    "gdp_cost_share": 0.0,
+    "effects": {
+      "treasury": 12,
+      "stability": -0.02
+    }
+  },
+  "general_staff_mobilisation": {
+    "name": "General staff rail mobilisation",
+    "description": "Enact pre-war mobilisation timetables to expand reserve manpower and war readiness.",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.002,
+    "effects": {
+      "war_support": 0.05,
+      "manpower": 50000
+    }
+  }
+}

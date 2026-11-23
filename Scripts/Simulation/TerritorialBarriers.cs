@@ -304,4 +304,202 @@ public static partial class TerritorialTopology
         }
         return distance;
     }
+
+    /// <summary>One province reassigned by <see cref="HealBorderSlivers"/>.</summary>
+    public readonly record struct SliverHealSummary(
+        int ProvinceId,
+        ushort OldNation,
+        ushort OldState,
+        ushort NewNation,
+        ushort NewState,
+        float Latitude,
+        float Longitude);
+
+    // Explicit geographic shields for real-world historic exclaves/enclaves (minLat, maxLat, minLon, maxLon).
+    private static readonly (float MinLat, float MaxLat, float MinLon, float MaxLon)[] ProtectedExclaveBoxes =
+    {
+        (54.20f, 55.50f, 19.40f, 23.00f),   // Kaliningrad
+        (38.70f, 39.95f, 44.60f, 46.30f),   // Nakhchivan
+        (51.00f, 72.00f, -180.0f, -129.0f), // Alaska
+        (36.05f, 36.22f, -5.45f, -5.28f),   // Gibraltar
+        (35.10f, 36.00f, -5.55f, -2.75f),   // Ceuta & Melilla
+        (-5.90f, -4.30f, 11.85f, 13.25f),   // Cabinda
+        (42.40f, 42.56f, 1.90f, 2.08f),     // Llivia
+        (-9.55f, -9.10f, 124.00f, 124.65f), // Oecusse
+        (4.25f, 4.98f, 115.00f, 115.45f),   // Temburong
+        (25.50f, 26.55f, 55.90f, 56.65f),   // Musandam
+        (45.92f, 46.02f, 8.92f, 9.04f),     // Campione d'Italia
+        (47.64f, 47.76f, 8.64f, 8.78f),     // Busingen
+        (51.40f, 51.50f, 4.88f, 5.00f),     // Baarle-Hertog / Baarle-Nassau
+        (39.70f, 40.50f, 70.50f, 72.25f),   // Fergana Valley enclaves (Sokh, Shohimardon, Vorukh, Barak)
+        (48.94f, 49.04f, -123.15f, -122.96f), // Point Roberts
+        (49.00f, 49.42f, -95.25f, -94.75f), // Northwest Angle
+        (19.85f, 20.08f, -75.26f, -75.04f), // Guantanamo
+        (34.50f, 35.12f, 32.78f, 34.02f),   // Akrotiri & Dhekelia
+        (2.00f, 6.00f, -54.70f, -51.50f),   // French Guiana
+    };
+
+    /// <summary>True when a province centre lies inside a protected real-world historic exclave/enclave.</summary>
+    public static bool IsProtectedRealWorldExclave(float latitude, float longitude)
+    {
+        for (var i = 0; i < ProtectedExclaveBoxes.Length; i++)
+        {
+            var b = ProtectedExclaveBoxes[i];
+            if (latitude >= b.MinLat && latitude <= b.MaxLat && longitude >= b.MinLon && longitude <= b.MaxLon)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Deterministically heal 1–2 province cut-off land/coastal border slivers (such as the 2 detached
+    /// coastal Western Samegrelo-Zemo Svaneti provinces on Abkhazia's Black Sea coast) whose 100% of
+    /// non-water <see cref="ProvinceTopology.LandNeighbors"/> belong to a single surrounding foreign nation.
+    ///
+    /// Strictly preserves:
+    /// - Islands (0 foreign land neighbors),
+    /// - Sovereign microstates (nations with &lt;= 4 total land provinces),
+    /// - Distinct whole-state exclaves (states with no other provinces outside the component),
+    /// - Explicitly shielded real-world historic exclaves/enclaves (<see cref="IsProtectedRealWorldExclave"/>).
+    /// Operates purely on the province graph so <c>WorldMapSource.States</c> and <c>compiled.json</c> stay untouched.
+    /// </summary>
+    public static IReadOnlyList<SliverHealSummary> HealBorderSlivers(ProvinceTopology topology)
+    {
+        if (topology is null || topology.ProvinceCount <= 0)
+            return Array.Empty<SliverHealSummary>();
+
+        var count = topology.ProvinceCount;
+        var nations = topology.ProvinceToNation;
+        var states = topology.ProvinceToState;
+        var landNeighbors = topology.LandNeighbors;
+        var nationLandCounts = new Dictionary<ushort, int>();
+        var stateLandCounts = new Dictionary<ushort, int>();
+
+        for (var p = 1; p <= count; p++)
+        {
+            if (topology.IsWater(p)) continue;
+            var owner = nations[p];
+            var state = states[p];
+            if (owner == 0 || state == 0) continue;
+            nationLandCounts[owner] = nationLandCounts.GetValueOrDefault(owner) + 1;
+            stateLandCounts[state] = stateLandCounts.GetValueOrDefault(state) + 1;
+        }
+
+        // Find connected components of provinces belonging to the same owner via pure LandNeighbors (no strait crossings).
+        var visited = new bool[count + 1];
+        var queue = new Queue<int>();
+        var component = new List<int>(4);
+        var foreignStateCounts = new Dictionary<ushort, int>();
+        var heals = new List<SliverHealSummary>();
+
+        for (var start = 1; start <= count; start++)
+        {
+            if (visited[start] || topology.IsWater(start)) continue;
+            var owner = nations[start];
+            var state = states[start];
+            if (owner == 0 || state == 0) continue;
+
+            visited[start] = true;
+            component.Clear();
+            queue.Clear();
+            queue.Enqueue(start);
+            while (queue.Count > 0)
+            {
+                var cur = queue.Dequeue();
+                component.Add(cur);
+                var adj = landNeighbors[cur];
+                for (var i = 0; i < adj.Length; i++)
+                {
+                    var next = adj[i];
+                    if (next <= 0 || next > count || visited[next] || topology.IsWater(next)) continue;
+                    if (nations[next] != owner) continue;
+                    visited[next] = true;
+                    queue.Enqueue(next);
+                }
+            }
+
+            // Only heal tiny 1–2 province detached slivers.
+            if (component.Count is < 1 or > 2) continue;
+
+            // Strictly preserve sovereign microstates (<= 4 total land provinces).
+            if (nationLandCounts.GetValueOrDefault(owner) <= 4) continue;
+
+            // Require every province in the sliver to belong to a state that has a larger body elsewhere
+            // (a split fragment of a region, never a whole distinct real-world exclave state).
+            var allSplitFragments = true;
+            var anyProtectedExclave = false;
+            for (var i = 0; i < component.Count; i++)
+            {
+                var p = component[i];
+                if (stateLandCounts.GetValueOrDefault(states[p]) <= component.Count)
+                {
+                    allSplitFragments = false;
+                    break;
+                }
+                var (lat, lon) = topology.CenterOf(p);
+                if (IsProtectedRealWorldExclave(lat, lon))
+                {
+                    anyProtectedExclave = true;
+                    break;
+                }
+            }
+            if (!allSplitFragments || anyProtectedExclave) continue;
+
+            // Inspect all non-water foreign LandNeighbors of the component.
+            ushort surroundingNation = 0;
+            var foreignContacts = 0;
+            var multipleForeignNations = false;
+            foreignStateCounts.Clear();
+
+            for (var i = 0; i < component.Count && !multipleForeignNations; i++)
+            {
+                var adj = landNeighbors[component[i]];
+                for (var j = 0; j < adj.Length; j++)
+                {
+                    var n = adj[j];
+                    if (n <= 0 || n > count || topology.IsWater(n)) continue;
+                    var nOwner = nations[n];
+                    var nState = states[n];
+                    if (nOwner == 0 || nState == 0 || nOwner == owner) continue;
+                    if (surroundingNation == 0) surroundingNation = nOwner;
+                    else if (surroundingNation != nOwner) { multipleForeignNations = true; break; }
+                    foreignContacts++;
+                    foreignStateCounts[nState] = foreignStateCounts.GetValueOrDefault(nState) + 1;
+                }
+            }
+
+            // Strictly preserve islands (0 foreign land neighbors) and multi-neighbor border pieces.
+            if (foreignContacts == 0 || multipleForeignNations || surroundingNation == 0) continue;
+
+            // Pick the majority surrounding state of that single foreign nation (deterministic tie-break by lowest ID).
+            ushort targetState = 0;
+            var bestContacts = -1;
+            foreach (var kv in foreignStateCounts)
+            {
+                if (kv.Value > bestContacts || (kv.Value == bestContacts && kv.Key < targetState))
+                {
+                    bestContacts = kv.Value;
+                    targetState = kv.Key;
+                }
+            }
+            if (targetState == 0) continue;
+
+            component.Sort();
+            for (var i = 0; i < component.Count; i++)
+            {
+                var p = component[i];
+                var (lat, lon) = topology.CenterOf(p);
+                heals.Add(new SliverHealSummary(p, nations[p], states[p], surroundingNation, targetState, lat, lon));
+            }
+        }
+
+        // Apply deterministically after full scan so order never cascades into multi-hop creep.
+        for (var i = 0; i < heals.Count; i++)
+        {
+            var h = heals[i];
+            nations[h.ProvinceId] = h.NewNation;
+            states[h.ProvinceId] = h.NewState;
+        }
+        return heals;
+    }
 }

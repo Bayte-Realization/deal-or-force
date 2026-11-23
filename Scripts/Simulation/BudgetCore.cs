@@ -129,6 +129,8 @@ public sealed class BudgetLine
     public float ResentedAbove;
     public float ResentedLiving;
     public float ResentedRadicalism;
+
+    internal bool IsDebtInterest;
 }
 
 /// <summary>What a week of budget did, without any of it being written down as prose.</summary>
@@ -201,6 +203,7 @@ public static class BudgetCore
     private static readonly float[] Slots = new float[SlotCount];
 
     private static readonly List<BudgetLine> Lines = new();
+    private static BudgetLine[] LevyLines = Array.Empty<BudgetLine>();
 
     /// <summary>
     /// The share of a week's output a government may take before anyone minds, and how
@@ -343,13 +346,23 @@ public static class BudgetCore
     public static void ValidateLine(string id, JsonElement element, List<string> problems) =>
         Read(id, BudgetSide.Revenue, element, problems);
 
-    private static void Sort() =>
+    private static void Sort()
+    {
         Lines.Sort((left, right) =>
         {
             if (left.Side != right.Side) return left.Side.CompareTo(right.Side);
             if (left.Order != right.Order) return left.Order.CompareTo(right.Order);
             return string.CompareOrdinal(left.Id, right.Id);
         });
+        var levies = new List<BudgetLine>();
+        for (var i = 0; i < Lines.Count; i++)
+        {
+            var line = Lines[i];
+            line.IsDebtInterest = line.Id == "debt_interest";
+            if (IsLevy(line)) levies.Add(line);
+        }
+        LevyLines = levies.ToArray();
+    }
 
     private static BudgetLine Read(string id, BudgetSide side, JsonElement element, List<string> errors)
     {
@@ -590,6 +603,22 @@ public static class BudgetCore
         _ => weeklyOutput
     };
 
+    private static float BasisOfCached(Nation nation, BudgetLine line, float weeklyOutput, ref float debtOutstanding)
+    {
+        switch (line.Charge)
+        {
+            case BudgetBasis.Debt:
+                if (float.IsNaN(debtOutstanding)) debtOutstanding = SovereignFinance.Outstanding(nation);
+                return debtOutstanding;
+            case BudgetBasis.Tariffs:
+                return nation.WeeklyTariffIncome;
+            case BudgetBasis.TradeBalance:
+                return nation.WeeklyTradeBalance;
+            default:
+                return weeklyOutput;
+        }
+    }
+
     /// <summary>What one line is worth to one country this week.</summary>
     public static float Amount(Nation nation, BudgetLine line, float weeklyOutput, bool atWar)
     {
@@ -629,9 +658,10 @@ public static class BudgetCore
     {
         if (nation is null || weeklyOutput <= 0f || TaxEvasion <= 0f) return 1f;
         var burden = 0f;
-        foreach (var line in Lines)
+        var levies = LevyLines;
+        for (var i = 0; i < levies.Length; i++)
         {
-            if (!IsLevy(line)) continue;
+            var line = levies[i];
             var rate = ReferenceEquals(line, overridden) ? overriddenRate : RateOf(nation, line);
             burden += rate * line.Yield * ScaleOf(line);
         }
@@ -662,10 +692,10 @@ public static class BudgetCore
         FillSlots(nation, atWar);
         var isLevy = IsLevy(line);
         var compliance = isLevy ? Compliance(nation, weeklyOutput, line, rate) : 1f;
-        var taxEfficiency = isLevy ? NationalModifiers.Factor(nation, "tax_efficiency") : 1f;
+        var taxEfficiency = isLevy ? NationalModifiers.FactorSlot(nation, NationalModifiers.SlotTaxEfficiency) : 1f;
         return EconomyRulesHook.EvaluateBudgetLineAmount(
             BasisOf(nation, line, weeklyOutput), rate, YieldOf(nation, line, weeklyOutput), ScaleOf(line),
-            nation.DebtMechanicActive && line.Id == "debt_interest", nation.PublicDebt, nation.DebtSpreadAnnual,
+            nation.DebtMechanicActive && (line.IsDebtInterest || line.Id == "debt_interest"), nation.PublicDebt, nation.DebtSpreadAnnual,
             isLevy, compliance, taxEfficiency, line.Charge == BudgetBasis.TradeBalance);
     }
 
@@ -673,13 +703,13 @@ public static class BudgetCore
         float compliance)
     {
         var isLevy = IsLevy(line);
-        var taxEfficiency = isLevy ? NationalModifiers.Factor(nation, "tax_efficiency") : 1f;
+        var taxEfficiency = isLevy ? NationalModifiers.FactorSlot(nation, NationalModifiers.SlotTaxEfficiency) : 1f;
         // A trade balance is allowed to be a loss; nothing else is allowed to be negative,
         // because a tax that pays money out because the country is miserable is a bug
         // wearing a formula's clothes.
         return EconomyRulesHook.EvaluateBudgetLineAmount(
             BasisOf(nation, line, weeklyOutput), RateOf(nation, line), YieldOf(nation, line, weeklyOutput), ScaleOf(line),
-            nation.DebtMechanicActive && line.Id == "debt_interest", nation.PublicDebt, nation.DebtSpreadAnnual,
+            nation.DebtMechanicActive && (line.IsDebtInterest || line.Id == "debt_interest"), nation.PublicDebt, nation.DebtSpreadAnnual,
             isLevy, compliance, taxEfficiency, line.Charge == BudgetBasis.TradeBalance);
     }
 
@@ -688,15 +718,23 @@ public static class BudgetCore
     /// the country beyond the money.
     /// </summary>
     public static BudgetOutcome Evaluate(Nation nation, float weeklyOutput, bool atWar) =>
-        Evaluate(nation, weeklyOutput, atWar, null);
+        Evaluate(nation, weeklyOutput, atWar, null, out _);
 
     /// <summary>
     /// The same week, with each line's signed amount written into <paramref name="perLine"/>
     /// (index = position in <see cref="All"/>; revenue positive, expenses negative) for the
     /// ledger. The array is the caller's and is not cleared: the ledger adds a week into it.
     /// </summary>
-    public static BudgetOutcome Evaluate(Nation nation, float weeklyOutput, bool atWar, float[] perLine)
+    public static BudgetOutcome Evaluate(Nation nation, float weeklyOutput, bool atWar, float[] perLine) =>
+        Evaluate(nation, weeklyOutput, atWar, perLine, out _);
+
+    /// <summary>
+    /// Weekly budget pass that also outputs the summed debt-charged expense total so
+    /// <see cref="EconomySystem"/> does not need a second pass over <see cref="Lines"/>.
+    /// </summary>
+    public static BudgetOutcome Evaluate(Nation nation, float weeklyOutput, bool atWar, float[] perLine, out float debtInterest)
     {
+        debtInterest = 0f;
         if (nation is null) return default;
         FillSlots(nation, atWar);
         // Once for the whole budget: every levy is charged against the same week's output,
@@ -706,11 +744,24 @@ public static class BudgetCore
         float revenue = 0f, taxation = 0f, expenses = 0f;
         float growth = 0f, living = 0f, literacy = 0f, radicalism = 0f, stability = 0f;
         var record = perLine is not null && perLine.Length >= Lines.Count;
+        var taxEfficiency = float.NaN;
+        var debtOutstanding = float.NaN;
 
         for (var lineIndex = 0; lineIndex < Lines.Count; lineIndex++)
         {
             var line = Lines[lineIndex];
-            var amount = AmountFromSlots(nation, line, weeklyOutput, compliance);
+            var isLevy = IsLevy(line);
+            if (isLevy && float.IsNaN(taxEfficiency))
+                taxEfficiency = NationalModifiers.FactorSlot(nation, NationalModifiers.SlotTaxEfficiency);
+            var basis = BasisOfCached(nation, line, weeklyOutput, ref debtOutstanding);
+            var yield = !float.IsNaN(line.LossYield) && basis < 0f ? line.LossYield : line.Yield;
+            var rate = RateOf(nation, line);
+            var amount = EconomyRulesHook.EvaluateBudgetLineAmount(
+                basis, rate, yield, ScaleOf(line),
+                nation.DebtMechanicActive && (line.IsDebtInterest || line.Id == "debt_interest"),
+                nation.PublicDebt, nation.DebtSpreadAnnual,
+                isLevy, compliance, isLevy ? taxEfficiency : 1f, line.Charge == BudgetBasis.TradeBalance);
+
             if (record) perLine[lineIndex] += line.Side == BudgetSide.Expense ? -amount : amount;
             if (line.Side == BudgetSide.Revenue)
             {
@@ -720,10 +771,10 @@ public static class BudgetCore
             else
             {
                 expenses += amount;
+                if (line.Charge == BudgetBasis.Debt) debtInterest += amount;
             }
 
             if (!line.PlayerSet) continue;
-            var rate = RateOf(nation, line);
             var above = rate - line.Neutral;
             growth += above * line.Growth;
             living += above * line.Living;

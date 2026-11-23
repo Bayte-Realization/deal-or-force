@@ -76,15 +76,21 @@ public static class MilitaryExperience
     /// </summary>
     public const string Command = "command";
 
-    [ThreadStatic] private static Dictionary<int, int> _engagedScratch;
-    [ThreadStatic] private static Dictionary<int, int> _drillingScratch;
-    [ThreadStatic] private static Dictionary<int, int> _flyingScratch;
-    [ThreadStatic] private static Dictionary<int, int> _atSeaScratch;
+    [ThreadStatic] private static int[] _engagedDenseScratch;
+    [ThreadStatic] private static int[] _drillingDenseScratch;
+    [ThreadStatic] private static int[] _flyingDenseScratch;
+    [ThreadStatic] private static int[] _atSeaDenseScratch;
+    [ThreadStatic] private static Dictionary<int, int> _engagedOverflowScratch;
+    [ThreadStatic] private static Dictionary<int, int> _drillingOverflowScratch;
+    [ThreadStatic] private static Dictionary<int, int> _flyingOverflowScratch;
+    [ThreadStatic] private static Dictionary<int, int> _atSeaOverflowScratch;
 
-    private static Dictionary<int, int> Engaged => _engagedScratch ??= new();
-    private static Dictionary<int, int> Drilling => _drillingScratch ??= new();
-    private static Dictionary<int, int> Flying => _flyingScratch ??= new();
-    private static Dictionary<int, int> AtSea => _atSeaScratch ??= new();
+    private static int[] EnsureCountBuffer(ref int[] buf, int len)
+    {
+        if (buf is null || buf.Length < len) buf = new int[Math.Max(len, 64)];
+        Array.Clear(buf, 0, len);
+        return buf;
+    }
 
     public static void Tick(Campaign campaign)
     {
@@ -98,75 +104,137 @@ public static class MilitaryExperience
         var defines = campaign.Defines;
         var scale = MathF.Max(0f, campaign.TickScale);
 
-        // One pass over the world, then one over the countries: asking each of two hundred and
-        // sixty countries to walk the army list is the mistake the AI tables already fixed once.
-        var engaged = Engaged; engaged.Clear();
-        var drilling = Drilling; drilling.Clear();
+        var maxId = 0;
+        var living = campaign.ActiveNations;
+        for (var i = 0; i < living.Count; i++)
+            if (living[i].Id > maxId) maxId = living[i].Id;
+        var denseLen = Math.Min(Math.Max(maxId + 1, campaign.Nations.Count), 16384);
+
+        var engagedArr = EnsureCountBuffer(ref _engagedDenseScratch, denseLen);
+        var drillingArr = EnsureCountBuffer(ref _drillingDenseScratch, denseLen);
+        var engagedOverflow = _engagedOverflowScratch; engagedOverflow?.Clear();
+        var drillingOverflow = _drillingOverflowScratch; drillingOverflow?.Clear();
+
         var scanned = 0;
-        foreach (var army in campaign.Armies)
+        var armies = campaign.Armies;
+        for (var i = 0; i < armies.Count; i++)
         {
-            if (++scanned % 512 == 0) yield return 0;
+            if (++scanned % 2048 == 0 && Campaign.StageOverdue()) yield return 0;
+            var army = armies[i];
+            var nid = army.NationId;
             if (army.Training)
             {
                 if (army.InBattle) army.Training = false;   // the order yields to the shooting
-                else drilling[army.NationId] = drilling.GetValueOrDefault(army.NationId) + 1;
+                else if ((uint)nid < (uint)denseLen) drillingArr[nid]++;
+                else (drillingOverflow ??= _drillingOverflowScratch = new())[nid] = drillingOverflow.GetValueOrDefault(nid) + 1;
             }
-            if (army.InBattle) engaged[army.NationId] = engaged.GetValueOrDefault(army.NationId) + 1;
+            if (army.InBattle)
+            {
+                if ((uint)nid < (uint)denseLen) engagedArr[nid]++;
+                else (engagedOverflow ??= _engagedOverflowScratch = new())[nid] = engagedOverflow.GetValueOrDefault(nid) + 1;
+            }
         }
-        var flying = Flying; flying.Clear();
-        foreach (var formation in campaign.SupportFormations)
+        var flyingArr = EnsureCountBuffer(ref _flyingDenseScratch, denseLen);
+        var flyingOverflow = _flyingOverflowScratch; flyingOverflow?.Clear();
+        var formations = campaign.SupportFormations;
+        for (var i = 0; i < formations.Count; i++)
+        {
+            var formation = formations[i];
             if (formation.Strength > 0.05f && !string.IsNullOrEmpty(formation.Mission) &&
                 formation.Mission != SupportCore.MissionStandby)
-                flying[formation.NationId] = flying.GetValueOrDefault(formation.NationId) + 1;
-        var atSea = AtSea; atSea.Clear();
-        foreach (var fleet in campaign.Fleets)
+            {
+                var nid = formation.NationId;
+                if ((uint)nid < (uint)denseLen) flyingArr[nid]++;
+                else (flyingOverflow ??= _flyingOverflowScratch = new())[nid] = flyingOverflow.GetValueOrDefault(nid) + 1;
+            }
+        }
+        var atSeaArr = EnsureCountBuffer(ref _atSeaDenseScratch, denseLen);
+        var atSeaOverflow = _atSeaOverflowScratch; atSeaOverflow?.Clear();
+        var fleets = campaign.Fleets;
+        for (var i = 0; i < fleets.Count; i++)
+        {
+            var fleet = fleets[i];
             if (fleet.Hulls > 0 && (fleet.InAction || fleet.Mission != FleetMission.Anchored))
-                atSea[fleet.NationId] = atSea.GetValueOrDefault(fleet.NationId) + 1;
+            {
+                var nid = fleet.NationId;
+                if ((uint)nid < (uint)denseLen) atSeaArr[nid]++;
+                else (atSeaOverflow ??= _atSeaOverflowScratch = new())[nid] = atSeaOverflow.GetValueOrDefault(nid) + 1;
+            }
+        }
 
         var peacetime = defines.ExperiencePeacetimePerWeek / 7f * scale;
         var political = defines.PoliticalPointsPerWeek / 7f * scale;
         var perStability = defines.PoliticalPointsStabilityWeight / 7f * scale;
         var baseline = MathF.Max(0.0001f, defines.BaselineMilitarySpending);
-        yield return 0;
-        // Every living country side by side (DeterministicParallel): a country's lesson is read
-        // off its own budget, its own strategy and the four counts above, which nothing in this
-        // loop writes, and it is written to its own experience, credit, treasury and ledger week
-        // only. No country reads another's, so the order of the countries is not part of the
-        // answer, and each country's sums are the same additions in the same order as before -
-        // the same bits on one thread or nine. This runs every hour of every day.
-        var living = campaign.ActiveNations;
-        DeterministicParallel.For(campaign, 0, living.Count, index =>
+        var fundingWeightScaled = defines.ArmyExperienceFundingWeight / 7f * scale;
+        var battleXpScaled = defines.ArmyExperiencePerDivisionDay * scale;
+        var trainXpScaled = defines.TrainingExperiencePerDivisionDay * scale;
+        var airXpScaled = defines.AirExperiencePerMissionDay * scale;
+        var navalXpScaled = defines.NavalExperiencePerHullDay * scale;
+        var trainCostScaled = defines.TrainingCostPerDivisionWeek / 7f * scale;
+        if (Campaign.StageOverdue()) yield return 0;
+
+        // Every living country side by side: a country's lesson is read off its own budget,
+        // strategy and four counts. At normal country counts (<= 1024), running serially avoids
+        // allocating closure objects and waking pool threads 24 times every game day.
+        var livingCount = living.Count;
+        if (livingCount >= 2048 && DeterministicParallel.Enabled(campaign))
         {
-            var nation = living[index];
-            // Money above what the army costs anyway is what buys training value: a budget at
-            // the baseline teaches nobody anything new, and a cut teaches nobody faster.
-            var funding = MathF.Max(0f, nation.MilitarySpending / baseline - 1f) *
-                          defines.ArmyExperienceFundingWeight / 7f * scale;
-            var drills = drilling.GetValueOrDefault(nation.Id);
-            var battle = engaged.GetValueOrDefault(nation.Id);
-            var missions = flying.GetValueOrDefault(nation.Id);
-            var hulls = atSea.GetValueOrDefault(nation.Id);
-            // The grand strategy's hand on learning: a cadre drills its experience up in peace, a
-            // war of attrition learns it in the line, and a country that has chosen no course
-            // learns exactly as it always did.
-            // One look at the strategy for its four multipliers: each of the four accessors
-            // looked the same strategy up again by name, every hour, for every country.
-            var strategy = StrategicDoctrines.Of(nation);
-            nation.ArmyExperience += peacetime + funding +
-                battle * defines.ArmyExperiencePerDivisionDay * scale * (strategy?.BattleExperience ?? 1f) +
-                drills * defines.TrainingExperiencePerDivisionDay * scale * (strategy?.DrillExperience ?? 1f);
-            nation.AirExperience += peacetime +
-                missions * defines.AirExperiencePerMissionDay * scale * (strategy?.AirExperience ?? 1f);
-            nation.NavalExperience += peacetime +
-                hulls * defines.NavalExperiencePerHullDay * scale * (strategy?.NavalExperience ?? 1f);
-            nation.PoliticalPoints += political + perStability * M.Clamp01(nation.Stability);
-            if (drills > 0)
-                { var ledgerBefore = nation.Treasury; nation.Treasury -= drills * defines.TrainingCostPerDivisionWeek / 7f * scale; MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore); }
-        });
+            DeterministicParallel.ForRange(campaign, 0, livingCount, (from, to) =>
+            {
+                for (var index = from; index < to; index++)
+                    ApplyHourlyCountryExperience(living[index], denseLen,
+                        drillingArr, engagedArr, flyingArr, atSeaArr,
+                        drillingOverflow, engagedOverflow, flyingOverflow, atSeaOverflow,
+                        baseline, fundingWeightScaled, peacetime, battleXpScaled, trainXpScaled,
+                        airXpScaled, navalXpScaled, political, perStability, trainCostScaled);
+            }, minItems: 256);
+        }
+        else
+        {
+            for (var index = 0; index < livingCount; index++)
+                ApplyHourlyCountryExperience(living[index], denseLen,
+                    drillingArr, engagedArr, flyingArr, atSeaArr,
+                    drillingOverflow, engagedOverflow, flyingOverflow, atSeaOverflow,
+                    baseline, fundingWeightScaled, peacetime, battleXpScaled, trainXpScaled,
+                    airXpScaled, navalXpScaled, political, perStability, trainCostScaled);
+        }
 
         // A week's cabinet business, not a daily one: which governments keep their army sharp.
-        yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
         if (campaign.ElapsedDays % 7 == 0) AiTraining(campaign);
+    }
+
+    private static void ApplyHourlyCountryExperience(
+        Nation nation, int denseLen,
+        int[] drillingArr, int[] engagedArr, int[] flyingArr, int[] atSeaArr,
+        Dictionary<int, int> drillingOverflow, Dictionary<int, int> engagedOverflow,
+        Dictionary<int, int> flyingOverflow, Dictionary<int, int> atSeaOverflow,
+        float baseline, float fundingWeightScaled, float peacetime, float battleXpScaled,
+        float trainXpScaled, float airXpScaled, float navalXpScaled, float political,
+        float perStability, float trainCostScaled)
+    {
+        var nid = nation.Id;
+        var funding = MathF.Max(0f, nation.MilitarySpending / baseline - 1f) * fundingWeightScaled;
+        var drills = (uint)nid < (uint)denseLen ? drillingArr[nid] : (drillingOverflow?.GetValueOrDefault(nid) ?? 0);
+        var battle = (uint)nid < (uint)denseLen ? engagedArr[nid] : (engagedOverflow?.GetValueOrDefault(nid) ?? 0);
+        var missions = (uint)nid < (uint)denseLen ? flyingArr[nid] : (flyingOverflow?.GetValueOrDefault(nid) ?? 0);
+        var hulls = (uint)nid < (uint)denseLen ? atSeaArr[nid] : (atSeaOverflow?.GetValueOrDefault(nid) ?? 0);
+        var strategy = StrategicDoctrines.Of(nation);
+        nation.ArmyExperience += peacetime + funding +
+            battle * battleXpScaled * (strategy?.BattleExperience ?? 1f) +
+            drills * trainXpScaled * (strategy?.DrillExperience ?? 1f);
+        nation.AirExperience += peacetime +
+            missions * airXpScaled * (strategy?.AirExperience ?? 1f);
+        nation.NavalExperience += peacetime +
+            hulls * navalXpScaled * (strategy?.NavalExperience ?? 1f);
+        nation.PoliticalPoints += political + perStability * M.Clamp01(nation.Stability);
+        if (drills > 0)
+        {
+            var ledgerBefore = nation.Treasury;
+            nation.Treasury -= drills * trainCostScaled;
+            MoneyLedger.Book(nation, MoneyFlow.Military, nation.Treasury - ledgerBefore);
+        }
     }
 
     /// <summary>
@@ -205,8 +273,10 @@ public static class MilitaryExperience
         }
         Array.Clear(scratch.AtWar, 0, nations);
         Array.Clear(scratch.Start, 0, nations + 1);
-        foreach (var war in Warfare.OpenWars(campaign))
+        var liveWars = Warfare.LiveWars(campaign);
+        for (var wi = 0; wi < liveWars.Count; wi++)
         {
+            var war = liveWars[wi];
             if (war.Ended) continue;
             if ((uint)war.AttackerId < (uint)nations) scratch.AtWar[war.AttackerId] = true;
             if ((uint)war.DefenderId < (uint)nations) scratch.AtWar[war.DefenderId] = true;
@@ -244,8 +314,10 @@ public static class MilitaryExperience
         var world = IndexForTraining(campaign);
         var indexedNations = campaign.Nations.Count;
         var own = _trainingOwnScratch ??= new List<Army>();
-        foreach (var nation in campaign.Nations)
+        var active = campaign.ActiveNations;
+        for (var ni = 0; ni < active.Count; ni++)
         {
+            var nation = active[ni];
             if (!Delegation.RunByAi(nation)) continue;
             var limit = Math.Max(0, (int)MathF.Round(baseLimit * StrategicDoctrines.TrainingSlots(nation)));
             // The two tables are kept by id, as the walks they stand for matched by id; a
@@ -254,8 +326,11 @@ public static class MilitaryExperience
             var atWar = false;
             if (indexed) atWar = world.AtWar[nation.Id];
             else
-                foreach (var war in Warfare.OpenWars(campaign))
-                    if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
+            {
+                var liveWars = Warfare.LiveWars(campaign);
+                for (var wi = 0; wi < liveWars.Count; wi++)
+                    if (!liveWars[wi].Ended && liveWars[wi].Involves(nation.Id)) { atWar = true; break; }
+            }
             if (atWar)
             {
                 if (indexed)

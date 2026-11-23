@@ -1,0 +1,17 @@
+// Diplomatic memory for emergent supply-chain chokepoint leverage and strategic supply anchors.
+{
+  "chokepoint_weaponized": {
+    "name": "gp.opinion.chokepoint_weaponized",
+    "opinion": -14,
+    "days": 1095,
+    "decays": true,
+    "max_stacks": 2
+  },
+  "strategic_supply_anchor": {
+    "name": "gp.opinion.strategic_supply_anchor",
+    "opinion": 8,
+    "days": 730,
+    "decays": true,
+    "max_stacks": 2
+  }
+}

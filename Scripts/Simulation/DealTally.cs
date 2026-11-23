@@ -32,4 +32,13 @@ public static class DealTally
 
     /// <summary>The kind a deal table belongs to, by its terms (common/deals), or "other".</summary>
     public static string KindOf(Ultimatum.Deal deal) => DealAnswerKinds.Classify(deal)?.Id ?? "other";
+
+    /// <summary>Formats non-zero clause weight lines cleanly for the Deal Composer review pane.</summary>
+    public static string FormatClauseWeights(IReadOnlyList<(string Label, float Points)> entries)
+    {
+        if (entries is null || entries.Count == 0) return "";
+        return string.Join("\n", entries
+            .Where(e => System.MathF.Abs(e.Points) >= 0.05f)
+            .Select(e => $"  • {e.Label}: {e.Points:+0.0;-0.0;0.0}"));
+    }
 }

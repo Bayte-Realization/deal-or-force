@@ -1,0 +1,28 @@
+{
+  "id": "example_historical_1914",
+  "name": "Example: July Crisis 1914 (Great War Era)",
+  "version": "1.0.0",
+  "supported_game_version": "*",
+  "enabled": false,
+  "load_order": 200,
+  "dependencies": [],
+  "total_conversion": false,
+  "era_name": "Great War Era",
+  "replace_paths": [
+    "events",
+    "common/technologies",
+    "common/decisions"
+  ],
+  "exclude_paths": [],
+  "disabled_features": [
+    "nukes",
+    "drones",
+    "missiles"
+  ],
+  "era_features": {
+    "aviation": "restricted",
+    "air_defence": "restricted"
+  },
+  "theme": "bronze_atlas",
+  "music_playlist": "great_war_orchestra"
+}

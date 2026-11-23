@@ -37,7 +37,9 @@ public sealed partial class GlobePresentation
     private Node3D _supportMarkerRoot = null!;
     private MeshInstance3D _supportRangeNode = null!;
     private ImmediateMesh _supportRangeMesh = null!;
-    private readonly Dictionary<string, Texture2D> _supportPlates = new();
+    private const int SupportPlateCap = 256;
+    private readonly Dictionary<string, (Texture2D Texture, LinkedListNode<string> Node)> _supportPlates = new();
+    private readonly LinkedList<string> _supportPlatesLru = new();
     private readonly Dictionary<int, SupportMapMarker> _supportMapMarkers = new();
     private readonly Dictionary<string, Image> _supportCutoutIcons = new();
     private readonly List<(Node3D Node, Vector3 Normal)> _supportVisibility = new();
@@ -143,11 +145,17 @@ public sealed partial class GlobePresentation
 
     public void FocusSupportFormation(int formationId)
     {
-        if (_campaign?.ProvinceMap is null) return;
-        var formation = _campaign.SupportFormations.Find(f => f.Id == formationId && f.NationId == _campaign.Player?.Id);
-        if (formation is null || LongRangeMovement.At(formation) <= 0) return;
+        if (!TryBeginActionRead(out var campaign)) return;
+        (float Latitude, float Longitude) center;
+        try
+        {
+            if (campaign.ProvinceMap is null) return;
+            var formation = campaign.SupportFormations.Find(f => f.Id == formationId && f.NationId == campaign.Player?.Id);
+            if (formation is null || LongRangeMovement.At(formation) <= 0) return;
+            center = LongRangeMovement.Position(campaign, formation);
+        }
+        finally { campaign.ExitRead(); }
         SelectSupportFormation(formationId);
-        var center = LongRangeMovement.Position(_campaign, formation);
         FocusOn(center.Latitude, center.Longitude, 7.8f);
     }
 
@@ -183,6 +191,14 @@ public sealed partial class GlobePresentation
              float.IsNaN(_supportRangeFlatX))) BuildSupportRange();
     }
 
+    private readonly List<SupportFormation> _supportOwnedScratch = new();
+
+    private static int CompareSupportOrder(SupportFormation a, SupportFormation b)
+    {
+        var cmp = a.StateMapIndex.CompareTo(b.StateMapIndex);
+        return cmp != 0 ? cmp : a.Id.CompareTo(b.Id);
+    }
+
     private void SyncSupportMarkers()
     {
         var player = _campaign?.Player;
@@ -190,10 +206,17 @@ public sealed partial class GlobePresentation
         if (player is null || map is null) return;
         // Every formation of ours that is anywhere on the map - deployed, on the road, deploying or
         // cut off. There is no "off the map" any more, so there is nothing to leave out.
-        var owned = _campaign.SupportFormations
-            .Where(f => f.NationId == player.Id && SupportCore.Enabled(_campaign, f.TypeId) &&
-                        LongRangeMovement.At(f) > 0 && LongRangeMovement.At(f) <= map.ProvinceCount)
-            .OrderBy(f => f.StateMapIndex).ThenBy(f => f.Id).ToArray();
+        var owned = _supportOwnedScratch;
+        owned.Clear();
+        var formations = _campaign.SupportFormations;
+        for (var i = 0; i < formations.Count; i++)
+        {
+            var f = formations[i];
+            if (f.NationId != player.Id || !SupportCore.Enabled(_campaign, f.TypeId)) continue;
+            var at = LongRangeMovement.At(f);
+            if (at > 0 && at <= map.ProvinceCount) owned.Add(f);
+        }
+        owned.Sort(CompareSupportOrder);
         var hash = new HashCode();
         hash.Add(player.Id);
         foreach (var formation in owned)
@@ -261,6 +284,7 @@ public sealed partial class GlobePresentation
                 Texture = SupportPlate(iconPath, nation: _campaign.NationById(formation.NationId)),
                 Name = "SupportCard", Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
+                TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 NoDepthTest = false
             };
@@ -270,6 +294,7 @@ public sealed partial class GlobePresentation
                 Font = PresentationFonts.For("ui.default"),
                 FontSize = 20, OutlineSize = 3, Offset = new Vector2(16, 0),
                 RenderPriority = 8, OutlineRenderPriority = 7,
+                TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
                 Name = "SupportReadiness", Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 NoDepthTest = false,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -320,8 +345,8 @@ public sealed partial class GlobePresentation
     private void PlaceSupportMarker(SupportMapMarker marker)
     {
         marker.Node.Position = _flatMap
-            ? FlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ - SupportMarkerDepthBias)
-            : SurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * SupportSurfaceDepthFactor);
+            ? LocalFlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ - SupportMarkerDepthBias)
+            : LocalSurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * SupportSurfaceDepthFactor);
         var flatScale = MathF.Max(.00001f, _counterWorldPixel);
         marker.Node.Scale = Vector3.One * (_flatMap ? flatScale * _counterFlatFar : SurfaceCounterWidth(marker.Node, "support"));
         OrientSurfaceCounter(marker.Node, marker.Node.Position.Normalized());
@@ -413,8 +438,8 @@ public sealed partial class GlobePresentation
                 else
                 {
                     var position = _flatMap
-                        ? FlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ - SupportMarkerDepthBias)
-                        : SurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * SupportSurfaceDepthFactor);
+                        ? LocalFlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ - SupportMarkerDepthBias)
+                        : LocalSurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * SupportSurfaceDepthFactor);
                     if (_flatMap)
                     {
                         position += new Vector3(marker.DisplayOffset.X, -marker.DisplayOffset.Y, 0f) * (_camera.Size / Math.Max(1f, Size.Y));
@@ -517,6 +542,18 @@ public sealed partial class GlobePresentation
     private readonly List<(float Latitude, float Longitude)> _supportTrail = new();
 
     private void BuildSupportRange()
+    {
+        if (_campaign is { } campaign)
+        {
+            if (!campaign.TryEnterRead(25, true)) return;
+            try { BuildSupportRangeCore(); }
+            finally { campaign.ExitRead(); }
+            return;
+        }
+        BuildSupportRangeCore();
+    }
+
+    private void BuildSupportRangeCore()
     {
         if (!IsInstanceValid(_supportRangeNode) || _campaign?.ProvinceMap is null) return;
         _supportRangeMesh.ClearSurfaces();
@@ -666,7 +703,7 @@ public sealed partial class GlobePresentation
         {
             // The same great circle the card travels along (LongRangeMovement.Between).
             var (lat, lon) = LongRangeMovement.Between(a, b, t);
-            return _flatMap ? FlatPoint(lat, lon, FlatLineZ + .0012f) : SurfacePoint(lat, lon, SurfaceLineRadius * 1.0008f);
+            return _flatMap ? LocalFlatPoint(lat, lon, FlatLineZ + .0012f) : LocalSurfacePoint(lat, lon, SurfaceLineRadius * 1.0008f);
         }
 
         void Ribbon(Vector3 a, Vector3 b, Color colour, float width)
@@ -729,8 +766,8 @@ public sealed partial class GlobePresentation
                 MathF.Cos(reach) - MathF.Sin(latitude) * MathF.Sin(targetLatitude));
             var lat = Mathf.RadToDeg(targetLatitude);
             var lon = Mathf.RadToDeg(targetLongitude);
-            return _flatMap ? FlatPoint(lat, lon, FlatLineZ + .001f) :
-                SurfacePoint(lat, lon, SurfaceLineRadius * 1.0007f);
+            return _flatMap ? LocalFlatPoint(lat, lon, FlatLineZ + .001f) :
+                LocalSurfacePoint(lat, lon, SurfaceLineRadius * 1.0007f);
         }
     }
 
@@ -745,7 +782,15 @@ public sealed partial class GlobePresentation
         var accent = arm ?? Ui.Colour("support.standby");
         var flagSprite = nation is not null ? FlagSpriteFor(nation) : "";
         var key = path + "|" + selected + "|" + accent.ToHtml() + "|" + (nation is null ? "" : nation.Color) + "|" + flagSprite + "|" + NationalFlagVisualId(nation);
-        if (_supportPlates.TryGetValue(key, out var cached)) return cached;
+        if (_supportPlates.TryGetValue(key, out var cached))
+        {
+            if (cached.Node != _supportPlatesLru.First)
+            {
+                _supportPlatesLru.Remove(cached.Node);
+                _supportPlatesLru.AddFirst(cached.Node);
+            }
+            return cached.Texture;
+        }
         const int width = 96, height = 56;
         const int s = 3;
         var w = width * s;
@@ -824,7 +869,7 @@ public sealed partial class GlobePresentation
         StrokeLine(data, w, 76f * s, 9.5f * s, 82f * s, 14.5f * s, 1.8f * s, supportGold);
         StrokeLine(data, w, 82f * s, 14.5f * s, 88f * s, 9.5f * s, 1.8f * s, supportGold);
 
-        var card = Image.CreateFromData(w, h, false, Image.Format.Rgba8, data);
+        using var card = Image.CreateFromData(w, h, false, Image.Format.Rgba8, data);
         card.Resize(width, height, Image.Interpolation.Lanczos);
         var icon = SupportCutoutImage(path);
         if (icon is not null)
@@ -835,16 +880,34 @@ public sealed partial class GlobePresentation
             var span = MathF.Max(iconWidth, iconHeight);
             if (span > slot)
             {
-                icon = icon.Duplicate() as Image;
-                icon.Resize(Mathf.RoundToInt(iconWidth * slot / span), Mathf.RoundToInt(iconHeight * slot / span),
-                    Image.Interpolation.Lanczos);
-                iconWidth = icon.GetWidth();
-                iconHeight = icon.GetHeight();
+                using var resized = icon.Duplicate() as Image;
+                if (resized is not null)
+                {
+                    resized.Resize(Mathf.RoundToInt(iconWidth * slot / span), Mathf.RoundToInt(iconHeight * slot / span),
+                        Image.Interpolation.Lanczos);
+                    iconWidth = resized.GetWidth();
+                    iconHeight = resized.GetHeight();
+                    card.BlendRect(resized, new Rect2I(0, 0, iconWidth, iconHeight),
+                        new Vector2I(22 - iconWidth / 2, 34 - iconHeight / 2));
+                }
             }
-            card.BlendRect(icon, new Rect2I(0, 0, iconWidth, iconHeight),
-                new Vector2I(22 - iconWidth / 2, 34 - iconHeight / 2));
+            else
+            {
+                card.BlendRect(icon, new Rect2I(0, 0, iconWidth, iconHeight),
+                    new Vector2I(22 - iconWidth / 2, 34 - iconHeight / 2));
+            }
         }
-        return _supportPlates[key] = ImageTexture.CreateFromImage(card);
+        card.GenerateMipmaps();
+        var plateTex = ImageTexture.CreateFromImage(card);
+        var lruNode = _supportPlatesLru.AddFirst(key);
+        _supportPlates[key] = (plateTex, lruNode);
+        while (_supportPlatesLru.Count > SupportPlateCap && _supportPlatesLru.Last is { } oldest)
+        {
+            _supportPlatesLru.RemoveLast();
+            if (_supportPlates.Remove(oldest.Value, out var evicted))
+                evicted.Texture?.Dispose();
+        }
+        return plateTex;
     }
 
     private Image SupportCutoutImage(string path)
@@ -884,7 +947,11 @@ public sealed partial class GlobePresentation
         }
         if (right >= left && bottom >= top &&
             (left > 0 || top > 0 || right < width - 1 || bottom < height - 1))
-            image = image.GetRegion(new Rect2I(left, top, right - left + 1, bottom - top + 1));
+        {
+            var cropped = image.GetRegion(new Rect2I(left, top, right - left + 1, bottom - top + 1));
+            image.Dispose();
+            image = cropped;
+        }
         return _supportCutoutIcons[path] = image;
     }
 }

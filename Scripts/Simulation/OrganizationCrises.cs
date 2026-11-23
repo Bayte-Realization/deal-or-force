@@ -160,7 +160,12 @@ public static class OrganizationCrises
         org.Cohesion = MathF.Max(0f, org.Cohesion - MathF.Max(0f, d.OrganizationCrisisCohesionDrain));
 
         var leader = InternationalOrganizations.Leader(c, org);
-        var economy = org.Members.Select(c.NationById).Where(n => n is not null).Sum(n => MathF.Max(0f, n.Gdp));
+        var economy = 0f;
+        for (var i = 0; i < org.Members.Count; i++)
+        {
+            var n = c.NationById(org.Members[i]);
+            if (n is not null) economy += MathF.Max(0f, n.Gdp);
+        }
         var share = economy > 0f ? MathF.Max(0f, member.Gdp) / economy : 0f;
         if (leader is { IsHuman: false } && leader.Id != member.Id && share >= d.AiConcessionValueShare &&
             leader.Treasury >= ConcessionCost(c, member) * 3f &&

@@ -1,0 +1,154 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dealorforce.local/schemas/scenario.schema.json",
+  "title": "Deal or Force Scenario Manifest",
+  "description": "Declarative scenarios/<id>/scenario.json defining start date, display calendar, era rules, featured powers, and starting diplomacy/wars.",
+  "type": "object",
+  "required": ["id", "name"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]{1,64}$",
+      "description": "Unique scenario identifier matching its folder name."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Display name (or localization key) for the scenario."
+    },
+    "description": {
+      "type": "string",
+      "description": "Short scenario summary shown in the scenario picker."
+    },
+    "base_world": {
+      "type": "boolean",
+      "default": false,
+      "description": "Set true to launch on the base Earth map without shipping a separate world.bdfsave."
+    },
+    "world": {
+      "type": "string",
+      "description": "Relative filename of a custom world snapshot inside this scenario folder (e.g. 'world.bdfsave')."
+    },
+    "player_country": {
+      "type": "string",
+      "description": "Default recommended 3-letter country tag (e.g. 'DEU', 'FRA')."
+    },
+    "start_date": {
+      "type": "string",
+      "pattern": "^\\d{1,4}-\\d{2}-\\d{2}(\\s+BCE)?$",
+      "description": "Start date formatted as 'YYYY-MM-DD' or 'YYYY-MM-DD BCE' (e.g. '1914-07-28')."
+    },
+    "start_year": { "type": "integer", "minimum": -4000, "maximum": 9999, "description": "Explicit start year (overrides start_date year)." },
+    "start_month": { "type": "integer", "minimum": 1, "maximum": 12, "description": "Start month (1-12)." },
+    "start_day": { "type": "integer", "minimum": 1, "maximum": 31, "description": "Start day of month (1-31)." },
+    "total_conversion": { "type": "boolean", "default": false },
+    "clear_base_wars": { "type": "boolean", "default": false, "description": "Clear base-world 2024 wars before applying starting_wars." },
+    "clear_base_diplomacy": { "type": "boolean", "default": false, "description": "Clear base-world 2024 alliances/truces before seeding scenario diplomacy." },
+    "skin": { "type": "string", "description": "Optional UI skin overlay ID." },
+    "theme": { "type": "string", "description": "Optional visual theme alias." },
+    "music_track": { "type": "string", "description": "Optional opening music track ID." },
+    "music_playlist": { "type": "string", "description": "Optional soundtrack playlist ID." },
+    "replace_paths": { "type": "array", "items": { "type": "string" } },
+    "exclude_paths": { "type": "array", "items": { "type": "string" } },
+    "disabled_features": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Mechanics unavailable in this scenario (e.g. 'nukes', 'missiles', 'drones')."
+    },
+    "era_features": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string", "enum": ["available", "restricted", "unavailable"] },
+          { "type": "boolean" }
+        ]
+      }
+    },
+    "calendar": {
+      "type": "object",
+      "properties": {
+        "era_name": { "type": "string" },
+        "year_offset": { "type": "integer", "default": 0 },
+        "year_prefix": { "type": "string" },
+        "year_suffix": { "type": "string" },
+        "month_names": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "featured_countries": {
+      "type": "array",
+      "description": "Highlighted nations shown on the scenario selection screen.",
+      "items": {
+        "type": "object",
+        "required": ["tag"],
+        "properties": {
+          "tag": { "type": "string", "minLength": 2, "maxLength": 8 },
+          "hook": { "type": "string" },
+          "difficulty": { "type": "string", "enum": ["easy", "normal", "hard", "very_hard"] }
+        }
+      }
+    },
+    "starting_wars": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["attacker", "defender"],
+        "properties": {
+          "name": { "type": "string" },
+          "attacker": { "type": "string" },
+          "defender": { "type": "string" },
+          "justification": { "type": "string", "default": "scenario" },
+          "limited": { "type": "boolean", "default": false }
+        }
+      }
+    },
+    "starting_alliances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "members"],
+        "properties": {
+          "name": { "type": "string" },
+          "charter": { "type": "string", "default": "collective_defence" },
+          "members": { "type": "array", "minItems": 2, "items": { "type": "string" } }
+        }
+      }
+    },
+    "starting_truces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["between", "days"],
+        "properties": {
+          "between": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } },
+          "days": { "type": "integer", "minimum": 1, "default": 365 }
+        }
+      }
+    }
+  },
+  "defaultSnippets": [
+    {
+      "label": "Historical Scenario on Earth Map",
+      "body": {
+        "id": "${1:my_historical_era}",
+        "name": "${2:My Historical Era}",
+        "description": "${3:Short scenario overview}",
+        "base_world": true,
+        "start_year": 1914,
+        "start_month": 7,
+        "start_day": 28,
+        "clear_base_wars": true,
+        "clear_base_diplomacy": true,
+        "disabled_features": ["nukes", "missiles", "drones"],
+        "featured_countries": [
+          { "tag": "DEU", "hook": "Central power", "difficulty": "hard" }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "FeatureUnlocks": {
+    "aviation": "early_aviation_doctrine",
+    "air_defence": "early_aviation_doctrine"
+  }
+}

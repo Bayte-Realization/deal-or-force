@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json.Serialization;
 
 namespace DealOrForce.Simulation;
@@ -66,28 +65,49 @@ public static class EquipmentLogistics
         return "";
     }
 
+    [ThreadStatic] private static Dictionary<string, float[]> _kitsScratch;
+    [ThreadStatic] private static Dictionary<int, List<Request>> _byNationScratch;
+    [ThreadStatic] private static double[] _stockScratch;
+    [ThreadStatic] private static double[] _demandScratch;
+    [ThreadStatic] private static double[] _spentScratch;
+
     private static float[] KitOf(Army army)
     {
         // Same template-dependent durable bill as recruitment; ammunition, food and
         // fuel are consumables, not the percentage of rifles/vehicles in a formation.
         var bill = StrategicStockpiles.DivisionMaterialBill(UnitTypeCatalog.Get(army.TemplateId), 1, MobilisationMode.Standard);
-        return Goods.Select(g => Math.Max(0f, bill.GetValueOrDefault(g))).ToArray();
+        var result = new float[Goods.Length];
+        for (var g = 0; g < Goods.Length; g++)
+            result[g] = Math.Max(0f, bill.GetValueOrDefault(Goods[g]));
+        return result;
+    }
+
+    private static bool AnyPositive(float[] values)
+    {
+        for (var i = 0; i < values.Length; i++)
+            if (values[i] > 0f) return true;
+        return false;
     }
 
     /// <summary>Called once by the daily depot pass, after ordinary military/naval upkeep.</summary>
     internal static void ReplenishDay(Campaign c)
     {
         if (!c.Defines.EquipmentReplenishmentEnabled) return;
-        var kits = new Dictionary<string, float[]>(StringComparer.OrdinalIgnoreCase);
-        var byNation = new Dictionary<int, List<Request>>();
+        var kits = _kitsScratch ??= new Dictionary<string, float[]>(StringComparer.OrdinalIgnoreCase);
+        kits.Clear();
+        var byNation = _byNationScratch ??= new Dictionary<int, List<Request>>();
+        foreach (var bucket in byNation.Values) bucket.Clear();
         var blocked = 0;
         var blockedReason = "";
         // The trace switch is the process's environment, read once for the pass: asked per
         // formation it was a system call for every division that needed nothing that day,
         // which is nearly all two thousand of them, every day.
         var trace = Environment.GetEnvironmentVariable("DOF_TRACE_EQUIP") == "1";
-        foreach (var army in c.Armies)
+        var armies = c.Armies;
+        for (var ai = 0; ai < armies.Count; ai++)
         {
+            var army = armies[ai];
+            if (army.Equipment >= 1f || army.Divisions <= 0f) continue;
             var limit = DailyLimit(c, army);
             if (limit <= 0f)
             {
@@ -106,17 +126,20 @@ public static class EquipmentLogistics
             }
             var key = army.TemplateId ?? "";
             if (!kits.TryGetValue(key, out var kit)) kits[key] = kit = KitOf(army);
-            if (!kit.Any(v => v > 0f)) continue; // A malformed free bill cannot mint kit.
+            if (!AnyPositive(kit)) continue; // A malformed free bill cannot mint kit.
             if (!byNation.TryGetValue(army.NationId, out var requests)) byNation[army.NationId] = requests = new();
             requests.Add(new Request { Army = army, Kit = kit, Left = limit });
         }
+        var stock = _stockScratch ??= new double[Goods.Length];
+        var demand = _demandScratch ??= new double[Goods.Length];
+        var spent = _spentScratch ??= new double[Goods.Length];
         foreach (var (id, requests) in byNation)
         {
+            if (requests.Count == 0) continue;
             var n = c.NationById(id);
-            requests.Sort((a,b) => a.Army.Id.CompareTo(b.Army.Id));
-            var stock = Goods.Select(g => (double)Math.Max(0f, n.Stockpiles.GetValueOrDefault(g))).ToArray();
-            var demand = new double[Goods.Length];
-            var spent = new double[Goods.Length];
+            requests.Sort(static (a, b) => a.Army.Id.CompareTo(b.Army.Id));
+            for (var g = 0; g < Goods.Length; g++)
+                stock[g] = Math.Max(0f, n.Stockpiles.GetValueOrDefault(Goods[g]));
             // Proportional allocation, not list order. Each round exhausts a limiting
             // material or completes demand. Four materials bound the pass. An absent
             // truck does not stop rifle deliveries to infantry that uses no trucks.

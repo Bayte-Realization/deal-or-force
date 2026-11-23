@@ -191,6 +191,18 @@ public static class OpinionWitnesses
         var d = c.Defines;
         if (concern >= d.WitnessThreshold)
         {
+            // Global broadcasts without a specific victim (nuclear_test, nuclear_threats, seized_power_by_coup)
+            // skip instantiating brand-new O(N^2) pairwise rows for remote uninvolved neutrals.
+            if (victim is null && floor <= 0f &&
+                (string.Equals(id, "nuclear_test", StringComparison.Ordinal) ||
+                 string.Equals(id, "nuclear_threats", StringComparison.Ordinal) ||
+                 string.Equals(id, "seized_power_by_coup", StringComparison.Ordinal)) &&
+                CampaignDiplomacy.Peek(c, observer.Id, actor.Id) is null &&
+                !CampaignDiplomacy.SharesLandBorder(c, observer.MapIndex, actor.MapIndex) &&
+                concern < 0.35f)
+            {
+                return concern;
+            }
             if (CampaignDiplomacy.Get(c, observer.Id, actor.Id) is { } relation)
                 OpinionSystem.Remember(c, relation, id, MathF.Min(1f, concern) * scale);
         }

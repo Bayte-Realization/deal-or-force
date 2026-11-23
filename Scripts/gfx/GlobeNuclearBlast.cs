@@ -156,8 +156,8 @@ void fragment() {
                 continue;
             }
             var position = _flatMap
-                ? FlatPoint(blast.Latitude, blast.Longitude, FlatMarkerZ + 0.002f)
-                : SurfacePoint(blast.Latitude, blast.Longitude, GlobeRadius * 1.0026f);
+                ? LocalFlatPoint(blast.Latitude, blast.Longitude, FlatMarkerZ + 0.002f)
+                : LocalSurfacePoint(blast.Latitude, blast.Longitude, GlobeRadius * 1.0026f);
             var up = _flatMap ? Vector3.Back : position.Normalized();
             var east = up.Cross(Vector3.Up);
             if (east.LengthSquared() < 1e-6f) east = Vector3.Right;

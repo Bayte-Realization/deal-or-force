@@ -200,16 +200,33 @@ public static class LongRangeStrikes
         public readonly HashSet<int> Enemies = new();
         public readonly HashSet<int> EnemyMaps = new();
         public List<(ScenarioState State, int Anchor)> EnemyStates;
+
+        public void Reset()
+        {
+            Own.Clear();
+            Enemies.Clear();
+            EnemyMaps.Clear();
+            EnemyStates = null;
+        }
     }
 
     internal static Sides SidesOf(Campaign c, int nationId)
     {
         var sides = new Sides();
+        FillSides(c, nationId, sides);
+        return sides;
+    }
+
+    internal static void FillSides(Campaign c, int nationId, Sides sides)
+    {
+        sides.Reset();
         sides.Own.Add(nationId);
-        foreach (var war in Warfare.OpenWars(c))
+        var openWars = Warfare.OpenWars(c);
+        for (var wi = 0; wi < openWars.Count; wi++)
         {
+            var war = openWars[wi];
             if (war.Ended || !war.Involves(nationId)) continue;
-            var attacking = war.Side(true).Contains(nationId);
+            var attacking = war.IsAttacking(nationId);
             foreach (var id in war.Side(attacking)) if (!sides.Own.Contains(id)) sides.Own.Add(id);
             foreach (var id in war.Side(!attacking))
             {
@@ -217,7 +234,6 @@ public static class LongRangeStrikes
                 if (c.NationById(id) is { } enemy) sides.EnemyMaps.Add(enemy.MapIndex);
             }
         }
-        return sides;
     }
 
     /// <summary>Whether anything of the enemy's flies: the reason to sweep the sky rather than bomb.</summary>
@@ -263,31 +279,42 @@ public static class LongRangeStrikes
     {
         if (c.ProvinceMap is null || c.SupportFormations.Count == 0) yield break;
         var interval = Math.Max(1, c.Defines.StrikeIntervalDays);
-        List<SupportFormation> due = null;
-        for (var i = 0; i < c.SupportFormations.Count; i++)
+        var pass = c.Caches.SupportPass;
+        var due = pass.FireDue;
+        due.Clear();
+        var formations = c.SupportFormations;
+        for (var i = 0; i < formations.Count; i++)
         {
-            var f = c.SupportFormations[i];
+            var f = formations[i];
             if (f.Mission != SupportCore.MissionStrike) continue;
             if (((c.ElapsedDays + f.Id) % interval + interval) % interval != 0) continue;
-            due ??= new List<SupportFormation>();
             due.Add(f);
         }
-        if (due is null) yield break;
+        if (due.Count == 0) yield break;
 
-        Dictionary<int, Sides> sides = null;
+        var sides = pass.FireSides;
+        sides.Clear();
         var fired = 0;
-        for (var i = 0; i < due.Count; i++)
+        try
         {
-            var formation = due[i];
-            if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type) || !SupportCore.Enabled(c, type) ||
-                type.Strike <= 0f || !type.Missions.Contains(SupportCore.MissionStrike)) continue;
-            var nation = c.NationById(formation.NationId);
-            if (nation is null || SupportCore.Displaced(c, formation)) continue;
-            sides ??= new Dictionary<int, Sides>();
-            if (!sides.TryGetValue(nation.Id, out var side)) sides[nation.Id] = side = SidesOf(c, nation.Id);
-            if (side.Enemies.Count == 0) continue;
-            Salvo(c, formation, type, nation, side);
-            if (++fired % 3 == 0 && i + 1 < due.Count && Campaign.StageOverdue()) yield return 0;
+            for (var i = 0; i < due.Count; i++)
+            {
+                var formation = due[i];
+                if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type) || !SupportCore.Enabled(c, type) ||
+                    type.Strike <= 0f || !type.Missions.Contains(SupportCore.MissionStrike)) continue;
+                var nation = c.NationById(formation.NationId);
+                if (nation is null || SupportCore.Displaced(c, formation)) continue;
+                if (!sides.TryGetValue(nation.Id, out var side)) sides[nation.Id] = side = SidesOf(c, nation.Id);
+                if (side.Enemies.Count == 0) continue;
+                Salvo(c, formation, type, nation, side);
+                fired++;
+                if (i + 1 < due.Count && Campaign.StageOverdue()) yield return 0;
+            }
+        }
+        finally
+        {
+            due.Clear();
+            sides.Clear();
         }
     }
 
@@ -360,6 +387,8 @@ public static class LongRangeStrikes
         Land(c, side, plan, landed, target);
     }
 
+    private static readonly string[] DepotDrainGoods = { "Ammunition", "Oil", "Arms" };
+
     /// <summary>What a salvo that got through does to what it was aimed at.</summary>
     private static void Land(Campaign c, Sides side, Plan plan, float landed, Nation target)
     {
@@ -374,14 +403,19 @@ public static class LongRangeStrikes
                 // The stack is the striker's enemies standing in the province, shared by divisions:
                 // a salvo into a corps hurts each of its divisions less than one into a brigade.
                 var divisions = 0f;
-                foreach (var army in c.Armies)
+                var armies = c.Armies;
+                for (var i = 0; i < armies.Count; i++)
+                {
+                    var army = armies[i];
                     if (army.ProvinceId == plan.Province && army.Divisions > 0f && side.Enemies.Contains(army.NationId))
                         divisions += army.Divisions;
+                }
                 if (divisions <= 0f) return;
                 var organisation = MathF.Min(0.3f, d.StrikeFrontOrganisation * landed / MathF.Max(1f, divisions));
                 var equipment = MathF.Min(0.1f, d.StrikeFrontEquipment * landed / MathF.Max(1f, divisions));
-                foreach (var army in c.Armies)
+                for (var i = 0; i < armies.Count; i++)
                 {
+                    var army = armies[i];
                     if (army.ProvinceId != plan.Province || army.Divisions <= 0f || !side.Enemies.Contains(army.NationId)) continue;
                     army.Organisation = M.Clamp01(army.Organisation - organisation);
                     army.Equipment = MathF.Max(MathF.Min(army.Equipment, 0.2f), army.Equipment - equipment);
@@ -390,8 +424,9 @@ public static class LongRangeStrikes
             }
             case TargetLogistics:
                 if (target is not null && d.StrategicStockpilesEnabled)
-                    foreach (var good in new[] { "Ammunition", "Oil", "Arms" })
+                    for (var gi = 0; gi < DepotDrainGoods.Length; gi++)
                     {
+                        var good = DepotDrainGoods[gi];
                         var have = StrategicStockpiles.Get(c, target, good);
                         target.Stockpiles[good] = MathF.Round(MathF.Max(0f, have - d.StrikeDepotDrain * landed), 3);
                     }
@@ -460,12 +495,12 @@ public static class LongRangeStrikes
     }
 
     /// <summary>Fast check for AI repositioning: whether any enemy target of any kind lies in reach, without computing air-screen odds.</summary>
-    internal static bool HasTargetInReach(Campaign c, SupportFormation formation, SupportTypeDefinition type, Sides side)
+    internal static bool HasTargetInReach(Campaign c, SupportFormation formation, SupportTypeDefinition type, Sides side, Plan scratchPlan = null)
     {
         if (c?.ProvinceMap is null || formation is null || type is null || type.Strike <= 0f || side is null || side.Enemies.Count == 0)
             return false;
         if (SupportCore.Displaced(c, formation)) return false;
-        var plan = new Plan();
+        var plan = scratchPlan ?? new Plan();
         var wanted = Targets.Contains(formation.StrikeTarget) ? formation.StrikeTarget : AutoTarget(type);
         var named = formation.TargetStateMapIndex;
         if (named >= 0)
@@ -489,9 +524,10 @@ public static class LongRangeStrikes
         if (side.EnemyStates is not null) return side.EnemyStates;
         var map = c.ProvinceMap;
         var list = new List<(ScenarioState, int)>();
-        for (var i = 0; i < c.States.Count; i++)
+        var states = c.States;
+        for (var i = 0; i < states.Count; i++)
         {
-            var state = c.States[i];
+            var state = states[i];
             var anchor = AnchorOf(map, state.MapIndex);
             if (anchor > 0 && side.EnemyMaps.Contains(Controller(c, anchor)))
                 list.Add((state, anchor));
@@ -517,12 +553,24 @@ public static class LongRangeStrikes
             else plan.Refusal = enemyHeld ? "The named region is out of reach." : "The named region is no longer the enemy's.";
         }
         // The staff's own pick: the kind asked for first, then the others in order of use.
-        foreach (var kind in new[] { wanted, TargetLogistics, TargetFront, TargetIndustry, TargetEnergy }.Distinct())
-            if (Choose(c, formation, type, side, kind, -1, plan)) { Odds(c, formation, type, side, plan); return plan; }
+        if (Choose(c, formation, type, side, wanted, -1, plan) ||
+            (wanted != TargetLogistics && Choose(c, formation, type, side, TargetLogistics, -1, plan)) ||
+            (wanted != TargetFront && Choose(c, formation, type, side, TargetFront, -1, plan)) ||
+            (wanted != TargetIndustry && Choose(c, formation, type, side, TargetIndustry, -1, plan)) ||
+            (wanted != TargetEnergy && Choose(c, formation, type, side, TargetEnergy, -1, plan)))
+        {
+            Odds(c, formation, type, side, plan);
+            return plan;
+        }
         plan.Target = wanted;
         plan.Refusal = "Nothing of the enemy's is in reach.";
         return plan;
     }
+
+    [ThreadStatic] private static Dictionary<int, float> _chooseReachableScratch;
+    [ThreadStatic] private static Dictionary<int, float> _choosePowerScratch;
+    [ThreadStatic] private static Dictionary<int, float> _chooseFedScratch;
+    [ThreadStatic] private static List<int> _chooseKeysScratch;
 
     /// <summary>The best target of one kind inside the reach (or inside one named region), into the plan.</summary>
     private static bool Choose(Campaign c, SupportFormation formation, SupportTypeDefinition type, Sides side,
@@ -532,7 +580,8 @@ public static class LongRangeStrikes
         var origin = map.CenterOf(formation.BaseProvinceId);
         var reach = SupportCore.ReachKm(c, type);
         var band = reach / 111f;
-        var reachable = new Dictionary<int, float>();
+        var reachable = _chooseReachableScratch ??= new Dictionary<int, float>();
+        reachable.Clear();
         bool InReach(int province, out float km)
         {
             km = 0f;
@@ -559,23 +608,39 @@ public static class LongRangeStrikes
         {
             case TargetFront:
             {
-                var power = new Dictionary<int, float>();
-                foreach (var army in c.Armies)
+                var power = _choosePowerScratch ??= new Dictionary<int, float>();
+                power.Clear();
+                var armies = c.Armies;
+                for (var i = 0; i < armies.Count; i++)
                 {
+                    var army = armies[i];
                     if (army.Divisions <= 0f || army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0 ||
                         !side.Enemies.Contains(army.NationId)) continue;
                     if (onlyState >= 0 && map.ProvinceToState[army.ProvinceId] != onlyState) continue;
                     power[army.ProvinceId] = power.GetValueOrDefault(army.ProvinceId) + army.Power * (army.InBattle ? 1.5f : 1f);
                 }
-                foreach (var (province, score) in power.OrderBy(p => p.Key))
-                    if (InReach(province, out var km)) Offer(score, province, map.ProvinceToState[province], km);
+                if (power.Count > 0)
+                {
+                    var keys = _chooseKeysScratch ??= new List<int>();
+                    keys.Clear();
+                    foreach (var p in power.Keys) keys.Add(p);
+                    if (keys.Count > 1) keys.Sort();
+                    for (var i = 0; i < keys.Count; i++)
+                    {
+                        var province = keys[i];
+                        if (InReach(province, out var km)) Offer(power[province], province, map.ProvinceToState[province], km);
+                    }
+                }
                 break;
             }
             case TargetLogistics:
             {
-                var fed = new Dictionary<int, float>();
-                foreach (var army in c.Armies)
+                var fed = _chooseFedScratch ??= new Dictionary<int, float>();
+                fed.Clear();
+                var armies = c.Armies;
+                for (var i = 0; i < armies.Count; i++)
                 {
+                    var army = armies[i];
                     if (army.Divisions <= 0f || !side.Enemies.Contains(army.NationId)) continue;
                     // The region the formation draws its supply from; before the first supply
                     // trace has run, the region it stands in - its railhead is not far behind.
@@ -586,11 +651,19 @@ public static class LongRangeStrikes
                 }
                 // A named region that feeds nobody is still a depot: it is struck for what it holds.
                 if (onlyState >= 0 && fed.Count == 0) fed[onlyState] = 0.01f;
-                foreach (var (state, score) in fed.OrderBy(p => p.Key))
+                if (fed.Count > 0)
                 {
-                    var anchor = AnchorOf(map, state);
-                    if (anchor <= 0 || !side.EnemyMaps.Contains(Controller(c, anchor))) continue;
-                    if (InReach(anchor, out var km)) Offer(score, anchor, state, km);
+                    var keys = _chooseKeysScratch ??= new List<int>();
+                    keys.Clear();
+                    foreach (var s in fed.Keys) keys.Add(s);
+                    if (keys.Count > 1) keys.Sort();
+                    for (var i = 0; i < keys.Count; i++)
+                    {
+                        var state = keys[i];
+                        var anchor = AnchorOf(map, state);
+                        if (anchor <= 0 || !side.EnemyMaps.Contains(Controller(c, anchor))) continue;
+                        if (InReach(anchor, out var km)) Offer(fed[state], anchor, state, km);
+                    }
                 }
                 break;
             }
@@ -622,10 +695,29 @@ public static class LongRangeStrikes
         plan.StateMapIndex = bestState;
         plan.DistanceKm = bestKm;
         var controller = Controller(c, bestProvince);
-        plan.TargetNationId = kind == TargetFront
-            ? c.Armies.Where(a => a.ProvinceId == bestProvince && side.Enemies.Contains(a.NationId))
-                .OrderByDescending(a => a.Divisions).ThenBy(a => a.Id).Select(a => a.NationId).DefaultIfEmpty(-1).First()
-            : (controller > 0 ? c.NationByMapIndex(controller)?.Id ?? -1 : -1);
+        if (kind == TargetFront)
+        {
+            var targetNation = -1;
+            var bestDivs = float.NegativeInfinity;
+            var bestArmyId = int.MaxValue;
+            var armies = c.Armies;
+            for (var i = 0; i < armies.Count; i++)
+            {
+                var army = armies[i];
+                if (army.ProvinceId != bestProvince || !side.Enemies.Contains(army.NationId)) continue;
+                if (army.Divisions > bestDivs || (army.Divisions == bestDivs && army.Id < bestArmyId))
+                {
+                    bestDivs = army.Divisions;
+                    bestArmyId = army.Id;
+                    targetNation = army.NationId;
+                }
+            }
+            plan.TargetNationId = targetNation;
+        }
+        else
+        {
+            plan.TargetNationId = controller > 0 ? c.NationByMapIndex(controller)?.Id ?? -1 : -1;
+        }
         return true;
     }
 
@@ -674,63 +766,136 @@ public static class LongRangeStrikes
     /// </summary>
     public static void Procure(Campaign c)
     {
+        foreach (var _ in ProcureStages(c)) { }
+    }
+
+    internal static IEnumerable<int> ProcureStages(Campaign c)
+    {
         var d = c.Defines;
         var every = Math.Max(1, d.AiLongRangeProcurementDays);
-        if (c.ProvinceMap is null) return;
-        HashSet<int> atWar = null;
-        foreach (var nation in c.Nations)
+        if (c.ProvinceMap is null) yield break;
+        var pass = c.Caches.SupportPass;
+        var atWar = pass.ProcureAtWar;
+        var usedByState = pass.ProcureUsedByState;
+        var regions = pass.ProcureTopRegions;
+        var side = pass.ProcureSides;
+        var builtAtWar = false;
+        var builtUsed = false;
+        var nations = c.Nations;
+        try
         {
-            if (nation.IsHuman || nation.Movement is not null || nation.Population <= 0 || nation.Gdp < 30f) continue;
-            if ((c.ElapsedDays + nation.Id) % every != 0) continue;
-            if (atWar is null)
+            for (var ni = 0; ni < nations.Count; ni++)
             {
-                atWar = new HashSet<int>();
-                foreach (var war in Warfare.OpenWars(c))
+                var nation = nations[ni];
+                if (nation.IsHuman || nation.Movement is not null || nation.Population <= 0 || nation.Gdp < 30f) continue;
+                if ((c.ElapsedDays + nation.Id) % every != 0) continue;
+                if (!builtAtWar)
                 {
-                    if (war.Ended || war.CivilConflict) continue;
-                    foreach (var id in war.Side(true)) atWar.Add(id);
-                    foreach (var id in war.Side(false)) atWar.Add(id);
+                    builtAtWar = true;
+                    atWar.Clear();
+                    var openWars = Warfare.OpenWars(c);
+                    for (var wi = 0; wi < openWars.Count; wi++)
+                    {
+                        var war = openWars[wi];
+                        if (war.Ended || war.CivilConflict) continue;
+                        foreach (var id in war.Side(true)) atWar.Add(id);
+                        foreach (var id in war.Side(false)) atWar.Add(id);
+                    }
                 }
-            }
-            if (!atWar.Contains(nation.Id)) continue;
-            var side = SidesOf(c, nation.Id);
-            var enemyStrikes = 0;
-            foreach (var enemy in side.Enemies)
-                foreach (var f in c.SupportByNation.GetValueOrDefault(enemy) ?? new List<SupportFormation>())
-                    if (SupportTypeCatalog.TryGet(f.TypeId, out var t) && t.Strike > 0f) enemyStrikes++;
-            int ownDefence = 0, ownStrike = 0;
-            foreach (var f in c.SupportByNation.GetValueOrDefault(nation.Id) ?? new List<SupportFormation>())
-                if (SupportTypeCatalog.TryGet(f.TypeId, out var t))
+                if (!atWar.Contains(nation.Id)) continue;
+                FillSides(c, nation.Id, side);
+                var enemyStrikes = 0;
+                foreach (var enemy in side.Enemies)
                 {
-                    if (t.Kind == SupportKind.AirDefence) ownDefence++;
-                    else if (t.Strike > t.SupportFire) ownStrike++;
+                    if (!c.SupportByNation.TryGetValue(enemy, out var enemyForms)) continue;
+                    for (var fi = 0; fi < enemyForms.Count; fi++)
+                        if (SupportTypeCatalog.TryGet(enemyForms[fi].TypeId, out var t) && t.Strike > 0f) enemyStrikes++;
                 }
-            foreach (var order in c.SupportOrders)
-                if (order.NationId == nation.Id && SupportTypeCatalog.TryGet(order.TypeId, out var t))
+                int ownDefence = 0, ownStrike = 0;
+                if (c.SupportByNation.TryGetValue(nation.Id, out var ownForms))
                 {
-                    if (t.Kind == SupportKind.AirDefence) ownDefence++;
-                    else if (t.Strike > t.SupportFire) ownStrike++;
+                    for (var fi = 0; fi < ownForms.Count; fi++)
+                        if (SupportTypeCatalog.TryGet(ownForms[fi].TypeId, out var t))
+                        {
+                            if (t.Kind == SupportKind.AirDefence) ownDefence++;
+                            else if (t.Strike > t.SupportFire) ownStrike++;
+                        }
                 }
-            var size = 1 + (int)(nation.Gdp / 400f);
-            var typeId = enemyStrikes > 0 && ownDefence < Math.Min(3, size) ? "sam_brigade"
-                : ownStrike < Math.Min(4, size) ? (nation.Gdp >= 300f ? "strike_missile_brigade" : "long_range_drone_group")
-                : null;
-            if (typeId is null || !SupportTypeCatalog.TryGet(typeId, out var type) || !SupportCore.Enabled(c, type)) continue;
-            if (nation.Treasury < SupportCore.CostOf(nation, type) * MathF.Max(1f, d.AiLongRangeReserve)) continue;
-            // Into the most populous region with room for it, or the most populous of all when none
-            // has: a full region is crowding now, not a refusal, and it is paid for in readiness.
-            var regions = c.StatesOf(nation).OrderByDescending(s => s.Population).ThenBy(s => s.MapIndex).Take(12).ToList();
-            var roomy = regions.Where(s => SupportCore.BasingUsed(c, s.MapIndex) + type.Basing <= SupportCore.CapacityOf(c, s)).ToList();
-            foreach (var state in roomy.Concat(regions.Except(roomy)))
-            {
-                if (SupportCore.Validate(c, nation.Id, state.MapIndex, typeId).Length > 0) continue;
-                var command = new RaiseSupportCommand { IssuerId = nation.Id, StateMapIndex = state.MapIndex, TypeId = typeId };
-                command.Apply(c);
-                if (command.Refusal.Length == 0) Procured++;
-                break;
+                var orders = c.SupportOrders;
+                for (var oi = 0; oi < orders.Count; oi++)
+                {
+                    var order = orders[oi];
+                    if (order.NationId == nation.Id && SupportTypeCatalog.TryGet(order.TypeId, out var t))
+                    {
+                        if (t.Kind == SupportKind.AirDefence) ownDefence++;
+                        else if (t.Strike > t.SupportFire) ownStrike++;
+                    }
+                }
+                var size = 1 + (int)(nation.Gdp / 400f);
+                var typeId = enemyStrikes > 0 && ownDefence < Math.Min(3, size) ? "sam_brigade"
+                    : ownStrike < Math.Min(4, size) ? (nation.Gdp >= 300f ? "strike_missile_brigade" : "long_range_drone_group")
+                    : null;
+                if (typeId is null || !SupportTypeCatalog.TryGet(typeId, out var type) || !SupportCore.Enabled(c, type)) continue;
+                if (nation.Treasury < SupportCore.CostOf(nation, type) * MathF.Max(1f, d.AiLongRangeReserve)) continue;
+                // Into the most populous region with room for it, or the most populous of all when none
+                // has: a full region is crowding now, not a refusal, and it is paid for in readiness.
+                regions.Clear();
+                foreach (var s in c.StatesOf(nation))
+                {
+                    if (regions.Count == 12 && !BetterProcureRegion(s, regions[11])) continue;
+                    var pos = 0;
+                    while (pos < regions.Count && !BetterProcureRegion(s, regions[pos])) pos++;
+                    if (regions.Count == 12) regions.RemoveAt(11);
+                    regions.Insert(pos, s);
+                }
+                if (regions.Count == 0) continue;
+                if (!builtUsed)
+                {
+                    builtUsed = true;
+                    SupportCore.FillBasingUsed(c, usedByState);
+                }
+                var roomyMask = 0;
+                for (var ri = 0; ri < regions.Count; ri++)
+                {
+                    var st = regions[ri];
+                    if (usedByState.GetValueOrDefault(st.MapIndex) + type.Basing <= SupportCore.CapacityOf(c, st))
+                        roomyMask |= 1 << ri;
+                }
+                for (var passIdx = 0; passIdx < 2; passIdx++)
+                {
+                    var wantRoomy = passIdx == 0;
+                    var tried = false;
+                    for (var ri = 0; ri < regions.Count; ri++)
+                    {
+                        if ((((roomyMask >> ri) & 1) != 0) != wantRoomy) continue;
+                        var state = regions[ri];
+                        if (SupportCore.Validate(c, nation.Id, state.MapIndex, typeId).Length > 0) continue;
+                        var ordersBefore = c.SupportOrders.Count;
+                        var command = new RaiseSupportCommand { IssuerId = nation.Id, StateMapIndex = state.MapIndex, TypeId = typeId };
+                        command.Apply(c);
+                        if (command.Refusal.Length == 0) Procured++;
+                        if (c.SupportOrders.Count > ordersBefore)
+                            usedByState[state.MapIndex] = usedByState.GetValueOrDefault(state.MapIndex) + type.Basing;
+                        tried = true;
+                        break;
+                    }
+                    if (tried) break;
+                }
+                if ((ni & 15) == 15 && ni + 1 < nations.Count && Campaign.StageOverdue()) yield return 0;
             }
         }
+        finally
+        {
+            if (builtAtWar) atWar.Clear();
+            if (builtUsed) usedByState.Clear();
+            regions.Clear();
+            side.Reset();
+        }
     }
+
+    private static bool BetterProcureRegion(ScenarioState candidate, ScenarioState incumbent) =>
+        candidate.Population > incumbent.Population ||
+        (candidate.Population == incumbent.Population && candidate.MapIndex < incumbent.MapIndex);
 
     // ------------------------------------------------------------------ the fingerprint
 

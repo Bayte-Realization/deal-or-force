@@ -1,0 +1,17 @@
+// Wave 5 opinion modifiers for WAR-02 bilateral strategic arms control pacts.
+{
+  "nuclear_arms_control_pact": {
+    "name": "nuc.op.arms_control_pact",
+    "opinion": 12,
+    "days": 1825,
+    "decays": true,
+    "max_stacks": 1
+  },
+  "nuclear_arms_control_broken": {
+    "name": "nuc.op.arms_control_broken",
+    "opinion": -16,
+    "days": 1095,
+    "decays": true,
+    "max_stacks": 2
+  }
+}

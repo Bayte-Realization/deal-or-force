@@ -394,7 +394,7 @@ public static partial class Warfare
         // Map indices are sparse: breakaways start at 1000, and mods may use
         // still higher values. Country COUNT silently excluded their entire fronts.
         var largestMapIndex = 0;
-        foreach (var nation in campaign.Nations) largestMapIndex = Math.Max(largestMapIndex, nation.MapIndex);
+        foreach (var nation in campaign.ActiveNations) largestMapIndex = Math.Max(largestMapIndex, nation.MapIndex);
         if (belligerents.Length <= largestMapIndex)
             belligerents = Belligerents = new bool[largestMapIndex + 1];
         Array.Clear(belligerents);
@@ -426,30 +426,36 @@ public static partial class Warfare
         }
         if (byPair.Count == 0) return;
 
-        for (var province = 1; province <= topology.ProvinceCount; province++)
+        var neighborsByProv = topology.Neighbors;
+        var provCount = topology.ProvinceCount;
+        var bellLen = belligerents.Length;
+        for (var owner = 1; owner < bellLen; owner++)
         {
-            var owner = controllers[province];
-            if (owner == 0 || owner >= belligerents.Length || !belligerents[owner]) continue;
-            // Nobody holds a line in the middle of a lake. Water can be owned and drawn,
-            // and it can be the thing two armies are on opposite sides of, but it is never
-            // itself a place a division is asked to stand.
-            if (topology.IsWater(province)) continue;
-            foreach (var neighbour in topology.Neighbors[province])
+            if (!belligerents[owner]) continue;
+            var held = CampaignIntel.ProvincesHeldBy(campaign, controllers, owner);
+            for (var hi = 0; hi < held.Length; hi++)
             {
-                var other = controllers[neighbour];
-                if (other == 0 || other == owner || other >= belligerents.Length || !belligerents[other]) continue;
-                if (topology.IsWater(neighbour)) continue;
-                if (!byPair.TryGetValue(PairKey(owner, other), out var found)) continue;
+                var province = held[hi];
+                if (province <= 0 || province > provCount || topology.IsWater(province)) continue;
+                var adj = neighborsByProv[province];
+                for (var ni = 0; ni < adj.Length; ni++)
+                {
+                    var neighbour = adj[ni];
+                    var other = controllers[neighbour];
+                    if (other == 0 || other == owner || other >= bellLen || !belligerents[other]) continue;
+                    if (topology.IsWater(neighbour)) continue;
+                    if (!byPair.TryGetValue(PairKey(owner, other), out var found)) continue;
 
-                if (owner == found.AttackerMap)
-                {
-                    found.War.AttackerFront.Add(province);
-                    found.War.DefenderFront.Add(neighbour);
-                }
-                else
-                {
-                    found.War.DefenderFront.Add(province);
-                    found.War.AttackerFront.Add(neighbour);
+                    if (owner == found.AttackerMap)
+                    {
+                        found.War.AttackerFront.Add(province);
+                        found.War.DefenderFront.Add(neighbour);
+                    }
+                    else
+                    {
+                        found.War.DefenderFront.Add(province);
+                        found.War.AttackerFront.Add(neighbour);
+                    }
                 }
             }
         }
@@ -470,6 +476,7 @@ public static partial class Warfare
         public int Count = -1;
         /// <summary>The last war of the record when the board was built: a record replaced with one of the same length is another object.</summary>
         public StrategicWar Tail;
+        public bool TailWasEnded;
     }
 
     static readonly ConditionalWeakTable<Campaign, LiveBoard> LiveBoards = new();
@@ -490,7 +497,8 @@ public static partial class Warfare
         if (campaign is null) return Array.Empty<StrategicWar>();
         var board = LiveBoards.GetValue(campaign, static _ => new LiveBoard());
         if (board.Revision != campaign.WarRevision || board.Count != campaign.Wars.Count || EndedIn(board.Wars) ||
-            !ReferenceEquals(board.Tail, campaign.Wars.Count > 0 ? campaign.Wars[^1] : null))
+            !ReferenceEquals(board.Tail, campaign.Wars.Count > 0 ? campaign.Wars[^1] : null) ||
+            board.TailWasEnded != (board.Tail?.Ended ?? false))
             RefreshLive(campaign, board);
         return board.Wars;
     }
@@ -647,6 +655,7 @@ public static partial class Warfare
         board.Revision = campaign.WarRevision;
         board.Count = wars.Count;
         board.Tail = wars.Count > 0 ? wars[^1] : null;
+        board.TailWasEnded = board.Tail?.Ended ?? false;
     }
 }
 
@@ -799,8 +808,14 @@ public static partial class FrontPlanner
         profiles.Clear();
         HashSet<ushort> attackerEnemyMaps = null;
         HashSet<ushort> defenderEnemyMaps = null;
-        foreach (var army in assigned)
+        var allowUnopposed = campaign.Defines.AiStartsUnopposedAdvance;
+        var today = campaign.ElapsedDays;
+        var map = campaign.ProvinceMap;
+        var provCount = map?.ProvinceCount ?? 0;
+        var assignedCount = assigned.Count;
+        for (var i = 0; i < assignedCount; i++)
         {
+            var army = assigned[i];
             if (army.AssignedWarId != war.Id || army.PlanActive) continue;
             if (army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) continue;
             var nation = campaign.NationById(army.NationId);
@@ -812,6 +827,13 @@ public static partial class FrontPlanner
             if (StaffReasons.SupplyHoldsAttack(campaign, army)) continue;
             if (army.Planning < profile.ExecutePlanningThreshold)
             {
+                // Fast reject before constructing enemy controller sets or entering F# assessment:
+                // all of these conditions unconditionally return -1 inside OpenAdvanceTarget.
+                if (!allowUnopposed || map is null || campaign.ProvinceController is null ||
+                    army.DirectOrder || army.SupportOnly || army.InBattle || army.IsMoving ||
+                    army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 || army.ProvinceId > provCount ||
+                    army.ReadyDay > today)
+                    continue;
                 var attacking = war.IsAttacking(army.NationId);
                 HashSet<ushort> enemyMaps;
                 if (attacking)
@@ -836,7 +858,7 @@ public static partial class FrontPlanner
                 }
                 if (!Warfare.CanStartOpenAdvance(campaign, war, army, enemyMaps)) continue;
             }
-            new SetArmyPlanExecutionCommand { IssuerId = nation.Id, ArmyId = army.Id, Active = true }.Apply(campaign);
+            SetArmyPlanExecutionCommand.ApplyTo(campaign, army, nation.Id, active: true);
         }
     }
 
@@ -1096,6 +1118,23 @@ public static partial class FrontPlanner
             scratch.Taken = new int[count];
         }
         var weight = scratch.Weight;
+        var threatByWar = scratch.Quota;
+        Array.Clear(threatByWar, 0, count);
+        var allArmies = campaign.Armies;
+        for (var i = 0; i < allArmies.Count; i++)
+        {
+            var enemy = allArmies[i];
+            if (enemy.AssignedWarId < 0 || enemy.TemplateId == MilitiaCore.TemplateId) continue;
+            for (var w = 0; w < count; w++)
+            {
+                var war = wars[w];
+                if (enemy.AssignedWarId == war.Id)
+                {
+                    if (war.Opposes(nationId, enemy.NationId)) threatByWar[w]++;
+                    break;
+                }
+            }
+        }
         while (scratch.SplitFrontPool.Count < count) scratch.SplitFrontPool.Add(new List<int>());
         for (var w = 0; w < count; w++)
         {
@@ -1107,14 +1146,7 @@ public static partial class FrontPlanner
             if (controllers is not null && nation is not null)
                 foreach (var province in front)
                     if (controllers[province] == (ushort)nation.MapIndex) frontList.Add(province);
-            var threat = 0;
-            var allArmies = campaign.Armies;
-            for (var i = 0; i < allArmies.Count; i++)
-            {
-                var enemy = allArmies[i];
-                if (enemy.AssignedWarId == war.Id && enemy.TemplateId != MilitiaCore.TemplateId &&
-                    war.Opposes(nationId, enemy.NationId)) threat++;
-            }
+            var threat = threatByWar[w];
             if (frontList.Count > 0)
             {
                 weight[w] = frontList.Count + 0.5f * threat;
@@ -1349,12 +1381,7 @@ public static partial class FrontPlanner
             }
 
             if (army.PlanActive != execute)
-                new SetArmyPlanExecutionCommand
-                {
-                    IssuerId = nationId,
-                    ArmyId = army.Id,
-                    Active = execute
-                }.Apply(campaign);
+                SetArmyPlanExecutionCommand.ApplyTo(campaign, army, nationId, execute);
         }
     }
 }

@@ -4,9 +4,9 @@
 
 **A grand strategy game about the whole world, from the morning of 1 January 2024.**
 Every country on the map is yours to play, and every one of them is simulated the same way.
-Version **0.8.3.5** (EntertAlpha).
+Version **0.8.5.3** (EntertAlpha).
 
-[![Release](https://img.shields.io/badge/release-EntertAlpha%200.8.3.5-2f6fb3)](docs/CHANGELOG_0.8.3.5_EN.md)
+[![Release](https://img.shields.io/badge/release-EntertAlpha%200.8.5.3-2f6fb3)](docs/CHANGELOG_0.8.5.3_EN.md)
 [![Engine](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED.md)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED.md)
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-3a7f3a)](LICENSE)
@@ -29,7 +29,7 @@ Version **0.8.3.5** (EntertAlpha).
   [itch.io](https://bayte-realization.itch.io/deal-or-force).
   Extract the whole archive and run `Deal or Force Launcher.exe`.
 - **From source** — see [Building and running](#building-and-running) below.
-- The [cumulative 0.8 changelog](docs/CHANGELOG_0.8.3.5_EN.md) covers the new interface, game
+- The [cumulative 0.8 changelog](docs/CHANGELOG_0.8.5.3_EN.md) covers the new interface, game
   rules and performance work, along with the latest fixes.
 - It is built by one person, openly with the help of AI.
 
@@ -37,10 +37,21 @@ Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 [X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
 [Telegram](https://t.me/+39SNXyA92aBmYzhi) · [devlog](https://bayte-realization.itch.io/deal-or-force/devlog)
 
-## New in EntertAlpha 0.8.3.5
+## New in EntertAlpha 0.8.5.3
 
 Built on **Godot 4.8 Beta 3 .NET** and **.NET 10**. The full history of the 0.8 series is in
-[CHANGELOG 0.8.3.5](docs/CHANGELOG_0.8.3.5_EN.md).
+[CHANGELOG 0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md).
+
+- **Zero-freeze background simulation & Android edition** — `DoF-Sim` background thread with
+  stage-yielding `StepFor` slicing, non-blocking HUD/map reads, pre-baked map boot caches, `STORED(0)`
+  APK packaging, touch controls, and pause-menu Developer Console with soft-keyboard adaptation.
+- **Elevation-aligned 3D relief, Dossier clarity & colour fixes** — per-coordinate 3D relief
+  snapping for armies, cities, capitals, weather/fog shells; clickable Capital navigation and
+  expandable Domestic Stability factors in the Country Dossier; live Tax Efficiency warning banner
+  in Economy; and 36 distinct splinter/civil-war country colours.
+- **Major gameplay & modding wave** — Grand Projects, World Situations, National Ambitions &
+  Cabinet Directives, multi-variant Production Methods, Diseases & Disasters, expanded Doctrines,
+  Mainland Reclamation, and Mod Content Studio.
 
 - **AI staff delegation & Diplomatic Inbox** — delegate any of the 11 branches of government from
   the dedicated **AI Staff** tab (`Q` / flag dossier, with an Overview shortcut) or the top
@@ -217,7 +228,7 @@ Everything below exists in English and in Russian; a `_RU` suffix is the Russian
 
 | | |
 |---|---|
-| [Changelog 0.8.3.5](docs/CHANGELOG_0.8.3.5_EN.md) · [0.7.2.3](docs/CHANGELOG_0.7.2.3_EN.md) | **cumulative 0.8 release notes and previous changelog** |
+| [Changelog 0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md) · [0.8.3.5](docs/CHANGELOG_0.8.3.5_EN.md) · [0.7.2.3](docs/CHANGELOG_0.7.2.3_EN.md) | **cumulative 0.8 release notes and previous changelogs** |
 | [Overhaul programme](docs/OVERHAUL_PROGRAMME_2026_11_14_RU.md) | the fifteen fronts of the rework and what "done" means for each (Russian) |
 | [Deal rework](docs/DEALS_REWORK_2026_11_14_RU.md) | what is wrong with deals today and the plan for them, step by step (Russian) |
 | [TUTORIAL](docs/TUTORIAL.md) | **your first campaign, hand held** |

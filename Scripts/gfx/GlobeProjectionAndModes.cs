@@ -59,6 +59,7 @@ public sealed partial class GlobePresentation
     private MeshInstance3D _globeNode = null!;
     private Node3D _spaceNode = null!;
     private Node3D _flatRoot = null!;
+    private QuadMesh[] _flatQuads;
     private bool _flatMap;
     private float _flatX;
     private float _flatY;
@@ -200,6 +201,7 @@ public sealed partial class GlobePresentation
     {
         _flatRoot = new Node3D { Name = "InfiniteFlatMap", Visible = false };
         world.AddChild(_flatRoot);
+        _flatQuads = new QuadMesh[3];
         for (var copy = -1; copy <= 1; copy++)
         {
             var quad = new QuadMesh
@@ -207,6 +209,7 @@ public sealed partial class GlobePresentation
                 Size = new Vector2(FlatMapWidth, FlatMapHeight),
                 Material = _globeMaterial
             };
+            _flatQuads[copy + 1] = quad;
             var tile = new MeshInstance3D
             {
                 Name = $"WorldCopy_{copy:+0;-0;0}",
@@ -217,6 +220,9 @@ public sealed partial class GlobePresentation
             };
             _flatRoot.AddChild(tile);
         }
+        // Apply initial 3D relief subdivision to the newly created flat quads.
+        _cachedReliefMeshEnabled = null;
+        ApplyTerrainRelief3D();
     }
 
     /// <summary>Whether the flat map is the one being drawn. The options screen asks.</summary>
@@ -254,6 +260,7 @@ public sealed partial class GlobePresentation
 
         _flatMap = enabled;
         _globeMaterial?.SetShaderParameter("flat_projection", enabled ? 1f : 0f);
+        SyncWeatherReliefShells();
         _globeNode.Visible = !enabled;
         _spaceNode.Visible = !enabled;
         _flatRoot.Visible = enabled;
@@ -307,7 +314,7 @@ public sealed partial class GlobePresentation
     }
 
     private Vector3 PresentationPoint(float latitude, float longitude, float sphereRadius) =>
-        _flatMap ? FlatPoint(latitude, longitude, FlatLineZ) : SurfacePoint(latitude, longitude, sphereRadius);
+        _flatMap ? LocalFlatPoint(latitude, longitude, FlatLineZ) : LocalSurfacePoint(latitude, longitude, sphereRadius);
 
     private Vector3 FlatPoint(float latitude, float longitude, float z)
     {
@@ -387,64 +394,141 @@ public sealed partial class GlobePresentation
         return AverageArmyLocation(stack);
     }
 
+    private bool _forceFlatReproject;
+    private float _lastFlatCapX = float.NaN;
+    private int _lastFlatCapRev = int.MinValue;
+    private int _lastFlatDestroyedCount = int.MinValue;
+    private int _lastFlatCapCount = -1;
+    private readonly List<(float Lat, float Lon)> _flatCapitalCoords = new();
+    private float _lastFlatGlyphX = float.NaN;
+    private object _lastFlatGlyphsRef;
+    private int _lastFlatGlyphsCount = -1;
+    private float _lastFlatMobileX = float.NaN;
+    private float _lastFlatMobileCamSize = float.NaN;
+    private int _lastFlatMobileMapRev = int.MinValue;
+    private int _lastFlatMobileFleetCount = -1;
+    private int _lastFlatMobileBattleCount = -1;
+    private int _lastFlatMobileSupportCount = -1;
+    private ulong _lastFlatPausedArmyMsec;
+
     private void UpdateFlatWorldPositions()
     {
-        foreach (var (node, normal) in _capitalMarkers)
+        var force = _forceFlatReproject;
+        _forceFlatReproject = false;
+
+        var destroyedCount = _campaign?.DestroyedProvinces.Count ?? -1;
+        if (force || MathF.Abs(_flatX - _lastFlatCapX) > 0.0001f ||
+            _lastFlatCapRev != _capitalRevision || _lastFlatDestroyedCount != destroyedCount ||
+            _lastFlatCapCount != _capitalMarkers.Count)
         {
-            if (!IsInstanceValid(node)) continue;
-            var geo = GeographicFromNormal(normal);
-            var position = FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
-            if (node.Position != position) node.Position = position;
-            node.Quaternion = Quaternion.Identity;
-        }
-        foreach (var (node, normal) in _fleetMarkers)
-        {
-            if (!IsInstanceValid(node)) continue;
-            var geo = GeographicFromNormal(normal);
-            var position = _fleetByMarker.TryGetValue(node, out var fleet)
-                ? FlatFleetPosition(fleet.Id, geo.Latitude, geo.Longitude)
-                : FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
-            if (node.Position != position) node.Position = position;
-        }
-        ReprojectSupportMarkers();
-        foreach (var marker in _armyStacks.Values)
-            if (IsInstanceValid(marker.Node))
+            if (_lastFlatCapRev != _capitalRevision || _lastFlatDestroyedCount != destroyedCount ||
+                _lastFlatCapCount != _capitalMarkers.Count || _flatCapitalCoords.Count != _capitalMarkers.Count)
             {
-                // Per-frame flat updates only write the target; the projection switch snaps
-                // both values through SnapArmyMarkerPositions before this method is used.
-                marker.TargetPosition = ArmyMarkerPosition(marker);
+                _flatCapitalCoords.Clear();
+                for (var i = 0; i < _capitalMarkers.Count; i++)
+                    _flatCapitalCoords.Add(GeographicFromNormal(_capitalMarkers[i].Normal));
             }
-        if (FlatViewInMotion) QueueRedraw();
-        foreach (var glyph in _countryGlyphs)
-        {
-            if (!IsInstanceValid(glyph.Node)) continue;
-            var position = FlatPoint(glyph.Latitude, glyph.Longitude, FlatTextZ);
-            var rotation = new Vector3(0f, 0f, glyph.FlatRotation);
-            if (glyph.Node.Position != position) glyph.Node.Position = position;
-            if (glyph.Node.Rotation != rotation) glyph.Node.Rotation = rotation;
+            _lastFlatCapX = _flatX;
+            _lastFlatCapRev = _capitalRevision;
+            _lastFlatDestroyedCount = destroyedCount;
+            _lastFlatCapCount = _capitalMarkers.Count;
+            for (var i = 0; i < _capitalMarkers.Count; i++)
+            {
+                var node = _capitalMarkers[i].Node;
+                if (!IsInstanceValid(node)) continue;
+                var geo = _flatCapitalCoords[i];
+                var position = LocalFlatPoint(geo.Lat, geo.Lon, FlatMarkerZ);
+                if (node.Position != position) node.Position = position;
+                if (node.Quaternion != Quaternion.Identity) node.Quaternion = Quaternion.Identity;
+            }
         }
-        ReprojectBattleMarkers();
+
+        var mapRev = _campaign?.MapRevision ?? -1;
+        var camSize = IsInstanceValid(_camera) ? _camera.Size : 0f;
+        var unpaused = _campaign is { IsPaused: false };
+        var flatInMotion = FlatViewInMotion;
+        var mobileWorldDirty = force || unpaused || flatInMotion ||
+            MathF.Abs(_flatX - _lastFlatMobileX) > 0.0001f ||
+            MathF.Abs(camSize - _lastFlatMobileCamSize) > 0.0001f ||
+            _lastFlatMobileMapRev != mapRev ||
+            _lastFlatMobileFleetCount != _fleetMarkers.Count ||
+            _lastFlatMobileBattleCount != _battleMarkers.Count ||
+            _lastFlatMobileSupportCount != _supportMapMarkers.Count;
+        if (mobileWorldDirty)
+        {
+            _lastFlatMobileX = _flatX;
+            _lastFlatMobileCamSize = camSize;
+            _lastFlatMobileMapRev = mapRev;
+            _lastFlatMobileFleetCount = _fleetMarkers.Count;
+            _lastFlatMobileBattleCount = _battleMarkers.Count;
+            _lastFlatMobileSupportCount = _supportMapMarkers.Count;
+            foreach (var (node, normal) in _fleetMarkers)
+            {
+                if (!IsInstanceValid(node)) continue;
+                var geo = GeographicFromNormal(normal);
+                var position = _fleetByMarker.TryGetValue(node, out var fleet)
+                    ? FlatFleetPosition(fleet.Id, geo.Latitude, geo.Longitude)
+                    : LocalFlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
+                if (node.Position != position) node.Position = position;
+            }
+            ReprojectSupportMarkers();
+            ReprojectBattleMarkers();
+        }
+
+        var nowMsec = Time.GetTicksMsec();
+        if (mobileWorldDirty || nowMsec - _lastFlatPausedArmyMsec >= 120UL)
+        {
+            _lastFlatPausedArmyMsec = nowMsec;
+            foreach (var marker in _armyStacks.Values)
+                if (IsInstanceValid(marker.Node))
+                {
+                    // Per-frame flat updates only write the target; the projection switch snaps
+                    // both values through SnapArmyMarkerPositions before this method is used.
+                    marker.TargetPosition = ArmyMarkerPosition(marker);
+                }
+        }
+        if (flatInMotion) QueueRedraw();
+
+        var glyphBias = _reliefDisplacement > 0.0001f ? 0.002f : 0f;
+        if (force || MathF.Abs(_flatX - _lastFlatGlyphX) > 0.0001f ||
+            !ReferenceEquals(_lastFlatGlyphsRef, _lastLabelAnchors) ||
+            _lastFlatGlyphsCount != _countryGlyphs.Count)
+        {
+            _lastFlatGlyphX = _flatX;
+            _lastFlatGlyphsRef = _lastLabelAnchors;
+            _lastFlatGlyphsCount = _countryGlyphs.Count;
+            foreach (var glyph in _countryGlyphs)
+            {
+                if (!IsInstanceValid(glyph.Node)) continue;
+                var position = LocalFlatPoint(glyph.Latitude, glyph.Longitude, FlatTextZ + glyphBias);
+                var rotation = new Vector3(0f, 0f, glyph.FlatRotation);
+                if (glyph.Node.Position != position) glyph.Node.Position = position;
+                if (glyph.Node.Rotation != rotation) glyph.Node.Rotation = rotation;
+            }
+        }
     }
 
     private void ReprojectWorldDecorations()
     {
         if (_flatMap)
         {
+            _forceFlatReproject = true;
             UpdateFlatWorldPositions();
             SnapArmyMarkerPositions();
             return;
         }
 
+        var glyphBias = _reliefDisplacement > 0.0001f ? 0.002f : 0f;
         foreach (var (node, normal) in _capitalMarkers)
             if (IsInstanceValid(node)) PlaceCapitalMarker(node, normal);
         foreach (var (node, normal) in _fleetMarkers)
-            if (IsInstanceValid(node)) node.Position = normal * SurfaceMarkerRadius;
+            if (IsInstanceValid(node)) node.Position = LocalSurfacePointFromNormal(normal, SurfaceMarkerRadius);
         ReprojectSupportMarkers();
         SnapArmyMarkerPositions();
         foreach (var glyph in _countryGlyphs)
         {
             if (!IsInstanceValid(glyph.Node)) continue;
-            glyph.Node.Position = SurfacePoint(glyph.Latitude, glyph.Longitude, SurfaceTextRadius);
+            glyph.Node.Position = LocalSurfacePoint(glyph.Latitude, glyph.Longitude, SurfaceTextRadius + glyphBias);
             glyph.Node.Basis = glyph.SurfaceBasis;
         }
         // The basis carries the scale: the letters are full size on the globe again.
@@ -464,16 +548,39 @@ public sealed partial class GlobePresentation
     public event Action<Nation> MapModeSubjectChanged;
 
     /// <summary>The country the diplomatic and war layers are currently drawn for.</summary>
-    public Nation MapModeSubject =>
-        _campaign is null ? null : _campaign.NationById(_mapModeSubjectId) ?? _campaign.Player;
+    public Nation MapModeSubject
+    {
+        get
+        {
+            if (!TryBeginActionRead(out var campaign, 25)) return null;
+            try { return campaign.NationById(_mapModeSubjectId) ?? campaign.Player; }
+            finally { campaign.ExitRead(); }
+        }
+    }
 
     public void SetMapModeSubject(Nation nation)
     {
-        var id = nation is null || nation == _campaign?.Player ? -1 : nation.Id;
-        if (id == _mapModeSubjectId) return;
-        _mapModeSubjectId = id;
-        if (_mapMode is StrategicMapMode.Diplomatic or StrategicMapMode.Wars or StrategicMapMode.Tension) RefreshMapModePalette();
-        MapModeSubjectChanged?.Invoke(MapModeSubject);
+        Nation subject;
+        if (_campaign is { } campaign)
+        {
+            if (!campaign.TryEnterRead(25, true)) return;
+            try
+            {
+                var id = nation is null || nation == campaign.Player ? -1 : nation.Id;
+                if (id == _mapModeSubjectId) return;
+                _mapModeSubjectId = id;
+                if (_mapMode is StrategicMapMode.Diplomatic or StrategicMapMode.Wars or StrategicMapMode.Tension) RefreshMapModePalette();
+                subject = campaign.NationById(_mapModeSubjectId) ?? campaign.Player;
+            }
+            finally { campaign.ExitRead(); }
+        }
+        else
+        {
+            if (_mapModeSubjectId == -1) return;
+            _mapModeSubjectId = -1;
+            subject = null;
+        }
+        MapModeSubjectChanged?.Invoke(subject);
     }
 
     public void SetMapMode(StrategicMapMode mode)
@@ -486,6 +593,18 @@ public sealed partial class GlobePresentation
     }
 
     public void RefreshMapModePalette()
+    {
+        if (_campaign is null || _globeMaterial is null) return;
+        if (!_campaign.TryEnterRead(25, true))
+        {
+            _lastMapModeDay = -100;
+            return;
+        }
+        try { RefreshMapModePaletteCore(); }
+        finally { _campaign.ExitRead(); }
+    }
+
+    private void RefreshMapModePaletteCore()
     {
         if (_campaign is null || _globeMaterial is null) return;
         _lastMapModeDay = _campaign.ElapsedDays;
@@ -580,13 +699,17 @@ public sealed partial class GlobePresentation
                     _ => Color.FromHsv(0.58f, 0.10f, Mathf.Clamp(0.46f + opinion / 500f, 0.30f, 0.65f))
                 };
             case StrategicMapMode.Wars:
+            {
                 if (nation == player) return Ui.Colour("map.war_self");
-                var war = _campaign.Wars.FirstOrDefault(candidate => !candidate.Ended &&
-                    (candidate.Involves(player.Id) || candidate.Involves(nation.Id)) && candidate.Involves(nation.Id));
-                if (war is null) return Ui.Colour("map.neutral");
-                if (war.AttackerId == nation.Id) return Ui.Colour("map.war_attacker");
-                if (war.DefenderId == nation.Id) return Ui.Colour("map.war_defender");
-                return Ui.Colour("map.war_bystander");
+                foreach (var candidate in _campaign.Wars)
+                {
+                    if (candidate.Ended || !candidate.Involves(nation.Id)) continue;
+                    if (candidate.AttackerId == nation.Id) return Ui.Colour("map.war_attacker");
+                    if (candidate.DefenderId == nation.Id) return Ui.Colour("map.war_defender");
+                    return Ui.Colour("map.war_bystander");
+                }
+                return Ui.Colour("map.neutral");
+            }
             case StrategicMapMode.Population:
                 return HeatRamp((float)((Math.Log10(Math.Max(1, nation.Population)) - minPopulation) /
                     Math.Max(0.001, maxPopulation - minPopulation)));
@@ -657,20 +780,29 @@ public sealed partial class GlobePresentation
         return !string.IsNullOrWhiteSpace(hex) && Color.HtmlIsValid(hex) ? Color.FromHtml(hex) : Ui.Colour("map.neutral");
     }
 
+    private readonly Dictionary<int, Color> _regionalByStateScratch = new();
+
     private void RefreshRegionalPalette(Func<ScenarioState, Color> colour)
     {
-        var pixels = new byte[256 * 256 * 4];
+        var pixels = _resourcePixels ??= new byte[256 * 256 * 4];
+        Array.Clear(pixels);
         var map = _campaign.ProvinceMap;
         if (map is not null)
         {
-            var byRegion = new Dictionary<int, Color>();
+            if (_nationByMapIndex.Count < _campaign.Nations.Count)
+            {
+                _nationByMapIndex.Clear();
+                foreach (var n in _campaign.Nations) _nationByMapIndex[n.MapIndex] = n;
+            }
+            var byRegion = _regionalByStateScratch;
+            byRegion.Clear();
             var hidden = Ui.Colour("map.neutral");
             foreach (var state in _campaign.States)
             {
-                var owner = state.NationMapIndex == 0 ? null : _campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
+                var owned = state.NationMapIndex != 0 && _nationByMapIndex.ContainsKey(state.NationMapIndex);
                 // Every country's: how settled a region is, and how restless, is the news, not a
                 // secret - the dossier of every country already says it.
-                byRegion[state.MapIndex] = owner is null ? hidden : colour(state);
+                byRegion[state.MapIndex] = owned ? colour(state) : hidden;
             }
             for (var p = 1; p <= map.ProvinceCount && p < 65536; p++)
             {
@@ -683,8 +815,9 @@ public sealed partial class GlobePresentation
                 pixels[i + 3] = 255;
             }
         }
-        using var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
-        UpdateMapImage("resource_colors", image, ref _resourceTexture);
+        if (_resourceImage is null) _resourceImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        else _resourceImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
+        UpdateMapImage("resource_colors", _resourceImage, ref _resourceTexture);
         _globeMaterial.SetShaderParameter("map_mode", 0f);
         _globeMaterial.SetShaderParameter("resource_mode", map is null ? 0f : 1f);
     }

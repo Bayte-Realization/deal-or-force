@@ -87,9 +87,9 @@ public static class StatePartition
 
         foreach (var (stateIndex, holder) in previousHolder)
         {
-            var former = campaign.Nations.Find(n => n.MapIndex == holder);
+            var former = campaign.NationByMapIndex(holder);
             if (!asConquest && !Reintegration.IsBreakawayOf(former, newOwner)) continue;
-            RevoltRecovery.Protect(campaign, newOwner, campaign.States.Find(s => s.MapIndex == stateIndex), campaign.ElapsedDays);
+            RevoltRecovery.Protect(campaign, newOwner, campaign.StateByMapIndex(stateIndex), campaign.ElapsedDays);
         }
 
         // What the neighbours make of it. Scaled by people rather than provinces, because a
@@ -100,9 +100,9 @@ public static class StatePartition
         if (previousHolder is { Count: > 0 })
             foreach (var (stateIndex, holder) in previousHolder)
             {
-                var breakaway = campaign.Nations.Find(n => n.MapIndex == holder);
+                var breakaway = campaign.NationByMapIndex(holder);
                 if (breakaway is null || breakaway.SecededFromId != newOwner.Id) continue;
-                var region = campaign.States.Find(s => s.MapIndex == stateIndex);
+                var region = campaign.StateByMapIndex(stateIndex);
                 if (region is not null) region.SecessionPressure = MathF.Min(region.SecessionPressure, SecessionCore.Weights.CrushedPressure);
             }
         // Conquered ground keeps what its work was worth. Its output was priced at the
@@ -114,7 +114,7 @@ public static class StatePartition
             double weight = newOwner.Population, sum = newOwner.OutputScale * (double)newOwner.Population;
             foreach (var (index, people) in takenFrom)
             {
-                var loser = campaign.Nations.Find(n => n.MapIndex == index);
+                var loser = campaign.NationByMapIndex(index);
                 if (loser is null || loser.OutputScale <= 0f || people <= 0) continue;
                 weight += people;
                 sum += loser.OutputScale * (double)people;
@@ -142,7 +142,7 @@ public static class StatePartition
         var arrived = new List<(ScenarioState Region, ushort Former)>();
         foreach (var stateMapIndex in touched)
         {
-            var state = campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex);
+            var state = campaign.StateByMapIndex(stateMapIndex);
             if (state is null) continue;
             var former = (ushort)state.NationMapIndex;
             var pieces = Repartition(campaign, state, separatePockets: false);
@@ -153,7 +153,7 @@ public static class StatePartition
                 if (piece.NationMapIndex == newOwner.MapIndex) arrived.Add((piece, former));
         }
         foreach (var (region, former) in arrived)
-            ConquestAcceptance.ChangedHands(campaign, region, campaign.Nations.Find(n => n.MapIndex == former),
+            ConquestAcceptance.ChangedHands(campaign, region, campaign.NationByMapIndex(former),
                 newOwner, asConquest, byConsent);
 
         // A border can put a region back together as easily as it can cut one: taking the
@@ -166,7 +166,7 @@ public static class StatePartition
         {
             foreach (var ownerMapIndex in formerOwnerIndices)
             {
-                var formerOwner = campaign.Nations.Find(n => n.MapIndex == ownerMapIndex);
+                var formerOwner = campaign.NationByMapIndex(ownerMapIndex);
                 if (formerOwner is null || formerOwner.Movement is not null || campaign.HasOwnedLand(formerOwner)) continue;
                 formerOwner.Gdp = 0f;
                 formerOwner.GrossOutput = 0f;
@@ -208,7 +208,7 @@ public static class StatePartition
             if (state.NationMapIndex != owner)
             {
                 state.NationMapIndex = owner;
-                state.NationId = campaign.Nations.Find(nation => nation.MapIndex == owner)?.Tag ?? "";
+                state.NationId = campaign.NationByMapIndex(owner)?.Tag ?? "";
             }
             return Array.Empty<ScenarioState>();
         }
@@ -244,7 +244,7 @@ public static class StatePartition
         if (state.NationMapIndex != parentOwner)
         {
             state.NationMapIndex = parentOwner;
-            state.NationId = campaign.Nations.Find(nation => nation.MapIndex == parentOwner)?.Tag ?? state.NationId;
+            state.NationId = campaign.NationByMapIndex(parentOwner)?.Tag ?? state.NationId;
         }
 
         RebindArmies(campaign, topology);
@@ -292,7 +292,7 @@ public static class StatePartition
         var created = 0;
         foreach (var region in wrong)
         {
-            var state = campaign.States.Find(candidate => candidate.MapIndex == region);
+            var state = campaign.StateByMapIndex(region);
             if (state is null) continue;
             created += Repartition(campaign, state, separatePockets: false).Count;
         }
@@ -456,6 +456,19 @@ public static class StatePartition
     // a display class even when the public cache guard returned without scanning.
     private static int ReunifyChanged(Campaign campaign, ProvinceTopology topology)
     {
+        var anyChild = false;
+        for (var si = 0; si < campaign.States.Count; si++)
+        {
+            if (campaign.States[si].ParentMapIndex != 0) { anyChild = true; break; }
+        }
+        if (!anyChild)
+        {
+            campaign.ReunifyBlockedPairs.Clear();
+            campaign.LastReunifyMapRevision = campaign.MapRevision;
+            campaign.LastReunifyStateCount = campaign.States.Count;
+            return 0;
+        }
+
         campaign.ReunifyBlockedPairs.Clear();
 
         var families = new Dictionary<int, List<ScenarioState>>();
@@ -493,7 +506,7 @@ public static class StatePartition
         var merged = 0;
         foreach (var (parentIndex, children) in families)
         {
-            var parent = campaign.States.Find(candidate => candidate.MapIndex == parentIndex);
+            var parent = campaign.StateByMapIndex(parentIndex);
             if (parent is null) continue;
 
             // Reunion is not all-or-nothing. Orientale may have one recovered piece and
@@ -520,7 +533,7 @@ public static class StatePartition
                 var survivor = survivors[match].State;
                 Absorb(campaign, topology, survivor, piece, provincesOf);
                 survivor.NationMapIndex = owner;
-                survivor.NationId = campaign.Nations.Find(n => n.MapIndex == owner)?.Tag ?? survivor.NationId;
+                survivor.NationId = campaign.NationByMapIndex(owner)?.Tag ?? survivor.NationId;
                 merged++;
             }
         }
@@ -585,7 +598,7 @@ public static class StatePartition
         parent.Radicalism = Blend(parent.Radicalism, child.Radicalism);
         // Acceptance is of one state: what the piece earned of somebody else is not added to what
         // the whole has of its holder, it counts as none.
-        var owner = campaign.Nations.Find(n => n.MapIndex == parent.NationMapIndex);
+        var owner = campaign.NationByMapIndex(parent.NationMapIndex);
         parent.Acceptance = Blend(ConquestAcceptance.Of(parent, owner), ConquestAcceptance.Of(child, owner));
         if (owner is not null && (parent.AcceptanceOf >= 0 || child.AcceptanceOf >= 0)) parent.AcceptanceOf = owner.Id;
         parent.ExhaustedUntilDay = Math.Max(parent.ExhaustedUntilDay, child.ExhaustedUntilDay);
@@ -713,7 +726,7 @@ public static class StatePartition
         float share, ushort owner, string name)
     {
         var mapIndex = NextMapIndex(campaign);
-        var nation = campaign.Nations.Find(candidate => candidate.MapIndex == owner);
+        var nation = campaign.NationByMapIndex(owner);
         var carved = new ScenarioState
         {
             MapIndex = mapIndex,
@@ -860,12 +873,28 @@ public static class StatePartition
         return (latitude / provinces.Count, longitude / provinces.Count);
     }
 
+    [ThreadStatic] private static HashSet<int> _usedMapIndicesScratch;
+
     private static int NextMapIndex(Campaign campaign)
     {
-        var highest = FirstDynamicMapIndex - 1;
-        foreach (var state in campaign.States)
-            if (state.MapIndex > highest) highest = state.MapIndex;
-        return highest + 1;
+        var used = _usedMapIndicesScratch ??= new HashSet<int>();
+        used.Clear();
+        var states = campaign.States;
+        for (var i = 0; i < states.Count; i++)
+        {
+            var idx = states[i].MapIndex;
+            if (idx >= FirstDynamicMapIndex) used.Add(idx);
+        }
+        for (var candidate = FirstDynamicMapIndex; candidate < ushort.MaxValue; candidate++)
+        {
+            if (!used.Contains(candidate))
+            {
+                used.Clear();
+                return candidate;
+            }
+        }
+        used.Clear();
+        throw new InvalidOperationException("Exceeded maximum 16-bit province state map index capacity.");
     }
 
     /// <summary>

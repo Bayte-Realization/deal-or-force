@@ -233,6 +233,25 @@ public static partial class SaveSystem
     public static PreparedSave Prepare(string root, string slot, Campaign campaign, string modFingerprint,
         string displayName = "", bool autosave = false)
     {
+        var writeEntered = false;
+        if (campaign is not null && campaign.DeferMainThreadNotifications && !campaign.AccessGate.IsWriterHeldByCurrentThread)
+        {
+            campaign.AccessGate.EnterWrite();
+            writeEntered = true;
+        }
+        try
+        {
+            return PrepareCore(root, slot, campaign, modFingerprint, displayName, autosave);
+        }
+        finally
+        {
+            if (writeEntered) campaign!.AccessGate.ExitWrite();
+        }
+    }
+
+    private static PreparedSave PrepareCore(string root, string slot, Campaign campaign, string modFingerprint,
+        string displayName, bool autosave)
+    {
         // A step the smoothed clock has begun is finished first: a save of half a day would
         // load as a day that never happened.
         campaign?.FinishStep();
@@ -1182,6 +1201,20 @@ public static partial class SaveSystem
         public bool ProductionUnitsSaved;
         public string ScenarioId = "2024";
         public string SkinOverlay = "";
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CalendarProfile Calendar;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ScenarioMetadata ScenarioMeta;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string> RestrictedFeatures;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<GrandProjectInstance> GrandProjects;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int NextGrandProjectId;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<WorldSituationInstance> WorldSituations;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int NextSituationId;
         /// <summary>
         /// The culture, religion and profession ids used by this save's population rows.
         ///
@@ -1358,6 +1391,15 @@ public static partial class SaveSystem
             ProductionUnitsSaved = true,
             ScenarioId = campaign.ScenarioId,
             SkinOverlay = campaign.SkinOverlay ?? "",
+            Calendar = campaign.Calendar is not null && !campaign.Calendar.IsDefault ? campaign.Calendar.Clone() : null,
+            ScenarioMeta = campaign.ScenarioMeta is not null && !campaign.ScenarioMeta.IsEmpty ? campaign.ScenarioMeta.Clone() : null,
+            RestrictedFeatures = campaign.RestrictedFeatures is { Count: > 0 }
+                ? campaign.RestrictedFeatures.OrderBy(id => id, StringComparer.OrdinalIgnoreCase).ToList()
+                : null,
+            GrandProjects = campaign.GrandProjects.Count > 0 ? global::DealOrForce.Simulation.GrandProjects.CaptureSave(campaign) : null,
+            NextGrandProjectId = campaign.GrandProjects.Count > 0 || campaign.NextGrandProjectId > 1 ? campaign.NextGrandProjectId : 0,
+            WorldSituations = campaign.WorldSituations.Count > 0 ? global::DealOrForce.Simulation.WorldSituations.CaptureSave(campaign) : null,
+            NextSituationId = campaign.WorldSituations.Count > 0 || campaign.NextSituationId > 1 ? campaign.NextSituationId : 0,
             StringTable = SaveStringTable.BuildForStates(campaign.States),
             ScenarioRules = campaign.ScenarioId != "2024" ? campaign.Defines : null,
             ScenarioTerritories = new Dictionary<string, int[]>(campaign.ScenarioTerritories),
@@ -1561,6 +1603,8 @@ public static partial class SaveSystem
                 }
                 SaveSnapshotCloner.IsolateListElements(CrossoverWorks, visited);
                 SaveSnapshotCloner.IsolateListElements(CrossoverImpacts, visited);
+                if (GrandProjects is not null) SaveSnapshotCloner.IsolateListElements(GrandProjects, visited);
+                if (WorldSituations is not null) SaveSnapshotCloner.IsolateListElements(WorldSituations, visited);
             }
             finally
             {
@@ -1570,8 +1614,21 @@ public static partial class SaveSystem
 
         public Campaign Restore()
         {
-            var campaign = new Campaign(Seed, ScenarioRules) { ScenarioId = ScenarioId, SkinOverlay = SkinOverlay ?? "",
-                ScenarioTerritories = new Dictionary<string, int[]>(ScenarioTerritories, StringComparer.OrdinalIgnoreCase) };
+            var campaign = new Campaign(Seed, ScenarioRules)
+            {
+                ScenarioId = ScenarioId,
+                SkinOverlay = SkinOverlay ?? "",
+                Calendar = Calendar is not null && !Calendar.IsDefault ? Calendar.Clone() : null,
+                ScenarioMeta = ScenarioMeta is not null && !ScenarioMeta.IsEmpty ? ScenarioMeta.Clone() : null,
+                RestrictedFeatures = RestrictedFeatures is { Count: > 0 }
+                    ? new HashSet<string>(RestrictedFeatures, StringComparer.OrdinalIgnoreCase)
+                    : null,
+                ScenarioTerritories = new Dictionary<string, int[]>(ScenarioTerritories, StringComparer.OrdinalIgnoreCase)
+            };
+            if (GrandProjects is not null || NextGrandProjectId > 0)
+                global::DealOrForce.Simulation.GrandProjects.RestoreSave(campaign, GrandProjects ?? new List<GrandProjectInstance>(), Math.Max(1, NextGrandProjectId));
+            if (WorldSituations is not null || NextSituationId > 0)
+                global::DealOrForce.Simulation.WorldSituations.RestoreSave(campaign, WorldSituations ?? new List<WorldSituationInstance>(), Math.Max(1, NextSituationId));
             Replace(campaign.Nations, Nations);
             if (FeatureDefaults is not null) campaign.Defines.Features = new(FeatureDefaults, StringComparer.OrdinalIgnoreCase);
             if (FeatureUnlocks is not null) campaign.Defines.FeatureUnlocks = new(FeatureUnlocks, StringComparer.OrdinalIgnoreCase);
@@ -1704,6 +1761,7 @@ public static partial class SaveSystem
             BattleMovementOrders.Normalise(campaign);
             TacticalDoctrines.BindHomes(campaign);
             TradeNetwork.FileLoadedRoutes(campaign);
+            global::DealOrForce.Simulation.DiseasesAndDisasters.NormalizeAfterLoad(campaign);
             return campaign;
         }
 

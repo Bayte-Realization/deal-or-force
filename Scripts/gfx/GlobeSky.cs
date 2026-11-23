@@ -99,19 +99,39 @@ void fragment() {
     {
         UpdateAtmosphereRim();
         SyncAtlasSun();
+        UpdateUrbanGlowClusters();
         if (!IsInstanceValid(_daySun) || (!DayNightEnabled && _cloudLayer is null)) return;
-        var target = ((_campaign?.ElapsedHours ?? 6) % 24) / 24f * Mathf.Tau;
+        var snap = _campaign?.RenderSnapshot;
+        var hasSnap = snap is { Version: > 0 };
+        var target = ((hasSnap ? snap.ElapsedHours : _campaign?.ElapsedHours ?? 6) % 24) / 24f * Mathf.Tau;
         _skyAngle = Mathf.LerpAngle(_skyAngle, target, 1f - MathF.Exp(-(float)delta * 3f));
         if (IsInstanceValid(_interiorLayer)) _interiorLayer.Visible = !_flatMap;
-        _daySun.Rotation = DayNightEnabled && !_flatMap
+        var dayNightActive = DayNightEnabled && !_flatMap;
+        _daySun.Rotation = dayNightActive
             ? new Vector3(-.41f, _skyAngle, 0)
             : new Vector3(Mathf.DegToRad(-32f), Mathf.DegToRad(-38f), 0);
+        // Subtle warm golden-hour tint when day/night sweeps across the globe, keeping night readable for orders.
+        if (dayNightActive)
+        {
+            var sunElev = Math.Clamp(MathF.Abs(MathF.Cos(_skyAngle)), 0f, 1f);
+            var duskWarmth = 1f - sunElev;
+            _daySun.LightColor = new Color(
+                Mathf.Lerp(0.99f, 1.00f, duskWarmth),
+                Mathf.Lerp(0.97f, 0.90f, duskWarmth),
+                Mathf.Lerp(0.94f, 0.80f, duskWarmth));
+        }
+        else
+        {
+            _daySun.LightColor = new Color(1.0f, 0.985f, 0.955f);
+        }
+        SyncAtlasSun();
         // Night remains readable enough to issue strategic orders.
-        _skyEnvironment.Environment.AmbientLightEnergy = DayNightEnabled && !_flatMap ? .28f : .72f;
+        _skyEnvironment.Environment.AmbientLightEnergy = dayNightActive ? .30f : .72f;
         if (_cloudLayer is null) return;
-        if (_campaign is null || !_campaign.IsPaused) _cloudWind += delta * .007;
+        var isPaused = hasSnap ? snap.IsPaused : _campaign?.IsPaused ?? false;
+        if (_campaign is null || !isPaused) _cloudWind += delta * .007;
         _cloudLayer.Rotation = new Vector3(0, (float)_cloudWind, .12f);
-        _cloudLayer.Visible = CloudsEnabled && !_flatMap && Simulation.WorldLayers.On("sky_clouds");
+        _cloudLayer.Visible = CloudsEnabled && !_flatMap && CurrentShaderQualityTier() < 1.5f && Simulation.WorldLayers.On("sky_clouds");
         var lightDirection = _daySun.GlobalBasis.Z;
         ((ShaderMaterial)_cloudLayer.MaterialOverride).SetShaderParameter("sun_direction", lightDirection);
     }

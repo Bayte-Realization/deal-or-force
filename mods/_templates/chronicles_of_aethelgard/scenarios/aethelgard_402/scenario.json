@@ -1,0 +1,54 @@
+{
+  "id": "aethelgard_402",
+  "name": "Chronicles of Aethelgard",
+  "description": "Year 402 of the Third Sun. Three rival realms contest the Iron Marches in a complete fantasy total conversion with custom months, guilds, ideologies, technologies and parchment skin.",
+  "world": "world.bdfsave",
+  "total_conversion": true,
+  "player_country": "VAL",
+  "start_year": 402,
+  "start_month": 3,
+  "start_day": 14,
+  "calendar": {
+    "id": "third_sun",
+    "era_name": "Third Sun",
+    "era_short": "3S",
+    "year_offset": 0,
+    "format": "{day} {month}, Year {year} of the {era}",
+    "year_format": "Year {year} of the {era}",
+    "month_names": [
+      "Frostfall",
+      "Deepwinter",
+      "Thawmoon",
+      "Blossomtide",
+      "Suncrest",
+      "Highsummer",
+      "Goldharvest",
+      "Emberwane",
+      "Mistveil",
+      "Galewatch",
+      "Duskfrost",
+      "Starquiet"
+    ],
+    "show_era_in_date": true
+  },
+  "skin": "aethelgard_parchment",
+  "music_playlist": "aethelgard_lute",
+  "disabled_features": [
+    "nukes",
+    "modern_air_force",
+    "missiles",
+    "drones",
+    "modern_intelligence"
+  ],
+  "featured_countries": [
+    { "tag": "VAL", "hook": "Chivalric crown defending the Sunward Plains.", "difficulty": "easy" },
+    { "tag": "IRN", "hook": "Forge-lords of the Ironhold marching south.", "difficulty": "medium" },
+    { "tag": "SYL", "hook": "Arcane merchants and forest wardens of the Silver Leaf.", "difficulty": "hard" }
+  ],
+  "starting_alliances": [
+    { "name": "Pact of the Silver Leaf", "charter": "collective_defence", "members": ["VAL", "SYL"] }
+  ],
+  "starting_wars": [
+    { "name": "Siege of the Iron Marches", "attacker": "IRN", "defender": "VAL", "justification": "border_claim" }
+  ]
+}

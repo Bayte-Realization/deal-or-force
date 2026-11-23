@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DealOrForce.Platform;
 using DealOrForce.Simulation;
 using DealOrForce.Simulation.Shell;
 using Godot;
@@ -71,11 +72,40 @@ internal sealed class ShellContext
     public Action OpenDealInbox { get; set; }
     public Func<int> GetIncomingDiplomaticCount { get; set; }
     public Action<string, bool> DelegatePortfolio { get; set; }
+    public Action OpenDoctrineScreen { get; set; }
+    public Action<Nation> OpenDiplomacyFor { get; set; }
+    public Action OpenOrganizations { get; set; }
+    public Action<Nation> OpenPeaceConferenceFor { get; set; }
+    public Action<Nation> OpenWarDeclarationFor { get; set; }
+    public Action<Nation> OpenUltimatumFor { get; set; }
+    public Func<Nation, string> SendOrRecallMission { get; set; }
+    public Action ToggleObserverMode { get; set; }
+    public Action WatchWorld { get; set; }
+    public Func<Nation> GetObservedNation { get; set; }
+    public Func<bool> IsWatchingWorld { get; set; }
+    public Func<string> GetObserverTransientNote { get; set; }
+    public Action OpenGrandProjects { get; set; }
+    public Func<bool> IsTouchMode { get; set; }
+    public Func<TouchTapMode> GetTouchTapMode { get; set; }
+    public Action<TouchTapMode> SetTouchTapMode { get; set; }
+    public Action PressTouchOrderMode { get; set; }
+    public Func<bool> IsTouchStickyOrder { get; set; }
 
     public bool ExplicitRegionIconsToggle { get; set; }
     public bool AltKeycapsVisible { get; set; }
+    /// <summary>UI-only collapse memory per nation ID for the stability breakdown in the country dossier.</summary>
+    public HashSet<int> CollapsedStabilityBreakdownNations { get; } = new();
 
     public Campaign World => GetCampaign?.Invoke();
+
+    /// <summary>Compute the active viewport layout profile, preserving SafeArea on touch devices.</summary>
+    public ShellLayoutProfile ResolveViewportProfile(bool atWar)
+    {
+        var vp = GetViewportSize();
+        var touch = IsTouchMode?.Invoke() ?? (PlatformProfile.Current?.IsTouchPrimary == true);
+        var sa = touch ? (PlatformProfile.Current?.SafeArea ?? default) : default;
+        return ShellLayout.ForViewport(vp.X, vp.Y, atWar, touch, sa.Left, sa.Top, sa.Right, sa.Bottom);
+    }
 
     public void ClearCaches()
     {

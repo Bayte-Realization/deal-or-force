@@ -1,0 +1,21 @@
+{
+  "Food": {
+    "name": "Harvest Grain",
+    "description": "Staple grain, orchards and livestock feeding castle towns and bannermen."
+  },
+  "Arms": {
+    "name": "Forged Steel & Blades",
+    "base_price": 0.095,
+    "description": "Tempered swords, polearms, siege timbers and plate mail."
+  },
+  "Energy": {
+    "name": "Runic Ember",
+    "base_price": 0.042,
+    "description": "Hearth charcoal and alchemical embers powering citadel foundries."
+  },
+  "RareEarths": {
+    "name": "Aether Crystals",
+    "base_price": 0.135,
+    "description": "Luminous mountain crystals prized by scholars and guild artificers."
+  }
+}

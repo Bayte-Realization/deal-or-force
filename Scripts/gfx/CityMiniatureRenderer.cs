@@ -38,12 +38,15 @@ public sealed class CityMiniatureRenderer
         bool LabelsEnabled,
         bool? VerificationOverride,
         string LookMode,
-        Vector3 SunDirection);
+        Vector3 SunDirection,
+        Func<float, float, bool, float> SampleReliefLift = null,
+        int ReliefKey = 0);
 
     private sealed class PreparedBatch
     {
         public ProvinceTopology Map;
         public int Revision;
+        public int ReliefKey;
         public CityMiniatureLayout.ObjMeshData[] MeshData;
         public CityMiniatureLayout.Placement[] AllPlacements;
         public ChunkSlice[] Chunks;
@@ -67,8 +70,8 @@ public sealed class CityMiniatureRenderer
     private ShaderMaterial _material;
 
     private Task<PreparedBatch> _buildTask;
-    private (ProvinceTopology Map, int Revision) _buildingFor;
-    private (ProvinceTopology Map, int Revision) _uploadedFor;
+    private (ProvinceTopology Map, int Revision, int ReliefKey) _buildingFor;
+    private (ProvinceTopology Map, int Revision, int ReliefKey) _uploadedFor;
     private PreparedBatch _activeBatch;
     private bool _uploadedFlat;
     private bool _visibilityDirty = true;
@@ -189,6 +192,7 @@ public sealed class CityMiniatureRenderer
     {
         var map = input.Campaign.ProvinceMap;
         var rev = input.Campaign.MapRevision;
+        var reliefKey = input.ReliefKey;
         if (_buildTask is { IsCompleted: true })
         {
             if (_buildTask.Status == TaskStatus.RanToCompletion && _buildTask.Result is { } ready)
@@ -196,8 +200,8 @@ public sealed class CityMiniatureRenderer
             _buildTask = null;
         }
 
-        var matchesUploaded = ReferenceEquals(_uploadedFor.Map, map) && _uploadedFor.Revision == rev;
-        var matchesBuilding = _buildTask is not null && ReferenceEquals(_buildingFor.Map, map) && _buildingFor.Revision == rev;
+        var matchesUploaded = ReferenceEquals(_uploadedFor.Map, map) && _uploadedFor.Revision == rev && _uploadedFor.ReliefKey == reliefKey;
+        var matchesBuilding = _buildTask is not null && ReferenceEquals(_buildingFor.Map, map) && _buildingFor.Revision == rev && _buildingFor.ReliefKey == reliefKey;
         if (matchesUploaded || matchesBuilding || _buildTask is not null) return;
 
         var citiesSnap = input.Cities;
@@ -214,10 +218,11 @@ public sealed class CityMiniatureRenderer
         }
         var needMeshes = _meshes is null;
         string[] objTexts = needMeshes ? ReadObjSources() : null;
+        var sampleLift = input.SampleReliefLift;
 
-        _buildingFor = (map, rev);
+        _buildingFor = (map, rev, reliefKey);
         _buildTask = Task.Run(() => BuildWorkerBatch(
-            map, rev, citiesSnap, anchorsSnap, capsSnap, urbanSnap, destroyedSnap, objTexts));
+            map, rev, reliefKey, citiesSnap, anchorsSnap, capsSnap, urbanSnap, destroyedSnap, objTexts, sampleLift));
     }
 
     private static string[] ReadObjSources()
@@ -242,12 +247,14 @@ public sealed class CityMiniatureRenderer
     private static PreparedBatch BuildWorkerBatch(
         ProvinceTopology map,
         int rev,
+        int reliefKey,
         IReadOnlyList<CityDefinition> cities,
         CityCatalog.MapAnchor[] anchors,
         bool[] caps,
         Dictionary<int, long> urbanByState,
         HashSet<int> destroyed,
-        string[] objTexts)
+        string[] objTexts,
+        Func<float, float, bool, float> sampleReliefLift)
     {
         CityMiniatureLayout.ObjMeshData[] meshData = null;
         if (objTexts is not null)
@@ -290,7 +297,8 @@ public sealed class CityMiniatureRenderer
                     new Vector3(c0.X, c0.Y, c0.Z),
                     new Vector3(c1.X, c1.Y, c1.Z),
                     new Vector3(c2.X, c2.Y, c2.Z));
-                var gOrigin = new Vector3(normal.X, normal.Y, normal.Z) * (GlobeRadius * 1.00018f);
+                var globeLift = sampleReliefLift?.Invoke(p.Latitude, p.Longitude, false) ?? 0f;
+                var gOrigin = new Vector3(normal.X, normal.Y, normal.Z) * (GlobeRadius * 1.00018f + globeLift);
                 byKindGlobe[k].Add(new Transform3D(gRot, gOrigin));
 
                 var flatW = p.FootprintDeg * 1.35f * (FlatMapWidth / 360f / p.LongitudeScale);
@@ -299,7 +307,8 @@ public sealed class CityMiniatureRenderer
                     new Vector3(cb, sb, 0f) * flatW,
                     new Vector3(-sb, cb, 0f) * flatD,
                     new Vector3(0f, 0f, flatD * 1.15f));
-                var fOrigin = new Vector3(p.Longitude / 360f * FlatMapWidth, p.Latitude / 180f * FlatMapHeight, FlatLineZ);
+                var flatLift = sampleReliefLift?.Invoke(p.Latitude, p.Longitude, true) ?? 0f;
+                var fOrigin = new Vector3(p.Longitude / 360f * FlatMapWidth, p.Latitude / 180f * FlatMapHeight, FlatLineZ + flatLift);
                 byKindFlat[k].Add(new Transform3D(fRot, fOrigin));
 
                 byKindCol[k].Add(new Color(p.Shade, p.Shade, p.Shade, 1f));
@@ -331,6 +340,7 @@ public sealed class CityMiniatureRenderer
         {
             Map = map,
             Revision = rev,
+            ReliefKey = reliefKey,
             MeshData = meshData,
             AllPlacements = placements,
             Chunks = chunks
@@ -350,7 +360,7 @@ public sealed class CityMiniatureRenderer
         }
 
         _activeBatch = batch;
-        _uploadedFor = (batch.Map, batch.Revision);
+        _uploadedFor = (batch.Map, batch.Revision, batch.ReliefKey);
         ApplyProjectionTransforms(batch, flatMap);
         _uploadedFlat = flatMap;
         _visibilityDirty = false;
@@ -476,13 +486,14 @@ void vertex() {
 }
 void fragment() {
     float is_window = clamp(window_mask, 0.0, 1.0);
-    vec3 stone = COLOR.rgb * 0.80;
-    ALBEDO = mix(stone, vec3(0.14, 0.16, 0.18), is_window * 0.72);
-    ROUGHNESS = mix(0.86, 0.45, is_window);
+    vec3 stone = COLOR.rgb * 0.84;
+    ALBEDO = mix(stone, vec3(0.14, 0.17, 0.21), is_window * 0.72);
+    ROUGHNESS = mix(0.84, 0.38, is_window);
     METALLIC = 0.0;
-    SPECULAR = 0.14;
+    SPECULAR = mix(0.16, 0.34, is_window);
     float sun_dot = dot(normalize(world_norm), normalize(sun_direction));
-    float night = flat_map > 0.5 ? 0.04 : (1.0 - smoothstep(-0.35, 0.08, sun_dot));
-    EMISSION = vec3(0.88, 0.78, 0.62) * is_window * night * 0.14;
+    float night = flat_map > 0.5 ? 0.08 : (1.0 - smoothstep(-0.32, 0.14, sun_dot));
+    float warm_accent = mix(0.08, 0.30, night);
+    EMISSION = vec3(0.98, 0.82, 0.54) * is_window * warm_accent;
 }";
 }

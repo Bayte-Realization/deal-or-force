@@ -230,7 +230,7 @@ public static class SubjectInteractions
             reb.WarSupport = MathF.Max(reb.WarSupport, 0.82f);
             reb.Stability = MathF.Max(reb.Stability, 0.55f);
             var rel = CampaignDiplomacy.Get(campaign, overlord.Id, reb.Id);
-            if (rel.Stance == DiplomaticStance.Allied) campaign.NoteAllianceChange();
+            if (rel.Stance == DiplomaticStance.Allied || rel.GuaranteeByA || rel.GuaranteeByB) campaign.NoteAllianceChange();
             rel.Stance = DiplomaticStance.Rival;
             rel.TruceUntil = -1;
             rel.NonAggressionPact = false;

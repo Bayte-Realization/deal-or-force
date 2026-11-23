@@ -223,6 +223,7 @@ public sealed partial class GlobePresentation
             image.SetPixel(x, y, colour);
         }
         image.Resize(size, size, Image.Interpolation.Lanczos);
+        image.GenerateMipmaps();
         return ImageTexture.CreateFromImage(image);
     }
 
@@ -317,7 +318,10 @@ public sealed partial class GlobePresentation
             var ratio = _camera.Size / _citySeenSize;
             if (shift < _camera.Size * .22f && ratio > .75f && ratio < 1.33f) return;
         }
-        if (!_cityDirty && (!moved || _cityClock < 0.1))
+        var cityTier = CurrentShaderQualityTier();
+        var movedInterval = cityTier >= 1.5f ? 0.25 : cityTier >= 0.5f ? 0.20 : 0.10;
+        var idleInterval = cityTier >= 1.5f ? 1.00 : cityTier >= 0.5f ? 0.80 : 0.50;
+        if (!_cityDirty && (!moved || _cityClock < movedInterval))
         {
             // Between placements the pins turn with the view, and a name carried over the limb
             // would go on being drawn - in front of space or of the globe, since names are drawn
@@ -327,7 +331,7 @@ public sealed partial class GlobePresentation
         }
         // When only _cityDirty was triggered (e.g. an army marched) and the camera hasn't moved,
         // throttle city placement to at most twice a second instead of 10 times a second!
-        if (!moved && _cityClock < 0.5) return;
+        if (!moved && _cityClock < idleInterval) return;
         _cityClock = 0;
         _cityDirty = false;
         _citySeenCamera = cameraTransform;
@@ -384,6 +388,9 @@ public sealed partial class GlobePresentation
     private void PlaceCities(Vector2I viewport)
     {
         var limit = Math.Clamp((int)InterfaceSkin.Metric(_flatMap ? "map.flat_city_label_limit" : "map.city_label_limit", _flatMap ? 90f : 140f), 0, 400);
+        var tier = CurrentShaderQualityTier();
+        if (tier >= 1.5f) limit = Math.Min(limit, 36);
+        else if (tier >= 0.5f) limit = Math.Min(limit, 64);
         var fontSize = Math.Clamp((int)InterfaceSkin.Metric("map.city_font_size", 44f), 12, 64);
         var textPixels = Math.Clamp(InterfaceSkin.Metric(_flatMap ? "map.flat_city_text_pixels" : "map.city_text_pixels", _flatMap ? 12f : 12.5f), 8f, 28f);
         var capitalTextPixels = Math.Clamp(InterfaceSkin.Metric(_flatMap ? "map.flat_city_capital_text_pixels" : "map.city_capital_text_pixels", textPixels + 1.3f), textPixels, 32f);
@@ -411,12 +418,15 @@ public sealed partial class GlobePresentation
         _movementLayer?.AddMedallions(_cityTaken);
         // Surface counters are world-sized in both views. Project their actual corners;
         // the former fixed-size formula reserved nearly a screen for a small globe card.
-        foreach (var marker in _armyStacks.Values)
-            ReserveSurfaceCard(marker.Plate, viewport);
-        foreach (var marker in _supportMapMarkers.Values)
-            ReserveSurfaceCard(marker.Plate, viewport);
-        foreach (var parts in _fleetNodes.Values)
-            ReserveSurfaceCard(parts.Plate, viewport);
+        if (IsInstanceValid(_armyRoot) && _armyRoot.IsVisibleInTree())
+            foreach (var marker in _armyStacks.Values)
+                ReserveSurfaceCard(marker.Plate, viewport);
+        if (IsInstanceValid(_supportMarkerRoot) && _supportMarkerRoot.IsVisibleInTree())
+            foreach (var marker in _supportMapMarkers.Values)
+                ReserveSurfaceCard(marker.Plate, viewport);
+        if (IsInstanceValid(_fleetRoot) && _fleetRoot.IsVisibleInTree())
+            foreach (var parts in _fleetNodes.Values)
+                ReserveSurfaceCard(parts.Plate, viewport);
 
         // Where every capital's star stands on the screen, before any name is set: a name is
         // never written across a star that is not its own. Santo Domingo, with no room to its
@@ -454,9 +464,9 @@ public sealed partial class GlobePresentation
             RootInverse = rootTransform.AffineInverse(),
             RootBasis = rootBasis,
             Horizon = horizon,
-            CapitalColor = _mapLookAtlas ? Color.FromHtml(MapLook.ColourHex("map.look_capital_fill")) : Ui.Colour("globe.city_capital"),
-            CityColor = _mapLookAtlas ? Color.FromHtml(MapLook.ColourHex("map.look_label_fill")) : Ui.Colour("globe.city"),
-            OutlineColor = _mapLookAtlas ? Color.FromHtml(MapLook.ColourHex("map.look_label_outline")) : Ui.Colour("globe.city_outline"),
+            CapitalColor = _mapLookAtlas ? AtlasColourCached("map.look_capital_fill", ref _cachedCapitalFillHex, ref _cachedCapitalFillColor) : Ui.Colour("globe.city_capital"),
+            CityColor = _mapLookAtlas ? AtlasColourCached("map.look_label_fill", ref _cachedCountryFillHex, ref _cachedCountryFillColor) : Ui.Colour("globe.city"),
+            OutlineColor = _mapLookAtlas ? AtlasColourCached("map.look_label_outline", ref _cachedCountryOutlineHex, ref _cachedCountryOutlineColor) : Ui.Colour("globe.city_outline"),
             Used = 0,
             StarsNamed = false
         };
@@ -554,14 +564,21 @@ public sealed partial class GlobePresentation
         }
     }
 
+    private string _cachedCapitalFillHex = "";
+    private Color _cachedCapitalFillColor = new(0.98f, 0.92f, 0.72f, 1f);
+    private string _cachedRiverFillHex = "";
+    private Color _cachedRiverFillColor = new(0.45f, 0.70f, 0.92f, 1f);
+    private string _cachedRiverOutlineHex = "";
+    private Color _cachedRiverOutlineColor = new(0.02f, 0.032f, 0.048f, 1f);
+
     private void PlaceRivers(ref CityPassContext pass)
     {
         if (!_mapLookAtlas || _riverAnchors.Count == 0 || !WorldLayers.On("city_labels")) return;
         var measure = _flatMap ? _flatZoom : ViewDistance;
         var riverPixels = Math.Max(10f, pass.TextPixels * 0.92f);
         var riverFont = PresentationFonts.For("map.cities");
-        var riverFill = Color.FromHtml(MapLook.ColourHex("map.look_river_fill"));
-        var riverOutline = Color.FromHtml(MapLook.ColourHex("map.look_river_outline"));
+        var riverFill = AtlasColourCached("map.look_river_fill", ref _cachedRiverFillHex, ref _cachedRiverFillColor);
+        var riverOutline = AtlasColourCached("map.look_river_outline", ref _cachedRiverOutlineHex, ref _cachedRiverOutlineColor);
 
         for (var r = 0; r < _riverAnchors.Count && pass.Used < pass.Limit; r++)
         {
@@ -571,11 +588,11 @@ public sealed partial class GlobePresentation
 
             var normal = _riverNormals[r];
             Vector3 local;
-            if (_flatMap) local = FlatPoint(anchor.Latitude, anchor.Longitude, 0f);
+            if (_flatMap) local = LocalFlatPoint(anchor.Latitude, anchor.Longitude, FlatTextZ);
             else
             {
                 if ((pass.RootBasis * normal).Dot(pass.CameraNormal) < pass.Horizon) continue;
-                local = normal * GlobeRadius;
+                local = LocalSurfacePoint(anchor.Latitude, anchor.Longitude, SurfaceTextRadius);
             }
             var world = pass.RootTransform * local;
             if (_camera.IsPositionBehind(world)) continue;
@@ -748,13 +765,12 @@ public sealed partial class GlobePresentation
         Vector3 local;
         if (_flatMap)
         {
-            var anchor = _cityAnchors[index];
-            local = FlatPoint(anchor.Latitude, anchor.Longitude, 0f);
+            local = LocalFlatPoint(anchorAt.Latitude, anchorAt.Longitude, FlatTextZ);
         }
         else
         {
             if ((pass.RootBasis * _cityNormals[index]).Dot(pass.CameraNormal) < pass.Horizon) return false;
-            local = _cityNormals[index] * GlobeRadius;
+            local = LocalSurfacePoint(anchorAt.Latitude, anchorAt.Longitude, SurfaceTextRadius);
         }
         var world = pass.RootTransform * local;
         if (_camera.IsPositionBehind(world)) return false;
@@ -902,6 +918,7 @@ public sealed partial class GlobePresentation
                 Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 NoDepthTest = true,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Disabled,
+                TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 RenderPriority = 1
             };
@@ -911,6 +928,7 @@ public sealed partial class GlobePresentation
                 NoDepthTest = true,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
+                TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 RenderPriority = 1,
                 OutlineRenderPriority = 0

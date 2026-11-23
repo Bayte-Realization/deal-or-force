@@ -135,6 +135,7 @@ public partial class DealOrForceGame
 
     private void OpenConflictsScreen()
     {
+        EnsureScreen("conflicts", BuildConflictsScreen);
         _openScreen = "Conflicts";
         _sidePanel.Visible = false;
         RaiseWorkspaceLayer(_conflictsLayer);

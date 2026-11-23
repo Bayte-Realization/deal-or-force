@@ -13,8 +13,14 @@
   "kp_06": {"claims": ["KOR"]}, "kp_03": {"claims": ["KOR"]}, "kp_10": {"claims": ["KOR"]},
   "kp_08": {"claims": ["KOR"]}, "kp_02": {"claims": ["KOR"]},
 
-  // The People's Republic holds Taiwan to be a province of China (Anti-Secession Law, 2005).
+  // The People's Republic holds Taiwan to be a province of China (Anti-Secession Law, 2005);
+  // the Republic of China in Taipei retains its constitutional claim across the strait, anchored
+  // on Fujian (Kinmen and Matsu remain part of ROC Fujian) and the historic eastern-southern corridor.
   "tw_khh": {"cores": ["TWN", "CHN"]}, "tw_nan": {"cores": ["TWN", "CHN"]},
+  "cn_fj": {"cores": ["CHN", "TWN"]},
+  "cn_gd": {"claims": ["TWN"]}, "cn_zj": {"claims": ["TWN"]},
+  "cn_js": {"claims": ["TWN"]}, "cn_ah": {"claims": ["TWN"]},
+  "cn_jx": {"claims": ["TWN"]}, "cn_bj": {"claims": ["TWN"]},
 
   // Kosovo: Serbia's Autonomous Province of Kosovo and Metohija (Constitution of Serbia, 2006);
   // union with Albania is the Albanian national question's old answer.

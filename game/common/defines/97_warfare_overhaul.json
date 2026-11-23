@@ -1,0 +1,8 @@
+{
+  "FlankingEntrenchmentBypassPerDirection": 0.18,
+  "FlankingEntrenchmentMaxBypass": 0.54,
+  "CombinedArmsBonus": 0.08,
+  "PocketCollapseSupplyThreshold": 0.12,
+  "PocketCollapseOrgMultiplier": 1.45,
+  "RetreatReorgMinDays": 3
+}

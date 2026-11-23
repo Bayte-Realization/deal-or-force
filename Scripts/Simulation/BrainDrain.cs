@@ -61,6 +61,15 @@ public static class BrainDrain
     public static float CalculatePressure(Campaign c, Nation n, ScenarioState s, bool atWar, Breakdown explain = null)
     {
         if (c is null || n is null || s is null || s.Unclaimed || s.Population <= 0) return 0f;
+        var foodSatisfaction = n.Market.TryGetValue(Commodity.Food, out var foodQ) ? Math.Clamp(foodQ.Satisfaction, 0f, 1f) : 1f;
+        var retentionSpirit = ModifierSystem.Has(n, "talent_retention") ? 0.22f : 0f;
+        var strictBorders = ModifierSystem.Has(n, "strict_border_controls");
+        return CalculatePressureCore(c, n, s, atWar, foodSatisfaction, retentionSpirit, strictBorders, explain);
+    }
+
+    private static float CalculatePressureCore(Campaign c, Nation n, ScenarioState s, bool atWar,
+        float foodSatisfaction, float retentionSpirit, bool strictBorders, Breakdown explain)
+    {
         var d = c.Defines;
         var damage = M.Clamp01(s.WarDamage);
         var stress = M.Clamp01(s.LivelihoodStress);
@@ -74,7 +83,6 @@ public static class BrainDrain
         var inflationPush = n.Inflation > 0.12f ? M.Clamp(n.Inflation - 0.12f, 0f, 0.40f) * 0.25f : 0f;
         var youthBulgePush = s.StandardOfLiving < 0.42f && s.Literacy < 0.72f && stress > 0.15f ? 0.12f : 0f;
 
-        var foodSatisfaction = n.Market.TryGetValue(Commodity.Food, out var foodQ) ? Math.Clamp(foodQ.Satisfaction, 0f, 1f) : 1f;
         var refugeeSurge = damage > 0.10f ? (damage - 0.10f) * 0.55f : 0f;
         var faminePush = foodSatisfaction < 0.45f ? (0.45f - foodSatisfaction) * 0.65f : 0f;
 
@@ -92,8 +100,7 @@ public static class BrainDrain
         var universities = s.Buildings.GetValueOrDefault(BuildingKind.University);
         var labs = s.Buildings.GetValueOrDefault(BuildingKind.ResearchLab);
         var highLiving = MathF.Max(0f, s.StandardOfLiving - d.BrainDrainLivingThreshold);
-        var retentionSpirit = ModifierSystem.Has(n, "talent_retention") ? 0.22f : 0f;
-        var borderControls = ModifierSystem.Has(n, "strict_border_controls") ? 0.18f : 0f;
+        var borderControls = strictBorders ? 0.18f : 0f;
         var educationFocus = n.GovernmentFocus == GovernmentFocus.SocialCohesion ? 0.05f : 0f;
 
         var livingAnchor = highLiving * 0.55f;
@@ -103,7 +110,7 @@ public static class BrainDrain
         var net = MathF.Max(0f, push - anchor);
         // Educated specialists relocate fastest, but war devastation displaces refugees regardless of education.
         var baseMobility = 0.40f + 0.60f * M.Clamp01(s.Literacy) + (damage > 0.10f ? 0.35f : 0f);
-        var mobility = baseMobility * (ModifierSystem.Has(n, "strict_border_controls") ? 0.55f : 1f);
+        var mobility = baseMobility * (strictBorders ? 0.55f : 1f);
         var result = M.Clamp01(net * mobility);
 
         if (explain is not null)
@@ -140,6 +147,7 @@ public static class BrainDrain
         public readonly float OpenDoors;
         public readonly float LaborShortagePull;
         public readonly double DoorMultiplier;
+        public readonly IReadOnlySet<string> PrimarySet;
 
         public DestCandidate(Nation candidate)
         {
@@ -150,6 +158,7 @@ public static class BrainDrain
             OpenDoors = hasOpen ? 0.35f : 0f;
             LaborShortagePull = MathF.Max(0f, 0.62f - candidate.WorkingShare) * 1.5f;
             DoorMultiplier = hasOpen ? 1.65d : 1.0d;
+            PrimarySet = DemographyCatalog.PrimarySet(candidate.Tag);
         }
     }
 
@@ -160,6 +169,7 @@ public static class BrainDrain
         Nation best = null;
         var bestScore = 0.12f; // Minimum pull threshold required to attract cross-border migrants.
         var sourcePrimary = DemographyCatalog.PrimaryCulture(source.Tag);
+        var hasSourcePrimary = !string.IsNullOrEmpty(sourcePrimary);
 
         for (var i = 0; i < pool.Count; i++)
         {
@@ -172,11 +182,11 @@ public static class BrainDrain
             if (rel is not null && (rel.EmbargoByA || rel.EmbargoByB || rel.Stance == DiplomaticStance.Rival)) continue;
 
             var livingGap = candidate.StandardOfLiving - source.StandardOfLiving;
-            var tradeLink = source.TradePartners.GetValueOrDefault(candidate.Id) * 0.85f;
+            var tradeLink = source.TradePartners.Count > 0 ? source.TradePartners.GetValueOrDefault(candidate.Id) * 0.85f : 0f;
             var sameContinent = string.Equals(candidate.Continent, source.Continent, StringComparison.OrdinalIgnoreCase) ? 0.18f : 0f;
             var friendly = rel is not null && rel.Opinion > 15f ? 0.12f : 0f;
             var kinship = StateIdentity.ShareDeclaredFaith(source, candidate) ||
-                          (!string.IsNullOrEmpty(sourcePrimary) && DemographyCatalog.IsPrimary(candidate.Tag, sourcePrimary))
+                          (hasSourcePrimary && entry.PrimarySet is not null && entry.PrimarySet.Contains(sourcePrimary))
                 ? 0.16f : 0f;
 
             var score = livingGap * 1.35f + entry.StabilityBonus + tradeLink + sameContinent + friendly +
@@ -199,9 +209,10 @@ public static class BrainDrain
         var bestScore = 0.12f; // Minimum pull threshold required to attract cross-border migrants.
         var sourcePrimary = DemographyCatalog.PrimaryCulture(source.Tag);
 
-        for (var i = 0; i < c.Nations.Count; i++)
+        var active = c.ActiveNations;
+        for (var i = 0; i < active.Count; i++)
         {
-            var candidate = c.Nations[i];
+            var candidate = active[i];
             if (candidate.Id == source.Id || candidate.Movement is not null || candidate.Population <= 0) continue;
             if (candidate.Stability < 0.52f || candidate.StandardOfLiving <= source.StandardOfLiving + 0.05f) continue;
             if (atWarNations.Contains(candidate.Id)) continue;
@@ -237,35 +248,45 @@ public static class BrainDrain
         return best;
     }
 
+    [ThreadStatic] private static List<(ScenarioState State, float Score)> _receptionScoredScratch;
+
     /// <summary>
     /// The regions arrivals settle in, the most attractive first: cities, universities and the
     /// capital pull, but people go to many places, not one.
     /// </summary>
     public static List<ScenarioState> ReceptionStates(Campaign c, Nation destination, int count)
     {
-        var states = c.StatesOf(destination);
-        var list = new List<ScenarioState>(states.Length);
-        for (var i = 0; i < states.Length; i++)
-        {
-            var s = states[i];
-            if (!s.Unclaimed && s.Population > 0) list.Add(s);
-        }
-        list.Sort((left, right) =>
-        {
-            var byAttraction = Attraction(destination, right).CompareTo(Attraction(destination, left));
-            return byAttraction != 0 ? byAttraction : left.MapIndex.CompareTo(right.MapIndex);
-        });
-        var take = Math.Max(1, count);
-        if (list.Count > take) list.RemoveRange(take, list.Count - take);
+        var list = new List<ScenarioState>();
+        FillReceptionStates(c, destination, count, list);
         return list;
     }
 
-    private static float Attraction(Nation destination, ScenarioState s)
+    private static void FillReceptionStates(Campaign c, Nation destination, int count, List<ScenarioState> into)
     {
-        var isCap = s.MapIndex == destination.CapitalStateMapIndex ? 0.35f : 0f;
-        var research = s.Buildings.GetValueOrDefault(BuildingKind.University) * 0.05f +
-                       s.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) * 0.08f;
-        return s.StandardOfLiving + isCap + research - s.WarDamage;
+        into.Clear();
+        var states = c.StatesOf(destination);
+        if (states.Length == 0) return;
+        var scored = _receptionScoredScratch ??= new List<(ScenarioState State, float Score)>(states.Length);
+        scored.Clear();
+        var capitalIdx = destination.CapitalStateMapIndex;
+        for (var i = 0; i < states.Length; i++)
+        {
+            var s = states[i];
+            if (s.Unclaimed || s.Population <= 0) continue;
+            var isCap = s.MapIndex == capitalIdx ? 0.35f : 0f;
+            var research = s.Buildings.GetValueOrDefault(BuildingKind.University) * 0.05f +
+                           s.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) * 0.08f;
+            scored.Add((s, s.StandardOfLiving + isCap + research - s.WarDamage));
+        }
+        if (scored.Count > 1)
+            scored.Sort(static (left, right) =>
+            {
+                var byAttraction = right.Score.CompareTo(left.Score);
+                return byAttraction != 0 ? byAttraction : left.State.MapIndex.CompareTo(right.State.MapIndex);
+            });
+        var take = Math.Min(Math.Max(1, count), scored.Count);
+        for (var i = 0; i < take; i++) into.Add(scored[i].State);
+        scored.Clear();
     }
 
     public static ScenarioState ReceptionState(Campaign c, Nation destination)
@@ -297,11 +318,17 @@ public static class BrainDrain
     }
 
     /// <summary>How many source countries one stage works through before the frame gets its turn back.</summary>
-    private const int StageCountries = 2;
+    private const int StageCountries = 32;
+
+    [ThreadStatic] private static HashSet<int> _atWarScratch;
+    [ThreadStatic] private static Dictionary<int, (int SourceId, long Moved)> _topSourceScratch;
+    [ThreadStatic] private static Dictionary<int, long> _intakeRoomScratch;
+    [ThreadStatic] private static Dictionary<int, List<ScenarioState>> _receptionsScratch;
+    [ThreadStatic] private static List<List<ScenarioState>> _receptionsPoolScratch;
+    [ThreadStatic] private static List<DestCandidate> _candidatesScratch;
 
     /// <summary>
-    /// The week's emigration in stages: the same countries in the same order, a pause every
-    /// StageCountries - one indivisible piece of twenty-five milliseconds before.
+    /// The week's emigration in stages: the same countries in the same order, yielding on frame budget.
     /// </summary>
     public static IEnumerable<int> Stages(Campaign c)
     {
@@ -309,7 +336,8 @@ public static class BrainDrain
         if (c.ElapsedDays <= 0 || c.ElapsedDays % Math.Max(1, c.Defines.EconomyTickDays) != 0) yield break;
         if (c.Nations.Count < 2 || c.States.Count < 2) yield break;
 
-        var atWarNations = new HashSet<int>();
+        var atWarNations = _atWarScratch ??= new HashSet<int>();
+        atWarNations.Clear();
         var liveWars = Warfare.LiveWars(c);
         for (var i = 0; i < liveWars.Count; i++)
         {
@@ -324,12 +352,19 @@ public static class BrainDrain
             c.States[i].BrainDrainPressure = 0f;
         }
 
-        var topSourceForDest = new Dictionary<int, (int SourceId, long Moved)>();
-        var intakeRoom = new Dictionary<int, long>();
-        var receptionsCache = new Dictionary<int, List<ScenarioState>>();
-        for (var i = 0; i < c.Nations.Count; i++)
+        var topSourceForDest = _topSourceScratch ??= new Dictionary<int, (int SourceId, long Moved)>();
+        var intakeRoom = _intakeRoomScratch ??= new Dictionary<int, long>();
+        var receptionsCache = _receptionsScratch ??= new Dictionary<int, List<ScenarioState>>();
+        var receptionsPool = _receptionsPoolScratch ??= new List<List<ScenarioState>>();
+        topSourceForDest.Clear();
+        intakeRoom.Clear();
+        foreach (var list in receptionsCache.Values) { list.Clear(); receptionsPool.Add(list); }
+        receptionsCache.Clear();
+
+        var active = c.ActiveNations;
+        for (var i = 0; i < active.Count; i++)
         {
-            var n = c.Nations[i];
+            var n = active[i];
             n.WeeklyNetMigration = 0;
             n.BrainDrainRate = 0f;
             n.BrainDrainDestinationId = -1;
@@ -339,10 +374,11 @@ public static class BrainDrain
         var maxWeeklyShare = M.Clamp(c.Defines.BrainDrainMaxWeeklyShare, 0f, 0.005f);
         var literacyWeight = M.Clamp(c.Defines.BrainDrainLiteracyWeight, 0f, 1f);
 
-        var candidates = new List<DestCandidate>(c.Nations.Count);
-        for (var i = 0; i < c.Nations.Count; i++)
+        var candidates = _candidatesScratch ??= new List<DestCandidate>(active.Count);
+        candidates.Clear();
+        for (var i = 0; i < active.Count; i++)
         {
-            var candidate = c.Nations[i];
+            var candidate = active[i];
             if (candidate.Movement is not null || candidate.Population <= 0) continue;
             if (candidate.Stability < 0.52f || atWarNations.Contains(candidate.Id)) continue;
             if (ModifierSystem.Has(candidate, "strict_border_controls")) continue;
@@ -350,20 +386,24 @@ public static class BrainDrain
             candidates.Add(new DestCandidate(candidate));
         }
 
-        for (var i = 0; i < c.Nations.Count; i++)
+        for (var i = 0; i < active.Count; i++)
         {
-            if (i > 0 && i % StageCountries == 0) yield return 0;
-            var sourceNation = c.Nations[i];
+            if (i > 0 && i % StageCountries == 0 && Campaign.StageOverdue()) yield return 0;
+            var sourceNation = active[i];
             if (sourceNation.Movement is not null || sourceNation.Population <= 10_000) continue;
             var states = c.StatesOf(sourceNation);
             if (states.Length == 0) continue;
 
             var atWar = atWarNations.Contains(sourceNation.Id);
+            var foodSat = sourceNation.Market.TryGetValue(Commodity.Food, out var foodQ) ? Math.Clamp(foodQ.Satisfaction, 0f, 1f) : 1f;
+            var retentionSpirit = ModifierSystem.Has(sourceNation, "talent_retention") ? 0.22f : 0f;
+            var strictBorders = ModifierSystem.Has(sourceNation, "strict_border_controls");
             var maxPressure = 0f;
             for (var sIdx = 0; sIdx < states.Length; sIdx++)
             {
                 var st = states[sIdx];
-                st.BrainDrainPressure = CalculatePressure(c, sourceNation, st, atWar);
+                if (st.Unclaimed || st.Population <= 0) { st.BrainDrainPressure = 0f; continue; }
+                st.BrainDrainPressure = CalculatePressureCore(c, sourceNation, st, atWar, foodSat, retentionSpirit, strictBorders, explain: null);
                 if (st.BrainDrainPressure > maxPressure) maxPressure = st.BrainDrainPressure;
             }
 
@@ -372,7 +412,16 @@ public static class BrainDrain
             var destNation = BestDestinationFromPool(c, sourceNation, candidates, out var destDoorMultiplier);
             if (destNation is null) continue;
             if (!receptionsCache.TryGetValue(destNation.Id, out var receptions))
-                receptionsCache[destNation.Id] = receptions = ReceptionStates(c, destNation, c.Defines.BrainDrainReceptionRegions);
+            {
+                if (receptionsPool.Count > 0)
+                {
+                    receptions = receptionsPool[^1];
+                    receptionsPool.RemoveAt(receptionsPool.Count - 1);
+                }
+                else receptions = new List<ScenarioState>(Math.Max(1, c.Defines.BrainDrainReceptionRegions));
+                FillReceptionStates(c, destNation, c.Defines.BrainDrainReceptionRegions, receptions);
+                receptionsCache[destNation.Id] = receptions;
+            }
             if (receptions.Count == 0) continue;
             // A country takes in only so many a week, whoever they come from.
             if (!intakeRoom.TryGetValue(destNation.Id, out var room))
@@ -396,6 +445,8 @@ public static class BrainDrain
                 // The people themselves cross: who they are arrives with them.
                 moved = InternalMigration.Move(st, destState, moved, withinCountry: false);
                 if (moved <= 0) continue;
+                MovementRules.MarkPeopleStateDirty(c, st);
+                MovementRules.MarkPeopleStateDirty(c, destState);
                 room -= moved;
                 st.ReviewNetMigration -= moved;
                 destState.ReviewNetMigration += moved;
@@ -449,5 +500,9 @@ public static class BrainDrain
                 dest.BrainDrainRate = M.Clamp(gainRatio * 0.35f, 0.01f, 1f);
             }
         }
+        topSourceForDest.Clear();
+        intakeRoom.Clear();
+        receptionsCache.Clear();
+        candidates.Clear();
     }
 }

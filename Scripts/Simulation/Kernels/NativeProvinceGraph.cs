@@ -380,6 +380,59 @@ public sealed partial class NativeProvinceGraph
         return true;
     }
 
+    /// <summary>
+    /// Computes bit-identical road Dijkstra distances directly into caller-owned
+    /// <paramref name="distances"/> (previously cleared over prior <paramref name="within"/> entries)
+    /// with zero managed heap allocations.
+    /// </summary>
+    internal unsafe bool TryFillDistanceField(
+        List<int> sources,
+        float boundKm,
+        float[] distances,
+        List<int> within)
+    {
+        if (!NativeKernelsLoader.IsAvailable || _graph.IsInvalid || sources is null ||
+            distances is null || distances.Length <= _provinceCount) return false;
+
+        var ws = _workspace.Value;
+        if (ws?.Scratch is null || ws.Scratch.IsInvalid) return false;
+
+        var sc = sources.Count;
+        if (sc > ws.SrcBuffer.Length)
+            ws.SrcBuffer = new int[Math.Max(sc, ws.SrcBuffer.Length * 2)];
+        for (var i = 0; i < sc; i++) ws.SrcBuffer[i] = sources[i];
+
+        uint count = 0;
+        fixed (int* pSrc = ws.SrcBuffer)
+        fixed (int* pOutProv = ws.OutProvinces)
+        fixed (float* pOutDist = ws.OutDistances)
+        {
+            var status = dof_graph_distance_field_v1(
+                _graph.DangerousGetHandle(),
+                ws.Scratch.DangerousGetHandle(),
+                pSrc, (uint)sc, boundKm,
+                pOutProv, pOutDist, (uint)_provinceCount, &count);
+            if (status != 0) return false;
+        }
+
+        for (var i = 0; i < within.Count; i++) distances[within[i]] = float.PositiveInfinity;
+        within.Clear();
+        var cInt = (int)count;
+        var op = ws.OutProvinces;
+        var od = ws.OutDistances;
+        for (var i = 0; i < cInt; i++)
+        {
+            var p = op[i];
+            if ((uint)p < (uint)distances.Length)
+            {
+                distances[p] = od[i];
+                within.Add(p);
+            }
+        }
+        within.Sort();
+        return true;
+    }
+
     public unsafe bool TrySolveSupply(
         ushort[] controllers,
         ushort[] provinceToNation,

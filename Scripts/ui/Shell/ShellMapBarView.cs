@@ -7,20 +7,21 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// Bottom-right Map Plate (Revision 3): 6 sunken circular antique-brass medallions (Z X C V N + M),
-/// optional framed minimap, and two-tab "Ещё" (M) drawer with 1-click live chip rows for
-/// Map Look ("map_look") and Political Fill ("map_political_fill").
+/// Bottom-right Sovereign Brass &amp; Obsidian Map Plate: 6 sunken circular medallions (Z X C V N + M)
+/// with distinct brass hover/active states and bounded tooltips, delegated live corner minimap
+/// (<see cref="ShellMinimapView"/>), and scrollable two-tab "More" (M) drawer with 1-click live chip
+/// rows for Map Look and Political Fill.
 /// </summary>
 internal sealed class ShellMapBarView
 {
     private readonly ShellContext _ctx;
+    private readonly ShellMinimapView _minimap;
 
     private PanelContainer _bar;
     private HBoxContainer _medallionRow;
     private readonly Dictionary<StrategicMapMode, MedallionNodes> _quickButtons = new();
     private MedallionNodes _moreMedallion;
 
-    // Two-tab More drawer (Modes | Layers)
     private PanelContainer _popover;
     private Button _modesTabBtn;
     private Button _layersTabBtn;
@@ -34,31 +35,25 @@ internal sealed class ShellMapBarView
     private readonly List<LayerRowNodes> _layerRows = new();
     private Button _projectionBtn;
 
-    // Live 256x128 political/land/sea corner minimap (on by default per ui_shell_minimap = true)
-    private const int MinimapW = 256, MinimapH = 128;
-    private PanelContainer _minimapPanel;
-    private Control _minimapCanvas;
-    private ImageTexture _minimapTexture;
-    private Campaign _minimapWorld;
-    private int _minimapRevision = int.MinValue;
-    private bool _minimapDragging;
-    private ulong _minimapLastBuildMsec;
-    private (float Lat, float Lon, float Span) _lastCamView;
-    private readonly int[] _minimapOwnerGrid = new int[MinimapW * MinimapH];
-    private readonly byte[] _minimapBytes = new byte[MinimapW * MinimapH * 4];
-    private byte[] _minimapPalR = Array.Empty<byte>(), _minimapPalG = Array.Empty<byte>(), _minimapPalB = Array.Empty<byte>();
-    private bool[] _minimapPalHas = Array.Empty<bool>();
-    private readonly bool _isMobileRuntime = OS.HasFeature("mobile") || OS.GetName() is "Android" or "iOS";
+    private StyleBox _medNormalBox;
+    private StyleBoxFlat _medHoverBox;
+    private StyleBox _medActiveBox;
+    private StyleBoxFlat _chipHoverBox;
+    private StyleBoxFlat _tabHoverBox;
+    private StyleBoxEmpty _layerEmpty;
+    private StyleBoxFlat _layerHover;
 
     private ShellLayoutProfile _profile;
     private bool _modalObscured;
-    private StyleBoxEmpty _layerEmpty;
-    private StyleBoxFlat _layerHover;
     private StrategicMapMode? _lastMedallionMode;
     private bool? _lastMoreOn, _lastAltVisible, _lastShowMini;
+    private string _lastLang = "";
 
     private sealed class MedallionNodes
     {
+        public string LabelKey;
+        public string TipDescKey;
+        public string Hotkey;
         public Button Button;
         public TextureRect Icon;
         public ColorRect ActiveUnderline;
@@ -68,18 +63,19 @@ internal sealed class ShellMapBarView
     private sealed class LayerRowNodes
     {
         public string Setting;
+        public string LabelKey;
         public Button RowButton;
+        public Label RowLabel;
         public Control TogglePill;
     }
 
-    private static readonly (StrategicMapMode Mode, string Hotkey, string Icon, string LabelKey)[] QuickModes =
+    private static readonly (StrategicMapMode Mode, string Hotkey, string Icon, string LabelKey, string TipDescKey)[] QuickModes =
     {
-        (StrategicMapMode.Political, "Z", "icon_shell_political", "Political"),
-        (StrategicMapMode.Diplomatic, "X", "icon_alliance", "Diplomacy"),
-        (StrategicMapMode.Economy, "C", "icon_gdp", "Economy"),
-        (StrategicMapMode.Resources, "V", "icon_terrain", "Resources"),
-        // N is ALWAYS War in the bottom-right row per owner spec
-        (StrategicMapMode.Wars, "N", "icon_shell_warmode", "Wars")
+        (StrategicMapMode.Political, "Z", "icon_shell_political", "Political", "shell.ws.shell.map_tip_political"),
+        (StrategicMapMode.Diplomatic, "X", "icon_alliance", "Diplomacy", "shell.ws.shell.map_tip_diplomatic"),
+        (StrategicMapMode.Economy, "C", "icon_gdp", "Economy", "shell.ws.shell.map_tip_economy"),
+        (StrategicMapMode.Resources, "V", "icon_terrain", "Resources", "shell.ws.shell.map_tip_resources"),
+        (StrategicMapMode.Wars, "N", "icon_shell_warmode", "Wars", "shell.ws.shell.map_tip_wars")
     };
 
     public bool IsPopoverOpen => _popover is { Visible: true };
@@ -87,13 +83,21 @@ internal sealed class ShellMapBarView
     public ShellMapBarView(ShellContext ctx)
     {
         _ctx = ctx;
+        _minimap = new ShellMinimapView(ctx);
     }
 
     public void Build()
     {
+        _medNormalBox = _ctx.NineSlice("round_bezel", 0, 0, 0, 0, 0, "shell.plate_top", "shell.engrave", 24);
+        _medHoverBox = Ui.ChromeBox("shell.plate_hover", 0.94f, "shell.brass_hi", 0.90f, cornerRadius: 24, borderWidth: 1);
+        _medActiveBox = _ctx.NineSlice("round_bezel_active", 0, 0, 0, 0, 0, "shell.well_top", "shell.brass_hi", 24);
+        _chipHoverBox = Ui.ChromeBox("shell.plate_hover", 0.90f, "shell.brass_hi", 0.82f, cornerRadius: 3, borderWidth: 1, padX: 8, padY: 3);
+        _tabHoverBox = Ui.ChromeBox("shell.plate_hover", 0.86f, "shell.brass_hi", 0.78f, cornerRadius: 3, borderWidth: 1, padX: 8, padY: 4);
+
         _bar = new PanelContainer
         {
             Name = "ShellMapBar",
+            ClipContents = true,
             MouseFilter = Control.MouseFilterEnum.Stop
         };
         _bar.AddThemeStyleboxOverride("panel",
@@ -109,34 +113,30 @@ internal sealed class ShellMapBarView
         _medallionRow.AddThemeConstantOverride("separation", 8);
         _bar.AddChild(_medallionRow);
 
-        foreach (var (mode, key, icon, labelKey) in QuickModes)
+        foreach (var (mode, key, icon, labelKey, tipDescKey) in QuickModes)
         {
             var captured = mode;
-            var med = CreateMedallion("ShellMap_" + mode, icon, key,
-                $"{Loc.Get(labelKey)} ({key})",
-                () =>
-                {
-                    _ctx.SetMapMode?.Invoke(captured);
-                    Refresh();
-                });
+            var med = CreateMedallion("ShellMap_" + mode, icon, key, labelKey, tipDescKey, () =>
+            {
+                _ctx.SetMapMode?.Invoke(captured);
+                Refresh();
+            });
             _medallionRow.AddChild(med.Button);
             _quickButtons[mode] = med;
         }
 
         _moreMedallion = CreateMedallion("ShellMap_More", "icon_shell_more", "M",
-            $"{Loc.Get("More map modes and layers")} (M)", () => { _ctx.PlayCue?.Invoke("shell_drawer_slide"); TogglePopover(); });
+            "More map modes and layers", "shell.ws.shell.map_tip_more",
+            () => { _ctx.PlayCue?.Invoke("shell_drawer_slide"); TogglePopover(); });
         _medallionRow.AddChild(_moreMedallion.Button);
 
         BuildPopover();
-        BuildMinimap();
+        _minimap.Build();
         _ctx.AttachPlateFrame(_bar);
     }
 
-    private MedallionNodes CreateMedallion(string name, string iconName, string hotkey, string tip, Action onPress)
+    private MedallionNodes CreateMedallion(string name, string iconName, string hotkey, string labelKey, string tipDescKey, Action onPress)
     {
-        var normalBox = _ctx.NineSlice("round_bezel", 0, 0, 0, 0, 0, "shell.plate_top", "shell.engrave", 24);
-        var activeBox = _ctx.NineSlice("round_bezel_active", 0, 0, 0, 0, 0, "shell.well_top", "shell.paper_muted", 24);
-
         var btn = new Button
         {
             Name = name,
@@ -144,21 +144,21 @@ internal sealed class ShellMapBarView
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
         };
-        btn.AddThemeStyleboxOverride("normal", normalBox);
-        btn.AddThemeStyleboxOverride("hover", normalBox);
-        btn.AddThemeStyleboxOverride("pressed", activeBox);
+        btn.AddThemeStyleboxOverride("normal", _medNormalBox);
+        btn.AddThemeStyleboxOverride("hover", _medHoverBox);
+        btn.AddThemeStyleboxOverride("pressed", _medActiveBox);
         btn.Pressed += () =>
         {
             _ctx.PlayCue?.Invoke("shell_map_lens");
             onPress();
         };
-        btn.TooltipText = Ui.Tip(tip);
+        btn.TooltipText = Ui.Tip($"{Loc.Get(labelKey)} ({hotkey})\n{Loc.Get(tipDescKey)}", 52);
 
         var icon = new TextureRect
         {
-            Texture = _ctx.Icon(iconName),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            Texture = _ctx.Icon(iconName),
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         ShellContext.ApplyIconRelief(icon, Ui.Colour("shell.icon"), 0.6f);
@@ -168,7 +168,7 @@ internal sealed class ShellMapBarView
 
         var underline = new ColorRect
         {
-            Color = Ui.Colour("shell.paper_muted"),
+            Color = Ui.Colour("shell.brass_hi"),
             Visible = false,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
@@ -177,7 +177,16 @@ internal sealed class ShellMapBarView
         var kbd = _ctx.CreateKeycapBadge(hotkey, compact: true);
         btn.AddChild(kbd);
 
-        return new MedallionNodes { Button = btn, Icon = icon, ActiveUnderline = underline, Keycap = kbd };
+        return new MedallionNodes
+        {
+            LabelKey = labelKey,
+            TipDescKey = tipDescKey,
+            Hotkey = hotkey,
+            Button = btn,
+            Icon = icon,
+            ActiveUnderline = underline,
+            Keycap = kbd
+        };
     }
 
     private void BuildPopover()
@@ -186,18 +195,26 @@ internal sealed class ShellMapBarView
         {
             Name = "ShellMapMorePopover",
             Visible = false,
+            ClipContents = true,
             MouseFilter = Control.MouseFilterEnum.Stop,
             ZIndex = 32
         };
         _popover.AddThemeStyleboxOverride("panel",
-            _ctx.NineSlice("plate_umber_9s", 14, 12, 10, 12, 12, "shell.plate_bottom", "shell.border", 3));
+            _ctx.NineSlice("plate_umber_9s", 14, 12, 10, 12, 10, "shell.plate_bottom", "shell.brass", 3));
+        _popover.GuiInput += ev =>
+        {
+            if (ev is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+            {
+                ClosePopover();
+                _popover.AcceptEvent();
+            }
+        };
         _ctx.Root.AddChild(_popover);
 
-        var rootCol = new VBoxContainer();
+        var rootCol = new VBoxContainer { ClipContents = true };
         rootCol.AddThemeConstantOverride("separation", 8);
         _popover.AddChild(rootCol);
 
-        // Engraved folder tabs: Modes | Layers
         var tabs = new HBoxContainer();
         tabs.AddThemeConstantOverride("separation", 4);
         rootCol.AddChild(tabs);
@@ -207,14 +224,49 @@ internal sealed class ShellMapBarView
         tabs.AddChild(_modesTabBtn);
         tabs.AddChild(_layersTabBtn);
 
-        // Page 1: Map Modes + 1-Click Map Look + 1-Click Political Fill
-        _modesPage = new VBoxContainer { Name = "ShellMoreModesPage" };
+        var closeBtn = new Button
+        {
+            Name = "CloseShellMapPopover",
+            Text = "×",
+            CustomMinimumSize = new Vector2(30, 30),
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+            FocusMode = Control.FocusModeEnum.None,
+            TooltipText = Ui.Tip(Loc.Get("Close"))
+        };
+        closeBtn.AddThemeStyleboxOverride("normal", _ctx.NineSlice("button_umber_9s", 8, 4, 2, 4, 2));
+        closeBtn.AddThemeStyleboxOverride("hover", _chipHoverBox);
+        closeBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
+        closeBtn.Pressed += ClosePopover;
+        tabs.AddChild(closeBtn);
+
+        // Bounded ScrollContainer with >= 14px right scrollbar clearance for 1280x720 EN/RU safety
+        var scroll = new ScrollContainer
+        {
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            ClipContents = true
+        };
+        rootCol.AddChild(scroll);
+
+        var scrollPad = new MarginContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            ClipContents = true
+        };
+        scrollPad.AddThemeConstantOverride("margin_right", 14);
+        scroll.AddChild(scrollPad);
+
+        var pagesHost = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
+        pagesHost.AddThemeConstantOverride("separation", 0);
+        scrollPad.AddChild(pagesHost);
+
+        _modesPage = new VBoxContainer { Name = "ShellMoreModesPage", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
         _modesPage.AddThemeConstantOverride("separation", 6);
-        rootCol.AddChild(_modesPage);
+        pagesHost.AddChild(_modesPage);
 
         BuildMapAppearanceChips(_modesPage);
 
-        var modeGrid = new GridContainer { Columns = 2 };
+        var modeGrid = new GridContainer { Columns = 2, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         modeGrid.AddThemeConstantOverride("h_separation", 5);
         modeGrid.AddThemeConstantOverride("v_separation", 5);
         _modesPage.AddChild(modeGrid);
@@ -229,12 +281,13 @@ internal sealed class ShellMapBarView
                 Refresh();
             });
             b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            b.CustomMinimumSize = new Vector2(154, 28);
+            b.CustomMinimumSize = new Vector2(124, 28);
             modeGrid.AddChild(b);
             _allModeButtons[mode] = b;
         }
 
-        _projectionBtn = CreateChipButton(Loc.Get("shell.proj_3d_globe") + " (F2)", () =>
+        var f2Suffix = (_ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true)) ? "" : " (F2)";
+        _projectionBtn = CreateChipButton(Loc.Get("shell.proj_3d_globe") + f2Suffix, () =>
         {
             _ctx.ToggleProjection?.Invoke();
             Refresh();
@@ -242,10 +295,9 @@ internal sealed class ShellMapBarView
         _projectionBtn.CustomMinimumSize = new Vector2(0, 28);
         _modesPage.AddChild(_projectionBtn);
 
-        // Page 2: Visual Layers with tactile .tg switch pills
-        _layersPage = new VBoxContainer { Name = "ShellMoreLayersPage", Visible = false };
+        _layersPage = new VBoxContainer { Name = "ShellMoreLayersPage", Visible = false, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
         _layersPage.AddThemeConstantOverride("separation", 3);
-        rootCol.AddChild(_layersPage);
+        pagesHost.AddChild(_layersPage);
 
         var layerDefs = new (string Setting, string LabelKey, string KeyBadge)[]
         {
@@ -265,7 +317,6 @@ internal sealed class ShellMapBarView
 
     private void BuildMapAppearanceChips(VBoxContainer parent)
     {
-        // Row 1: Вид карты (map_look: realistic / paper / atlas / classic)
         var lookCap = new Label { Text = Loc.Get("shell.map_look_row") };
         lookCap.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
         lookCap.AddThemeFontSizeOverride("font_size", 12);
@@ -293,7 +344,6 @@ internal sealed class ShellMapBarView
             _lookButtons[val] = btn;
         }
 
-        // Row 2: Заливка стран (map_political_fill: classic_opaque / balanced / translucent)
         var fillCap = new Label { Text = Loc.Get("shell.political_fill_row") };
         fillCap.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
         fillCap.AddThemeFontSizeOverride("font_size", 12);
@@ -320,7 +370,7 @@ internal sealed class ShellMapBarView
             _fillButtons[val] = btn;
         }
 
-        parent.AddChild(ShellContext.CreateRuledLine(31, "shell.ruled_ink", 1.2f, 4f));
+        parent.AddChild(ShellContext.CreateRuledLine(31, "shell.brass_dim", 1.2f, 4f));
     }
 
     private void ApplyMapChoiceSetting(string settingId, string value)
@@ -340,12 +390,12 @@ internal sealed class ShellMapBarView
         var btn = new Button
         {
             CustomMinimumSize = new Vector2(0, 29),
+            ClipContents = true,
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
         };
         _layerEmpty ??= new StyleBoxEmpty();
-        _layerHover ??= new StyleBoxFlat();
-        _layerHover.BgColor = Ui.Colour("shell.paper", 0.06f);
+        _layerHover ??= Ui.ChromeBox("shell.plate_hover", 0.78f, "shell.brass_hi", 0.65f, cornerRadius: 2, borderWidth: 1);
         btn.AddThemeStyleboxOverride("normal", _layerEmpty);
         btn.AddThemeStyleboxOverride("hover", _layerHover);
 
@@ -366,7 +416,7 @@ internal sealed class ShellMapBarView
             Refresh();
         };
 
-        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        var row = new HBoxContainer { ClipContents = true, MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddThemeConstantOverride("separation", 8);
         row.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         row.OffsetLeft = 4; row.OffsetRight = -4;
@@ -378,12 +428,11 @@ internal sealed class ShellMapBarView
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
-        var node = new LayerRowNodes { Setting = setting, RowButton = btn, TogglePill = pill };
         pill.Draw += () =>
         {
             var on = IsLayerSettingOn(capSetting);
-            pill.DrawRect(new Rect2(0, 0, 28, 15), Ui.Colour("shell.well"));
-            pill.DrawRect(new Rect2(0, 0, 28, 15), Ui.Colour("shell.engrave"), filled: false, width: 1f);
+            pill.DrawRect(new Rect2(0, 0, 28, 15), Ui.Colour(on ? "shell.brass_shadow" : "shell.well"));
+            pill.DrawRect(new Rect2(0, 0, 28, 15), Ui.Colour(on ? "shell.brass_hi" : "shell.engrave"), filled: false, width: 1f);
             var knobX = on ? 20.5f : 7.5f;
             var knobCol = on ? Ui.Colour("shell.paper") : Ui.Colour("shell.paper_ghost");
             pill.DrawCircle(new Vector2(knobX, 7.5f), 4.8f, knobCol);
@@ -395,7 +444,8 @@ internal sealed class ShellMapBarView
             Text = Loc.Get(labelKey),
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             VerticalAlignment = VerticalAlignment.Center,
-            ClipText = true
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
         };
         lbl.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
         lbl.AddThemeFontSizeOverride("font_size", 12);
@@ -410,7 +460,7 @@ internal sealed class ShellMapBarView
         }
 
         parent.AddChild(btn);
-        _layerRows.Add(node);
+        _layerRows.Add(new LayerRowNodes { Setting = setting, LabelKey = labelKey, RowButton = btn, RowLabel = lbl, TogglePill = pill });
     }
 
     private bool IsLayerSettingOn(string setting) =>
@@ -425,6 +475,7 @@ internal sealed class ShellMapBarView
             Text = Loc.Get(labelKey),
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 30),
+            ClipText = true,
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
         };
@@ -444,6 +495,7 @@ internal sealed class ShellMapBarView
         {
             Text = text,
             ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
         };
@@ -457,38 +509,13 @@ internal sealed class ShellMapBarView
         return b;
     }
 
-    private void BuildMinimap()
-    {
-        _minimapPanel = new PanelContainer
-        {
-            Name = "ShellMinimap",
-            Visible = false,
-            MouseFilter = Control.MouseFilterEnum.Stop
-        };
-        _minimapPanel.AddThemeStyleboxOverride("panel",
-            _ctx.NineSlice("plate_brass_9s", 10, 4, 4, 4, 4, "shell.well_top", "shell.brass", 2));
-        _ctx.Root.AddChild(_minimapPanel);
-        ChromePlateArt.AttachSurfaceTexture(_minimapPanel, "blueprint", 0.20f);
-
-        _minimapCanvas = new Control
-        {
-            MouseFilter = Control.MouseFilterEnum.Stop,
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand
-        };
-        _minimapCanvas.Draw += DrawMinimap;
-        _minimapCanvas.GuiInput += OnMinimapInput;
-        _minimapPanel.AddChild(_minimapCanvas);
-        _minimapPanel.TooltipText = Ui.Tip(Loc.Get("Click on the minimap to jump the camera there."));
-        _ctx.AttachPlateFrame(_minimapPanel, chamfer: 4.0f);
-    }
-
     public void SetModalObscured(bool obscured)
     {
         _modalObscured = obscured;
         if (obscured)
         {
             if (_popover is not null) _popover.Visible = false;
-            if (_minimapPanel is not null) _minimapPanel.Visible = false;
+            _minimap.SetVisible(false);
             return;
         }
         Refresh();
@@ -519,12 +546,10 @@ internal sealed class ShellMapBarView
         foreach (var (_, med) in _quickButtons) LayoutSingleMedallion(med, medSz, compact);
         LayoutSingleMedallion(_moreMedallion, medSz, compact);
 
-        var miniW = compact ? 196f : 260f;
-        var miniH = compact ? 98f : 130f;
-        ShellContext.PlaceRect(_minimapPanel, new ShellRect(profile.MapBar.Right - miniW, profile.MapBar.Y - miniH - 6f, miniW, miniH));
+        _minimap.Layout(profile);
 
-        var popW = compact ? 304f : 388f;
-        var popH = compact ? 330f : 420f;
+        var popW = compact ? 316f : 400f;
+        var popH = compact ? 336f : 426f;
         ShellContext.PlaceRect(_popover, new ShellRect(Math.Max(12f, profile.MapBar.Right - popW), Math.Max(70f, profile.MapBar.Y - popH - 8f), popW, popH));
     }
 
@@ -534,8 +559,8 @@ internal sealed class ShellMapBarView
         var pad = compact ? 7f : 9f;
         med.Icon.OffsetLeft = pad; med.Icon.OffsetRight = -pad;
         med.Icon.OffsetTop = pad; med.Icon.OffsetBottom = -pad;
-        med.ActiveUnderline.Position = new Vector2(sz * 0.28f, sz + 2f);
-        med.ActiveUnderline.Size = new Vector2(sz * 0.44f, 2f);
+        med.ActiveUnderline.Position = new Vector2(sz * 0.24f, sz + 1f);
+        med.ActiveUnderline.Size = new Vector2(sz * 0.52f, 2f);
         med.Keycap.Position = new Vector2(sz - 14f, sz - 14f);
     }
 
@@ -547,6 +572,18 @@ internal sealed class ShellMapBarView
         var obscured = _modalObscured || (_ctx.IsAnyModalOpen?.Invoke() ?? false);
         if (obscured && _popover is { Visible: true }) { _popover.Visible = false; moreOn = false; }
         var showMini = !obscured && SettingsCatalog.Flag("ui_shell_minimap");
+        var lang = Loc.Language;
+
+        if (_lastLang != lang)
+        {
+            _lastLang = lang;
+            foreach (var (_, med) in _quickButtons)
+                med.Button.TooltipText = Ui.Tip($"{Loc.Get(med.LabelKey)} ({med.Hotkey})\n{Loc.Get(med.TipDescKey)}", 52);
+            _moreMedallion.Button.TooltipText = Ui.Tip($"{Loc.Get(_moreMedallion.LabelKey)} ({_moreMedallion.Hotkey})\n{Loc.Get(_moreMedallion.TipDescKey)}", 52);
+            _modesTabBtn.Text = Loc.Get("Map modes");
+            _layersTabBtn.Text = Loc.Get("shell.map_layers");
+            foreach (var lr in _layerRows) lr.RowLabel.Text = Loc.Get(lr.LabelKey);
+        }
 
         if (_lastMedallionMode != activeMode || _lastMoreOn != moreOn || _lastAltVisible != altVis || _lastShowMini != showMini)
         {
@@ -555,21 +592,21 @@ internal sealed class ShellMapBarView
             _lastAltVisible = altVis;
             _lastShowMini = showMini;
 
-            var normalBox = _ctx.NineSlice("round_bezel", 0, 0, 0, 0, 0, "shell.plate_top", "shell.engrave", 24);
-            var activeBox = _ctx.NineSlice("round_bezel_active", 0, 0, 0, 0, 0, "shell.well_top", "shell.paper_muted", 24);
             foreach (var (mode, med) in _quickButtons)
             {
                 var on = mode == activeMode;
-                med.Button.AddThemeStyleboxOverride("normal", on ? activeBox : normalBox);
-                med.Button.AddThemeStyleboxOverride("hover", on ? activeBox : normalBox);
+                med.Button.AddThemeStyleboxOverride("normal", on ? _medActiveBox : _medNormalBox);
+                med.Button.AddThemeStyleboxOverride("hover", on ? _medActiveBox : _medHoverBox);
                 med.ActiveUnderline.Visible = on;
                 med.Keycap.Visible = altVis;
+                ShellContext.ApplyIconRelief(med.Icon, Ui.Colour(on ? "shell.highlight" : "shell.icon"), on ? 0.85f : 0.6f);
             }
-            _moreMedallion.Button.AddThemeStyleboxOverride("normal", moreOn ? activeBox : normalBox);
+            _moreMedallion.Button.AddThemeStyleboxOverride("normal", moreOn ? _medActiveBox : _medNormalBox);
+            _moreMedallion.Button.AddThemeStyleboxOverride("hover", moreOn ? _medActiveBox : _medHoverBox);
             _moreMedallion.ActiveUnderline.Visible = moreOn;
             _moreMedallion.Keycap.Visible = altVis;
-            _minimapPanel.Visible = showMini;
-            if (showMini) _minimapCanvas.QueueRedraw();
+            ShellContext.ApplyIconRelief(_moreMedallion.Icon, Ui.Colour(moreOn ? "shell.highlight" : "shell.icon"), moreOn ? 0.85f : 0.6f);
+            _minimap.SetVisible(showMini);
         }
         if (!obscured && moreOn) RefreshPopover();
     }
@@ -582,19 +619,21 @@ internal sealed class ShellMapBarView
         var tabOn = _ctx.NineSlice("tab_folder_9s", 10, 8, 4, 8, 4);
         var tabOff = _ctx.PressedWellStyle(padX: 8, padY: 4);
         _modesTabBtn.AddThemeStyleboxOverride("normal", !_showLayers ? tabOn : tabOff);
+        _modesTabBtn.AddThemeStyleboxOverride("hover", !_showLayers ? tabOn : _tabHoverBox);
         _modesTabBtn.AddThemeColorOverride("font_color", Ui.Colour(!_showLayers ? "shell.paper" : "shell.paper_faint"));
         _layersTabBtn.AddThemeStyleboxOverride("normal", _showLayers ? tabOn : tabOff);
+        _layersTabBtn.AddThemeStyleboxOverride("hover", _showLayers ? tabOn : _tabHoverBox);
         _layersTabBtn.AddThemeColorOverride("font_color", Ui.Colour(_showLayers ? "shell.paper" : "shell.paper_faint"));
 
         var chipNormal = _ctx.NineSlice("button_umber_9s", 8, 8, 3, 8, 3);
-        var chipActive = _ctx.PressedWellStyle(underlineLeft: true, padX: 8, padY: 3);
+        var chipActive = Ui.ChromeBox("shell.well_top", 0.96f, "shell.brass_hi", 0.92f, cornerRadius: 3, borderWidth: 1, padX: 8, padY: 3, leftBorderWidth: 3);
 
         var curMode = _ctx.GetMapMode?.Invoke() ?? StrategicMapMode.Political;
         foreach (var (m, btn) in _allModeButtons)
         {
             var on = m == curMode;
             btn.AddThemeStyleboxOverride("normal", on ? chipActive : chipNormal);
-            btn.AddThemeStyleboxOverride("hover", on ? chipActive : chipNormal);
+            btn.AddThemeStyleboxOverride("hover", on ? chipActive : _chipHoverBox);
             btn.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_muted"));
         }
 
@@ -603,7 +642,7 @@ internal sealed class ShellMapBarView
         {
             var on = string.Equals(curLook, val, StringComparison.OrdinalIgnoreCase);
             btn.AddThemeStyleboxOverride("normal", on ? chipActive : chipNormal);
-            btn.AddThemeStyleboxOverride("hover", on ? chipActive : chipNormal);
+            btn.AddThemeStyleboxOverride("hover", on ? chipActive : _chipHoverBox);
             btn.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_muted"));
         }
 
@@ -614,167 +653,18 @@ internal sealed class ShellMapBarView
         {
             var on = string.Equals(curFill, val, StringComparison.OrdinalIgnoreCase);
             btn.AddThemeStyleboxOverride("normal", on ? chipActive : chipNormal);
-            btn.AddThemeStyleboxOverride("hover", on ? chipActive : chipNormal);
+            btn.AddThemeStyleboxOverride("hover", on ? chipActive : _chipHoverBox);
             btn.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_muted"));
         }
 
         var isFlat = _ctx.IsFlatMap?.Invoke() ?? false;
-        _projectionBtn.Text = $"{Loc.Get(isFlat ? "shell.proj_3d_globe" : "shell.proj_2d_map")} (F2)";
+        var f2 = _profile?.TouchMode == true ? "" : " (F2)";
+        _projectionBtn.Text = $"{Loc.Get(isFlat ? "shell.proj_3d_globe" : "shell.proj_2d_map")}{f2}";
         _projectionBtn.AddThemeStyleboxOverride("normal", chipNormal);
+        _projectionBtn.AddThemeStyleboxOverride("hover", _chipHoverBox);
         _projectionBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         foreach (var lr in _layerRows) lr.TogglePill.QueueRedraw();
     }
 
-    public void TickMinimap()
-    {
-        if (_minimapPanel is not { Visible: true }) return;
-        EnsureMinimapTextureCurrent();
-        var cam = _ctx.GetCameraMinimapView?.Invoke() ?? (20f, 0f, 60f);
-        if (MathF.Abs(cam.Latitude - _lastCamView.Lat) > 0.25f ||
-            MathF.Abs(cam.Longitude - _lastCamView.Lon) > 0.25f ||
-            MathF.Abs(cam.SpanDegrees - _lastCamView.Span) > 0.25f)
-        {
-            _lastCamView = cam;
-            _minimapCanvas.QueueRedraw();
-        }
-    }
-
-    private void EnsureMinimapTextureCurrent()
-    {
-        var world = _ctx.World;
-        if (world?.ProvinceMap is not { Width: > 0, Height: > 0 } map) return;
-        if (ReferenceEquals(_minimapWorld, world) && _minimapRevision == world.MapRevision && _minimapTexture is not null)
-            return;
-
-        var paused = _ctx.IsPaused?.Invoke() ?? true;
-        if (!paused && _minimapTexture is not null && ReferenceEquals(_minimapWorld, world) &&
-            Time.GetTicksMsec() - _minimapLastBuildMsec < (ulong)(_isMobileRuntime ? 750 : 450))
-            return;
-
-        _minimapWorld = world;
-        _minimapRevision = world.MapRevision;
-        _minimapLastBuildMsec = Time.GetTicksMsec();
-
-        var maxIdx = 1;
-        for (var i = 0; i < world.Nations.Count; i++)
-            if (world.Nations[i].MapIndex > maxIdx) maxIdx = world.Nations[i].MapIndex;
-
-        var palLen = maxIdx + 1;
-        if (_minimapPalR.Length < palLen)
-        {
-            _minimapPalR = new byte[palLen]; _minimapPalG = new byte[palLen];
-            _minimapPalB = new byte[palLen]; _minimapPalHas = new bool[palLen];
-        }
-        else Array.Clear(_minimapPalHas, 0, palLen);
-
-        var playerMapIdx = world.Player?.MapIndex ?? -1;
-        for (var i = 0; i < world.Nations.Count; i++)
-        {
-            var n = world.Nations[i];
-            if (n.MapIndex <= 0 || n.MapIndex > maxIdx) continue;
-            var col = Color.FromString(string.IsNullOrEmpty(n.Color) ? "#6e6c66" : n.Color, new Color(0.43f, 0.42f, 0.40f));
-            col = n.MapIndex == playerMapIdx ? col.Lightened(0.14f) : col.Lerp(new Color(0.28f, 0.28f, 0.27f), 0.22f);
-            _minimapPalR[n.MapIndex] = (byte)Math.Clamp((int)(col.R * 255f), 0, 255);
-            _minimapPalG[n.MapIndex] = (byte)Math.Clamp((int)(col.G * 255f), 0, 255);
-            _minimapPalB[n.MapIndex] = (byte)Math.Clamp((int)(col.B * 255f), 0, 255);
-            _minimapPalHas[n.MapIndex] = true;
-        }
-
-        var cells = map.CellToProvince;
-        var controllers = world.ProvinceController;
-        var owners = map.ProvinceToNation;
-        for (var y = 0; y < MinimapH; y++)
-        {
-            var sy = Math.Clamp((int)((y + 0.5f) / MinimapH * map.Height), 0, map.Height - 1);
-            var rowOff = sy * map.Width;
-            for (var x = 0; x < MinimapW; x++)
-            {
-                var sx = Math.Clamp((int)((x + 0.5f) / MinimapW * map.Width), 0, map.Width - 1);
-                var prov = cells[rowOff + sx];
-                if (prov <= 0 || prov > map.ProvinceCount || map.IsWater(prov)) { _minimapOwnerGrid[y * MinimapW + x] = 0; continue; }
-                var ctrl = controllers is not null && prov < controllers.Length && controllers[prov] > 0
-                    ? controllers[prov] : (prov < owners.Length ? owners[prov] : 0);
-                _minimapOwnerGrid[y * MinimapW + x] = ctrl > 0 && ctrl <= maxIdx ? ctrl : -1;
-            }
-        }
-
-        for (var y = 0; y < MinimapH; y++)
-        {
-            for (var x = 0; x < MinimapW; x++)
-            {
-                var idx = y * MinimapW + x;
-                var o = _minimapOwnerGrid[idx];
-                var bOff = idx * 4;
-                if (o == 0)
-                {
-                    var latShade = 1f - 0.18f * MathF.Abs((y / (float)MinimapH) * 2f - 1f);
-                    _minimapBytes[bOff] = (byte)(17 * latShade); _minimapBytes[bOff + 1] = (byte)(24 * latShade);
-                    _minimapBytes[bOff + 2] = (byte)(32 * latShade); _minimapBytes[bOff + 3] = 255;
-                    continue;
-                }
-                var has = o > 0 && o < _minimapPalHas.Length && _minimapPalHas[o];
-                byte r = has ? _minimapPalR[o] : (byte)86, g = has ? _minimapPalG[o] : (byte)85, b = has ? _minimapPalB[o] : (byte)82;
-                if ((x > 0 && _minimapOwnerGrid[idx - 1] != o) || (y > 0 && _minimapOwnerGrid[idx - MinimapW] != o))
-                { r = (byte)(r * 0.52f); g = (byte)(g * 0.52f); b = (byte)(b * 0.52f); }
-                _minimapBytes[bOff] = r; _minimapBytes[bOff + 1] = g; _minimapBytes[bOff + 2] = b; _minimapBytes[bOff + 3] = 255;
-            }
-        }
-
-        using var img = Image.CreateFromData(MinimapW, MinimapH, false, Image.Format.Rgba8, _minimapBytes);
-        if (_minimapTexture is null) _minimapTexture = ImageTexture.CreateFromImage(img);
-        else _minimapTexture.Update(img);
-        _minimapCanvas?.QueueRedraw();
-    }
-
-    private void DrawMinimap()
-    {
-        var w = _minimapCanvas.Size.X;
-        var h = _minimapCanvas.Size.Y;
-        if (w <= 4f || h <= 4f) return;
-
-        EnsureMinimapTextureCurrent();
-        if (_minimapTexture is not null) _minimapCanvas.DrawTextureRect(_minimapTexture, new Rect2(0, 0, w, h), tile: false);
-        else _minimapCanvas.DrawRect(new Rect2(0, 0, w, h), new Color(0.07f, 0.10f, 0.13f, 1f));
-
-        var gridCol = new Color(1f, 1f, 1f, 0.06f);
-        _minimapCanvas.DrawLine(new Vector2(0, h * 0.5f), new Vector2(w, h * 0.5f), gridCol, 1f);
-        _minimapCanvas.DrawLine(new Vector2(w * 0.5f, 0), new Vector2(w * 0.5f, h), gridCol, 1f);
-
-        var (lat, lon, span) = _ctx.GetCameraMinimapView?.Invoke() ?? (20f, 0f, 60f);
-        var cx = ((lon + 180f) / 360f) * w;
-        var cy = ((90f - lat) / 180f) * h;
-        var vw = Math.Clamp((span / 360f) * w * 1.6f, 14f, w - 4f);
-        var vh = Math.Clamp((span / 180f) * h, 10f, h - 4f);
-        var rx = Math.Clamp(cx - vw * 0.5f, 1f, Math.Max(1f, w - vw - 1f));
-        var ry = Math.Clamp(cy - vh * 0.5f, 1f, Math.Max(1f, h - vh - 1f));
-
-        _minimapCanvas.DrawRect(new Rect2(rx - 1f, ry - 1f, vw + 2f, vh + 2f), new Color(0f, 0f, 0f, 0.7f), filled: false, width: 1f);
-        _minimapCanvas.DrawRect(new Rect2(rx, ry, vw, vh), Ui.Colour("shell.paper"), filled: false, width: 1.5f);
-    }
-
-    private void OnMinimapInput(InputEvent ev)
-    {
-        if (ev is InputEventMouseButton { ButtonIndex: MouseButton.Left } mb)
-        {
-            _minimapDragging = mb.Pressed;
-            if (mb.Pressed) PanCameraFromMinimapPoint(mb.Position);
-            _minimapCanvas.AcceptEvent();
-        }
-        else if (ev is InputEventMouseMotion mm && _minimapDragging)
-        {
-            if ((mm.ButtonMask & MouseButtonMask.Left) == 0) { _minimapDragging = false; return; }
-            PanCameraFromMinimapPoint(mm.Position);
-            _minimapCanvas.AcceptEvent();
-        }
-    }
-
-    private void PanCameraFromMinimapPoint(Vector2 localPos)
-    {
-        var w = MathF.Max(1f, _minimapCanvas.Size.X);
-        var h = MathF.Max(1f, _minimapCanvas.Size.Y);
-        var lon = Math.Clamp((localPos.X / w) * 360f - 180f, -180f, 180f);
-        var lat = Math.Clamp(90f - (localPos.Y / h) * 180f, -78f, 78f);
-        _ctx.FocusLatLon?.Invoke(lat, lon, Math.Clamp(_ctx.GetViewDistance?.Invoke() ?? 6.5f, 3.2f, 12f));
-        _minimapCanvas.QueueRedraw();
-    }
+    public void TickMinimap() => _minimap.Tick();
 }

@@ -76,13 +76,33 @@ public partial class MenuGlobe : Control
         MouseFilter = MouseFilterEnum.Stop;
         MouseDefaultCursorShape = CursorShape.Arrow;
 
+        var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var aaChoice = (SettingsCatalog.Chosen("map_antialiasing") ?? "").Trim().ToLowerInvariant();
+        Viewport.Msaa menuMsaa;
+        if (aaChoice is "off" or "0" or "none")
+            menuMsaa = Viewport.Msaa.Disabled;
+        else if (aaChoice is "4x" or "4")
+            menuMsaa = Viewport.Msaa.Msaa4X;
+        else if (aaChoice is "2x" or "2")
+            menuMsaa = Viewport.Msaa.Msaa2X;
+        else if (isTouchPrimary)
+            menuMsaa = Viewport.Msaa.Disabled;
+        else
+            menuMsaa = Viewport.Msaa.Msaa2X;
+
         _viewport = new SubViewport
         {
             Name = "MenuGlobeView",
             OwnWorld3D = true,
             TransparentBg = false,
+            PhysicsObjectPicking = false,
             HandleInputLocally = false,
-            Msaa3D = Viewport.Msaa.Msaa4X,
+            ScreenSpaceAA = Viewport.ScreenSpaceAAEnum.Disabled,
+            AnisotropicFilteringLevel = isTouchPrimary
+                ? Viewport.AnisotropicFiltering.Anisotropy4X
+                : Viewport.AnisotropicFiltering.Anisotropy8X,
+            TextureMipmapBias = isTouchPrimary ? -0.35f : -0.20f,
+            Msaa3D = menuMsaa,
             RenderTargetUpdateMode = SubViewport.UpdateMode.Always
         };
         AddChild(_viewport);
@@ -172,6 +192,17 @@ public partial class MenuGlobe : Control
         if (_viewport is null || GetWindow() is not { } window) return;
         var pixels = window.Size;
         if (pixels.X < 16 || pixels.Y < 16) return;
+        if (Platform.PlatformProfile.Current?.IsTouchPrimary == true)
+        {
+            var longEdge = Math.Max(pixels.X, pixels.Y);
+            if (longEdge > 2048)
+            {
+                var ratio = 2048f / Math.Max(1, longEdge);
+                pixels = new Vector2I(
+                    Math.Max(1, (int)MathF.Round(pixels.X * ratio)),
+                    Math.Max(1, (int)MathF.Round(pixels.Y * ratio)));
+            }
+        }
         if (_viewport.Size != pixels) _viewport.Size = pixels;
         Place();
     }
@@ -263,6 +294,11 @@ public partial class MenuGlobe : Control
         if (string.IsNullOrWhiteSpace(path) || !ResourceLoader.Exists(path)) return null;
         var texture = GD.Load<Texture2D>(path);
         if (texture is null) return null;
+        // Skip main-thread GPU->CPU GetImage() readbacks + Decompress() + CPU GenerateMipmaps() on
+        // touch/mobile devices and on assets already imported with mipmaps (menu_globe.jpg).
+        if (Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
+            string.Equals(sprite, "menu_globe", StringComparison.Ordinal))
+            return texture;
         using var image = texture.GetImage();
         if (image is null || image.IsEmpty() || image.HasMipmaps()) return texture;
         if (image.IsCompressed() && image.Decompress() != Error.Ok) return texture;

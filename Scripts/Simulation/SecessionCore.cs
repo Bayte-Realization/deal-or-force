@@ -222,14 +222,14 @@ public static class SecessionCore
     /// </summary>
     public static float Pressure(Campaign campaign, Nation owner, ScenarioState state)
     {
-        if (RevoltRecovery.DaysLeft(campaign, owner, state) > 0) return 0f;
         if (campaign is null || owner is null || state is null) return 0f;
         var weights = Weights;
+        if (state.Population < weights.MinimumPopulation) return 0f;
+        if (RevoltRecovery.DaysLeft(campaign, owner, state) > 0) return 0f;
 
         var foreign = EconomySystem.ForeignShare(state, owner.Tag);
-        var federal = foreign < weights.MinimumForeignShare && IsFederalBreak(campaign, owner, state);
+        var federal = foreign < weights.MinimumForeignShare && IsFederalBreakCore(campaign, owner, state, foreign);
         if (!federal && foreign < weights.MinimumForeignShare) return 0f;
-        if (state.Population < weights.MinimumPopulation) return 0f;
 
         var losing = false;
         var torn = false;
@@ -263,28 +263,34 @@ public static class SecessionCore
                * overstretchScale;
     }
 
-    /// <summary>
-    /// A region of the country's own people, politically finished with the centre.
-    ///
-    /// The ethnic gate above is what keeps Wales in a Britain that works. It also kept
-    /// every state of a union that works on paper and has stopped working in fact: the
-    /// people are the country's own, so the pressure was defined to be zero. This is the
-    /// other road. It needs the region's politics to have diverged, the region to have
-    /// stopped accepting the government, the centre to be illegitimate, and an economic
-    /// stress that is already on the books — debt, shortage, or a region much poorer than
-    /// the country it is taxed by. None of those is a penalty for being large, and none
-    /// of them names a tag.
-    /// </summary>
     public static bool IsFederalBreak(Campaign campaign, Nation owner, ScenarioState state)
     {
         if (campaign is null || owner is null || state is null) return false;
-        if (!campaign.FeatureEnabled("federal_fracture") || !campaign.FeatureEnabled("political_cohorts")) return false;
-        if (!campaign.FeatureEnabled("secession")) return false;
+        if (!PreFederalCheck(campaign, owner, state)) return false;
+        var foreign = EconomySystem.ForeignShare(state, owner.Tag);
+        return foreign < Weights.MinimumForeignShare && TailFederalCheck(campaign, owner, state);
+    }
+
+    private static bool IsFederalBreakCore(Campaign campaign, Nation owner, ScenarioState state, float foreign)
+    {
+        if (foreign >= Weights.MinimumForeignShare) return false;
+        return PreFederalCheck(campaign, owner, state) && TailFederalCheck(campaign, owner, state);
+    }
+
+    private static bool PreFederalCheck(Campaign campaign, Nation owner, ScenarioState state)
+    {
         if (state.MapIndex == owner.CapitalStateMapIndex || state.Population < Weights.MinimumPopulation) return false;
-        if (EconomySystem.ForeignShare(state, owner.Tag) >= Weights.MinimumForeignShare) return false;
-        if (state.PoliticalDivergence < campaign.Defines.CenterRegionIdeologySplit) return false;
-        if (state.GovernmentApproval < 0f || state.GovernmentApproval > campaign.Defines.FederalGovernmentApprovalCeiling) return false;
-        if (owner.Stability > campaign.Defines.FederalStabilityCeiling) return false;
+        var defines = campaign.Defines;
+        if (state.PoliticalDivergence < defines.CenterRegionIdeologySplit) return false;
+        if (state.GovernmentApproval < 0f || state.GovernmentApproval > defines.FederalGovernmentApprovalCeiling) return false;
+        if (owner.Stability > defines.FederalStabilityCeiling) return false;
+        return campaign.FeatureEnabled("federal_fracture") &&
+               campaign.FeatureEnabled("political_cohorts") &&
+               campaign.FeatureEnabled("secession");
+    }
+
+    private static bool TailFederalCheck(Campaign campaign, Nation owner, ScenarioState state)
+    {
         var defines = campaign.Defines;
         if (owner.ShortageIndex >= defines.FederalShortageStress) return true;
         if (campaign.FeatureEnabled("public_debt"))
@@ -350,8 +356,9 @@ public static class SecessionCore
 
         // Busy elsewhere - and every war beyond the first is another reason to let one go.
         var wars = 0;
-        foreach (var war in Warfare.OpenWars(campaign))
-            if (!war.Ended && war.Involves(parent.Id)) wars++;
+        var liveWars = Warfare.LiveWars(campaign);
+        for (var wi = 0; wi < liveWars.Count; wi++)
+            if (!liveWars[wi].Ended && liveWars[wi].Involves(parent.Id)) wars++;
         if (wars > 0) accept += 0.20f + (wars - 1) * weights.EachFurtherWar;
 
         // Exhaustion: a country tired of war lets a province go rather than open another front.

@@ -1,7 +1,7 @@
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace DealOrForce.Simulation;
 
@@ -97,7 +97,9 @@ public static class FrontManager
         public readonly List<Army> Loose = new();
         public readonly List<Army> BattleCandidates = new();
         public readonly List<int> Posts = new();
+        public readonly List<(int Post, float Need)> RankedPosts = new();
         public readonly HashSet<int> PostSet = new();
+        public readonly HashSet<int> PostStates = new();
         public readonly Dictionary<int, float> Need = new();
         public readonly HashSet<int> Refused = new();
         public readonly Dictionary<int, int> DonorComponents = new();
@@ -123,6 +125,7 @@ public static class FrontManager
     private static List<Army> BattleCandidates => Active.BattleCandidates;
     private static List<int> Posts => Active.Posts;
     private static HashSet<int> PostSet => Active.PostSet;
+    private static HashSet<int> PostStates => Active.PostStates;
     private static Dictionary<int, float> Need => Active.Need;
     private static HashSet<int> Refused => Active.Refused;
     private static Dictionary<int, int> DonorComponents => Active.DonorComponents;
@@ -218,7 +221,20 @@ public static class FrontManager
                 Active = board;
                 var war = wars[wi];
                 if (war.Ended) continue;
-                Balance(campaign, war);
+                for (var side = 0; side < 2; side++)
+                {
+                    var attacking = side == 0;
+                    FillWarEnemyPower(campaign, war, attacking);
+                    foreach (var nationId in war.Side(attacking))
+                    {
+                        BalanceSideMember(campaign, war, nationId);
+                        if (Campaign.StageOverdue())
+                        {
+                            yield return 0;
+                            Active = board;
+                        }
+                    }
+                }
                 yield return 0;
             }
             // A full withdrawal may detach the last formation and prune empty plans.
@@ -235,6 +251,7 @@ public static class FrontManager
                 if (!campaign.FrontLines.Contains(line)) continue;
                 if (line.Kind is FrontLineKind.Defence or FrontLineKind.AreaDefence or FrontLineKind.Offensive) BalanceLine(campaign, line);
                 else if (line.Kind == FrontLineKind.Fallback) DefensivePlanning.Maintain(campaign, line);
+                if (li + 1 < Lines.Count && Campaign.StageOverdue()) yield return 0;
                 yield return 0;
             }
         }
@@ -293,7 +310,7 @@ public static class FrontManager
             var nation = campaign.NationById(army.NationId);
             // A player's divisions stay where they were put, unless the general staff in the
             // field was handed over. Then the same call-up every other country gets applies.
-            if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) continue;
+            if (nation is null || (campaign.IsHumanControlled(nation) && !Delegation.Holds(nation, Delegation.Command))) continue;
             if (!warNations.Contains(nation.Id)) continue;
             new SetArmyOrderCommand { IssuerId = nation.Id, ArmyId = army.Id, Order = ArmyOrder.DefendFront }.Apply(campaign);
             FrontPlanner.GiveIdleRole(campaign, army);
@@ -320,35 +337,42 @@ public static class FrontManager
             for (var side = 0; side < 2; side++)
             {
                 var attacking = side == 0;
-                // Who is on the other side, and where they stand: the pressure each post is under.
-                EnemyPower.Clear();
-                foreach (var enemyId in war.Side(!attacking))
-                {
-                    var enemyArmies = NationArmies(campaign, enemyId);
-                    for (var i = 0; i < enemyArmies.Count; i++)
-                    {
-                        var army = enemyArmies[i];
-                        if (army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0) continue;
-                        EnemyPower[army.ProvinceId] = EnemyPower.GetValueOrDefault(army.ProvinceId) + army.Power;
-                    }
-                }
+                FillWarEnemyPower(campaign, war, attacking);
                 foreach (var nationId in war.Side(attacking))
-                {
-                    var nation = campaign.NationById(nationId);
-                    if (nation is null) continue;
-                    // Its own sector: a coalition's front runs past every member, and a division
-                    // cannot march through an ally's country to stand on its border.
-                    Posts.Clear();
-                    foreach (var province in war.FriendlyFront(nationId))
-                        if (campaign.ProvinceController[province] == (ushort)nation.MapIndex) Posts.Add(province);
-                    Posts.Sort();
-                    Arrange(campaign, nation, war, null);
-                }
+                    BalanceSideMember(campaign, war, nationId);
             }
         }
         finally
         {
             if (builtIndex) EndNationArmies();
+        }
+    }
+
+    private static void BalanceSideMember(Campaign campaign, StrategicWar war, int nationId)
+    {
+        var nation = campaign.NationById(nationId);
+        if (nation is null) return;
+        // Its own sector: a coalition's front runs past every member, and a division
+        // cannot march through an ally's country to stand on its border.
+        Posts.Clear();
+        foreach (var province in war.FriendlyFront(nationId))
+            if (campaign.ProvinceController[province] == (ushort)nation.MapIndex) Posts.Add(province);
+        Posts.Sort();
+        Arrange(campaign, nation, war, null);
+    }
+
+    private static void FillWarEnemyPower(Campaign campaign, StrategicWar war, bool attacking)
+    {
+        EnemyPower.Clear();
+        foreach (var enemyId in war.Side(!attacking))
+        {
+            var enemyArmies = NationArmies(campaign, enemyId);
+            for (var i = 0; i < enemyArmies.Count; i++)
+            {
+                var army = enemyArmies[i];
+                if (army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0) continue;
+                EnemyPower[army.ProvinceId] = EnemyPower.GetValueOrDefault(army.ProvinceId) + army.Power;
+            }
         }
     }
 
@@ -434,11 +458,9 @@ public static class FrontManager
             // Local guards may plug gaps inside their own region without being marked as
             // detached expeditionary militia (EmergencyFieldArmy). No player commandeering.
             if (line is not null || war is null || army.FrontLineId >= 0 ||
-                nation.IsHuman && !Delegation.Holds(nation, Delegation.Command)) return false;
+                campaign.IsHumanControlled(nation) && !Delegation.Holds(nation, Delegation.Command)) return false;
             var region = campaign.ProvinceMap.ProvinceToState[army.ProvinceId];
-            foreach (var post in Posts)
-                if (campaign.ProvinceMap.ProvinceToState[post] == region) return true;
-            return false;
+            return PostStates.Contains(region);
         }
         var duty = army.OrderKind == ArmyOrder.DefendFront ||
                    (advances && army.OrderKind == ArmyOrder.AdvanceFront);
@@ -456,7 +478,14 @@ public static class FrontManager
         var defines = campaign.Defines;
 
         PostSet.Clear();
-        foreach (var post in Posts) PostSet.Add(post);
+        PostStates.Clear();
+        var provinceToState = topology.ProvinceToState;
+        for (var i = 0; i < Posts.Count; i++)
+        {
+            var post = Posts[i];
+            PostSet.Add(post);
+            PostStates.Add(provinceToState[post]);
+        }
         // The lists are kept between fronts rather than thrown away: this runs for every
         // country at war every day, and a fresh list per post would be the staff's garbage.
         foreach (var list in Allocated.Values) { list.Clear(); Spare.Push(list); }
@@ -471,8 +500,9 @@ public static class FrontManager
         var ownArmies = NationArmies(campaign, nation.Id);
         var holders = 0;
         var power = 0f;
-        foreach (var army in ownArmies)
+        for (var i = 0; i < ownArmies.Count; i++)
         {
+            var army = ownArmies[i];
             if (FrontDisengagement.Eligible(campaign, nation, war, line, army)) BattleCandidates.Add(army);
             if (!Holds(campaign, army, nation, war, line, defines.FrontStaffMovesAdvances)) continue;
             holders++;
@@ -489,7 +519,7 @@ public static class FrontManager
         }
         var today = campaign.ElapsedDays;
         var mayBorrow = war is not null && line is null &&
-            (!nation.IsHuman || Delegation.Holds(nation, Delegation.Command));
+            (!campaign.IsHumanControlled(nation) || Delegation.Holds(nation, Delegation.Command));
         var referenceCount = holders;
         if (holders == 0)
         {
@@ -497,8 +527,9 @@ public static class FrontManager
             // An empty line is precisely when a ready reserve is needed. There may be no
             // defender yet from which to estimate a division's power, so use the available
             // field formations, without counting them as holders until actually posted.
-            foreach (var army in ownArmies)
+            for (var i = 0; i < ownArmies.Count; i++)
             {
+                var army = ownArmies[i];
                 if (!ReadyReserve(campaign, army, nation, war, today, advancesToo: true) &&
                     !FrontDisengagement.Eligible(campaign, nation, war, line, army)) continue;
                 referenceCount++;
@@ -512,8 +543,9 @@ public static class FrontManager
         var typical = MathF.Max(0.01f, power / referenceCount);
         Need.Clear();
         var totalNeed = 0f;
-        foreach (var post in Posts)
+        for (var pi = 0; pi < Posts.Count; pi++)
         {
+            var post = Posts[pi];
             var pressure = 0f;
             foreach (var neighbour in topology.Neighbors[post])
                 pressure += EnemyPower.GetValueOrDefault(neighbour);
@@ -535,11 +567,19 @@ public static class FrontManager
         quota = (int)MathF.Ceiling(holders / (float)Math.Max(1, Posts.Count));
 
         // First the holes, the most threatened first.
-        Posts.Sort(static (left, right) =>
+        var ranked = Active.RankedPosts;
+        ranked.Clear();
+        for (var pi = 0; pi < Posts.Count; pi++)
         {
-            var order = Need[right].CompareTo(Need[left]);
-            return order != 0 ? order : left.CompareTo(right);
+            var p = Posts[pi];
+            ranked.Add((p, Need[p]));
+        }
+        ranked.Sort(static (left, right) =>
+        {
+            var order = right.Need.CompareTo(left.Need);
+            return order != 0 ? order : left.Post.CompareTo(right.Post);
         });
+        for (var pi = 0; pi < ranked.Count; pi++) Posts[pi] = ranked[pi].Post;
         FrontDisengagement.SelectionContext disengagement = null;
         try
         {
@@ -610,8 +650,14 @@ public static class FrontManager
             {
                 if (FrontDisengagement.TryCoverHole(campaign, nation, war, line, hole, out var detached, ref disengagement, BattleCandidates))
                 {
-                    var alreadyCounted = false;
-                    foreach (var units in Allocated.Values) alreadyCounted |= units.Remove(detached);
+                    var alreadyCounted =
+                        (Allocated.TryGetValue(detached.OrderProvinceId, out var atOrder) && atOrder.Remove(detached)) ||
+                        (detached.ProvinceId != detached.OrderProvinceId && Allocated.TryGetValue(detached.ProvinceId, out var atHere) && atHere.Remove(detached));
+                    if (!alreadyCounted)
+                    {
+                        foreach (var units in Allocated.Values)
+                            if (units.Remove(detached)) { alreadyCounted = true; break; }
+                    }
                     if (!Allocated.TryGetValue(hole, out var there)) Allocated[hole] = there = Take();
                     there.Add(detached);
                     budget--; Reposts++; if (!alreadyCounted) holders++; filled = true;
@@ -831,8 +877,9 @@ public static class FrontManager
     private static Army Movable(int post)
     {
         if (!Allocated.TryGetValue(post, out var there)) return null;
-        foreach (var army in there)
-            if (!army.InBattle) return army;
+        var span = CollectionsMarshal.AsSpan(there);
+        for (var i = 0; i < span.Length; i++)
+            if (!span[i].InBattle) return span[i];
         return null;
     }
 
@@ -854,8 +901,10 @@ public static class FrontManager
             if (there.Count < 2) continue;
             // A post more than its share may give up even a division it has just been given.
             var crowded = there.Count > quota;
-            foreach (var army in there)
+            var span = CollectionsMarshal.AsSpan(there);
+            for (var i = 0; i < span.Length; i++)
             {
+                var army = span[i];
                 if (army.InBattle || Refused.Contains(army.Id) || !MayRepost(campaign, army, hole)) continue;
                 if (!crowded && today - army.OrderIssuedDay < defines.FrontSettleDays) continue;
                 var distance = NavalOperations.Distance(army.Latitude, army.Longitude, target.Latitude, target.Longitude) *
@@ -891,8 +940,10 @@ public static class FrontManager
         Army best = null;
         var bestDistance = float.MaxValue;
         var target = campaign.ProvinceMap.CenterOf(post);
-        foreach (var army in candidates)
+        var span = CollectionsMarshal.AsSpan(candidates);
+        for (var i = 0; i < span.Length; i++)
         {
+            var army = span[i];
             if (army.InBattle || Refused.Contains(army.Id) || !MayRepost(campaign, army, post)) continue;
             if (!allowSettled && today - army.OrderIssuedDay < defines.FrontSettleDays) continue;
             var distance = NavalOperations.Distance(army.Latitude, army.Longitude, target.Latitude, target.Longitude);

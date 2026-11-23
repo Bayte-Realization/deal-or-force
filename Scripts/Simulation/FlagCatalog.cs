@@ -585,7 +585,7 @@ public static partial class FlagCatalog
         // identity of whichever occupied/minority region happened to seed the rising.
         // Explicit artwork for the new tag still wins. Existing saves carry the parent
         // in their language-independent rising name, so this repairs their flags too.
-        var civilParent = CivilWarParentTag(nation);
+        var civilParent = CivilWarParentTag(campaign, nation);
         if (civilParent.Length > 0)
         {
             for (var size = combined; size >= 1; size--)
@@ -594,10 +594,25 @@ public static partial class FlagCatalog
                         Spread(names, "flag_" + civilParent + "_civil_war", live, combined, mask, 0, 0);
             names.Add($"flag_{civilParent}_civil_war_{Slug(nation.Ideology)}");
             names.Add($"flag_{civilParent}_civil_war");
+            // Nationwide civil-war rebels fly their parent country's ideological flag variant matching the rebel ideology!
+            AddRegimeFlagsForTag(campaign, nation, civilParent, names);
+            var rebelIdeo = Slug(nation.Ideology);
+            var rebelGov = Slug(nation.Government);
+            if (rebelIdeo.Length > 0 && rebelGov.Length > 0) names.Add($"flag_{civilParent}_{rebelIdeo}_{rebelGov}");
+            if (rebelIdeo.Length > 0) names.Add($"flag_{civilParent}_{rebelIdeo}");
+            if (rebelGov.Length > 0) names.Add($"flag_{civilParent}_{rebelGov}");
             for (var size = combined; size >= 1; size--)
                 for (var mask = 1; mask < 1 << combined; mask++)
                     if (System.Numerics.BitOperations.PopCount((uint)mask) == size)
                         Spread(names, "flag_" + civilParent, live, combined, mask, 0, 0);
+            if (rebelIdeo.Length > 0)
+                foreach (var alias in Chain("ideology", rebelIdeo))
+                    if (!string.Equals(alias, rebelIdeo, StringComparison.OrdinalIgnoreCase))
+                        names.Add($"flag_{civilParent}_{alias}");
+            if (rebelGov.Length > 0)
+                foreach (var alias in Chain("government", rebelGov))
+                    if (!string.Equals(alias, rebelGov, StringComparison.OrdinalIgnoreCase))
+                        names.Add($"flag_{civilParent}_{alias}");
             if (Fits(campaign, nation, civilParent)) names.Add("flag_" + civilParent);
             else if (Otherwise.TryGetValue(civilParent, out var alternative)) names.Add(alternative);
         }
@@ -623,6 +638,28 @@ public static partial class FlagCatalog
             !nation.Name.StartsWith("rising:", StringComparison.Ordinal)) return "";
         var parts = nation.Name.Split(':', 4);
         return parts.Length >= 3 ? Slug(parts[2]) : "";
+    }
+
+    /// <summary>
+    /// Parent country tag for any nationwide civil-war rebel faction (rising front, state-claiming
+    /// de-facto faction, or nationwide uprising) so it resolves its parent's ideological banner.
+    /// </summary>
+    public static string CivilWarParentTag(Campaign campaign, Nation nation)
+    {
+        var fromName = CivilWarParentTag(nation);
+        if (fromName.Length > 0) return fromName;
+        if (campaign is null || nation is null || !string.IsNullOrEmpty(nation.FormedNationId) || nation.Movement is not null)
+            return "";
+        if (Factions.Of(nation) is { ClaimsState: true } fDef && !string.IsNullOrWhiteSpace(fDef.Parent))
+            return Slug(fDef.Parent);
+        var isCivilRevolt = string.Equals(nation.FoundedInRevolt, "uprising", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(nation.FoundedInRevolt, "civil_war", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(nation.FoundedInRevolt, "coup", StringComparison.OrdinalIgnoreCase);
+        if (!isCivilRevolt) return "";
+        var parentId = nation.SecededFromId >= 0 ? nation.SecededFromId : nation.RevoltParentId;
+        var parent = parentId >= 0 ? campaign.NationById(parentId) : null;
+        if (parent is null || string.IsNullOrWhiteSpace(parent.Tag)) return "";
+        return Factions.RoseOnHomelandOf(campaign, nation, parent) ? Slug(parent.Tag) : "";
     }
 
     /// <summary>

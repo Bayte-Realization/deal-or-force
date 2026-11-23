@@ -87,6 +87,84 @@ public static partial class CampaignFingerprint
         foreach (var character in campaign.ScenarioId ?? "2024") Mix(ref hash, character);
         Mix(ref hash, -1);
         MixScenarioFeatures(campaign, ref hash);
+        MixScenarioCalendarAndMeta(campaign, ref hash);
+        MixWorldSituations(campaign, ref hash);
+        DiseasesAndDisasters.WriteFingerprint(campaign, ref hash);
+    }
+
+    private static void MixWorldSituations(Campaign campaign, ref ulong hash)
+    {
+        if (!WorldSituations.IsEnabled(campaign))
+        {
+            MixText(ref hash, "world_situations_disabled");
+            Mix(ref hash, 0);
+        }
+        if (campaign.WorldSituations.Count == 0 && campaign.NextSituationId <= 1) return;
+
+        MixText(ref hash, "world_situations_v1");
+        Mix(ref hash, campaign.NextSituationId);
+        Mix(ref hash, campaign.WorldSituations.Count);
+        foreach (var s in Ordered(campaign.WorldSituations, item => item.Id))
+        {
+            Mix(ref hash, s.Id);
+            MixText(ref hash, s.DefinitionId);
+            Mix(ref hash, s.StartedDay);
+            Mix(ref hash, s.LastUpdateDay);
+            Mix(ref hash, s.ResolvedDay);
+            MixFloat(ref hash, s.Intensity);
+            MixFloat(ref hash, s.StabilizerWeight);
+            MixFloat(ref hash, s.ExploiterWeight);
+            Mix(ref hash, s.SummitConvened ? 1 : 0);
+            Mix(ref hash, s.SummitHostId);
+            Mix(ref hash, (int)s.Outcome);
+            Mix(ref hash, s.ParticipantStances?.Count ?? 0);
+            if (s.ParticipantStances is not null)
+                foreach (var kv in s.ParticipantStances.OrderBy(p => p.Key))
+                { Mix(ref hash, kv.Key); Mix(ref hash, (int)kv.Value); }
+            Mix(ref hash, s.LastActionDayByNation?.Count ?? 0);
+            if (s.LastActionDayByNation is not null)
+                foreach (var kv in s.LastActionDayByNation.OrderBy(p => p.Key))
+                { Mix(ref hash, kv.Key); Mix(ref hash, kv.Value); }
+        }
+    }
+
+    private static void MixScenarioCalendarAndMeta(Campaign campaign, ref ulong hash)
+    {
+        // Only mix custom calendar / scenario metadata / restricted features when actually present,
+        // so base 2024 campaigns emit zero extra bytes and keep their exact historical fingerprint.
+        if (campaign.Calendar is not null && !campaign.Calendar.IsDefault)
+        {
+            MixText(ref hash, "scenario_calendar_v1");
+            MixText(ref hash, campaign.Calendar.CalendarId);
+            MixText(ref hash, campaign.Calendar.EraName);
+            MixText(ref hash, campaign.Calendar.EraShort);
+            Mix(ref hash, campaign.Calendar.YearOffset);
+            MixText(ref hash, campaign.Calendar.DateFormat);
+            MixText(ref hash, campaign.Calendar.YearFormat);
+            Mix(ref hash, campaign.Calendar.ShowEraInDate ? 1 : 0);
+            if (campaign.Calendar.MonthNames is { Length: > 0 } months)
+            {
+                Mix(ref hash, months.Length);
+                foreach (var m in months) MixText(ref hash, m);
+            }
+        }
+        if (campaign.RestrictedFeatures is { Count: > 0 })
+        {
+            MixText(ref hash, "restricted_features_v1");
+            Mix(ref hash, campaign.RestrictedFeatures.Count);
+            foreach (var id in campaign.RestrictedFeatures.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                MixText(ref hash, id.ToLowerInvariant());
+        }
+        if (campaign.ScenarioMeta is not null && !campaign.ScenarioMeta.IsEmpty)
+        {
+            MixText(ref hash, "scenario_meta_v1");
+            Mix(ref hash, campaign.ScenarioMeta.TotalConversion ? 1 : 0);
+            MixText(ref hash, campaign.ScenarioMeta.ContentSignature);
+            MixText(ref hash, campaign.ScenarioMeta.EraName);
+            MixText(ref hash, campaign.ScenarioMeta.Theme);
+            MixText(ref hash, campaign.ScenarioMeta.MusicTrack);
+            MixText(ref hash, campaign.ScenarioMeta.MusicPlaylist);
+        }
     }
 
     private static void MixScenarioFeatures(Campaign campaign, ref ulong hash)

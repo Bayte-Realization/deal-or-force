@@ -1,0 +1,12 @@
+{
+  "3D terrain relief": "3D terrain relief",
+  "Physically elevates mountain ranges and gently recesses deep ocean basins in 3D on both the globe and flat map. Paper mode always stays flat. Disable for a completely smooth sphere and lower GPU vertex load. Changes immediately.": "Physically elevates mountain ranges and gently recesses deep ocean basins in 3D on both the globe and flat map. Paper mode always stays flat. Disable for a completely smooth sphere and lower GPU vertex load. Changes immediately.",
+  "3D upscaling mode": "3D upscaling mode",
+  "How the 3D map scales when rendered below native resolution. Auto uses FSR 1.0 below 100% scale on Vulkan; FSR 2.2 adds temporal reconstruction on Vulkan; Bilinear is used on Compatibility or when selected. Changes immediately.": "How the 3D map scales when rendered below native resolution. Auto uses FSR 1.0 below 100% scale on Vulkan; FSR 2.2 adds temporal reconstruction on Vulkan; Bilinear is used on Compatibility or when selected. Changes immediately.",
+  "map.upscale.auto": "Auto (FSR 1.0 below 100%)",
+  "map.upscale.fsr": "FSR 1.0 (Spatial)",
+  "map.upscale.fsr2": "FSR 2.2 (Temporal)",
+  "map.upscale.bilinear": "Bilinear",
+  "FSR sharpness": "FSR sharpness",
+  "Edge sharpening filter strength for FSR 1.0 and FSR 2.2 upscaling (0 is sharpest, 2 is softest). Changes immediately.": "Edge sharpening filter strength for FSR 1.0 and FSR 2.2 upscaling (0 is sharpest, 2 is softest). Changes immediately."
+}

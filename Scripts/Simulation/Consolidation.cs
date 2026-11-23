@@ -93,8 +93,8 @@ public static class Consolidation
         for (var ni = 0; ni < nations.Count; ni++)
         {
             var nation = nations[ni];
-            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if ((c.ElapsedDays + (long)nation.Id * 7) % every != 0) continue;
+            if (ticked++ > 0 && Campaign.StageOverdue()) yield return 0;
             // A player's country pursues a union only when the player has handed diplomacy over.
             if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;
             if (!FormableProclamationAi.EstablishedCountry(nation) || nation.Landless || nation.IsSubject || nation.Population <= 0 || !c.HasOwnedLand(nation))
@@ -295,6 +295,7 @@ public static class Consolidation
         public int Revision = int.MinValue;
         public int StateCount = -1;
         public readonly Dictionary<string, (Dictionary<int, int> Owners, int Total)> Cache = new(StringComparer.Ordinal);
+        public readonly Stack<Dictionary<int, int>> Pool = new();
     }
 
     private static readonly ConditionalWeakTable<Campaign, OwnersBoard> OwnersBoards = new();
@@ -305,13 +306,15 @@ public static class Consolidation
         var board = OwnersBoards.GetOrCreateValue(c);
         if (board.Revision != c.OwnershipRevision || board.StateCount != c.States.Count)
         {
+            foreach (var entry in board.Cache.Values)
+                if (entry.Owners.Count > 0) { entry.Owners.Clear(); board.Pool.Push(entry.Owners); }
             board.Cache.Clear();
             board.Revision = c.OwnershipRevision;
             board.StateCount = c.States.Count;
         }
         if (board.Cache.TryGetValue(definition.Id, out var cached)) return cached;
         var map = c.ProvinceMap;
-        var owners = new Dictionary<int, int>();
+        var owners = board.Pool.Count > 0 ? board.Pool.Pop() : new Dictionary<int, int>();
         var total = 0;
         foreach (var province in PeacefulFormation.Territory(c, definition))
         {

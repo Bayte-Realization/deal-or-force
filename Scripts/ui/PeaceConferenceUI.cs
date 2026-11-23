@@ -27,6 +27,8 @@ public partial class DealOrForceGame
     private Label _peaceBorderNote = null!;
     private Label _peaceVerdict = null!;
     private VBoxContainer _peaceLedgerRows = null!;
+    private VBoxContainer _peaceOfferStateRows = null!;
+    private Label _peaceOfferSummary = null!;
     private Label _peaceHint = null!;
     private Label _peaceLegend = null!;
     private OptionButton _peaceBeneficiaryPicker;
@@ -128,7 +130,9 @@ public partial class DealOrForceGame
         { button.SizeFlagsHorizontal = SizeFlags.ExpandFill; claims.AddChild(button); }
 
         _peaceHint = Title(
-            "LMB: claim · RMB: release · Shift: frame · WASD / MMB: move map",
+            Platform.PlatformProfile.Current.IsTouchPrimary
+                ? "mobile.override.peace_controls"
+                : "LMB: claim · RMB: release · Shift: frame · WASD / MMB: move map",
             12, Ui.Colour("text.faint"));
         _peaceHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_peaceHint);
@@ -158,10 +162,20 @@ public partial class DealOrForceGame
         var pages = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         body.AddChild(pages); pages.AddChild(rows); pages.AddChild(treatyRows);
         _peaceTreatyPage = treatyRows;
-        SectionRule(treatyRows, "OTHER TERMS");
+        var bilateral = new GridContainer { Name = "PeaceBilateralGrid", Columns = 2,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        bilateral.AddThemeConstantOverride("h_separation", 10);
+        bilateral.AddThemeConstantOverride("v_separation", 6);
+        treatyRows.AddChild(bilateral);
+
+        var demandsCol = new VBoxContainer { Name = "PeaceDemandsColumn",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+        demandsCol.AddThemeConstantOverride("separation", 4);
+        bilateral.AddChild(demandsCol);
+        SectionRule(demandsCol, Simulation.Loc.Get("peace.bilateral.ui.we_demand"));
         var terms = new VBoxContainer { Name = "PeaceTermsList", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         terms.AddThemeConstantOverride("separation", 3);
-        treatyRows.AddChild(terms);
+        demandsCol.AddChild(terms);
         AddPeaceTerm(terms, "reparations", "Reparations",
             "An indemnity scaled to what their economy can still bear.");
         AddPeaceTerm(terms, "trade", "Trade concessions",
@@ -182,6 +196,38 @@ public partial class DealOrForceGame
             AddPeaceTerm(terms, "subject:" + kind.Id,
                 Simulation.Loc.Format("Make them a {0}", Tr(kind.Name).ToLowerInvariant()),
                 kind.Description);
+
+        var offersCol = new VBoxContainer { Name = "PeaceOffersColumn",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+        offersCol.AddThemeConstantOverride("separation", 4);
+        bilateral.AddChild(offersCol);
+        SectionRule(offersCol, Simulation.Loc.Get("peace.bilateral.ui.we_offer"));
+        _peaceOfferSummary = Title(Simulation.Loc.Format("peace.bilateral.ui.offer_credit_fmt", 0f),
+            12, Ui.Colour("state.positive"));
+        _peaceOfferSummary.Name = "PeaceOfferCreditSummary";
+        _peaceOfferSummary.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        _peaceOfferSummary.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        offersCol.AddChild(_peaceOfferSummary);
+
+        var offerTerms = new VBoxContainer { Name = "PeaceOfferTermsList", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        offerTerms.AddThemeConstantOverride("separation", 3);
+        offersCol.AddChild(offerTerms);
+        AddPeaceTerm(offerTerms, "offer_reparations", "peace.bilateral.ui.offer_reparations",
+            "peace.bilateral.ui.offer_reparations_tip");
+        AddPeaceTerm(offerTerms, "offer_trade", "peace.bilateral.ui.offer_trade",
+            "peace.bilateral.ui.offer_trade_tip");
+        AddPeaceTerm(offerTerms, "offer_demilitarise", "peace.bilateral.ui.offer_demilitarise",
+            "peace.bilateral.ui.offer_demilitarise_tip");
+        AddPeaceTerm(offerTerms, "offer_drop_claims", "peace.bilateral.ui.offer_drop_claims",
+            "peace.bilateral.ui.offer_drop_claims_tip");
+        AddPeaceTerm(offerTerms, "offer_truce", "peace.bilateral.ui.offer_truce",
+            "peace.bilateral.ui.offer_truce_tip");
+
+        SectionRule(offersCol, Simulation.Loc.Get("peace.bilateral.ui.offer_regions"));
+        _peaceOfferStateRows = new VBoxContainer { Name = "PeaceOfferStatesList",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _peaceOfferStateRows.AddThemeConstantOverride("separation", 3);
+        offersCol.AddChild(_peaceOfferStateRows);
 
         BuildPeaceSettlementFooter(shell);
         panel.Resized += () => FitNegotiationTypography(panel);
@@ -223,6 +269,7 @@ public partial class DealOrForceGame
     private void OpenPeaceConference(StrategicWar war)
     {
         if (war is null || war.Ended || _campaign?.Player is null || !war.Involves(_campaign.Player.Id)) return;
+        EnsureScreen("peace", BuildPeaceConference);
         _peaceWar = war;
         _peaceClaimableOwners.Clear();
         foreach (var enemyId in war.EnemiesOf(_campaign.Player.Id))
@@ -313,12 +360,43 @@ public partial class DealOrForceGame
         if (_peaceDemand is null) return;
         switch (key)
         {
-            case "reparations": _peaceDemand.Reparations = !_peaceDemand.Reparations; break;
-            case "trade": _peaceDemand.TradeConcessions = !_peaceDemand.TradeConcessions; break;
-            case "demilitarise": _peaceDemand.Demilitarise = !_peaceDemand.Demilitarise; break;
+            case "reparations":
+                _peaceDemand.Reparations = !_peaceDemand.Reparations;
+                if (_peaceDemand.Reparations) _peaceDemand.OfferReparations = false;
+                break;
+            case "trade":
+                _peaceDemand.TradeConcessions = !_peaceDemand.TradeConcessions;
+                if (_peaceDemand.TradeConcessions) _peaceDemand.OfferTradeConcessions = false;
+                break;
+            case "demilitarise":
+                _peaceDemand.Demilitarise = !_peaceDemand.Demilitarise;
+                if (_peaceDemand.Demilitarise) _peaceDemand.OfferDemilitarise = false;
+                break;
             case "humiliate": _peaceDemand.Humiliate = !_peaceDemand.Humiliate; break;
-            case "truce": _peaceDemand.LongTruce = !_peaceDemand.LongTruce; break;
+            case "truce":
+                _peaceDemand.LongTruce = !_peaceDemand.LongTruce;
+                if (_peaceDemand.LongTruce) _peaceDemand.OfferLongTruce = false;
+                break;
             case "release": _peaceDemand.ReleaseRegions = !_peaceDemand.ReleaseRegions; break;
+            case "offer_reparations":
+                _peaceDemand.OfferReparations = !_peaceDemand.OfferReparations;
+                if (_peaceDemand.OfferReparations) _peaceDemand.Reparations = false;
+                break;
+            case "offer_trade":
+                _peaceDemand.OfferTradeConcessions = !_peaceDemand.OfferTradeConcessions;
+                if (_peaceDemand.OfferTradeConcessions) _peaceDemand.TradeConcessions = false;
+                break;
+            case "offer_demilitarise":
+                _peaceDemand.OfferDemilitarise = !_peaceDemand.OfferDemilitarise;
+                if (_peaceDemand.OfferDemilitarise) _peaceDemand.Demilitarise = false;
+                break;
+            case "offer_drop_claims":
+                _peaceDemand.OfferDropClaims = !_peaceDemand.OfferDropClaims;
+                break;
+            case "offer_truce":
+                _peaceDemand.OfferLongTruce = !_peaceDemand.OfferLongTruce;
+                if (_peaceDemand.OfferLongTruce) _peaceDemand.LongTruce = false;
+                break;
             default:
                 if (key.StartsWith("subject:", StringComparison.Ordinal))
                 {
@@ -328,6 +406,21 @@ public partial class DealOrForceGame
                 }
                 break;
         }
+        RefreshPeaceConference();
+    }
+
+    private void TogglePeaceOfferRegion(int stateMapIndex)
+    {
+        if (_peaceDemand is null || _campaign?.ProvinceMap is null || _campaign.Player is null) return;
+        var provinces = PeaceConference.ProvincesOfState(_campaign.ProvinceMap, stateMapIndex)
+            .Where(p => p > 0 && p <= _campaign.ProvinceMap.ProvinceCount &&
+                        _campaign.ProvinceMap.ProvinceToNation[p] == (ushort)_campaign.Player.MapIndex)
+            .ToList();
+        if (provinces.Count == 0) return;
+        var allOffered = provinces.All(_peaceDemand.OfferProvinces.Contains);
+        foreach (var p in provinces)
+            if (allOffered) _peaceDemand.OfferProvinces.Remove(p);
+            else _peaceDemand.OfferProvinces.Add(p);
         RefreshPeaceConference();
     }
 
@@ -379,23 +472,38 @@ public partial class DealOrForceGame
     private void ProposeWrittenPeace()
     {
         if (_peaceDemand is null || _peaceWar is null) return;
-        var command = WrittenPeaceCommand.From(_peaceDemand);
-        _campaign.Commands.Enqueue(command); _campaign.Commands.ApplyAll(_campaign);
-        if (_campaign.Commands.SubmitInterceptor is not null && !command.Delivered && command.Note.Length == 0)
+        bool delivered;
+        string note;
+        if (_peaceDemand.HasOffers)
+        {
+            var bilateral = BilateralPeaceCommand.From(_peaceDemand);
+            _campaign.Commands.Enqueue(bilateral);
+            _campaign.Commands.ApplyAll(_campaign);
+            delivered = bilateral.Delivered;
+            note = bilateral.Note;
+        }
+        else
+        {
+            var command = WrittenPeaceCommand.From(_peaceDemand);
+            _campaign.Commands.Enqueue(command);
+            _campaign.Commands.ApplyAll(_campaign);
+            delivered = command.Delivered;
+            note = command.Note;
+        }
+        if (_campaign.Commands.SubmitInterceptor is not null && !delivered && note.Length == 0)
         {
             _peaceVerdict.Text = Tr("Order sent to the host. Awaiting confirmation.");
             return;
         }
-        if (command.Delivered)
+        if (delivered)
         {
-            var summary = command.Note;
             ClosePeaceConference();
-            SetArmyFeedback(summary);
+            SetArmyFeedback(note);
             Refresh();
             return;
         }
         RefreshPeaceConference();
-        if (command.Note.Length > 0) _peaceVerdict.Text = command.Note;
+        if (note.Length > 0) _peaceVerdict.Text = note;
     }
 
     private void ProposeConferenceWhitePeace()
@@ -432,13 +540,27 @@ public partial class DealOrForceGame
 
         var budget = _peaceLedgerModel.Budget;
         var signed = PeaceConference.Round(_campaign, _peaceWar, _peaceDemand);
+        var demandCost = _peaceLedgerModel.DemandCost(signed);
+        var offerCredit = _peaceLedgerModel.OfferCredit(signed);
         var cost = _peaceLedgerModel.Cost(signed);
-        _peaceBudget.Text = Simulation.Loc.Format("This war is worth {0:0.0} · you are asking for {1:0.0}", budget, cost);
+        var netBalance = _peaceLedgerModel.NetBalance(signed);
+        _peaceBudget.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        _peaceLeverageValue.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        _peaceDemandValue.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        _peaceBudget.Text = offerCredit > 0.01f
+            ? Simulation.Loc.Format("peace.bilateral.ui.budget_bilateral_fmt", budget, demandCost, offerCredit, netBalance)
+            : Simulation.Loc.Format("This war is worth {0:0.0} · you are asking for {1:0.0}", budget, cost);
         _peaceBudget.AddThemeColorOverride("font_color",
-            cost > budget ? Ui.Colour("state.negative") : Ui.Colour("state.positive"));
+            netBalance < 0f ? Ui.Colour("state.negative") : Ui.Colour("state.positive"));
         _peaceLeverageValue.Text = budget.ToString("0.0");
         _peaceDemandValue.Text = cost.ToString("0.0");
-        _peaceDemandValue.AddThemeColorOverride("font_color", Ui.Colour(cost > budget ? "state.negative" : "text.bright"));
+        _peaceDemandValue.AddThemeColorOverride("font_color", Ui.Colour(netBalance < 0f ? "state.negative" : "text.bright"));
+        if (IsInstanceValid(_peaceOfferSummary))
+        {
+            _peaceOfferSummary.Text = Simulation.Loc.Format("peace.bilateral.ui.offer_credit_fmt", offerCredit);
+            _peaceOfferSummary.AddThemeColorOverride("font_color",
+                Ui.Colour(offerCredit > 0.01f ? "state.positive" : "text.muted"));
+        }
 
         var added = signed.Provinces.Count(province => !_peaceDemand.Provinces.Contains(province));
         var removed = _peaceDemand.Provinces.Count(province => !signed.Provinces.Contains(province));
@@ -483,12 +605,18 @@ public partial class DealOrForceGame
                 "humiliate" => _peaceDemand.Humiliate,
                 "truce" => _peaceDemand.LongTruce,
                 "release" => _peaceDemand.ReleaseRegions,
+                "offer_reparations" => _peaceDemand.OfferReparations,
+                "offer_trade" => _peaceDemand.OfferTradeConcessions,
+                "offer_demilitarise" => _peaceDemand.OfferDemilitarise,
+                "offer_drop_claims" => _peaceDemand.OfferDropClaims,
+                "offer_truce" => _peaceDemand.OfferLongTruce,
                 _ => key.StartsWith("subject:", StringComparison.Ordinal) &&
                      string.Equals(_peaceDemand.Subjugate, key["subject:".Length..],
                          StringComparison.OrdinalIgnoreCase)
             });
 
         RefreshPeaceLedgerRows(signed);
+        RefreshPeaceOfferStates();
         FitNegotiationTypography(_peaceWorkspacePanel);
         // An independent state has no final map colour yet: do not misrepresent it as annexation.
         if (signed.ReleaseRegions) _globe.ClearPeacePreview();
@@ -583,6 +711,57 @@ public partial class DealOrForceGame
                     : Tr("Every province claimed here is already under your occupation, which is why it is cheap.")));
             _peaceLedgerRows.AddChild(row);
         }
+    }
 
+    private void RefreshPeaceOfferStates()
+    {
+        if (!IsInstanceValid(_peaceOfferStateRows) || _peaceDemand is null ||
+            _peaceLedgerModel is null || _peaceWar is null || _campaign?.Player is null) return;
+
+        foreach (var child in _peaceOfferStateRows.GetChildren())
+        {
+            _peaceOfferStateRows.RemoveChild(child);
+            child.QueueFree();
+        }
+
+        var offerable = PeaceConference.OfferableStates(_campaign, _peaceWar, _campaign.Player.Id);
+        if (offerable.Count == 0)
+        {
+            var empty = Title(Simulation.Loc.Get("peace.bilateral.ui.no_offerable_regions"),
+                12, Ui.Colour("text.faint"));
+            empty.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            _peaceOfferStateRows.AddChild(empty);
+            return;
+        }
+
+        var topology = _campaign.ProvinceMap;
+        var playerMap = (ushort)_campaign.Player.MapIndex;
+        var shown = 0;
+        for (var i = 0; i < offerable.Count && shown < 16; i++)
+        {
+            var state = offerable[i];
+            var provinces = PeaceConference.ProvincesOfState(topology, state.MapIndex)
+                .Where(p => p > 0 && p <= topology.ProvinceCount && topology.ProvinceToNation[p] == playerMap)
+                .ToList();
+            if (provinces.Count == 0) continue;
+
+            var offered = provinces.All(_peaceDemand.OfferProvinces.Contains);
+            var credit = 0f;
+            for (var k = 0; k < provinces.Count; k++)
+                credit += _peaceLedgerModel.OfferProvinceCredit(provinces[k]);
+            var stateIdx = state.MapIndex;
+            var label = $"{(offered ? "▣" : "◇")} {state.DisplayName}  +{credit:0.0}";
+            var row = ActionButton(label, () => TogglePeaceOfferRegion(stateIdx), 0, 36);
+            row.Alignment = HorizontalAlignment.Left;
+            row.ClipText = true;
+            row.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            row.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            StyleButton(row, offered);
+            row.TooltipText = Ui.Tip(Simulation.Loc.Format(
+                offered ? "peace.bilateral.ui.offer_region_remove_tip_fmt" : "peace.bilateral.ui.offer_region_add_tip_fmt",
+                state.DisplayName, provinces.Count, credit));
+            _peaceOfferStateRows.AddChild(row);
+            shown++;
+        }
     }
 }

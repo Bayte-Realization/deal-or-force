@@ -188,8 +188,16 @@ public static class ModifierSystem
         var days = daysOverride > 0 ? daysOverride : definition.Days;
         var expires = days > 0 ? campaign.ElapsedDays + days : 0;
 
-        var existing = nation.Modifiers.FirstOrDefault(item =>
-            string.Equals(item.Id, definition.Id, StringComparison.OrdinalIgnoreCase));
+        ActiveModifier existing = null;
+        var mods = nation.Modifiers;
+        for (var i = 0; i < mods.Count; i++)
+        {
+            if (string.Equals(mods[i].Id, definition.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                existing = mods[i];
+                break;
+            }
+        }
 
         if (existing is not null)
         {
@@ -250,9 +258,12 @@ public static class ModifierSystem
         // Remove first: otherwise today's national totals still contain yesterday's
         // expired bonus, including weekly drifts paid by NationalModifiers.Tick.
         var ticked = 0;
-        foreach (var nation in campaign.Nations)
+        var nations = campaign.ActiveNations;
+        for (var ni = 0; ni < nations.Count; ni++)
         {
-            if (++ticked % 16 == 0 || Campaign.StageOverdue()) yield return 0;
+            var nation = nations[ni];
+            if (++ticked % 16 == 0 && Campaign.StageOverdue()) yield return 0;
+            if (nation.Modifiers.Count == 0) continue;
             var changed = false;
             for (var index = nation.Modifiers.Count - 1; index >= 0; index--)
             {
@@ -266,12 +277,14 @@ public static class ModifierSystem
         // Every day: what the modifiers add up to, and the weekly ones paid a day at a time.
         foreach (var _ in NationalModifiers.TickStages(campaign)) yield return 0;
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) yield break;
-        yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
 
         ticked = 0;
-        foreach (var nation in campaign.Nations)
+        nations = campaign.ActiveNations;
+        for (var ni = 0; ni < nations.Count; ni++)
         {
-            if (++ticked % 16 == 0 || Campaign.StageOverdue()) yield return 0;
+            var nation = nations[ni];
+            if (++ticked % 16 == 0 && Campaign.StageOverdue()) yield return 0;
             if (nation.Modifiers.Count == 0) continue;
 
             for (var index = nation.Modifiers.Count - 1; index >= 0; index--)

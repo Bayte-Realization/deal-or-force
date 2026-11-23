@@ -1,0 +1,40 @@
+{
+  "guild_metallurgy": {
+    "name": "Guild metallurgy",
+    "description": "Blast bellows and charcoal crucibles raising steel quality across the realm.",
+    "category": "industry",
+    "cost": 90,
+    "effects": { "output": 0.04 }
+  },
+  "plate_armour_forging": {
+    "name": "Full plate armour forging",
+    "description": "Articulated steel harness shielding royal knights and heavy vanguard footmen.",
+    "category": "military",
+    "cost": 150,
+    "requires": ["guild_metallurgy"],
+    "effects": { "army_defense": 0.07, "army_attack": 0.03 }
+  },
+  "runic_masonry": {
+    "name": "Runic citadel masonry",
+    "description": "Interlocking ashlar keeps and vaulted granaries built to endure long sieges.",
+    "category": "industry",
+    "cost": 140,
+    "requires": ["guild_metallurgy"],
+    "effects": { "output": 0.03, "army_defense": 0.05 }
+  },
+  "arcane_logistics": {
+    "name": "Waystone caravan logistics",
+    "description": "Beacon towers and relay stables keeping banner columns provisioned across wild marches.",
+    "category": "logistics",
+    "cost": 130,
+    "effects": { "supply": 0.09, "army_speed": 0.06 }
+  },
+  "citadel_ballistae": {
+    "name": "Torsion siege ballistae",
+    "description": "Heavy sinew-wound siege engines capable of breaching ironbound gatehouses.",
+    "category": "military",
+    "cost": 210,
+    "requires": ["plate_armour_forging", "arcane_logistics"],
+    "effects": { "army_attack": 0.09 }
+  }
+}

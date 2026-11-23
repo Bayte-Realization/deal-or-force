@@ -13,5 +13,6 @@
   "caliphate": {"ai_priority":0.45,"preferred_ideologies":["theocratic_rule"],"preferred_governments":["theocracy"],"preferred_courses":["institutional_continuity"]},
   "austria_hungary": {"ai_priority":0.46,"preferred_governments":["constitutional_monarchy","absolute_monarchy"],"preferred_courses":["institutional_continuity"]},
   "slavic_union": {"ai_priority":0.40,"preferred_ideologies":["nationalism"],"preferred_courses":["national_security","strategic_autonomy"]},
-  "north_american_union": {"ai_priority":0.44,"preferred_governments":["federation"],"preferred_courses":["commercial_openness","civic_pluralism"]}
+  "north_american_union": {"ai_priority":0.44,"preferred_governments":["federation"],"preferred_courses":["commercial_openness","civic_pluralism"]},
+  "china_reunified": {"ai_priority":0.90,"preferred_ideologies":["liberalism","socialism","conservatism","nationalism"],"preferred_governments":["presidential_republic","parliamentary_republic","one_party_state","federation"],"preferred_courses":["national_security","strategic_autonomy","civic_pluralism"]}
 }

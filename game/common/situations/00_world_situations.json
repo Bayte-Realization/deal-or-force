@@ -1,0 +1,190 @@
+{
+  "global_energy_chokepoint_shock": {
+    "name": "world_situation.energy_chokepoint.name",
+    "summary": "world_situation.energy_chokepoint.summary",
+    "category": "economy",
+    "trigger_kind": "chokepoint_shock",
+    "trigger_threshold": 1,
+    "base_weekly_drift": 1.9,
+    "starting_intensity": 36,
+    "min_start_day": 42,
+    "cooldown_days": 540,
+    "duration_days": 220,
+    "stabilize_cost_gdp_share": 0.0025,
+    "stabilize_min_cost": 0.4,
+    "stabilize_cost_pp": 10,
+    "exploit_cost_pp": 8,
+    "summit_cost_pp": 14,
+    "compromise_cost_pp": 12,
+    "consensus_effects": {
+      "stability": 0.025,
+      "market_access": 0.03,
+      "stockpile.oil": 15
+    },
+    "multipolar_effects": {
+      "productivity": 0.015,
+      "inflation": 0.005
+    },
+    "escalation_effects": {
+      "stability": -0.025,
+      "inflation": 0.015,
+      "market_access": -0.03
+    }
+  },
+  "sovereign_debt_contagion": {
+    "name": "world_situation.debt_contagion.name",
+    "summary": "world_situation.debt_contagion.summary",
+    "category": "finance",
+    "trigger_kind": "debt_contagion",
+    "trigger_threshold": 3,
+    "base_weekly_drift": 1.7,
+    "starting_intensity": 34,
+    "min_start_day": 56,
+    "cooldown_days": 600,
+    "duration_days": 240,
+    "stabilize_cost_gdp_share": 0.003,
+    "stabilize_min_cost": 0.5,
+    "stabilize_cost_pp": 12,
+    "exploit_cost_pp": 8,
+    "summit_cost_pp": 15,
+    "compromise_cost_pp": 12,
+    "consensus_effects": {
+      "credit_confidence": 0.04,
+      "stability": 0.02
+    },
+    "multipolar_effects": {
+      "credit_confidence": 0.01,
+      "inflation": 0.004
+    },
+    "escalation_effects": {
+      "credit_confidence": -0.05,
+      "stability": -0.02,
+      "inflation": 0.012
+    }
+  },
+  "semiconductor_supply_race": {
+    "name": "world_situation.supply_race.name",
+    "summary": "world_situation.supply_race.summary",
+    "category": "technology",
+    "trigger_kind": "supply_race",
+    "trigger_threshold": 2,
+    "base_weekly_drift": 1.6,
+    "starting_intensity": 32,
+    "min_start_day": 70,
+    "cooldown_days": 600,
+    "duration_days": 260,
+    "stabilize_cost_gdp_share": 0.0022,
+    "stabilize_min_cost": 0.45,
+    "stabilize_cost_pp": 10,
+    "exploit_cost_pp": 9,
+    "summit_cost_pp": 14,
+    "compromise_cost_pp": 11,
+    "consensus_effects": {
+      "productivity": 0.03,
+      "stockpile.electronics": 18,
+      "research": 20
+    },
+    "multipolar_effects": {
+      "research": 15,
+      "market_access": -0.01
+    },
+    "escalation_effects": {
+      "market_access": -0.04,
+      "productivity": -0.02,
+      "notoriety": 3
+    }
+  },
+  "great_power_arms_spiral": {
+    "name": "world_situation.arms_spiral.name",
+    "summary": "world_situation.arms_spiral.summary",
+    "category": "security",
+    "trigger_kind": "arms_spiral",
+    "trigger_threshold": 2,
+    "base_weekly_drift": 2.0,
+    "starting_intensity": 38,
+    "min_start_day": 49,
+    "cooldown_days": 540,
+    "duration_days": 210,
+    "stabilize_cost_gdp_share": 0.002,
+    "stabilize_min_cost": 0.35,
+    "stabilize_cost_pp": 12,
+    "exploit_cost_pp": 8,
+    "summit_cost_pp": 16,
+    "compromise_cost_pp": 12,
+    "consensus_effects": {
+      "stability": 0.03,
+      "notoriety": -4,
+      "political_points": 12
+    },
+    "multipolar_effects": {
+      "army_experience": 10,
+      "war_support": 0.02
+    },
+    "escalation_effects": {
+      "war_support": 0.04,
+      "stability": -0.03,
+      "stockpile.ammunition": 20
+    }
+  },
+  "regional_autonomy_wave": {
+    "name": "world_situation.autonomy_wave.name",
+    "summary": "world_situation.autonomy_wave.summary",
+    "category": "politics",
+    "trigger_kind": "autonomy_wave",
+    "trigger_threshold": 4,
+    "base_weekly_drift": 1.8,
+    "starting_intensity": 34,
+    "min_start_day": 63,
+    "cooldown_days": 600,
+    "duration_days": 240,
+    "stabilize_cost_gdp_share": 0.002,
+    "stabilize_min_cost": 0.3,
+    "stabilize_cost_pp": 11,
+    "exploit_cost_pp": 8,
+    "summit_cost_pp": 14,
+    "compromise_cost_pp": 11,
+    "consensus_effects": {
+      "stability": 0.03,
+      "state.radicalism": -0.03
+    },
+    "multipolar_effects": {
+      "political_points": 8,
+      "state.radicalism": -0.01
+    },
+    "escalation_effects": {
+      "stability": -0.03,
+      "state.radicalism": 0.04
+    }
+  },
+  "post_war_reconstruction_charter": {
+    "name": "world_situation.reconstruction_charter.name",
+    "summary": "world_situation.reconstruction_charter.summary",
+    "category": "reconstruction",
+    "trigger_kind": "reconstruction_charter",
+    "trigger_threshold": 3,
+    "base_weekly_drift": 1.5,
+    "starting_intensity": 30,
+    "min_start_day": 77,
+    "cooldown_days": 600,
+    "duration_days": 250,
+    "stabilize_cost_gdp_share": 0.0025,
+    "stabilize_min_cost": 0.4,
+    "stabilize_cost_pp": 10,
+    "exploit_cost_pp": 8,
+    "summit_cost_pp": 14,
+    "compromise_cost_pp": 10,
+    "consensus_effects": {
+      "state.war_damage": -0.06,
+      "construction_capacity": 0.25,
+      "stability": 0.02
+    },
+    "multipolar_effects": {
+      "state.war_damage": -0.03,
+      "productivity": 0.015
+    },
+    "escalation_effects": {
+      "stability": -0.02,
+      "notoriety": 3
+    }
+  }
+}

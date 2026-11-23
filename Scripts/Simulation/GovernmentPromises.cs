@@ -153,11 +153,19 @@ public sealed partial class Nation
 
 public static class GovernmentPromises
 {
+    private static bool HasPromise(Nation nation, string promiseId)
+    {
+        var promises = nation.Promises;
+        for (var i = 0; i < promises.Count; i++)
+            if (promises[i].Id.Equals(promiseId, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     public static string BlockReason(Campaign campaign, Nation nation, PromiseDefinition definition)
     {
         if (!campaign.FeatureEnabled("government_promises"))
             return Loc.Get("This mechanic is disabled in this scenario.");
-        if (nation.Promises.Any(promise => promise.Id.Equals(definition.Id, StringComparison.Ordinal)))
+        if (HasPromise(nation, definition.Id))
             return Loc.Get("Already promised to the public");
         if (nation.Promises.Count >= Math.Max(1, campaign.Defines.MaxConcurrentPromises))
             return Loc.Format("The government can only keep {0} promises at once",
@@ -172,7 +180,7 @@ public static class GovernmentPromises
     /// <summary>Whether a promise may be made, without saying why not. See DecisionCatalog.IsBlocked.</summary>
     public static bool IsBlocked(Campaign campaign, Nation nation, PromiseDefinition definition) =>
         !campaign.FeatureEnabled("government_promises") ||
-        nation.Promises.Any(promise => promise.Id.Equals(definition.Id, StringComparison.Ordinal)) ||
+        HasPromise(nation, definition.Id) ||
         nation.Promises.Count >= Math.Max(1, campaign.Defines.MaxConcurrentPromises) ||
         (definition.Trigger is { IsEmpty: false } && !definition.Trigger.Matches(campaign, nation));
 

@@ -61,23 +61,97 @@ public static class HouseholdEconomy
         return (float)sum / labour;
     }
 
+    [ThreadStatic] private static (string Key, ProfessionDefinition Def)[] _professionCache;
+    [ThreadStatic] private static int _professionCacheVersion;
+
+    private static ProfessionDefinition LookupProfession(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return null;
+        var version = DemographyCatalog.ProfessionVersion;
+        var cache = _professionCache;
+        if (cache is null || _professionCacheVersion != version)
+        {
+            cache ??= _professionCache = new (string, ProfessionDefinition)[16];
+            if (_professionCacheVersion != version)
+            {
+                Array.Clear(cache);
+                _professionCacheVersion = version;
+            }
+        }
+        var slot = (id[0] ^ id[id.Length - 1] ^ id.Length) & 15;
+        ref var entry = ref cache[slot];
+        if (entry.Key is not null && (ReferenceEquals(entry.Key, id) || string.Equals(entry.Key, id, StringComparison.Ordinal)))
+            return entry.Def;
+        var found = DemographyCatalog.Profession(id);
+        entry = (id, found);
+        return found;
+    }
+
+    private static bool IsNationAtWar(Campaign c, int nationId)
+    {
+        var live = Warfare.LiveWars(c);
+        for (var index = 0; index < live.Count; index++)
+            if (live[index].Involves(nationId)) return true;
+        return false;
+    }
+
     private static float Supply(Nation n, Commodity good) =>
         n.Market.TryGetValue(good, out var q) ? Math.Clamp(q.Satisfaction, 0, 1) : 1;
 
     public static void Review(Campaign c, Nation n, ScenarioState s, float annualConditions)
     {
+        if (c is null || n is null || s is null) return;
+        ReviewCore(c, n, s, annualConditions,
+            Supply(n, Commodity.Food), Supply(n, Commodity.Energy), Supply(n, Commodity.Pharmaceuticals),
+            IsNationAtWar(c, n.Id), MarketSystem.JobsDemanded(s));
+    }
+
+    internal static void ReviewFast(Campaign c, Nation n, ScenarioState s, float annualConditions,
+        float food, float energy, float medicine, bool atWar) =>
+        ReviewCore(c, n, s, annualConditions, food, energy, medicine, atWar, MarketSystem.JobsDemanded(s));
+
+    private static void ReviewCore(Campaign c, Nation n, ScenarioState s, float annualConditions,
+        float food, float energy, float medicine, bool atWar, float buildingJobs)
+    {
         if (!c.Defines.HouseholdDynamicsEnabled || s.LastHouseholdReviewDay == c.ElapsedDays || s.Unclaimed || s.Population <= 0) return;
         s.LastHouseholdReviewDay = c.ElapsedDays;
         var interval = Math.Clamp(c.Defines.EconomyTickDays, 1, 365) / 365f;
-        var labour = Labour(s);
-        var buildingJobs = MarketSystem.JobsDemanded(s);
-        if (s.NonBuildingJobs < 0) s.NonBuildingJobs = Math.Max(0, labour * Employment(s) - buildingJobs);
+        var share = DemographicCycle.WorkingShare(s);
+        var groups = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(s.PopulationGroups);
+        var needEmployment = s.NonBuildingJobs < 0;
+        var sumLabour = 0.0;
+        var sumEmployed = 0.0;
+        if (groups.Length == 0)
+        {
+            sumLabour = s.Population * (double)share * 1e-6;
+        }
+        else if (needEmployment)
+        {
+            for (var i = 0; i < groups.Length; i++)
+            {
+                var g = groups[i];
+                var active = g.Size * share * 1e-6 * (g.Class == SocialClass.Upper ? .15 : 1);
+                sumLabour += active;
+                sumEmployed += active * g.Employment;
+            }
+        }
+        else
+        {
+            for (var i = 0; i < groups.Length; i++)
+            {
+                var g = groups[i];
+                sumLabour += g.Size * share * 1e-6 * (g.Class == SocialClass.Upper ? .15 : 1);
+            }
+        }
+        var labour = (float)sumLabour;
+        if (needEmployment)
+        {
+            var emp = labour <= 0f ? 0f : (float)sumEmployed / labour;
+            s.NonBuildingJobs = Math.Max(0, labour * emp - buildingJobs);
+        }
         var damage = Math.Clamp(s.WarDamage, 0, 1);
         s.NonBuildingJobs = Math.Max(0, s.NonBuildingJobs * (1 + Math.Clamp(annualConditions, -.25f, .15f) * interval));
         s.EmploymentTarget = labour <= 0 ? 0 : Math.Clamp((s.NonBuildingJobs + buildingJobs) * (1 - damage * .5f) / labour, 0, 1);
-        var food = Supply(n, Commodity.Food);
-        var energy = Supply(n, Commodity.Energy);
-        var medicine = Supply(n, Commodity.Pharmaceuticals);
         s.BasicNeedsCoverage = food * .6f + energy * .25f + medicine * .15f;
         var scarcity = Math.Max(0, 1 - s.BasicNeedsCoverage - c.Defines.ScarcityTolerance);
         var unemployment = Math.Max(0, .9f - s.EmploymentTarget);
@@ -85,10 +159,11 @@ public static class HouseholdEconomy
         var employmentRate = Math.Clamp(c.Defines.HouseholdEmploymentApproach, 0, 1);
         var wealthRate = Math.Clamp(c.Defines.HouseholdWealthApproach, 0, 1);
         double living = 0;
-        foreach (var g in s.PopulationGroups)
+        for (var i = 0; i < groups.Length; i++)
         {
+            var g = groups[i];
             g.Employment = M.Lerp(g.Employment, s.EmploymentTarget, employmentRate);
-            var anchor = DemographyCatalog.Profession(g.Profession)?.Wealth ?? (g.Class == SocialClass.Upper ? .9f : g.Class == SocialClass.Middle ? .6f : .35f);
+            var anchor = LookupProfession(g.Profession)?.Wealth ?? (g.Class == SocialClass.Upper ? .9f : g.Class == SocialClass.Middle ? .6f : .35f);
             var targetWealth = Math.Clamp(anchor + (g.Employment - .9f) * .22f - scarcity * .18f - damage * .12f, 0, 1);
             g.Wealth = M.Lerp(g.Wealth, targetWealth, wealthRate);
             var targetLiving = Math.Clamp(n.StandardOfLiving + (g.Wealth - .5f) * .12f - s.LivelihoodStress * .25f, 0, 1);
@@ -96,8 +171,8 @@ public static class HouseholdEconomy
             g.Radicalism = Math.Clamp(M.Lerp(g.Radicalism, s.Radicalism + s.LivelihoodStress * .2f, .025f), 0, 1);
             living += g.Size * (double)g.StandardOfLiving;
         }
-        if (s.PopulationGroups.Count > 0) s.StandardOfLiving = M.Lerp(s.StandardOfLiving, (float)(living / s.Population), .08f);
-        var (birth, death, _) = VitalRates(c, n, s);
+        if (groups.Length > 0) s.StandardOfLiving = M.Lerp(s.StandardOfLiving, (float)(living / s.Population), .08f);
+        var (birth, death, _) = VitalRatesCore(c, n, s, food, energy, medicine, atWar, netBreakdown: null);
         s.ReviewBirths = (long)Math.Round(s.Population * (double)birth * interval);
         s.ReviewDeaths = Math.Min(s.Population + s.ReviewBirths, (long)Math.Round(s.Population * (double)death * interval));
         EconomySystem.AdjustStatePopulation(s, s.ReviewBirths - s.ReviewDeaths);
@@ -131,10 +206,16 @@ public static class HouseholdEconomy
         Campaign c, Nation n, ScenarioState s, Breakdown netBreakdown = null)
     {
         if (c is null || n is null || s is null) return (0f, 0f, 0f);
+        return VitalRatesCore(c, n, s,
+            Supply(n, Commodity.Food), Supply(n, Commodity.Energy), Supply(n, Commodity.Pharmaceuticals),
+            IsNationAtWar(c, n.Id), netBreakdown);
+    }
+
+    private static (float BirthAnnual, float DeathAnnual, float OldAgeBurden) VitalRatesCore(
+        Campaign c, Nation n, ScenarioState s,
+        float food, float energy, float medicine, bool atWar, Breakdown netBreakdown)
+    {
         var damage = Math.Clamp(s.WarDamage, 0f, 1f);
-        var food = Supply(n, Commodity.Food);
-        var energy = Supply(n, Commodity.Energy);
-        var medicine = Supply(n, Commodity.Pharmaceuticals);
         var coverage = food * .6f + energy * .25f + medicine * .15f;
         var scarcity = Math.Max(0f, 1f - coverage - c.Defines.ScarcityTolerance);
         var health = HospitalCover(s, s.Buildings.GetValueOrDefault(BuildingKind.Hospital), medicine);
@@ -160,10 +241,6 @@ public static class HouseholdEconomy
             ? -Math.Clamp(n.Inflation - 0.08f, 0f, 0.30f) * 0.014f
             : 0f;
 
-        var atWar = false;
-        var live = Warfare.LiveWars(c);
-        for (var index = 0; index < live.Count; index++)
-            if (live[index].Involves(n.Id)) { atWar = true; break; }
         var exhaustion = M.Clamp01(1f - n.WarSupport);
         var mobilizationShock = exhaustion > 0.08f ? -Math.Min(0.0075f, (exhaustion - 0.08f) * 0.02f) : 0f;
         if (atWar) mobilizationShock -= 0.0020f;

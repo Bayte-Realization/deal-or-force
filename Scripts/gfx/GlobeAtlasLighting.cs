@@ -39,8 +39,10 @@ public sealed partial class GlobePresentation
 
     private void SyncAtlasSun()
     {
-        if (!IsInstanceValid(_atlasSun)) return;
-        if (_atlasSun.LightEnergy != _daySun.LightEnergy) _atlasSun.LightEnergy = _daySun.LightEnergy;
-        if (_atlasSun.LightColor != _daySun.LightColor) _atlasSun.LightColor = _daySun.LightColor;
+        if (!IsInstanceValid(_atlasSun) || !IsInstanceValid(_daySun)) return;
+        if (!Mathf.IsEqualApprox(_atlasSun.LightEnergy, _daySun.LightEnergy))
+            _atlasSun.LightEnergy = _daySun.LightEnergy;
+        if (_atlasSun.LightColor != _daySun.LightColor)
+            _atlasSun.LightColor = _daySun.LightColor;
     }
 }

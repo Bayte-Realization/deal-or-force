@@ -1,0 +1,12 @@
+{
+  "3D terrain relief": "Объёмный 3D-рельеф карты",
+  "Physically elevates mountain ranges and gently recesses deep ocean basins in 3D on both the globe and flat map. Paper mode always stays flat. Disable for a completely smooth sphere and lower GPU vertex load. Changes immediately.": "Физически приподнимает горные хребты и мягко углубляет океанические впадины в 3D на глобусе и плоской карте. Бумажный режим всегда остаётся плоским. Выключите для идеально гладкой поверхности и снижения нагрузки на видеокарту. Применяется сразу.",
+  "3D upscaling mode": "Режим 3D-масштабирования",
+  "How the 3D map scales when rendered below native resolution. Auto uses FSR 1.0 below 100% scale on Vulkan; FSR 2.2 adds temporal reconstruction on Vulkan; Bilinear is used on Compatibility or when selected. Changes immediately.": "Как масштабируется 3D-карта при рендеринге ниже родного разрешения. Авто использует FSR 1.0 ниже 100% на Vulkan; FSR 2.2 добавляет временную реконструкцию на Vulkan; Билинейный используется в Compatibility или при явном выборе. Применяется сразу.",
+  "map.upscale.auto": "Авто (FSR 1.0 ниже 100%)",
+  "map.upscale.fsr": "FSR 1.0 (пространственный)",
+  "map.upscale.fsr2": "FSR 2.2 (временной)",
+  "map.upscale.bilinear": "Билинейный",
+  "FSR sharpness": "Резкость FSR",
+  "Edge sharpening filter strength for FSR 1.0 and FSR 2.2 upscaling (0 is sharpest, 2 is softest). Changes immediately.": "Сила фильтра резкости для масштабирования FSR 1.0 и FSR 2.2 (0 — максимальная резкость, 2 — мягче). Применяется сразу."
+}

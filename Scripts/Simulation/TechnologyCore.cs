@@ -311,12 +311,33 @@ public static partial class ResearchSystem
     }
 
     /// <summary>Whether a country may start this one: it exists, it is not had yet, and what it needs is.</summary>
-    public static bool Available(Nation nation, TechnologyDefinition technology) =>
-        nation is not null && technology is not null && !nation.HasTechnology(technology.Id) &&
-        technology.Requires.All(nation.HasTechnology);
+    public static bool Available(Nation nation, TechnologyDefinition technology)
+    {
+        if (nation is null || technology is null || nation.HasTechnology(technology.Id)) return false;
+        var requires = technology.Requires;
+        for (var i = 0; i < requires.Count; i++)
+            if (!nation.HasTechnology(requires[i])) return false;
+        return true;
+    }
 
-    public static IEnumerable<TechnologyDefinition> AvailableTo(Nation nation) =>
-        TechnologyCatalog.All.Where(technology => Available(nation, technology));
+    [ThreadStatic] private static List<TechnologyDefinition> _availableTechScratch;
+
+    public static IEnumerable<TechnologyDefinition> AvailableTo(Nation nation)
+    {
+        var all = TechnologyCatalog.All;
+        var list = new List<TechnologyDefinition>();
+        for (var i = 0; i < all.Count; i++)
+            if (Available(nation, all[i])) list.Add(all[i]);
+        return list;
+    }
+
+    private static void FillAvailableTo(Nation nation, List<TechnologyDefinition> into)
+    {
+        into.Clear();
+        var all = TechnologyCatalog.All;
+        for (var i = 0; i < all.Count; i++)
+            if (Available(nation, all[i])) into.Add(all[i]);
+    }
 
     /// <summary>
     /// What a country's universities and laboratories multiply its research by: one, plus each
@@ -490,20 +511,46 @@ public static partial class ResearchSystem
         public readonly Dictionary<string, float> KnownOutput = new(StringComparer.OrdinalIgnoreCase);
         public readonly Dictionary<int, Nation> ByMapIndex = new();
         public readonly Dictionary<int, List<(Nation Other, DiplomaticRelation Relation)>> Ties = new();
+        private readonly Stack<List<(Nation Other, DiplomaticRelation Relation)>> _tieListPool = new();
+        private readonly HashSet<string> _seen = new(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, Survey> Reused = new();
 
         public static Survey Take(Campaign campaign)
         {
-            var survey = new Survey();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var nation in campaign.Nations)
+            var survey = Reused.GetOrCreateValue(campaign);
+            survey.ResetAndTake(campaign);
+            return survey;
+        }
+
+        private void ResetAndTake(Campaign campaign)
+        {
+            World = 0f;
+            KnownOutput.Clear();
+            ByMapIndex.Clear();
+            foreach (var list in Ties.Values)
             {
-                survey.ByMapIndex[nation.MapIndex] = nation;
+                list.Clear();
+                _tieListPool.Push(list);
+            }
+            Ties.Clear();
+
+            var seen = _seen;
+            var nations = campaign.Nations;
+            for (var ni = 0; ni < nations.Count; ni++)
+            {
+                var nation = nations[ni];
+                ByMapIndex[nation.MapIndex] = nation;
                 if (nation.Gdp <= 0f) continue;
-                survey.World += nation.Gdp;
+                World += nation.Gdp;
                 seen.Clear();
-                foreach (var id in nation.Technologies)
+                var techs = nation.Technologies;
+                for (var ti = 0; ti < techs.Count; ti++)
+                {
+                    var id = techs[ti];
                     if (id is not null && seen.Add(id))
-                        survey.KnownOutput[id] = survey.KnownOutput.GetValueOrDefault(id) + nation.Gdp;
+                        KnownOutput[id] = KnownOutput.GetValueOrDefault(id) + nation.Gdp;
+                }
             }
             foreach (var relation in campaign.Relations.Values)
             {
@@ -514,15 +561,15 @@ public static partial class ResearchSystem
                 var a = campaign.NationById(relation.A);
                 var b = campaign.NationById(relation.B);
                 if (a is null || b is null) continue;
-                Tie(survey, a, b, relation);
-                Tie(survey, b, a, relation);
+                Tie(a, b, relation);
+                Tie(b, a, relation);
             }
-            return survey;
         }
 
-        private static void Tie(Survey survey, Nation from, Nation to, DiplomaticRelation relation)
+        private void Tie(Nation from, Nation to, DiplomaticRelation relation)
         {
-            if (!survey.Ties.TryGetValue(from.Id, out var list)) survey.Ties[from.Id] = list = new();
+            if (!Ties.TryGetValue(from.Id, out var list))
+                Ties[from.Id] = list = _tieListPool.Count > 0 ? _tieListPool.Pop() : new List<(Nation Other, DiplomaticRelation Relation)>(4);
             list.Add((to, relation));
         }
 
@@ -530,8 +577,12 @@ public static partial class ResearchSystem
         public void Learned(Campaign campaign, string technology)
         {
             var sum = 0f;
-            foreach (var nation in campaign.Nations)
+            var nations = campaign.Nations;
+            for (var i = 0; i < nations.Count; i++)
+            {
+                var nation = nations[i];
                 if (nation.Gdp > 0f && nation.HasTechnology(technology)) sum += nation.Gdp;
+            }
             KnownOutput[technology] = sum;
         }
     }
@@ -557,8 +608,9 @@ public static partial class ResearchSystem
         var partnerWeight = 0f;
         var partnerHaving = 0f;
         if (survey.Ties.TryGetValue(nation.Id, out var ties))
-            foreach (var (other, relation) in ties)
+            for (var i = 0; i < ties.Count; i++)
             {
+                var (other, relation) = ties[i];
                 if (other == nation || other.Population <= 0 || other.Landless || Isolated(relation, nation, other)) continue;
                 var weight = relation.Stance == DiplomaticStance.Allied ? 2f
                     : relation.TradeAgreement ? 1f
@@ -600,23 +652,17 @@ public static partial class ResearchSystem
 
     private static TechnologyDefinition Choose(Campaign campaign, Nation nation, Survey survey)
     {
-        // ─── The proliferation race ────────────────────────────────────────────────────
-        // A country that faces a rival's deterrent and could build its own reaches for
-        // it ahead of the cheap shelf. The history of the club is not countries shopping
-        // by price - it is each one racing the rival that already had one. Nothing
-        // forces the choice: the country still has to afford the research, and a country
-        // at peace with every holder shops the ordinary way.
-        //
-        // For modders: this fires when the AI country WITHOUT a deterrent has a rival
-        // (DiplomaticStance.Rival or AtWar) that HAS one. The technology it reaches for
-        // is any available technology whose `effects` include `"deterrence"`. If your
-        // mod doesn't have such a technology, this block simply doesn't fire.
-        // ─────────────────────────────────────────────────────────────────────────────
+        var available = _availableTechScratch ??= new List<TechnologyDefinition>(32);
+        FillAvailableTo(nation, available);
+        if (available.Count == 0) return null;
+
         if (Deterrence.TierOf(campaign, nation) < 1)
         {
             var threatened = false;
-            foreach (var other in campaign.Nations)
+            var nations = campaign.Nations;
+            for (var i = 0; i < nations.Count; i++)
             {
+                var other = nations[i];
                 if (other == nation || Deterrence.TierOf(campaign, other) < 1) continue;
                 var relation = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id);
                 if (relation is { Stance: DiplomaticStance.Rival or DiplomaticStance.AtWar })
@@ -627,17 +673,36 @@ public static partial class ResearchSystem
             }
             if (threatened)
             {
-                var deterrent = AvailableTo(nation)
-                    .FirstOrDefault(technology => technology.Effects.ContainsKey("deterrence"));
-                if (deterrent is not null) return deterrent;
+                for (var i = 0; i < available.Count; i++)
+                    if (available[i].Effects.ContainsKey("deterrence")) return available[i];
             }
         }
-        var atWar = Warfare.OpenWars(campaign).Any(war => !war.Ended && war.Involves(nation.Id));
-        return AvailableTo(nation)
-            .OrderBy(technology => survey is null ? CostFor(campaign, nation, technology) : CostFor(campaign, survey, nation, technology))
-            .ThenBy(technology => (technology.Category is "military" or "logistics") == atWar ? 0 : 1)
-            .ThenBy(technology => technology.Id, StringComparer.Ordinal)
-            .FirstOrDefault();
+        var atWar = false;
+        var liveWars = Warfare.LiveWars(campaign);
+        for (var wi = 0; wi < liveWars.Count; wi++)
+        {
+            var war = liveWars[wi];
+            if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
+        }
+        TechnologyDefinition best = null;
+        var bestCost = float.PositiveInfinity;
+        var bestBucket = 2;
+        for (var i = 0; i < available.Count; i++)
+        {
+            var technology = available[i];
+            var cost = survey is null ? CostFor(campaign, nation, technology) : CostFor(campaign, survey, nation, technology);
+            var bucket = (technology.Category is "military" or "logistics") == atWar ? 0 : 1;
+            var cmp = cost.CompareTo(bestCost);
+            if (best is null || cmp < 0 ||
+                (cmp == 0 && (bucket < bestBucket ||
+                    (bucket == bestBucket && string.CompareOrdinal(technology.Id, best.Id) < 0))))
+            {
+                best = technology;
+                bestCost = cost;
+                bestBucket = bucket;
+            }
+        }
+        return best;
     }
 
     /// <summary>Once a week, with the economy: every country puts its week into what it is researching.</summary>

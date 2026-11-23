@@ -286,7 +286,7 @@ public static class Reintegration
                    AiStatecraft.SideOverrun(c, war, war.IsAttacking(loser.Id));
 
         if (WarAims.IsRebel(winner)) return false;
-        if (!PeaceShape.Near(c, winner, loser)) return false;
+        if (!PeaceShape.Near(c, winner, loser) && !IsReunificationTarget(c, war, winner, loser)) return false;
 
         if (IsReunificationTarget(c, war, winner, loser))
             return score >= c.Defines.ReclaimDecisiveScore ||

@@ -120,12 +120,9 @@ public sealed partial class GlobePresentation
             }
             marker.DisplayPosition += remaining * blend;
             // On the globe the card lies on the surface, so the eased point is pushed back out
-            // to the sphere rather than cutting the chord through the planet.
+            // to the local terrain surface rather than cutting the chord through the planet.
             if (!_flatMap)
-            {
-                var length = marker.DisplayPosition.Length();
-                if (length > 0.0001f) marker.DisplayPosition *= SurfaceMarkerRadius / length;
-            }
+                marker.DisplayPosition = LocalSurfacePointFromNormal(marker.DisplayPosition, SurfaceMarkerRadius);
             node.Position = marker.DisplayPosition;
             // Orientation follows the ground under the card, so it has to be recomputed as the
             // card slides rather than left at the bearing it was created with.
@@ -223,7 +220,7 @@ public sealed partial class GlobePresentation
         {
             if (!IsInstanceValid(counter.Node) || !counter.Node.IsVisibleInTree()) continue;
             var anchor = counter.Support is { } support
-                ? _supportMarkerRoot.ToGlobal(FlatPoint(support.Latitude, support.Longitude, FlatMarkerZ - .002f))
+                ? _supportMarkerRoot.ToGlobal(LocalFlatPoint(support.Latitude, support.Longitude, FlatMarkerZ - .002f))
                 : _fleetRoot.ToGlobal(counter.Anchor);
             var at = _camera.UnprojectPosition(anchor);
             var center = _camera.UnprojectPosition(counter.Node.GlobalPosition);
@@ -420,7 +417,7 @@ public sealed partial class GlobePresentation
 
     private Vector3 FlatFleetPosition(int id, float latitude, float longitude)
     {
-        var anchor = FlatPoint(latitude, longitude, FlatMarkerZ);
+        var anchor = LocalFlatPoint(latitude, longitude, FlatMarkerZ);
         var offset = _flatFleetOffsets.GetValueOrDefault(id);
         return anchor + new Vector3(offset.X, -offset.Y, 0f) * (_camera.Size / Math.Max(1f, Size.Y));
     }
@@ -435,7 +432,7 @@ public sealed partial class GlobePresentation
         foreach (var (id, parts) in _fleetNodes)
         {
             if (!parts.Node.IsVisibleInTree() || !_fleetByMarker.TryGetValue(parts.Node, out var fleet)) continue;
-            _auxiliaryCounters.Add((parts.Node, parts.Plate, FlatPoint(fleet.Latitude, fleet.Longitude, FlatMarkerZ), id, null));
+            _auxiliaryCounters.Add((parts.Node, parts.Plate, LocalFlatPoint(fleet.Latitude, fleet.Longitude, FlatMarkerZ), id, null));
         }
         _auxiliaryCounters.Sort((a, b) => (a.Support is null) != (b.Support is null)
             ? (a.Support is null ? 1 : -1) : a.Id.CompareTo(b.Id));

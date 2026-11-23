@@ -80,13 +80,42 @@ render_mode unshaded, blend_mix, cull_disabled, depth_draw_never, shadows_disabl
 uniform float period = 1.5;
 uniform float duty = 0.48;
 uniform float phase = 0.0;
+uniform float shimmer = 1.0;
+uniform float quality_tier = 0.0;
 void fragment() {
     float d = fract(UV.x / period - phase);
-    float dash = smoothstep(0.0, 0.07, d) * (1.0 - smoothstep(duty - 0.07, duty, d));
+    float dash = smoothstep(0.0, 0.08, d) * (1.0 - smoothstep(duty - 0.08, duty, d));
+    float head = smoothstep(duty - 0.16, duty - 0.04, d) * (1.0 - smoothstep(duty - 0.04, duty, d));
     float across = 1.0 - abs(UV.y * 2.0 - 1.0);
-    ALBEDO = COLOR.rgb;
-    ALPHA = COLOR.a * dash * smoothstep(0.0, 0.55, across);
+    float core = smoothstep(0.0, 0.58, across);
+    // Subtle orbital atmospheric shimmer along real maritime/overland trade arteries.
+    float orbital_wave = quality_tier < 1.5 ? (0.5 + 0.5 * sin(UV.x * 1.4 - phase * 6.283185)) * shimmer : 0.0;
+    vec3 col = COLOR.rgb * (0.92 + 0.36 * head + 0.20 * orbital_wave);
+    ALBEDO = col;
+    float base_alpha = max(dash, orbital_wave * 0.24 * shimmer);
+    ALPHA = COLOR.a * base_alpha * core;
 }";
+
+    private int _shipModelWeightTotal;
+    private int _lorryModelWeightTotal;
+    private float _tradeQualityTier;
+
+    private void ApplyTradeQualityTier(float tier)
+    {
+        _tradeQualityTier = tier;
+        _tradeLaneMaterial?.SetShaderParameter("quality_tier", tier);
+    }
+
+    private void RefreshTradeModelWeightTotals()
+    {
+        _shipModelWeightTotal = 0;
+        _lorryModelWeightTotal = 0;
+        for (var i = 0; i < _tradeModels.Count; i++)
+        {
+            if (_tradeModels[i].Ship) _shipModelWeightTotal += _tradeModels[i].Weight;
+            else _lorryModelWeightTotal += _tradeModels[i].Weight;
+        }
+    }
 
     /// <summary>The trade moving on the map, or not.</summary>
     public bool TradeTrafficShown
@@ -110,8 +139,11 @@ void fragment() {
             _tradeRoot.AddChild(model.Layer);
             _tradeModels.Add(model);
         }
+        RefreshTradeModelWeightTotals();
         _tradeLaneMesh = new ImmediateMesh();
         _tradeLaneMaterial = new ShaderMaterial { Shader = new Shader { Code = TradeLaneShader } };
+        _tradeQualityTier = CurrentShaderQualityTier();
+        _tradeLaneMaterial.SetShaderParameter("quality_tier", _tradeQualityTier);
         _tradeLaneLines = new MeshInstance3D
         {
             Name = "TradeLanes", Mesh = _tradeLaneMesh, MaterialOverride = _tradeLaneMaterial,
@@ -227,25 +259,55 @@ void fragment() {
     private double _lastTradeDrawnClock = -1.0;
     private float _lastTradeDrawnZoom = -1f;
     private bool _lastTradeDrawnFlat;
+    private double _tradeMobileAccum;
 
     private void UpdateTradeTraffic(double delta)
     {
         if (_tradeRoot is null || !IsInstanceValid(_tradeRoot) || _campaign?.ProvinceMap is null) return;
-        if (IsInstanceValid(_tradeLaneLines) && !Simulation.WorldLayers.On("trade_lanes")) _tradeLaneLines.Visible = false;
+        // On MobileLow (quality_tier >= 2), skip all trade movers & trade lane draw calls for max FPS.
+        if (_tradeQualityTier >= 1.5f)
+        {
+            if (IsInstanceValid(_tradeLaneLines)) _tradeLaneLines.Visible = false;
+            foreach (var model in _tradeModels) model.Layer.Multimesh.VisibleInstanceCount = 0;
+            return;
+        }
+        if (IsInstanceValid(_tradeLaneLines))
+            _tradeLaneLines.Visible = Simulation.WorldLayers.On("trade_lanes");
         if (!QualityTradeTraffic || !_tradeTrafficShown || !_mapApplied || _tradeModels.Count == 0 ||
             !Simulation.WorldLayers.On("trade_traffic"))
         {
             foreach (var model in _tradeModels) model.Layer.Multimesh.VisibleInstanceCount = 0;
             return;
         }
+        // On MobileMedium (quality_tier == 1), halve per-frame trade animation update cadence.
+        if (_tradeQualityTier >= 0.5f && delta > 0.0)
+        {
+            _tradeMobileAccum += delta;
+            if (_tradeMobileAccum < 0.033) return;
+            delta = _tradeMobileAccum;
+            _tradeMobileAccum = 0.0;
+        }
         PlanTradeLanes();
         if (!_campaign.IsPaused) _tradeClock += delta;
 
-        // A few pixels at any distance: the size follows the camera out, and only a little in.
+        // Zoom-tiered LOD: at orbital distance (>14.5) or on MobileLow (quality_tier >= 2), hide tiny
+        // 3D mover meshes and boost atmospheric flow shimmer along the real trade arteries instead.
         var zoom = _flatMap ? Mathf.Clamp(_flatZoom / 1.6f, 0.45f, 2f) : Mathf.Clamp(_distance / 9f, 0.45f, 2f);
+        var orbitalShare = Mathf.SmoothStep(11.5f, 16.5f, ViewDistance);
+        var moverCapPerRoute = _tradeQualityTier > 1.5f || ViewDistance > 15.5f
+            ? 0
+            : _tradeQualityTier > 0.5f ? 10 : TradeMoversPerRoute;
+        _tradeLaneMaterial.SetShaderParameter("shimmer", 0.35f + 0.65f * orbitalShare);
+
+        var localCamNormal = !_flatMap && IsInstanceValid(_camera)
+            ? (_tradeRoot.GlobalTransform.Basis.Inverse() * _camera.GlobalPosition.Normalized()).Normalized()
+            : Vector3.Back;
+        var camStable = _flatMap || localCamNormal.Dot(_lastTradeCamNormal) > 0.995f;
         if (Math.Abs(_tradeClock - _lastTradeDrawnClock) < 0.0001 &&
             MathF.Abs(zoom - _lastTradeDrawnZoom) < 0.002f &&
-            _flatMap == _lastTradeDrawnFlat)
+            _flatMap == _lastTradeDrawnFlat &&
+            camStable &&
+            moverCapPerRoute > 0)
         {
             DrawTradeLanes(zoom);
             return;
@@ -253,35 +315,42 @@ void fragment() {
         _lastTradeDrawnClock = _tradeClock;
         _lastTradeDrawnZoom = zoom;
         _lastTradeDrawnFlat = _flatMap;
+        _lastTradeCamNormal = localCamNormal;
 
         if (_tradeModelCounts.Length < _tradeModels.Count)
             _tradeModelCounts = new int[_tradeModels.Count];
         else
             Array.Clear(_tradeModelCounts, 0, _tradeModels.Count);
         var counts = _tradeModelCounts;
-        foreach (var lane in _tradeLanes)
+        if (moverCapPerRoute > 0)
         {
-            if (lane.Length <= 0.01f) continue;
-            var speed = lane.Sea ? ShipDegreesPerSecond : LorryDegreesPerSecond;
-            for (var mover = 0; mover < lane.Movers; mover++)
+            for (var li = 0; li < _tradeLanes.Count; li++)
             {
-                var pick = PickModel(lane, mover);
-                if (pick < 0) continue;
-                var model = _tradeModels[pick];
-                var layer = model.Layer.Multimesh;
-                if (counts[pick] >= layer.InstanceCount) continue;
-                // Half go one way, half the other, spread along the lane.
-                var travelled = (float)((_tradeClock * speed + lane.Length * (mover + 0.5f) / lane.Movers) % lane.Length);
-                var outward = mover % 2 == 0;
-                var at = outward ? travelled : lane.Length - travelled;
-                var (position, heading) = OnLane(lane, at, outward);
-                var up = _flatMap ? Vector3.Back : position.Normalized();
-                var forward = (heading - up * heading.Dot(up)).Normalized();
-                if (forward.LengthSquared() < 0.5f) forward = up.Cross(Vector3.Up).Normalized();
-                var side = forward.Cross(up).Normalized();
-                // One scale for every ship and one for every lorry: a tanker stays shorter than a box ship.
-                var scale = (model.Ship ? ShipDisplayLength / 300f : LorryDisplayLength / 16f) * zoom;
-                layer.SetInstanceTransform(counts[pick]++, new Transform3D(new Basis(forward, up, side).Scaled(Vector3.One * scale), position));
+                var lane = _tradeLanes[li];
+                if (lane.Length <= 0.01f) continue;
+                if (!_flatMap && !TradeLaneNearFrontHemisphere(lane, localCamNormal)) continue;
+                var speed = lane.Sea ? ShipDegreesPerSecond : LorryDegreesPerSecond;
+                var moverCount = Math.Min(lane.Movers, moverCapPerRoute);
+                for (var mover = 0; mover < moverCount; mover++)
+                {
+                    var pick = PickModel(lane, mover);
+                    if (pick < 0) continue;
+                    var model = _tradeModels[pick];
+                    var layer = model.Layer.Multimesh;
+                    if (counts[pick] >= layer.InstanceCount) continue;
+                    // Half go one way, half the other, spread along the lane.
+                    var travelled = (float)((_tradeClock * speed + lane.Length * (mover + 0.5f) / moverCount) % lane.Length);
+                    var outward = mover % 2 == 0;
+                    var at = outward ? travelled : lane.Length - travelled;
+                    var (position, heading) = OnLane(lane, at, outward);
+                    var up = _flatMap ? Vector3.Back : position.Normalized();
+                    var forward = (heading - up * heading.Dot(up)).Normalized();
+                    if (forward.LengthSquared() < 0.5f) forward = up.Cross(Vector3.Up).Normalized();
+                    var side = forward.Cross(up).Normalized();
+                    // One scale for every ship and one for every lorry: a tanker stays shorter than a box ship.
+                    var scale = (model.Ship ? ShipDisplayLength / 300f : LorryDisplayLength / 16f) * zoom;
+                    layer.SetInstanceTransform(counts[pick]++, new Transform3D(new Basis(forward, up, side).Scaled(Vector3.One * scale), position));
+                }
             }
         }
         for (var i = 0; i < _tradeModels.Count; i++) _tradeModels[i].Layer.Multimesh.VisibleInstanceCount = counts[i];
@@ -292,8 +361,7 @@ void fragment() {
     /// <summary>Which model this mover is: a ship for a sea lane, a lorry for a road, by weight, fixed per mover.</summary>
     private int PickModel(TradeLane lane, int mover)
     {
-        var total = 0;
-        foreach (var model in _tradeModels) if (model.Ship == lane.Sea) total += model.Weight;
+        var total = lane.Sea ? _shipModelWeightTotal : _lorryModelWeightTotal;
         if (total == 0) return -1;
         var roll = (int)((uint)HashCode.Combine(lane.A, lane.B, mover) % (uint)total);
         for (var i = 0; i < _tradeModels.Count; i++)
@@ -303,6 +371,28 @@ void fragment() {
             if (roll < 0) return i;
         }
         return -1;
+    }
+
+    private Vector3 _lastTradeCamNormal;
+
+    private static bool TradeLaneNearFrontHemisphere(TradeLane lane, Vector3 camNormal)
+    {
+        var n = lane.Points.Count;
+        if (n == 0) return false;
+        if (n == 1)
+        {
+            var p = lane.Points[0];
+            return SurfacePoint(p.X, p.Y, 1f).Dot(camNormal) >= -0.15f;
+        }
+        // Check 5 evenly spaced points along the arc so long trans-oceanic routes
+        // whose middle crosses the front hemisphere are never skipped.
+        for (var k = 0; k <= 4; k++)
+        {
+            var pt = lane.Points[(n - 1) * k / 4];
+            if (SurfacePoint(pt.X, pt.Y, 1f).Dot(camNormal) >= -0.15f)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>Where on its lane a mover is, and which way it is facing, in the scene.</summary>
@@ -318,9 +408,9 @@ void fragment() {
         var latitude = from.X + (to.X - from.X) * t;
         var longitude = from.Y + WrapDegrees(to.Y - from.Y) * t;
         var radius = GlobeRadius * 1.0016f;
-        var here = _flatMap ? FlatPoint(latitude, longitude, FlatMarkerZ) : SurfacePoint(latitude, longitude, radius);
-        var ahead = _flatMap ? FlatPoint(to.X, from.Y + WrapDegrees(to.Y - from.Y), FlatMarkerZ) : SurfacePoint(to.X, to.Y, radius);
-        var behind = _flatMap ? FlatPoint(from.X, from.Y, FlatMarkerZ) : SurfacePoint(from.X, from.Y, radius);
+        var here = _flatMap ? LocalFlatPoint(latitude, longitude, FlatMarkerZ) : LocalSurfacePoint(latitude, longitude, radius);
+        var ahead = _flatMap ? LocalFlatPoint(to.X, from.Y + WrapDegrees(to.Y - from.Y), FlatMarkerZ) : LocalSurfacePoint(to.X, to.Y, radius);
+        var behind = _flatMap ? LocalFlatPoint(from.X, from.Y, FlatMarkerZ) : LocalSurfacePoint(from.X, from.Y, radius);
         return (here, outward ? ahead - behind : behind - ahead);
     }
 
@@ -334,16 +424,18 @@ void fragment() {
         var halfWidth = LaneHalfWidth * zoom;
         // The lines of the busiest lanes only: where a dozen lanes share the Mediterranean, a dozen
         // lines read as rain. The ships on the rest say where they go.
-        foreach (var lane in _tradeLanes.Take(TradeLinesDrawn))
+        var maxLines = Math.Min(TradeLinesDrawn, _tradeLanes.Count);
+        for (var li = 0; li < maxLines; li++)
         {
-            var colour = lane.Sea ? new Color(0.86f, 0.82f, 0.68f, 0.26f) : new Color(0.9f, 0.76f, 0.5f, 0.3f);
+            var lane = _tradeLanes[li];
+            var colour = lane.Sea ? new Color(0.84f, 0.88f, 0.74f, 0.30f) : new Color(0.94f, 0.76f, 0.44f, 0.34f);
             _tradeDrawPoints.Clear();
             for (var i = 0; i < lane.Points.Count; i++)
             {
                 var point = lane.Points[i];
                 _tradeDrawPoints.Add(_flatMap
-                    ? FlatPoint(point.X, point.Y, FlatLineZ)
-                    : SurfacePoint(point.X, point.Y, GlobeRadius * 1.0013f));
+                    ? LocalFlatPoint(point.X, point.Y, FlatLineZ)
+                    : LocalSurfacePoint(point.X, point.Y, GlobeRadius * 1.0013f));
             }
             // A lane across the date line breaks at the sheet edge. One point on a
             // side is not a triangle strip, so that side is not begun.

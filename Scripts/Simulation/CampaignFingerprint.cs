@@ -55,6 +55,7 @@ public static partial class CampaignFingerprint
         MixStateCountAndInstantConstruction(campaign, ref hash);
         MixRelationsAndDiplomacyTables(campaign, ref hash);
         MixOrganizationsAndArmsShipments(campaign, ref hash);
+        MixGrandProjects(campaign, ref hash);
         MixDormantRelationsOrder(campaign, ref hash);
 
         foreach (var nation in Ordered(campaign.Nations, nation => nation.Id))

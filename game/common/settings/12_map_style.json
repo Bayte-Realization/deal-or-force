@@ -23,6 +23,26 @@
     "labels": ["map.fill.classic_opaque", "map.fill.balanced", "map.fill.translucent"],
     "default": "translucent"
   },
+  "terrain_3d_relief": {
+    "category": "video", "order": 322, "kind": "toggle",
+    "name": "3D terrain relief",
+    "description": "Physically elevates mountain ranges and gently recesses deep ocean basins in 3D on both the globe and flat map. Paper mode always stays flat. Disable for a completely smooth sphere and lower GPU vertex load. Changes immediately.",
+    "default": true
+  },
+  "map_upscaling_mode": {
+    "category": "video", "order": 323, "kind": "choice",
+    "name": "3D upscaling mode",
+    "description": "How the 3D map scales when rendered below native resolution. Auto uses FSR 1.0 below 100% scale on Vulkan; FSR 2.2 adds temporal reconstruction on Vulkan; Bilinear is used on Compatibility or when selected. Changes immediately.",
+    "values": ["auto", "fsr", "fsr2", "bilinear"],
+    "labels": ["map.upscale.auto", "map.upscale.fsr", "map.upscale.fsr2", "map.upscale.bilinear"],
+    "default": "auto"
+  },
+  "map_fsr_sharpness": {
+    "category": "video", "order": 324, "kind": "slider",
+    "name": "FSR sharpness",
+    "description": "Edge sharpening filter strength for FSR 1.0 and FSR 2.2 upscaling (0 is sharpest, 2 is softest). Changes immediately.",
+    "minimum": 0, "maximum": 2, "step": 0.05, "default": 0.2
+  },
   "map_consistent_lighting": {
     "category": "video", "order": 319, "kind": "toggle",
     "name": "Consistent atlas lighting",

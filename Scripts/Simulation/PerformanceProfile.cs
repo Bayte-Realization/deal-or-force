@@ -239,6 +239,8 @@ public sealed class FrameRateGovernor
 {
     private readonly Queue<double> _window = new();
     private readonly Queue<double> _gpuWindow = new();
+    private double[] _sortScratch = Array.Empty<double>();
+    private double _windowSum;
     private readonly int _windowFrames;
     // The cheapest tier the governor may reach by itself: the processor tier only for a machine
     // that started there. A real graphics card that is merely busy never falls to half the
@@ -247,6 +249,7 @@ public sealed class FrameRateGovernor
     private double _slowFor;
     private double _fastFor;
     private double _sinceChange;
+    private int _consecutiveExtreme;
     // How long the frame must stay fast before stepping back up: doubled after every step down,
     // so a machine on the edge settles instead of bouncing between two pictures.
     private double _stepUpWait = -1;
@@ -288,50 +291,66 @@ public sealed class FrameRateGovernor
     public QualityProfile Sample(double frameMilliseconds, double gpuMilliseconds = -1)
     {
         if (!Automatic || frameMilliseconds <= 0 || double.IsNaN(frameMilliseconds)) return null;
-        if (frameMilliseconds > QualityProfiles.SlowFrameMs * 4) return null;
-        _warmedFor += frameMilliseconds / 1000.0;
+        var extremeCap = QualityProfiles.SlowFrameMs * 4.0;
+        var sampleMs = frameMilliseconds;
+        if (frameMilliseconds > extremeCap)
+        {
+            // Ignore isolated 1-2 frame hitches (save, GC, OS stall), but count sustained <7.3 FPS
+            // slideshows (clamped per frame) so a struggling machine always steps down cleanly.
+            _consecutiveExtreme++;
+            if (_consecutiveExtreme <= 2) return null;
+            sampleMs = extremeCap;
+        }
+        else
+        {
+            _consecutiveExtreme = 0;
+        }
+        var frameSeconds = sampleMs / 1000.0;
+        _warmedFor += frameSeconds;
         if (_warmedFor < WarmUpSeconds) return null;
-        _sinceChange += frameMilliseconds / 1000.0;
+        _sinceChange += frameSeconds;
         // Counted in frames rather than seconds: a game that is already slow would otherwise
         // take a minute to collect enough frames to admit it.
-        _window.Enqueue(frameMilliseconds);
-        while (_window.Count > _windowFrames) _window.Dequeue();
+        _window.Enqueue(sampleMs);
+        _windowSum += sampleMs;
+        while (_window.Count > _windowFrames) _windowSum -= _window.Dequeue();
         if (gpuMilliseconds >= 0 && !double.IsNaN(gpuMilliseconds))
         {
-            _gpuWindow.Enqueue(gpuMilliseconds);
+            _gpuWindow.Enqueue(Math.Min(gpuMilliseconds, extremeCap));
             while (_gpuWindow.Count > _windowFrames) _gpuWindow.Dequeue();
         }
         if (_window.Count < _windowFrames) return null;
 
-        var ordered = _window.ToArray();
-        Array.Sort(ordered);
-        var median = ordered[ordered.Length / 2];
-        var windowSeconds = ordered.Sum() / 1000.0;
+        if (_sortScratch.Length < _windowFrames) _sortScratch = new double[_windowFrames];
+        var windowCount = _window.Count;
+        _window.CopyTo(_sortScratch, 0);
+        Array.Sort(_sortScratch, 0, windowCount);
+        var median = _sortScratch[windowCount / 2];
         var gpuKnown = _gpuWindow.Count >= _windowFrames / 2;
         var gpuMedian = 0.0;
         if (gpuKnown)
         {
-            var gpu = _gpuWindow.ToArray();
-            Array.Sort(gpu);
-            gpuMedian = gpu[gpu.Length / 2];
+            var gpuCount = _gpuWindow.Count;
+            _gpuWindow.CopyTo(_sortScratch, 0);
+            Array.Sort(_sortScratch, 0, gpuCount);
+            gpuMedian = _sortScratch[gpuCount / 2];
         }
-        // Only a card that is really busy is the card's fault. A slow frame with the card idle, or
-        // with its time unknown, is the simulation or a load on the processor - fewer pixels would
-        // only blur the picture and change nothing.
-        var cardBound = gpuKnown && gpuMedian > QualityProfiles.SlowFrameMs * 0.75;
+        // Only a card that is really busy is the card's fault when GPU timing is reported.
+        // When a driver cannot report GPU time (!gpuKnown), fall back to clearly sustained slow
+        // frame medians (> 1.25x SlowFrameMs) so the machine can still step down instead of stalling.
+        var cardBound = gpuKnown
+            ? gpuMedian > QualityProfiles.SlowFrameMs * 0.75
+            : median > QualityProfiles.SlowFrameMs * 1.25;
         var cardIdle = gpuKnown && gpuMedian < QualityProfiles.SlowFrameMs * 0.35;
-        // A card that is busy at an acceptable frame rate is a card doing its job. Stepping down
-        // for it ("heat and fan noise") took a mid-range card (RTX 3060, a heavy globe at 60 fps)
-        // from high to low and back every few minutes all game, and the player watched the
-        // clouds, the fog and the ships come and go. Only frames that are actually slow count.
+        // Accumulate actual elapsed frame time (frameSeconds), NOT the entire windowSeconds per frame!
         if (median > QualityProfiles.SlowFrameMs && cardBound)
         {
-            _slowFor += windowSeconds;
+            _slowFor += frameSeconds;
             _fastFor = 0;
         }
         else if (median < QualityProfiles.FastFrameMs || cardIdle && Profile.Order > 0)
         {
-            _fastFor += windowSeconds;
+            _fastFor += frameSeconds;
             _slowFor = 0;
         }
         else
@@ -366,20 +385,26 @@ public sealed class FrameRateGovernor
         Profile = profile;
         if (profile is not null) _layers = profile;
         _window.Clear();
+        _gpuWindow.Clear();
+        _windowSum = 0;
         _slowFor = _fastFor = _sinceChange = 0;
+        _consecutiveExtreme = 0;
         _warmedFor = 0;
     }
 
     private QualityProfile Adopt(QualityProfile profile)
     {
-        // The step's pixels, shadows and frame cap; the starting tier's layers.
+        // The step's pixels, shadows, MSAA and frame cap; the starting tier's layers.
         profile = profile.Clone();
         profile.CityLabels = _layers.CityLabels;
         profile.TradeTraffic = _layers.TradeTraffic;
         profile.Weather = _layers.Weather;
         Profile = profile;
         _window.Clear();
+        _gpuWindow.Clear();
+        _windowSum = 0;
         _sinceChange = 0;
+        _consecutiveExtreme = 0;
         return profile;
     }
 }

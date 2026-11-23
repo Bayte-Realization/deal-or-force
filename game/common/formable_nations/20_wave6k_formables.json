@@ -1,0 +1,385 @@
+{
+  "north_sea_union": {
+    "name": "North Sea Commonwealth",
+    "description": "A maritime energy and shipping confederation uniting Britain, Norway, the Netherlands and Denmark around the North Sea basin.",
+    "eligible_tags": [
+      "GBR",
+      "NOR",
+      "NLD",
+      "DNK"
+    ],
+    "required_tags": [
+      "GBR",
+      "NOR",
+      "NLD",
+      "DNK"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.74,
+    "minimum_stability": 0.72,
+    "gdp_cost_share": 0.025,
+    "governance_gain": 0.045,
+    "productivity_gain": 0.022,
+    "colour": "#194f82"
+  },
+  "pyrenean_union": {
+    "name": "Pyrenean Confederation",
+    "description": "A trans-Pyrenean Atlantic-Mediterranean union binding France, Spain and Andorra under one constitutional market.",
+    "eligible_tags": [
+      "FRA",
+      "ESP",
+      "AND"
+    ],
+    "required_tags": [
+      "FRA",
+      "ESP",
+      "AND"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.75,
+    "minimum_stability": 0.7,
+    "gdp_cost_share": 0.025,
+    "governance_gain": 0.045,
+    "productivity_gain": 0.02,
+    "colour": "#a83232"
+  },
+  "adriatic_alps_union": {
+    "name": "Alpe-Adria Confederation",
+    "description": "An Alpine-Adriatic commonwealth connecting Vienna, Ljubljana, Zagreb and Rome across shared mountain passes and ports.",
+    "eligible_tags": [
+      "AUT",
+      "SVN",
+      "HRV",
+      "ITA"
+    ],
+    "required_tags": [
+      "AUT",
+      "SVN",
+      "HRV",
+      "ITA"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.74,
+    "minimum_stability": 0.7,
+    "gdp_cost_share": 0.024,
+    "governance_gain": 0.04,
+    "productivity_gain": 0.02,
+    "colour": "#24668c"
+  },
+  "balkan_black_sea_accord": {
+    "name": "Pontic-Danube Commonwealth",
+    "description": "A Black Sea and lower-Danube confederation linking Ukraine, Romania, Moldova, Bulgaria and Georgia in a shared maritime corridor.",
+    "eligible_tags": [
+      "UKR",
+      "ROU",
+      "MDA",
+      "BGR",
+      "GEO"
+    ],
+    "required_tags": [
+      "UKR",
+      "ROU",
+      "MDA",
+      "BGR",
+      "GEO"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.72,
+    "minimum_stability": 0.66,
+    "gdp_cost_share": 0.024,
+    "governance_gain": 0.045,
+    "productivity_gain": 0.018,
+    "colour": "#225c91"
+  },
+  "caspian_commonwealth": {
+    "name": "Caspian Basin Federation",
+    "description": "A trans-Caspian energy and transit republic uniting Azerbaijan, Kazakhstan, Turkmenistan and Uzbekistan across the middle corridor.",
+    "eligible_tags": [
+      "AZE",
+      "KAZ",
+      "TKM",
+      "UZB"
+    ],
+    "required_tags": [
+      "AZE",
+      "KAZ",
+      "TKM",
+      "UZB"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.74,
+    "minimum_stability": 0.66,
+    "gdp_cost_share": 0.024,
+    "governance_gain": 0.04,
+    "productivity_gain": 0.02,
+    "colour": "#1d7a8a"
+  },
+  "red_sea_federation": {
+    "name": "Red Sea Maritime Union",
+    "description": "A strategic strait federation linking Suez to Bab el-Mandeb under unified maritime security and port governance.",
+    "eligible_tags": [
+      "EGY",
+      "SDN",
+      "ERI",
+      "DJI",
+      "SAU",
+      "YEM"
+    ],
+    "required_tags": [
+      "EGY",
+      "SDN",
+      "ERI",
+      "DJI",
+      "SAU",
+      "YEM"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.7,
+    "minimum_stability": 0.62,
+    "gdp_cost_share": 0.024,
+    "governance_gain": 0.04,
+    "productivity_gain": 0.018,
+    "colour": "#9c2828"
+  },
+  "great_lakes_african_union": {
+    "name": "African Great Lakes Federation",
+    "description": "A highland East-Central African federation unifying the Great Lakes watersheds, railways and mineral trade routes.",
+    "eligible_tags": [
+      "UGA",
+      "RWA",
+      "BDI",
+      "COD",
+      "TZA",
+      "KEN"
+    ],
+    "required_tags": [
+      "UGA",
+      "RWA",
+      "BDI",
+      "COD",
+      "TZA",
+      "KEN"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.7,
+    "minimum_stability": 0.62,
+    "gdp_cost_share": 0.023,
+    "governance_gain": 0.04,
+    "productivity_gain": 0.018,
+    "colour": "#1e7a52"
+  },
+  "zambezi_confederation": {
+    "name": "Zambezi Basin Commonwealth",
+    "description": "A southern-central African federation spanning the Zambezi corridor from the Atlantic coast to the Indian Ocean.",
+    "eligible_tags": [
+      "ZMB",
+      "ZWE",
+      "MWI",
+      "MOZ",
+      "BWA",
+      "NAM"
+    ],
+    "required_tags": [
+      "ZMB",
+      "ZWE",
+      "MWI",
+      "MOZ",
+      "BWA",
+      "NAM"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.72,
+    "minimum_stability": 0.64,
+    "gdp_cost_share": 0.022,
+    "governance_gain": 0.04,
+    "productivity_gain": 0.018,
+    "colour": "#2a7d46"
+  },
+  "atlas_sahara_union": {
+    "name": "Atlas-Sahara Confederation",
+    "description": "An Atlantic-Sahel federation linking Morocco, Mauritania, Senegal and Mali across coastal ports and trans-Saharan highways.",
+    "eligible_tags": [
+      "MAR",
+      "MRT",
+      "SEN",
+      "MLI"
+    ],
+    "required_tags": [
+      "MAR",
+      "MRT",
+      "SEN",
+      "MLI"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.72,
+    "minimum_stability": 0.64,
+    "gdp_cost_share": 0.022,
+    "governance_gain": 0.04,
+    "productivity_gain": 0.016,
+    "colour": "#b56c24"
+  },
+  "indus_himalaya_accord": {
+    "name": "Indus-Karakoram Federation",
+    "description": "A highland trade and watershed federation binding Pakistan, Afghanistan and Tajikistan from the Pamirs to the Arabian Sea.",
+    "eligible_tags": [
+      "PAK",
+      "AFG",
+      "TJK"
+    ],
+    "required_tags": [
+      "PAK",
+      "AFG",
+      "TJK"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.72,
+    "minimum_stability": 0.62,
+    "gdp_cost_share": 0.023,
+    "governance_gain": 0.04,
+    "productivity_gain": 0.016,
+    "colour": "#1a6e42"
+  },
+  "silk_steppe_union": {
+    "name": "Eurasian Steppe Commonwealth",
+    "description": "An inner-Asian continental commonwealth uniting Kazakhstan, Mongolia and Kyrgyzstan along historic steppe railways.",
+    "eligible_tags": [
+      "KAZ",
+      "MNG",
+      "KGZ"
+    ],
+    "required_tags": [
+      "KAZ",
+      "MNG",
+      "KGZ"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.74,
+    "minimum_stability": 0.66,
+    "gdp_cost_share": 0.022,
+    "governance_gain": 0.04,
+    "productivity_gain": 0.018,
+    "colour": "#2876a8"
+  },
+  "coral_sea_federation": {
+    "name": "Coral Sea Maritime Union",
+    "description": "A Melanesian-Australian oceanic union safeguarding fisheries, cables and shipping across the Coral Sea.",
+    "eligible_tags": [
+      "AUS",
+      "PNG",
+      "SLB",
+      "VUT",
+      "FJI"
+    ],
+    "required_tags": [
+      "AUS",
+      "PNG",
+      "SLB",
+      "VUT",
+      "FJI"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.72,
+    "minimum_stability": 0.7,
+    "gdp_cost_share": 0.024,
+    "governance_gain": 0.04,
+    "productivity_gain": 0.018,
+    "colour": "#16608a"
+  },
+  "northern_andes_federation": {
+    "name": "Equatorial Andes Commonwealth",
+    "description": "A Pacific-Caribbean Andean federation linking Colombia, Ecuador, Peru and Venezuela in one integrated republic.",
+    "eligible_tags": [
+      "COL",
+      "ECU",
+      "PER",
+      "VEN"
+    ],
+    "required_tags": [
+      "COL",
+      "ECU",
+      "PER",
+      "VEN"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.72,
+    "minimum_stability": 0.64,
+    "gdp_cost_share": 0.024,
+    "governance_gain": 0.045,
+    "productivity_gain": 0.018,
+    "colour": "#c79a24"
+  },
+  "southern_atlantic_accord": {
+    "name": "South Atlantic Federation",
+    "description": "A bi-oceanic southern cone republic uniting Argentina, Chile and Uruguay from the Strait of Magellan to the Rio de la Plata.",
+    "eligible_tags": [
+      "ARG",
+      "CHL",
+      "URY"
+    ],
+    "required_tags": [
+      "ARG",
+      "CHL",
+      "URY"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.75,
+    "minimum_stability": 0.68,
+    "gdp_cost_share": 0.024,
+    "governance_gain": 0.045,
+    "productivity_gain": 0.02,
+    "colour": "#3a85c2"
+  },
+  "laurentian_commonwealth": {
+    "name": "North Atlantic Continental Union",
+    "description": "A northern oceanic confederation spanning Canada, the United States, Iceland and Denmark across the Arctic-Atlantic corridor.",
+    "eligible_tags": [
+      "CAN",
+      "USA",
+      "ISL",
+      "DNK"
+    ],
+    "required_tags": [
+      "CAN",
+      "USA",
+      "ISL",
+      "DNK"
+    ],
+    "peaceful_accession": true,
+    "subject_integration": true,
+    "ai_foundation": true,
+    "required_share": 0.76,
+    "minimum_stability": 0.74,
+    "gdp_cost_share": 0.028,
+    "governance_gain": 0.05,
+    "productivity_gain": 0.024,
+    "colour": "#1f477a"
+  }
+}

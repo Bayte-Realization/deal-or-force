@@ -107,10 +107,28 @@ public static class PeacefulFormation
                 cache.Regions.Clear();
             }
             if (cache.Regions.TryGetValue(definition.Id, out var cached)) return cached;
-            var named = campaign.States.Where(s => definition.RequiredRegions.Contains(s.Id, StringComparer.OrdinalIgnoreCase))
-                .Select(s => s.MapIndex).ToHashSet();
-            var wanted = campaign.States.Where(s => named.Contains(s.MapIndex) || named.Contains(s.ParentMapIndex))
-                .Select(s => s.MapIndex).ToHashSet();
+            var named = new HashSet<int>();
+            var required = definition.RequiredRegions;
+            var states = campaign.States;
+            for (var si = 0; si < states.Count; si++)
+            {
+                var st = states[si];
+                for (var ri = 0; ri < required.Length; ri++)
+                {
+                    if (string.Equals(st.Id, required[ri], StringComparison.OrdinalIgnoreCase))
+                    {
+                        named.Add(st.MapIndex);
+                        break;
+                    }
+                }
+            }
+            var wanted = new HashSet<int>();
+            for (var si = 0; si < states.Count; si++)
+            {
+                var st = states[si];
+                if (named.Contains(st.MapIndex) || named.Contains(st.ParentMapIndex))
+                    wanted.Add(st.MapIndex);
+            }
             var map = campaign.ProvinceMap;
             var provinces = new List<int>();
             for (var p = 1; p <= map.ProvinceCount; p++)
@@ -123,8 +141,10 @@ public static class PeacefulFormation
 
     private static bool AtPeace(Campaign campaign, Nation nation)
     {
-        foreach (var w in Warfare.OpenWars(campaign))
+        var live = Warfare.LiveWars(campaign);
+        for (var i = 0; i < live.Count; i++)
         {
+            var w = live[i];
             if (!w.Ended && w.Involves(nation.Id)) return false;
         }
         return true;

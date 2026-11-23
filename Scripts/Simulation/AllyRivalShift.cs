@@ -383,6 +383,7 @@ public static class AllyRivalShift
         {
             relation.GuaranteeByA = false;
             relation.GuaranteeByB = false;
+            campaign.NoteAllianceChange();
             OpinionSystem.Forget(campaign, relation, "guaranteed_us");
         }
         board?.Forget(relation.A, relation.B);

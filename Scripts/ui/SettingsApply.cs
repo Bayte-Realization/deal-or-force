@@ -267,6 +267,7 @@ public partial class DealOrForceGame
             case "map_visual_style":
             case "map_cloud_opacity":
             case "map_consistent_lighting":
+            case "terrain_3d_relief":
                 _globe?.ApplyMapVisualStyle();
                 break;
 
@@ -290,6 +291,8 @@ public partial class DealOrForceGame
 
             case "render_scale":
             case "map_antialiasing":
+            case "map_upscaling_mode":
+            case "map_fsr_sharpness":
                 // The profile owns the tier's share; this is the player's own multiplier on top.
                 if (_globe is not null) _globe.ApplyQuality(_globe.Quality);
                 break;

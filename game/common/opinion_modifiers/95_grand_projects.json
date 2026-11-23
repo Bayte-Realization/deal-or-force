@@ -1,0 +1,31 @@
+// Diplomatic memory of joint Strategic Megaproject consortia and covert sabotage.
+{
+  "grand_project_consortium_partner": {
+    "name": "gp.opinion.consortium_partner",
+    "opinion": 10,
+    "days": 1460,
+    "decays": true,
+    "max_stacks": 2
+  },
+  "grand_project_consortium_completed": {
+    "name": "gp.opinion.consortium_completed",
+    "opinion": 15,
+    "days": 2190,
+    "decays": true,
+    "max_stacks": 2
+  },
+  "grand_project_consortium_fractured": {
+    "name": "gp.opinion.consortium_fractured",
+    "opinion": -12,
+    "days": 1095,
+    "decays": true,
+    "max_stacks": 2
+  },
+  "grand_project_sabotaged_us": {
+    "name": "gp.opinion.sabotaged_us",
+    "opinion": -24,
+    "days": 1825,
+    "decays": true,
+    "max_stacks": 2
+  }
+}

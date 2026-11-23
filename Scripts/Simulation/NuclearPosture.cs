@@ -23,6 +23,12 @@ public sealed partial class Nation
     public int NuclearStruckBy = -1;
     /// <summary>The last day this country used a nuclear weapon first - not in answer to one.</summary>
     public int NuclearFirstUseDay = -100000;
+    /// <summary>Active nuclear doctrine (WAR-02). Default RetaliatoryTriad preserves legacy saves.</summary>
+    public NuclearDoctrine NuclearDoctrine = NuclearDoctrine.RetaliatoryTriad;
+    /// <summary>Day the nuclear doctrine was last changed.</summary>
+    public int NuclearDoctrineDay = -100000;
+    /// <summary>Bilateral strategic arms control pacts: partner NationId -> expiry ElapsedDay.</summary>
+    public Dictionary<int, int> ArmsControlPacts = new();
 }
 
 public sealed partial class Defines
@@ -102,6 +108,18 @@ public sealed partial class Defines
     public float NuclearCityStability { get; set; } = 0.12f;
     public float NuclearCityWarSupport { get; set; } = 0.10f;
     public float NuclearDevastationNotoriety { get; set; } = 30f;
+
+    /// <summary>WAR-02: Nuclear doctrine switching, triad maintenance upkeep, and bilateral arms control treaties.</summary>
+    public float NuclearDoctrineSwitchCost { get; set; } = 15f;
+    public int NuclearDoctrineCooldownDays { get; set; } = 180;
+    /// <summary>Weekly strategic triad upkeep as a small bounded share of holder GDP (discounted by arms control).</summary>
+    public float NuclearTriadWeeklyGdpShare { get; set; } = 0.000018f;
+    public int ArmsControlPactDays { get; set; } = 1825;
+    public float ArmsControlCost { get; set; } = 12f;
+    public float ArmsControlUpkeepDiscount { get; set; } = 0.25f;
+    public float ArmsControlTensionDrop { get; set; } = 15f;
+    public bool AiArmsControlEnabled { get; set; } = true;
+    public float AiArmsControlChance { get; set; } = 0.015f;
 }
 
 /// <summary>
@@ -124,9 +142,185 @@ public sealed partial class Defines
 /// </summary>
 public static class NuclearPosture
 {
-    public static bool IsHolder(Campaign c, Nation n) => n is not null && Deterrence.TierOf(c, n) >= 1;
+    public static bool IsHolder(Campaign c, Nation n) => n is not null && DefconSystem.CachedDeterrenceTier(c, n) >= 1;
 
-    public static bool Active(Campaign c) => DefconSystem.Enabled(c) && c.FeatureEnabled("nuclear_posture");
+    public static bool Active(Campaign c) => DefconSystem.Enabled(c) && Deterrence.IsNuclearEraEnabled(c);
+
+    private static int EffectivePostureCooldown(Campaign c, Nation n)
+    {
+        var baseDays = Math.Max(0, c.Defines.NuclearPostureCooldownDays);
+        return n is not null && n.NuclearDoctrine == NuclearDoctrine.EscalationToDeescalate
+            ? Math.Max(1, (int)MathF.Round(baseDays * 0.67f))
+            : baseDays;
+    }
+
+    /// <summary>True if <paramref name="n"/> has at least one active bilateral arms control pact.</summary>
+    public static bool HasActiveArmsControl(Campaign c, Nation n)
+    {
+        if (c is null || n is null || n.ArmsControlPacts is null || n.ArmsControlPacts.Count == 0) return false;
+        foreach (var (partnerId, expiryDay) in n.ArmsControlPacts)
+        {
+            if (expiryDay <= c.ElapsedDays) continue;
+            var partner = c.NationById(partnerId);
+            if (partner is { Population: > 0 } && IsHolder(c, partner) && !AtWarWith(c, n.Id, partnerId))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>True if two nuclear powers currently share an active bilateral arms control treaty.</summary>
+    public static bool HasArmsControlWith(Campaign c, Nation a, Nation b)
+    {
+        if (c is null || a is null || b is null || a.ArmsControlPacts is null) return false;
+        return a.ArmsControlPacts.TryGetValue(b.Id, out var exp) && exp > c.ElapsedDays;
+    }
+
+    /// <summary>Weekly treasury upkeep of a nuclear holder's strategic triad, adjusted by doctrine and arms control.</summary>
+    public static float WeeklyTriadUpkeep(Campaign c, Nation n)
+    {
+        if (!Active(c) || !IsHolder(c, n) || n.Population <= 0 || n.Gdp <= 0f) return 0f;
+        var share = MathF.Max(0f, c.Defines.NuclearTriadWeeklyGdpShare);
+        if (share <= 0f) return 0f;
+        var tier = Math.Max(1, Deterrence.TierOf(c, n));
+        var upkeep = n.Gdp * share * tier * Deterrence.UpkeepMultiplier(n.NuclearDoctrine);
+        if (HasActiveArmsControl(c, n))
+            upkeep *= 1f - M.Clamp(c.Defines.ArmsControlUpkeepDiscount, 0f, 0.75f);
+        return MathF.Max(0f, upkeep);
+    }
+
+    public static bool CanSetDoctrine(Campaign c, Nation n, NuclearDoctrine doctrine, out string reason)
+    {
+        reason = "";
+        if (!Active(c)) { reason = Loc.Get("nuc.refuse.era_disabled"); return false; }
+        if (!IsHolder(c, n)) { reason = Loc.Get("Your country holds no nuclear deterrent."); return false; }
+        if (n.NuclearDoctrine == doctrine) { reason = Loc.Get("nuc.refuse.same_doctrine"); return false; }
+        var cooldown = Math.Max(0, c.Defines.NuclearDoctrineCooldownDays);
+        if (c.ElapsedDays - n.NuclearDoctrineDay < cooldown)
+        {
+            reason = Loc.Format("nuc.refuse.doctrine_cooldown", c.ElapsedDays - n.NuclearDoctrineDay, cooldown);
+            return false;
+        }
+        var cost = MathF.Max(0f, c.Defines.NuclearDoctrineSwitchCost);
+        if (n.PoliticalPoints < cost)
+        {
+            reason = Loc.Format("nuc.refuse.doctrine_cost", cost, n.PoliticalPoints);
+            return false;
+        }
+        return true;
+    }
+
+    public static bool SetDoctrine(Campaign c, Nation n, NuclearDoctrine doctrine)
+    {
+        if (!CanSetDoctrine(c, n, doctrine, out _)) return false;
+        n.PoliticalPoints -= MathF.Max(0f, c.Defines.NuclearDoctrineSwitchCost);
+        n.NuclearDoctrine = doctrine;
+        n.NuclearDoctrineDay = c.ElapsedDays;
+        if (doctrine == NuclearDoctrine.EscalationToDeescalate)
+        {
+            var active = c.ActiveNations;
+            for (var i = 0; i < active.Count; i++)
+            {
+                var other = active[i];
+                if (other.Id == n.Id || other.Population <= 0 || Allied(c, n.Id, other.Id)) continue;
+                var rel = CampaignDiplomacy.Peek(c, n.Id, other.Id);
+                if (rel is not null && (rel.Stance == DiplomaticStance.Rival || IsHolder(c, other)))
+                    rel.Tension = MathF.Min(100f, rel.Tension + 6f);
+            }
+        }
+        else if (doctrine == NuclearDoctrine.NoFirstUse)
+        {
+            var active = c.ActiveNations;
+            for (var i = 0; i < active.Count; i++)
+            {
+                var other = active[i];
+                if (other.Id == n.Id || other.Population <= 0 || !IsHolder(c, other)) continue;
+                var rel = CampaignDiplomacy.Peek(c, n.Id, other.Id);
+                if (rel is not null && rel.Tension > 0f)
+                    rel.Tension = MathF.Max(0f, rel.Tension - 4f);
+            }
+        }
+        c.Chronicle.Record(c, "nuclear_doctrine_changed", n.Id, -1, Loc.Get(Deterrence.DoctrineNameKey(doctrine)));
+        c.MarkStrategicChange();
+        return true;
+    }
+
+    public static bool CanProposeArmsControl(Campaign c, Nation proposer, Nation target, out string reason)
+    {
+        reason = "";
+        if (!Active(c)) { reason = Loc.Get("nuc.refuse.era_disabled"); return false; }
+        if (!IsHolder(c, proposer) || !IsHolder(c, target)) { reason = Loc.Get("nuc.refuse.arms_holders"); return false; }
+        if (proposer.Id == target.Id || proposer.Population <= 0 || target.Population <= 0)
+        { reason = Loc.Get("nuc.refuse.arms_holders"); return false; }
+        if (AtWarWith(c, proposer.Id, target.Id)) { reason = Loc.Get("nuc.refuse.arms_at_war"); return false; }
+        if (HasArmsControlWith(c, proposer, target)) { reason = Loc.Get("nuc.refuse.arms_active"); return false; }
+        var cost = MathF.Max(0f, c.Defines.ArmsControlCost);
+        if (proposer.PoliticalPoints < cost)
+        {
+            reason = Loc.Format("nuc.refuse.arms_cost", cost, proposer.PoliticalPoints);
+            return false;
+        }
+        return true;
+    }
+
+    public static bool TargetAcceptsArmsControl(Campaign c, Nation proposer, Nation target, out string reason)
+    {
+        reason = "";
+        if (proposer is null || target is null) { reason = Loc.Get("nuc.refuse.arms_holders"); return false; }
+        if (target.NuclearStruckBy == proposer.Id && c.ElapsedDays - target.NuclearStruckDay < 3650)
+        { reason = Loc.Get("nuc.refuse.arms_hostile"); return false; }
+        var rel = CampaignDiplomacy.Peek(c, target.Id, proposer.Id);
+        if ((rel?.Opinion ?? 0f) < -45f)
+        { reason = Loc.Get("nuc.refuse.arms_hostile"); return false; }
+        if (target.NuclearDoctrine == NuclearDoctrine.EscalationToDeescalate && target.NuclearPosture <= 2)
+        { reason = Loc.Get("nuc.refuse.arms_doctrine"); return false; }
+        return true;
+    }
+
+    public static bool SignArmsControl(Campaign c, Nation proposer, Nation target)
+    {
+        if (!CanProposeArmsControl(c, proposer, target, out _)) return false;
+        if (!TargetAcceptsArmsControl(c, proposer, target, out _)) return false;
+        var d = c.Defines;
+        proposer.PoliticalPoints -= MathF.Max(0f, d.ArmsControlCost);
+        var expiry = c.ElapsedDays + Math.Max(30, d.ArmsControlPactDays);
+        proposer.ArmsControlPacts ??= new Dictionary<int, int>();
+        target.ArmsControlPacts ??= new Dictionary<int, int>();
+        proposer.ArmsControlPacts[target.Id] = expiry;
+        target.ArmsControlPacts[proposer.Id] = expiry;
+
+        var drop = MathF.Max(0f, d.ArmsControlTensionDrop);
+        if (CampaignDiplomacy.Get(c, proposer.Id, target.Id) is { } forth)
+        {
+            forth.Tension = MathF.Max(0f, forth.Tension - drop);
+            OpinionSystem.Remember(c, forth, "nuclear_arms_control_pact");
+        }
+        if (CampaignDiplomacy.Get(c, target.Id, proposer.Id) is { } back)
+        {
+            back.Tension = MathF.Max(0f, back.Tension - drop);
+            OpinionSystem.Remember(c, back, "nuclear_arms_control_pact");
+        }
+        c.Chronicle.Record(c, "nuclear_arms_control_signed", proposer.Id, target.Id);
+        c.MarkStrategicChange();
+        return true;
+    }
+
+    public static bool CancelArmsControl(Campaign c, Nation issuer, Nation target, bool dueToWar = false)
+    {
+        if (c is null || issuer is null || target is null) return false;
+        var hadA = issuer.ArmsControlPacts is not null && issuer.ArmsControlPacts.Remove(target.Id);
+        var hadB = target.ArmsControlPacts is not null && target.ArmsControlPacts.Remove(issuer.Id);
+        if (!hadA && !hadB) return false;
+        if (CampaignDiplomacy.Get(c, target.Id, issuer.Id) is { } back)
+        {
+            back.Tension = MathF.Min(100f, back.Tension + (dueToWar ? 15f : 10f));
+            OpinionSystem.Remember(c, back, "nuclear_arms_control_broken");
+        }
+        if (CampaignDiplomacy.Get(c, issuer.Id, target.Id) is { } forth)
+            forth.Tension = MathF.Min(100f, forth.Tension + (dueToWar ? 15f : 10f));
+        c.Chronicle.Record(c, "nuclear_arms_control_broken", issuer.Id, target.Id);
+        c.MarkStrategicChange();
+        return true;
+    }
 
     /// <summary>The most alarmed holder's posture, 5 when none has raised its alert.</summary>
     public static int Lowest(Campaign c, out Nation holder)
@@ -134,8 +328,12 @@ public static class NuclearPosture
         holder = null;
         var lowest = 5;
         if (!Active(c)) return lowest;
-        foreach (var n in c.Nations)
+        var active = c.ActiveNations;
+        for (var i = 0; i < active.Count; i++)
+        {
+            var n = active[i];
             if (n.NuclearPosture < lowest && n.Population > 0 && IsHolder(c, n)) { lowest = n.NuclearPosture; holder = n; }
+        }
         return Math.Clamp(lowest, 1, 5);
     }
 
@@ -143,7 +341,16 @@ public static class NuclearPosture
     public static int Effective(Campaign c, Nation n) =>
         IsHolder(c, n) ? Math.Min(DefconSystem.CurrentLevel(c), Math.Clamp(n.NuclearPosture, 1, 5)) : DefconSystem.CurrentLevel(c);
 
-    private static bool AtWarWith(Campaign c, int a, int b) => Warfare.OpenWars(c).Any(w => !w.Ended && w.Opposes(a, b));
+    private static bool AtWarWith(Campaign c, int a, int b)
+    {
+        var open = Warfare.OpenWars(c);
+        for (var i = 0; i < open.Count; i++)
+        {
+            var w = open[i];
+            if (!w.Ended && w.Opposes(a, b)) return true;
+        }
+        return false;
+    }
 
     /// <summary>Player-visible country targets follow the same non-civil wars as automatic
     /// targeting. Choosing a country never creates a war or bypasses readiness and cooldown.</summary>
@@ -156,21 +363,22 @@ public static class NuclearPosture
         if (!Active(c)) return Loc.Get("The nuclear alert is switched off in this campaign.");
         if (!IsHolder(c, n)) return Loc.Get("Your country holds no nuclear deterrent.");
         var d = c.Defines;
+        var postureCooldown = EffectivePostureCooldown(c, n);
         switch (action)
         {
             case "raise":
                 if (n.NuclearPosture <= 1) return Loc.Get("The forces already stand at the highest alert.");
-                if (c.ElapsedDays - n.NuclearPostureDay < d.NuclearPostureCooldownDays)
+                if (c.ElapsedDays - n.NuclearPostureDay < postureCooldown)
                     return Loc.Format("The posture was changed {0} days ago; the next change after {1}.",
-                        c.ElapsedDays - n.NuclearPostureDay, d.NuclearPostureCooldownDays);
+                        c.ElapsedDays - n.NuclearPostureDay, postureCooldown);
                 if (n.PoliticalPoints < d.NuclearPostureRaiseCost)
                     return Loc.Format("Raising the alert costs {0:0} political credit; there is {1:0.#}.", d.NuclearPostureRaiseCost, n.PoliticalPoints);
                 return "";
             case "stand_down":
                 if (n.NuclearPosture >= 5) return Loc.Get("The forces are already at routine readiness.");
-                if (c.ElapsedDays - n.NuclearPostureDay < d.NuclearPostureCooldownDays)
+                if (c.ElapsedDays - n.NuclearPostureDay < postureCooldown)
                     return Loc.Format("The posture was changed {0} days ago; the next change after {1}.",
-                        c.ElapsedDays - n.NuclearPostureDay, d.NuclearPostureCooldownDays);
+                        c.ElapsedDays - n.NuclearPostureDay, postureCooldown);
                 return "";
             case "test":
                 if (c.ElapsedDays - n.LastNuclearTestDay < d.NuclearTestCooldownDays)
@@ -184,6 +392,12 @@ public static class NuclearPosture
                 if (!c.FeatureEnabled("nuclear_strikes")) return Loc.Get("No government in this world can order a nuclear weapon used.");
                 if (d.NuclearCityCasualties <= 0f) return Loc.Get("No government in this world can order a strike on cities.");
                 if (n.NuclearPosture > 1) return Loc.Get("Only forces at DEFCON 1 can be ordered to use a weapon.");
+                if (!Deterrence.AllowsFirstUse(n.NuclearDoctrine))
+                {
+                    var avengedCity = Avenging(c, n);
+                    if (avengedCity is null || (target is not null && avengedCity.Id != target.Id))
+                        return Loc.Get("nuc.refuse.no_first_use");
+                }
                 if (c.ElapsedDays - n.LastNuclearStrikeDay < d.NuclearStrikeCooldownDays)
                     return Loc.Format("A weapon was used {0} days ago; the next order after {1}.",
                         c.ElapsedDays - n.LastNuclearStrikeDay, d.NuclearStrikeCooldownDays);
@@ -195,6 +409,12 @@ public static class NuclearPosture
                 if (target is not null && !Targets(c, n).Any(t => t.Id == target.Id)) return Loc.Get("The selected country is not an opponent in an active interstate war.");
                 if (!c.FeatureEnabled("nuclear_strikes")) return Loc.Get("No government in this world can order a nuclear weapon used.");
                 if (n.NuclearPosture > 1) return Loc.Get("Only forces at DEFCON 1 can be ordered to use a weapon.");
+                if (!Deterrence.AllowsFirstUse(n.NuclearDoctrine))
+                {
+                    var avengedStrike = Avenging(c, n);
+                    if (avengedStrike is null || (target is not null && avengedStrike.Id != target.Id))
+                        return Loc.Get("nuc.refuse.no_first_use");
+                }
                 if (c.ElapsedDays - n.LastNuclearStrikeDay < d.NuclearStrikeCooldownDays)
                     return Loc.Format("A weapon was used {0} days ago; the next order after {1}.",
                         c.ElapsedDays - n.LastNuclearStrikeDay, d.NuclearStrikeCooldownDays);
@@ -229,9 +449,15 @@ public static class NuclearPosture
                 // who is not on its side - as much as it concerns them (OpinionWitnesses): its
                 // rivals and neighbours in full, the far side of the world hardly at all.
                 if (n.NuclearPosture <= 2)
-                    foreach (var other in c.Nations)
+                {
+                    var active = c.ActiveNations;
+                    for (var i = 0; i < active.Count; i++)
+                    {
+                        var other = active[i];
                         if (other.Id != n.Id && other.Population > 0 && !Allied(c, n.Id, other.Id))
                             OpinionWitnesses.Witness(c, other, n, null, "nuclear_threats");
+                    }
+                }
                 break;
             case "stand_down":
                 n.NuclearPosture++;
@@ -245,14 +471,16 @@ public static class NuclearPosture
                 // Everybody not on its side notes a test, by as much as it concerns them. It used
                 // to be the same minus twenty, twice over, for every government on earth - and
                 // it created a relation with every one of them to say so.
-                foreach (var other in c.Nations)
+                var activeForTest = c.ActiveNations;
+                for (var i = 0; i < activeForTest.Count; i++)
                 {
+                    var other = activeForTest[i];
                     if (other.Id == n.Id || other.Population <= 0) continue;
                     if (!Allied(c, n.Id, other.Id)) OpinionWitnesses.Witness(c, other, n, null, "nuclear_test");
                     var relation = CampaignDiplomacy.Peek(c, n.Id, other.Id);
                     if (relation is null) continue;
                     if (relation.Stance == DiplomaticStance.Rival || relation.TensionStage >= (int)TensionStage.Crisis)
-                        relation.Tension = MathF.Min(100f, relation.Tension + d.NuclearTestTension);
+                        relation.Tension = MathF.Min(100f, relation.Tension + d.NuclearTestTension * Deterrence.ThreatMultiplier(n.NuclearDoctrine));
                 }
                 break;
             case "strike":
@@ -286,31 +514,180 @@ public static class NuclearPosture
     /// of its own to defend with it. When the AI orders it at all is still Existential (defeat or
     /// the capital lost); NuclearCounterforce false keeps the old homeland-only rule.
     /// </summary>
+    [ThreadStatic] private static Dictionary<int, float> _strikeWeightScratch;
+    [ThreadStatic] private static HashSet<int> _existentialEnemiesScratch;
+    [ThreadStatic] private static List<Nation> _weekHoldersScratch;
+    [ThreadStatic] private static HashSet<int> _weekHolderIdsScratch;
+    [ThreadStatic] private static HashSet<int> _batchAllEnemiesScratch;
+    [ThreadStatic] private static HashSet<int> _batchPendingHoldersScratch;
+    [ThreadStatic] private static Dictionary<int, (HashSet<int> Enemies, int AvengedId, int MapIndex)> _batchHolderInfoScratch;
+    [ThreadStatic] private static HashSet<long> _weekWarPairsScratch;
+    [ThreadStatic] private static HashSet<int> _weekNonCivilWarHoldersScratch;
+    [ThreadStatic] private static HashSet<int> _weekStrikeHoldersScratch;
+    [ThreadStatic] private static List<DiplomaticRelation> _weekTensionRelationsScratch;
+    [ThreadStatic] private static Dictionary<int, List<(Nation Other, DiplomaticRelation Relation)>> _weekCrisisByHolderScratch;
+    [ThreadStatic] private static List<List<(Nation Other, DiplomaticRelation Relation)>> _weekCrisisPoolScratch;
+    [ThreadStatic] private static Dictionary<int, Nation> _holderByIdScratch;
+
+    private sealed class SubjectHolderCache
+    {
+        public int Day = int.MinValue;
+        public int NationCount = -1;
+        public readonly List<Nation> SubjectHolders = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, SubjectHolderCache> SubjectHolderCaches = new();
+
+    private static long PairKey(int a, int b) => a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
+
+    internal static void FillActiveHolderTensionRelations(Campaign c, HashSet<int> holderSet, List<int> sortedHolderIds,
+        List<DiplomaticRelation> into)
+    {
+        into.Clear();
+        var holderCount = sortedHolderIds.Count;
+        if (c is null || holderCount < 2) return;
+        var pairChecks = (long)holderCount * (holderCount - 1) / 2;
+        var relations = c.Relations;
+        if (pairChecks <= relations.Count)
+        {
+            for (var i = 0; i < holderCount; i++)
+            {
+                var idA = sortedHolderIds[i];
+                for (var j = i + 1; j < holderCount; j++)
+                {
+                    var idB = sortedHolderIds[j];
+                    var key = ((long)idA << 32) | (uint)idB;
+                    if (!relations.TryGetValue(key, out var rel)) continue;
+                    if (rel.Tension >= 15f || rel.TensionStage >= (int)TensionStage.Crisis || rel.CrisisOpenedDay >= 0)
+                        into.Add(rel);
+                }
+            }
+            return;
+        }
+        foreach (var rel in relations.Values)
+        {
+            if (rel.Tension < 15f && rel.TensionStage < (int)TensionStage.Crisis && rel.CrisisOpenedDay < 0) continue;
+            if (!holderSet.Contains(rel.A) || !holderSet.Contains(rel.B)) continue;
+            into.Add(rel);
+        }
+        if (into.Count > 1)
+            into.Sort(static (left, right) =>
+            {
+                var la = Math.Min(left.A, left.B);
+                var ra = Math.Min(right.A, right.B);
+                var cmp = la.CompareTo(ra);
+                if (cmp != 0) return cmp;
+                return Math.Max(left.A, left.B).CompareTo(Math.Max(right.A, right.B));
+            });
+    }
+
+    internal static void FillHoldersWithStrikeTarget(Campaign c, IReadOnlyList<StrategicWar> openWars,
+        HashSet<int> candidateHolderIds, HashSet<int> into)
+    {
+        into.Clear();
+        var topology = c?.ProvinceMap;
+        if (topology is null || candidateHolderIds is null || candidateHolderIds.Count == 0 || openWars.Count == 0) return;
+        var allEnemies = _batchAllEnemiesScratch ??= new HashSet<int>();
+        var pending = _batchPendingHoldersScratch ??= new HashSet<int>();
+        var info = _batchHolderInfoScratch ??= new Dictionary<int, (HashSet<int>, int, int)>();
+        allEnemies.Clear();
+        pending.Clear();
+        foreach (var kv in info) kv.Value.Enemies.Clear();
+
+        for (var wi = 0; wi < openWars.Count; wi++)
+        {
+            var war = openWars[wi];
+            if (war.Ended || war.CivilConflict) continue;
+            if (candidateHolderIds.Contains(war.AttackerId)) AddWarEnemies(c, war, war.AttackerId, pending, allEnemies, info);
+            if (candidateHolderIds.Contains(war.DefenderId)) AddWarEnemies(c, war, war.DefenderId, pending, allEnemies, info);
+        }
+        if (pending.Count == 0) return;
+
+        var counterforce = c.Defines.NuclearCounterforce;
+        var armies = c.Armies;
+        var provinceCount = topology.ProvinceCount;
+        var owners = topology.ProvinceToNation;
+        for (var ai = 0; ai < armies.Count; ai++)
+        {
+            var army = armies[ai];
+            if (army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 || army.ProvinceId > provinceCount ||
+                army.Divisions < 0.1f || army.Personnel * army.Strength <= 0f || !allEnemies.Contains(army.NationId))
+                continue;
+            foreach (var holderId in pending)
+            {
+                if (!info.TryGetValue(holderId, out var h)) continue;
+                if (!h.Enemies.Contains(army.NationId)) continue;
+                if ((h.AvengedId >= 0 && army.NationId == h.AvengedId) ||
+                    owners[army.ProvinceId] == h.MapIndex ||
+                    counterforce)
+                {
+                    into.Add(holderId);
+                }
+            }
+            if (into.Count > 0)
+            {
+                pending.ExceptWith(into);
+                if (pending.Count == 0) break;
+            }
+        }
+        allEnemies.Clear();
+        pending.Clear();
+
+        static void AddWarEnemies(Campaign campaign, StrategicWar war, int holderId, HashSet<int> pendingSet,
+            HashSet<int> allEnemyIds, Dictionary<int, (HashSet<int> Enemies, int AvengedId, int MapIndex)> map)
+        {
+            var holder = campaign.NationById(holderId);
+            if (holder is null) return;
+            if (!map.TryGetValue(holderId, out var entry))
+            {
+                entry = (new HashSet<int>(), -1, 0);
+                map[holderId] = entry;
+            }
+            if (pendingSet.Add(holderId))
+            {
+                var avenged = Avenging(campaign, holder);
+                map[holderId] = (entry.Enemies, avenged?.Id ?? -1, holder.MapIndex);
+            }
+            foreach (var enemyId in war.EnemiesOf(holderId))
+            {
+                entry.Enemies.Add(enemyId);
+                allEnemyIds.Add(enemyId);
+            }
+        }
+    }
+
     public static int StrikeTarget(Campaign c, Nation n, out HashSet<int> enemies, Nation target = null)
     {
         enemies = new HashSet<int>();
         var topology = c.ProvinceMap;
         if (topology is null || n is null) return 0;
-        foreach (var war in Warfare.OpenWars(c))
+        var open = Warfare.OpenWars(c);
+        for (var wi = 0; wi < open.Count; wi++)
+        {
+            var war = open[wi];
             if (!war.Ended && !war.CivilConflict && war.Involves(n.Id))
                 foreach (var id in war.EnemiesOf(n.Id)) enemies.Add(id);
+        }
         if (target is not null)
         {
             if (!enemies.Contains(target.Id)) { enemies.Clear(); return 0; }
-            enemies.IntersectWith(new[] { target.Id });
+            enemies.Clear();
+            enemies.Add(target.Id);
         }
         if (enemies.Count == 0) return 0;
         // An answer to a strike falls on the striker's strongest force wherever it stands; failing
         // that, and always otherwise, the weapon defends our own soil.
         var avenged = Avenging(c, n);
         if (target is not null && avenged?.Id != target.Id) avenged = null;
-        var weight = new Dictionary<int, float>();
+        var weight = _strikeWeightScratch ??= new Dictionary<int, float>();
         var passes = c.Defines.NuclearCounterforce ? 3 : 2;
+        var armies = c.Armies;
         for (var pass = avenged is null ? 1 : 0; pass < passes; pass++)
         {
             weight.Clear();
-            foreach (var army in c.Armies)
+            for (var ai = 0; ai < armies.Count; ai++)
             {
+                var army = armies[ai];
                 if (!enemies.Contains(army.NationId) || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 ||
                     army.ProvinceId > topology.ProvinceCount || army.Divisions < 0.1f) continue;
                 if (pass == 0 ? army.NationId != avenged.Id : pass == 1 && topology.ProvinceToNation[army.ProvinceId] != n.MapIndex) continue;
@@ -320,9 +697,45 @@ public static class NuclearPosture
             var bestWeight = 0f;
             foreach (var (province, value) in weight)
                 if (value > bestWeight || value == bestWeight && province < best) { best = province; bestWeight = value; }
-            if (best > 0) return best;
+            if (best > 0) { weight.Clear(); return best; }
         }
+        weight.Clear();
         return 0;
+    }
+
+    private static bool HasStrikeTarget(Campaign c, Nation n)
+    {
+        var topology = c.ProvinceMap;
+        if (topology is null || n is null) return false;
+        var enemies = _existentialEnemiesScratch ??= new HashSet<int>();
+        enemies.Clear();
+        var open = Warfare.OpenWars(c);
+        for (var wi = 0; wi < open.Count; wi++)
+        {
+            var war = open[wi];
+            if (!war.Ended && !war.CivilConflict && war.Involves(n.Id))
+                foreach (var id in war.EnemiesOf(n.Id)) enemies.Add(id);
+        }
+        if (enemies.Count == 0) return false;
+        var avenged = Avenging(c, n);
+        var counterforce = c.Defines.NuclearCounterforce;
+        var armies = c.Armies;
+        for (var ai = 0; ai < armies.Count; ai++)
+        {
+            var army = armies[ai];
+            if (army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 ||
+                army.ProvinceId > topology.ProvinceCount || army.Divisions < 0.1f ||
+                army.Personnel * army.Strength <= 0f || !enemies.Contains(army.NationId)) continue;
+            if ((avenged is not null && army.NationId == avenged.Id) ||
+                topology.ProvinceToNation[army.ProvinceId] == n.MapIndex ||
+                counterforce)
+            {
+                enemies.Clear();
+                return true;
+            }
+        }
+        enemies.Clear();
+        return false;
     }
 
     /// <summary>
@@ -437,8 +850,10 @@ public static class NuclearPosture
                 enemy.NuclearPostureDay = c.ElapsedDays;
             }
         }
-        foreach (var other in c.Nations)
+        var activeForStrike = c.ActiveNations;
+        for (var i = 0; i < activeForStrike.Count; i++)
         {
+            var other = activeForStrike[i];
             if (other.Id == n.Id || other.Population <= 0) continue;
             // The countries struck remember it in full. Everybody else is a witness, and a
             // nuclear weapon used is everybody's business: never less than half, whatever the
@@ -463,9 +878,14 @@ public static class NuclearPosture
     public static Nation Shadow(Campaign c)
     {
         Nation latest = null;
-        foreach (var n in c.Nations)
-            if (c.ElapsedDays - n.LastNuclearStrikeDay < c.Defines.NuclearShadowDays &&
+        var shadowDays = c.Defines.NuclearShadowDays;
+        var active = c.ActiveNations;
+        for (var i = 0; i < active.Count; i++)
+        {
+            var n = active[i];
+            if (c.ElapsedDays - n.LastNuclearStrikeDay < shadowDays &&
                 (latest is null || n.LastNuclearStrikeDay > latest.LastNuclearStrikeDay)) latest = n;
+        }
         return latest;
     }
 
@@ -475,14 +895,17 @@ public static class NuclearPosture
     /// </summary>
     internal static bool Existential(Campaign c, Nation n)
     {
+        if (c is null || n is null) return false;
         var controllers = c.ProvinceController;
         var capitalLost = controllers is not null && n.CapitalProvinceId > 0 && n.CapitalProvinceId < controllers.Length &&
                           controllers[n.CapitalProvinceId] != n.MapIndex;
-        foreach (var war in Warfare.OpenWars(c))
+        var open = Warfare.OpenWars(c);
+        for (var wi = 0; wi < open.Count; wi++)
         {
+            var war = open[wi];
             if (war.Ended || war.CivilConflict || !war.Involves(n.Id)) continue;
             if (capitalLost || (war.IsAttacking(n.Id) ? war.WarScore : -war.WarScore) < -60f)
-                return StrikeTarget(c, n, out _) > 0;
+                return HasStrikeTarget(c, n);
         }
         return false;
     }
@@ -493,27 +916,98 @@ public static class NuclearPosture
     /// how far its alert stands below 4. A holder at routine readiness protects nobody this way -
     /// raising the alert is how a guarantee becomes believable.
     /// </summary>
+    internal static void WarmUmbrellaCache(Campaign c)
+    {
+        if (c is null) return;
+        var cache = SubjectHolderCaches.GetOrCreateValue(c);
+        if (cache.Day == c.ElapsedDays && cache.NationCount == c.ActiveNations.Count) return;
+        lock (cache)
+        {
+            if (cache.Day == c.ElapsedDays && cache.NationCount == c.ActiveNations.Count) return;
+            cache.SubjectHolders.Clear();
+            var active = c.ActiveNations;
+            for (var i = 0; i < active.Count; i++)
+            {
+                var candidate = active[i];
+                if (candidate.IsSubject && candidate.Population > 0 && IsHolder(c, candidate))
+                    cache.SubjectHolders.Add(candidate);
+            }
+            cache.NationCount = active.Count;
+            cache.Day = c.ElapsedDays;
+        }
+    }
+
     public static float UmbrellaPrice(Campaign c, Nation attacker, Nation target, out Nation patron)
     {
         patron = null;
         if (!Active(c) || attacker is null || target is null || c.Defines.AiNuclearUmbrellaPrice <= 0f) return 0f;
-        var steps = 0;
-        foreach (var holder in c.Nations)
+        var bestScore = 0f;
+        Nation bestPatron = null;
+        void Consider(Nation holder)
         {
-            if (holder.NuclearPosture >= 4 || holder.Id == attacker.Id || holder.Id == target.Id || holder.Population <= 0) continue;
-            if (!Allied(c, holder.Id, target.Id) || Allied(c, holder.Id, attacker.Id) || !IsHolder(c, holder)) continue;
-            if (4 - holder.NuclearPosture > steps) { steps = 4 - holder.NuclearPosture; patron = holder; }
+            if (holder is null || holder.NuclearPosture >= 4 || holder.Id == attacker.Id || holder.Id == target.Id || holder.Population <= 0) return;
+            if (Allied(c, holder.Id, attacker.Id) || !IsHolder(c, holder)) return;
+            var score = (4 - holder.NuclearPosture) * Deterrence.UmbrellaMultiplier(holder.NuclearDoctrine);
+            if (score > bestScore) { bestScore = score; bestPatron = holder; }
         }
-        return steps * c.Defines.AiNuclearUmbrellaPrice;
+        var allies = c.Caches.Protectors.AlliesOf(c, target.Id);
+        for (var i = 0; i < allies.Length; i++) Consider(c.NationById(allies[i]));
+        if (target.IsSubject && target.OverlordId >= 0) Consider(c.NationById(target.OverlordId));
+        WarmUmbrellaCache(c);
+        var cache = SubjectHolderCaches.GetOrCreateValue(c);
+        var shList = cache.SubjectHolders;
+        for (var i = 0; i < shList.Count; i++)
+        {
+            var sh = shList[i];
+            if (sh.AnswersTo(target.Id)) Consider(sh);
+        }
+        patron = bestPatron;
+        return bestScore * c.Defines.AiNuclearUmbrellaPrice;
     }
 
     private static bool Allied(Campaign c, int a, int b) =>
         CampaignDiplomacy.Peek(c, a, b) is { Stance: DiplomaticStance.Allied } ||
         (c.NationById(a)?.AnswersTo(b) ?? false) || (c.NationById(b)?.AnswersTo(a) ?? false);
 
+    private static void PruneArmsControlPacts(Campaign c)
+    {
+        List<int> expired = null;
+        var active = c.ActiveNations;
+        for (var i = 0; i < active.Count; i++)
+        {
+            var nation = active[i];
+            if (nation.ArmsControlPacts is null || nation.ArmsControlPacts.Count == 0) continue;
+            expired?.Clear();
+            foreach (var (partnerId, expiryDay) in nation.ArmsControlPacts)
+            {
+                var partner = c.NationById(partnerId);
+                if (partner is null || partner.Population <= 0 || nation.Population <= 0 || expiryDay <= c.ElapsedDays)
+                {
+                    (expired ??= new List<int>()).Add(partnerId);
+                    continue;
+                }
+                if (AtWarWith(c, nation.Id, partnerId))
+                    (expired ??= new List<int>()).Add(-partnerId - 1);
+            }
+            if (expired is null || expired.Count == 0) continue;
+            foreach (var entry in expired)
+            {
+                if (entry >= 0) nation.ArmsControlPacts.Remove(entry);
+                else
+                {
+                    var partnerId = -entry - 1;
+                    var partner = c.NationById(partnerId);
+                    if (partner is not null) CancelArmsControl(c, nation, partner, dueToWar: true);
+                    else nation.ArmsControlPacts.Remove(partnerId);
+                }
+            }
+        }
+    }
+
     /// <summary>
-    /// The week: coercion felt by every enemy of an alarmed holder, the computer's governments'
-    /// own decisions, and at the brink the incidents nobody chose. Runs on the DEFCON review day.
+    /// The week: triad upkeep, arms control maintenance, coercion felt by every enemy of an alarmed
+    /// holder, the computer's governments' own decisions, and at the brink the incidents nobody chose.
+    /// Runs on the DEFCON review day.
     /// </summary>
     public static void Week(Campaign c)
     {
@@ -525,21 +1019,43 @@ public static class NuclearPosture
         if (!Active(c)) yield break;
         var d = c.Defines;
         var liveWars = Warfare.LiveWars(c);
-        foreach (var holder in c.Nations)
+        PruneArmsControlPacts(c);
+        var holders = _weekHoldersScratch ??= new List<Nation>(16);
+        var holderIds = _weekHolderIdsScratch ??= new HashSet<int>(16);
+        holders.Clear();
+        holderIds.Clear();
+        var nations = c.ActiveNations;
+        for (var i = 0; i < nations.Count; i++)
         {
-            if (holder.NuclearPosture >= 3 || holder.Population <= 0 || !IsHolder(c, holder)) continue;
-            var pressure = d.NuclearCoercionWarSupport * (3 - holder.NuclearPosture);
-            foreach (var war in liveWars)
+            var nation = nations[i];
+            if (nation.Population <= 0 || !IsHolder(c, nation)) continue;
+            holders.Add(nation);
+            holderIds.Add(nation.Id);
+        }
+        for (var hi = 0; hi < holders.Count; hi++)
+        {
+            var holder = holders[hi];
+            var upkeep = WeeklyTriadUpkeep(c, holder);
+            if (upkeep > 0f)
             {
+                holder.Treasury -= upkeep;
+                MoneyLedger.Book(holder, MoneyFlow.AlertUpkeep, -upkeep);
+            }
+            if (holder.NuclearPosture >= 3) continue;
+            var pressure = d.NuclearCoercionWarSupport * (3 - holder.NuclearPosture) *
+                Deterrence.CoercionMultiplier(holder.NuclearDoctrine);
+            for (var wi = 0; wi < liveWars.Count; wi++)
+            {
+                var war = liveWars[wi];
                 if (war.Ended || !war.Involves(holder.Id)) continue;
                 foreach (var enemyId in war.EnemiesOf(holder.Id))
-                    if (c.NationById(enemyId) is { } enemy && !IsHolder(c, enemy))
+                    if (c.NationById(enemyId) is { } enemy && !holderIds.Contains(enemy.Id))
                         enemy.WarSupport = M.Clamp01(enemy.WarSupport - pressure);
             }
         }
         yield return 0;
         if (d.AiNuclearPosture)
-            foreach (var _ in AiWeekStages(c, liveWars))
+            foreach (var _ in AiWeekStages(c, liveWars, holders, holderIds))
                 yield return 0;
         // A false warning in a tense season (DEFCON 3) takes the world to the brink's antechamber,
         // never past it: 1983 was a satellite mistaking sunlight for missiles, and the man on
@@ -548,14 +1064,31 @@ public static class NuclearPosture
         if (DefconSystem.CurrentLevel(c) == 3 && MovementRules.Roll(c.Seed, 0x4E55, c.ElapsedDays, 0x1983) < d.NuclearIncidentChance)
         {
             // Two holders the incident is between: the most alarmed pair.
-            var pair = c.Nations.Where(n => n.Population > 0 && IsHolder(c, n)).OrderBy(n => n.NuclearPosture).ThenBy(n => n.Id).Take(2).ToList();
+            Nation first = null, second = null;
+            for (var hi = 0; hi < holders.Count; hi++)
+            {
+                var candidate = holders[hi];
+                if (first is null || candidate.NuclearPosture < first.NuclearPosture ||
+                    (candidate.NuclearPosture == first.NuclearPosture && candidate.Id < first.Id))
+                {
+                    second = first;
+                    first = candidate;
+                }
+                else if (second is null || candidate.NuclearPosture < second.NuclearPosture ||
+                    (candidate.NuclearPosture == second.NuclearPosture && candidate.Id < second.Id))
+                {
+                    second = candidate;
+                }
+            }
             c.DefconLevel = Math.Max(2, c.DefconLevel - 1);
             c.DefconDaysInStage = 0;
             c.DefconPeakLevel = Math.Min(c.DefconPeakLevel, c.DefconLevel);
-            c.Chronicle.Record(c, "nuclear_incident", pair.Count > 0 ? pair[0].Id : c.Player?.Id ?? 0,
-                pair.Count > 1 ? pair[1].Id : -1, c.DefconLevel.ToString());
+            c.Chronicle.Record(c, "nuclear_incident", first?.Id ?? c.Player?.Id ?? 0,
+                second?.Id ?? -1, c.DefconLevel.ToString());
             c.MarkStrategicChange();
         }
+        holders.Clear();
+        holderIds.Clear();
     }
 
     /// <summary>
@@ -564,35 +1097,118 @@ public static class NuclearPosture
     /// standoff with another holder is at crisis; stand down two months after the danger passes;
     /// sometimes test a weapon in a standoff; and talk on the red telephone when both are alarmed.
     /// </summary>
-    private static IEnumerable<int> AiWeekStages(Campaign c, IReadOnlyList<StrategicWar> liveWars)
+    private static IEnumerable<int> AiWeekStages(Campaign c, IReadOnlyList<StrategicWar> liveWars,
+        List<Nation> holders, HashSet<int> holderIds)
     {
         var d = c.Defines;
-        var holders = c.Nations.Where(n => n.Population > 0 && IsHolder(c, n)).OrderBy(n => n.Id).ToList();
+        holders.Sort(static (left, right) => left.Id.CompareTo(right.Id));
+
+        var warPairs = _weekWarPairsScratch ??= new HashSet<long>();
+        var warHolders = _weekNonCivilWarHoldersScratch ??= new HashSet<int>();
+        var candidateStrikeHolders = _batchPendingHoldersScratch ??= new HashSet<int>();
+        var strikeHolders = _weekStrikeHoldersScratch ??= new HashSet<int>();
+        warPairs.Clear();
+        warHolders.Clear();
+        candidateStrikeHolders.Clear();
+        strikeHolders.Clear();
+        var controllers = c.ProvinceController;
+        for (var wi = 0; wi < liveWars.Count; wi++)
+        {
+            var war = liveWars[wi];
+            if (war.Ended) continue;
+            if (holderIds.Contains(war.AttackerId))
+            {
+                if (!war.CivilConflict) warHolders.Add(war.AttackerId);
+                foreach (var eid in war.EnemiesOf(war.AttackerId))
+                    if (holderIds.Contains(eid)) warPairs.Add(PairKey(war.AttackerId, eid));
+            }
+            if (holderIds.Contains(war.DefenderId))
+            {
+                if (!war.CivilConflict) warHolders.Add(war.DefenderId);
+                foreach (var eid in war.EnemiesOf(war.DefenderId))
+                    if (holderIds.Contains(eid)) warPairs.Add(PairKey(war.DefenderId, eid));
+            }
+        }
+        if (warHolders.Count > 0)
+        {
+            for (var hi = 0; hi < holders.Count; hi++)
+            {
+                var h = holders[hi];
+                if (!warHolders.Contains(h.Id)) continue;
+                var capLost = controllers is not null && h.CapitalProvinceId > 0 && h.CapitalProvinceId < controllers.Length &&
+                              controllers[h.CapitalProvinceId] != h.MapIndex;
+                var losing60 = false;
+                if (!capLost)
+                {
+                    for (var wi = 0; wi < liveWars.Count; wi++)
+                    {
+                        var w = liveWars[wi];
+                        if (!w.Ended && !w.CivilConflict && w.Involves(h.Id) &&
+                            (w.IsAttacking(h.Id) ? w.WarScore : -w.WarScore) < -60f)
+                        { losing60 = true; break; }
+                    }
+                }
+                if (capLost || losing60) candidateStrikeHolders.Add(h.Id);
+            }
+            if (candidateStrikeHolders.Count > 0)
+                FillHoldersWithStrikeTarget(c, liveWars, candidateStrikeHolders, strikeHolders);
+            candidateStrikeHolders.Clear();
+        }
+
+        var tenseRelations = _weekTensionRelationsScratch ??= new List<DiplomaticRelation>();
+        FillActiveHolderTensionRelations(c, holderIds, BuildSortedIds(holders), tenseRelations);
+        var holderById = _holderByIdScratch ??= new Dictionary<int, Nation>();
+        holderById.Clear();
+        for (var hi = 0; hi < holders.Count; hi++) holderById[holders[hi].Id] = holders[hi];
+
+        var crisisByHolder = _weekCrisisByHolderScratch ??= new Dictionary<int, List<(Nation Other, DiplomaticRelation Relation)>>();
+        var crisisPool = _weekCrisisPoolScratch ??= new List<List<(Nation Other, DiplomaticRelation Relation)>>();
+        foreach (var list in crisisByHolder.Values) { list.Clear(); crisisPool.Add(list); }
+        crisisByHolder.Clear();
+        for (var ri = 0; ri < tenseRelations.Count; ri++)
+        {
+            var rel = tenseRelations[ri];
+            if (rel.TensionStage < (int)TensionStage.Crisis) continue;
+            if (!holderById.TryGetValue(rel.A, out var na) || !holderById.TryGetValue(rel.B, out var nb)) continue;
+            AddCrisisPartner(crisisByHolder, crisisPool, na.Id, nb, rel);
+            AddCrisisPartner(crisisByHolder, crisisPool, nb.Id, na, rel);
+        }
+        foreach (var list in crisisByHolder.Values)
+            if (list.Count > 1) list.Sort(static (l, r) => l.Other.Id.CompareTo(r.Other.Id));
+
         for (var idx = 0; idx < holders.Count; idx++)
         {
             if (idx > 0 && (idx % 4 == 0 || Campaign.StageOverdue())) yield return 0;
             var n = holders[idx];
             if (n.IsHuman) continue;
             var wanted = 5;
-            foreach (var war in liveWars)
+            if (warHolders.Contains(n.Id))
             {
-                if (war.Ended || !war.Involves(n.Id) || war.CivilConflict) continue;
-                // Losing badly, not merely behind: the score swings past -25 and back every month.
-                var losing = (war.IsAttacking(n.Id) ? war.WarScore : -war.WarScore) < -40f;
-                var againstHolder = war.EnemiesOf(n.Id).Any(id => IsHolder(c, c.NationById(id)));
-                wanted = Math.Min(wanted, againstHolder ? 2 : losing ? 3 : 4);
+                for (var wi = 0; wi < liveWars.Count; wi++)
+                {
+                    var war = liveWars[wi];
+                    if (war.Ended || !war.Involves(n.Id) || war.CivilConflict) continue;
+                    var losing = (war.IsAttacking(n.Id) ? war.WarScore : -war.WarScore) < -40f;
+                    var againstHolder = false;
+                    foreach (var enemyId in war.EnemiesOf(n.Id))
+                        if (holderIds.Contains(enemyId)) { againstHolder = true; break; }
+                    wanted = Math.Min(wanted, againstHolder ? 2 : losing ? 3 : 4);
+                }
             }
-            var existential = Existential(c, n);
+            var existential = strikeHolders.Contains(n.Id);
             var avenging = Avenging(c, n) is not null;
             if (existential || avenging) wanted = 1;
-            foreach (var other in holders)
+            if (crisisByHolder.TryGetValue(n.Id, out var partners))
             {
-                if (other.Id == n.Id || CampaignDiplomacy.Peek(c, n.Id, other.Id) is not { } relation) continue;
-                if (relation.TensionStage >= (int)TensionStage.Clashes) wanted = Math.Min(wanted, 3);
-                else if (relation.TensionStage >= (int)TensionStage.Crisis) wanted = Math.Min(wanted, 4);
-                if (relation.TensionStage >= (int)TensionStage.Crisis && n.NuclearPosture <= 3 &&
-                    MovementRules.Roll(c.Seed, n.Id, c.ElapsedDays, 0x7E57 + other.Id) < d.AiNuclearTestChance)
-                    Apply(c, n, "test");
+                for (var oi = 0; oi < partners.Count; oi++)
+                {
+                    var (other, relation) = partners[oi];
+                    if (relation.TensionStage >= (int)TensionStage.Clashes) wanted = Math.Min(wanted, 3);
+                    else if (relation.TensionStage >= (int)TensionStage.Crisis) wanted = Math.Min(wanted, 4);
+                    if (relation.TensionStage >= (int)TensionStage.Crisis && n.NuclearPosture <= 3 &&
+                        MovementRules.Roll(c.Seed, n.Id, c.ElapsedDays, 0x7E57 + other.Id) < d.AiNuclearTestChance)
+                        Apply(c, n, "test");
+                }
             }
             // Slow to move either way: a government does not flip its forces' alert every time a
             // front line wobbles, and a call on the red telephone buys a season before the next rise.
@@ -613,21 +1229,59 @@ public static class NuclearPosture
                 Apply(c, n, IsHolder(c, Avenging(c, n)) && Refusal(c, n, "devastate").Length == 0 ? "devastate" : "strike");
         }
         yield return 0;
-        for (var i = 0; i < holders.Count; i++)
+        for (var ti = 0; ti < tenseRelations.Count; ti++)
         {
-            if (i > 0 && (i % 4 == 0 || Campaign.StageOverdue())) yield return 0;
-            for (var j = i + 1; j < holders.Count; j++)
+            if (ti > 0 && (ti % 8 == 0 || Campaign.StageOverdue())) yield return 0;
+            var rel = tenseRelations[ti];
+            if (rel.TensionStage < (int)TensionStage.Crisis || rel.Opinion < -60f) continue;
+            var loId = Math.Min(rel.A, rel.B);
+            var hiId = Math.Max(rel.A, rel.B);
+            if (!holderById.TryGetValue(loId, out var a) || !holderById.TryGetValue(hiId, out var b)) continue;
+            if (a.IsHuman || b.IsHuman || a.NuclearPosture > 3 || b.NuclearPosture > 3 || warPairs.Contains(PairKey(a.Id, b.Id))) continue;
+            if (MovementRules.Roll(c.Seed, a.Id, c.ElapsedDays, 0x7E1E + b.Id) < d.AiHotlineChance) Apply(c, a, "hotline", b);
+        }
+        if (d.AiArmsControlEnabled && d.AiArmsControlChance > 0f)
+        {
+            for (var ti = 0; ti < tenseRelations.Count; ti++)
             {
-                var a = holders[i]; var b = holders[j];
-                if (a.IsHuman || b.IsHuman || a.NuclearPosture > 3 || b.NuclearPosture > 3 || AtWarWith(c, a.Id, b.Id)) continue;
-                var rel = CampaignDiplomacy.Peek(c, a.Id, b.Id);
-                if ((rel?.Opinion ?? 0f) < -60f) continue;
-                // A call is about the two of them: only when their own standoff is at crisis or worse.
-                if ((rel?.TensionStage ?? 0) < (int)TensionStage.Crisis) continue;
-                if (MovementRules.Roll(c.Seed, a.Id, c.ElapsedDays, 0x7E1E + b.Id) < d.AiHotlineChance) Apply(c, a, "hotline", b);
+                var rel = tenseRelations[ti];
+                if (rel.Tension < 15f || rel.Opinion < -20f) continue;
+                var loId = Math.Min(rel.A, rel.B);
+                var hiId = Math.Max(rel.A, rel.B);
+                if (!holderById.TryGetValue(loId, out var a) || !holderById.TryGetValue(hiId, out var b)) continue;
+                if (a.IsHuman || b.IsHuman || warPairs.Contains(PairKey(a.Id, b.Id)) || HasArmsControlWith(c, a, b)) continue;
+                if (MovementRules.Roll(c.Seed, a.Id, c.ElapsedDays, 0x4152 + b.Id) < d.AiArmsControlChance)
+                    SignArmsControl(c, a, b);
             }
         }
+        tenseRelations.Clear();
+        holderById.Clear();
+        warPairs.Clear();
+        warHolders.Clear();
+        strikeHolders.Clear();
+
+        static List<int> BuildSortedIds(List<Nation> list)
+        {
+            var ids = _weekSortedHolderIdsScratch ??= new List<int>(list.Count);
+            ids.Clear();
+            for (var i = 0; i < list.Count; i++) ids.Add(list[i].Id);
+            return ids;
+        }
+
+        static void AddCrisisPartner(Dictionary<int, List<(Nation Other, DiplomaticRelation Relation)>> map,
+            List<List<(Nation Other, DiplomaticRelation Relation)>> pool, int id, Nation other, DiplomaticRelation relation)
+        {
+            if (!map.TryGetValue(id, out var list))
+            {
+                if (pool.Count > 0) { list = pool[^1]; pool.RemoveAt(pool.Count - 1); }
+                else list = new List<(Nation, DiplomaticRelation)>(4);
+                map[id] = list;
+            }
+            list.Add((other, relation));
+        }
     }
+
+    [ThreadStatic] private static List<int> _weekSortedHolderIdsScratch;
 }
 
 /// <summary>A holder's nuclear posture: raise, stand_down, test, or hotline to <see cref="TargetId"/>.</summary>
@@ -649,5 +1303,60 @@ public sealed class NuclearPostureCommand : ICampaignCommand
         Changed = NuclearPosture.Apply(campaign, nation, Action, campaign.NationById(TargetId));
         if (!Changed)
             DiagnosticLogs.Write("orders", $"NUCLEAR_POSTURE_REFUSED nation={IssuerId} action={Action} reason={NuclearPosture.Refusal(campaign, nation, Action, campaign.NationById(TargetId))}");
+    }
+}
+
+/// <summary>Switch a nuclear holder's strategic doctrine (WAR-02) via lockstep command.</summary>
+public sealed class SetNuclearDoctrineCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public NuclearDoctrine Doctrine { get; init; } = NuclearDoctrine.RetaliatoryTriad;
+    public bool Changed { get; private set; }
+
+    public void Apply(Campaign campaign)
+    {
+        Changed = false;
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        var nation = campaign.NationById(IssuerId);
+        Changed = NuclearPosture.SetDoctrine(campaign, nation, Doctrine);
+        if (!Changed)
+        {
+            NuclearPosture.CanSetDoctrine(campaign, nation, Doctrine, out var reason);
+            DiagnosticLogs.Write("orders", $"NUCLEAR_DOCTRINE_REFUSED nation={IssuerId} doctrine={Doctrine} reason={reason}");
+        }
+    }
+}
+
+/// <summary>Propose or withdraw from a bilateral strategic arms control treaty between nuclear holders (WAR-02).</summary>
+public sealed class NuclearArmsControlCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int TargetId { get; init; } = -1;
+    public bool Propose { get; init; } = true;
+    public bool Changed { get; private set; }
+
+    public void Apply(Campaign campaign)
+    {
+        Changed = false;
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        if (!NuclearPosture.Active(campaign)) return;
+        var issuer = campaign.NationById(IssuerId);
+        var target = campaign.NationById(TargetId);
+        if (issuer is null || target is null) return;
+        if (Propose)
+        {
+            Changed = NuclearPosture.SignArmsControl(campaign, issuer, target);
+            if (!Changed)
+            {
+                var reason = "";
+                if (NuclearPosture.CanProposeArmsControl(campaign, issuer, target, out reason))
+                    NuclearPosture.TargetAcceptsArmsControl(campaign, issuer, target, out reason);
+                DiagnosticLogs.Write("orders", $"ARMS_CONTROL_REFUSED nation={IssuerId} target={TargetId} reason={reason}");
+            }
+        }
+        else
+        {
+            Changed = NuclearPosture.CancelArmsControl(campaign, issuer, target, dueToWar: false);
+        }
     }
 }

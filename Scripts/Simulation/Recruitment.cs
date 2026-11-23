@@ -32,6 +32,12 @@ public sealed partial class Defines
 
     /// <summary>Baseline training batches in wartime.</summary>
     public int RecruitmentWartimeBatchCap { get; set; } = 24;
+
+    /// <summary>Bound long-campaign peacetime AI 1-division army bloat while keeping full wartime mobilization.</summary>
+    public bool AiPeacetimeForceLimitEnabled { get; set; } = true;
+
+    /// <summary>Maximum standing divisions an AI nation raises or holds in peace (war removes this ceiling).</summary>
+    public int AiPeacetimeMaxDivisions { get; set; } = 64;
 }
 
 public static class RecruitmentSystem
@@ -105,7 +111,9 @@ public static class RecruitmentSystem
         if (!Enabled(c)) return Loc.Get("Recruitment is disabled in this campaign.");
         var nation = c.NationById(issuer);
         var state = c.StateByMapIndex(stateId);
-        var template = UnitTypeCatalog.All.FirstOrDefault(t => t.Id == templateId);
+        UnitTypeDefinition template = null;
+        foreach (var candidate in UnitTypeCatalog.All)
+            if (candidate.Id == templateId) { template = candidate; break; }
         if (nation is null || c.ProvinceMap is null) return "Campaign map is not ready.";
         if (state is null || state.NationMapIndex != nation.MapIndex) return "Choose an owned training region.";
         var maxBatch = MaxDivisionsPerBatch(c, nation, state, mode);
@@ -115,8 +123,30 @@ public static class RecruitmentSystem
 
         var atWar = Fighting(c, issuer);
         var cap = DynamicQueueCap(c, nation, mode);
-        if (c.Recruitment.Count(o => o.NationId == issuer) >= cap)
+        var activeForIssuer = 0;
+        var queuedDivisions = 0;
+        var orders = c.Recruitment;
+        for (var i = 0; i < orders.Count; i++)
+        {
+            if (orders[i].NationId == issuer)
+            {
+                activeForIssuer++;
+                queuedDivisions += orders[i].Count;
+            }
+        }
+        if (activeForIssuer >= cap)
             return Loc.Format("Training capacity reached: {0} batches.", cap);
+        if (c.Defines.AiPeacetimeForceLimitEnabled && !nation.IsHuman && nation.Id != (c.Player?.Id ?? -1) &&
+            !atWar && nation.WarPlanTargetId < 0 && c.Armies.Count + queuedDivisions + count >= 12)
+        {
+            var limit = PeacetimeAiForceLimit(c, nation);
+            var standing = 0f;
+            var armies = c.Armies;
+            for (var i = 0; i < armies.Count; i++)
+                if (armies[i].NationId == issuer) standing += armies[i].Divisions;
+            if (standing + queuedDivisions + count > limit)
+                return Loc.Format("Peacetime force limit reached: {0} divisions.", (int)MathF.Ceiling(limit));
+        }
 
         var cost = TotalBatchCost(c, nation, template, count, mode, out _);
         if (!allowDeficit && nation.Treasury < cost)
@@ -181,7 +211,7 @@ public static class RecruitmentSystem
         if (nation is null || map is null) return -1;
         // The state must be the nation's own: training pauses under occupation and
         // does not deploy into ground merely controlled.
-        var state = c.States.FirstOrDefault(s => s.MapIndex == stateId);
+        var state = c.StateByMapIndex(stateId);
         if (state is null || state.NationMapIndex != nation.MapIndex) return -1;
         // The state→provinces index turns a 35 000-province scan into a read of the
         // handful of provinces that state actually has.
@@ -191,18 +221,96 @@ public static class RecruitmentSystem
         return -1;
     }
 
+    internal static float PeacetimeAiForceLimit(Campaign c, Nation nation)
+    {
+        var popM = MathF.Max(1f, nation.Population / 1_000_000f);
+        var gdp = MathF.Max(1f, nation.Gdp);
+        return Math.Clamp(6f + MathF.Sqrt(popM) * 3.2f + MathF.Sqrt(gdp) * 0.9f,
+            12f, Math.Max(16f, c.Defines.AiPeacetimeMaxDivisions));
+    }
+
     public static void Tick(Campaign c)
     {
         foreach (var _ in TickStages(c)) { }
+    }
+
+    private sealed class TickOrdersScratch
+    {
+        public readonly List<RecruitmentOrder> Orders = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, TickOrdersScratch> TickOrdersScratches = new();
+    [ThreadStatic] private static Dictionary<int, float> _standingScratch;
+    [ThreadStatic] private static HashSet<int> _atWarScratch;
+
+    /// <summary>
+    /// Gentle weekly peacetime equilibrium once world armies grow large in long campaigns:
+    /// demobilises one idle weakest garrison per over-limit peaceful AI nation (men return to
+    /// manpower reserve cleanly, never disrupting ongoing wars or war plans).
+    /// </summary>
+    private static void DemobilizePeacetimeSurplus(Campaign c)
+    {
+        if (!c.Defines.AiPeacetimeForceLimitEnabled || c.ElapsedDays < 90) return;
+        if (c.Armies.Count < 1000 || c.ElapsedDays % 7 != 5) return;
+        var standing = _standingScratch ??= new Dictionary<int, float>();
+        var atWar = _atWarScratch ??= new HashSet<int>();
+        standing.Clear();
+        atWar.Clear();
+        var live = Warfare.LiveWars(c);
+        for (var wi = 0; wi < live.Count; wi++)
+        {
+            var w = live[wi];
+            if (w.Ended) continue;
+            atWar.Add(w.AttackerId);
+            atWar.Add(w.DefenderId);
+            foreach (var p in w.AttackerAllies) atWar.Add(p);
+            foreach (var p in w.DefenderAllies) atWar.Add(p);
+        }
+        var armies = c.Armies;
+        for (var ai = 0; ai < armies.Count; ai++)
+        {
+            var army = armies[ai];
+            standing[army.NationId] = standing.GetValueOrDefault(army.NationId) + army.Divisions;
+        }
+        var active = c.ActiveNations;
+        var playerId = c.Player?.Id ?? -1;
+        for (var ni = 0; ni < active.Count; ni++)
+        {
+            var nation = active[ni];
+            if (nation.IsHuman || nation.Id == playerId || nation.Population <= 0 || nation.Movement is not null) continue;
+            if (nation.WarPlanTargetId >= 0 || atWar.Contains(nation.Id)) continue;
+            var have = standing.GetValueOrDefault(nation.Id);
+            if (have <= 0f) continue;
+            var limit = PeacetimeAiForceLimit(c, nation);
+            if (have <= limit * 1.25f) continue;
+            Army weakestIdle = null;
+            for (var ai = 0; ai < armies.Count; ai++)
+            {
+                var army = armies[ai];
+                if (army.NationId != nation.Id || army.InBattle || army.AssignedWarId >= 0 || army.FrontLineId >= 0) continue;
+                if (army.PlanActive && (army.OrderProvinceId >= 0 || army.Route.Count > 0 || army.PlannedRoute.Count > 0)) continue;
+                if (weakestIdle is null || army.Power < weakestIdle.Power) weakestIdle = army;
+            }
+            if (weakestIdle is not null)
+                Demobilisation.StandDown(c, nation, weakestIdle, "peacetime_demobilisation");
+        }
+        standing.Clear();
+        atWar.Clear();
     }
 
     /// <summary>The same recruitment pass, yielded between orders.</summary>
     public static IEnumerable<int> TickStages(Campaign c)
     {
         if (!MechanicFeatures.SystemEnabled(c, nameof(RecruitmentSystem))) yield break;
+        DemobilizePeacetimeSurplus(c);
+        if (c.Recruitment.Count == 0) yield break;
+        var orders = TickOrdersScratches.GetOrCreateValue(c).Orders;
+        orders.Clear();
+        for (var i = 0; i < c.Recruitment.Count; i++) orders.Add(c.Recruitment[i]);
         var ticked = 0;
-        foreach (var order in c.Recruitment.ToArray())
+        for (var oi = 0; oi < orders.Count; oi++)
         {
+            var order = orders[oi];
             if (++ticked % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (order.LastProcessedDay >= c.ElapsedDays) continue;
             order.LastProcessedDay = c.ElapsedDays;
@@ -213,8 +321,16 @@ public static class RecruitmentSystem
             if (order.TrainedDays < order.DurationDays) continue;
             var map = c.ProvinceMap;
             var position = map.CenterOf(province);
-            var id = c.Armies.Count == 0 ? 1 : c.Armies.Max(a => a.Id) + 1;
-            var serial = c.Armies.Count(a => a.NationId == nation.Id) + 1;
+            var maxArmyId = 0;
+            var serialCount = 0;
+            for (var ai = 0; ai < c.Armies.Count; ai++)
+            {
+                var army = c.Armies[ai];
+                if (army.Id > maxArmyId) maxArmyId = army.Id;
+                if (army.NationId == nation.Id) serialCount++;
+            }
+            var id = c.Armies.Count == 0 ? 1 : maxArmyId + 1;
+            var serial = serialCount + 1;
             var (initOrg, initEquip, initExp, initCoh) = order.Mode switch
             {
                 MobilisationMode.RapidCallUp => (0.55f, 0.78f, 0.06f, 0.62f),

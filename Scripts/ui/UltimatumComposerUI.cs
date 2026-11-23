@@ -126,10 +126,10 @@ public partial class DealOrForceGame
         PrependToScreenHeader(ultHead, FlagBadge(target.Tag, 30, target.DisplayName));
         rows.AddChild(WrappedUltimatumText(Loc.Format("If accepted: {0} days of protected peace. If refused: {1} days before war can be declared.",
             Math.Max(1, _campaign.Defines.UltimatumSettlementTruceDays), Math.Max(1, _campaign.Defines.UltimatumRefusalTruceDays)), 13));
-        var body = new HBoxContainer { Name = "UltimatumColumns", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
+        var body = new HBoxContainer { Name = "UltimatumColumns", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
         body.AddThemeConstantOverride("separation", 20);
         rows.AddChild(body);
-        var land = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        var land = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
         body.AddChild(land);
         SectionRule(land, "Territorial demands");
         var search = new LineEdit { Name = "UltimatumRegionSearch", PlaceholderText = Tr("Search regions…"), ClearButtonEnabled = true };
@@ -139,7 +139,7 @@ public partial class DealOrForceGame
         land.AddChild(_ultimatumRegionCount);
         var regionScroll = new ScrollContainer { Name = "UltimatumRegionsScroll",
             SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, ClipContents = true, FollowFocus = true };
         land.AddChild(regionScroll);
         var regionRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         regionRows.AddThemeConstantOverride("separation", 4);
@@ -184,12 +184,12 @@ public partial class DealOrForceGame
         ShowRegionCount("");
         var terms = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         terms.AddThemeConstantOverride("separation", 10);
-        var termsColumn = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        var termsColumn = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
         body.AddChild(termsColumn);
         SectionRule(termsColumn, "Additional demands");
         var termsScroll = new ScrollContainer { Name = "UltimatumTermsScroll",
             SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, ClipContents = true, FollowFocus = true };
         termsColumn.AddChild(termsScroll); termsScroll.AddChild(terms);
         terms.AddChild(WrappedUltimatumText("One-time reparations · billions of dollars", 13));
         _ultimatumCash = new SpinBox { Name = "UltimatumReparations", MinValue = 0, Step = .01,
@@ -277,14 +277,20 @@ public partial class DealOrForceGame
         _ultimatumCash.ValueChanged += _ => RefreshUltimatumComposer();
         _ultimatumEmbargo.Toggled += _ => RefreshUltimatumComposer();
         _ultimatumPact.Toggled += _ => RefreshUltimatumComposer();
-        var footer = new PanelContainer { Name = "UltimatumSettlementFooter" };
+        var footer = new PanelContainer
+        {
+            Name = "UltimatumSettlementFooter",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ShrinkEnd,
+            ClipContents = true
+        };
         footer.AddThemeStyleboxOverride("panel", WarInsetStyle(10, 10));
         AtlasSurfaceSkin.Attach(footer, AtlasSurfaceSkin.Level.Inset, "war.card");
         rows.AddChild(footer);
-        var foot = new VBoxContainer();
+        var foot = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         foot.AddThemeConstantOverride("separation", 8);
         footer.AddChild(foot);
-        var figures = new HBoxContainer();
+        var figures = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         figures.AddThemeConstantOverride("separation", 16);
         foot.AddChild(figures);
         var strength = NumberCell("Strength ratio", "—");
@@ -295,6 +301,8 @@ public partial class DealOrForceGame
         _ultimatumStrengthFigure = strength.GetNode<Label>("FigureValue");
         _ultimatumShareFigure = share.GetNode<Label>("FigureValue");
         _ultimatumReparationsFigure = reparations.GetNode<Label>("FigureValue");
+        foreach (var fig in new[] { _ultimatumStrengthFigure, _ultimatumShareFigure, _ultimatumReparationsFigure })
+            fig.AddThemeFontOverride("font", PresentationFonts.Tabular());
         _ultimatumAssessment = WrappedUltimatumText("", 16);
         _ultimatumAssessment.Name = "UltimatumAssessment";
         foot.AddChild(_ultimatumAssessment);
@@ -316,7 +324,7 @@ public partial class DealOrForceGame
         actions.AddChild(_ultimatumSend);
         ReadableDecision(panel, "modal.ultimatum");
         RefreshUltimatumComposer();
-        search.GrabFocus();
+        Ui.FocusInputIfDesktop(search);
     }
 
     private static Label WrappedUltimatumText(string text, int size) => new()

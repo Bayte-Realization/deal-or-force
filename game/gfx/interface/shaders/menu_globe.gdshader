@@ -39,14 +39,30 @@ void fragment() {
 	float lamps = textureGrad(night_lights, uv, across, down).r;
 
 	vec3 facing_normal = normalize(NORMAL);
-	float lit = dot(facing_normal, normalize(sun_direction));
+	vec3 view_dir = normalize(VIEW);
+	vec3 sun_dir = normalize(sun_direction);
+	float lit = dot(facing_normal, sun_dir);
 	float day = smoothstep(-0.10, 0.78, lit);
-	vec3 colour = surface * (0.032 + 0.96 * day);
-	// The cities come on as the ground goes dark, a little before full night.
-	float dark = clamp(-lit * 3.0 + 0.22, 0.0, 1.0);
-	colour += lamps * dark * lamp_colour * 0.58;
-	// Air: the edge of the ball is looked at through more of it.
-	float rim = pow(1.0 - clamp(dot(facing_normal, VIEW), 0.0, 1.0), 5.2);
-	colour += rim * air_colour * (0.04 + 0.20 * clamp(lit + 0.15, 0.0, 1.0));
+	// Subtle dusk/dawn Rayleigh twilight band along the planetary terminator.
+	float twilight = smoothstep(-0.18, 0.04, lit) * (1.0 - smoothstep(0.04, 0.34, lit));
+	vec3 colour = surface * (0.034 + 0.96 * day);
+	colour += surface * vec3(0.98, 0.56, 0.28) * twilight * 0.12;
+	// Soft sunlit ocean/orbital specular hint for planetary depth (unshaded, mobile-safe).
+	vec3 half_sum = view_dir + sun_dir;
+	vec3 half_vec = half_sum / max(length(half_sum), 0.0001);
+	float ocean_hint = clamp(1.0 - dot(surface, vec3(0.55, 0.40, 0.15)) * 2.2, 0.0, 1.0);
+	float sun_glint = pow(clamp(dot(facing_normal, half_vec), 0.0, 1.0), 18.0) * ocean_hint * day;
+	colour += vec3(0.76, 0.86, 0.98) * sun_glint * 0.14;
+	// The cities come on as the ground goes dark, with a warm golden core glow.
+	float dark = clamp(-lit * 3.0 + 0.24, 0.0, 1.0);
+	colour += (lamps * 0.54 + lamps * lamps * 0.36) * dark * lamp_colour;
+	// Air: two-stage Fresnel limb (broad azure scatter + razor-sharp sunlit horizon rim).
+	float ndotv = clamp(dot(facing_normal, view_dir), 0.0, 1.0);
+	float rim_broad = pow(1.0 - ndotv, 3.6);
+	float rim_sharp = pow(1.0 - ndotv, 6.2);
+	float limb_sun = clamp(lit + 0.22, 0.0, 1.0);
+	vec3 limb_tint = mix(air_colour, vec3(0.78, 0.89, 1.0), rim_sharp * 0.55);
+	limb_tint = mix(limb_tint, vec3(0.96, 0.64, 0.38), twilight * 0.35);
+	colour += (rim_broad * 0.18 + rim_sharp * 0.24) * limb_tint * (0.06 + 0.94 * limb_sun);
 	ALBEDO = colour * brightness;
 }

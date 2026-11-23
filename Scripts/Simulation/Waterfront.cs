@@ -68,14 +68,15 @@ public static class Waterfront
         var byProvince = ProvinceAccess(map);
 
         var stamp = campaign.States?.Count ?? 0;
+        var ownershipRev = campaign.OwnershipRevision;
         var cache = campaign.Caches.WaterfrontRegions;
         lock (cache.Gate)
         {
-            if (!ReferenceEquals(cache.Map, map) || stamp != cache.StateCount || cache.MapRevision != campaign.MapRevision)
+            if (!ReferenceEquals(cache.Map, map) || stamp != cache.StateCount || cache.MapRevision != ownershipRev)
             {
                 cache.Map = map;
                 cache.StateCount = stamp;
-                cache.MapRevision = campaign.MapRevision;
+                cache.MapRevision = ownershipRev;
                 cache.ByRegion.Clear();
                 for (var province = 1; province <= map.ProvinceCount; province++)
                 {

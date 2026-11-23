@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace DealOrForce.Simulation;
 
@@ -146,40 +147,57 @@ public static class StateFailure
         if (c?.ProvinceMap is null) yield break;
         if (!MechanicFeatures.SystemEnabled(c, nameof(SecessionEvents))) yield break;
         var d = c.Defines;
-        var count = c.Nations.Count;
+        var active = c.ActiveNations;
         var worked = 0;
         if (d.StateCollapses)
         {
             // Waves of a collapse already under way, every day: each runs on its own clock.
-            for (var i = 0; i < count && i < c.Nations.Count; i++)
+            for (var i = 0; i < active.Count; i++)
             {
-                var nation = c.Nations[i];
+                var nation = active[i];
                 if (nation.CollapseStartDay < 0) continue;
-                if (++worked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
-                Continue(c, nation);
+                if (++worked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
+                foreach (var _ in ContinueStages(c, nation)) yield return 0;
             }
             if (c.ElapsedDays % 7 == 6 && c.ElapsedDays >= d.CollapseEarliestDay)
+            {
+                if (Campaign.StageOverdue()) yield return 0;
                 foreach (var _ in BeginStages(c)) yield return 0;
+            }
         }
         if (d.Revolutions && c.ElapsedDays >= d.RevolutionEarliestDay)
-            for (var i = 0; i < count && i < c.Nations.Count; i++)
+            for (var i = 0; i < active.Count; i++)
             {
-                var nation = c.Nations[i];
+                var nation = active[i];
                 if ((c.ElapsedDays + (long)nation.Id) % 30 != 0 || nation.Population <= 0) continue;
-                if (++worked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
-                ConsiderRevolution(c, nation);
+                if (++worked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
+                foreach (var _ in ConsiderRevolutionStages(c, nation)) yield return 0;
             }
         if (d.CollapseReunions)
-            for (var i = 0; i < count && i < c.Nations.Count; i++)
+            for (var i = 0; i < active.Count; i++)
             {
-                var nation = c.Nations[i];
+                var nation = active[i];
                 if ((c.ElapsedDays + (long)nation.Id * 3) % 30 != 17 || nation.Population <= 0) continue;
-                if (++worked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
-                ConsiderReunion(c, nation);
+                if (++worked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
+                foreach (var _ in ConsiderReunionStages(c, nation)) yield return 0;
             }
     }
 
     // ---------------------------------------------------------------------------- signs
+
+    private static int SignCount(Campaign c, Nation nation)
+    {
+        if (c is null || nation is null) return 0;
+        var count = 0;
+        if (CapitalLost(c, nation)) count++;
+        if (RisingsAgainst(c, nation) >= 2) count++;
+        if (LosingWar(c, nation)) count++;
+        if (nation.PaymentArrears > 0f || nation.DebtCondition is DebtCondition.Default or DebtCondition.Insolvent ||
+            nation.Treasury < 0f)
+            count++;
+        if (Radicalism(c, nation) >= 0.45f) count++;
+        return count;
+    }
 
     /// <summary>
     /// The signs of a failing state that hold right now, as localisation keys, in a fixed order.
@@ -214,8 +232,10 @@ public static class StateFailure
     public static int RisingsAgainst(Campaign c, Nation nation)
     {
         var count = 0;
-        foreach (var war in Warfare.OpenWars(c))
+        var live = Warfare.LiveWars(c);
+        for (var wi = 0; wi < live.Count; wi++)
         {
+            var war = live[wi];
             if (war.Ended || !war.CivilConflict || !war.Involves(nation.Id)) continue;
             foreach (var enemyId in war.EnemiesOf(nation.Id))
                 if (c.NationById(enemyId) is { } enemy &&
@@ -228,18 +248,24 @@ public static class StateFailure
 
     private static bool LosingWar(Campaign c, Nation nation)
     {
-        foreach (var war in Warfare.OpenWars(c))
+        var live = Warfare.LiveWars(c);
+        for (var wi = 0; wi < live.Count; wi++)
+        {
+            var war = live[wi];
             if (!war.Ended && war.Involves(nation.Id) &&
                 (war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore) <= -25f)
                 return true;
+        }
         return false;
     }
 
     private static float Radicalism(Campaign c, Nation nation)
     {
         double people = 0, weighted = 0;
-        foreach (var state in c.StatesOf(nation))
+        var states = c.StatesOf(nation);
+        for (var si = 0; si < states.Length; si++)
         {
+            var state = states[si];
             if (state.Population <= 0 || !float.IsFinite(state.Radicalism)) continue;
             people += state.Population;
             weighted += state.Population * (double)M.Clamp01(state.Radicalism);
@@ -250,8 +276,12 @@ public static class StateFailure
     // ---------------------------------------------------------------------------- collapse
 
     /// <summary>Why this state cannot begin to collapse now, or "" when it can.</summary>
-    public static string CollapseRefusal(Campaign c, Nation nation)
+    public static string CollapseRefusal(Campaign c, Nation nation) =>
+        CollapseRefusalReason(c, nation, out _);
+
+    private static string CollapseRefusalReason(Campaign c, Nation nation, out int signCount)
     {
+        signCount = 0;
         if (c is null || nation is null) return "No governed country selected.";
         var d = c.Defines;
         if (!d.StateCollapses) return "State collapse is disabled.";
@@ -262,53 +292,86 @@ public static class StateFailure
         if (c.ElapsedDays - (long)nation.LastCollapseDay < d.CollapseCooldownDays) return "The state is protected from another collapse during recovery.";
         if (!float.IsFinite(nation.Stability) || nation.Stability >= d.CollapseStabilityThreshold)
             return "Institutions remain above the collapse threshold.";
-        if (nation.Population < d.CollapseMinimumPopulation ||
-            c.StatesOf(nation).Count(s => s.Population > 0) < d.CollapseMinimumRegions)
+        var ownStates = c.StatesOf(nation);
+        var peopled = 0;
+        for (var i = 0; i < ownStates.Length; i++)
+            if (ownStates[i].Population > 0) peopled++;
+        if (nation.Population < d.CollapseMinimumPopulation || peopled < d.CollapseMinimumRegions)
             return "Too few residents or governed regions to come apart.";
-        if (Signs(c, nation).Count < Math.Max(1, d.CollapseSignsNeeded)) return "Too few signs of a failing state.";
+        signCount = SignCount(c, nation);
+        if (signCount < Math.Max(1, d.CollapseSignsNeeded)) return "Too few signs of a failing state.";
         return "";
     }
 
     /// <summary>The weekly chance this state begins to collapse.</summary>
     public static float CollapseChance(Campaign c, Nation nation)
     {
-        if (CollapseRefusal(c, nation).Length > 0) return 0f;
+        if (CollapseRefusalReason(c, nation, out var signCount).Length > 0) return 0f;
         var d = c.Defines;
         var depth = M.Clamp01((d.CollapseStabilityThreshold - nation.Stability) / MathF.Max(0.01f, d.CollapseStabilityThreshold));
-        var extra = Signs(c, nation).Count - Math.Max(1, d.CollapseSignsNeeded);
-        var chance = d.CollapseWeeklyChance * depth * (1f + 0.5f * extra);
+        var extra = signCount - Math.Max(1, d.CollapseSignsNeeded);
+        var chance = d.CollapseWeeklyChance * depth * (1f + 0.5f * extra) * FailureEpochFactor(c, nation);
         return float.IsFinite(chance) ? Math.Clamp(chance, 0f, 1f) : 0f;
     }
 
-    private static int CollapsesInLastYear(Campaign c) =>
-        c.Nations.Count(n => n.LastCollapseDay >= 0 && c.ElapsedDays - (long)n.LastCollapseDay < 365);
+    private static float FailureEpochFactor(Campaign c, Nation nation)
+    {
+        if (c is null || nation is null || c.ElapsedDays <= 0) return 1f;
+        var factor = GeopoliticalCycle.SystemicFragmentationPressure(c, nation);
+        factor *= 1f + (AiTemperament.Of(c, nation).Volatility - 0.5f) * 0.22f;
+        if (string.Equals(nation.Tag, "SYR", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(nation.Tag, "MMR", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(nation.Tag, "COD", StringComparison.OrdinalIgnoreCase))
+        {
+            var hash = GeopoliticalCycle.HashNationEpoch(c.Seed, nation, GeopoliticalCycle.DecadeIndex(c.ElapsedDays), 0xFA57);
+            factor *= 0.80f + GeopoliticalCycle.HashToUnit(hash) * 0.50f;
+        }
+        return M.Clamp(factor, 0.65f, 1.65f);
+    }
+
+    private static int CollapsesInLastYear(Campaign c)
+    {
+        var total = 0;
+        var nations = c.ActiveNations;
+        for (var i = 0; i < nations.Count; i++)
+        {
+            var n = nations[i];
+            if (n.LastCollapseDay >= 0 && c.ElapsedDays - (long)n.LastCollapseDay < 365) total++;
+        }
+        return total;
+    }
 
     private static IEnumerable<int> BeginStages(Campaign c)
     {
         var d = c.Defines;
         var thisYear = CollapsesInLastYear(c);
-        var count = c.Nations.Count;
+        var active = c.ActiveNations;
         var scanned = 0;
-        for (var i = 0; i < count && i < c.Nations.Count; i++)
+        for (var i = 0; i < active.Count; i++)
         {
-            var nation = c.Nations[i];
+            var nation = active[i];
             if (thisYear >= d.CollapseWorldPerYear) yield break;
             if (nation.Stability >= d.CollapseStabilityThreshold || nation.Population <= 0) continue;   // the cheap test first
-            if (++scanned % 8 == 0 || Campaign.StageOverdue()) yield return 0;
-            var refusal = CollapseRefusal(c, nation);
+            if (++scanned % 4 == 0 || Campaign.StageOverdue()) yield return 0;
+            var refusal = CollapseRefusalReason(c, nation, out var signCount);
             if (refusal.Length > 0)
             {
                 if (refusal == "Too few signs of a failing state.") Count("collapse_one_sign_weeks");
+                if (Campaign.StageOverdue()) yield return 0;
                 continue;
             }
             var depth = M.Clamp01((d.CollapseStabilityThreshold - nation.Stability) / MathF.Max(0.01f, d.CollapseStabilityThreshold));
-            var extra = Signs(c, nation).Count - Math.Max(1, d.CollapseSignsNeeded);
-            var chance = d.CollapseWeeklyChance * depth * (1f + 0.5f * extra);
+            var extra = signCount - Math.Max(1, d.CollapseSignsNeeded);
+            var chance = d.CollapseWeeklyChance * depth * (1f + 0.5f * extra) * FailureEpochFactor(c, nation);
             if (!float.IsFinite(chance) || chance <= 0f) continue;
             chance = Math.Clamp(chance, 0f, 1f);
             Count("collapse_eligible_weeks");
             if (Escalation.Roll(c.Seed, nation.Id, 0xFA11, c.ElapsedDays, 0x5) >= chance) continue;
-            if (StartCollapse(c, nation)) thisYear++;
+            Campaign.HeavyNext();
+            yield return 0;
+            foreach (var _ in StartCollapseStages(c, nation)) yield return 0;
+            if (nation.CollapseStartDay >= 0) thisYear++;
+            if (Campaign.StageOverdue()) yield return 0;
         }
     }
 
@@ -319,40 +382,53 @@ public static class StateFailure
     /// </summary>
     public static bool StartCollapse(Campaign c, Nation nation)
     {
-        if (c?.ProvinceMap is null || nation is null) return false;
+        foreach (var _ in StartCollapseStages(c, nation)) { }
+        return c?.ProvinceMap is not null && nation is not null && nation.CollapseStartDay >= 0;
+    }
+
+    private static IEnumerable<int> StartCollapseStages(Campaign c, Nation nation)
+    {
+        if (c?.ProvinceMap is null || nation is null) yield break;
         var lastCollapse = nation.LastCollapseDay;
         nation.CollapseStartDay = c.ElapsedDays;
         nation.LastCollapseDay = c.ElapsedDays;
         nation.CollapseWaves = 0;
         nation.CollapseStartPopulation = Math.Max(1, nation.Population);
-        var signs = Signs(c, nation);
+        var signCount = SignCount(c, nation);
         var people = nation.Population;
-        if (Wave(c, nation) == 0)
+        var made = 0;
+        foreach (var step in WaveStages(c, nation))
+        {
+            if (step < 0) yield return 0;
+            else made = step;
+        }
+        if (made == 0)
         {
             nation.CollapseStartDay = -1;
             nation.LastCollapseDay = lastCollapse;
             nation.CollapseWaves = 0;
             nation.CollapseStartPopulation = 0;
             Count("collapse_nothing_to_break");
-            return false;
+            yield break;
         }
         c.Chronicle.Record(c, "state_collapse", nation.Id);
         Count("collapses");
         if (nation.Population >= 50_000_000) Count("collapses_large");
-        Log.Add($"day {c.ElapsedDays} COLLAPSE {nation.Tag} people {people:N0} stability {nation.Stability:0.00} signs {signs.Count}");
-        DiagnosticLogs.Write("simulation", $"STATE_COLLAPSE nation={nation.Tag} stability={nation.Stability:0.00} " +
-            $"signs={signs.Count} people={people} day={c.ElapsedDays}");
+        Log.Add($"day {c.ElapsedDays} COLLAPSE {nation.Tag} people {people:N0} stability {nation.Stability:0.00} signs {signCount}");
+        if (DiagnosticLogs.Enabled)
+            DiagnosticLogs.Write("simulation", $"STATE_COLLAPSE nation={nation.Tag} stability={nation.Stability:0.00} " +
+                $"signs={signCount} people={people} day={c.ElapsedDays}");
         c.MarkStrategicChange();
-        return true;
     }
 
-    private static void Continue(Campaign c, Nation nation)
+    private static IEnumerable<int> ContinueStages(Campaign c, Nation nation)
     {
         var d = c.Defines;
-        if (Over(c, nation)) { End(c, nation); return; }
+        if (Over(c, nation)) { End(c, nation); yield break; }
         var due = (long)nation.CollapseStartDay + (long)nation.CollapseWaves * Math.Max(1, d.CollapseWaveDays);
-        if (c.ElapsedDays < due) return;
-        Wave(c, nation);
+        if (c.ElapsedDays < due) yield break;
+        foreach (var step in WaveStages(c, nation))
+            if (step < 0) yield return 0;
         if (Over(c, nation)) End(c, nation);
     }
 
@@ -378,6 +454,15 @@ public static class StateFailure
     /// <summary>One wave: several sides at once on the first, one or two after. Returns the sides made.</summary>
     private static int Wave(Campaign c, Nation nation)
     {
+        var made = 0;
+        foreach (var step in WaveStages(c, nation))
+            if (step >= 0) made = step;
+        return made;
+    }
+
+    /// <summary>Same wave staged per generated side: yields -1 while yielding frame budget, final item >= 0 is made count.</summary>
+    private static IEnumerable<int> WaveStages(Campaign c, Nation nation)
+    {
         var d = c.Defines;
         var first = nation.CollapseWaves == 0;
         nation.CollapseWaves++;
@@ -387,13 +472,26 @@ public static class StateFailure
         for (var i = 0; i < sides; i++)
         {
             if (Over(c, nation) && !(first && i == 0)) break;
+            if (i > 0) { Campaign.HeavyNext(); yield return -1; }
             var born = BreakOne(c, nation, countsAsOutbreak: first && made == 0, salt: nation.CollapseWaves * 7 + i);
             if (born is null) break;
             made++;
         }
         if (made > 0) Count("waves");
-        return made;
+        yield return made;
     }
+
+    [ThreadStatic] private static List<ScenarioState> _collapseStartsScratch;
+    [ThreadStatic] private static List<ScenarioState> _collapseOwnedScratch;
+    [ThreadStatic] private static Dictionary<int, HashSet<int>> _collapseAdjScratch;
+    [ThreadStatic] private static Stack<HashSet<int>> _collapseSetPool;
+    [ThreadStatic] private static Dictionary<int, ScenarioState> _growByIndexScratch;
+    [ThreadStatic] private static HashSet<int> _growInsideScratch;
+    [ThreadStatic] private static HashSet<int> _growPassedScratch;
+    [ThreadStatic] private static Dictionary<string, long> _majorityByCultureScratch;
+    [ThreadStatic] private static HashSet<string> _nationalOursScratch;
+    [ThreadStatic] private static Dictionary<int, string> _nationalReadyScratch;
+    [ThreadStatic] private static List<Nation> _backersSponsorsScratch;
 
     /// <summary>
     /// One new side: another people's homeland as a state of its own if the state has one ready
@@ -428,13 +526,30 @@ public static class StateFailure
             Escalation.Roll(c.Seed, nation.Id, 0xFA12, c.ElapsedDays, salt);
         var target = Math.Min(ceiling, (long)(basis * (double)share));
         var minimum = Math.Min(target, (long)(basis * (double)d.CollapseSideShareMin * 0.5));
-        float Grievance(ScenarioState s) => s.Stability - 0.6f * s.Radicalism;
+        static float Grievance(ScenarioState s) => s.Stability - 0.6f * s.Radicalism;
         // The worst-governed region first; where it cannot carry a side (too big for what is
         // left to lose, or too small with its neighbours) the next worst - a few tries, not all.
-        foreach (var start in owned.Where(s => s.Population <= ceiling).OrderBy(Grievance).ThenBy(s => s.MapIndex).Take(6))
+        var starts = _collapseStartsScratch ??= new List<ScenarioState>(owned.Count);
+        starts.Clear();
+        for (var i = 0; i < owned.Count; i++)
+            if (owned[i].Population <= ceiling) starts.Add(owned[i]);
+        if (starts.Count > 1)
+            starts.Sort(static (a, b) =>
+            {
+                var ga = a.Stability - 0.6f * a.Radicalism;
+                var gb = b.Stability - 0.6f * b.Radicalism;
+                var cmp = ga.CompareTo(gb);
+                return cmp != 0 ? cmp : a.MapIndex.CompareTo(b.MapIndex);
+            });
+        var tries = Math.Min(6, starts.Count);
+        for (var ti = 0; ti < tries; ti++)
         {
+            var start = starts[ti];
             var ground = Grow(owned, adjacency, start, Grievance, target, ceiling, Math.Max(1, (int)(owned.Count * 0.6f)));
-            if (ground.Count == 0 || ground.Sum(s => s.Population) < minimum) continue;
+            if (ground.Count == 0) continue;
+            long groundPop = 0;
+            for (var gi = 0; gi < ground.Count; gi++) groundPop += ground[gi].Population;
+            if (groundPop < minimum) continue;
             var side = Rise(c, nation, ground, countsAsOutbreak);
             if (side is not null) return side;
         }
@@ -447,8 +562,8 @@ public static class StateFailure
         // The ground grew from its worst-governed region, but a side sits where its people are:
         // its seat, its capital and its name are its most populous region, not a glacier.
         var seed = ground[0];
-        foreach (var region in ground)
-            if (region.Population > seed.Population) seed = region;
+        for (var i = 1; i < ground.Count; i++)
+            if (ground[i].Population > seed.Population) seed = ground[i];
         var (template, ideology, government) = Allegiance(c, nation, seed);
         var parentTag = nation.Tag;
         var parentName = nation.Name;
@@ -489,8 +604,12 @@ public static class StateFailure
         return (template, leading, Known("provisional_government", nation.Government));
     }
 
-    private static string Known(string government, string fallback) =>
-        GovernmentCatalog.All.Any(g => string.Equals(g.Id, government, StringComparison.OrdinalIgnoreCase)) ? government : fallback;
+    private static string Known(string government, string fallback)
+    {
+        foreach (var g in GovernmentCatalog.All)
+            if (string.Equals(g.Id, government, StringComparison.OrdinalIgnoreCase)) return government;
+        return fallback;
+    }
 
     /// <summary>
     /// The regions that can leave: peopled, not the capital, not still settling from the last
@@ -501,37 +620,64 @@ public static class StateFailure
     {
         var map = c.ProvinceMap;
         var control = c.ProvinceController;
-        var total = new Dictionary<int, int>();
-        var held = new Dictionary<int, int>();
-        if (map is not null && control is not null)
-            for (var p = 1; p <= map.ProvinceCount && p < control.Length; p++)
+        var nationMap = (ushort)nation.MapIndex;
+        var states = c.StatesOf(nation);
+        var result = _collapseOwnedScratch ??= new List<ScenarioState>(states.Length);
+        result.Clear();
+        for (var si = 0; si < states.Length; si++)
+        {
+            var s = states[si];
+            if (s.Population <= 0 || s.MapIndex == nation.CapitalStateMapIndex ||
+                LakeRegions.IsWaterState(s) || !float.IsFinite(s.Stability) || !float.IsFinite(s.Radicalism) ||
+                RevoltRecovery.DaysLeft(c, nation, s) != 0)
+                continue;
+            if (map is not null && control is not null)
             {
-                if (map.ProvinceToNation[p] != (ushort)nation.MapIndex || map.IsWater(p)) continue;
-                var state = map.ProvinceToState[p];
-                total[state] = total.GetValueOrDefault(state) + 1;
-                if (control[p] == (ushort)nation.MapIndex) held[state] = held.GetValueOrDefault(state) + 1;
+                var provinces = map.ProvincesOfState(s.MapIndex);
+                var total = 0;
+                var held = 0;
+                for (var pi = 0; pi < provinces.Length; pi++)
+                {
+                    var p = provinces[pi];
+                    if (p <= 0 || p >= control.Length) continue;
+                    if (map.ProvinceToNation[p] != nationMap || map.IsWater(p)) continue;
+                    total++;
+                    if (control[p] == nationMap) held++;
+                }
+                if (total > 0 && held * 2 < total) continue;
             }
-        return c.StatesOf(nation).Where(s => s.Population > 0 && s.MapIndex != nation.CapitalStateMapIndex &&
-            !LakeRegions.IsWaterState(s) && RevoltRecovery.DaysLeft(c, nation, s) == 0 &&
-            float.IsFinite(s.Stability) && float.IsFinite(s.Radicalism) &&
-            (!total.TryGetValue(s.MapIndex, out var all) || held.GetValueOrDefault(s.MapIndex) * 2 >= all)).ToList();
+            result.Add(s);
+        }
+        return result;
     }
 
     /// <summary>Which of these regions touch which, through the province graph, once.</summary>
     private static Dictionary<int, HashSet<int>> Adjacency(Campaign c, List<ScenarioState> owned)
     {
-        var adjacent = owned.ToDictionary(s => s.MapIndex, _ => new HashSet<int>());
-        var map = c.ProvinceMap;
-        for (var p = 1; p <= map.ProvinceCount; p++)
+        var adjacent = _collapseAdjScratch ??= new Dictionary<int, HashSet<int>>(owned.Count);
+        var setPool = _collapseSetPool ??= new Stack<HashSet<int>>();
+        foreach (var existing in adjacent.Values)
         {
-            var here = map.ProvinceToState[p];
-            if (!adjacent.TryGetValue(here, out var set)) continue;
-            // Drawn borders: the regions that fall away together are the ones that touch on the
-            // map, not the ones a ferry runs between (ProvinceTopology.LandNeighbors).
-            foreach (var next in map.LandNeighbors[p])
+            existing.Clear();
+            setPool.Push(existing);
+        }
+        adjacent.Clear();
+        for (var i = 0; i < owned.Count; i++)
+            adjacent.TryAdd(owned[i].MapIndex, setPool.Count > 0 ? setPool.Pop() : new HashSet<int>());
+        var map = c.ProvinceMap;
+        foreach (var (here, set) in adjacent)
+        {
+            var provinces = map.ProvincesOfState(here);
+            for (var pi = 0; pi < provinces.Length; pi++)
             {
-                var there = map.ProvinceToState[next];
-                if (there != here && adjacent.ContainsKey(there)) set.Add(there);
+                // Drawn borders: the regions that fall away together are the ones that touch on the
+                // map, not the ones a ferry runs between (ProvinceTopology.LandNeighbors).
+                var nextList = map.LandNeighbors[provinces[pi]];
+                for (var ni = 0; ni < nextList.Length; ni++)
+                {
+                    var there = map.ProvinceToState[nextList[ni]];
+                    if (there != here && adjacent.ContainsKey(there)) set.Add(there);
+                }
             }
         }
         return adjacent;
@@ -546,17 +692,36 @@ public static class StateFailure
         Func<ScenarioState, bool> admits = null)
     {
         if (seed is null || seed.Population > ceiling) return new();
-        var byIndex = owned.ToDictionary(s => s.MapIndex);
+        var byIndex = _growByIndexScratch ??= new Dictionary<int, ScenarioState>(owned.Count);
+        byIndex.Clear();
+        for (var i = 0; i < owned.Count; i++)
+            byIndex.TryAdd(owned[i].MapIndex, owned[i]);
         var taken = new List<ScenarioState> { seed };
-        var inside = new HashSet<int> { seed.MapIndex };
-        var passed = new HashSet<int>();
+        var inside = _growInsideScratch ??= new HashSet<int>();
+        inside.Clear();
+        inside.Add(seed.MapIndex);
+        var passed = _growPassedScratch ??= new HashSet<int>();
+        passed.Clear();
         long people = seed.Population;
         while (people < target && taken.Count < limit)
         {
-            var next = taken.SelectMany(s => adjacency[s.MapIndex])
-                .Where(i => !inside.Contains(i) && !passed.Contains(i) && byIndex.ContainsKey(i))
-                .Select(i => byIndex[i]).Where(s => admits is null || admits(s))
-                .OrderBy(order).ThenBy(s => s.MapIndex).FirstOrDefault();
+            ScenarioState next = null;
+            var bestScore = 0f;
+            for (var ti = 0; ti < taken.Count; ti++)
+            {
+                if (!adjacency.TryGetValue(taken[ti].MapIndex, out var nbrs)) continue;
+                foreach (var idx in nbrs)
+                {
+                    if (inside.Contains(idx) || passed.Contains(idx) || !byIndex.TryGetValue(idx, out var cand)) continue;
+                    if (admits is not null && !admits(cand)) continue;
+                    var score = order(cand);
+                    if (next is null || score < bestScore || (score == bestScore && cand.MapIndex < next.MapIndex))
+                    {
+                        next = cand;
+                        bestScore = score;
+                    }
+                }
+            }
             if (next is null) break;
             if (people + next.Population > ceiling) { passed.Add(next.MapIndex); continue; }
             taken.Add(next); inside.Add(next.MapIndex); people += next.Population;
@@ -568,17 +733,27 @@ public static class StateFailure
     private static (string Culture, float Share) Majority(ScenarioState state)
     {
         if (state.PopulationGroups is null || state.PopulationGroups.Count == 0 || state.Population <= 0) return ("", 0f);
-        var byCulture = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var byCulture = _majorityByCultureScratch ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        byCulture.Clear();
         long total = 0;
-        foreach (var group in state.PopulationGroups)
+        var groups = state.PopulationGroups;
+        for (var i = 0; i < groups.Count; i++)
         {
+            var group = groups[i];
             if (string.IsNullOrEmpty(group.Culture) || group.Size <= 0) continue;
             byCulture[group.Culture] = byCulture.GetValueOrDefault(group.Culture) + group.Size;
             total += group.Size;
         }
         if (total <= 0) return ("", 0f);
-        var best = byCulture.OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal).First();
-        return (best.Key, best.Value / (float)total);
+        string bestKey = "";
+        long bestVal = -1;
+        foreach (var (k, v) in byCulture)
+            if (v > bestVal || (v == bestVal && string.CompareOrdinal(k, bestKey) < 0))
+            {
+                bestKey = k;
+                bestVal = v;
+            }
+        return (bestKey, bestVal / (float)total);
     }
 
     /// <summary>
@@ -591,19 +766,32 @@ public static class StateFailure
     {
         culture = "";
         var d = c.Defines;
-        var ours = new HashSet<string>(DemographyCatalog.PrimaryCultures(nation.Tag), StringComparer.OrdinalIgnoreCase);
-        foreach (var people in nation.FoundedCultures) ours.Add(people);
-        var ready = new Dictionary<int, string>();
-        foreach (var state in owned)
+        var ours = _nationalOursScratch ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        ours.Clear();
+        var primaries = DemographyCatalog.PrimaryCultures(nation.Tag);
+        for (var i = 0; i < primaries.Count; i++) ours.Add(primaries[i]);
+        for (var i = 0; i < nation.FoundedCultures.Count; i++) ours.Add(nation.FoundedCultures[i]);
+        var ready = _nationalReadyScratch ??= new Dictionary<int, string>();
+        ready.Clear();
+        ScenarioState seed = null;
+        var bestScore = 0f;
+        for (var i = 0; i < owned.Count; i++)
         {
+            var state = owned[i];
             var (majority, share) = Majority(state);
             if (majority.Length == 0 || share < 0.5f || ours.Contains(majority)) continue;
             if (state.SecessionPressure < d.CollapseNationalPressure && state.Radicalism < d.CollapseNationalRadicalism) continue;
             ready[state.MapIndex] = majority;
+            if (state.Population <= ceiling)
+            {
+                var score = state.SecessionPressure + state.Radicalism;
+                if (seed is null || score > bestScore || (score == bestScore && state.MapIndex < seed.MapIndex))
+                {
+                    seed = state;
+                    bestScore = score;
+                }
+            }
         }
-        if (ready.Count == 0) return new();
-        var seed = owned.Where(s => ready.ContainsKey(s.MapIndex) && s.Population <= ceiling)
-            .OrderByDescending(s => s.SecessionPressure + s.Radicalism).ThenBy(s => s.MapIndex).FirstOrDefault();
         if (seed is null) return new();
         var chosen = ready[seed.MapIndex];
         culture = chosen;
@@ -676,17 +864,29 @@ public static class StateFailure
         return "";
     }
 
-    private static int RevolutionsInLastYear(Campaign c) =>
-        c.Nations.Count(n => n.LastRevolutionDay >= 0 && c.ElapsedDays - (long)n.LastRevolutionDay < 365);
+    private static int RevolutionsInLastYear(Campaign c)
+    {
+        var total = 0;
+        var nations = c.Nations;
+        for (var i = 0; i < nations.Count; i++)
+        {
+            var n = nations[i];
+            if (n.LastRevolutionDay >= 0 && c.ElapsedDays - (long)n.LastRevolutionDay < 365) total++;
+        }
+        return total;
+    }
 
-    private static void ConsiderRevolution(Campaign c, Nation nation)
+    private static IEnumerable<int> ConsiderRevolutionStages(Campaign c, Nation nation)
     {
         var d = c.Defines;
-        if (nation.Stability >= d.RevolutionStabilityThreshold || nation.Population <= 0) return;   // the cheap test first
-        if (RevolutionRefusal(c, nation).Length > 0) return;
+        if (nation.Stability >= d.RevolutionStabilityThreshold || nation.Population <= 0) yield break;   // the cheap test first
+        if (RevolutionRefusal(c, nation).Length > 0) yield break;
         Count("revolution_ripe_months");
-        if (RevolutionsInLastYear(c) >= d.RevolutionWorldPerYear) return;
-        if (Escalation.Roll(c.Seed, nation.Id, 0x4E70, c.ElapsedDays, 0x2) >= d.RevolutionMonthlyChance) return;
+        if (RevolutionsInLastYear(c) >= d.RevolutionWorldPerYear) yield break;
+        var revChance = d.RevolutionMonthlyChance * FailureEpochFactor(c, nation);
+        if (Escalation.Roll(c.Seed, nation.Id, 0x4E70, c.ElapsedDays, 0x2) >= revChance) yield break;
+        Campaign.HeavyNext();
+        yield return 0;
         Revolution(c, nation);
     }
 
@@ -715,12 +915,21 @@ public static class StateFailure
         c.Chronicle.Record(c, "revolution", nation.Id);
         Count("revolutions");
         Log.Add($"day {c.ElapsedDays} REVOLUTION {nation.Tag} {oldGovernment}/{oldIdeology} -> {nation.Government}/{creed} stability {nation.Stability:0.00}");
-        DiagnosticLogs.Write("simulation", $"REVOLUTION nation={nation.Tag} from={oldIdeology} to={creed} day={c.ElapsedDays}");
+        if (DiagnosticLogs.Enabled)
+            DiagnosticLogs.Write("simulation", $"REVOLUTION nation={nation.Tag} from={oldIdeology} to={creed} day={c.ElapsedDays}");
         c.MarkStrategicChange();
 
         var roll = Escalation.Roll(c.Seed, nation.Id, 0x4E71, c.ElapsedDays, 0x3);
         if (!forceCivilWar && roll >= d.RevolutionCivilWarChance) return null;
-        if (Warfare.OpenWars(c).Any(w => !w.Ended && w.CivilConflict && w.Involves(nation.Id)) && !forceCivilWar) return null;
+        if (!forceCivilWar)
+        {
+            var live = Warfare.LiveWars(c);
+            for (var wi = 0; wi < live.Count; wi++)
+            {
+                var openWar = live[wi];
+                if (!openWar.Ended && openWar.CivilConflict && openWar.Involves(nation.Id)) return null;
+            }
+        }
         var owned = Breakable(c, nation);
         if (owned.Count < 2) return null;
         var adjacency = Adjacency(c, owned);
@@ -729,10 +938,25 @@ public static class StateFailure
         var target = (long)(nation.Population * (double)share);
         var ceiling = (long)(nation.Population * (double)d.CivilWarRebelShareMax);
         // The old order holds out where it was least resented.
-        float Loyalty(ScenarioState s) => s.Radicalism - 0.3f * s.Stability;
-        var ground = Grow(owned, adjacency, owned.OrderBy(Loyalty).ThenBy(s => s.MapIndex).First(), Loyalty, target, ceiling,
+        static float Loyalty(ScenarioState s) => s.Radicalism - 0.3f * s.Stability;
+        var seed = owned[0];
+        var seedLoyalty = Loyalty(seed);
+        for (var i = 1; i < owned.Count; i++)
+        {
+            var s = owned[i];
+            var l = Loyalty(s);
+            if (l < seedLoyalty || (l == seedLoyalty && s.MapIndex < seed.MapIndex))
+            {
+                seed = s;
+                seedLoyalty = l;
+            }
+        }
+        var ground = Grow(owned, adjacency, seed, Loyalty, target, ceiling,
             Math.Max(1, (int)(owned.Count * 0.6f)));
-        if (ground.Count == 0 || ground.Sum(s => s.Population) < nation.Population * 0.06f) return null;
+        if (ground.Count == 0) return null;
+        long groundPeople = 0;
+        for (var gi = 0; gi < ground.Count; gi++) groundPeople += ground[gi].Population;
+        if (groundPeople < nation.Population * 0.06f) return null;
         var parentTag = nation.Tag;
         var parentName = nation.Name;
         var report = SecessionEvents.Uprising(c, nation, ground, born =>
@@ -747,7 +971,13 @@ public static class StateFailure
         nation.LastCivilWarDay = c.ElapsedDays;
         Count("revolution_civil_wars");
         Log.Add($"day {c.ElapsedDays}   {nation.Tag} old regime fights on as {loyalists.Tag} regions {ground.Count} people {report.Population:N0}");
-        var war = Warfare.OpenWars(c).LastOrDefault(w => !w.Ended && w.Involves(nation.Id) && w.Involves(loyalists.Id));
+        StrategicWar war = null;
+        var postLive = Warfare.LiveWars(c);
+        for (var wi = 0; wi < postLive.Count; wi++)
+        {
+            var openWar = postLive[wi];
+            if (!openWar.Ended && openWar.Involves(nation.Id) && openWar.Involves(loyalists.Id)) war = openWar;
+        }
         if (war is not null)
         {
             Count("revolution_sponsors", Backers(c, war, nation));
@@ -766,14 +996,30 @@ public static class StateFailure
         if (c is null || war is null || client is null || !MechanicFeatures.SystemEnabled(c, nameof(ProxyWars))) return 0;
         var enemy = c.NationById(war.EnemyLeaderOf(client.Id));
         if (enemy is null) return 0;
-        var added = 0;
-        foreach (var sponsor in c.Nations.Where(n => !n.IsHuman && n.Id != client.Id && n.Id != enemy.Id &&
-                     n.Movement is null && !n.IsSubject && n.Population > 0 && !c.Fallen.Contains(n.Id) &&
-                     string.Equals(n.Ideology, client.Ideology, StringComparison.OrdinalIgnoreCase) &&
-                     !string.Equals(n.Ideology, enemy.Ideology, StringComparison.OrdinalIgnoreCase))
-                     .OrderByDescending(n => n.Gdp).ThenBy(n => n.Id))
+        var sponsors = _backersSponsorsScratch ??= new List<Nation>();
+        sponsors.Clear();
+        var nations = c.Nations;
+        for (var i = 0; i < nations.Count; i++)
         {
-            if (added >= Math.Max(0, c.Defines.RevolutionSponsorsPerSide)) break;
+            var n = nations[i];
+            if (!n.IsHuman && n.Id != client.Id && n.Id != enemy.Id &&
+                n.Movement is null && !n.IsSubject && n.Population > 0 && !c.Fallen.Contains(n.Id) &&
+                string.Equals(n.Ideology, client.Ideology, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(n.Ideology, enemy.Ideology, StringComparison.OrdinalIgnoreCase))
+                sponsors.Add(n);
+        }
+        if (sponsors.Count > 1)
+            sponsors.Sort(static (a, b) =>
+            {
+                var cmp = b.Gdp.CompareTo(a.Gdp);
+                return cmp != 0 ? cmp : a.Id.CompareTo(b.Id);
+            });
+        var added = 0;
+        var maxSponsors = Math.Max(0, c.Defines.RevolutionSponsorsPerSide);
+        for (var si = 0; si < sponsors.Count; si++)
+        {
+            if (added >= maxSponsors) break;
+            var sponsor = sponsors[si];
             if (!ProxyWars.HasStake(c, sponsor, client, enemy, war)) continue;
             if (ProxyWars.Interest(c, sponsor, client, enemy, war) < 0f) continue;
             var level = Math.Min(2, ProxyWars.MaximumLevel(sponsor));
@@ -809,8 +1055,13 @@ public static class StateFailure
             return "Both countries must be alive to unite.";
         if (piece.Movement is not null || centre.Movement is not null || piece.IsSubject || centre.IsSubject)
             return "Both countries must be sovereign to unite by consent.";
-        if (Warfare.OpenWars(c).Any(w => !w.Ended && (w.Involves(piece.Id) || w.Involves(centre.Id))))
-            return "Union is a peace-time act; neither country may be at war.";
+        var live = Warfare.LiveWars(c);
+        for (var wi = 0; wi < live.Count; wi++)
+        {
+            var war = live[wi];
+            if (!war.Ended && (war.Involves(piece.Id) || war.Involves(centre.Id)))
+                return "Union is a peace-time act; neither country may be at war.";
+        }
         var born = Math.Max(piece.LastSecessionDay, piece.LastCivilWarDay);
         if (c.ElapsedDays - (long)born < d.ReunionEarliestDays) return "The wounds of the split are too fresh.";
         if (centre.Stability < d.ReunionCentreStability) return "The old centre has not recovered.";
@@ -831,18 +1082,31 @@ public static class StateFailure
         return "";
     }
 
-    private static void ConsiderReunion(Campaign c, Nation piece)
+    private static IEnumerable<int> ConsiderReunionStages(Campaign c, Nation piece)
     {
-        if (piece.RevoltParentId < 0 || piece.Population <= 0 || c.Fallen.Contains(piece.Id)) return;
+        if (piece.RevoltParentId < 0 || piece.Population <= 0 || c.Fallen.Contains(piece.Id)) yield break;
         var parent = c.NationById(piece.RevoltParentId);
         var centre = Heir(c, parent);
-        if (centre is null || centre.Id == piece.Id) return;
+        if (centre is null || centre.Id == piece.Id) yield break;
         // A player's government decides its own: a piece it plays is never folded in, and a
         // centre it plays reunites only when it has handed diplomacy over, as for any union.
-        if (piece.IsHuman && !c.ObserverMode) return;
-        if (centre.IsHuman && !c.ObserverMode && !Delegation.Holds(centre, Delegation.Diplomacy)) return;
-        if (ReunionRefusal(c, piece, centre).Length > 0) return;
-        if (Escalation.Roll(c.Seed, piece.Id, 0x2E01, c.ElapsedDays, centre.Id) >= c.Defines.ReunionMonthlyChance) return;
+        if (piece.IsHuman && !c.ObserverMode) yield break;
+        if (centre.IsHuman && !c.ObserverMode && !Delegation.Holds(centre, Delegation.Diplomacy)) yield break;
+        if (ReunionRefusal(c, piece, centre).Length > 0) yield break;
+        var reconciliationHash = GeopoliticalCycle.HashPairEpoch(
+            c.Seed, centre, piece, GeopoliticalCycle.DecadeIndex(c.ElapsedDays), 0x2E02);
+        var seedPull = 0.68f + GeopoliticalCycle.HashToUnit(reconciliationHash) * 0.70f;
+        var eraPull = GeopoliticalCycle.CurrentEraRegime(c) switch
+        {
+            GlobalEraRegime.MultipolarConcert => 1.15f,
+            GlobalEraRegime.ArmedDetente => 1.05f,
+            GlobalEraRegime.PostImperialTurbulence => 0.80f,
+            _ => 0.95f
+        };
+        var reunionChance = c.Defines.ReunionMonthlyChance * seedPull * eraPull;
+        if (Escalation.Roll(c.Seed, piece.Id, 0x2E01, c.ElapsedDays, centre.Id) >= reunionChance) yield break;
+        Campaign.HeavyNext();
+        yield return 0;
         Reunite(c, centre, piece);
     }
 
@@ -856,7 +1120,8 @@ public static class StateFailure
         c.Chronicle.Record(c, "collapse_reunion", centre.Id, piece.Id, place: place);
         Count("reunions");
         Log.Add($"day {c.ElapsedDays} REUNION {piece.Tag} -> {centre.Tag}");
-        DiagnosticLogs.Write("simulation", $"COLLAPSE_REUNION centre={centre.Tag} piece={piece.Tag} day={c.ElapsedDays}");
+        if (DiagnosticLogs.Enabled)
+            DiagnosticLogs.Write("simulation", $"COLLAPSE_REUNION centre={centre.Tag} piece={piece.Tag} day={c.ElapsedDays}");
         c.MarkMapChanged();
         c.MarkStrategicChange();
         return true;

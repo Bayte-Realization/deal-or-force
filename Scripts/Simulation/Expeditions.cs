@@ -224,105 +224,214 @@ public static class Expeditions
         foreach (var _ in TickStages(c)) { }
     }
 
+    [ThreadStatic] private static Dictionary<int, float> _ownedDivsScratch;
+    [ThreadStatic] private static Dictionary<int, float> _lentDivsScratch;
+    [ThreadStatic] private static HashSet<long> _lentPairsScratch;
+    [ThreadStatic] private static HashSet<int> _atWarScratch;
+    [ThreadStatic] private static List<Army> _eligibleArmiesScratch;
+    [ThreadStatic] private static List<int> _seenHostsScratch;
+    [ThreadStatic] private static List<int> _seenEnemiesScratch;
+
+    private static bool AnyWarInvolving(IReadOnlyList<StrategicWar> openWars, int nationId)
+    {
+        for (var i = 0; i < openWars.Count; i++)
+        {
+            var w = openWars[i];
+            if (!w.Ended && w.Involves(nationId)) return true;
+        }
+        return false;
+    }
+
+    private static bool AnySharedWar(IReadOnlyList<StrategicWar> openWars, int aId, int bId)
+    {
+        for (var i = 0; i < openWars.Count; i++)
+        {
+            var w = openWars[i];
+            if (!w.Ended && w.Involves(aId) && w.Involves(bId)) return true;
+        }
+        return false;
+    }
+
     /// <summary>The same expedition pass, yielded between batches of armies and sponsors.</summary>
     public static IEnumerable<int> TickStages(Campaign c)
     {
         if (!c.StepOpensNewDay) yield break;
+        var armies = c.Armies;
+        var openWars = Warfare.OpenWars(c);
         var scanned = 0;
-        foreach (var army in c.Armies)
+        for (var ai = 0; ai < armies.Count; ai++)
         {
-            if (++scanned % 256 == 0) yield return 0;
+            if (++scanned % 512 == 0 && Campaign.StageOverdue()) yield return 0;
+            var army = armies[ai];
             if (army.LentById < 0 || army.InBattle) continue;
             var host = c.NationById(army.NationId);
             var sponsor = c.NationById(army.LentById);
-            var hostAtWar = host is not null && Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(host.Id));
+            var hostAtWar = host is not null && AnyWarInvolving(openWars, host.Id);
             if (sponsor is null || sponsor.Population <= 0 || !c.HasOwnedLand(sponsor))
             { army.LentById = -1; army.LentDay = -1; continue; }   // the sender is gone: they stay where they fought
             if (!hostAtWar || host is null || !c.HasOwnedLand(host) || MilitaryAccess.Hostile(c, sponsor.Id, host.Id) ||
-                Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(host.Id) && w.Involves(sponsor.Id)))
+                AnySharedWar(openWars, host.Id, sponsor.Id))
                 Return(c, army);
         }
         if (c.Defines.AiVolunteerChance <= 0f || c.ElapsedDays % 7 != 0) yield break;
-        var ticked = 0;
-        foreach (var sponsor in c.Nations)
+
+        var atWar = _atWarScratch ??= new HashSet<int>();
+        atWar.Clear();
+        for (var wi = 0; wi < openWars.Count; wi++)
         {
-            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
+            var war = openWars[wi];
+            if (war.Ended) continue;
+            atWar.Add(war.AttackerId);
+            atWar.Add(war.DefenderId);
+            foreach (var id in war.AttackerAllies) atWar.Add(id);
+            foreach (var id in war.DefenderAllies) atWar.Add(id);
+        }
+        if (atWar.Count == 0) yield break;
+
+        Dictionary<int, float> ownedDivs = null;
+        Dictionary<int, float> lentDivs = null;
+        HashSet<long> lentPairs = null;
+        HashSet<int> greatPowers = null;
+
+        var active = c.ActiveNations;
+        var thresh = c.Defines.AiVolunteerChance * AiTemper.Aggression(c);
+        var ticked = 0;
+        for (var si = 0; si < active.Count; si++)
+        {
+            if (++ticked % 32 == 0 && Campaign.StageOverdue()) yield return 0;
+            var sponsor = active[si];
             if (sponsor.IsHuman || sponsor.Movement is not null || sponsor.Population <= 0) continue;
-            if (Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(sponsor.Id))) continue;   // its own wars come first
-            if (MovementRules.Roll(c.Seed, sponsor.Id, c.ElapsedDays, 0x7011) >= c.Defines.AiVolunteerChance * AiTemper.Aggression(c)) continue;
-            var host = Friend(c, sponsor);
-            if (host is null) continue;
-            var room = Cap(c, sponsor) - LentDivisions(c, sponsor);
-            foreach (var army in c.Armies.Where(a => a.NationId == sponsor.Id && a.LentById < 0 && !a.InBattle &&
-                                                       a.EmbarkedFleetId < 0 && !a.CutOff && a.AssignedWarId < 0)
-                         .OrderByDescending(a => a.Organisation * a.Divisions).ThenBy(a => a.Id).ToList())
+            if (atWar.Contains(sponsor.Id)) continue;   // its own wars come first
+            if (MovementRules.Roll(c.Seed, sponsor.Id, c.ElapsedDays, 0x7011) >= thresh) continue;
+
+            if (ownedDivs is null)
             {
+                ownedDivs = _ownedDivsScratch ??= new Dictionary<int, float>(256);
+                lentDivs = _lentDivsScratch ??= new Dictionary<int, float>(32);
+                lentPairs = _lentPairsScratch ??= new HashSet<long>(32);
+                ownedDivs.Clear();
+                lentDivs.Clear();
+                lentPairs.Clear();
+                for (var ai = 0; ai < armies.Count; ai++)
+                {
+                    var a = armies[ai];
+                    ownedDivs[a.NationId] = ownedDivs.GetValueOrDefault(a.NationId) + a.Divisions;
+                    if (a.LentById >= 0)
+                    {
+                        lentDivs[a.LentById] = lentDivs.GetValueOrDefault(a.LentById) + a.Divisions;
+                        lentPairs.Add(((long)a.LentById << 32) | (uint)a.NationId);
+                    }
+                }
+                greatPowers = AllianceSystem.GreatPowers(c);
+            }
+
+            var strength = ownedDivs.GetValueOrDefault(sponsor.Id);
+            if (strength < 4f) continue;
+            var host = FriendFast(c, sponsor, strength, openWars, greatPowers, ownedDivs, lentDivs, lentPairs);
+            if (host is null) continue;
+
+            var lentNow = lentDivs.GetValueOrDefault(sponsor.Id);
+            var cap = MathF.Max(1f, (strength + lentNow) * c.Defines.VolunteerShare);
+            var room = cap - lentNow;
+            var eligible = _eligibleArmiesScratch ??= new List<Army>(16);
+            eligible.Clear();
+            for (var ai = 0; ai < armies.Count; ai++)
+            {
+                var a = armies[ai];
+                if (a.NationId == sponsor.Id && a.LentById < 0 && !a.InBattle &&
+                    a.EmbarkedFleetId < 0 && !a.CutOff && a.AssignedWarId < 0)
+                    eligible.Add(a);
+            }
+            if (eligible.Count > 1)
+                eligible.Sort(static (a, b) =>
+                {
+                    var cmp = (b.Organisation * b.Divisions).CompareTo(a.Organisation * a.Divisions);
+                    return cmp != 0 ? cmp : a.Id.CompareTo(b.Id);
+                });
+            for (var ei = 0; ei < eligible.Count; ei++)
+            {
+                var army = eligible[ei];
                 if (army.Divisions > room) continue;
                 if (!Lend(c, sponsor, army, host)) break;
                 room -= army.Divisions;
+                lentDivs[sponsor.Id] = lentDivs.GetValueOrDefault(sponsor.Id) + army.Divisions;
+                lentPairs.Add(((long)sponsor.Id << 32) | (uint)host.Id);
                 if (room < 1f) break;
             }
         }
     }
 
-    /// <summary>
-    /// The friend at war a country would send its sons to: liked enough, losing on paper, and
-    /// fighting nobody the sender is afraid of - a neighbour much stronger than the sender
-    /// would come for it next, and fear in proportion is what keeps most volunteers at home.
-    /// Only a great power sends them across the world; anyone else helps a neighbour, or a
-    /// regime of its own kind on its own continent.
-    /// </summary>
-    private static Nation Friend(Campaign c, Nation sponsor)
+    private static string VolunteerRefusalFast(Campaign c, Nation sponsor, Nation host,
+        IReadOnlyList<StrategicWar> openWars, Dictionary<int, float> ownedDivs, Dictionary<int, float> lentDivs)
     {
-        var strength = c.Armies.Where(a => a.NationId == sponsor.Id).Sum(a => a.Divisions);
-        if (strength < 4f) return null;
-        var great = AllianceSystem.GreatPowers(c).Contains(sponsor.Id);
+        if (c is null || sponsor is null || host is null || sponsor.Id == host.Id) return "x";
+        if (sponsor.Movement is not null) return "x";
+        if (!c.HasOwnedLand(host)) return "x";
+        if (MilitaryAccess.Hostile(c, sponsor.Id, host.Id)) return "x";
+        if (!AnyWarInvolving(openWars, host.Id)) return "x";
+        if (AnySharedWar(openWars, host.Id, sponsor.Id)) return "x";
+        if (sponsor.PoliticalPoints < c.Defines.VolunteerPoliticalCost) return "x";
+        var lent = lentDivs.GetValueOrDefault(sponsor.Id);
+        var cap = MathF.Max(1f, (ownedDivs.GetValueOrDefault(sponsor.Id) + lent) * c.Defines.VolunteerShare);
+        if (lent >= cap) return "x";
+        return "";
+    }
+
+    private static Nation FriendFast(Campaign c, Nation sponsor, float strength,
+        IReadOnlyList<StrategicWar> openWars, HashSet<int> greatPowers,
+        Dictionary<int, float> ownedDivs, Dictionary<int, float> lentDivs, HashSet<long> lentPairs)
+    {
+        var great = greatPowers.Contains(sponsor.Id);
         var creed = PoliticsCore.IdeologyOf(sponsor)?.Id ?? "";
         Nation best = null;
         var bestScore = 0f;
-        foreach (var war in Warfare.OpenWars(c))
+        var seenHosts = _seenHostsScratch ??= new List<int>(16);
+        var seenEnemies = _seenEnemiesScratch ??= new List<int>(16);
+
+        for (var wi = 0; wi < openWars.Count; wi++)
         {
+            var war = openWars[wi];
             if (war.Ended) continue;
-            foreach (var side in new[] { true, false })
-                foreach (var hostId in war.Side(side).Distinct())
+            for (var s = 0; s < 2; s++)
+            {
+                seenHosts.Clear();
+                foreach (var hostId in war.Side(s == 0))
                 {
+                    if (seenHosts.Contains(hostId)) continue;
+                    seenHosts.Add(hostId);
                     var host = c.NationById(hostId);
-                    if (host is null || VolunteerRefusal(c, sponsor, host).Length > 0) continue;
-                    if (c.Armies.Any(a => a.LentById == sponsor.Id && a.NationId == host.Id)) continue;   // already there
+                    if (host is null || VolunteerRefusalFast(c, sponsor, host, openWars, ownedDivs, lentDivs).Length > 0) continue;
+                    if (lentPairs.Contains(((long)sponsor.Id << 32) | (uint)host.Id)) continue;
                     var neighbour = CampaignDiplomacy.SharesLandBorder(c, sponsor.MapIndex, host.MapIndex);
                     var kindred = creed.Length > 0 && (PoliticsCore.IdeologyOf(host)?.Id ?? "") == creed &&
                                   string.Equals(sponsor.Continent, host.Continent, StringComparison.OrdinalIgnoreCase);
-                    // What the war is worth to the sender, not only to the friend: an enemy it
-                    // hates, an enemy on its own border it would rather see bled by somebody
-                    // else, a host that is its ally or answers to it. A country sends its sons
-                    // where the war serves it - Spain in 1936 was a rehearsal and a rival's
-                    // defeat as much as a friendship.
+
+                    var enemySide = war.EnemiesOf(hostId);
+                    seenEnemies.Clear();
                     var hatred = 0f;
                     var rivalNextDoor = false;
-                    foreach (var enemyId in war.EnemiesOf(hostId).Distinct())
+                    var theirs = 0f;
+                    var feared = false;
+                    foreach (var enemyId in enemySide)
                     {
+                        if (seenEnemies.Contains(enemyId)) continue;
+                        seenEnemies.Add(enemyId);
                         var enemy = c.NationById(enemyId);
                         if (enemy is null) continue;
                         var feeling = CampaignDiplomacy.Peek(c, sponsor.Id, enemyId)?.Opinion ?? 0f;
                         hatred = MathF.Max(hatred, -feeling);
-                        if (feeling < -25f && CampaignDiplomacy.SharesLandBorder(c, sponsor.MapIndex, enemy.MapIndex)) rivalNextDoor = true;
+                        var sharesEnemyBorder = (feeling < -25f || ownedDivs.GetValueOrDefault(enemyId) > strength * 1.5f) &&
+                                                CampaignDiplomacy.SharesLandBorder(c, sponsor.MapIndex, enemy.MapIndex);
+                        if (feeling < -25f && sharesEnemyBorder) rivalNextDoor = true;
+                        var power = ownedDivs.GetValueOrDefault(enemyId);
+                        theirs += power;
+                        if (power > strength * 1.5f && sharesEnemyBorder) feared = true;
                     }
-                    // An ally has the alliance and its own war to join; a client has only its patron.
                     var bound = host.AnswersTo(sponsor.Id);
                     if (!great && !neighbour && !kindred && !rivalNextDoor && !bound) continue;
                     var opinion = CampaignDiplomacy.Peek(c, sponsor.Id, host.Id)?.Opinion ?? 0f;
                     if (opinion < c.Defines.AiVolunteerOpinion - MathF.Min(40f, hatred * 0.5f) - (bound ? 30f : 0f)) continue;
-                    var ours = c.Armies.Where(a => a.NationId == hostId).Sum(a => a.Divisions);
-                    var theirs = 0f;
-                    var feared = false;
-                    foreach (var enemyId in war.EnemiesOf(hostId).Distinct())
-                    {
-                        var enemy = c.NationById(enemyId);
-                        if (enemy is null) continue;
-                        var power = c.Armies.Where(a => a.NationId == enemyId).Sum(a => a.Divisions);
-                        theirs += power;
-                        if (power > strength * 1.5f && CampaignDiplomacy.SharesLandBorder(c, sponsor.MapIndex, enemy.MapIndex)) feared = true;
-                    }
+                    var ours = ownedDivs.GetValueOrDefault(hostId);
                     if (feared || theirs <= ours) continue;
                     var strategic = 1f + MathF.Min(2f, hatred / 50f) + (rivalNextDoor ? 1f : 0f) + (bound ? 1.5f : 0f);
                     var score = MathF.Max(5f, opinion + hatred * 0.5f) * strategic * (theirs / MathF.Max(1f, ours));
@@ -330,6 +439,7 @@ public static class Expeditions
                     bestScore = score;
                     best = host;
                 }
+            }
         }
         return best;
     }

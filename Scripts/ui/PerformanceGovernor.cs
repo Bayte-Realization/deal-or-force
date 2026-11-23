@@ -48,6 +48,8 @@ public partial class DealOrForceGame
         if (_qualityGovernor is null || _globe is null) return;
         // A map still being built is loading, not play: the warm-up starts when it is up.
         if (!_globe.MapReady) { _qualityGovernor.Reset(_qualityGovernor.Profile); return; }
+        // Never feed intentional background/unfocused FPS throttling into the frame-rate governor.
+        if (_isBackgroundFramePaced || !DisplayServer.WindowIsFocused()) return;
         var next = _qualityGovernor.Sample(delta * 1000.0, _globe.MeasuredGpuMs);
         if (next is null) return;
         _globe.ApplyQuality(next);

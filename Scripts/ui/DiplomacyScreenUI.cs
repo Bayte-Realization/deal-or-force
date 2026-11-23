@@ -213,23 +213,30 @@ public partial class DealOrForceGame
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto, FollowFocus = true
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+            ClipContents = true,
+            FollowFocus = true
         };
         _diplomacyDossierScroll = pageScroll;
         page.AddChild(pageScroll);
+        var detailMargin = new MarginContainer
+        {
+            Name = "DiplomacyDetailMargin",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            ClipContents = true
+        };
+        detailMargin.AddThemeConstantOverride("margin_right", 12);
+        pageScroll.AddChild(detailMargin);
         _diplomacyDetailBody = new VBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            // The same idiom as the action column below: a VBoxContainer inside a ScrollContainer
-            // is sized to its content unless it is told to fill, so the page's inset panels stop
-            // short of the viewport and the column reads as unfinished rather than as a page that
-            // simply has less on it today. The children keep their own flags, so nothing moves -
-            // the container is the thing that now reaches the bottom.
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(420, 0)
+            CustomMinimumSize = Vector2.Zero,
+            ClipContents = true
         };
         _diplomacyDetailBody.AddThemeConstantOverride("separation", 12);
-        pageScroll.AddChild(_diplomacyDetailBody);
+        detailMargin.AddChild(_diplomacyDetailBody);
         _diplomacyDetailRows = _diplomacyDetailBody;
 
         // ---- the actions: what you can do about any of it.
@@ -400,6 +407,7 @@ public partial class DealOrForceGame
 
     private void OpenDiplomacyScreen()
     {
+        EnsureScreen("diplomacy", BuildDiplomacyScreen);
         _openScreen = "Diplomacy";
         _sidePanel.Visible = false;
         if (_selectedNation is null || _selectedNation.Id == _campaign.Player.Id)
@@ -422,6 +430,7 @@ public partial class DealOrForceGame
 
     private void CloseDiplomacyScreen()
     {
+        if (_diplomacyLayer is null) return;
         _diplomacyLayer.Visible = false;
         if (_openScreen == "Diplomacy") _openScreen = "";
         UpdateScreenButtons();
@@ -737,15 +746,18 @@ public partial class DealOrForceGame
     /// </summary>
     private Button DiplomacyChip(Nation member, string suffix = "")
     {
+        var fullText = member.DisplayName + suffix;
+        var displayText = fullText.Length > 26 ? fullText[..25].TrimEnd() + "…" : fullText;
         var chip = new Button
         {
-            Text = member.DisplayName + suffix,
+            Text = displayText,
             Icon = FlagTexture(member.Tag),
             // Not expanded: an expanded icon adds nothing to a button's minimum width, and a
             // chip in a flow is given exactly its minimum - the flag would get no room at all.
             ExpandIcon = false,
+            ClipContents = true,
             CustomMinimumSize = new Vector2(0, 24),
-            TooltipText = Ui.Tip(member.DisplayName + " · " + member.Tag)
+            TooltipText = Ui.Tip(fullText + " · " + member.Tag)
         };
         chip.AddThemeConstantOverride("icon_max_width", 22);
         chip.AddThemeConstantOverride("h_separation", 6);
@@ -779,7 +791,7 @@ public partial class DealOrForceGame
     /// </summary>
     private Control DiplomacyChips(IEnumerable<Nation> members, string none, Func<Nation, string> suffix = null)
     {
-        var flow = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        var flow = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         flow.AddThemeConstantOverride("h_separation", 6);
         flow.AddThemeConstantOverride("v_separation", 6);
         var limit = (int)Ui.Metric("diplomacy.chips_shown", 24f);
@@ -853,11 +865,11 @@ public partial class DealOrForceGame
         // A recessed field with a caption, and a note on the caption's right when it has one.
         VBoxContainer Field(string caption, string aside = "", Color? asideColour = null)
         {
-            var panel = new PanelContainer();
+            var panel = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
             panel.AddThemeStyleboxOverride("panel", WarInsetStyle(16, 12));
             AtlasSurfaceSkin.Attach(panel, AtlasSurfaceSkin.Level.Inset, "war.card");
             _diplomacyDetailBody.AddChild(panel);
-            var stack = new VBoxContainer();
+            var stack = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
             stack.AddThemeConstantOverride("separation", 7);
             panel.AddChild(stack);
             var head = new HBoxContainer();

@@ -295,7 +295,8 @@ public partial class DealOrForceGame
                     _doctrineCards.TryGetValue(node.Id, out var to))
                     _doctrineTree.Edges.Add((from.Position + new Vector2(DoctrineCardWidth, DoctrineCardHeight / 2f),
                         to.Position + new Vector2(0f, DoctrineCardHeight / 2f),
-                        Ui.Colour(TacticalDoctrines.Known(n, node.Id) ? "state.positive" : "text.muted")));
+                        Ui.Colour(TacticalDoctrines.Known(n, node.Id) ? "state.positive"
+                            : node.Excludes.Count > 0 ? "state.warning" : "text.muted")));
         _doctrineExtent = extent;
         _doctrineTree.PivotOffset = Vector2.Zero;
         _doctrineTree.Scale = Vector2.One * _doctrineZoom;
@@ -359,7 +360,8 @@ public partial class DealOrForceGame
             card.TooltipText = Ui.Tip(Tr(node.Description) + (alternative.Length > 0
                 ? "\n\n" + Loc.Format("Alternative to: {0}", string.Join(", ", alternative)) : ""));
 
-            var state = body.GetNodeOrNull<Label>("State_" + node.Id);
+            var headerRow = body.GetNodeOrNull<Control>("HeaderRow_" + node.Id);
+            var state = (headerRow ?? body).GetNodeOrNull<Label>("State_" + node.Id);
             if (state is not null)
             {
                 state.Text = known ? Loc.Get("in force")
@@ -377,13 +379,50 @@ public partial class DealOrForceGame
                 state.AddThemeColorOverride("font_color", Ui.Colour(known ? "state.positive"
                     : learning ? "text.accent" : excluded is not null || missing.Length > 0 ? "state.warning" : "text.caption"));
             }
+
+            if (node.Excludes.Count > 0)
+            {
+                var subPill = headerRow?.GetNodeOrNull<PanelContainer>("SubDoctrinePill_" + node.Id);
+                var subLbl = subPill?.GetNodeOrNull<Label>("SubDoctrineLabel_" + node.Id);
+                var subTok = known ? "state.positive" : excluded is not null ? "surface.line_faint" : "state.warning";
+                var subTextTok = known ? "state.positive" : excluded is not null ? "text.muted" : "state.warning";
+                if (subPill is not null)
+                {
+                    subPill.AddThemeStyleboxOverride("panel", Ui.ChromeBox(subTok, excluded is not null ? 0.12f : 0.22f, subTok, 0.85f, cornerRadius: 3, borderWidth: 1, padX: 5, padY: 0));
+                    subPill.TooltipText = Ui.Tip(Loc.Format("doctrine.ui.sub_doctrine_tip_fmt", string.Join(", ", alternative)));
+                }
+                if (subLbl is not null)
+                {
+                    subLbl.Text = known ? Loc.Get("doctrine.ui.sub_chosen")
+                        : excluded is not null ? Loc.Get("doctrine.ui.sub_locked")
+                        : Loc.Get("doctrine.ui.sub_doctrine_pill");
+                    subLbl.AddThemeColorOverride("font_color", Ui.Colour(subTextTok));
+                }
+                if (card is PanelContainer panelCard)
+                {
+                    panelCard.AddThemeStyleboxOverride("panel", Ui.ChromeBox(
+                        "surface.inset", excluded is not null ? 0.65f : 1f,
+                        subTok, excluded is not null ? 0.65f : 0.90f,
+                        cornerRadius: 4, borderWidth: 1, padX: 12, padY: 10,
+                        leftBorderWidth: excluded is not null ? 3 : 4));
+                }
+            }
+            else if (card is PanelContainer mainCard)
+            {
+                var borderTok = known ? "state.positive" : learning ? "text.accent" : "surface.line_faint";
+                mainCard.AddThemeStyleboxOverride("panel", Ui.ChromeBox(
+                    "surface.inset", 1f, borderTok, known || learning ? 0.88f : 0.72f,
+                    cornerRadius: 4, borderWidth: 1, padX: 12, padY: 10,
+                    leftBorderWidth: known || learning ? 3 : 1));
+            }
+
             var title = body.GetNodeOrNull<Label>("Title_" + node.Id);
             if (title is not null)
             {
                 title.Text = Tr(node.Name);
                 title.SetMeta(LocAppliedMeta, title.Text);
                 title.AddThemeColorOverride("font_color",
-                    Ui.Colour(known ? "state.positive" : learning ? "text.accent" : "text.bright"));
+                    Ui.Colour(known ? "state.positive" : learning ? "text.accent" : excluded is not null ? "text.body_soft" : "text.bright"));
             }
 
             // A persistent canvas needs its dynamic text recomposed after a language change.
@@ -453,10 +492,32 @@ public partial class DealOrForceGame
         body.AddThemeConstantOverride("separation", 4);
         card.AddChild(body);
 
+        var headerRow = new HBoxContainer { Name = "HeaderRow_" + node.Id };
+        headerRow.AddThemeConstantOverride("separation", 6);
+        body.AddChild(headerRow);
+
         var state = Fixed(Title("", 12, Ui.Colour("text.caption")));
         state.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        state.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         state.Name = "State_" + node.Id;
-        body.AddChild(state);
+        headerRow.AddChild(state);
+
+        if (node.Excludes.Count > 0)
+        {
+            var pill = new PanelContainer
+            {
+                Name = "SubDoctrinePill_" + node.Id,
+                SizeFlagsHorizontal = SizeFlags.ShrinkEnd,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+                ClipContents = true
+            };
+            pill.AddThemeStyleboxOverride("panel", Ui.ChromeBox("state.warning", 0.22f, "state.warning", 0.85f, cornerRadius: 3, borderWidth: 1, padX: 5, padY: 0));
+            var pillLbl = Title(Loc.Get("doctrine.ui.sub_doctrine_pill"), 11, Ui.Colour("state.warning"));
+            pillLbl.Name = "SubDoctrineLabel_" + node.Id;
+            pillLbl.AutowrapMode = TextServer.AutowrapMode.Off;
+            pill.AddChild(pillLbl);
+            headerRow.AddChild(pill);
+        }
 
         var title = new Label
         {
@@ -494,6 +555,7 @@ public partial class DealOrForceGame
         }
 
         var price = Fixed(Title("", 12, Ui.Colour("text.body")));
+        price.AddThemeFontOverride("font", PresentationFonts.Tabular());
         price.TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming;
         price.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         price.ClipText = false;

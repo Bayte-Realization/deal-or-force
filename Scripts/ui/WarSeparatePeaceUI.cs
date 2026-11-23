@@ -30,8 +30,9 @@ public partial class DealOrForceGame
                 wish.ToString("0")), 12, Ui.Colour("text.body"));
             line.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             _warDetailActions.AddChild(line);
-            var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 6);
+            var row = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+            row.AddThemeConstantOverride("h_separation", 6);
+            row.AddThemeConstantOverride("v_separation", 6);
             _warDetailActions.AddChild(row);
             foreach (var terms in new[] { SeparatePeaceTerms.WhiteExit, SeparatePeaceTerms.Indemnity, SeparatePeaceTerms.Concede })
                 row.AddChild(SeparatePeaceButton(war, player.Id, player.Id, terms, false, refusal));
@@ -44,11 +45,12 @@ public partial class DealOrForceGame
                 var member = _campaign.NationById(memberId);
                 if (member is null || war.EnemyLeaderOf(memberId) != player.Id) continue;
                 var refusal = SeparatePeace.Refusal(_campaign, war, memberId);
-                var row = new HBoxContainer();
-                row.AddThemeConstantOverride("separation", 6);
+                var row = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+                row.AddThemeConstantOverride("h_separation", 6);
+                row.AddThemeConstantOverride("v_separation", 6);
                 _warDetailActions.AddChild(row);
                 var name = RowLabel(Simulation.Loc.Format("{0} · wavering {1}%", member.DisplayName,
-                    SeparatePeace.Wish(_campaign, war, member).ToString("0")), 12, Ui.Colour("text.body"), 220f);
+                    SeparatePeace.Wish(_campaign, war, member).ToString("0")), 12, Ui.Colour("text.body"), 200f);
                 name.TooltipText = Ui.Tip(Tr("How much this member of the other side wants out of the war: a tired public, a losing side, its own land held, a long war, little binding it to its leader."));
                 name.MouseFilter = Control.MouseFilterEnum.Stop;
                 row.AddChild(name);
@@ -63,15 +65,16 @@ public partial class DealOrForceGame
                 var member = _campaign.NationById(memberId);
                 if (member is null) continue;
                 var wish = SeparatePeace.Wish(_campaign, war, member);
-                var row = new HBoxContainer();
-                row.AddThemeConstantOverride("separation", 6);
+                var row = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+                row.AddThemeConstantOverride("h_separation", 6);
+                row.AddThemeConstantOverride("v_separation", 6);
                 _warDetailActions.AddChild(row);
                 var shaky = wish >= _campaign.Defines.SeparatePeaceAiThreshold - 15f;
                 row.AddChild(RowLabel(Simulation.Loc.Format(shaky ? "{0} · wavering {1}%" : "{0} · steadfast ({1}%)", member.DisplayName, wish.ToString("0")),
-                    12, Ui.Colour(shaky ? "state.warning" : "text.body"), 220f));
+                    12, Ui.Colour(shaky ? "state.warning" : "text.body"), 200f));
                 var cost = MathF.Max(0.05f, player.Gdp * _campaign.Defines.SeparatePeaceSubsidyShare);
                 var captured = memberId;
-                var pay = ActionButton(Simulation.Loc.Format("Subsidise · ${0:0.00}B", cost), () => SubsidiseAlly(war, captured), 180, 28);
+                var pay = ActionButton(Simulation.Loc.Format("Subsidise · ${0:0.00}B", cost), () => SubsidiseAlly(war, captured), 160, 28);
                 pay.TooltipText = Ui.Tip(Tr("Pay this ally to stay in the war: money for its treasury and a little resolve for its public. Once in 90 days."));
                 pay.Disabled = player.Treasury < cost ||
                                member.DecisionAvailableDay.GetValueOrDefault("separate_peace_subsidy/" + war.Id) > _campaign.ElapsedDays;
@@ -97,7 +100,7 @@ public partial class DealOrForceGame
         string refusal, string caption = null)
     {
         var text = caption ?? (switchSides ? Tr("Change sides") : SeparatePeace.TermsName(terms));
-        var button = ActionButton(text, () => SignSeparatePeace(war, issuerId, memberId, terms, switchSides), 190, 30);
+        var button = ActionButton(text, () => SignSeparatePeace(war, issuerId, memberId, terms, switchSides), 148, 30);
         var acceptance = SeparatePeace.Acceptance(_campaign, war, memberId, terms);
         button.Disabled = refusal.Length > 0;
         var tip = refusal.Length > 0

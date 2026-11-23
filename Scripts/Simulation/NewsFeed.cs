@@ -164,7 +164,8 @@ public static class NewsFeed
             var nation = campaign?.NationById(id);
             return nation is not null && nation.Name == recorded ? nation.DisplayName : CountryNames.Recorded(recorded);
         }
-        var subject = entry.Kind is "ultimatum_accepted" or "ultimatum_refused"
+        var subject = entry.Kind is "ultimatum_accepted" or "ultimatum_refused" or
+            "mainland_campaign_launched" or "mainland_bridgehead" or "mainland_rally" or "mainland_defection"
             ? campaign?.States.FirstOrDefault(state => state.Name == entry.Subject)?.DisplayName ??
               CountryNames.Recorded(entry.Subject)
             : CountryNames.Recorded(entry.Subject);

@@ -18,6 +18,8 @@ public static class TradeTermsComposer
 {
     public sealed record Candidate(TradeTerms Terms, float ProposerValue, float PartnerValue, int Order);
 
+    [ThreadStatic] private static List<TradeTerms> _candidatesScratch;
+
     /// <summary>
     /// The presets made into terms for this pair, in order; those that do not fit are left out. Each
     /// fixed-term one is followed by the same terms for a short trial (TradeShortTrialYears) - the length is a term like
@@ -28,31 +30,68 @@ public static class TradeTermsComposer
     public static List<TradeTerms> Candidates(Campaign c, Nation proposer, Nation partner,
         IReadOnlyCollection<string> presets = null, Commodity? good = null, float[] shares = null)
     {
-        var list = new List<TradeTerms>();
+        var list = new List<TradeTerms>(8);
+        CandidatesInto(list, c, proposer, partner, presets, good, shares);
+        return list;
+    }
+
+    internal static List<TradeTerms> CandidatesScratch(Campaign c, Nation proposer, Nation partner,
+        IReadOnlyCollection<string> presets = null, Commodity? good = null, float[] shares = null)
+    {
+        var list = _candidatesScratch ??= new List<TradeTerms>(16);
+        CandidatesInto(list, c, proposer, partner, presets, good, shares);
+        return list;
+    }
+
+    private static void CandidatesInto(List<TradeTerms> list, Campaign c, Nation proposer, Nation partner,
+        IReadOnlyCollection<string> presets, Commodity? good, float[] shares)
+    {
+        list.Clear();
         var trial = c?.Defines.TradeShortTrialYears ?? 0;
-        if (!TradeTermsCatalog.Spec.Years.Contains(trial)) trial = 0;
-        void Add(TradeTerms t)
-        {
-            list.Add(t);
-            // Only a fixed term has a shorter version: an agreement with no end binds by its exit
-            // price alone and is the open-ended kind already, not a long commitment to cut down.
-            if (trial <= 0 || t.Years <= trial) return;
-            var shorter = TradeTerms.Copy(t);
-            shorter.Years = trial;
-            shorter.Trial = true;
-            list.Add(shorter);
-        }
+        var specYears = TradeTermsCatalog.Spec.Years;
+        var hasTrial = false;
+        for (var yi = 0; yi < specYears.Length; yi++)
+            if (specYears[yi] == trial) { hasTrial = true; break; }
+        if (!hasTrial) trial = 0;
+
         foreach (var preset in TradeTermsCatalog.Composed)
         {
-            if (presets is not null && !presets.Contains(preset.Id)) continue;
+            if (presets is not null && !ContainsPreset(presets, preset.Id)) continue;
             if (preset.Guarantee != "none" && shares is { Length: > 0 })
             {
-                foreach (var share in shares)
-                    if (TradeTermsCatalog.Build(c, preset, proposer, partner, good, share) is { } t) Add(t);
+                for (var si = 0; si < shares.Length; si++)
+                    if (TradeTermsCatalog.Build(c, preset, proposer, partner, good, shares[si]) is { } t)
+                        AddCandidate(list, t, trial);
             }
-            else if (TradeTermsCatalog.Build(c, preset, proposer, partner, good) is { } terms) Add(terms);
+            else if (TradeTermsCatalog.Build(c, preset, proposer, partner, good) is { } terms)
+                AddCandidate(list, terms, trial);
         }
-        return list;
+    }
+
+    private static bool ContainsPreset(IReadOnlyCollection<string> presets, string id)
+    {
+        if (presets is string[] arr)
+        {
+            for (var i = 0; i < arr.Length; i++)
+                if (string.Equals(arr[i], id, StringComparison.Ordinal)) return true;
+            return false;
+        }
+        if (presets is HashSet<string> set) return set.Contains(id);
+        foreach (var item in presets)
+            if (string.Equals(item, id, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
+    private static void AddCandidate(List<TradeTerms> list, TradeTerms t, int trial)
+    {
+        list.Add(t);
+        // Only a fixed term has a shorter version: an agreement with no end binds by its exit
+        // price alone and is the open-ended kind already, not a long commitment to cut down.
+        if (trial <= 0 || t.Years <= trial) return;
+        var shorter = TradeTerms.Copy(t);
+        shorter.Years = trial;
+        shorter.Trial = true;
+        list.Add(shorter);
     }
 
     /// <summary>
@@ -63,7 +102,14 @@ public static class TradeTermsComposer
     public static List<Candidate> Ranked(Campaign c, Nation proposer, Nation partner, List<TradeTerms> candidates)
     {
         var ranked = new List<Candidate>(candidates.Count);
-        if (candidates.Count == 0) return ranked;
+        RankedInto(ranked, c, proposer, partner, candidates);
+        return ranked;
+    }
+
+    private static void RankedInto(List<Candidate> ranked, Campaign c, Nation proposer, Nation partner, List<TradeTerms> candidates)
+    {
+        ranked.Clear();
+        if (candidates.Count == 0) return;
         var ours = TradeTermsValue.ReadScratchOurs(c, proposer, partner);
         var theirs = TradeTermsValue.ReadScratchTheirs(c, partner, proposer);
         var grudge = Ultimatum.GrudgePenalty(c, proposer, partner);
@@ -79,7 +125,61 @@ public static class TradeTermsComposer
             if (trialNotNeeded) continue;
             if (mine >= 0f && yours >= 0f) ranked.Add(new Candidate(candidates[i], mine, yours, i));
         }
-        return ranked.OrderByDescending(r => r.ProposerValue).ThenBy(r => r.Order).ToList();
+        if (ranked.Count > 1)
+            ranked.Sort(static (a, b) =>
+            {
+                var cmp = b.ProposerValue.CompareTo(a.ProposerValue);
+                return cmp != 0 ? cmp : a.Order.CompareTo(b.Order);
+            });
+    }
+
+    private static bool Beats(float value, int order, float bestValue, int bestOrder)
+    {
+        var cmp = bestValue.CompareTo(value);
+        return cmp < 0 || (cmp == 0 && order < bestOrder);
+    }
+
+    private static void BestTwo(Campaign c, Nation proposer, Nation partner, List<TradeTerms> candidates,
+        out TradeTerms first, out TradeTerms second, out float firstMine, out float firstYours, out int firstOrder)
+    {
+        first = null;
+        second = null;
+        firstMine = 0f;
+        firstYours = 0f;
+        firstOrder = 0;
+        if (candidates.Count == 0) return;
+
+        var secondMine = 0f;
+        var secondOrder = 0;
+        var ours = TradeTermsValue.ReadScratchOurs(c, proposer, partner);
+        var theirs = TradeTermsValue.ReadScratchTheirs(c, partner, proposer);
+        var grudge = Ultimatum.GrudgePenalty(c, proposer, partner);
+        var previousSignable = false;
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var term = candidates[i];
+            var mine = TradeTermsValue.Value(ours, term);
+            var yours = TradeTermsValue.Value(theirs, term) - grudge;
+            var trialNotNeeded = term.Trial && previousSignable;
+            if (!term.Trial) previousSignable = yours >= 0f;
+            if (trialNotNeeded || mine < 0f || yours < 0f) continue;
+            if (first is null || Beats(mine, i, firstMine, firstOrder))
+            {
+                second = first;
+                secondMine = firstMine;
+                secondOrder = firstOrder;
+                first = term;
+                firstMine = mine;
+                firstYours = yours;
+                firstOrder = i;
+            }
+            else if (second is null || Beats(mine, i, secondMine, secondOrder))
+            {
+                second = term;
+                secondMine = mine;
+                secondOrder = i;
+            }
+        }
     }
 
     /// <summary>
@@ -91,13 +191,15 @@ public static class TradeTermsComposer
         out TradeTerms signed)
     {
         signed = null;
-        var ranked = Ranked(c, proposer, partner, candidates);
+        BestTwo(c, proposer, partner, candidates, out var firstTerms, out var secondTerms, out _, out _, out _);
+        var count = firstTerms is null ? 0 : secondTerms is null ? 1 : 2;
         var result = AgreementResult.NotAsked;
         var before = CampaignDiplomacy.Peek(c, proposer.Id, partner.Id);
         var refusedBefore = before?.AgreementRefusedDay ?? -9999;
         var actedBefore = before?.LastActionDay ?? -30;
-        for (var attempt = 0; attempt < Math.Min(2, ranked.Count); attempt++)
+        for (var attempt = 0; attempt < count; attempt++)
         {
+            var terms = attempt == 0 ? firstTerms : secondTerms;
             if (attempt > 0 && CampaignDiplomacy.Peek(c, proposer.Id, partner.Id) is { } relation)
             {
                 // The second try is part of the same visit, not a new one: the first refusal's
@@ -108,13 +210,13 @@ public static class TradeTermsComposer
             var ask = new ProposeAgreementCommand
             {
                 IssuerId = proposer.Id, TargetId = partner.Id, Kind = AgreementKind.TradeAgreement,
-                Trade = ranked[attempt].Terms
+                Trade = terms
             };
             ask.Apply(c);
             result = ask.Result;
             if (result is AgreementResult.Signed or AgreementResult.Offered)
             {
-                signed = ranked[attempt].Terms;
+                signed = terms;
                 return result;
             }
             if (result != AgreementResult.Refused) return result;
@@ -126,8 +228,11 @@ public static class TradeTermsComposer
     /// What the composer would ask a player's country for, and whether the same count says that
     /// country would sign it - the gate every computer-to-player trade paper passes.
     /// </summary>
-    public static Candidate BestFor(Campaign c, Nation proposer, Nation partner, List<TradeTerms> candidates) =>
-        Ranked(c, proposer, partner, candidates).FirstOrDefault();
+    public static Candidate BestFor(Campaign c, Nation proposer, Nation partner, List<TradeTerms> candidates)
+    {
+        BestTwo(c, proposer, partner, candidates, out var firstTerms, out _, out var mine, out var yours, out var order);
+        return firstTerms is null ? null : new Candidate(firstTerms, mine, yours, order);
+    }
 }
 
 /// <summary>

@@ -21,6 +21,15 @@ public static partial class CampaignFingerprint
         foreach (var n in campaign.Nations.OrderBy(n => n.Id))
             if (n.NuclearStruckDay != -100000 || n.NuclearStruckBy != -1 || n.NuclearFirstUseDay != -100000)
             { MixText(ref hash, "nuclear_struck"); Mix(ref hash, n.Id); Mix(ref hash, n.NuclearStruckDay); Mix(ref hash, n.NuclearStruckBy); Mix(ref hash, n.NuclearFirstUseDay); }
+        foreach (var n in campaign.Nations.OrderBy(n => n.Id))
+            if (n.NuclearDoctrine != NuclearDoctrine.RetaliatoryTriad || n.NuclearDoctrineDay != -100000 || n.ArmsControlPacts.Count > 0)
+            {
+                MixText(ref hash, "nuclear_doctrine_arms"); Mix(ref hash, n.Id);
+                Mix(ref hash, (int)n.NuclearDoctrine); Mix(ref hash, n.NuclearDoctrineDay);
+                Mix(ref hash, n.ArmsControlPacts.Count);
+                foreach (var (partnerId, expiryDay) in n.ArmsControlPacts.OrderBy(p => p.Key))
+                { Mix(ref hash, partnerId); Mix(ref hash, expiryDay); }
+            }
     }
 
     private static void MixMilitaryRules(Campaign campaign, ref ulong hash)

@@ -35,16 +35,25 @@ public sealed partial class GlobePresentation
     private const string SupplyLineShader = @"
 shader_type spatial;
 render_mode unshaded, blend_mix, cull_disabled, depth_draw_never, shadows_disabled;
+uniform float quality_tier = 0.0;
 void fragment() {
-    float flow = fract(UV.x * 1.4 + TIME * 0.85);
-    float dash = smoothstep(0.0, 0.10, flow) * (1.0 - smoothstep(0.58, 0.68, flow));
     float across = abs(UV.y * 2.0 - 1.0);
-    float core = 1.0 - smoothstep(0.0, 0.62, across);
-    float edge = smoothstep(0.62, 0.96, across) * (1.0 - smoothstep(0.96, 1.0, across));
-    vec3 col = mix(COLOR.rgb * (0.85 + 0.30 * dash), vec3(0.03, 0.05, 0.07), edge * 0.78);
+    float speed = quality_tier < 1.5 ? 0.95 : 0.45;
+    // Directional logistics chevron pointing from supply hub toward the division.
+    float chevron_u = UV.x * 1.45 + (quality_tier < 1.5 ? across * 0.32 : 0.0) + TIME * speed;
+    float flow = fract(chevron_u);
+    float dash = smoothstep(0.0, 0.10, flow) * (1.0 - smoothstep(0.56, 0.68, flow));
+    float tip = smoothstep(0.42, 0.56, flow) * (1.0 - smoothstep(0.56, 0.66, flow));
+    float core = 1.0 - smoothstep(0.0, 0.64, across);
+    float edge = smoothstep(0.64, 0.96, across) * (1.0 - smoothstep(0.96, 1.0, across));
+    vec3 bright = clamp(COLOR.rgb * (0.90 + 0.36 * dash) + vec3(0.14, 0.12, 0.08) * tip, vec3(0.0), vec3(1.0));
+    vec3 col = mix(bright, vec3(0.03, 0.045, 0.065), edge * 0.82);
     ALBEDO = col;
-    ALPHA = COLOR.a * max(core * (0.45 + 0.55 * dash), edge * 0.65);
+    ALPHA = COLOR.a * max(core * (0.48 + 0.52 * dash), edge * 0.72);
 }";
+
+    private void ApplySupplyLineQualityTier(float tier) =>
+        _supplyLineMaterial?.SetShaderParameter("quality_tier", tier);
 
     private void UpdateSupplyLines()
     {
@@ -60,6 +69,7 @@ void fragment() {
             if (_routePreview.GetParent() is not Node3D world) return;
             _supplyLineMesh = new ImmediateMesh();
             _supplyLineMaterial = new ShaderMaterial { Shader = new Shader { Code = SupplyLineShader } };
+            _supplyLineMaterial.SetShaderParameter("quality_tier", CurrentShaderQualityTier());
             _supplyLinePreview = new MeshInstance3D
             {
                 Name = "ArmySupplyLines",
@@ -156,24 +166,30 @@ void fragment() {
             _supplyLineMesh.SurfaceEnd();
         }
 
-        // The hub end gets a hollow square, so the far end of a long artery is findable
-        // and reads as a place rather than the line simply stopping.
+        // The hub end gets a crisp diamond + inner cross depot beacon (zero-alloc) so the supply source
+        // reads unmistakably as a logistics hub rather than a cut-off line.
         var end = _supplyLinePoints[^1];
         var up = _flatMap ? Vector3.Forward : end.Normalized();
         var across = up.Cross(Vector3.Up).LengthSquared() > 0.0001f ? up.Cross(Vector3.Up).Normalized() : Vector3.Right;
         var along = up.Cross(across).Normalized();
-        const float size = 0.0072f;
+        const float size = 0.0086f;
+        const float inner = 0.0042f;
+        var pE = OnOrderSurface(end + across * size);
+        var pN = OnOrderSurface(end + along * size);
+        var pW = OnOrderSurface(end - across * size);
+        var pS = OnOrderSurface(end - along * size);
         _supplyLineMesh.SurfaceBegin(Mesh.PrimitiveType.LineStrip);
-        foreach (var (a, b) in new[]
-                 {
-                     (across, along), (along, -across), (-across, -along), (-along, across), (across, along)
-                 })
-        {
-            _supplyLineMesh.SurfaceSetColor(colour);
-            _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(end + a * size));
-            _supplyLineMesh.SurfaceSetColor(colour);
-            _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(end + b * size));
-        }
+        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(pE);
+        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(pN);
+        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(pW);
+        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(pS);
+        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(pE);
+        _supplyLineMesh.SurfaceEnd();
+        _supplyLineMesh.SurfaceBegin(Mesh.PrimitiveType.Lines);
+        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(end - across * inner));
+        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(end + across * inner));
+        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(end - along * inner));
+        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(end + along * inner));
         _supplyLineMesh.SurfaceEnd();
         return true;
     }

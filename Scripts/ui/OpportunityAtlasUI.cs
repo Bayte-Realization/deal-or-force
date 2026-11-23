@@ -82,6 +82,432 @@ public partial class DealOrForceGame
                 }
             }
         }
+
+        BuildOpportunityWorldSituations(nation);
+        BuildOpportunityDiseasesAndDisasters(nation);
+        BuildOpportunityAmbitionsAndDirectives(nation);
+    }
+
+    private void BuildOpportunityDiseasesAndDisasters(Nation nation)
+    {
+        if (_campaign is null || nation is null || !DiseasesAndDisasters.IsEnabled(_campaign)) return;
+
+        var healthCrises = DiseasesAndDisasters.ActiveHealthCrises(_campaign, nation);
+        var disasters = DiseasesAndDisasters.ActiveDisasters(_campaign, nation);
+        if (healthCrises.Count == 0 && disasters.Count == 0) return;
+
+        // ---- Regional Public Health Crises (Wave 6H)
+        if (healthCrises.Count > 0)
+        {
+            _decisionControls.AddChild(Title(Loc.Get("wave6.ui.health.heading"), 16, Ui.Colour("text.accent_dim")));
+            var healthActions = new[]
+            {
+                HealthResponseAction.TargetedQuarantine,
+                HealthResponseAction.MassVaccinationAndMedicalDrive,
+                HealthResponseAction.EmergencyHealthSubsidies,
+                HealthResponseAction.InternationalMedicalCooperation
+            };
+
+            for (var i = 0; i < healthCrises.Count; i++)
+            {
+                var brief = healthCrises[i];
+                var tierLabel = Loc.Get(DiseasesAndDisasters.TierLocalizationKey(brief.SeverityTier));
+                var stateLine = Loc.Format("wave6.ui.health.state_fmt",
+                    brief.AffectedStateName, tierLabel, (int)MathF.Round(brief.Severity), brief.DaysRemaining);
+                var card = AtlasCard(brief.Name, stateLine, brief.Severity < 45f);
+                card.Name = "OpportunityHealthCrisis_" + brief.Id;
+
+                if (!string.IsNullOrWhiteSpace(brief.Summary))
+                {
+                    var desc = Title(brief.Summary, 12, Ui.Colour("text.body_soft"));
+                    desc.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                    card.AddChild(desc);
+                }
+
+                var bar = new ProgressBar
+                {
+                    MinValue = 0, MaxValue = 100, Value = brief.Severity, ShowPercentage = false,
+                    CustomMinimumSize = new Vector2(0, 8), SizeFlagsHorizontal = SizeFlags.ExpandFill
+                };
+                bar.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = Ui.Colour("surface.inset") });
+                bar.AddThemeStyleboxOverride("fill", new StyleBoxFlat
+                    { BgColor = Ui.Colour(brief.Severity >= 65f ? "state.negative" : "state.warning") });
+                card.AddChild(bar);
+
+                var metricsLbl = Title(Loc.Format("wave6.ui.health.metrics_fmt",
+                    Fmt.People(brief.TotalDeaths), Fmt.Percent(brief.HospitalCoverage),
+                    Fmt.Percent(brief.MedicineSupply), Fmt.Money(brief.TotalCostBillions)),
+                    12, Ui.Colour("text.body"));
+                metricsLbl.AddThemeFontOverride("font", PresentationFonts.Tabular());
+                card.AddChild(metricsLbl);
+
+                if (brief.ActiveResponse != HealthResponseAction.None && !string.IsNullOrWhiteSpace(brief.ActiveResponseLabel))
+                    card.AddChild(Title(Loc.Format("wave6.ui.health.active_resp_fmt", brief.ActiveResponseLabel), 12, Ui.Colour("state.positive")));
+
+                var flow = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+                flow.AddThemeConstantOverride("h_separation", 6);
+                flow.AddThemeConstantOverride("v_separation", 6);
+                card.AddChild(flow);
+
+                foreach (var act in healthActions)
+                {
+                    DiseasesAndDisasters.HealthActionCost(_campaign, nation, brief.Id, act, out var cashCost, out var ppCost);
+                    var refusal = "";
+                    var canAct = !_observerMode && DiseasesAndDisasters.CanRespondHealth(_campaign, nation, brief.Id, act, out refusal);
+                    var actLabel = Loc.Get(DiseasesAndDisasters.ActionLocalizationKey(act));
+                    var btnText = Loc.Format("wave6.ui.crisis.action_cost_fmt", actLabel, Fmt.Money(cashCost), ppCost);
+
+                    var capturedId = brief.Id;
+                    var capturedAct = act;
+                    var btn = ActionButton(btnText, () =>
+                    {
+                        if (_observerMode || _campaign?.Player is not { } p) return;
+                        _campaign.Commands.Enqueue(new HealthResponseCommand
+                        {
+                            IssuerId = p.Id,
+                            CrisisId = capturedId,
+                            Action = capturedAct
+                        });
+                        _campaign.Commands.ApplyAll(_campaign);
+                        ShowOpportunityAtlas();
+                        Refresh();
+                    }, 0, 30);
+                    btn.Name = $"HealthAction_{brief.Id}_{act}";
+                    btn.Disabled = !canAct;
+                    btn.AddThemeFontOverride("font", PresentationFonts.Tabular());
+                    btn.TooltipText = Ui.Tip(_observerMode
+                        ? Loc.Get("shell.obs.readonly_banner")
+                        : (!canAct && refusal.Length > 0 ? refusal : btnText));
+                    flow.AddChild(btn);
+                }
+            }
+        }
+
+        // ---- Regional Natural Disasters (Wave 6H)
+        if (disasters.Count > 0)
+        {
+            _decisionControls.AddChild(Title(Loc.Get("wave6.ui.disasters.heading"), 16, Ui.Colour("text.accent_dim")));
+            var reliefActions = new[]
+            {
+                DisasterReliefAction.EmergencyEvacuationAndRescue,
+                DisasterReliefAction.InfrastructureReconstruction,
+                DisasterReliefAction.StrategicReserveAid,
+                DisasterReliefAction.CivilDefenseMobilization
+            };
+
+            for (var i = 0; i < disasters.Count; i++)
+            {
+                var brief = disasters[i];
+                var tierLabel = Loc.Get(DiseasesAndDisasters.TierLocalizationKey(brief.SeverityTier));
+                var stateLine = Loc.Format("wave6.ui.disasters.state_fmt",
+                    brief.AffectedStateName, tierLabel, (int)MathF.Round(brief.Severity), brief.DaysRemaining);
+                var card = AtlasCard(brief.Name, stateLine, brief.Severity < 45f);
+                card.Name = "OpportunityDisaster_" + brief.Id;
+
+                if (!string.IsNullOrWhiteSpace(brief.Summary))
+                {
+                    var desc = Title(brief.Summary, 12, Ui.Colour("text.body_soft"));
+                    desc.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                    card.AddChild(desc);
+                }
+
+                var bar = new ProgressBar
+                {
+                    MinValue = 0, MaxValue = 100, Value = brief.Severity, ShowPercentage = false,
+                    CustomMinimumSize = new Vector2(0, 8), SizeFlagsHorizontal = SizeFlags.ExpandFill
+                };
+                bar.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = Ui.Colour("surface.inset") });
+                bar.AddThemeStyleboxOverride("fill", new StyleBoxFlat
+                    { BgColor = Ui.Colour(brief.Severity >= 65f ? "state.negative" : "state.warning") });
+                card.AddChild(bar);
+
+                var metricsLbl = Title(Loc.Format("wave6.ui.disasters.metrics_fmt",
+                    Fmt.Percent(brief.InstantDamageApplied), Fmt.People(brief.TotalDeaths),
+                    Fmt.Percent(brief.DisasterPreparedness), Fmt.Money(brief.TotalCostBillions)),
+                    12, Ui.Colour("text.body"));
+                metricsLbl.AddThemeFontOverride("font", PresentationFonts.Tabular());
+                card.AddChild(metricsLbl);
+
+                if (brief.ActiveResponse != DisasterReliefAction.None && !string.IsNullOrWhiteSpace(brief.ActiveResponseLabel))
+                    card.AddChild(Title(Loc.Format("wave6.ui.disasters.active_resp_fmt", brief.ActiveResponseLabel), 12, Ui.Colour("state.positive")));
+
+                var flow = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+                flow.AddThemeConstantOverride("h_separation", 6);
+                flow.AddThemeConstantOverride("v_separation", 6);
+                card.AddChild(flow);
+
+                foreach (var act in reliefActions)
+                {
+                    DiseasesAndDisasters.DisasterActionCost(_campaign, nation, brief.Id, act, out var cashCost, out var ppCost);
+                    var refusal = "";
+                    var canAct = !_observerMode && DiseasesAndDisasters.CanRespondDisaster(_campaign, nation, brief.Id, act, out refusal);
+                    var actLabel = Loc.Get(DiseasesAndDisasters.ActionLocalizationKey(act));
+                    var btnText = Loc.Format("wave6.ui.crisis.action_cost_fmt", actLabel, Fmt.Money(cashCost), ppCost);
+
+                    var capturedId = brief.Id;
+                    var capturedAct = act;
+                    var btn = ActionButton(btnText, () =>
+                    {
+                        if (_observerMode || _campaign?.Player is not { } p) return;
+                        _campaign.Commands.Enqueue(new DisasterReliefCommand
+                        {
+                            IssuerId = p.Id,
+                            DisasterId = capturedId,
+                            Action = capturedAct
+                        });
+                        _campaign.Commands.ApplyAll(_campaign);
+                        ShowOpportunityAtlas();
+                        Refresh();
+                    }, 0, 30);
+                    btn.Name = $"DisasterAction_{brief.Id}_{act}";
+                    btn.Disabled = !canAct;
+                    btn.AddThemeFontOverride("font", PresentationFonts.Tabular());
+                    btn.TooltipText = Ui.Tip(_observerMode
+                        ? Loc.Get("shell.obs.readonly_banner")
+                        : (!canAct && refusal.Length > 0 ? refusal : btnText));
+                    flow.AddChild(btn);
+                }
+            }
+        }
+    }
+
+    private void BuildOpportunityWorldSituations(Nation nation)
+    {
+        if (_campaign is null || nation is null || !WorldSituations.IsEnabled(_campaign)) return;
+        var active = WorldSituations.ActiveSituations(_campaign);
+        _decisionControls.AddChild(Title(Loc.Get("wave6.ui.situations.heading"), 16, Ui.Colour("text.accent_dim")));
+        if (active.Count == 0)
+        {
+            _decisionControls.AddChild(Title(Loc.Get("wave6.ui.situations.none"), 13, Ui.Colour("text.muted")));
+            return;
+        }
+
+        var actions = new[]
+        {
+            (SituationActionKind.ConveneEmergencySummit, "world_situation.action.convene_summit"),
+            (SituationActionKind.FundStabilizationPackage, "world_situation.action.fund_stabilization"),
+            (SituationActionKind.ExploitStrategicLeverage, "world_situation.action.exploit_leverage"),
+            (SituationActionKind.BrokerCompromise, "world_situation.action.broker_compromise")
+        };
+
+        for (var i = 0; i < active.Count; i++)
+        {
+            var inst = active[i];
+            var brief = WorldSituations.Describe(_campaign, inst, nation);
+            if (brief is null) continue;
+
+            var stateLine = Loc.Format("wave6.ui.situations.state_fmt",
+                Loc.Get(brief.Category), brief.Intensity, brief.DaysRemaining);
+            var card = AtlasCard(brief.Title, stateLine, brief.Intensity < 65f);
+            card.Name = "OpportunitySituation_" + inst.Id;
+
+            if (!string.IsNullOrWhiteSpace(brief.Summary))
+            {
+                var summaryLbl = Title(brief.Summary, 12, Ui.Colour("text.body_soft"));
+                summaryLbl.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                card.AddChild(summaryLbl);
+            }
+
+            var bar = new ProgressBar
+            {
+                MinValue = 0, MaxValue = 100, Value = brief.Intensity, ShowPercentage = false,
+                CustomMinimumSize = new Vector2(0, 8), SizeFlagsHorizontal = SizeFlags.ExpandFill
+            };
+            bar.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = Ui.Colour("surface.inset") });
+            bar.AddThemeStyleboxOverride("fill", new StyleBoxFlat
+                { BgColor = Ui.Colour(brief.Intensity >= 70f ? "state.negative" : "state.warning") });
+            card.AddChild(bar);
+
+            var coalLbl = Title(Loc.Format("wave6.ui.situations.coalitions_fmt",
+                brief.StabilizerCount, brief.StabilizerWeight, brief.ExploiterCount, brief.ExploiterWeight),
+                12, Ui.Colour("text.body"));
+            coalLbl.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            card.AddChild(coalLbl);
+
+            if (brief.SummitConvened && !string.IsNullOrEmpty(brief.SummitHostTag))
+                card.AddChild(Title(Loc.Format("wave6.ui.situations.summit_host_fmt", brief.SummitHostTag), 12, Ui.Colour("state.positive")));
+
+            var flow = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+            flow.AddThemeConstantOverride("h_separation", 6);
+            flow.AddThemeConstantOverride("v_separation", 6);
+            card.AddChild(flow);
+
+            foreach (var (kind, locKey) in actions)
+            {
+                WorldSituations.ActionCost(_campaign, nation, inst, kind, out var cashCost, out var ppCost);
+                var refusal = "";
+                var canAct = !_observerMode && WorldSituations.CanIntervene(_campaign, nation, inst.Id, kind, out refusal);
+                var labelText = cashCost > 0f
+                    ? Loc.Format("wave6.ui.situations.action_cost_cash_pp_fmt", Loc.Get(locKey), Fmt.Money(cashCost), ppCost)
+                    : Loc.Format("wave6.ui.situations.action_cost_pp_fmt", Loc.Get(locKey), ppCost);
+
+                var capturedId = inst.Id;
+                var capturedKind = kind;
+                var btn = ActionButton(labelText, () =>
+                {
+                    if (_observerMode || _campaign?.Player is not { } p) return;
+                    _campaign.Commands.Enqueue(new SituationInterventionCommand
+                    {
+                        IssuerId = p.Id,
+                        SituationId = capturedId,
+                        Action = capturedKind
+                    });
+                    _campaign.Commands.ApplyAll(_campaign);
+                    ShowOpportunityAtlas();
+                    Refresh();
+                }, 0, 30);
+                btn.Name = $"SituationAction_{inst.Id}_{kind}";
+                btn.Disabled = !canAct;
+                btn.AddThemeFontOverride("font", PresentationFonts.Tabular());
+                btn.TooltipText = Ui.Tip(_observerMode
+                    ? Loc.Get("shell.obs.readonly_banner")
+                    : (!canAct && refusal.Length > 0 ? Loc.Get(refusal) : labelText));
+                flow.AddChild(btn);
+            }
+        }
+    }
+
+    private void BuildOpportunityAmbitionsAndDirectives(Nation nation)
+    {
+        if (_campaign is null || nation is null) return;
+
+        // ---- National Ambitions & Golden Era
+        _decisionControls.AddChild(Title(Loc.Get("wave6.ui.ambitions.heading"), 16, Ui.Colour("text.accent_dim")));
+        if (NationalAmbitions.InGoldenEra(_campaign, nation))
+        {
+            var days = NationalAmbitions.GoldenEraDaysRemaining(_campaign, nation);
+            var goldenBanner = WorkbenchCard(_decisionControls);
+            goldenBanner.Name = "OpportunityGoldenEraBanner";
+            var gLbl = Title(Loc.Format("wave6.ui.ambitions.golden_era_fmt", days), 14, Ui.Colour("text.accent"));
+            gLbl.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            goldenBanner.AddChild(gLbl);
+        }
+
+        var activeAmbitions = NationalAmbitions.ActiveFor(_campaign, nation);
+        for (var i = 0; i < activeAmbitions.Count; i++)
+        {
+            var slot = activeAmbitions[i];
+            var def = NationalAmbitions.FindAmbition(slot.Id);
+            if (def is null) continue;
+            var pct = (int)MathF.Round(Math.Clamp(slot.Progress, 0f, 1f) * 100f);
+            var card = AtlasCard(Loc.Get(def.Name), Loc.Format("wave6.ui.ambitions.active_state_fmt", pct), pct >= 75);
+            card.Name = "OpportunityActiveAmbition_" + def.Id;
+
+            if (!string.IsNullOrWhiteSpace(def.Description))
+            {
+                var desc = Title(Loc.Get(def.Description), 12, Ui.Colour("text.body_soft"));
+                desc.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                card.AddChild(desc);
+            }
+            var bar = new ProgressBar
+            {
+                MinValue = 0, MaxValue = 100, Value = pct, ShowPercentage = false,
+                CustomMinimumSize = new Vector2(0, 8), SizeFlagsHorizontal = SizeFlags.ExpandFill
+            };
+            bar.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = Ui.Colour("surface.inset") });
+            bar.AddThemeStyleboxOverride("fill", new StyleBoxFlat { BgColor = Ui.Colour("state.positive") });
+            card.AddChild(bar);
+
+            var rew = Title(Loc.Format("wave6.ui.ambitions.reward_fmt", def.GoldenEraDays, def.RewardPp, def.RewardXp),
+                12, Ui.Colour("text.accent_dim"));
+            rew.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            card.AddChild(rew);
+        }
+
+        var availableAmbitions = NationalAmbitions.AvailableFor(_campaign, nation);
+        if (availableAmbitions.Count == 0 && activeAmbitions.Count == 0)
+        {
+            _decisionControls.AddChild(Title(Loc.Get("wave6.ui.ambitions.none_available"), 13, Ui.Colour("text.muted")));
+        }
+        else
+        {
+            var showCount = Math.Min(availableAmbitions.Count, 4);
+            for (var i = 0; i < showCount; i++)
+            {
+                var def = availableAmbitions[i];
+                var refusal = "";
+                var canSelect = !_observerMode && NationalAmbitions.CanSelectAmbition(_campaign, nation, def.Id, out refusal);
+                var card = AtlasCard(Loc.Get(def.Name), Loc.Get("wave6.ui.ambitions.available_state"), canSelect);
+                card.Name = "OpportunityAvailableAmbition_" + def.Id;
+
+                if (!string.IsNullOrWhiteSpace(def.Description))
+                {
+                    var desc = Title(Loc.Get(def.Description), 12, Ui.Colour("text.body_soft"));
+                    desc.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                    card.AddChild(desc);
+                }
+                var rew = Title(Loc.Format("wave6.ui.ambitions.reward_fmt", def.GoldenEraDays, def.RewardPp, def.RewardXp),
+                    12, Ui.Colour("text.accent_dim"));
+                rew.AddThemeFontOverride("font", PresentationFonts.Tabular());
+                card.AddChild(rew);
+
+                var capturedId = def.Id;
+                var btn = ActionButton(Loc.Get("wave6.ui.ambitions.adopt"), () =>
+                {
+                    if (_observerMode || _campaign?.Player is not { } p) return;
+                    _campaign.Commands.Enqueue(new SelectAmbitionCommand { IssuerId = p.Id, AmbitionId = capturedId });
+                    _campaign.Commands.ApplyAll(_campaign);
+                    ShowOpportunityAtlas();
+                    Refresh();
+                }, 0, 30);
+                btn.Name = "SelectAmbition_" + def.Id;
+                btn.Disabled = !canSelect;
+                btn.TooltipText = Ui.Tip(_observerMode
+                    ? Loc.Get("shell.obs.readonly_banner")
+                    : (!canSelect && refusal.Length > 0 ? refusal : Loc.Get(def.Description)));
+                card.AddChild(btn);
+            }
+        }
+
+        // ---- Executive Cabinet Directives
+        var directives = NationalAmbitions.Directives;
+        if (directives.Count == 0) return;
+        _decisionControls.AddChild(Title(Loc.Get("wave6.ui.directives.heading"), 16, Ui.Colour("text.accent_dim")));
+        for (var i = 0; i < directives.Count; i++)
+        {
+            var dir = directives[i];
+            var isActive = NationalAmbitions.IsDirectiveActive(_campaign, nation, dir.Id);
+            var cooldown = NationalAmbitions.DirectiveCooldownRemaining(_campaign, nation, dir.Id);
+            var refusal = "";
+            var canExec = !_observerMode && NationalAmbitions.CanExecuteDirective(_campaign, nation, dir.Id, out refusal);
+            var state = isActive
+                ? Loc.Get("wave6.ui.directives.active_state")
+                : cooldown > 0
+                    ? Loc.Format("wave6.ui.directives.cooldown_fmt", cooldown)
+                    : Loc.Get("wave6.ui.directives.ready_state");
+
+            var card = AtlasCard(Loc.Get(dir.Name), state, isActive || canExec);
+            card.Name = "OpportunityDirective_" + dir.Id;
+
+            if (!string.IsNullOrWhiteSpace(dir.Description))
+            {
+                var desc = Title(Loc.Get(dir.Description), 12, Ui.Colour("text.body_soft"));
+                desc.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                card.AddChild(desc);
+            }
+
+            var (cash, pp) = NationalAmbitions.DirectiveCost(nation, dir);
+            var costLbl = Title(Loc.Format("wave6.ui.directives.cost_fmt", Fmt.Money(cash), pp, dir.DurationDays),
+                12, Ui.Colour("text.accent_dim"));
+            costLbl.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            card.AddChild(costLbl);
+
+            var capturedDirId = dir.Id;
+            var btn = ActionButton(Loc.Get("wave6.ui.directives.enact"), () =>
+            {
+                if (_observerMode || _campaign?.Player is not { } p) return;
+                _campaign.Commands.Enqueue(new ExecuteCabinetDirectiveCommand { IssuerId = p.Id, DirectiveId = capturedDirId });
+                _campaign.Commands.ApplyAll(_campaign);
+                ShowOpportunityAtlas();
+                Refresh();
+            }, 0, 30);
+            btn.Name = "ExecuteDirective_" + dir.Id;
+            btn.Disabled = !canExec;
+            btn.TooltipText = Ui.Tip(_observerMode
+                ? Loc.Get("shell.obs.readonly_banner")
+                : (!canExec && refusal.Length > 0 ? refusal : Loc.Get(dir.Description)));
+            card.AddChild(btn);
+        }
     }
 
     private static bool AtlasHasTab(string id) => CampaignUiCatalog.For("Decisions").Tabs.Any(t => t.Id == id);

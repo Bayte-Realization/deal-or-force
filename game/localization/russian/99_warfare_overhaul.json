@@ -1,0 +1,28 @@
+{
+  "Flanking bypass": "Обход укреплений с флангов",
+  "Pocket collapse": "Распад котла",
+
+  "wf.phase.meeting_engagement.name": "Встречный бой",
+  "wf.phase.meeting_engagement.desc": "Передовые эшелоны вступают в манёвренный контакт до полного развёртывания линий.",
+  "wf.phase.prepared_assault.name": "Подготовленный штурм",
+  "wf.phase.prepared_assault.desc": "Спланированный натиск на укреплённые полосы при согласованной огневой поддержке и снабжении.",
+  "wf.phase.armoured_breakthrough.name": "Бронетанковый прорыв",
+  "wf.phase.armoured_breakthrough.desc": "Ударные танковые и механизированные клинья взламывают передний край и выходят на фланги.",
+  "wf.phase.flanking_envelopment.name": "Фланговый охват",
+  "wf.phase.flanking_envelopment.desc": "Удары с нескольких направлений расширяют ширину фронта и обесценивают окопы обороняющихся.",
+  "wf.phase.artillery_barrage.name": "Огневой и авиационный вал",
+  "wf.phase.artillery_barrage.desc": "Дальнобойная артиллерия, ударная авиация и дроны подавляют боевые порядки на участке.",
+  "wf.phase.urban_grind.name": "Уличные бои",
+  "wf.phase.urban_grind.desc": "Плотная городская застройка гасит темп бронетехники и усиливает позиции окопавшейся пехоты.",
+  "wf.phase.elastic_defence.name": "Эластичная оборона",
+  "wf.phase.elastic_defence.desc": "Глубоко окопанные части гасят первый удар и встречают штурмовые колонны перекрёстным огнём.",
+  "wf.phase.desperate_counterattack.name": "Контратака",
+  "wf.phase.desperate_counterattack.desc": "Резервы обороны бьют в растянутые порядки наступающих и перехватывают инициативу.",
+  "wf.phase.pocket_collapse.name": "Распад котла",
+  "wf.phase.pocket_collapse.desc": "Окружённые части без снабжения стремительно теряют организацию под сходящимся огнём.",
+
+  "wf.note.initial_contact": "Завязка боя — части выходят на рубеж",
+  "wf.role.frontline": "Передовая",
+  "wf.role.reserve": "Резерв",
+  "wf.role.retreating": "Отход"
+}

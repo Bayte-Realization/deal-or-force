@@ -42,6 +42,8 @@ public partial class DealOrForceGame
 
     /// <summary>The country an observer is watching, or null for the whole world.</summary>
     private Simulation.Nation _observerWatched;
+    private int _observerReturnNationId = -1;
+    private string _observerTransientNote = "";
     private bool _interfaceHidden;
     private bool _simulating;
     private System.Func<Simulation.ICampaignCommand, bool> _observerGate;
@@ -52,29 +54,56 @@ public partial class DealOrForceGame
     private void ToggleObserverMode()
     {
         if (_campaign is null || !_hudLayer.Visible) return;
-        // Nobody at the wheel: F7 takes the wheel of the country being watched.
-        if (_observerMode && _campaign.HumanSeats.Count == 0)
+        var currentlyObserving = _observerMode || _campaign.ObserverMode;
+        if (currentlyObserving)
         {
-            if (_observerWatched is null) { ShowObserverHint(Tr("Click a country to watch it, then F7 takes control of it.")); return; }
-            var nation = _observerWatched;
+            // Pure observer campaign (no human seat): F7 takes control of the country being watched.
+            if (_campaign.HumanSeats.Count == 0)
+            {
+                if (_observerWatched is null)
+                {
+                    ShowObserverHint(Tr("Click a country to watch it, then F7 takes control of it."));
+                    if (IsNewShellActive) RefreshNewShell(force: true);
+                    return;
+                }
+                var nation = _observerWatched;
+                _observerWatched = null;
+                _observerReturnNationId = -1;
+                _campaign.ConfigureSinglePlayer(nation.Id);
+                SetObserverMode(false);
+                return;
+            }
+
+            // Player entered observer mode from an active campaign: restore their own seat immediately.
+            var seatIndex = System.Math.Clamp(_campaign.ActiveSeat, 0, _campaign.HumanSeats.Count - 1);
+            var returnId = _observerReturnNationId >= 0 && _campaign.NationById(_observerReturnNationId) is not null
+                ? _observerReturnNationId
+                : _campaign.HumanSeats[seatIndex];
+            _observerReturnNationId = -1;
             _observerWatched = null;
-            _observerMode = false;
-            _campaign.ObserverMode = false;
-            _campaign.ConfigureSinglePlayer(nation.Id);
+            _campaign.ViewAs(returnId);
             SetObserverMode(false);
             return;
         }
-        SetObserverMode(!_campaign.ObserverMode);
+
+        _observerReturnNationId = _campaign.HumanSeats.Count > 0 ? (_campaign.Player?.Id ?? _campaign.HumanSeats[0]) : -1;
+        _observerWatched = _campaign.Player;
+        SetObserverMode(true);
     }
 
     /// <summary>
     /// An observer clicked a country: the flag, the figures, the alerts and every screen are now
-    /// that country's. It is still run by the computer; orders are refused (ObserverCommandGate).
+    /// that country's immediately (even while paused). It is still run by the computer; orders are refused.
     /// </summary>
     private void WatchCountry(Simulation.Nation nation)
     {
-        if (!_observerMode || _campaign is null || nation is null || _campaign.HumanSeats.Count > 0) return;
-        if (ReferenceEquals(nation, _observerWatched) && ReferenceEquals(_campaign.Player, nation)) return;
+        if ((!_observerMode && _campaign is not { ObserverMode: true }) || _campaign is null || nation is null) return;
+        _observerMode = true;
+        if (ReferenceEquals(nation, _observerWatched) && ReferenceEquals(_campaign.Player, nation))
+        {
+            if (IsNewShellActive) RefreshNewShell(force: true);
+            return;
+        }
         _observerWatched = nation;
         _campaign.ViewAs(nation.Id);
         RestoreCountryTopBar();
@@ -82,6 +111,7 @@ public partial class DealOrForceGame
         _strategicHudFingerprint = int.MinValue;
         ShowObserverHint("");
         Refresh();
+        if (IsNewShellActive) RefreshNewShell(force: true);
     }
 
     /// <summary>Back to the faceless view: the world's own figures and news (F4).</summary>
@@ -92,6 +122,7 @@ public partial class DealOrForceGame
         _strategicHudFingerprint = int.MinValue;
         ShowObserverHint("");
         Refresh();
+        if (IsNewShellActive) RefreshNewShell(force: true);
     }
 
     /// <summary>
@@ -110,7 +141,13 @@ public partial class DealOrForceGame
 
     private void ShowObserverHint(string once)
     {
+        _observerTransientNote = once ?? "";
         if (_observerHint is null) return;
+        if (IsNewShellActive)
+        {
+            _observerHint.Visible = false;
+            return;
+        }
         _observerHint.Visible = _observerMode || _campaign is { ObserverMode: true };
         if (!_observerHint.Visible) return;
         // Between the rail on the left and the map's switches on the right, never under either.
@@ -126,8 +163,8 @@ public partial class DealOrForceGame
     }
 
     /// <summary>
-    /// While nobody plays, an order from the interface is not carried out: the country on screen
-    /// belongs to the computer. Orders the simulation gives itself during a step pass.
+    /// While observing, orders from the interface are not carried out: the country on screen
+    /// is read-only. Orders the simulation gives itself during a step pass.
     /// </summary>
     private void SyncObserverCommandGate()
     {
@@ -135,7 +172,7 @@ public partial class DealOrForceGame
         // A step an order has to finish first (FinishStep) is still the simulation speaking.
         _observerGate ??= _ => !_simulating && _campaign is { MidStep: false };
         var queue = _campaign.Commands;
-        var locked = _observerMode && _campaign.HumanSeats.Count == 0 && !_networkConnected;
+        var locked = (_observerMode || _campaign.ObserverMode) && !_networkConnected;
         if (locked) { if (queue.SubmitInterceptor is null) queue.SubmitInterceptor = _observerGate; }
         else if (queue.SubmitInterceptor == _observerGate) queue.SubmitInterceptor = null;
     }
@@ -143,6 +180,7 @@ public partial class DealOrForceGame
     private void SetObserverMode(bool watching)
     {
         if (_campaign is null) return;
+        _observerMode = watching;
         _campaign.ObserverMode = watching;
 
         // The interface stays (owner, 16 November): an observer reads the same screens a player
@@ -150,12 +188,18 @@ public partial class DealOrForceGame
         // Only what waits for an answer is put away, because nobody is there to answer.
         if (_eventLayer is not null && watching) _eventLayer.Visible = false;
         _observerChromeHidden = false;
-        if (!watching) _observerWatched = null;
+        if (!watching)
+        {
+            _observerWatched = null;
+            _observerReturnNationId = -1;
+            RestoreCountryTopBar();
+        }
         // The report on the right is the world's or a country's: draw it again for whichever it is now.
         _strategicHudFingerprint = int.MinValue;
         // The clock is left as it is: starting it is the observer's own decision.
         SyncObserverCommandGate();
         ShowObserverHint("");
         Refresh();
+        if (IsNewShellActive) RefreshNewShell(force: true);
     }
 }

@@ -95,6 +95,7 @@ public sealed partial class GlobePresentation
             card.BlendRect(silh, new Rect2I(0, 0, 18, 20), new Vector2I(49, 20));
         }
 
+        card.GenerateMipmaps();
         return _compactCounterTextures[full.GetInstanceId()] = ImageTexture.CreateFromImage(card);
     }
 

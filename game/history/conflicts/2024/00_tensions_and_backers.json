@@ -9,7 +9,7 @@
     // Missiles over Japanese waters.
     { "between": ["PRK", "JPN"], "structural": 30, "tension": 55 },
     // Across the strait, with an election in Taiwan on 13 January 2024.
-    { "between": ["CHN", "TWN"], "structural": 60, "tension": 64 },
+    { "between": ["CHN", "TWN"], "structural": 68, "tension": 74, "grievance": [25, 25] },
     { "between": ["CHN", "USA"], "structural": 30, "tension": 55 },
     // Water cannon and rammings at the Second Thomas Shoal.
     { "between": ["CHN", "PHL"], "structural": 25, "tension": 55 },

@@ -10,6 +10,18 @@ public static class PeacefulFormationAi
 {
     private const string ReviewKey = "union_ai_review";
 
+    private sealed class TickScratch
+    {
+        public readonly List<FormableNation> Definitions = new();
+        public readonly List<Nation> DueFounders = new();
+        public readonly HashSet<int> Leaders = new();
+        public readonly HashSet<int> AtWar = new();
+        public readonly HashSet<string> Formed = new(StringComparer.Ordinal);
+        public readonly Dictionary<int, int> Owners = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, TickScratch> _tickScratches = new();
+
     public static void Tick(Campaign campaign)
     {
         foreach (var _ in TickStages(campaign)) { }
@@ -30,46 +42,76 @@ public static class PeacefulFormationAi
             !float.IsFinite(campaign.Defines.UnionAiMinimumOwnedShare) ||
             !float.IsFinite(campaign.Defines.UnionAiTreasuryReserveShare) ||
             campaign.ProvinceMap is null || campaign.ProvinceController is null) yield break;
-        var definitions = FormableNations.AvailableIn(campaign).Where(d => d.AiFoundation &&
-            (d.PeacefulAccession || d.SubjectIntegration)).ToArray();
-        if (definitions.Length == 0) yield break;
+        var scratch = _tickScratches.GetOrCreateValue(campaign);
+        var definitions = scratch.Definitions;
+        definitions.Clear();
+        foreach (var def in FormableNations.AvailableIn(campaign))
+            if (def.AiFoundation && (def.PeacefulAccession || def.SubjectIntegration))
+                definitions.Add(def);
+        if (definitions.Count == 0) yield break;
+
+        var dueFounders = scratch.DueFounders;
+        dueFounders.Clear();
+        var nations = campaign.Nations;
+        for (var i = 0; i < nations.Count; i++)
+        {
+            var founder = nations[i];
+            if (founder.IsHuman || (campaign.ElapsedDays + (long)founder.Id) % interval != 0 ||
+                (founder.DecisionAvailableDay.Count > 0 && founder.DecisionAvailableDay.GetValueOrDefault(ReviewKey) > campaign.ElapsedDays) ||
+                !CanLead(campaign, founder)) continue;
+            dueFounders.Add(founder);
+        }
+        if (dueFounders.Count == 0) yield break;
+        if (dueFounders.Count > 1) dueFounders.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+
         // Three questions the reviews below ask of every candidate, answered once for the pass
         // instead of once per candidate partner: who may lead at all, what identities already
         // exist, and whether a country is at peace. Nothing a review does here changes any of
         // them - an invitation writes a cooldown and a consent key, never a border or a war -
         // so the answers are the same before the first founder as after the last.
-        var leaders = LeaderIds(campaign);
-        var atWar = NationsAtWar(campaign);
-        var formed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var nation in campaign.Nations)
-            if (!string.IsNullOrEmpty(nation.FormedNationId)) formed.Add(nation.FormedNationId);
-        foreach (var founder in campaign.Nations.OrderBy(n => n.Id))
+        var leaders = scratch.Leaders;
+        var atWar = scratch.AtWar;
+        var formed = scratch.Formed;
+        FillLeaderIds(campaign, leaders);
+        FillNationsAtWar(campaign, atWar);
+        formed.Clear();
+        for (var i = 0; i < nations.Count; i++)
+            if (!string.IsNullOrEmpty(nations[i].FormedNationId)) formed.Add(nations[i].FormedNationId);
+
+        var minOwnedShare = M.Clamp01(campaign.Defines.UnionAiMinimumOwnedShare);
+        var reserveShare = Math.Max(0f, campaign.Defines.UnionAiTreasuryReserveShare);
+        var owners = scratch.Owners;
+
+        for (var fi = 0; fi < dueFounders.Count; fi++)
         {
-            if (founder.IsHuman || (campaign.ElapsedDays + (long)founder.Id) % interval != 0 ||
-                founder.DecisionAvailableDay.GetValueOrDefault(ReviewKey) > campaign.ElapsedDays ||
-                !CanLead(campaign, founder)) continue;
+            var founder = dueFounders[fi];
             // Stamp even an unsuccessful review: repeated calls today must be idempotent.
             founder.DecisionAvailableDay[ReviewKey] = campaign.ElapsedDays + interval;
-            foreach (var definition in definitions)
+            for (var di = 0; di < definitions.Count; di++)
             {
+                var definition = definitions[di];
                 if (!FormableNations.Eligible(campaign, founder, definition) ||
                     !FormableNations.CompatibleProclamation(founder, definition) ||
                     FormableNations.SmallerThanCountry(campaign, founder, definition) ||
                     !FormableNations.ReligionMandate(campaign, founder, definition) ||
                     founder.Stability < definition.MinimumStability ||
-                    (definition.RequiredIdeology.Length > 0 && !definition.RequiredIdeology.Contains(founder.Ideology, StringComparer.OrdinalIgnoreCase)) ||
-                    (definition.RequiredGovernment.Length > 0 && !definition.RequiredGovernment.Contains(founder.Government, StringComparer.OrdinalIgnoreCase)) ||
+                    (definition.RequiredIdeology.Length > 0 && !ContainsIgnoreCase(definition.RequiredIdeology, founder.Ideology)) ||
+                    (definition.RequiredGovernment.Length > 0 && !ContainsIgnoreCase(definition.RequiredGovernment, founder.Government)) ||
                     formed.Contains(definition.Id)) continue;
-                var reserve = founder.Gdp * Math.Max(0f, campaign.Defines.UnionAiTreasuryReserveShare);
+                var reserve = founder.Gdp * reserveShare;
                 if (founder.Treasury < Math.Max(.05f, founder.Gdp * definition.CostShare) + reserve) continue;
 
                 var map = campaign.ProvinceMap;
-                var owners = new Dictionary<int, int>();
+                owners.Clear();
                 var total = 0;
                 var complete = true;
-                foreach (var tag in definition.RequiredTags)
-                    if (!(campaign.ScenarioId == "2024" ? ProvinceOwnership.ProvincesOf(tag) :
-                        campaign.ScenarioTerritories.GetValueOrDefault(tag, Array.Empty<int>())).Any()) complete = false;
+                var is2024 = campaign.ScenarioId == "2024";
+                for (var ti = 0; ti < definition.RequiredTags.Length; ti++)
+                {
+                    var tag = definition.RequiredTags[ti];
+                    var provs = is2024 ? ProvinceOwnership.ProvincesOf(tag) : campaign.ScenarioTerritories.GetValueOrDefault(tag, Array.Empty<int>());
+                    if (((IReadOnlyCollection<int>)provs).Count == 0) { complete = false; }
+                }
                 foreach (var province in PeacefulFormation.Territory(campaign, definition))
                 {
                     if (province <= 0 || province > map.ProvinceCount) { complete = false; break; }
@@ -80,8 +122,7 @@ public static class PeacefulFormationAi
                     owners[owner] = owners.GetValueOrDefault(owner) + 1;
                     total++;
                 }
-                if (!complete || total == 0 || owners.GetValueOrDefault(founder.MapIndex) / (float)total <
-                    M.Clamp01(campaign.Defines.UnionAiMinimumOwnedShare)) continue;
+                if (!complete || total == 0 || owners.GetValueOrDefault(founder.MapIndex) / (float)total < minOwnedShare) continue;
 
                 // The largest eligible, viable founding country has precedence, including
                 // humans. Two AI founders must not approach the same partner in parallel.
@@ -105,24 +146,33 @@ public static class PeacefulFormationAi
         }
     }
 
+    private static bool ContainsIgnoreCase(string[] values, string target)
+    {
+        for (var i = 0; i < values.Length; i++)
+            if (string.Equals(values[i], target, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
     private static bool CanLead(Campaign campaign, Nation nation)
     {
         if (nation.Population <= 0 || !FormableProclamationAi.EstablishedCountry(nation) || nation.Landless || nation.IsSubject)
             return false;
-        foreach (var w in Warfare.OpenWars(campaign))
+        var live = Warfare.LiveWars(campaign);
+        for (var i = 0; i < live.Count; i++)
         {
+            var w = live[i];
             if (!w.Ended && w.Involves(nation.Id)) return false;
         }
         return true;
     }
 
     /// <summary>Every country that may lead a foundation today, worked out in one walk.</summary>
-    private static HashSet<int> LeaderIds(Campaign campaign)
+    private static void FillLeaderIds(Campaign campaign, HashSet<int> ids)
     {
-        var ids = new HashSet<int>();
-        foreach (var nation in campaign.Nations)
-            if (CanLead(campaign, nation)) ids.Add(nation.Id);
-        return ids;
+        ids.Clear();
+        var nations = campaign.Nations;
+        for (var i = 0; i < nations.Count; i++)
+            if (CanLead(campaign, nations[i])) ids.Add(nations[i].Id);
     }
 
     /// <summary>
@@ -200,18 +250,19 @@ public static class PeacefulFormationAi
     }
 
     /// <summary>Every country currently fighting somebody, worked out once from the wars.</summary>
-    private static HashSet<int> NationsAtWar(Campaign campaign)
+    private static void FillNationsAtWar(Campaign campaign, HashSet<int> atWar)
     {
-        var atWar = new HashSet<int>();
-        foreach (var war in Warfare.OpenWars(campaign))
+        atWar.Clear();
+        var live = Warfare.LiveWars(campaign);
+        for (var i = 0; i < live.Count; i++)
         {
+            var war = live[i];
             if (war.Ended) continue;
             atWar.Add(war.AttackerId);
             atWar.Add(war.DefenderId);
             foreach (var ally in war.AttackerAllies) atWar.Add(ally);
             foreach (var ally in war.DefenderAllies) atWar.Add(ally);
         }
-        return atWar;
     }
 
     private static bool PromisedElsewhere(Campaign campaign, int founderId, Nation partner, HashSet<int> leaders)
@@ -228,8 +279,19 @@ public static class PeacefulFormationAi
             if (other < 0 || other == founderId || !leaders.Contains(other)) continue;
             return true;
         }
-        return campaign.PendingEvents.Any(e => e.NationId == partner.Id && e.ExpiresDay > campaign.ElapsedDays &&
-            e.Options.Any(o => o.UnionFounderId != founderId && !string.IsNullOrEmpty(o.UnionFormableId)));
+        var pending = campaign.PendingEvents;
+        for (var i = 0; i < pending.Count; i++)
+        {
+            var e = pending[i];
+            if (e.NationId != partner.Id || e.ExpiresDay <= campaign.ElapsedDays) continue;
+            var opts = e.Options;
+            for (var j = 0; j < opts.Length; j++)
+            {
+                var o = opts[j];
+                if (o.UnionFounderId != founderId && !string.IsNullOrEmpty(o.UnionFormableId)) return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>

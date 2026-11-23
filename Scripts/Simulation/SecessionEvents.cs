@@ -77,25 +77,24 @@ public static class SecessionEvents
         if (campaign.ElapsedDays % 7 != 0) yield break;
         var weights = SecessionCore.Weights;
 
-        // Countries are taken as a snapshot because a secession adds one, and a country
-        // three seconds old has nothing to secede from it.
-        var nations = campaign.Nations.ToArray();
+        // ActiveNations is already an immutable Nation[] snapshot that excludes retired nations.
+        var nations = campaign.ActiveNations;
         var scanned = 0;
-        foreach (var nation in nations)
+        for (var ni = 0; ni < nations.Count; ni++)
         {
-            if (++scanned % 4 == 0 || Campaign.StageOverdue()) yield return 0;
-            if (nation.Population <= 0) continue;
+            var nation = nations[ni];
+            if (++scanned % 32 == 0 && Campaign.StageOverdue()) yield return 0;
+            if (nation.Population <= 0 || nation.Movement is not null) continue;
 
-            var ripe = (List<ScenarioState>)null;
-            foreach (var state in campaign.StatesOf(nation.MapIndex))
+            var states = campaign.StatesOf(nation.MapIndex);
+            if (states.Length == 0) continue;
+            List<ScenarioState> ripe = null;
+            for (var si = 0; si < states.Length; si++)
             {
+                var state = states[si];
                 var gained = SecessionCore.Pressure(campaign, nation, state);
                 if (gained <= 0f)
                 {
-                    // Pressure that stops being fed drains away. A grievance that was
-                    // answered - the war won, the region governed, the people given a
-                    // reason to stay - should be able to be answered permanently, and a
-                    // number that only ever went up would make every answer a delay.
                     if (state.SecessionPressure > 0f)
                         state.SecessionPressure = MathF.Max(0f, state.SecessionPressure - weights.Base);
                     continue;
@@ -654,11 +653,18 @@ public static class SecessionEvents
         Action<Nation> shape, bool countsAsOutbreak = true)
     {
         if (campaign?.ProvinceMap is null || parent is null || regions is null || regions.Count == 0) return null;
-        var leaving = regions.Select(state => new SecessionPiece
+        var leaving = new List<SecessionPiece>(regions.Count);
+        long people = 0;
+        for (var i = 0; i < regions.Count; i++)
         {
-            MapIndex = state.MapIndex, Name = state.Name, Population = state.Population, Cause = SecessionCause.Discontent
-        }).ToList();
-        var report = Secede(campaign, parent, leaving, "", regions.Sum(state => state.Population), shape, fight: true,
+            var state = regions[i];
+            leaving.Add(new SecessionPiece
+            {
+                MapIndex = state.MapIndex, Name = state.Name, Population = state.Population, Cause = SecessionCause.Discontent
+            });
+            people += state.Population;
+        }
+        var report = Secede(campaign, parent, leaving, "", people, shape, fight: true,
             countsAsOutbreak: countsAsOutbreak);
         if (report is not null) Recent.Add(report);
         return report;
@@ -677,12 +683,19 @@ public static class SecessionEvents
     {
         if (campaign?.ProvinceMap is null || parent is null || regions is null || regions.Count == 0 ||
             string.IsNullOrWhiteSpace(culture)) return null;
-        var leaving = regions.Select(state => new SecessionPiece
+        var leaving = new List<SecessionPiece>(regions.Count);
+        long people = 0;
+        for (var i = 0; i < regions.Count; i++)
         {
-            MapIndex = state.MapIndex, Name = state.Name, Population = state.Population,
-            Cause = SecessionCause.Nationality
-        }).ToList();
-        var report = Secede(campaign, parent, leaving, culture, regions.Sum(state => state.Population));
+            var state = regions[i];
+            leaving.Add(new SecessionPiece
+            {
+                MapIndex = state.MapIndex, Name = state.Name, Population = state.Population,
+                Cause = SecessionCause.Nationality
+            });
+            people += state.Population;
+        }
+        var report = Secede(campaign, parent, leaving, culture, people);
         if (report is not null) Recent.Add(report);
         return report;
     }
@@ -701,17 +714,21 @@ public static class SecessionEvents
         Action<Nation> shape = null, bool fight = false, bool countsAsOutbreak = true)
     {
         if (!RegionalResourcePartition.ValidAccounts(parent)) yield break;
-        leaving = leaving.Where(piece => RevoltRecovery.DaysLeft(campaign, parent,
-            campaign.StateByMapIndex(piece.MapIndex)) == 0).ToList();
+        for (var i = leaving.Count - 1; i >= 0; i--)
+            if (RevoltRecovery.DaysLeft(campaign, parent, campaign.StateByMapIndex(leaving[i].MapIndex)) != 0)
+                leaving.RemoveAt(i);
         if (leaving.Count == 0) yield break;
         // Political succession cannot repaint a third party's military occupation.
         // Do this before creating a tag, transferring accounts, or drawing a response.
         var provinces = RevoltTerritory.Select(campaign, parent, ref leaving);
         if (provinces.Count == 0 || leaving.Count == 0) yield break;
         yield return 0;
-        people = leaving.Sum(piece => piece.Population);
+        people = 0;
+        for (var i = 0; i < leaving.Count; i++) people += leaving[i].Population;
         if (people <= 0) yield break;
-        var residentTotal = campaign.StatesOf(parent).Sum(state => (double)state.Population);
+        double residentTotal = 0;
+        var parentStates = campaign.StatesOf(parent);
+        for (var i = 0; i < parentStates.Length; i++) residentTotal += parentStates[i].Population;
         var was = parent.Population;
         var revolt = RevoltKind(parent, leaving, culture, people);
         var matchingMovement = FindMatchingMovement(campaign, leaving);
@@ -752,6 +769,11 @@ public static class SecessionEvents
             born.Government = "provisional_government";
             born.PoliticsChangedDay = campaign.ElapsedDays;
             MovementRules.GraduateToStatehood(campaign, born);
+            if (!(MovementFall.GovernmentInExile(born.Movement) && MovementFall.HadGovernment(campaign, born)) &&
+                SecessionColours.ClashesWithNeighbors(campaign, born, leaving.Select(p => p.MapIndex)))
+            {
+                born.Color = SecessionColours.Choose(campaign, parent, born.Tag, leaving.Select(p => p.MapIndex));
+            }
         }
         else
         {
@@ -769,12 +791,21 @@ public static class SecessionEvents
         //
         // The core, not everything that came along, and added to rather than replaced: a homeland
         // rewritten with whatever left each time drifted across the map with every fall and rise.
-        var homeland = leaving.Where(piece => piece.Cause != SecessionCause.Discontent).Select(piece => piece.MapIndex).ToList();
-        if (homeland.Count == 0) homeland = leaving.Select(piece => piece.MapIndex).ToList();
+        var homeland = new List<int>(leaving.Count);
+        for (var i = 0; i < leaving.Count; i++)
+            if (leaving[i].Cause != SecessionCause.Discontent) homeland.Add(leaving[i].MapIndex);
+        if (homeland.Count == 0)
+            for (var i = 0; i < leaving.Count; i++) homeland.Add(leaving[i].MapIndex);
         if (campaign.Homelands.TryGetValue(born.Id, out var earlier) && earlier is { Count: > 0 })
-            homeland = earlier.Concat(homeland).Distinct().ToList();
+        {
+            var merged = new List<int>(earlier.Count + homeland.Count);
+            var seenHome = new HashSet<int>();
+            for (var i = 0; i < earlier.Count; i++) if (seenHome.Add(earlier[i])) merged.Add(earlier[i]);
+            for (var i = 0; i < homeland.Count; i++) if (seenHome.Add(homeland[i])) merged.Add(homeland[i]);
+            homeland = merged;
+        }
         campaign.Homelands[born.Id] = homeland;
-        var coreRegions = homeland.ToHashSet();
+        var coreRegions = new HashSet<int>(homeland);
         // A people taking back its own ground under its own exiled government is that country
         // restored, not the parent's opposition: Ukraine's government rose in occupied Chernihiv,
         // was renamed Russia's "transitional council", won, and became Russia.
@@ -784,6 +815,7 @@ public static class SecessionEvents
         // ProductionCapacity already scales its reference by the population still present.
         RegionalResourcePartition.Transfer(parent, born,
             (float)Math.Clamp(people / Math.Max(1d, residentTotal), 0d, 1d));
+        yield return 0;
         // Not a conquest. It is standing on the ground it already lived on, and a state born
         // an international pariah for that would be the wrong answer twice over.
         StatePartition.Annex(campaign, provinces, born, asConquest: false);
@@ -792,19 +824,25 @@ public static class SecessionEvents
         var departedStates = campaign.StatesOf(born);
         // For a region cut by an occupation, inherit only the residents actually leaving,
         // not the entire region's money, debt, research or production capacity.
-        var causes = leaving.ToDictionary(piece => piece.MapIndex, piece => piece.Cause);
-        leaving = departedStates.Select(state => new SecessionPiece
+        var causes = new Dictionary<int, SecessionCause>(leaving.Count);
+        for (var i = 0; i < leaving.Count; i++) causes[leaving[i].MapIndex] = leaving[i].Cause;
+        leaving = new List<SecessionPiece>(departedStates.Length);
+        for (var i = 0; i < departedStates.Length; i++)
         {
-            MapIndex = state.MapIndex, Name = state.Name, Population = state.Population,
-            Cause = causes.GetValueOrDefault(state.MapIndex,
-                causes.GetValueOrDefault(state.ParentMapIndex, SecessionCause.Discontent))
-        }).ToList();
+            var state = departedStates[i];
+            leaving.Add(new SecessionPiece
+            {
+                MapIndex = state.MapIndex, Name = state.Name, Population = state.Population,
+                Cause = causes.GetValueOrDefault(state.MapIndex,
+                    causes.GetValueOrDefault(state.ParentMapIndex, SecessionCause.Discontent))
+            });
+        }
         people = born.Population;
         CampaignDiplomacy.ForgetBorders();
         SecessionResearch.Inherit(campaign, parent, born, departedStates, was);
 
-        foreach (var piece in leaving)
-            if (campaign.StateByMapIndex(piece.MapIndex) is { } pieceState)
+        for (var i = 0; i < leaving.Count; i++)
+            if (campaign.StateByMapIndex(leaving[i].MapIndex) is { } pieceState)
                 pieceState.SecessionPressure = 0f;
 
         parent.LastSecessionDay = campaign.ElapsedDays;
@@ -813,8 +851,9 @@ public static class SecessionEvents
         // came along is the most populous: a Dagestani state does not govern from Rostov.
         ScenarioState coreSeat = null;
         ScenarioState anySeat = null;
-        foreach (var s in departedStates)
+        for (var i = 0; i < departedStates.Length; i++)
         {
+            var s = departedStates[i];
             if (anySeat is null || s.Population > anySeat.Population) anySeat = s;
             if ((coreRegions.Contains(s.MapIndex) || coreRegions.Contains(s.ParentMapIndex)) &&
                 (coreSeat is null || s.Population > coreSeat.Population))
@@ -829,6 +868,7 @@ public static class SecessionEvents
             // the region's name was what its organisations and its exported definition said.
             if (CapitalCore.City(born) is null) born.CapitalName = seat.Name;
         }
+        yield return 0;
         campaign.LocateCapitals(preserveExisting: true);
         yield return 0;
         // A revived movement keeps the name it fell with only while that name still describes
@@ -842,6 +882,7 @@ public static class SecessionEvents
         born.StabilityBias = born.Stability - StabilityCore.Target(campaign, born);
 
         var raised = RaiseFoundingMilitia(campaign, born);
+        yield return 0;
 
         // A country nobody is playing answers the way it always has. A country somebody is
         // playing is asked, because this is the largest thing that happens to a state and
@@ -870,12 +911,15 @@ public static class SecessionEvents
                 yield return 0;
                 // Part of the garrison standing on the ground goes over: the war is fought by
                 // soldiers who were the state's last week, not by four companies of militia.
-                var defected = Reintegration.Defect(campaign, parent, born, provinces.ToHashSet());
+                var provinceSet = new HashSet<int>(provinces);
+                var defected = Reintegration.Defect(campaign, parent, born, provinceSet);
                 if (defected > 0)
                 {
                     FrontPlanner.ReassignAi(campaign, war);
-                    DiagnosticLogs.Write("simulation", $"SECESSION_DEFECTION born={born.Tag} formations={defected}");
+                    if (DiagnosticLogs.Enabled)
+                        DiagnosticLogs.Write("simulation", $"SECESSION_DEFECTION born={born.Tag} formations={defected}");
                 }
+                yield return 0;
                 // The loyal rest do not simply stand on the new state's ground and starve: each
                 // goes home or digs in as a pocket of resistance (StrandedGarrisons).
                 StrandedGarrisons.AtRising(campaign, parent, born, provinces);
@@ -885,9 +929,10 @@ public static class SecessionEvents
         {
             // A negotiated independence still divides the garrison standing on the ground.
             // The new state is not born with only a militia because the parent signed a paper.
-            var defected = Reintegration.Defect(campaign, parent, born, provinces.ToHashSet(),
+            var provinceSet = new HashSet<int>(provinces);
+            var defected = Reintegration.Defect(campaign, parent, born, provinceSet,
                 campaign.Defines.PeacefulSecessionDefectionShare);
-            if (defected > 0)
+            if (defected > 0 && DiagnosticLogs.Enabled)
                 DiagnosticLogs.Write("simulation",
                     $"SECESSION_PEACEFUL_DEFECTION born={born.Tag} formations={defected}");
         }
@@ -1018,8 +1063,102 @@ public static class SecessionEvents
         if (!string.IsNullOrWhiteSpace(revolt)) born.FoundedInRevolt = revolt;
         NationNaming.ApplyTo(campaign, born, parent,
             leaving.Select(piece => piece.MapIndex).ToArray(), "auto", culture);
+        EnsureDistinctSplinterName(campaign, parent, born, seat.Name);
         return born;
     }
+
+    /// <summary>
+    /// Guarantees a newly founded splinter or civil-war survivor never clones its living parent's
+    /// or a sibling splinter's display name (eliminating duplicate "Republic of Russia" x4 clones).
+    /// </summary>
+    internal static void EnsureDistinctSplinterName(Campaign campaign, Nation parent, Nation born, string seatName)
+    {
+        if (campaign is null || born is null) return;
+        if (born.Name.StartsWith("rising:", StringComparison.Ordinal)) return;
+        if (!NameClashesWithLiving(campaign, born, born.Name) &&
+            (string.IsNullOrWhiteSpace(born.CustomName) || !NameClashesWithLiving(campaign, born, born.CustomName)))
+            return;
+
+        var cleanSeat = StripAdministrativeSuffix(seatName);
+        if (string.IsNullOrWhiteSpace(cleanSeat))
+            cleanSeat = StripAdministrativeSuffix(campaign.StatesOf(born).OrderByDescending(s => s.Population).FirstOrDefault()?.Name ?? "");
+        if (string.IsNullOrWhiteSpace(cleanSeat)) cleanSeat = born.CapitalName;
+        if (string.IsNullOrWhiteSpace(cleanSeat)) cleanSeat = born.Tag;
+
+        var candidate = cleanSeat;
+        if (NameClashesWithLiving(campaign, born, candidate))
+            candidate = $"{IdeologyPrefix(born.Ideology)} {cleanSeat}".Trim();
+        if (NameClashesWithLiving(campaign, born, candidate))
+            candidate = $"Free {cleanSeat}";
+        if (NameClashesWithLiving(campaign, born, candidate))
+            candidate = $"{cleanSeat} ({born.Tag})";
+
+        born.Name = candidate;
+        born.CustomName = "";
+        born.FoundNameKind = "region";
+        born.FoundNameBase = candidate;
+    }
+
+    /// <summary>
+    /// Names a civil-war rising that survived a stalemate without replacing its parent: uses its
+    /// actual regional seat + distinct colour instead of copying the parent's name ("Russia" -> x4).
+    /// </summary>
+    internal static void AssignDistinctSurvivorIdentity(Campaign campaign, Nation survivor, Nation parent, string fallbackLabel)
+    {
+        if (campaign is null || survivor is null) return;
+        var seat = campaign.StatesOf(survivor).OrderByDescending(s => s.Population).FirstOrDefault();
+        var cleanSeat = StripAdministrativeSuffix(seat?.Name ?? survivor.CapitalName ?? "");
+        var preferred = !string.IsNullOrWhiteSpace(fallbackLabel) && !NameClashesWithLiving(campaign, survivor, fallbackLabel)
+            ? fallbackLabel
+            : cleanSeat;
+        if (string.IsNullOrWhiteSpace(preferred) || NameClashesWithLiving(campaign, survivor, preferred))
+            preferred = !string.IsNullOrWhiteSpace(cleanSeat)
+                ? $"{IdeologyPrefix(survivor.Ideology)} {cleanSeat}".Trim()
+                : $"{IdeologyPrefix(survivor.Ideology)} {survivor.Tag}".Trim();
+        if (NameClashesWithLiving(campaign, survivor, preferred))
+            preferred = $"{cleanSeat} ({survivor.Tag})".Trim();
+
+        survivor.Name = preferred;
+        survivor.CustomName = "";
+        survivor.NameProclaimed = true;
+        survivor.FoundNameKind = "region";
+        survivor.FoundNameBase = preferred;
+        if (parent is not null &&
+            (string.Equals(survivor.Color, parent.Color, StringComparison.OrdinalIgnoreCase) ||
+             SecessionColours.ClashesWithNeighbors(campaign, survivor)))
+            survivor.Color = SecessionColours.Choose(campaign, parent, survivor.Tag,
+                campaign.StatesOf(survivor).Select(s => s.MapIndex));
+    }
+
+    private static bool NameClashesWithLiving(Campaign campaign, Nation self, string candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate)) return true;
+        var norm = candidate.Trim();
+        foreach (var other in campaign.Nations)
+        {
+            if (other.Id == self.Id || other.Movement is not null) continue;
+            if (other.Population <= 0 && campaign.StatesOf(other).Length == 0) continue;
+            if (string.Equals(other.Name, norm, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(other.CustomName, norm, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(CountryNames.Resolve(other, false), norm, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(CountryNames.Resolve(other, true), norm, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private static string IdeologyPrefix(string ideology) => (ideology ?? "").ToLowerInvariant() switch
+    {
+        "communism" => "People's",
+        "socialism" => "Socialist",
+        "liberalism" or "social_democracy" => "Free",
+        "conservatism" => "Constitutional",
+        "traditionalism" => "Sovereign",
+        "nationalism" => "National",
+        "fascism" => "Nationalist",
+        "theocratic_rule" => "Sacred",
+        _ => "Free"
+    };
 
     /// <summary>
     /// Say who the new country is for, which nothing else can say for it.

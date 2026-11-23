@@ -1,0 +1,387 @@
+// Wave 6G flashpoints: Cross-Strait doctrine divergences, multi-decade global inflection
+// points, and Syria / Myanmar / DRC multi-faction civil conflict dilemmas.
+{
+  "w6g_taiwan_strait_crossroads": {
+    "title": "w6g.ev.twn_crossroads.title",
+    "description": "w6g.ev.twn_crossroads.desc",
+    "picture": "naval",
+    "trigger": { "tags": ["TWN"], "min_stability": 0.25 },
+    "weight": 1.35,
+    "options": [
+      {
+        "title": "w6g.ev.twn_crossroads.opt1",
+        "consequence": "w6g.ev.twn_crossroads.con1",
+        "effects": {
+          "treasury_percent": -0.05,
+          "naval_experience": 6.0,
+          "war_support": 0.035,
+          "political_points": 6.0
+        },
+        "modifiers": [
+          { "id": "joint_deterrence_posture", "days": 270 }
+        ]
+      },
+      {
+        "title": "w6g.ev.twn_crossroads.opt2",
+        "consequence": "w6g.ev.twn_crossroads.con2",
+        "effects": {
+          "stability": 0.025,
+          "market_access": 0.03,
+          "war_support": -0.025,
+          "credit_confidence": 0.03
+        },
+        "modifiers": [
+          { "id": "w5_crisis_summit_accord", "days": 240 }
+        ]
+      },
+      {
+        "title": "w6g.ev.twn_crossroads.opt3",
+        "consequence": "w6g.ev.twn_crossroads.con3",
+        "effects": {
+          "political_points": -8.0,
+          "army_experience": 5.0,
+          "notoriety": 4.0,
+          "war_support": 0.020
+        },
+        "modifiers": [
+          { "id": "twn_mainland_underground_spirit", "days": 240 }
+        ]
+      }
+    ]
+  },
+
+  "w6g_beijing_strait_mobilization": {
+    "title": "w6g.ev.chn_strait.title",
+    "description": "w6g.ev.chn_strait.desc",
+    "picture": "diplomacy",
+    "trigger": { "tags": ["CHN"], "min_stability": 0.25 },
+    "weight": 1.25,
+    "options": [
+      {
+        "title": "w6g.ev.chn_strait.opt1",
+        "consequence": "w6g.ev.chn_strait.con1",
+        "effects": {
+          "treasury_percent": -0.04,
+          "naval_experience": 5.0,
+          "war_support": 0.030,
+          "notoriety": 3.0
+        },
+        "modifiers": [
+          { "id": "border_reserve_programme", "days": 240 }
+        ]
+      },
+      {
+        "title": "w6g.ev.chn_strait.opt2",
+        "consequence": "w6g.ev.chn_strait.con2",
+        "effects": {
+          "market_access": 0.03,
+          "stability": 0.020,
+          "credit_confidence": 0.025
+        },
+        "modifiers": [
+          { "id": "w5_civic_consensus", "days": 210 }
+        ]
+      },
+      {
+        "title": "w6g.ev.chn_strait.opt3",
+        "consequence": "w6g.ev.chn_strait.con3",
+        "effects": {
+          "stability": -0.015,
+          "state.radicalism": -0.020,
+          "army.organisation": 0.03
+        }
+      }
+    ]
+  },
+
+  "w6g_multipolar_era_inflection": {
+    "title": "w6g.ev.era_inflection.title",
+    "description": "w6g.ev.era_inflection.desc",
+    "picture": "turning_point",
+    "trigger": { "min_year": 2030 },
+    "weight": 1.05,
+    "options": [
+      {
+        "title": "w6g.ev.era_inflection.opt1",
+        "consequence": "w6g.ev.era_inflection.con1",
+        "effects": {
+          "political_points": 8.0,
+          "credit_confidence": 0.03,
+          "market_access": 0.025,
+          "war_support": -0.015
+        },
+        "modifiers": [
+          { "id": "w5_crisis_summit_accord", "days": 240 }
+        ]
+      },
+      {
+        "title": "w6g.ev.era_inflection.opt2",
+        "consequence": "w6g.ev.era_inflection.con2",
+        "effects": {
+          "treasury_percent": -0.04,
+          "army_experience": 4.0,
+          "war_support": 0.025,
+          "imperial_overstretch": 0.02
+        },
+        "modifiers": [
+          { "id": "joint_deterrence_posture", "days": 240 }
+        ]
+      },
+      {
+        "title": "w6g.ev.era_inflection.opt3",
+        "consequence": "w6g.ev.era_inflection.con3",
+        "effects": {
+          "stability": 0.025,
+          "productivity": 0.012,
+          "treasury_percent": -0.03
+        },
+        "modifiers": [
+          { "id": "industrial_renewal", "days": 240 }
+        ]
+      }
+    ]
+  },
+
+  "w6g_syria_fragmented_frontlines": {
+    "title": "w6g.ev.syr_frontlines.title",
+    "description": "w6g.ev.syr_frontlines.desc",
+    "picture": "battlefield",
+    "trigger": { "tags": ["SYR", "SIG", "HTS", "SDF"] },
+    "weight": 1.45,
+    "options": [
+      {
+        "title": "w6g.ev.syr_frontlines.opt1",
+        "consequence": "w6g.ev.syr_frontlines.con1",
+        "effects": {
+          "stability": 0.030,
+          "state.radicalism": -0.030,
+          "political_points": -8.0,
+          "treasury_percent": -0.04
+        },
+        "modifiers": [
+          { "id": "civic_mediation_programme", "days": 240 }
+        ]
+      },
+      {
+        "title": "w6g.ev.syr_frontlines.opt2",
+        "consequence": "w6g.ev.syr_frontlines.con2",
+        "effects": {
+          "war_support": 0.040,
+          "army.organisation": 0.03,
+          "state.radicalism": 0.030,
+          "stability": -0.020
+        },
+        "modifiers": [
+          { "id": "war_economy", "days": 240 }
+        ]
+      },
+      {
+        "title": "w6g.ev.syr_frontlines.opt3",
+        "consequence": "w6g.ev.syr_frontlines.con3",
+        "effects": {
+          "state.standard_of_living": 0.020,
+          "state.war_damage": -0.04,
+          "treasury_percent": -0.05
+        },
+        "modifiers": [
+          { "id": "reconstruction_programme", "days": 270 }
+        ]
+      }
+    ]
+  },
+
+  "w6g_syria_suwayda_euphrates_unrest": {
+    "title": "w6g.ev.syr_autonomy.title",
+    "description": "w6g.ev.syr_autonomy.desc",
+    "picture": "protest",
+    "trigger": { "tags": ["SYR"], "max_stability": 0.78 },
+    "weight": 1.35,
+    "options": [
+      {
+        "title": "w6g.ev.syr_autonomy.opt1",
+        "consequence": "w6g.ev.syr_autonomy.con1",
+        "effects": {
+          "stability": 0.025,
+          "state.radicalism": -0.035,
+          "treasury_percent": -0.05
+        },
+        "modifiers": [
+          { "id": "minority_government_compact", "days": 240 }
+        ]
+      },
+      {
+        "title": "w6g.ev.syr_autonomy.opt2",
+        "consequence": "w6g.ev.syr_autonomy.con2",
+        "effects": {
+          "political_points": 6.0,
+          "state.radicalism": 0.040,
+          "stability": -0.025
+        },
+        "modifiers": [
+          { "id": "border_reserve_programme", "days": 180 }
+        ]
+      }
+    ]
+  },
+
+  "w6g_myanmar_federal_crossroads": {
+    "title": "w6g.ev.mmr_federal.title",
+    "description": "w6g.ev.mmr_federal.desc",
+    "picture": "ceasefire",
+    "trigger": { "tags": ["MMR", "NUG", "ARA", "KIO", "UWS", "MND", "TNL"] },
+    "weight": 1.45,
+    "options": [
+      {
+        "title": "w6g.ev.mmr_federal.opt1",
+        "consequence": "w6g.ev.mmr_federal.con1",
+        "effects": {
+          "stability": 0.035,
+          "state.radicalism": -0.035,
+          "political_points": -10.0
+        },
+        "modifiers": [
+          { "id": "civic_mediation_programme", "days": 270 }
+        ]
+      },
+      {
+        "title": "w6g.ev.mmr_federal.opt2",
+        "consequence": "w6g.ev.mmr_federal.con2",
+        "effects": {
+          "army_experience": 5.0,
+          "war_support": 0.035,
+          "state.radicalism": 0.035,
+          "stability": -0.020
+        },
+        "modifiers": [
+          { "id": "general_mobilisation", "days": 210 }
+        ]
+      },
+      {
+        "title": "w6g.ev.mmr_federal.opt3",
+        "consequence": "w6g.ev.mmr_federal.con3",
+        "effects": {
+          "market_access": 0.025,
+          "treasury_percent": 0.03,
+          "state.standard_of_living": 0.015
+        },
+        "modifiers": [
+          { "id": "frontline_relief_programme", "days": 210 }
+        ]
+      }
+    ]
+  },
+
+  "w6g_myanmar_dry_zone_resistance": {
+    "title": "w6g.ev.mmr_dryzone.title",
+    "description": "w6g.ev.mmr_dryzone.desc",
+    "picture": "coup",
+    "trigger": { "tags": ["MMR"], "max_stability": 0.80 },
+    "weight": 1.35,
+    "options": [
+      {
+        "title": "w6g.ev.mmr_dryzone.opt1",
+        "consequence": "w6g.ev.mmr_dryzone.con1",
+        "effects": {
+          "army.entrenchment": 0.04,
+          "state.radicalism": 0.045,
+          "stability": -0.030
+        },
+        "modifiers": [
+          { "id": "austerity", "days": 210 }
+        ]
+      },
+      {
+        "title": "w6g.ev.mmr_dryzone.opt2",
+        "consequence": "w6g.ev.mmr_dryzone.con2",
+        "effects": {
+          "stability": 0.025,
+          "state.radicalism": -0.025,
+          "political_points": -6.0
+        },
+        "modifiers": [
+          { "id": "postwar_settlement", "days": 210 }
+        ]
+      }
+    ]
+  },
+
+  "w6g_drc_eastern_kivu_mineral_crisis": {
+    "title": "w6g.ev.cod_kivu.title",
+    "description": "w6g.ev.cod_kivu.desc",
+    "picture": "refugees",
+    "trigger": { "tags": ["COD", "AFC"] },
+    "weight": 1.45,
+    "options": [
+      {
+        "title": "w6g.ev.cod_kivu.opt1",
+        "consequence": "w6g.ev.cod_kivu.con1",
+        "effects": {
+          "stability": 0.030,
+          "state.war_damage": -0.03,
+          "political_points": -8.0
+        },
+        "modifiers": [
+          { "id": "w5_crisis_summit_accord", "days": 240 }
+        ]
+      },
+      {
+        "title": "w6g.ev.cod_kivu.opt2",
+        "consequence": "w6g.ev.cod_kivu.con2",
+        "effects": {
+          "treasury_percent": 0.05,
+          "war_support": 0.035,
+          "state.radicalism": 0.030
+        },
+        "modifiers": [
+          { "id": "defence_arsenal_consolidation", "days": 210 }
+        ]
+      },
+      {
+        "title": "w6g.ev.cod_kivu.opt3",
+        "consequence": "w6g.ev.cod_kivu.con3",
+        "effects": {
+          "state.standard_of_living": 0.018,
+          "stability": 0.020,
+          "treasury_percent": -0.04
+        },
+        "modifiers": [
+          { "id": "frontline_relief_programme", "days": 240 }
+        ]
+      }
+    ]
+  },
+
+  "w6g_drc_katanga_kasai_autonomy": {
+    "title": "w6g.ev.cod_katanga.title",
+    "description": "w6g.ev.cod_katanga.desc",
+    "picture": "politics",
+    "trigger": { "tags": ["COD"], "max_stability": 0.80 },
+    "weight": 1.35,
+    "options": [
+      {
+        "title": "w6g.ev.cod_katanga.opt1",
+        "consequence": "w6g.ev.cod_katanga.con1",
+        "effects": {
+          "stability": 0.028,
+          "state.radicalism": -0.030,
+          "treasury_percent": -0.05
+        },
+        "modifiers": [
+          { "id": "w5_civic_consensus", "days": 240 }
+        ]
+      },
+      {
+        "title": "w6g.ev.cod_katanga.opt2",
+        "consequence": "w6g.ev.cod_katanga.con2",
+        "effects": {
+          "treasury_percent": 0.04,
+          "state.radicalism": 0.035,
+          "stability": -0.022
+        },
+        "modifiers": [
+          { "id": "revenue_compliance_audit", "days": 210 }
+        ]
+      }
+    ]
+  }
+}

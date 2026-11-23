@@ -305,7 +305,8 @@
     "description": "One China, settled rather than asserted. Which of the two governments is doing the settling is the whole question.",
     "eligible_tags": ["CHN", "TWN"],
     "required_tags": ["CHN", "TWN"],
-    "minimum_stability": 0.74, "gdp_cost_share": 0.030,
+    "required_share": 0.65,
+    "minimum_stability": 0.25, "gdp_cost_share": 0.005,
     "governance_gain": 0.05, "productivity_gain": 0.022,
     "colour": "#c4182c"
   },

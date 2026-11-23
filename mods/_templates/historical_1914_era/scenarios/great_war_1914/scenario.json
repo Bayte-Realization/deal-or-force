@@ -1,0 +1,48 @@
+{
+  "id": "great_war_1914",
+  "name": "July Crisis: 1914",
+  "description": "28 July 1914. Europe mobilises along rival alliances as the Great War begins. Nuclear weapons, missiles and drones are disabled; early aviation unlocks through research.",
+  "base_world": true,
+  "clear_base_wars": true,
+  "clear_base_diplomacy": true,
+  "player_country": "DEU",
+  "start_year": 1914,
+  "start_month": 7,
+  "start_day": 28,
+  "calendar": {
+    "id": "gregorian_1914",
+    "era_name": "Great War Era",
+    "era_short": "AD",
+    "year_offset": 0,
+    "format": "{day} {month} {year} {era_short}",
+    "show_era_in_date": true
+  },
+  "skin": "bronze_atlas",
+  "music_playlist": "great_war_orchestra",
+  "disabled_features": [
+    "nukes",
+    "drones",
+    "missiles"
+  ],
+  "era_features": {
+    "aviation": "restricted",
+    "air_defence": "restricted"
+  },
+  "featured_countries": [
+    { "tag": "DEU", "hook": "Two-front industrial powerhouse of the Central Powers.", "difficulty": "medium" },
+    { "tag": "FRA", "hook": "Defend the Republic and rally the Entente.", "difficulty": "medium" },
+    { "tag": "RUS", "hook": "Vast manpower facing rapid rail mobilisation.", "difficulty": "hard" },
+    { "tag": "GBR", "hook": "Command the seas and finance the coalition.", "difficulty": "easy" },
+    { "tag": "AUT", "hook": "Hold the Danubian realm together through crisis.", "difficulty": "hard" }
+  ],
+  "starting_alliances": [
+    { "name": "Triple Entente", "charter": "collective_defence", "members": ["FRA", "RUS", "GBR"] },
+    { "name": "Central Powers", "charter": "collective_defence", "members": ["DEU", "AUT"] }
+  ],
+  "starting_wars": [
+    { "name": "The Great War", "attacker": "AUT", "defender": "SRB", "justification": "july_crisis" }
+  ],
+  "starting_truces": [
+    { "between": ["GBR", "USA"], "days": 365 }
+  ]
+}

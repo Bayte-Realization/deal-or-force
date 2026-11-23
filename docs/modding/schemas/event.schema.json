@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dealorforce.local/schemas/event.schema.json",
+  "title": "Deal or Force Events Data File",
+  "description": "Dictionary of campaign events under events/*.json keyed by unique event ID.",
+  "type": "object",
+  "definitions": {
+    "trigger": {
+      "type": "object",
+      "description": "Read-only conditions gating when the event may fire.",
+      "properties": {
+        "use": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "at_war": { "type": "boolean" },
+        "is_movement": { "type": "boolean" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "has_feature": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "missing_feature": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "has_grand_project": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "completed_grand_project": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "squeezed_chokepoint": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "nuclear_doctrine": {
+          "oneOf": [
+            { "type": "string", "enum": ["retaliatory_triad", "no_first_use", "escalation_to_deescalate"] },
+            { "type": "array", "items": { "type": "string", "enum": ["retaliatory_triad", "no_first_use", "escalation_to_deescalate"] } }
+          ]
+        },
+        "officeholders": { "type": "object" }
+      },
+      "patternProperties": {
+        "^(min|max)_[a-zA-Z0-9_.-]+$": { "type": "number" }
+      }
+    },
+    "effects": {
+      "type": "object",
+      "description": "Scripted consequences applied when an option is chosen.",
+      "properties": {
+        "use": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "add_modifier": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "remove_modifier": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "unlock_feature": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "restrict_feature": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "disable_feature": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "income_penalty": {
+          "type": "object",
+          "required": ["share", "days"],
+          "properties": {
+            "share": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+            "days": { "type": "integer", "minimum": 1, "maximum": 3650 }
+          }
+        },
+        "grand_project_progress": { "type": "number" },
+        "stability": { "type": "number" },
+        "war_support": { "type": "number" },
+        "treasury": { "type": "number" },
+        "political_points": { "type": "number" },
+        "notoriety": { "type": "number" },
+        "nuclear_posture": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "eventOption": {
+      "type": "object",
+      "required": ["label"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "description": "Button text or localization key." },
+        "ai_weight": { "type": "number", "default": 1 },
+        "trigger": { "$ref": "#/definitions/trigger" },
+        "effects": { "$ref": "#/definitions/effects" }
+      }
+    }
+  },
+  "additionalProperties": {
+    "type": "object",
+    "properties": {
+      "$op": {
+        "type": "string",
+        "enum": ["inject", "replace", "create"],
+        "description": "Optional inline merge directive: inject merges fields/arrays, replace overwrites, create adds only if ID is absent."
+      },
+      "remove": { "type": "boolean", "description": "Set true to delete a base event by ID." },
+      "title": { "type": "string", "description": "Headline or localization key." },
+      "body": { "type": "string", "description": "Body text or localization key." },
+      "picture": { "type": "string", "description": "Optional event picture ID from common/event_pictures." },
+      "date": { "type": "string", "pattern": "^\\d{1,4}-\\d{2}-\\d{2}(\\s+BCE)?$", "description": "Optional scheduled date ('YYYY-MM-DD' or 'YYYY-MM-DD BCE')." },
+      "once": { "type": "boolean", "default": true },
+      "cooldown_days": { "type": "integer", "minimum": 0 },
+      "mtth_days": { "type": "number", "minimum": 1 },
+      "trigger": { "$ref": "#/definitions/trigger" },
+      "effects": { "$ref": "#/definitions/effects" },
+      "options": {
+        "type": "array",
+        "minItems": 1,
+        "items": { "$ref": "#/definitions/eventOption" }
+      }
+    }
+  },
+  "defaultSnippets": [
+    {
+      "label": "Campaign Event",
+      "body": {
+        "${1:mod_event_id}": {
+          "title": "${2:Event Title}",
+          "body": "${3:Event description text.}",
+          "once": true,
+          "trigger": {
+            "min_stability": 0.4,
+            "at_war": false
+          },
+          "options": [
+            {
+              "label": "${4:Accept proposal}",
+              "effects": {
+                "stability": 0.02,
+                "political_points": -10
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

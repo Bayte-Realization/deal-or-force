@@ -10,6 +10,8 @@ public sealed partial class GlobePresentation
     // every integrated GPU. The normal Compatibility path retains the full material.
     private static bool ReducedMap => Array.IndexOf(OS.GetCmdlineUserArgs(), "--safe-map") >= 0;
     private Texture2DArray _packedLookups, _packedIds, _packedWater;
+    private Image _packedLookupRgbaScratch;
+    private byte[] _packedLookupRgbaBytes;
 
     private void InitializePackedTextures()
     {
@@ -32,6 +34,21 @@ public sealed partial class GlobePresentation
             if (image.GetWidth() != 256 || image.GetHeight() != 256 || image.HasMipmaps())
                 throw new InvalidDataException("Map lookup must be 256x256 without mipmaps: " + uniform);
             if (image.GetFormat() == Image.Format.Rgba8) _packedLookups.UpdateLayer(image, layer);
+            else if (image.GetFormat() == Image.Format.R8)
+            {
+                var src = image.GetData();
+                var dst = _packedLookupRgbaBytes ??= new byte[256 * 256 * 4];
+                for (int s = 0, d = 0; s < src.Length && d + 3 < dst.Length; s++, d += 4)
+                {
+                    var v = src[s];
+                    dst[d] = v; dst[d + 1] = v; dst[d + 2] = v; dst[d + 3] = 255;
+                }
+                if (_packedLookupRgbaScratch is null)
+                    _packedLookupRgbaScratch = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, dst);
+                else
+                    _packedLookupRgbaScratch.SetData(256, 256, false, Image.Format.Rgba8, dst);
+                _packedLookups.UpdateLayer(_packedLookupRgbaScratch, layer);
+            }
             else
             {
                 using var rgba = (Image)image.Duplicate();
@@ -55,6 +72,29 @@ public sealed partial class GlobePresentation
             previous.Dispose();
         }
         _packedIds.UpdateLayer(image, layer);
+        return true;
+    }
+
+    /// <summary>Create the 3-layer geographic ID array directly from its real images with zero blank upload.</summary>
+    private bool UploadPackedIds(Image regionIds, Image provinceIds, Image nationIds)
+    {
+        if (_packedLookups is null) return false;
+        if (regionIds.GetFormat() != Image.Format.Rg8 || regionIds.HasMipmaps() ||
+            provinceIds.GetFormat() != Image.Format.Rg8 || provinceIds.HasMipmaps() ||
+            nationIds.GetFormat() != Image.Format.Rg8 || nationIds.HasMipmaps())
+            throw new InvalidDataException("Map IDs must remain lossless RG8.");
+        if (regionIds.GetWidth() != provinceIds.GetWidth() || regionIds.GetHeight() != provinceIds.GetHeight() ||
+            regionIds.GetWidth() != nationIds.GetWidth() || regionIds.GetHeight() != nationIds.GetHeight())
+            throw new InvalidDataException("Geographic ID layers must have identical dimensions.");
+
+        var layers = new Godot.Collections.Array<Image> { regionIds, provinceIds, nationIds };
+        var created = new Texture2DArray();
+        var result = created.CreateFromImages(layers);
+        if (result != Error.Ok) { created.Dispose(); throw new InvalidDataException("Map ID texture array: " + result); }
+        var previous = _packedIds;
+        _packedIds = created;
+        _globeMaterial.SetShaderParameter("packed_ids", created);
+        previous?.Dispose();
         return true;
     }
 

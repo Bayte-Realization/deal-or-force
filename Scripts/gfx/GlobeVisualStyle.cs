@@ -33,5 +33,24 @@ public sealed partial class GlobePresentation
         // settings page, the terrain upload) must reapply the look too, or loading would put
         // the classic uniforms back under a player who chose the atlas.
         ApplyMapLook();
+        ApplyShaderQualityTier();
+        ApplyTerrainRelief3D();
+    }
+
+    private void ApplyTerrainRelief3D()
+    {
+        var tier = CurrentShaderQualityTier();
+        var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var toggleOn = SettingsCatalog.Of("terrain_3d_relief") is null || SettingsCatalog.Flag("terrain_3d_relief");
+        var enabled = toggleOn && !ReducedMap && !_mapLookPaper && tier < 1.5f;
+        var styleBoost = SettingsCatalog.Chosen("map_visual_style") == "relief" ? 1.18f : 1.0f;
+        // Sculptural physical relief on PC (mobile skips 5760px heightmap decode so keeps 0 displacement).
+        var baseDisplacement = isTouchPrimary ? 0f : (tier < 0.5f ? 0.055f : 0.042f);
+        var displacement = enabled ? baseDisplacement * styleBoost : 0f;
+        var oceanDepth = enabled && !isTouchPrimary ? (tier < 0.5f ? 0.018f : 0.014f) : 0f;
+        _globeMaterial?.SetShaderParameter("relief_displacement", displacement);
+        _globeMaterial?.SetShaderParameter("relief_ocean_depth", oceanDepth);
+        ApplyReliefMeshSubdivision(enabled && !isTouchPrimary, tier);
+        ApplyReliefState(displacement, oceanDepth);
     }
 }

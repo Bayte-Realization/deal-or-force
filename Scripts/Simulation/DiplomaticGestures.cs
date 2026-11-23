@@ -205,8 +205,10 @@ public static class DiplomaticGestures
     public static StrategicWar MediableWar(Campaign c, Nation issuer, Nation target)
     {
         StrategicWar best = null;
-        foreach (var w in Warfare.OpenWars(c))
+        var wars = Warfare.LiveWars(c);
+        for (var i = 0; i < wars.Count; i++)
         {
+            var w = wars[i];
             if (w.Ended || !w.Involves(target.Id) || w.Involves(issuer.Id)) continue;
             if (best is null || w.StartedDay < best.StartedDay || (w.StartedDay == best.StartedDay && w.Id < best.Id))
                 best = w;
@@ -258,8 +260,12 @@ public static class DiplomaticGestures
         if (c is null || donor is null || recipient is null || recipient.Population <= 0) return false;
         var d = c.Defines;
         if (recipient.Stability < d.HumanitarianAidNeedStability) return true;
-        foreach (var war in Warfare.OpenWars(c))
+        var wars = Warfare.LiveWars(c);
+        for (var i = 0; i < wars.Count; i++)
+        {
+            var war = wars[i];
             if (!war.Ended && war.Involves(recipient.Id) && !war.Involves(donor.Id)) return true;
+        }
         if (donor.Population <= 0) return false;
         var theirs = recipient.Gdp / recipient.Population;
         var ours = donor.Gdp / donor.Population;
@@ -501,19 +507,52 @@ public static class DiplomaticGestures
     /// its own LINQ pipeline, filtering into a list and sorting it. The lists are now gathered
     /// once for the countries that act, and each question is a single walk of that list.
     /// </summary>
+    private sealed class GestureTickScratch
+    {
+        public readonly List<Nation> Pending = new();
+        public readonly List<bool> NeedsRelations = new();
+        public readonly Dictionary<int, List<DiplomaticRelation>> ByNation = new();
+        public readonly List<DiplomaticRelation> Inserted = new();
+        public readonly List<StrategicWar> Mediable = new();
+        public readonly Stack<List<DiplomaticRelation>> Pool = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, GestureTickScratch> _tickScratches = new();
+
+    private static bool NeedsRelationsToday(Campaign c, int nationId) =>
+        GestureRoll(c, nationId, 1) < 0.12f ||
+        GestureRoll(c, nationId, 2) < 0.15f ||
+        GestureRoll(c, nationId, 5) < 0.04f ||
+        GestureRoll(c, nationId, 6) < 0.08f ||
+        GestureRoll(c, nationId, 4) < 0.05f ||
+        GestureRoll(c, nationId, 7) < 0.10f ||
+        GestureRoll(c, nationId, 8) < 0.06f;
+
     public static IEnumerable<int> AiTickStages(Campaign c)
     {
         if (c is null || c.ElapsedDays <= 0) yield break;
-        var pending = ActingToday(c);
+        var scratch = _tickScratches.GetOrCreateValue(c);
+        var pending = scratch.Pending;
+        var needRelations = scratch.NeedsRelations;
+        var anyNeedsRelations = FillActingToday(c, pending, needRelations);
         if (pending.Count == 0) yield break;
-        var byNation = new Dictionary<int, List<DiplomaticRelation>>(pending.Count);
-        foreach (var _ in GatherStages(c, pending, byNation)) yield return 0;
-        var inserted = new List<DiplomaticRelation>();
-        c.RelationInsertSink = inserted;
+        var byNation = scratch.ByNation;
+        var pool = scratch.Pool;
+        var inserted = scratch.Inserted;
+        inserted.Clear();
         try
         {
-            foreach (var nation in pending)
+            if (anyNeedsRelations)
+                foreach (var _ in GatherStages(c, pending, needRelations, byNation, pool)) yield return 0;
+            else
             {
+                foreach (var list in byNation.Values) { list.Clear(); pool.Push(list); }
+                byNation.Clear();
+            }
+            c.RelationInsertSink = inserted;
+            for (var ni = 0; ni < pending.Count; ni++)
+            {
+                var nation = pending[ni];
                 // A gesture in this pass can open a relation the table did not hold when the lists
                 // were gathered. Append any newly opened/woken pairs directly rather than rescanning
                 // all tens of thousands of relations.
@@ -527,7 +566,7 @@ public static class DiplomaticGestures
                     }
                     inserted.Clear();
                 }
-                var relations = byNation.TryGetValue(nation.Id, out var pairs) ? pairs : NoRelations;
+                var relations = needRelations[ni] && byNation.TryGetValue(nation.Id, out var pairs) ? pairs : NoRelations;
 
                 if (GestureRoll(c, nation.Id, 1) < 0.12f && Warmest(nation.Id, relations) is { } partner)
                     Perform(c, nation.Id, Other(nation.Id, partner), "state_visit");
@@ -538,11 +577,16 @@ public static class DiplomaticGestures
                 if (GestureRoll(c, nation.Id, 3) < 0.10f && AllianceSystem.GreatPowers(c).Contains(nation.Id))
                 {
                     yield return 0;
-                    var mediable = new List<StrategicWar>();
-                    foreach (var w in Warfare.OpenWars(c))
+                    var mediable = scratch.Mediable;
+                    mediable.Clear();
+                    var wars = Warfare.LiveWars(c);
+                    for (var wi = 0; wi < wars.Count; wi++)
+                    {
+                        var w = wars[wi];
                         if (!w.Ended && !w.Involves(nation.Id) && c.ElapsedDays - w.StartedDay > 180)
                             mediable.Add(w);
-                    if (mediable.Count > 1) mediable.Sort((a, b) => a.Id.CompareTo(b.Id));
+                    }
+                    if (mediable.Count > 1) mediable.Sort(static (a, b) => a.Id.CompareTo(b.Id));
                     for (var i = 0; i < mediable.Count; i++)
                     {
                         if (i > 0) yield return 0;
@@ -592,6 +636,16 @@ public static class DiplomaticGestures
         finally
         {
             c.RelationInsertSink = null;
+            pending.Clear();
+            needRelations.Clear();
+            inserted.Clear();
+            scratch.Mediable.Clear();
+            foreach (var list in byNation.Values)
+            {
+                list.Clear();
+                pool.Push(list);
+            }
+            byNation.Clear();
         }
     }
 
@@ -601,17 +655,24 @@ public static class DiplomaticGestures
     private static readonly List<DiplomaticRelation> NoRelations = new();
 
     /// <summary>The countries that act today, in the order the world lists them.</summary>
-    private static List<Nation> ActingToday(Campaign c)
+    private static bool FillActingToday(Campaign c, List<Nation> pending, List<bool> needRelations)
     {
-        var pending = new List<Nation>();
-        foreach (var nation in c.Nations)
+        pending.Clear();
+        needRelations.Clear();
+        var anyNeeds = false;
+        var nations = c.ActiveNations;
+        for (var i = 0; i < nations.Count; i++)
         {
+            var nation = nations[i];
             if (nation.Movement is not null || nation.Population <= 0 || c.Fallen.Contains(nation.Id)) continue;
             if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;
             if ((c.ElapsedDays + nation.Id * 7) % 30 != 0) continue;
+            var needs = NeedsRelationsToday(c, nation.Id);
+            anyNeeds |= needs;
             pending.Add(nation);
+            needRelations.Add(needs);
         }
-        return pending;
+        return anyNeeds;
     }
 
     /// <summary>
@@ -619,14 +680,23 @@ public static class DiplomaticGestures
     /// table holds them. Held for the pass and never shared: a process can be running a host's
     /// world and a client's snapshot at once, and two of them must not read each other's lists.
     /// </summary>
-    private static IEnumerable<int> GatherStages(Campaign c, List<Nation> pending, Dictionary<int, List<DiplomaticRelation>> byNation)
+    private static IEnumerable<int> GatherStages(Campaign c, List<Nation> pending, List<bool> needRelations,
+        Dictionary<int, List<DiplomaticRelation>> byNation, Stack<List<DiplomaticRelation>> pool)
     {
-        foreach (var list in byNation.Values) list.Clear();
-        foreach (var nation in pending)
+        foreach (var list in byNation.Values)
         {
-            if (!byNation.TryGetValue(nation.Id, out var list)) byNation[nation.Id] = list = new List<DiplomaticRelation>();
             list.Clear();
+            pool.Push(list);
         }
+        byNation.Clear();
+        for (var i = 0; i < pending.Count; i++)
+        {
+            if (!needRelations[i]) continue;
+            var nation = pending[i];
+            if (!byNation.ContainsKey(nation.Id))
+                byNation[nation.Id] = pool.Count > 0 ? pool.Pop() : new List<DiplomaticRelation>();
+        }
+        if (byNation.Count == 0) yield break;
         var scanned = 0;
         foreach (var relation in c.Relations.Values)
         {
@@ -756,6 +826,21 @@ public static class DiplomaticGestures
                 (relation.Opinion == best.Opinion && other < Other(nation.Id, best))) best = relation;
         }
         return best;
+    }
+
+    /// <summary>True when <paramref name="partner"/> is currently fighting a third-party war that
+    /// <paramref name="mediator"/> is not already fighting in.</summary>
+    public static bool HasActiveThirdPartyWar(Campaign c, Nation partner, Nation mediator)
+    {
+        if (c is null || partner is null || mediator is null) return false;
+        var wars = Warfare.LiveWars(c);
+        for (var i = 0; i < wars.Count; i++)
+        {
+            var war = wars[i];
+            if (war.Ended) continue;
+            if (war.Involves(partner.Id) && !war.Involves(mediator.Id)) return true;
+        }
+        return false;
     }
 }
 /// <summary>A diplomatic gesture made by a government (DiplomaticGestures): state_visit, show_of_force, mediate, loan,

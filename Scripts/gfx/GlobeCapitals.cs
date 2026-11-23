@@ -1,22 +1,136 @@
 using System;
+using System.Collections.Generic;
+using DealOrForce.Simulation;
 using Godot;
 
 namespace DealOrForce;
 
+/// <summary>
+/// Capital brass star halos + 1-draw-call warm dusk/twilight urban glow clusters
+/// scaled by real state population and GDP, synced seamlessly across 3D globe and flat atlas.
+/// Strictly presentation-only: zero simulation mutation, zero texture units added to globe shader.
+/// </summary>
 public sealed partial class GlobePresentation
 {
+    private const int UrbanGlowMaxClusters = 240;
+
+    private static QuadMesh _capitalHaloQuad;
+    private static ShaderMaterial _capitalHaloMaterial;
+
+    private MultiMeshInstance3D _urbanGlowNode;
+    private ShaderMaterial _urbanGlowMaterial;
+    private int _urbanGlowRevision = int.MinValue;
+    private int _urbanGlowCityCount = -1;
+    private bool _urbanGlowFlat;
+    private float _urbanGlowQualityTier = -1f;
+    private readonly List<(float Lat, float Lon, float Intensity, float Radius)> _urbanGlowAnchors = new(UrbanGlowMaxClusters);
+
+    private const string CapitalHaloShader = """
+shader_type spatial;
+render_mode unshaded, blend_mix, cull_disabled, depth_draw_never, shadows_disabled;
+uniform vec3 brass_color : source_color = vec3(0.95, 0.80, 0.42);
+uniform float quality_tier = 0.0;
+void fragment() {
+    vec2 p = UV * 2.0 - 1.0;
+    float r = length(p);
+    if (r > 1.0) discard;
+    float outer_ring = smoothstep(0.09, 0.0, abs(r - 0.78));
+    float inner_ring = smoothstep(0.06, 0.0, abs(r - 0.56));
+    float soft_glow = pow(max(1.0 - r, 0.0), 2.6) * 0.42;
+    float shimmer = quality_tier < 1.5 ? 0.92 + 0.08 * sin(TIME * 2.1) : 1.0;
+    vec3 col = mix(brass_color * 0.78, brass_color * 1.18 + vec3(0.10, 0.08, 0.03), max(outer_ring, inner_ring));
+    float alpha = clamp(max(max(outer_ring * 0.82, inner_ring * 0.48), soft_glow), 0.0, 0.90) * shimmer;
+    ALBEDO = col;
+    ALPHA = alpha;
+}
+""";
+
+    private const string UrbanGlowShader = """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled;
+uniform vec3 sun_direction = vec3(0.35, 0.55, 0.75);
+uniform float flat_map = 0.0;
+uniform float dusk_boost = 1.0;
+uniform float paper_fade = 1.0;
+varying vec3 world_norm;
+void vertex() {
+    world_norm = normalize((MODEL_MATRIX * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
+}
+void fragment() {
+    vec2 p = UV * 2.0 - 1.0;
+    float r = length(p);
+    if (r > 1.0) discard;
+    float core = exp(-r * r * 5.6);
+    float halo = pow(max(1.0 - r, 0.0), 2.4) * 0.45;
+    float sun_dot = dot(normalize(world_norm), normalize(sun_direction));
+    // Whisper-subtle warm cartographic highlight in daylight; rich golden dusk/night metropolis glow on terminator/night.
+    float twilight = flat_map > 0.5
+        ? 0.24
+        : mix(0.20, 1.0, 1.0 - smoothstep(-0.34, 0.28, sun_dot));
+    float energy = (core * 0.72 + halo) * COLOR.a * twilight * dusk_boost * paper_fade;
+    vec3 warm = mix(vec3(0.96, 0.62, 0.26), vec3(1.00, 0.88, 0.58), core);
+    ALBEDO = warm * energy;
+    ALPHA = clamp(energy, 0.0, 0.92);
+}
+""";
+
+    private static ShaderMaterial EnsureCapitalHaloMaterial()
+    {
+        if (_capitalHaloMaterial is not null) return _capitalHaloMaterial;
+        _capitalHaloQuad ??= new QuadMesh { Size = Vector2.One };
+        _capitalHaloMaterial = new ShaderMaterial
+        {
+            Shader = new Shader { Code = CapitalHaloShader },
+            RenderPriority = 6
+        };
+        var brass = Ui.Colour("globe.selection");
+        _capitalHaloMaterial.SetShaderParameter("brass_color", new Vector3(brass.R, brass.G, brass.B));
+        return _capitalHaloMaterial;
+    }
+
+    private void ApplyCapitalAndUrbanQualityTier(float tier)
+    {
+        _capitalHaloMaterial?.SetShaderParameter("quality_tier", tier);
+        if (!Mathf.IsEqualApprox(_urbanGlowQualityTier, tier))
+        {
+            _urbanGlowQualityTier = tier;
+            _urbanGlowRevision = int.MinValue;
+        }
+    }
+
     /// <summary>
     /// A capital is a mark on the map, not a sign facing the viewer. Geographic east/north
     /// are its permanent axes; only a projection change replaces that frame with flat axes.
+    /// Attaches a subtle elevated brass halo ring synced identically across globe and flat atlas.
     /// </summary>
     private void PlaceCapitalMarker(Node3D node, Vector3 normal)
     {
         var geographic = GeographicFromNormal(normal);
         node.Position = _flatMap
-            ? FlatPoint(geographic.Latitude, geographic.Longitude, FlatMarkerZ)
-            : normal * SurfaceMarkerRadius;
+            ? LocalFlatPoint(geographic.Latitude, geographic.Longitude, FlatMarkerZ)
+            : LocalSurfacePoint(geographic.Latitude, geographic.Longitude, SurfaceMarkerRadius);
         OrientSurfaceCounter(node, normal);
-        if (node is Sprite3D star) SizeCapitalMarker(star);
+        if (node is Sprite3D star)
+        {
+            EnsureCapitalHaloChild(star);
+            SizeCapitalMarker(star);
+        }
+    }
+
+    private static void EnsureCapitalHaloChild(Sprite3D star)
+    {
+        if (star.GetNodeOrNull<MeshInstance3D>("CapitalHalo") is not null) return;
+        var halo = new MeshInstance3D
+        {
+            Name = "CapitalHalo",
+            Mesh = _capitalHaloQuad ??= new QuadMesh { Size = Vector2.One },
+            MaterialOverride = EnsureCapitalHaloMaterial(),
+            Position = new Vector3(0f, 0f, -0.0004f),
+            Scale = Vector3.One * 1.85f,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            GIMode = GeometryInstance3D.GIModeEnum.Disabled
+        };
+        star.AddChild(halo);
     }
 
     private void SizeCapitalMarker(Sprite3D star)
@@ -49,5 +163,142 @@ public sealed partial class GlobePresentation
     {
         foreach (var (node, _) in _capitalMarkers)
             if (IsInstanceValid(node) && node is Sprite3D star) SizeCapitalMarker(star);
+    }
+
+    /// <summary>
+    /// 1-draw-call warm dusk/twilight urban glow clusters scaled by real state population and GDP.
+    /// Zero invented settlements, zero per-frame allocations, cleanly muted in paper mode & MobileLow.
+    /// </summary>
+    private void UpdateUrbanGlowClusters()
+    {
+        if (_campaign is null || !_mapApplied || !IsInstanceValid(_skyWorld)) return;
+        var tier = CurrentShaderQualityTier();
+        var allowed = !_mapLookPaper && tier < 1.5f && Simulation.WorldLayers.On("cities");
+        if (!allowed)
+        {
+            if (IsInstanceValid(_urbanGlowNode)) _urbanGlowNode.Visible = false;
+            return;
+        }
+
+        if (_urbanGlowNode is null || !IsInstanceValid(_urbanGlowNode))
+        {
+            _urbanGlowMaterial = new ShaderMaterial
+            {
+                Shader = new Shader { Code = UrbanGlowShader },
+                RenderPriority = 4
+            };
+            var mm = new MultiMesh
+            {
+                TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
+                UseColors = true,
+                Mesh = new QuadMesh { Size = Vector2.One },
+                InstanceCount = UrbanGlowMaxClusters,
+                VisibleInstanceCount = 0
+            };
+            _urbanGlowNode = new MultiMeshInstance3D
+            {
+                Name = "UrbanDuskGlow",
+                Multimesh = mm,
+                MaterialOverride = _urbanGlowMaterial,
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                GIMode = GeometryInstance3D.GIModeEnum.Disabled
+            };
+            _skyWorld.AddChild(_urbanGlowNode);
+        }
+
+        _urbanGlowNode.Visible = true;
+        if (IsInstanceValid(_daySun))
+            _urbanGlowMaterial.SetShaderParameter("sun_direction", _daySun.GlobalBasis.Z);
+        _urbanGlowMaterial.SetShaderParameter("flat_map", _flatMap ? 1f : 0f);
+        _urbanGlowMaterial.SetShaderParameter("paper_fade", 1f - Math.Clamp(_cachedPaperMix, 0f, 1f));
+        _urbanGlowMaterial.SetShaderParameter("dusk_boost", DayNightEnabled ? 1.0f : 0.42f);
+
+        var rev = _campaign.MapRevision;
+        var cityCount = Math.Min(_cities.Count, _cityAnchors.Length);
+        if (rev == _urbanGlowRevision && cityCount == _urbanGlowCityCount
+            && _urbanGlowFlat == _flatMap && Mathf.IsEqualApprox(_urbanGlowQualityTier, tier))
+            return;
+
+        _urbanGlowRevision = rev;
+        _urbanGlowCityCount = cityCount;
+        _urbanGlowFlat = _flatMap;
+        _urbanGlowQualityTier = tier;
+        RebuildUrbanGlowInstances(tier);
+    }
+
+    private void RebuildUrbanGlowInstances(float tier)
+    {
+        if (_urbanGlowNode?.Multimesh is not { } mm || _campaign?.ProvinceMap is null) return;
+        EnsureStateIndex();
+        var limit = tier > 0.5f ? 110 : UrbanGlowMaxClusters;
+        _urbanGlowAnchors.Clear();
+
+        var topology = _campaign.ProvinceMap;
+        var countCities = Math.Min(_cities.Count, _cityAnchors.Length);
+        if (countCities > 0)
+        {
+            // Place warm twilight glow clusters on real metropolises scaled by live state population & urbanization.
+            for (var i = 0; i < countCities; i++)
+            {
+                var city = _cities[i];
+                var prov = _cityAnchors[i].ProvinceId;
+                if (prov <= 0 || prov >= topology.ProvinceToState.Length) continue;
+                var stateIdx = topology.ProvinceToState[prov];
+                if (!_stateByMapIndex.TryGetValue(stateIdx, out var state)) continue;
+                var urbanPop = CityLife.Urban(state);
+                if (urbanPop < 400_000) continue;
+                if (TerrainGone(city.Latitude, city.Longitude)) continue;
+
+                var urbanNorm = Math.Clamp(MathF.Log10(MathF.Max(1f, urbanPop / 350_000f)) / 2.2f, 0.15f, 1.0f);
+                var density = Math.Clamp(state.Urbanization, 0.15f, 1.0f);
+                var isCap = i < _cityIsCapital.Length && _cityIsCapital[i];
+                var intensity = Math.Clamp(0.24f + 0.44f * urbanNorm + 0.24f * density + (isCap ? 0.16f : 0f), 0.22f, 1.0f);
+                var radius = Math.Clamp(0.018f + 0.038f * urbanNorm + (isCap ? 0.008f : 0f), 0.018f, 0.064f);
+                _urbanGlowAnchors.Add((city.Latitude, city.Longitude, intensity, radius));
+            }
+        }
+        else
+        {
+            // Fallback before cities finish loading: use real national capitals scaled by nation population.
+            var nations = _campaign.Nations;
+            for (var i = 0; i < nations.Count; i++)
+            {
+                var n = nations[i];
+                if (n.Population < 600_000 || !CapitalCore.HasSeat(_campaign, n)) continue;
+                var lat = CapitalCore.EffectiveLatitude(_campaign, n);
+                var lon = CapitalCore.EffectiveLongitude(_campaign, n);
+                if (TerrainGone(lat, lon)) continue;
+                var popNorm = Math.Clamp(MathF.Log10(MathF.Max(1f, n.Population / 500_000f)) / 2.5f, 0.20f, 1.0f);
+                _urbanGlowAnchors.Add((lat, lon, Math.Clamp(0.32f + 0.62f * popNorm, 0.30f, 1.0f), 0.024f + 0.034f * popNorm));
+            }
+        }
+
+        _urbanGlowAnchors.Sort((a, b) => b.Intensity.CompareTo(a.Intensity));
+        var count = Math.Min(limit, _urbanGlowAnchors.Count);
+        for (var i = 0; i < count; i++)
+        {
+            var anchor = _urbanGlowAnchors[i];
+            Vector3 pos, right, up, normal;
+            if (_flatMap)
+            {
+                pos = LocalFlatPoint(anchor.Lat, anchor.Lon, FlatLineZ * 0.45f);
+                right = Vector3.Right;
+                up = Vector3.Up;
+                normal = Vector3.Back;
+            }
+            else
+            {
+                normal = SurfacePoint(anchor.Lat, anchor.Lon, 1f).Normalized();
+                pos = LocalSurfacePoint(anchor.Lat, anchor.Lon, GlobeRadius * 1.0007f);
+                right = normal.Cross(Vector3.Up);
+                if (right.LengthSquared() < 1e-6f) right = Vector3.Right;
+                right = right.Normalized();
+                up = right.Cross(normal).Normalized();
+            }
+            var scale = anchor.Radius * (_flatMap ? 1.25f : 1.0f);
+            mm.SetInstanceTransform(i, new Transform3D(new Basis(right * scale, up * scale, normal * scale), pos));
+            mm.SetInstanceColor(i, new Color(1f, 0.85f, 0.55f, anchor.Intensity));
+        }
+        mm.VisibleInstanceCount = count;
     }
 }

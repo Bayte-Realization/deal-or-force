@@ -287,6 +287,8 @@ internal static class SimBenchReportRegistry
 
         Add("--exiles", SimBenchPhase.AfterMap, 352, "Exile government probe",
             ctx => ctx.Has("--exiles") ? (ctx.Mapped ? ExileReport.Run(ctx.Campaign, ctx.Days) : 2) : null);
+        Add("--taiwan-return", SimBenchPhase.AfterMap, 353, "Track AI Taiwan's military return to the Mainland over N days",
+            ctx => ctx.Has("--taiwan-return") ? (ctx.Mapped ? TaiwanReturnReport.Run(ctx.Campaign, ctx.Days) : 2) : null);
 
         Add("--movement-births", SimBenchPhase.AfterMap, 354, "Movement birth triggers report",
             ctx => ctx.Has("--movement-births") ? (ctx.Mapped ? MovementBirthReport.Run(ctx.Campaign, ctx.Days) : 2) : null);

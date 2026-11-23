@@ -70,6 +70,11 @@ public static class Defections
         var controllers = campaign.ProvinceController;
         var moved = 0;
         var touchedWars = new HashSet<int>();
+        var loggedReunion = new HashSet<(int EnemyId, int NationId)>();
+        var activeBattleProvinces = new HashSet<int>();
+        foreach (var battle in campaign.Battles)
+            if (battle is not null && !battle.Ended && battle.ProvinceId > 0)
+                activeBattleProvinces.Add(battle.ProvinceId);
         var scanned = 0;
         foreach (var army in campaign.Armies.ToArray())
         {
@@ -84,14 +89,19 @@ public static class Defections
                             army.Strength <= campaign.Defines.DefectionStrength;
             // A hollow army: a government nobody believes in, whose soldiers on the line watch a
             // rising win. Kabul in 2021, Damascus in December 2024, Goma in January 2025 - armies
-            // many times the size of what came at them, which did not fight. Only in a civil war,
-            // only near the enemy, and only while the rising is ahead.
+            // many times the size of what came at them, which did not fight. Only in a civil war
+            // or a reunification war, only near the enemy, and only while the challenger is ahead
+            // or the regime is strained.
             var hollow = !exhausted && nation.Stability < campaign.Defines.HollowArmyStability;
-            if (!exhausted && !hollow) continue;
+            var strainedForReunification = !exhausted && !hollow &&
+                (nation.Stability < 0.62f || nation.WarSupport < 0.58f ||
+                 ModifierSystem.Has(nation, "mainland_regime_shock"));
+            if (!exhausted && !hollow && !strainedForReunification) continue;
 
             StrategicWar chosen = null;
             Nation enemy = null;
             var civil = false;
+            var reunification = false;
             foreach (var war in Warfare.OpenWars(campaign))
             {
                 if (war.Ended || !war.Involves(nation.Id)) continue;
@@ -101,20 +111,24 @@ public static class Defections
                     if (candidate is null || candidate.Id == nation.Id) continue;
                     var rebel = war.CivilConflict || WarAims.IsRebel(candidate) ||
                                 candidate.SecededFromId == nation.Id || nation.SecededFromId == candidate.Id;
+                    var reunion = !rebel && campaign.Defines.MainlandReclamationEnabled &&
+                                  MainlandReclamation.IsMainlandLiberator(campaign, war, candidate, nation);
                     var holdsHere = controllers[army.ProvinceId] == candidate.MapIndex;
-                    if (!rebel && !holdsHere) continue;
+                    if (!rebel && !reunion && !holdsHere) continue;
                     chosen = war;
                     enemy = candidate;
                     civil = rebel;
+                    reunification = reunion;
                     break;
                 }
                 if (chosen is not null) break;
             }
             if (chosen is null || enemy is null) continue;
+            if (strainedForReunification && !reunification) continue;
 
             var ownGround = topology.ProvinceToNation[army.ProvinceId] == nation.MapIndex;
             var enemyGround = topology.ProvinceToNation[army.ProvinceId] == enemy.MapIndex;
-            if (!civil)
+            if (!civil && !reunification)
             {
                 if (nation.WarSupport > campaign.Defines.DefectionWarSupport) continue;
                 if (controllers[army.ProvinceId] != enemy.MapIndex) continue;
@@ -123,24 +137,52 @@ public static class Defections
                 continue;
 
             var odds = civil ? campaign.Defines.WartimeDefectionChanceCivil
+                : reunification ? MathF.Max(campaign.Defines.WartimeDefectionChanceInterstate, campaign.Defines.MainlandDefectionChanceBonus)
                 : campaign.Defines.WartimeDefectionChanceInterstate;
             if (!exhausted)
             {
-                if (!civil) continue;
+                if (!civil && !reunification) continue;
                 var rebelScore = chosen.IsAttacking(enemy.Id) ? chosen.WarScore : -chosen.WarScore;
                 var nearEnemy = controllers[army.ProvinceId] == enemy.MapIndex;
                 if (!nearEnemy)
-                    foreach (var next in topology.Neighbors[army.ProvinceId])
+                {
+                    // Reunification frontline defections require true dry-land adjacency (never
+                    // across a ferry edge like kinmen_ferry before an amphibious landing occurs).
+                    var adjacent = reunification ? topology.LandNeighbors[army.ProvinceId] : topology.Neighbors[army.ProvinceId];
+                    foreach (var next in adjacent)
                         if (next > 0 && next < controllers.Length && controllers[next] == enemy.MapIndex) { nearEnemy = true; break; }
-                if (rebelScore <= 0f || !nearEnemy) continue;
-                var weakness = 1f - nation.Stability / MathF.Max(0.01f, campaign.Defines.HollowArmyStability);
-                odds *= M.Clamp01(weakness) * M.Clamp01(rebelScore / MathF.Max(1f, campaign.Defines.HollowArmyMomentumScore));
+                }
+                if (!nearEnemy) continue;
+                if (civil)
+                {
+                    if (rebelScore <= 0f) continue;
+                    var weakness = 1f - nation.Stability / MathF.Max(0.01f, campaign.Defines.HollowArmyStability);
+                    odds *= M.Clamp01(weakness) * M.Clamp01(rebelScore / MathF.Max(1f, campaign.Defines.HollowArmyMomentumScore));
+                }
+                else
+                {
+                    // Reunification frontline defection: requires the liberator to have actually
+                    // established a mainland bridgehead in this war first.
+                    var shocked = ModifierSystem.Has(nation, "mainland_regime_shock");
+                    if (!MainlandReclamation.HasBridgehead(enemy, chosen.Id) && !shocked) continue;
+                    if (rebelScore < -10f && !shocked) continue;
+                    var underground = ModifierSystem.Has(enemy, "twn_mainland_underground_spirit") ? 1.35f : 1f;
+                    var momentum = ModifierSystem.Has(enemy, "mainland_return_momentum") ? 1.25f : 1f;
+                    var strain = M.Clamp(
+                        (shocked ? 0.40f : 0.15f) +
+                        M.Clamp01((0.65f - nation.Stability) / 0.45f) * 0.45f +
+                        M.Clamp01((0.60f - nation.WarSupport) / 0.45f) * 0.35f +
+                        M.Clamp01((rebelScore + 10f) / 40f) * 0.30f,
+                        0.15f, 1.35f);
+                    odds = MathF.Min(0.26f, odds * strain * underground * momentum);
+                    if (nation.IsHuman) odds *= 0.50f;
+                }
             }
             if (odds <= 0f || Roll(campaign.Seed, army.Id, enemy.Id, day / 30) >= odds)
                 continue;
 
             army.NationId = enemy.Id;
-            army.AssignedWarId = -1;
+            army.AssignedWarId = chosen.Id;
             army.ArmyGroupId = -1;
             army.FrontLineId = -1;
             army.OrderKind = ArmyOrder.Manual;
@@ -148,13 +190,37 @@ public static class Defections
             army.PlannedRoute.Clear();
             army.DirectOrder = false;
             army.Cohesion = M.Clamp01(army.Cohesion - 0.12f);
+            // If this garrison defected in a reunification war and no active battle or loyal
+            // defenders remain in the province, it hands the province over immediately.
+            if (reunification && controllers[army.ProvinceId] == nation.MapIndex &&
+                !activeBattleProvinces.Contains(army.ProvinceId))
+            {
+                var loyalLeft = false;
+                foreach (var other in campaign.Armies)
+                    if (other.Id != army.Id && other.ProvinceId == army.ProvinceId &&
+                        other.EmbarkedFleetId < 0 && other.Strength > 0.05f &&
+                        chosen.Opposes(enemy.Id, other.NationId))
+                    { loyalLeft = true; break; }
+                if (!loyalLeft)
+                {
+                    chosen.OriginalController.TryAdd(army.ProvinceId, controllers[army.ProvinceId]);
+                    campaign.SetProvinceController(army.ProvinceId, (ushort)enemy.MapIndex);
+                    chosen.FrontDirty = true;
+                }
+            }
             touchedWars.Add(chosen.Id);
             moved++;
+            if (reunification && loggedReunion.Add((enemy.Id, nation.Id)))
+            {
+                var regionName = campaign.StateByMapIndex(topology.ProvinceToState[army.ProvinceId])?.Name ?? "";
+                campaign.Chronicle.Record(campaign, "mainland_defection", enemy.Id, nation.Id, subject: regionName);
+            }
             DiagnosticLogs.Write("simulation",
                 $"DEFECTION army={army.Id} from={nation.Tag} to={enemy.Tag} war={chosen.Id} " +
                 $"civil={civil} province={army.ProvinceId} cohesion={army.Cohesion:0.00} supply={army.SupplyLevel:0.00}");
         }
         yield return 0;
+        if (touchedWars.Count > 0) Warfare.MarkIndexStale(campaign);
         foreach (var warId in touchedWars)
             if (campaign.Wars.Find(war => war.Id == warId) is { } war)
                 FrontPlanner.ReassignAi(campaign, war);

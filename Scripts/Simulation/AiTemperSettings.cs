@@ -50,4 +50,37 @@ public static class AiTemper
         var pull = Pull(c, out var yes);
         return M.Clamp(yes ? score + (100f - score) * pull : score - score * pull, 0f, 100f);
     }
+
+    /// <summary>
+    /// Generational and era aggression modifier for a specific country (1f at day 0; 0.78..1.25 over
+    /// decades and centuries) driven by deterministic FNV-1a historical drift and temperament.
+    /// </summary>
+    public static float EraAggressionModifier(Campaign c, Nation actor)
+    {
+        if (c is null || actor is null || c.ElapsedDays <= 0) return 1f;
+        var bias = GeopoliticalCycle.GenerationalPivotBias(c, actor, 0xA661);
+        var era = GeopoliticalCycle.CurrentEraRegime(c) switch
+        {
+            GlobalEraRegime.RevisionistTide => 0.10f,
+            GlobalEraRegime.PostImperialTurbulence => 0.06f,
+            GlobalEraRegime.MultipolarConcert => -0.09f,
+            GlobalEraRegime.ArmedDetente => -0.04f,
+            _ => 0f
+        };
+        var oppOffset = (AiTemperament.Of(c, actor).Opportunism - 0.5f) * 0.16f;
+        return M.Clamp(1f + bias * 0.14f + era + oppOffset, 0.78f, 1.25f);
+    }
+
+    /// <summary>
+    /// Pair- and era-modulated agreement willingness (-1..1). Preserves <see cref="Willing"/>
+    /// identically at day 0 and bends bilateral diplomacy across seeded decades and centuries.
+    /// </summary>
+    public static float EraWilling(Campaign c, Nation actor, Nation other, float willingness)
+    {
+        var baseWilling = Willing(c, willingness);
+        if (c is null || actor is null || other is null || c.ElapsedDays <= 0) return baseWilling;
+        var alignment = GeopoliticalCycle.BilateralRealignmentBias(c, actor, other);
+        var foresightShift = (AiTemperament.Of(c, actor).Foresight - 0.5f) * 0.08f;
+        return M.Clamp(baseWilling + alignment * 0.14f + foresightShift, -1f, 1f);
+    }
 }

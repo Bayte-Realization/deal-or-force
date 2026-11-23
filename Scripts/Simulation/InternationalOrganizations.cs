@@ -166,22 +166,82 @@ public static class InternationalOrganizations
         return weight;
     }
 
+    [ThreadStatic] private static Dictionary<int, float> _memberArmyWeightsScratch;
+
+    private static Dictionary<int, float> FillMemberArmyWeights(Campaign c, InternationalOrganization o)
+    {
+        var weights = _memberArmyWeightsScratch ??= new Dictionary<int, float>();
+        weights.Clear();
+        var members = o.Members;
+        for (var i = 0; i < members.Count; i++) weights[members[i]] = 0f;
+        var armies = c.Armies;
+        for (var i = 0; i < armies.Count; i++)
+        {
+            var a = armies[i];
+            if (weights.TryGetValue(a.NationId, out var sum))
+                weights[a.NationId] = sum + a.Divisions * a.Strength * Math.Max(0.15f, a.Organisation);
+        }
+        return weights;
+    }
+
+    private static float InfluenceWithArmy(Campaign c, InternationalOrganization o, Nation n, float army)
+    {
+        var weight = Math.Max(0f, n.Gdp) * c.Defines.AiEconomicWeight + army;
+        if (n.IsSubject) weight *= 0.5f;
+        var unpaid = o.UnpaidWeeks.GetValueOrDefault(n.Id);
+        if (unpaid > 0) weight *= MathF.Max(0.25f, 1f - unpaid * 0.08f);
+        return weight;
+    }
+
     public static Nation Leader(Campaign c, InternationalOrganization o)
     {
         if (c is null || o is null || o.Dissolved || o.Members.Count == 0) return null;
-        return o.Members.Select(c.NationById).Where(n => n is not null && n.Population > 0)
-            .OrderByDescending(n => Influence(c, o, n)).ThenBy(n => n.Id).FirstOrDefault();
+        var weights = FillMemberArmyWeights(c, o);
+        Nation best = null;
+        var bestInfluence = float.NegativeInfinity;
+        var members = o.Members;
+        for (var i = 0; i < members.Count; i++)
+        {
+            var n = c.NationById(members[i]);
+            if (n is null || n.Population <= 0) continue;
+            var infl = InfluenceWithArmy(c, o, n, weights.GetValueOrDefault(n.Id));
+            if (best is null || infl > bestInfluence || (infl == bestInfluence && n.Id < best.Id))
+            {
+                best = n;
+                bestInfluence = infl;
+            }
+        }
+        return best;
     }
 
     public static Nation Challenger(Campaign c, InternationalOrganization o)
     {
-        var leader = Leader(c, o);
-        if (leader is null || o.Members.Count < 2) return null;
-        var leadScore = Influence(c, o, leader);
-        if (leadScore <= 0.001f) return null;
-        var second = o.Members.Select(c.NationById).Where(n => n is not null && n.Id != leader.Id && n.Population > 0)
-            .OrderByDescending(n => Influence(c, o, n)).ThenBy(n => n.Id).FirstOrDefault();
-        return second is not null && Influence(c, o, second) >= leadScore * 0.55f ? second : null;
+        if (c is null || o is null || o.Dissolved || o.Members.Count < 2) return null;
+        var weights = FillMemberArmyWeights(c, o);
+        Nation leader = null, second = null;
+        var leadScore = float.NegativeInfinity;
+        var secondScore = float.NegativeInfinity;
+        var members = o.Members;
+        for (var i = 0; i < members.Count; i++)
+        {
+            var n = c.NationById(members[i]);
+            if (n is null || n.Population <= 0) continue;
+            var infl = InfluenceWithArmy(c, o, n, weights.GetValueOrDefault(n.Id));
+            if (leader is null || infl > leadScore || (infl == leadScore && n.Id < leader.Id))
+            {
+                second = leader;
+                secondScore = leadScore;
+                leader = n;
+                leadScore = infl;
+            }
+            else if (second is null || infl > secondScore || (infl == secondScore && n.Id < second.Id))
+            {
+                second = n;
+                secondScore = infl;
+            }
+        }
+        if (leader is null || leadScore <= 0.001f || second is null) return null;
+        return secondScore >= leadScore * 0.55f ? second : null;
     }
 
     public static string PreferredDoctrine(Campaign c, InternationalOrganization o, Nation n)
@@ -190,7 +250,11 @@ public static class InternationalOrganizations
         var charter = Charter(o.CharterId);
         if (charter?.Defence == true)
         {
-            if (Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(n.Id)) || n.StrategicDoctrine.Id is "manoeuvre_warfare" or "homeland_defense")
+            var wars = Warfare.LiveWars(c);
+            for (var i = 0; i < wars.Count; i++)
+                if (!wars[i].Ended && wars[i].Involves(n.Id))
+                    return Doctrine("integrated_command") is not null ? "integrated_command" : "sovereign_equality";
+            if (n.StrategicDoctrine.Id is "manoeuvre_warfare" or "homeland_defense")
                 return Doctrine("integrated_command") is not null ? "integrated_command" : "sovereign_equality";
             return Doctrine("integrated_command") is not null ? "integrated_command" : "sovereign_equality";
         }
@@ -205,6 +269,18 @@ public static class InternationalOrganizations
 
     public static IEnumerable<InternationalOrganization> Active(Campaign c) => c.Organizations.Where(o => !o.Dissolved);
     public static IEnumerable<InternationalOrganization> Memberships(Campaign c, int nationId) => Active(c).Where(o => o.Members.Contains(nationId));
+
+    internal static void FillMemberships(Campaign c, int nationId, List<InternationalOrganization> into)
+    {
+        into.Clear();
+        var orgs = c?.Organizations;
+        if (orgs is null) return;
+        for (var i = 0; i < orgs.Count; i++)
+        {
+            var o = orgs[i];
+            if (!o.Dissolved && o.Members.Contains(nationId)) into.Add(o);
+        }
+    }
 
     // DefencePartners answers inside pair/third-country loops (CanDeclareWar, guarantees,
     // war aims): the LINQ chain allocated a membership enumeration, a Distinct buffer and
@@ -222,9 +298,11 @@ public static class InternationalOrganizations
 
     private static int DefenceStamp(Campaign c)
     {
-        var stamp = c.Organizations.Count * 1000003;
-        foreach (var o in c.Organizations)
+        var orgs = c.Organizations;
+        var stamp = orgs.Count * 1000003;
+        for (var i = 0; i < orgs.Count; i++)
         {
+            var o = orgs[i];
             stamp = stamp ^ (o.Members.Count * 31 + (o.Dissolved ? 1 : 0) + o.Cohesion.GetHashCode());
         }
         return stamp;
@@ -243,18 +321,30 @@ public static class InternationalOrganizations
         cache.Stamp = stamp;
         cache.Epoch = _defenceEpoch;
         if (!c.FeatureEnabled("organizations")) return cache;
-        foreach (var o in Active(c))
+        var orgs = c.Organizations;
+        for (var oi = 0; oi < orgs.Count; oi++)
         {
+            var o = orgs[oi];
             if (o.Dissolved || Charter(o.CharterId) is not { Defence: true } || o.Cohesion < .25f) continue;
-            foreach (var memberId in o.Members)
+            var members = o.Members;
+            for (var i = 0; i < members.Count; i++)
             {
+                var memberId = members[i];
                 if (!cache.ByNation.TryGetValue(memberId, out var list))
                     cache.ByNation[memberId] = list = new List<int>();
-                foreach (var other in o.Members)
+                for (var j = 0; j < members.Count; j++)
+                {
+                    var other = members[j];
                     if (other != memberId && !list.Contains(other)) list.Add(other);
+                }
             }
         }
         return cache;
+    }
+
+    internal static void WarmDefencePartners(Campaign c)
+    {
+        if (c is not null && c.FeatureEnabled("organizations")) EnsureDefencePartners(c);
     }
 
     public static IReadOnlyList<int> DefencePartners(Campaign c, int nationId)
@@ -504,6 +594,12 @@ public static class InternationalOrganizations
         return target.Treasury < Math.Max(1, target.Gdp * .005f) && m.Amount <= org.Budget * .6f;
     }
 
+    [ThreadStatic] private static List<InternationalOrganization> _activeOrgsScratch;
+    [ThreadStatic] private static List<int> _invitationsCopyScratch;
+    [ThreadStatic] private static List<int> _membersCopyScratch;
+    [ThreadStatic] private static List<Nation> _sortedActiveNationsScratch;
+    [ThreadStatic] private static Dictionary<int, int> _membershipCountScratch;
+
     public static void Tick(Campaign c)
     {
         foreach (var _ in TickStages(c)) { }
@@ -513,25 +609,58 @@ public static class InternationalOrganizations
     public static IEnumerable<int> TickStages(Campaign c)
     {
         if (!c.FeatureEnabled("organizations")) yield break;
-        var ticked = 0;
-        foreach (var org in Active(c).ToArray())
+        if (c.ElapsedDays > 0 && c.ElapsedDays % 365 == 0 && c.Organizations.Count > 0)
         {
-            if (++ticked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
+            var orgList = c.Organizations;
+            for (var i = orgList.Count - 1; i >= 0; i--)
+            {
+                var o = orgList[i];
+                if (o.Dissolved && o.Members.Count == 0 && MathF.Abs(o.Budget) <= 0.001f && o.Motion is null &&
+                    c.ElapsedDays - Math.Max(o.LastReviewDay, o.FoundedDay) > 3650)
+                    orgList.RemoveAt(i);
+            }
+        }
+        var activeOrgs = _activeOrgsScratch ??= new List<InternationalOrganization>();
+        activeOrgs.Clear();
+        var allOrgs = c.Organizations;
+        for (var i = 0; i < allOrgs.Count; i++)
+        {
+            var org = allOrgs[i];
+            if (!org.Dissolved) activeOrgs.Add(org);
+        }
+        var ticked = 0;
+        for (var oi = 0; oi < activeOrgs.Count; oi++)
+        {
+            var org = activeOrgs[oi];
+            if (++ticked % 4 == 0 && Campaign.StageOverdue()) yield return 0;
             // A live mod reload can remove a charter. Freeze its institution, do not crash
             // an assembly or silently reinterpret its voting rule.
             if (Charter(org.CharterId) is null) continue;
             if (org.LastReviewDay == c.ElapsedDays) continue;
             org.LastReviewDay = c.ElapsedDays;
-            foreach (var id in org.Invitations.ToArray())
-                if (c.NationById(id) is { IsHuman: false } target)
-                    new OrganizationCommand { IssuerId = id, OrganizationId = org.Id, Action = WouldJoin(c, org, target) ? "join" : "decline" }.Apply(c);
+            if (org.Invitations.Count > 0)
+            {
+                var invCopy = _invitationsCopyScratch ??= new List<int>();
+                invCopy.Clear();
+                for (var ii = 0; ii < org.Invitations.Count; ii++) invCopy.Add(org.Invitations[ii]);
+                for (var ii = 0; ii < invCopy.Count; ii++)
+                {
+                    var id = invCopy[ii];
+                    if (c.NationById(id) is { IsHuman: false } target)
+                        new OrganizationCommand { IssuerId = id, OrganizationId = org.Id, Action = WouldJoin(c, org, target) ? "join" : "decline" }.Apply(c);
+                }
+            }
             if (c.ElapsedDays > org.FoundedDay && (c.ElapsedDays - org.FoundedDay) % 7 == 0)
             {
                 // The fund's week closes where its dues are collected, before this week's dues.
                 OrganizationLedger.Close(c, org);
                 var unpaid = false;
-                foreach (var id in org.Members.ToArray())
+                var memCopy = _membersCopyScratch ??= new List<int>();
+                memCopy.Clear();
+                for (var mi = 0; mi < org.Members.Count; mi++) memCopy.Add(org.Members[mi]);
+                for (var mi = 0; mi < memCopy.Count; mi++)
                 {
+                    var id = memCopy[mi];
                     var n = c.NationById(id);
                     // A member with no ground of its own to tax owes nothing: arrears are a government's choice.
                     if (!Eligible(c, n)) continue;
@@ -545,10 +674,15 @@ public static class InternationalOrganizations
                 org.Cohesion = Math.Clamp(org.Cohesion + (unpaid ? -Math.Max(0, c.Defines.OrganizationArrearsCohesionLoss) : .002f), 0, 1);
             }
             if (org.Motion is not { } m) continue;
-            foreach (var id in org.Members)
+            for (var mi = 0; mi < org.Members.Count; mi++)
+            {
+                var id = org.Members[mi];
                 if (!m.Votes.ContainsKey(id) && c.NationById(id) is { IsHuman: false } voter) m.Votes[id] = AiVote(c, org, voter, m);
+            }
             if (c.ElapsedDays < m.EndsDay) continue;
-            var yes = org.Members.Count(id => m.Votes.GetValueOrDefault(id));
+            var yes = 0;
+            for (var mi = 0; mi < org.Members.Count; mi++)
+                if (m.Votes.GetValueOrDefault(org.Members[mi])) yes++;
             var passed = Charter(org.CharterId).Unanimity ? yes == org.Members.Count : yes > org.Members.Count / 2;
             var targetNation = c.NationById(m.TargetId);
             var voters = org.Members.Count;
@@ -570,14 +704,20 @@ public static class InternationalOrganizations
             }
             else if (passed && Eligible(c, targetNation))
             {
-                if (m.Kind == "admission" && !org.Members.Contains(m.TargetId) &&
-                    !org.Members.Any(id => CampaignDiplomacy.AtWar(c, id, m.TargetId))) org.Invitations.Add(m.TargetId);
+                if (m.Kind == "admission" && !org.Members.Contains(m.TargetId))
+                {
+                    var atWarWithMember = false;
+                    for (var mi = 0; mi < org.Members.Count; mi++)
+                        if (CampaignDiplomacy.AtWar(c, org.Members[mi], m.TargetId)) { atWarWithMember = true; break; }
+                    if (!atWarWithMember) org.Invitations.Add(m.TargetId);
+                }
                 else if (m.Kind == "grant" && org.Members.Contains(m.TargetId) && m.Amount <= org.Budget && float.IsFinite(targetNation.Treasury + m.Amount))
                 { org.Budget -= m.Amount; targetNation.Treasury += m.Amount; OrganizationLedger.Book(org, OrganizationFlow.Grants, -m.Amount); MoneyLedger.Book(targetNation, MoneyFlow.Organizations, m.Amount); }
                 else if (m.Kind == "sanction" && !org.Members.Contains(m.TargetId))
                 {
-                    foreach (var id in org.Members)
+                    for (var mi = 0; mi < org.Members.Count; mi++)
                     {
+                        var id = org.Members[mi];
                         if (id == m.TargetId) continue;
                         var rel = CampaignDiplomacy.Get(c, id, m.TargetId);
                         if (id == rel.A) rel.EmbargoByA = true; else rel.EmbargoByB = true;
@@ -591,8 +731,9 @@ public static class InternationalOrganizations
                 }
                 else if (m.Kind == "lift_sanction")
                 {
-                    foreach (var id in org.Members)
+                    for (var mi = 0; mi < org.Members.Count; mi++)
                     {
+                        var id = org.Members[mi];
                         if (id == m.TargetId) continue;
                         var rel = CampaignDiplomacy.Peek(c, id, m.TargetId);
                         if (rel is null) continue;
@@ -611,6 +752,7 @@ public static class InternationalOrganizations
             org.Motion = null; c.MarkStrategicChange();
         }
         AiInitiatives(c);
+        activeOrgs.Clear();
     }
 
     /// <summary>
@@ -631,14 +773,98 @@ public static class InternationalOrganizations
         return members > 0 && holding * 2 < members;
     }
 
+    private static List<Nation> SortedActiveNations(Campaign c)
+    {
+        var list = _sortedActiveNationsScratch ??= new List<Nation>();
+        list.Clear();
+        var active = c.ActiveNations;
+        for (var i = 0; i < active.Count; i++)
+            list.Add(active[i]);
+        if (list.Count > 1) list.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+        return list;
+    }
+
+    private static void FillAllMemberArmyWeights(Campaign c, List<InternationalOrganization> activeOrgs, Dictionary<int, float> weights)
+    {
+        weights.Clear();
+        var hasEligible = false;
+        for (var oi = 0; oi < activeOrgs.Count; oi++)
+        {
+            var org = activeOrgs[oi];
+            if (org.Motion is not null || org.Invitations.Count > 0 || org.Members.Count <= 1) continue;
+            var members = org.Members;
+            for (var mi = 0; mi < members.Count; mi++)
+            {
+                weights[members[mi]] = 0f;
+                hasEligible = true;
+            }
+        }
+        if (!hasEligible) return;
+        var armies = c.Armies;
+        for (var i = 0; i < armies.Count; i++)
+        {
+            var a = armies[i];
+            if (weights.TryGetValue(a.NationId, out var sum))
+                weights[a.NationId] = sum + a.Divisions * a.Strength * Math.Max(0.15f, a.Organisation);
+        }
+    }
+
+    private static Nation LeaderFromWeights(Campaign c, InternationalOrganization o, Dictionary<int, float> weights)
+    {
+        if (c is null || o is null || o.Dissolved || o.Members.Count == 0) return null;
+        if (o.Members.Count == 1)
+            return c.NationById(o.Members[0]) is { Population: > 0 } single ? single : null;
+        Nation best = null;
+        var bestInfluence = float.NegativeInfinity;
+        var members = o.Members;
+        for (var i = 0; i < members.Count; i++)
+        {
+            var n = c.NationById(members[i]);
+            if (n is null || n.Population <= 0) continue;
+            var infl = InfluenceWithArmy(c, o, n, weights.GetValueOrDefault(n.Id));
+            if (best is null || infl > bestInfluence || (infl == bestInfluence && n.Id < best.Id))
+            {
+                best = n;
+                bestInfluence = infl;
+            }
+        }
+        return best;
+    }
+
     private static void AiInitiatives(Campaign c)
     {
         var organic = c.Defines.OrganicOrganizationReachEnabled;
-        foreach (var org in Active(c).OrderBy(o => o.Id).ToArray())
+        var activeOrgs = _activeOrgsScratch ??= new List<InternationalOrganization>();
+        activeOrgs.Clear();
+        var allOrgs = c.Organizations;
+        for (var i = 0; i < allOrgs.Count; i++)
         {
+            var org = allOrgs[i];
+            if (!org.Dissolved) activeOrgs.Add(org);
+        }
+        if (activeOrgs.Count > 1) activeOrgs.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+
+        var weights = _memberArmyWeightsScratch ??= new Dictionary<int, float>();
+        FillAllMemberArmyWeights(c, activeOrgs, weights);
+
+        List<Nation> sortedNations = null;
+        var liveWars = Warfare.LiveWars(c);
+        var shadowDays = c.Defines.NuclearShadowDays;
+        var maxMembership = Math.Clamp(c.Defines.OrganizationMembershipLimit, 1, 30);
+
+        for (var oi = 0; oi < activeOrgs.Count; oi++)
+        {
+            var org = activeOrgs[oi];
             if (org.Motion is not null || org.Invitations.Count > 0) continue;
-            var proposer = Leader(c, org) is { IsHuman: false, IsSubject: false } lead ? lead
-                : org.Members.Select(c.NationById).FirstOrDefault(n => n is { IsHuman: false, IsSubject: false });
+            Nation proposer = LeaderFromWeights(c, org, weights) is { IsHuman: false, IsSubject: false } lead ? lead : null;
+            if (proposer is null)
+            {
+                for (var mi = 0; mi < org.Members.Count; mi++)
+                {
+                    if (c.NationById(org.Members[mi]) is { IsHuman: false, IsSubject: false } cand)
+                    { proposer = cand; break; }
+                }
+            }
             if (proposer is null || (c.ElapsedDays + proposer.Id) % 30 != 0) continue;
             if (string.IsNullOrEmpty(org.DoctrineId))
             {
@@ -651,22 +877,44 @@ public static class InternationalOrganizations
             }
             // The first government to use a nuclear weapon is everybody's business, not only its
             // enemies': every assembly it does not sit in moves to sanction it while the shadow lasts.
-            var aggressor = c.Nations.Where(n => c.ElapsedDays - n.NuclearFirstUseDay < c.Defines.NuclearShadowDays)
-                .OrderBy(n => n.Id)
-                .FirstOrDefault(a => Eligible(c, a) && !org.Members.Contains(a.Id) &&
-                    Unsanctioned(c, org, a))
-                ?? Warfare.OpenWars(c).Where(w => !w.Ended && !w.CivilConflict && org.Members.Any(w.IsDefending))
-                .Select(w => c.NationById(w.AttackerId))
-                .FirstOrDefault(a => a is not null && Eligible(c, a) && !org.Members.Contains(a.Id) &&
-                    Unsanctioned(c, org, a));
+            sortedNations ??= SortedActiveNations(c);
+            Nation aggressor = null;
+            for (var ni = 0; ni < sortedNations.Count; ni++)
+            {
+                var a = sortedNations[ni];
+                if (c.ElapsedDays - a.NuclearFirstUseDay < shadowDays &&
+                    Eligible(c, a) && !org.Members.Contains(a.Id) && Unsanctioned(c, org, a))
+                { aggressor = a; break; }
+            }
+            if (aggressor is null)
+            {
+                for (var wi = 0; wi < liveWars.Count; wi++)
+                {
+                    var w = liveWars[wi];
+                    if (w.Ended || w.CivilConflict) continue;
+                    var defenderMember = false;
+                    for (var mi = 0; mi < org.Members.Count; mi++)
+                        if (w.IsDefending(org.Members[mi])) { defenderMember = true; break; }
+                    if (!defenderMember) continue;
+                    var a = c.NationById(w.AttackerId);
+                    if (a is not null && Eligible(c, a) && !org.Members.Contains(a.Id) && Unsanctioned(c, org, a))
+                    { aggressor = a; break; }
+                }
+            }
             if (aggressor is not null)
             {
                 new OrganizationCommand { IssuerId = proposer.Id, OrganizationId = org.Id, Action = "propose", Kind = "sanction", TargetId = aggressor.Id }.Apply(c);
                 if (org.Motion is not null) continue;
             }
             if (org.Members.Count >= (organic ? Math.Clamp(c.Defines.AiOrganizationExpansionLimit, 2, 160) : 13)) continue;
-            var needy = org.Members.Select(c.NationById).Where(n => n is { Population: > 0 } && n.Treasury < Math.Max(1, n.Gdp * .002f))
-                .OrderBy(n => n.Treasury).FirstOrDefault();
+            Nation needy = null;
+            var bestNeedTreasury = float.PositiveInfinity;
+            for (var mi = 0; mi < org.Members.Count; mi++)
+            {
+                var mn = c.NationById(org.Members[mi]);
+                if (mn is { Population: > 0 } && mn.Treasury < Math.Max(1, mn.Gdp * .002f) && mn.Treasury < bestNeedTreasury)
+                { needy = mn; bestNeedTreasury = mn.Treasury; }
+            }
             if (needy is not null && org.Budget > .05f)
             {
                 new OrganizationCommand { IssuerId = proposer.Id, OrganizationId = org.Id, Action = "propose", Kind = "grant",
@@ -674,36 +922,90 @@ public static class InternationalOrganizations
                 continue;
             }
             if (c.ElapsedDays < org.FoundedDay + 180 || org.Cohesion < .5f) continue;
-            var partner = c.Nations.Where(n => Eligible(c, n) && !n.IsSubject && !org.Members.Contains(n.Id) && !org.Suspended.ContainsKey(n.Id) &&
-                    OrganizationDynamics.ExpansionRelevant(c, org, proposer, n) &&
-                    (CampaignDiplomacy.Peek(c, proposer.Id, n.Id)?.Opinion ?? 0) >= 40 && WouldJoin(c, org, n))
-                .OrderBy(n => n.Id).FirstOrDefault();
+            Nation partner = null;
+            for (var ni = 0; ni < sortedNations.Count; ni++)
+            {
+                var n = sortedNations[ni];
+                if (n.IsSubject || !Eligible(c, n) || org.Members.Contains(n.Id) || org.Suspended.ContainsKey(n.Id)) continue;
+                if ((CampaignDiplomacy.Peek(c, proposer.Id, n.Id)?.Opinion ?? 0) < 40) continue;
+                if (OrganizationDynamics.ExpansionRelevant(c, org, proposer, n) && WouldJoin(c, org, n))
+                { partner = n; break; }
+            }
             if (partner is not null) new OrganizationCommand { IssuerId = proposer.Id, OrganizationId = org.Id,
                 Action = "propose", Kind = "admission", TargetId = partner.Id }.Apply(c);
         }
-        if (!c.Defines.AiMayFoundOrganizations || c.ElapsedDays < 365 || Active(c).Count() >= Math.Clamp(c.Defines.AiOrganizationWorldLimit, 0, 100)) return;
-        foreach (var n in c.Nations.OrderBy(n => n.Id))
+        var worldLimit = Math.Clamp(c.Defines.AiOrganizationWorldLimit, 0, 100);
+        if (!c.Defines.AiMayFoundOrganizations || c.ElapsedDays < 365 || activeOrgs.Count >= worldLimit) return;
+
+        sortedNations ??= SortedActiveNations(c);
+        var memCounts = _membershipCountScratch ??= new Dictionary<int, int>();
+        memCounts.Clear();
+        for (var oi = 0; oi < activeOrgs.Count; oi++)
         {
-            if (n.IsHuman || n.IsSubject || !Eligible(c, n) ||
-                (organic ? Memberships(c, n.Id).Count() >= Math.Clamp(c.Defines.OrganizationMembershipLimit,1,30) : Memberships(c,n.Id).Any()) ||
-                ((c.ElapsedDays + n.Id) % 365 != 0 && (c.ElapsedDays + n.Id * 13) % 90 != 0) ||
-                organic && (Active(c).Any(o=>o.FounderId==n.Id && o.FoundedDay>0) ||
-                !float.IsFinite(n.PoliticalPoints) || !float.IsFinite(c.Defines.AiOrganizationFoundingPoliticalCost) || n.PoliticalPoints < Math.Max(0,c.Defines.AiOrganizationFoundingPoliticalCost)) ||
-                n.Stability < .55f || n.Treasury < Math.Max(1, n.Gdp * .005f)) continue;
-            var friend = c.Nations.Where(other => other.Id != n.Id && Eligible(c, other) && !other.IsSubject &&
-                Memberships(c,other.Id).Count() < Math.Clamp(c.Defines.OrganizationMembershipLimit,1,30) &&
-                !CampaignDiplomacy.AtWar(c,n.Id,other.Id) &&
-                OrganizationDynamics.FoundingRelevant(c,n,other) &&
-                (!organic || !Active(c).Any(o=>o.CharterId=="cooperation" && o.Cohesion>=.5f && o.Members.Contains(n.Id) && o.Members.Contains(other.Id))) &&
-                (CampaignDiplomacy.Peek(c, n.Id, other.Id)?.Opinion ?? 0) >= 40).OrderBy(other => organic ? -other.Gdp : other.Id).ThenBy(other=>other.Id).FirstOrDefault();
+            var mem = activeOrgs[oi].Members;
+            for (var mi = 0; mi < mem.Count; mi++)
+            {
+                var id = mem[mi];
+                memCounts[id] = memCounts.GetValueOrDefault(id) + 1;
+            }
+        }
+        var foundingCost = Math.Max(0, c.Defines.AiOrganizationFoundingPoliticalCost);
+        for (var ni = 0; ni < sortedNations.Count; ni++)
+        {
+            var n = sortedNations[ni];
+            if ((c.ElapsedDays + n.Id) % 365 != 0 && (c.ElapsedDays + n.Id * 13) % 90 != 0) continue;
+            if (n.IsHuman || n.IsSubject || n.Stability < .55f || n.Treasury < Math.Max(1, n.Gdp * .005f)) continue;
+            var nMemberships = memCounts.GetValueOrDefault(n.Id);
+            if (organic ? nMemberships >= maxMembership : nMemberships > 0) continue;
+            if (!Eligible(c, n)) continue;
+            if (organic)
+            {
+                if (!float.IsFinite(n.PoliticalPoints) || !float.IsFinite(c.Defines.AiOrganizationFoundingPoliticalCost) ||
+                    n.PoliticalPoints < foundingCost) continue;
+                var alreadyFounded = false;
+                for (var oi = 0; oi < activeOrgs.Count; oi++)
+                    if (activeOrgs[oi].FounderId == n.Id && activeOrgs[oi].FoundedDay > 0) { alreadyFounded = true; break; }
+                if (alreadyFounded) continue;
+            }
+
+            Nation friend = null;
+            for (var oi = 0; oi < sortedNations.Count; oi++)
+            {
+                var other = sortedNations[oi];
+                if (other.Id == n.Id || other.IsSubject) continue;
+                if (memCounts.GetValueOrDefault(other.Id) >= maxMembership) continue;
+                if ((CampaignDiplomacy.Peek(c, n.Id, other.Id)?.Opinion ?? 0) < 40) continue;
+                if (!Eligible(c, other) || CampaignDiplomacy.AtWar(c, n.Id, other.Id)) continue;
+                if (!OrganizationDynamics.FoundingRelevant(c, n, other)) continue;
+                if (organic)
+                {
+                    var alreadyCoop = false;
+                    for (var ai = 0; ai < activeOrgs.Count; ai++)
+                    {
+                        var ao = activeOrgs[ai];
+                        if (ao.CharterId == "cooperation" && ao.Cohesion >= .5f && ao.Members.Contains(n.Id) && ao.Members.Contains(other.Id))
+                        { alreadyCoop = true; break; }
+                    }
+                    if (alreadyCoop) continue;
+                }
+                if (friend is null) friend = other;
+                else if (organic ? other.Gdp > friend.Gdp : other.Id < friend.Id) friend = other;
+            }
             if (friend is null) continue;
 
             var charter = "cooperation";
             var mutualRel = CampaignDiplomacy.Peek(c, n.Id, friend.Id);
             var sharedThreat = OrganizationDynamics.SharedThreat(c, n, friend);
             var hasMilitaryFocus = n.NationalCourse.Dominant is "militarism" or "great_power" or "expansionism" or "forward_defense";
-            var inDefencePactTogether = Active(c).Any(o => !o.Dissolved && Charter(o.CharterId)?.Defence == true && o.Members.Contains(n.Id) && o.Members.Contains(friend.Id));
-            var inDevelopmentUnionTogether = Active(c).Any(o => !o.Dissolved && o.CharterId == "development" && o.Members.Contains(n.Id) && o.Members.Contains(friend.Id));
+            var inDefencePactTogether = false;
+            var inDevelopmentUnionTogether = false;
+            for (var oi = 0; oi < activeOrgs.Count; oi++)
+            {
+                var ao = activeOrgs[oi];
+                if (ao.Dissolved || !ao.Members.Contains(n.Id) || !ao.Members.Contains(friend.Id)) continue;
+                if (!inDefencePactTogether && Charter(ao.CharterId)?.Defence == true) inDefencePactTogether = true;
+                if (!inDevelopmentUnionTogether && ao.CharterId == "development") inDevelopmentUnionTogether = true;
+            }
 
             if (!inDefencePactTogether && (sharedThreat || (hasMilitaryFocus && mutualRel?.Stance == DiplomaticStance.Allied)))
             {
@@ -715,7 +1017,10 @@ public static class InternationalOrganizations
             }
 
             var chosenName = OrganizationDynamics.DetermineOrganizationName(c, charter, n, friend, new[] { n, friend });
-            if (Active(c).Any(o => string.Equals(o.Name, chosenName, StringComparison.OrdinalIgnoreCase))) continue;
+            var nameTaken = false;
+            for (var oi = 0; oi < activeOrgs.Count; oi++)
+                if (string.Equals(activeOrgs[oi].Name, chosenName, StringComparison.OrdinalIgnoreCase)) { nameTaken = true; break; }
+            if (nameTaken) continue;
 
             var command = new FoundCooperationForumCommand { IssuerId = n.Id, TargetId = friend.Id, CharterId = charter, OrganizationName = chosenName };
             command.Apply(c);

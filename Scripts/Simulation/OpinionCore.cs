@@ -371,17 +371,20 @@ public static class OpinionSystem
     {
         public readonly Campaign Campaign;
         public readonly List<DiplomaticRelation> Waiting = new();
-        public readonly Action<int> SettleOne;
+        public readonly Action<int, int> SettleRange;
 
         public SettleQueue(Campaign campaign)
         {
             Campaign = campaign;
-            SettleOne = index =>
+            SettleRange = (from, to) =>
             {
-                var relation = Waiting[index];
-                var explain = Campaign.NationById(relation.A)?.IsHuman == true ||
-                              Campaign.NationById(relation.B)?.IsHuman == true;
-                Settle(Campaign, relation, explain);
+                for (var index = from; index < to; index++)
+                {
+                    var relation = Waiting[index];
+                    var explain = Campaign.NationById(relation.A)?.IsHuman == true ||
+                                  Campaign.NationById(relation.B)?.IsHuman == true;
+                    Settle(Campaign, relation, explain);
+                }
             };
         }
     }
@@ -408,7 +411,7 @@ public static class OpinionSystem
             if (campaign.NationById(waiting[index].A) is { } left) SocialMemory.NationKey(left);
             if (campaign.NationById(waiting[index].B) is { } right) SocialMemory.NationKey(right);
         }
-        DeterministicParallel.For(campaign, 0, waiting.Count, queue.SettleOne);
+        DeterministicParallel.ForRange(campaign, 0, waiting.Count, queue.SettleRange);
         waiting.Clear();
     }
 

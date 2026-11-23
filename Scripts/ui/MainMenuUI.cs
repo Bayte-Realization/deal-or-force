@@ -152,8 +152,11 @@ public partial class DealOrForceGame
         MenuChromeTheme.StyleWellButton(quitBtn, selected: false, fontSize: 13);
         rows.AddChild(quitBtn);
 
-        _navigationHint = Title("Right-drag to turn the globe · wheel to zoom · WASD to move.", 12,
-            MenuChromeTheme.PaperFaint);
+        _navigationHint = Title(
+            Platform.PlatformProfile.Current.IsTouchPrimary
+                ? "mobile.override.map_controls"
+                : "Right-drag to turn the globe · wheel to zoom · WASD to move.",
+            12, MenuChromeTheme.PaperFaint);
         _navigationHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_navigationHint);
         var version = Title(GameBuildInfo.VersionLabel, 12, MenuChromeTheme.PaperFaint);

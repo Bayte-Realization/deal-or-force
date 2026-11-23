@@ -155,6 +155,78 @@ public static partial class CampaignFingerprint
         MixFloat(ref hash, nation.WeeklyBalance);
         MixFloat(ref hash, nation.LivingOffset);
         MixText(ref hash, nation.StartGovernment); MixText(ref hash, nation.StartIdeology);
+        if (nation.ActiveProductionMethods is { Count: > 0 } methods)
+        {
+            MixText(ref hash, "production_methods_v1");
+            Mix(ref hash, methods.Count);
+            foreach (var entry in methods.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                MixText(ref hash, entry.Key.ToLowerInvariant());
+                MixText(ref hash, entry.Value ?? "");
+            }
+        }
+        if (nation.LastProductionMethodAiDay >= 0)
+        {
+            MixText(ref hash, "production_methods_ai_day");
+            Mix(ref hash, nation.LastProductionMethodAiDay);
+        }
+        MixNationAmbitionsAndDirectives(nation, ref hash);
+    }
+
+    private static void MixNationAmbitionsAndDirectives(Nation nation, ref ulong hash)
+    {
+        if (nation.ActiveAmbitions is { Count: > 0 } active)
+        {
+            MixText(ref hash, "national_ambitions_active_v1");
+            Mix(ref hash, active.Count);
+            foreach (var slot in active.OrderBy(a => a.Id, StringComparer.OrdinalIgnoreCase))
+            {
+                MixText(ref hash, slot.Id ?? "");
+                Mix(ref hash, slot.SelectedDay);
+                MixFloat(ref hash, slot.BaselineValue);
+                MixFloat(ref hash, slot.TargetValue);
+                MixFloat(ref hash, slot.Progress);
+            }
+        }
+        if (nation.CompletedAmbitions is { Count: > 0 } done)
+        {
+            MixText(ref hash, "national_ambitions_completed_v1");
+            Mix(ref hash, done.Count);
+            foreach (var id in done.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+                MixText(ref hash, id ?? "");
+        }
+        if (nation.GoldenEraUntilDay >= 0 || nation.GoldenEraCount > 0)
+        {
+            MixText(ref hash, "golden_era_v1");
+            Mix(ref hash, nation.GoldenEraUntilDay);
+            Mix(ref hash, nation.GoldenEraCount);
+        }
+        if (nation.ActiveDirectives is { Count: > 0 } directives)
+        {
+            MixText(ref hash, "cabinet_directives_active_v1");
+            Mix(ref hash, directives.Count);
+            foreach (var dir in directives.OrderBy(d => d.Id, StringComparer.OrdinalIgnoreCase))
+            {
+                MixText(ref hash, dir.Id ?? "");
+                Mix(ref hash, dir.StartedDay);
+                Mix(ref hash, dir.UntilDay);
+            }
+        }
+        if (nation.DirectiveCooldownUntilDay is { Count: > 0 } cooldowns)
+        {
+            MixText(ref hash, "cabinet_directives_cd_v1");
+            Mix(ref hash, cooldowns.Count);
+            foreach (var entry in cooldowns.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                MixText(ref hash, entry.Key.ToLowerInvariant());
+                Mix(ref hash, entry.Value);
+            }
+        }
+        if (nation.LastAmbitionAiDay >= 0)
+        {
+            MixText(ref hash, "national_ambitions_ai_day");
+            Mix(ref hash, nation.LastAmbitionAiDay);
+        }
     }
 
     private static void MixNationStockpiles(Nation nation, ref ulong hash)

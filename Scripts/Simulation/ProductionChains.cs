@@ -240,6 +240,7 @@ public static class ProductionChains
     {
         Regional.Clear();
         National.Clear();
+        ProductionMethods.ResetCatalog();
 
         foreach (var document in GameDataLoader.DataDocuments("common", "production"))
             using (document)
@@ -268,6 +269,11 @@ public static class ProductionChains
             if (entry.Value.ValueKind != JsonValueKind.Object)
             {
                 errors?.Add($"Production recipe '{entry.Name}' must be an object.");
+                continue;
+            }
+            if (ProductionMethods.IsMethodEntry(entry.Value))
+            {
+                ProductionMethods.MergeEntry(entry.Name, entry.Value, errors);
                 continue;
             }
             if (GameDataLoader.IsRemoved(entry.Value, $"common/production:{entry.Name}"))
@@ -329,6 +335,11 @@ public static class ProductionChains
             if (entry.Value.ValueKind != JsonValueKind.Object)
             {
                 problems.Add($"Production recipe '{entry.Name}' must be an object.");
+                continue;
+            }
+            if (ProductionMethods.IsMethodEntry(entry.Value))
+            {
+                ProductionMethods.ValidateEntry(entry.Name, entry.Value, problems);
                 continue;
             }
             Read(entry.Name, entry.Value, problems);
@@ -597,7 +608,10 @@ public static class ProductionChains
 
         if (prepared is not null && (!ReferenceEquals(prepared.Nation, nation) || prepared.Recipes != Regional.Count))
             prepared = null;
-        state.RegionalOutputValue = Run(Regional, nation, slots, allocation, prepared, defines);
+        var gross = Run(Regional, nation, slots, allocation, prepared, defines);
+        if (nation is not null && nation.ActiveProductionMethods is { Count: > 0 })
+            gross += ProductionMethods.ApplyRegionMethodDeltas(nation, state, outputFactor, defines);
+        state.RegionalOutputValue = gross;
     }
 
     /// <summary>
@@ -618,10 +632,14 @@ public static class ProductionChains
         slots[SlotOutputFactor] = outputFactor;
         slots[SlotIncome] = nation is not null && float.IsFinite(nation.IncomeFactor) && nation.IncomeFactor > 0f ? nation.IncomeFactor : 1f;
 
+        var hasMethods = nation is not null && nation.ActiveProductionMethods is { Count: > 0 };
         foreach (var kind in UsedBuildingsRaw)
             slots[FixedSlots + BuildingKinds + kind] = Count((BuildingKind)kind);
         foreach (var kind in UsedBuildingsStaffed)
-            slots[FixedSlots + kind] = slots[FixedSlots + BuildingKinds + kind] * outputFactor;
+        {
+            var methodFactor = hasMethods ? ProductionMethods.EffectiveOutputFactor(nation, (BuildingKind)kind) : 1f;
+            slots[FixedSlots + kind] = slots[FixedSlots + BuildingKinds + kind] * outputFactor * methodFactor;
+        }
         foreach (var commodity in UsedDeposits)
             slots[DepositSlot(commodity)] = state.ResourceDeposits.GetValueOrDefault(commodity);
 
@@ -629,8 +647,11 @@ public static class ProductionChains
         // compound factors below are built out of them whether or not any recipe named them.
         var infrastructure = (float)Count(BuildingKind.Infrastructure);
         var extraction = (float)Count(BuildingKind.ExtractionIndustry);
+        var extractionMethod = hasMethods
+            ? ProductionMethods.EffectiveOutputFactor(nation, BuildingKind.ExtractionIndustry)
+            : 1f;
         slots[SlotExtractionEfficiency] =
-            (0.32f + extraction * 0.72f + infrastructure * 0.11f) * outputFactor;
+            (0.32f + extraction * 0.72f * extractionMethod + infrastructure * 0.11f) * outputFactor;
         slots[SlotTimberYield] =
             0.55f + Count(BuildingKind.Agriculture) * outputFactor * 0.06f +
             extraction * 0.20f;

@@ -3,6 +3,7 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace DealOrForce.Simulation;
@@ -393,13 +394,37 @@ public static class SupportCore
     /// </summary>
     internal static void PrepareStep(Campaign campaign)
     {
+        var stepCache = campaign.Caches.SupportStep;
+        var protVer = DiplomaticRelation.ProtectorMutationVersion;
+        if (stepCache.PreparedClean &&
+            stepCache.PreparedDay == campaign.ElapsedDays &&
+            stepCache.PreparedMapRevision == campaign.MapRevision &&
+            stepCache.PreparedWarRevision == campaign.WarRevision &&
+            stepCache.PreparedStrategicRevision == campaign.StrategicRevision &&
+            stepCache.PreparedAllianceRevision == campaign.AllianceRevision &&
+            stepCache.PreparedProtectorVersion == protVer &&
+            stepCache.PreparedSupportCount == campaign.SupportFormations.Count &&
+            stepCache.PreparedBattleCount == campaign.Battles.Count &&
+            ReferenceEquals(stepCache.PreparedMap, campaign.ProvinceMap))
+            return;
+
         var memo = campaign.Caches.SupportEnabledMemo;
         memo.Entries.Clear();
         memo.Active = true;
         try
         {
-            SupportRepatriation.Reconcile(campaign);
+            var changed = SupportRepatriation.Reconcile(campaign);
             IndexReach(campaign);
+            stepCache.PreparedClean = changed == 0;
+            stepCache.PreparedDay = campaign.ElapsedDays;
+            stepCache.PreparedMapRevision = campaign.MapRevision;
+            stepCache.PreparedWarRevision = campaign.WarRevision;
+            stepCache.PreparedStrategicRevision = campaign.StrategicRevision;
+            stepCache.PreparedAllianceRevision = campaign.AllianceRevision;
+            stepCache.PreparedProtectorVersion = DiplomaticRelation.ProtectorMutationVersion;
+            stepCache.PreparedSupportCount = campaign.SupportFormations.Count;
+            stepCache.PreparedBattleCount = campaign.Battles.Count;
+            stepCache.PreparedMap = campaign.ProvinceMap;
         }
         finally
         {
@@ -431,31 +456,43 @@ public static class SupportCore
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(SupportCore))) yield break;
         // Warfare can change control after the step's initial reach index.
-        SupportRepatriation.Reconcile(campaign);
+        foreach (var _ in MeasureStage("  sup:reconcile", SupportRepatriation.ReconcileStages(campaign))) yield return 0;
         yield return 0;
         // The day's road, rail, sea and air before anything is trained or fires: a formation
         // that arrives today is deploying tonight, and one still on the road fires nothing.
-        LongRangeMovement.Advance(campaign);
+        foreach (var _ in MeasureStage("  sup:advance", LongRangeMovement.AdvanceStages(campaign, skipSettle: true))) yield return 0;
         yield return 0;
-        Train(campaign);
+        foreach (var _ in MeasureStage("  sup:train", TrainStages(campaign))) yield return 0;
         yield return 0;
-        AirReconnaissance.Expose(campaign);
+        foreach (var _ in MeasureStage("  sup:expose", AirReconnaissance.ExposeStages(campaign))) yield return 0;
         yield return 0;
         // The salvos go before the day's losses are counted: an aircraft that flew into a
         // defended sky to launch is charged for it the same evening.
-        foreach (var _ in LongRangeStrikes.FireStages(campaign)) yield return 0;
+        foreach (var _ in MeasureStage("  sup:strikes", LongRangeStrikes.FireStages(campaign))) yield return 0;
         yield return 0;
-        Attrition(campaign);
+        using (SimProfiler.Measure("  sup:attrition")) Attrition(campaign);
         yield return 0;
-        Recover(campaign);
+        foreach (var _ in MeasureStage("  sup:recover", RecoverStages(campaign))) yield return 0;
         yield return 0;
-        CommandByAir(campaign);
+        foreach (var _ in MeasureStage("  sup:command", CommandByAirStages(campaign))) yield return 0;
         yield return 0;
         // Where the computer's formations stand, after it has decided what they fly: the same
         // relocation order a player gives, so neither side is moved by a better rule.
-        foreach (var _ in LongRangeMovement.RepositionStages(campaign)) yield return 0;
+        foreach (var _ in MeasureStage("  sup:reposition", LongRangeMovement.RepositionStages(campaign))) yield return 0;
         yield return 0;
-        LongRangeStrikes.Procure(campaign);
+        foreach (var _ in MeasureStage("  sup:procure", LongRangeStrikes.ProcureStages(campaign))) yield return 0;
+    }
+
+    private static IEnumerable<int> MeasureStage(string name, IEnumerable<int> inner)
+    {
+        using var enumerator = inner.GetEnumerator();
+        while (true)
+        {
+            bool more;
+            using (SimProfiler.Measure(name)) more = enumerator.MoveNext();
+            if (!more) break;
+            yield return 0;
+        }
     }
 
     // ------------------------------------------------------------------ the air war
@@ -537,21 +574,70 @@ public static class SupportCore
             defines.LongRangeBasingPerCity * HeldCitiesOf(campaign, state));
     }
 
+    private sealed class LeadingCityTable
+    {
+        public readonly int[] Under;
+        public readonly int[][] ByState;
+        public LeadingCityTable(int[] under, int[][] byState) { Under = under; ByState = byState; }
+    }
+
+    private static readonly ConditionalWeakTable<ProvinceTopology, LeadingCityTable> LeadingCitiesTables = new();
+    private static readonly ConditionalWeakTable<ProvinceTopology, float[][]> NeighborEdgeKmTables = new();
+
+    private static int[][] LeadingCitiesByState(ProvinceTopology map)
+    {
+        var under = CityCatalog.ProvincesOf(map);
+        if (LeadingCitiesTables.TryGetValue(map, out var cached) && ReferenceEquals(cached.Under, under))
+            return cached.ByState;
+        var leading = Math.Min(under.Length, CityCatalog.LeadingCount);
+        var provToState = map.ProvinceToState;
+        var maxState = 0;
+        for (var index = 0; index < leading; index++)
+        {
+            var province = under[index];
+            if (province > 0 && province <= map.ProvinceCount && province < provToState.Length)
+            {
+                var s = provToState[province];
+                if (s > maxState) maxState = s;
+            }
+        }
+        var counts = new int[maxState + 1];
+        for (var index = 0; index < leading; index++)
+        {
+            var province = under[index];
+            if (province > 0 && province <= map.ProvinceCount && province < provToState.Length)
+                counts[provToState[province]]++;
+        }
+        var byState = new int[maxState + 1][];
+        for (var s = 0; s <= maxState; s++)
+            if (counts[s] > 0) byState[s] = new int[counts[s]];
+        Array.Clear(counts, 0, counts.Length);
+        for (var index = 0; index < leading; index++)
+        {
+            var province = under[index];
+            if (province <= 0 || province > map.ProvinceCount || province >= provToState.Length) continue;
+            var s = provToState[province];
+            var bucket = byState[s];
+            if (bucket is not null) bucket[counts[s]++] = province;
+        }
+        LeadingCitiesTables.AddOrUpdate(map, new LeadingCityTable(under, byState));
+        return byState;
+    }
+
     /// <summary>Leading cities of the region on ground its owner controls.</summary>
     public static int HeldCitiesOf(Campaign campaign, ScenarioState state)
     {
         var map = campaign?.ProvinceMap;
-        if (map is null || state is null || state.NationMapIndex <= 0) return 0;
+        if (map is null || state is null || state.NationMapIndex <= 0 || state.MapIndex <= 0) return 0;
+        var byState = LeadingCitiesByState(map);
+        if (state.MapIndex >= byState.Length) return 0;
+        var cityProvinces = byState[state.MapIndex];
+        if (cityProvinces is null || cityProvinces.Length == 0) return 0;
         var controllers = campaign.ProvinceController ?? map.ProvinceToNation;
-        var under = CityCatalog.ProvincesOf(map);
-        var leading = Math.Min(under.Length, CityCatalog.LeadingCount);
+        var owner = state.NationMapIndex;
         var held = 0;
-        for (var index = 0; index < leading; index++)
-        {
-            var province = under[index];
-            if (province <= 0 || province > map.ProvinceCount || map.ProvinceToState[province] != state.MapIndex) continue;
-            if (controllers[province] == state.NationMapIndex) held++;
-        }
+        for (var i = 0; i < cityProvinces.Length; i++)
+            if (controllers[cityProvinces[i]] == owner) held++;
         return held;
     }
 
@@ -567,20 +653,47 @@ public static class SupportCore
     public static float BasingUsed(Campaign campaign, int stateMapIndex, int exceptFormationId = -1)
     {
         var used = 0f;
-        foreach (var formation in campaign.SupportFormations)
+        var formations = campaign.SupportFormations;
+        for (var i = 0; i < formations.Count; i++)
         {
+            var formation = formations[i];
             if (formation.Id == exceptFormationId || formation.Route.Count > 0 || !Enabled(campaign, formation.TypeId)) continue;
             if (formation.StateMapIndex != stateMapIndex) continue;
             used += BasingOf(formation.TypeId);
         }
-        foreach (var order in campaign.SupportOrders)
+        var orders = campaign.SupportOrders;
+        for (var i = 0; i < orders.Count; i++)
+        {
+            var order = orders[i];
             if (order.StateMapIndex == stateMapIndex && Enabled(campaign, order.TypeId)) used += BasingOf(order.TypeId);
+        }
         return used;
+    }
+
+    internal static void FillBasingUsed(Campaign campaign, Dictionary<int, float> usedByState)
+    {
+        usedByState.Clear();
+        var formations = campaign.SupportFormations;
+        for (var i = 0; i < formations.Count; i++)
+        {
+            var f = formations[i];
+            if (f.Route.Count > 0 || !Enabled(campaign, f.TypeId)) continue;
+            usedByState[f.StateMapIndex] = usedByState.GetValueOrDefault(f.StateMapIndex) + BasingOf(f.TypeId);
+        }
+        var orders = campaign.SupportOrders;
+        for (var i = 0; i < orders.Count; i++)
+        {
+            var order = orders[i];
+            if (Enabled(campaign, order.TypeId))
+                usedByState[order.StateMapIndex] = usedByState.GetValueOrDefault(order.StateMapIndex) + BasingOf(order.TypeId);
+        }
     }
 
     /// <summary>The readiness a crowded region still repairs: capacity / used, 1 when there is room.</summary>
     public static float CrowdingOf(float capacity, float used) =>
         used <= capacity || used <= 0f ? 1f : MathF.Max(0f, capacity) / used;
+
+    [ThreadStatic] private static List<int> _baseCandidatesScratch;
 
     /// <summary>A controlled province of the region, which the range is measured from. -1 if there is none.</summary>
     public static int BaseProvinceOf(Campaign campaign, Nation nation, int stateMapIndex)
@@ -588,12 +701,15 @@ public static class SupportCore
         var map = campaign.ProvinceMap;
         if (nation is null || map is null) return -1;
         var controllers = campaign.ProvinceController ?? map.ProvinceToNation;
-        var candidates = new List<int>();
-        for (var province = 1; province <= map.ProvinceCount; province++)
+        var candidates = _baseCandidatesScratch ??= new List<int>();
+        candidates.Clear();
+        var held = CampaignIntel.ProvincesHeldBy(campaign, controllers, nation.MapIndex);
+        var provToState = map.ProvinceToState;
+        for (var i = 0; i < held.Length; i++)
         {
-            if (map.ProvinceToState[province] != stateMapIndex) continue;
-            if (controllers[province] != nation.MapIndex) continue;
-            candidates.Add(province);
+            var province = held[i];
+            if (province > 0 && province < provToState.Length && provToState[province] == stateMapIndex)
+                candidates.Add(province);
         }
         return ChooseBase(map, candidates);
     }
@@ -606,41 +722,71 @@ public static class SupportCore
     /// at sea: Gyeonggi's air wings stood on Yeonpyeong, a dot off the North Korean coast,
     /// and drew their reach from there.
     /// </summary>
+    [ThreadStatic] private static HashSet<int> _chooseHeldScratch;
+    [ThreadStatic] private static HashSet<int> _chooseSeenScratch;
+    [ThreadStatic] private static Queue<int> _chooseQueueScratch;
+    [ThreadStatic] private static (List<int> A, List<int> B) _choosePairScratch;
+    [ThreadStatic] private static HashSet<int> _chooseOnGroundScratch;
+
     public static int ChooseBase(ProvinceTopology map, IReadOnlyList<int> candidates)
     {
         if (map is null || candidates is null || candidates.Count == 0) return -1;
         if (candidates.Count == 1) return candidates[0];
-        var held = new HashSet<int>(candidates);
-        var ground = new List<int>();
-        var seen = new HashSet<int>();
-        var queue = new Queue<int>();
-        foreach (var start in candidates)
+        var held = _chooseHeldScratch ??= new HashSet<int>();
+        var seen = _chooseSeenScratch ??= new HashSet<int>();
+        var queue = _chooseQueueScratch ??= new Queue<int>();
+        if (_choosePairScratch.A is null)
+            _choosePairScratch = (new List<int>(), new List<int>());
+        var ground = _choosePairScratch.A;
+        var run = _choosePairScratch.B;
+        var onGround = _chooseOnGroundScratch ??= new HashSet<int>();
+
+        held.Clear();
+        for (var i = 0; i < candidates.Count; i++) held.Add(candidates[i]);
+        seen.Clear();
+        queue.Clear();
+        ground.Clear();
+        run.Clear();
+        onGround.Clear();
+
+        for (var i = 0; i < candidates.Count; i++)
         {
+            var start = candidates[i];
             if (!seen.Add(start)) continue;
-            var run = new List<int>();
+            run.Clear();
             queue.Enqueue(start);
             while (queue.Count > 0)
             {
                 var province = queue.Dequeue();
                 run.Add(province);
-                foreach (var next in map.Neighbors[province])
+                var neighbors = map.Neighbors[province];
+                for (var ni = 0; ni < neighbors.Length; ni++)
+                {
+                    var next = neighbors[ni];
                     if (held.Contains(next) && seen.Add(next)) queue.Enqueue(next);
+                }
             }
-            if (run.Count > ground.Count) ground = run;
+            if (run.Count > ground.Count)
+            {
+                var tmp = ground;
+                ground = run;
+                run = tmp;
+            }
         }
         // The first city written that stands on that ground, among the leading cities of the
         // list: a base is put in a city of some standing, not in the nearest hamlet.
         var under = CityCatalog.ProvincesOf(map);
-        var onGround = new HashSet<int>(ground);
+        for (var i = 0; i < ground.Count; i++) onGround.Add(ground[i]);
         var leading = Math.Min(under.Length, CityCatalog.LeadingCount);
         for (var index = 0; index < leading; index++)
             if (onGround.Contains(under[index])) return under[index];
         var centre = Vector3.Zero;
-        foreach (var province in ground) centre += BaseDirection(map.CenterOf(province));
+        for (var i = 0; i < ground.Count; i++) centre += BaseDirection(map.CenterOf(ground[i]));
         var best = -1;
         var bestScore = float.NegativeInfinity;
-        foreach (var province in ground)
+        for (var i = 0; i < ground.Count; i++)
         {
+            var province = ground[i];
             var score = Vector3.Dot(BaseDirection(map.CenterOf(province)), centre);
             if (score <= bestScore) continue;
             best = province;
@@ -656,126 +802,160 @@ public static class SupportCore
         return new Vector3(MathF.Cos(lat) * MathF.Cos(lon), MathF.Sin(lat), MathF.Cos(lat) * MathF.Sin(lon));
     }
 
-    private static void Train(Campaign campaign)
+    private static IEnumerable<int> TrainStages(Campaign campaign)
     {
-        foreach (var order in campaign.SupportOrders.ToArray())
+        if (campaign.SupportOrders.Count == 0) yield break;
+        var orders = campaign.Caches.SupportPass.TrainOrders;
+        orders.Clear();
+        orders.AddRange(campaign.SupportOrders);
+        try
         {
-            if (!Enabled(campaign, order.TypeId)) { order.LastProcessedDay = campaign.ElapsedDays; continue; }
-            if (order.LastProcessedDay >= campaign.ElapsedDays) continue;
-            order.LastProcessedDay = campaign.ElapsedDays;
-            var nation = campaign.NationById(order.NationId);
-            if (nation is null || !SupportTypeCatalog.TryGet(order.TypeId, out var type)) { campaign.SupportOrders.Remove(order); continue; }
-            // A base overrun mid-build pauses the order rather than refunding it: the
-            // region is the point of the whole purchase, and the war can still turn.
-            if (BaseProvinceOf(campaign, nation, order.StateMapIndex) <= 0) continue;
-            order.TrainedDays++;
-            if (order.TrainedDays < order.DurationDays) continue;
-            campaign.SupportOrders.Remove(order);
-            var province = BaseProvinceOf(campaign, nation, order.StateMapIndex);
-            campaign.SupportFormations.Add(new SupportFormation
+            for (var oi = 0; oi < orders.Count; oi++)
             {
-                Id = campaign.NextSupportId++,
-                NationId = nation.Id,
-                TypeId = order.TypeId,
-                StateMapIndex = order.StateMapIndex,
-                BaseProvinceId = province,
-                ProvinceId = province,
-                Strength = 1f,
-                Experience = 0.10f,
-                Mission = MissionStandby
-            });
-            campaign.MarkStrategicChange();
-            DiagnosticLogs.Write("simulation",
-                $"SUPPORT_RAISED order={order.Id} nation={nation.Id} type={order.TypeId} state={order.StateMapIndex}");
+                var order = orders[oi];
+                if (!Enabled(campaign, order.TypeId)) { order.LastProcessedDay = campaign.ElapsedDays; continue; }
+                if (order.LastProcessedDay >= campaign.ElapsedDays) continue;
+                order.LastProcessedDay = campaign.ElapsedDays;
+                var nation = campaign.NationById(order.NationId);
+                if (nation is null || !SupportTypeCatalog.TryGet(order.TypeId, out var type)) { campaign.SupportOrders.Remove(order); continue; }
+                // A base overrun mid-build pauses the order rather than refunding it: the
+                // region is the point of the whole purchase, and the war can still turn.
+                var baseProvince = BaseProvinceOf(campaign, nation, order.StateMapIndex);
+                if (baseProvince <= 0) continue;
+                order.TrainedDays++;
+                if (order.TrainedDays < order.DurationDays) continue;
+                campaign.SupportOrders.Remove(order);
+                campaign.SupportFormations.Add(new SupportFormation
+                {
+                    Id = campaign.NextSupportId++,
+                    NationId = nation.Id,
+                    TypeId = order.TypeId,
+                    StateMapIndex = order.StateMapIndex,
+                    BaseProvinceId = baseProvince,
+                    ProvinceId = baseProvince,
+                    Strength = 1f,
+                    Experience = 0.10f,
+                    Mission = MissionStandby
+                });
+                campaign.MarkStrategicChange();
+                DiagnosticLogs.Write("simulation",
+                    $"SUPPORT_RAISED order={order.Id} nation={nation.Id} type={order.TypeId} state={order.StateMapIndex}");
+                if ((oi & 15) == 15 && oi + 1 < orders.Count && Campaign.StageOverdue()) yield return 0;
+            }
+        }
+        finally
+        {
+            orders.Clear();
         }
     }
 
-    [ThreadStatic] private static (Dictionary<int, float> Crowding, Dictionary<int, float> Used) _recoverScratch;
-
     /// <summary>Readiness again, out of the arms on the national market: a wing without planes does not fly.</summary>
-    private static void Recover(Campaign campaign)
+    private static IEnumerable<int> RecoverStages(Campaign campaign)
     {
-        Dictionary<int, float> crowding = null;
-        Dictionary<int, float> usedByState = null;
-        foreach (var formation in campaign.SupportFormations)
+        var formations = campaign.SupportFormations;
+        if (formations.Count == 0) yield break;
+        var pass = campaign.Caches.SupportPass;
+        var crowding = pass.RecoverCrowding;
+        var usedByState = pass.RecoverUsedByState;
+        var builtCrowding = false;
+        try
         {
-            var nation = campaign.NationById(formation.NationId);
-            if (nation is null || !Enabled(campaign, formation.TypeId) || Displaced(campaign, formation)) continue;
-            if (formation.Strength < 1f)
+            for (var fi = 0; fi < formations.Count; fi++)
             {
-                if (crowding is null)
+                var formation = formations[fi];
+                var nation = campaign.NationById(formation.NationId);
+                if (nation is null || !Enabled(campaign, formation.TypeId) || Displaced(campaign, formation)) continue;
+                if (formation.Strength < 1f)
                 {
-                    if (_recoverScratch.Crowding is null)
-                        _recoverScratch = (new Dictionary<int, float>(), new Dictionary<int, float>());
-                    crowding = _recoverScratch.Crowding;
-                    usedByState = _recoverScratch.Used;
-                    crowding.Clear();
-                    usedByState.Clear();
-                    foreach (var f in campaign.SupportFormations)
+                    if (!builtCrowding)
                     {
-                        if (f.Route.Count > 0 || !Enabled(campaign, f.TypeId)) continue;
-                        usedByState[f.StateMapIndex] = usedByState.GetValueOrDefault(f.StateMapIndex) + BasingOf(f.TypeId);
+                        builtCrowding = true;
+                        crowding.Clear();
+                        FillBasingUsed(campaign, usedByState);
                     }
-                    foreach (var order in campaign.SupportOrders)
-                        if (Enabled(campaign, order.TypeId))
-                            usedByState[order.StateMapIndex] = usedByState.GetValueOrDefault(order.StateMapIndex) + BasingOf(order.TypeId);
+                    if (!crowding.TryGetValue(formation.StateMapIndex, out var crowded))
+                    {
+                        var state = campaign.StateByMapIndex(formation.StateMapIndex);
+                        crowded = crowding[formation.StateMapIndex] = state is null ? 1f
+                            : CrowdingOf(CapacityOf(campaign, state), usedByState.GetValueOrDefault(state.MapIndex));
+                    }
+                    var arms = nation.Market.TryGetValue(Commodity.Arms, out var quote) ? quote.Satisfaction : 1f;
+                    var equipment = 0.50f + 0.50f * M.Clamp01(arms);
+                    var resting = formation.Mission == MissionStandby ? 1.6f : 1f;
+                    formation.Strength = M.Clamp01(formation.Strength +
+                        campaign.Defines.SupportRegenPerDay * equipment * resting * crowded * NationalModifiers.Factor(nation, "support_recovery"));
                 }
-                if (!crowding.TryGetValue(formation.StateMapIndex, out var crowded))
+                else if (formation.Strength > 1f)
                 {
-                    var state = campaign.StateByMapIndex(formation.StateMapIndex);
-                    crowded = crowding[formation.StateMapIndex] = state is null ? 1f
-                        : CrowdingOf(CapacityOf(campaign, state), usedByState.GetValueOrDefault(state.MapIndex));
+                    formation.Strength = 1f;
                 }
-                var arms = nation.Market.TryGetValue(Commodity.Arms, out var quote) ? quote.Satisfaction : 1f;
-                var equipment = 0.50f + 0.50f * M.Clamp01(arms);
-                var resting = formation.Mission == MissionStandby ? 1.6f : 1f;
-                formation.Strength = M.Clamp01(formation.Strength +
-                    campaign.Defines.SupportRegenPerDay * equipment * resting * crowded * NationalModifiers.Factor(nation, "support_recovery"));
+                // Experience drifts toward what the formation is doing, slowly, the way it does.
+                var target = formation.Mission == MissionStandby ? 0.15f : 0.45f;
+                formation.Experience = M.Lerp(formation.Experience, target, 0.002f);
+                if ((fi & 31) == 31 && fi + 1 < formations.Count && Campaign.StageOverdue()) yield return 0;
             }
-            else if (formation.Strength > 1f)
+        }
+        finally
+        {
+            if (builtCrowding)
             {
-                formation.Strength = 1f;
+                crowding.Clear();
+                usedByState.Clear();
             }
-            // Experience drifts toward what the formation is doing, slowly, the way it does.
-            var target = formation.Mission == MissionStandby ? 0.15f : 0.45f;
-            formation.Experience = M.Lerp(formation.Experience, target, 0.002f);
         }
     }
 
     /// <summary>The countries nobody plays get their missions minded: at war, everything that can
     /// work the front does; at peace, everything rests. Deliberately cheap and periodic - a
     /// full re-plan per day is a budget the war does not need spent on it.</summary>
-    private static void CommandByAir(Campaign campaign)
+    private static IEnumerable<int> CommandByAirStages(Campaign campaign)
     {
-        if (campaign.ElapsedDays % 30 != 0) return;
+        if (campaign.ElapsedDays % 30 != 0) yield break;
+        var formations = campaign.SupportFormations;
+        if (formations.Count == 0) yield break;
         // Everybody on both sides, not only the two leaders: a country that joined a war kept
         // every formation it had on standby until the war ended, while still buying missiles
         // and air defence for it by the whole coalition (LongRangeStrikes.Procure).
-        var wars = new HashSet<int>();
-        foreach (var war in Warfare.OpenWars(campaign))
+        var pass = campaign.Caches.SupportPass;
+        var wars = pass.CommandWars;
+        wars.Clear();
+        var openWars = Warfare.OpenWars(campaign);
+        for (var wi = 0; wi < openWars.Count; wi++)
         {
+            var war = openWars[wi];
             if (war.Ended) continue;
             foreach (var id in war.Side(true)) wars.Add(id);
             foreach (var id in war.Side(false)) wars.Add(id);
         }
-        Dictionary<int, bool> enemyFlies = null;
-        foreach (var formation in campaign.SupportFormations)
+        var enemyFlies = pass.CommandEnemyFlies;
+        enemyFlies.Clear();
+        try
         {
-            var nation = campaign.NationById(formation.NationId);
-            if (nation is null || nation.IsHuman) continue;
-            if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type) || !Enabled(campaign, type)) continue;
-            // Emergency evacuation is handled for ALL countries on every step, not
-            // just for AI countries on this monthly mission-planning day.
-            var atWar = wars.Contains(formation.NationId);
-            // A wing worn down over the front is pulled out to recover, and goes back when it has
-            // - with room between the two, so it does not flicker in and out every month.
-            var resting = formation.Mission == MissionStandby;
-            var fit = formation.Strength >= (resting ? 0.75f : 0.45f);
-            // A formation on the road keeps the mission it will fly on arrival; only one cut off
-            // with nowhere to go rests, because it has nothing to fly from.
-            formation.Mission = !atWar || !fit || type.Kind == SupportKind.AirDefence || formation.CutOff
-                ? MissionStandby
-                : RoleOf(campaign, nation, type, ref enemyFlies);
+            for (var fi = 0; fi < formations.Count; fi++)
+            {
+                var formation = formations[fi];
+                var nation = campaign.NationById(formation.NationId);
+                if (nation is null || nation.IsHuman) continue;
+                if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type) || !Enabled(campaign, type)) continue;
+                // Emergency evacuation is handled for ALL countries on every step, not
+                // just for AI countries on this monthly mission-planning day.
+                var atWar = wars.Contains(formation.NationId);
+                // A wing worn down over the front is pulled out to recover, and goes back when it has
+                // - with room between the two, so it does not flicker in and out every month.
+                var resting = formation.Mission == MissionStandby;
+                var fit = formation.Strength >= (resting ? 0.75f : 0.45f);
+                // A formation on the road keeps the mission it will fly on arrival; only one cut off
+                // with nowhere to go rests, because it has nothing to fly from.
+                formation.Mission = !atWar || !fit || type.Kind == SupportKind.AirDefence || formation.CutOff
+                    ? MissionStandby
+                    : RoleOf(campaign, nation, type, ref enemyFlies);
+                if ((fi & 31) == 31 && fi + 1 < formations.Count && Campaign.StageOverdue()) yield return 0;
+            }
+        }
+        finally
+        {
+            wars.Clear();
+            enemyFlies.Clear();
         }
     }
 
@@ -826,7 +1006,11 @@ public static class SupportCore
     public static float DistanceKm(Campaign campaign, int fromProvince, int toProvince)
     {
         var map = campaign.ProvinceMap;
-        if (map is null) return float.MaxValue;
+        return map is null ? float.MaxValue : DistanceKm(map, fromProvince, toProvince);
+    }
+
+    internal static float DistanceKm(ProvinceTopology map, int fromProvince, int toProvince)
+    {
         var from = map.CenterOf(fromProvince);
         var to = map.CenterOf(toProvince);
         var radians = MathF.PI / 180f;
@@ -837,6 +1021,26 @@ public static class SupportCore
         var haversine = sinLat * sinLat +
                         MathF.Cos(from.Latitude * radians) * MathF.Cos(to.Latitude * radians) * sinLon * sinLon;
         return 6371f * 2f * MathF.Asin(MathF.Min(1f, MathF.Sqrt(haversine)));
+    }
+
+    internal static float[][] NeighborEdgeKm(ProvinceTopology map) =>
+        NeighborEdgeKmTables.GetValue(map, BuildNeighborEdgeKm);
+
+    private static float[][] BuildNeighborEdgeKm(ProvinceTopology map)
+    {
+        var count = map.ProvinceCount;
+        var edges = new float[count + 1][];
+        edges[0] = Array.Empty<float>();
+        for (var p = 1; p <= count; p++)
+        {
+            var neighbors = map.Neighbors[p];
+            if (neighbors.Length == 0) { edges[p] = Array.Empty<float>(); continue; }
+            var row = new float[neighbors.Length];
+            for (var ni = 0; ni < neighbors.Length; ni++)
+                row[ni] = DistanceKm(map, p, neighbors[ni]);
+            edges[p] = row;
+        }
+        return edges;
     }
 
     /// <summary>
@@ -870,8 +1074,15 @@ public static class SupportCore
     /// <summary>Whether the formation reaches a province at all: deployed, inside the reach.</summary>
     public static bool InRange(Campaign campaign, SupportFormation formation, SupportTypeDefinition type, int province)
     {
-        if (!Enabled(campaign, type) || Displaced(campaign, formation) || province <= 0 || province > campaign.ProvinceMap.ProvinceCount) return false;
-        return DistanceKm(campaign, formation.BaseProvinceId, province) <= ReachKm(campaign, type);
+        var map = campaign.ProvinceMap;
+        if (!Enabled(campaign, type) || Displaced(campaign, formation) || province <= 0 || province > map.ProvinceCount) return false;
+        var reach = ReachKm(campaign, type);
+        // 1 degree of latitude is ~111.19 km anywhere on Earth: reject out-of-band targets
+        // before paying for spherical Sin/Cos/Asin/Sqrt in DistanceKm.
+        var from = map.CenterOf(formation.BaseProvinceId);
+        var to = map.CenterOf(province);
+        if (MathF.Abs(from.Latitude - to.Latitude) * 111.0f > reach) return false;
+        return DistanceKm(campaign, formation.BaseProvinceId, province) <= reach;
     }
 
     /// <summary>
@@ -909,17 +1120,40 @@ public static class SupportCore
         public float AirDefence;
     }
 
+    [ThreadStatic] private static HashSet<int> _reachNationsScratch;
+
     /// <summary>Sum the formations of these nations that reach the province, by what they are doing.</summary>
     public static SideReach ReachOf(Campaign campaign, IEnumerable<int> nationIds, int province)
     {
         var reach = new SideReach();
-        if (campaign.ProvinceMap is null) return reach;
-        var nations = nationIds.ToHashSet();
+        FillReachOf(campaign, nationIds, province, reach);
+        return reach;
+    }
+
+    internal static void FillReachOf(Campaign campaign, IEnumerable<int> nationIds, int province, SideReach reach)
+    {
+        reach.Fire = 0f;
+        reach.Interdiction = 0f;
+        reach.AirSuperiority = 0f;
+        reach.AirDefence = 0f;
+        if (campaign.ProvinceMap is null) return;
+        HashSet<int> nations;
+        if (nationIds is HashSet<int> existing)
+        {
+            nations = existing;
+        }
+        else
+        {
+            nations = _reachNationsScratch ??= new HashSet<int>();
+            nations.Clear();
+            foreach (var id in nationIds) nations.Add(id);
+        }
         foreach (var nationId in nations)
         {
             if (!campaign.SupportByNation.TryGetValue(nationId, out var formations)) continue;
-            foreach (var formation in formations)
+            for (var fi = 0; fi < formations.Count; fi++)
             {
+                var formation = formations[fi];
                 if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
                 if (Displaced(campaign, formation)) continue;
                 // A missile brigade covers its own ground whatever it was told; everything
@@ -938,8 +1172,42 @@ public static class SupportCore
                 }
             }
         }
-        return reach;
     }
+
+    private static void AccumulateEngagement(
+        Campaign campaign, int nationId, bool forAttacker, int province, SideReach side,
+        List<(SupportFormation Formation, SupportTypeDefinition Type, bool Attacker)> present)
+    {
+        if (!campaign.SupportByNation.TryGetValue(nationId, out var formations)) return;
+        for (var fi = 0; fi < formations.Count; fi++)
+        {
+            var formation = formations[fi];
+            if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
+            if (Displaced(campaign, formation)) continue;
+            var passive = type.Kind == SupportKind.AirDefence;
+            if (!passive && formation.Mission == MissionStandby) continue;
+            // A formation on deep strike is aiming at something else this week: it neither
+            // helps the battle nor is charged for its sky (LongRangeStrikes charges its own).
+            if (!passive && formation.Mission == MissionStrike) continue;
+            if (!InRange(campaign, formation, type, province)) continue;
+            var weight = formation.Strength * (1f + formation.Experience * 0.35f);
+            present.Add((formation, type, forAttacker));
+            if (passive)
+                side.AirDefence += type.AirDefence * weight;
+            else
+            {
+                if (formation.Mission == MissionCloseAirSupport) side.Fire += type.SupportFire * weight;
+                if (formation.Mission == MissionInterdiction) side.Interdiction += type.Interdiction * weight;
+                if (formation.Mission == MissionAirSuperiority) side.AirSuperiority += type.AirSuperiority * weight;
+            }
+        }
+    }
+
+    [ThreadStatic] private static SideReach _engAttackerScratch;
+    [ThreadStatic] private static SideReach _engDefenderScratch;
+    [ThreadStatic] private static List<(SupportFormation Formation, SupportTypeDefinition Type, bool Attacker)> _engPresentScratch;
+    [ThreadStatic] private static HashSet<int> _engAttackerSetScratch;
+    [ThreadStatic] private static HashSet<int> _engDefenderSetScratch;
 
     /// <summary>
     /// What the battle at a province is worth to each side's long-range forces, as the
@@ -955,47 +1223,43 @@ public static class SupportCore
         if (campaign.SupportByNation.Count == 0 || campaign.ProvinceMap is null)
             return (1f, 1f, 1f, 1f, 0f, 0f);
 
-        // One pass over the ENGAGED nations' formations answers both sides at once: a
-        // battle asks this every day it runs, and walking the world's whole establishment
-        // for it is a price the front cannot pay twice a day, let alone twice a pass.
-        var attacker = new SideReach();
-        var defender = new SideReach();
-        var present = new List<(SupportFormation Formation, SupportTypeDefinition Type, bool Attacker)>();
-        var attackerSet = attackerNations as HashSet<int> ?? new HashSet<int>(attackerNations);
-        var defenderSet = defenderNations as HashSet<int> ?? new HashSet<int>(defenderNations);
-        foreach (var (nationId, formations) in campaign.SupportByNation)
+        // Walk ONLY the engaged nations on each side (typically 2-6 nations) instead of
+        // scanning all 260 entries in SupportByNation, using ThreadStatic scratch objects.
+        var attacker = _engAttackerScratch ??= new SideReach();
+        var defender = _engDefenderScratch ??= new SideReach();
+        attacker.Fire = attacker.Interdiction = attacker.AirSuperiority = attacker.AirDefence = 0f;
+        defender.Fire = defender.Interdiction = defender.AirSuperiority = defender.AirDefence = 0f;
+        var present = _engPresentScratch ??= new List<(SupportFormation, SupportTypeDefinition, bool)>(16);
+        present.Clear();
+
+        HashSet<int> attackerSet;
+        if (attackerNations is HashSet<int> existingAtk) attackerSet = existingAtk;
+        else
         {
-            var forAttacker = attackerSet.Contains(nationId);
-            var forDefender = defenderSet.Contains(nationId);
-            if (!forAttacker && !forDefender) continue;
-            foreach (var formation in formations)
-            {
-                if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
-                if (Displaced(campaign, formation)) continue;
-                var passive = type.Kind == SupportKind.AirDefence;
-                if (!passive && formation.Mission == MissionStandby) continue;
-                // A formation on deep strike is aiming at something else this week: it neither
-                // helps the battle nor is charged for its sky (LongRangeStrikes charges its own).
-                if (!passive && formation.Mission == MissionStrike) continue;
-                if (!InRange(campaign, formation, type, province)) continue;
-                var weight = formation.Strength * (1f + formation.Experience * 0.35f);
-                var side = forAttacker ? attacker : defender;
-                present.Add((formation, type, forAttacker));
-                if (passive)
-                    side.AirDefence += type.AirDefence * weight;
-                else
-                {
-                    if (formation.Mission == MissionCloseAirSupport) side.Fire += type.SupportFire * weight;
-                    if (formation.Mission == MissionInterdiction) side.Interdiction += type.Interdiction * weight;
-                    if (formation.Mission == MissionAirSuperiority) side.AirSuperiority += type.AirSuperiority * weight;
-                }
-            }
+            attackerSet = _engAttackerSetScratch ??= new HashSet<int>();
+            attackerSet.Clear();
+            foreach (var id in attackerNations) attackerSet.Add(id);
         }
+        HashSet<int> defenderSet;
+        if (defenderNations is HashSet<int> existingDef) defenderSet = existingDef;
+        else
+        {
+            defenderSet = _engDefenderSetScratch ??= new HashSet<int>();
+            defenderSet.Clear();
+            foreach (var id in defenderNations) defenderSet.Add(id);
+        }
+
+        foreach (var nationId in attackerSet)
+            AccumulateEngagement(campaign, nationId, true, province, attacker, present);
+        foreach (var nationId in defenderSet)
+            if (!attackerSet.Contains(nationId))
+                AccumulateEngagement(campaign, nationId, false, province, defender, present);
         var defines = campaign.Defines;
 
         // The price of being there: each formation is charged the worst sky it met today.
-        foreach (var (formation, type, onAttack) in present)
+        for (var pi = 0; pi < present.Count; pi++)
         {
+            var (formation, type, onAttack) = present[pi];
             var threat = ThreatTo(type, formation.Mission, onAttack ? attacker : defender, onAttack ? defender : attacker);
             if (threat <= 0f) continue;
             if (!campaign.SupportExposure.TryGetValue(formation.Id, out var worst) || threat > worst)
@@ -1032,6 +1296,19 @@ public static class SupportCore
     /// size of the economy, deterministic to the digit, spread across regions with
     /// free posts instead of silently overfilling the capital.
     /// </summary>
+    private static readonly string[] InitialMajorTypes =
+    {
+        "fighter_wing", "fighter_wing", "attack_aircraft_wing", "strike_drone_group",
+        "artillery_brigade", "artillery_brigade", "mlrs_battalion", "sam_brigade", "strike_missile_brigade"
+    };
+    private static readonly string[] InitialMidTypes =
+    {
+        "fighter_wing", "strike_drone_group", "artillery_brigade", "mlrs_battalion", "sam_brigade",
+        "long_range_drone_group"
+    };
+    private static readonly string[] InitialSmallTypes = { "artillery_brigade", "recon_drone_group" };
+    private static readonly string[] InitialTinyTypes = { "artillery_brigade" };
+
     public static void EnsureInitial(Campaign campaign)
     {
         if (campaign.SupportFormations.Count > 0) return;
@@ -1046,38 +1323,55 @@ public static class SupportCore
             if (!held.TryGetValue(key, out var list)) held[key] = list = new List<int>();
             list.Add(province);
         }
-        var bases = new Dictionary<(int Nation, int State), int>();
+        var bases = new Dictionary<(int Nation, int State), int>(held.Count);
         foreach (var (key, list) in held)
             if (ChooseBase(map, list) is var chosen and > 0) bases[key] = chosen;
-        foreach (var nation in campaign.Nations)
+        var statesByNation = new Dictionary<int, List<ScenarioState>>(campaign.Nations.Count);
+        for (var si = 0; si < campaign.States.Count; si++)
         {
-            var states = campaign.States
-                .Where(candidate => candidate.NationMapIndex == nation.MapIndex)
-                .OrderByDescending(candidate => candidate.Population)
-                .ThenBy(candidate => candidate.MapIndex)
-                .ToArray();
-            if (states.Length == 0) continue;
+            var st = campaign.States[si];
+            if (!statesByNation.TryGetValue(st.NationMapIndex, out var list))
+                statesByNation[st.NationMapIndex] = list = new List<ScenarioState>(4);
+            list.Add(st);
+        }
+        foreach (var list in statesByNation.Values)
+            list.Sort(static (a, b) =>
+            {
+                var cmp = b.Population.CompareTo(a.Population);
+                return cmp != 0 ? cmp : a.MapIndex.CompareTo(b.MapIndex);
+            });
+        var usedByState = new Dictionary<int, float>();
+        if (campaign.SupportOrders.Count > 0) FillBasingUsed(campaign, usedByState);
+
+        var nations = campaign.Nations;
+        for (var ni = 0; ni < nations.Count; ni++)
+        {
+            var nation = nations[ni];
+            if (!statesByNation.TryGetValue(nation.MapIndex, out var states) || states.Count == 0) continue;
             // The deep-strike arm of 2024 is part of the opening world too: every large military
             // fielded cruise or ballistic missiles, and the middle powers one-way drones.
-            IEnumerable<string> types = nation.Gdp >= 1000f
-                ? new[] { "fighter_wing", "fighter_wing", "attack_aircraft_wing", "strike_drone_group",
-                    "artillery_brigade", "artillery_brigade", "mlrs_battalion", "sam_brigade", "strike_missile_brigade" }
-                : nation.Gdp >= 200f
-                ? new[] { "fighter_wing", "strike_drone_group", "artillery_brigade", "mlrs_battalion", "sam_brigade",
-                    "long_range_drone_group" }
-                : nation.Gdp >= 50f
-                ? new[] { "artillery_brigade", "recon_drone_group" }
-                : nation.Gdp >= 10f
-                ? new[] { "artillery_brigade" }
+            var types = nation.Gdp >= 1000f ? InitialMajorTypes
+                : nation.Gdp >= 200f ? InitialMidTypes
+                : nation.Gdp >= 50f ? InitialSmallTypes
+                : nation.Gdp >= 10f ? InitialTinyTypes
                 : Array.Empty<string>();
-            foreach (var typeId in types)
+            for (var ti = 0; ti < types.Length; ti++)
             {
+                var typeId = types[ti];
                 if (!SupportTypeCatalog.TryGet(typeId, out var type) || !Enabled(campaign, type)) continue;
                 // Spread by weight within capacity, so the world opens uncrowded: a wing takes a
                 // runway's worth of room, a battery a field's.
-                var state = states.FirstOrDefault(candidate =>
-                    BasingUsed(campaign, candidate.MapIndex) + type.Basing <= CapacityOf(campaign, candidate) &&
-                    bases.ContainsKey((nation.MapIndex, candidate.MapIndex)));
+                ScenarioState state = null;
+                for (var si = 0; si < states.Count; si++)
+                {
+                    var candidate = states[si];
+                    if (usedByState.GetValueOrDefault(candidate.MapIndex) + type.Basing <= CapacityOf(campaign, candidate) &&
+                        bases.ContainsKey((nation.MapIndex, candidate.MapIndex)))
+                    {
+                        state = candidate;
+                        break;
+                    }
+                }
                 if (state is null) break;
                 var province = bases[(nation.MapIndex, state.MapIndex)];
                 campaign.SupportFormations.Add(new SupportFormation
@@ -1092,6 +1386,7 @@ public static class SupportCore
                     Experience = nation.Gdp >= 200f ? 0.35f : 0.20f,
                     Mission = MissionStandby
                 });
+                usedByState[state.MapIndex] = usedByState.GetValueOrDefault(state.MapIndex) + type.Basing;
             }
         }
     }
@@ -1100,7 +1395,13 @@ public static class SupportCore
     public static string Validate(Campaign campaign, int issuer, int stateMapIndex, string typeId)
     {
         var nation = campaign.NationById(issuer);
-        var state = campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex);
+        ScenarioState state = stateMapIndex > 0 ? campaign.StateByMapIndex(stateMapIndex) : null;
+        if (state is null)
+        {
+            var states = campaign.States;
+            for (var i = 0; i < states.Count; i++)
+                if (states[i].MapIndex == stateMapIndex) { state = states[i]; break; }
+        }
         if (nation is null || campaign.ProvinceMap is null) return "Campaign map is not ready.";
         if (state is null || state.NationMapIndex != nation.MapIndex) return "Choose an owned region to base in.";
         if (!SupportTypeCatalog.TryGet(typeId, out var type)) return "No such formation type.";
@@ -1108,8 +1409,14 @@ public static class SupportCore
         if (BaseProvinceOf(campaign, nation, stateMapIndex) <= 0) return "That region has no controlled province.";
         // The training queue is a define now, shown in the panel; a full region is not a refusal
         // any more - it is crowding, which the readiness pays for (CrowdingOf).
-        if (campaign.SupportOrders.Count(order => order.NationId == issuer && Enabled(campaign, order.TypeId)) >=
-            Math.Max(1, campaign.Defines.SupportTrainingSlots)) return "Training capacity reached.";
+        var orders = campaign.SupportOrders;
+        var activeOrders = 0;
+        for (var i = 0; i < orders.Count; i++)
+        {
+            var order = orders[i];
+            if (order.NationId == issuer && Enabled(campaign, order.TypeId)) activeOrders++;
+        }
+        if (activeOrders >= Math.Max(1, campaign.Defines.SupportTrainingSlots)) return "Training capacity reached.";
         if (nation.Treasury < CostOf(nation, type)) return "Insufficient treasury.";
         if (nation.ManpowerReserve < type.Personnel) return "Insufficient manpower reserve.";
         return "";

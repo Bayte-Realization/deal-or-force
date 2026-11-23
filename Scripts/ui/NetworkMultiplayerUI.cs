@@ -212,6 +212,7 @@ public partial class DealOrForceGame
 
     private void OpenNetworkMultiplayer()
     {
+        EnsureScreen("network", BuildNetworkMultiplayerInterface);
         _campaign.IsPaused = true;
         _menuLayer.Visible = false;
         // The picker is lazy-built only on the single-player route. A cold direct
@@ -513,8 +514,8 @@ public partial class DealOrForceGame
         if (firstStart) PlayStrategicCue("campaign_start");
         _menuLayer.Visible = false;
         if (IsInstanceValid(_pickerLayer)) _pickerLayer.Visible = false;
-        _pauseMenuLayer.Visible = false;
-        _handoverLayer.Visible = false;
+        if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
+        if (_handoverLayer is not null) _handoverLayer.Visible = false;
         _hudLayer.Visible = true;
         UpdateNetworkHud();
         _networkStatus.Text = string.IsNullOrWhiteSpace(result.Warning) ? Tr("Campaign synchronised.") : result.Warning;

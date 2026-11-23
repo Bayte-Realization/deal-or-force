@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace DealOrForce.Simulation;
@@ -67,7 +69,69 @@ public static class NationalModifiers
         new("living_weekly", "Standard of living a week", "Added to the standard of living in every region every week, in points.", Weekly: true),
     };
 
-    private static readonly Dictionary<string, Key> ById = Keys.ToDictionary(key => key.Id, StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenDictionary<string, Key> ById =
+        Keys.ToFrozenDictionary(key => key.Id, StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenDictionary<string, int> SlotById = BuildSlotMap();
+
+    private static FrozenDictionary<string, int> BuildSlotMap()
+    {
+        var map = new Dictionary<string, int>(Keys.Count, StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < Keys.Count; i++) map[Keys[i].Id] = i;
+        return map.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static int SlotIndex(string id) => SlotById.TryGetValue(id, out var idx) ? idx : -1;
+
+    internal static readonly int SlotOutput = SlotIndex("output");
+    internal static readonly int SlotTaxEfficiency = SlotIndex("tax_efficiency");
+    internal static readonly int SlotTradeReach = SlotIndex("trade_reach");
+    internal static readonly int SlotReconstructionSpeed = SlotIndex("reconstruction_speed");
+    internal static readonly int SlotAssimilation = SlotIndex("assimilation");
+    internal static readonly int SlotSettlement = SlotIndex("settlement");
+    internal static readonly int SlotNavalSpeed = SlotIndex("naval_speed");
+    internal static readonly int SlotStabilityWeekly = SlotIndex("stability_weekly");
+    internal static readonly int SlotWarSupportWeekly = SlotIndex("war_support_weekly");
+    internal static readonly int SlotRadicalismWeekly = SlotIndex("radicalism_weekly");
+    internal static readonly int SlotLivingWeekly = SlotIndex("living_weekly");
+
+    private sealed class CompiledDictionary
+    {
+        public readonly (int Slot, float Value)[] Slotted;
+        public readonly (string Key, float Value)[] Custom;
+
+        public CompiledDictionary((int Slot, float Value)[] slotted, (string Key, float Value)[] custom)
+        {
+            Slotted = slotted;
+            Custom = custom;
+        }
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyDictionary<string, float>, CompiledDictionary> CompiledCache = new();
+    [ThreadStatic] private static Dictionary<string, float> _dynamicScratch;
+
+    private static CompiledDictionary CompileDictionary(IReadOnlyDictionary<string, float> source)
+    {
+        var slotted = new List<(int Slot, float Value)>(source.Count);
+        List<(string Key, float Value)> custom = null;
+        if (source is Dictionary<string, float> concrete)
+        {
+            foreach (var (k, v) in concrete)
+            {
+                if (SlotById.TryGetValue(k, out var slot)) slotted.Add((slot, v));
+                else (custom ??= new()).Add((k, v));
+            }
+        }
+        else
+        {
+            foreach (var (k, v) in source)
+            {
+                if (SlotById.TryGetValue(k, out var slot)) slotted.Add((slot, v));
+                else (custom ??= new()).Add((k, v));
+            }
+        }
+        return new CompiledDictionary(slotted.ToArray(), custom is null ? Array.Empty<(string, float)>() : custom.ToArray());
+    }
 
     public static bool Knows(string id) => id is not null && ById.ContainsKey(id);
 
@@ -89,13 +153,40 @@ public static class NationalModifiers
         return totals.TryGetValue(key, out var value) ? value : 0f;
     }
 
+    internal static float OfSlot(Nation nation, int slot)
+    {
+        if (nation is null || (uint)slot >= (uint)Keys.Count) return 0f;
+        var slots = nation.ModifierSlots;
+        if (slots is null || nation.ModifierTotals is null || System.Threading.Volatile.Read(ref nation.ModifierTotalsDirty))
+        {
+            lock (nation.ModifierGate)
+            {
+                EnsureBuiltLocked(nation);
+                slots = nation.ModifierSlots;
+            }
+        }
+        return slots is not null && (uint)slot < (uint)slots.Length ? slots[slot] : 0f;
+    }
+
+    internal static float FactorSlot(Nation nation, int slot) => MathF.Max(0.1f, 1f + OfSlot(nation, slot));
+
+    private static void SyncSlots(Dictionary<string, float> totals, float[] slots)
+    {
+        Array.Clear(slots);
+        foreach (var (k, v) in totals)
+            if (SlotById.TryGetValue(k, out var slot)) slots[slot] = v;
+    }
+
     private static Dictionary<string, float> EnsureBuiltLocked(Nation nation)
     {
-        if (nation.ModifierTotals is not null && !System.Threading.Volatile.Read(ref nation.ModifierTotalsDirty))
+        if (nation.ModifierTotals is not null && nation.ModifierSlots is not null &&
+            !System.Threading.Volatile.Read(ref nation.ModifierTotalsDirty))
             return nation.ModifierTotals;
         var next = nation._modifierSwap ?? new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-        next.Clear();
-        Fill(next, nation);
+        var nextSlots = nation._modifierSlotSwap ?? new float[Keys.Count];
+        Fill(next, nextSlots, nation);
+        nation._modifierSlotSwap = nation.ModifierSlots;
+        nation.ModifierSlots = nextSlots;
         nation._modifierSwap = nation.ModifierTotals;
         nation.ModifierTotals = next;
         unchecked { nation.ModifierTotalsVersion++; }
@@ -124,6 +215,7 @@ public static class NationalModifiers
         foreach (var source in ParliamentaryPolitics.Sources(nation)) yield return source;
         foreach (var source in PoliticalPolicies.Sources(nation)) yield return source;
         foreach (var source in Rulers.Sources(nation)) yield return source;
+        foreach (var source in GrandProjects.Sources(nation)) yield return source;
         foreach (var id in nation.Technologies)
             if (TechnologyCatalog.Of(id) is { } technology && technology.Effects.Count > 0)
                 yield return (technology.Name, technology.Effects);
@@ -145,8 +237,8 @@ public static class NationalModifiers
         // countries is the collector's whole budget. Values are refilled from scratch, so
         // the sum is exactly what a new dictionary would have held.
         var totals = nation.ModifierTotals ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-        totals.Clear();
-        Fill(totals, nation);
+        var slots = nation.ModifierSlots ??= new float[Keys.Count];
+        Fill(totals, slots, nation);
         unchecked { nation.ModifierTotalsVersion++; }
         System.Threading.Volatile.Write(ref nation.ModifierTotalsDirty, false);
         return totals;
@@ -154,40 +246,92 @@ public static class NationalModifiers
 
     private static void Fill(Dictionary<string, float> totals, Nation nation)
     {
-        static void Add(Dictionary<string, float> totals, IReadOnlyDictionary<string, float> modifiers)
+        var scratchSlots = new float[Keys.Count];
+        Fill(totals, scratchSlots, nation);
+    }
+
+    private static void Fill(Dictionary<string, float> totals, float[] slots, Nation nation)
+    {
+        totals.Clear();
+        Array.Clear(slots);
+        ulong slotMask = 0;
+        var scratch = _dynamicScratch ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        scratch.Clear();
+
+        void DrainScratch()
+        {
+            if (scratch.Count == 0) return;
+            foreach (var (key, value) in scratch)
+            {
+                if (SlotById.TryGetValue(key, out var slot))
+                {
+                    slots[slot] += value;
+                    if ((uint)slot < 64u) slotMask |= 1UL << slot;
+                }
+                else
+                {
+                    CollectionsMarshal.GetValueRefOrAddDefault(totals, key, out _) += value;
+                }
+            }
+            scratch.Clear();
+        }
+
+        void AddCompiled(IReadOnlyDictionary<string, float> modifiers)
         {
             if (modifiers is null || modifiers.Count == 0) return;
-            // Walked as the dictionary it nearly always is: through the interface every walk
-            // boxed an enumerator, thirty sources a country a day. Same entries, same order.
-            if (modifiers is Dictionary<string, float> concrete)
+            var compiled = CompiledCache.GetValue(modifiers, static m => CompileDictionary(m));
+            var slotted = compiled.Slotted;
+            for (var i = 0; i < slotted.Length; i++)
             {
-                foreach (var (key, value) in concrete)
-                    totals[key] = totals.GetValueOrDefault(key) + value;
-                return;
+                var entry = slotted[i];
+                slots[entry.Slot] += entry.Value;
+                if ((uint)entry.Slot < 64u) slotMask |= 1UL << entry.Slot;
             }
-            foreach (var (key, value) in modifiers)
-                totals[key] = totals.GetValueOrDefault(key) + value;
+            var custom = compiled.Custom;
+            for (var i = 0; i < custom.Length; i++)
+            {
+                var entry = custom[i];
+                CollectionsMarshal.GetValueRefOrAddDefault(totals, entry.Key, out _) += entry.Value;
+            }
         }
-        NationalCourses.AddTo(totals, nation);
-        UnionCohesion.AddTo(totals, nation);
-        DemographicCycle.AddTo(totals, nation);
+
+        NationalCourses.AddTo(scratch, nation);
+        UnionCohesion.AddTo(scratch, nation);
+        DemographicCycle.AddTo(scratch, nation);
         // Same-shelf books share a ceiling here, on this sum. Sources still names each book whole.
-        TacticalDoctrines.AddTo(totals, nation);
-        if (StrategicDoctrines.Of(nation) is { } stratDoc) Add(totals, stratDoc.Modifiers);
-        ParliamentaryPolitics.AddTo(totals, nation);
+        TacticalDoctrines.AddTo(scratch, nation);
+        DrainScratch();
+        if (StrategicDoctrines.Of(nation) is { } stratDoc) AddCompiled(stratDoc.Modifiers);
+        ParliamentaryPolitics.AddTo(scratch, nation);
+        DrainScratch();
         if (nation.LawsActive)
             foreach (var category in PoliticalPolicyCatalog.NationalCategories)
-                if (PoliticalPolicies.Effective(nation, category) is { } law) Add(totals, law.Modifiers);
+                if (PoliticalPolicies.Effective(nation, category) is { } law) AddCompiled(law.Modifiers);
         if (nation.AgendasActive && nation.Agenda is { Completed: false } agenda &&
-            PoliticalPolicyCatalog.Find(agenda.Id, true) is { } definition) Add(totals, definition.Modifiers);
-        Rulers.AddTo(totals, nation);
+            PoliticalPolicyCatalog.Find(agenda.Id, true) is { } definition) AddCompiled(definition.Modifiers);
+        Rulers.AddTo(scratch, nation);
+        GrandProjects.AddTo(scratch, nation);
+        DrainScratch();
         foreach (var id in nation.Technologies)
-            if (TechnologyCatalog.Of(id) is { } technology) Add(totals, technology.Effects);
+            if (TechnologyCatalog.Of(id) is { } technology) AddCompiled(technology.Effects);
         foreach (var active in nation.Modifiers)
-            if (ModifierCatalog.Get(active.Id) is { } spirit) Add(totals, spirit.Modifiers);
-        if (GovernmentCatalog.Of(nation.Government) is { } government) Add(totals, government.Modifiers);
-        if (IdeologyCatalog.Of(nation.Ideology) is { } ideology) Add(totals, ideology.Modifiers);
-        if (GovernmentFocusCatalog.Of(nation.GovernmentFocus) is { } focus) Add(totals, focus.Modifiers);
+            if (ModifierCatalog.Get(active.Id) is { } spirit) AddCompiled(spirit.Modifiers);
+        if (GovernmentCatalog.Of(nation.Government) is { } government) AddCompiled(government.Modifiers);
+        if (IdeologyCatalog.Of(nation.Ideology) is { } ideology) AddCompiled(ideology.Modifiers);
+        if (GovernmentFocusCatalog.Of(nation.GovernmentFocus) is { } focus) AddCompiled(focus.Modifiers);
+
+        var remaining = slotMask;
+        while (remaining != 0UL)
+        {
+            var bit = System.Numerics.BitOperations.TrailingZeroCount(remaining);
+            remaining &= remaining - 1UL;
+            totals[Keys[bit].Id] = slots[bit];
+        }
+        if (Keys.Count > 64)
+        {
+            for (var i = 64; i < Keys.Count; i++)
+                if (slots[i] != 0f) totals[Keys[i].Id] = slots[i];
+        }
     }
 
     /// <summary>
@@ -203,9 +347,9 @@ public static class NationalModifiers
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(NationalModifiers))) yield break;
-        using (SimProfiler.Measure("  mod:policies")) PoliticalPolicies.Tick(campaign);
+        foreach (var _ in PoliticalPolicies.TickStages(campaign)) yield return 0;
         using (SimProfiler.Measure("  mod:parliament")) ParliamentaryPolitics.Tick(campaign);
-        yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
         // The sums first, every living country's side by side, then the weekly keys paid in the
         // order of the list on this thread (DeterministicParallel). Splitting the old loop in two
         // changes nothing it read: a country's sum is read off its own laws, books, cabinet,
@@ -220,22 +364,32 @@ public static class NationalModifiers
         Rulers.Found(campaign);
         var living = campaign.ActiveNations;
         using (SimProfiler.Measure("  mod:nations"))
-            DeterministicParallel.For(campaign, 0, living.Count, index => Build(living[index]));
-        yield return 0;
+        {
+            if (living.Count >= 32 && DeterministicParallel.Enabled(campaign))
+                DeterministicParallel.ForRange(campaign, 0, living.Count, (from, to) =>
+                {
+                    for (var i = from; i < to; i++) Build(living[i]);
+                }, minItems: 16);
+            else
+                for (var i = 0; i < living.Count; i++) Build(living[i]);
+        }
+        if (Campaign.StageOverdue()) yield return 0;
         var ticked = 0;
         for (var index = 0; index < living.Count; index++)
         {
-            if (++ticked % 96 == 0) yield return 0;
+            if (++ticked % 96 == 0 && Campaign.StageOverdue()) yield return 0;
             var nation = living[index];
-            var stability = Of(nation, "stability_weekly");
-            var support = Of(nation, "war_support_weekly");
-            var radicalism = Of(nation, "radicalism_weekly");
-            var livingWeekly = Of(nation, "living_weekly");
+            var stability = OfSlot(nation, SlotStabilityWeekly);
+            var support = OfSlot(nation, SlotWarSupportWeekly);
+            var radicalism = OfSlot(nation, SlotRadicalismWeekly);
+            var livingWeekly = OfSlot(nation, SlotLivingWeekly);
             if (stability != 0f) nation.Stability = M.Clamp(nation.Stability + stability / 7f, 0.10f, 0.98f);
             if (support != 0f) nation.WarSupport = M.Clamp01(nation.WarSupport + support / 7f);
             if (radicalism == 0f && livingWeekly == 0f) continue;
-            foreach (var state in campaign.StatesOf(nation))
+            var states = campaign.StatesOf(nation);
+            for (var si = 0; si < states.Length; si++)
             {
+                var state = states[si];
                 if (radicalism != 0f) state.Radicalism = M.Clamp01(state.Radicalism + radicalism / 7f);
                 if (livingWeekly != 0f) state.StandardOfLiving = M.Clamp01(state.StandardOfLiving + livingWeekly / 7f);
             }
@@ -310,6 +464,8 @@ public sealed partial class Nation
     /// <summary>What <see cref="NationalModifiers"/> added up for this country, until a source changes. Not saved.</summary>
     internal Dictionary<string, float> ModifierTotals;
     internal Dictionary<string, float> _modifierSwap;
+    internal float[] ModifierSlots;
+    internal float[] _modifierSlotSwap;
     internal bool ModifierTotalsDirty;
 
     /// <summary>

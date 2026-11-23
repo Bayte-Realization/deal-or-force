@@ -120,6 +120,21 @@ public static class EconomicExposure
         sellers[route.SellerId] = sellers.GetValueOrDefault(route.SellerId) + route.Volume;
     }
 
+    private static void AccumulateEligibleRoute(Campaign campaign, int buyerId, TradeRoute route,
+        ulong eligibleMask, bool checkOverflow, Dictionary<Commodity, Dictionary<int, double>> totals,
+        List<Dictionary<int, double>> used)
+    {
+        var idx = (int)route.Commodity;
+        if (!checkOverflow && ((uint)idx >= 64u || (eligibleMask & (1UL << idx)) == 0)) return;
+        if (route.BuyerId != buyerId || route.SellerId == buyerId ||
+            !float.IsFinite(route.Volume) || route.Volume <= 0f ||
+            campaign.NationById(route.SellerId) is null) return;
+        if (!totals.TryGetValue(route.Commodity, out var sellers))
+            totals[route.Commodity] = sellers = new Dictionary<int, double>();
+        if (sellers.Count == 0) used.Add(sellers);
+        sellers[route.SellerId] = sellers.GetValueOrDefault(route.SellerId) + route.Volume;
+    }
+
     public static Row[] Read(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null) return Array.Empty<Row>();
@@ -176,10 +191,42 @@ public static class EconomicExposure
 
     internal static bool TryPickHedgeCandidate(Campaign campaign, Nation nation, float line, float shortAt,
         Dictionary<string, int> decisionAvailableDay, int elapsedDays, Func<Commodity, string> keyOf,
-        out HedgeCandidate candidate)
+        out HedgeCandidate candidate) =>
+        TryPickHedgeCandidateCore(campaign, nation, line, shortAt, decisionAvailableDay, elapsedDays,
+            ReadOnlySpan<string>.Empty, keyOf, out candidate);
+
+    internal static bool TryPickHedgeCandidate(Campaign campaign, Nation nation, float line, float shortAt,
+        Dictionary<string, int> decisionAvailableDay, int elapsedDays, ReadOnlySpan<string> keysByCommodity,
+        out HedgeCandidate candidate) =>
+        TryPickHedgeCandidateCore(campaign, nation, line, shortAt, decisionAvailableDay, elapsedDays,
+            keysByCommodity, null, out candidate);
+
+    private static bool TryPickHedgeCandidateCore(Campaign campaign, Nation nation, float line, float shortAt,
+        Dictionary<string, int> decisionAvailableDay, int elapsedDays, ReadOnlySpan<string> keysByCommodity,
+        Func<Commodity, string> keyOf, out HedgeCandidate candidate)
     {
         candidate = default;
         if (campaign is null || nation is null) return false;
+
+        // First mark which commodities are even hedge candidates before touching TradeRoutes.
+        ulong eligibleMask = 0;
+        var hasOverflow = false;
+        foreach (var quote in nation.Market.Values)
+        {
+            if (!float.IsFinite(quote.Demand) || quote.Demand <= .001f ||
+                !float.IsFinite(quote.Imports) || quote.Imports <= .001f) continue;
+            var shortOf = float.IsFinite(quote.Satisfaction) && quote.Satisfaction < shortAt;
+            if (!shortOf && quote.Imports / quote.Demand < 0.5f) continue;
+            var idx = (int)quote.Commodity;
+            var key = (uint)idx < (uint)keysByCommodity.Length
+                ? keysByCommodity[idx]
+                : keyOf?.Invoke(quote.Commodity);
+            if (!string.IsNullOrEmpty(key) && decisionAvailableDay.GetValueOrDefault(key) > elapsedDays) continue;
+            if ((uint)idx < 64u) eligibleMask |= 1UL << idx;
+            else hasOverflow = true;
+        }
+        if (eligibleMask == 0 && !hasOverflow) return false;
+
         var scratch = ScratchOf();
         var totals = scratch.Totals;
         var used = scratch.Used;
@@ -190,13 +237,13 @@ public static class EconomicExposure
             {
                 if (filed is not null)
                     for (var i = 0; i < filed.Count; i++)
-                        AccumulateRoute(campaign, nation.Id, filed[i], totals, used);
+                        AccumulateEligibleRoute(campaign, nation.Id, filed[i], eligibleMask, hasOverflow, totals, used);
             }
             else
             {
                 var routes = campaign.TradeRoutes;
                 for (var i = 0; i < routes.Count; i++)
-                    AccumulateRoute(campaign, nation.Id, routes[i], totals, used);
+                    AccumulateEligibleRoute(campaign, nation.Id, routes[i], eligibleMask, hasOverflow, totals, used);
             }
         }
 
@@ -204,11 +251,19 @@ public static class EconomicExposure
         var bestShare = 0f;
         foreach (var quote in nation.Market.Values)
         {
+            var idx = (int)quote.Commodity;
+            if (!hasOverflow && ((uint)idx >= 64u || (eligibleMask & (1UL << idx)) == 0)) continue;
             if (!float.IsFinite(quote.Demand) || quote.Demand <= .001f ||
                 !float.IsFinite(quote.Imports) || quote.Imports <= .001f) continue;
-            if (decisionAvailableDay.GetValueOrDefault(keyOf(quote.Commodity)) > elapsedDays) continue;
             var shortOf = float.IsFinite(quote.Satisfaction) && quote.Satisfaction < shortAt;
             if (!shortOf && quote.Imports / quote.Demand < 0.5f) continue;
+            if (hasOverflow)
+            {
+                var key = (uint)idx < (uint)keysByCommodity.Length
+                    ? keysByCommodity[idx]
+                    : keyOf?.Invoke(quote.Commodity);
+                if (!string.IsNullOrEmpty(key) && decisionAvailableDay.GetValueOrDefault(key) > elapsedDays) continue;
+            }
 
             var topId = -1;
             var topVol = 0f;

@@ -168,6 +168,7 @@ public static class WarEmergency
     }
 
     [ThreadStatic] private static List<int> _unheldPostsScratch;
+    [ThreadStatic] private static List<Army> _rushArmiesScratch;
 
     private static int Reinforce(Campaign campaign, Nation nation, StrategicWar war, int budget)
     {
@@ -180,13 +181,18 @@ public static class WarEmergency
             if (!Held.Contains(province)) posts.Add(province);
         }
         posts.Sort();
+        var allArmies = campaign.Armies;
         for (var pi = 0; pi < posts.Count; pi++)
         {
             var post = posts[pi];
             if (used >= budget) break;
-            Candidates.Clear();
-            foreach (var army in campaign.Armies)
+            Army target = null;
+            var bestMilitia = int.MaxValue;
+            var bestPriority = int.MaxValue;
+            var bestDistance = float.MaxValue;
+            for (var ai = 0; ai < allArmies.Count; ai++)
             {
+                var army = allArmies[ai];
                 if (army.NationId != nation.Id || army.InBattle || army.IsMoving || army.SupportOnly ||
                     army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 || army.DirectOrder ||
                     RepostedToday.Contains(army.Id) || army.FrontLineId >= 0 ||
@@ -197,15 +203,24 @@ public static class WarEmergency
                 // A division already attacking another war is not a reserve; a formation
                 // standing in reserve or belonging to no war is exactly what is needed.
                 if (army.AssignedWarId >= 0 && army.AssignedWarId != war.Id) continue;
-                Candidates.Add(army);
+
+                var militiaRank = army.TemplateId == MilitiaCore.TemplateId ? 1 : 0;
+                if (militiaRank > bestMilitia) continue;
+                var priority = army.AssignedWarId == war.Id && army.OrderKind == ArmyOrder.ReserveFront ? 0 :
+                    army.AssignedWarId < 0 ? 1 : 2;
+                if (militiaRank == bestMilitia && priority > bestPriority) continue;
+                var distance = Distance(campaign, army.ProvinceId, post);
+                if (militiaRank == bestMilitia && priority == bestPriority)
+                {
+                    if (distance > bestDistance) continue;
+                    if (distance == bestDistance && target is not null && army.Id >= target.Id) continue;
+                }
+                target = army;
+                bestMilitia = militiaRank;
+                bestPriority = priority;
+                bestDistance = distance;
             }
-            if (Candidates.Count == 0) break;
-            var target = Candidates
-                .OrderBy(army => army.TemplateId == MilitiaCore.TemplateId ? 1 : 0)
-                .ThenBy(army => army.AssignedWarId == war.Id && army.OrderKind == ArmyOrder.ReserveFront ? 0 :
-                    army.AssignedWarId < 0 ? 1 : 2)
-                .ThenBy(army => Distance(campaign, army.ProvinceId, post))
-                .ThenBy(army => army.Id).First();
+            if (target is null) break;
             new SetArmyOrderCommand
             {
                 IssuerId = nation.Id, ArmyId = target.Id, WarId = war.Id,
@@ -226,10 +241,22 @@ public static class WarEmergency
     /// <summary>Take one undefended enemy province beside this front with a reserve already there.</summary>
     private static int RushGap(Campaign campaign, Nation nation, StrategicWar war)
     {
-        foreach (var army in campaign.Armies.OrderBy(candidate => candidate.Id))
+        var candidates = _rushArmiesScratch ??= new List<Army>();
+        candidates.Clear();
+        var armies = campaign.Armies;
+        for (var i = 0; i < armies.Count; i++)
         {
+            var army = armies[i];
             if (army.NationId != nation.Id || army.TemplateId == MilitiaCore.TemplateId ||
                 RepostedToday.Contains(army.Id)) continue;
+            candidates.Add(army);
+        }
+        if (candidates.Count == 0) return 0;
+        if (candidates.Count > 1)
+            candidates.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var army = candidates[i];
             var next = Warfare.ReserveOpening(campaign, war, army);
             if (next <= 0) continue;
             var command = new MoveArmyCommand
@@ -245,10 +272,7 @@ public static class WarEmergency
 
     /// <summary>
     /// The last resort: a country that cannot raise one more division puts the people of a
-    /// threatened region under arms on that region's own part of the line. Only then. Posted
-    /// whenever a post was open, a few thousand armed villagers made the post count as held, so
-    /// no division was sent there, the line broke where they stood and the break became a pocket:
-    /// Ukraine was gone inside a year on every seed with them and held on every seed without.
+    /// threatened region under arms on that region's own part of the line.
     /// </summary>
     private static int EmergencyMilitia(Campaign campaign, Nation nation, StrategicWar war)
     {
@@ -256,8 +280,13 @@ public static class WarEmergency
         if (nation.ManpowerReserve >= MilitaryBootstrap.DivisionSize) return 0;
         var weights = MilitiaCore.Weights;
         var topology = campaign.ProvinceMap;
-        var standing = campaign.Armies.Count(army => army.NationId == nation.Id &&
-            army.TemplateId == MilitiaCore.TemplateId);
+        var standing = 0;
+        var armies = campaign.Armies;
+        for (var i = 0; i < armies.Count; i++)
+        {
+            var army = armies[i];
+            if (army.NationId == nation.Id && army.TemplateId == MilitiaCore.TemplateId) standing++;
+        }
         foreach (var post in Posts)
         {
             if (post <= 0 || Held.Contains(post)) continue;

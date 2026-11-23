@@ -16,7 +16,7 @@
     "population": 8277096,
     "urbanization": 0.68,
     "cultures": { "han": 0.7, "hakka": 0.155, "cantonese": 0.1, "polynesian": 0.023, "vietnamese": 0.008, "javanese": 0.006, "tagalog": 0.005, "thai": 0.003 },
-    "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "buildings": { "Agriculture": 4, "CivilianIndustry": 2, "Infrastructure": 3, "Shipyard": 2, "Port": 2, "ArmsIndustry": 1, "Barracks": 1 },
     "resources": { "Food": 0.911, "Coal": 0.397, "Oil": 0.662, "IronOre": 0.163, "RareEarths": 0.052, "NaturalGas": 0.279, "Timber": 1.551, "Bauxite": 0.063, "Uranium": 0.013 }
   },
   // Nantou
@@ -24,7 +24,7 @@
     "population": 15291282,
     "urbanization": 0.86,
     "cultures": { "han": 0.7, "hakka": 0.155, "cantonese": 0.1, "polynesian": 0.023, "vietnamese": 0.008, "javanese": 0.006, "tagalog": 0.005, "thai": 0.003 },
-    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 2, "Infrastructure": 4, "ElectronicsPlant": 2, "ArmsIndustry": 1, "Barracks": 2, "Port": 1 },
     "resources": { "Food": 1.496, "Coal": 0.321, "Oil": 0.709, "IronOre": 0.343, "RareEarths": 0.06, "NaturalGas": 0.749, "Timber": 1.57, "Bauxite": 0.13, "Uranium": 0.019 }
   }
 }

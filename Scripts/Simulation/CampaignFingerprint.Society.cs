@@ -244,6 +244,11 @@ public static partial class CampaignFingerprint
             MixText(ref hash, "political_cohort");
             MixFloat(ref hash, state.PoliticalDivergence); MixFloat(ref hash, state.LawApproval); MixFloat(ref hash, state.GovernmentApproval);
         }
+        if (state.PoliticalBlocs is { Length: 5 })
+        {
+            MixText(ref hash, "political_blocs");
+            for (var i = 0; i < 5; i++) MixFloat(ref hash, state.PoliticalBlocs[i]);
+        }
     }
 
     private static void MixPartisansAndSecessionEvents(Campaign campaign, ref ulong hash)

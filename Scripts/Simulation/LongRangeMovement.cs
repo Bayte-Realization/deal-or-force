@@ -78,7 +78,7 @@ public sealed partial class Defines
 /// Every day of movement is resolved in formation id order, and every search breaks its ties
 /// on province id, so two peers given the same orders see the same columns on the same roads.
 /// </summary>
-public static class LongRangeMovement
+public static partial class LongRangeMovement
 {
     /// <summary>Telemetry for the bench (SimBench --long-range): read, never steered by.</summary>
     public static int AiOrders, AiOrdersTowardFront, AiCityCover, Withdrawals, CutOffs, Overruns;
@@ -104,6 +104,9 @@ public static class LongRangeMovement
             _any = any;
         }
 
+        public int WordCount => _any ? (_limit + 63) >> 6 : 0;
+        public ReadOnlySpan<ulong> Words => _any ? _words.AsSpan(0, WordCount) : ReadOnlySpan<ulong>.Empty;
+
         public bool Contains(int province) =>
             _any && (uint)province < (uint)_limit && (_words[province >> 6] & (1UL << (province & 63))) != 0;
     }
@@ -123,7 +126,27 @@ public static class LongRangeMovement
         public int HostileLimit;
         public ulong[] BordersCheckedBits;
         public ulong[] BordersTrueBits;
+        private bool _bordersDirty;
         public BattleSet Battles = BattleSet.Empty;
+        public ulong PassableHash;
+        public ulong HostileHash;
+
+        public void ResetForReuse()
+        {
+            Campaign = null;
+            Nation = null;
+            Map = null;
+            Controls = null;
+            Passable.Clear();
+            Hostile.Clear();
+            PassableLimit = 0;
+            HostileLimit = 0;
+            PassableHash = 0;
+            HostileHash = 0;
+            _bordersDirty = true;
+            Battles = BattleSet.Empty;
+            _shut = null;
+        }
 
         public bool IsPassable(ushort code) =>
             (uint)code < (uint)PassableLimit && (PassableBits[code >> 6] & (1UL << (code & 63))) != 0;
@@ -142,11 +165,18 @@ public static class LongRangeMovement
         public bool BordersEnemy(int province)
         {
             if (!Valid(province) || HostileLimit <= 0) return false;
-            if (BordersCheckedBits is null)
+            var wordsNeeded = (Map.ProvinceCount + 65) >> 6;
+            if (BordersCheckedBits is null || BordersCheckedBits.Length < wordsNeeded)
             {
-                var wordsNeeded = (Map.ProvinceCount + 65) >> 6;
                 BordersCheckedBits = new ulong[wordsNeeded];
                 BordersTrueBits = new ulong[wordsNeeded];
+                _bordersDirty = false;
+            }
+            else if (_bordersDirty)
+            {
+                Array.Clear(BordersCheckedBits, 0, wordsNeeded);
+                Array.Clear(BordersTrueBits, 0, wordsNeeded);
+                _bordersDirty = false;
             }
             var w = province >> 6;
             var mask = 1UL << (province & 63);
@@ -190,30 +220,39 @@ public static class LongRangeMovement
     [ThreadStatic] private static Dictionary<int, int> _settleSeatScratch;
 
     internal static Ground GroundOf(Campaign c, int nationId, Dictionary<int, Ground> cache = null, BattleSet battles = null, bool[] activeControllers = null)
+        => GroundOf(c, nationId, cache, battles, pool: null);
+
+    internal static Ground GroundOf(Campaign c, int nationId, Dictionary<int, Ground> cache, BattleSet battles, SupportStepCache pool)
     {
         if (cache is not null && cache.TryGetValue(nationId, out var known)) return known;
         var nation = c.NationById(nationId);
         var map = c.ProvinceMap;
         if (nation is null || map is null) return null;
-        var ground = new Ground
-        {
-            Campaign = c, Nation = nation, Map = map,
-            Controls = c.ProvinceController ?? map.ProvinceToNation,
-            Battles = battles ?? BattleProvinces(c)
-        };
+        var ground = pool is not null ? pool.RentGround() : new Ground();
+        ground.Campaign = c;
+        ground.Nation = nation;
+        ground.Map = map;
+        ground.Controls = c.ProvinceController ?? map.ProvinceToNation;
+        ground.Battles = battles ?? BattleProvinces(c);
         MilitaryAccess.FillControllers(c, nationId, ground.Passable);
         // The same enemies MilitaryAccess.Hostile names - everybody across a live war, and anybody
         // the relation says we are at war with - gathered once rather than asked pair by pair.
-        foreach (var war in Warfare.LiveWars(c))
+        var liveWars = Warfare.LiveWars(c);
+        for (var wi = 0; wi < liveWars.Count; wi++)
         {
+            var war = liveWars[wi];
             if (war.Ended || !war.Involves(nationId)) continue;
             foreach (var enemy in war.EnemiesOf(nationId))
                 if (c.NationById(enemy) is { MapIndex: > 0 } foe) ground.Hostile.Add((ushort)foe.MapIndex);
         }
-        foreach (var other in c.Nations)
+        var nations = c.ActiveNations;
+        for (var ni = 0; ni < nations.Count; ni++)
+        {
+            var other = nations[ni];
             if (other.Id != nationId && other.MapIndex > 0 &&
                 CampaignDiplomacy.Peek(c, nationId, other.Id)?.Stance == DiplomaticStance.AtWar)
                 ground.Hostile.Add((ushort)other.MapIndex);
+        }
         // Hostile ground is never passable, whatever an access grant once said.
         ground.Passable.ExceptWith(ground.Hostile);
         if (ground.Passable.Count > 0)
@@ -221,7 +260,9 @@ public static class LongRangeMovement
             var maxP = 0;
             foreach (var code in ground.Passable) if (code > maxP) maxP = code;
             ground.PassableLimit = maxP + 1;
-            ground.PassableBits = new ulong[(maxP + 64) >> 6];
+            var wordsNeeded = (maxP + 64) >> 6;
+            if (ground.PassableBits.Length < wordsNeeded) ground.PassableBits = new ulong[wordsNeeded];
+            else Array.Clear(ground.PassableBits, 0, wordsNeeded);
             foreach (var code in ground.Passable) ground.PassableBits[code >> 6] |= 1UL << (code & 63);
         }
         if (ground.Hostile.Count > 0)
@@ -229,11 +270,40 @@ public static class LongRangeMovement
             var maxH = 0;
             foreach (var code in ground.Hostile) if (code > maxH) maxH = code;
             ground.HostileLimit = maxH + 1;
-            ground.HostileBits = new ulong[(maxH + 64) >> 6];
+            var wordsNeeded = (maxH + 64) >> 6;
+            if (ground.HostileBits.Length < wordsNeeded) ground.HostileBits = new ulong[wordsNeeded];
+            else Array.Clear(ground.HostileBits, 0, wordsNeeded);
             foreach (var code in ground.Hostile) ground.HostileBits[code >> 6] |= 1UL << (code & 63);
         }
+        ground.PassableHash = HashSortedCodes(ground.Passable);
+        ground.HostileHash = HashSortedCodes(ground.Hostile);
         if (cache is not null) cache[nationId] = ground;
         return ground;
+    }
+
+    private const ulong FnvOffsetBasis64 = 14695981039346656037UL;
+    private const ulong FnvPrime64 = 1099511628211UL;
+    [ThreadStatic] private static List<ushort> _hashCodesScratch;
+
+    private static ulong HashSortedCodes(HashSet<ushort> codes)
+    {
+        var hash = FnvOffsetBasis64;
+        if (codes.Count == 0) return hash;
+        var list = _hashCodesScratch ??= new List<ushort>(64);
+        list.Clear();
+        foreach (var code in codes) list.Add(code);
+        list.Sort();
+        hash ^= (uint)list.Count;
+        hash *= FnvPrime64;
+        for (var i = 0; i < list.Count; i++)
+        {
+            var c = list[i];
+            hash ^= (byte)c;
+            hash *= FnvPrime64;
+            hash ^= (byte)(c >> 8);
+            hash *= FnvPrime64;
+        }
+        return hash;
     }
 
     internal static BattleSet BattleProvinces(Campaign c)
@@ -249,6 +319,31 @@ public static class LongRangeMovement
         if (maxP <= 0) return BattleSet.Empty;
         var limit = maxP + 1;
         var words = new ulong[(limit + 63) >> 6];
+        for (var i = 0; i < count; i++)
+        {
+            var b = battles[i];
+            if (!b.Ended && b.ProvinceId > 0)
+                words[b.ProvinceId >> 6] |= 1UL << (b.ProvinceId & 63);
+        }
+        return new BattleSet(words, limit, true);
+    }
+
+    private static BattleSet BattleProvincesPooled(Campaign c, SupportStepCache pool)
+    {
+        var battles = c.Battles;
+        var count = battles.Count;
+        var maxP = 0;
+        for (var i = 0; i < count; i++)
+        {
+            var b = battles[i];
+            if (!b.Ended && b.ProvinceId > maxP) maxP = b.ProvinceId;
+        }
+        if (maxP <= 0) return BattleSet.Empty;
+        var limit = maxP + 1;
+        var wordsNeeded = (limit + 63) >> 6;
+        if (pool.BattleWords.Length < wordsNeeded) pool.BattleWords = new ulong[wordsNeeded + 16];
+        else Array.Clear(pool.BattleWords, 0, wordsNeeded);
+        var words = pool.BattleWords;
         for (var i = 0; i < count; i++)
         {
             var b = battles[i];
@@ -717,7 +812,7 @@ public static class LongRangeMovement
 
         /// <summary>From <paramref name="start"/> (which may itself be lost ground: a formation
         /// leaving it) over enterable land; stops at <paramref name="target"/> when one is given.</summary>
-        public void Run(Ground g, int start, int target = -1, bool corridor = false)
+        public void Run(Ground g, int start, int target = -1, bool corridor = false, bool stopOnFirstOwnQuiet = false)
         {
             var size = g.Map.ProvinceCount + 1;
             if (_stamp.Length < size)
@@ -741,6 +836,9 @@ public static class LongRangeMovement
                     _stamp[next] = _generation; _previous[next] = current; _steps[next] = _steps[current] + 1;
                     _queue.Enqueue(next);
                     Reached.Add(next);
+                    if (stopOnFirstOwnQuiet && next != start && !g.Battles.Contains(next) &&
+                        g.Enterable(next) && g.Own(next) && !g.BordersEnemy(next))
+                        return;
                 }
             }
         }
@@ -768,6 +866,11 @@ public static class LongRangeMovement
     [ThreadStatic] private static Search _inbound;
     [ThreadStatic] private static bool[] _coastal;
     [ThreadStatic] private static ProvinceTopology _coastalMap;
+    [ThreadStatic] private static List<(int Province, int Water)> _portsDepScratch;
+    [ThreadStatic] private static List<(int Province, int Water)> _portsArrScratch;
+    [ThreadStatic] private static Dictionary<int, int> _portsPerWaterScratch;
+    [ThreadStatic] private static List<(float Floor, int From, int To, float Land)> _seaPairsScratch;
+    [ThreadStatic] private static HashSet<int> _seaBasinsScratch;
 
     private static bool[] CoastalOf(ProvinceTopology map)
     {
@@ -821,37 +924,55 @@ public static class LongRangeMovement
             return "";
         }
 
-        // No road: to a port, over the water, from a port. Only ports on the same water are joined
-        // - a ship from the Black Sea does not come out in the Caspian, and does not come out
-        // in the Mediterranean either while the Bosporus is shut to it.
+        return PlanSeaFromExistingOutbound(g, type, from, to, outbound, route, modes, corridor);
+    }
+
+    private static string PlanSeaFromExistingOutbound(Ground g, SupportTypeDefinition type, int from, int to,
+        Search outbound, List<int> route, List<int> modes, bool corridor) =>
+        PlanSeaFromExistingOutbound(g, type, from, to, outbound, route, modes, corridor, out _);
+
+    private static string PlanSeaFromExistingOutbound(Ground g, SupportTypeDefinition type, int from, int to,
+        Search outbound, List<int> route, List<int> modes, bool corridor, out bool hadDepartures)
+    {
+        var c = g.Campaign;
         var coastal = CoastalOf(g.Map);
-        outbound.Run(g, from, corridor: corridor);
+        var shut = g.Shut;
+        var departures = Ports(c, shut, outbound, coastal, _portsDepScratch ??= new List<(int, int)>(PortsConsidered));
+        hadDepartures = departures.Count > 0;
+        if (!hadDepartures) return RefuseNoRoute;
         var inbound = _inbound ??= new Search();
         inbound.Run(g, to, corridor: corridor);
-        var shut = g.Shut;
-        var departures = Ports(c, shut, outbound, coastal);
-        var arrivals = Ports(c, shut, inbound, coastal);
+        var arrivals = Ports(c, shut, inbound, coastal, _portsArrScratch ??= new List<(int, int)>(PortsConsidered));
         var d = c.Defines;
         // Every pair on one water, with the days it would take if the sea were a straight line -
         // a floor under the real voyage, which is never shorter. The courses are plotted cheapest
         // floor first, and the search stops when no unplotted pair can beat the best real voyage.
-        var pairs = new List<(float Floor, int From, int To, float Land)>();
-        foreach (var (departure, water) in departures)
-            foreach (var (arrival, arrivalWater) in arrivals)
+        var pairs = _seaPairsScratch ??= new List<(float Floor, int From, int To, float Land)>();
+        pairs.Clear();
+        var seaInv = 1f / MathF.Max(1f, d.LongRangeSeaKmPerDay);
+        var marchInv = 1f / MathF.Max(0.05f, d.MarchProgressPerDay);
+        for (var di = 0; di < departures.Count; di++)
+        {
+            var (departure, water) = departures[di];
+            var outSteps = outbound.Steps(departure);
+            for (var ai = 0; ai < arrivals.Count; ai++)
             {
+                var (arrival, arrivalWater) = arrivals[ai];
                 if (arrival == departure || arrivalWater != water) continue;
-                var land = (outbound.Steps(departure) + inbound.Steps(arrival)) / MathF.Max(0.05f, d.MarchProgressPerDay);
-                pairs.Add((land + SupportCore.DistanceKm(c, departure, arrival) / MathF.Max(1f, d.LongRangeSeaKmPerDay), departure, arrival, land));
+                var land = (outSteps + inbound.Steps(arrival)) * marchInv;
+                pairs.Add((land + SupportCore.DistanceKm(c, departure, arrival) * seaInv, departure, arrival, land));
             }
-        pairs.Sort((a, b) => a.Floor != b.Floor ? a.Floor.CompareTo(b.Floor) : a.From != b.From ? a.From.CompareTo(b.From) : a.To.CompareTo(b.To));
+        }
+        pairs.Sort(static (a, b) => a.Floor != b.Floor ? a.Floor.CompareTo(b.Floor) : a.From != b.From ? a.From.CompareTo(b.From) : a.To.CompareTo(b.To));
         var best = float.MaxValue;
         int bestFrom = -1, bestTo = -1, plotted = 0;
-        foreach (var pair in pairs)
+        for (var pi = 0; pi < pairs.Count; pi++)
         {
+            var pair = pairs[pi];
             if (pair.Floor >= best || plotted >= CoursesPlotted) break;
             plotted++;
             if (CourseOf(c, pair.From, pair.To, shut) is not { } course) continue;
-            var days = pair.Land + course.Total / MathF.Max(1f, d.LongRangeSeaKmPerDay);
+            var days = pair.Land + course.Total * seaInv;
             if (days >= best) continue;
             best = days; bestFrom = pair.From; bestTo = pair.To;
         }
@@ -876,12 +997,16 @@ public static class LongRangeMovement
     /// saw nothing but the Black Sea - its own country's Baltic ports, a long drive away, were
     /// never asked.
     /// </summary>
-    private static List<(int Province, int Water)> Ports(Campaign c, long shut, Search search, bool[] coastal)
+    private static List<(int Province, int Water)> Ports(Campaign c, long shut, Search search, bool[] coastal,
+        List<(int Province, int Water)> ports)
     {
-        var ports = new List<(int, int)>(PortsConsidered);
-        var perWater = new Dictionary<int, int>();
-        foreach (var province in search.Reached)
+        ports.Clear();
+        var perWater = _portsPerWaterScratch ??= new Dictionary<int, int>();
+        perWater.Clear();
+        var reached = search.Reached;
+        for (var i = 0; i < reached.Count; i++)
         {
+            var province = reached[i];
             if (province >= coastal.Length || !coastal[province]) continue;
             var water = SeaLanes.WaterOf(c, shut, province);
             if (water < 0) continue;
@@ -896,14 +1021,15 @@ public static class LongRangeMovement
     /// <summary>Whether any departure and arrival share a sea once the straits are open: the refusal then names the strait.</summary>
     private static bool SameSea(ProvinceTopology map, List<(int Province, int Water)> departures, List<(int Province, int Water)> arrivals)
     {
-        var basins = new HashSet<int>();
-        foreach (var (province, _) in departures)
+        var basins = _seaBasinsScratch ??= new HashSet<int>();
+        basins.Clear();
+        for (var i = 0; i < departures.Count; i++)
         {
-            var basin = SeaLanes.HarbourBasin(map, province);
+            var basin = SeaLanes.HarbourBasin(map, departures[i].Province);
             if (basin >= 0) basins.Add(basin);
         }
-        foreach (var (province, _) in arrivals)
-            if (basins.Contains(SeaLanes.HarbourBasin(map, province))) return true;
+        for (var i = 0; i < arrivals.Count; i++)
+            if (basins.Contains(SeaLanes.HarbourBasin(map, arrivals[i].Province))) return true;
         return false;
     }
 
@@ -994,9 +1120,25 @@ public static class LongRangeMovement
     internal static RelocatePreview PreviewOne(Campaign c, int issuer, int formationId, int province, bool append,
         Dictionary<int, Ground> grounds = null, BattleSet battles = null,
         Dictionary<int, SupportFormation> byId = null, bool includeBasing = true,
+        Dictionary<(int, int), CachedGroundPlan> planMemo = null) =>
+        PreviewOneInto(c, new RelocatePreview(), issuer, formationId, province, append, grounds, battles, byId, includeBasing, planMemo);
+
+    internal static RelocatePreview PreviewOneInto(Campaign c, RelocatePreview preview, int issuer, int formationId, int province, bool append,
+        Dictionary<int, Ground> grounds = null, BattleSet battles = null,
+        Dictionary<int, SupportFormation> byId = null, bool includeBasing = true,
         Dictionary<(int, int), CachedGroundPlan> planMemo = null)
     {
-        var preview = new RelocatePreview { FormationId = formationId, Destination = province };
+        preview.FormationId = formationId;
+        preview.Destination = province;
+        preview.StateMapIndex = -1;
+        preview.Route.Clear();
+        preview.Modes.Clear();
+        preview.KeepsStep = false;
+        preview.Days = 0;
+        preview.BasingUsed = 0;
+        preview.BasingCapacity = 0;
+        preview.Refusal = "";
+        preview.RefusalArgs = Array.Empty<object>();
         SupportFormation formation;
         if (byId is not null)
         {
@@ -1157,12 +1299,17 @@ public static class LongRangeMovement
     private static List<SupportFormation> InIdOrder(Campaign c)
     {
         var list = _ordered ??= new List<SupportFormation>();
+        InIdOrderInto(c, list);
+        return list;
+    }
+
+    private static void InIdOrderInto(Campaign c, List<SupportFormation> list)
+    {
         list.Clear();
         list.AddRange(c.SupportFormations);
         var sorted = true;
         for (var i = 1; i < list.Count && sorted; i++) sorted = list[i - 1].Id <= list[i].Id;
-        if (!sorted) list.Sort((a, b) => a.Id.CompareTo(b.Id));
-        return list;
+        if (!sorted) list.Sort(static (a, b) => a.Id.CompareTo(b.Id));
     }
 
     /// <summary>
@@ -1172,56 +1319,78 @@ public static class LongRangeMovement
     /// </summary>
     public static void Advance(Campaign c)
     {
-        if (c?.ProvinceMap is null) return;
-        Settle(c);
-        var grounds = new Dictionary<int, Ground>();
-        var battles = BattleProvinces(c);
+        foreach (var _ in AdvanceStages(c)) { }
+    }
+
+    internal static IEnumerable<int> AdvanceStages(Campaign c, bool skipSettle = false)
+    {
+        if (c?.ProvinceMap is null) yield break;
+        if (!skipSettle) Settle(c);
+        if (c.SupportFormations.Count == 0) yield break;
         var map = c.ProvinceMap;
         var controls = c.ProvinceController ?? map.ProvinceToNation;
-        var formations = InIdOrder(c);
-        foreach (var f in formations)
+        var pass = c.Caches.SupportPass;
+        var formations = pass.MovementOrdered;
+        InIdOrderInto(c, formations);
+        var pool = c.Caches.SupportStep;
+        Dictionary<int, Ground> grounds = null;
+        BattleSet battles = null;
+        try
         {
-            // Most of the world's formations, most days: deployed on their own ground, nothing to do.
-            if (f.Route.Count == 0 && f.DeployDaysLeft == 0 && !f.CutOff && !f.Overrun && f.ProvinceId > 0 &&
-                f.BaseProvinceId == f.ProvinceId && f.ProvinceId <= map.ProvinceCount &&
-                c.NationById(f.NationId) is { } owner && controls[f.ProvinceId] == owner.MapIndex) continue;
-            if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || !SupportCore.Enabled(c, type)) continue;
-            var g = GroundOf(c, f.NationId, grounds, battles);
-            if (g is null) continue;
-            var at = At(f);
-            if (!g.Valid(at)) continue;
-
-            if (g.Enterable(at))
+            for (var i = 0; i < formations.Count; i++)
             {
-                // Back on ground of its own side: whatever was lost is lost, and nothing more is.
-                f.Overrun = false;
-                if (f.CutOff)
+                var f = formations[i];
+                // Most of the world's formations, most days: deployed on their own ground, nothing to do.
+                if (f.Route.Count == 0 && f.DeployDaysLeft == 0 && !f.CutOff && !f.Overrun && f.ProvinceId > 0 &&
+                    f.BaseProvinceId == f.ProvinceId && f.ProvinceId <= map.ProvinceCount &&
+                    c.NationById(f.NationId) is { } owner && controls[f.ProvinceId] == owner.MapIndex) continue;
+                if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || !SupportCore.Enabled(c, type)) continue;
+                grounds ??= pool.WithdrawGrounds;
+                battles ??= BattleProvincesPooled(c, pool);
+                var g = GroundOf(c, f.NationId, grounds, battles, pool);
+                if (g is null) continue;
+                var at = At(f);
+                if (!g.Valid(at)) continue;
+
+                if (g.Enterable(at))
                 {
-                    f.CutOff = false;
-                    if (f.Route.Count == 0) StartDeploying(f, type);
+                    // Back on ground of its own side: whatever was lost is lost, and nothing more is.
+                    f.Overrun = false;
+                    if (f.CutOff)
+                    {
+                        f.CutOff = false;
+                        if (f.Route.Count == 0) StartDeploying(f, type);
+                    }
                 }
-            }
-            else if (!OverWater(f) && (f.CutOff || !f.Overrun || f.Route.Count == 0 || !g.Passing(f, f.Route[0])))
-            {
-                // Standing on ground it may not stand on: a fresh loss the hourly pass has not seen
-                // yet, or a cut-off formation looking for a way out again today.
-                WithdrawOne(c, g, f, type);
-            }
-            if (f.CutOff) continue;
+                else if (!OverWater(f) && (f.CutOff || !f.Overrun || f.Route.Count == 0 || !g.Passing(f, f.Route[0])))
+                {
+                    // Standing on ground it may not stand on: a fresh loss the hourly pass has not seen
+                    // yet, or a cut-off formation looking for a way out again today.
+                    WithdrawOne(c, g, f, type);
+                    if (i + 1 < formations.Count && Campaign.StageOverdue()) yield return 0;
+                }
+                if (f.CutOff) continue;
 
-            if (f.Route.Count > 0) Step(c, g, f, type);
-            else if (f.DeployDaysLeft > 0)
-            {
-                if (!g.Enterable(at)) continue;
-                f.DeployDaysLeft--;
-                if (f.DeployDaysLeft == 0) { f.BaseProvinceId = at; c.MarkStrategicChange(); }
+                if (f.Route.Count > 0) Step(c, g, f, type);
+                else if (f.DeployDaysLeft > 0)
+                {
+                    if (!g.Enterable(at)) continue;
+                    f.DeployDaysLeft--;
+                    if (f.DeployDaysLeft == 0) { f.BaseProvinceId = at; c.MarkStrategicChange(); }
+                }
+                else if (f.BaseProvinceId != at && g.Enterable(at))
+                {
+                    // Standing, not deploying, and no base: an old save's formation or one stopped on
+                    // the road by a lost destination. It works from where it stands.
+                    f.BaseProvinceId = at;
+                }
+                if ((i & 15) == 15 && i + 1 < formations.Count && Campaign.StageOverdue()) yield return 0;
             }
-            else if (f.BaseProvinceId != at && g.Enterable(at))
-            {
-                // Standing, not deploying, and no base: an old save's formation or one stopped on
-                // the road by a lost destination. It works from where it stands.
-                f.BaseProvinceId = at;
-            }
+        }
+        finally
+        {
+            formations.Clear();
+            if (grounds is not null) pool.ReturnGrounds(grounds);
         }
     }
 
@@ -1338,30 +1507,317 @@ public static class LongRangeMovement
     {
         var map = c?.ProvinceMap;
         if (map is null) return 0;
+        var formations = c.SupportFormations;
+        var count = formations.Count;
+        if (count == 0) return 0;
         var controls = c.ProvinceController ?? map.ProvinceToNation;
+        var destroyed = map.DestroyedByProvince;
+        var provinceCount = map.ProvinceCount;
+
+        // Zero-alloc hourly fast path: if every formation is cut off, over water, or standing on
+        // dry undestroyed ground it is allowed to enter (own ground or military access / coalition),
+        // skip sorting, BattleSet bitset allocation, and full Ground construction completely.
+        if (!AnyFormationNeedsWithdrawCheck(c, map, formations, controls, destroyed, provinceCount))
+            return 0;
+
+        var pool = c.Caches.SupportStep;
         Dictionary<int, Ground> grounds = null;
         BattleSet battles = null;
         var changed = 0;
-        foreach (var f in InIdOrder(c))
+        try
         {
-            if (f.CutOff || OverWater(f)) continue;
-            var at = At(f);
-            if (at <= 0 || at > map.ProvinceCount) continue;
-            // The common case, answered without building anything: standing on its own ground.
-            var nation = c.NationById(f.NationId);
-            if (nation is null || controls[at] == nation.MapIndex && !map.IsWater(at) &&
-                (map.DestroyedByProvince is not { } destroyed || !destroyed[at])) continue;
-            if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || !SupportCore.Enabled(c, type)) continue;
-            grounds ??= new Dictionary<int, Ground>();
-            battles ??= BattleProvinces(c);
-            var g = GroundOf(c, f.NationId, grounds, battles);
-            if (g is null || g.Enterable(at)) continue;
-            // Already leaving by a road that is still open: it has paid, and it is going.
-            if (f.Route.Count > 0 && f.Overrun && g.Passing(f, f.Route[0])) continue;
-            WithdrawOne(c, g, f, type);
-            changed++;
+            var ordered = InIdOrder(c);
+            for (var i = 0; i < ordered.Count; i++)
+            {
+                var f = ordered[i];
+                if (f.CutOff || OverWater(f)) continue;
+                var at = At(f);
+                if (at <= 0 || at > provinceCount) continue;
+                var nation = c.NationById(f.NationId);
+                if (nation is null) continue;
+                var code = controls[at];
+                if (!map.IsWater(at) && (destroyed is null || at >= destroyed.Length || !destroyed[at]) &&
+                    (code == nation.MapIndex || MilitaryAccess.CanEnter(c, nation.Id, code)))
+                    continue;
+                if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || !SupportCore.Enabled(c, type)) continue;
+                grounds ??= pool.WithdrawGrounds;
+                battles ??= BattleProvincesPooled(c, pool);
+                var g = GroundOf(c, f.NationId, grounds, battles, pool);
+                if (g is null || g.Enterable(at)) continue;
+                // Already leaving by a road that is still open: it has paid, and it is going.
+                if (f.Route.Count > 0 && f.Overrun && g.Passing(f, f.Route[0])) continue;
+                WithdrawOne(c, g, f, type);
+                changed++;
+            }
+        }
+        finally
+        {
+            if (grounds is not null) pool.ReturnGrounds(grounds);
         }
         return changed;
+    }
+
+    internal static IEnumerable<int> WithdrawStages(Campaign c)
+    {
+        var pass = c?.Caches.SupportPass;
+        if (pass is not null) pass.LastWithdrawChanged = 0;
+        var map = c?.ProvinceMap;
+        if (map is null) yield break;
+        var formations = c.SupportFormations;
+        if (formations.Count == 0) yield break;
+        var controls = c.ProvinceController ?? map.ProvinceToNation;
+        var destroyed = map.DestroyedByProvince;
+        var provinceCount = map.ProvinceCount;
+        if (!AnyFormationNeedsWithdrawCheck(c, map, formations, controls, destroyed, provinceCount))
+            yield break;
+
+        var pool = c.Caches.SupportStep;
+        var ordered = pass.MovementOrdered;
+        InIdOrderInto(c, ordered);
+        Dictionary<int, Ground> grounds = null;
+        BattleSet battles = null;
+        var changed = 0;
+        try
+        {
+            for (var i = 0; i < ordered.Count; i++)
+            {
+                var f = ordered[i];
+                if (f.CutOff || OverWater(f)) continue;
+                var at = At(f);
+                if (at <= 0 || at > provinceCount) continue;
+                var nation = c.NationById(f.NationId);
+                if (nation is null) continue;
+                var code = controls[at];
+                if (!map.IsWater(at) && (destroyed is null || at >= destroyed.Length || !destroyed[at]) &&
+                    (code == nation.MapIndex || MilitaryAccess.CanEnter(c, nation.Id, code)))
+                    continue;
+                if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || !SupportCore.Enabled(c, type)) continue;
+                grounds ??= pool.WithdrawGrounds;
+                battles ??= BattleProvincesPooled(c, pool);
+                var g = GroundOf(c, f.NationId, grounds, battles, pool);
+                if (g is null || g.Enterable(at)) continue;
+                if (f.Route.Count > 0 && f.Overrun && g.Passing(f, f.Route[0])) continue;
+                WithdrawOne(c, g, f, type);
+                changed++;
+                if (i + 1 < ordered.Count && Campaign.StageOverdue()) yield return 0;
+            }
+            pass.LastWithdrawChanged = changed;
+        }
+        finally
+        {
+            ordered.Clear();
+            if (grounds is not null) pool.ReturnGrounds(grounds);
+        }
+    }
+
+    private static bool AnyFormationNeedsWithdrawCheck(Campaign c, ProvinceTopology map,
+        List<SupportFormation> formations, ushort[] controls, bool[] destroyed, int provinceCount)
+    {
+        for (var i = 0; i < formations.Count; i++)
+        {
+            var f = formations[i];
+            if (f.CutOff || OverWater(f)) continue;
+            var at = At(f);
+            if (at <= 0 || at > provinceCount) continue;
+            var nation = c.NationById(f.NationId);
+            if (nation is null) continue;
+            var code = controls[at];
+            if (!map.IsWater(at) && (destroyed is null || at >= destroyed.Length || !destroyed[at]) &&
+                (code == nation.MapIndex || MilitaryAccess.CanEnter(c, nation.Id, code)))
+                continue;
+            return true;
+        }
+        return false;
+    }
+
+    private static void EnsureCutOffCache(Campaign c, CampaignCaches.SupportPassCache pass, BattleSet battles)
+    {
+        var d = c.Defines;
+        var map = c.ProvinceMap;
+        var mapRev = c.MapRevision;
+        var warRev = c.WarRevision;
+        var allyRev = c.AllianceRevision;
+        var protVer = DiplomaticRelation.ProtectorMutationVersion;
+        var treatyVer = DiplomaticRelation.TreatyMutationVersion;
+        var seaRev = SeaPassageCatalog.Revision;
+        var destCount = c.DestroyedProvinces.Count;
+        var battleWords = battles.Words;
+        var wordCount = battleWords.Length;
+
+        var mapChanged = !ReferenceEquals(pass.CutOffMap, map);
+        var structureMatch = !mapChanged &&
+            pass.CutOffMapRevision == mapRev &&
+            pass.CutOffWarRevision == warRev &&
+            pass.CutOffAllianceRevision == allyRev &&
+            pass.CutOffProtectorVersion == protVer &&
+            pass.CutOffTreatyVersion == treatyVer &&
+            pass.CutOffSeaPassageRevision == seaRev &&
+            pass.CutOffDestroyedCount == destCount &&
+            pass.CutOffPortDays == d.LongRangePortDays &&
+            pass.CutOffSeaKm == d.LongRangeSeaKmPerDay &&
+            pass.CutOffAirKm == d.LongRangeAirKmPerDay &&
+            pass.CutOffFerryFactor == d.LongRangeFerryRangeFactor &&
+            pass.CutOffFerryMin == d.LongRangeFerryMinKm &&
+            pass.CutOffFerryMax == d.LongRangeFerryMaxKm &&
+            pass.CutOffSlackKm == d.LongRangeReachSlackKm;
+        if (structureMatch &&
+            pass.CutOffBattleWordCount == wordCount &&
+            (wordCount == 0 || pass.CutOffBattleWords.AsSpan(0, wordCount).SequenceEqual(battleWords)))
+            return;
+
+        // If only active battles changed while map/diplomacy/straits stayed identical, new battles
+        // can only close paths, never unblock a cut-off search that already failed. Only drop the
+        // failure caches when at least one existing battle ended.
+        var onlyNewBattles = false;
+        if (structureMatch && pass.CutOffBattleWordCount == wordCount)
+        {
+            onlyNewBattles = true;
+            var prev = pass.CutOffBattleWords;
+            for (var wi = 0; wi < wordCount; wi++)
+            {
+                if ((prev[wi] & ~battleWords[wi]) != 0)
+                {
+                    onlyNewBattles = false;
+                    break;
+                }
+            }
+        }
+        if (!onlyNewBattles)
+        {
+            pass.CutOffFailed.Clear();
+            pass.CutOffOrder.Clear();
+            pass.CutOffGlobalEpoch++;
+            if (mapChanged)
+            {
+                pass.PocketCutOffFailed.Clear();
+                pass.PocketCutOffOrder.Clear();
+            }
+        }
+        pass.CutOffMap = map;
+        pass.CutOffMapRevision = mapRev;
+        pass.CutOffWarRevision = warRev;
+        pass.CutOffAllianceRevision = allyRev;
+        pass.CutOffProtectorVersion = protVer;
+        pass.CutOffTreatyVersion = treatyVer;
+        pass.CutOffSeaPassageRevision = seaRev;
+        pass.CutOffDestroyedCount = destCount;
+        pass.CutOffPortDays = d.LongRangePortDays;
+        pass.CutOffSeaKm = d.LongRangeSeaKmPerDay;
+        pass.CutOffAirKm = d.LongRangeAirKmPerDay;
+        pass.CutOffFerryFactor = d.LongRangeFerryRangeFactor;
+        pass.CutOffFerryMin = d.LongRangeFerryMinKm;
+        pass.CutOffFerryMax = d.LongRangeFerryMaxKm;
+        pass.CutOffSlackKm = d.LongRangeReachSlackKm;
+        pass.CutOffBattleWordCount = wordCount;
+        if (wordCount > 0)
+        {
+            if (pass.CutOffBattleWords.Length < wordCount)
+                pass.CutOffBattleWords = new ulong[wordCount + 16];
+            battleWords.CopyTo(pass.CutOffBattleWords);
+        }
+    }
+
+    private const int MaxPocketCacheProvinces = 2048;
+    [ThreadStatic] private static int[] _watchStamp;
+    [ThreadStatic] private static int _watchGen;
+    [ThreadStatic] private static List<int> _watchListScratch;
+
+    private static int[] BuildWatchProvinces(ProvinceTopology map, List<int> reached)
+    {
+        var size = map.ProvinceCount + 1;
+        if (_watchStamp is null || _watchStamp.Length < size)
+        {
+            _watchStamp = new int[size];
+            _watchGen = 0;
+        }
+        if (++_watchGen == int.MaxValue)
+        {
+            Array.Clear(_watchStamp, 0, _watchStamp.Length);
+            _watchGen = 1;
+        }
+        var gen = _watchGen;
+        var list = _watchListScratch ??= new List<int>(512);
+        list.Clear();
+        var count = reached.Count;
+        for (var i = 0; i < count; i++)
+        {
+            var p = reached[i];
+            if (p > 0 && p < size && _watchStamp[p] != gen)
+            {
+                _watchStamp[p] = gen;
+                list.Add(p);
+            }
+            foreach (var n in map.Neighbors[p])
+            {
+                if (n > 0 && n < size && _watchStamp[n] != gen)
+                {
+                    _watchStamp[n] = gen;
+                    list.Add(n);
+                }
+            }
+        }
+        return list.ToArray();
+    }
+
+    private static ulong ComputeWatchStateHash(int[] watchProvinces, ushort[] controls, bool[] destroyed, BattleSet battles)
+    {
+        var hash = FnvOffsetBasis64;
+        for (var i = 0; i < watchProvinces.Length; i++)
+        {
+            var p = watchProvinces[i];
+            hash ^= (uint)p;
+            hash *= FnvPrime64;
+            hash ^= controls[p];
+            hash *= FnvPrime64;
+            var isDestroyed = destroyed is not null && p < destroyed.Length && destroyed[p] ? 1UL : 0UL;
+            var inBattle = battles.Contains(p) ? 2UL : 0UL;
+            hash ^= isDestroyed | inBattle;
+            hash *= FnvPrime64;
+        }
+        return hash;
+    }
+
+    private static void StorePocketCutOff(CampaignCaches.SupportPassCache pass,
+        CampaignCaches.SupportPassCache.PocketCutOffKey key,
+        CampaignCaches.SupportPassCache.PocketCutOffEntry entry)
+    {
+        if (pass.PocketCutOffFailed.ContainsKey(key))
+        {
+            pass.PocketCutOffFailed[key] = entry;
+            return;
+        }
+        while (pass.PocketCutOffFailed.Count >= CampaignCaches.SupportPassCache.MaxCutOffEntries &&
+               pass.PocketCutOffOrder.Count > 0)
+        {
+            var oldest = pass.PocketCutOffOrder.Dequeue();
+            pass.PocketCutOffFailed.Remove(oldest);
+        }
+        if (pass.PocketCutOffOrder.Count > CampaignCaches.SupportPassCache.MaxCutOffEntries * 4)
+        {
+            pass.PocketCutOffFailed.Clear();
+            pass.PocketCutOffOrder.Clear();
+        }
+        pass.PocketCutOffFailed[key] = entry;
+        pass.PocketCutOffOrder.Enqueue(key);
+    }
+
+    private static void StoreCutOffFailed(CampaignCaches.SupportPassCache pass,
+        CampaignCaches.SupportPassCache.CutOffSearchKey key)
+    {
+        if (pass.CutOffFailed.Contains(key)) return;
+        while (pass.CutOffFailed.Count >= CampaignCaches.SupportPassCache.MaxCutOffEntries &&
+               pass.CutOffOrder.Count > 0)
+        {
+            var oldest = pass.CutOffOrder.Dequeue();
+            pass.CutOffFailed.Remove(oldest);
+        }
+        if (pass.CutOffOrder.Count > CampaignCaches.SupportPassCache.MaxCutOffEntries * 4)
+        {
+            pass.CutOffFailed.Clear();
+            pass.CutOffOrder.Clear();
+        }
+        pass.CutOffFailed.Add(key);
+        pass.CutOffOrder.Enqueue(key);
     }
 
     internal static void WithdrawOne(Campaign c, Ground g, SupportFormation f, SupportTypeDefinition type)
@@ -1380,10 +1836,91 @@ public static class LongRangeMovement
         // A road out that is still open is kept: the column is already on it.
         if (f.Route.Count > 0 && g.Passing(f, f.Route[0]) && g.Enterable(f.Route[^1])) { f.CutOff = false; return; }
         f.Route.Clear(); f.RouteModes.Clear(); f.MoveProgress = 0f; f.SeaCourseMask = 0;
-        var target = SafeProvince(g, f, type, at);
-        var away = target > 0 && (type.Movement == SupportMoveMode.Air && SupportCore.DistanceKm(c, at, target) > FerryKm(c, type)
-            ? FerryHops(g, type, at, target, f.Route, f.RouteModes)
-            : Plan(g, type, at, target, f.Route, f.RouteModes, out _, corridor: true).Length == 0);
+
+        var pass = c.Caches.SupportPass;
+        EnsureCutOffCache(c, pass, g.Battles);
+        var ferryBits = type.Movement == SupportMoveMode.Air ? BitConverter.SingleToInt32Bits(FerryKm(c, type)) : 0;
+        var seatSig = (g.Nation.GovernmentSeatProvinceId * 397) ^ g.Nation.CapitalProvinceId;
+
+        CampaignCaches.SupportPassCache.PocketCutOffKey pocketKey = default;
+        var usePocket = type.Movement != SupportMoveMode.Air;
+        if (usePocket)
+        {
+            pocketKey = new CampaignCaches.SupportPassCache.PocketCutOffKey(g.Nation.Id, at, (int)type.Movement, g.Shut, seatSig);
+            if (pass.PocketCutOffFailed.TryGetValue(pocketKey, out var pocket))
+            {
+                if ((!pocket.HadDepartures || pocket.GlobalEpoch == pass.CutOffGlobalEpoch) &&
+                    pocket.PassableHash == g.PassableHash &&
+                    pocket.HostileHash == g.HostileHash &&
+                    ComputeWatchStateHash(pocket.WatchProvinces, g.Controls, g.Map.DestroyedByProvince, g.Battles) == pocket.WatchStateHash)
+                {
+                    if (!f.CutOff)
+                    {
+                        f.CutOff = true;
+                        CutOffs++;
+                        DiagnosticLogs.Write("orders", $"SUPPORT_CUT_OFF formation={f.Id} nation={g.Nation.Tag} province={at}");
+                    }
+                    return;
+                }
+                pass.PocketCutOffFailed.Remove(pocketKey);
+            }
+        }
+
+        var cutKey = new CampaignCaches.SupportPassCache.CutOffSearchKey(g.Nation.Id, at, (int)type.Movement, g.Shut, seatSig, ferryBits);
+        if (pass.CutOffFailed.Contains(cutKey))
+        {
+            if (!f.CutOff)
+            {
+                f.CutOff = true;
+                CutOffs++;
+                DiagnosticLogs.Write("orders", $"SUPPORT_CUT_OFF formation={f.Id} nation={g.Nation.Tag} province={at}");
+            }
+            return;
+        }
+
+        var near = NearbySafeProvince(g, type, at);
+        int target;
+        bool away;
+        var hadDepartures = false;
+        var checkedDepartures = false;
+        if (near > 0)
+        {
+            target = near;
+            if (type.Movement == SupportMoveMode.Air)
+            {
+                away = SupportCore.DistanceKm(c, at, target) > FerryKm(c, type)
+                    ? FerryHops(g, type, at, target, f.Route, f.RouteModes)
+                    : Plan(g, type, at, target, f.Route, f.RouteModes, out _, corridor: true).Length == 0;
+            }
+            else
+            {
+                var start = f.Route.Count;
+                _outbound.PathTo(target, f.Route);
+                AddLandModes(g, type, at, f.Route, start, f.RouteModes);
+                away = true;
+            }
+        }
+        else
+        {
+            var seat = CapitalCore.SupplyOriginProvinceId(g.Campaign, g.Nation);
+            target = seat > 0 && seat != at && g.Enterable(seat) && !g.Battles.Contains(seat) ? seat : -1;
+            if (target <= 0)
+            {
+                away = false;
+            }
+            else if (type.Movement == SupportMoveMode.Air)
+            {
+                away = SupportCore.DistanceKm(c, at, target) > FerryKm(c, type)
+                    ? FerryHops(g, type, at, target, f.Route, f.RouteModes)
+                    : Plan(g, type, at, target, f.Route, f.RouteModes, out _, corridor: true).Length == 0;
+            }
+            else
+            {
+                away = PlanSeaFromExistingOutbound(g, type, at, target, _outbound, f.Route, f.RouteModes, corridor: true, out hadDepartures).Length == 0;
+                checkedDepartures = true;
+            }
+        }
+
         if (away && f.Route.Count > 0)
         {
             if (f.CutOff) f.CutOff = false;
@@ -1392,6 +1929,19 @@ public static class LongRangeMovement
             return;
         }
         f.Route.Clear(); f.RouteModes.Clear();
+        if (usePocket && _outbound is not null && _outbound.Reached.Count <= MaxPocketCacheProvinces)
+        {
+            if (!checkedDepartures)
+                hadDepartures = Ports(c, g.Shut, _outbound, CoastalOf(g.Map), _portsDepScratch ??= new List<(int, int)>(PortsConsidered)).Count > 0;
+            var watchProvinces = BuildWatchProvinces(g.Map, _outbound.Reached);
+            var watchHash = ComputeWatchStateHash(watchProvinces, g.Controls, g.Map.DestroyedByProvince, g.Battles);
+            StorePocketCutOff(pass, pocketKey, new CampaignCaches.SupportPassCache.PocketCutOffEntry(
+                g.PassableHash, g.HostileHash, hadDepartures, pass.CutOffGlobalEpoch, watchProvinces, watchHash));
+        }
+        else
+        {
+            StoreCutOffFailed(pass, cutKey);
+        }
         if (!f.CutOff)
         {
             f.CutOff = true;
@@ -1425,25 +1975,35 @@ public static class LongRangeMovement
         if (type.Movement == SupportMoveMode.Air)
         {
             var ferry = FerryKm(g.Campaign, type);
+            var map = g.Map;
+            var originLat = map.CenterOf(at).Latitude;
             int best = -1, fallback = -1, last = -1;
             float bestKm = float.MaxValue, fallbackKm = float.MaxValue, lastKm = float.MaxValue;
-            for (var p = 1; p <= g.Map.ProvinceCount; p++)
+            foreach (var code in g.Passable)
             {
-                if (p == at || !g.Enterable(p) || g.Battles.Contains(p)) continue;
-                var km = SupportCore.DistanceKm(g.Campaign, at, p);
-                if (km > ferry) continue;
-                var quiet = !g.BordersEnemy(p);
-                if (g.Own(p) && quiet && km < bestKm) { best = p; bestKm = km; }
-                else if (quiet && km < fallbackKm) { fallback = p; fallbackKm = km; }
-                else if (g.Own(p) && km < lastKm) { last = p; lastKm = km; }
+                var held = CampaignIntel.ProvincesHeldBy(g.Campaign, g.Controls, code);
+                for (var i = 0; i < held.Length; i++)
+                {
+                    var p = held[i];
+                    if (p == at || map.IsWater(p) || g.Destroyed(p) || g.Battles.Contains(p)) continue;
+                    if (MathF.Abs(map.CenterOf(p).Latitude - originLat) * 111.0f > ferry) continue;
+                    var km = SupportCore.DistanceKm(g.Campaign, at, p);
+                    if (km > ferry) continue;
+                    var quiet = !g.BordersEnemy(p);
+                    if (g.Own(p) && quiet && (km < bestKm || (km == bestKm && p < best))) { best = p; bestKm = km; }
+                    else if (quiet && (km < fallbackKm || (km == fallbackKm && p < fallback))) { fallback = p; fallbackKm = km; }
+                    else if (g.Own(p) && (km < lastKm || (km == lastKm && p < last))) { last = p; lastKm = km; }
+                }
             }
             return best > 0 ? best : fallback > 0 ? fallback : last;
         }
         var search = _outbound ??= new Search();
-        search.Run(g, at, corridor: true);
+        search.Run(g, at, corridor: true, stopOnFirstOwnQuiet: true);
         int sideQuiet = -1, ownAny = -1;
-        foreach (var p in search.Reached)
+        var reached = search.Reached;
+        for (var i = 0; i < reached.Count; i++)
         {
+            var p = reached[i];
             if (p == at || g.Battles.Contains(p) || !g.Enterable(p)) continue;
             var quiet = !g.BordersEnemy(p);
             if (g.Own(p) && quiet) return p;
@@ -1512,6 +2072,8 @@ public static class LongRangeMovement
     /// </summary>
     internal sealed class RepositionScratch
     {
+        public int LastRoadChosen;
+        public int LastDriveOrdered;
         public float[] Near = Array.Empty<float>();
         public readonly List<int> Within = new();
         public float[] RoadDays = Array.Empty<float>();
@@ -1525,653 +2087,22 @@ public static class LongRangeMovement
         public readonly List<int> Targets = new();
         public readonly List<(SupportFormation Formation, SupportTypeDefinition Type)> Idle = new();
         public readonly List<(SupportFormation Formation, SupportTypeDefinition Type)> Sams = new();
+        public readonly LongRangeStrikes.Plan StrikePlan = new();
+        public readonly Dictionary<int, LongRangeStrikes.Sides> StrikeSides = new();
+        public readonly List<(ushort OwnerMap, int Province, float Reach, float Lat)> AllStrikers = new();
+        public readonly Dictionary<int, List<ScenarioState>> StatesByOwnerMap = new();
+        public readonly Stack<List<ScenarioState>> StatesListPool = new();
+        public readonly List<(SupportFormation Formation, SupportTypeDefinition Type)> CoverSpare = new();
+        public readonly List<(int Province, float Reach, float Lat)> CoverStrikers = new();
+        public readonly Dictionary<int, List<int>> CoverHeld = new();
+        public readonly List<ScenarioState> CoverRegions = new();
+        public readonly List<(int Province, float Reach, float Lat)> CoverGuarded = new();
+        public readonly Dictionary<int, int> CoverAnchors = new();
+        public readonly RelocatePreview PreviewScratch = new();
+        public readonly Dictionary<(int Comp, float Standoff, bool MayTouch), bool> CompSuitMemo = new();
     }
 
-    public static void Reposition(Campaign c)
-    {
-        foreach (var _ in RepositionStages(c)) { }
-    }
 
-    public static IEnumerable<int> RepositionStages(Campaign c)
-    {
-        var map = c?.ProvinceMap;
-        if (map is null) yield break;
-        var d = c.Defines;
-        if (c.ElapsedDays % Math.Max(1, d.AiLongRangeRepositionDays) != 0) yield break;
-        var wars = Warfare.LiveWars(c);
-        if (wars.Count == 0) yield break;
-        var ordered = InIdOrder(c);
-        var byNation = new Dictionary<int, List<SupportFormation>>();
-        var byId = new Dictionary<int, SupportFormation>(ordered.Count);
-        for (var fi = 0; fi < ordered.Count; fi++)
-        {
-            var f = ordered[fi];
-            byId[f.Id] = f;
-            if (!byNation.TryGetValue(f.NationId, out var list)) byNation[f.NationId] = list = new List<SupportFormation>();
-            list.Add(f);
-        }
-        var battlesByWar = new Dictionary<int, List<int>>();
-        foreach (var battle in c.Battles)
-        {
-            if (battle.Ended) continue;
-            if (!battlesByWar.TryGetValue(battle.WarId, out var list)) battlesByWar[battle.WarId] = list = new List<int>();
-            list.Add(battle.ProvinceId);
-        }
-        var battles = BattleProvinces(c);
-        var controls = c.ProvinceController ?? map.ProvinceToNation;
-        Dictionary<ushort, List<int>> landByController = null;
-        Dictionary<int, LongRangeStrikes.Sides> strikeSides = null;
-        List<(ushort OwnerMap, int Province, float Reach)> allStrikers = null;
-        Dictionary<int, List<ScenarioState>> statesByOwnerMap = null;
-        var grounds = new Dictionary<int, Ground>();
-        var scratch = c.Caches.RepositionScratch;
-        var nations = new List<Nation>(c.Nations.Count);
-        for (var i = 0; i < c.Nations.Count; i++)
-        {
-            var n = c.Nations[i];
-            if (!n.IsHuman && byNation.ContainsKey(n.Id)) nations.Add(n);
-        }
-        nations.Sort(static (a, b) => a.Id.CompareTo(b.Id));
-        for (var ni = 0; ni < nations.Count; ni++)
-        {
-            var nation = nations[ni];
-            if (!byNation.TryGetValue(nation.Id, out var own)) continue;
-            var inWar = false;
-            foreach (var war in wars) if (!war.Ended && war.Involves(nation.Id)) { inWar = true; break; }
-            if (!inWar) continue;
-            var g = GroundOf(c, nation.Id, grounds, battles);
-            if (g is null) continue;
-            landByController ??= BuildLandByController(map, controls);
-            foreach (var _ in RepositionNationStages(c, g, own, wars, battlesByWar, landByController, grounds, battles, byId, scratch,
-                         () => strikeSides ??= new Dictionary<int, LongRangeStrikes.Sides>(),
-                         () => allStrikers ??= BuildAllStrikers(c, map),
-                         () => statesByOwnerMap ??= BuildStatesByOwnerMap(c)))
-                yield return 0;
-            if (ni + 1 < nations.Count && Campaign.StageOverdue()) yield return 0;
-        }
-    }
-
-    private static List<(ushort OwnerMap, int Province, float Reach)> BuildAllStrikers(Campaign c, ProvinceTopology map)
-    {
-        var list = new List<(ushort, int, float)>();
-        var forms = c.SupportFormations;
-        for (var i = 0; i < forms.Count; i++)
-        {
-            var f = forms[i];
-            var at = f.BaseProvinceId > 0 ? f.BaseProvinceId : At(f);
-            if (at <= 0 || at > map.ProvinceCount) continue;
-            if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || type.Strike <= 0f || !SupportCore.Enabled(c, type)) continue;
-            var owner = c.NationById(f.NationId);
-            if (owner is null || owner.MapIndex <= 0) continue;
-            list.Add(((ushort)owner.MapIndex, at, SupportCore.ReachKm(c, type)));
-        }
-        return list;
-    }
-
-    private static Dictionary<int, List<ScenarioState>> BuildStatesByOwnerMap(Campaign c)
-    {
-        var map = new Dictionary<int, List<ScenarioState>>();
-        var states = c.States;
-        for (var i = 0; i < states.Count; i++)
-        {
-            var s = states[i];
-            if (s.NationMapIndex <= 0) continue;
-            if (!map.TryGetValue(s.NationMapIndex, out var list)) map[s.NationMapIndex] = list = new List<ScenarioState>();
-            list.Add(s);
-        }
-        return map;
-    }
-
-    private static Dictionary<ushort, List<int>> BuildLandByController(ProvinceTopology map, ushort[] controls)
-    {
-        var byController = new Dictionary<ushort, List<int>>();
-        var limit = Math.Min(map.ProvinceCount, controls.Length - 1);
-        for (var p = 1; p <= limit; p++)
-        {
-            if (map.IsWater(p)) continue;
-            var code = controls[p];
-            if (code == 0) continue;
-            if (!byController.TryGetValue(code, out var list)) byController[code] = list = new List<int>();
-            list.Add(p);
-        }
-        return byController;
-    }
-
-    private static IEnumerable<int> RepositionNationStages(Campaign c, Ground g, List<SupportFormation> own,
-        IReadOnlyList<StrategicWar> wars, Dictionary<int, List<int>> battlesByWar,
-        Dictionary<ushort, List<int>> landByController, Dictionary<int, Ground> grounds, BattleSet battles,
-        Dictionary<int, SupportFormation> byId, RepositionScratch scratch,
-        Func<Dictionary<int, LongRangeStrikes.Sides>> getStrikeSides,
-        Func<List<(ushort OwnerMap, int Province, float Reach)>> getAllStrikers,
-        Func<Dictionary<int, List<ScenarioState>>> getStatesByOwnerMap)
-    {
-        var map = g.Map;
-        var d = c.Defines;
-        var wordsNeeded = (map.ProvinceCount + 65) >> 6;
-        if (scratch.TargetBits.Length < wordsNeeded) scratch.TargetBits = new ulong[wordsNeeded + 8];
-        else Array.Clear(scratch.TargetBits, 0, wordsNeeded);
-        var targetBits = scratch.TargetBits;
-        var targets = scratch.Targets;
-        targets.Clear();
-
-        foreach (var war in wars)
-        {
-            if (war.Ended || !war.Involves(g.Nation.Id) || !battlesByWar.TryGetValue(war.Id, out var list)) continue;
-            for (var i = 0; i < list.Count; i++)
-            {
-                var province = list[i];
-                if (!g.Valid(province)) continue;
-                var w = province >> 6;
-                var mask = 1UL << (province & 63);
-                if ((targetBits[w] & mask) == 0) { targetBits[w] |= mask; targets.Add(province); }
-            }
-        }
-        if (targets.Count == 0)
-            foreach (var code in g.Passable)
-                if (landByController.TryGetValue(code, out var owned))
-                    for (var i = 0; i < owned.Count; i++)
-                    {
-                        var p = owned[i];
-                        var w = p >> 6;
-                        var mask = 1UL << (p & 63);
-                        if ((targetBits[w] & mask) == 0 && g.BordersEnemy(p)) { targetBits[w] |= mask; targets.Add(p); }
-                    }
-        if (targets.Count == 0) yield break;
-        targets.Sort();
-
-        var idle = scratch.Idle;
-        var sams = scratch.Sams;
-        idle.Clear();
-        sams.Clear();
-        scratch.PlanMemo.Clear();
-        LongRangeStrikes.Sides mySides = null;
-        for (var oi = 0; oi < own.Count; oi++)
-        {
-            var f = own[oi];
-            if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || !SupportCore.Enabled(c, type)) continue;
-            // Only the standing: nothing on the road, deploying, or cut off is re-planned.
-            if (f.Route.Count > 0 || f.DeployDaysLeft > 0 || f.CutOff || f.BaseProvinceId <= 0 || SupportCore.Displaced(c, f)) continue;
-            if (type.Kind == SupportKind.AirDefence) { sams.Add((f, type)); continue; }
-            // A missile brigade or a long-range drone group on strike work answers to its targets,
-            // not to the battles: depots and power stations a thousand kilometres behind the line
-            // are what it is for, and while any of them is in reach it stays where it is.
-            if (f.Mission == SupportCore.MissionStrike && type.Strike > 0f)
-            {
-                if (mySides is null)
-                {
-                    var strikeSides = getStrikeSides();
-                    if (!strikeSides.TryGetValue(g.Nation.Id, out mySides))
-                        strikeSides[g.Nation.Id] = mySides = LongRangeStrikes.SidesOf(c, g.Nation.Id);
-                }
-                if (!LongRangeStrikes.HasTargetInReach(c, f, type, mySides)) idle.Add((f, type));
-                continue;
-            }
-            var reach = SupportCore.ReachKm(c, type);
-            var covers = false;
-            for (var ti = 0; ti < targets.Count; ti++)
-                if (SupportCore.DistanceKm(c, f.BaseProvinceId, targets[ti]) <= reach) { covers = true; break; }
-            if (!covers) idle.Add((f, type));
-        }
-        // SAM brigades guard the cities first; the ones no city needs - nothing of the enemy's
-        // can reach any, or every threatened one is covered - go where the fighting is, to keep
-        // the enemy's aircraft off it, like any other formation that reaches no battle.
-        if (sams.Count > 0)
-        {
-            foreach (var (f, type) in CoverWithSams(c, g, own, sams, landByController, grounds, battles, byId, scratch,
-                         getAllStrikers(), getStatesByOwnerMap()))
-            {
-                var reach = SupportCore.ReachKm(c, type);
-                var covers = false;
-                for (var ti = 0; ti < targets.Count; ti++)
-                    if (SupportCore.DistanceKm(c, f.BaseProvinceId, targets[ti]) <= reach) { covers = true; break; }
-                if (!covers) idle.Add((f, type));
-            }
-            if (idle.Count > 0 && Campaign.StageOverdue()) yield return 0;
-        }
-
-        if (idle.Count > 0)
-        {
-            var bound = 0f;
-            for (var i = 0; i < idle.Count; i++) bound = MathF.Max(bound, Standoff(c, idle[i].Type));
-            DistanceField(c, map, targets, bound, scratch, out var near, out var within);
-            scratch.RoadMemo.Clear();
-            scratch.SeaMemo.Clear();
-            scratch.AirMemo.Clear();
-            for (var i = 0; i < idle.Count; i++)
-            {
-                var (f, type) = idle[i];
-                var standoff = Standoff(c, type);
-                var mayTouch = type.RangeKm < d.AiLongRangeFrontlineMaxRangeKm;
-                var origin = f.BaseProvinceId;
-                var anySuit = false;
-                for (var wi = 0; wi < within.Count; wi++)
-                {
-                    var p = within[wi];
-                    if (p != origin && Suits(g, p, near, standoff, mayTouch)) { anySuit = true; break; }
-                }
-                if (!anySuit) continue;
-                var ordered = type.Movement == SupportMoveMode.Air
-                    ? FlyToward(c, g, f, type, origin, within, near, standoff, mayTouch, landByController, grounds, battles, byId, scratch)
-                    : DriveToward(c, g, f, type, origin, within, near, standoff, mayTouch, grounds, battles, byId, scratch);
-                var ordDist = (uint)ordered < (uint)near.Length ? near[ordered] : float.PositiveInfinity;
-                var orgDist = (uint)origin < (uint)near.Length ? near[origin] : float.PositiveInfinity;
-                if (ordered > 0 && ordDist < orgDist)
-                    AiOrdersTowardFront++;
-                if (i + 1 < idle.Count && Campaign.StageOverdue()) yield return 0;
-            }
-        }
-    }
-
-    /// <summary>
-    /// A formation that drives: the suiting province the road reaches soonest; with none by road -
-    /// a war across the water - the nearest suiting ones in a straight line, the first the order
-    /// accepts, by ship if it must. Returns where it was sent, or -1.
-    /// </summary>
-    private static int DriveToward(Campaign c, Ground g, SupportFormation f, SupportTypeDefinition type, int origin,
-        List<int> within, float[] near, float standoff, bool mayTouch,
-        Dictionary<int, Ground> grounds, BattleSet battles, Dictionary<int, SupportFormation> byId, RepositionScratch scratch)
-    {
-        var memoKey = (origin, standoff, mayTouch, type.Speed);
-        if (!scratch.RoadMemo.TryGetValue(memoKey, out var chosen))
-        {
-            chosen = NearestByRoad(c, g, type, origin, near, standoff, mayTouch, scratch);
-            scratch.RoadMemo[memoKey] = chosen;
-        }
-        if (chosen > 0 && chosen != origin)
-            return OrderFast(c, g.Nation.Id, f.Id, chosen, grounds, battles, byId, scratch.PlanMemo) ? chosen : -1;
-
-        var seaKey = (origin, standoff, mayTouch);
-        if (!scratch.SeaMemo.TryGetValue(seaKey, out var seaChosen))
-        {
-            seaChosen = -1;
-            Span<int> topP = stackalloc int[4];
-            Span<float> topKm = stackalloc float[4];
-            var found = 0;
-            for (var wi = 0; wi < within.Count; wi++)
-            {
-                var p = within[wi];
-                if (p == origin || !Suits(g, p, near, standoff, mayTouch)) continue;
-                var km = SupportCore.DistanceKm(c, origin, p);
-                if (found == 4 && (km > topKm[3] || (km == topKm[3] && p >= topP[3]))) continue;
-                var insert = found < 4 ? found++ : 3;
-                while (insert > 0 && (km < topKm[insert - 1] || (km == topKm[insert - 1] && p < topP[insert - 1])))
-                {
-                    topKm[insert] = topKm[insert - 1];
-                    topP[insert] = topP[insert - 1];
-                    insert--;
-                }
-                topKm[insert] = km;
-                topP[insert] = p;
-            }
-            for (var ti = 0; ti < found; ti++)
-            {
-                var province = topP[ti];
-                if (!PreviewOne(c, g.Nation.Id, f.Id, province, false, grounds, battles, byId, includeBasing: false, planMemo: scratch.PlanMemo).Accepted)
-                    continue;
-                seaChosen = province;
-                break;
-            }
-            scratch.SeaMemo[seaKey] = seaChosen;
-        }
-        if (seaChosen > 0)
-            return OrderFast(c, g.Nation.Id, f.Id, seaChosen, grounds, battles, byId, scratch.PlanMemo) ? seaChosen : -1;
-        return -1;
-    }
-
-    /// <summary>
-    /// A formation that flies: the suiting province nearest in one flight; with none that close,
-    /// the nearest at all, reached in hops - each to a province of its side within one ferry
-    /// flight and nearer the destination - given as one order with its waypoints, the way a
-    /// player gives it with Shift+right-click. Returns where it was sent, or -1.
-    /// </summary>
-    private static int FlyToward(Campaign c, Ground g, SupportFormation f, SupportTypeDefinition type, int origin,
-        List<int> within, float[] near, float standoff, bool mayTouch, Dictionary<ushort, List<int>> landByController,
-        Dictionary<int, Ground> grounds, BattleSet battles, Dictionary<int, SupportFormation> byId, RepositionScratch scratch)
-    {
-        var ferry = FerryKm(c, type);
-        var airKey = (origin, standoff, mayTouch, ferry);
-        if (!scratch.AirMemo.TryGetValue(airKey, out var hopsArr))
-        {
-            var chosen = NearestByAir(c, g, type, origin, within, near, standoff, mayTouch);
-            if (chosen > 0 && chosen != origin)
-            {
-                hopsArr = new[] { chosen };
-            }
-            else
-            {
-                var goal = -1; var goalKm = float.MaxValue;
-                for (var wi = 0; wi < within.Count; wi++)
-                {
-                    var province = within[wi];
-                    if (province == origin || !Suits(g, province, near, standoff, mayTouch)) continue;
-                    var km = SupportCore.DistanceKm(c, origin, province);
-                    if (km < goalKm) { goal = province; goalKm = km; }
-                }
-                if (goal <= 0)
-                {
-                    hopsArr = Array.Empty<int>();
-                }
-                else
-                {
-                    var map = g.Map;
-                    var goalLat = map.CenterOf(goal).Latitude;
-                    var hops = new List<int>();
-                    var at = origin;
-                    var reachable = true;
-                    // Six legs is a wing across a continent; a war further than that is not this wing's.
-                    while (SupportCore.DistanceKm(c, at, goal) > ferry && hops.Count < 6)
-                    {
-                        var atLat = map.CenterOf(at).Latitude;
-                        var next = -1; var nextKm = SupportCore.DistanceKm(c, at, goal) - 100f;
-                        foreach (var code in g.Passable)
-                            if (landByController.TryGetValue(code, out var bucket))
-                                for (var i = 0; i < bucket.Count; i++)
-                                {
-                                    var p = bucket[i];
-                                    if (g.Destroyed(p) || g.Battles.Contains(p)) continue;
-                                    var pLat = map.CenterOf(p).Latitude;
-                                    if (MathF.Abs(pLat - atLat) * 111.0f > ferry || MathF.Abs(pLat - goalLat) * 111.0f > nextKm) continue;
-                                    if (SupportCore.DistanceKm(c, at, p) > ferry) continue;
-                                    var left = SupportCore.DistanceKm(c, p, goal);
-                                    if (left < nextKm || (next > 0 && left == nextKm && p < next)) { next = p; nextKm = left; }
-                                }
-                        if (next <= 0) { reachable = false; break; }
-                        hops.Add(next);
-                        at = next;
-                    }
-                    if (!reachable || SupportCore.DistanceKm(c, at, goal) > ferry)
-                    {
-                        hopsArr = Array.Empty<int>();
-                    }
-                    else
-                    {
-                        hops.Add(goal);
-                        hopsArr = hops.ToArray();
-                    }
-                }
-            }
-            scratch.AirMemo[airKey] = hopsArr;
-        }
-        if (hopsArr.Length == 0) return -1;
-        if (!OrderFast(c, g.Nation.Id, f.Id, hopsArr[0], grounds, battles, byId, null)) return -1;
-        for (var leg = 1; leg < hopsArr.Length; leg++)
-            new RelocateSupportCommand { IssuerId = g.Nation.Id, FormationIds = new[] { f.Id }, ProvinceId = hopsArr[leg], Append = true }
-                .ApplyFast(c, grounds, battles, byId, null);
-        return hopsArr[^1];
-    }
-
-    /// <summary>
-    /// How far from the fighting the computer puts a formation: a share of its reach, so the front
-    /// can move and it still reaches - except for the guns that belong on the front itself, which
-    /// take their whole reach. A province is about 65 km across, and three fifths of a 45 km gun
-    /// line's reach is less than one: held to the share, it could never stand next to a battle.
-    /// </summary>
-    private static float Standoff(Campaign c, SupportTypeDefinition type)
-    {
-        var d = c.Defines;
-        var reach = SupportCore.ReachKm(c, type);
-        return type.RangeKm < d.AiLongRangeFrontlineMaxRangeKm ? reach : d.AiLongRangeStandoffShare * reach;
-    }
-
-    private static bool OrderFast(Campaign c, int nationId, int formationId, int province,
-        Dictionary<int, Ground> grounds, BattleSet battles, Dictionary<int, SupportFormation> byId,
-        Dictionary<(int, int), CachedGroundPlan> planMemo)
-    {
-        var order = new RelocateSupportCommand { IssuerId = nationId, FormationIds = new[] { formationId }, ProvinceId = province };
-        order.ApplyFast(c, grounds, battles, byId, planMemo);
-        if (order.Moved == 0) return false;
-        AiOrders++;
-        return true;
-    }
-
-    /// <summary>
-    /// Kilometres from the nearest battle or front province, along the province graph, out to a
-    /// bound - never shorter than the straight line, so a province inside the bound by this
-    /// measure is inside it in fact. Ties never matter: a shortest distance is the same however
-    /// equal-cost provinces are popped.
-    /// </summary>
-    internal static Dictionary<int, float> DistanceField(Campaign c, ProvinceTopology map, List<int> sources, float bound, out List<int> within)
-    {
-        if (NativeKernelsLoader.EnableDistanceFieldDefault &&
-            NativeProvinceGraph.ForMap(map) is { } nativeGraph &&
-            nativeGraph.TryDistanceField(sources, bound, out var nativeDistances, out var nativeWithin) &&
-            nativeDistances is not null && nativeWithin is not null)
-        {
-            within = nativeWithin;
-            return nativeDistances;
-        }
-        return DistanceFieldManaged(c, map, sources, bound, out within);
-    }
-
-    internal static Dictionary<int, float> DistanceFieldManaged(Campaign c, ProvinceTopology map, List<int> sources, float bound, out List<int> within)
-    {
-        var distance = new Dictionary<int, float>();
-        within = new List<int>();
-        var queue = new PriorityQueue<int, (float, int)>();
-        foreach (var source in sources) { distance[source] = 0f; queue.Enqueue(source, (0f, source)); }
-        while (queue.TryDequeue(out var province, out var key))
-        {
-            if (key.Item1 > distance[province]) continue;
-            within.Add(province);
-            if (province < 0 || province >= map.Neighbors.Length) continue;
-            var neighbours = map.Neighbors[province];
-            if (neighbours is null) continue;
-            foreach (var neighbour in neighbours)
-            {
-                var step = SupportCore.DistanceKm(c, province, neighbour);
-                var toNeighbour = key.Item1 + step;
-                if (toNeighbour > bound) continue;
-                if (distance.TryGetValue(neighbour, out var known) && known <= toNeighbour) continue;
-                distance[neighbour] = toNeighbour;
-                queue.Enqueue(neighbour, (toNeighbour, neighbour));
-            }
-        }
-        return distance;
-    }
-
-    private static void DistanceField(Campaign c, ProvinceTopology map, List<int> sources, float bound,
-        RepositionScratch scratch, out float[] distance, out List<int> within)
-    {
-        var needed = map.ProvinceCount + 2;
-        within = scratch.Within;
-        if (scratch.Near.Length < needed)
-        {
-            scratch.Near = new float[needed + 64];
-            Array.Fill(scratch.Near, float.PositiveInfinity);
-            within.Clear();
-        }
-        else
-        {
-            for (var i = 0; i < within.Count; i++) scratch.Near[within[i]] = float.PositiveInfinity;
-            within.Clear();
-        }
-        distance = scratch.Near;
-        var queue = scratch.Queue;
-        queue.Clear();
-        for (var i = 0; i < sources.Count; i++)
-        {
-            var source = sources[i];
-            if ((uint)source >= (uint)distance.Length) continue;
-            distance[source] = 0f;
-            queue.Enqueue(source, (0f, source));
-        }
-        while (queue.TryDequeue(out var province, out var key))
-        {
-            if (key.Item1 > distance[province]) continue;
-            within.Add(province);
-            foreach (var next in map.Neighbors[province])
-            {
-                var km = key.Item1 + SupportCore.DistanceKm(c, province, next);
-                if (km > bound || distance[next] <= km) continue;
-                distance[next] = km;
-                queue.Enqueue(next, (km, next));
-            }
-        }
-        within.Sort();
-    }
-
-    private static bool Suits(Ground g, int province, float[] near, float standoff, bool mayTouch) =>
-        g.Enterable(province) && !g.Battles.Contains(province) &&
-        (uint)province < (uint)near.Length && near[province] <= standoff &&
-        (mayTouch || !g.BordersEnemy(province));
-
-    /// <summary>The province suiting the formation that the road reaches soonest, ties to the lower id.</summary>
-    private static int NearestByRoad(Campaign c, Ground g, SupportTypeDefinition type, int origin,
-        float[] near, float standoff, bool mayTouch, RepositionScratch scratch)
-    {
-        var needed = g.Map.ProvinceCount + 2;
-        var touched = scratch.RoadTouched;
-        if (scratch.RoadDays.Length < needed)
-        {
-            scratch.RoadDays = new float[needed + 64];
-            Array.Fill(scratch.RoadDays, float.PositiveInfinity);
-            touched.Clear();
-        }
-        else
-        {
-            for (var i = 0; i < touched.Count; i++) scratch.RoadDays[touched[i]] = float.PositiveInfinity;
-            touched.Clear();
-        }
-        var days = scratch.RoadDays;
-        if ((uint)origin >= (uint)days.Length) return -1;
-        days[origin] = 0f;
-        touched.Add(origin);
-        var queue = scratch.Queue;
-        queue.Clear();
-        queue.Enqueue(origin, (0f, origin));
-        var popped = 0;
-        while (queue.TryDequeue(out var province, out var key))
-        {
-            if (key.Item1 > days[province]) continue;
-            if (province != origin && Suits(g, province, near, standoff, mayTouch)) return province;
-            // A month of driving is not a repositioning, and a continent is not a search space.
-            if (++popped > 6000 || key.Item1 > 45f) break;
-            foreach (var next in g.Map.Neighbors[province])
-            {
-                if (!g.Enterable(next)) continue;
-                var pace = PaceOf(g, type, province, next, SupportMoveMode.Land, out _);
-                var arrive = key.Item1 + MathF.Max(1f, 1f / pace);
-                var known = days[next];
-                if (known <= arrive) continue;
-                if (float.IsPositiveInfinity(known)) touched.Add(next);
-                days[next] = arrive;
-                queue.Enqueue(next, (arrive, next));
-            }
-        }
-        return -1;
-    }
-
-    /// <summary>The suiting province nearest in a straight line within one ferry flight, ties to the lower id.</summary>
-    private static int NearestByAir(Campaign c, Ground g, SupportTypeDefinition type, int origin, List<int> within,
-        float[] near, float standoff, bool mayTouch)
-    {
-        var ferry = FerryKm(c, type);
-        var best = -1;
-        var bestKm = float.MaxValue;
-        for (var i = 0; i < within.Count; i++)
-        {
-            var province = within[i];
-            if (province == origin || !Suits(g, province, near, standoff, mayTouch)) continue;
-            var km = SupportCore.DistanceKm(c, origin, province);
-            if (km > ferry || km >= bestKm) continue;
-            best = province; bestKm = km;
-        }
-        return best;
-    }
-
-    /// <summary>
-    /// SAM brigades go where the enemy's strike arm can hit and nobody covers yet - the most
-    /// populous such region first - unless the brigade already stands under that threat.
-    /// </summary>
-    private static List<(SupportFormation Formation, SupportTypeDefinition Type)> CoverWithSams(Campaign c, Ground g,
-        List<SupportFormation> own,
-        List<(SupportFormation Formation, SupportTypeDefinition Type)> sams, Dictionary<ushort, List<int>> landByController,
-        Dictionary<int, Ground> grounds, BattleSet battles, Dictionary<int, SupportFormation> byId, RepositionScratch scratch,
-        List<(ushort OwnerMap, int Province, float Reach)> allStrikers,
-        Dictionary<int, List<ScenarioState>> statesByOwnerMap)
-    {
-        // The brigades no city needs, for the review to send toward the fighting instead.
-        var spare = new List<(SupportFormation Formation, SupportTypeDefinition Type)>();
-        var map = g.Map;
-        var strikers = new List<(int Province, float Reach)>();
-        for (var si = 0; si < allStrikers.Count; si++)
-        {
-            var item = allStrikers[si];
-            if (g.IsHostile(item.OwnerMap)) strikers.Add((item.Province, item.Reach));
-        }
-        if (strikers.Count == 0) return sams;
-        bool Threatened(int province)
-        {
-            for (var si = 0; si < strikers.Count; si++)
-            {
-                var (at, reach) = strikers[si];
-                if (SupportCore.DistanceKm(c, at, province) <= reach) return true;
-            }
-            return false;
-        }
-
-        // The regions in danger, most people first; each named by the province its bases take.
-        var held = new Dictionary<int, List<int>>();
-        if (g.Nation.MapIndex > 0 && landByController.TryGetValue((ushort)g.Nation.MapIndex, out var ownLand))
-            for (var i = 0; i < ownLand.Count; i++)
-            {
-                var p = ownLand[i];
-                var region = map.ProvinceToState[p];
-                if (!held.TryGetValue(region, out var list)) held[region] = list = new List<int>();
-                list.Add(p);
-            }
-        var regions = new List<ScenarioState>();
-        if (g.Nation.MapIndex > 0 && statesByOwnerMap.TryGetValue(g.Nation.MapIndex, out var ownedStates))
-            for (var i = 0; i < ownedStates.Count; i++)
-            {
-                var s = ownedStates[i];
-                if (held.ContainsKey(s.MapIndex)) regions.Add(s);
-            }
-        regions.Sort(static (a, b) =>
-        {
-            var cmp = b.Population.CompareTo(a.Population);
-            return cmp != 0 ? cmp : a.MapIndex.CompareTo(b.MapIndex);
-        });
-        if (regions.Count > 40) regions.RemoveRange(40, regions.Count - 40);
-        var guarded = new List<(int Province, float Reach)>();
-        foreach (var (f, type) in sams) guarded.Add((Destination(f), SupportCore.ReachKm(c, type)));
-        for (var oi = 0; oi < own.Count; oi++)
-        {
-            var other = own[oi];
-            if (other.Route.Count == 0) continue;
-            if (SupportTypeCatalog.TryGet(other.TypeId, out var otherType) && otherType.Kind == SupportKind.AirDefence)
-                guarded.Add((Destination(other), SupportCore.ReachKm(c, otherType)));
-        }
-        var anchors = new Dictionary<int, int>();
-        foreach (var (f, type) in sams)
-        {
-            if (Threatened(f.BaseProvinceId)) continue;
-            var sent = false;
-            foreach (var region in regions)
-            {
-                if (!anchors.TryGetValue(region.MapIndex, out var anchor))
-                    anchors[region.MapIndex] = anchor = SupportCore.ChooseBase(map, held[region.MapIndex]);
-                if (anchor <= 0 || !Threatened(anchor) || !g.Enterable(anchor) || g.Battles.Contains(anchor)) continue;
-                var covered = false;
-                foreach (var (at, reach) in guarded)
-                    if (at > 0 && SupportCore.DistanceKm(c, at, anchor) <= reach) { covered = true; break; }
-                if (covered) continue;
-                if (OrderFast(c, g.Nation.Id, f.Id, anchor, grounds, battles, byId, scratch.PlanMemo))
-                {
-                    guarded.Add((anchor, SupportCore.ReachKm(c, type)));
-                    AiCityCover++;
-                    sent = true;
-                }
-                break;
-            }
-            if (!sent) spare.Add((f, type));
-        }
-        return spare;
-    }
-
-    // ------------------------------------------------------------------ the fingerprint
-
-    /// <summary>The rules a peer must agree on, in a fixed order; compared against the shipped defaults.</summary>
     internal static float[] Rules(Defines d) => new[]
     {
         d.LongRangeSeaKmPerDay, d.LongRangePortDays, d.LongRangeAirKmPerDay, d.LongRangeFerryRangeFactor,

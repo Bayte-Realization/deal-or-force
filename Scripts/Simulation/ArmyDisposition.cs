@@ -85,8 +85,10 @@ public static class ArmyDisposition
                 if ((campaign.ElapsedDays + nation.Id * 3) % 7 != 0) continue;
                 if (nation.Population <= 0 || nation.Landless) continue;
                 if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command)) continue;
-                foreach (var _ in ReviewStages(campaign, nation)) yield return 0;
-                yield return 0;
+                var nationArmies = CollectFreeArmies(campaign, nation);
+                if (nationArmies is null) continue;
+                foreach (var _ in ReviewStages(campaign, nation, nationArmies)) yield return 0;
+                if (Campaign.StageOverdue()) yield return 0;
             }
         }
         finally
@@ -113,9 +115,8 @@ public static class ArmyDisposition
         return cache.ByNation.TryGetValue(nationId, out var owned) ? owned : Array.Empty<Army>();
     }
 
-    private static IEnumerable<int> ReviewStages(Campaign campaign, Nation nation)
+    private static IReadOnlyList<Army> CollectFreeArmies(Campaign campaign, Nation nation)
     {
-        var d = campaign.Defines;
         Free.Clear();
         var nationArmies = ArmiesOf(campaign, nation.Id);
         for (var i = 0; i < nationArmies.Count; i++)
@@ -127,6 +128,38 @@ public static class ArmyDisposition
                 army.PlanActive && army.OrderKind != ArmyOrder.Manual) continue;
             Free.Add(army);
         }
+        return Free.Count == 0 ? null : nationArmies;
+    }
+
+    private static bool NeedsRelieve(Campaign campaign)
+    {
+        var d = campaign.Defines;
+        var map = campaign.ProvinceMap;
+        for (var i = 0; i < Free.Count; i++)
+        {
+            var army = Free[i];
+            if (army.CutOff || army.ProvinceId <= 0 || army.ProvinceId >= map.ProvinceToState.Length) continue;
+            if (army.SupplyCongestion >= d.DispositionCongestionLimit && army.SupplyLevel >= d.DispositionSupplyLimit) continue;
+            return true;
+        }
+        return false;
+    }
+
+    private static bool HasStackedFreeArmies()
+    {
+        var count = Free.Count;
+        for (var i = 0; i < count; i++)
+        {
+            var p = Free[i].ProvinceId;
+            for (var j = i + 1; j < count; j++)
+                if (Free[j].ProvinceId == p) return true;
+        }
+        return false;
+    }
+
+    private static IEnumerable<int> ReviewStages(Campaign campaign, Nation nation, IReadOnlyList<Army> nationArmies)
+    {
+        var d = campaign.Defines;
         if (Free.Count == 0) yield break;
         var atWar = AtWar(campaign, nation);
         var moves = 0;
@@ -139,13 +172,16 @@ public static class ArmyDisposition
             }
         }
         if (Free.Count == 0 || moves >= d.DispositionMovesPerWeek) yield break;
-        Measure(campaign, nation, nationArmies);
-        foreach (var added in RelieveStages(campaign, nation, d.DispositionMovesPerWeek - moves))
+        if (NeedsRelieve(campaign))
         {
-            moves += added;
-            yield return 0;
+            Measure(campaign, nation, nationArmies);
+            foreach (var added in RelieveStages(campaign, nation, d.DispositionMovesPerWeek - moves))
+            {
+                moves += added;
+                yield return 0;
+            }
         }
-        if (moves < d.DispositionMovesPerWeek && !atWar)
+        if (moves < d.DispositionMovesPerWeek && !atWar && HasStackedFreeArmies())
             foreach (var _ in GarrisonStages(campaign, nation, nationArmies, d.DispositionMovesPerWeek - moves))
                 yield return 0;
     }

@@ -1,0 +1,120 @@
+// Wave 2 geopolitical decision & event modifiers (explicit structural trade-offs).
+{
+  "supply_diversification_pact": {
+    "name": "gp.mod.supply_diversification_pact.name",
+    "description": "gp.mod.supply_diversification_pact.desc",
+    "days": 365,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "trade_reach": 0.10,
+      "output": 0.03,
+      "borrowing_cost": 0.04
+    }
+  },
+  "export_control_regime": {
+    "name": "gp.mod.export_control_regime.name",
+    "description": "gp.mod.export_control_regime.desc",
+    "days": 270,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "research_speed": 0.09,
+      "construction_speed": 0.07,
+      "trade_reach": -0.08
+    }
+  },
+  "convoy_escort_charter": {
+    "name": "gp.mod.convoy_escort_charter.name",
+    "description": "gp.mod.convoy_escort_charter.desc",
+    "days": 240,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "naval_speed": 0.08,
+      "supply": 0.10,
+      "trade_reach": 0.06
+    }
+  },
+  "fast_track_overdrive": {
+    "name": "gp.mod.fast_track_overdrive.name",
+    "description": "gp.mod.fast_track_overdrive.desc",
+    "days": 240,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "construction_speed": 0.14,
+      "construction_cost": 0.08,
+      "radicalism_weekly": 0.0008
+    }
+  },
+  "creditor_austerity_covenant": {
+    "name": "gp.mod.creditor_austerity_covenant.name",
+    "description": "gp.mod.creditor_austerity_covenant.desc",
+    "days": 365,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "credit_capacity": 0.12,
+      "borrowing_cost": -0.08,
+      "tax_efficiency": 0.05,
+      "living_weekly": -0.0008
+    }
+  },
+  "joint_deterrence_posture": {
+    "name": "gp.mod.joint_deterrence_posture.name",
+    "description": "gp.mod.joint_deterrence_posture.desc",
+    "days": 270,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "deterrence": 0.09,
+      "organisation_recovery": 0.08,
+      "entrenchment_speed": 0.08
+    }
+  },
+  "gp_ev_freight_reroute": {
+    "name": "gp.mod.freight_reroute.name",
+    "description": "gp.mod.freight_reroute.desc",
+    "days": 180,
+    "positive": false,
+    "effects": {},
+    "modifiers": {
+      "trade_reach": -0.07,
+      "construction_cost": 0.05
+    }
+  },
+  "gp_ev_lithography_crash_program": {
+    "name": "gp.mod.lithography_crash.name",
+    "description": "gp.mod.lithography_crash.desc",
+    "days": 270,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "research_speed": 0.10,
+      "borrowing_cost": 0.05
+    }
+  },
+  "gp_ev_transit_corridor_boom": {
+    "name": "gp.mod.transit_boom.name",
+    "description": "gp.mod.transit_boom.desc",
+    "days": 240,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "tax_efficiency": 0.06,
+      "trade_reach": 0.08
+    }
+  },
+  "gp_ev_engineering_breakthrough": {
+    "name": "gp.mod.engineering_breakthrough.name",
+    "description": "gp.mod.engineering_breakthrough.desc",
+    "days": 240,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "construction_speed": 0.12,
+      "research_speed": 0.06
+    }
+  }
+}

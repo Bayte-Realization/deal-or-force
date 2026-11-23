@@ -44,7 +44,7 @@ public static class FrontDisengagement
     {
         using var measured = SimProfiler.Measure("      staff:disengage");
         moving = null;
-        if (context is not null && !context.Matches(c, war, nation.Id))
+        if (context is not null && !context.EnsureFresh(c, war, nation.Id))
         { context.Dispose(); context = null; }
         if (!c.Defines.FrontStaffDisengages || war is null || war.Ended ||
             !(context?.Safe(hole) ?? WarCoalition.SafeRetreatProvince(c, war, nation.Id, hole))) return false;
@@ -67,10 +67,10 @@ public static class FrontDisengagement
         {
             if (!Eligible(c, nation, war, line, army)) continue;
             context ??= SelectionContext.Obtain(c, war, nation.Id, hole);
-            var battle = context.Battle(army.BattleId);
-            if (battle is null || c.ElapsedDays - battle.StartedDay < Math.Max(0, c.Defines.FrontDisengagementMinimumBattleDays)) continue;
-            var attacking = battle.Attackers.Contains(army.Id);
-            if (!attacking && !battle.Defenders.Contains(army.Id)) continue;
+            var armyBattle = context.Battle(army.BattleId);
+            if (armyBattle is null || c.ElapsedDays - armyBattle.StartedDay < Math.Max(0, c.Defines.FrontDisengagementMinimumBattleDays)) continue;
+            var attacking = armyBattle.Attackers.Contains(army.Id);
+            if (!attacking && !armyBattle.Defenders.Contains(army.Id)) continue;
             if (line?.Cohesion == PlanCohesion.Rigid &&
                 !c.ProvinceMap.Neighbors[army.ProvinceId].AsSpan().Contains(hole)) continue;
             var take = army.Divisions >= 2f
@@ -79,7 +79,7 @@ public static class FrontDisengagement
             var share = take / army.Divisions;
             SideTotals totals;
             using (SimProfiler.Measure("        disengage:participants"))
-                totals = context.Totals(battle, attacking);
+                totals = context.Totals(armyBattle, attacking);
             // Do not leave the healthy anchor and call two exhausted counters a rearguard.
             if (totals.OwnDivisions - take < .99f || totals.OwnPower - army.Power * share < MathF.Max(.05f, totals.OwnPower * .5f)) continue;
             if (!attacking)
@@ -108,13 +108,18 @@ public static class FrontDisengagement
         if (best is null) return false;
         var objective = line?.Objectives.GetValueOrDefault(best.Id, -1) ?? -1;
         var lineIndex = line is null ? -1 : c.FrontLines.IndexOf(line);
+        var battle = context.Battle(best.BattleId);
+        var bestAttacking = battle is not null && battle.Attackers.Contains(best.Id);
         var order = new WithdrawArmyFromBattleCommand
         { IssuerId = nation.Id, ArmyId = best.Id, TargetProvinceId = bestRetreat, Share = bestShare };
-        context?.Dispose();
-        context = null; // Splitting/withdrawing changes positions, powers and participant lists.
         order.Apply(c);
-        if (!order.Withdrawn) return false;
-        moving = c.Armies.Find(a => a.Id == order.WithdrawnArmyId);
+        if (!order.Withdrawn) { context?.InvalidateAfterArmyCommand(); return false; }
+        var withdrawnId = order.WithdrawnArmyId;
+        var armies = c.Armies;
+        for (var i = 0; i < armies.Count; i++)
+            if (armies[i].Id == withdrawnId) { moving = armies[i]; break; }
+        if (moving is null) { context?.InvalidateAfterArmyCommand(); return false; }
+        context?.NotifyArmyDetached(best, moving, battle, bestAttacking);
         moving.OrderKind = ArmyOrder.DefendFront;
         moving.AssignedWarId = war.Id;
         moving.DirectOrder = false;
@@ -152,16 +157,25 @@ public static class FrontDisengagement
     {
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, SelectionContext> Pool = new();
         private bool _inUse;
+        private bool _needsRefresh;
         private Campaign _campaign;
         private StrategicWar _war;
         private int _nation;
         private ProvinceTopology _map;
         private ushort[] _controllers;
         private int _mapRevision;
+        private int _warRevision;
+        private int _allianceRevision;
         private int _armyCount;
         private int _battleCount;
         private int _attacker;
         private int _defender;
+        private ProvinceTopology _compMap;
+        private ushort[] _compControllers;
+        private int _compMapRevision;
+        private int _compWarRevision;
+        private int _compAllianceRevision;
+        private int _compNation;
         private readonly HashSet<int> _attackerAllies = new();
         private readonly HashSet<int> _defenderAllies = new();
         private readonly Dictionary<(int Id, int Battle), Army> _units = new();
@@ -203,12 +217,41 @@ public static class FrontDisengagement
         internal SelectionContext(Campaign c, StrategicWar war, int nation, int hole) =>
             Initialize(c, war, nation, hole);
 
+        internal void InvalidateAfterArmyCommand() => _needsRefresh = true;
+
+        internal void NotifyArmyDetached(Army best, Army moving, LandBattle battle, bool attacking)
+        {
+            if (_campaign is null) { _needsRefresh = true; return; }
+            _armyCount = _campaign.Armies.Count;
+            if (battle is not null)
+            {
+                _totals.Remove((battle, attacking));
+                _totals.Remove((battle, !attacking));
+                if (moving is not null) _units.Remove((moving.Id, battle.Id));
+            }
+            if (moving is not null && moving.Divisions >= 0.1f && moving.NationId == _nation)
+                Occupied.Add(moving.ProvinceId);
+            _crowdingReady = false;
+        }
+
+        internal bool EnsureFresh(Campaign c, StrategicWar war, int nation)
+        {
+            if (!_needsRefresh) return Matches(c, war, nation);
+            _needsRefresh = false;
+            if (!ReferenceEquals(c, _campaign) || !ReferenceEquals(war, _war) || nation != _nation)
+                return false;
+            Initialize(c, war, nation, _hole);
+            return true;
+        }
+
         private void Initialize(Campaign c, StrategicWar war, int nation, int hole)
         {
             using var measured = SimProfiler.Measure("        disengage:index");
             _inUse = true;
+            _needsRefresh = false;
             _campaign = c; _war = war; _nation = nation; _map = c.ProvinceMap;
             _controllers = c.ProvinceController; _mapRevision = c.MapRevision;
+            _warRevision = c.WarRevision; _allianceRevision = c.AllianceRevision;
             _armyCount = c.Armies.Count; _battleCount = c.Battles.Count; _hole = hole;
             _attacker = war.AttackerId; _defender = war.DefenderId;
             _attackerAllies.Clear();
@@ -220,6 +263,18 @@ public static class FrontDisengagement
             _holeRoutes.Clear(); _retreats.Clear();
             _crowding.Clear(); _excludedCrowding.Clear(); _crowdingReady = false;
             Occupied.Clear();
+            var keepRouteGraph = ReferenceEquals(_compMap, _map) && ReferenceEquals(_compControllers, _controllers) &&
+                _compMapRevision == _mapRevision && _compWarRevision == _warRevision &&
+                _compAllianceRevision == _allianceRevision && _compNation == nation;
+            if (!keepRouteGraph)
+            {
+                foreach (var search in _searches.Values) search.Dispose();
+                _searches.Clear(); _searchOrder.Clear();
+                _components?.Dispose(); _components = null;
+                _compMap = _map; _compControllers = _controllers;
+                _compMapRevision = _mapRevision; _compWarRevision = _warRevision;
+                _compAllianceRevision = _allianceRevision; _compNation = nation;
+            }
             var own = c.NationById(nation);
             _ownMapIndex = own?.MapIndex ?? -1;
             if (own is not null) _friendly.Add((ushort)own.MapIndex);
@@ -248,7 +303,7 @@ public static class FrontDisengagement
                 // idle or unrelated division rebuilt a world-sized dictionary for each
                 // staff selection. Keep the full scan for occupancy/safety below, but
                 // retain participant references only where they can actually be read.
-                if (_battles.ContainsKey(unit.BattleId))
+                if (unit.BattleId >= 0 && _battles.ContainsKey(unit.BattleId))
                     _units.TryAdd((unit.Id, unit.BattleId), unit);
                 if (!(unit.Divisions >= .1f)) continue;
                 if (unit.NationId == nation) Occupied.Add(unit.ProvinceId);
@@ -259,7 +314,8 @@ public static class FrontDisengagement
         internal bool Matches(Campaign c, StrategicWar war, int nation) =>
             ReferenceEquals(c, _campaign) && ReferenceEquals(war, _war) && nation == _nation &&
             ReferenceEquals(c.ProvinceMap, _map) && ReferenceEquals(c.ProvinceController, _controllers) &&
-            c.MapRevision == _mapRevision && c.Armies.Count == _armyCount && c.Battles.Count == _battleCount &&
+            c.MapRevision == _mapRevision && c.WarRevision == _warRevision && c.AllianceRevision == _allianceRevision &&
+            c.Armies.Count == _armyCount && c.Battles.Count == _battleCount &&
             war.AttackerId == _attacker && war.DefenderId == _defender &&
             _attackerAllies.SetEquals(war.AttackerAllies) && _defenderAllies.SetEquals(war.DefenderAllies);
 
@@ -327,6 +383,8 @@ public static class FrontDisengagement
             _friendly.Clear(); _routeAllowed.Clear(); _hostile.Clear(); _passage.Clear(); _unsafe.Clear();
             _attackerAllies.Clear(); _defenderAllies.Clear();
             _campaign = null; _war = null; _map = null; _controllers = null;
+            _compMap = null; _compControllers = null;
+            _needsRefresh = false;
             _inUse = false;
         }
 

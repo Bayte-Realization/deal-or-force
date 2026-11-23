@@ -1,0 +1,85 @@
+// Production chains for the four modern strategic buildings declared in 98_wave5_buildings.json.
+{
+  "clean_energy_generation": {
+    "good": "Energy",
+    "output": { "CleanEnergyPlant": 4.80 },
+    "needs": { "Batteries": 0.75, "Copper": 0.80 }
+  },
+  "clean_energy_battery_bill": {
+    "good": "Batteries",
+    "demand": { "CleanEnergyPlant": 0.14 }
+  },
+  "clean_energy_copper_bill": {
+    "good": "Copper",
+    "demand": { "CleanEnergyPlant": 0.12 }
+  },
+
+  "industrial_park_materials": {
+    "good": "IndustrialMaterials",
+    "output": { "IndustrialPark": 3.20 },
+    "needs": { "Steel": 0.72, "Energy": 0.75 }
+  },
+  "industrial_park_machinery": {
+    "good": "Machinery",
+    "output": { "IndustrialPark": 0.95 },
+    "needs": { "Steel": 0.70, "Energy": 0.75 }
+  },
+  "industrial_park_steel_bill": {
+    "good": "Steel",
+    "demand": { "IndustrialPark": 0.32 }
+  },
+  "industrial_park_energy_bill": {
+    "good": "Energy",
+    "demand": { "IndustrialPark": 0.55 }
+  },
+
+  "semiconductor_fab_chips": {
+    "good": "Semiconductors",
+    "output": { "SemiconductorFab": 0.95 },
+    "needs": { "Silica": 0.65, "Chemicals": 0.70, "Energy": 0.65, "NobleGases": 0.75 }
+  },
+  "semiconductor_fab_leading": {
+    "good": "AdvancedChips",
+    "output": { "SemiconductorFab": 0.22 },
+    "needs": { "ChipTools": 0.60, "NobleGases": 0.70, "Gallium": 0.75, "Energy": 0.65 }
+  },
+  "semiconductor_fab_inputs_silica": {
+    "good": "Silica",
+    "demand": { "SemiconductorFab": 0.45 }
+  },
+  "semiconductor_fab_inputs_chemicals": {
+    "good": "Chemicals",
+    "demand": { "SemiconductorFab": 0.35 }
+  },
+  "semiconductor_fab_inputs_energy": {
+    "good": "Energy",
+    "demand": { "SemiconductorFab": 0.85 }
+  },
+  "semiconductor_fab_inputs_noblegases": {
+    "good": "NobleGases",
+    "demand": { "SemiconductorFab": 0.04 }
+  },
+  "semiconductor_fab_inputs_chiptools": {
+    "good": "ChipTools",
+    "demand": { "SemiconductorFab": 0.02 }
+  },
+
+  "logistics_hub_materials": {
+    "good": "IndustrialMaterials",
+    "output": { "LogisticsHub": 1.60 },
+    "needs": { "Fuel": 0.75, "MotorVehicles": 0.80 }
+  },
+  "logistics_hub_consumer": {
+    "good": "ConsumerGoods",
+    "output": { "LogisticsHub": 1.40 },
+    "needs": { "Fuel": 0.75, "MotorVehicles": 0.80 }
+  },
+  "logistics_hub_fuel_bill": {
+    "good": "Fuel",
+    "demand": { "LogisticsHub": 0.16 }
+  },
+  "logistics_hub_vehicle_bill": {
+    "good": "MotorVehicles",
+    "demand": { "LogisticsHub": 0.06 }
+  }
+}

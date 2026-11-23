@@ -54,6 +54,7 @@ public partial class DealOrForceGame
         var enabled = !_globe.FreeCamera;
         _freeCameraMode = enabled;
         _globe.SetFreeCamera(enabled);
+        if (enabled) EnsureScreen("free_camera", BuildFreeCameraOverlay);
         RefreshFreeCameraReadout();
         if (enabled && _peaceLayer is { Visible: true }) ClosePeaceConference();
         if (_hudLayer is not null) _hudLayer.Visible = !enabled && _campaign is not null && !_menuLayer.Visible;

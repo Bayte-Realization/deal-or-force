@@ -32,10 +32,18 @@ public static class NavalInvasion
     public static float CarriedDivisions(Campaign campaign, Fleet fleet)
     {
         var carried = 0f;
-        foreach (var id in fleet.Carried)
+        var armies = campaign.Armies;
+        for (var ci = 0; ci < fleet.Carried.Count; ci++)
         {
-            var army = campaign.Armies.Find(candidate => candidate.Id == id);
-            if (army is not null) carried += army.Divisions;
+            var id = fleet.Carried[ci];
+            for (var ai = 0; ai < armies.Count; ai++)
+            {
+                if (armies[ai].Id == id)
+                {
+                    carried += armies[ai].Divisions;
+                    break;
+                }
+            }
         }
         return carried;
     }

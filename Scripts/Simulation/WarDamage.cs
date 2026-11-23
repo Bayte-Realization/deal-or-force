@@ -229,6 +229,9 @@ public static class WarDamage
         foreach (var _ in WeekStages(campaign)) { }
     }
 
+    [ThreadStatic] private static HashSet<int> _atWarScratch;
+    [ThreadStatic] private static List<ScenarioState> _abroadScratch;
+
     /// <summary>The same week, yielded between batches of countries.</summary>
     internal static IEnumerable<int> WeekStages(Campaign campaign)
     {
@@ -236,30 +239,35 @@ public static class WarDamage
         var ledger = LedgerOf(campaign);
         var recounted = false;
         HashSet<int> atWar = null;
-        var abroad = new List<ScenarioState>();
+        var abroad = _abroadScratch ??= new List<ScenarioState>(64);
 
-        var ticked = 0;
-        foreach (var nation in campaign.Nations)
+        var active = campaign.ActiveNations;
+        for (var i = 0; i < active.Count; i++)
         {
-            if (++ticked % 2 == 0 || Campaign.StageOverdue()) yield return 0;
-            // What Arrive remembers of the regions is for one country's turn (Arrivals).
-            _arrivals?.Forget();
+            var nation = active[i];
+            if (i > 0 && Campaign.StageOverdue()) yield return 0;
             var states = campaign.StatesOf(nation);
+            if (states.Length == 0) continue;
             var anyDamage = false;
             var anyDisplaced = false;
-            foreach (var state in states)
+            for (var si = 0; si < states.Length; si++)
             {
-                if (state.WarDamage > 0f) anyDamage = true;
-                if (state.Displaced.Count > 0) anyDisplaced = true;
+                var st = states[si];
+                if (st.WarDamage > 0f) anyDamage = true;
+                if (st.Displaced.Count > 0) anyDisplaced = true;
             }
+            if (!anyDamage && !anyDisplaced) continue;
+            // What Arrive remembers of the regions is for one country's turn (Arrivals).
+            _arrivals?.Forget();
             if (anyDisplaced)
                 using (SimProfiler.Measure("  wd:return"))
-                    foreach (var state in states) Return(campaign, states, state);
+                    ReturnBatch(campaign, states);
             if (!anyDamage) continue;
             if (!recounted) { Recount(campaign, ledger); recounted = true; }
             if (atWar is null)
             {
-                atWar = new HashSet<int>();
+                atWar = _atWarScratch ??= new HashSet<int>();
+                atWar.Clear();
                 var liveWars = Warfare.LiveWars(campaign);
                 for (var wi = 0; wi < liveWars.Count; wi++)
                 {
@@ -273,8 +281,9 @@ public static class WarDamage
             using (SimProfiler.Measure("  wd:abroad")) NeighboursAtPeace(campaign, nation, atWar, abroad);
 
             ScenarioState worst = null;
-            foreach (var state in states)
+            for (var si = 0; si < states.Length; si++)
             {
+                var state = states[si];
                 var damage = state.WarDamage;
                 if (damage <= 0f) continue;
 
@@ -358,8 +367,11 @@ public static class WarDamage
         var paid = Rebuilding(campaign, state) ? 1f + defines.WarDamageRebuildBoost * Materials(nation) : 1f;
         return M.Clamp01(defines.WarDamageRecoveryPerWeek *
                          (1f + infrastructure * defines.WarDamageRecoveryPerInfrastructure) *
-                         NationalModifiers.Factor(nation, "reconstruction_speed") * paid);
+                         NationalModifiers.FactorSlot(nation, NationalModifiers.SlotReconstructionSpeed) * paid);
     }
+
+    [ThreadStatic] private static List<ScenarioState> _homeDestScratch;
+    [ThreadStatic] private static List<ScenarioState> _abroadDestScratch;
 
     private static void Flee(Campaign campaign, ScenarioState[] states, ScenarioState from, long leaving,
         List<ScenarioState> abroad)
@@ -368,13 +380,33 @@ public static class WarDamage
         leaving = Math.Min(leaving, from.Population / 2);
         var defines = campaign.Defines;
 
-        // Where they can go at home: the country's regions the war has not reached, by how many
-        // already live there - people go where there are towns, work and family. The rest go
-        // abroad, to the regions of the neighbours at peace, by the same rule; with no neighbour
-        // at peace they leave for somewhere further off, and the map loses them.
-        var home = Destinations(states, from, defines.WarDamageSafeBelow, out var room) ? M.Clamp01(defines.WarDamageRefugeesStayHome) : 0f;
+        var homeDest = _homeDestScratch ??= new List<ScenarioState>(16);
+        homeDest.Clear();
+        long room = 0;
+        var safeBelow = defines.WarDamageSafeBelow;
+        for (var i = 0; i < states.Length; i++)
+        {
+            var state = states[i];
+            if (state != from && state.WarDamage < safeBelow && state.Population > 0)
+            {
+                homeDest.Add(state);
+                room += state.Population;
+            }
+        }
+        var home = room > 0 ? M.Clamp01(defines.WarDamageRefugeesStayHome) : 0f;
+
+        var abroadDest = _abroadDestScratch ??= new List<ScenarioState>(64);
+        abroadDest.Clear();
         long roomAbroad = 0;
-        foreach (var state in abroad) roomAbroad += state.Population;
+        for (var i = 0; i < abroad.Count; i++)
+        {
+            var state = abroad[i];
+            if (state.Population > 0)
+            {
+                abroadDest.Add(state);
+                roomAbroad += state.Population;
+            }
+        }
 
         // The displaced are counted by their people, to come home when the region is rebuilt -
         // and forgotten when the region has changed hands since they left.
@@ -398,53 +430,85 @@ public static class WarDamage
             gone += share;
 
             var settling = (long)(share * home);
-            if (settling > 0)
+            if (settling > 0 && room > 0)
             {
-                Spread(states, from, defines.WarDamageSafeBelow, room, group, settling);
+                SpreadFiltered(campaign, homeDest, room, group, settling);
                 from.Displaced[group.Culture] = from.Displaced.GetValueOrDefault(group.Culture) + settling;
             }
             if (roomAbroad > 0 && share > settling)
-                Spread(abroad, null, float.PositiveInfinity, roomAbroad, group, share - settling);
+                SpreadFiltered(campaign, abroadDest, roomAbroad, group, share - settling);
         }
 
         from.Population = Math.Max(0, from.Population - gone);
+        if (gone > 0) MovementRules.MarkPeopleStateDirty(campaign, from);
     }
 
     /// <summary>Whether there is anywhere at home to go, and how many people already live there.</summary>
     private static bool Destinations(ScenarioState[] states, ScenarioState from, float safeBelow, out long room)
     {
         room = 0;
-        foreach (var state in states)
+        for (var i = 0; i < states.Length; i++)
+        {
+            var state = states[i];
             if (state != from && state.WarDamage < safeBelow && state.Population > 0)
                 room += state.Population;
+        }
         return room > 0;
     }
 
+    /// <summary>Settle these people over pre-filtered regions by how many live in each; rounding goes to the biggest.</summary>
+    private static void SpreadFiltered(Campaign campaign, List<ScenarioState> dests, long room, PopulationGroup like, long people)
+    {
+        long placed = 0;
+        ScenarioState largest = null;
+        var count = dests.Count;
+        var invRoom = room;
+        for (var i = 0; i < count; i++)
+        {
+            var state = dests[i];
+            if (largest is null || state.Population > largest.Population) largest = state;
+            var part = (long)(people * (state.Population / (double)invRoom));
+            if (part <= 0) continue;
+            Arrive(campaign, state, like, part);
+            placed += part;
+        }
+        if (people > placed && largest is not null) Arrive(campaign, largest, like, people - placed);
+    }
+
     /// <summary>Settle these people over the regions by how many live in each; rounding goes to the biggest.</summary>
-    private static void Spread(IReadOnlyList<ScenarioState> states, ScenarioState except, float safeBelow, long room,
+    private static void Spread(Campaign campaign, IReadOnlyList<ScenarioState> states, ScenarioState except, float safeBelow, long room,
         PopulationGroup like, long people)
     {
         long placed = 0;
         ScenarioState largest = null;
-        foreach (var state in states)
+        var count = states.Count;
+        for (var i = 0; i < count; i++)
         {
+            var state = states[i];
             if (state == except || state.WarDamage >= safeBelow || state.Population <= 0) continue;
             if (largest is null || state.Population > largest.Population) largest = state;
             var part = (long)(people * (state.Population / (double)room));
             if (part <= 0) continue;
-            Arrive(state, like, part);
+            Arrive(campaign, state, like, part);
             placed += part;
         }
-        if (people > placed && largest is not null) Arrive(largest, like, people - placed);
+        if (people > placed && largest is not null) Arrive(campaign, largest, like, people - placed);
     }
 
     /// <summary>
     /// The displaced come home, a share a week, once their region is rebuilt past the ruins and
     /// safe from the fighting: people of each of its peoples are found in the rest of the country
-    /// and moved back. Some are never found - they have moved on, or been counted as locals -
-    /// and the count falls by the share either way, so it ends.
+    /// and moved back.
     /// </summary>
     [ThreadStatic] private static List<string> _displacedKeysScratch;
+    [ThreadStatic] private static Dictionary<string, long> _returnFoundScratch;
+    [ThreadStatic] private static List<(ScenarioState State, PopulationGroup Group)> _returnMatchesScratch;
+
+    private static void ReturnBatch(Campaign campaign, ScenarioState[] states)
+    {
+        for (var si = 0; si < states.Length; si++)
+            Return(campaign, states, states[si]);
+    }
 
     private static void Return(Campaign campaign, ScenarioState[] states, ScenarioState home)
     {
@@ -456,39 +520,99 @@ public static class WarDamage
         var keys = _displacedKeysScratch ??= new List<string>();
         keys.Clear();
         foreach (var key in home.Displaced.Keys) keys.Add(key);
+
+        Dictionary<string, long> foundByCulture = null;
+        if (keys.Count > 1)
+        {
+            foundByCulture = _returnFoundScratch ??= new Dictionary<string, long>(StringComparer.Ordinal);
+            foundByCulture.Clear();
+            for (var ki = 0; ki < keys.Count; ki++) foundByCulture[keys[ki]] = 0;
+            for (var si = 0; si < states.Length; si++)
+            {
+                var state = states[si];
+                if (state == home || state.Population <= 0) continue;
+                var groups = state.PopulationGroups;
+                for (var gi = 0; gi < groups.Count; gi++)
+                {
+                    var group = groups[gi];
+                    if (group.Size > 0 && foundByCulture.TryGetValue(group.Culture, out var existing))
+                        foundByCulture[group.Culture] = existing + group.Size;
+                }
+            }
+        }
+
+        var singleCultureMatches = keys.Count == 1 ? (_returnMatchesScratch ??= new List<(ScenarioState, PopulationGroup)>()) : null;
         for (var ki = 0; ki < keys.Count; ki++)
         {
             var culture = keys[ki];
             var waiting = home.Displaced[culture];
             var coming = Math.Min(waiting, Math.Max(1L, (long)MathF.Ceiling(waiting * defines.WarDamageReturnPerWeek)));
             long found = 0;
-            foreach (var state in states)
+            if (foundByCulture is not null)
             {
-                if (state == home) continue;
-                foreach (var group in state.PopulationGroups)
-                    if (group.Size > 0 && string.Equals(group.Culture, culture, StringComparison.Ordinal)) found += group.Size;
-            }
-            // Never more than a tenth of that people elsewhere in the country in one week.
-            var moving = Math.Min(coming, found / 10);
-            if (moving > 0)
-            {
-                long moved = 0;
-                foreach (var state in states)
+                found = foundByCulture.GetValueOrDefault(culture);
+                var moving = Math.Min(coming, found / 10);
+                if (moving > 0)
                 {
-                    if (state == home || moved >= moving) continue;
-                    foreach (var group in state.PopulationGroups)
+                    long moved = 0;
+                    for (var si = 0; si < states.Length; si++)
                     {
-                        if (group.Size <= 0 || !string.Equals(group.Culture, culture, StringComparison.Ordinal)) continue;
+                        var state = states[si];
+                        if (state == home || state.Population <= 0 || moved >= moving) continue;
+                        var groups = state.PopulationGroups;
+                        for (var gi = 0; gi < groups.Count; gi++)
+                        {
+                            var group = groups[gi];
+                            if (group.Size <= 0 || !string.Equals(group.Culture, culture, StringComparison.Ordinal)) continue;
+                            var part = Math.Min(group.Size, (long)Math.Ceiling(moving * (group.Size / (double)found)));
+                            part = Math.Min(part, moving - moved);
+                            if (part <= 0) continue;
+                            group.Size -= part;
+                            state.Population = Math.Max(0, state.Population - part);
+                            MovementRules.MarkPeopleStateDirty(campaign, state);
+                            Arrive(campaign, home, group, part);
+                            moved += part;
+                            if (moved >= moving) break;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                singleCultureMatches!.Clear();
+                for (var si = 0; si < states.Length; si++)
+                {
+                    var state = states[si];
+                    if (state == home || state.Population <= 0) continue;
+                    var groups = state.PopulationGroups;
+                    for (var gi = 0; gi < groups.Count; gi++)
+                    {
+                        var group = groups[gi];
+                        if (group.Size > 0 && string.Equals(group.Culture, culture, StringComparison.Ordinal))
+                        {
+                            found += group.Size;
+                            singleCultureMatches.Add((state, group));
+                        }
+                    }
+                }
+                var moving = Math.Min(coming, found / 10);
+                if (moving > 0)
+                {
+                    long moved = 0;
+                    for (var mi = 0; mi < singleCultureMatches.Count && moved < moving; mi++)
+                    {
+                        var (state, group) = singleCultureMatches[mi];
                         var part = Math.Min(group.Size, (long)Math.Ceiling(moving * (group.Size / (double)found)));
                         part = Math.Min(part, moving - moved);
                         if (part <= 0) continue;
                         group.Size -= part;
                         state.Population = Math.Max(0, state.Population - part);
-                        Arrive(home, group, part);
+                        MovementRules.MarkPeopleStateDirty(campaign, state);
+                        Arrive(campaign, home, group, part);
                         moved += part;
-                        if (moved >= moving) break;
                     }
                 }
+                singleCultureMatches.Clear();
             }
             if (waiting - coming <= 0) home.Displaced.Remove(culture);
             else home.Displaced[culture] = waiting - coming;
@@ -519,8 +643,10 @@ public static class WarDamage
         foreach (var index in CampaignDiplomacy.Neighbours(campaign, nation.MapIndex))
         {
             var neighbour = campaign.NationByMapIndex(index);
-            if (neighbour is null || atWar.Contains(neighbour.Id)) continue;
-            into.AddRange(campaign.StatesOf(neighbour));
+            if (neighbour is null || neighbour.Population <= 0 || atWar.Contains(neighbour.Id)) continue;
+            var states = campaign.StatesOf(neighbour);
+            for (var si = 0; si < states.Length; si++)
+                if (states[si].Population > 0) into.Add(states[si]);
         }
     }
 
@@ -572,13 +698,14 @@ public static class WarDamage
     }
 
     /// <summary>How many times a region is walked in a week before it is given a table.</summary>
-    private const int WalksBeforeTable = 8;
+    private const int WalksBeforeTable = 4;
 
     [ThreadStatic] private static Arrivals _arrivals;
 
-    private static void Arrive(ScenarioState state, PopulationGroup like, long people)
+    private static void Arrive(Campaign campaign, ScenarioState state, PopulationGroup like, long people)
     {
         state.Population += people;
+        MovementRules.MarkPeopleStateDirty(campaign, state);
         var arrivals = _arrivals ??= new Arrivals();
         var groups = state.PopulationGroups;
         if (!arrivals.ByState.TryGetValue(state, out var kinds))
@@ -587,11 +714,13 @@ public static class WarDamage
             else kinds = new Kinds();
             arrivals.ByState[state] = kinds;
         }
-        if (++kinds.Asked <= WalksBeforeTable)
+        var threshold = groups.Count > 8 ? 1 : WalksBeforeTable;
+        if (++kinds.Asked <= threshold && kinds.Listed < 0)
         {
-            // The walk itself, as it always was.
-            foreach (var group in groups)
+            // The walk itself, as it always was (only worthwhile on tiny group lists).
+            for (var index = 0; index < groups.Count; index++)
             {
+                var group = groups[index];
                 if (group.Class != like.Class || group.Sector != like.Sector ||
                     !string.Equals(group.Culture, like.Culture, StringComparison.Ordinal) ||
                     !string.Equals(group.Religion, like.Religion, StringComparison.Ordinal) ||

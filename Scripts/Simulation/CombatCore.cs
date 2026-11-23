@@ -131,7 +131,7 @@ public static partial class Warfare
         campaign is not null && ArmyIndexes.TryGetValue(campaign, out var index) ? index : null;
 
     /// <summary>A capture moved formations in this campaign. Another campaign's capture does not set the flag.</summary>
-    private static void MarkIndexStale(Campaign campaign)
+    internal static void MarkIndexStale(Campaign campaign)
     {
         if (campaign is not null && ArmyIndexes.TryGetValue(campaign, out var index))
         {
@@ -441,6 +441,8 @@ public static partial class Warfare
     // beside another.
     private static readonly Army[] SingleAdvancing = new Army[1];
 
+    [ThreadStatic] private static int[] _homeCountsScratch;
+
     internal static void MeasureOccupation(Campaign campaign)
     {
         if (campaign is null) return;
@@ -450,16 +452,31 @@ public static partial class Warfare
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null) return;
-        for (var province = 1; province <= topology.ProvinceCount; province++)
+        var homeToNation = topology.ProvinceToNation;
+        var count = topology.ProvinceCount;
+        var maxOrig = 0;
+        for (var p = 1; p <= count; p++)
         {
-            var original = topology.ProvinceToNation[province];
+            var orig = homeToNation[p];
+            if (orig > maxOrig) maxOrig = orig;
+        }
+        var homes = _homeCountsScratch;
+        if (homes is null || homes.Length <= maxOrig)
+            _homeCountsScratch = homes = new int[Math.Max(maxOrig + 1, 2048)];
+        else
+            Array.Clear(homes, 0, maxOrig + 1);
+        for (var province = 1; province <= count; province++)
+        {
+            var original = homeToNation[province];
             if (original == 0) continue;
-            index.HomeProvinces[original] = index.HomeProvinces.GetValueOrDefault(original) + 1;
+            homes[original]++;
             var controller = controllers[province];
             if (controller == 0 || controller == original) continue;
             var key = ((long)original << 32) | controller;
             index.OccupiedPairs[key] = index.OccupiedPairs.GetValueOrDefault(key) + 1;
         }
+        for (var orig = 1; orig <= maxOrig; orig++)
+            if (homes[orig] > 0) index.HomeProvinces[(ushort)orig] = homes[orig];
     }
 
     private static int Occupied(Campaign campaign, ushort original, ushort by) =>
@@ -776,8 +793,21 @@ public static partial class Warfare
         //
         // Gated inside the scope rather than around it, so the profiler still counts one
         // entry per step and the cadence check still reads what it is written to read.
-        using (SimProfiler.Measure("  war:battles"))
-            if (campaign.StepOpensNewDay) ResolveBattles(campaign);
+        if (campaign.StepOpensNewDay)
+        {
+            using var battles = ResolveBattlesStages(campaign).GetEnumerator();
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("  war:battles")) more = battles.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
+        else
+        {
+            using (SimProfiler.Measure("  war:battles")) { }
+        }
         using (SimProfiler.Measure("  war:occupation")) SecureOccupation(campaign);
         campaign.Battles.RemoveAll(battle => battle.Ended && campaign.ElapsedDays - battle.StartedDay > 30);
         ForgetEndedBattleNations(campaign);
@@ -843,21 +873,30 @@ public static partial class Warfare
         // day. The seams sit between armies, so captures still land in the order the
         // formations made them and the scopes stay closed across every seam.
         var seen = 0;
-        foreach (var army in InWar(war.Id))
+        var warArmies = InWar(war.Id);
+        for (var ai = 0; ai < warArmies.Count; ai++)
         {
-            if (++seen % 6 == 0 || Campaign.StageOverdue()) yield return 0;
+            var army = warArmies[ai];
             // A formation with nothing to resolve - holding, in reserve, marching, fighting, not
-            // yet ready - is passed before the measuring starts. Two in three are, every hour
-            // (87 thousand of 129 thousand over fourteen late days), and each used to open and
-            // close two profiler scopes to be told so: the scopes were all an idle formation
-            // cost here. The tests are the same ones in the same order; the rest follow inside.
+            // yet ready - is passed before the measuring starts and without bouncing the iterator.
             if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
                 army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays)
                 continue;
+            if (++seen % 12 == 0 || Campaign.StageOverdue()) yield return 0;
             using (SimProfiler.Measure("  war:advances"))
             using (SimProfiler.Measure("    adv:resolve"))
             {
-            if (!war.Involves(army.NationId) || MilitaryAccess.MustReturn(campaign, army))
+            if (!war.Involves(army.NationId)) continue;
+            var armyNation = campaign.NationById(army.NationId);
+            if (armyNation is null || army.ProvinceId <= 0) continue;
+            // Fast path: a formation on its own ground cannot trigger MilitaryAccess.MustReturn.
+            if (army.ProvinceId < controllers.Length)
+            {
+                var standingOn = controllers[army.ProvinceId];
+                if (standingOn != 0 && standingOn != armyNation.MapIndex && MilitaryAccess.MustReturn(campaign, army))
+                    continue;
+            }
+            else if (MilitaryAccess.MustReturn(campaign, army))
                 continue;
             // A cut-off or stranded formation does not begin an attack on its own (StaffReasons),
             // but it still marches into ground nobody holds: that is how a pocket breaks out, and
@@ -1064,6 +1103,13 @@ public static partial class Warfare
 
     private static void ResolveBattles(Campaign campaign)
     {
+        foreach (var _ in ResolveBattlesStages(campaign)) { }
+    }
+
+    private static IEnumerable<int> ResolveBattlesStages(Campaign campaign)
+    {
+        var battleCount = campaign.Battles.Count;
+        if (battleCount == 0) yield break;
         UseBattleBuckets(campaign);
         // A capture marks province slots stale. While this day's battles are still
         // being read, that mark patches the slots whose membership changed. It does
@@ -1075,8 +1121,9 @@ public static partial class Warfare
         battleIndex.DeferProvinceRebuild = true;
         try
         {
-        foreach (var battle in campaign.Battles)
+        for (var bi = 0; bi < battleCount; bi++)
         {
+            var battle = campaign.Battles[bi];
             if (battle.Ended) continue;
             var warsById = IndexedWarById(campaign);
             var war = warsById is not null && warsById.TryGetValue(battle.WarId, out var foundWar) ? foundWar : null;
@@ -1215,6 +1262,11 @@ public static partial class Warfare
             battle.DefenderSupport = defenderSupportShown;
 
             var envelopmentBonus = CombatTempo.EnvelopmentFactor(defines, directions);
+            var attackerCombinedArms = BattleTelemetry.CombinedArmsMultiplier(defines, AttackerLine, attackerFire);
+            var defenderCombinedArms = BattleTelemetry.CombinedArmsMultiplier(defines, DefenderLine, defenderFire);
+            battle.LastAttackDirections = directions;
+            battle.LastAttackerCombinedArms = attackerCombinedArms;
+            battle.LastDefenderCombinedArms = defenderCombinedArms;
 
             double attackerOffenceSum = 0d;
             double atkPowerWeight = 0d, atkTrainSum = 0d, atkStanceSum = 0d, atkCmdSum = 0d, atkResSum = 0d, atkEncSum = 0d;
@@ -1240,7 +1292,7 @@ public static partial class Warfare
             }
             var attackerOffence = (float)attackerOffenceSum *
                 attackerEngagement * attackerPierces * riverAttackMultiplier * straitAttackMultiplier * terrain.Attack *
-                (1f + attackerPlanning * defines.MaxPlanningAttackBonus) * envelopmentBonus * attackerFire;
+                (1f + attackerPlanning * defines.MaxPlanningAttackBonus) * envelopmentBonus * attackerFire * attackerCombinedArms;
 
             double defenderOffenceSum = 0d;
             for (var di = 0; di < DefenderLine.Count; di++)
@@ -1255,7 +1307,7 @@ public static partial class Warfare
                     Generals.Factors(campaign, army).Attack;
             }
             var defenderOffence = (float)defenderOffenceSum *
-                defenderEngagement * defenderPierces * defines.DefenderCounterFire * defenderFire;
+                defenderEngagement * defenderPierces * defines.DefenderCounterFire * defenderFire * defenderCombinedArms;
 
             double dugInSum = 0d;
             for (var di = 0; di < DefenderLine.Count; di++) dugInSum += DefenderLine[di].Entrenchment;
@@ -1304,10 +1356,13 @@ public static partial class Warfare
                 defResSum += w * res;
                 defEncSum += w * enc;
             }
+            var flankRetention = BattleTelemetry.FlankingEntrenchmentRetention(defines, directions);
+            battle.LastFlankingBypass = 1f - flankRetention;
+            var effectiveEntrenchmentBonus = 1f + dugIn * flankRetention * defines.EntrenchmentBonus;
             var defenderProtection = (float)defenderProtectionSum *
                 defenderEngagement * defines.DefenderAdvantage * terrain.Defense *
-                (1f + dugIn * defines.EntrenchmentBonus) * effectiveDefenderStripped *
-                homelandBonus * frontalBonus;
+                effectiveEntrenchmentBonus * effectiveDefenderStripped *
+                homelandBonus * frontalBonus * defenderCombinedArms;
 
             double attackerProtectionSum = 0d;
             for (var ai = 0; ai < AttackerLine.Count; ai++)
@@ -1321,7 +1376,7 @@ public static partial class Warfare
                     Generals.Factors(campaign, army).Defence;
             }
             var attackerProtection = (float)attackerProtectionSum *
-                attackerEngagement * attackerStripped;
+                attackerEngagement * attackerStripped * attackerCombinedArms;
 
             // The war of the weak (GuerrillaWar): a rising or a small country defending rough
             // ground of its own against a far stronger enemy stays in the fight longer, and gives
@@ -1370,6 +1425,7 @@ public static partial class Warfare
                 CombatFactors.Add(attack, "Frontage", attackerEngagement);
                 CombatFactors.Add(attack, "Armour and piercing", attackerPierces);
                 CombatFactors.Add(attack, "Guns and aircraft", attackerFire);
+                CombatFactors.Add(attack, "Combined arms", attackerCombinedArms);
                 CombatFactors.Add(attack, "Plan prepared", 1f + attackerPlanning * defines.MaxPlanningAttackBonus);
                 CombatFactors.Add(attack, "Attack from several sides", envelopmentBonus);
                 CombatFactors.Add(attack, "Training and equipment", atkPowerWeight <= 0 ? 1f : (float)(atkTrainSum / atkPowerWeight));
@@ -1383,7 +1439,9 @@ public static partial class Warfare
                 CombatFactors.Add(attack, "Fortune", attackerFortune);
 
                 CombatFactors.Add(defence, "Terrain", terrain.Defense);
-                CombatFactors.Add(defence, "Entrenchment", 1f + dugIn * defines.EntrenchmentBonus);
+                CombatFactors.Add(defence, "Entrenchment", effectiveEntrenchmentBonus);
+                if (directions >= 2 && dugIn > 0.05f) CombatFactors.Add(defence, "Flanking bypass", flankRetention);
+                CombatFactors.Add(defence, "Combined arms", defenderCombinedArms);
                 CombatFactors.Add(defence, "Shelled", effectiveDefenderStripped);
                 CombatFactors.Add(defence, "Homeland", isHomeProvince ? defines.HomelandDefenseBonus : 1f);
                 CombatFactors.Add(defence, "Capital", isCapitalState ? defines.CapitalDefenseBonus : 1f);
@@ -1426,6 +1484,31 @@ public static partial class Warfare
                 CombatTactics.OrgDamage(attackerTactic), defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
             var attackerOrgLoss = M.Clamp(defines.BaseOrganisationDamage * MathF.Sqrt(pressureOnAttacker) *
                 CombatTactics.OrgDamage(defenderTactic), defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
+
+            // Encircled zero-supply pocket collapse: trapped formations with exhausted depots lose
+            // organisation decisively instead of stalling indefinitely as 1-man zombie stacks.
+            var defCollapseCount = 0;
+            for (var di = 0; di < DefenderLine.Count; di++)
+                if (BattleTelemetry.IsInPocketCollapse(defines, DefenderLine[di])) defCollapseCount++;
+            var defCollapseShare = DefenderLine.Count > 0 ? (float)defCollapseCount / DefenderLine.Count : 0f;
+            if (defCollapseShare > 0f && defines.PocketCollapseOrgMultiplier > 1f)
+            {
+                var collapseMult = M.Lerp(1f, defines.PocketCollapseOrgMultiplier, defCollapseShare);
+                defenderOrgLoss *= collapseMult;
+                CombatFactors.Add(battle.DefenceFactors, "Pocket collapse", 1f / collapseMult);
+            }
+            var atkCollapseCount = 0;
+            for (var ai = 0; ai < AttackerLine.Count; ai++)
+                if (BattleTelemetry.IsInPocketCollapse(defines, AttackerLine[ai])) atkCollapseCount++;
+            var atkCollapseShare = AttackerLine.Count > 0 ? (float)atkCollapseCount / AttackerLine.Count : 0f;
+            if (atkCollapseShare > 0f && defines.PocketCollapseOrgMultiplier > 1f)
+            {
+                var collapseMult = M.Lerp(1f, defines.PocketCollapseOrgMultiplier, atkCollapseShare);
+                attackerOrgLoss *= collapseMult;
+                CombatFactors.Add(battle.AttackFactors, "Pocket collapse", 1f / collapseMult);
+            }
+            battle.LastPhase = BattleTelemetry.ClassifyPhase(terrain.Id, directions, defCollapseShare > 0.25f,
+                attackerArmour, attackerPlanning, dugIn, attackerFire, defenderFire, breakthrough, counterattack);
             if (breakthrough > 0f)
             {
                 defenderOrgLoss *= 1f + breakthrough * defines.BreakthroughOrganisationBonus;
@@ -1583,9 +1666,10 @@ public static partial class Warfare
                 !HasReadyReserve(AttackerReserve, campaign.Defines.BattleBreakOrganisation))
             {
                 var extraRest = counterattack > 0.30f ? 2 : 0;
+                var minRest = Math.Max(campaign.Defines.RestAfterSpentAttackDays, campaign.Defines.RetreatReorgMinDays);
                 foreach (var army in attacking)
                 {
-                    army.ReadyDay = campaign.ElapsedDays + campaign.Defines.RestAfterSpentAttackDays + extraRest;
+                    army.ReadyDay = Math.Max(army.ReadyDay, campaign.ElapsedDays + minRest + extraRest);
                     if (counterattack > 0.30f)
                     {
                         army.Planning = 0f;
@@ -1621,6 +1705,7 @@ public static partial class Warfare
                     EnsureIndexed(campaign);
                 }
             }
+            if (bi + 1 < battleCount && Campaign.StageOverdue()) yield return 0;
         }
         }
         finally
@@ -1758,7 +1843,7 @@ public static partial class Warfare
             var attackerReady = assessment.Ready ||
                 (assessment.Reason == AssaultReadiness.Reason.PlanPaused &&
                  army.FrontLineId < 0 && army.Planning > 0f &&
-                 campaign.NationById(army.NationId)?.IsHuman != true &&
+                 !campaign.IsHumanControlled(campaign.NationById(army.NationId)) &&
                  assessment.Organisation > assessment.MinimumOrganisation &&
                  assessment.Supply > assessment.MinimumSupply);
             if (WarCoalition.SameSide(war, army.NationId, battle.AttackerId) &&

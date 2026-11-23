@@ -115,6 +115,9 @@ public partial class MainMenuScene : Control
         var chosen = SettingsCatalog.Chosen("language");
         if (chosen.Length > 0) Loc.Language = chosen;
 
+        // Initialize platform profile + mobile text adapter before building menu or intro chrome.
+        Platform.GodotPlatformBridge.EnsureInitialized(Size.Y > 1f ? Size.Y : 1080f);
+
         // And the music, which this screen had none of: the player for it used to live in the
         // campaign scene, so the menu theme only began once a world had been built. It lives
         // above the scenes now and carries on across them (MusicDirector). The catalogue is read
@@ -126,7 +129,7 @@ public partial class MainMenuScene : Control
         // The frame limit the player chose. It used to be applied only when the setting was
         // changed or the window lost focus, so a menu opened fresh ran uncapped - harmless over
         // a still picture, a hot graphics card over a turning planet.
-        Engine.MaxFps = Math.Max(0, (int)MathF.Round(SettingsCatalog.Number("max_fps")));
+        ApplyMenuMaxFps();
 
         // The world itself, behind everything: a live planet wearing the game's own map as it
         // stands on the first day - no badges, no stars, no names, so it reads the same in
@@ -741,7 +744,7 @@ public partial class MainMenuScene : Control
                 break;
 
             case "max_fps":
-                Engine.MaxFps = Math.Max(0, (int)MathF.Round(SettingsCatalog.Number("max_fps")));
+                ApplyMenuMaxFps();
                 break;
 
             case "renderer":
@@ -766,6 +769,19 @@ public partial class MainMenuScene : Control
         }
     }
 
+    private static void ApplyMenuMaxFps()
+    {
+        var configuredMaxFps = Math.Max(0, (int)MathF.Round(SettingsCatalog.Number("max_fps")));
+        if (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true && configuredMaxFps == 0)
+        {
+            if (Engine.MaxFps == 0) Engine.MaxFps = 60;
+        }
+        else
+        {
+            Engine.MaxFps = configuredMaxFps;
+        }
+    }
+
     public override void _Notification(int what)
     {
         base._Notification(what);
@@ -777,7 +793,7 @@ public partial class MainMenuScene : Control
         }
         else if (what == NotificationApplicationFocusIn)
         {
-            Engine.MaxFps = Math.Max(0, (int)MathF.Round(SettingsCatalog.Number("max_fps")));
+            ApplyMenuMaxFps();
         }
     }
 

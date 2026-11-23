@@ -181,7 +181,7 @@ public static class ScenarioCatalog
             var parts = row.Split('|');
             if (parts.Length < 10) continue;
 
-            var mapIndex = ParseInt(parts[0]);
+            var mapIndex = ParseIntSpan(parts[0]);
             if (mergedGround.ContainsKey(mapIndex))
             {
                 readPast++;
@@ -192,7 +192,7 @@ public static class ScenarioCatalog
             if (!usedIds.Add(id)) id = $"{id}_{mapIndex}";
 
             var palette = WorldMapTables.MapPalette[
-                M.Clamp(ParseInt(parts[7]), 0, WorldMapTables.MapPalette.Length - 1)];
+                M.Clamp(ParseIntSpan(parts[7]), 0, WorldMapTables.MapPalette.Length - 1)];
             var variant = palette.Length <= 1 ? 0 : (int)(StableHash(id) % (uint)palette.Length);
             CapitalCatalog.TryGet(iso, out var capital);
 
@@ -209,8 +209,8 @@ public static class ScenarioCatalog
             // magnitude and never negative. How much per head is Defines.MicrostateGdpPerHead,
             // because it is the one number in that derivation that is a judgement rather than a
             // figure.
-            var reportedGdp = ParseFloat(parts[6]);
-            var population = ParseLong(parts[5]);
+            var reportedGdp = ParseFloatSpan(parts[6]);
+            var population = ParseLongSpan(parts[5]);
             var gdp = reportedGdp > 0f
                 ? reportedGdp / 1000f
                 // The parentheses are load-bearing, and so is the divisor being 1e9 rather than
@@ -249,14 +249,31 @@ public static class ScenarioCatalog
         }
         Phase("nations");
 
-        var usedStateIds = new HashSet<string>(StringComparer.Ordinal);
+        var usedStateIds = new HashSet<string>(WorldMapTables.StateRows.Length, StringComparer.Ordinal);
         foreach (var row in WorldMapTables.StateRows)
         {
-            var parts = row.Split('|');
-            if (parts.Length < 5) continue;
+            var span = row.AsSpan();
+            var p0 = span.IndexOf('|');
+            if (p0 < 0) continue;
+            var s0 = span[..p0];
+            span = span[(p0 + 1)..];
+            var p1 = span.IndexOf('|');
+            if (p1 < 0) continue;
+            var s1 = span[..p1];
+            span = span[(p1 + 1)..];
+            var p2 = span.IndexOf('|');
+            if (p2 < 0) continue;
+            var s2 = span[..p2];
+            span = span[(p2 + 1)..];
+            var p3 = span.IndexOf('|');
+            if (p3 < 0) continue;
+            var s3 = span[..p3];
+            span = span[(p3 + 1)..];
+            var p4 = span.IndexOf('|');
+            var s4 = p4 >= 0 ? span[..p4] : span;
 
-            var mapIndex = ParseInt(parts[0]);
-            var nationMapIndex = ParseInt(parts[2]);
+            var mapIndex = ParseIntSpan(s0);
+            var nationMapIndex = ParseIntSpan(s2);
             // A region of an entry that is not a country is a region of whoever holds its
             // ground, from this line on; of nobody, when nobody does (Antarctica), and then it
             // is unclaimed land like any other history says belongs to no one.
@@ -267,9 +284,10 @@ public static class ScenarioCatalog
                 nobodys = holder == 0;
             }
             countryIdByMapIndex.TryGetValue(nationMapIndex, out var nationId);
-            var iso = parts[3];
+            var name = s1.ToString();
+            var iso = s3.ToString();
             var id = string.IsNullOrWhiteSpace(iso) || iso.Length < 4
-                ? $"{nationId ?? "x"}_{Slug(parts[1])}"
+                ? $"{nationId ?? "x"}_{Slug(name)}"
                 : Slug(iso);
 
             if (!usedStateIds.Add(id))
@@ -284,9 +302,9 @@ public static class ScenarioCatalog
                 NationMapIndex = nationMapIndex,
                 NationId = nationId ?? "",
                 Id = id,
-                Name = parts[1],
+                Name = name,
                 Iso = iso,
-                Kind = parts[4],
+                Kind = s4.ToString(),
                 Unclaimed = nobodys
             });
         }
@@ -391,13 +409,15 @@ public static class ScenarioCatalog
     private static bool IsCode(string value) =>
         value is { Length: 3 } && !value.StartsWith("-", StringComparison.Ordinal) && char.IsLetter(value[0]);
 
-    private static int ParseInt(string value) =>
+    [ThreadStatic] private static System.Text.StringBuilder _slugBuilder;
+
+    private static int ParseIntSpan(ReadOnlySpan<char> value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : 0;
 
-    private static long ParseLong(string value) =>
+    private static long ParseLongSpan(ReadOnlySpan<char> value) =>
         long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : 0;
 
-    private static float ParseFloat(string value) =>
+    private static float ParseFloatSpan(ReadOnlySpan<char> value) =>
         float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? result : 0f;
 
     private static uint StableHash(string value)
@@ -409,12 +429,17 @@ public static class ScenarioCatalog
 
     private static string Slug(string value)
     {
-        var builder = new System.Text.StringBuilder();
+        var builder = _slugBuilder ??= new System.Text.StringBuilder(32);
+        builder.Clear();
         foreach (var character in value)
         {
             if (char.IsLetterOrDigit(character)) builder.Append(char.ToLowerInvariant(character));
             else if (builder.Length > 0 && builder[^1] != '_') builder.Append('_');
         }
-        return builder.ToString().Trim('_');
+        var start = 0;
+        var len = builder.Length;
+        while (start < len && builder[start] == '_') start++;
+        while (len > start && builder[len - 1] == '_') len--;
+        return len <= start ? "" : start == 0 && len == builder.Length ? builder.ToString() : builder.ToString(start, len - start);
     }
 }

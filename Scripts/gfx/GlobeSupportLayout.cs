@@ -24,8 +24,8 @@ public sealed partial class GlobePresentation
         _supportLayoutOrder.Sort((a,b)=>a.Formation.Id.CompareTo(b.Formation.Id));
         foreach(var marker in _supportLayoutOrder)
         {
-            var anchor=_flatMap ? FlatPoint(marker.Latitude,marker.Longitude,FlatMarkerZ-SupportMarkerDepthBias)
-                : SurfacePoint(marker.Latitude,marker.Longitude,SurfaceMarkerRadius*SupportSurfaceDepthFactor);
+            var anchor = _flatMap ? LocalFlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ - SupportMarkerDepthBias)
+                : LocalSurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * SupportSurfaceDepthFactor);
             marker.Node.Position=anchor;
             OrientSurfaceCounter(marker.Node,anchor.Normalized());
             marker.DisplayOffset=Vector2.Zero;
@@ -48,8 +48,8 @@ public sealed partial class GlobePresentation
             if(found && offset!=Vector2.Zero &&
                TryLocate(at+offset,out var latitude,out var longitude,out _,out _))
             {
-                marker.Node.Position=_flatMap ? FlatPoint(latitude,longitude,FlatMarkerZ-SupportMarkerDepthBias)
-                    : SurfacePoint(latitude,longitude,SurfaceMarkerRadius*SupportSurfaceDepthFactor);
+                marker.Node.Position = _flatMap ? LocalFlatPoint(latitude, longitude, FlatMarkerZ - SupportMarkerDepthBias)
+                    : LocalSurfacePoint(latitude, longitude, SurfaceMarkerRadius * SupportSurfaceDepthFactor);
                 if(!_flatMap)OrientSurfaceCounter(marker.Node,marker.Node.Position.Normalized());
                 // Radial height can move the projected centre by a fraction of a pixel.
                 // Reject even that final displacement if it crossed a very narrow edge.

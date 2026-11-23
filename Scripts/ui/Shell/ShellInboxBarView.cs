@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -20,9 +21,9 @@ internal sealed class ShellInboxBarView
     private PanelContainer _badge;
     private StyleBoxFlat _badgeStyle;
     private Label _badgeLabel;
-    private StyleBox _idleNormal;
-    private StyleBox _pendingNormal;
-    private StyleBox _hoverStyle;
+    private StyleBoxFlat _idleNormal;
+    private StyleBoxFlat _pendingNormal;
+    private StyleBoxFlat _hoverStyle;
 
     private int _lastCount = -1;
     private string _lastLang = "";
@@ -39,32 +40,24 @@ internal sealed class ShellInboxBarView
 
     public void Build(VBoxContainer parent)
     {
-        _container = new VBoxContainer { Name = "ShellInboxBar", MouseFilter = Control.MouseFilterEnum.Pass };
+        _container = new VBoxContainer
+        {
+            Name = "ShellInboxBar",
+            ClipContents = true,
+            MouseFilter = Control.MouseFilterEnum.Pass
+        };
         _container.AddThemeConstantOverride("separation", 0);
         parent.AddChild(_container);
 
-        _idleNormal = new StyleBoxFlat
-        {
-            BgColor = Ui.Colour("shell.plate_top", 0.45f),
-            ContentMarginLeft = 10, ContentMarginRight = 10, ContentMarginTop = 3, ContentMarginBottom = 3
-        };
-        _pendingNormal = new StyleBoxFlat
-        {
-            BgColor = Ui.Colour("shell.state.warning", 0.16f),
-            BorderColor = Ui.Colour("shell.state.warning", 0.65f),
-            BorderWidthLeft = 2,
-            ContentMarginLeft = 10, ContentMarginRight = 10, ContentMarginTop = 3, ContentMarginBottom = 3
-        };
-        _hoverStyle = new StyleBoxFlat
-        {
-            BgColor = Ui.Colour("shell.paper", 0.10f),
-            ContentMarginLeft = 10, ContentMarginRight = 10, ContentMarginTop = 3, ContentMarginBottom = 3
-        };
+        _idleNormal = Ui.ChromeBox("shell.plate_top", 0.56f, "shell.engrave", 0.72f, cornerRadius: 2, borderWidth: 1, padX: 10, padY: 3);
+        _pendingNormal = Ui.ChromeBox("shell.state.warning", 0.18f, "shell.state.warning", 0.78f, cornerRadius: 2, borderWidth: 1, padX: 10, padY: 3, leftBorderWidth: 3);
+        _hoverStyle = Ui.ChromeBox("shell.plate_hover", 0.88f, "shell.brass_hi", 0.84f, cornerRadius: 2, borderWidth: 1, padX: 10, padY: 3);
 
         _button = new Button
         {
             Name = "ShellDiplomaticInboxButton",
             CustomMinimumSize = new Vector2(0, 34),
+            ClipContents = true,
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None,
             TooltipText = Ui.Tip(Loc.Get("shell.inbox_tooltip"))
@@ -79,18 +72,22 @@ internal sealed class ShellInboxBarView
         };
         _container.AddChild(_button);
 
-        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        var row = new HBoxContainer
+        {
+            ClipContents = true,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
         row.AddThemeConstantOverride("separation", 8);
         row.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        row.OffsetLeft = 12;
-        row.OffsetRight = -12;
+        row.OffsetLeft = 10;
+        row.OffsetRight = -10;
         _button.AddChild(row);
 
         _icon = new TextureRect
         {
-            Texture = _ctx.Icon("icon_shell_treaty"),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            Texture = _ctx.Icon("icon_shell_treaty"),
             CustomMinimumSize = new Vector2(18, 18),
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
             MouseFilter = Control.MouseFilterEnum.Ignore
@@ -113,18 +110,12 @@ internal sealed class ShellInboxBarView
         _titleLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         row.AddChild(_titleLabel);
 
-        _badgeStyle = new StyleBoxFlat
-        {
-            BgColor = Ui.Colour("shell.well"),
-            BorderColor = Ui.Colour("shell.engrave"),
-            ContentMarginLeft = 7, ContentMarginRight = 7, ContentMarginTop = 1, ContentMarginBottom = 1
-        };
-        _badgeStyle.SetBorderWidthAll(1);
-        _badgeStyle.SetCornerRadiusAll(9);
+        _badgeStyle = Ui.ChromeBox("shell.well", 1f, "shell.engrave", 0.85f, cornerRadius: 9, borderWidth: 1, padX: 7, padY: 1);
 
         _badge = new PanelContainer
         {
             Name = "ShellDiplomaticInboxBadge",
+            ClipContents = true,
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
@@ -138,7 +129,7 @@ internal sealed class ShellInboxBarView
             VerticalAlignment = VerticalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
-        _badgeLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
+        _badgeLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
         _badgeLabel.AddThemeFontSizeOverride("font_size", 11);
         _badgeLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
         _badge.AddChild(_badgeLabel);
@@ -173,23 +164,27 @@ internal sealed class ShellInboxBarView
             _container.Visible = false;
             return was;
         }
-        if (!_container.Visible) _container.Visible = true;
+        var wasHidden = !_container.Visible;
+        if (wasHidden) _container.Visible = true;
 
-        var count = _ctx.GetIncomingDiplomaticCount?.Invoke() ?? 0;
+        var count = Math.Max(0, _ctx.GetIncomingDiplomaticCount?.Invoke() ?? 0);
         var lang = Loc.Language;
-        var changed = _lastCount != count || _lastLang != lang;
+        var changed = wasHidden || _lastCount != count || _lastLang != lang;
         if (!changed) return false;
 
         _lastCount = count;
         _lastLang = lang;
         _titleLabel.Text = Loc.Get("Diplomatic inbox");
-        _button.TooltipText = Ui.Tip(Loc.Get("shell.inbox_tooltip"));
 
         var hasMail = count > 0;
+        _button.TooltipText = Ui.Tip(hasMail
+            ? $"{Loc.Format("shell.ws.shell.inbox_pending_tip_fmt", count)}\n{Loc.Get("shell.inbox_tooltip")}"
+            : Loc.Get("shell.inbox_tooltip"));
+
         _button.AddThemeStyleboxOverride("normal", hasMail ? _pendingNormal : _idleNormal);
-        _badgeLabel.Text = count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _badgeLabel.Text = count > 99 ? "99+" : count.ToString(CultureInfo.InvariantCulture);
         _badgeStyle.BgColor = hasMail ? Ui.Colour("shell.state.warning") : Ui.Colour("shell.well");
-        _badgeStyle.BorderColor = hasMail ? Ui.Colour("shell.paper_muted", 0.55f) : Ui.Colour("shell.engrave");
+        _badgeStyle.BorderColor = hasMail ? Ui.Colour("shell.brass_hi", 0.85f) : Ui.Colour("shell.engrave", 0.85f);
         _badgeLabel.AddThemeColorOverride("font_color", Ui.Colour(hasMail ? "shell.ink" : "shell.paper_muted"));
         _titleLabel.AddThemeColorOverride("font_color", Ui.Colour(hasMail ? "shell.state.warning_text" : "shell.paper"));
         _icon.Modulate = hasMail ? Ui.Colour("shell.state.warning") : Ui.Colour("shell.icon");

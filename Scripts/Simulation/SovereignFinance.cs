@@ -128,47 +128,63 @@ public static class SovereignFinance
             Borrow(c, n, shortfall);
             n.Treasury -= shortfall;
         }
+        var before = n.DebtCondition;
         var unpaid = MathF.Max(0, -n.Treasury);
         n.Treasury = MathF.Max(0, n.Treasury);
         MoneyLedger.Book(n, MoneyFlow.BillsDeferred, unpaid);
         // Essential primary spending has priority; any unfunded interest becomes contractual arrears.
+        // During active DebtCondition.Restructuring, contractual interest arrears are paused under
+        // standstill so compounding interest cannot trap the workout at 0 progress forever.
         var missedInterest = MathF.Min(unpaid, n.DebtInterestWeekly);
-        n.DebtArrears += missedInterest;
+        if (before != DebtCondition.Restructuring) n.DebtArrears += missedInterest;
         n.PaymentArrears += unpaid - missedInterest;
-        PayArrears(n, n.Treasury);
         var tolerance = MathF.Max(.000001f, n.Gdp * .0000001f);
-        n.DebtMissedWeeks = n.DebtArrears > tolerance ? n.DebtMissedWeeks + 1 : 0;
-        var crisis = n.DebtArrears + n.PaymentArrears > tolerance;
-        n.DebtCrisisWeeks = crisis ? n.DebtCrisisWeeks + 1 : Math.Max(0, n.DebtCrisisWeeks - 2);
         var revenue = MathF.Max(tolerance, n.WeeklyTaxIncome + n.WeeklyTariffIncome);
-        var unsustainable = n.PublicDebt > Capacity(c, n) && n.DebtInterestWeekly > revenue * .30f ||
-            n.DebtArrears + n.PaymentArrears > revenue * 4f;
-        var before = n.DebtCondition;
         if (before == DebtCondition.Restructuring)
         {
             var fee = MathF.Max(0, n.Gdp * c.Defines.DebtRestructuringFeeShare);
-            // Fiscal adjustment and funding take time; an unfunded process does not magically complete.
+            // Reserve & pay restructuring fee BEFORE PayArrears so arrears sweeps never drain
+            // cash to zero before the workout clock can advance.
             if (n.Treasury >= fee && balance + interest >= -revenue * .15f)
             {
                 n.Treasury -= fee;
                 MoneyLedger.Book(n, MoneyFlow.RestructuringFee, -fee);
                 n.DebtRestructuringProgress++;
             }
+            PayArrears(n, n.Treasury);
+            n.DebtMissedWeeks = n.DebtArrears > tolerance ? n.DebtMissedWeeks + 1 : 0;
+            var crisisDuring = n.DebtArrears + n.PaymentArrears > tolerance;
+            n.DebtCrisisWeeks = crisisDuring ? n.DebtCrisisWeeks + 1 : Math.Max(0, n.DebtCrisisWeeks - 2);
             if (n.DebtRestructuringProgress >= Math.Clamp(c.Defines.DebtRestructuringWeeks, 4, 260))
             {
-                n.PublicDebt = (n.PublicDebt + n.DebtArrears) * (1 - Math.Clamp(c.Defines.DebtHaircut, 0, .7f));
-                n.DebtArrears = 0; n.DebtMissedWeeks = 0;
+                var haircut = Math.Clamp(c.Defines.DebtHaircut, 0, .7f);
+                n.PublicDebt = (n.PublicDebt + n.DebtArrears) * (1f - haircut);
+                n.DebtArrears = 0;
+                n.PaymentArrears *= (1f - haircut);
+                if (n.PaymentArrears <= MathF.Max(tolerance, fee * 4f)) n.PaymentArrears = 0;
+                n.DebtMissedWeeks = 0;
+                n.DebtCrisisWeeks = 0;
                 n.CreditConfidence = MathF.Min(n.CreditConfidence, .35f);
                 n.DebtCondition = n.PaymentArrears > tolerance ? DebtCondition.Stressed : DebtCondition.Current;
                 n.DebtRestructuringLastDay = c.ElapsedDays;
                 c.Chronicle.Record(c, "debt_restructured", n.Id);
             }
         }
-        else if (n.DebtCrisisWeeks >= Math.Clamp(c.Defines.DebtInsolvencyWeeks, 4, 104) && unsustainable)
-            n.DebtCondition = DebtCondition.Insolvent;
-        else if (n.DebtMissedWeeks >= Math.Clamp(c.Defines.DebtDefaultGraceWeeks, 1, 26))
-            n.DebtCondition = DebtCondition.Default;
-        else n.DebtCondition = crisis || n.CreditConfidence < .4f ? DebtCondition.Stressed : DebtCondition.Current;
+        else
+        {
+            PayArrears(n, n.Treasury);
+            n.DebtMissedWeeks = n.DebtArrears > tolerance ? n.DebtMissedWeeks + 1 : 0;
+            var crisisNormal = n.DebtArrears + n.PaymentArrears > tolerance;
+            n.DebtCrisisWeeks = crisisNormal ? n.DebtCrisisWeeks + 1 : Math.Max(0, n.DebtCrisisWeeks - 2);
+            var unsustainable = n.PublicDebt > Capacity(c, n) && n.DebtInterestWeekly > revenue * .30f ||
+                n.DebtArrears + n.PaymentArrears > revenue * 4f;
+            if (n.DebtCrisisWeeks >= Math.Clamp(c.Defines.DebtInsolvencyWeeks, 4, 104) && unsustainable)
+                n.DebtCondition = DebtCondition.Insolvent;
+            else if (n.DebtMissedWeeks >= Math.Clamp(c.Defines.DebtDefaultGraceWeeks, 1, 26))
+                n.DebtCondition = DebtCondition.Default;
+            else n.DebtCondition = crisisNormal || n.CreditConfidence < .4f ? DebtCondition.Stressed : DebtCondition.Current;
+        }
+        var crisis = n.DebtArrears + n.PaymentArrears > tolerance;
         if (n.DebtCondition != before)
         {
             if (n.DebtCondition == DebtCondition.Default) c.Chronicle.Record(c, "sovereign_default", n.Id);
@@ -178,7 +194,7 @@ public static class SovereignFinance
         n.StabilityGovernance = M.Clamp(n.StabilityGovernance - distress, -.20f, .20f);
         n.Productivity = MathF.Max(.05f, n.Productivity * (1 - distress));
         // A conservative AI negotiates rather than spending a decade in an unresolvable crisis.
-        if (!n.IsHuman && n.DebtCondition == DebtCondition.Insolvent) StartRestructuring(c, n);
+        if (!c.IsHumanControlled(n) && n.DebtCondition == DebtCondition.Insolvent) StartRestructuring(c, n);
     }
 
     public static bool StartRestructuring(Campaign c, Nation n)

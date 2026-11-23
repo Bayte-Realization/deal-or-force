@@ -26,9 +26,14 @@ public sealed class SimulationFrameClock
     public double Pending { get; private set; }
 
     private double _stepSeconds;
+    private int _deferredUiFrames;
 
     /// <summary>Forget the owed time: a pause, a load, a fault, a speed the player just changed.</summary>
-    public void Reset() => Pending = 0;
+    public void Reset()
+    {
+        Pending = 0;
+        _deferredUiFrames = 0;
+    }
 
     /// <summary>
     /// The slice of a frame the simulation may use at this speed, in milliseconds.
@@ -37,20 +42,30 @@ public sealed class SimulationFrameClock
     /// between, so a short slice costs nothing but a few more frames for the heavy day. With it
     /// off a step runs to its end anyway, and the slice only says how many may start.
     /// </summary>
-    public static double FrameBudgetMs(Defines defines, int speed, bool smooth)
+    public static double FrameBudgetMs(Defines defines, int speed, bool smooth) =>
+        FrameBudgetMs(defines, speed, smooth, mobileProfile: false);
+
+    public static double FrameBudgetMs(Defines defines, int speed, bool smooth, bool mobileProfile)
     {
         var baseSlice = defines.FrameSimulationBudgetMs;
         var fastSlice = defines.FastSpeedSimulationBudgetMs;
         var smoothFastSlice = defines.SmoothFastSpeedSimulationBudgetMs;
         var uncheckedFastSlice = defines.UncheckedSpeedSimulationBudgetMs;
+        if (mobileProfile)
+        {
+            baseSlice = Math.Min(baseSlice, 5.0f);
+            fastSlice = Math.Min(fastSlice, 24.0f);
+            smoothFastSlice = Math.Min(smoothFastSlice, 22.0f);
+            uncheckedFastSlice = Math.Min(uncheckedFastSlice, 56.0f);
+        }
         return baseSlice <= 0f ? 0f
             : smooth
                 ? (speed >= 5 ? Math.Max(baseSlice, smoothFastSlice)
-                    : speed == 4 ? Math.Max(baseSlice, Math.Min(smoothFastSlice, baseSlice * 1.5f))
+                    : speed == 4 ? Math.Max(baseSlice, Math.Min(smoothFastSlice, mobileProfile ? 14.0f : baseSlice * 1.6f))
                     : baseSlice)
                 : (speed >= 5 ? Math.Max(fastSlice, uncheckedFastSlice)
                     : speed == 4 ? Math.Max(baseSlice, fastSlice)
-                    : Math.Max(27f, baseSlice * 3f));
+                    : Math.Max(12f, baseSlice * 1.5f));
     }
 
     /// <summary>
@@ -64,13 +79,17 @@ public sealed class SimulationFrameClock
     /// (the game: a fault). Exceptions are not caught here: the game's handler resets this clock.
     /// </param>
     public int RunFrame(Campaign campaign, double deltaSeconds, int speed, bool smooth,
-        Action beforeCall = null, Func<bool, bool> afterCall = null)
+        Action beforeCall = null, Func<bool, bool> afterCall = null) =>
+        RunFrame(campaign, deltaSeconds, speed, smooth, beforeCall, afterCall, spentElsewhereMs: 0.0, mobileProfile: false);
+
+    public int RunFrame(Campaign campaign, double deltaSeconds, int speed, bool smooth,
+        Action beforeCall, Func<bool, bool> afterCall, double spentElsewhereMs, bool mobileProfile = false)
     {
         if (campaign is null) return 0;
         campaign.Speed = speed;
         // A step the smoothed clock has begun is carried on even under pause: pausing stops the
         // next step, never half of this one.
-        if (campaign.IsPaused && !campaign.MidStep) { Pending = 0; return 0; }
+        if (campaign.IsPaused && !campaign.MidStep) { Pending = 0; _deferredUiFrames = 0; return 0; }
         // Real seconds one step of the simulation is worth. The speed setting is still in
         // days, because that is what a player thinks in; a campaign stepping six hours at a
         // time simply takes four steps to spend one day's worth of them.
@@ -84,18 +103,28 @@ public sealed class SimulationFrameClock
         // Time is given a slice of the frame rather than a number of days: a speed the machine
         // cannot reach becomes a slower campaign instead of an unresponsive one. See the long
         // note in DealOrForceGame._Process for the history.
-        var budget = Stopwatch.StartNew();
         var baseSlice = campaign.Defines.FrameSimulationBudgetMs;
         var cap = campaign.Defines.MaxDaysPerFrame;
-        var frameBudget = FrameBudgetMs(campaign.Defines, speed, smooth);
+        var frameBudget = FrameBudgetMs(campaign.Defines, speed, smooth, mobileProfile);
+        var remainingBudget = frameBudget > 0 ? frameBudget - Math.Max(0.0, spentElsewhereMs) : 0.0;
+        if (baseSlice > 0f && spentElsewhereMs > 0.0 && remainingBudget < 1.25 &&
+            (campaign.MidStep || Pending >= secondsPerStep) && _deferredUiFrames < 2)
+        {
+            _deferredUiFrames++;
+            return 0;
+        }
+        _deferredUiFrames = 0;
+        var effectiveBudget = frameBudget > 0 ? Math.Max(1.0, remainingBudget) : 0.0;
+        var budget = Stopwatch.StartNew();
         var steps = 0;
         // The frame's own start, for the stages' heavy-piece rule (Campaign.HeavyNext): a step
         // begun late in a frame must know the frame is not fresh.
         Campaign.FrameStarted = Stopwatch.GetTimestamp();
         try
         {
+            const double MinNextStepHeadroomMs = 1.5;
             while ((campaign.MidStep || Pending >= secondsPerStep) && steps < cap &&
-                   (steps == 0 || budget.Elapsed.TotalMilliseconds < frameBudget))
+                   (steps == 0 || (effectiveBudget > 0 && budget.Elapsed.TotalMilliseconds + MinNextStepHeadroomMs <= effectiveBudget)))
             {
                 if (!campaign.MidStep) Pending -= secondsPerStep;
                 beforeCall?.Invoke();
@@ -105,13 +134,12 @@ public sealed class SimulationFrameClock
                 {
                     if (baseSlice > 0f)
                     {
-                        var slice = Math.Max(1.0, frameBudget - budget.Elapsed.TotalMilliseconds);
-                        var callStarted = smooth ? Stopwatch.GetTimestamp() : 0L;
-                        // Half the slice is the heavy ceiling. Smooth time off passes no ceiling,
-                        // so the same budget still runs every stage that fits and the step's result
-                        // is unchanged.
+                        var slice = Math.Max(1.0, effectiveBudget - budget.Elapsed.TotalMilliseconds);
+                        var callStarted = (smooth && speed < 4) ? Stopwatch.GetTimestamp() : 0L;
+                        // Half the slice is the heavy ceiling. Smooth time off (and high fast-forward
+                        // Speed 4/5) packs stages cleanly across the slice without discarding remaining budget.
                         finished = smooth ? campaign.StepFor(slice, slice * 0.5) : campaign.StepFor(slice);
-                        if (smooth)
+                        if (smooth && speed < 4)
                             heavyCall = Stopwatch.GetElapsedTime(callStarted).TotalMilliseconds >= slice * 0.5;
                     }
                     else if (smooth)

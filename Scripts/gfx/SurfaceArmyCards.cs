@@ -28,34 +28,68 @@ public sealed partial class GlobePresentation
             marker.Node.Scale = Vector3.One * width;
     }
 
+    private ulong _surfaceCamFrame = ulong.MaxValue;
+    private float _surfaceCamFov = -1f;
+    private float _surfaceCamViewportH = -1f;
+    private Vector3 _surfaceCamOrigin;
+    private Vector3 _surfaceCamForward;
+    private float _surfaceUnitsPerPixelScale;
+    private ulong _surfaceMetricCacheMsec;
+    private bool _surfaceMetricsCached;
+    private (float Pixel, float World) _surfaceMapLimits;
+    private (float Pixel, float World) _surfaceFleetLimits;
+    private (float Pixel, float World) _surfaceSupportLimits;
+    private (float Pixel, float World) _surfaceBattleLimits;
+
+    private (float Pixel, float World) SurfaceLimitsForPrefix(string prefix)
+    {
+        var nowMs = Time.GetTicksMsec();
+        if (!_surfaceMetricsCached || nowMs - _surfaceMetricCacheMsec >= 250UL)
+        {
+            _surfaceMetricsCached = true;
+            _surfaceMetricCacheMsec = nowMs;
+            var defaultPixels = Ui.Metric("map.globe_counter_pixels", 56f);
+            var defaultWorld = Ui.Metric("map.globe_counter_world_width", .06f);
+            _surfaceMapLimits = (Math.Clamp(defaultPixels, 28f, 80f), Math.Clamp(defaultWorld, .012f, .3f));
+            _surfaceFleetLimits = (Math.Clamp(Ui.Metric("fleet.globe_counter_pixels", defaultPixels), 28f, 80f),
+                Math.Clamp(Ui.Metric("fleet.globe_counter_world_width", defaultWorld), .012f, .3f));
+            _surfaceSupportLimits = (Math.Clamp(Ui.Metric("support.globe_counter_pixels", defaultPixels), 28f, 80f),
+                Math.Clamp(Ui.Metric("support.globe_counter_world_width", defaultWorld), .012f, .3f));
+            _surfaceBattleLimits = (Math.Clamp(Ui.Metric("combat.map_marker_pixels", defaultPixels), 28f, 80f),
+                _surfaceMapLimits.World);
+        }
+        return prefix switch
+        {
+            "fleet" => _surfaceFleetLimits,
+            "support" => _surfaceSupportLimits,
+            "battle" => _surfaceBattleLimits,
+            _ => _surfaceMapLimits
+        };
+    }
+
     // One world footprint and one screen ceiling for all military cards. Individual
     // arms may override these limits in gui without adding another billboard shader.
     private float SurfaceCounterWidth(Node3D node, string prefix = "map")
     {
         if (!IsInstanceValid(_camera)) return .06f;
-        var camTransform = _camera.GlobalTransform;
-        var pos = node.IsInsideTree() ? node.GlobalPosition : node.Position;
-        var rel = pos - camTransform.Origin;
-        var depth = Math.Max(.001f, -rel.Dot(camTransform.Basis.Z));
+        var frame = Engine.GetProcessFrames();
         var viewportH = Math.Max(1f, Size.Y);
-        var unitsPerPixel = 2f * depth * MathF.Tan(Mathf.DegToRad(_camera.Fov * 0.5f)) / viewportH;
-        var defaultPixels = Ui.Metric("map.globe_counter_pixels", 56f);
-        var defaultWorld = Ui.Metric("map.globe_counter_world_width", .06f);
-        var pixelKey = prefix switch
+        var fov = _camera.Fov;
+        if (frame != _surfaceCamFrame || MathF.Abs(fov - _surfaceCamFov) > 0.001f || MathF.Abs(viewportH - _surfaceCamViewportH) > 0.5f)
         {
-            "fleet" => "fleet.globe_counter_pixels",
-            "support" => "support.globe_counter_pixels",
-            "battle" => "combat.map_marker_pixels",
-            _ => "map.globe_counter_pixels"
-        };
-        var worldKey = prefix switch
-        {
-            "fleet" => "fleet.globe_counter_world_width",
-            "support" => "support.globe_counter_world_width",
-            _ => "map.globe_counter_world_width"
-        };
-        var pixelLimit = Math.Clamp(Ui.Metric(pixelKey, defaultPixels), 28f, 80f);
-        var worldLimit = Math.Clamp(Ui.Metric(worldKey, defaultWorld), .012f, .3f);
+            var camTransform = _camera.GlobalTransform;
+            _surfaceCamFrame = frame;
+            _surfaceCamFov = fov;
+            _surfaceCamViewportH = viewportH;
+            _surfaceCamOrigin = camTransform.Origin;
+            _surfaceCamForward = camTransform.Basis.Z;
+            _surfaceUnitsPerPixelScale = 2f * MathF.Tan(Mathf.DegToRad(fov * 0.5f)) / viewportH;
+        }
+        var pos = node.IsInsideTree() ? node.GlobalPosition : node.Position;
+        var rel = pos - _surfaceCamOrigin;
+        var depth = Math.Max(.001f, -rel.Dot(_surfaceCamForward));
+        var unitsPerPixel = depth * _surfaceUnitsPerPixelScale;
+        var (pixelLimit, worldLimit) = SurfaceLimitsForPrefix(prefix);
         // Close cards remain readable but never balloon with altitude to cover a
         // country. Foreshortening is intentional: the card lies on the ground.
         return Math.Min(worldLimit, pixelLimit * unitsPerPixel);

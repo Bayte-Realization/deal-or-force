@@ -282,6 +282,6 @@ public partial class DealOrForceGame
         if (key.Keycode == Key.Escape && GetViewport().GuiGetFocusOwner() == _recruitmentTemplateSearch)
         { _recruitmentLayer.Hide(); return true; }
         if (!(key.CtrlPressed || key.MetaPressed) || key.AltPressed || Letter(key) != Key.F) return false;
-        _recruitmentTemplateSearch.GrabFocus(); _recruitmentTemplateSearch.SelectAll(); return true;
+        Ui.FocusInputIfDesktop(_recruitmentTemplateSearch); if (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary != true) _recruitmentTemplateSearch.SelectAll(); return true;
     }
 }

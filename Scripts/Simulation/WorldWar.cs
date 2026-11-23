@@ -74,19 +74,15 @@ public static class WorldWar
     private const int RecogniseStageWars = 32;
 
     /// <summary>Whether any world war is being fought.</summary>
-    public static bool Active(Campaign c) => c is not null && Warfare.OpenWars(c).Any(w => !w.Ended && w.WorldWarDay >= 0);
+    public static bool Active(Campaign c)
+    {
+        if (c is null) return false;
+        var open = Warfare.OpenWars(c);
+        for (var i = 0; i < open.Count; i++)
+            if (!open[i].Ended && open[i].WorldWarDay >= 0) return true;
+        return false;
+    }
 
-    /// <summary>
-    /// The recognition in stages: a few wars at a time.
-    ///
-    /// It used to be one call - the wars of the world, and a declaration that walks every
-    /// relation and every organisation membership - measured at 70 ms on a save with 494 wars
-    /// and 44 000 relations, against a nine millisecond frame. Nothing in it reads a war that
-    /// a later stage writes: each war is examined and, if it qualifies, declared, exactly as
-    /// before. The list is walked by index against the count taken when it started, so a war
-    /// declared between two frames - by the player, or by anything else - neither breaks the
-    /// walk nor joins it, which is what the one-call version did.
-    /// </summary>
     private static IEnumerable<int> RecogniseStages(Campaign c)
     {
         HashSet<int> powers = null;
@@ -99,92 +95,126 @@ public static class WorldWar
             if (!war.Ended && !war.CivilConflict && war.WorldWarDay < 0 && war.BelligerentCount >= 2)
             {
                 powers ??= WorldPowers(c);
-                var attackers = war.Side(true).Count(powers.Contains);
-                var defenders = war.Side(false).Count(powers.Contains);
+                var attackers = CountPowersOnSide(war, true, powers);
+                var defenders = CountPowersOnSide(war, false, powers);
                 if (attackers != 0 && defenders != 0)
                 {
-                    // Two great powers and a crowd is a regional war with friends - Russia and a
-                    // mobilised Ukraine ranked among the strongest armies made the 2024 war a
-                    // "world war" by spring, whose declaration then called in thirty countries. A
-                    // world war has powers in the plural: three in all, or a crowd with at least
-                    // two on each side.
                     var plural = attackers + defenders >= c.Defines.WorldWarMinimumPowers;
                     var crowd = war.BelligerentCount >= c.Defines.WorldWarMinimumBelligerents &&
                                 attackers >= 2 && defenders >= 2;
-                    if (plural || crowd) Declare(c, war, powers);
+                    if (plural || crowd)
+                        foreach (var _ in DeclareStages(c, war, powers)) yield return 0;
                 }
             }
             if (++seen % RecogniseStageWars == 0) yield return 0;
         }
     }
 
-    /// <summary>
-    /// The powers a world war is fought between: among the strongest armies (GreatPowers), and
-    /// of a weight beyond them - a deterrent of its own, or one of the largest economies. A
-    /// strong army alone is a country at war, not a pole of the world: mobilised Ukraine and
-    /// North Korea's million men both rank among the strongest, and with Russia made three
-    /// "great powers" in one regional war.
-    /// </summary>
+    private static int CountPowersOnSide(StrategicWar war, bool attacking, HashSet<int> powers)
+    {
+        var count = 0;
+        foreach (var id in war.Side(attacking))
+            if (powers.Contains(id)) count++;
+        return count;
+    }
+
+    [ThreadStatic] private static List<Nation> _worldPowerCandidatesScratch;
+    [ThreadStatic] private static HashSet<int> _worldPowerRichScratch;
+
     internal static HashSet<int> WorldPowers(Campaign c)
     {
         var strong = AllianceSystem.GreatPowers(c);
-        var rich = new HashSet<int>(c.Nations.Where(n => n.Population > 0 && n.Gdp > 0)
-            .OrderByDescending(n => n.Gdp).ThenBy(n => n.Id).Take(Math.Max(1, c.Defines.WorldWarEconomyRank)).Select(n => n.Id));
+        var rankLimit = Math.Max(1, c.Defines.WorldWarEconomyRank);
+        var candidates = _worldPowerCandidatesScratch ??= new List<Nation>(c.Nations.Count);
+        candidates.Clear();
+        var nations = c.Nations;
+        for (var i = 0; i < nations.Count; i++)
+        {
+            var n = nations[i];
+            if (n.Population > 0 && n.Gdp > 0) candidates.Add(n);
+        }
+        candidates.Sort(static (a, b) =>
+        {
+            var cmp = b.Gdp.CompareTo(a.Gdp);
+            return cmp != 0 ? cmp : a.Id.CompareTo(b.Id);
+        });
+        var rich = _worldPowerRichScratch ??= new HashSet<int>(Math.Min(rankLimit, candidates.Count));
+        rich.Clear();
+        var take = Math.Min(rankLimit, candidates.Count);
+        for (var i = 0; i < take; i++) rich.Add(candidates[i].Id);
+
         var powers = new HashSet<int>();
         foreach (var id in strong)
             if (rich.Contains(id) || Deterrence.TierOf(c, c.NationById(id)) >= 1) powers.Add(id);
+        candidates.Clear();
+        rich.Clear();
         return powers;
     }
 
-    private static void Declare(Campaign c, StrategicWar war, HashSet<int> powers)
+    /// <summary>
+    /// Staged world-war proclamation: yields between bloc call-to-arms joins so a massive
+    /// alliance cascade (measured at 520 ms in a single frame on seed 42 day 321) spreads
+    /// smoothly across frames without altering join order or world fingerprint.
+    /// </summary>
+    private static IEnumerable<int> DeclareStages(Campaign c, StrategicWar war, HashSet<int> powers)
     {
         war.WorldWarDay = c.ElapsedDays;
         // The first two were in the twentieth century.
-        var number = 2 + c.Wars.Count(w => w.WorldWarDay >= 0);
+        var wwCount = 0;
+        for (var i = 0; i < c.Wars.Count; i++)
+            if (c.Wars[i].WorldWarDay >= 0) wwCount++;
+        var number = 2 + wwCount;
         war.Name = Loc.Has($"world_war.name.{number}") ? $"world_war.name.{number}" : Loc.Format("world_war.name", number);
         c.Chronicle.Record(c, "world_war_began", war.AttackerId, war.DefenderId, subject: WarNames.Of(c, war));
 
+        var sortedFriends = new List<int>();
+        var friendSet = new HashSet<int>();
+
         // Each great power in it calls its own: allies, and partners in a defence organisation.
-        foreach (var attacking in new[] { true, false })
+        for (var side = 0; side < 2; side++)
         {
-            var leaders = war.Side(attacking).Where(powers.Contains).ToList();
-            foreach (var leaderId in leaders)
+            var attacking = side == 0;
+            var leaders = new List<int>();
+            foreach (var id in war.Side(attacking))
+                if (powers.Contains(id)) leaders.Add(id);
+            for (var li = 0; li < leaders.Count; li++)
             {
+                var leaderId = leaders[li];
                 var leader = c.NationById(leaderId);
                 if (leader is null) continue;
-                foreach (var friendId in Friends(c, leaderId))
+                friendSet.Clear();
+                var allies = c.Caches.Protectors.AlliesOf(c, leaderId);
+                for (var ai = 0; ai < allies.Length; ai++) friendSet.Add(allies[ai]);
+                foreach (var org in InternationalOrganizations.Memberships(c, leaderId))
+                    if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true)
+                        foreach (var member in org.Members)
+                            if (member != leaderId) friendSet.Add(member);
+                sortedFriends.Clear();
+                foreach (var fid in friendSet) sortedFriends.Add(fid);
+                sortedFriends.Sort();
+
+                for (var fi = 0; fi < sortedFriends.Count; fi++)
                 {
+                    var friendId = sortedFriends[fi];
                     var friend = c.NationById(friendId);
                     if (friend is null || friend.IsHuman || friend.Population <= 0 || friend.Movement is not null) continue;
                     if (war.Involves(friendId)) continue;
                     // Not into a war against a friend of its own.
-                    if (war.Side(!attacking).Any(enemy => CampaignDiplomacy.Peek(c, friendId, enemy) is { Stance: DiplomaticStance.Allied })) continue;
+                    var alliedWithOpposite = false;
+                    foreach (var enemy in war.Side(!attacking))
+                        if (CampaignDiplomacy.Peek(c, friendId, enemy) is { Stance: DiplomaticStance.Allied })
+                        { alliedWithOpposite = true; break; }
+                    if (alliedWithOpposite) continue;
                     var opinion = CampaignDiplomacy.Peek(c, friendId, leaderId)?.Opinion ?? 0f;
                     var chance = c.Defines.BlocCallChance * M.Clamp(0.5f + opinion / 200f, 0.2f, 1f) *
                                  M.Clamp(friend.WarSupport + 0.3f, 0.3f, 1.2f);
                     if (MovementRules.Roll(c.Seed, friendId, c.ElapsedDays, 4401 + leaderId) >= chance) continue;
                     CampaignDiplomacy.JoinWar(c, war, friendId, defending: !attacking, attacking ? null : "declared_war_on_us");
+                    if (Campaign.StageOverdue()) yield return 0;
                 }
             }
         }
         c.MarkStrategicChange();
-    }
-
-    /// <summary>A great power's allies and its partners in a defence organisation.</summary>
-    private static IEnumerable<int> Friends(Campaign c, int nationId)
-    {
-        var friends = new HashSet<int>();
-        foreach (var relation in c.Relations.Values)
-        {
-            if (relation.Stance != DiplomaticStance.Allied) continue;
-            if (relation.A == nationId) friends.Add(relation.B);
-            else if (relation.B == nationId) friends.Add(relation.A);
-        }
-        foreach (var org in InternationalOrganizations.Memberships(c, nationId))
-            if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true)
-                foreach (var member in org.Members)
-                    if (member != nationId) friends.Add(member);
-        return friends.OrderBy(id => id);
     }
 
     /// <summary>Every country outside a world war is afraid while it lasts.</summary>
@@ -198,12 +228,20 @@ public static class WorldWar
     {
         if (!Active(c)) yield break;
         var shock = M.Clamp(c.Defines.WorldWarFearPerWeek, 0f, 0.05f);
+        var worldWars = new List<StrategicWar>();
+        var open = Warfare.OpenWars(c);
+        for (var i = 0; i < open.Count; i++)
+            if (!open[i].Ended && open[i].WorldWarDay >= 0) worldWars.Add(open[i]);
         var ticked = 0;
-        foreach (var nation in c.Nations)
+        for (var ni = 0; ni < c.Nations.Count; ni++)
         {
+            var nation = c.Nations[ni];
             if (++ticked % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null) continue;
-            if (Warfare.OpenWars(c).Any(w => !w.Ended && w.WorldWarDay >= 0 && w.Involves(nation.Id))) continue;
+            var involved = false;
+            for (var wi = 0; wi < worldWars.Count; wi++)
+                if (worldWars[wi].Involves(nation.Id)) { involved = true; break; }
+            if (involved) continue;
             nation.Stability = M.Clamp01(nation.Stability - shock);
         }
     }
@@ -291,6 +329,22 @@ public static class WorldWar
                 return;
             }
         }
+    }
+
+    /// <summary>A great power's allies and its partners in a defence organisation.</summary>
+    private static List<int> Friends(Campaign c, int nationId)
+    {
+        var friends = new HashSet<int>();
+        var allies = c.Caches.Protectors.AlliesOf(c, nationId);
+        for (var i = 0; i < allies.Length; i++) friends.Add(allies[i]);
+        foreach (var org in InternationalOrganizations.Memberships(c, nationId))
+            if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true)
+                foreach (var member in org.Members)
+                    if (member != nationId) friends.Add(member);
+        var sorted = new List<int>(friends.Count);
+        foreach (var id in friends) sorted.Add(id);
+        sorted.Sort();
+        return sorted;
     }
 
     /// <summary>The rival itself if it borders the power, or the largest of its friends that does.</summary>

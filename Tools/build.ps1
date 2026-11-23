@@ -169,7 +169,7 @@ Copy-PlayerTree (Join-Path $project 'Tools\ExportVerification') (Join-Path $stag
 foreach ($file in @('DealOrForce.csproj', 'DealOrForce.sln', 'GameVersion.props', 'export_presets.cfg', 'icon.ico', 'icon_small.png')) {
     Copy-Item -LiteralPath (Join-Path $project $file) -Destination $stage
 }
-foreach ($file in @('NuGet.Config', 'nuget.config', 'global.json', 'Directory.Build.props', 'Directory.Build.targets')) {
+foreach ($file in @('NuGet.Config', 'nuget.config', 'global.json', 'Directory.Build.props', 'Directory.Build.targets', 'runtimeconfig.template.json')) {
     $source = Join-Path $project $file
     if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination $stage -Force }
 }

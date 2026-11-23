@@ -1,6 +1,10 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace DealOrForce.Simulation;
@@ -94,11 +98,31 @@ public static class LakeRegions
             first.TryGetInt32(out var index) && index > 0) FirstMapIndex = index;
     }
 
+    public const string BootCacheFileName = "lakes_boot_v1.bin";
+    public const uint BootCacheMagic = 0x434C4D44u; // "DMLC"
+    public const int BootCacheFormatVersion = 1;
+    private const int BootCacheHeaderSizeBytes = 44;
+    private const int MaxBootCachePayloadBytes = 64 * 1024 * 1024;
+    private const int MinAutoPersistWidth = 1024;
+    private const int MinAutoPersistHeight = 512;
+
+    private sealed record CachedLakeBody(int[] Cells, int[] BoundaryNeighbors, string Name);
+
+    private static readonly object BootCacheGate = new();
     private static bool[] _water;
     private static ulong _waterLakes;
     private static int _waterWidth, _waterHeight;
+    private static CachedLakeBody[] _cachedBodies;
+    private static (ulong Fingerprint, int Width, int Height, int MinCells, int MinWidth) _cachedBodiesKey;
 
-    public static void ReleaseWaterCache() => _water = null;
+    public static void ReleaseWaterCache()
+    {
+        lock (BootCacheGate)
+        {
+            _water = null;
+            _cachedBodies = null;
+        }
+    }
 
     /// <summary>
     /// Which cells are lake water, drawn from the hydrology once and kept until the lakes
@@ -116,9 +140,469 @@ public static class LakeRegions
         catch (Exception) { return null; }
         if (hydrology.Pixels.Length != width * height * 2) return null;
         var water = new bool[width * height];
-        for (var cell = 0; cell < water.Length; cell++) water[cell] = hydrology.Pixels[cell * 2] > 0;
+        var pixels = hydrology.Pixels;
+        for (var cell = 0; cell < water.Length; cell++) water[cell] = pixels[cell * 2] > 0;
         (_water, _waterLakes, _waterWidth, _waterHeight) = (water, lakes, width, height);
+        _cachedBodies = null;
         return water;
+    }
+
+    private static ulong ResolveBootCacheFingerprint()
+    {
+        var lakesPath = GameDataLoader.FindDataFile("map_data", "hydrography", "lakes.json");
+        if (!string.IsNullOrWhiteSpace(lakesPath) && File.Exists(lakesPath))
+        {
+            try
+            {
+                const ulong fnvOffset = 14695981039346656037UL;
+                const ulong fnvPrime = 1099511628211UL;
+                var hash = fnvOffset;
+                using var fs = new FileStream(lakesPath, FileMode.Open, FileAccess.Read, FileShare.Read, 16384);
+                hash ^= (ulong)fs.Length;
+                hash *= fnvPrime;
+                Span<byte> buf = stackalloc byte[4096];
+                while (true)
+                {
+                    var read = fs.Read(buf);
+                    if (read <= 0) break;
+                    for (var i = 0; i < read; i++)
+                    {
+                        hash ^= buf[i];
+                        hash *= fnvPrime;
+                    }
+                }
+                return hash;
+            }
+            catch (Exception)
+            {
+                // Fall back to parsed hydrology fingerprint if direct file read fails.
+            }
+        }
+        return HydrologyCatalog.LakeFingerprint;
+    }
+
+    private static CachedLakeBody[] GetOrBuildBodies(int width, int height)
+    {
+        if (width <= 0 || height <= 0 || (long)width * height > int.MaxValue) return null;
+        var modActive = ModOverlayPolicy.IsActive;
+        var fingerprint = modActive ? HydrologyCatalog.LakeFingerprint : ResolveBootCacheFingerprint();
+        var minCells = MinimumCells;
+        var minWidth = MinimumWidthCells;
+        var key = (fingerprint, width, height, minCells, minWidth);
+
+        lock (BootCacheGate)
+        {
+            if (_cachedBodies is not null && _cachedBodiesKey == key) return _cachedBodies;
+
+            var writableDir = modActive ? null : DefaultWritableCacheDirectory();
+            if (!modActive)
+            {
+                if (!string.IsNullOrWhiteSpace(writableDir))
+                {
+                    var writablePath = Path.Combine(writableDir, BootCacheFileName);
+                    if (TryReadBootCacheFile(writablePath, fingerprint, width, height, minCells, minWidth, out var fromWritable))
+                    {
+                        _cachedBodies = fromWritable;
+                        _cachedBodiesKey = key;
+                        return _cachedBodies;
+                    }
+                }
+
+                var shippedPath = GameDataLoader.FindDataFile("cache", BootCacheFileName);
+                if (!string.IsNullOrWhiteSpace(shippedPath) &&
+                    TryReadBootCacheFile(shippedPath, fingerprint, width, height, minCells, minWidth, out var fromShipped))
+                {
+                    _cachedBodies = fromShipped;
+                    _cachedBodiesKey = key;
+                    return _cachedBodies;
+                }
+            }
+
+            var built = BuildBodiesUncached(width, height);
+            if (built is null) return null;
+
+            _cachedBodies = built;
+            _cachedBodiesKey = key;
+
+            if (!modActive &&
+                width >= MinAutoPersistWidth && height >= MinAutoPersistHeight &&
+                !string.IsNullOrWhiteSpace(writableDir))
+            {
+                TryWriteBootCacheToDirectory(writableDir, fingerprint, width, height, minCells, minWidth, built, out _);
+            }
+
+            return _cachedBodies;
+        }
+    }
+
+    /// <summary>
+    /// Pre-bake or persist <c>lakes_boot_v1.bin</c> under <paramref name="cacheDirectory"/>.
+    /// Bypassed cleanly whenever <see cref="ModOverlayPolicy.IsActive"/> is true.
+    /// </summary>
+    public static bool TryWriteBootCache(string cacheDirectory, int width, int height, out string error)
+    {
+        error = "";
+        if (ModOverlayPolicy.IsActive)
+        {
+            error = "bypassed: mod overlay active";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(cacheDirectory))
+        {
+            error = "no cache directory";
+            return false;
+        }
+        if (width <= 0 || height <= 0 || (long)width * height > int.MaxValue)
+        {
+            error = "invalid map dimensions";
+            return false;
+        }
+
+        lock (BootCacheGate)
+        {
+            var fingerprint = ResolveBootCacheFingerprint();
+            var minCells = MinimumCells;
+            var minWidth = MinimumWidthCells;
+            var key = (fingerprint, width, height, minCells, minWidth);
+            var bodies = _cachedBodies is not null && _cachedBodiesKey == key
+                ? _cachedBodies
+                : BuildBodiesUncached(width, height);
+            if (bodies is null)
+            {
+                error = "hydrology raster unavailable";
+                return false;
+            }
+            return TryWriteBootCacheToDirectory(cacheDirectory, fingerprint, width, height, minCells, minWidth, bodies, out error);
+        }
+    }
+
+    private static string DefaultWritableCacheDirectory()
+    {
+        try
+        {
+            var args = Environment.GetCommandLineArgs();
+            var isVerifyBuild = false;
+            for (var i = 0; i < args.Length; i++)
+            {
+                if (string.Equals(args[i], "--verify-build", StringComparison.Ordinal))
+                {
+                    isVerifyBuild = true;
+                    break;
+                }
+            }
+            if (isVerifyBuild)
+            {
+                var verifyDocs = Environment.GetEnvironmentVariable("DOF_VERIFICATION_DOCUMENTS");
+                if (!string.IsNullOrWhiteSpace(verifyDocs) && Path.IsPathRooted(verifyDocs))
+                {
+                    var verifyFolders = GameFolders.For(verifyDocs);
+                    if (verifyFolders is not null) return Path.Combine(verifyFolders.Root, "cache");
+                }
+            }
+
+            var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            var docFolders = GameFolders.For(docs);
+            if (docFolders is not null) return Path.Combine(docFolders.Root, "cache");
+
+            var localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var localFolders = GameFolders.For(localApp);
+            if (localFolders is not null) return Path.Combine(localFolders.Root, "cache");
+        }
+        catch (Exception)
+        {
+            // Fall through when special folders are unavailable in restricted hosts.
+        }
+        return null;
+    }
+
+    private static bool TryReadBootCacheFile(
+        string filePath,
+        ulong expectedFingerprint,
+        int expectedWidth,
+        int expectedHeight,
+        int expectedMinCells,
+        int expectedMinWidth,
+        out CachedLakeBody[] bodies)
+    {
+        bodies = null;
+        if (ModOverlayPolicy.IsActive || string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            return false;
+
+        try
+        {
+            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536);
+            if (stream.Length < BootCacheHeaderSizeBytes) return false;
+            using var reader = new BinaryReader(stream);
+            if (reader.ReadUInt32() != BootCacheMagic) return false;
+            if (reader.ReadInt32() != BootCacheFormatVersion) return false;
+            if (reader.ReadUInt64() != expectedFingerprint) return false;
+            var width = reader.ReadInt32();
+            var height = reader.ReadInt32();
+            if (width != expectedWidth || height != expectedHeight) return false;
+            if (reader.ReadInt32() != expectedMinCells) return false;
+            if (reader.ReadInt32() != expectedMinWidth) return false;
+            var payloadLength = reader.ReadInt32();
+            var expectedChecksum = reader.ReadUInt64();
+            if (payloadLength <= 0 || payloadLength > MaxBootCachePayloadBytes ||
+                stream.Length - BootCacheHeaderSizeBytes != payloadLength)
+                return false;
+
+            var payload = reader.ReadBytes(payloadLength);
+            if (payload.Length != payloadLength) return false;
+            if (ComputeFnv1a64(payload) != expectedChecksum) return false;
+
+            bodies = DecodeBootCachePayload(payload, width * height);
+            return bodies is not null;
+        }
+        catch (Exception)
+        {
+            bodies = null;
+            return false;
+        }
+    }
+
+    private static bool TryWriteBootCacheToDirectory(
+        string cacheDirectory,
+        ulong fingerprint,
+        int width,
+        int height,
+        int minCells,
+        int minWidth,
+        CachedLakeBody[] bodies,
+        out string error)
+    {
+        error = "";
+        if (ModOverlayPolicy.IsActive)
+        {
+            error = "bypassed: mod overlay active";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(cacheDirectory) || bodies is null)
+        {
+            error = "invalid lake boot cache write arguments";
+            return false;
+        }
+
+        var targetPath = Path.Combine(cacheDirectory, BootCacheFileName);
+        string tempPath = null;
+        try
+        {
+            Directory.CreateDirectory(cacheDirectory);
+            var payload = EncodeBootCachePayload(bodies);
+            var checksum = ComputeFnv1a64(payload);
+
+            tempPath = $"{targetPath}.tmp.{Guid.NewGuid():N}";
+            using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536))
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(BootCacheMagic);
+                writer.Write(BootCacheFormatVersion);
+                writer.Write(fingerprint);
+                writer.Write(width);
+                writer.Write(height);
+                writer.Write(minCells);
+                writer.Write(minWidth);
+                writer.Write(payload.Length);
+                writer.Write(checksum);
+                writer.Write(payload);
+                writer.Flush();
+            }
+
+            File.Move(tempPath, targetPath, overwrite: true);
+            tempPath = null;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+        finally
+        {
+            if (tempPath is not null)
+            {
+                try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+            }
+        }
+    }
+
+    private static byte[] EncodeBootCachePayload(CachedLakeBody[] bodies)
+    {
+        using var compressed = new MemoryStream();
+        using (var brotli = new BrotliStream(compressed, CompressionLevel.Fastest, leaveOpen: true))
+        using (var writer = new BinaryWriter(brotli))
+        {
+            writer.Write(bodies.Length);
+            for (var i = 0; i < bodies.Length; i++)
+            {
+                var body = bodies[i];
+                writer.Write(body.Name ?? "Lake");
+                WriteIntArray(writer, body.Cells);
+                WriteIntArray(writer, body.BoundaryNeighbors);
+            }
+            writer.Flush();
+        }
+        return compressed.ToArray();
+    }
+
+    private static CachedLakeBody[] DecodeBootCachePayload(byte[] payload, int cellCount)
+    {
+        using var input = new MemoryStream(payload, writable: false);
+        using var brotli = new BrotliStream(input, CompressionMode.Decompress);
+        using var reader = new BinaryReader(brotli);
+        var count = reader.ReadInt32();
+        if (count < 0 || count > cellCount) return null;
+        var bodies = new CachedLakeBody[count];
+        for (var i = 0; i < count; i++)
+        {
+            var name = reader.ReadString();
+            if (!TryReadIntArray(reader, cellCount, out var cells)) return null;
+            if (!TryReadIntArray(reader, cellCount, out var boundary)) return null;
+            bodies[i] = new CachedLakeBody(cells, boundary, string.IsNullOrWhiteSpace(name) ? "Lake" : name);
+        }
+        return bodies;
+    }
+
+    private static void WriteIntArray(BinaryWriter writer, int[] values)
+    {
+        var len = values?.Length ?? 0;
+        writer.Write(len);
+        if (len == 0) return;
+        if (BitConverter.IsLittleEndian)
+        {
+            writer.Write(MemoryMarshal.AsBytes(values.AsSpan()));
+            return;
+        }
+        for (var i = 0; i < len; i++) writer.Write(values[i]);
+    }
+
+    private static bool TryReadIntArray(BinaryReader reader, int cellCount, out int[] values)
+    {
+        values = Array.Empty<int>();
+        var len = reader.ReadInt32();
+        if (len < 0 || len > cellCount) return false;
+        if (len == 0) return true;
+        var result = new int[len];
+        if (BitConverter.IsLittleEndian)
+        {
+            var bytes = MemoryMarshal.AsBytes(result.AsSpan());
+            var read = 0;
+            while (read < bytes.Length)
+            {
+                var n = reader.Read(bytes.Slice(read));
+                if (n <= 0) return false;
+                read += n;
+            }
+        }
+        else
+        {
+            for (var i = 0; i < len; i++) result[i] = reader.ReadInt32();
+        }
+        for (var i = 0; i < len; i++)
+        {
+            if ((uint)result[i] >= (uint)cellCount) return false;
+        }
+        values = result;
+        return true;
+    }
+
+    private static ulong ComputeFnv1a64(ReadOnlySpan<byte> bytes)
+    {
+        var hash = 14695981039346656037UL;
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            hash ^= bytes[i];
+            hash *= 1099511628211UL;
+        }
+        return hash;
+    }
+
+    private static CachedLakeBody[] BuildBodiesUncached(int width, int height)
+    {
+        var water = LakeWater(width, height);
+        if (water is null) return null;
+
+        var cellCount = width * height;
+        var visited = ArrayPool<bool>.Shared.Rent(cellCount);
+        Array.Clear(visited, 0, cellCount);
+        var component = new List<int>();
+        var queue = new Queue<int>();
+        var boundary = new List<int>();
+        var boundarySeen = new HashSet<int>();
+        var widthInside = new HashSet<int>();
+        var widthDepth = new Dictionary<int, int>();
+        var widthWave = new Queue<int>();
+        var bodies = new List<CachedLakeBody>();
+        try
+        {
+            var words = MemoryMarshal.Cast<bool, ulong>(water.AsSpan());
+            var wordCount = words.Length;
+            for (var wi = 0; wi < wordCount; wi++)
+            {
+                if (words[wi] == 0) continue;
+                var baseCell = wi << 3;
+                for (var bit = 0; bit < 8; bit++)
+                {
+                    var seed = baseCell + bit;
+                    if (visited[seed] || !water[seed]) continue;
+                    ProcessWaterSeed(seed, water, visited, width, height, component, queue, boundary, boundarySeen,
+                        widthInside, widthDepth, widthWave, bodies);
+                }
+            }
+            for (var seed = wordCount << 3; seed < cellCount; seed++)
+            {
+                if (visited[seed] || !water[seed]) continue;
+                ProcessWaterSeed(seed, water, visited, width, height, component, queue, boundary, boundarySeen,
+                    widthInside, widthDepth, widthWave, bodies);
+            }
+        }
+        finally
+        {
+            ArrayPool<bool>.Shared.Return(visited);
+        }
+
+        return bodies.ToArray();
+    }
+
+    private static void ProcessWaterSeed(int seed, bool[] water, bool[] visited, int width, int height,
+        List<int> component, Queue<int> queue, List<int> boundary, HashSet<int> boundarySeen,
+        HashSet<int> widthInside, Dictionary<int, int> widthDepth, Queue<int> widthWave,
+        List<CachedLakeBody> bodies)
+    {
+        component.Clear();
+        queue.Clear();
+        boundary.Clear();
+        boundarySeen.Clear();
+        visited[seed] = true;
+        queue.Enqueue(seed);
+        while (queue.Count > 0)
+        {
+            var cell = queue.Dequeue();
+            component.Add(cell);
+            var y = cell / width;
+            var x = cell % width;
+            for (var side = 0; side < 4; side++)
+            {
+                var nx = x + (side == 0 ? -1 : side == 1 ? 1 : 0);
+                var ny = y + (side == 2 ? -1 : side == 3 ? 1 : 0);
+                if (ny < 0 || ny >= height) continue;
+                nx = (nx + width) % width;
+                var neighbour = ny * width + nx;
+                if (water[neighbour])
+                {
+                    if (!visited[neighbour])
+                    {
+                        visited[neighbour] = true;
+                        queue.Enqueue(neighbour);
+                    }
+                    continue;
+                }
+                if (boundarySeen.Add(neighbour)) boundary.Add(neighbour);
+            }
+        }
+        if (component.Count < MinimumCells || boundary.Count == 0) return;
+        if (WidthOf(component, width, height, widthInside, widthDepth, widthWave) < MinimumWidthCells) return;
+        bodies.Add(new CachedLakeBody(component.ToArray(), boundary.ToArray(), NameFor(component, width, height)));
     }
 
     /// <summary>
@@ -139,62 +623,36 @@ public static class LakeRegions
         LakeStateIndices.Clear();
         if (campaign is null || control is null || states is null) return 0;
 
-        var water = LakeWater(width, height);
-        if (water is null) return 0;
+        var bodies = GetOrBuildBodies(width, height);
+        if (bodies is null || bodies.Length == 0) return 0;
 
-        var cellCount = width * height;
-        var visited = new bool[cellCount];
-        var component = new List<int>();
-        var queue = new Queue<int>();
-        var next = FirstMapIndex;
-
-        for (var seed = 0; seed < cellCount; seed++)
+        var statesByMap = new Dictionary<int, ScenarioState>(campaign.States.Count);
+        for (var i = 0; i < campaign.States.Count; i++)
         {
-            if (visited[seed] || !water[seed]) continue;
+            var existing = campaign.States[i];
+            statesByMap.TryAdd(existing.MapIndex, existing);
+        }
 
-            // A body of water, and the land it touches.
-            component.Clear();
-            queue.Clear();
-            visited[seed] = true;
-            queue.Enqueue(seed);
-            var shore = new Dictionary<ushort, int>();
-            while (queue.Count > 0)
+        var next = FirstMapIndex;
+        for (var bi = 0; bi < bodies.Length; bi++)
+        {
+            var body = bodies[bi];
+            var boundary = body.BoundaryNeighbors;
+            var hasShore = false;
+            for (var i = 0; i < boundary.Length; i++)
             {
-                var cell = queue.Dequeue();
-                component.Add(cell);
-                var y = cell / width;
-                var x = cell % width;
-                for (var side = 0; side < 4; side++)
+                var neighbour = boundary[i];
+                if (control[neighbour] != 0 && !IsLakeRegion(states[neighbour]))
                 {
-                    var nx = x + (side == 0 ? -1 : side == 1 ? 1 : 0);
-                    var ny = y + (side == 2 ? -1 : side == 3 ? 1 : 0);
-                    if (ny < 0 || ny >= height) continue;
-                    nx = (nx + width) % width;
-                    var neighbour = ny * width + nx;
-                    if (water[neighbour])
-                    {
-                        if (visited[neighbour]) continue;
-                        visited[neighbour] = true;
-                        queue.Enqueue(neighbour);
-                        continue;
-                    }
-                    // Dry land, or open sea. Only land counts as a shore.
-                    var owner = control[neighbour];
-                    if (owner != 0 && !IsLakeRegion(states[neighbour]))
-                        shore[owner] = shore.GetValueOrDefault(owner) + 1;
+                    hasShore = true;
+                    break;
                 }
             }
-
-            // Water with no shore is the sea, whatever the hydrology calls it, and water
-            // too small to sail across is a pond somebody can walk round.
-            if (component.Count < MinimumCells || shore.Count == 0) continue;
-            // And water you can see across is not a barrier either, however far it runs.
-            if (WidthOf(component, width, height) < MinimumWidthCells) continue;
+            if (!hasShore) continue;
 
             var mapIndex = next++;
-            var name = NameFor(component, width, height);
-            var state = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == mapIndex);
-            if (state is null)
+            var name = body.Name;
+            if (!statesByMap.TryGetValue(mapIndex, out var state))
             {
                 state = new ScenarioState
                 {
@@ -207,6 +665,7 @@ public static class LakeRegions
                     Kind = "Lake"
                 };
                 campaign.States.Add(state);
+                statesByMap[mapIndex] = state;
                 CreatedCount++;
             }
             else
@@ -217,8 +676,10 @@ public static class LakeRegions
             }
 
             LakeStateIndices.Add(mapIndex);
-            foreach (var cell in component)
+            var cells = body.Cells;
+            for (var i = 0; i < cells.Length; i++)
             {
+                var cell = cells[i];
                 states[cell] = (ushort)mapIndex;
                 control[cell] = 0;
             }
@@ -235,13 +696,16 @@ public static class LakeRegions
     /// It is the honest measure for a shape that bends, which a bounding box is not: a
     /// reservoir that winds for three hundred kilometres has a wide box and no width at all.
     /// </summary>
-    private static int WidthOf(List<int> component, int width, int height)
+    private static int WidthOf(List<int> component, int width, int height,
+        HashSet<int> inside, Dictionary<int, int> depth, Queue<int> wave)
     {
-        var inside = new HashSet<int>(component);
-        var depth = new Dictionary<int, int>(component.Count);
-        var wave = new Queue<int>();
-        foreach (var cell in component)
+        inside.Clear();
+        depth.Clear();
+        wave.Clear();
+        for (var i = 0; i < component.Count; i++) inside.Add(component[i]);
+        for (var i = 0; i < component.Count; i++)
         {
+            var cell = component[i];
             var y = cell / width;
             var x = cell % width;
             var onTheEdge = false;

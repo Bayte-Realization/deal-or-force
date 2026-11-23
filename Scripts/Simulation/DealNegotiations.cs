@@ -31,7 +31,9 @@ public sealed class DealOffer
     /// <summary>The trade agreement on the paper (TradeTerms), a term of the pair; null for none.
     /// A paper written before terms existed carries none and reads its sides' old ticks instead.</summary>
     public TradeTerms Trade;
-    [JsonIgnore] public Ultimatum.Deal Terms => new(From, To) { Trade = Trade };
+    public bool ChokepointTransit;
+    public bool CeasefireMediation;
+    [JsonIgnore] public Ultimatum.Deal Terms => new(From, To) { Trade = Trade, ChokepointTransit = ChokepointTransit, CeasefireMediation = CeasefireMediation };
     [JsonIgnore] public bool Pending => State == DealOfferState.Pending;
 }
 
@@ -57,7 +59,11 @@ public static class DealNegotiations
         Regions = (side?.Regions ?? Array.Empty<int>()).Distinct().OrderBy(id => id).ToArray(),
         Cash = side?.Cash ?? 0, ReleaseRegions = side?.ReleaseRegions ?? false,
         LiftEmbargo = side?.LiftEmbargo ?? false, NonAggression = side?.NonAggression ?? false,
-        TradeAgreement = side?.TradeAgreement ?? false
+        TradeAgreement = side?.TradeAgreement ?? false,
+        EnclaveCorridor = side?.EnclaveCorridor ?? false,
+        TechnologyTransfer = side?.TechnologyTransfer ?? false,
+        BaseAccessLease = side?.BaseAccessLease ?? false,
+        SovereignCredit = side?.SovereignCredit ?? false
     };
 
     public static DealOffer Copy(DealOffer offer) => new()
@@ -67,6 +73,8 @@ public static class DealNegotiations
         ParentOfferId = offer.ParentOfferId, CounterDepth = offer.CounterDepth,
         From = Copy(offer.From), To = Copy(offer.To), State = offer.State, Reason = offer.Reason ?? "", ByRule = offer.ByRule,
         Trade = TradeTerms.Copy(offer.Trade),
+        ChokepointTransit = offer.ChokepointTransit,
+        CeasefireMediation = offer.CeasefireMediation,
         FromProvinces = (offer.FromProvinces ?? Array.Empty<int>()).ToArray(),
         ToProvinces = (offer.ToProvinces ?? Array.Empty<int>()).ToArray()
     };
@@ -106,7 +114,9 @@ public static class DealNegotiations
         var paper = new DealOffer
         {
             Id = c.NextDealOfferId++, FromId = from.Id, ToId = to.Id,
-            From = Copy(terms.From), To = Copy(terms.To), Trade = TradeTerms.Copy(terms.Trade), CreatedDay = c.ElapsedDays,
+            From = Copy(terms.From), To = Copy(terms.To), Trade = TradeTerms.Copy(terms.Trade),
+            ChokepointTransit = terms.ChokepointTransit, CeasefireMediation = terms.CeasefireMediation,
+            CreatedDay = c.ElapsedDays,
             ExpiresDay = (int)Math.Min(int.MaxValue, (long)c.ElapsedDays + Math.Clamp(c.Defines.DealOfferDays, 1, 365)),
             ParentOfferId = parentId, CounterDepth = depth,
             FromProvinces = Ground(c, terms.From), ToProvinces = Ground(c, terms.To)

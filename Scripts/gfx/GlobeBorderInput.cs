@@ -23,7 +23,14 @@ public sealed partial class GlobePresentation
             {
                 if (ObjectivePaintMode && button.ButtonIndex == MouseButton.Left) { AcceptEvent(); return true; }
                 _borderPainting = false;
-                if (TryPick(button.Position, out var pick, updateSelection: false))
+                GlobePick pick = default;
+                var picked = false;
+                if (TryBeginActionRead(out var c, 150))
+                {
+                    try { picked = TryPick(button.Position, out pick, updateSelection: false); }
+                    finally { c.ExitRead(); }
+                }
+                if (picked)
                 {
                     _borderPainting = button.ButtonIndex == MouseButton.Right;
                     BorderStrokeStarted?.Invoke(pick, !_borderPainting, button.AltPressed, button.ShiftPressed);
@@ -40,7 +47,14 @@ public sealed partial class GlobePresentation
         }
         if (input is InputEventMouseMotion motion && _borderPainting)
         {
-            if (TryPick(motion.Position, out var pick, updateSelection: false)) BorderStrokeMoved?.Invoke(pick);
+            GlobePick pick = default;
+            var picked = false;
+            if (TryBeginActionRead(out var c, 25))
+            {
+                try { picked = TryPick(motion.Position, out pick, updateSelection: false); }
+                finally { c.ExitRead(); }
+            }
+            if (picked) BorderStrokeMoved?.Invoke(pick);
             AcceptEvent();
             return true;
         }
@@ -48,10 +62,17 @@ public sealed partial class GlobePresentation
         // pixel - the answer is a walk along a border and the pointer crosses a province in
         // dozens of events. The camera keeps its own handling of the motion.
         if (input is InputEventMouseMotion hover && !_dragging && BorderHovered is not null &&
-            TryPick(hover.Position, out var under, updateSelection: false) && under.ProvinceId != _borderHoverProvince)
+            _campaign is { } hoverCampaign && hoverCampaign.TryEnterRead(0, true))
         {
-            _borderHoverProvince = under.ProvinceId;
-            BorderHovered.Invoke(under);
+            GlobePick under = default;
+            var picked = false;
+            try { picked = TryPick(hover.Position, out under, updateSelection: false); }
+            finally { hoverCampaign.ExitRead(); }
+            if (picked && under.ProvinceId != _borderHoverProvince)
+            {
+                _borderHoverProvince = under.ProvinceId;
+                BorderHovered.Invoke(under);
+            }
         }
         // Middle-drag pans while the front tool owns RMB; wheel zoom remains available.
         if (input is InputEventMouseButton middle && middle.ButtonIndex == MouseButton.Middle)

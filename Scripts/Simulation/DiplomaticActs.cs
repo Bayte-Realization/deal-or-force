@@ -311,7 +311,36 @@ public static class DiplomaticActs
             (int)act, campaign.Defines.DiplomaticActCost, campaign.Defines.DiplomaticSubsidy) *
         DiplomacyPrice.Scale(campaign, asking);
 
-    private static string CooldownKey(DiplomaticAct act, int targetId) => "diplomatic_act/" + act + "/" + targetId;
+    private static readonly string[][] CooldownKeyCache = BuildCooldownKeys();
+
+    private static string[][] BuildCooldownKeys()
+    {
+        var values = (DiplomaticAct[])Enum.GetValues(typeof(DiplomaticAct));
+        var max = 0;
+        for (var i = 0; i < values.Length; i++)
+            if ((int)values[i] > max) max = (int)values[i];
+        var cache = new string[max + 1][];
+        for (var i = 0; i < values.Length; i++)
+        {
+            var act = values[i];
+            var prefix = "diplomatic_act/" + act + "/";
+            var row = new string[384];
+            for (var id = 0; id < row.Length; id++) row[id] = prefix + id;
+            cache[(int)act] = row;
+        }
+        return cache;
+    }
+
+    private static string CooldownKey(DiplomaticAct act, int targetId)
+    {
+        var ai = (int)act;
+        if ((uint)ai < (uint)CooldownKeyCache.Length)
+        {
+            var row = CooldownKeyCache[ai];
+            if (row is not null && (uint)targetId < (uint)row.Length) return row[targetId];
+        }
+        return "diplomatic_act/" + act + "/" + targetId;
+    }
 
     internal static bool Accept(Campaign campaign, DiplomaticRelation relation, Nation asking, Nation asked, DiplomaticAct act)
     {

@@ -1,6 +1,7 @@
 {
   "layout": {
     "shell.top_plate": { "anchors": [0, 0, 0, 0], "offsets": [0, 0, 1168, 70] },
+    "shell.xp_strip": { "anchors": [0, 0, 0, 0], "offsets": [118, 74, 466, 114] },
     "shell.rail": { "anchors": [0, 0, 0, 0], "offsets": [0, 70, 64, 792] },
     "shell.date_plate": { "anchors": [0, 0, 0, 0], "offsets": [1472, 8, 1912, 92] },
     "shell.alert_column": { "anchors": [0, 0, 0, 0], "offsets": [1536, 94, 1912, 760] },
@@ -11,6 +12,7 @@
     "shell.full_workspace": { "anchors": [0, 0, 0, 0], "offsets": [80, 134, 1904, 992] },
 
     "shell.compact.top_plate": { "anchors": [0, 0, 0, 0], "offsets": [0, 0, 816, 48] },
+    "shell.compact.xp_strip": { "anchors": [0, 0, 0, 0], "offsets": [80, 50, 356, 82] },
     "shell.compact.rail": { "anchors": [0, 0, 0, 0], "offsets": [0, 48, 50, 552] },
     "shell.compact.date_plate": { "anchors": [0, 0, 0, 0], "offsets": [952, 6, 1274, 64] },
     "shell.compact.alert_column": { "anchors": [0, 0, 0, 0], "offsets": [990, 66, 1274, 546] },

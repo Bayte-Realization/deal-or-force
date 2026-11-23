@@ -55,7 +55,11 @@ public sealed partial class GlobePresentation
         if (chosen is "2x" or "2")
             return profile is { EffectiveMsaaSamples: <= 0 } ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa2X;
         if (chosen is "4x" or "4")
-            return profile is { EffectiveMsaaSamples: <= 0 } ? Viewport.Msaa.Msaa2X : Viewport.Msaa.Msaa4X;
+        {
+            if (profile is { EffectiveMsaaSamples: <= 0 }) return Viewport.Msaa.Disabled;
+            if (profile is { EffectiveMsaaSamples: <= 2 }) return Viewport.Msaa.Msaa2X;
+            return Viewport.Msaa.Msaa4X;
+        }
         var samples = profile?.EffectiveMsaaSamples ?? 2;
         return samples switch
         {
@@ -107,11 +111,13 @@ public sealed partial class GlobePresentation
         };
         world.AddChild(_atmosphereLayer);
         ApplyAtmosphereLook();
+        SyncWeatherReliefShells();
     }
 
     private void ApplyAtmosphereLook()
     {
         if (!IsInstanceValid(_atmosphereLayer) || _atmosphereLayer.MaterialOverride is not ShaderMaterial material) return;
+        material.SetShaderParameter("quality_tier", CurrentShaderQualityTier());
         var polish = MapLabelPriority.AtmospherePolishForMood(
             _mapLookMode, RenderingServer.GetCurrentRenderingMethod(), 0f);
         material.SetShaderParameter("rayleigh_mie", polish.RayleighMieHalo ? 1f : 0f);
@@ -124,8 +130,8 @@ public sealed partial class GlobePresentation
         else if (polish.RayleighMieHalo)
         {
             material.SetShaderParameter("tabletop_warmth", 0f);
-            material.SetShaderParameter("strength", 0.18f);
-            material.SetShaderParameter("falloff", 4.8f);
+            material.SetShaderParameter("strength", 0.22f);
+            material.SetShaderParameter("falloff", 4.4f);
         }
         else if (polish.WarmLampRim)
         {
@@ -137,8 +143,8 @@ public sealed partial class GlobePresentation
         else
         {
             material.SetShaderParameter("tabletop_warmth", 0f);
-            material.SetShaderParameter("strength", 0.15f);
-            material.SetShaderParameter("falloff", 5.2f);
+            material.SetShaderParameter("strength", 0.16f);
+            material.SetShaderParameter("falloff", 5.0f);
         }
     }
 
@@ -160,6 +166,7 @@ uniform float falloff = 4.8;
 uniform vec3 sun_direction = vec3(0.2, 0.6, 0.75);
 uniform float tabletop_warmth = 0.0;
 uniform float rayleigh_mie = 0.0;
+uniform float quality_tier = 0.0;
 uniform vec3 lamp_rim_color : source_color = vec3(0.98, 0.98, 0.97);
 uniform vec3 lamp_direction = vec3(-0.62, 0.62, 0.48);
 void fragment() {
@@ -172,19 +179,22 @@ void fragment() {
     vec3 sun_l = normalize(sun_direction);
     float sun_facing = dot(world_n, sun_l);
     float lit = smoothstep(-0.28, 0.55, sun_facing);
-    if (rayleigh_mie > 0.5) {
-        // Rayleigh molecular sky scatter + Henyey-Greenstein crisp D65 Mie horizon scatter (zero yellow cast).
+    if (rayleigh_mie > 0.5 && quality_tier < 1.5) {
+        // Rayleigh molecular sky scatter + Henyey-Greenstein crisp D65 Mie horizon scatter +
+        // subtle warm golden-peach twilight scatter right along the dusk/dawn terminator limb.
         vec3 world_v = normalize((INV_VIEW_MATRIX * vec4(-v, 0.0)).xyz);
         float cos_theta = clamp(dot(world_v, sun_l), -1.0, 1.0);
         float rayleigh = 0.75 * (1.0 + cos_theta * cos_theta);
         float g = 0.68;
         float g2 = g * g;
         float mie = (1.0 - g2) / max(4.0 * PI * pow(1.0 + g2 - 2.0 * g * cos_theta, 1.5), 0.02);
-        float terminator = smoothstep(-0.22, 0.18, sun_facing) * (1.0 - smoothstep(0.18, 0.68, sun_facing));
-        vec3 scatter = vec3(0.22, 0.50, 0.98) * rayleigh * 0.68
-                     + vec3(0.88, 0.93, 1.00) * (mie * 0.48 + terminator * 0.34);
+        float terminator = smoothstep(-0.24, 0.08, sun_facing) * (1.0 - smoothstep(0.08, 0.52, sun_facing));
+        float sharp_edge = pow(1.0 - ndotv, falloff * 1.45);
+        vec3 scatter = vec3(0.22, 0.52, 0.98) * rayleigh * 0.70
+                     + vec3(0.84, 0.92, 1.00) * (mie * 0.44 + sharp_edge * 0.36)
+                     + vec3(0.98, 0.58, 0.32) * terminator * 0.28;
         ALBEDO = scatter;
-        ALPHA = rim * strength * mix(0.12, 1.0, smoothstep(-0.32, 0.48, sun_facing));
+        ALPHA = rim * strength * mix(0.10, 1.0, smoothstep(-0.32, 0.48, sun_facing));
     } else {
         float lamp = smoothstep(-0.15, 0.75, dot(world_n, normalize(lamp_direction)));
         ALBEDO = mix(limb_color.rgb, lamp_rim_color, tabletop_warmth * lamp);

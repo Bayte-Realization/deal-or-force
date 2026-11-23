@@ -71,29 +71,50 @@ public static class OrganizationDynamics
         foreach (var _ in TickStages(c)) { }
     }
 
+    [ThreadStatic] private static List<InternationalOrganization> _activeOrgsScratch;
+    [ThreadStatic] private static List<Nation> _membersScratch;
+    [ThreadStatic] private static List<Nation> _othersScratch;
+
     /// <summary>The same reviews, yielded between organisations so one frame does not carry them all.</summary>
     public static IEnumerable<int> TickStages(Campaign c)
     {
         if (c is null || !c.FeatureEnabled("organizations") || !MechanicFeatures.SystemEnabled(c, nameof(OrganizationDynamics))) yield break;
-        foreach (var org in InternationalOrganizations.Active(c).OrderBy(o => o.Id).ToArray())
+        var orgs = _activeOrgsScratch ??= new List<InternationalOrganization>();
+        orgs.Clear();
+        var allOrgs = c.Organizations;
+        for (var i = 0; i < allOrgs.Count; i++)
         {
+            var org = allOrgs[i];
+            if (!org.Dissolved) orgs.Add(org);
+        }
+        if (orgs.Count > 1) orgs.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+        for (var i = 0; i < orgs.Count; i++)
+        {
+            var org = orgs[i];
             if (InternationalOrganizations.Charter(org.CharterId) is null) continue;
             // Weekly, each organisation on its own day.
             if ((c.ElapsedDays + org.Id * 3) % 7 != 0) continue;
             using (SimProfiler.Measure("organization life")) Review(c, org);
-            yield return 0;
+            if (Campaign.StageOverdue()) yield return 0;
         }
+        orgs.Clear();
         if (c.ElapsedDays % 30 == 11)
         {
             using (SimProfiler.Measure("organization life")) ThreatPacts(c);
-            yield return 0;
+            if (Campaign.StageOverdue()) yield return 0;
         }
     }
 
     /// <summary>What the members are to one another, 0 to 1: the cohesion an organisation drifts towards.</summary>
     public static float Target(Campaign c, InternationalOrganization org)
     {
-        var members = org.Members.Select(c.NationById).Where(n => n is not null).ToList();
+        var members = _membersScratch ??= new List<Nation>();
+        members.Clear();
+        for (var i = 0; i < org.Members.Count; i++)
+        {
+            var n = c.NationById(org.Members[i]);
+            if (n is not null) members.Add(n);
+        }
         if (members.Count < 2) return 0.3f;
         var pairs = 0;
         var opinion = 0f;
@@ -116,23 +137,44 @@ public static class OrganizationDynamics
         target += Institution(c, org);
         // Trade is the glue of every economic union: Germany sells half of what it sells to the
         // rest of the European Union, and leaving would cost it that before anything else.
-        target += members.Average(m => TradeWithMembers(m, members)) * 0.2f;
+        double tradeSum = 0d;
+        for (var i = 0; i < members.Count; i++) tradeSum += TradeWithMembers(members[i], members);
+        target += (float)(tradeSum / members.Count) * 0.2f;
         // A danger in common: a member at war with an outsider, for a pact that exists to answer it.
-        if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true &&
-            members.Any(m => Warfare.OpenWars(c).Any(w => !w.Ended && !w.CivilConflict && w.IsDefending(m.Id) && w.EnemiesOf(m.Id).All(e => !org.Members.Contains(e)))))
-            target += 0.12f;
-        // Hegemonic rivalry inside the same council erodes unity when the top two members are rivals or far apart.
-        if (InternationalOrganizations.Leader(c, org) is { } leader && InternationalOrganizations.Challenger(c, org) is { } challenger)
+        var liveWars = Warfare.LiveWars(c);
+        if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true && liveWars.Count > 0)
         {
-            var rel = CampaignDiplomacy.Peek(c, leader.Id, challenger.Id);
+            var attackedByOutsider = false;
+            for (var mi = 0; mi < members.Count && !attackedByOutsider; mi++)
+            {
+                var mId = members[mi].Id;
+                for (var wi = 0; wi < liveWars.Count; wi++)
+                {
+                    var w = liveWars[wi];
+                    if (w.Ended || w.CivilConflict || !w.IsDefending(mId)) continue;
+                    var allOutside = true;
+                    foreach (var e in w.EnemiesOf(mId))
+                        if (org.Members.Contains(e)) { allOutside = false; break; }
+                    if (allOutside) { attackedByOutsider = true; break; }
+                }
+            }
+            if (attackedByOutsider) target += 0.12f;
+        }
+        // Hegemonic rivalry inside the same council erodes unity when the top two members are rivals or far apart.
+        var mainLeader = InternationalOrganizations.Leader(c, org);
+        if (mainLeader is not null && InternationalOrganizations.Challenger(c, org) is { } challenger)
+        {
+            var rel = CampaignDiplomacy.Peek(c, mainLeader.Id, challenger.Id);
             if (rel?.Stance == DiplomaticStance.Rival) target -= 0.08f;
             else if ((rel?.Opinion ?? 0f) < -15f) target -= 0.04f;
         }
         // If the dominant member or patron of the organization collapses into civil conflict, bankruptcy, or isolationism,
         // the entire organization's cohesion target suffers an organic systemic drop.
-        if (InternationalOrganizations.Leader(c, org) is { } mainLeader)
+        if (mainLeader is not null)
         {
-            var totalOrgGdp = MathF.Max(1f, members.Sum(m => MathF.Max(0f, m.Gdp)));
+            var totalGdpSum = 0f;
+            for (var i = 0; i < members.Count; i++) totalGdpSum += MathF.Max(0f, members[i].Gdp);
+            var totalOrgGdp = MathF.Max(1f, totalGdpSum);
             var leaderShare = mainLeader.Gdp / totalOrgGdp;
             if (leaderShare >= 0.25f)
             {
@@ -140,7 +182,12 @@ public static class OrganizationDynamics
                 if (mainLeader.NationalCourse.Dominant is "isolationism" or "armed_neutrality") target -= 0.14f * weight;
                 if (mainLeader.DebtCondition >= DebtCondition.Insolvent) target -= 0.12f * weight;
                 if (mainLeader.Stability < 0.35f) target -= 0.10f * weight;
-                if (Warfare.OpenWars(c).Any(w => !w.Ended && w.CivilConflict && (w.AttackerId == mainLeader.Id || w.DefenderId == mainLeader.Id))) target -= 0.18f * weight;
+                for (var wi = 0; wi < liveWars.Count; wi++)
+                {
+                    var w = liveWars[wi];
+                    if (!w.Ended && w.CivilConflict && (w.AttackerId == mainLeader.Id || w.DefenderId == mainLeader.Id))
+                    { target -= 0.18f * weight; break; }
+                }
             }
         }
         return M.Clamp(target, 0.05f, 0.95f);
@@ -152,14 +199,32 @@ public static class OrganizationDynamics
 
     private static float Belonging(Campaign c, InternationalOrganization org, Nation member, Nation leader)
     {
-        var others = org.Members.Where(id => id != member.Id).Select(c.NationById).Where(n => n is not null).ToList();
+        var others = _othersScratch ??= new List<Nation>();
+        others.Clear();
+        for (var i = 0; i < org.Members.Count; i++)
+        {
+            var id = org.Members[i];
+            if (id == member.Id) continue;
+            var n = c.NationById(id);
+            if (n is not null) others.Add(n);
+        }
         if (others.Count == 0) return 1f;
-        var opinion = others.Average(o => CampaignDiplomacy.Peek(c, member.Id, o.Id)?.Opinion ?? 0f);
-        var distance = others.Average(o => PoliticsCore.IdeologicalDistance(member, o));
-        var trust = others.Average(o => PoliticalPolicies.ForeignTrust(c, member, o));
+        double opinionSum = 0d, distanceSum = 0d, trustSum = 0d;
+        var atWarWithOther = false;
+        for (var i = 0; i < others.Count; i++)
+        {
+            var o = others[i];
+            opinionSum += CampaignDiplomacy.Peek(c, member.Id, o.Id)?.Opinion ?? 0f;
+            distanceSum += PoliticsCore.IdeologicalDistance(member, o);
+            trustSum += PoliticalPolicies.ForeignTrust(c, member, o);
+            if (!atWarWithOther && CampaignDiplomacy.AtWar(c, member.Id, o.Id)) atWarWithOther = true;
+        }
+        var opinion = (float)(opinionSum / others.Count);
+        var distance = (float)(distanceSum / others.Count);
+        var trust = (float)(trustSum / others.Count);
         var belonging = 0.55f + opinion * 0.004f - distance * 0.3f + trust + Institution(c, org) * 0.6f +
                         MathF.Min(0.25f, TradeWithMembers(member, others) * 0.4f);
-        if (others.Any(o => CampaignDiplomacy.AtWar(c, member.Id, o.Id))) belonging -= 0.4f;
+        if (atWarWithOther) belonging -= 0.4f;
         belonging -= MathF.Min(0.25f, org.UnpaidWeeks.GetValueOrDefault(member.Id) * 0.02f);
         if (org.Cohesion < 0.4f) belonging -= (0.4f - org.Cohesion) * 0.5f;
         if (!string.IsNullOrEmpty(org.DoctrineId))
@@ -216,18 +281,30 @@ public static class OrganizationDynamics
          (founder.NationalCourse.Dominant=="global_integration" || founder.TradeDependenceOn(target.Id)>=.02f ||
           CampaignDiplomacy.Peek(c,founder.Id,target.Id)?.Stance==DiplomaticStance.Allied))));
 
-    public static bool ExpansionRelevant(Campaign c,InternationalOrganization org,Nation proposer,Nation target) =>
-        FoundingRelevant(c,proposer,target) || c.Defines.OrganicOrganizationReachEnabled && org.Members.Any(id=>c.NationById(id) is { } member &&
-            (string.Equals(member.Region,target.Region,StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(member.Continent,target.Continent,StringComparison.OrdinalIgnoreCase) ||
-             SharedThreat(c,member,target) || member.TradeDependenceOn(target.Id)>=.02f));
+    public static bool ExpansionRelevant(Campaign c, InternationalOrganization org, Nation proposer, Nation target)
+    {
+        if (FoundingRelevant(c, proposer, target)) return true;
+        if (!c.Defines.OrganicOrganizationReachEnabled) return false;
+        for (var i = 0; i < org.Members.Count; i++)
+        {
+            if (c.NationById(org.Members[i]) is not { } member) continue;
+            if (string.Equals(member.Region, target.Region, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(member.Continent, target.Continent, StringComparison.OrdinalIgnoreCase) ||
+                SharedThreat(c, member, target) || member.TradeDependenceOn(target.Id) >= .02f)
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>The share of a member's trade that is with the others, 0 to 1.</summary>
-    private static float TradeWithMembers(Nation member, IEnumerable<Nation> others)
+    private static float TradeWithMembers(Nation member, List<Nation> others)
     {
         var share = 0f;
-        foreach (var other in others)
+        for (var i = 0; i < others.Count; i++)
+        {
+            var other = others[i];
             if (other.Id != member.Id) share += member.TradeDependenceOn(other.Id);
+        }
         return M.Clamp01(share);
     }
 
@@ -251,6 +328,8 @@ public static class OrganizationDynamics
         return false;
     }
 
+    [ThreadStatic] private static List<int> _reviewMembersCopyScratch;
+
     private static void Review(Campaign c, InternationalOrganization org)
     {
         var defines = c.Defines;
@@ -271,19 +350,31 @@ public static class OrganizationDynamics
             leader = InternationalOrganizations.Leader(c, org);
         }
         else
+        {
             // Whoever attacks a fellow member is out.
-            foreach (var war in Warfare.OpenWars(c))
+            var liveWars = Warfare.LiveWars(c);
+            for (var wi = 0; wi < liveWars.Count; wi++)
             {
+                var war = liveWars[wi];
                 if (war.Ended || war.CivilConflict) continue;
-                if (!org.Members.Contains(war.AttackerId) || !war.Side(false).Any(org.Members.Contains)) continue;
+                if (!org.Members.Contains(war.AttackerId)) continue;
+                var hitMember = false;
+                foreach (var e in war.Side(false))
+                    if (org.Members.Contains(e)) { hitMember = true; break; }
+                if (!hitMember) continue;
                 ExpelForAggression(c, org, c.NationById(war.AttackerId), war.DefenderId);
                 if (org.Dissolved) return;
             }
+        }
+
+        var noHuman = true;
+        for (var mi = 0; mi < org.Members.Count; mi++)
+            if (c.NationById(org.Members[mi]) is { IsHuman: true }) { noHuman = false; break; }
 
         // A council nobody believes in is wound up; one with a single member left, a year on, too.
         var lonely = org.Members.Count < 2 && org.Invitations.Count == 0 && org.Motion is null &&
-                     c.ElapsedDays - org.FoundedDay > 365 && org.Members.All(id => c.NationById(id) is not { IsHuman: true });
-        if (lonely || (org.Cohesion < defines.OrganizationDissolveCohesion && org.Members.All(id => c.NationById(id) is not { IsHuman: true }) &&
+                     c.ElapsedDays - org.FoundedDay > 365 && noHuman;
+        if (lonely || (org.Cohesion < defines.OrganizationDissolveCohesion && noHuman &&
                        MovementRules.Roll(c.Seed, 7000 + org.Id, c.ElapsedDays, 4603) < defines.OrganizationDissolveChance * Durability(c, org)))
         {
             Dissolve(c, org);
@@ -291,17 +382,21 @@ public static class OrganizationDynamics
         }
 
         // Where each member stood the first time it was weighed, from the first week on.
-        foreach (var id in org.Members)
-            if (c.NationById(id) is { } weighed && !weighed.OrganizationBelongingAtStart.ContainsKey(org.Id))
-                weighed.OrganizationBelongingAtStart[org.Id] = Belonging(c, org, weighed,leader);
+        for (var mi = 0; mi < org.Members.Count; mi++)
+            if (c.NationById(org.Members[mi]) is { } weighed && !weighed.OrganizationBelongingAtStart.ContainsKey(org.Id))
+                weighed.OrganizationBelongingAtStart[org.Id] = Belonging(c, org, weighed, leader);
         if (c.ElapsedDays - org.FoundedDay < defines.OrganizationGraceDays) return;
         // A member bargaining for better terms: bought back, still bargaining, or gone by its vote.
         if (OrganizationCrises.Week(c, org, m => Belonging(c, org, m, leader), m => Leave(c, org, m))) return;
-        foreach (var id in org.Members.ToArray())
+        var memCopy = _reviewMembersCopyScratch ??= new List<int>();
+        memCopy.Clear();
+        for (var mi = 0; mi < org.Members.Count; mi++) memCopy.Add(org.Members[mi]);
+        for (var mi = 0; mi < memCopy.Count; mi++)
         {
+            var id = memCopy[mi];
             var member = c.NationById(id);
             if (member is null || member.IsHuman || !org.Members.Contains(id)) continue;
-            var belonging = Belonging(c, org, member,leader);
+            var belonging = Belonging(c, org, member, leader);
             var floor = defines.OrganizationDepartureBelonging;
             // A member that was already half out on the first day - most of the African Union's
             // quarrels are older than 2024 - is not estranged by them: what counts is how far it
@@ -347,6 +442,25 @@ public static class OrganizationDynamics
     public static bool Estranged(Campaign c, InternationalOrganization org, Nation member) =>
         member is not null && Belonging(c, org, member) < c.Defines.OrganizationDepartureBelonging;
 
+    [ThreadStatic] private static List<Nation> _leaveRemainingScratch;
+    [ThreadStatic] private static List<Nation> _leaveCompanionsScratch;
+    [ThreadStatic] private static List<Nation> _dissolveMembersScratch;
+    [ThreadStatic] private static List<Nation> _schismPairScratch;
+
+    private static bool SharesOtherDefencePact(Campaign c, int excludedOrgId, int aId, int bId)
+    {
+        var orgs = c.Organizations;
+        for (var i = 0; i < orgs.Count; i++)
+        {
+            var o = orgs[i];
+            if (o.Id != excludedOrgId && !o.Dissolved &&
+                InternationalOrganizations.Charter(o.CharterId)?.Defence == true &&
+                o.Members.Contains(aId) && o.Members.Contains(bId))
+                return true;
+        }
+        return false;
+    }
+
     private static void Leave(Campaign c, InternationalOrganization org, Nation member)
     {
         var name = InternationalOrganizations.DisplayName(c, org);
@@ -360,11 +474,25 @@ public static class OrganizationDynamics
             return;
         }
         // A friend as estranged as itself leaves with it, and they found their own.
-        var companion = org.Members.Where(id => id != member.Id).Select(c.NationById)
-            .Where(n => n is { IsHuman: false, IsSubject: false } &&
-                        Belonging(c, org, n) < c.Defines.OrganizationDepartureBelonging &&
-                        (CampaignDiplomacy.Peek(c, member.Id, n.Id)?.Opinion ?? 0f) >= c.Defines.OrganizationSchismOpinion)
-            .OrderByDescending(n => CampaignDiplomacy.Peek(c, member.Id, n.Id)?.Opinion ?? 0f).ThenBy(n => n.Id).FirstOrDefault();
+        Nation companion = null;
+        var bestOpinion = float.NegativeInfinity;
+        var minBelonging = c.Defines.OrganizationDepartureBelonging;
+        var schismOpinion = c.Defines.OrganizationSchismOpinion;
+        for (var i = 0; i < org.Members.Count; i++)
+        {
+            var id = org.Members[i];
+            if (id == member.Id) continue;
+            var n = c.NationById(id);
+            if (n is not { IsHuman: false, IsSubject: false }) continue;
+            var op = CampaignDiplomacy.Peek(c, member.Id, n.Id)?.Opinion ?? 0f;
+            if (op < schismOpinion) continue;
+            if (Belonging(c, org, n) >= minBelonging) continue;
+            if (companion is null || op > bestOpinion || (op == bestOpinion && n.Id < companion.Id))
+            {
+                companion = n;
+                bestOpinion = op;
+            }
+        }
         var leaver = new OrganizationCommand { IssuerId = member.Id, OrganizationId = org.Id, Action = "leave" };
         leaver.Apply(c);
         if (!leaver.Changed) return;
@@ -376,7 +504,12 @@ public static class OrganizationDynamics
             if (with.Changed)
             {
                 Remember(c, org, companion, "left_our_organization");
-                var founded = Found(c, org.CharterId, member, new[] { member, companion });
+                var pair = _schismPairScratch ??= new List<Nation>(2);
+                pair.Clear();
+                pair.Add(member);
+                pair.Add(companion);
+                var founded = Found(c, org.CharterId, member, pair);
+                pair.Clear();
                 c.Chronicle.Record(c, "organization_split", member.Id, companion.Id, name);
                 if (founded is not null) return;
             }
@@ -384,19 +517,38 @@ public static class OrganizationDynamics
         c.Chronicle.Record(c, "organization_left", member.Id, -1, name);
         // Hegemon / dominant pillar departure shock across ALL organizations:
         // if a founder or an economic/military pillar (>= 35% of org GDP) leaves, cohesion collapses.
-        var totalGdp = org.Members.Select(c.NationById).Where(n => n != null).Sum(n => n.Gdp);
+        var totalGdp = 0f;
+        var remaining = _leaveRemainingScratch ??= new List<Nation>();
+        remaining.Clear();
+        Nation newLeader = null;
+        for (var i = 0; i < org.Members.Count; i++)
+        {
+            var n = c.NationById(org.Members[i]);
+            if (n is null) continue;
+            totalGdp += n.Gdp;
+            if (!n.IsSubject && InternationalOrganizations.Eligible(c, n))
+            {
+                remaining.Add(n);
+                if (newLeader is null || n.Gdp > newLeader.Gdp) newLeader = n;
+            }
+        }
         var isPillar = member.Id == org.FounderId || (totalGdp > 0 && member.Gdp >= totalGdp * 0.35f);
         if (isPillar)
         {
             org.Cohesion = MathF.Max(0.05f, org.Cohesion - 0.35f);
-            var remaining = org.Members.Select(c.NationById).Where(n => n is not null && !n.IsSubject && InternationalOrganizations.Eligible(c, n)).ToList();
-            if (remaining.Count >= 3 && org.Cohesion < c.Defines.OrganizationDissolveCohesion)
+            if (remaining.Count >= 3 && org.Cohesion < c.Defines.OrganizationDissolveCohesion && newLeader is not null)
             {
-                var newLeader = remaining.OrderByDescending(n => n.Gdp).First();
-                var companions = remaining.Where(n => n.Id != newLeader.Id && (CampaignDiplomacy.Peek(c, newLeader.Id, n.Id)?.Opinion ?? 0f) >= 20f).ToList();
-                if (companions.Count >= 2)
+                var companions = _leaveCompanionsScratch ??= new List<Nation>();
+                companions.Clear();
+                companions.Add(newLeader);
+                for (var i = 0; i < remaining.Count; i++)
                 {
-                    companions.Insert(0, newLeader);
+                    var n = remaining[i];
+                    if (n.Id != newLeader.Id && (CampaignDiplomacy.Peek(c, newLeader.Id, n.Id)?.Opinion ?? 0f) >= 20f)
+                        companions.Add(n);
+                }
+                if (companions.Count >= 3)
+                {
                     var newBloc = Found(c, org.CharterId, newLeader, companions);
                     if (newBloc is not null)
                     {
@@ -404,20 +556,21 @@ public static class OrganizationDynamics
                             InternationalOrganizations.DisplayName(c, newBloc));
                     }
                 }
+                companions.Clear();
             }
         }
+        remaining.Clear();
         if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true)
         {
-            foreach (var otherId in org.Members)
+            for (var i = 0; i < org.Members.Count; i++)
             {
+                var otherId = org.Members[i];
                 if (otherId == member.Id) continue;
                 var rel = CampaignDiplomacy.Peek(c, member.Id, otherId);
-                if (rel is { Stance: DiplomaticStance.Allied })
+                if (rel is { Stance: DiplomaticStance.Allied } && !SharesOtherDefencePact(c, org.Id, member.Id, otherId))
                 {
-                    var shareOther = InternationalOrganizations.Active(c).Any(o => o.Id != org.Id && !o.Dissolved &&
-                        InternationalOrganizations.Charter(o.CharterId)?.Defence == true &&
-                        o.Members.Contains(member.Id) && o.Members.Contains(otherId));
-                    if (!shareOther) { rel.Stance = DiplomaticStance.Neutral; c.NoteAllianceChange(); }
+                    rel.Stance = DiplomaticStance.Neutral;
+                    c.NoteAllianceChange();
                 }
             }
         }
@@ -427,15 +580,17 @@ public static class OrganizationDynamics
     internal static void UnbindDefence(Campaign c, InternationalOrganization org, Nation member)
     {
         if (InternationalOrganizations.Charter(org.CharterId)?.Defence != true) return;
-        foreach (var otherId in org.Members)
+        for (var i = 0; i < org.Members.Count; i++)
         {
+            var otherId = org.Members[i];
             if (otherId == member.Id) continue;
             var rel = CampaignDiplomacy.Peek(c, member.Id, otherId);
             if (rel is not { Stance: DiplomaticStance.Allied }) continue;
-            var shareOther = InternationalOrganizations.Active(c).Any(o => o.Id != org.Id && !o.Dissolved &&
-                InternationalOrganizations.Charter(o.CharterId)?.Defence == true &&
-                o.Members.Contains(member.Id) && o.Members.Contains(otherId));
-            if (!shareOther) { rel.Stance = DiplomaticStance.Neutral; c.NoteAllianceChange(); }
+            if (!SharesOtherDefencePact(c, org.Id, member.Id, otherId))
+            {
+                rel.Stance = DiplomaticStance.Neutral;
+                c.NoteAllianceChange();
+            }
         }
     }
 
@@ -462,12 +617,28 @@ public static class OrganizationDynamics
     private static void Dissolve(Campaign c, InternationalOrganization org)
     {
         var name = InternationalOrganizations.DisplayName(c, org);
-        var members = org.Members.Select(c.NationById).Where(n => n is not null).ToList();
+        var members = _dissolveMembersScratch ??= new List<Nation>(org.Members.Count);
+        members.Clear();
+        var gdp = 0f;
+        Nation actorNation = null;
+        for (var i = 0; i < org.Members.Count; i++)
+        {
+            var n = c.NationById(org.Members[i]);
+            if (n is null) continue;
+            members.Add(n);
+            gdp += MathF.Max(0f, n.Gdp);
+            if (actorNation is null || n.Gdp > actorNation.Gdp || (n.Gdp == actorNation.Gdp && n.Id < actorNation.Id))
+                actorNation = n;
+        }
         // The common fund goes back to the members, by the size of their economies.
-        var gdp = members.Sum(n => MathF.Max(0f, n.Gdp));
         if (org.Budget > 0f && members.Count > 0)
-            foreach (var member in members)
-                { var ledgerBefore = member.Treasury; member.Treasury += org.Budget * (gdp > 0f ? MathF.Max(0f, member.Gdp) / gdp : 1f / members.Count); MoneyLedger.Book(member, MoneyFlow.Organizations, member.Treasury - ledgerBefore); }
+            for (var i = 0; i < members.Count; i++)
+            {
+                var member = members[i];
+                var ledgerBefore = member.Treasury;
+                member.Treasury += org.Budget * (gdp > 0f ? MathF.Max(0f, member.Gdp) / gdp : 1f / members.Count);
+                MoneyLedger.Book(member, MoneyFlow.Organizations, member.Treasury - ledgerBefore);
+            }
         if (org.Budget > 0f && members.Count > 0) OrganizationLedger.Book(org, OrganizationFlow.Returned, -org.Budget);
         org.Budget = 0f;
         org.Motion = null;
@@ -476,7 +647,7 @@ public static class OrganizationDynamics
         org.SuspendedFor.Clear();
         org.Dissolved = true;
         InternationalOrganizations.InvalidateDefencePartners();
-        var actor = members.OrderByDescending(n => n.Gdp).ThenBy(n => n.Id).FirstOrDefault()?.Id ?? org.FounderId;
+        var actor = actorNation?.Id ?? org.FounderId;
         c.Chronicle.Record(c, "organization_dissolved", actor, -1, name);
         if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true)
         {
@@ -484,15 +655,14 @@ public static class OrganizationDynamics
             for (var j = i + 1; j < members.Count; j++)
             {
                 var rel = CampaignDiplomacy.Peek(c, members[i].Id, members[j].Id);
-                if (rel is { Stance: DiplomaticStance.Allied })
+                if (rel is { Stance: DiplomaticStance.Allied } && !SharesOtherDefencePact(c, org.Id, members[i].Id, members[j].Id))
                 {
-                    var shareOther = InternationalOrganizations.Active(c).Any(o => o.Id != org.Id && !o.Dissolved &&
-                        InternationalOrganizations.Charter(o.CharterId)?.Defence == true &&
-                        o.Members.Contains(members[i].Id) && o.Members.Contains(members[j].Id));
-                    if (!shareOther) { rel.Stance = DiplomaticStance.Neutral; c.NoteAllianceChange(); }
+                    rel.Stance = DiplomaticStance.Neutral;
+                    c.NoteAllianceChange();
                 }
             }
         }
+        members.Clear();
         c.MarkStrategicChange();
     }
 
@@ -512,19 +682,67 @@ public static class OrganizationDynamics
         }
     }
 
+    [ThreadStatic] private static List<int> _pactPowersScratch;
+    [ThreadStatic] private static List<Nation> _threatenedScratch;
+    [ThreadStatic] private static List<Nation> _pactMembersScratch;
+    [ThreadStatic] private static HashSet<int> _defendedScratch;
+    [ThreadStatic] private static HashSet<string> _distinctContinentsScratch;
+    [ThreadStatic] private static List<int> _foundMemberIdsScratch;
+
+    private static int CountActiveOrgs(Campaign c)
+    {
+        var count = 0;
+        var orgs = c.Organizations;
+        for (var i = 0; i < orgs.Count; i++)
+            if (!orgs[i].Dissolved) count++;
+        return count;
+    }
+
+    private static bool AnyActiveOrgWithName(Campaign c, string name)
+    {
+        var orgs = c.Organizations;
+        for (var i = 0; i < orgs.Count; i++)
+        {
+            var o = orgs[i];
+            if (!o.Dissolved && o.Name == name) return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// A new organisation of the founders, named for the first two capitals that signed - the
     /// Warsaw–Vilnius pact - or an authentic global/regional treaty name, and seeded with them all at once.
     /// </summary>
     private static InternationalOrganization Found(Campaign c, string charterId, Nation founder, IReadOnlyList<Nation> members)
     {
-        if (members.Count < 2 || InternationalOrganizations.Active(c).Count() >= Math.Clamp(c.Defines.AiOrganizationWorldLimit + 8, 0, 120)) return null;
+        if (members.Count < 2 || CountActiveOrgs(c) >= Math.Clamp(c.Defines.AiOrganizationWorldLimit + 8, 0, 120)) return null;
         var limit = Math.Clamp(c.Defines.OrganizationMembershipLimit, 1, 30);
-        if (members.Any(m => InternationalOrganizations.Memberships(c, m.Id).Count() >= limit)) return null;
-        var second = members.Where(m => m.Id != founder.Id).OrderByDescending(m => m.Gdp).ThenBy(m => m.Id).First();
+        for (var i = 0; i < members.Count; i++)
+        {
+            var mCount = 0;
+            var orgs = c.Organizations;
+            var mid = members[i].Id;
+            for (var oi = 0; oi < orgs.Count; oi++)
+            {
+                var o = orgs[oi];
+                if (!o.Dissolved && o.Members.Contains(mid) && ++mCount >= limit) return null;
+            }
+        }
+        Nation second = null;
+        for (var i = 0; i < members.Count; i++)
+        {
+            var m = members[i];
+            if (m.Id == founder.Id) continue;
+            if (second is null || m.Gdp > second.Gdp || (m.Gdp == second.Gdp && m.Id < second.Id))
+                second = m;
+        }
         var name = DetermineOrganizationName(c, charterId, founder, second, members);
-        if (InternationalOrganizations.Active(c).Any(o => o.Name == name)) return null;
-        var org = InternationalOrganizations.Seed(c, name, charterId, members.Select(m => m.Id));
+        if (AnyActiveOrgWithName(c, name)) return null;
+        var memberIds = _foundMemberIdsScratch ??= new List<int>(members.Count);
+        memberIds.Clear();
+        for (var i = 0; i < members.Count; i++) memberIds.Add(members[i].Id);
+        var org = InternationalOrganizations.Seed(c, name, charterId, memberIds);
+        memberIds.Clear();
         if (org is null || org.Name != name) return null;
         org.FounderId = founder.Id;
         org.Cohesion = 0.6f;
@@ -546,8 +764,17 @@ public static class OrganizationDynamics
     {
         var kind = charterId switch { "collective_defence" => "pact", "development" => "community", "commodity_cartel" => "cartel", _ => "forum" };
         var isGlobalOrCrossContinent = !string.Equals(founder.Continent, second.Continent, StringComparison.OrdinalIgnoreCase) ||
-                                       founder.Gdp >= c.Defines.AiOrganizationGlobalGdp ||
-                                       members.Select(m => m.Continent).Distinct().Count() > 1;
+                                       founder.Gdp >= c.Defines.AiOrganizationGlobalGdp;
+        if (!isGlobalOrCrossContinent)
+        {
+            var continents = _distinctContinentsScratch ??= new HashSet<string>();
+            continents.Clear();
+            for (var i = 0; i < members.Count; i++)
+            {
+                continents.Add(members[i].Continent);
+                if (continents.Count > 1) { isGlobalOrCrossContinent = true; break; }
+            }
+        }
 
         if (charterId == "collective_defence")
         {
@@ -556,41 +783,41 @@ public static class OrganizationDynamics
                 if ((founder.Continent is "north_america" && second.Continent is "europe") ||
                     (founder.Continent is "europe" && second.Continent is "north_america"))
                 {
-                    if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.transatlantic_treaty"))
+                    if (!AnyActiveOrgWithName(c, "org.name.transatlantic_treaty"))
                         return "org.name.transatlantic_treaty";
                 }
-                if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.global_security_coalition"))
+                if (!AnyActiveOrgWithName(c, "org.name.global_security_coalition"))
                     return "org.name.global_security_coalition";
             }
             if (string.Equals(founder.Continent, "europe", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(second.Continent, "europe", StringComparison.OrdinalIgnoreCase) &&
-                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.european_defence_alliance"))
+                !AnyActiveOrgWithName(c, "org.name.european_defence_alliance"))
             {
                 return "org.name.european_defence_alliance";
             }
             if ((string.Equals(founder.Continent, "asia", StringComparison.OrdinalIgnoreCase) ||
                  string.Equals(founder.Region, "east_asia", StringComparison.OrdinalIgnoreCase)) &&
-                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.indopacific_security_dialogue"))
+                !AnyActiveOrgWithName(c, "org.name.indopacific_security_dialogue"))
             {
                 return "org.name.indopacific_security_dialogue";
             }
             if ((founder.Continent is "asia" or "europe") && (founder.Region is "eastern_europe" or "central_asia" or "russia" || second.Region is "eastern_europe" or "central_asia") &&
-                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.eurasian_security_treaty"))
+                !AnyActiveOrgWithName(c, "org.name.eurasian_security_treaty"))
             {
                 return "org.name.eurasian_security_treaty";
             }
             if (founder.Continent is "africa" && second.Continent is "africa" &&
-                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.african_defence_community"))
+                !AnyActiveOrgWithName(c, "org.name.african_defence_community"))
             {
                 return "org.name.african_defence_community";
             }
             if (founder.Continent is "south_america" or "north_america" && second.Continent is "south_america" or "north_america" &&
-                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.panamerican_defence_pact"))
+                !AnyActiveOrgWithName(c, "org.name.panamerican_defence_pact"))
             {
                 return "org.name.panamerican_defence_pact";
             }
             if (founder.Region is "middle_east" or "north_africa" && second.Region is "middle_east" or "north_africa" &&
-                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.middle_eastern_security_pact"))
+                !AnyActiveOrgWithName(c, "org.name.middle_eastern_security_pact"))
             {
                 return "org.name.middle_eastern_security_pact";
             }
@@ -600,23 +827,23 @@ public static class OrganizationDynamics
             if (isGlobalOrCrossContinent)
             {
                 if ((founder.Region is "east_asia" or "oceania" || second.Region is "east_asia" or "oceania") &&
-                    !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.pacific_trade_partnership"))
+                    !AnyActiveOrgWithName(c, "org.name.pacific_trade_partnership"))
                     return "org.name.pacific_trade_partnership";
-                if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.global_trade_partnership"))
+                if (!AnyActiveOrgWithName(c, "org.name.global_trade_partnership"))
                     return "org.name.global_trade_partnership";
             }
             if (founder.Continent is "africa" && second.Continent is "africa" &&
-                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.african_economic_community"))
+                !AnyActiveOrgWithName(c, "org.name.african_economic_community"))
             {
                 return "org.name.african_economic_community";
             }
             if (founder.Continent is "south_america" or "north_america" && second.Continent is "south_america" or "north_america" &&
-                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.panamerican_economic_community"))
+                !AnyActiveOrgWithName(c, "org.name.panamerican_economic_community"))
             {
                 return "org.name.panamerican_economic_community";
             }
             if ((founder.Region is "eastern_europe" or "central_asia" || second.Region is "eastern_europe" or "central_asia") &&
-                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.eurasian_economic_council"))
+                !AnyActiveOrgWithName(c, "org.name.eurasian_economic_council"))
             {
                 return "org.name.eurasian_economic_council";
             }
@@ -625,9 +852,9 @@ public static class OrganizationDynamics
         {
             if (isGlobalOrCrossContinent)
             {
-                if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.petroleum_exporting_cartel"))
+                if (!AnyActiveOrgWithName(c, "org.name.petroleum_exporting_cartel"))
                     return "org.name.petroleum_exporting_cartel";
-                if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.critical_minerals_cartel"))
+                if (!AnyActiveOrgWithName(c, "org.name.critical_minerals_cartel"))
                     return "org.name.critical_minerals_cartel";
             }
         }
@@ -637,16 +864,16 @@ public static class OrganizationDynamics
             {
                 if (founder.Continent is "africa" or "asia" or "south_america" &&
                     second.Continent is "africa" or "asia" or "south_america" &&
-                    !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.global_south_dialogue"))
+                    !AnyActiveOrgWithName(c, "org.name.global_south_dialogue"))
                 {
                     return "org.name.global_south_dialogue";
                 }
                 if (founder.NationalCourse.Dominant is "armed_neutrality" or "isolationism" &&
-                    !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.non_aligned_coalition"))
+                    !AnyActiveOrgWithName(c, "org.name.non_aligned_coalition"))
                 {
                     return "org.name.non_aligned_coalition";
                 }
-                if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.world_cooperation_council"))
+                if (!AnyActiveOrgWithName(c, "org.name.world_cooperation_council"))
                 {
                     return "org.name.world_cooperation_council";
                 }
@@ -672,34 +899,73 @@ public static class OrganizationDynamics
         if (!c.Defines.AiMayFoundOrganizations || InternationalOrganizations.Charter("collective_defence") is null ||
             c.ElapsedDays < c.Defines.ThreatPactEarliestDay) return;
         var limit = Math.Clamp(c.Defines.OrganizationMembershipLimit, 1, 30);
-        foreach (var powerId in AllianceSystem.GreatPowers(c).OrderBy(id => id))
+        var powers = _pactPowersScratch ??= new List<int>(16);
+        powers.Clear();
+        foreach (var id in AllianceSystem.GreatPowers(c)) powers.Add(id);
+        if (powers.Count > 1) powers.Sort();
+        var threatened = _threatenedScratch ??= new List<Nation>(32);
+        var members = _pactMembersScratch ??= new List<Nation>(5);
+        var defended = _defendedScratch ??= new HashSet<int>();
+        var active = c.ActiveNations;
+        for (var pi = 0; pi < powers.Count; pi++)
         {
+            var powerId = powers[pi];
             var power = c.NationById(powerId);
             if (power is null) continue;
-            var threatened = c.Nations.Where(n => n.Id != powerId && !n.IsHuman && !n.IsSubject && InternationalOrganizations.Eligible(c, n) &&
-                    !n.AnswersTo(powerId) && InternationalOrganizations.Memberships(c, n.Id).Count() < limit &&
-                    (CampaignDiplomacy.SharesLandBorder(c, n.MapIndex, power.MapIndex) ||
-                     (string.Equals(n.Region, power.Region, StringComparison.OrdinalIgnoreCase) &&
-                      NavalOperations.Distance(n.CapitalLatitude, n.CapitalLongitude, power.CapitalLatitude, power.CapitalLongitude) < 3500f) ||
-                     (power.Gdp >= c.Defines.AiOrganizationGlobalGdp && (string.Equals(n.Continent, power.Continent, StringComparison.OrdinalIgnoreCase) || n.Gdp >= 300f))) &&
-                    CampaignDiplomacy.Peek(c, n.Id, powerId) is { } relation && relation.Stance != DiplomaticStance.Allied &&
-                    (relation.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar || relation.Opinion <= -40f))
-                .OrderByDescending(n => n.Gdp).ThenBy(n => n.Id).ToList();
+            threatened.Clear();
+            for (var ni = 0; ni < active.Count; ni++)
+            {
+                var n = active[ni];
+                if (n.Id == powerId || n.IsHuman || n.IsSubject || n.AnswersTo(powerId)) continue;
+                var relation = CampaignDiplomacy.Peek(c, n.Id, powerId);
+                if (relation is null || relation.Stance == DiplomaticStance.Allied ||
+                    (relation.Stance is not DiplomaticStance.Rival and not DiplomaticStance.AtWar && relation.Opinion > -40f)) continue;
+                if (!CampaignDiplomacy.SharesLandBorder(c, n.MapIndex, power.MapIndex) &&
+                    !(string.Equals(n.Region, power.Region, StringComparison.OrdinalIgnoreCase) &&
+                      NavalOperations.Distance(n.CapitalLatitude, n.CapitalLongitude, power.CapitalLatitude, power.CapitalLongitude) < 3500f) &&
+                    !(power.Gdp >= c.Defines.AiOrganizationGlobalGdp && (string.Equals(n.Continent, power.Continent, StringComparison.OrdinalIgnoreCase) || n.Gdp >= 300f)))
+                    continue;
+                if (!InternationalOrganizations.Eligible(c, n)) continue;
+                var memCount = 0;
+                var allOrgs = c.Organizations;
+                for (var oi = 0; oi < allOrgs.Count; oi++)
+                {
+                    var o = allOrgs[oi];
+                    if (!o.Dissolved && o.Members.Contains(n.Id) && ++memCount >= limit) break;
+                }
+                if (memCount >= limit) continue;
+                threatened.Add(n);
+            }
             if (threatened.Count < 2) continue;
             if (MovementRules.Roll(c.Seed, powerId, c.ElapsedDays, 4611) >= c.Defines.ThreatPactChance) continue;
+            if (threatened.Count > 1)
+                threatened.Sort(static (left, right) =>
+                {
+                    var cmp = right.Gdp.CompareTo(left.Gdp);
+                    return cmp != 0 ? cmp : left.Id.CompareTo(right.Id);
+                });
             var founder = threatened[0];
-            var defended = InternationalOrganizations.DefencePartners(c, founder.Id).ToHashSet();
-            var members = new List<Nation> { founder };
-            foreach (var other in threatened.Skip(1))
+            defended.Clear();
+            foreach (var dId in InternationalOrganizations.DefencePartners(c, founder.Id)) defended.Add(dId);
+            members.Clear();
+            members.Add(founder);
+            for (var ti = 1; ti < threatened.Count; ti++)
             {
+                var other = threatened[ti];
                 if (defended.Contains(other.Id) || CampaignDiplomacy.AtWar(c, founder.Id, other.Id)) continue;
                 if ((CampaignDiplomacy.Peek(c, founder.Id, other.Id)?.Opinion ?? 0f) < c.Defines.ThreatPactOpinion) continue;
-                if (members.Any(m => CampaignDiplomacy.AtWar(c, m.Id, other.Id))) continue;
+                var warring = false;
+                for (var mi = 0; mi < members.Count; mi++)
+                    if (CampaignDiplomacy.AtWar(c, members[mi].Id, other.Id)) { warring = true; break; }
+                if (warring) continue;
                 members.Add(other);
                 if (members.Count >= 5) break;
             }
             if (members.Count < 2) continue;
-            if (Found(c, "collective_defence", founder, members) is not null) return;
+            if (Found(c, "collective_defence", founder, members) is not null) break;
         }
+        threatened.Clear();
+        members.Clear();
+        defended.Clear();
     }
 }

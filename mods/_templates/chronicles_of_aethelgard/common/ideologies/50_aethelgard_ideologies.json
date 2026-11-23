@@ -1,0 +1,38 @@
+{
+  "chivalric_order": {
+    "name": "Chivalric Order",
+    "description": "Honour, sworn fealty and protection of the hearth above unchecked ambition.",
+    "order": 10,
+    "colour": "#4D82B8",
+    "economic": 0.15,
+    "authority": 0.25,
+    "prefers_governments": ["high_monarchy"],
+    "militia": 1.1,
+    "effects": { "stability": 0.00014, "radicalism": -0.00008 },
+    "modifiers": { "stability_weekly": 0.0002 }
+  },
+  "iron_hegemony": {
+    "name": "Iron Hegemony",
+    "description": "Strength forged in fire: every anvil and levy serves the expansion of the Dominion.",
+    "order": 20,
+    "colour": "#A84438",
+    "economic": -0.35,
+    "authority": 0.75,
+    "prefers_governments": ["runic_council", "high_monarchy"],
+    "militia": 1.25,
+    "effects": { "war_support": 0.00014, "growth": 0.0012 },
+    "modifiers": { "construction_speed": 0.05 }
+  },
+  "arcane_mercantilism": {
+    "name": "Arcane Mercantilism",
+    "description": "Free guild caravans, crystal lore and silver coinage binding distant holds.",
+    "order": 30,
+    "colour": "#49946B",
+    "economic": 0.65,
+    "authority": -0.45,
+    "prefers_governments": ["warden_conclave"],
+    "militia": 0.95,
+    "effects": { "growth": 0.0020, "literacy": 0.00008 },
+    "modifiers": { "trade_reach": 0.06, "research_speed": 0.06 }
+  }
+}

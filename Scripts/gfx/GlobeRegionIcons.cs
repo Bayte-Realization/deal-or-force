@@ -52,6 +52,14 @@ public sealed partial class GlobePresentation
     /// <summary>The average count of each building kind in an inhabited region, for what a region is known for.</summary>
     private readonly Dictionary<BuildingKind, float> _buildingAverage = new();
     private readonly List<Rect2> _regionIconTaken = new();
+    private Simulation.ProvinceTopology _regionCellCountsTopology;
+    private int[] _regionCellCounts;
+    private Simulation.ProvinceTopology _regionAnchorsGeometryTopology;
+    private ulong _regionAnchorsStateHash;
+    private readonly List<BuildingKind> _buildingAverageKeysScratch = new();
+    private readonly Dictionary<int, int> _regionProjectsScratch = new();
+    private readonly HashSet<int> _regionKeepScratch = new();
+    private readonly Vector2[] _regionTryOffsetsScratch = new Vector2[6];
 
     // When the layout was last decided, and what the camera looked like then and last frame.
     private Transform3D _badgeLastCamera;
@@ -159,13 +167,22 @@ public sealed partial class GlobePresentation
     /// Each region's middle: the area-weighted centre of its provinces, moved to the region's own
     /// province nearest it, so a crescent-shaped region is not marked in its neighbour's sea.
     /// </summary>
+    private static ulong ComputeUShortHash(ushort[] values)
+    {
+        var hash = 14695981039346656037UL;
+        for (var i = 0; i < values.Length; i++)
+        {
+            hash ^= values[i];
+            hash *= 1099511628211UL;
+        }
+        return hash;
+    }
+
     private void RefreshRegionAnchors()
     {
         if (ReferenceEquals(_regionAnchorsCampaign, _campaign) && _regionAnchorsRevision == _campaign.MapRevision) return;
         _regionAnchorsCampaign = _campaign;
         _regionAnchorsRevision = _campaign.MapRevision;
-        _regionAnchors.Clear();
-        _regionRadius.Clear();
         _regionIconOrder.Clear();
         _regionIconOrder.AddRange(_campaign.States);
         _regionIconOrder.Sort((left, right) => right.Population != left.Population
@@ -179,14 +196,33 @@ public sealed partial class GlobePresentation
             foreach (var (kind, count) in state.Buildings)
                 if (count > 0) _buildingAverage[kind] = _buildingAverage.GetValueOrDefault(kind) + count;
         }
-        foreach (var kind in new List<BuildingKind>(_buildingAverage.Keys))
-            _buildingAverage[kind] /= Math.Max(1, inhabited);
+        _buildingAverageKeysScratch.Clear();
+        foreach (var kind in _buildingAverage.Keys) _buildingAverageKeysScratch.Add(kind);
+        var denom = Math.Max(1, inhabited);
+        for (var i = 0; i < _buildingAverageKeysScratch.Count; i++)
+        {
+            var kind = _buildingAverageKeysScratch[i];
+            _buildingAverage[kind] /= denom;
+        }
 
         var map = _campaign.ProvinceMap;
         if (map is null) return;
-        var cells = new int[map.ProvinceCount + 1];
-        foreach (var province in map.CellToProvince)
-            if (province > 0 && province <= map.ProvinceCount) cells[province]++;
+        if (_regionCellCounts is null || !ReferenceEquals(_regionCellCountsTopology, map) || _regionCellCounts.Length != map.ProvinceCount + 1)
+        {
+            _regionCellCountsTopology = map;
+            _regionCellCounts = new int[map.ProvinceCount + 1];
+            foreach (var province in map.CellToProvince)
+                if (province > 0 && province <= map.ProvinceCount) _regionCellCounts[province]++;
+        }
+        var stateHash = ComputeUShortHash(map.ProvinceToState);
+        if (ReferenceEquals(_regionAnchorsGeometryTopology, map) && _regionAnchorsStateHash == stateHash && _regionAnchors.Count > 0)
+            return;
+
+        _regionAnchorsGeometryTopology = map;
+        _regionAnchorsStateHash = stateHash;
+        _regionAnchors.Clear();
+        _regionRadius.Clear();
+        var cells = _regionCellCounts;
         var members = new Dictionary<int, List<int>>();
         for (var province = 1; province <= map.ProvinceCount; province++)
         {
@@ -293,11 +329,13 @@ public sealed partial class GlobePresentation
         // is all a player would see.
         var spacing = ViewDistance > 5f ? 12f : 4f;
 
-        var projects = new Dictionary<int, int>();
+        var projects = _regionProjectsScratch;
+        projects.Clear();
         foreach (var project in _campaign.Construction) projects[project.StateMapIndex] = projects.GetValueOrDefault(project.StateMapIndex) + 1;
         var limit = Math.Clamp((int)InterfaceSkin.Metric("map.region_icon_limit", 160f), 0, 400);
         var placed = 0;
-        var keep = new HashSet<int>();
+        var keep = _regionKeepScratch;
+        keep.Clear();
 
         void Consider(ScenarioState state)
         {
@@ -323,11 +361,17 @@ public sealed partial class GlobePresentation
                 if (screenRect.Encloses(kept)) { _regionIconTaken.Add(kept); keep.Add(state.MapIndex); placed++; return; }
             }
             var step = iconSize + 6f;
-            var tries = new[] { badge.Offset, Vector2.Zero, new Vector2(0f, step), new Vector2(0f, -step),
-                new Vector2(badge.Width * 0.6f + 4f, 0f), new Vector2(-badge.Width * 0.6f - 4f, 0f) };
+            var tries = _regionTryOffsetsScratch;
+            tries[0] = badge.Offset;
+            tries[1] = Vector2.Zero;
+            tries[2] = new Vector2(0f, step);
+            tries[3] = new Vector2(0f, -step);
+            tries[4] = new Vector2(badge.Width * 0.6f + 4f, 0f);
+            tries[5] = new Vector2(-badge.Width * 0.6f - 4f, 0f);
             Rect2? found = null;
-            foreach (var offset in tries)
+            for (var ti = 0; ti < tries.Length; ti++)
             {
+                var offset = tries[ti];
                 var box = new Rect2(point.X + offset.X - badge.Width / 2f, point.Y + offset.Y - iconSize / 2f, badge.Width, iconSize).Grow(spacing);
                 if (!screenRect.Encloses(box)) continue;
                 var free = true;

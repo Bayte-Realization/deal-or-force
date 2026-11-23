@@ -63,7 +63,8 @@ public static class ShellAlerts
         bool observer = false,
         IReadOnlySet<string> viewedIds = null,
         CampaignAlertSnoozes snoozes = null,
-        IReadOnlySet<Commodity> watchedGoods = null)
+        IReadOnlySet<Commodity> watchedGoods = null,
+        bool touchMode = false)
     {
         if (campaign is null || nation is null || observer)
             return new(Array.Empty<ShellAlertEntry>(), 0, Array.Empty<ShellOutlinerGroup>(), false);
@@ -135,7 +136,7 @@ public static class ShellAlerts
         ShellAlertEntry nextEntry = null;
         var nextCutoff = (int)InterfaceSkin.Metric("shell.next_hint_days", 60f);
         if (nextHintsEnabled && campaign.ElapsedDays < nextCutoff)
-            nextEntry = BuildEarlyGameNextHint(campaign, nation);
+            nextEntry = BuildEarlyGameNextHint(campaign, nation, touchMode);
 
         var shown = new List<ShellAlertEntry>(maxAlerts);
         var regularLimit = nextEntry is not null && maxAlerts > 1 ? maxAlerts - 1 : maxAlerts;
@@ -218,7 +219,7 @@ public static class ShellAlerts
         return $"{daysRemaining}{unit}";
     }
 
-    private static ShellAlertEntry BuildEarlyGameNextHint(Campaign campaign, Nation nation)
+    private static ShellAlertEntry BuildEarlyGameNextHint(Campaign campaign, Nation nation, bool touchMode)
     {
         if (campaign.FeatureEnabled("research") && string.IsNullOrEmpty(nation.CurrentResearch) && ResearchSystem.AvailableTo(nation).Any())
             return new("next:research", "next_hint", Loc.Get("Next: Choose research"),
@@ -230,7 +231,9 @@ public static class ShellAlerts
                 Loc.Get("Commission an economic or infrastructure site in Economy."), ShellAlertSeverity.NextHint,
                 CampaignAlertRoute.Decisions, -1, -1, "", false, false, true);
 
-        return new("next:time", "next_hint", Loc.Get("Next: Advance time [Space]"),
+        var advanceTitle = Loc.Get("Next: Advance time [Space]");
+        if (touchMode) advanceTitle = advanceTitle.Replace(" [Space]", "", StringComparison.Ordinal).TrimEnd();
+        return new("next:time", "next_hint", advanceTitle,
             Loc.Get("Unpause time when your opening plans are ready."), ShellAlertSeverity.NextHint,
             CampaignAlertRoute.Situation, -1, -1, "", false, false, true);
     }

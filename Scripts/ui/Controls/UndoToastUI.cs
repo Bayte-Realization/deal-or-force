@@ -53,7 +53,10 @@ public sealed partial class UndoToastControl : PanelContainer
         _label.AddThemeColorOverride("font_color", Ui.Colour("text.bright"));
         row.AddChild(_label);
 
-        _undoButton = CreateButton(Loc.Get("Undo") + " (Ctrl+Z)", primary: true);
+        var undoLabel = Platform.PlatformProfile.Current.IsTouchPrimary
+            ? Loc.Get("Undo")
+            : Loc.Get("Undo") + " (Ctrl+Z)";
+        _undoButton = CreateButton(undoLabel, primary: true);
         _undoButton.Name = "UndoToastButton";
         _undoButton.Pressed += () => UndoRequested?.Invoke();
         row.AddChild(_undoButton);
@@ -75,7 +78,9 @@ public sealed partial class UndoToastControl : PanelContainer
             return;
         }
         _label.Text = Loc.Format("Done in {0} region(s) ({1}) — Undo (Ctrl+Z)", rec.RegionCount, rec.SummaryText);
-        _undoButton.Text = Loc.Get("Undo") + " (Ctrl+Z)";
+        _undoButton.Text = Platform.PlatformProfile.Current.IsTouchPrimary
+            ? Loc.Get("Undo")
+            : Loc.Get("Undo") + " (Ctrl+Z)";
         Visible = true;
         UpdateAnchorPosition();
     }

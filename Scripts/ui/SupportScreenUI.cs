@@ -416,6 +416,7 @@ public partial class DealOrForceGame
     private void OpenSupportScreen()
     {
         if (_campaign is null || !SupportTypeCatalog.All.Any(t => SupportCore.Enabled(_campaign, t))) return;
+        EnsureScreen("support", BuildSupportScreen);
         EndDrawing();
         CloseFleetPanel();
         ClearArmySelectionAndClose();
@@ -435,7 +436,7 @@ public partial class DealOrForceGame
 
     private void CloseSupportScreen()
     {
-        _supportLayer.Visible = false;
+        if (_supportLayer is not null) _supportLayer.Visible = false;
         _supportTargetArmed = false;
         _globe.SupportOverlay = false;
         _globe.SupportCommandMode = false;
@@ -462,7 +463,7 @@ public partial class DealOrForceGame
         MapSelection.Apply(_supportSelected, new[] { formation.Id }, AddingToSelection, RemovingFromSelection);
         if (!RemovingFromSelection) _supportSelectionAnchor = formation.Id;
         SupportSelectionChanged();
-        if (_supportLayer.Visible && _supportRowMap.TryGetValue(formation.Id, out var row))
+        if (_supportLayer is { Visible: true } && _supportRowMap.TryGetValue(formation.Id, out var row))
             _supportScroll.EnsureControlVisible(row.Row);
     }
 
@@ -939,7 +940,7 @@ public partial class DealOrForceGame
     private void SupportSelectionChanged()
     {
         _globe.SelectSupportFormations(_supportSelected);
-        _supportFeedback.Text = "";
+        if (_supportFeedback is not null) _supportFeedback.Text = "";
         RefreshSupportScreen();
         RefreshFormationBar();
     }

@@ -103,7 +103,7 @@ public partial class DealOrForceGame
         if (!(key.CtrlPressed || key.MetaPressed) || key.AltPressed || Letter(key) != Key.F) return false;
         var search = key.ShiftPressed ? _diplomacyActionSearch : _diplomacySearch;
         if (search is null || !search.IsVisibleInTree()) return false;
-        search.GrabFocus(); search.SelectAll();
+        Ui.FocusInputIfDesktop(search); if (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary != true) search.SelectAll();
         return true;
     }
 }

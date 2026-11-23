@@ -1,0 +1,311 @@
+// Wave 2 turning-point geopolitical events — grounded in real economic, trade,
+// military, megaproject and supply-chain triggers with meaningful trade-offs.
+{
+  "gp_sovereign_wealth_rebalance": {
+    "title": "gp.ev.swf.title",
+    "description": "gp.ev.swf.desc",
+    "trigger": { "min_inflation": 0.05 },
+    "weight": 1.15,
+    "options": [
+      {
+        "title": "gp.ev.swf.opt1",
+        "consequence": "gp.ev.swf.con1",
+        "effects": {
+          "treasury_percent": -0.05,
+          "inflation": -0.018,
+          "credit_confidence": 0.04,
+          "stability": 0.010
+        }
+      },
+      {
+        "title": "gp.ev.swf.opt2",
+        "consequence": "gp.ev.swf.con2",
+        "effects": {
+          "treasury_percent": 0.06,
+          "inflation": 0.012,
+          "state.radicalism": 0.010
+        }
+      },
+      {
+        "title": "gp.ev.swf.opt3",
+        "consequence": "gp.ev.swf.con3",
+        "effects": {
+          "public_debt_percent": -0.04,
+          "gdp_percent": -0.002,
+          "credit_confidence": 0.03
+        }
+      }
+    ]
+  },
+
+  "gp_chokepoint_insurance_spike": {
+    "title": "gp.ev.chokepoint.title",
+    "description": "gp.ev.chokepoint.desc",
+    "trigger": { "max_market_access": 0.92 },
+    "weight": 1.25,
+    "options": [
+      {
+        "title": "gp.ev.chokepoint.opt1",
+        "consequence": "gp.ev.chokepoint.con1",
+        "effects": {
+          "treasury_percent": -0.06,
+          "market_access": 0.04,
+          "naval_experience": 4.0
+        }
+      },
+      {
+        "title": "gp.ev.chokepoint.opt2",
+        "consequence": "gp.ev.chokepoint.con2",
+        "effects": {
+          "market_access": -0.02,
+          "inflation": 0.008
+        },
+        "modifiers": [
+          { "id": "gp_ev_freight_reroute", "days": 180 }
+        ]
+      }
+    ]
+  },
+
+  "gp_tech_sanctions_backfire": {
+    "title": "gp.ev.sanctions.title",
+    "description": "gp.ev.sanctions.desc",
+    "trigger": { "min_literacy": 0.60, "max_market_access": 0.94 },
+    "weight": 1.20,
+    "options": [
+      {
+        "title": "gp.ev.sanctions.opt1",
+        "consequence": "gp.ev.sanctions.con1",
+        "effects": {
+          "treasury_percent": -0.07,
+          "productivity": 0.012
+        },
+        "modifiers": [
+          { "id": "gp_ev_lithography_crash_program", "days": 270 }
+        ]
+      },
+      {
+        "title": "gp.ev.sanctions.opt2",
+        "consequence": "gp.ev.sanctions.con2",
+        "effects": {
+          "political_points": -8.0,
+          "market_access": 0.03,
+          "notoriety": -2.0
+        }
+      },
+      {
+        "title": "gp.ev.sanctions.opt3",
+        "consequence": "gp.ev.sanctions.con3",
+        "effects": {
+          "notoriety": 3.0,
+          "war_support": 0.018,
+          "market_access": -0.025
+        }
+      }
+    ]
+  },
+
+  "gp_energy_corridor_windfall": {
+    "title": "gp.ev.energy.title",
+    "description": "gp.ev.energy.desc",
+    "trigger": { "at_war": false, "min_market_access": 0.85 },
+    "weight": 1.10,
+    "options": [
+      {
+        "title": "gp.ev.energy.opt1",
+        "consequence": "gp.ev.energy.con1",
+        "effects": {
+          "treasury_percent": 0.05,
+          "construction_capacity": 0.16
+        },
+        "modifiers": [
+          { "id": "gp_ev_transit_corridor_boom", "days": 240 }
+        ]
+      },
+      {
+        "title": "gp.ev.energy.opt2",
+        "consequence": "gp.ev.energy.con2",
+        "effects": {
+          "state.standard_of_living": 0.012,
+          "state.radicalism": -0.014,
+          "stability": 0.014
+        }
+      }
+    ]
+  },
+
+  "gp_regional_arms_race": {
+    "title": "gp.ev.armsrace.title",
+    "description": "gp.ev.armsrace.desc",
+    "trigger": { "min_military_spending": 0.04 },
+    "weight": 1.15,
+    "options": [
+      {
+        "title": "gp.ev.armsrace.opt1",
+        "consequence": "gp.ev.armsrace.con1",
+        "effects": {
+          "treasury_percent": -0.05,
+          "army_experience": 8.0,
+          "air_experience": 6.0,
+          "notoriety": 2.5
+        }
+      },
+      {
+        "title": "gp.ev.armsrace.opt2",
+        "consequence": "gp.ev.armsrace.con2",
+        "effects": {
+          "notoriety": -3.5,
+          "political_points": 8.0,
+          "war_support": -0.018
+        }
+      }
+    ]
+  },
+
+  "gp_peace_broker_summit": {
+    "title": "gp.ev.summit.title",
+    "description": "gp.ev.summit.desc",
+    "trigger": { "at_war": false, "min_stability": 0.65 },
+    "weight": 1.05,
+    "options": [
+      {
+        "title": "gp.ev.summit.opt1",
+        "consequence": "gp.ev.summit.con1",
+        "effects": {
+          "treasury_percent": -0.03,
+          "political_points": 14.0,
+          "notoriety": -4.0,
+          "credit_confidence": 0.03
+        }
+      },
+      {
+        "title": "gp.ev.summit.opt2",
+        "consequence": "gp.ev.summit.con2",
+        "effects": {
+          "stability": 0.008,
+          "market_access": 0.015
+        }
+      }
+    ]
+  },
+
+  "gp_megaproject_breakthrough": {
+    "title": "gp.ev.breakthrough.title",
+    "description": "gp.ev.breakthrough.desc",
+    "trigger": { "min_literacy": 0.55 },
+    "weight": 1.10,
+    "options": [
+      {
+        "title": "gp.ev.breakthrough.opt1",
+        "consequence": "gp.ev.breakthrough.con1",
+        "effects": {
+          "treasury_percent": -0.04,
+          "construction_capacity": 0.20
+        },
+        "modifiers": [
+          { "id": "gp_ev_engineering_breakthrough", "days": 240 }
+        ]
+      },
+      {
+        "title": "gp.ev.breakthrough.opt2",
+        "consequence": "gp.ev.breakthrough.con2",
+        "effects": {
+          "treasury_percent": 0.04,
+          "gdp_percent": 0.003,
+          "political_points": 6.0
+        }
+      }
+    ]
+  },
+
+  "gp_megaproject_contractor_strike": {
+    "title": "gp.ev.strike.title",
+    "description": "gp.ev.strike.desc",
+    "trigger": { "min_inflation": 0.04 },
+    "weight": 1.10,
+    "options": [
+      {
+        "title": "gp.ev.strike.opt1",
+        "consequence": "gp.ev.strike.con1",
+        "effects": {
+          "treasury_percent": -0.04,
+          "stability": 0.014,
+          "state.radicalism": -0.015
+        }
+      },
+      {
+        "title": "gp.ev.strike.opt2",
+        "consequence": "gp.ev.strike.con2",
+        "effects": {
+          "construction_capacity": 0.12,
+          "stability": -0.018,
+          "state.radicalism": 0.022
+        }
+      }
+    ]
+  },
+
+  "gp_rare_earth_cartel_squeeze": {
+    "title": "gp.ev.cartel.title",
+    "description": "gp.ev.cartel.desc",
+    "trigger": { "max_market_access": 0.93 },
+    "weight": 1.20,
+    "options": [
+      {
+        "title": "gp.ev.cartel.opt1",
+        "consequence": "gp.ev.cartel.con1",
+        "effects": {
+          "treasury_percent": -0.06,
+          "productivity": 0.010,
+          "market_access": 0.025
+        }
+      },
+      {
+        "title": "gp.ev.cartel.opt2",
+        "consequence": "gp.ev.cartel.con2",
+        "effects": {
+          "gdp_percent": -0.0025,
+          "political_points": 5.0
+        }
+      }
+    ]
+  },
+
+  "gp_sovereign_ai_labor_shift": {
+    "title": "gp.ev.aishift.title",
+    "description": "gp.ev.aishift.desc",
+    "trigger": { "min_literacy": 0.68, "min_gdp": 150.0 },
+    "weight": 1.15,
+    "options": [
+      {
+        "title": "gp.ev.aishift.opt1",
+        "consequence": "gp.ev.aishift.con1",
+        "effects": {
+          "treasury_percent": -0.05,
+          "productivity": 0.018,
+          "state.literacy": 0.008,
+          "state.radicalism": -0.010
+        }
+      },
+      {
+        "title": "gp.ev.aishift.opt2",
+        "consequence": "gp.ev.aishift.con2",
+        "effects": {
+          "gdp_percent": 0.005,
+          "productivity": 0.014,
+          "state.radicalism": 0.018,
+          "stability": -0.012
+        }
+      },
+      {
+        "title": "gp.ev.aishift.opt3",
+        "consequence": "gp.ev.aishift.con3",
+        "effects": {
+          "stability": 0.012,
+          "productivity": -0.006,
+          "brain_drain": 0.004
+        }
+      }
+    ]
+  }
+}

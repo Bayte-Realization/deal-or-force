@@ -1,0 +1,77 @@
+// National spirits for Taiwan's Project National Glory and Mainland Reclamation campaigns.
+{
+  "twn_project_national_glory_spirit": {
+    "name": "mr.mod.national_glory.name",
+    "description": "mr.mod.national_glory.desc",
+    "days": 730,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "army_attack": 0.16,
+      "army_defense": 0.10,
+      "organisation_recovery": 0.14,
+      "shipbuilding_speed": 0.20,
+      "recruitment_speed": 0.18,
+      "war_support_weekly": 0.008
+    }
+  },
+  "twn_strait_armada_spirit": {
+    "name": "mr.mod.strait_armada.name",
+    "description": "mr.mod.strait_armada.desc",
+    "days": 540,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "naval_speed": 0.18,
+      "shipbuilding_speed": 0.25,
+      "supply": 0.14,
+      "organisation_recovery": 0.08
+    }
+  },
+  "twn_mainland_underground_spirit": {
+    "name": "mr.mod.mainland_underground.name",
+    "description": "mr.mod.mainland_underground.desc",
+    "days": 540,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "army_attack": 0.08,
+      "army_speed": 0.08,
+      "supply": 0.10,
+      "war_support_weekly": 0.004
+    }
+  },
+  "mainland_return_momentum": {
+    "name": "mr.mod.return_momentum.name",
+    "description": "mr.mod.return_momentum.desc",
+    "days": 365,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "army_attack": 0.38,
+      "army_defense": 0.30,
+      "army_speed": 0.28,
+      "organisation_recovery": 0.32,
+      "supply": 0.30,
+      "reinforcement_rate": 0.30,
+      "war_support_weekly": 0.014
+    }
+  },
+  "mainland_regime_shock": {
+    "name": "mr.mod.regime_shock.name",
+    "description": "mr.mod.regime_shock.desc",
+    "days": 180,
+    "positive": false,
+    "effects": {},
+    "modifiers": {
+      "army_attack": -0.24,
+      "army_defense": -0.28,
+      "organisation_recovery": -0.32,
+      "supply": -0.20,
+      "recruitment_speed": -0.50,
+      "war_support_weekly": -0.020,
+      "stability_weekly": -0.014,
+      "radicalism_weekly": 0.014
+    }
+  }
+}

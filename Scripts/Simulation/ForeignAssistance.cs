@@ -157,7 +157,8 @@ public static partial class ForeignAssistance
                 if (!assessment.Allowed) Close(c, request, ForeignAssistanceState.Invalidated, assessment.Reason);
             }
         }
-        c.AssistanceCooldowns.RemoveAll(x => !CooldownReserved(c, x));
+        for (var i = c.AssistanceCooldowns.Count - 1; i >= 0; i--)
+            if (!CooldownReserved(c, c.AssistanceCooldowns[i])) c.AssistanceCooldowns.RemoveAt(i);
         if (c.AssistanceRequests.Count > MaxHistory + MaxActiveRequests) TrimHistory(c);
         if (c.AssistanceLastTickDay == c.ElapsedDays) yield break;
         c.AssistanceLastTickDay = c.ElapsedDays;
@@ -174,10 +175,19 @@ public static partial class ForeignAssistance
         foreach (var _ in ReviewDonorsStages(c, cadence, threshold)) { }
     }
 
+    private sealed class DonorReviewScratch
+    {
+        public readonly List<Nation> Donors = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, DonorReviewScratch> DonorReviewScratches = new();
+
+    private static int CompareNationId(Nation left, Nation right) => left.Id.CompareTo(right.Id);
+
     /// <summary>The same donor review, yielded between batches of requesters.</summary>
     internal static IEnumerable<int> ReviewDonorsStages(Campaign c, int cadence, float threshold)
     {
-        Nation[] donors = null;
+        List<Nation> donors = null;
         var reviewed = 0;
         for (var idx = 0; idx < c.Nations.Count; idx++)
         {
@@ -193,17 +203,26 @@ public static partial class ForeignAssistance
             var amount = (double)requester.Gdp * c.Defines.AidShareOfRecipientGdp;
             if (!double.IsFinite(amount) || amount < .01 || amount > float.MaxValue) continue;
             var warId = -1;
-            foreach (var w in Warfare.OpenWars(c))
+            var liveWars = Warfare.LiveWars(c);
+            for (var wi = 0; wi < liveWars.Count; wi++)
             {
+                var w = liveWars[wi];
                 if (!w.Ended && w.Involves(requester.Id) && (warId < 0 || w.Id < warId)) warId = w.Id;
             }
             // Same predicate as the live payment assessment: without need, no
             // donor can accept. Avoid constructing every impossible assessment.
             if (!HasCurrentNeed(c, requester, warId >= 0)) continue;
             Nation best = null; var bestScore = float.NegativeInfinity;
-            donors ??= c.Nations.OrderBy(n => n.Id).ToArray();
-            foreach (var donor in donors)
+            if (donors is null)
             {
+                donors = DonorReviewScratches.GetOrCreateValue(c).Donors;
+                donors.Clear();
+                for (var ni = 0; ni < c.Nations.Count; ni++) donors.Add(c.Nations[ni]);
+                donors.Sort(CompareNationId);
+            }
+            for (var di = 0; di < donors.Count; di++)
+            {
+                var donor = donors[di];
                 if (donor.Id == requester.Id || donor.Population <= 0 || donor.Treasury <= donor.Gdp * c.Defines.AiAidReserveOfGdp) continue;
                 var assessment = CanSubmit(c, requester.Id, donor.Id, (float)amount, warId);
                 if (!assessment.Allowed || assessment.Willingness < threshold || assessment.Willingness <= bestScore) continue;
@@ -213,8 +232,19 @@ public static partial class ForeignAssistance
         }
     }
     public const int MaxActiveRequests = 16, MaxHistory = 32, MaxCooldowns = 1024;
-    public static int Incoming(Campaign c, int nationId) => c?.AssistanceRequests.Count(r =>
-        r.State == ForeignAssistanceState.Pending && r.DonorId == nationId && r.ExpiresDay > c.ElapsedDays) ?? 0;
+    public static int Incoming(Campaign c, int nationId)
+    {
+        if (c is null) return 0;
+        var count = 0;
+        var requests = c.AssistanceRequests;
+        var elapsed = c.ElapsedDays;
+        for (var i = 0; i < requests.Count; i++)
+        {
+            var r = requests[i];
+            if (r.State == ForeignAssistanceState.Pending && r.DonorId == nationId && r.ExpiresDay > elapsed) count++;
+        }
+        return count;
+    }
 
     /// <summary>Submission gates are separate from the live payment preview: a request's own
     /// cooldown must never prevent its addressed donor from answering it.</summary>
@@ -223,37 +253,89 @@ public static partial class ForeignAssistance
         var assessment = Assess(c, requesterId, donorId, amount, warId);
         if (!assessment.Allowed) return assessment;
         string refusal = null;
-        if (c.AssistanceRequests.Any(r => r.State == ForeignAssistanceState.Pending && r.ExpiresDay > c.ElapsedDays &&
-            ((r.RequesterId == requesterId && r.DonorId == donorId) || (r.RequesterId == donorId && r.DonorId == requesterId))))
+        var requests = c.AssistanceRequests;
+        var cooldowns = c.AssistanceCooldowns;
+        var elapsed = c.ElapsedDays;
+
+        var pairPending = false;
+        var activePendingCount = 0;
+        for (var i = 0; i < requests.Count; i++)
+        {
+            var r = requests[i];
+            if (r.State != ForeignAssistanceState.Pending) continue;
+            activePendingCount++;
+            if (!pairPending && r.ExpiresDay > elapsed &&
+                ((r.RequesterId == requesterId && r.DonorId == donorId) || (r.RequesterId == donorId && r.DonorId == requesterId)))
+                pairPending = true;
+        }
+        if (pairPending)
+        {
             refusal = "A request between these countries already awaits a reply.";
-        else if (c.AssistanceCooldowns.Any(x => x.RequesterId == requesterId && x.DonorId == donorId && x.ReadyOnDay > c.ElapsedDays))
-            refusal = "This donor was asked recently. Wait before asking again.";
-        else if (c.AssistanceRequests.Count(r => r.State == ForeignAssistanceState.Pending) >= MaxActiveRequests ||
-            c.NationById(donorId).IsHuman && Incoming(c, donorId) + DealNegotiations.Incoming(c, donorId) >= Math.Clamp(c.Defines.DealInboxLimit, 1, 16))
-            refusal = "The diplomatic request inbox is full. Wait for a reply.";
-        else if (c.AssistanceCooldowns.Count(x => CooldownReserved(c, x)) >= MaxCooldowns)
-            refusal = "The assistance request ledger is full. Wait for earlier requests to clear.";
-        else if (c.NextAssistanceRequestId <= 0 || c.NextAssistanceRequestId == int.MaxValue)
-            refusal = "No further assistance request numbers are available.";
+        }
+        else
+        {
+            var donorOnCooldown = false;
+            for (var i = 0; i < cooldowns.Count; i++)
+            {
+                var x = cooldowns[i];
+                if (x.RequesterId == requesterId && x.DonorId == donorId && x.ReadyOnDay > elapsed)
+                { donorOnCooldown = true; break; }
+            }
+            if (donorOnCooldown)
+            {
+                refusal = "This donor was asked recently. Wait before asking again.";
+            }
+            else if (activePendingCount >= MaxActiveRequests ||
+                c.NationById(donorId).IsHuman && Incoming(c, donorId) + DealNegotiations.Incoming(c, donorId) >= Math.Clamp(c.Defines.DealInboxLimit, 1, 16))
+            {
+                refusal = "The diplomatic request inbox is full. Wait for a reply.";
+            }
+            else
+            {
+                var reservedCount = 0;
+                for (var i = 0; i < cooldowns.Count; i++)
+                    if (CooldownReserved(c, cooldowns[i])) reservedCount++;
+                if (reservedCount >= MaxCooldowns)
+                    refusal = "The assistance request ledger is full. Wait for earlier requests to clear.";
+                else if (c.NextAssistanceRequestId <= 0 || c.NextAssistanceRequestId == int.MaxValue)
+                    refusal = "No further assistance request numbers are available.";
+            }
+        }
         return refusal is null ? assessment : assessment with { Allowed = false, Reason = refusal };
     }
     private static void RememberRequest(Campaign c, int requesterId, int donorId)
     {
-        var clock = c.AssistanceCooldowns.FirstOrDefault(x => x.RequesterId == requesterId && x.DonorId == donorId);
+        ForeignAssistanceCooldown clock = null;
+        var cooldowns = c.AssistanceCooldowns;
+        for (var i = 0; i < cooldowns.Count; i++)
+        {
+            var x = cooldowns[i];
+            if (x.RequesterId == requesterId && x.DonorId == donorId) { clock = x; break; }
+        }
         if (clock is null)
         {
-            if (c.AssistanceCooldowns.Count >= MaxCooldowns) return;
+            if (cooldowns.Count >= MaxCooldowns) return;
             clock = new ForeignAssistanceCooldown { RequesterId = requesterId, DonorId = donorId };
-            c.AssistanceCooldowns.Add(clock);
+            cooldowns.Add(clock);
             // Kept in the order a load restores it in (requester, then donor), so a save written
             // before a load and one written after are the same file.
-            c.AssistanceCooldowns.Sort((a, b) => a.RequesterId != b.RequesterId
+            cooldowns.Sort(static (a, b) => a.RequesterId != b.RequesterId
                 ? a.RequesterId.CompareTo(b.RequesterId) : a.DonorId.CompareTo(b.DonorId));
         }
         clock.ReadyOnDay = (int)Math.Min(int.MaxValue, (long)c.ElapsedDays + Math.Clamp(c.Defines.AidRequestCooldownDays, 1, 365));
     }
-    private static bool CooldownReserved(Campaign c, ForeignAssistanceCooldown clock) => clock.ReadyOnDay > c.ElapsedDays ||
-        c.AssistanceRequests.Any(r => r.State == ForeignAssistanceState.Pending && r.RequesterId == clock.RequesterId && r.DonorId == clock.DonorId);
+    private static bool CooldownReserved(Campaign c, ForeignAssistanceCooldown clock)
+    {
+        if (clock.ReadyOnDay > c.ElapsedDays) return true;
+        var requests = c.AssistanceRequests;
+        for (var i = 0; i < requests.Count; i++)
+        {
+            var r = requests[i];
+            if (r.State == ForeignAssistanceState.Pending && r.RequesterId == clock.RequesterId && r.DonorId == clock.DonorId)
+                return true;
+        }
+        return false;
+    }
     private static ForeignAssistanceOutcome Close(Campaign c, ForeignAssistanceRequest request, ForeignAssistanceState state, string reason)
     {
         request.State = state; request.ClosedDay = c.ElapsedDays; request.Reason = reason;
@@ -262,11 +344,33 @@ public static partial class ForeignAssistance
         c.MarkStrategicChange();
         return new(request.Id, state, request.GrantedAmount, reason);
     }
+    [ThreadStatic] private static List<(int Id, int Index)> _trimHistoryScratch;
+    [ThreadStatic] private static HashSet<int> _trimKeepScratch;
+    [ThreadStatic] private static List<int> _willingnessEnemiesScratch;
+
     private static void TrimHistory(Campaign c)
     {
-        var old = c.AssistanceRequests.Where(r => r.State != ForeignAssistanceState.Pending)
-            .OrderByDescending(r => r.Id).Skip(MaxHistory).Select(r => r.Id).ToHashSet();
-        c.AssistanceRequests.RemoveAll(r => old.Contains(r.Id));
+        var list = c.AssistanceRequests;
+        var closed = 0;
+        for (var i = 0; i < list.Count; i++)
+            if (list[i].State != ForeignAssistanceState.Pending) closed++;
+        if (closed <= MaxHistory) return;
+
+        var rows = _trimHistoryScratch ??= new List<(int Id, int Index)>(closed);
+        rows.Clear();
+        for (var i = 0; i < list.Count; i++)
+        {
+            var r = list[i];
+            if (r.State != ForeignAssistanceState.Pending) rows.Add((r.Id, i));
+        }
+        rows.Sort(static (a, b) => b.Id.CompareTo(a.Id));
+        var oldIds = _trimKeepScratch ??= new HashSet<int>();
+        oldIds.Clear();
+        for (var i = MaxHistory; i < rows.Count; i++) oldIds.Add(rows[i].Id);
+        rows.Clear();
+        for (var i = list.Count - 1; i >= 0; i--)
+            if (oldIds.Contains(list[i].Id)) list.RemoveAt(i);
+        oldIds.Clear();
     }
     public static bool Enabled(Campaign c) => c is not null && c.FeatureEnabled("foreign_assistance") && MechanicFeatures.SystemEnabled(c, nameof(ForeignAssistance)) &&
         (!(c.Defines.Features.ContainsKey("diplomacy") || c.FeatureOverrides.ContainsKey("diplomacy")) || c.FeatureEnabled("diplomacy"));
@@ -292,7 +396,22 @@ public static partial class ForeignAssistance
         if (!float.IsFinite(c.Defines.AiAidCrisisTreasuryOfGdp) || c.Defines.AiAidCrisisTreasuryOfGdp < 0 ||
             !float.IsFinite(requester.WeeklyBalance) || !float.IsFinite(requester.PaymentArrears) || !float.IsFinite(requester.DebtArrears))
             return new(false, 0, 0, false, "The financial inputs are invalid.");
-        var war = warId < 0 ? Warfare.OpenWars(c).FirstOrDefault(w => !w.Ended && w.Involves(requesterId)) : c.Wars.FirstOrDefault(w => w.Id == warId);
+        StrategicWar war = null;
+        if (warId < 0)
+        {
+            var liveWars = Warfare.LiveWars(c);
+            for (var wi = 0; wi < liveWars.Count; wi++)
+            {
+                var w = liveWars[wi];
+                if (!w.Ended && w.Involves(requesterId)) { war = w; break; }
+            }
+        }
+        else
+        {
+            var wars = c.Wars;
+            for (var wi = 0; wi < wars.Count; wi++)
+                if (wars[wi].Id == warId) { war = wars[wi]; break; }
+        }
         if (warId >= 0 && (war is null || war.Ended || !war.Involves(requesterId)))
             return new(false, 0, 0, false, "The requested war is no longer active.");
         if (!HasCurrentNeed(c, requester, war is not null))
@@ -342,23 +461,38 @@ public static partial class ForeignAssistance
             (relation?.GuaranteedBy(donor.Id) == true ? .3f : 0) +
             (requester.OverlordId == donor.Id && !string.IsNullOrEmpty(requester.SubjectType) ? .3f : 0) +
             (Math.Clamp(donor.Stability, 0, 1) - .5f) * .1f;
-        if (Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(donor.Id))) score -= .3f;
+        var liveWars = Warfare.LiveWars(c);
+        for (var wi = 0; wi < liveWars.Count; wi++)
+        {
+            var w = liveWars[wi];
+            if (!w.Ended && w.Involves(donor.Id)) { score -= .3f; break; }
+        }
         if (war is not null)
         {
             if (war.AttackerId != requester.Id) score += .15f;
-            var opponent = war.EnemiesOf(requester.Id).OrderBy(id => id).ToArray();
-            foreach (var enemy in opponent)
+            var enemies = _willingnessEnemiesScratch ??= new List<int>(8);
+            enemies.Clear();
+            foreach (var enemy in war.EnemiesOf(requester.Id)) enemies.Add(enemy);
+            if (enemies.Count > 1) enemies.Sort();
+            for (var ei = 0; ei < enemies.Count; ei++)
             {
-                var stance = CampaignDiplomacy.Peek(c, donor.Id, enemy)?.Stance;
+                var stance = CampaignDiplomacy.Peek(c, donor.Id, enemies[ei])?.Stance;
                 if (stance is DiplomaticStance.Rival or DiplomaticStance.AtWar) score += .45f;
                 if (stance == DiplomaticStance.Allied) score -= 1;
             }
+            enemies.Clear();
         }
         return Math.Clamp(score, -2, 3);
     }
     public static ForeignAssistanceOutcome Respond(Campaign c, int issuerId, int requestId, ForeignAssistanceReply reply, float approvedAmount = float.MaxValue)
     {
-        var request = c?.AssistanceRequests.FirstOrDefault(r => r.Id == requestId);
+        ForeignAssistanceRequest request = null;
+        if (c is not null)
+        {
+            var list = c.AssistanceRequests;
+            for (var i = 0; i < list.Count; i++)
+                if (list[i].Id == requestId) { request = list[i]; break; }
+        }
         if (request is null || request.State != ForeignAssistanceState.Pending || !Enum.IsDefined(reply) ||
             (reply == ForeignAssistanceReply.Withdraw ? issuerId != request.RequesterId : issuerId != request.DonorId))
             return new(0, ForeignAssistanceState.Invalidated, 0, "Only the addressed donor may answer this pending request.");

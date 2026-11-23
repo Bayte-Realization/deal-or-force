@@ -7,18 +7,9 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// The book of war on a screen of its own.
-///
-/// The Army panel could show a column of cards and one article at a time, which is not what a tree
-/// is for: the point of a doctrine tree is seeing the whole book at once - what is in force, what
-/// it opens, and what the far end of the branch would cost. So the tree gets the wide screen the
-/// technology graph has: books down the left, the open book in the middle with its lines drawn,
-/// and what the army is actually reading on the right.
-///
-/// Every button reads the same refusal the command and the AI go through, the canvas is the same
-/// plate the Army tab shows in miniature (DoctrineTreeWindow), and the hands are the same two
-/// (TreeViewport), with buttons beside the toolbar for a layout where Alt with the wheel belongs
-/// to the window manager.
+/// The book of war on a screen of its own: unified mode-aware hub where Tactical Books show the
+/// service shelf filter tabs + left book catalogue + center doctrine tree, while Strategic Course
+/// and Generals hide the irrelevant service/catalogue chrome to claim the full wide center canvas.
 /// </summary>
 public partial class DealOrForceGame
 {
@@ -38,11 +29,6 @@ public partial class DealOrForceGame
 
     private void BuildDoctrineScreen()
     {
-        // A screen of its own, on a canvas of its own. Built as a sibling of the map inside the
-        // shared HUD Control, its plate drew perfectly and took no clicks and no wheel at all -
-        // the whole stack above it was happy to eat GUI input while _Input (which the tree's zoom
-        // goes through) worked fine. A CanvasLayer of its own removes the question: nothing in the
-        // HUD's child order can be above a layer, and a modal screen belongs on one anyway.
         _doctrineCanvas = new CanvasLayer { Name = "DoctrineCanvas", Layer = 12 };
         AddChild(_doctrineCanvas);
         _doctrineLayer = FullLayer("Doctrines");
@@ -51,8 +37,6 @@ public partial class DealOrForceGame
         var shade = new ColorRect { Color = Ui.Colour("surface.overlay"), MouseFilter = MouseFilterEnum.Stop };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         shade.OffsetLeft = InterfaceSkin.Metric("shell.navigation_size", 82);
-        // Moved to where the rail really ends when the screen opens (FitWorkspaceNavigationInset):
-        // the rail is wider in Russian than this metric, and was left half under the shade.
         shade.SetMeta("rail_shade", true);
         _doctrineLayer.AddChild(shade);
         var panel = TexturedPanel(_doctrineLayer);
@@ -60,8 +44,6 @@ public partial class DealOrForceGame
         Ui.Place(panel, "modal.doctrines");
         var rows = PanelRows(panel, 18, 14, 8);
 
-        // The head of the page, built from the shared vocabulary: display title, a sentence of
-        // purpose, the two views and the close, and a rule under the lot.
         _doctrineTacticalView = ActionButton("Tactical books", () => SetDoctrineView("tactical"), 176, 34, true,
             "res://game/gfx/interface/icons/icon_military.png");
         _doctrineTacticalView.Name = "DoctrineTacticalView";
@@ -83,18 +65,18 @@ public partial class DealOrForceGame
         close.Name = "CloseDoctrineScreen";
         close.TooltipText = Ui.Tip(Tr("Close"));
         ScreenHeader(rows, "BOOK OF WAR",
-            "What each service is taught to be, what it costs to change its mind, and what the country pays it in.");
+            "What each service is taught to be, what it costs to change its mind, and what the country pays it in.",
+            false, toMilitary, close);
         var tabs = TabStrip(rows, "DoctrineViewTabs");
-        foreach (var button in new[] { _doctrineTacticalView, _doctrineCourseView, _doctrineGeneralsView, toMilitary, close })
+        foreach (var button in new[] { _doctrineTacticalView, _doctrineCourseView, _doctrineGeneralsView })
             tabs.AddChild(button);
 
         _doctrineScreenSummary = Title("", (int)Ui.Metric("ui.font.body", 12), Ui.Colour("text.body"));
         _doctrineScreenSummary.Name = "DoctrineScreenSummary";
-        // One line, ellipsised: a caption that wraps into a ladder of single words is worse than a
-        // caption that ends in an ellipsis, and the tooltip holds the whole sentence anyway.
         _doctrineScreenSummary.AutowrapMode = TextServer.AutowrapMode.Off;
         _doctrineScreenSummary.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         _doctrineScreenSummary.ClipText = true;
+        _doctrineScreenSummary.AddThemeFontOverride("font", PresentationFonts.Tabular());
         rows.AddChild(_doctrineScreenSummary);
         BuildDoctrineServices(rows);
 
@@ -114,8 +96,7 @@ public partial class DealOrForceGame
         body.AddThemeConstantOverride("separation", 14);
         bodyScroll.AddChild(body);
 
-        // Left: the six books, each saying how much of it is written down, and the four currencies
-        // the books are paid in.
+        // Left: service-filtered books + currencies (visible on Tactical Books tab only).
         var left = new VBoxContainer { Name = "DoctrineCatalogueColumn", CustomMinimumSize = new Vector2(266, 0) };
         _doctrineCatalogueColumn = left;
         left.AddThemeConstantOverride("separation", 6);
@@ -123,9 +104,6 @@ public partial class DealOrForceGame
         _doctrineCatalogueHeading = Title("", 13, Ui.Colour("text.accent"));
         _doctrineCatalogueHeading.Name = "DoctrineCatalogueHeading";
         left.AddChild(_doctrineCatalogueHeading);
-        // A growing/modded catalogue must not determine the height of all three columns.
-        // Otherwise the course scroller is taller than its clipped outer viewport and
-        // EnsureControlVisible/keyboard navigation can leave its buttons below the screen.
         var bookScroll = new ScrollContainer
         {
             Name = "DoctrineBookScroll",
@@ -144,7 +122,7 @@ public partial class DealOrForceGame
         _doctrineScreenCurrencies = new VBoxContainer { Name = "DoctrineScreenCurrencies" };
         left.AddChild(_doctrineScreenCurrencies);
 
-        // Middle: the open book, as wide as the screen allows.
+        // Middle: full-width center canvas for tree, 2-column Strategic Courses, or Generals.
         _doctrineCentre = new VBoxContainer
         {
             Name = "DoctrineCentre",
@@ -164,7 +142,7 @@ public partial class DealOrForceGame
     /// <summary>Opening the book: the world stays behind it, and the map does not take the wheel.</summary>
     private void OpenDoctrineScreen()
     {
-        if (_doctrineLayer is null) BuildDoctrineScreen();
+        EnsureScreen("doctrine", BuildDoctrineScreen);
         _openScreen = "Doctrines";
         _sidePanel.Visible = false;
         HideMapSelection(true);
@@ -173,6 +151,19 @@ public partial class DealOrForceGame
         _doctrineScreenDay = -1;
         RefreshDoctrineScreen();
         UpdateScreenButtons();
+    }
+
+    private void OpenDoctrineScreenOnView(string view)
+    {
+        _doctrineView = view;
+        OpenDoctrineScreen();
+    }
+
+    private void OpenDoctrineScreenOnService(string slot)
+    {
+        _doctrineView = "tactical";
+        OpenDoctrineScreen();
+        SelectDoctrineService(slot);
     }
 
     private void CloseDoctrineScreen()
@@ -189,11 +180,6 @@ public partial class DealOrForceGame
         RefreshDoctrineScreen();
     }
 
-    /// <summary>
-    /// What the wide screen says today: the summary line every frame, and the heavy parts - the
-    /// book list, currencies, tree and side column - when their state changes, even on pause.
-    /// The retained canvas keeps its zoom and scroll across those redraws.
-    /// </summary>
     private void RefreshDoctrineScreen()
     {
         if (_doctrineLayer is not { Visible: true } || _campaign?.Player is null) return;
@@ -216,8 +202,6 @@ public partial class DealOrForceGame
             "{0} · army {1} · air {2} · navy {3} · political credit {4} ({5}/week)",
             countryName, Fmt.Number(n.ArmyExperience), Fmt.Number(n.AirExperience),
             Fmt.Number(n.NavalExperience), Fmt.Number(n.PoliticalPoints), Fmt.Number(weekly));
-        // This runs every frame while the screen is open, so the string is rebuilt only when a
-        // number in it actually changed - the same rule the retained HUD labels follow.
         if (summary != _doctrineScreenSummary.Text)
         {
             _doctrineScreenSummary.Text = summary;
@@ -226,12 +210,14 @@ public partial class DealOrForceGame
         StyleButton(_doctrineTacticalView, _doctrineView == "tactical");
         StyleButton(_doctrineCourseView, _doctrineView == "course");
         StyleButton(_doctrineGeneralsView, _doctrineView == "generals");
+
+        var isTactical = _doctrineView == "tactical";
+        if (_doctrineServiceTabs is not null) _doctrineServiceTabs.Visible = isTactical;
+        if (_doctrineCatalogueColumn is not null) _doctrineCatalogueColumn.Visible = isTactical;
+
         UpdateDoctrineZoomLabel();
         ClearPolicyRows(_doctrineScreenCurrencies);
-        // Three services while a tactical book is open, and political credit added the moment the
-        // strategic courses are: a course is bought with credit, so the number it is bought with
-        // belongs on the screen that spends it.
-        CurrencyStrip(_doctrineScreenCurrencies, n, _doctrineView == "course", columns: 2);
+        CurrencyStrip(_doctrineScreenCurrencies, n, withPolitical: false, columns: 2);
         RebuildDoctrineBookList(n);
         RefreshDoctrineServices();
 
@@ -244,12 +230,16 @@ public partial class DealOrForceGame
                 SizeFlagsVertical = SizeFlags.ExpandFill,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+                ClipContents = true,
                 FollowFocus = true
             };
             _doctrineCentre.AddChild(generalsScroll);
+            var pad = new MarginContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+            pad.AddThemeConstantOverride("margin_right", 14);
+            generalsScroll.AddChild(pad);
             var generalsRows = new VBoxContainer { Name = "DoctrineGeneralsRows", SizeFlagsHorizontal = SizeFlags.ExpandFill };
             generalsRows.AddThemeConstantOverride("separation", 8);
-            generalsScroll.AddChild(generalsRows);
+            pad.AddChild(generalsRows);
             GeneralsPage(n, generalsRows);
         }
         else if (_doctrineView == "course")
@@ -260,13 +250,18 @@ public partial class DealOrForceGame
                 SizeFlagsVertical = SizeFlags.ExpandFill,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+                ClipContents = true,
                 FollowFocus = true
             };
             _doctrineCentre.AddChild(courseScroll);
+            var pad = new MarginContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+            pad.AddThemeConstantOverride("margin_right", 14);
+            courseScroll.AddChild(pad);
             var courseRows = new VBoxContainer { Name = "DoctrineCourseRows", SizeFlagsHorizontal = SizeFlags.ExpandFill };
             courseRows.AddThemeConstantOverride("separation", 8);
-            courseScroll.AddChild(courseRows);
-            StrategicDoctrinePage(n, courseRows);
+            pad.AddChild(courseRows);
+            CurrencyStrip(courseRows, n, withPolitical: true, columns: 4);
+            StrategicDoctrinePage(n, courseRows, wideGrid: true);
         }
         else
         {
@@ -285,7 +280,7 @@ public partial class DealOrForceGame
         FitDoctrineTypography(_doctrineLayer);
     }
 
-    /// <summary>The books as a column, shelf by shelf: what each is, and how much of it is written down.</summary>
+    /// <summary>The books as a column, shelf by shelf: clear [IN FORCE]/[COMPANION]/[STUDYING] status and X/Y progress.</summary>
     private void RebuildDoctrineBookList(Nation n)
     {
         if (_doctrineBookList is null) return;
@@ -300,15 +295,19 @@ public partial class DealOrForceGame
         foreach (var branch in books)
         {
             var id = branch.Id;
+            var shelf = n.TacticalDoctrine.Track(branch.Slot);
+            var isPrimary = string.Equals(shelf.Branch, id, StringComparison.Ordinal);
+            var isCompanion = shelf.Companion is not null && string.Equals(shelf.Companion.Branch, id, StringComparison.Ordinal);
             var track = TacticalDoctrines.TrackFor(n, branch);
-            var inForce = track is not null && string.Equals(track.Branch, id, StringComparison.Ordinal);
-            var written = inForce ? track.Known.Count : 0;
+            var inForce = isPrimary || isCompanion;
+            var isStudying = track is not null && string.Equals(track.LearningBranch, id, StringComparison.Ordinal) && track.LearningNode.Length > 0;
+            var written = inForce && track is not null ? track.Known.Count : 0;
             if (!_doctrineBookButtons.TryGetValue(id, out var button))
             {
                 button = ActionButton("", () => SelectDoctrineBook(id), 0, 46, inForce);
                 var retainedRow = new HBoxContainer { Name = "BookRow_" + id };
                 retainedRow.AddThemeConstantOverride("separation", 6);
-                var retainedEdge = new Panel { Name = "StatusEdge", CustomMinimumSize = new Vector2(3, 0), MouseFilter = MouseFilterEnum.Ignore };
+                var retainedEdge = new Panel { Name = "StatusEdge", CustomMinimumSize = new Vector2(4, 0), MouseFilter = MouseFilterEnum.Ignore };
                 retainedRow.AddChild(retainedEdge); retainedRow.AddChild(button);
                 _doctrineBookList.AddChild(retainedRow); _doctrineBookButtons[id] = button;
             }
@@ -316,27 +315,26 @@ public partial class DealOrForceGame
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.ClipText = true;
             button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            button.Text = Tr(branch.Name) + "\n" + Loc.Format("{0} · {1}/{2} articles", Tr(DoctrineSlots.Name(branch.Slot)), written, branch.Nodes.Count);
+
+            var statusTag = isPrimary ? " " + Loc.Get("doctrine.ui.tag_in_force")
+                : isCompanion ? " " + Loc.Get("doctrine.ui.tag_companion")
+                : isStudying ? " " + Loc.Get("doctrine.ui.tag_studying")
+                : "";
+            button.Text = Tr(branch.Name) + statusTag + "\n" +
+                Loc.Format("{0} · {1}/{2} articles", Tr(DoctrineSlots.Name(branch.Slot)), written, branch.Nodes.Count);
             if (!button.HasMeta("doctrine_base_font")) button.AddThemeFontSizeOverride("font_size", 14);
             button.TooltipText = Ui.Tip(Tr(branch.Name) + "\n" + Tr(branch.Description) + "\n" +
                 Loc.Format("Paid for in {0}.", Loc.Get(TacticalDoctrines.ServiceName(branch.Experience))));
             StyleButton(button, branch.Id == _doctrineBook);
-            // A status edge: brass for the book in force, blue for one being read, a hairline
-            // for a shelf that is still empty. A list of equal buttons says nothing about
-            // which of them is the country's own.
+
             var row = button.GetParent() as HBoxContainer;
             var edge = row.GetNode<Panel>("StatusEdge");
-            var edgeStyle = new StyleBoxFlat
-            {
-                BgColor = Ui.Colour(inForce ? "text.accent" : written > 0 ? "state.info" : "surface.line_faint")
-            };
-            edgeStyle.SetCornerRadiusAll(1);
-            edge.AddThemeStyleboxOverride("panel", edgeStyle);
+            var edgeTok = isPrimary ? "text.accent" : (isCompanion || isStudying) ? "state.info" : "surface.line_faint";
+            edge.AddThemeStyleboxOverride("panel", Ui.ChromeBox(edgeTok, 1f, edgeTok, 0f, cornerRadius: 1, borderWidth: 0));
             _doctrineBookList.MoveChild(row, Array.IndexOf(books, branch));
         }
     }
 
-    /// <summary>The toolbar: the two hands as buttons, for a layout where Alt is the window manager's.</summary>
     private void DoctrineTreeToolbar(Control rows)
     {
         if (_doctrineToolbar is null)
@@ -352,6 +350,7 @@ public partial class DealOrForceGame
             _doctrineZoomLabel.Name = "DoctrineZoomLabel";
             _doctrineZoomLabel.CustomMinimumSize = new Vector2(66, 0);
             _doctrineZoomLabel.HorizontalAlignment = HorizontalAlignment.Center;
+            _doctrineZoomLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
             _doctrineToolbar.AddChild(_doctrineZoomLabel);
             var closer = ActionButton("+", () => NudgeDoctrineZoom(true), 46, 30);
             closer.Name = "DoctrineZoomIn";

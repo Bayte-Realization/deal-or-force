@@ -1,0 +1,38 @@
+{
+  "july_ultimatum_1914": {
+    "title": "The July Crisis",
+    "description": "Ultimatums have expired across the continent and mobilisation telegrams race down every telegraph line.",
+    "date": "1914-07-28",
+    "window_days": 14,
+    "options": [
+      {
+        "title": "Sound general mobilisation",
+        "consequence": "Rally public resolve and call up reserves.",
+        "effects": { "war_support": 0.04, "manpower": 25000 }
+      },
+      {
+        "title": "Prioritise domestic order",
+        "consequence": "Keep railways focused on civil supply and stability.",
+        "effects": { "stability": 0.03 }
+      }
+    ]
+  },
+  "christmas_truce_1914": {
+    "title": "Winter Lull on the Front",
+    "description": "Frost settles over the forward trenches as exhausted regiments pause under a quiet winter sky.",
+    "date": "1914-12-25",
+    "window_days": 10,
+    "options": [
+      {
+        "title": "Allow a brief winter respite",
+        "consequence": "Restore home-front calm at a slight dip in fervour.",
+        "effects": { "stability": 0.02, "war_support": -0.01 }
+      },
+      {
+        "title": "Enforce strict front discipline",
+        "consequence": "Maintain combat tempo through the winter freeze.",
+        "effects": { "war_support": 0.02 }
+      }
+    ]
+  }
+}

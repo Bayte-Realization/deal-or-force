@@ -43,6 +43,23 @@ public sealed partial class GlobePresentation
         return _seaLiftMaterial;
     }
 
+    private bool _seaLiftHasActiveBadges;
+    private Transform3D _lastSeaLiftBadgeCam;
+
+    private static Fleet FindFleetById(List<Fleet> fleets, int id)
+    {
+        for (var i = 0; i < fleets.Count; i++)
+            if (fleets[i].Id == id) return fleets[i];
+        return null;
+    }
+
+    private static Army FindArmyById(List<Army> armies, int id)
+    {
+        for (var i = 0; i < armies.Count; i++)
+            if (armies[i].Id == id) return armies[i];
+        return null;
+    }
+
     /// <summary>Rebuilt only when a lift, its fleet or one of its formations has moved on.</summary>
     private void UpdateSeaLiftPreview()
     {
@@ -55,15 +72,25 @@ public sealed partial class GlobePresentation
             if (player is null || lift.NationId != player.Id) continue;
             any = true;
             fingerprint = HashCode.Combine(fingerprint, lift.Id, lift.Stage, lift.ArmyIds.Count);
-            if (_campaign.Fleets.Find(f => f.Id == lift.FleetId) is { } fleet)
+            if (FindFleetById(_campaign.Fleets, lift.FleetId) is { } fleet)
                 fingerprint = HashCode.Combine(fingerprint, Mathf.RoundToInt(fleet.Latitude * 4f), Mathf.RoundToInt(fleet.Longitude * 4f));
             foreach (var id in lift.ArmyIds)
-                if (_campaign.Armies.Find(a => a.Id == id) is { } army)
+                if (FindArmyById(_campaign.Armies, id) is { } army)
                     fingerprint = HashCode.Combine(fingerprint, army.ProvinceId, army.Route.Count, army.EmbarkedFleetId);
         }
-        // The anchors are drawn on the overlay, which redraws only when asked.
-        if (any) QueueRedraw();
-        if (fingerprint == _seaLiftFingerprint) return;
+        var camNow = IsInstanceValid(_camera) ? _camera.GlobalTransform : Transform3D.Identity;
+        var dirty = fingerprint != _seaLiftFingerprint;
+        if (any && (dirty || !_campaign.IsPaused || camNow != _lastSeaLiftBadgeCam))
+        {
+            _lastSeaLiftBadgeCam = camNow;
+            QueueRedraw();
+        }
+        else if (!any && _seaLiftHasActiveBadges)
+        {
+            QueueRedraw();
+        }
+        _seaLiftHasActiveBadges = any;
+        if (!dirty) return;
         _seaLiftFingerprint = fingerprint;
         _seaLiftMesh.ClearSurfaces();
         var drew = false;
@@ -76,7 +103,7 @@ public sealed partial class GlobePresentation
     private bool DrawSeaLift(SeaLiftOrder lift, ShaderMaterial sea)
     {
         var map = _campaign.ProvinceMap;
-        var fleet = _campaign.Fleets.Find(f => f.Id == lift.FleetId);
+        var fleet = FindFleetById(_campaign.Fleets, lift.FleetId);
         var drew = false;
         var move = _routeMaterials[0];
 
@@ -84,7 +111,7 @@ public sealed partial class GlobePresentation
         if (lift.Stage == 0)
             foreach (var id in lift.ArmyIds)
             {
-                if (_campaign.Armies.Find(a => a.Id == id) is not { } army || army.ProvinceId <= 0 ||
+                if (FindArmyById(_campaign.Armies, id) is not { } army || army.ProvinceId <= 0 ||
                     army.ProvinceId == lift.PortProvinceId) continue;
                 _routePoints.Clear();
                 _routePoints.Add(PresentationPoint(army.Latitude, army.Longitude, SurfaceLineRadius));
@@ -148,14 +175,14 @@ public sealed partial class GlobePresentation
             {
                 foreach (var id in lift.ArmyIds)
                 {
-                    if (_campaign.Armies.Find(a => a.Id == id) is not { } army || army.ProvinceId <= 0) continue;
+                    if (FindArmyById(_campaign.Armies, id) is not { } army || army.ProvinceId <= 0) continue;
                     var text = army.ProvinceId == lift.PortProvinceId
                         ? Loc.Format("⚓ waiting for ships at {0}", port)
                         : Loc.Format("⚓ to the ships at {0}", port);
                     DrawSeaLiftBadge(army.Latitude, army.Longitude, text, font, size);
                 }
             }
-            else if (_campaign.Fleets.Find(f => f.Id == lift.FleetId) is { } fleet)
+            else if (FindFleetById(_campaign.Fleets, lift.FleetId) is { } fleet)
                 DrawSeaLiftBadge(fleet.Latitude, fleet.Longitude,
                     Loc.Format("⚓ {0:N0} aboard, landing at {1}", fleet.Carried.Count, landing), font, size);
         }

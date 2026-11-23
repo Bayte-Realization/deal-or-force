@@ -45,7 +45,7 @@ public static partial class Corridors
         foreach (var _ in TickStages(c)) { }
     }
 
-    private static readonly List<Nation> TickNationsScratch = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, List<Nation>> _tickNationsScratches = new();
 
     /// <summary>The same corridor pass, yielded between batches of countries.</summary>
     public static IEnumerable<int> TickStages(Campaign c)
@@ -53,18 +53,24 @@ public static partial class Corridors
         if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(Corridors))) yield break;
         if (c.ProvinceMap is null || c.ProvinceController is null) yield break;
         var every = Math.Max(7, c.Defines.CorridorReviewDays);
-        TickNationsScratch.Clear();
-        for (var i = 0; i < c.Nations.Count; i++)
-            TickNationsScratch.Add(c.Nations[i]);
+        var nations = _tickNationsScratches.GetOrCreateValue(c);
+        nations.Clear();
+        var src = c.Nations;
+        for (var i = 0; i < src.Count; i++)
+        {
+            var n = src[i];
+            if ((c.ElapsedDays + (long)n.Id * 11) % every != 0) continue;
+            if (n.IsHuman && !Delegation.Holds(n, Delegation.Diplomacy)) continue;
+            if (n.Movement is not null || n.IsSubject || n.Population <= 0) continue;
+            nations.Add(n);
+        }
+        if (nations.Count == 0) yield break;
         try
         {
-            for (var i = 0; i < TickNationsScratch.Count; i++)
+            for (var i = 0; i < nations.Count; i++)
             {
                 if (i > 0 && (i % 8 == 0 || Campaign.StageOverdue())) yield return 0;
-                var nation = TickNationsScratch[i];
-                if ((c.ElapsedDays + (long)nation.Id * 11) % every != 0) continue;
-                if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;
-                if (nation.Movement is not null || nation.IsSubject || nation.Population <= 0) continue;
+                var nation = nations[i];
                 foreach (var _ in EnsurePoresStages(c)) yield return 0;
                 yield return 0;
                 foreach (var _ in ReviewStages(c, nation)) yield return 0;
@@ -72,18 +78,21 @@ public static partial class Corridors
         }
         finally
         {
-            TickNationsScratch.Clear();
+            nations.Clear();
         }
     }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, List<HashSet<int>>> _reviewPieces = new();
 
     private static IEnumerable<int> ReviewStages(Campaign c, Nation nation)
     {
         if (TryExchange(c, nation)) yield break;
         yield return 0;
-        var parts = Pieces(c, nation);
-        var authored = ProvinceOwnership.ProvinceSetOf(nation.Tag);
+        var parts = _reviewPieces.GetOrCreateValue(c);
+        FillPieces(c, nation, parts);
         if (parts.Count >= 2)
         {
+            var authored = ProvinceOwnership.ProvinceSetOf(nation.Tag);
             var main = parts[0];
             for (var i = 1; i < parts.Count; i++)
             {
@@ -132,13 +141,20 @@ public static partial class Corridors
     }
 
     [ThreadStatic] private static List<(HashSet<int> Piece, bool HasCapital)> _piecesScratch;
+    [ThreadStatic] private static List<HashSet<int>> _openingPiecesScratch;
+    [ThreadStatic] private static Dictionary<int, int> _describeByHolderScratch;
     [ThreadStatic] private static int[] _corrStampArray;
     [ThreadStatic] private static int[] _corrCost;
     [ThreadStatic] private static int[] _corrFrom;
     [ThreadStatic] private static int[] _corrDeque;
     [ThreadStatic] private static int _corrStamp;
     [ThreadStatic] private static Dictionary<int, HashSet<int>> _joinByHolder;
+    [ThreadStatic] private static Stack<HashSet<int>> _joinSetPool;
     [ThreadStatic] private static List<(int Holder, HashSet<int> Regions, int Order)> _joinOrder;
+    [ThreadStatic] private static List<int> _corridorPathScratch;
+    [ThreadStatic] private static HashSet<int> _describeRegionsSetScratch;
+    [ThreadStatic] private static List<int> _describeRegionsListScratch;
+    [ThreadStatic] private static Dictionary<int, HashSet<int>> _proposeByHolderScratch;
     [ThreadStatic] private static Dictionary<int, int> _sellAround;
     [ThreadStatic] private static List<(int Buyer, int Count, int Order)> _sellOrder;
     [ThreadStatic] private static Dictionary<int, int> _wholeGroundCounts;
@@ -150,11 +166,18 @@ public static partial class Corridors
     /// </summary>
     public static List<HashSet<int>> Pieces(Campaign c, Nation nation)
     {
-        var map = c.ProvinceMap;
-        if (map is null || nation is null) return new List<HashSet<int>>();
-        EnsurePores(c);
         var pieces = new List<HashSet<int>>();
-        if (!c.Caches.CorridorPores.Components.TryGetValue(nation.MapIndex, out var cached) || cached.Count == 0) return pieces;
+        FillPieces(c, nation, pieces);
+        return pieces;
+    }
+
+    private static void FillPieces(Campaign c, Nation nation, List<HashSet<int>> pieces)
+    {
+        pieces.Clear();
+        var map = c.ProvinceMap;
+        if (map is null || nation is null) return;
+        EnsurePores(c);
+        if (!c.Caches.CorridorPores.Components.TryGetValue(nation.MapIndex, out var cached) || cached.Count == 0) return;
         var capital = nation.CapitalStateMapIndex;
         var scratch = _piecesScratch ??= new List<(HashSet<int> Piece, bool HasCapital)>(cached.Count);
         scratch.Clear();
@@ -174,7 +197,6 @@ public static partial class Corridors
         for (var i = 0; i < scratch.Count; i++)
             pieces.Add(scratch[i].Piece);
         scratch.Clear();
-        return pieces;
     }
 
     /// <summary>
@@ -182,7 +204,10 @@ public static partial class Corridors
     /// country: each foreign province costs one, the country's own cost nothing (a 0-1 search),
     /// and the search stops at the longest corridor anybody would buy. Null when there is none.
     /// </summary>
-    public static List<int> Corridor(Campaign c, Nation nation, HashSet<int> piece, HashSet<int> main)
+    public static List<int> Corridor(Campaign c, Nation nation, HashSet<int> piece, HashSet<int> main) =>
+        FillCorridor(c, nation, piece, main, null);
+
+    private static List<int> FillCorridor(Campaign c, Nation nation, HashSet<int> piece, HashSet<int> main, List<int> buffer)
     {
         var map = c.ProvinceMap;
         var limit = Math.Max(1, c.Defines.CorridorMaxProvinces);
@@ -268,7 +293,8 @@ public static partial class Corridors
             }
         }
         if (reached < 0) return null;
-        var path = new List<int>();
+        var path = buffer ?? new List<int>();
+        path.Clear();
         for (var p = reached; p > 0 && from[p] > 0; p = from[p])
             if (map.ProvinceToNation[p] != nation.MapIndex) path.Add(p);
         return path;
@@ -293,13 +319,36 @@ public static partial class Corridors
         tail = count;
     }
 
+    private static HashSet<int> RentJoinSet()
+    {
+        var pool = _joinSetPool;
+        if (pool is not null && pool.Count > 0)
+        {
+            var set = pool.Pop();
+            set.Clear();
+            return set;
+        }
+        return new HashSet<int>();
+    }
+
+    private static void ReturnHolderSets(Dictionary<int, HashSet<int>> byHolder)
+    {
+        var pool = _joinSetPool ??= new Stack<HashSet<int>>();
+        foreach (var set in byHolder.Values)
+        {
+            set.Clear();
+            pool.Push(set);
+        }
+        byHolder.Clear();
+    }
+
     private static bool TryJoin(Campaign c, Nation nation, HashSet<int> piece, HashSet<int> main)
     {
         var map = c.ProvinceMap;
-        var path = Corridor(c, nation, piece, main);
+        var path = FillCorridor(c, nation, piece, main, _corridorPathScratch ??= new List<int>());
         // Regions, not provinces, change hands: the regions the corridor runs through, by holder.
         var byHolder = _joinByHolder ??= new Dictionary<int, HashSet<int>>();
-        byHolder.Clear();
+        ReturnHolderSets(byHolder);
         if (path is not null)
         {
             for (var i = 0; i < path.Count; i++)
@@ -307,7 +356,7 @@ public static partial class Corridors
                 var province = path[i];
                 var holder = map.ProvinceToNation[province];
                 if (holder == 0) continue;
-                if (!byHolder.TryGetValue(holder, out var regions)) byHolder[holder] = regions = new HashSet<int>();
+                if (!byHolder.TryGetValue(holder, out var regions)) byHolder[holder] = regions = RentJoinSet();
                 regions.Add(map.ProvinceToState[province]);
             }
         }
@@ -321,20 +370,28 @@ public static partial class Corridors
             var cmp = b.Regions.Count.CompareTo(a.Regions.Count);
             return cmp != 0 ? cmp : a.Order.CompareTo(b.Order);
         });
-        // One holder at a time - the one with the most of the way.
-        for (var i = 0; i < order.Count; i++)
+        try
         {
-            var (holderIndex, regions, _) = order[i];
-            var holder = c.NationByMapIndex(holderIndex);
-            if (holder is null || holder.Movement is not null || !Approachable(c, nation, holder)) continue;
-            var deal = new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { Regions = regions.ToArray() });
-            var price = Ultimatum.CashToBalance(c, nation, holder, deal);
-            if (!float.IsFinite(price) || price < 0f) continue;
-            if (price > nation.Treasury * M.Clamp01(c.Defines.CorridorTreasuryShare)) continue;
-            deal = deal with { From = deal.From with { Cash = MathF.Max(0.01f, price * 1.05f) } };
-            Remember(c, nation, holder);
-            DealNegotiations.Submit(c, nation, holder, deal);
-            return true;
+            // One holder at a time - the one with the most of the way.
+            for (var i = 0; i < order.Count; i++)
+            {
+                var (holderIndex, regions, _) = order[i];
+                var holder = c.NationByMapIndex(holderIndex);
+                if (holder is null || holder.Movement is not null || !Approachable(c, nation, holder)) continue;
+                var deal = new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { Regions = regions.ToArray() });
+                var price = Ultimatum.CashToBalance(c, nation, holder, deal);
+                if (!float.IsFinite(price) || price < 0f) continue;
+                if (price > nation.Treasury * M.Clamp01(c.Defines.CorridorTreasuryShare)) continue;
+                deal = deal with { From = deal.From with { Cash = MathF.Max(0.01f, price * 1.05f) } };
+                Remember(c, nation, holder);
+                DealNegotiations.Submit(c, nation, holder, deal);
+                return true;
+            }
+        }
+        finally
+        {
+            order.Clear();
+            ReturnHolderSets(byHolder);
         }
         return TrySell(c, nation, piece);
     }
@@ -641,36 +698,41 @@ public static partial class Corridors
         var report = Describe(c, nation, piece, main);
         if (!report.CanAsk) return Loc.Get(report.Reason);
         var map = c.ProvinceMap;
-        var path = Corridor(c, nation, piece, main);
-        var regions = new HashSet<int>();
-        if (path is not null)
-            foreach (var province in path)
-            {
-                var holder = map.ProvinceToNation[province];
-                if (holder == 0 || holder == nation.MapIndex) continue;
-                var holderNation = c.NationByMapIndex(holder);
-                if (holderNation is null || holderNation.Name != report.Holder && holderNation.DisplayName != report.Holder) continue;
-                regions.Add(map.ProvinceToState[province]);
-            }
+        var path = FillCorridor(c, nation, piece, main, _corridorPathScratch ??= new List<int>());
         // The holder named in the report is the one with the most of the way. Ask only them.
         Nation asked = null;
-        var askedRegions = new HashSet<int>();
-        if (path is not null)
+        int[] askedRegions = null;
+        if (path is not null && path.Count > 0)
         {
-            var byHolder = new Dictionary<int, HashSet<int>>();
-            foreach (var province in path)
+            var byHolder = _proposeByHolderScratch ??= new Dictionary<int, HashSet<int>>();
+            ReturnHolderSets(byHolder);
+            for (var i = 0; i < path.Count; i++)
             {
+                var province = path[i];
                 var holder = map.ProvinceToNation[province];
                 if (holder == 0 || holder == nation.MapIndex) continue;
-                if (!byHolder.TryGetValue(holder, out var set)) byHolder[holder] = set = new HashSet<int>();
+                if (!byHolder.TryGetValue(holder, out var set)) byHolder[holder] = set = RentJoinSet();
                 set.Add(map.ProvinceToState[province]);
             }
-            var best = byHolder.OrderByDescending(entry => entry.Value.Count).FirstOrDefault();
-            asked = c.NationByMapIndex(best.Key);
-            askedRegions = best.Value ?? askedRegions;
+            var bestHolder = 0;
+            HashSet<int> bestRegions = null;
+            foreach (var entry in byHolder)
+            {
+                if (bestRegions is null || entry.Value.Count > bestRegions.Count)
+                {
+                    bestHolder = entry.Key;
+                    bestRegions = entry.Value;
+                }
+            }
+            if (bestRegions is not null && bestRegions.Count > 0)
+            {
+                asked = c.NationByMapIndex(bestHolder);
+                askedRegions = bestRegions.ToArray();
+            }
+            ReturnHolderSets(byHolder);
         }
-        if (asked is null || askedRegions.Count == 0) return Loc.Get(report.Reason);
-        var deal = new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { Regions = askedRegions.ToArray() });
+        if (asked is null || askedRegions is null || askedRegions.Length == 0) return Loc.Get(report.Reason);
+        var deal = new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { Regions = askedRegions });
         var price = Ultimatum.CashToBalance(c, nation, asked, deal);
         if (!float.IsFinite(price) || price < 0f) return Loc.Get("There is no price they would take.");
         deal = deal with { From = deal.From with { Cash = MathF.Max(0.01f, price * 1.05f) } };
@@ -683,14 +745,17 @@ public static partial class Corridors
         piece = null;
         main = null;
         if (c?.ProvinceMap is null || nation is null || nation.Population <= 0) return false;
-        var parts = Pieces(c, nation);
+        var parts = _openingPiecesScratch ??= new List<HashSet<int>>();
+        FillPieces(c, nation, parts);
         if (parts.Count < 2) return false;
         main = parts[0];
         var authored = ProvinceOwnership.ProvinceSetOf(nation.Tag);
-        foreach (var candidate in parts.Skip(1))
+        var minProvinces = Math.Max(1, c.Defines.CorridorMinimumProvinces);
+        for (var i = 1; i < parts.Count; i++)
         {
-            if (candidate.Count < Math.Max(1, c.Defines.CorridorMinimumProvinces)) continue;
-            if (candidate.Count(authored.Contains) * 10 >= candidate.Count * 6) continue;
+            var candidate = parts[i];
+            if (candidate.Count < minProvinces) continue;
+            if (Authored(candidate, authored)) continue;
             piece = candidate;
             return true;
         }
@@ -699,35 +764,54 @@ public static partial class Corridors
 
     private static CutOffReport Describe(Campaign c, Nation nation, HashSet<int> piece, HashSet<int> main)
     {
-        var path = Corridor(c, nation, piece, main);
+        var path = FillCorridor(c, nation, piece, main, _corridorPathScratch ??= new List<int>());
         if (path is null || path.Count == 0)
             return new CutOffReport(piece.Count, "", 0, 0f, false, "No short way through a neighbour can be bought.");
         var map = c.ProvinceMap;
-        var byHolder = new Dictionary<int, int>();
-        foreach (var province in path)
+        var byHolder = _describeByHolderScratch ??= new Dictionary<int, int>();
+        byHolder.Clear();
+        for (var i = 0; i < path.Count; i++)
         {
-            var owner = map.ProvinceToNation[province];
+            var owner = map.ProvinceToNation[path[i]];
             if (owner != 0 && owner != nation.MapIndex) byHolder[owner] = byHolder.GetValueOrDefault(owner) + 1;
         }
         if (byHolder.Count == 0)
             return new CutOffReport(piece.Count, "", path.Count, 0f, false, "No short way through a neighbour can be bought.");
-        var holderIndex = byHolder.OrderByDescending(entry => entry.Value).First().Key;
+        var holderIndex = 0;
+        var bestCount = -1;
+        foreach (var entry in byHolder)
+        {
+            if (entry.Value > bestCount) { bestCount = entry.Value; holderIndex = entry.Key; }
+        }
         var holder = c.NationByMapIndex(holderIndex);
         var name = holder?.DisplayName ?? "";
         if (holder is null || holder.Movement is not null)
             return new CutOffReport(piece.Count, name, path.Count, 0f, false, "The way through is not a country that can sell it.");
         if (!Approachable(c, nation, holder))
             return new CutOffReport(piece.Count, name, path.Count, 0f, false, "They cannot be asked just now.");
-        var regions = path.Where(p => map.ProvinceToNation[p] == holder.MapIndex).Select(p => (int)map.ProvinceToState[p]).Distinct().ToArray();
-        if (regions.Any(id => c.StateByMapIndex(id) is not { } st || st.NationMapIndex != holder.MapIndex))
-            return new CutOffReport(piece.Count, name, path.Count, 0f, false, "They cannot yield what they do not hold.");
+        var regionsSet = _describeRegionsSetScratch ??= new HashSet<int>();
+        regionsSet.Clear();
+        var regionsList = _describeRegionsListScratch ??= new List<int>();
+        regionsList.Clear();
+        for (var i = 0; i < path.Count; i++)
+        {
+            var p = path[i];
+            if (map.ProvinceToNation[p] != holder.MapIndex) continue;
+            var stId = (int)map.ProvinceToState[p];
+            if (regionsSet.Add(stId)) regionsList.Add(stId);
+        }
+        for (var i = 0; i < regionsList.Count; i++)
+        {
+            if (c.StateByMapIndex(regionsList[i]) is not { } st || st.NationMapIndex != holder.MapIndex)
+                return new CutOffReport(piece.Count, name, path.Count, 0f, false, "They cannot yield what they do not hold.");
+        }
         var kept = false;
         for (var province = 1; province <= map.ProvinceCount; province++)
-            if (map.ProvinceToNation[province] == holder.MapIndex && !regions.Contains(map.ProvinceToState[province]))
-                kept = true;
+            if (map.ProvinceToNation[province] == holder.MapIndex && !regionsSet.Contains(map.ProvinceToState[province]))
+            { kept = true; break; }
         if (!kept)
             return new CutOffReport(piece.Count, name, path.Count, 0f, false, "A demand must leave them territory and cannot include occupied land.");
-        var deal = new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { Regions = regions });
+        var deal = new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { Regions = regionsList.ToArray() });
         var price = Ultimatum.CashToBalance(c, nation, holder, deal);
         if (!float.IsFinite(price) || price < 0f)
             return new CutOffReport(piece.Count, name, path.Count, 0f, false, "There is no price they would take.");

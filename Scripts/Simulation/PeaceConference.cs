@@ -73,8 +73,27 @@ public sealed class PeaceDemand
     /// </summary>
     public bool Unconditional;
 
-    public bool IsEmpty => Provinces.Count == 0 && !Reparations && !TradeConcessions &&
-                           !Demilitarise && !Humiliate && !LongTruce && Subjugate.Length == 0;
+    // ---- Wave 6J Bilateral Give-and-Take Offers / Concessions from the proposer to offset demands
+    /// <summary>Proposer's own non-capital provinces offered to the enemy leader in exchange for peace or demands.</summary>
+    public readonly HashSet<int> OfferProvinces = new();
+    /// <summary>Proposer pays war reparations to the enemy leader.</summary>
+    public bool OfferReparations;
+    /// <summary>Proposer grants a favorable trade pact to the enemy leader.</summary>
+    public bool OfferTradeConcessions;
+    /// <summary>Proposer accepts partial demilitarisation to sweeten the treaty.</summary>
+    public bool OfferDemilitarise;
+    /// <summary>Proposer formally renounces war claims / reduces post-war resentment.</summary>
+    public bool OfferDropClaims;
+    /// <summary>Proposer offers a ten-year protected truce.</summary>
+    public bool OfferLongTruce;
+
+    public bool HasDemands => Provinces.Count > 0 || Reparations || TradeConcessions ||
+                              Demilitarise || Humiliate || LongTruce || Subjugate.Length > 0;
+
+    public bool HasOffers => OfferProvinces.Count > 0 || OfferReparations || OfferTradeConcessions ||
+                             OfferDemilitarise || OfferDropClaims || OfferLongTruce;
+
+    public bool IsEmpty => !HasDemands && !HasOffers;
 }
 
 /// <summary>Pricing, acceptance and resolution for a written peace.</summary>
@@ -148,20 +167,32 @@ public static class PeaceConference
     /// score says it is behind. A country whose army is gone signs what it is handed.
     /// The same reading prices a player's demand and a computer's.
     /// </summary>
+    [ThreadStatic] private static HashSet<int> _resistanceTheirsScratch;
+    [ThreadStatic] private static HashSet<int> _resistanceOursScratch;
+    [ThreadStatic] private static HashSet<int> _blockEnemyOwnersScratch;
+
     public static float Resistance(Campaign campaign, StrategicWar war, int proposerId)
     {
         if (campaign is null || war is null || war.Ended || !war.Involves(proposerId)) return 0f;
         var attacking = war.IsAttacking(proposerId);
-        var theirs = new HashSet<int>(war.Side(!attacking));
-        var ours = new HashSet<int>(war.Side(attacking));
+        var theirs = _resistanceTheirsScratch ??= new HashSet<int>();
+        theirs.Clear();
+        foreach (var id in war.Side(!attacking)) theirs.Add(id);
+        var ours = _resistanceOursScratch ??= new HashSet<int>();
+        ours.Clear();
+        foreach (var id in war.Side(attacking)) ours.Add(id);
         float their = 0f, our = 0f;
-        foreach (var army in campaign.Armies)
+        var armies = campaign.Armies;
+        for (var i = 0; i < armies.Count; i++)
         {
+            var army = armies[i];
             var power = army.Divisions * army.Strength * army.Organisation;
             if (!float.IsFinite(power) || power <= 0f) continue;
             if (theirs.Contains(army.NationId)) their += power;
             else if (ours.Contains(army.NationId)) our += power;
         }
+        theirs.Clear();
+        ours.Clear();
         var field = their <= 0f ? 0f : M.Clamp01(their / M.Max(0.01f, our));
         var occupied = attacking ? war.DefenderOccupiedValue : war.AttackerOccupiedValue;
         var support = attacking ? war.DefenderWarSupport : war.AttackerWarSupport;
@@ -192,9 +223,45 @@ public static class PeaceConference
     public static ProvinceCost Price(Campaign campaign, StrategicWar war, int proposerId, int province,
         int beneficiaryId = -1) => new PeaceLedger(campaign, war, proposerId, beneficiaryId).Price(province);
 
-    /// <summary>The whole bill. Builds a ledger; prefer a ledger for repeated costing.</summary>
+    /// <summary>The net bill (demands minus bilateral offers). Builds a ledger; prefer a ledger for repeated costing.</summary>
     public static float Cost(Campaign campaign, StrategicWar war, PeaceDemand demand) =>
         demand is null || war is null ? 0f : new PeaceLedger(campaign, war, demand.ProposerId, demand.BeneficiaryId).Cost(demand);
+
+    /// <summary>Gross demand cost before bilateral offer credits.</summary>
+    public static float DemandCost(Campaign campaign, StrategicWar war, PeaceDemand demand) =>
+        demand is null || war is null ? 0f : new PeaceLedger(campaign, war, demand.ProposerId, demand.BeneficiaryId).DemandCost(demand);
+
+    /// <summary>Warscore credit gained from the proposer's bilateral offers/concessions.</summary>
+    public static float OfferCredit(Campaign campaign, StrategicWar war, PeaceDemand demand) =>
+        demand is null || war is null ? 0f : new PeaceLedger(campaign, war, demand.ProposerId, demand.BeneficiaryId).OfferCredit(demand);
+
+    /// <summary>Net peace balance (&gt;= 0 means the enemy will accept the give-and-take treaty).</summary>
+    public static float NetBalance(Campaign campaign, StrategicWar war, PeaceDemand demand)
+    {
+        if (campaign is null || war is null || demand is null) return -1f;
+        var ledger = new PeaceLedger(campaign, war, demand.ProposerId, demand.BeneficiaryId);
+        var rounded = Round(campaign, war, demand);
+        return ledger.NetBalance(rounded);
+    }
+
+    /// <summary>Non-capital states owned by the proposer that may be offered as bilateral concessions.</summary>
+    public static List<ScenarioState> OfferableStates(Campaign campaign, StrategicWar war, int proposerId)
+    {
+        var result = new List<ScenarioState>();
+        if (campaign?.ProvinceMap is null || war is null || war.Ended || !war.Involves(proposerId)) return result;
+        var proposer = campaign.NationById(proposerId);
+        if (proposer is null) return result;
+        var ownStates = campaign.StatesOf(proposer).Where(s => s.Population > 0 && !s.Unclaimed).ToList();
+        if (ownStates.Count <= 1) return result;
+        for (var i = 0; i < ownStates.Count; i++)
+        {
+            var st = ownStates[i];
+            if (st.MapIndex == proposer.CapitalStateMapIndex) continue;
+            result.Add(st);
+        }
+        result.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, StringComparison.Ordinal));
+        return result;
+    }
 
     /// <summary>
     /// Why the other side will not sign this, in words a player can act on. An empty
@@ -216,9 +283,10 @@ public static class PeaceConference
         var topology = campaign.ProvinceMap;
         if (topology is null) return Loc.Get("The map is not ready");
 
-        var loser = campaign.NationById(war.EnemyLeaderOf(demand.ProposerId));
-        var enemyOwners = war.EnemiesOf(demand.ProposerId).Select(campaign.NationById)
-            .Where(nation => nation is not null).Select(nation => nation.MapIndex).ToHashSet();
+        var enemyOwners = _blockEnemyOwnersScratch ??= new HashSet<int>();
+        enemyOwners.Clear();
+        foreach (var enemyId in war.EnemiesOf(demand.ProposerId))
+            if (campaign.NationById(enemyId) is { } en) enemyOwners.Add(en.MapIndex);
         foreach (var province in demand.Provinces)
             if (province <= 0 || province > topology.ProvinceCount ||
                 !enemyOwners.Contains(topology.ProvinceToNation[province]))
@@ -228,9 +296,12 @@ public static class PeaceConference
         if (rounded.IsEmpty) return Loc.Get("The demand is empty; offer a white peace instead");
         // A mod or a changed map may contain a region with more than one owner.
         // Rounding must not silently add a neutral or friendly country's ground.
-        if (rounded.Provinces.Any(province => !enemyOwners.Contains(topology.ProvinceToNation[province])))
-            return Loc.Get("The demand includes ground that is not theirs to give");
+        foreach (var province in rounded.Provinces)
+            if (!enemyOwners.Contains(topology.ProvinceToNation[province]))
+                return Loc.Get("The demand includes ground that is not theirs to give");
+        enemyOwners.Clear();
 
+        var loser = campaign.NationById(war.EnemyLeaderOf(demand.ProposerId));
         if (demand.ReleaseRegions)
         {
             if (demand.Subjugate.Length > 0) return Loc.Get("Independence and subjugation cannot be combined in one settlement.");
@@ -297,6 +368,36 @@ public static class PeaceConference
             }
         }
 
+        // Bilateral give-and-take validation (Wave 6J)
+        var proposer = campaign.NationById(demand.ProposerId);
+        if (demand.HasOffers)
+        {
+            if (proposer is null) return Loc.Get("You are not a belligerent in this war");
+            if ((demand.Reparations && demand.OfferReparations) ||
+                (demand.TradeConcessions && demand.OfferTradeConcessions) ||
+                (demand.Demilitarise && demand.OfferDemilitarise) ||
+                (demand.LongTruce && demand.OfferLongTruce))
+                return Loc.Get("peace.bilateral.err.contradictory_terms");
+            if (demand.OfferReparations && proposer.Treasury < 0.05f)
+                return Loc.Get("peace.bilateral.err.low_treasury");
+            if (demand.OfferProvinces.Count > 0)
+            {
+                foreach (var p in demand.OfferProvinces)
+                {
+                    if (p <= 0 || p > topology.ProvinceCount || topology.ProvinceToNation[p] != (ushort)proposer.MapIndex)
+                        return Loc.Get("peace.bilateral.err.not_own_province");
+                    if (topology.ProvinceToState[p] == (ushort)proposer.CapitalStateMapIndex)
+                        return Loc.Get("peace.bilateral.err.cannot_offer_capital");
+                }
+                var keepsOwnLand = false;
+                for (var p = 1; p <= topology.ProvinceCount; p++)
+                    if (topology.ProvinceToNation[p] == (ushort)proposer.MapIndex && !demand.OfferProvinces.Contains(p))
+                    { keepsOwnLand = true; break; }
+                if (!keepsOwnLand)
+                    return Loc.Get("peace.bilateral.err.must_keep_land");
+            }
+        }
+
         var ledger = new PeaceLedger(campaign, war, demand.ProposerId, demand.BeneficiaryId);
         var budget = ledger.Budget;
 
@@ -307,9 +408,12 @@ public static class PeaceConference
         // number, say they would sign, and then refuse - because the thing actually put in
         // front of them was bigger than the thing that was priced. One rounding, used by
         // both.
-        var cost = ledger.Cost(rounded);
-        if (!demand.Unconditional && cost > budget && !forcePeace)
+        var netBalance = ledger.NetBalance(rounded);
+        if (!demand.Unconditional && netBalance < 0f && !forcePeace)
+        {
+            var cost = ledger.Cost(rounded);
             return Loc.Format("They will not sign: the demand is worth {0:0} and the war is worth {1:0}", cost, budget);
+        }
         return "";
     }
 
@@ -334,8 +438,14 @@ public static class PeaceConference
             TradeConcessions = demand.TradeConcessions,
             Demilitarise = demand.Demilitarise,
             Humiliate = demand.Humiliate,
-            Unconditional = demand.Unconditional
+            Unconditional = demand.Unconditional,
+            OfferReparations = demand.OfferReparations,
+            OfferTradeConcessions = demand.OfferTradeConcessions,
+            OfferDemilitarise = demand.OfferDemilitarise,
+            OfferDropClaims = demand.OfferDropClaims,
+            OfferLongTruce = demand.OfferLongTruce
         };
+        foreach (var op in demand.OfferProvinces) rounded.OfferProvinces.Add(op);
         var proposer = campaign?.NationById(demand.ProposerId);
         var beneficiary = Beneficiary(campaign, demand);
         if (demand.Provinces.Count == 0 || proposer is null || beneficiary is null)
@@ -394,7 +504,7 @@ public static class PeaceConference
     /// Years this written settlement already keeps: ten when the demand asks for the long
     /// truce, otherwise five. <see cref="Resolve"/> writes the same split onto the relation.
     /// </summary>
-    public static int TruceYears(PeaceDemand demand) => demand is { LongTruce: true } ? 10 : 5;
+    public static int TruceYears(PeaceDemand demand) => demand is { LongTruce: true } or { OfferLongTruce: true } ? 10 : 5;
 
     /// <summary>
     /// That length, in one sentence, or empty when there is no demand. Reading it does not
@@ -435,7 +545,7 @@ public static class PeaceConference
         // Anything not being kept goes back to whoever held it when the war began.
         if (campaign.ProvinceController is not null)
             foreach (var pair in war.OriginalController)
-                if (!demand.Provinces.Contains(pair.Key))
+                if (!demand.Provinces.Contains(pair.Key) && !demand.OfferProvinces.Contains(pair.Key))
                     campaign.SetProvinceController(pair.Key, pair.Value);
 
         if (demand.Provinces.Count > 0)
@@ -470,6 +580,39 @@ public static class PeaceConference
             foreach (var formerOwner in campaign.Nations.Where(nation => cededOwners.Contains((ushort)nation.MapIndex)))
                 ModifierSystem.Grant(campaign, formerOwner, "ceded_territory", 0);
         }
+
+        // ---- Wave 6J Bilateral Offers / Concessions from proposer to opponent
+        if (demand.OfferProvinces.Count > 0)
+            StatePartition.Annex(campaign, demand.OfferProvinces, loser, asConquest: false, byConsent: true);
+
+        if (demand.OfferReparations)
+        {
+            var offerPay = MathF.Min(MathF.Max(0f, winner.Treasury), MathF.Max(0.10f, winner.Gdp * 0.03f));
+            if (offerPay > 0f)
+            {
+                var beforeW = winner.Treasury; winner.Treasury -= offerPay; MoneyLedger.Book(winner, MoneyFlow.Reparations, winner.Treasury - beforeW);
+                var beforeL = loser.Treasury; loser.Treasury += offerPay; MoneyLedger.Book(loser, MoneyFlow.Reparations, loser.Treasury - beforeL);
+                war.Reparations = offerPay;
+            }
+        }
+
+        if (demand.OfferTradeConcessions)
+        {
+            AgreementSystem.Sign(campaign, CampaignDiplomacy.Get(campaign, loser.Id, winner.Id),
+                AgreementKind.TradeAgreement, TradeTermsCatalog.Concession(campaign, loser, winner, 10));
+            DealTally.Count("trade_agreement.source.peace_conference");
+        }
+
+        if (demand.OfferDemilitarise)
+            foreach (var division in campaign.Armies.Where(division => division.NationId == winner.Id))
+            {
+                division.Equipment = MathF.Min(division.Equipment, 0.45f);
+                division.Cohesion = MathF.Min(division.Cohesion, 0.55f);
+                division.Strength = MathF.Min(division.Strength, 0.72f);
+            }
+
+        if (demand.OfferDropClaims)
+            war.ClaimedStateMapIndex = -1;
 
         if (demand.Reparations || demand.TradeConcessions)
         {
@@ -740,10 +883,20 @@ public static class PeaceConference
         if (demand.TradeConcessions) parts.Add(Loc.Format("a trade agreement was imposed between {0} and {1}", beneficiary.DisplayName, loser.DisplayName));
         if (demand.Demilitarise) parts.Add(Loc.Format("the {0} armed forces were partially demobilised", loser.DisplayName));
         if (demand.Humiliate) parts.Add(Loc.Format("{0} was publicly humbled", loser.DisplayName));
-        if (demand.LongTruce) parts.Add(Loc.Get("a ten-year truce was signed"));
+        if (demand.LongTruce || demand.OfferLongTruce) parts.Add(Loc.Get("a ten-year truce was signed"));
         if (demand.Subjugate.Length > 0 && loser.AnswersTo(beneficiary.Id))
             parts.Add(Loc.Format("{0} became a {1} of {2}", loser.DisplayName,
                 Loc.Get(SubjectCatalog.Of(demand.Subjugate)?.Name ?? demand.Subjugate), beneficiary.DisplayName));
+        if (demand.OfferProvinces.Count > 0)
+            parts.Add(Loc.Format("peace.bilateral.summary.offer_provinces_fmt", winner.DisplayName, demand.OfferProvinces.Count, loser.DisplayName));
+        if (demand.OfferReparations)
+            parts.Add(Loc.Format("peace.bilateral.summary.offer_reparations_fmt", winner.DisplayName, loser.DisplayName));
+        if (demand.OfferTradeConcessions)
+            parts.Add(Loc.Format("peace.bilateral.summary.offer_trade_fmt", winner.DisplayName, loser.DisplayName));
+        if (demand.OfferDemilitarise)
+            parts.Add(Loc.Format("peace.bilateral.summary.offer_demilitarise_fmt", winner.DisplayName));
+        if (demand.OfferDropClaims)
+            parts.Add(Loc.Format("peace.bilateral.summary.offer_drop_claims_fmt", winner.DisplayName));
         return parts.Count == 0
             ? Loc.Format("{0} and {1} made peace on no terms at all.", winner.DisplayName, loser.DisplayName)
             : char.ToUpperInvariant(parts[0][0]) + parts[0][1..] +
@@ -773,6 +926,7 @@ public sealed class PeaceLedger
     private readonly HashSet<int> _capitalStates = new();
     private bool _surveyed;
     private float _resistance = -1f;
+    [ThreadStatic] private static Dictionary<int, (int Province, float Distance)> _surveyCapitalsScratch;
 
     /// <summary>How much fight the loser still has (PeaceConference.Resistance), read once per ledger.</summary>
     public float Resistance => _resistance >= 0f ? _resistance
@@ -810,7 +964,8 @@ public sealed class PeaceLedger
         var topology = campaign.ProvinceMap;
         if (topology is null || _loser is null) return;
 
-        var capitals = new Dictionary<int, (int Province, float Distance)>();
+        var capitals = _surveyCapitalsScratch ??= new Dictionary<int, (int Province, float Distance)>();
+        capitals.Clear();
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             if (!_enemies.TryGetValue(topology.ProvinceToNation[province], out var owner)) continue;
@@ -825,10 +980,15 @@ public sealed class PeaceLedger
                 capitals[owner.MapIndex] = (province, distance);
         }
         foreach (var capital in capitals.Values) _capitalStates.Add(topology.ProvinceToState[capital.Province]);
+        capitals.Clear();
 
-        foreach (var state in campaign.States)
+        var states = campaign.States;
+        for (var si = 0; si < states.Count; si++)
+        {
+            var state = states[si];
             if (_provincesPerState.ContainsKey(state.MapIndex))
                 _statePopulation[state.MapIndex] = state.Population;
+        }
     }
 
     /// <summary>War score this side may spend on the whole demand.</summary>
@@ -949,7 +1109,8 @@ public sealed class PeaceLedger
         return !TerritorialCoherence.TouchesOwnedGround(campaign, beneficiary, topology.ProvinceToState[province]);
     }
 
-    public float Cost(PeaceDemand demand)
+    /// <summary>Gross warscore cost of demands before subtracting bilateral offers.</summary>
+    public float DemandCost(PeaceDemand demand)
     {
         if (demand is null) return 0f;
         var beneficiary = PeaceConference.Beneficiary(_campaign, demand);
@@ -999,6 +1160,49 @@ public sealed class PeaceLedger
         if (demand.Subjugate.Length > 0)
             total += PeaceConference.SubjugationCost(_campaign, beneficiary, _loser, demand.Subjugate);
         return total;
+    }
+
+    /// <summary>Warscore credit earned by offering one own province to the opponent.</summary>
+    public float OfferProvinceCredit(int province)
+    {
+        var topology = _campaign?.ProvinceMap;
+        if (topology is null || _proposer is null || province <= 0 || province > topology.ProvinceCount) return 0f;
+        if (topology.ProvinceToNation[province] != (ushort)_proposer.MapIndex) return 0f;
+        var stateIdx = (int)topology.ProvinceToState[province];
+        var state = _campaign.StateByMapIndex(stateIdx);
+        var provCount = Math.Max(1, topology.ProvincesOfState(stateIdx).Length);
+        var perProvPop = (state?.Population ?? 0L) / (float)provCount;
+        var defines = _campaign.Defines;
+        var baseVal = defines.PeaceCostPerProvince * defines.PeaceCostHeldFactor *
+                      (1f + M.Clamp(perProvPop / M.Max(1f, defines.PeaceCostPopulationScale), 0f, 2f));
+        return MathF.Max(1.5f, baseVal);
+    }
+
+    /// <summary>Total warscore credit granted by the proposer's bilateral concessions/offers.</summary>
+    public float OfferCredit(PeaceDemand demand)
+    {
+        if (demand is null || !demand.HasOffers) return 0f;
+        var defines = _campaign.Defines;
+        var credit = 0f;
+        foreach (var p in demand.OfferProvinces) credit += OfferProvinceCredit(p);
+        if (demand.OfferReparations) credit += MathF.Max(6f, defines.PeaceCostReparations);
+        if (demand.OfferTradeConcessions) credit += MathF.Max(6f, defines.PeaceCostTradeConcessions);
+        if (demand.OfferDemilitarise) credit += MathF.Max(8f, defines.PeaceCostDemilitarise);
+        if (demand.OfferDropClaims) credit += 10f;
+        if (demand.OfferLongTruce) credit += MathF.Max(4f, defines.PeaceCostLongTruce);
+        return credit;
+    }
+
+    /// <summary>Net bill of the treaty (demands minus bilateral offer credits; identical to gross when no offers).</summary>
+    public float Cost(PeaceDemand demand) => DemandCost(demand) - OfferCredit(demand);
+
+    /// <summary>Net balance (&gt;= 0 means acceptable): war budget minus net treaty cost and any enemy advantage floor.</summary>
+    public float NetBalance(PeaceDemand demand)
+    {
+        var score = _war is null || _proposer is null ? 0f
+            : _war.IsAttacking(_proposer.Id) ? _war.WarScore : -_war.WarScore;
+        var enemyAdvantageFloor = demand is { HasOffers: true } && score < 0f ? -score * 0.65f : 0f;
+        return Budget - Cost(demand) - enemyAdvantageFloor;
     }
 
     /// <summary>The share of the losing side's people the demand would take, by region population.</summary>
@@ -1057,5 +1261,86 @@ public sealed class PeaceLedger
             foreach (var neighbour in map.LandNeighbors[queue.Dequeue()])
                 if (held.Contains(neighbour) && kept.Add(neighbour)) queue.Enqueue(neighbour);
         return kept;
+    }
+}
+
+/// <summary>
+/// Engine-neutral bilateral peace conference command (Wave 6J): carries both Demands
+/// from the opponent AND Offers/Concessions from the proposer to reach a balanced deal.
+/// </summary>
+public sealed class BilateralPeaceCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int WarId;
+    public int BeneficiaryId = -1;
+    public int[] Provinces = Array.Empty<int>();
+    public bool ReleaseRegions, Reparations, TradeConcessions, Demilitarise, Humiliate, LongTruce;
+    public string Subjugate = "";
+    public int[] OfferProvinces = Array.Empty<int>();
+    public bool OfferReparations, OfferTradeConcessions, OfferDemilitarise, OfferDropClaims, OfferLongTruce;
+    public bool Delivered { get; private set; }
+    public string Note { get; private set; } = "";
+
+    public static BilateralPeaceCommand From(PeaceDemand d) => new()
+    {
+        IssuerId = d.ProposerId,
+        WarId = d.WarId,
+        BeneficiaryId = d.BeneficiaryId,
+        Provinces = d.Provinces.OrderBy(id => id).ToArray(),
+        ReleaseRegions = d.ReleaseRegions,
+        Reparations = d.Reparations,
+        TradeConcessions = d.TradeConcessions,
+        Demilitarise = d.Demilitarise,
+        Humiliate = d.Humiliate,
+        LongTruce = d.LongTruce,
+        Subjugate = d.Subjugate ?? "",
+        OfferProvinces = d.OfferProvinces.OrderBy(id => id).ToArray(),
+        OfferReparations = d.OfferReparations,
+        OfferTradeConcessions = d.OfferTradeConcessions,
+        OfferDemilitarise = d.OfferDemilitarise,
+        OfferDropClaims = d.OfferDropClaims,
+        OfferLongTruce = d.OfferLongTruce
+    };
+
+    public void Apply(Campaign c)
+    {
+        Delivered = false;
+        if (!MechanicFeatures.Allows(c, this))
+        {
+            Note = Loc.Get("This action is disabled in this campaign.");
+            return;
+        }
+        var war = c.Wars.FirstOrDefault(w => w.Id == WarId);
+        var draft = new PeaceDemand
+        {
+            WarId = WarId,
+            ProposerId = IssuerId,
+            BeneficiaryId = BeneficiaryId,
+            ReleaseRegions = ReleaseRegions,
+            Reparations = Reparations,
+            TradeConcessions = TradeConcessions,
+            Demilitarise = Demilitarise,
+            Humiliate = Humiliate,
+            LongTruce = LongTruce,
+            Subjugate = Subjugate ?? "",
+            OfferReparations = OfferReparations,
+            OfferTradeConcessions = OfferTradeConcessions,
+            OfferDemilitarise = OfferDemilitarise,
+            OfferDropClaims = OfferDropClaims,
+            OfferLongTruce = OfferLongTruce
+        };
+        foreach (var p in Provinces ?? Array.Empty<int>()) draft.Provinces.Add(p);
+        foreach (var op in OfferProvinces ?? Array.Empty<int>()) draft.OfferProvinces.Add(op);
+
+        Note = PeaceConference.BlockReason(c, war, draft);
+        if (Note.Length > 0) return;
+        var proposer = c.NationById(IssuerId);
+        var opponent = c.NationById(war.EnemyLeaderOf(IssuerId));
+        Note = PeaceOffers.DeliveryBlockReason(c, war, proposer, opponent);
+        if (Note.Length > 0) return;
+        Delivered = PeaceOffers.Put(c, war, proposer, opponent, draft);
+        Note = Delivered
+            ? (war.Ended ? war.PeaceSummary : Loc.Get("The peace offer is awaiting their answer."))
+            : Loc.Get("The offer cannot bypass a human coalition member or replace a pending offer.");
     }
 }

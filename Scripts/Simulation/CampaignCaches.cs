@@ -38,6 +38,9 @@ internal sealed class CampaignCaches
     private SecessionAdjacencyCache _secession;
     private ShipbuildingSlipwaysCache _shipbuildingSlipways;
     private SupportEnabledMemoCache _supportEnabledMemo;
+    private SupportStepCache _supportStep;
+    private SupportPassCache _supportPass;
+    private ProtectorIndex _protectors;
 
     public AiStrategyPostureCache AiStrategyPosture => LazyInitializer.EnsureInitialized(ref _aiStrategyPosture)!;
     public AiTemperamentCache AiTemperament => LazyInitializer.EnsureInitialized(ref _aiTemperament)!;
@@ -57,6 +60,9 @@ internal sealed class CampaignCaches
     public SecessionAdjacencyCache Secession => LazyInitializer.EnsureInitialized(ref _secession)!;
     public ShipbuildingSlipwaysCache ShipbuildingSlipways => LazyInitializer.EnsureInitialized(ref _shipbuildingSlipways)!;
     public SupportEnabledMemoCache SupportEnabledMemo => LazyInitializer.EnsureInitialized(ref _supportEnabledMemo)!;
+    public SupportStepCache SupportStep => LazyInitializer.EnsureInitialized(ref _supportStep)!;
+    public SupportPassCache SupportPass => LazyInitializer.EnsureInitialized(ref _supportPass)!;
+    public ProtectorIndex Protectors => LazyInitializer.EnsureInitialized(ref _protectors)!;
     public LongRangeMovement.RepositionScratch RepositionScratch { get; } = new();
     public int NextKinScanRunId;
 
@@ -343,5 +349,136 @@ internal sealed class CampaignCaches
     {
         public bool Active;
         public readonly List<(string TypeId, bool Enabled)> Entries = new();
+    }
+
+    internal sealed class SupportPassCache
+    {
+        public readonly struct CutOffSearchKey : IEquatable<CutOffSearchKey>
+        {
+            public readonly int NationId;
+            public readonly int At;
+            public readonly int MovementMode;
+            public readonly long Shut;
+            public readonly int Seat;
+            public readonly int FerryBits;
+
+            public CutOffSearchKey(int nationId, int at, int movementMode, long shut, int seat, int ferryBits)
+            {
+                NationId = nationId;
+                At = at;
+                MovementMode = movementMode;
+                Shut = shut;
+                Seat = seat;
+                FerryBits = ferryBits;
+            }
+
+            public bool Equals(CutOffSearchKey other) =>
+                NationId == other.NationId && At == other.At && MovementMode == other.MovementMode &&
+                Shut == other.Shut && Seat == other.Seat && FerryBits == other.FerryBits;
+
+            public override bool Equals(object obj) => obj is CutOffSearchKey other && Equals(other);
+
+            public override int GetHashCode() => HashCode.Combine(NationId, At, MovementMode, Shut, Seat, FerryBits);
+        }
+
+        public readonly struct PocketCutOffKey : IEquatable<PocketCutOffKey>
+        {
+            public readonly int NationId;
+            public readonly int At;
+            public readonly int MovementMode;
+            public readonly long Shut;
+            public readonly int Seat;
+
+            public PocketCutOffKey(int nationId, int at, int movementMode, long shut, int seat)
+            {
+                NationId = nationId;
+                At = at;
+                MovementMode = movementMode;
+                Shut = shut;
+                Seat = seat;
+            }
+
+            public bool Equals(PocketCutOffKey other) =>
+                NationId == other.NationId && At == other.At && MovementMode == other.MovementMode &&
+                Shut == other.Shut && Seat == other.Seat;
+
+            public override bool Equals(object obj) => obj is PocketCutOffKey other && Equals(other);
+
+            public override int GetHashCode() => HashCode.Combine(NationId, At, MovementMode, Shut, Seat);
+        }
+
+        public readonly struct PocketCutOffEntry
+        {
+            public readonly ulong PassableHash;
+            public readonly ulong HostileHash;
+            public readonly bool HadDepartures;
+            public readonly int GlobalEpoch;
+            public readonly int[] WatchProvinces;
+            public readonly ulong WatchStateHash;
+
+            public PocketCutOffEntry(ulong passableHash, ulong hostileHash, bool hadDepartures,
+                int globalEpoch, int[] watchProvinces, ulong watchStateHash)
+            {
+                PassableHash = passableHash;
+                HostileHash = hostileHash;
+                HadDepartures = hadDepartures;
+                GlobalEpoch = globalEpoch;
+                WatchProvinces = watchProvinces;
+                WatchStateHash = watchStateHash;
+            }
+        }
+
+        public const int MaxCutOffEntries = 512;
+
+        public int LastWithdrawChanged;
+        public readonly List<SupportFormation> MovementOrdered = new();
+        public readonly List<SupportOrder> TrainOrders = new();
+        public readonly Dictionary<int, float> RecoverCrowding = new();
+        public readonly Dictionary<int, float> RecoverUsedByState = new();
+        public readonly HashSet<int> CommandWars = new();
+        public readonly Dictionary<int, bool> CommandEnemyFlies = new();
+        public readonly List<SupportFormation> ExposeFlights = new();
+        public readonly List<(int Province, float Latitude)> ExposeEnemyProvs = new();
+        public readonly HashSet<int> ExposeOwn = new();
+        public readonly HashSet<int> ExposeEnemy = new();
+        public readonly HashSet<int> ExposeEnemyMaps = new();
+        public readonly SupportCore.SideReach ExposeOwnReach = new();
+        public readonly SupportCore.SideReach ExposeEnemyReach = new();
+        public readonly List<SupportFormation> FireDue = new();
+        public readonly Dictionary<int, LongRangeStrikes.Sides> FireSides = new();
+        public readonly HashSet<int> ProcureAtWar = new();
+        public readonly Dictionary<int, float> ProcureUsedByState = new();
+        public readonly List<ScenarioState> ProcureTopRegions = new(12);
+        public readonly LongRangeStrikes.Sides ProcureSides = new();
+
+        // Cross-day memoization of failed cut-off withdrawal searches:
+        // - CutOffFailed covers Air wings and large (>256 province) searches within the same global epoch.
+        // - PocketCutOffFailed stores pocket-local WatchProvinces + hashes so landlocked pockets survive
+        //   unrelated global wars/battles/captures cleanly with zero stale hits.
+        public readonly HashSet<CutOffSearchKey> CutOffFailed = new();
+        public readonly Queue<CutOffSearchKey> CutOffOrder = new();
+        public readonly Dictionary<PocketCutOffKey, PocketCutOffEntry> PocketCutOffFailed = new();
+        public readonly Queue<PocketCutOffKey> PocketCutOffOrder = new();
+        public int CutOffGlobalEpoch;
+        public ProvinceTopology CutOffMap;
+        public int CutOffMapRevision = int.MinValue;
+        public int CutOffWarRevision = int.MinValue;
+        public int CutOffAllianceRevision = int.MinValue;
+        public int CutOffStrategicRevision = int.MinValue;
+        public int CutOffProtectorVersion = int.MinValue;
+        public int CutOffTreatyVersion = int.MinValue;
+        public int CutOffSeaPassageRevision = int.MinValue;
+        public int CutOffNationCount = -1;
+        public int CutOffRelationCount = -1;
+        public int CutOffDestroyedCount = -1;
+        public int CutOffPortDays;
+        public float CutOffSeaKm;
+        public float CutOffAirKm;
+        public float CutOffFerryFactor;
+        public float CutOffFerryMin;
+        public float CutOffFerryMax;
+        public float CutOffSlackKm;
+        public ulong[] CutOffBattleWords = Array.Empty<ulong>();
+        public int CutOffBattleWordCount;
     }
 }

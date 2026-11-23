@@ -71,7 +71,8 @@ public static class DecisionCatalog
         // Decisions name triggers and effects out of the libraries as they are read.
         ScriptLibrary.EnsureLoaded();
         Definitions.Clear();
-        Definitions.AddRange(Defaults);
+        if (!ModOverlayPolicy.IsActive || !ModOverlayPolicy.IsBasePathReplaced("common", "decisions"))
+            Definitions.AddRange(Defaults);
         foreach (var document in GameDataLoader.DataDocuments("common", "decisions"))
             using (document)
             foreach (var entry in document.RootElement.EnumerateObject())

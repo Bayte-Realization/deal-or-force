@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using System.Security.Cryptography;
@@ -54,5 +55,45 @@ static class SecessionColourTests
             if (folder.StartsWith(Path.GetFullPath(Path.GetTempPath()), StringComparison.OrdinalIgnoreCase) &&
                 Path.GetFileName(folder).StartsWith("dof-colours-",StringComparison.Ordinal) && Directory.Exists(folder)) Directory.Delete(folder,true);
         }
+
+        RunCentralEuropeMultiSplinterTests();
+    }
+
+    private static void RunCentralEuropeMultiSplinterTests()
+    {
+        var eu = new Campaign(20350525);
+        GameDataLoader.ApplyDefines(eu.Defines);
+        var deu = eu.AddNation(new Nation { Tag = "DEU", Name = "Germany", Region = "Central Europe", Color = "#5a5a5a", MapIndex = 500, Population = 83_000_000 });
+        var fra = eu.AddNation(new Nation { Tag = "FRA", Name = "France", Region = "Western Europe", Color = "#4f83c4", MapIndex = 501, Population = 68_000_000 });
+        var pol = eu.AddNation(new Nation { Tag = "POL", Name = "Poland", Region = "Central Europe", Color = "#a33b40", MapIndex = 502, Population = 38_000_000 });
+        var cze = eu.AddNation(new Nation { Tag = "CZE", Name = "Czechia", Region = "Central Europe", Color = "#48a284", MapIndex = 503, Population = 10_500_000 });
+        var che = eu.AddNation(new Nation { Tag = "CHE", Name = "Switzerland", Region = "Central Europe", Color = "#c9403f", MapIndex = 504, Population = 8_700_000 });
+        var nld = eu.AddNation(new Nation { Tag = "NLD", Name = "Netherlands", Region = "Western Europe", Color = "#d4762e", MapIndex = 505, Population = 17_500_000 });
+        var bel = eu.AddNation(new Nation { Tag = "BEL", Name = "Belgium", Region = "Western Europe", Color = "#d8ae3b", MapIndex = 506, Population = 11_600_000 });
+        var splinters = new List<Nation>();
+        for (var i = 0; i < 6; i++)
+        {
+            var tag = $"D0{i}";
+            var colour = SecessionColours.Choose(eu, deu, tag, Array.Empty<int>());
+            var child = eu.AddNation(new Nation
+            {
+                Tag = tag, Name = $"Splinter {i}", Region = "Central Europe", Color = colour,
+                MapIndex = 600 + i, SecededFromId = deu.Id, RevoltParentId = deu.Id, Population = 4_000_000
+            });
+            splinters.Add(child);
+        }
+        var hexes = splinters.Select(s => s.Color.ToUpperInvariant()).ToArray();
+        Check(hexes.Distinct().Count() == 6, $"all 6 German splinters receive unique hex colors ({string.Join(", ", hexes)})");
+        foreach (var child in splinters)
+        {
+            Check(!SecessionColours.ClashesWithNeighbors(eu, child),
+                $"splinter {child.Tag} ({child.Color}) cleanly separated from Germany, Central Europe neighbors, and siblings");
+        }
+        // Verify AssignDistinctSurvivorIdentity fixes a clashing slate-blue survivor against living Germany
+        var clash = eu.AddNation(new Nation { Tag = "DX9", Name = "Military Command", Region = "Central Europe", Color = "#5B5D5F", MapIndex = 610, SecededFromId = deu.Id, RevoltParentId = deu.Id, Population = 5_000_000 });
+        SecessionEvents.AssignDistinctSurvivorIdentity(eu, clash, deu, "Hesse");
+        Check(clash.Color != "#5B5D5F" && !SecessionColours.ClashesWithNeighbors(eu, clash),
+            $"AssignDistinctSurvivorIdentity replaced near-duplicate grey '#5B5D5F' with '{clash.Color}'");
+        _ = fra; _ = pol; _ = cze; _ = che; _ = nld; _ = bel;
     }
 }

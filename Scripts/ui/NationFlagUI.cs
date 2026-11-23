@@ -12,7 +12,39 @@ public partial class DealOrForceGame
     /// Flags, cached, because the interface asks for the same dozen every time it refreshes
     /// and loading a texture per frame is a texture load per frame.
     /// </summary>
+    private const int DynamicFlagCacheCap = 512;
     private static readonly Dictionary<string, Texture2D> FlagCache = new();
+    private static readonly LinkedList<string> DynamicFlagLru = new();
+    private static readonly Dictionary<string, LinkedListNode<string>> DynamicFlagNodes = new();
+
+    private static void CacheDynamicFlag(string key, Texture2D texture)
+    {
+        FlagCache[key] = texture;
+        if (DynamicFlagNodes.TryGetValue(key, out var existing))
+        {
+            DynamicFlagLru.Remove(existing);
+            DynamicFlagLru.AddFirst(existing);
+            return;
+        }
+        var node = DynamicFlagLru.AddFirst(key);
+        DynamicFlagNodes[key] = node;
+        while (DynamicFlagLru.Count > DynamicFlagCacheCap && DynamicFlagLru.Last is { } oldest)
+        {
+            DynamicFlagLru.RemoveLast();
+            DynamicFlagNodes.Remove(oldest.Value);
+            if (FlagCache.Remove(oldest.Value, out var evicted) && evicted is ImageTexture imgTex)
+                imgTex.Dispose();
+        }
+    }
+
+    private static void TouchDynamicFlag(string key)
+    {
+        if (DynamicFlagNodes.TryGetValue(key, out var node) && node != DynamicFlagLru.First)
+        {
+            DynamicFlagLru.Remove(node);
+            DynamicFlagLru.AddFirst(node);
+        }
+    }
 
     // One raster per country, keyed by the saved document rather than an ever-growing series
     // of draft IDs. Campaign designs never enter the shared mod/sprite catalogue.
@@ -231,7 +263,11 @@ public partial class DealOrForceGame
         }
         var landId = nation.FoundNameKind == "land" ? (nation.FoundNameId?.ToLowerInvariant() ?? "") : "";
         var key = $"provisional|{nation.Tag}|{nation.Color}|{ideology}|{religion}|{nation.Government}|{culture}|{landId}|{nation.FoundedInRevolt}";
-        if (FlagCache.TryGetValue(key, out var cached)) return cached;
+        if (FlagCache.TryGetValue(key, out var cached))
+        {
+            TouchDynamicFlag(key);
+            return cached;
+        }
 
         const int width = 300;
         const int height = 200;
@@ -261,7 +297,7 @@ public partial class DealOrForceGame
             hash = (hash ^ character) * 16777619u;
         var style = (int)(hash % 10);
 
-        var image = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
+        using var image = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
 
         if (!DrawNamedLandBanner(image, width, height, landId, isCommunist, isMonarchy, isMuslim, light, gold, navy, crimson, emerald, charcoal))
         {
@@ -325,7 +361,7 @@ public partial class DealOrForceGame
 
         image.GenerateMipmaps();
         var texture = ImageTexture.CreateFromImage(image);
-        FlagCache[key] = texture;
+        CacheDynamicFlag(key, texture);
         return texture;
     }
 
@@ -845,6 +881,8 @@ public partial class DealOrForceGame
     {
         CampaignFlagCache.Clear();
         FlagCache.Clear();
+        DynamicFlagLru.Clear();
+        DynamicFlagNodes.Clear();
         ResolvedFlags.Clear();
         RetiredFlagLoads.AddRange(FlagsLoading.Values);
         FlagsLoading.Clear();

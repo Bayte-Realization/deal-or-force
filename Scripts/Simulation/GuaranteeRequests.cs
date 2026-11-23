@@ -100,6 +100,32 @@ public static class Guarantee
         return count;
     }
 
+    [ThreadStatic] private static string[] _guaranteeKeys;
+
+    internal static string RetryKey(int patronId)
+    {
+        var keys = _guaranteeKeys ??= new string[512];
+        if ((uint)patronId < (uint)keys.Length)
+            return keys[patronId] ??= "guarantee/" + patronId;
+        return "guarantee/" + patronId;
+    }
+
+    /// <summary>Zero-allocation refusal check for AI paths: returns true when the request can be put today.</summary>
+    internal static bool CanAskQuiet(Campaign campaign, Nation asker, Nation patron)
+    {
+        if (campaign is null || asker is null || patron is null || asker == patron) return false;
+        var relation = CampaignDiplomacy.Peek(campaign, asker.Id, patron.Id);
+        if (relation is { Stance: DiplomaticStance.AtWar }) return false;
+        if (relation is not null && relation.GuaranteedBy(patron.Id)) return false;
+        if (relation is not null && relation.GuaranteeRequestedBy >= 0 && Pending(campaign, relation)) return false;
+        if (asker.DecisionAvailableDay.Count > 0 &&
+            asker.DecisionAvailableDay.GetValueOrDefault(RetryKey(patron.Id)) > campaign.ElapsedDays)
+            return false;
+        if (patron.IsHuman && Outstanding(campaign, patron.Id) >= Math.Max(1, campaign.Defines.GuaranteeInboxLimit))
+            return false;
+        return true;
+    }
+
     /// <summary>Why this ask cannot be put today, or an empty string. The asker's side.</summary>
     public static string Refusal(Campaign campaign, Nation asker, Nation patron)
     {
@@ -113,7 +139,7 @@ public static class Guarantee
         if (relation is not null && relation.GuaranteeRequestedBy >= 0 && relation.GuaranteeRequestedBy != asker.Id &&
             Pending(campaign, relation))
             return Loc.Get("They are weighing somebody else's request first.");
-        var retry = asker.DecisionAvailableDay.GetValueOrDefault("guarantee/" + patron.Id);
+        var retry = asker.DecisionAvailableDay.Count > 0 ? asker.DecisionAvailableDay.GetValueOrDefault(RetryKey(patron.Id)) : 0;
         if (retry > campaign.ElapsedDays)
             return Loc.Format("Ask again in {0} day(s).", retry - campaign.ElapsedDays);
         if (patron.IsHuman && Outstanding(campaign, patron.Id) >= Math.Max(1, campaign.Defines.GuaranteeInboxLimit))

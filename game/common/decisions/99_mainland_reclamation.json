@@ -1,0 +1,55 @@
+// Strategic decisions for Taiwan's Return to the Mainland (Project National Glory).
+{
+  "twn_project_national_glory": {
+    "name": "mr.dec.national_glory.name",
+    "resource_costs": { "political_points": 10 },
+    "ai_resource_reserve": { "political_points": 4 },
+    "description": "mr.dec.national_glory.desc",
+    "cooldown_days": 730,
+    "gdp_cost_share": 0.0020,
+    "unavailable": "mr.dec.national_glory.unavail",
+    "trigger": { "tags": ["TWN"], "min_stability": 0.45, "min_mainland_reclamation_pending": 1 },
+    "effects": {
+      "war_support": 0.08,
+      "army_experience": 18.0,
+      "naval_experience": 14.0,
+      "manpower": 180000,
+      "army.organisation": 0.08,
+      "add_modifier": { "twn_project_national_glory_spirit": 730 }
+    },
+    "ai_will_do": "ai_twn_project_national_glory"
+  },
+  "twn_strait_armada": {
+    "name": "mr.dec.strait_armada.name",
+    "resource_costs": { "political_points": 10 },
+    "ai_resource_reserve": { "political_points": 4 },
+    "description": "mr.dec.strait_armada.desc",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.0018,
+    "unavailable": "mr.dec.strait_armada.unavail",
+    "trigger": { "tags": ["TWN"], "min_stability": 0.40, "min_mainland_reclamation_pending": 1 },
+    "effects": {
+      "naval_experience": 16.0,
+      "fleet.readiness": 0.15,
+      "fleet.supply": 0.20,
+      "add_modifier": { "twn_strait_armada_spirit": 540 }
+    },
+    "ai_will_do": "ai_twn_strait_armada"
+  },
+  "twn_mainland_underground": {
+    "name": "mr.dec.mainland_underground.name",
+    "resource_costs": { "political_points": 10 },
+    "ai_resource_reserve": { "political_points": 4 },
+    "description": "mr.dec.mainland_underground.desc",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.0014,
+    "unavailable": "mr.dec.mainland_underground.unavail",
+    "trigger": { "tags": ["TWN"], "min_stability": 0.40, "min_mainland_reclamation_pending": 1 },
+    "effects": {
+      "war_support": 0.05,
+      "army_experience": 10.0,
+      "add_modifier": { "twn_mainland_underground_spirit": 540 }
+    },
+    "ai_will_do": "ai_twn_mainland_underground"
+  }
+}

@@ -350,4 +350,64 @@ public static class BorderDiplomacy
         if (asking <= 0f) { precomputed = assessment; return deal; }
         return deal with { To = deal.To with { Cash = asking } };
     }
+
+    // ------------------------------------------------------------------ CONS-03 enclave land-corridor transit
+
+    /// <summary>
+    /// Counts cut-off pockets belonging to <paramref name="owner"/> that touch <paramref name="neighbour"/>.
+    /// Read-only and deterministic; never mutates campaign state.
+    /// </summary>
+    public static int CountIsolatedPockets(Campaign c, Nation owner, Nation neighbour)
+    {
+        if (c?.ProvinceMap is null || owner is null || neighbour is null || owner.Id == neighbour.Id) return 0;
+        var count = 0;
+        foreach (var state in c.StatesOf(owner))
+        {
+            if (state.Population <= 0 || state.Unclaimed) continue;
+            if (!BorderShape.IsCutOffPocket(c, state)) continue;
+            foreach (var (adj, _) in TerritorialCoherence.RegionBorders(c, state.MapIndex))
+            {
+                if (c.StateByMapIndex(adj)?.NationMapIndex == neighbour.MapIndex)
+                {
+                    count++;
+                    break;
+                }
+            }
+        }
+        return count;
+    }
+
+    /// <summary>True when <paramref name="grantor"/> and <paramref name="grantee"/> share a land border
+    /// or either holds a cut-off enclave touching the other.</summary>
+    public static bool HasCorridorNeed(Campaign c, Nation grantor, Nation grantee)
+    {
+        if (c?.ProvinceMap is null || grantor is null || grantee is null || grantor.Id == grantee.Id) return false;
+        if (CampaignDiplomacy.SharesLandBorder(c, grantor.MapIndex, grantee.MapIndex)) return true;
+        return CountIsolatedPockets(c, grantee, grantor) > 0 || CountIsolatedPockets(c, grantor, grantee) > 0;
+    }
+
+    /// <summary>Why <paramref name="grantor"/> cannot grant a land-transit corridor to <paramref name="grantee"/>, or empty.</summary>
+    public static string CorridorRefusal(Campaign c, Nation grantor, Nation grantee)
+    {
+        if (c?.ProvinceMap is null || grantor is null || grantee is null || grantor.Id == grantee.Id)
+            return Loc.Get("Invalid target.");
+        if (!HasCorridorNeed(c, grantor, grantee))
+            return Loc.Get("deal.refuse.corridor_no_border");
+        var key = $"deal_corridor/{grantor.Id}/{grantee.Id}";
+        if (grantor.DecisionAvailableDay.TryGetValue(key, out var avail) && avail > c.ElapsedDays)
+            return Loc.Format("deal.refuse.clause_cooldown_fmt", avail - c.ElapsedDays);
+        return "";
+    }
+
+    /// <summary>
+    /// Diplomatic utility points a land-transit corridor across <paramref name="grantor"/> is worth to
+    /// <paramref name="grantee"/>: base border transit plus strong relief for cut-off enclaves.
+    /// </summary>
+    public static float CorridorReliefValue(Campaign c, Nation grantee, Nation grantor)
+    {
+        if (!HasCorridorNeed(c, grantor, grantee)) return 0f;
+        var pockets = CountIsolatedPockets(c, grantee, grantor);
+        var grievance = Math.Clamp(BorderShape.Grievance(c, grantee, grantor), 0f, 1f);
+        return 10f + Math.Min(3, pockets) * 5.5f + grievance * 12f;
+    }
 }

@@ -1,0 +1,22 @@
+// Deal or Force - Mainland Reclamation & Cross-Strait Amphibious Campaign defines.
+//
+// Governs reunification bridgehead shock, liberated mainland volunteer rallies,
+// narrow-strait amphibious crossings, and AI maritime reclamation timing.
+{
+  "MainlandReclamationEnabled": true,
+  "MainlandBridgeheadRallyDivisions": 6,
+  "MainlandRegionRallyDivisions": 3,
+  "MainlandRallyMaxDivisionsPerWar": 56,
+  "MainlandLiberationWarSupportHit": 0.065,
+  "MainlandLiberationStabilityHit": 0.040,
+  "MainlandLiberationCoupPressure": 0.085,
+  "MainlandLiberationRadicalismSurge": 0.08,
+  "MainlandDefectionChanceBonus": 0.16,
+  "AiNarrowStraitInvasionDegrees": 7.5,
+  "AiNarrowStraitInvasionOdds": 2.4,
+  "AiMainlandReturnEarliestDay": 240,
+  "AiMainlandReturnReviewDays": 21,
+  "AiMainlandReturnChance": 0.28,
+  "AiMainlandReturnMinimumDivisions": 14,
+  "AiMainlandReturnMinimumHulls": 45
+}

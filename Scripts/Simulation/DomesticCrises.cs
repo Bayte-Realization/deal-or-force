@@ -155,40 +155,122 @@ public static partial class DomesticCrises
         // Every region's alienation for the day, read side by side before the countries are
         // taken one at a time (PoliticalCohorts.AlienationTable).
         var alienation = PoliticalCohorts.ReadAlienation(c);
-        var tick = 0;
-        foreach (var nation in c.Nations)
+
+        // Pre-compute resident awareness across very large worlds in parallel (chunked range pass),
+        // then apply deterministically per nation so 1-thread and N-thread runs agree bit-for-bit.
+        // On normal worlds (< 8192 states), updating inside the per-nation pass below avoids pool
+        // dispatch, ArrayPool churn, and second scans over every region object.
+        var awarenessPrecomputed = false;
+        if (awarenessEnabled && c.States.Count >= 256)
         {
-            if (++tick % 8 == 0 || Campaign.StageOverdue()) yield return 0;
-            var memory = nation.DomesticCrisis ??= new();
-            if (memory.LastReviewDay == c.ElapsedDays) continue;
-            // Start at the current conditions; a legacy save never accrues years of backdated crises.
-            var days = memory.LastReviewDay < 0 ? 1 : Math.Clamp(c.ElapsedDays - memory.LastReviewDay, 0, 60);
-            memory.LastReviewDay = c.ElapsedDays;
-            if (awarenessEnabled)
-                foreach (var region in c.StatesOf(nation))
-                {
-                    if (region.ResidentAwareness < 0f) region.ResidentAwareness = ResidentAwareness.Target(c, region);
-                    else region.ResidentAwareness = Move(region.ResidentAwareness, ResidentAwareness.Target(c, region),
-                        MathF.Max(0f, c.Defines.ResidentAwarenessChangePerDay) * days);
-                }
-            PoliticalCohorts.Review(c, nation, days, alienation, tick - 1);
-            if (crisesEnabled)
+            // Warm up thread-safe dense index snapshot before fanning out.
+            _ = c.NationsByMapIndex();
+            var states = c.States;
+            var stateCount = states.Count;
+            var precomputedAwareness = System.Buffers.ArrayPool<float>.Shared.Rent(stateCount);
+            try
             {
-                ReviewResponse(c, nation, days);
-                ReviewConciliation(c, nation, days);
-                // A coup is the one thing in this review that reaches beyond its own country.
-                if (ReviewPressure(c, nation, days)) alienation?.Spoil();
-                ConsiderConciliation(c, nation);
-                // The longer lever beside the season's payment: a region that runs itself.
-                RegionalAutonomy.ConsiderGrant(c, nation);
-                // The street is read weekly: a wave takes days to build, and Read walks every region.
-                if (c.Defines.ProtestsEnabled && nation.Movement is null && nation.Population > 0 &&
-                    (c.ElapsedDays + nation.Id) % 7 == 0)
+                var changePerDay = MathF.Max(0f, c.Defines.ResidentAwarenessChangePerDay);
+                var elapsed = c.ElapsedDays;
+                DeterministicParallel.ForRange(c, 0, stateCount, (from, to) =>
                 {
-                    AwarenessAndRadicalism(c, nation, out var awareness, out var radicalism);
-                    MassProtests.Review(c, nation, awareness, radicalism, 7);
+                    for (var i = from; i < to; i++)
+                    {
+                        var region = states[i];
+                        var owner = region.NationMapIndex > 0 ? c.NationByMapIndex(region.NationMapIndex) : null;
+                        if (owner is null) { precomputedAwareness[i] = region.ResidentAwareness; continue; }
+                        var lastReview = owner.DomesticCrisis is { } mem ? mem.LastReviewDay : -1;
+                        if (lastReview == elapsed) { precomputedAwareness[i] = region.ResidentAwareness; continue; }
+                        var days = lastReview < 0 ? 1 : Math.Clamp(elapsed - lastReview, 0, 60);
+                        var target = ResidentAwareness.Target(c, region);
+                        precomputedAwareness[i] = region.ResidentAwareness < 0f
+                            ? target
+                            : Move(region.ResidentAwareness, target, changePerDay * days);
+                    }
+                }, minItems: 64);
+                // Apply in ascending state order on the calling thread.
+                for (var i = 0; i < stateCount; i++)
+                    states[i].ResidentAwareness = precomputedAwareness[i];
+                awarenessPrecomputed = true;
+            }
+            finally
+            {
+                System.Buffers.ArrayPool<float>.Shared.Return(precomputedAwareness);
+            }
+        }
+        if (awarenessEnabled && !awarenessPrecomputed)
+            _ = c.NationsByMapIndex();
+
+        var tick = 0;
+        var awarenessChangePerDay = MathF.Max(0f, c.Defines.ResidentAwarenessChangePerDay);
+        try
+        {
+            var activeNations = c.ActiveNations;
+            for (var ni = 0; ni < activeNations.Count; ni++)
+            {
+                var nation = activeNations[ni];
+                if (++tick % 32 == 0 && Campaign.StageOverdue()) yield return 0;
+                if (c.IsRetired(nation)) continue;
+                var memory = nation.DomesticCrisis ??= new();
+                if (memory.LastReviewDay == c.ElapsedDays) continue;
+                // Start at the current conditions; a legacy save never accrues years of backdated crises.
+                var days = memory.LastReviewDay < 0 ? 1 : Math.Clamp(c.ElapsedDays - memory.LastReviewDay, 0, 60);
+                memory.LastReviewDay = c.ElapsedDays;
+                var regions = c.StatesOf(nation);
+                if (regions.Length == 0 && (nation.Movement is not null || nation.Population <= 0) &&
+                    memory.ResponseUntilDay < 0 && memory.ConciliationUntilDay < 0 && memory.CoupPressure <= 0f)
+                {
+                    memory.DaysAboveThreshold = 0;
+                    alienation?.ClearSummary();
+                    continue;
+                }
+                if (awarenessEnabled && (!awarenessPrecomputed || nation.MapIndex <= 0) &&
+                    regions.Length > 0 &&
+                    (nation.MapIndex <= 0 || ReferenceEquals(c.NationByMapIndex(nation.MapIndex), nation)))
+                {
+                    var awarenessStep = awarenessChangePerDay * days;
+                    for (var ri = 0; ri < regions.Length; ri++)
+                    {
+                        var region = regions[ri];
+                        var target = ResidentAwareness.Target(c, region);
+                        region.ResidentAwareness = region.ResidentAwareness < 0f
+                            ? target
+                            : Move(region.ResidentAwareness, target, awarenessStep);
+                    }
+                }
+                PoliticalCohorts.Review(c, nation, days, alienation, tick - 1);
+                if (crisesEnabled)
+                {
+                    ReviewResponse(c, nation, days);
+                    var couldConciliate = memory.ConciliationRegion >= 0 && memory.ConciliationUntilDay >= c.ElapsedDays - days;
+                    ReviewConciliation(c, nation, days);
+                    if (couldConciliate) alienation?.InvalidateMood();
+                    // A coup is the one thing in this review that reaches beyond its own country.
+                    if (regions.Length > 0 && ReviewPressure(c, nation, days)) alienation?.Spoil();
+                    alienation?.ClearSummary();
+                    if (!nation.IsHuman && nation.Movement is null && regions.Length > 0)
+                    {
+                        ConsiderConciliation(c, nation);
+                        // The longer lever beside the season's payment: a region that runs itself.
+                        RegionalAutonomy.ConsiderGrant(c, nation);
+                    }
+                    // The street is read weekly: a wave takes days to build, and Read walks every region.
+                    if (c.Defines.ProtestsEnabled && nation.Movement is null && nation.Population > 0 && regions.Length > 0 &&
+                        (c.ElapsedDays + nation.Id) % 7 == 0)
+                    {
+                        AwarenessAndRadicalism(c, nation, out var awareness, out var radicalism);
+                        MassProtests.Review(c, nation, awareness, radicalism, 7);
+                    }
+                }
+                else
+                {
+                    alienation?.ClearSummary();
                 }
             }
+        }
+        finally
+        {
+            alienation?.ClearSummary();
         }
     }
 

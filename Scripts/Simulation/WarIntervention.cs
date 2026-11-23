@@ -335,6 +335,7 @@ public static class WarInterventions
                     {
                         if (request.DonorId == bond.A) bond.GuaranteeByA = false;
                         else bond.GuaranteeByB = false;
+                        c.NoteAllianceChange();
                         OpinionSystem.Forget(c, bond, "guaranteed_us");
                     }
                     donorNation.Stability = Math.Clamp(donorNation.Stability - c.Defines.BrokenPromiseStabilityCost, 0f, 1f);

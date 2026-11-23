@@ -35,7 +35,7 @@ public static partial class Warfare
     {
         public readonly List<int> Candidates = new();
         public readonly List<int> Neighbours = new();
-        public readonly HashSet<int> CoverSeen = new();
+        public readonly GenerationalStampSet CoverSeen = new();
         public List<int> CoverRing = new();
         public List<int> CoverNext = new();
         public readonly HashSet<ushort> OpeningEnemyMaps = new();
@@ -117,10 +117,19 @@ public static partial class Warfare
         // The far shore of a strait is a neighbour like any other - unless it is reached by a
         // ferry and an enemy fleet commands the water, when there is no way to send the assault.
         var atCrossing = topology.IsCrossingEnd(army.ProvinceId);
-        foreach (var province in armyNeighbors)
-            if (province >= 0 && province < controllers.Length && enemyMaps.Contains(controllers[province]) &&
+        var ctrlLen = controllers.Length;
+        ushort singleEnemy = 0;
+        var hasSingleEnemy = enemyMaps.Count == 1;
+        if (hasSingleEnemy)
+            foreach (var map in enemyMaps) { singleEnemy = map; break; }
+        for (var i = 0; i < armyNeighbors.Length; i++)
+        {
+            var province = armyNeighbors[i];
+            if ((uint)province < (uint)ctrlLen &&
+                (hasSingleEnemy ? controllers[province] == singleEnemy : enemyMaps.Contains(controllers[province])) &&
                 !(atCrossing && LandCrossings.StepClosed(campaign, army.NationId, army.ProvinceId, province)))
                 candidates.Add(province);
+        }
         if (candidates.Count == 0) return -1;
         // A defender takes back its own before it invades. Until it is clearly winning, a
         // country fighting off an attack advances only onto its own ground - occupied, or its
@@ -220,6 +229,21 @@ public static partial class Warfare
             }
             if (candidates.Count == 0) candidates.Add(pinned);
         }
+        // Never pick a cover-refused empty gap over a neighbor the army can actually march into
+        // or fight for: an empty province has observedResistance == 0, so without filtering
+        // cover-refused candidates first it wins the lowest score and CombatCore silently drops
+        // the whole step, deadlocking the front forever.
+        if (!army.DirectOrder && candidates.Count > 1)
+        {
+            var playable = 0;
+            for (var ci = 0; ci < candidates.Count; ci++)
+            {
+                if (!CoverRefuses(campaign, topology, war, army, candidates[ci]))
+                    candidates[playable++] = candidates[ci];
+            }
+            if (playable > 0 && playable < candidates.Count)
+                candidates.RemoveRange(playable, candidates.Count - playable);
+        }
         // The front AI probes weak sectors and prefers dry crossings. Spearheads
         // accept more terrain risk, while regular advances strongly avoid
         // needlessly attacking across a defended river line. Picking the best of a
@@ -230,18 +254,38 @@ public static partial class Warfare
         var activeBattles = EnsureActiveBattles(campaign);
         var target = -1;
         var bestScore = 0f;
-        foreach (var province in candidates)
+        ProvinceVision armyVision = null;
+        var visionLoaded = false;
+        var viewerId = army.NationId;
+        for (var ci = 0; ci < candidates.Count; ci++)
         {
+            var province = candidates[ci];
             // Player battle plans and AI orders use the same reconnaissance. Deep
             // hidden formations must not influence which sector the planner probes.
             var observedResistance = 0f;
             var observedEntrenchment = 0f;
-            foreach (var defender in InProvince(province))
-                if (war.Opposes(army.NationId, defender.NationId) && CampaignIntel.CanSeeArmy(campaign, army.NationId, defender))
+            var defenders = InProvince(province);
+            for (var di = 0; di < defenders.Count; di++)
+            {
+                var defender = defenders[di];
+                if (!war.Opposes(viewerId, defender.NationId)) continue;
+                var visible = CampaignIntel.CanInspect(viewerId, defender.NationId);
+                if (!visible)
+                {
+                    if (!visionLoaded)
+                    {
+                        armyVision = CampaignIntel.Vision(campaign, viewerId);
+                        visionLoaded = true;
+                    }
+                    visible = armyVision is not null &&
+                        (armyVision.Sees(defender.ProvinceId) || armyVision.CombatContacts.Contains(defender.Id));
+                }
+                if (visible)
                 {
                     observedResistance += defender.Power;
                     observedEntrenchment += defender.Entrenchment * M.Max(0f, defender.Divisions);
                 }
+            }
             // Weighted, not divided. Dividing the enemy's strength by your own makes
             // resistance dominate the score by an order of magnitude over everything
             // else, so every formation on the front picks the single weakest sector and
@@ -253,9 +297,15 @@ public static partial class Warfare
             var multiAxisBonus = activeBattles.ContainsKey((war.Id, province)) ? -0.18f : 0f;
             var pocketBonus = 0f;
             var enemyNeighbors = 0;
-            foreach (var adj in topology.Neighbors[province])
-                if (adj > 0 && adj < controllers.Length && enemyMaps.Contains(controllers[adj]) && !topology.IsWater(adj))
+            var pNeighbors = topology.Neighbors[province];
+            for (var ni = 0; ni < pNeighbors.Length; ni++)
+            {
+                var adj = pNeighbors[ni];
+                if (adj > 0 && adj < ctrlLen &&
+                    (hasSingleEnemy ? controllers[adj] == singleEnemy : enemyMaps.Contains(controllers[adj])) &&
+                    !topology.IsWater(adj))
                     enemyNeighbors++;
+            }
             if (enemyNeighbors <= 1) pocketBonus = -0.22f;
 
             // A strait is weighed like a river, by what it takes off the attack: where there is
@@ -327,15 +377,8 @@ public static partial class Warfare
     private static bool OwnGround(Campaign campaign, ProvinceTopology topology, Nation nation, int province)
     {
         if (topology.ProvinceToNation[province] == nation.MapIndex) return true;
-        var index = UseArmyIndex(campaign);
-        if (index.RegionsCount != campaign.States.Count || index.RegionsRevision != campaign.MapRevision)
-        {
-            index.RegionByIndex.Clear();
-            foreach (var each in campaign.States) index.RegionByIndex[each.MapIndex] = each;
-            index.RegionsCount = campaign.States.Count;
-            index.RegionsRevision = campaign.MapRevision;
-        }
-        if (!index.RegionByIndex.TryGetValue(topology.ProvinceToState[province], out var state)) return false;
+        var state = campaign.StateByMapIndex(topology.ProvinceToState[province]);
+        if (state is null) return false;
         var coreTags = state.CoreTags;
         for (var i = 0; i < coreTags.Count; i++)
             if (string.Equals(coreTags[i], nation.Tag, StringComparison.OrdinalIgnoreCase)) return true;
@@ -420,6 +463,7 @@ public static partial class Warfare
         var seen = scratch.CoverSeen;
         var ring = scratch.CoverRing;
         var next = scratch.CoverNext;
+        seen.EnsureCapacity(topology.ProvinceCount);
         seen.Clear();
         seen.Add(target);
         ring.Clear();

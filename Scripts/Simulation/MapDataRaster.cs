@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -24,7 +25,7 @@ public static class DataMapPng
 
     public static RgbDataMap LoadRgb(string path)
     {
-        using var stream = File.OpenRead(path);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 262144, FileOptions.SequentialScan);
         Span<byte> signature = stackalloc byte[8];
         stream.ReadExactly(signature);
         if (!signature.SequenceEqual(Signature)) throw new InvalidDataException($"{Path.GetFileName(path)} is not a PNG file.");
@@ -32,30 +33,50 @@ public static class DataMapPng
         var width = 0;
         var height = 0;
         var colorType = -1;
-        using var compressed = new MemoryStream();
+        var initialCap = stream.Length > 0 && stream.Length < int.MaxValue ? (int)stream.Length : 65536;
+        using var compressed = new MemoryStream(initialCap);
         var chunkHeader = new byte[8];
         var chunkCrc = new byte[4];
+        var chunkBuf = new byte[65536];
         while (stream.Position < stream.Length)
         {
             stream.ReadExactly(chunkHeader);
             var length = checked((int)BinaryPrimitives.ReadUInt32BigEndian(chunkHeader.AsSpan(0, 4)));
-            var type = Encoding.ASCII.GetString(chunkHeader, 4, 4);
-            var data = new byte[length];
-            stream.ReadExactly(data);
-            stream.ReadExactly(chunkCrc);
-            if (type == "IHDR")
+            var isIhdr = chunkHeader[4] == (byte)'I' && chunkHeader[5] == (byte)'H' && chunkHeader[6] == (byte)'D' && chunkHeader[7] == (byte)'R';
+            var isIdat = chunkHeader[4] == (byte)'I' && chunkHeader[5] == (byte)'D' && chunkHeader[6] == (byte)'A' && chunkHeader[7] == (byte)'T';
+            var isIend = chunkHeader[4] == (byte)'I' && chunkHeader[5] == (byte)'E' && chunkHeader[6] == (byte)'N' && chunkHeader[7] == (byte)'D';
+            if (isIhdr || isIdat)
             {
-                if (length != 13) throw new InvalidDataException("Invalid PNG header.");
-                width = checked((int)BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(0, 4)));
-                height = checked((int)BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(4, 4)));
-                if (data[8] != 8 || data[10] != 0 || data[11] != 0 || data[12] != 0)
-                    throw new InvalidDataException("Data maps must use non-interlaced 8-bit PNG pixels.");
-                colorType = data[9];
-                if (colorType is not (0 or 2 or 6))
-                    throw new InvalidDataException("Data maps must be grayscale, RGB or RGBA PNG; indexed palettes are not accepted.");
+                if (chunkBuf.Length < length) chunkBuf = new byte[length];
+                stream.ReadExactly(chunkBuf.AsSpan(0, length));
+                stream.ReadExactly(chunkCrc);
+                if (isIhdr)
+                {
+                    if (length != 13) throw new InvalidDataException("Invalid PNG header.");
+                    width = checked((int)BinaryPrimitives.ReadUInt32BigEndian(chunkBuf.AsSpan(0, 4)));
+                    height = checked((int)BinaryPrimitives.ReadUInt32BigEndian(chunkBuf.AsSpan(4, 4)));
+                    if (chunkBuf[8] != 8 || chunkBuf[10] != 0 || chunkBuf[11] != 0 || chunkBuf[12] != 0)
+                        throw new InvalidDataException("Data maps must use non-interlaced 8-bit PNG pixels.");
+                    colorType = chunkBuf[9];
+                    if (colorType is not (0 or 2 or 6))
+                        throw new InvalidDataException("Data maps must be grayscale, RGB or RGBA PNG; indexed palettes are not accepted.");
+                }
+                else
+                {
+                    compressed.Write(chunkBuf, 0, length);
+                }
             }
-            else if (type == "IDAT") compressed.Write(data);
-            else if (type == "IEND") break;
+            else
+            {
+                if (stream.CanSeek) stream.Seek(length + 4L, SeekOrigin.Current);
+                else
+                {
+                    if (chunkBuf.Length < length) chunkBuf = new byte[length];
+                    stream.ReadExactly(chunkBuf.AsSpan(0, length));
+                    stream.ReadExactly(chunkCrc);
+                }
+                if (isIend) break;
+            }
         }
         if (width <= 0 || height <= 0 || colorType < 0) throw new InvalidDataException("PNG has no valid IHDR chunk.");
 
@@ -65,69 +86,81 @@ public static class DataMapPng
         var previous = new byte[stride];
         var row = new byte[stride];
         var encoded = new byte[stride];
+        var vecWidth = System.Numerics.Vector<byte>.Count;
         compressed.Position = 0;
         using var zlib = new ZLibStream(compressed, CompressionMode.Decompress, true);
+        using var buffered = new BufferedStream(zlib, 131072);
         for (var y = 0; y < height; y++)
         {
-            var filter = zlib.ReadByte();
+            var filter = buffered.ReadByte();
             if (filter < 0) throw new EndOfStreamException("PNG pixel stream ended before the final row.");
-            zlib.ReadExactly(encoded);
-            // The filter is one value for the whole row, so the branch belongs outside the loop
-            // rather than inside it. Each raster is upwards of fifty million bytes and there are
-            // half a dozen rasters on a map, so a switch evaluated per byte is hundreds of millions
-            // of branches for an answer that was decided at the start of the row. Each filter gets
-            // its own tight loop, and None - which is a stored row - is a copy.
-            //
-            // The arithmetic is the same expression per filter as it was; what changed is how many
-            // times the answer to "which filter" is asked for. SourceMapGrid round-trips every id
-            // and fingerprints the grid, so a decode that quietly stopped matching its file would
-            // be caught rather than shipped.
+            buffered.ReadExactly(encoded);
             switch (filter)
             {
                 case 0:
                     encoded.AsSpan().CopyTo(row);
                     break;
                 case 1:
-                    for (var x = 0; x < stride; x++)
-                        row[x] = unchecked((byte)(encoded[x] + (x >= channels ? row[x - channels] : 0)));
+                    for (var x = 0; x < channels; x++) row[x] = encoded[x];
+                    for (var x = channels; x < stride; x++)
+                        row[x] = unchecked((byte)(encoded[x] + row[x - channels]));
                     break;
                 case 2:
-                    for (var x = 0; x < stride; x++)
+                {
+                    var x = 0;
+                    if (System.Numerics.Vector.IsHardwareAccelerated)
+                    {
+                        var limit = stride - vecWidth;
+                        for (; x <= limit; x += vecWidth)
+                        {
+                            var v = new System.Numerics.Vector<byte>(encoded, x) + new System.Numerics.Vector<byte>(previous, x);
+                            v.CopyTo(row, x);
+                        }
+                    }
+                    for (; x < stride; x++)
                         row[x] = unchecked((byte)(encoded[x] + previous[x]));
                     break;
+                }
                 case 3:
-                    for (var x = 0; x < stride; x++)
-                    {
-                        var left = x >= channels ? row[x - channels] : 0;
-                        row[x] = unchecked((byte)(encoded[x] + ((left + previous[x]) >> 1)));
-                    }
+                    for (var x = 0; x < channels; x++)
+                        row[x] = unchecked((byte)(encoded[x] + (previous[x] >> 1)));
+                    for (var x = channels; x < stride; x++)
+                        row[x] = unchecked((byte)(encoded[x] + ((row[x - channels] + previous[x]) >> 1)));
                     break;
                 case 4:
-                    for (var x = 0; x < stride; x++)
-                    {
-                        var left = x >= channels ? row[x - channels] : 0;
-                        var up = previous[x];
-                        var upperLeft = x >= channels ? previous[x - channels] : 0;
-                        row[x] = unchecked((byte)(encoded[x] + Paeth(left, up, upperLeft)));
-                    }
+                    for (var x = 0; x < channels; x++)
+                        row[x] = unchecked((byte)(encoded[x] + previous[x]));
+                    for (var x = channels; x < stride; x++)
+                        row[x] = unchecked((byte)(encoded[x] + Paeth(row[x - channels], previous[x], previous[x - channels])));
                     break;
                 default:
                     throw new InvalidDataException($"Unsupported PNG filter {filter}.");
             }
-            for (var x = 0; x < width; x++)
+            var rowDst = y * width * 3;
+            if (channels == 3)
             {
-                var write = (y * width + x) * 3;
-                if (channels == 1)
+                Buffer.BlockCopy(row, 0, rgb, rowDst, stride);
+            }
+            else if (channels == 1)
+            {
+                for (var x = 0; x < width; x++)
                 {
-                    rgb[write] = row[x];
-                    rgb[write + 1] = row[x];
-                    rgb[write + 2] = row[x];
+                    var v = row[x];
+                    var write = rowDst + x * 3;
+                    rgb[write] = v;
+                    rgb[write + 1] = v;
+                    rgb[write + 2] = v;
                 }
-                else
+            }
+            else
+            {
+                for (var x = 0; x < width; x++)
                 {
-                    rgb[write] = row[x * channels];
-                    rgb[write + 1] = row[x * channels + 1];
-                    rgb[write + 2] = row[x * channels + 2];
+                    var src = x * 4;
+                    var write = rowDst + x * 3;
+                    rgb[write] = row[src];
+                    rgb[write + 1] = row[src + 1];
+                    rgb[write + 2] = row[src + 2];
                 }
             }
             (previous, row) = (row, previous);
@@ -218,10 +251,48 @@ public static class MapRasterCatalog
     private static string _sourceRevision = "";
     private static bool _resettingSources;
 
+    private sealed record PrefetchedProvinceMap(
+        string ProvincePath,
+        string DefinitionPath,
+        RgbDataMap Raster,
+        Dictionary<int, int> ColorToProvince);
+
+    private static readonly object PrefetchLock = new();
+    private static PrefetchedProvinceMap _prefetched;
+
+    private static void ClearPrefetch()
+    {
+        lock (PrefetchLock) _prefetched = null;
+    }
+
+    public static void ReleasePrefetch() => ClearPrefetch();
+
+    private static bool TryTakePrefetch(string provincePath, string definitionPath,
+        out RgbDataMap raster, out Dictionary<int, int> definitions)
+    {
+        lock (PrefetchLock)
+        {
+            var cached = _prefetched;
+            _prefetched = null;
+            if (cached is not null &&
+                string.Equals(cached.ProvincePath, provincePath, StringComparison.Ordinal) &&
+                string.Equals(cached.DefinitionPath, definitionPath, StringComparison.Ordinal))
+            {
+                raster = cached.Raster;
+                definitions = cached.ColorToProvince;
+                return true;
+            }
+        }
+        raster = null;
+        definitions = null;
+        return false;
+    }
+
     static MapRasterCatalog() => ResetCatalog();
 
     public static void ResetCatalog()
     {
+        ClearPrefetch();
         _resettingSources = true;
         try
         {
@@ -294,6 +365,7 @@ public static class MapRasterCatalog
             errors?.Add("map_data/provinces.png and definition.csv must be overridden together.");
         else if (File.Exists(province))
         {
+            ClearPrefetch();
             ProvincePath = province;
             DefinitionPath = definition;
         }
@@ -355,8 +427,16 @@ public static class MapRasterCatalog
     public static ulong RegionFingerprint(ushort[] states)
     {
         var hash = 14695981039346656037UL;
-        foreach (var index in states)
+        if (BitConverter.IsLittleEndian)
         {
+            var bytes = MemoryMarshal.AsBytes(states.AsSpan());
+            for (var i = 0; i < bytes.Length; i++)
+                hash = (hash ^ bytes[i]) * 1099511628211UL;
+            return hash;
+        }
+        for (var i = 0; i < states.Length; i++)
+        {
+            var index = states[i];
             hash = (hash ^ (byte)index) * 1099511628211UL;
             hash = (hash ^ (byte)(index >> 8)) * 1099511628211UL;
         }
@@ -375,6 +455,87 @@ public static class MapRasterCatalog
         }
         catch { /* A map pack that says nothing is treated as one that was never stamped. */ }
         return null;
+    }
+
+    /// <summary>
+    /// On non-Windows-x64 platforms (Android ARM64, Linux, macOS ARM64), C <c>libm</c>
+    /// transcendentals and FMA rounding in polar/organic region growth can shift a handful of
+    /// boundary cells by 1 ULP, causing <see cref="RegionFingerprint"/> to diverge from the
+    /// authored <c>compiled.json</c> stamp and rejecting <c>provinces.png</c>.
+    ///
+    /// When that happens, reconstruct the exact authored <paramref name="states"/> and
+    /// <paramref name="control"/> cells from <c>provinces.png</c> + <c>definition.csv</c>,
+    /// verify the reconstructed region fingerprint matches <c>compiled.json</c> bit-for-bit,
+    /// commit the reconciled arrays, and hand off the already-decoded raster/definitions to
+    /// <see cref="TryBuildProvinceTopology"/> via a 1-shot cache so <c>provinces.png</c> is
+    /// never decoded twice.
+    ///
+    /// Windows x64 returns immediately (0 ms, strict stamp check unchanged).
+    /// </summary>
+    public static bool ReconcileCrossArchitectureRegions(ushort[] states, ushort[] control, int width, int height)
+    {
+        if (OperatingSystem.IsWindows() && RuntimeInformation.ProcessArchitecture == Architecture.X64)
+            return false;
+        return ReconcileFromProvinceRaster(states, control, width, height);
+    }
+
+    internal static bool ReconcileFromProvinceRaster(ushort[] states, ushort[] control, int width, int height)
+    {
+        if (states is null || control is null || width <= 0 || height <= 0)
+            return false;
+        var cellCount = width * height;
+        if (states.Length != cellCount || control.Length != cellCount)
+            return false;
+        var provincePath = ProvincePath;
+        var definitionPath = DefinitionPath;
+        if (string.IsNullOrWhiteSpace(provincePath) || string.IsNullOrWhiteSpace(definitionPath))
+            return false;
+        var stamped = StampedFingerprint();
+        if (stamped is null || RegionFingerprint(states) == stamped.Value)
+            return false;
+
+        try
+        {
+            var definitionsTask = Task.Run(() => LoadFullDefinitions(definitionPath));
+            var raster = DataMapPng.LoadRgb(provincePath);
+            var fullDefs = definitionsTask.GetAwaiter().GetResult();
+            if (raster.Width != width || raster.Height != height || fullDefs is null)
+                return false;
+
+            var authoredStates = new ushort[cellCount];
+            var authoredControl = new ushort[cellCount];
+            var pixels = raster.Pixels;
+            var colorToProvince = fullDefs.ColorToProvince;
+            var stateByProv = fullDefs.StateByProvince;
+            var nationByProv = fullDefs.NationByProvince;
+            for (var cell = 0; cell < cellCount; cell++)
+            {
+                var off = cell * 3;
+                var color = (pixels[off] << 16) | (pixels[off + 1] << 8) | pixels[off + 2];
+                if (color == 0) continue;
+                if (colorToProvince.TryGetValue(color, out var provId))
+                {
+                    authoredStates[cell] = stateByProv[provId];
+                    authoredControl[cell] = nationByProv[provId];
+                }
+            }
+
+            if (RegionFingerprint(authoredStates) != stamped.Value)
+                return false;
+
+            Array.Copy(authoredStates, states, cellCount);
+            for (var cell = 0; cell < cellCount; cell++)
+                if (authoredStates[cell] != 0)
+                    control[cell] = authoredControl[cell];
+
+            lock (PrefetchLock)
+                _prefetched = new PrefetchedProvinceMap(provincePath, definitionPath, raster, colorToProvince);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public static bool TryBuildProvinceTopology(ushort[] states, ushort[] control, int width, int height,
@@ -397,17 +558,26 @@ public static class MapRasterCatalog
         }
         try
         {
-            // The ground picture is read on another core while the provinces' is: neither
-            // needs the other until the terrain is counted province by province.
-            var ground = Task.Run(TerrainCatalog.LoadTerrainMap);
-            var raster = DataMapPng.LoadRgb(ProvincePath);
-            var definitions = LoadDefinitions(DefinitionPath);
+            // Read terrain, province definitions, and the province raster in parallel: none
+            // of the three depend on each other until FromColorRaster/AttachTerrain merge them.
+            // If ReconcileCrossArchitectureRegions already decoded provinces.png + definition.csv,
+            // consume the 1-shot prefetch instead of decoding them twice.
+            var groundTask = Task.Run(TerrainCatalog.LoadTerrainMap);
+            RgbDataMap raster;
+            Dictionary<int, int> definitions;
+            if (!TryTakePrefetch(ProvincePath, DefinitionPath, out raster, out definitions))
+            {
+                var definitionsTask = Task.Run(() => LoadDefinitions(DefinitionPath));
+                raster = DataMapPng.LoadRgb(ProvincePath);
+                definitions = definitionsTask.GetAwaiter().GetResult();
+            }
             topology = ProvinceTopology.FromColorRaster(states, control, width, height, raster, definitions);
-            topology.AttachTerrain(ground.GetAwaiter().GetResult());
+            topology.AttachTerrain(groundTask.GetAwaiter().GetResult());
             // The straits an army can walk over (map_data/crossings) are part of what is next to
             // what, so they are on the graph before anybody is handed it: the game, the bench
             // and every test stand read the map through here and get the same edges.
             LandCrossings.Attach(topology);
+            TerritorialTopology.ApplyProvinceSliverHealing(topology);
             message =$"{Path.GetFileName(ProvincePath)} + {Path.GetFileName(DefinitionPath)}";
             return true;
         }
@@ -428,14 +598,19 @@ public static class MapRasterCatalog
         }
         try
         {
+            var lakesTask = Task.Run(() => DataMapPng.LoadRgb(LakePath));
             var rivers = DataMapPng.LoadRgb(RiverPath);
-            var lakes = DataMapPng.LoadRgb(LakePath);
+            var lakes = lakesTask.GetAwaiter().GetResult();
             RequireDimensions(rivers, width, height, RiverFile);
             RequireDimensions(lakes, width, height, LakeFile);
-            var pixels = new byte[width * height * 2];
-            for (var cell = 0; cell < width * height; cell++)
+            var cellCount = width * height;
+            var pixels = new byte[cellCount * 2];
+            var riverPixels = rivers.Pixels;
+            var lakePixels = lakes.Pixels;
+            for (var cell = 0; cell < cellCount; cell++)
             {
-                var riverColor = Packed(rivers.Pixels, cell * 3);
+                var off = cell * 3;
+                var riverColor = (riverPixels[off] << 16) | (riverPixels[off + 1] << 8) | riverPixels[off + 2];
                 pixels[cell * 2 + 1] = riverColor switch
                 {
                     0x000000 => 0,
@@ -444,7 +619,7 @@ public static class MapRasterCatalog
                     0x2DD4FF => 225,
                     _ => throw new InvalidDataException($"Unknown river colour #{riverColor:X6} at pixel {cell}; use the documented palette.")
                 };
-                var lakeColor = Packed(lakes.Pixels, cell * 3);
+                var lakeColor = (lakePixels[off] << 16) | (lakePixels[off + 1] << 8) | lakePixels[off + 2];
                 pixels[cell * 2] = lakeColor switch
                 {
                     0x000000 => 0,
@@ -520,21 +695,85 @@ public static class MapRasterCatalog
 
     private static Dictionary<int, int> LoadDefinitions(string path)
     {
-        var result = new Dictionary<int, int>();
-        foreach (var raw in File.ReadLines(path).Skip(1))
+        var result = new Dictionary<int, int>(40000);
+        using var reader = new StreamReader(path, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 65536);
+        _ = reader.ReadLine(); // header
+        string raw;
+        while ((raw = reader.ReadLine()) is not null)
         {
-            if (string.IsNullOrWhiteSpace(raw) || raw.TrimStart().StartsWith('#')) continue;
-            var columns = raw.Split(';');
-            if (columns.Length < 4 || !int.TryParse(columns[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ||
-                !byte.TryParse(columns[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var r) ||
-                !byte.TryParse(columns[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var g) ||
-                !byte.TryParse(columns[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out var b) || id <= 0 || id > ushort.MaxValue)
+            var span = raw.AsSpan().TrimStart();
+            if (span.IsEmpty || span[0] == '#') continue;
+            if (!TryNextIntColumn(ref span, out var id) ||
+                !TryNextByteColumn(ref span, out var r) ||
+                !TryNextByteColumn(ref span, out var g) ||
+                !TryNextByteColumn(ref span, out var b) ||
+                id <= 0 || id > ushort.MaxValue)
                 throw new InvalidDataException($"Invalid province definition: {raw}");
             var color = (r << 16) | (g << 8) | b;
             if (color == 0 || !result.TryAdd(color, id)) throw new InvalidDataException($"Duplicate or black province colour in definition.csv: {raw}");
         }
         if (result.Count == 0) throw new InvalidDataException("definition.csv contains no provinces.");
         return result;
+    }
+
+    private sealed record FullProvinceDefinitions(
+        Dictionary<int, int> ColorToProvince,
+        ushort[] StateByProvince,
+        ushort[] NationByProvince);
+
+    private static FullProvinceDefinitions LoadFullDefinitions(string path)
+    {
+        var colorToProvince = new Dictionary<int, int>(40000);
+        var stateByProv = new ushort[ushort.MaxValue + 1];
+        var nationByProv = new ushort[ushort.MaxValue + 1];
+        using var reader = new StreamReader(path, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 65536);
+        _ = reader.ReadLine(); // header
+        string raw;
+        while ((raw = reader.ReadLine()) is not null)
+        {
+            var span = raw.AsSpan().TrimStart();
+            if (span.IsEmpty || span[0] == '#') continue;
+            if (!TryNextIntColumn(ref span, out var id) ||
+                !TryNextByteColumn(ref span, out var r) ||
+                !TryNextByteColumn(ref span, out var g) ||
+                !TryNextByteColumn(ref span, out var b) ||
+                !TryNextUshortColumn(ref span, out var stateId) ||
+                !TryNextUshortColumn(ref span, out var nationId) ||
+                id <= 0 || id > ushort.MaxValue)
+                return null;
+            var color = (r << 16) | (g << 8) | b;
+            if (color == 0 || !colorToProvince.TryAdd(color, id)) return null;
+            stateByProv[id] = stateId;
+            nationByProv[id] = nationId;
+        }
+        return colorToProvince.Count > 0 ? new FullProvinceDefinitions(colorToProvince, stateByProv, nationByProv) : null;
+    }
+
+    private static bool TryNextUshortColumn(ref ReadOnlySpan<char> span, out ushort value)
+    {
+        var sep = span.IndexOf(';');
+        ReadOnlySpan<char> col;
+        if (sep < 0) { col = span; span = ReadOnlySpan<char>.Empty; }
+        else { col = span.Slice(0, sep); span = span.Slice(sep + 1); }
+        return ushort.TryParse(col, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryNextIntColumn(ref ReadOnlySpan<char> span, out int value)
+    {
+        var sep = span.IndexOf(';');
+        ReadOnlySpan<char> col;
+        if (sep < 0) { col = span; span = ReadOnlySpan<char>.Empty; }
+        else { col = span.Slice(0, sep); span = span.Slice(sep + 1); }
+        return int.TryParse(col, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryNextByteColumn(ref ReadOnlySpan<char> span, out byte value)
+    {
+        var sep = span.IndexOf(';');
+        ReadOnlySpan<char> col;
+        if (sep < 0) { col = span; span = ReadOnlySpan<char>.Empty; }
+        else { col = span.Slice(0, sep); span = span.Slice(sep + 1); }
+        return byte.TryParse(col, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
     }
 
     private static Dictionary<string, string> ReadDescriptor(string path, List<string> errors)

@@ -354,19 +354,20 @@ public static class Escalation
 
         List<DiplomaticRelation> candidates;
         using (SimProfiler.Measure("escalation")) candidates = Candidates(c);
-        yield return 0;
-        for (var start = 0; start < candidates.Count; start += 16)
+        if (Campaign.StageOverdue()) yield return 0;
+        for (var start = 0; start < candidates.Count; start += 128)
         {
+            var end = Math.Min(candidates.Count, start + 128);
             using (SimProfiler.Measure("escalation"))
-                for (var index = start; index < Math.Min(candidates.Count, start + 16); index++)
+                for (var index = start; index < end; index++)
                     Review(c, candidates[index], every);
-            yield return 0;
+            if (end < candidates.Count && Campaign.StageOverdue()) yield return 0;
         }
         candidates.Clear();
         using (SimProfiler.Measure("escalation")) GrowWars(c, every);
-        yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
         using (SimProfiler.Measure("escalation")) EndBorderWars(c, every);
-        yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
         using (SimProfiler.Measure("escalation")) ReviewCrises(c, every);
     }
 
@@ -376,6 +377,7 @@ public static class Escalation
     /// </summary>
     [ThreadStatic] private static List<long> _candidateKeysScratch;
     [ThreadStatic] private static List<DiplomaticRelation> _candidateRelationsScratch;
+    [ThreadStatic] private static bool[] _liveNationDenseScratch;
 
     private static List<DiplomaticRelation> Candidates(Campaign c)
     {
@@ -385,29 +387,85 @@ public static class Escalation
         // then sorted and made unique, which is what the sorted set this used to be did one
         // insertion at a time: the same keys in the same order, so the same relations are
         // reviewed (and the same missing neighbour relations made) in the same sequence.
+        var active = c.ActiveNations;
+        var maxLiveId = 0;
+        for (var i = 0; i < active.Count; i++)
+        {
+            var n = active[i];
+            if (n.Movement is null && n.Population > 0 && n.Id > maxLiveId) maxLiveId = n.Id;
+        }
+        var denseLimit = Math.Min(maxLiveId + 1, 16384);
+        var liveDense = _liveNationDenseScratch;
+        if (liveDense is null || liveDense.Length < denseLimit)
+            _liveNationDenseScratch = liveDense = new bool[Math.Max(denseLimit, 512)];
+        else Array.Clear(liveDense, 0, denseLimit);
+        HashSet<int> liveOverflow = null;
+        for (var i = 0; i < active.Count; i++)
+        {
+            var n = active[i];
+            if (n.Movement is not null || n.Population <= 0) continue;
+            if ((uint)n.Id < (uint)denseLimit) liveDense[n.Id] = true;
+            else (liveOverflow ??= new HashSet<int>()).Add(n.Id);
+        }
+
         var relations = c.Relations;
         var count = relations.Count;
-        var rows = System.Buffers.ArrayPool<DiplomaticRelation>.Shared.Rent(Math.Max(1, count));
-        var pairKeys = System.Buffers.ArrayPool<long>.Shared.Rent(Math.Max(1, count));
-        var keep = System.Buffers.ArrayPool<bool>.Shared.Rent(Math.Max(1, count));
         var keys = _candidateKeysScratch ??= new List<long>();
         keys.Clear();
-        try
+        if (count > 0)
         {
-            relations.Values.CopyTo(rows, 0);
-            relations.Keys.CopyTo(pairKeys, 0);
-            DeterministicParallel.For(c, 0, count, index => keep[index] = Carries(c, rows[index]), minItems: 2048);
-            for (var index = 0; index < count; index++)
-                if (keep[index]) keys.Add(pairKeys[index]);
+            if (count >= 2048 && DeterministicParallel.Enabled(c))
+            {
+                var rows = System.Buffers.ArrayPool<DiplomaticRelation>.Shared.Rent(count);
+                var keep = System.Buffers.ArrayPool<bool>.Shared.Rent(count);
+                try
+                {
+                    relations.Values.CopyTo(rows, 0);
+                    DeterministicParallel.ForRange(c, 0, count, (from, to) =>
+                    {
+                        for (var index = from; index < to; index++)
+                        {
+                            var rel = rows[index];
+                            var liveA = (uint)rel.A < (uint)denseLimit ? liveDense[rel.A] : (liveOverflow is not null && liveOverflow.Contains(rel.A));
+                            if (!liveA) { keep[index] = false; continue; }
+                            var liveB = (uint)rel.B < (uint)denseLimit ? liveDense[rel.B] : (liveOverflow is not null && liveOverflow.Contains(rel.B));
+                            if (!liveB) { keep[index] = false; continue; }
+                            keep[index] = CarriesFields(rel);
+                        }
+                    }, minItems: 2048);
+                    for (var index = 0; index < count; index++)
+                    {
+                        if (!keep[index]) continue;
+                        var rel = rows[index];
+                        var lo = rel.A < rel.B ? rel.A : rel.B;
+                        var hi = rel.A < rel.B ? rel.B : rel.A;
+                        keys.Add(((long)lo << 32) | (uint)hi);
+                    }
+                }
+                finally
+                {
+                    System.Buffers.ArrayPool<DiplomaticRelation>.Shared.Return(rows, clearArray: true);
+                    System.Buffers.ArrayPool<bool>.Shared.Return(keep);
+                }
+            }
+            else
+            {
+                foreach (var rel in relations.Values)
+                {
+                    var liveA = (uint)rel.A < (uint)denseLimit ? liveDense[rel.A] : (liveOverflow is not null && liveOverflow.Contains(rel.A));
+                    if (!liveA) continue;
+                    var liveB = (uint)rel.B < (uint)denseLimit ? liveDense[rel.B] : (liveOverflow is not null && liveOverflow.Contains(rel.B));
+                    if (!liveB) continue;
+                    if (!CarriesFields(rel)) continue;
+                    var lo = rel.A < rel.B ? rel.A : rel.B;
+                    var hi = rel.A < rel.B ? rel.B : rel.A;
+                    keys.Add(((long)lo << 32) | (uint)hi);
+                }
+            }
         }
-        finally
+        for (var ni = 0; ni < active.Count; ni++)
         {
-            System.Buffers.ArrayPool<DiplomaticRelation>.Shared.Return(rows, clearArray: true);
-            System.Buffers.ArrayPool<long>.Shared.Return(pairKeys);
-            System.Buffers.ArrayPool<bool>.Shared.Return(keep);
-        }
-        foreach (var nation in c.Nations)
-        {
+            var nation = active[ni];
             if (nation.Movement is not null || nation.Population <= 0) continue;
             foreach (var mapIndex in CampaignDiplomacy.Neighbours(c, nation.MapIndex))
             {
@@ -433,6 +491,13 @@ public static class Escalation
         return result;
     }
 
+    private static bool CarriesFields(DiplomaticRelation relation) =>
+        relation.Tension > 0.01f || relation.StructuralTension > 0f || relation.GrievanceA > 0.01f ||
+        relation.GrievanceB > 0.01f || relation.Opinion < -20f ||
+        relation.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar ||
+        OpinionSystem.Has(relation, "refused_our_ultimatum") ||
+        OpinionSystem.Has(relation, "took_our_land");
+
     /// <summary>Whether a relation already carries something worth weighing. Reads only; asked from workers.</summary>
     private static bool Carries(Campaign c, DiplomaticRelation relation)
     {
@@ -440,11 +505,7 @@ public static class Escalation
         var b = c.NationById(relation.B);
         if (a is null || b is null || a.Movement is not null || b.Movement is not null ||
             a.Population <= 0 || b.Population <= 0) return false;
-        return relation.Tension > 0.01f || relation.StructuralTension > 0f || relation.GrievanceA > 0.01f ||
-               relation.GrievanceB > 0.01f || relation.Opinion < -20f ||
-               relation.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar ||
-               OpinionSystem.Has(relation, "refused_our_ultimatum") ||
-               OpinionSystem.Has(relation, "took_our_land");
+        return CarriesFields(relation);
     }
 
     private static void Review(Campaign c, DiplomaticRelation relation, int days)
@@ -470,10 +531,11 @@ public static class Escalation
             return;
         }
 
+        var globalCycle = GeopoliticalCycle.GlobalTensionOffset(c);
         if (relation.TensionAnchor >= 0f)
         {
             relation.TensionBaseline = 0f;
-            relation.TensionBaseline = relation.TensionAnchor - Drivers(c, relation).Target;
+            relation.TensionBaseline = relation.TensionAnchor - DriversCore(c, relation, a, b, globalCycle).Target;
             relation.TensionAnchor = -1f;
         }
         else if (relation.TensionBaseline != 0f)
@@ -482,7 +544,7 @@ public static class Escalation
             if (MathF.Abs(relation.TensionBaseline) < 0.05f) relation.TensionBaseline = 0f;
         }
 
-        var drivers = Drivers(c, relation);
+        var drivers = DriversCore(c, relation, a, b, globalCycle);
         var rate = drivers.Target > relation.Tension ? defines.TensionRiseRate : defines.TensionFallRate;
         var share = 1f - MathF.Pow(1f - M.Clamp01(rate), days / 7f);
         relation.Tension += (drivers.Target - relation.Tension) * share;
@@ -716,6 +778,11 @@ public static class Escalation
         var a = c?.NationById(relation?.A ?? -1);
         var b = c?.NationById(relation?.B ?? -1);
         if (a is null || b is null) return default;
+        return DriversCore(c, relation, a, b, GeopoliticalCycle.GlobalTensionOffset(c));
+    }
+
+    private static TensionDrivers DriversCore(Campaign c, DiplomaticRelation relation, Nation a, Nation b, float globalCycle)
+    {
         var defines = c.Defines;
         var structural = MathF.Max(0f, relation.StructuralTension);
         var hostility = MathF.Max(0f, -relation.Opinion) * defines.TensionFromHostility;
@@ -733,10 +800,25 @@ public static class Escalation
         if (relation.GuaranteeByA || relation.GuaranteeByB) factor *= 0.4f;
         if (a.AnswersTo(b.Id) || b.AnswersTo(a.Id)) factor *= 0.2f;
         // Structural tension is not softened by distance: an armistice line is an armistice line.
-        var globalCycle = GeopoliticalCycle.GlobalTensionOffset(c);
+        var bilateralCycle = GeopoliticalCycle.BilateralRealignmentBias(c, a, b) * -5.5f * factor;
+        var straitDrift = 0f;
+        if (c.ElapsedDays > 0 &&
+            ((string.Equals(a.Tag, "TWN", StringComparison.OrdinalIgnoreCase) && string.Equals(b.Tag, "CHN", StringComparison.OrdinalIgnoreCase)) ||
+             (string.Equals(a.Tag, "CHN", StringComparison.OrdinalIgnoreCase) && string.Equals(b.Tag, "TWN", StringComparison.OrdinalIgnoreCase))))
+        {
+            var twn = string.Equals(a.Tag, "TWN", StringComparison.OrdinalIgnoreCase) ? a : b;
+            var chn = twn.Id == a.Id ? b : a;
+            straitDrift = MainlandReclamation.EvaluateStraitPosture(c, twn, chn) switch
+            {
+                CrossStraitPosture.DiplomaticDetente => -6.0f,
+                CrossStraitPosture.AsymmetricCrisis => 7.0f,
+                CrossStraitPosture.AmphibiousReclamation => 3.5f,
+                _ => 0f
+            };
+        }
         var reasons = structural * MathF.Max(factor, MathF.Min(1f, factor * 2f)) +
                       (hostility + grievance + lostLand + rivalry + proxy + ideology) * factor;
-        var target = M.Clamp(reasons + relation.TensionBaseline + globalCycle, 0f, 100f);
+        var target = M.Clamp(reasons + relation.TensionBaseline + globalCycle + bilateralCycle + straitDrift, 0f, 100f);
         return new TensionDrivers(structural, hostility, grievance, lostLand, rivalry, proxy, ideology, factor, target,
             relation.TensionBaseline);
     }
@@ -748,14 +830,18 @@ public static class Escalation
         var weeks = days / 7f;
         var heat = 1f + MathF.Max(0f, relation.Tension - defines.TensionClashesAt) / 25f;
         var men = defines.ClashLossesPerWeek * weeks * heat * (border ? 1f : 0.35f);
-        foreach (var side in new[] { a, b })
-        {
-            var lost = MathF.Min(MathF.Max(0f, side.ManpowerReserve), men);
-            side.ManpowerReserve -= lost;
-            relation.ClashLosses += lost;
-            side.WarSupport = M.Clamp01(side.WarSupport + defines.ClashWarSupportPerWeek * weeks);
-            if (border) ModifierSystem.Grant(c, side, "border_clashes", days * 2);
-        }
+        var wsGain = defines.ClashWarSupportPerWeek * weeks;
+        ClashSide(c, relation, a, men, wsGain, border, days);
+        ClashSide(c, relation, b, men, wsGain, border, days);
+    }
+
+    private static void ClashSide(Campaign c, DiplomaticRelation relation, Nation side, float men, float wsGain, bool border, int days)
+    {
+        var lost = MathF.Min(MathF.Max(0f, side.ManpowerReserve), men);
+        side.ManpowerReserve -= lost;
+        relation.ClashLosses += lost;
+        side.WarSupport = M.Clamp01(side.WarSupport + wsGain);
+        if (border) ModifierSystem.Grant(c, side, "border_clashes", days * 2);
     }
 
     private static void MaybeIncident(Campaign c, DiplomaticRelation relation, Nation a, Nation b, bool border, int days)
@@ -764,23 +850,39 @@ public static class Escalation
         var stage = (int)StageOf(relation);
         if (stage <= 0) return;
         var heat = relation.Tension / 100f;
-        var chance = defines.IncidentChance * heat * heat * (border ? 1f : 0.4f) * days / 7f;
+        var eraScale = GeopoliticalCycle.CurrentEraRegime(c) switch
+        {
+            GlobalEraRegime.RevisionistTide => 1.22f,
+            GlobalEraRegime.PostImperialTurbulence => 1.18f,
+            GlobalEraRegime.MultipolarConcert => 0.82f,
+            GlobalEraRegime.ArmedDetente => 0.94f,
+            _ => 1f
+        };
+        var realignment = GeopoliticalCycle.BilateralRealignmentBias(c, a, b);
+        var pairScale = 1f - realignment * 0.25f;
+        var chance = defines.IncidentChance * heat * heat * (border ? 1f : 0.4f) * days / 7f * eraScale * pairScale;
         if (Roll(c.Seed, relation.A, relation.B, c.ElapsedDays, 11) >= chance) return;
 
         var naval = HasNavy(c, a) && HasNavy(c, b);
         var total = 0f;
-        foreach (var incident in IncidentCatalog.All)
-            if (Fits(incident, stage, border, naval)) total += incident.Weight;
+        IncidentDefinition lastFit = null;
+        var allIncidents = IncidentCatalog.All;
+        for (var i = 0; i < allIncidents.Count; i++)
+        {
+            var incident = allIncidents[i];
+            if (Fits(incident, stage, border, naval)) { total += incident.Weight; lastFit = incident; }
+        }
         if (total <= 0f) return;
         var pick = Roll(c.Seed, relation.A, relation.B, c.ElapsedDays, 23) * total;
         IncidentDefinition chosen = null;
-        foreach (var incident in IncidentCatalog.All)
+        for (var i = 0; i < allIncidents.Count; i++)
         {
+            var incident = allIncidents[i];
             if (!Fits(incident, stage, border, naval)) continue;
             pick -= incident.Weight;
             if (pick <= 0f) { chosen = incident; break; }
         }
-        chosen ??= IncidentCatalog.All.LastOrDefault(incident => Fits(incident, stage, border, naval));
+        chosen ??= lastFit;
         if (chosen is null) return;
 
         // Who starts it: the side with more against the other, more often.
@@ -796,8 +898,9 @@ public static class Escalation
 
     private static bool HasNavy(Campaign c, Nation nation)
     {
-        foreach (var fleet in c.Fleets)
-            if (fleet.NationId == nation.Id && fleet.Hulls > 0) return true;
+        var fleets = c.Fleets;
+        for (var i = 0; i < fleets.Count; i++)
+            if (fleets[i].NationId == nation.Id && fleets[i].Hulls > 0) return true;
         return false;
     }
 
@@ -815,12 +918,14 @@ public static class Escalation
             else relation.GrievanceB = M.Clamp(relation.GrievanceB + incident.Grievance, 0f, c.Defines.GrievanceCap);
         }
         if (incident.Losses > 0f)
-            foreach (var side in new[] { by, against })
-            {
-                var lost = MathF.Min(MathF.Max(0f, side.ManpowerReserve), incident.Losses);
-                side.ManpowerReserve -= lost;
-                relation.ClashLosses += lost;
-            }
+        {
+            var lostBy = MathF.Min(MathF.Max(0f, by.ManpowerReserve), incident.Losses);
+            by.ManpowerReserve -= lostBy;
+            relation.ClashLosses += lostBy;
+            var lostAg = MathF.Min(MathF.Max(0f, against.ManpowerReserve), incident.Losses);
+            against.ManpowerReserve -= lostAg;
+            relation.ClashLosses += lostAg;
+        }
         if (incident.WarSupport != 0f) against.WarSupport = M.Clamp01(against.WarSupport + incident.WarSupport);
         if (incident.Opinion.Length > 0) OpinionSystem.Remember(c, relation, incident.Opinion);
         relation.LastIncident = incident.Id;
@@ -867,7 +972,8 @@ public static class Escalation
         // crisis adds nothing - the Korean armistice line was "in crisis" for seventy years
         // without either side marching - and grievance counts for half only while it lasts.
         var clashes = M.Clamp01((relation.Tension - defines.TensionClashesAt) / MathF.Max(1f, 100f - defines.TensionClashesAt));
-        return clashes + 0.5f * M.Clamp01(relation.GrievanceOf(nation.Id) / 100f);
+        return (clashes + 0.5f * M.Clamp01(relation.GrievanceOf(nation.Id) / 100f)) *
+               AiTemper.EraAggressionModifier(c, nation);
     }
 
     /// <summary>What the size of a war takes off the acceptance of anything short of a surrender.</summary>
@@ -937,6 +1043,8 @@ public static class Escalation
     /// has lost most, as a share of its people; it does not shrink back, because the dead do not
     /// come back either. Each stage is announced and worn as a modifier by everybody in it.
     /// </summary>
+    [ThreadStatic] private static List<StrategicWar> _limitedWarsScratch;
+
     private static void GrowWars(Campaign c, int days)
     {
         var defines = c.Defines;
@@ -964,18 +1072,25 @@ public static class Escalation
             }
             if (war.Intensity <= 0) continue;
             var modifier = war.Intensity >= 2 ? "total_war" : "major_war";
-            foreach (var id in war.Side(true).Concat(war.Side(false)))
-            {
-                var nation = c.NationById(id);
-                if (nation is null || nation.Movement is not null) continue;
-                ModifierSystem.Grant(c, nation, modifier, days * 2);
-                if (war.Intensity < 2) continue;
-                // The call-up of a total war, up to the ceiling everyone has.
-                var ceiling = nation.Population * defines.MobilisationCeilingShare * 1.5f;
-                if (nation.ManpowerReserve < ceiling)
-                    nation.ManpowerReserve = MathF.Min(ceiling,
-                        nation.ManpowerReserve + nation.Population * defines.TotalWarMobilisation * days / 7f);
-            }
+            var totalWar = war.Intensity >= 2;
+            ApplyTotalWarSide(c, war.Side(true), modifier, defines, days, totalWar);
+            ApplyTotalWarSide(c, war.Side(false), modifier, defines, days, totalWar);
+        }
+    }
+
+    private static void ApplyTotalWarSide(Campaign c, IEnumerable<int> sideIds, string modifier, Defines defines, int days, bool totalWar)
+    {
+        foreach (var id in sideIds)
+        {
+            var nation = c.NationById(id);
+            if (nation is null || nation.Movement is not null) continue;
+            ModifierSystem.Grant(c, nation, modifier, days * 2);
+            if (!totalWar) continue;
+            // The call-up of a total war, up to the ceiling everyone has.
+            var ceiling = nation.Population * defines.MobilisationCeilingShare * 1.5f;
+            if (nation.ManpowerReserve < ceiling)
+                nation.ManpowerReserve = MathF.Min(ceiling,
+                    nation.ManpowerReserve + nation.Population * defines.TotalWarMobilisation * days / 7f);
         }
     }
 
@@ -1113,9 +1228,11 @@ public static class Escalation
     {
         // Ending one war rebuilds the live list. This week keeps the wars it started with.
         var live = Warfare.LiveWars(c);
-        var open = new List<StrategicWar>(live.Count);
+        var open = _limitedWarsScratch ??= new List<StrategicWar>();
+        open.Clear();
         for (var index = 0; index < live.Count; index++)
             if (live[index].Limited) open.Add(live[index]);
+        if (open.Count == 0) return;
         for (var index = 0; index < open.Count; index++)
         {
             var war = open[index];
@@ -1137,6 +1254,7 @@ public static class Escalation
             // Refused by the rules (a lock, a pending offer): it becomes the war it now is.
             if (!war.Ended) war.Limited = false;
         }
+        open.Clear();
     }
 
     // ------------------------------------------------------------------------- talks
@@ -1268,15 +1386,43 @@ public static class Escalation
         return true;
     }
 
+    [ThreadStatic] private static List<DiplomaticRelation> _topCrisesScratch;
+
+    private static int CompareHotRelations(DiplomaticRelation x, DiplomaticRelation y)
+    {
+        var cmp = y.Tension.CompareTo(x.Tension);
+        if (cmp != 0) return cmp;
+        cmp = x.A.CompareTo(y.A);
+        return cmp != 0 ? cmp : x.B.CompareTo(y.B);
+    }
+
     private static void ReviewCrises(Campaign c, int days)
     {
         var powers = AllianceSystem.GreatPowers(c);
         if (powers.Count == 0) return;
-        var hot = Hottest(c, c.Defines.TensionCrisisAt).Take(8).ToList();
+        var hot = _topCrisesScratch ??= new List<DiplomaticRelation>(8);
+        hot.Clear();
+        var above = c.Defines.TensionCrisisAt;
+        foreach (var relation in c.Relations.Values)
+        {
+            if (relation.Tension <= above || relation.TensionStage >= (int)TensionStage.War) continue;
+            if (hot.Count == 8 && CompareHotRelations(relation, hot[7]) >= 0) continue;
+            if (c.NationById(relation.A) is not { Population: > 0, Movement: null } ||
+                c.NationById(relation.B) is not { Population: > 0, Movement: null }) continue;
+            var pos = hot.Count;
+            while (pos > 0 && CompareHotRelations(relation, hot[pos - 1]) < 0) pos--;
+            if (hot.Count < 8) hot.Insert(pos, relation);
+            else if (pos < 8)
+            {
+                for (var k = 7; k > pos; k--) hot[k] = hot[k - 1];
+                hot[pos] = relation;
+            }
+        }
         if (hot.Count == 0) return;
 
-        foreach (var relation in hot)
+        for (var hi = 0; hi < hot.Count; hi++)
         {
+            var relation = hot[hi];
             var a = c.NationById(relation.A);
             var b = c.NationById(relation.B);
             if (a is null || b is null || a.Population <= 0 || b.Population <= 0) continue;

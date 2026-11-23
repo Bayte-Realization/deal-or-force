@@ -195,41 +195,49 @@ public static class NavalOperations
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(NavalOperations))) yield break;
         var defines = campaign.Defines;
-        foreach (var fleet in campaign.Fleets) fleet.InAction = false;
+        var fleets = campaign.Fleets;
+        for (var i = 0; i < fleets.Count; i++) fleets[i].InAction = false;
 
         // Everything below is a rate per day and this runs per step, so each takes the
         // step's share. Without it a fleet at an hourly step resupplied, repaired and
         // recovered its order twenty-four times faster than the number beside it says.
         var share = campaign.TickScale;
-        yield return 0;
+        var baselineSpend = MathF.Max(0.01f, defines.BaselineMilitarySpending);
+        var readinessBlend = 1f - MathF.Pow(1f - M.Clamp01(defines.FleetReadinessDrift), share);
+        var supplyPortGain = defines.FleetSupplyInPortPerDay * share;
+        var orgPortGain = defines.FleetOrganisationInPortPerDay * share;
+        var repairPortGain = defines.FleetRepairInPortPerDay * share;
+        var supplySeaCost = defines.FleetSupplyAtSeaPerDay * share;
+        var orgSeaGain = defines.FleetOrganisationAtSeaPerDay * share;
+        var reach = MathF.Max(1f, defines.FleetSupplyRangeDegrees);
+        var openNewDay = campaign.StepOpensNewDay;
+        if (Campaign.StageOverdue()) yield return 0;
         var ticked = 0;
-        foreach (var fleet in campaign.Fleets)
+        for (var i = 0; i < fleets.Count; i++)
         {
-            if (++ticked % 32 == 0 || Campaign.StageOverdue()) yield return 0;
+            if (++ticked % 128 == 0 && Campaign.StageOverdue()) yield return 0;
+            var fleet = fleets[i];
             var nation = campaign.NationById(fleet.NationId);
             if (nation is null) continue;
             // A fleet sunk to its last hull is rebuilt in its home port, so it still needs one.
-            if (fleet.Hulls <= 0) { if (campaign.StepOpensNewDay) KeepPort(campaign, fleet, nation); continue; }
+            if (fleet.Hulls <= 0) { if (openNewDay) KeepPort(campaign, fleet, nation); continue; }
 
             // Readiness is what the treasury reaches the fleet with, and it moves slowly:
             // a navy is not re-crewed by a budget line in a fortnight. The drift is a day's, and
             // this is a step, so it takes the step's share of it - the whole of it every hour
             // closed the gap to the budget twenty-four times as fast as the define says.
-            var funded = M.Clamp(nation.MilitarySpending /
-                MathF.Max(0.01f, defines.BaselineMilitarySpending), 0.35f, 1f);
-            fleet.Readiness = M.Lerp(fleet.Readiness, funded,
-                1f - MathF.Pow(1f - M.Clamp01(defines.FleetReadinessDrift), share));
+            var funded = M.Clamp(nation.MilitarySpending / baselineSpend, 0.35f, 1f);
+            fleet.Readiness = M.Lerp(fleet.Readiness, funded, readinessBlend);
 
             // A port is a place somebody holds, and the holder changes. Asked once a day: a
             // port does not fall between two hours of the same afternoon.
-            if (campaign.StepOpensNewDay) KeepPort(campaign, fleet, nation);
+            if (openNewDay) KeepPort(campaign, fleet, nation);
 
             if (fleet.InPort)
             {
-                fleet.Supply = M.Clamp01(fleet.Supply + defines.FleetSupplyInPortPerDay * share);
-                fleet.Organisation = M.Clamp01(fleet.Organisation + defines.FleetOrganisationInPortPerDay * share);
-                fleet.Strength = M.Clamp01(fleet.Strength +
-                    defines.FleetRepairInPortPerDay * share * fleet.Readiness);
+                fleet.Supply = M.Clamp01(fleet.Supply + supplyPortGain);
+                fleet.Organisation = M.Clamp01(fleet.Organisation + orgPortGain);
+                fleet.Strength = M.Clamp01(fleet.Strength + repairPortGain * fleet.Readiness);
             }
             else
             {
@@ -237,16 +245,13 @@ public static class NavalOperations
                 // is - the one bit of naval logistics this game keeps, because it is the one
                 // a player can act on by taking a port. At anchor off a coast that is not a
                 // friendly port it burns them just the same: there is nobody there to refill it.
-                var reach = MathF.Max(1f, defines.FleetSupplyRangeDegrees);
                 var fromHome = M.Clamp01(Distance(fleet.Latitude, fleet.Longitude,
                     fleet.HomeLatitude, fleet.HomeLongitude) / reach);
-                fleet.Supply = M.Clamp01(fleet.Supply -
-                    defines.FleetSupplyAtSeaPerDay * share * (0.45f + fromHome * 0.55f));
-                fleet.Organisation = M.Clamp01(fleet.Organisation +
-                    defines.FleetOrganisationAtSeaPerDay * share * fleet.Supply);
+                fleet.Supply = M.Clamp01(fleet.Supply - supplySeaCost * (0.45f + fromHome * 0.55f));
+                fleet.Organisation = M.Clamp01(fleet.Organisation + orgSeaGain * fleet.Supply);
             }
 
-            Sail(campaign, fleet);
+            if (fleet.HasOrder) Sail(campaign, fleet, nation);
 
             // A loaded fleet that has reached the coast it was sent to puts its army
             // ashore. Everything that then happens - a province changing hands, or a
@@ -255,7 +260,7 @@ public static class NavalOperations
                 NavalInvasion.Land(campaign, fleet, fleet.TargetProvinceId);
         }
 
-        yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
         using (SimProfiler.Measure("    sea:actions")) ResolveActions(campaign);
 
         // A fleet with nothing left afloat is not a fleet. Whoever was aboard went down
@@ -264,14 +269,22 @@ public static class NavalOperations
         {
             var fleet = campaign.Fleets[index];
             if (fleet.Hulls > 0) continue;
-            foreach (var id in fleet.Carried)
+            for (var ci = 0; ci < fleet.Carried.Count; ci++)
             {
-                var army = campaign.Armies.Find(candidate => candidate.Id == id);
+                var army = FindArmyById(campaign, fleet.Carried[ci]);
                 if (army is not null) Attrition.Destroy(campaign, army, "lost at sea");
             }
             fleet.Carried.Clear();
             campaign.Fleets.RemoveAt(index);
         }
+    }
+
+    private static Army FindArmyById(Campaign campaign, int id)
+    {
+        var armies = campaign.Armies;
+        for (var i = 0; i < armies.Count; i++)
+            if (armies[i].Id == id) return armies[i];
+        return null;
     }
 
     // --- ports ------------------------------------------------------------------------
@@ -289,8 +302,10 @@ public static class NavalOperations
         var holder = campaign.NationById(holderId);
         if (nation is not null && nation.IsSubject && nation.OverlordId == holderId) return true;
         if (holder is not null && holder.IsSubject && holder.OverlordId == nationId) return true;
-        foreach (var war in Warfare.OpenWars(campaign))
+        var liveWars = Warfare.LiveWars(campaign);
+        for (var i = 0; i < liveWars.Count; i++)
         {
+            var war = liveWars[i];
             if (war.Ended || !war.Involves(nationId) || !war.Involves(holderId)) continue;
             if (!war.Opposes(nationId, holderId)) return true;
         }
@@ -540,10 +555,13 @@ public static class NavalOperations
 
     /// <summary>Degrees a day at the fleet's present condition.</summary>
     public static float Speed(Campaign campaign, Fleet fleet) =>
+        Speed(campaign, fleet, campaign.NationById(fleet.NationId));
+
+    private static float Speed(Campaign campaign, Fleet fleet, Nation owner) =>
         campaign.Defines.FleetDegreesPerDay *
         M.Clamp(0.35f + fleet.Supply * 0.65f, 0.35f, 1f) *
         M.Clamp(0.50f + fleet.Readiness * 0.50f, 0.5f, 1f) *
-        NationalModifiers.Factor(campaign.NationById(fleet.NationId), "naval_speed");
+        NationalModifiers.FactorSlot(owner, NationalModifiers.SlotNavalSpeed);
 
     /// <summary>Whole days until it gets where it is going, or zero when it is not going anywhere.</summary>
     public static int DaysToGo(Campaign campaign, Fleet fleet) =>
@@ -553,13 +571,21 @@ public static class NavalOperations
     /// Follow the course, at a speed the fleet's condition sets. A course is legs of open
     /// water between waypoints, so a fleet goes round a continent rather than across it.
     /// </summary>
-    private static void Sail(Campaign campaign, Fleet fleet)
+    [ThreadStatic] private static List<float> _courseScratch;
+    [ThreadStatic] private static HashSet<int> _atWarNationsScratch;
+    [ThreadStatic] private static List<Fleet> _combatFleetsScratch;
+
+    private static void Sail(Campaign campaign, Fleet fleet) =>
+        Sail(campaign, fleet, campaign.NationById(fleet.NationId));
+
+    private static void Sail(Campaign campaign, Fleet fleet, Nation owner)
     {
         if (!fleet.HasOrder) return;
         if (!fleet.Routed || fleet.RoutedLatitude != fleet.OrderLatitude ||
             fleet.RoutedLongitude != fleet.OrderLongitude || fleet.Waypoints.Count < 2)
         {
-            var course = new List<float>();
+            var course = _courseScratch ??= new List<float>();
+            course.Clear();
             if (!SeaLanes.Plan(campaign, fleet.NationId, fleet.Latitude, fleet.Longitude,
                     fleet.OrderLatitude, fleet.OrderLongitude, course, out _))
             {
@@ -576,7 +602,7 @@ public static class NavalOperations
 
         // Degrees a DAY, and this is a step - so a crossing that is written as sixty days
         // takes sixty days whatever the clock is set to.
-        var step = Speed(campaign, fleet) * campaign.TickScale;
+        var step = Speed(campaign, fleet, owner) * campaign.TickScale;
         while (step > 0f && fleet.Waypoints.Count >= 2)
         {
             var latitude = fleet.Waypoints[0];
@@ -641,28 +667,51 @@ public static class NavalOperations
     /// </summary>
     private static void ResolveActions(Campaign campaign)
     {
+        var liveWars = Warfare.LiveWars(campaign);
+        if (liveWars.Count == 0) return;
+        var atWarNations = _atWarNationsScratch ??= new HashSet<int>();
+        atWarNations.Clear();
+        for (var wi = 0; wi < liveWars.Count; wi++)
+        {
+            var war = liveWars[wi];
+            if (war.Ended) continue;
+            atWarNations.Add(war.AttackerId);
+            atWarNations.Add(war.DefenderId);
+            foreach (var aid in war.AttackerAllies) atWarNations.Add(aid);
+            foreach (var did in war.DefenderAllies) atWarNations.Add(did);
+        }
+        if (atWarNations.Count == 0) return;
+
         var defines = campaign.Defines;
+        var contactRange = defines.FleetContactRangeDegrees;
         var fleets = campaign.Fleets;
+        var warFleets = _combatFleetsScratch ??= new List<Fleet>();
+        warFleets.Clear();
         for (var index = 0; index < fleets.Count; index++)
         {
-            var mine = fleets[index];
-            if (mine.Hulls <= 0 || mine.ReadyDay > campaign.ElapsedDays || mine.InAction) continue;
-            if (mine.Mission == FleetMission.Anchored) continue;
+            var fleet = fleets[index];
+            if (fleet.Hulls <= 0 || fleet.ReadyDay > campaign.ElapsedDays || fleet.InAction ||
+                fleet.Mission == FleetMission.Anchored || !atWarNations.Contains(fleet.NationId)) continue;
+            warFleets.Add(fleet);
+        }
+        for (var index = 0; index < warFleets.Count; index++)
+        {
+            var mine = warFleets[index];
+            if (mine.Hulls <= 0 || mine.InAction) continue;
 
-            for (var other = index + 1; other < fleets.Count; other++)
+            for (var other = index + 1; other < warFleets.Count; other++)
             {
-                var theirs = fleets[other];
+                var theirs = warFleets[other];
                 if (theirs.Hulls <= 0 || theirs.InAction || theirs.NationId == mine.NationId) continue;
-                if (theirs.ReadyDay > campaign.ElapsedDays) continue;
-                if (theirs.Mission == FleetMission.Anchored) continue;
                 if (Distance(mine.Latitude, mine.Longitude, theirs.Latitude, theirs.Longitude) >
-                    defines.FleetContactRangeDegrees) continue;
+                    contactRange) continue;
                 if (!AtWar(campaign, mine.NationId, theirs.NationId)) continue;
 
                 Engage(campaign, mine, theirs);
                 break;
             }
         }
+        warFleets.Clear();
     }
 
     private static void Engage(Campaign campaign, Fleet left, Fleet right)
@@ -714,9 +763,9 @@ public static class NavalOperations
         if (!fleet.IsLoaded) return;
         var lost = campaign.Defines.InvasionLossesPerActionAtSea * M.Clamp(pressure, 0.25f, 4f) * share;
         if (lost <= 0f) return;
-        foreach (var id in fleet.Carried)
+        for (var ci = 0; ci < fleet.Carried.Count; ci++)
         {
-            var army = campaign.Armies.Find(candidate => candidate.Id == id);
+            var army = FindArmyById(campaign, fleet.Carried[ci]);
             if (army is null) continue;
             army.Strength = M.Clamp01(army.Strength - lost);
             army.Organisation = M.Clamp01(army.Organisation - lost);
@@ -954,7 +1003,8 @@ public static class NavalOperations
     {
         if (campaign is null || !campaign.FeatureEnabled("navy")) return CommerceBatch.Inactive;
 
-        var openWars = Warfare.OpenWars(campaign);
+        var openWars = Warfare.LiveWars(campaign);
+        if (openWars.Count == 0) return CommerceBatch.Inactive;
         var anyWar = false;
         var maxId = -1;
         for (var i = 0; i < campaign.Nations.Count; i++)
@@ -1226,8 +1276,10 @@ public static class NavalOperations
 
     private static bool AtWar(Campaign campaign, int left, int right)
     {
-        foreach (var war in Warfare.OpenWars(campaign))
+        var liveWars = Warfare.LiveWars(campaign);
+        for (var i = 0; i < liveWars.Count; i++)
         {
+            var war = liveWars[i];
             if (war.Ended) continue;
             if (war.Opposes(left, right)) return true;
         }

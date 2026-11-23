@@ -41,6 +41,12 @@ public static partial class DomesticCrises
             target += (d.ScandalApproval - mood.Government) * MathF.Max(0f, d.CoupGovernmentDisapprovalWeight);
             drivers?.Add("The governed do not accept the government");
         }
+        var cleavage = PoliticalCohorts.CrisisPressureContribution(c, n);
+        if (cleavage > 0.001f)
+        {
+            target += cleavage;
+            drivers?.Add("Deep political and regional polarization");
+        }
         var memory = n.DomesticCrisis;
         if (memory is not null && memory.ResponseUntilDay > c.ElapsedDays)
         {
@@ -56,9 +62,13 @@ public static partial class DomesticCrises
 
     private static bool HasDefeat(Campaign c, Nation n)
     {
-        foreach (var war in Warfare.OpenWars(c))
+        var liveWars = Warfare.LiveWars(c);
+        for (var i = 0; i < liveWars.Count; i++)
+        {
+            var war = liveWars[i];
             if (!war.Ended && war.Involves(n.Id) && (war.IsAttacking(n.Id) ? war.WarScore : -war.WarScore) < -15f)
                 return true;
+        }
         return false;
     }
 
@@ -67,8 +77,10 @@ public static partial class DomesticCrises
     {
         double people = 0, radicalism = 0;
         var capitalAnger = 0f;
-        foreach (var region in c.StatesOf(n))
+        var states = c.StatesOf(n);
+        for (var i = 0; i < states.Length; i++)
         {
+            var region = states[i];
             if (region.MapIndex == n.CapitalStateMapIndex) capitalAnger = M.Clamp01(region.Radicalism);
             if (region.Population <= 0) continue;
             people += region.Population;
@@ -77,12 +89,23 @@ public static partial class DomesticCrises
         return Target(c, n, people > 0 ? (float)(radicalism / people) : 0f, capitalAnger);
     }
 
+    private static bool HasEligibleCoupEvent(Campaign c, Nation n)
+    {
+        var all = GovernanceEvents.All;
+        for (var i = 0; i < all.Count; i++)
+        {
+            var t = all[i];
+            if (t.Crisis == "coup" && t.Weight > 0f && GovernanceEvents.Eligible(c, n, t))
+                return true;
+        }
+        return false;
+    }
+
     private static bool Eligible(Campaign c, Nation n) => c.FeatureEnabled("domestic_crises") &&
         c.FeatureEnabled("politics") && MechanicFeatures.SystemEnabled(c, nameof(Coups)) &&
         !n.IsSubject && n.Movement is null && n.FactionId.Length == 0 && !c.Fallen.Contains(n.Id) &&
         n.CoupPlotDay < 0 && c.ElapsedDays - (long)n.LastCoupDay >= Math.Max(0, c.Defines.CoupGraceDays) &&
-        c.StatesOf(n).Length > 0 &&
-        GovernanceEvents.All.Any(t => t.Crisis == "coup" && t.Weight > 0f && GovernanceEvents.Eligible(c, n, t));
+        c.StatesOf(n).Length > 0 && HasEligibleCoupEvent(c, n);
 
     /// <summary>True when the review went as far as attempting a transition of government, whether or not one took.</summary>
     private static bool ReviewPressure(Campaign c, Nation nation, int days)
@@ -104,14 +127,31 @@ public static partial class DomesticCrises
         var required = Math.Max(1, c.Defines.CoupRequiredPressureDays);
         memory.DaysAboveThreshold = (int)Math.Min(required, (long)Math.Max(0, memory.DaysAboveThreshold) + pressuredDays);
         if (memory.DaysAboveThreshold < required) return false;
-        var choices = GovernanceEvents.All.Where(t => t.Crisis == "coup" && t.Weight > 0f &&
-            GovernanceEvents.Eligible(c, nation, t)).ToArray();
-        if (choices.Length == 0) return false;
-        var total = choices.Sum(t => t.Weight);
+        var all = GovernanceEvents.All;
+        var total = 0f;
+        var matchCount = 0;
+        var lastIdx = -1;
+        for (var i = 0; i < all.Count; i++)
+        {
+            var t = all[i];
+            if (t.Crisis == "coup" && t.Weight > 0f && GovernanceEvents.Eligible(c, nation, t))
+            {
+                total += t.Weight;
+                matchCount++;
+                lastIdx = i;
+            }
+        }
+        if (matchCount == 0) return false;
         var roll = c.Random.NextFloat() * total;
-        var chosen = choices[^1];
-        foreach (var candidate in choices)
-        { roll -= candidate.Weight; if (roll <= 0f) { chosen = candidate; break; } }
+        var chosen = all[lastIdx];
+        for (var i = 0; i < all.Count; i++)
+        {
+            var candidate = all[i];
+            if (candidate.Crisis != "coup" || candidate.Weight <= 0f || !GovernanceEvents.Eligible(c, nation, candidate))
+                continue;
+            roll -= candidate.Weight;
+            if (roll <= 0f) { chosen = candidate; break; }
+        }
         if (!GovernanceEvents.ApplyTransition(c, nation, chosen)) return true;
         Coups.RegisterOutcome(c, nation, chosen.Id);
         c.Chronicle.Record(c, "institutional_coup", nation.Id);

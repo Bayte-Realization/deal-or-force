@@ -104,6 +104,97 @@ public partial class ExportVerification
         await Capture("state-affairs-staff");
         game.CloseVisibleCampaignScreen();
         await Wait(.15);
+
+        await VerifyUiClarityAndObserverMode(game);
+    }
+
+    private async Task VerifyUiClarityAndObserverMode(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        var originalPlayer = world.Player.Id;
+        var originalPause = world.IsPaused;
+        try
+        {
+            world.IsPaused = true;
+            // 1. Verify Top-Bar XP Strip is visible with Army, Air, Navy XP cells
+            var xpStrip = game.FindChild("ShellXpStrip", true, false) as Control;
+            var xpArmy = game.FindChild("ShellXp_Army", true, false) as Control;
+            var xpAir = game.FindChild("ShellXp_Air", true, false) as Control;
+            var xpNavy = game.FindChild("ShellXp_Navy", true, false) as Control;
+            Check(xpStrip is { Visible: true } && xpArmy is { Visible: true } &&
+                  xpAir is { Visible: true } && xpNavy is { Visible: true },
+                "top-bar XP strip renders Army, Air and Navy XP cells cleanly");
+
+            // 2. Verify Foreign Country Dossier Diplomacy tab renders rich bilateral, flag-only tiles, and zero horizontal overflow
+            var foreign = world.NationByTag("RUS") ?? world.NationByTag("SYR") ?? world.Nations.FirstOrDefault(n => n.Id != world.Player.Id && n.Population > 0);
+            if (foreign is not null)
+            {
+                game.OpenNewShellCountryDossier(foreign);
+                await Wait(.2);
+                var workPanel = game.FindChild("ShellWorkPanel", true, false) as Control;
+                var dipTab = workPanel?.FindChildren("*", "Button", true, false).OfType<Button>()
+                    .FirstOrDefault(b => string.Equals(b.Text, Loc.Get("Diplomacy"), StringComparison.Ordinal));
+                dipTab?.EmitSignal(BaseButton.SignalName.Pressed);
+                await Wait(.25);
+                var bilateralCard = game.FindChild("ShellDipBilateralCard", true, false) as Control;
+                var fullBtn = game.FindChild("ShellDipAct_Full", true, false) as Button;
+                var dipContent = game.FindChild("ShellDipContent", true, false) as Control;
+                var flagTiles = dipContent?.FindChildren("ShellDipFlag_*", "Button", true, false).OfType<Button>().ToArray() ?? Array.Empty<Button>();
+                var panelRight = workPanel?.GetGlobalRect().End.X ?? float.MaxValue;
+                var anyOverflow = flagTiles.Any(t => t.GetGlobalRect().End.X > panelRight + 1f);
+                var flagSizesOk = flagTiles.All(t => t.Size.X <= 46f && t.Size.Y <= 34f && string.IsNullOrEmpty(t.Text));
+                var flagImgsOk = flagTiles.All(t =>
+                {
+                    var img = t.FindChild("FlagImg", false, false) as TextureRect;
+                    return img is not null && img.Size.X <= t.Size.X && img.Size.Y <= t.Size.Y && img.Size.X >= 20f && img.Size.Y >= 14f;
+                });
+                Check(bilateralCard is { Visible: true } && fullBtn is { Visible: true } && !anyOverflow && flagSizesOk && flagImgsOk,
+                    $"foreign country Diplomacy tab renders bilateral card, {flagTiles.Length} compact full-frame flag-only tiles, and zero horizontal overflow");
+                await Capture("new-shell-diplomacy-dossier");
+                game.CloseNewShellWorkPanel(unpinnedOnly: false);
+                await Wait(.15);
+            }
+
+            // 3. Verify Pause Menu Observer Mode button toggles into observer mode cleanly
+            game.Call("ShowPauseMenu");
+            await Wait(.2);
+            var obsBtn = game.FindChild("PauseToggleObserver", true, false) as Button;
+            Check(obsBtn is { Visible: true }, "Pause Menu exposes PauseToggleObserver button");
+            if (obsBtn is not null)
+            {
+                obsBtn.EmitSignal(BaseButton.SignalName.Pressed);
+                await Wait(.25);
+                var obsBadge = game.FindChild("ShellObserverBadge", true, false) as Control;
+                Check(world.ObserverMode && obsBadge is { Visible: true },
+                    "clicking PauseToggleObserver activates Observer Mode and shows ShellObserverBadge");
+
+                // 4. Verify Observer Mode instant country switch while PAUSED updates HUD on the same frame
+                var target = world.Nations.FirstOrDefault(n => n.Id != world.Player.Id && n.Population > 0);
+                if (target is not null)
+                {
+                    var dayBefore = world.ElapsedDays;
+                    game.VerificationWatchCountry(target);
+                    await Wait(.15);
+                    Check(world.Player.Id == target.Id && world.ElapsedDays == dayBefore,
+                        "Observer country switch updates campaign player immediately while paused");
+                }
+
+                // Exit observer mode back via Pause Menu
+                game.Call("ShowPauseMenu");
+                await Wait(.2);
+                obsBtn.EmitSignal(BaseButton.SignalName.Pressed);
+                await Wait(.2);
+                Check(!world.ObserverMode && world.Player.Id == originalPlayer,
+                    "clicking PauseToggleObserver again exits Observer Mode and restores player seat");
+            }
+        }
+        finally
+        {
+            if (world.ObserverMode) game.Call("ToggleObserverMode");
+            world.ViewAs(originalPlayer);
+            world.IsPaused = originalPause;
+            game.Call("Refresh");
+        }
     }
 
     private async Task VerifyCampaignTopBar(DealOrForceGame game)
@@ -303,6 +394,7 @@ public partial class DealOrForceGame
 
     internal void VerificationCloseDealInbox() => CloseDealComposer();
     internal void VerificationToggleScreen(string screen) => ToggleCampaignScreen(screen);
+    internal void VerificationWatchCountry(Nation nation) => WatchCountry(nation);
 }
 
 public sealed partial class GlobePresentation

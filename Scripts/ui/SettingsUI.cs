@@ -162,6 +162,7 @@ public partial class DealOrForceGame
 
     private void ShowSettings()
     {
+        EnsureScreen("settings", BuildSettingsInterface);
         SettingsRows.RefreshLanguageChoices();
         if (_settingsCategory.Length == 0)
             _settingsCategory = SettingsCatalog.Categories().FirstOrDefault() ?? "game";
@@ -178,7 +179,7 @@ public partial class DealOrForceGame
     /// </summary>
     private void HideSettings()
     {
-        _settingsLayer.Visible = false;
+        if (_settingsLayer is not null) _settingsLayer.Visible = false;
         var somethingElseIsUp = (_hudLayer is { Visible: true }) ||
                                 (_pickerLayer is { Visible: true }) ||
                                 (_networkLayer is { Visible: true }) ||

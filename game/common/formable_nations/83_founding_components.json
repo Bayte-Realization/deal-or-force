@@ -1,4 +1,4 @@
 {
-  "china_reunified": { "minimum_component_share": 1.0 },
+  "china_reunified": { "minimum_component_share": 0.65 },
   "italia_unita": { "minimum_component_share": 1.0 }
 }

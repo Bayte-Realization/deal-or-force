@@ -78,9 +78,15 @@ public static class CultureUnion
             return Loc.Get("Both countries must be alive to unite.");
         if (initiator.IsSubject || partner.IsSubject || initiator.Movement is not null || partner.Movement is not null)
             return Loc.Get("Both countries must be sovereign to unite by consent.");
-        if (CampaignDiplomacy.AtWar(c, initiator.Id, partner.Id) ||
-            Warfare.OpenWars(c).Any(w => !w.Ended && (w.Involves(initiator.Id) || w.Involves(partner.Id))))
+        if (CampaignDiplomacy.AtWar(c, initiator.Id, partner.Id))
             return Loc.Get("Union is a peace-time act; neither country may be at war.");
+        var liveWars = Warfare.LiveWars(c);
+        for (var wi = 0; wi < liveWars.Count; wi++)
+        {
+            var w = liveWars[wi];
+            if (!w.Ended && (w.Involves(initiator.Id) || w.Involves(partner.Id)))
+                return Loc.Get("Union is a peace-time act; neither country may be at war.");
+        }
         if (partner.IsHuman && c.HumanSeats.Count > 1) return Loc.Get("Human countries cannot merge in multiplayer.");
         if ((CampaignDiplomacy.Peek(c, initiator.Id, partner.Id)?.Opinion ?? 0f) < c.Defines.CultureUnionMinimumOpinion)
             return Loc.Get("Relations must not be hostile before union talks.");
@@ -118,8 +124,14 @@ public static class CultureUnion
         initiator.DecisionAvailableDay.Remove(CooldownKey(initiator.Id));
         foreach (var other in c.Nations)
             other.DecisionAvailableDay.Remove(CooldownKey(partner.Id));
-        CapitalCore.Establish(c, initiator,
-            c.StatesOf(initiator).OrderByDescending(s => s.Population).FirstOrDefault());
+        var initStates = c.StatesOf(initiator);
+        ScenarioState capitalState = null;
+        for (var i = 0; i < initStates.Length; i++)
+        {
+            if (capitalState is null || initStates[i].Population > capitalState.Population)
+                capitalState = initStates[i];
+        }
+        CapitalCore.Establish(c, initiator, capitalState);
         c.Chronicle.Record(c, "culture_union", initiator.Id, partner.Id, place);
         DiagnosticLogs.Write("simulation",
             $"CULTURE_UNION initiator={initiator.Tag} joined={partner.Tag} regions={provinces.Count} day={c.ElapsedDays}");
@@ -189,8 +201,10 @@ public static class CultureUnion
     private static List<Nation> KindredList(Campaign c)
     {
         var atWar = new HashSet<int>();
-        foreach (var w in Warfare.OpenWars(c))
+        var liveWars = Warfare.LiveWars(c);
+        for (var wi = 0; wi < liveWars.Count; wi++)
         {
+            var w = liveWars[wi];
             if (w.Ended) continue;
             atWar.Add(w.AttackerId);
             atWar.Add(w.DefenderId);
@@ -198,8 +212,10 @@ public static class CultureUnion
             foreach (var ally in w.DefenderAllies) atWar.Add(ally);
         }
         var list = new List<Nation>();
-        foreach (var n in c.Nations)
+        var active = c.ActiveNations;
+        for (var i = 0; i < active.Count; i++)
         {
+            var n = active[i];
             if (n.IsHuman || n.IsSubject || n.Movement is not null || n.Population <= 0 ||
                 c.Fallen.Contains(n.Id) || atWar.Contains(n.Id)) continue;
             list.Add(n);

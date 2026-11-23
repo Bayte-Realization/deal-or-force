@@ -150,7 +150,7 @@ public partial class DealOrForceGame
         FillNavigator();
         _navigatorLayer!.Visible = true;
         _navigatorLayer.MoveToFront();
-        _navigatorSearch.GrabFocus();
+        Ui.FocusInputIfDesktop(_navigatorSearch);
     }
 
     private void CloseNavigator()

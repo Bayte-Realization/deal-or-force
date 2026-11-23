@@ -167,8 +167,21 @@ public static class ProxyWars
         For(c, war).Where(s => war.IsAttacking(s.ClientId) == attackers);
 
     /// <summary>Two sides each with a backer: a confrontation of the backers through the war.</summary>
-    public static bool IsConfrontation(Campaign c, StrategicWar war) =>
-        war is not null && Backing(c, war, true).Any() && Backing(c, war, false).Any();
+    public static bool IsConfrontation(Campaign c, StrategicWar war)
+    {
+        if (c is null || war is null || c.Sponsorships.Count == 0) return false;
+        bool hasAttacker = false, hasDefender = false;
+        var list = c.Sponsorships;
+        for (var i = 0; i < list.Count; i++)
+        {
+            var s = list[i];
+            if (s.Ended || s.WarId != war.Id) continue;
+            if (war.IsAttacking(s.ClientId)) hasAttacker = true;
+            else hasDefender = true;
+            if (hasAttacker && hasDefender) return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// How much these two countries are on opposite sides of other people's wars, 0 to 3: one
@@ -218,8 +231,14 @@ public static class ProxyWars
         if (level < 1 || level > 3) return Loc.Get("Choose a level of support.");
         if (level > MaximumLevel(sponsor)) return Loc.Get("Your economy is too small for that level of support.");
         if (sponsor.Treasury < WeeklyCost(c, sponsor, level) * 4f) return Loc.Get("Not enough money in the treasury.");
-        if (Active(c).Any(s => s.SponsorId == sponsor.Id && s.WarId == war.Id && war.IsAttacking(s.ClientId) != war.IsAttacking(client.Id)))
-            return Loc.Get("You are already backing the other side.");
+        var clientSide = war.IsAttacking(client.Id);
+        var list = c.Sponsorships;
+        for (var i = 0; i < list.Count; i++)
+        {
+            var s = list[i];
+            if (!s.Ended && s.SponsorId == sponsor.Id && s.WarId == war.Id && war.IsAttacking(s.ClientId) != clientSide)
+                return Loc.Get("You are already backing the other side.");
+        }
         return "";
     }
 
@@ -227,7 +246,14 @@ public static class ProxyWars
     public static bool Sponsor(Campaign c, Nation sponsor, StrategicWar war, Nation client, int level)
     {
         if (c is null || sponsor is null || client is null || war is null) return false;
-        var existing = Active(c).FirstOrDefault(s => s.SponsorId == sponsor.Id && s.WarId == war.Id && s.ClientId == client.Id);
+        Sponsorship existing = null;
+        var list = c.Sponsorships;
+        for (var i = 0; i < list.Count; i++)
+        {
+            var entry = list[i];
+            if (!entry.Ended && entry.SponsorId == sponsor.Id && entry.WarId == war.Id && entry.ClientId == client.Id)
+            { existing = entry; break; }
+        }
         if (level <= 0)
         {
             if (existing is null) return false;
@@ -287,14 +313,47 @@ public static class ProxyWars
             c.Sponsorships.RemoveAll(s => s.Ended && c.ElapsedDays - s.EndedDay > 3650);
     }
 
+    private sealed class DeliverScratch
+    {
+        public readonly Dictionary<int, float> Arms = new();
+        public readonly Dictionary<int, int> Backing = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, DeliverScratch> DeliverScratches = new();
+    [ThreadStatic] private static List<Army> _equipArmiesScratch;
+    [ThreadStatic] private static List<Sponsorship> _considerMineScratch;
+
+    private static int CompareEquipArmy(Army left, Army right)
+    {
+        var cmp = left.Equipment.CompareTo(right.Equipment);
+        return cmp != 0 ? cmp : left.Id.CompareTo(right.Id);
+    }
+
+    private static int BackingCount(Campaign c, StrategicWar war, bool attackers)
+    {
+        var count = 0;
+        var sponsorships = c.Sponsorships;
+        for (var i = 0; i < sponsorships.Count; i++)
+        {
+            var s = sponsorships[i];
+            if (!s.Ended && s.WarId == war.Id && war.IsAttacking(s.ClientId) == attackers)
+                count++;
+        }
+        return count;
+    }
+
     private static IEnumerable<int> DeliverStages(Campaign c, int days)
     {
         var defines = c.Defines;
-        var arms = new Dictionary<int, float>();
-        var backing = new Dictionary<int, int>();
+        var scratch = DeliverScratches.GetOrCreateValue(c);
+        var arms = scratch.Arms;
+        arms.Clear();
+        var backing = scratch.Backing;
+        backing.Clear();
         var delivered = 0;
-        foreach (var s in c.Sponsorships)
+        for (var i = 0; i < c.Sponsorships.Count; i++)
         {
+            var s = c.Sponsorships[i];
             if (++delivered % 64 == 0 || Campaign.StageOverdue()) yield return 0;
             if (s.Ended) continue;
             var sponsor = c.NationById(s.SponsorId);
@@ -346,10 +405,19 @@ public static class ProxyWars
         var defines = c.Defines;
         var budget = value / MathF.Max(0.01f, defines.ProxyEquipmentValue);
         if (budget <= 0f) return;
-        var armies = c.Armies.Where(a => a.NationId == clientId && a.Equipment < 0.999f)
-            .OrderBy(a => a.Equipment).ThenBy(a => a.Id).ToList();
-        foreach (var army in armies)
+        var armies = _equipArmiesScratch ??= new List<Army>(16);
+        armies.Clear();
+        var allArmies = c.Armies;
+        for (var i = 0; i < allArmies.Count; i++)
         {
+            var a = allArmies[i];
+            if (a.NationId == clientId && a.Equipment < 0.999f) armies.Add(a);
+        }
+        if (armies.Count == 0) return;
+        if (armies.Count > 1) armies.Sort(CompareEquipArmy);
+        for (var i = 0; i < armies.Count; i++)
+        {
+            var army = armies[i];
             if (budget <= 0f) break;
             var units = MathF.Max(1f, army.Divisions);
             var need = (1f - army.Equipment) * units;
@@ -366,25 +434,43 @@ public static class ProxyWars
     {
         var defines = c.Defines;
         var cycle = Math.Max(1, defines.ProxyAiReviewDays);
-        var live = Warfare.OpenWars(c).Where(w => !w.Ended).ToArray();
+        var live = Warfare.LiveWars(c);
+        var hasLiveWars = false;
+        for (var wi = 0; wi < live.Count; wi++)
+            if (!live[wi].Ended) { hasLiveWars = true; break; }
         var ticked = 0;
-        foreach (var sponsor in c.Nations)
+        var mine = _considerMineScratch ??= new List<Sponsorship>(8);
+        for (var ni = 0; ni < c.Nations.Count; ni++)
         {
+            var sponsor = c.Nations[ni];
             if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if ((sponsor.Id + c.ElapsedDays) % cycle != 0) continue;
             if (sponsor.IsHuman || sponsor.Movement is not null || sponsor.Population <= 0) continue;
-            var mine = Active(c).Where(s => s.SponsorId == sponsor.Id).ToList();
+            mine.Clear();
+            var sponsorships = c.Sponsorships;
+            for (var si = 0; si < sponsorships.Count; si++)
+            {
+                var s = sponsorships[si];
+                if (!s.Ended && s.SponsorId == sponsor.Id) mine.Add(s);
+            }
 
             // First whether it still wants what it is paying for.
-            foreach (var s in mine)
+            var activeMine = mine.Count;
+            for (var si = 0; si < mine.Count; si++)
             {
+                var s = mine[si];
                 var war = WarById(c, s.WarId);
                 var client = c.NationById(s.ClientId);
                 if (war is null || client is null) continue;
                 var enemy = c.NationById(war.EnemyLeaderOf(client.Id));
                 if (enemy is null) continue;
                 if (c.ElapsedDays < s.CommittedUntilDay) continue;
-                if (Interest(c, sponsor, client, enemy, war) < defines.ProxyAiStopInterest) { End(c, s, "lost interest"); continue; }
+                if (Interest(c, sponsor, client, enemy, war) < defines.ProxyAiStopInterest)
+                {
+                    End(c, s, "lost interest");
+                    activeMine--;
+                    continue;
+                }
                 // Past its commitment, a backing the service cannot carry within its allowance
                 // (CovertBudget) is scaled down a step a month, and the last step ended. Rwanda,
                 // Burundi and Uganda paid 22-46 % of their income for history's backings, each at
@@ -392,28 +478,47 @@ public static class ProxyWars
                 if (CovertBudget.Free(c, sponsor) < 0f)
                 {
                     if (s.Level > 1) s.Level--;
-                    else End(c, s, "could not pay");
+                    else
+                    {
+                        End(c, s, "could not pay");
+                        activeMine--;
+                    }
                 }
             }
 
-            if (sponsor.Gdp < defines.ProxyAiMinimumGdp || sponsor.Stability < 0.3f) continue;
-            if (live.Any(w => w.Involves(sponsor.Id) && w.Intensity >= 1)) continue;
+            if (!hasLiveWars || sponsor.Gdp < defines.ProxyAiMinimumGdp || sponsor.Stability < 0.3f) continue;
+            var highIntensity = false;
+            for (var wi = 0; wi < live.Count; wi++)
+            {
+                var w = live[wi];
+                if (!w.Ended && w.Involves(sponsor.Id) && w.Intensity >= 1) { highIntensity = true; break; }
+            }
+            if (highIntensity) continue;
             var limit = 1 + (int)(sponsor.Gdp / MathF.Max(1f, defines.ProxyAiGdpPerSponsorship));
-            if (mine.Count(s => !s.Ended) >= Math.Min(5, limit)) continue;
+            if (activeMine >= Math.Min(5, limit)) continue;
 
             StrategicWar bestWar = null;
             Nation bestClient = null;
             var bestInterest = defines.ProxyAiInterest;
-            foreach (var war in live)
+            for (var wi = 0; wi < live.Count; wi++)
             {
-                if (war.Involves(sponsor.Id) || mine.Any(s => !s.Ended && s.WarId == war.Id)) continue;
-                if (c.ElapsedDays - war.StartedDay < 14) continue;
-                foreach (var attackers in new[] { true, false })
+                var war = live[wi];
+                if (war.Ended || war.Involves(sponsor.Id)) continue;
+                var alreadyBacking = false;
+                for (var si = 0; si < mine.Count; si++)
                 {
+                    var ms = mine[si];
+                    if (!ms.Ended && ms.WarId == war.Id) { alreadyBacking = true; break; }
+                }
+                if (alreadyBacking) continue;
+                if (c.ElapsedDays - war.StartedDay < 14) continue;
+                for (var sideIdx = 0; sideIdx < 2; sideIdx++)
+                {
+                    var attackers = sideIdx == 0;
                     var client = c.NationById(attackers ? war.AttackerId : war.DefenderId);
                     var enemy = c.NationById(attackers ? war.DefenderId : war.AttackerId);
                     if (client is null || enemy is null || client.Movement is not null && client.Population <= 0) continue;
-                    if (Backing(c, war, attackers).Count() >= defines.ProxyAiBackersPerSide) continue;
+                    if (BackingCount(c, war, attackers) >= defines.ProxyAiBackersPerSide) continue;
                     if (!HasStake(c, sponsor, client, enemy, war)) continue;
                     var interest = Interest(c, sponsor, client, enemy, war);
                     if (interest <= bestInterest) continue;
@@ -455,8 +560,15 @@ public static class ProxyWars
             (toClient.Stance == DiplomaticStance.Allied || toClient.GuaranteeByA || toClient.GuaranteeByB)) return true;
         var toEnemy = CampaignDiplomacy.Peek(c, sponsor.Id, enemy.Id);
         if (toEnemy is not null && (toEnemy.Stance == DiplomaticStance.Rival || toEnemy.Tension >= c.Defines.TensionCrisisAt)) return true;
-        foreach (var s in Backing(c, war, !war.IsAttacking(client.Id)))
-            if (CampaignDiplomacy.Peek(c, sponsor.Id, s.SponsorId) is { Stance: DiplomaticStance.Rival }) return true;
+        var otherSideAttacking = !war.IsAttacking(client.Id);
+        var sponsorships = c.Sponsorships;
+        for (var i = 0; i < sponsorships.Count; i++)
+        {
+            var s = sponsorships[i];
+            if (!s.Ended && s.WarId == war.Id && war.IsAttacking(s.ClientId) == otherSideAttacking &&
+                CampaignDiplomacy.Peek(c, sponsor.Id, s.SponsorId) is { Stance: DiplomaticStance.Rival })
+                return true;
+        }
         return false;
     }
 
@@ -523,8 +635,12 @@ public static class ProxyWars
         if (toEnemy is { Stance: DiplomaticStance.Rival }) interest += 0.5f;
 
         // A rival of ours is backing the other side: the war has become ours by proxy.
-        foreach (var s in Backing(c, war, !war.IsAttacking(client.Id)))
+        var otherSideAttacking = !war.IsAttacking(client.Id);
+        var sponsorships = c.Sponsorships;
+        for (var i = 0; i < sponsorships.Count; i++)
         {
+            var s = sponsorships[i];
+            if (s.Ended || s.WarId != war.Id || war.IsAttacking(s.ClientId) != otherSideAttacking) continue;
             if (s.SponsorId == sponsor.Id) continue;
             var withRival = CampaignDiplomacy.Peek(c, sponsor.Id, s.SponsorId);
             if (withRival is not null && (withRival.Stance == DiplomaticStance.Rival || withRival.Tension >= 50f || withRival.Opinion <= -40f))

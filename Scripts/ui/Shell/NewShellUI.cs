@@ -27,6 +27,7 @@ public partial class DealOrForceGame
         string.Equals(SettingsCatalog.Chosen("ui_shell"), "new", StringComparison.OrdinalIgnoreCase);
 
     internal bool IsNewShellEconomyOpen => _shell?.EconomyWorkspace.IsVisible ?? false;
+    internal bool IsNewShellGrandProjectsOpen => _shell?.GrandProjects.IsVisible ?? false;
     internal bool IsNewShellNationOpen =>
         (_shell?.WorkPanel.IsVisible ?? false) && _shell.WorkPanel.Mode == ShellWorkPanelView.DossierMode.Country && _openScreen == "Nation";
 
@@ -34,7 +35,7 @@ public partial class DealOrForceGame
 
     private static readonly string[] ClassicChromeNodeNames =
     {
-        "CampaignTopBar", "HudFlagMount", "HudResourceDrawer", "CampaignNavigation", "DatePlate",
+        "CampaignTopBar", "CampaignFlagMount", "HudResourceDrawer", "CampaignNavigation", "DatePlate",
         "AlertList", "CampaignAlertPopup", "Outliner", "StrategicOutliner", "SituationDesk", "SituationDeskTab",
         "MapControls", "MapModeDrawer", "ArmyBar", "TeletypeBand", "HeadlinePopups"
     };
@@ -50,9 +51,25 @@ public partial class DealOrForceGame
         };
         _newShellRoot.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _hudLayer.AddChild(_newShellRoot);
+        EnsureNewShellFlagClothPulse();
         _shell = new ShellOrchestrator(CreateShellContext(_newShellRoot));
         _shell.Build();
         ApplyUiShellSetting();
+    }
+
+    private void EnsureNewShellFlagClothPulse()
+    {
+        if (_newShellRoot is null) return;
+        if (_newShellRoot.GetNodeOrNull<FlagClothSettingsPulse>("NewShellFlagClothPulse") is null)
+        {
+            _newShellRoot.AddChild(new FlagClothSettingsPulse
+            {
+                Name = "NewShellFlagClothPulse",
+                ProcessMode = ProcessModeEnum.Always
+            });
+        }
+        _ = FlagClothPresentation.Material;
+        FlagClothPresentation.Synchronize();
     }
 
     private ShellContext CreateShellContext(Control root)
@@ -64,7 +81,7 @@ public partial class DealOrForceGame
             GetViewportSize = () => _hudLayer?.Size is { X: >= 320f, Y: >= 240f } sz ? sz : GetViewportRect().Size,
             IsPaused = () => _campaign?.IsPaused ?? true,
             GetSpeed = () => _speed,
-            IsObserverMode = () => _observerMode,
+            IsObserverMode = () => _observerMode || (_campaign?.ObserverMode ?? false),
             IsFreeCameraMode = () => _freeCameraMode,
             IsAnyModalOpen = IsAnyShellModalOpen,
             IsProductionOpen = () => _productionLayer is { Visible: true },
@@ -121,6 +138,26 @@ public partial class DealOrForceGame
         ctx.OpenDealInbox = OpenDealInbox;
         ctx.GetIncomingDiplomaticCount = CountIncomingDiplomaticInbox;
         ctx.DelegatePortfolio = DelegatePortfolio;
+        ctx.OpenDoctrineScreen = OpenDoctrineScreen;
+        ctx.OpenDiplomacyFor = nation =>
+        {
+            if (nation is null) { OpenScreen("Diplomacy"); return; }
+            _selectedNation = nation;
+            _diplomacySelectedId = nation.Id;
+            _globe?.SetMapModeSubject(nation);
+            OpenScreen("Diplomacy");
+        };
+        ctx.OpenOrganizations = () => { _conflictTab = 4; OpenScreen("Conflicts"); };
+        ctx.OpenPeaceConferenceFor = OpenDiplomaticPeace;
+        ctx.OpenWarDeclarationFor = nation => { if (nation is not null) OpenWarDeclaration(nation, -1); };
+        ctx.OpenUltimatumFor = nation => { if (nation is not null) OpenUltimatumComposer(nation); };
+        ctx.SendOrRecallMission = SendOrRecallDiplomaticMission;
+        ctx.ToggleObserverMode = ToggleObserverMode;
+        ctx.WatchWorld = WatchWorld;
+        ctx.GetObservedNation = () => _observerWatched;
+        ctx.IsWatchingWorld = () => WatchingWorld;
+        ctx.GetObserverTransientNote = () => _observerTransientNote;
+        ctx.OpenGrandProjects = OpenNewShellGrandProjects;
     }
 
     private void UndoLastBatchForShell()
@@ -143,6 +180,7 @@ public partial class DealOrForceGame
     {
         if (!_newShellBuilt) BuildNewShell();
         CloseVisibleCampaignScreen();
+        if (IsNewShellGrandProjectsOpen) CloseNewShellGrandProjects();
         HideLegacyLeftAndBottomCards();
         _shell?.WorkPanel.Close();
         _openScreen = "Economy";
@@ -161,10 +199,34 @@ public partial class DealOrForceGame
         SyncNewShellLeftAndBottomDock();
     }
 
+    internal void OpenNewShellGrandProjects()
+    {
+        if (!_newShellBuilt) BuildNewShell();
+        CloseVisibleCampaignScreen();
+        if (IsNewShellEconomyOpen) CloseNewShellEconomyWorkspace();
+        HideLegacyLeftAndBottomCards();
+        _shell?.WorkPanel.Close();
+        _openScreen = "GrandProjects";
+        _newShellRoot?.MoveToFront();
+        _shell?.GrandProjects.Open();
+        SyncNewShellModalState();
+        SyncNewShellLeftAndBottomDock();
+        RefreshNewShell(force: true);
+    }
+
+    internal void CloseNewShellGrandProjects()
+    {
+        _shell?.GrandProjects.Close();
+        if (_openScreen == "GrandProjects") _openScreen = "";
+        SyncNewShellModalState();
+        SyncNewShellLeftAndBottomDock();
+    }
+
     internal void OpenNewShellCountryDossier(Nation nation)
     {
         if (!_newShellBuilt) BuildNewShell();
         if (IsNewShellEconomyOpen) CloseNewShellEconomyWorkspace();
+        if (IsNewShellGrandProjectsOpen) CloseNewShellGrandProjects();
         HideLegacyLeftAndBottomCards();
         SetArmyPanelVisible(false);
         _openScreen = nation == _campaign?.Player ? "Nation" : "";
@@ -177,6 +239,7 @@ public partial class DealOrForceGame
     {
         if (!_newShellBuilt) BuildNewShell();
         if (IsNewShellEconomyOpen) CloseNewShellEconomyWorkspace();
+        if (IsNewShellGrandProjectsOpen) CloseNewShellGrandProjects();
         HideLegacyLeftAndBottomCards();
         SetArmyPanelVisible(false);
         if (pick.State is not null) { _openScreen = ""; _shell?.WorkPanel.OpenRegion(pick.Nation, pick.State, pick.ProvinceId); }
@@ -318,6 +381,7 @@ public partial class DealOrForceGame
         AddClassicNode(_alertListPanel);
         AddClassicNode(_outliner);
         AddClassicNode(_hudTopPanel);
+        AddClassicNode(_hudFlagMount);
         AddClassicNode(_hudDatePlate);
         AddClassicNode(_mapControlsPanel);
         AddClassicNode(_armyBar);
@@ -342,7 +406,7 @@ public partial class DealOrForceGame
         }
         if (_globe is not null && !isNew) _globe.NewShellVisibleArmyIds = null;
         if (isNew) { _shell?.ResetCadence(); LayoutNewShell(); RefreshNewShell(force: true); }
-        else { CloseShellTransientPopovers(); _shell?.WorkPanel.Close(); CloseNewShellEconomyWorkspace(); LayoutCampaignShell(); Refresh(); }
+        else { CloseShellTransientPopovers(); _shell?.WorkPanel.Close(); CloseNewShellEconomyWorkspace(); CloseNewShellGrandProjects(); LayoutCampaignShell(); Refresh(); }
     }
 
     private void SetClassicChromeVisible(bool visible)
@@ -445,7 +509,7 @@ public partial class DealOrForceGame
     internal void CloseShellTransientPopovers(bool includeNews = true) => _shell?.CloseTransientPopovers(includeNews);
 
     private bool IsAnyShellModalOpen() =>
-        IsNewShellEconomyOpen || _handbookLayer is { Visible: true } || _peaceLayer is { Visible: true } ||
+        IsNewShellEconomyOpen || IsNewShellGrandProjectsOpen || _handbookLayer is { Visible: true } || _peaceLayer is { Visible: true } ||
         _peaceOfferLayer is { Visible: true } || _defconLayer is { Visible: true } || _pauseMenuLayer is { Visible: true } ||
         _settingsLayer is { Visible: true } || _saveLoadLayer is { Visible: true } || _pickerLayer is { Visible: true } ||
         _stateAffairsLayer is { Visible: true } || _sovereignFinanceLayer is { Visible: true } || _ledgerLayer is { Visible: true } ||
@@ -503,6 +567,7 @@ public partial class DealOrForceGame
         // 4) Close shell popovers & panels (Escape NEVER closes the News Card).
         if (_shell.Messages.IsVisible) { _shell.Messages.Close(); return true; }
         if (_shell.MapBar.IsPopoverOpen) { _shell.MapBar.ClosePopover(); return true; }
+        if (_shell.GrandProjects.IsVisible) { CloseNewShellGrandProjects(); return true; }
         if (_shell.EconomyWorkspace.IsVisible) { CloseNewShellEconomyWorkspace(); return true; }
         if (_shell.WorkPanel.IsVisible) { CloseNewShellWorkPanel(unpinnedOnly: false); return true; }
         if (CloseVisibleCampaignScreen()) return true;

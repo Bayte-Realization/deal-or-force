@@ -176,8 +176,8 @@ public partial class DealOrForceGame
         detailsCard.AddThemeStyleboxOverride("panel", ButtonStyle(false, 0));
         columns.AddChild(detailsCard);
         var details = PanelRows(detailsCard, 18, 16, 8);
-        // The bookmark's picture, as a Paradox bookmark has one: the sprite scenario_<id> when a
-        // scenario or a mod ships it, the night side of the Earth when it does not.
+        // The bookmark's picture: the sprite scenario_<id> when a scenario or a mod ships it,
+        // or the night side of the Earth when it does not.
         var detailsPicture = new TextureRect
         {
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
@@ -295,6 +295,9 @@ public partial class DealOrForceGame
 
         var actions = new HFlowContainer();
         rows.AddChild(actions);
+        var studioBtn = ActionButton(Loc.Get("studio.open_btn"), () => OpenModContentStudio(), 240, 42, true);
+        studioBtn.Name = "OpenModContentStudio";
+        actions.AddChild(studioBtn);
         actions.AddChild(ActionButton("Content editor", OpenContentEditor, 220, 42));
         actions.AddChild(ActionButton("UI layout editor", OpenVisualLayoutEditor, 220, 42));
         // The two whole-thing editors: a country as one screen, and its flag as layers. Both
@@ -389,6 +392,7 @@ public partial class DealOrForceGame
         var browser = new VBoxContainer { CustomMinimumSize = new Vector2(240, 0) };
         columns.AddChild(browser);
         var search = new LineEdit { PlaceholderText = Tr("Find a file…"), ClearButtonEnabled = true };
+        Ui.FocusInputIfDesktop(search);
         browser.AddChild(search);
         var files = new ItemList { Name = "ContentFileList", SizeFlagsVertical = SizeFlags.ExpandFill };
         browser.AddChild(files);
@@ -537,6 +541,8 @@ public partial class DealOrForceGame
         toolbar.AddChild(ActionButton("Scenarios", () => ConfirmAuthorExit(OpenScenarioLibrary), 140, 38));
         var newDocument = ActionButton("New document", NewAuthorDocument, 160, 38);
         newDocument.Name = "ContentNewDocument"; toolbar.AddChild(newDocument);
+        var studio = ActionButton(Loc.Get("studio.open_btn"), () => ConfirmAuthorExit(() => OpenModContentStudio()), 200, 38);
+        studio.Name = "ContentOpenModStudio"; toolbar.AddChild(studio);
         toolbar.AddChild(ActionButton("Refresh file list", () => { ScanFiles(); Filter(); }, 160, 38));
         toolbar.AddChild(ActionButton("Open mod folder", () => { ContentWorkbench.EnsureMod(AuthorRoot); OS.ShellOpen(AuthorRoot); }, 180, 38));
         _authorStatus = Title("Select a file. Changes to rules and UI take effect after restarting with Editor workspace enabled.", 13, Ui.Colour("text.caption"));

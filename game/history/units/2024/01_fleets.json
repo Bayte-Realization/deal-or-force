@@ -137,7 +137,7 @@
       { "name": "Turkish Naval Forces", "hulls": 48, "latitude": 40.9, "longitude": 28.6 }
     ],
     "TWN": [
-      { "name": "Republic of China Fleet", "hulls": 48, "latitude": 22.6, "longitude": 120.2 }
+      { "name": "Republic of China Fleet", "hulls": 78, "latitude": 22.6, "longitude": 120.2 }
     ],
     "USA": [
       { "name": "Atlantic Fleet", "hulls": 105, "latitude": 36.9, "longitude": -75.4 },

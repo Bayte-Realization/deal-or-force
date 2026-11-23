@@ -193,8 +193,10 @@ public sealed class CampaignHistory
         // a save 107 years long the landless movements' weekly rows were 117,000 of 395,000.
         var landlessEvery = Math.Max(7, campaign.Defines.HistoryLandlessSampleDays / 7 * 7);
         var landlessDue = campaign.ElapsedDays % landlessEvery == 0;
-        foreach (var nation in campaign.Nations)
+        var active = campaign.ActiveNations;
+        for (var ai = 0; ai < active.Count; ai++)
         {
+            var nation = active[ai];
             // A retired country (LongCampaign) has no ledger at all and is not given one.
             if (campaign.IsRetired(nation)) continue;
             // A country that is no more has no week to record. Its history ends where it

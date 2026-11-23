@@ -62,15 +62,17 @@ static class DoctrineExpansionTests
     static void AdvancedChoices()
     {
         var branches = TacticalDoctrineCatalog.All.ToArray();
-        Check(branches.Length == 18 && branches.All(book => book.Nodes.Count >= 16), "all eighteen books contain at least sixteen articles");
-        var additions = branches.SelectMany(book => book.Nodes.Where(node => node.Id.StartsWith(book.Id + "_adv_", StringComparison.Ordinal))).ToArray();
+        var coreWithAdv = branches.Where(b => b.Nodes.Any(n => n.Id.StartsWith(b.Id + "_adv_", StringComparison.Ordinal))).ToArray();
+        Check(branches.Length >= 18 && coreWithAdv.Length == 18 && coreWithAdv.All(book => book.Nodes.Count >= 16),
+            "all eighteen core books contain at least sixteen articles");
+        var additions = coreWithAdv.SelectMany(book => book.Nodes.Where(node => node.Id.StartsWith(book.Id + "_adv_", StringComparison.Ordinal))).ToArray();
         Check(additions.Length == 144 && additions.Select(node => node.Id).Distinct().Count() == 144, "144 uniquely saved advanced articles extend the original catalogue");
         var c = Campaign.CreateBootstrap(61109); var n = c.NationByTag("POL"); c.ConfigureSinglePlayer(n.Id); c.IsPaused = true;
         var region = c.StatesOf(n).First();
         c.AttachProvinceTopology(ProvinceTopology.Build(Enumerable.Repeat((ushort)region.MapIndex, 8192).ToArray(),
             Enumerable.Repeat((ushort)n.MapIndex, 8192).ToArray(), 128, 64, _ => false));
         var rng = c.Random.State; var clock = c.ElapsedHours;
-        foreach (var branch in branches)
+        foreach (var branch in coreWithAdv)
         {
             var nodes = branch.Nodes.Where(node => node.Id.StartsWith(branch.Id + "_adv_", StringComparison.Ordinal)).ToArray();
             var choices = nodes.Where(node => node.Excludes.Count > 0).ToArray();

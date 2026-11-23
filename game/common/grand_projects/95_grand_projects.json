@@ -1,0 +1,446 @@
+// Strategic Megaprojects & Joint International Consortia (16 Archetypes).
+//
+// Each project is anchored to a real owned region (ScenarioState), built across three
+// funded stages (Feasibility & Design -> Core Construction -> Commissioning), and grants
+// permanent NationalModifiers while the region is held and not ruined by war damage.
+// Category exclusivity prevents stacking duplicate energy/infrastructure wonders on one nation.
+// Allies or fellow International Organization members can join as Consortium Partners to
+// share costs, accelerate construction, buffer key-good shortages, and earn a Partner
+// Dividend while diplomatic alignment holds.
+//
+// Mods can add new projects, tune existing entries by id, or drop one with "remove": true.
+{
+  "transcontinental_hsr": {
+    "name": "gp.proj.transcontinental_hsr.name",
+    "description": "gp.proj.transcontinental_hsr.desc",
+    "category": "infrastructure",
+    "order": 10,
+    "stage_days": [90, 150, 90],
+    "base_cost_billions": 1.2,
+    "gdp_cost_share": 0.0022,
+    "political_cost": 12,
+    "experience_currency": "",
+    "experience_cost": 0,
+    "min_population": 2000000,
+    "min_literacy": 0.45,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["IndustrialMaterials", "Machinery"],
+    "host_modifiers": {
+      "trade_reach": 0.12,
+      "supply": 0.10,
+      "construction_speed": 0.06
+    },
+    "partner_modifiers": {
+      "trade_reach": 0.05,
+      "supply": 0.04
+    }
+  },
+
+  "sovereign_fusion_grid": {
+    "name": "gp.proj.sovereign_fusion_grid.name",
+    "description": "gp.proj.sovereign_fusion_grid.desc",
+    "category": "energy",
+    "order": 20,
+    "stage_days": [110, 180, 110],
+    "base_cost_billions": 2.0,
+    "gdp_cost_share": 0.0030,
+    "political_cost": 18,
+    "experience_currency": "",
+    "experience_cost": 0,
+    "min_population": 1500000,
+    "min_literacy": 0.65,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["Energy", "Uranium"],
+    "host_modifiers": {
+      "output": 0.08,
+      "construction_speed": 0.08,
+      "living_weekly": 0.0012
+    },
+    "partner_modifiers": {
+      "output": 0.03,
+      "research_speed": 0.04
+    }
+  },
+
+  "geothermal_baseload_ring": {
+    "name": "gp.proj.geothermal_baseload_ring.name",
+    "description": "gp.proj.geothermal_baseload_ring.desc",
+    "category": "energy",
+    "order": 25,
+    "stage_days": [85, 135, 85],
+    "base_cost_billions": 1.3,
+    "gdp_cost_share": 0.0021,
+    "political_cost": 13,
+    "experience_currency": "",
+    "experience_cost": 0,
+    "min_population": 1000000,
+    "min_literacy": 0.48,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["Machinery", "IndustrialMaterials"],
+    "host_modifiers": {
+      "output": 0.06,
+      "construction_speed": 0.10,
+      "construction_cost": -0.08
+    },
+    "partner_modifiers": {
+      "output": 0.03,
+      "construction_speed": 0.04
+    }
+  },
+
+  "deepwater_megaport": {
+    "name": "gp.proj.deepwater_megaport.name",
+    "description": "gp.proj.deepwater_megaport.desc",
+    "category": "maritime",
+    "order": 30,
+    "stage_days": [90, 140, 80],
+    "base_cost_billions": 1.4,
+    "gdp_cost_share": 0.0024,
+    "political_cost": 12,
+    "experience_currency": "naval_experience",
+    "experience_cost": 10,
+    "min_population": 1000000,
+    "min_literacy": 0.40,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["IndustrialMaterials", "Aluminium"],
+    "host_modifiers": {
+      "trade_reach": 0.15,
+      "shipbuilding_speed": 0.12,
+      "naval_speed": 0.06
+    },
+    "partner_modifiers": {
+      "trade_reach": 0.06,
+      "shipbuilding_speed": 0.04
+    }
+  },
+
+  "arctic_icebreaker_corridor": {
+    "name": "gp.proj.arctic_icebreaker_corridor.name",
+    "description": "gp.proj.arctic_icebreaker_corridor.desc",
+    "category": "polar",
+    "order": 35,
+    "stage_days": [95, 150, 90],
+    "base_cost_billions": 1.6,
+    "gdp_cost_share": 0.0025,
+    "political_cost": 14,
+    "experience_currency": "naval_experience",
+    "experience_cost": 12,
+    "min_population": 600000,
+    "min_literacy": 0.45,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["Oil", "Machinery"],
+    "host_modifiers": {
+      "naval_speed": 0.10,
+      "trade_reach": 0.12,
+      "supply": 0.10
+    },
+    "partner_modifiers": {
+      "naval_speed": 0.04,
+      "trade_reach": 0.05
+    }
+  },
+
+  "sovereign_semiconductor_fab": {
+    "name": "gp.proj.sovereign_semiconductor_fab.name",
+    "description": "gp.proj.sovereign_semiconductor_fab.desc",
+    "category": "industry",
+    "order": 40,
+    "stage_days": [100, 170, 100],
+    "base_cost_billions": 2.2,
+    "gdp_cost_share": 0.0032,
+    "political_cost": 16,
+    "experience_currency": "",
+    "experience_cost": 0,
+    "min_population": 1500000,
+    "min_literacy": 0.70,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["Electronics", "RareEarths"],
+    "host_modifiers": {
+      "output": 0.07,
+      "research_speed": 0.12,
+      "support_recovery": 0.08
+    },
+    "partner_modifiers": {
+      "research_speed": 0.05,
+      "output": 0.03
+    }
+  },
+
+  "subsea_cable_nexus": {
+    "name": "gp.proj.subsea_cable_nexus.name",
+    "description": "gp.proj.subsea_cable_nexus.desc",
+    "category": "communications",
+    "order": 45,
+    "stage_days": [80, 130, 80],
+    "base_cost_billions": 1.3,
+    "gdp_cost_share": 0.0022,
+    "political_cost": 13,
+    "experience_currency": "",
+    "experience_cost": 0,
+    "min_population": 1000000,
+    "min_literacy": 0.60,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["Electronics", "Aluminium"],
+    "host_modifiers": {
+      "research_speed": 0.10,
+      "trade_reach": 0.10,
+      "credit_capacity": 0.08
+    },
+    "partner_modifiers": {
+      "research_speed": 0.04,
+      "trade_reach": 0.04
+    }
+  },
+
+  "orbital_launch_complex": {
+    "name": "gp.proj.orbital_launch_complex.name",
+    "description": "gp.proj.orbital_launch_complex.desc",
+    "category": "aerospace",
+    "order": 50,
+    "stage_days": [110, 180, 100],
+    "base_cost_billions": 2.4,
+    "gdp_cost_share": 0.0034,
+    "political_cost": 18,
+    "experience_currency": "air_experience",
+    "experience_cost": 15,
+    "min_population": 800000,
+    "min_literacy": 0.60,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["Electronics", "Aluminium"],
+    "host_modifiers": {
+      "research_speed": 0.14,
+      "deterrence": 0.08,
+      "support_losses": -0.06
+    },
+    "partner_modifiers": {
+      "research_speed": 0.05,
+      "deterrence": 0.03
+    }
+  },
+
+  "strategic_aerospace_arsenal": {
+    "name": "gp.proj.strategic_aerospace_arsenal.name",
+    "description": "gp.proj.strategic_aerospace_arsenal.desc",
+    "category": "airpower",
+    "order": 55,
+    "stage_days": [95, 155, 90],
+    "base_cost_billions": 1.9,
+    "gdp_cost_share": 0.0029,
+    "political_cost": 16,
+    "experience_currency": "air_experience",
+    "experience_cost": 18,
+    "min_population": 1200000,
+    "min_literacy": 0.58,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["Aluminium", "Electronics"],
+    "host_modifiers": {
+      "support_recovery": 0.14,
+      "support_losses": -0.10,
+      "recruitment_speed": 0.08
+    },
+    "partner_modifiers": {
+      "support_recovery": 0.05,
+      "support_losses": -0.04
+    }
+  },
+
+  "continental_defense_shield": {
+    "name": "gp.proj.continental_defense_shield.name",
+    "description": "gp.proj.continental_defense_shield.desc",
+    "category": "defense",
+    "order": 60,
+    "stage_days": [90, 160, 90],
+    "base_cost_billions": 1.8,
+    "gdp_cost_share": 0.0028,
+    "political_cost": 15,
+    "experience_currency": "army_experience",
+    "experience_cost": 20,
+    "min_population": 1000000,
+    "min_literacy": 0.50,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["Arms", "Electronics"],
+    "host_modifiers": {
+      "army_defense": 0.08,
+      "entrenchment_speed": 0.12,
+      "deterrence": 0.10,
+      "support_losses": -0.08
+    },
+    "partner_modifiers": {
+      "army_defense": 0.03,
+      "deterrence": 0.04
+    }
+  },
+
+  "international_science_citadel": {
+    "name": "gp.proj.international_science_citadel.name",
+    "description": "gp.proj.international_science_citadel.desc",
+    "category": "science",
+    "order": 70,
+    "stage_days": [90, 150, 90],
+    "base_cost_billions": 1.6,
+    "gdp_cost_share": 0.0026,
+    "political_cost": 14,
+    "experience_currency": "",
+    "experience_cost": 0,
+    "min_population": 1500000,
+    "min_literacy": 0.72,
+    "requires_distressed_region": false,
+    "unique_global": true,
+    "key_goods": ["Electronics", "Energy"],
+    "host_modifiers": {
+      "research_speed": 0.16,
+      "stability_weekly": 0.0010,
+      "living_weekly": 0.0008
+    },
+    "partner_modifiers": {
+      "research_speed": 0.07,
+      "stability_weekly": 0.0004
+    }
+  },
+
+  "global_diplomatic_forum": {
+    "name": "gp.proj.global_diplomatic_forum.name",
+    "description": "gp.proj.global_diplomatic_forum.desc",
+    "category": "diplomacy",
+    "order": 75,
+    "stage_days": [85, 140, 85],
+    "base_cost_billions": 1.5,
+    "gdp_cost_share": 0.0024,
+    "political_cost": 18,
+    "experience_currency": "",
+    "experience_cost": 0,
+    "min_population": 1200000,
+    "min_literacy": 0.55,
+    "requires_distressed_region": false,
+    "unique_global": true,
+    "key_goods": ["IndustrialMaterials", "Energy"],
+    "host_modifiers": {
+      "stability_weekly": 0.0016,
+      "credit_capacity": 0.12,
+      "radicalism_weekly": -0.0012
+    },
+    "partner_modifiers": {
+      "stability_weekly": 0.0006,
+      "credit_capacity": 0.05
+    }
+  },
+
+  "sovereign_reserve_vault": {
+    "name": "gp.proj.sovereign_reserve_vault.name",
+    "description": "gp.proj.sovereign_reserve_vault.desc",
+    "category": "finance",
+    "order": 80,
+    "stage_days": [80, 130, 80],
+    "base_cost_billions": 1.5,
+    "gdp_cost_share": 0.0025,
+    "political_cost": 15,
+    "experience_currency": "",
+    "experience_cost": 0,
+    "min_population": 1000000,
+    "min_literacy": 0.55,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["IndustrialMaterials", "Electronics"],
+    "host_modifiers": {
+      "credit_capacity": 0.18,
+      "borrowing_cost": -0.10,
+      "tax_efficiency": 0.06
+    },
+    "partner_modifiers": {
+      "credit_capacity": 0.06,
+      "borrowing_cost": -0.04
+    }
+  },
+
+  "continental_grain_belt": {
+    "name": "gp.proj.continental_grain_belt.name",
+    "description": "gp.proj.continental_grain_belt.desc",
+    "category": "agriculture",
+    "order": 85,
+    "stage_days": [80, 130, 80],
+    "base_cost_billions": 1.1,
+    "gdp_cost_share": 0.0020,
+    "political_cost": 12,
+    "experience_currency": "",
+    "experience_cost": 0,
+    "min_population": 1500000,
+    "min_literacy": 0.35,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["Fertiliser", "Energy"],
+    "host_modifiers": {
+      "living_weekly": 0.0018,
+      "stability_weekly": 0.0012,
+      "output": 0.06
+    },
+    "partner_modifiers": {
+      "living_weekly": 0.0006,
+      "output": 0.03
+    }
+  },
+
+  "transoceanic_canal_tunnel": {
+    "name": "gp.proj.transoceanic_canal_tunnel.name",
+    "description": "gp.proj.transoceanic_canal_tunnel.desc",
+    "category": "logistics",
+    "order": 90,
+    "stage_days": [100, 160, 90],
+    "base_cost_billions": 1.9,
+    "gdp_cost_share": 0.0029,
+    "political_cost": 16,
+    "experience_currency": "army_experience",
+    "experience_cost": 8,
+    "min_population": 1200000,
+    "min_literacy": 0.45,
+    "requires_distressed_region": false,
+    "unique_global": false,
+    "key_goods": ["IndustrialMaterials", "Machinery"],
+    "host_modifiers": {
+      "trade_reach": 0.14,
+      "army_speed": 0.06,
+      "supply": 0.12
+    },
+    "partner_modifiers": {
+      "trade_reach": 0.06,
+      "supply": 0.05
+    }
+  },
+
+  "metropolitan_renewal_plan": {
+    "name": "gp.proj.metropolitan_renewal_plan.name",
+    "description": "gp.proj.metropolitan_renewal_plan.desc",
+    "category": "reconstruction",
+    "order": 100,
+    "stage_days": [70, 120, 70],
+    "base_cost_billions": 0.9,
+    "gdp_cost_share": 0.0018,
+    "political_cost": 10,
+    "experience_currency": "",
+    "experience_cost": 0,
+    "min_population": 500000,
+    "min_literacy": 0.25,
+    "requires_distressed_region": true,
+    "unique_global": false,
+    "key_goods": ["IndustrialMaterials", "Energy"],
+    "host_modifiers": {
+      "reconstruction_speed": 0.25,
+      "stability_weekly": 0.0015,
+      "radicalism_weekly": -0.0015,
+      "living_weekly": 0.0012
+    },
+    "partner_modifiers": {
+      "reconstruction_speed": 0.10,
+      "stability_weekly": 0.0005
+    }
+  }
+}

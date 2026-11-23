@@ -1,0 +1,95 @@
+// Narrative geopolitical dilemma events for the Cross-Strait Return to the Mainland.
+{
+  "mr_twn_national_glory_council": {
+    "title": "mr.ev.glory_council.title",
+    "description": "mr.ev.glory_council.desc",
+    "trigger": { "tags": ["TWN"], "min_stability": 0.45, "min_mainland_reclamation_pending": 1 },
+    "weight": 2.4,
+    "options": [
+      {
+        "title": "mr.ev.glory_council.opt1",
+        "consequence": "mr.ev.glory_council.con1",
+        "effects": {
+          "treasury_percent": -0.04,
+          "war_support": 0.08,
+          "army_experience": 15.0,
+          "naval_experience": 12.0,
+          "manpower": 120000
+        },
+        "modifiers": [
+          { "id": "twn_project_national_glory_spirit", "days": 540 }
+        ]
+      },
+      {
+        "title": "mr.ev.glory_council.opt2",
+        "consequence": "mr.ev.glory_council.con2",
+        "effects": {
+          "treasury_percent": -0.02,
+          "stability": 0.03,
+          "fleet.readiness": 0.12
+        },
+        "modifiers": [
+          { "id": "twn_strait_armada_spirit", "days": 365 }
+        ]
+      }
+    ]
+  },
+  "mr_twn_strait_window_briefing": {
+    "title": "mr.ev.strait_window.title",
+    "description": "mr.ev.strait_window.desc",
+    "trigger": { "tags": ["TWN"], "min_mainland_reclamation_war": 1 },
+    "weight": 2.6,
+    "options": [
+      {
+        "title": "mr.ev.strait_window.opt1",
+        "consequence": "mr.ev.strait_window.con1",
+        "effects": {
+          "war_support": 0.06,
+          "army.organisation": 0.10,
+          "manpower": 150000
+        },
+        "modifiers": [
+          { "id": "twn_project_national_glory_spirit", "days": 365 }
+        ]
+      },
+      {
+        "title": "mr.ev.strait_window.opt2",
+        "consequence": "mr.ev.strait_window.con2",
+        "effects": {
+          "political_points": 12.0,
+          "fleet.supply": 0.20,
+          "fleet.readiness": 0.15
+        },
+        "modifiers": [
+          { "id": "twn_mainland_underground_spirit", "days": 365 }
+        ]
+      }
+    ]
+  },
+  "mr_chn_coastal_ferment": {
+    "title": "mr.ev.coastal_ferment.title",
+    "description": "mr.ev.coastal_ferment.desc",
+    "trigger": { "tags": ["CHN"], "min_facing_mainland_reclamation": 1 },
+    "weight": 1.6,
+    "options": [
+      {
+        "title": "mr.ev.coastal_ferment.opt1",
+        "consequence": "mr.ev.coastal_ferment.con1",
+        "effects": {
+          "stability": -0.035,
+          "state.radicalism": 0.028,
+          "war_support": -0.02
+        }
+      },
+      {
+        "title": "mr.ev.coastal_ferment.opt2",
+        "consequence": "mr.ev.coastal_ferment.con2",
+        "effects": {
+          "treasury_percent": -0.04,
+          "war_support": -0.04,
+          "stability": 0.01
+        }
+      }
+    ]
+  }
+}

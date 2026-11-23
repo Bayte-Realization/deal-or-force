@@ -32,18 +32,27 @@ public partial class DealOrForceGame
             MathF.Abs(preference - _doctrineComfortPreference) > .001f;
         _doctrineComfortViewport = viewport; _doctrineComfortScale = scale; _doctrineComfortPreference = preference;
         if (_doctrineScreenPanel is null) return changed;
-        // Restore the authored/modded rectangle first. The translated navigation is a
-        // separate physical-pixel rail and can be wider than its reference-resolution box.
-        Ui.Place(_doctrineScreenPanel, "modal.doctrines");
-        if (_hudNavigationPanel is not null)
+        if (IsNewShellActive)
         {
-            var local = _doctrineLayer.GetGlobalTransformWithCanvas().AffineInverse();
-            var railEnd = local * (_hudNavigationPanel.GetGlobalTransformWithCanvas() * _hudNavigationPanel.Size);
-            _doctrineScreenPanel.OffsetLeft += MathF.Max(0, railEnd.X + 12 / scale - _doctrineScreenPanel.Position.X);
+            FitNewShellWorkspaceLayer(_doctrineLayer);
+        }
+        else
+        {
+            // Restore the authored/modded rectangle first. The translated navigation is a
+            // separate physical-pixel rail and can be wider than its reference-resolution box.
+            Ui.Place(_doctrineScreenPanel, "modal.doctrines");
+            if (_hudNavigationPanel is not null)
+            {
+                var local = _doctrineLayer.GetGlobalTransformWithCanvas().AffineInverse();
+                var railEnd = local * (_hudNavigationPanel.GetGlobalTransformWithCanvas() * _hudNavigationPanel.Size);
+                _doctrineScreenPanel.OffsetLeft += MathF.Max(0, railEnd.X + 12 / scale - _doctrineScreenPanel.Position.X);
+            }
         }
         var available = _doctrineScreenPanel.Size.X * scale;
+        var isTactical = _doctrineView == "tactical";
         _doctrineCatalogueColumn.CustomMinimumSize = new Vector2(Math.Clamp(available * .25f, 250, 350) / scale, 0);
-        _doctrinePreviewColumn.CustomMinimumSize = new Vector2(Math.Clamp(available * .22f, 230, 320) / scale, 0);
+        _doctrinePreviewColumn.CustomMinimumSize = new Vector2(
+            Math.Clamp(available * (isTactical ? .22f : .20f), isTactical ? 230 : 220, isTactical ? 320 : 300) / scale, 0);
         // The diagram has its own scroll; it must not force an outer vertical scroll.
         if (_doctrineWindow is not null) _doctrineWindow.CustomMinimumSize = new Vector2(0, DoctrineUnits(220));
         return changed;

@@ -1,0 +1,98 @@
+// Wave 5 national modifiers for POL-01 cleavages, WAR-02 nuclear doctrine & arms control,
+// multilateral crisis summits, and post-war reconstruction contracts.
+{
+  "w5_fiscal_compact_spirit": {
+    "name": "w5.mod.fiscal_compact.name",
+    "description": "w5.mod.fiscal_compact.desc",
+    "days": 365,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "radicalism_weekly": -0.0012,
+      "living_weekly": 0.0006,
+      "tax_efficiency": -0.04
+    }
+  },
+  "w5_crisis_summit_accord": {
+    "name": "w5.mod.crisis_summit.name",
+    "description": "w5.mod.crisis_summit.desc",
+    "days": 300,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "trade_reach": 0.09,
+      "borrowing_cost": -0.06,
+      "credit_capacity": 0.08
+    }
+  },
+  "w5_rebuilding_authority": {
+    "name": "w5.mod.rebuilding_authority.name",
+    "description": "w5.mod.rebuilding_authority.desc",
+    "days": 365,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "construction_speed": 0.16,
+      "construction_cost": -0.08,
+      "borrowing_cost": 0.05
+    }
+  },
+  "w5_triad_modernization": {
+    "name": "w5.mod.triad_modernization.name",
+    "description": "w5.mod.triad_modernization.desc",
+    "days": 365,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "deterrence": 0.12,
+      "organisation_recovery": 0.06,
+      "borrowing_cost": 0.06
+    }
+  },
+  "w5_industrial_retooling": {
+    "name": "w5.mod.industrial_retooling.name",
+    "description": "w5.mod.industrial_retooling.desc",
+    "days": 300,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "output": 0.06,
+      "research_speed": 0.07,
+      "construction_cost": 0.05
+    }
+  },
+  "w5_civic_consensus": {
+    "name": "w5.mod.civic_consensus.name",
+    "description": "w5.mod.civic_consensus.desc",
+    "days": 300,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "radicalism_weekly": -0.0014,
+      "living_weekly": 0.0005,
+      "output": -0.02
+    }
+  },
+  "w5_ev_verifiers_deployed": {
+    "name": "w5.mod.verifiers_deployed.name",
+    "description": "w5.mod.verifiers_deployed.desc",
+    "days": 270,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "trade_reach": 0.06,
+      "borrowing_cost": -0.05
+    }
+  },
+  "w5_ev_wartime_repatriation": {
+    "name": "w5.mod.wartime_repatriation.name",
+    "description": "w5.mod.wartime_repatriation.desc",
+    "days": 240,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "supply": 0.10,
+      "construction_speed": 0.10
+    }
+  }
+}

@@ -41,7 +41,8 @@ public partial class DealOrForceGame
             await operation();
             EnsureLoadingAlive();
             LogLoadingStage();
-            PrebuildScreens();
+            if (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary != true)
+                PrebuildScreens();
             _loadingScreen.SetStage(_loadingHeading, "Ready", 100, "Loading advances as each stage is completed.");
             DiagnosticLogs.Write("performance", $"LOADING_COMPLETE operation={heading} elapsed_ms={_loadingClock.Elapsed.TotalMilliseconds:F1}");
             // Present the completed map once before uncovering it. No timer/minimum duration.
@@ -111,23 +112,31 @@ public partial class DealOrForceGame
         var lastStage = "";
         var lastProgress = -1d;
         var lastChange = Time.GetTicksMsec();
+        var tree = GetTree();
         while (!_globe.IsMapPresentationReady)
         {
             if (!string.IsNullOrEmpty(_globe.MapLoadingError)) throw new InvalidOperationException(_globe.MapLoadingError);
             var stage = _globe.MapLoadingStage;
             var progress = _globe.MapLoadingProgress;
             var now = Time.GetTicksMsec();
-            if (!string.Equals(stage, lastStage, StringComparison.Ordinal) || Math.Abs(progress - lastProgress) > 0.001f)
+            var changed = !string.Equals(stage, lastStage, StringComparison.Ordinal) || Math.Abs(progress - lastProgress) > 0.001f;
+            if (changed)
             {
                 lastStage = stage;
                 lastProgress = progress;
                 lastChange = now;
+                await LoadingPhase(stage, progress);
             }
-            else if (now - lastChange > 120000)
-                throw new InvalidOperationException(
-                    $"The map stopped answering while {stage} was in progress. " +
-                    "Close any other copy of the game that is running, then try again.");
-            await LoadingPhase(stage, progress);
+            else
+            {
+                if (now - lastChange > 120000)
+                    throw new InvalidOperationException(
+                        $"The map stopped answering while {stage} was in progress. " +
+                        "Close any other copy of the game that is running, then try again.");
+                EnsureLoadingAlive();
+                await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+                EnsureLoadingAlive();
+            }
         }
     }
 

@@ -53,6 +53,9 @@ public static class MusicCatalog
     }
 
     private static readonly Dictionary<string, Track> Tracks = new(StringComparer.OrdinalIgnoreCase);
+    private static bool _baseLoaded;
+    private static bool _dirtyFromOverlay;
+    private static string _loadedKey = "";
 
     /// <summary>Raised whenever the list is rebuilt, so a player can requeue.</summary>
     public static event Action Changed;
@@ -93,22 +96,43 @@ public static class MusicCatalog
         : name.Trim().ToLowerInvariant().Replace(' ', '_').Replace('-', '_');
 
     /// <summary>Read the base game's own `music/` tree, replacing whatever was loaded.</summary>
-    public static void Load()
+    public static void Load() => Load(force: false);
+
+    public static void Load(bool force)
     {
+        var root = GameDataLoader.DataFolder("music");
+        var cacheKey = $"{ModOverlayPolicy.IsActive}|{root ?? ""}";
+        if (!force && _baseLoaded && !_dirtyFromOverlay && string.Equals(_loadedKey, cacheKey, StringComparison.Ordinal))
+            return;
+
         Tracks.Clear();
         Director = new(); Revision++;
-        DataCatalogLoader.LoadBaseTree("music", (directory, assetRoot) => LoadTree(directory, assetRoot, null));
+        if (root is not null)
+            DataCatalogLoader.LoadTree("music", root, null, (json, origin) => MergeInternal(json, "res://game/music", origin, null), null);
+        _baseLoaded = true;
+        _dirtyFromOverlay = false;
+        _loadedKey = cacheKey;
         Changed?.Invoke();
     }
 
     /// <summary>Layer one package's `music/` tree over what is already loaded.</summary>
-    public static void LoadTree(string directory, string assetRoot, List<string> errors) =>
+    public static void LoadTree(string directory, string assetRoot, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
+        _dirtyFromOverlay = true;
         DataCatalogLoader.LoadTree("music", directory, errors,
-            (json, origin) => Merge(json, assetRoot, origin, errors),
+            (json, origin) => MergeInternal(json, assetRoot, origin, errors),
             () => Changed?.Invoke());
+    }
 
     /// <summary>Merge one track list. A bare path is a track that plays anywhere, once as often as any other.</summary>
     public static void Merge(string json, string assetRoot, string origin, List<string> errors)
+    {
+        _dirtyFromOverlay = true;
+        MergeInternal(json, assetRoot, origin, errors);
+    }
+
+    private static void MergeInternal(string json, string assetRoot, string origin, List<string> errors)
     {
         using var document = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
         var root = document.RootElement;

@@ -204,17 +204,25 @@ public static class Shipbuilding
                 cache.Day = campaign.ElapsedDays;
                 cache.ByNation.Clear();
                 var defines = campaign.Defines;
-                foreach (var fleet in campaign.Fleets)
+                var fleets = campaign.Fleets;
+                for (var fi = 0; fi < fleets.Count; fi++)
+                {
+                    var fleet = fleets[fi];
                     cache.ByNation[fleet.NationId] = cache.ByNation.GetValueOrDefault(fleet.NationId) +
                                                      fleet.Establishment * defines.SlipwaysPerEstablishedHull;
-                foreach (var state in campaign.States)
+                }
+                var needsWater = Waterfront.NeedsWater(BuildingKind.Shipyard);
+                var states = campaign.States;
+                for (var si = 0; si < states.Count; si++)
                 {
+                    var state = states[si];
                     var yards = state.Buildings.GetValueOrDefault(BuildingKind.Shipyard);
                     var ports = state.Buildings.GetValueOrDefault(BuildingKind.Port);
                     if (yards <= 0 && ports <= 0) continue;
-                    var owner = NavalOperations.NationAt(campaign, state.NationMapIndex);
+                    var owner = campaign.NationByMapIndex(state.NationMapIndex);
                     if (owner is null) continue;
-                    var yield = Waterfront.Yield(campaign, state.MapIndex, BuildingKind.Shipyard);
+                    var yield = needsWater ? Waterfront.Yield(campaign, Waterfront.OfRegion(campaign, state.MapIndex)) : 1f;
+                    if (yield <= 0f) continue;
                     cache.ByNation[owner.Id] = cache.ByNation.GetValueOrDefault(owner.Id) +
                                                yards * yield * defines.SlipwaysPerShipyard +
                                                ports * yield * SlipwaysPerPort;

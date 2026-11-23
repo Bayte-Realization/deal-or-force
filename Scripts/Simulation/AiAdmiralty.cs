@@ -120,7 +120,7 @@ public static class AiAdmiralty
 
             if (fleet.IsLoaded)
             {
-                LaunchIfPossible(campaign, fleet, nation, enemy);
+                LaunchIfPossible(campaign, fleet, nation, enemy, war);
                 continue;
             }
 
@@ -130,17 +130,17 @@ public static class AiAdmiralty
             // for this fleet: sending it home to load and then, in the same breath, ordering
             // it out to blockade simply cancels the order it was just given.
             //
-            // Unless the enemy's navy is so much the stronger that a convoy would never
-            // arrive, in which case the fleet fights for the sea first.
-            if (!WalkedTo(campaign, nation, enemy, war) &&
-                KnownNavy(campaign, enemy, nation) <= OwnNavy(campaign, nation) * campaign.Defines.AiInvasionNavalOdds)
+            // Co-belligerent navies fighting on our side share the sea-control burden, and a
+            // narrow strait crossing (e.g. Taiwan Strait) weighs local active enemy fleets at
+            // sea rather than anchored squadrons a thousand kilometres away in another theatre.
+            if (!WalkedTo(campaign, nation, enemy, war) && CanAttemptInvasion(campaign, fleet, nation, enemy, war))
             {
                 if (fleet.Mission != FleetMission.Anchored) { SendHome(campaign, fleet); continue; }
-                if (TryLoad(campaign, fleet, nation)) LaunchIfPossible(campaign, fleet, nation, enemy);
+                if (TryLoad(campaign, fleet, nation)) LaunchIfPossible(campaign, fleet, nation, enemy, war);
                 continue;
             }
 
-            Deploy(campaign, fleet, nation, enemy);
+            Deploy(campaign, fleet, nation, enemy, war);
         }
     }
 
@@ -191,24 +191,36 @@ public static class AiAdmiralty
     /// <summary>
     /// The war this navy is for.
     ///
-    /// A country can be in several at once, and taking whichever came first is how a fleet
-    /// ends up blockading a neighbour it shares a land border with while an island it
-    /// cannot otherwise reach goes unfought. A war across water is the one a navy is the
-    /// only answer to, so it comes first.
+    /// Prioritize wars where this country is a primary leader (attacker or defender) over
+    /// distant junior coalition wars (so an island nation fighting its neighbour never sends
+    /// its fleet across the ocean to Cuba), and prioritize overseas wars that cannot be walked
+    /// to over landward wars, breaking ties by closest enemy capital.
     /// </summary>
     private static StrategicWar FindWar(Campaign campaign, Nation nation)
     {
-        StrategicWar landward = null;
+        StrategicWar best = null;
+        var bestTier = -1;
+        var bestDistance = float.MaxValue;
         foreach (var war in Warfare.OpenWars(campaign))
         {
             if (war.Ended || !war.Involves(nation.Id)) continue;
             var enemyId = war.EnemyLeaderOf(nation.Id);
             var enemy = campaign.NationById(enemyId);
             if (enemy is null) continue;
-            if (!WalkedTo(campaign, nation, enemy, war)) return war;
-            landward ??= war;
+
+            var isLeader = war.AttackerId == nation.Id || war.DefenderId == nation.Id;
+            var overseas = !WalkedTo(campaign, nation, enemy, war);
+            var tier = (isLeader ? 2 : 0) + (overseas ? 1 : 0);
+            var distance = NavalOperations.Distance(nation.CapitalLatitude, nation.CapitalLongitude,
+                enemy.CapitalLatitude, enemy.CapitalLongitude);
+            if (tier > bestTier || (tier == bestTier && distance < bestDistance))
+            {
+                bestTier = tier;
+                bestDistance = distance;
+                best = war;
+            }
         }
-        return landward;
+        return best;
     }
 
     private static void SendHome(Campaign campaign, Fleet fleet)
@@ -226,6 +238,61 @@ public static class AiAdmiralty
         foreach (var other in campaign.Fleets)
             if (other.NationId == nation.Id) mine += other.Presence;
         return mine;
+    }
+
+    /// <summary>Our navy plus co-belligerent allied fleets fighting on our side of this war.</summary>
+    private static float AlliedNavy(Campaign campaign, Nation nation, StrategicWar war)
+    {
+        var friendly = 0f;
+        foreach (var other in campaign.Fleets)
+        {
+            if (other.Hulls <= 0) continue;
+            if (other.NationId == nation.Id ||
+                (war is not null && WarCoalition.SameSide(war, other.NationId, nation.Id)))
+                friendly += other.Presence;
+        }
+        return friendly;
+    }
+
+    /// <summary>
+    /// Whether this fleet's side has enough sea control (globally with co-belligerents, or locally
+    /// across a narrow strait) to embark and sail an amphibious assault or bridgehead reinforcement.
+    /// </summary>
+    private static bool CanAttemptInvasion(Campaign campaign, Fleet fleet, Nation nation, Nation enemy, StrategicWar war)
+    {
+        var allied = AlliedNavy(campaign, nation, war);
+        var enemyTotal = KnownNavy(campaign, enemy, nation);
+        if (enemyTotal <= allied * campaign.Defines.AiInvasionNavalOdds) return true;
+
+        var narrowRange = MathF.Max(1f, campaign.Defines.AiNarrowStraitInvasionDegrees);
+        CollectBeaches(campaign, fleet, enemy);
+        // Measure narrow-strait crossing distance from the fleet's HOME port (where troops embark),
+        // never from a distant patrol position off an enemy coast across an ocean.
+        var nearestEnemy = float.MaxValue;
+        for (var i = 0; i < Beaches.Count; i++)
+        {
+            if (SeaLanes.TryHarbourPoint(campaign.ProvinceMap, Beaches[i].Province, out var eLat, out var eLon))
+            {
+                var d = NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude, eLat, eLon);
+                if (d < nearestEnemy) nearestEnemy = d;
+            }
+        }
+        var bridgehead = FriendlyBridgeheadPort(campaign, fleet, nation, war);
+        var nearestFriendly = float.MaxValue;
+        if (bridgehead > 0 && SeaLanes.TryHarbourPoint(campaign.ProvinceMap, bridgehead, out var bLat, out var bLon))
+            nearestFriendly = NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude, bLat, bLon);
+        if (MathF.Min(nearestEnemy, nearestFriendly) > narrowRange) return false;
+
+        // Across a narrow strait, only enemy fleets actually at sea near the crossing block fast runs.
+        var localSeaThreat = 0f;
+        foreach (var other in campaign.Fleets)
+        {
+            if (other.Hulls <= 0 || other.InPort) continue;
+            if (other.NationId != enemy.Id && !CampaignDiplomacy.AtWar(campaign, other.NationId, nation.Id)) continue;
+            if (NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude, other.Latitude, other.Longitude) <= narrowRange + 4f)
+                localSeaThreat += other.Presence;
+        }
+        return localSeaThreat <= allied * MathF.Max(campaign.Defines.AiInvasionNavalOdds, campaign.Defines.AiNarrowStraitInvasionOdds);
     }
 
     /// <summary>
@@ -254,9 +321,9 @@ public static class AiAdmiralty
     /// after what the enemy has. Both are the obvious move, which is the point - an AI that
     /// does the obvious thing is one a player can plan against.
     /// </summary>
-    private static void Deploy(Campaign campaign, Fleet fleet, Nation nation, Nation enemy)
+    private static void Deploy(Campaign campaign, Fleet fleet, Nation nation, Nation enemy, StrategicWar war = null)
     {
-        var mine = OwnNavy(campaign, nation);
+        var mine = AlliedNavy(campaign, nation, war);
         var theirs = KnownNavy(campaign, enemy, nation);
 
         var mission = mine >= theirs * campaign.Defines.AiFleetOffensiveRatio
@@ -295,81 +362,114 @@ public static class AiAdmiralty
         new SetFleetOrderCommand { IssuerId = nation.Id, FleetId = fleet.Id, Mission = mission }.Apply(campaign);
     }
 
-    /// <summary>Take aboard whatever is standing at the fleet's own port.</summary>
+    /// <summary>Take aboard whatever is standing at the fleet's own port, marines first.</summary>
     private static bool TryLoad(Campaign campaign, Fleet fleet, Nation nation)
     {
         if (fleet.Mission != FleetMission.Anchored) { SendHome(campaign, fleet); return false; }
 
         Loadable.Clear();
+        var capacity = NavalInvasion.Capacity(campaign, fleet);
+        var limit = Math.Clamp(Math.Max(campaign.Defines.AiInvasionMaxFormations, (int)MathF.Floor(capacity)), 1, 6);
         foreach (var army in campaign.Armies)
         {
             if (army.NationId != nation.Id || army.EmbarkedFleetId >= 0) continue;
+            if (army.TemplateId == MilitiaCore.TemplateId) continue;
             if (!NavalInvasion.CanEmbark(campaign, fleet, army, out _)) continue;
             Loadable.Add(army);
-            if (Loadable.Count >= campaign.Defines.AiInvasionMaxFormations) break;
         }
         if (Loadable.Count == 0)
         {
             // Nobody at the quayside. An invasion the AI wants and never mounts because its
             // divisions are all standing on a front six hundred miles inland is not an AI
-            // with an invasion; so it sends for one.
+            // with an invasion; so it sends for formations to embark.
             SummonToPort(campaign, fleet, nation);
             return false;
         }
 
-        foreach (var army in Loadable) NavalInvasion.Embark(campaign, fleet, army);
+        // Embark amphibious-trained marines and fresh offensive divisions first.
+        Loadable.Sort((left, right) =>
+        {
+            var leftAmphib = UnitTypeCatalog.Get(left.TemplateId).Amphibious;
+            var rightAmphib = UnitTypeCatalog.Get(right.TemplateId).Amphibious;
+            var cmp = rightAmphib.CompareTo(leftAmphib);
+            if (cmp != 0) return cmp;
+            cmp = (right.Organisation * right.Strength).CompareTo(left.Organisation * left.Strength);
+            return cmp != 0 ? cmp : left.Id.CompareTo(right.Id);
+        });
+
+        var embarked = 0;
+        var loadedDivisions = NavalInvasion.CarriedDivisions(campaign, fleet);
+        foreach (var army in Loadable)
+        {
+            if (embarked >= limit) break;
+            if (loadedDivisions + army.Divisions > capacity + 0.001f) continue;
+            NavalInvasion.Embark(campaign, fleet, army);
+            loadedDivisions += army.Divisions;
+            embarked++;
+        }
+        if (embarked == 0)
+        {
+            SummonToPort(campaign, fleet, nation);
+            return false;
+        }
         return true;
     }
 
     /// <summary>
-    /// March the nearest formation that is doing nothing important to the fleet's port.
-    /// One at a time, and only one: an AI that empties its whole front into a harbour to
-    /// mount a landing has lost the war it was already fighting.
+    /// March up to a wave's worth of idle / non-front formations (preferring marines) to the
+    /// fleet's port, while always keeping a home garrison behind if few divisions remain.
     /// </summary>
     private static void SummonToPort(Campaign campaign, Fleet fleet, Nation nation)
     {
         var topology = campaign.ProvinceMap;
         if (topology is null || fleet.HomeProvinceId <= 0) return;
 
-        Army chosen = null;
-        var bestDistance = float.MaxValue;
+        var capacity = Math.Clamp((int)MathF.Floor(NavalInvasion.Capacity(campaign, fleet)), 1, 4);
+        var candidates = new List<(Army Army, float Amphibious, float Distance)>();
+        var alreadyHeading = 0;
         foreach (var army in campaign.Armies)
         {
             if (army.NationId != nation.Id || army.EmbarkedFleetId >= 0) continue;
             if (army.InBattle || army.ProvinceId <= 0) continue;
             if (army.TemplateId == MilitiaCore.TemplateId || army.FrontLineId >= 0) continue;
-            // Only an existing march to THIS port fulfils the request. An unrelated
-            // column must not prevent every other reserve from boarding.
             if (army.Route.Count > 0)
             {
-                if (army.OrderProvinceId == fleet.HomeProvinceId) return;
+                if (army.OrderProvinceId == fleet.HomeProvinceId) alreadyHeading++;
                 continue;
             }
             if (army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead or ArmyOrder.DefendFront)
             {
-                // A nominal land role in an overseas war with no own sector is not
-                // a reason to leave the only landing troops inland forever.
-                //
-                // Nor is a sector the division cannot walk to. Holding one post of the front
-                // anywhere used to count for the whole army, so a country whose front is
-                // across the sea from most of it summoned nobody.
                 if (WalksToFront(campaign, nation, army.AssignedWarId).Contains(army.ProvinceId)) continue;
             }
+            if (army.ProvinceId != fleet.HomeProvinceId && topology.FindRoute(army.ProvinceId,
+                    fleet.HomeProvinceId, (ushort)nation.MapIndex, campaign.ProvinceController).Length == 0) continue;
             var centre = topology.CenterOf(army.ProvinceId);
             var distance = NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude,
                 centre.Latitude, centre.Longitude);
-            if (distance >= bestDistance) continue;
-            if (army.ProvinceId != fleet.HomeProvinceId && topology.FindRoute(army.ProvinceId,
-                    fleet.HomeProvinceId, (ushort)nation.MapIndex, campaign.ProvinceController).Length == 0) continue;
-            bestDistance = distance;
-            chosen = army;
+            candidates.Add((army, UnitTypeCatalog.Get(army.TemplateId).Amphibious, distance));
         }
-        if (chosen is null) return;
+        if (candidates.Count == 0 || alreadyHeading >= capacity) return;
 
-        new MoveArmyCommand
+        // Leave at least 2 divisions on the home landmass when summoning an expeditionary wave.
+        var maxSummon = Math.Min(capacity - alreadyHeading, Math.Max(1, candidates.Count - 2));
+        if (candidates.Count <= 2) maxSummon = alreadyHeading > 0 ? 0 : 1;
+        if (maxSummon <= 0) return;
+
+        candidates.Sort((left, right) =>
         {
-            IssuerId = nation.Id, ArmyId = chosen.Id, TargetProvinceId = fleet.HomeProvinceId
-        }.Apply(campaign);
+            var cmp = right.Amphibious.CompareTo(left.Amphibious);
+            if (cmp != 0) return cmp;
+            cmp = left.Distance.CompareTo(right.Distance);
+            return cmp != 0 ? cmp : left.Army.Id.CompareTo(right.Army.Id);
+        });
+
+        for (var i = 0; i < maxSummon && i < candidates.Count; i++)
+        {
+            new MoveArmyCommand
+            {
+                IssuerId = nation.Id, ArmyId = candidates[i].Army.Id, TargetProvinceId = fleet.HomeProvinceId
+            }.Apply(campaign);
+        }
     }
 
     /// <summary>
@@ -434,9 +534,14 @@ public static class AiAdmiralty
         return reached;
     }
 
-    private static void LaunchIfPossible(Campaign campaign, Fleet fleet, Nation nation, Nation enemy)
+    private static void LaunchIfPossible(Campaign campaign, Fleet fleet, Nation nation, Nation enemy, StrategicWar war = null)
     {
-        var beach = BestBeach(campaign, fleet, enemy);
+        // If we already hold an occupied enemy coastal bridgehead that walks to the front AND
+        // has room to expand (not overcrowded in a tiny 1-2 province pocket), shuttle follow-up
+        // waves straight into that friendly beachhead port. If our pocket is cramped and already
+        // packed with divisions, open a flanking second landing on another weakly defended beach!
+        var bridgehead = war is not null ? FriendlyBridgeheadPort(campaign, fleet, nation, war) : -1;
+        var beach = bridgehead > 0 ? bridgehead : BestBeach(campaign, fleet, enemy);
         if (beach > 0)
         {
             var launch = new LaunchInvasionCommand { IssuerId = nation.Id, FleetId = fleet.Id, ProvinceId = beach };
@@ -448,6 +553,59 @@ public static class AiAdmiralty
         // the fleet is, which is home only when the fleet is.
         if (fleet.InPort) NavalInvasion.Disembark(campaign, fleet, fleet.BerthProvinceId);
         else NavalOperations.SendHome(campaign, fleet);
+    }
+
+    /// <summary>
+    /// A coastal province already captured from the enemy across water that can walk to our
+    /// overseas front in <paramref name="war"/>, unless that pocket is tiny and already crowded
+    /// (in which case returning -1 lets the fleet open a flanking second landing!).
+    /// </summary>
+    private static int FriendlyBridgeheadPort(Campaign campaign, Fleet fleet, Nation nation, StrategicWar war)
+    {
+        var topology = campaign.ProvinceMap;
+        var control = campaign.ProvinceController;
+        if (topology is null || control is null || war is null) return -1;
+        var reachableFromFront = WalksToFront(campaign, nation, war.Id);
+        if (reachableFromFront.Count == 0) return -1;
+        var basin = SeaLanes.BasinAt(topology, fleet.Latitude, fleet.Longitude);
+        var search = campaign.Defines.AiInvasionSearchDegrees;
+        var own = (ushort)nation.MapIndex;
+
+        // Count how many occupied enemy provinces we hold in this front component and how many
+        // friendly divisions are already crammed inside it.
+        var occupiedProvinces = 0;
+        foreach (var p in reachableFromFront)
+            if (p > 0 && p < control.Length && control[p] == own && topology.ProvinceToNation[p] != own)
+                occupiedProvinces++;
+        if (occupiedProvinces == 0) return -1;
+        if (occupiedProvinces <= 2)
+        {
+            var crowded = 0;
+            foreach (var army in campaign.Armies)
+                if (army.NationId == nation.Id && army.EmbarkedFleetId < 0 && army.ProvinceId > 0 &&
+                    reachableFromFront.Contains(army.ProvinceId))
+                    crowded++;
+            // Already 8+ divisions in a 1-2 province beachhead: open a second coastal landing!
+            if (crowded >= 8) return -1;
+        }
+
+        var best = -1;
+        var bestDistance = float.MaxValue;
+        foreach (var province in SeaLanes.CoastalProvinces(topology))
+        {
+            if (province <= 0 || province >= control.Length || control[province] != own) continue;
+            // Must be an occupied enemy-owned coastal bridgehead on the rival's landmass, never
+            // one of our own tiny offshore islands (like Kinmen) where troops would just stack.
+            if (topology.ProvinceToNation[province] == own) continue;
+            if (!reachableFromFront.Contains(province)) continue;
+            if (basin >= 0 && SeaLanes.HarbourBasin(topology, province) != basin) continue;
+            if (!SeaLanes.TryHarbourPoint(topology, province, out var latitude, out var longitude)) continue;
+            var distance = NavalOperations.Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
+            if (distance >= search || distance >= bestDistance) continue;
+            bestDistance = distance;
+            best = province;
+        }
+        return best;
     }
 
     /// <summary>

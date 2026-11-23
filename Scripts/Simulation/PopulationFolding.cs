@@ -29,19 +29,17 @@ public sealed partial class Defines
     /// 500 a world from 2024 counted 2.4 million people a year under another people this way,
     /// at 100 it is a fifth of that, and the table is only a tenth larger for it.
     /// </summary>
-    public int FoldPeopleSliverPeople { get; set; } = 100;
+    public int FoldPeopleSliverPeople { get; set; } = 1500;
 
     /// <summary>... and at most this share of the region. It joins its own people of another faith, or failing that another people of its faith.</summary>
-    public float FoldPeopleSliverShare { get; set; } = 0.0003f;
+    public float FoldPeopleSliverShare { get; set; } = 0.0025f;
 
     /// <summary>
     /// How often a region's last slivers of a faith and of a people are looked at, in weeks; each
-    /// region on a week of its own. A year: a sliver is folded for having stayed a sliver, not
-    /// for having arrived this week - two newcomers a week are a community of a hundred before
-    /// their region's turn comes round. Trades are folded every week whatever this says. 1:
-    /// every week.
+    /// region on a week of its own. Quarterly (13 weeks) prevents century-long migration tables
+    /// from bloating past 100k+ sliver rows while giving newcomers a full quarter to establish.
     /// </summary>
-    public int FoldPeopleEveryWeeks { get; set; } = 52;
+    public int FoldPeopleEveryWeeks { get; set; } = 13;
 
     /// <summary>... and, to be folded into another people, at most this share of its own people in the world.</summary>
     public float FoldPeopleSliverOfPeople { get; set; } = 0.0005f;
@@ -499,12 +497,226 @@ public static class PopulationFolding
             }
         }
 
+        // Asymptotic cap per region (128 groups): compact any surviving long-tail trade,
+        // faith, or non-immune secondary groups in O(n log n) while preserving normal diversity,
+        // headcount conservation, and anchor/movement immunity.
+        const int MaxRegionPopulationGroups = 128;
+        if (groups.Count > MaxRegionPopulationGroups &&
+            defines.FoldSliverGroups &&
+            (defines.FoldTradeSliverPeople > 0 || defines.FoldPeopleSliverPeople > 0))
+        {
+            folded += CapRegionPopulationGroups(campaign, state, shield, groups, MaxRegionPopulationGroups,
+                ref tradePeople, ref faithPeople, ref culturePeople);
+        }
+
         if (folded == 0) return false;
+        MovementRules.MarkPeopleStateDirty(campaign, state);
         System.Threading.Interlocked.Add(ref campaign.FoldedGroups, folded);
         System.Threading.Interlocked.Add(ref campaign.FoldedTradePeople, tradePeople);
         System.Threading.Interlocked.Add(ref campaign.FoldedFaithPeople, faithPeople);
         System.Threading.Interlocked.Add(ref campaign.FoldedCulturePeople, culturePeople);
         return true;
+    }
+
+    private sealed class PairIgnoreCaseComparer : IEqualityComparer<(string Culture, string Religion)>
+    {
+        public static readonly PairIgnoreCaseComparer Instance = new();
+        public bool Equals((string Culture, string Religion) x, (string Culture, string Religion) y) =>
+            string.Equals(x.Culture, y.Culture, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(x.Religion, y.Religion, StringComparison.OrdinalIgnoreCase);
+        public int GetHashCode((string Culture, string Religion) obj) =>
+            HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Culture ?? ""),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Religion ?? ""));
+    }
+
+    [ThreadStatic] private static List<int> _capVictims;
+    [ThreadStatic] private static Dictionary<(string, string), int> _capPairBest;
+    [ThreadStatic] private static Dictionary<string, int> _capCultureBest;
+    [ThreadStatic] private static Dictionary<string, long> _capCultureTotal;
+    [ThreadStatic] private static Dictionary<string, bool> _capCultureProtected;
+    [ThreadStatic] private static Dictionary<string, int> _capFaithBest;
+
+    private static int CapRegionPopulationGroups(Campaign campaign, ScenarioState state, Shield shield,
+        List<PopulationGroup> groups, int maxGroups,
+        ref long tradePeople, ref long faithPeople, ref long culturePeople)
+    {
+        var live = 0;
+        for (var i = 0; i < groups.Count; i++)
+            if (groups[i].Size > 0) live++;
+        if (live <= maxGroups) return 0;
+
+        var folded = 0;
+        var victims = _capVictims ??= new List<int>(groups.Count);
+
+        int CompareVictims(int a, int b)
+        {
+            var sa = groups[a].Size;
+            var sb = groups[b].Size;
+            var cmp = sa.CompareTo(sb);
+            return cmp != 0 ? cmp : a.CompareTo(b);
+        }
+
+        // Phase A: O(n log n) — fold smallest trade splinters within the same (Culture, Religion) pair first.
+        var pairBest = _capPairBest ??= new Dictionary<(string, string), int>(PairIgnoreCaseComparer.Instance);
+        pairBest.Clear();
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var g = groups[i];
+            if (g.Size <= 0) continue;
+            var key = (g.Culture ?? "", g.Religion ?? "");
+            if (!pairBest.TryGetValue(key, out var cur) || g.Size > groups[cur].Size)
+                pairBest[key] = i;
+        }
+        victims.Clear();
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var g = groups[i];
+            if (g.Size <= 0) continue;
+            var host = pairBest[(g.Culture ?? "", g.Religion ?? "")];
+            if (i != host) victims.Add(i);
+        }
+        if (victims.Count > 0)
+        {
+            victims.Sort(CompareVictims);
+            var take = Math.Min(live - maxGroups, victims.Count);
+            for (var vi = 0; vi < take; vi++)
+            {
+                var idx = victims[vi];
+                var v = groups[idx];
+                var host = pairBest[(v.Culture ?? "", v.Religion ?? "")];
+                var size = v.Size;
+                Merge(groups[host], v);
+                tradePeople += size;
+                folded++;
+                live--;
+            }
+        }
+
+        // Phase B: O(n log n) — fold smallest secondary faith splinters within the same Culture.
+        if (live > maxGroups && campaign.Defines.FoldPeopleSliverPeople > 0)
+        {
+            var cultureBest = _capCultureBest ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            cultureBest.Clear();
+            for (var i = 0; i < groups.Count; i++)
+            {
+                var g = groups[i];
+                if (g.Size <= 0) continue;
+                var key = g.Culture ?? "";
+                if (!cultureBest.TryGetValue(key, out var cur) || g.Size > groups[cur].Size)
+                    cultureBest[key] = i;
+            }
+            victims.Clear();
+            for (var i = 0; i < groups.Count; i++)
+            {
+                var g = groups[i];
+                if (g.Size <= 0) continue;
+                var host = cultureBest[g.Culture ?? ""];
+                if (i != host) victims.Add(i);
+            }
+            if (victims.Count > 0)
+            {
+                victims.Sort(CompareVictims);
+                var take = Math.Min(live - maxGroups, victims.Count);
+                for (var vi = 0; vi < take; vi++)
+                {
+                    var idx = victims[vi];
+                    var v = groups[idx];
+                    var host = cultureBest[v.Culture ?? ""];
+                    var size = v.Size;
+                    Merge(groups[host], v);
+                    faithPeople += size;
+                    folded++;
+                    live--;
+                }
+            }
+        }
+
+        // Phase C: O(n log n) — fold smallest non-immune secondary culture groups while preserving Own/Anchor/Movement/Home/Keep.
+        if (live > maxGroups && campaign.Defines.FoldPeopleSliverPeople > 0)
+        {
+            var owner = campaign.NationsByMapIndex().GetValueOrDefault(state.NationMapIndex);
+            shield.Movements.TryGetValue(state.MapIndex, out var movements);
+            shield.Homes.TryGetValue(state.MapIndex, out var homes);
+            var keep = Math.Max(0, campaign.Defines.FoldKeepCulturePeople);
+            var ofPeople = Math.Clamp(campaign.Defines.FoldPeopleSliverOfPeople, 0f, 1f);
+
+            var cTotals = _capCultureTotal ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            var cProtected = _capCultureProtected ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            var faithBest = _capFaithBest ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            cTotals.Clear();
+            cProtected.Clear();
+            faithBest.Clear();
+
+            var largestIdx = -1;
+            long largestSize = -1;
+            for (var i = 0; i < groups.Count; i++)
+            {
+                var g = groups[i];
+                if (g.Size <= 0) continue;
+                var cKey = g.Culture ?? "";
+                cTotals[cKey] = cTotals.GetValueOrDefault(cKey) + g.Size;
+                if (g.Size > largestSize) { largestSize = g.Size; largestIdx = i; }
+            }
+
+            foreach (var (cKey, totalInState) in cTotals)
+            {
+                var prot = string.IsNullOrEmpty(cKey) || Own(owner, cKey);
+                if (!prot && shield.World.TryGetValue(cKey, out var world))
+                {
+                    if (world.People < keep || world.Anchor == state.MapIndex || world.Anchor < 0 ||
+                        totalInState > (long)(world.People * (double)ofPeople))
+                        prot = true;
+                }
+                else if (!prot)
+                {
+                    prot = true;
+                }
+                if (!prot && movements is not null)
+                    for (var m = 0; m < movements.Count; m++)
+                        if (movements[m].HasPeople(cKey)) { prot = true; break; }
+                if (!prot && homes is not null)
+                    for (var h = 0; h < homes.Count; h++)
+                        if (Own(homes[h], cKey)) { prot = true; break; }
+                cProtected[cKey] = prot;
+            }
+
+            victims.Clear();
+            for (var i = 0; i < groups.Count; i++)
+            {
+                var g = groups[i];
+                if (g.Size <= 0) continue;
+                var prot = cProtected.GetValueOrDefault(g.Culture ?? "", true);
+                if (prot)
+                {
+                    var rKey = g.Religion ?? "";
+                    if (!faithBest.TryGetValue(rKey, out var fb) || g.Size > groups[fb].Size)
+                        faithBest[rKey] = i;
+                }
+                else if (i != largestIdx)
+                {
+                    victims.Add(i);
+                }
+            }
+
+            if (largestIdx >= 0 && victims.Count > 0)
+            {
+                victims.Sort(CompareVictims);
+                var take = Math.Min(live - maxGroups, victims.Count);
+                for (var vi = 0; vi < take; vi++)
+                {
+                    var v = groups[victims[vi]];
+                    if (v.Size <= 0) continue;
+                    var host = faithBest.TryGetValue(v.Religion ?? "", out var fb) ? fb : largestIdx;
+                    var size = v.Size;
+                    Merge(groups[host], v);
+                    culturePeople += size;
+                    folded++;
+                    live--;
+                }
+            }
+        }
+        return folded;
     }
 
     /// <summary>

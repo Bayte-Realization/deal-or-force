@@ -88,7 +88,21 @@ public static class CivilIndependence
     {
         if (movement.Movement.ReadyOnDay.GetValueOrDefault(ConsentKey(owner.Id), -1) >= c.ElapsedDays) return true;
         if (owner.IsHuman) return false;
-        return PoliticsCore.GovernmentOf(owner).WarRestraint >= c.Defines.CivilReferendumRestraint &&
+        var restraintBar = c.Defines.CivilReferendumRestraint;
+        if (c.ElapsedDays > 0)
+        {
+            var eraShift = GeopoliticalCycle.CurrentEraRegime(c) switch
+            {
+                GlobalEraRegime.MultipolarConcert => -0.06f,
+                GlobalEraRegime.ArmedDetente => -0.02f,
+                GlobalEraRegime.RevisionistTide => 0.06f,
+                GlobalEraRegime.PostImperialTurbulence => 0.04f,
+                _ => 0f
+            };
+            var pivot = GeopoliticalCycle.GenerationalPivotBias(c, owner, 0xC171) * -0.05f;
+            restraintBar = M.Clamp(restraintBar + eraShift + pivot, 0.35f, 0.90f);
+        }
+        return PoliticsCore.GovernmentOf(owner).WarRestraint >= restraintBar &&
             owner.Stability >= 0.5f && CampaignDiplomacy.Peek(c, movement.Id, owner.Id)?.EmbargoBy(owner.Id) != true;
     }
 
@@ -122,9 +136,13 @@ public static class CivilIndependence
         if (Refusal(c, movement, region).Length != 0) return false;
         var owner = c.Nations.First(n => n.MapIndex == region.NationMapIndex);
         var place = region.DisplayName;
-        // The count: what the residents think, give or take what the campaign's last weeks do.
-        var swing = c.Defines.CivilReferendumSwing * (2f * Escalation.Roll(c.Seed, movement.Id, region.MapIndex, c.ElapsedDays, 0x7E1) - 1f);
-        var result = M.Clamp01(ResidentSupport(movement, region) + swing);
+        // The count: what the residents think, give or take what the campaign's last weeks and
+        // generational diplomatic climate do.
+        var swingRoll = GeopoliticalCycle.HashToUnit(GeopoliticalCycle.HashPairEpoch(
+            c.Seed, movement, owner, c.ElapsedDays + GeopoliticalCycle.DecadeIndex(c.ElapsedDays) * 31, 0x7E1));
+        var swing = c.Defines.CivilReferendumSwing * (2f * swingRoll - 1f);
+        var eraMomentum = c.ElapsedDays > 0 ? GeopoliticalCycle.BilateralRealignmentBias(c, movement, owner) * 0.025f : 0f;
+        var result = M.Clamp01(ResidentSupport(movement, region) + swing + eraMomentum);
         if (result <= c.Defines.CivilReferendumMajority)
         {
             var state = movement.Movement;

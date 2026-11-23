@@ -1,0 +1,51 @@
+{
+  "id": "example_chronicles_of_aethelgard",
+  "name": "Example: Chronicles of Aethelgard (Fantasy Total Conversion)",
+  "version": "1.0.0",
+  "supported_game_version": "*",
+  "enabled": false,
+  "load_order": 210,
+  "dependencies": [],
+  "total_conversion": true,
+  "era_name": "Third Sun",
+  "replace_paths": [
+    "events",
+    "common/technologies",
+    "common/decisions",
+    "common/ideologies",
+    "common/governments"
+  ],
+  "exclude_paths": [],
+  "disabled_features": [
+    "nukes",
+    "modern_air_force",
+    "missiles",
+    "drones",
+    "modern_intelligence"
+  ],
+  "calendar": {
+    "id": "third_sun",
+    "era_name": "Third Sun",
+    "era_short": "3S",
+    "year_offset": 0,
+    "format": "{day} {month}, Year {year} of the {era}",
+    "year_format": "Year {year} of the {era}",
+    "month_names": [
+      "Frostfall",
+      "Deepwinter",
+      "Thawmoon",
+      "Blossomtide",
+      "Suncrest",
+      "Highsummer",
+      "Goldharvest",
+      "Emberwane",
+      "Mistveil",
+      "Galewatch",
+      "Duskfrost",
+      "Starquiet"
+    ],
+    "show_era_in_date": true
+  },
+  "theme": "aethelgard_parchment",
+  "music_playlist": "aethelgard_lute"
+}

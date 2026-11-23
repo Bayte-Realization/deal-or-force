@@ -231,7 +231,7 @@ public static class PeaceNegotiation
         if (terms is not (PeaceTerms.Ceasefire or PeaceTerms.WhitePeace or PeaceTerms.StatusQuo)) return 0;
         var score = war.IsAttacking(proposerId) ? war.WarScore : -war.WarScore;
         var responder = campaign.NationById(war.EnemyLeaderOf(proposerId));
-        if (score >= 0 || responder is null || responder.IsHuman ||
+        if (score >= 0 || responder is null || campaign.IsHumanControlled(responder) ||
             !AiStatecraft.ShouldPressWarAim(campaign, responder, war)) return 0;
         var penalty = campaign.Defines.AiWarAimResolvePenalty;
         if (!float.IsFinite(penalty)) penalty = 70f;

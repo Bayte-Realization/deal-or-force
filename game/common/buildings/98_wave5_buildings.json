@@ -1,0 +1,37 @@
+// Modern strategic buildings expanding mid- and late-game industrial transformation.
+// Declared through the standard BuildingCatalog pipeline so tooltips, jobs, construction
+// capacity, depreciation, AI builders and mods consume them identically to core buildings.
+{
+  "CleanEnergyPlant": {
+    "name": "Clean power station",
+    "cost": 2.15,
+    "days": 210,
+    "capacity_gain": 0.14,
+    "jobs": 0.16,
+    "description": "Utility-scale solar, wind, hydro and modular nuclear generation. Supplies clean grid power using batteries and copper without burning coal."
+  },
+  "IndustrialPark": {
+    "name": "Industrial & construction park",
+    "cost": 1.75,
+    "days": 175,
+    "capacity_gain": 0.55,
+    "jobs": 0.45,
+    "description": "Integrated contractor yards and machine shops. Greatly expands national construction capacity while producing industrial materials and machinery."
+  },
+  "SemiconductorFab": {
+    "name": "Semiconductor foundry",
+    "cost": 3.60,
+    "days": 310,
+    "capacity_gain": 0.08,
+    "jobs": 0.40,
+    "description": "High-purity lithography foundry producing semiconductors and advanced chips from silica, chemicals, noble gases and chipmaking equipment."
+  },
+  "LogisticsHub": {
+    "name": "Intermodal logistics hub",
+    "cost": 1.50,
+    "days": 165,
+    "capacity_gain": 0.42,
+    "jobs": 0.24,
+    "description": "Automated freight terminals and cold-chain depots. Raises construction throughput and boosts regional consumer and industrial distribution."
+  }
+}

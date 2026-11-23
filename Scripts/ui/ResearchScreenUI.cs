@@ -241,6 +241,7 @@ public partial class DealOrForceGame
 
     private void OpenResearchScreen()
     {
+        EnsureScreen("research", BuildResearchScreen);
         _openScreen = "Research";
         _sidePanel.Visible = false;
         HideMapSelection(true);
@@ -254,6 +255,7 @@ public partial class DealOrForceGame
 
     private void CloseResearchScreen()
     {
+        if (_researchLayer is null) return;
         _researchLayer.Visible = false;
         if (_openScreen == "Research") _openScreen = "";
         UpdateScreenButtons();

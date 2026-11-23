@@ -219,18 +219,35 @@ public partial class DealOrForceGame
             _knownEndedBattles.Add(battle.Id);
     }
 
+    private int _audioLastBattleCount = -1;
+    private long _audioLastBattleHours = -1;
+    private int _audioLastBattleWarRev = -1;
+    private int _audioLastBattlePlayerId = -1;
+
     private void RefreshStrategicAudio()
     {
         if (_campaign?.Player is null || !_hudLayer.Visible) return;
         RefreshDomesticAudio();
+        var playerId = _campaign.Player.Id;
         var playerWon = false;
         var playerLost = false;
-        foreach (var battle in _campaign.Battles.Where(battle => battle.Ended &&
-                     (battle.AttackerId == _campaign.Player.Id || battle.DefenderId == _campaign.Player.Id)))
+        if (_campaign.Battles.Count != _audioLastBattleCount ||
+            _campaign.ElapsedHours != _audioLastBattleHours ||
+            _campaign.WarRevision != _audioLastBattleWarRev ||
+            playerId != _audioLastBattlePlayerId)
         {
-            if (!_knownEndedBattles.Add(battle.Id)) continue;
-            if (battle.WinnerId == _campaign.Player.Id) playerWon = true;
-            else playerLost = true;
+            _audioLastBattleCount = _campaign.Battles.Count;
+            _audioLastBattleHours = _campaign.ElapsedHours;
+            _audioLastBattleWarRev = _campaign.WarRevision;
+            _audioLastBattlePlayerId = playerId;
+            for (var i = 0; i < _campaign.Battles.Count; i++)
+            {
+                var battle = _campaign.Battles[i];
+                if (!battle.Ended || (battle.AttackerId != playerId && battle.DefenderId != playerId)) continue;
+                if (!_knownEndedBattles.Add(battle.Id)) continue;
+                if (battle.WinnerId == playerId) playerWon = true;
+                else playerLost = true;
+            }
         }
 
         if (playerLost) PlayStrategicCue("battle_lost");

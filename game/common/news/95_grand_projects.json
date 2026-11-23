@@ -1,0 +1,13 @@
+{
+  "importance": {
+    "grand_project_started": 1,
+    "grand_project_stage": 1,
+    "grand_project_completed": 2,
+    "grand_project_consortium_joined": 1,
+    "grand_project_consortium_fractured": 2,
+    "grand_project_sabotaged": 2,
+    "grand_project_captured": 2,
+    "supply_chokepoint_squeezed": 2,
+    "strategic_supply_anchor": 1
+  }
+}

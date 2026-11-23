@@ -646,10 +646,9 @@ public static class MilitaryOperations
 {
     /// <summary>
     /// How much of a country's replacement capacity each of its formations has a claim on,
-    /// rebuilt every step. Held here so the step does not allocate it; see the note at its
-    /// one use.
+    /// rebuilt every step into a dense integer-indexed float map (zero hashing, O(1) reset).
     /// </summary>
-    private static readonly Dictionary<int, float> ReinforcementWeights = new();
+    private static readonly ScratchFloatMap ReinforcementWeights = new();
 
     /// <summary>
     /// Bench hook for the isolation harness: when set, fires once per march increment for
@@ -699,6 +698,7 @@ public static class MilitaryOperations
         private int[] _version = Array.Empty<int>();
         public float[] Recovery = Array.Empty<float>();
         public float[] Entrenchment = Array.Empty<float>();
+        public float[] ArmySpeed = Array.Empty<float>();
 
         private int _stamp = 1;
         private int[] _stamps = Array.Empty<int>();
@@ -717,6 +717,7 @@ public static class MilitaryOperations
                 _version = new int[nations];
                 Recovery = new float[nations];
                 Entrenchment = new float[nations];
+                ArmySpeed = new float[nations];
                 _stamps = new int[nations];
                 _readiness = new float[nations];
                 _stamp = 1;
@@ -727,7 +728,7 @@ public static class MilitaryOperations
         }
 
         /// <summary>
-        /// The country's row with both modifiers as NationalModifiers would give them now;
+        /// The country's row with modifiers as NationalModifiers would give them now;
         /// -1 for a formation whose country is not in the list, which asks the long way.
         /// </summary>
         public int Row(Campaign campaign, int nationId)
@@ -742,6 +743,7 @@ public static class MilitaryOperations
             {
                 Recovery[nationId] = NationalModifiers.Factor(nation, "organisation_recovery");
                 Entrenchment[nationId] = NationalModifiers.Factor(nation, "entrenchment_speed");
+                ArmySpeed[nationId] = NationalModifiers.Factor(nation, "army_speed");
                 _owner[nationId] = nation;
                 _totals[nationId] = nation.ModifierTotals;
                 _version[nationId] = nation.ModifierTotalsVersion;
@@ -773,74 +775,100 @@ public static class MilitaryOperations
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(MilitaryOperations))) yield break;
-        OffensivePlanning.Tick(campaign);
+        if (campaign.FrontLines.Count > 0) OffensivePlanning.Tick(campaign);
         var topology = campaign.ProvinceMap;
-        // A nation's daily replacement capacity is shared out by priority - but only among
-        // the formations that can actually take replacements. Counting every division in
-        // the army, full-strength ones included, handed a third of the capacity to units
-        // that returned it unused and quietly threw it away: Russia could field six million
-        // reservists and still watch its line fall to 6 % strength, because most of what it
-        // could move each day was allotted to divisions that were already full.
-        // Reused rather than rebuilt. At a daily step this was one dictionary of two hundred
-        // and sixty entries a day and beneath noticing; at the shipped hourly one it is
-        // twenty-four, and the pass that builds it is already the largest single source of
-        // garbage in the simulation.
         var reinforcementWeights = ReinforcementWeights;
-        reinforcementWeights.Clear();
-        foreach (var formation in campaign.Armies)
+        reinforcementWeights.BeginPass(campaign.Nations.Count);
+        var armySpan = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(campaign.Armies);
+        var anyNeedsReplacements = false;
+        for (var i = 0; i < armySpan.Length; i++)
         {
+            var formation = armySpan[i];
             if (!CanTakeReplacements(formation)) continue;
-            reinforcementWeights[formation.NationId] = reinforcementWeights.GetValueOrDefault(formation.NationId) +
-                                                       ReinforcementDoctrine.Weight(formation.ReinforcementPriority);
+            anyNeedsReplacements = true;
+            reinforcementWeights.Add(formation.NationId, ReinforcementDoctrine.Weight(formation.ReinforcementPriority));
         }
         yield return 0;
         var factors = StepFactors.GetOrCreateValue(campaign);
         factors.Close(campaign.Nations.Count);
+        var defines = campaign.Defines;
+        var tickScale = campaign.TickScale;
+        var weirdRoute = campaign.Curse == WorldCurses.WeirdRoute;
+        var fastPeacetimeAllowed = !weirdRoute && defines.OrganisationRecoveryPerDay >= 0f && defines.EntrenchmentPerDay >= 0f;
+        var controls = campaign.ProvinceController;
+        var ctrlLen = controls?.Length ?? 0;
+        var provCount = topology?.ProvinceCount ?? 0;
+        var armies = campaign.Armies;
         var marched = 0;
-        foreach (var army in campaign.Armies)
+        for (var ai = 0; ai < armies.Count; ai++)
         {
-            if (++marched % 64 == 0)
+            if (++marched % 256 == 0)
             {
                 yield return 0;
                 factors.Close(campaign.Nations.Count);
+                controls = campaign.ProvinceController;
+                ctrlLen = controls?.Length ?? 0;
             }
+            var army = armies[ai];
             army.LastReinforced = 0f;
-            // Interned on neutral ground with no safe home left: no offensive orders or
-            // starvation. The repatriation pass will send it back once a home exists.
-            if (MilitaryAccess.MustReturn(campaign, army) && !army.InBattle)
+            var nation = campaign.NationById(army.NationId);
+            // Single-branch fast path for stationary peacetime full-strength/org/entrenched
+            // divisions standing on their own ground (~70% of all hourly army visits).
+            if (fastPeacetimeAllowed && !army.InBattle && army.Route.Count == 0 && !army.CutOff &&
+                army.Recovering <= 0f && army.Organisation >= 1f && army.Entrenchment >= 1f &&
+                army.PostBattleWaypoints.Count == 0 && army.AssignedWarId < 0 && army.EmbarkedFleetId < 0 &&
+                (!anyNeedsReplacements || !CanTakeReplacements(army)))
+            {
+                if (topology is null || controls is null || army.ProvinceId <= 0 || army.ProvinceId > provCount || army.ProvinceId >= ctrlLen)
+                    continue;
+                var whoFast = controls[army.ProvinceId];
+                if (nation is null || whoFast == 0 || whoFast == nation.MapIndex) continue;
+                if (MilitaryAccess.MustReturn(campaign, army)) MilitaryAccess.Provision(army);
+                continue;
+            }
+            // Fast path: a formation standing on its own ground (the vast majority of armies
+            // every hour) never triggers MilitaryAccess.MustReturn.
+            var mustReturn = false;
+            if (!army.InBattle && !weirdRoute && army.EmbarkedFleetId < 0 && topology is not null && controls is not null &&
+                army.ProvinceId > 0 && army.ProvinceId <= provCount && army.ProvinceId < ctrlLen)
+            {
+                var who = controls[army.ProvinceId];
+                if (nation is not null && who != 0 && who != nation.MapIndex)
+                    mustReturn = MilitaryAccess.MustReturn(campaign, army);
+            }
+            if (mustReturn)
             { MilitaryAccess.Provision(army); continue; }
-            ReturnWounded(campaign, army);
+            if (army.Recovering > 0f) ReturnWounded(campaign, army);
+            var row = -1;
             if (!army.InBattle)
             {
-                // The same two factors in the same places of the same product; only where
-                // they are read from differs (NationFactors).
-                var row = factors.Row(campaign, army.NationId);
-                var recovery = campaign.Defines.OrganisationRecoveryPerDay * campaign.TickScale *
-                    MilitaryDoctrine.Recovery(army.Stance) *
-                    M.Clamp(0.20f + army.SupplyLevel * 0.80f, 0.15f, 1f) *
-                    (row >= 0 ? factors.Recovery[row]
-                        : NationalModifiers.Factor(campaign.NationById(army.NationId), "organisation_recovery")) *
-                    (row >= 0 ? factors.Readiness(campaign, row)
-                        : DefconSystem.ReadinessRecoveryMultiplier(campaign, army.NationId));
-                if (army.OrderKind == ArmyOrder.ReserveFront) recovery *= 1.25f;
-                // A closed pocket is living on what it carried, and rests accordingly: at half
-                // pace while the stores last, a quarter once they are gone. It used to rest
-                // not at all, so a pocket that beat off an assault stayed as spent as the
-                // assault left it and fell to the next shove. The dry-out still arrives - the
-                // ceiling below comes down with the hungry days whatever was recovered.
-                if (army.CutOff)
-                    recovery *= army.PocketStores > 0f
-                        ? campaign.Defines.PocketRecoveryWithStores
-                        : campaign.Defines.PocketRecoveryHungry;
-                army.Organisation = M.Clamp01(army.Organisation + recovery);
-                Reinforce(campaign, army, reinforcementWeights.GetValueOrDefault(army.NationId, 1f));
+                // Peacetime / full-organisation divisions skip the modifier & DEFCON readiness
+                // lookup when positive recovery would clamp right back to 1f.
+                if (army.Organisation < 1f || army.CutOff || defines.OrganisationRecoveryPerDay < 0f)
+                {
+                    // The same two factors in the same places of the same product; only where
+                    // they are read from differs (NationFactors).
+                    row = factors.Row(campaign, army.NationId);
+                    var recovery = defines.OrganisationRecoveryPerDay * tickScale *
+                        MilitaryDoctrine.Recovery(army.Stance) *
+                        M.Clamp(0.20f + army.SupplyLevel * 0.80f, 0.15f, 1f) *
+                        (row >= 0 ? factors.Recovery[row]
+                            : NationalModifiers.Factor(nation, "organisation_recovery")) *
+                        (row >= 0 ? factors.Readiness(campaign, row)
+                            : DefconSystem.ReadinessRecoveryMultiplier(campaign, army.NationId));
+                    if (army.OrderKind == ArmyOrder.ReserveFront) recovery *= 1.25f;
+                    // A closed pocket is living on what it carried, and rests accordingly: at half
+                    // pace while the stores last, a quarter once they are gone.
+                    if (army.CutOff)
+                        recovery *= army.PocketStores > 0f
+                            ? defines.PocketRecoveryWithStores
+                            : defines.PocketRecoveryHungry;
+                    army.Organisation = M.Clamp01(army.Organisation + recovery);
+                }
+                if (CanTakeReplacements(army))
+                    Reinforce(campaign, army, reinforcementWeights.GetOrDefault(army.NationId, 1f));
             }
 
-            // And nothing else wastes it here. There was a third hunger in this place, by
-            // the hour, for any cut-off formation whose supply had sunk under 0.16 - on top of
-            // the daily clock (LogisticsSystem.AgeCutOff) and the daily wasting (Attrition).
-            // Hunger now has one clock and one wasting, both with a floor, and the supply
-            // floor is 0.15: left in, this would have run for ever.
             if (army.CutOff) LogisticsSystem.HoldCauldron(campaign, army);
 
             if (army.InBattle) continue;
@@ -852,20 +880,25 @@ public static class MilitaryOperations
                 if (army.ReadyDay > campaign.ElapsedDays) continue;
                 BattleMovementOrders.Resume(campaign, army);
                 factors.Close(campaign.Nations.Count);
+                row = -1;
             }
 
             if (topology is null || army.Route.Count == 0)
             {
                 if (!army.InBattle)
                 {
-                    var row = factors.Row(campaign, army.NationId);
-                    army.Entrenchment = M.Clamp01(army.Entrenchment + campaign.Defines.EntrenchmentPerDay * campaign.TickScale *
-                        MilitaryDoctrine.Entrenchment(army.Stance) *
-                        (row >= 0 ? factors.Entrenchment[row]
-                            : NationalModifiers.Factor(campaign.NationById(army.NationId), "entrenchment_speed")));
+                    if (army.Entrenchment < 1f || defines.EntrenchmentPerDay < 0f)
+                    {
+                        if (row < 0) row = factors.Row(campaign, army.NationId);
+                        army.Entrenchment = M.Clamp01(army.Entrenchment + defines.EntrenchmentPerDay * tickScale *
+                            MilitaryDoctrine.Entrenchment(army.Stance) *
+                            (row >= 0 ? factors.Entrenchment[row]
+                                : NationalModifiers.Factor(nation, "entrenchment_speed")));
+                    }
                     if (army.AssignedWarId >= 0 &&
-                        (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead))
-                        army.Planning = M.Clamp01(army.Planning + campaign.Defines.PlanningGainPerDay * campaign.TickScale *
+                        (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead) &&
+                        (army.Planning < 1f || defines.PlanningGainPerDay < 0f))
+                        army.Planning = M.Clamp01(army.Planning + defines.PlanningGainPerDay * tickScale *
                             MilitaryDoctrine.Planning(army.Stance));
                 }
                 continue;
@@ -873,8 +906,7 @@ public static class MilitaryOperations
 
             var template = UnitTypeCatalog.Get(army.TemplateId);
             var nextProvince = army.Route[0];
-            var nation = campaign.NationById(army.NationId);
-            var controllers = campaign.ProvinceController ?? topology.ProvinceToNation;
+            var controllers = controls ?? topology.ProvinceToNation;
             if (nation is null || nextProvince <= 0 || nextProvince > topology.ProvinceCount ||
                 (controllers[nextProvince] != nation.MapIndex && !WarCoalition.FriendlyController(campaign,
                     WarCoalition.AssignedWar(campaign, army), army.NationId, controllers[nextProvince])))
@@ -883,26 +915,21 @@ public static class MilitaryOperations
                 factors.Close(campaign.Nations.Count);
                 continue;
             }
-            // A ferry does not sail under an enemy squadron's guns. The formation keeps its
-            // route and the progress it has made and waits on the quay: the day the strait is
-            // clear it goes on, without anybody having to give the order again.
+            // A ferry does not sail under an enemy squadron's guns.
             if (topology.IsCrossingEnd(army.ProvinceId) &&
                 LandCrossings.StepClosed(campaign, army.NationId, army.ProvinceId, nextProvince)) continue;
             var crossingStrength = topology.RiverCrossingStrength(army.ProvinceId, nextProvince);
-            // A river and a strait are never the same step, so one factor carries both: the
-            // river's share of pace, or the bridge's or the ferry's (LandCrossings).
-            var riverMovement = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier, crossingStrength) *
+            var riverMovement = M.Lerp(1f, defines.RiverMovementMultiplier, crossingStrength) *
                 LandCrossings.MarchMultiplier(campaign, army.ProvinceId, nextProvince);
-            var marchSupply = M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f);
+            var marchSupply = M.Clamp(army.SupplyLevel, defines.MarchSupplyFloor, 1f);
             var cutOffSlow = army.CutOff && army.DaysCutOff > 3 ? (army.DaysCutOff >= 10 ? 0.20f : 0.35f) : 1.0f;
             var terrainSpeed = topology.TerrainAt(nextProvince).MovementSpeed;
             var redeploySpeed = StrategicRedeployment.DayOf(campaign, army);
-            var nationSpeed = NationalModifiers.Factor(nation, "army_speed");
-            // And on roads: the march is through friendly ground, and a
-            // region with a network of them is crossed faster than one without.
+            if (row < 0) row = factors.Row(campaign, army.NationId);
+            var nationSpeed = row >= 0 ? factors.ArmySpeed[row] : NationalModifiers.Factor(nation, "army_speed");
             var roadSpeed = MovementPace.Roads(campaign, nextProvince);
-            var doctrineSpeed = MilitaryDoctrine.Movement(army.Stance, campaign.Defines);
-            army.MoveProgress += campaign.Defines.MarchProgressPerDay * campaign.TickScale * template.Speed *
+            var doctrineSpeed = MilitaryDoctrine.Movement(army.Stance, defines);
+            army.MoveProgress += defines.MarchProgressPerDay * tickScale * template.Speed *
                 doctrineSpeed * marchSupply * riverMovement * cutOffSlow *
                 terrainSpeed * redeploySpeed * nationSpeed * roadSpeed;
             if (MarchProbe is not null && army.Id == MarchProbeArmyId)
@@ -956,9 +983,17 @@ public static class MilitaryOperations
         Army army, Nation nation, int nextProvince)
     {
         var blockingNation = nextProvince > 0 && nextProvince <= topology.ProvinceCount
-            ? campaign.Nations.Find(n => n.MapIndex == controllers[nextProvince]) : null;
-        var crossingWar = nation is null || blockingNation is null ? null : Warfare.OpenWars(campaign).Find(w =>
-            !w.Ended && w.Opposes(nation.Id, blockingNation.Id));
+            ? campaign.NationByMapIndex(controllers[nextProvince]) : null;
+        StrategicWar crossingWar = null;
+        if (nation is not null && blockingNation is not null)
+        {
+            var openWars = Warfare.OpenWars(campaign);
+            for (var wi = 0; wi < openWars.Count; wi++)
+            {
+                var w = openWars[wi];
+                if (!w.Ended && w.Opposes(nation.Id, blockingNation.Id)) { crossingWar = w; break; }
+            }
+        }
         if (army.DirectOrder && army.OrderProvinceId > 0 && crossingWar is not null)
         {
             army.Route.Clear();
@@ -1404,22 +1439,39 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         }
     }
 
+    private static readonly List<int> FocusSpearheadScratch = new();
+
     private static void FocusSpearhead(Campaign campaign, StrategicWar war, int nationId, Army army, List<int> front)
     {
         var topology = campaign.ProvinceMap;
         var nation = campaign.NationById(nationId);
-        var objective = campaign.States.Find(state => state.MapIndex == army.ObjectiveStateMapIndex);
+        var objective = campaign.StateByMapIndex(army.ObjectiveStateMapIndex);
         if (objective is null || objective.NationMapIndex == nation?.MapIndex)
         {
             army.ObjectiveStateMapIndex = war.ClaimedStateMapIndex;
-            objective = campaign.States.Find(state => state.MapIndex == army.ObjectiveStateMapIndex);
+            objective = campaign.StateByMapIndex(army.ObjectiveStateMapIndex);
         }
         if (topology is null || objective is null || front.Count < 2) return;
-        var focused = front.Where(province => topology.Neighbors[province].Any(neighbor =>
-            topology.ProvinceToState[neighbor] == objective.MapIndex)).ToList();
+        var objIndex = objective.MapIndex;
+        var focused = FocusSpearheadScratch;
+        focused.Clear();
+        for (var fi = 0; fi < front.Count; fi++)
+        {
+            var province = front[fi];
+            var neighbors = topology.Neighbors[province];
+            for (var ni = 0; ni < neighbors.Length; ni++)
+            {
+                if (topology.ProvinceToState[neighbors[ni]] == objIndex)
+                {
+                    focused.Add(province);
+                    break;
+                }
+            }
+        }
         if (focused.Count == 0) return;
+        focused.Sort();
         front.Clear();
-        front.AddRange(focused.OrderBy(value => value));
+        front.AddRange(focused);
     }
 }
 
@@ -1456,6 +1508,8 @@ public sealed class SetArmyReinforcementPriorityCommand : ICampaignCommand
 /// <summary>Separates laying out an offensive plan from executing it.</summary>
 public sealed class SetArmyPlanExecutionCommand : ICampaignCommand
 {
+    private static readonly SetArmyPlanExecutionCommand FeatureProbe = new();
+
     public int IssuerId { get; init; }
     public int ArmyId { get; init; }
     public bool Active { get; init; }
@@ -1463,15 +1517,31 @@ public sealed class SetArmyPlanExecutionCommand : ICampaignCommand
     public void Apply(Campaign campaign)
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
-        var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
-        if (army is null || army.NationId != IssuerId) return;
+        Army army = null;
+        var armies = campaign.Armies;
+        for (var i = 0; i < armies.Count; i++)
+        {
+            if (armies[i].Id == ArmyId) { army = armies[i]; break; }
+        }
+        ApplyResolved(campaign, army, IssuerId, Active);
+    }
+
+    internal static void ApplyTo(Campaign campaign, Army army, int issuerId, bool active)
+    {
+        if (!MechanicFeatures.Allows(campaign, FeatureProbe)) return;
+        ApplyResolved(campaign, army, issuerId, active);
+    }
+
+    private static void ApplyResolved(Campaign campaign, Army army, int issuerId, bool active)
+    {
+        if (army is null || army.NationId != issuerId) return;
         if (army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) return;
-        if (Active && StaffReasons.SupplyHoldsAttack(campaign, army)) return;
-        army.PlanActive = Active;
+        if (active && StaffReasons.SupplyHoldsAttack(campaign, army)) return;
+        army.PlanActive = active;
         var line = BattlePlanning.LineFor(campaign, army);
         if (!army.InBattle && line is { Kind: FrontLineKind.Offensive } && line.Objectives.Count > 0)
         {
-            if (Active) OffensivePlanning.Route(campaign, army, line);
+            if (active) OffensivePlanning.Route(campaign, army, line);
             else { army.Route.Clear(); army.PlannedRoute.Clear(); army.MoveProgress = 0; }
         }
     }
@@ -1601,7 +1671,7 @@ public static class MilitaryBootstrap
         "CHN 2035000 IND 1455000 USA 1328000 PRK 1280000 RUS 1150000",
         "PAK 654000 KOR 500000 IRN 610000 VNM 470000 EGY 440000",
         "MMR 406000 UKR 800000 IDN 400000 BRA 366000 THA 361000",
-        "COL 293000 MEX 277000 JPN 247000 TUR 355000 TWN 169000",
+        "COL 293000 MEX 277000 JPN 247000 TUR 355000 TWN 260000",
         "SAU 257000 FRA 205000 DEU 184000 ITA 165000 GBR 148000",
         "POL 202000 ESP 133000 ISR 170000 IRQ 193000 ETH 162000",
         "DZA 130000 SDN 104000 MAR 195000 SYR 169000 GRC 142000",

@@ -1,0 +1,290 @@
+// Wave 5 geopolitical dilemma events weaving POL-01 cleavages, WAR-02 nuclear doctrine
+// & arms control, megaproject consortia, chokepoint diplomacy, and post-war rebuilding.
+{
+  "w5_regional_fiscal_revolt": {
+    "title": "w5.ev.fiscal_revolt.title",
+    "description": "w5.ev.fiscal_revolt.desc",
+    "trigger": { "max_stability": 0.72 },
+    "weight": 1.25,
+    "options": [
+      {
+        "title": "w5.ev.fiscal_revolt.opt1",
+        "consequence": "w5.ev.fiscal_revolt.con1",
+        "effects": {
+          "treasury_percent": -0.05,
+          "stability": 0.025,
+          "state.radicalism": -0.025
+        },
+        "modifiers": [
+          { "id": "w5_fiscal_compact_spirit", "days": 240 }
+        ]
+      },
+      {
+        "title": "w5.ev.fiscal_revolt.opt2",
+        "consequence": "w5.ev.fiscal_revolt.con2",
+        "effects": {
+          "political_points": -10.0,
+          "stability": -0.015,
+          "treasury_percent": 0.03,
+          "state.radicalism": 0.020
+        }
+      },
+      {
+        "title": "w5.ev.fiscal_revolt.opt3",
+        "consequence": "w5.ev.fiscal_revolt.con3",
+        "effects": {
+          "political_points": -6.0,
+          "credit_confidence": 0.03,
+          "state.standard_of_living": -0.010
+        }
+      }
+    ]
+  },
+
+  "w5_industrial_reform_standoff": {
+    "title": "w5.ev.industrial_standoff.title",
+    "description": "w5.ev.industrial_standoff.desc",
+    "trigger": { "min_literacy": 0.55 },
+    "weight": 1.15,
+    "options": [
+      {
+        "title": "w5.ev.industrial_standoff.opt1",
+        "consequence": "w5.ev.industrial_standoff.con1",
+        "effects": {
+          "productivity": 0.015,
+          "treasury_percent": -0.04,
+          "state.radicalism": 0.012
+        },
+        "modifiers": [
+          { "id": "w5_industrial_retooling", "days": 240 }
+        ]
+      },
+      {
+        "title": "w5.ev.industrial_standoff.opt2",
+        "consequence": "w5.ev.industrial_standoff.con2",
+        "effects": {
+          "stability": 0.020,
+          "state.standard_of_living": 0.012,
+          "treasury_percent": -0.03
+        },
+        "modifiers": [
+          { "id": "w5_civic_consensus", "days": 210 }
+        ]
+      }
+    ]
+  },
+
+  "w5_security_establishment_memorandum": {
+    "title": "w5.ev.security_memo.title",
+    "description": "w5.ev.security_memo.desc",
+    "trigger": { "at_war": true },
+    "weight": 1.25,
+    "options": [
+      {
+        "title": "w5.ev.security_memo.opt1",
+        "consequence": "w5.ev.security_memo.con1",
+        "effects": {
+          "army_experience": 10.0,
+          "war_support": 0.035,
+          "treasury_percent": -0.05,
+          "stability": -0.012
+        }
+      },
+      {
+        "title": "w5.ev.security_memo.opt2",
+        "consequence": "w5.ev.security_memo.con2",
+        "effects": {
+          "political_points": 8.0,
+          "stability": 0.018,
+          "war_support": -0.015
+        }
+      }
+    ]
+  },
+
+  "w5_arms_control_verification_dispute": {
+    "title": "w5.ev.arms_verification.title",
+    "description": "w5.ev.arms_verification.desc",
+    "trigger": { "min_literacy": 0.60, "at_war": false },
+    "weight": 1.10,
+    "options": [
+      {
+        "title": "w5.ev.arms_verification.opt1",
+        "consequence": "w5.ev.arms_verification.con1",
+        "effects": {
+          "political_points": -8.0,
+          "notoriety": -3.5,
+          "credit_confidence": 0.03
+        },
+        "modifiers": [
+          { "id": "w5_ev_verifiers_deployed", "days": 270 }
+        ]
+      },
+      {
+        "title": "w5.ev.arms_verification.opt2",
+        "consequence": "w5.ev.arms_verification.con2",
+        "effects": {
+          "notoriety": 3.0,
+          "war_support": 0.025,
+          "air_experience": 6.0
+        },
+        "modifiers": [
+          { "id": "w5_triad_modernization", "days": 210 }
+        ]
+      }
+    ]
+  },
+
+  "w5_doctrine_white_paper_leak": {
+    "title": "w5.ev.doctrine_leak.title",
+    "description": "w5.ev.doctrine_leak.desc",
+    "trigger": { "min_gdp": 80.0 },
+    "weight": 1.05,
+    "options": [
+      {
+        "title": "w5.ev.doctrine_leak.opt1",
+        "consequence": "w5.ev.doctrine_leak.con1",
+        "effects": {
+          "notoriety": -3.0,
+          "market_access": 0.02,
+          "war_support": -0.012
+        }
+      },
+      {
+        "title": "w5.ev.doctrine_leak.opt2",
+        "consequence": "w5.ev.doctrine_leak.con2",
+        "effects": {
+          "notoriety": 4.0,
+          "war_support": 0.030,
+          "army_experience": 5.0
+        }
+      },
+      {
+        "title": "w5.ev.doctrine_leak.opt3",
+        "consequence": "w5.ev.doctrine_leak.con3",
+        "effects": {
+          "political_points": -10.0,
+          "stability": 0.015
+        }
+      }
+    ]
+  },
+
+  "w5_megaproject_consortium_overrun": {
+    "title": "w5.ev.consortium_overrun.title",
+    "description": "w5.ev.consortium_overrun.desc",
+    "trigger": { "min_gdp": 50.0, "at_war": false },
+    "weight": 1.15,
+    "options": [
+      {
+        "title": "w5.ev.consortium_overrun.opt1",
+        "consequence": "w5.ev.consortium_overrun.con1",
+        "effects": {
+          "treasury_percent": -0.06,
+          "construction_capacity": 0.25,
+          "credit_confidence": 0.03
+        }
+      },
+      {
+        "title": "w5.ev.consortium_overrun.opt2",
+        "consequence": "w5.ev.consortium_overrun.con2",
+        "effects": {
+          "political_points": -8.0,
+          "market_access": 0.025,
+          "notoriety": -2.0
+        }
+      }
+    ]
+  },
+
+  "w5_chokepoint_transit_summit": {
+    "title": "w5.ev.chokepoint_summit.title",
+    "description": "w5.ev.chokepoint_summit.desc",
+    "trigger": { "max_market_access": 0.93 },
+    "weight": 1.20,
+    "options": [
+      {
+        "title": "w5.ev.chokepoint_summit.opt1",
+        "consequence": "w5.ev.chokepoint_summit.con1",
+        "effects": {
+          "treasury_percent": -0.04,
+          "market_access": 0.04,
+          "notoriety": -2.5
+        },
+        "modifiers": [
+          { "id": "w5_crisis_summit_accord", "days": 240 }
+        ]
+      },
+      {
+        "title": "w5.ev.chokepoint_summit.opt2",
+        "consequence": "w5.ev.chokepoint_summit.con2",
+        "effects": {
+          "naval_experience": 8.0,
+          "notoriety": 2.5,
+          "treasury_percent": -0.03
+        }
+      }
+    ]
+  },
+
+  "w5_postwar_reconstruction_tenders": {
+    "title": "w5.ev.reconstruction_tenders.title",
+    "description": "w5.ev.reconstruction_tenders.desc",
+    "trigger": { "at_war": false, "min_public_debt": 15.0 },
+    "weight": 1.15,
+    "options": [
+      {
+        "title": "w5.ev.reconstruction_tenders.opt1",
+        "consequence": "w5.ev.reconstruction_tenders.con1",
+        "effects": {
+          "treasury_percent": -0.05,
+          "state.standard_of_living": 0.018,
+          "stability": 0.020
+        },
+        "modifiers": [
+          { "id": "w5_rebuilding_authority", "days": 300 }
+        ]
+      },
+      {
+        "title": "w5.ev.reconstruction_tenders.opt2",
+        "consequence": "w5.ev.reconstruction_tenders.con2",
+        "effects": {
+          "public_debt_percent": -0.05,
+          "market_access": 0.03,
+          "state.radicalism": 0.010
+        },
+        "modifiers": [
+          { "id": "w5_ev_wartime_repatriation", "days": 240 }
+        ]
+      }
+    ]
+  },
+
+  "w5_emergency_grain_and_energy_corridor": {
+    "title": "w5.ev.grain_energy_corridor.title",
+    "description": "w5.ev.grain_energy_corridor.desc",
+    "trigger": { "min_inflation": 0.04 },
+    "weight": 1.15,
+    "options": [
+      {
+        "title": "w5.ev.grain_energy_corridor.opt1",
+        "consequence": "w5.ev.grain_energy_corridor.con1",
+        "effects": {
+          "treasury_percent": -0.05,
+          "inflation": -0.016,
+          "state.standard_of_living": 0.015,
+          "notoriety": -2.0
+        }
+      },
+      {
+        "title": "w5.ev.grain_energy_corridor.opt2",
+        "consequence": "w5.ev.grain_energy_corridor.con2",
+        "effects": {
+          "treasury_percent": 0.04,
+          "inflation": 0.010,
+          "state.radicalism": 0.012
+        }
+      }
+    ]
+  }
+}

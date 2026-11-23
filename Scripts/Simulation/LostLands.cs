@@ -61,6 +61,21 @@ public static class LostLands
         return lost;
     }
 
+    internal static void FillOfHolder(Campaign campaign, Nation nation, Nation holder, HashSet<int> regionIndices)
+    {
+        regionIndices.Clear();
+        if (campaign is null || nation is null || holder is null || holder.Id == nation.Id || holder.Population <= 0) return;
+        if (holder.AnswersTo(nation.Id) || nation.AnswersTo(holder.Id)) return;
+        var states = campaign.StatesOf(holder);
+        for (var i = 0; i < states.Length; i++)
+        {
+            var region = states[i];
+            if (region.NationMapIndex == nation.MapIndex) continue;
+            if (TerritorialClaims.TitleOf(campaign, nation, region) == TerritorialTitle.Homeland)
+                regionIndices.Add(region.MapIndex);
+        }
+    }
+
     /// <summary>
     /// How much of our lost homeland the other country holds, as a weight for the AI's war
     /// judgement: millions of people in it over twelve, at most two and a half - the same scale
@@ -105,8 +120,10 @@ public static class LostLands
         var relative = people / (Math.Max(1, nation.Population) + people);
         var memory = people / 12_000_000 + relative * Math.Max(0, campaign.Defines.AiRevancheRelativeWeight);
         var distractions = 0;
-        foreach (var w in Warfare.OpenWars(campaign))
+        var live = Warfare.LiveWars(campaign);
+        for (var i = 0; i < live.Count; i++)
         {
+            var w = live[i];
             if (!w.Ended && w.Involves(other.Id) && !w.Involves(nation.Id)) distractions++;
         }
         var distress = M.Clamp01((.55f - other.Stability) / .55f);
@@ -156,7 +173,8 @@ public static class LostLands
         if (region is null) return null;
 
         var id = -(campaign.ElapsedDays * 1000 + nation.Id) - 1;
-        if (campaign.PendingEvents.Any(item => item.Id == id)) return null;
+        for (var i = 0; i < campaign.PendingEvents.Count; i++)
+            if (campaign.PendingEvents[i].Id == id) return null;
         nation.LostLandAskedDay = campaign.ElapsedDays;
         var item = new PendingCampaignEvent
         {

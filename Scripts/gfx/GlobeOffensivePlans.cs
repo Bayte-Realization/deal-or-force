@@ -1,14 +1,21 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Godot;
 
 namespace DealOrForce;
 
+/// <summary>
+/// High-contrast operational offensive plan arrows and destination bars.
+/// Three-pass cartographic ink (charcoal keyline, vivid operational fill, luminous spine + flared arrowhead)
+/// with reusable scratch buffers for zero per-rebuild LINQ allocations.
+/// </summary>
 public sealed partial class GlobePresentation
 {
     private readonly List<int> _objectivePreview = new();
     private readonly HashSet<int> _departurePreview = new();
+    private readonly List<Vector3> _offensiveGoalScratch = new();
+    private readonly List<Vector3> _offensiveStartScratch = new();
+    private readonly List<Vector3> _offensiveAxisScratch = new(34);
 
     public void SetOffensivePlanPreview(IEnumerable<int> goals, IEnumerable<int> departure)
     {
@@ -29,39 +36,53 @@ public sealed partial class GlobePresentation
     private void DrawOffensiveGeometry(IReadOnlyList<int> goals, IEnumerable<int> departure, bool preview, int phaseState = 1)
     {
         if (goals.Count == 0) return;
-        var points = goals.Select(PlanPoint).ToList();
+        _offensiveGoalScratch.Clear();
+        for (var i = 0; i < goals.Count; i++)
+            _offensiveGoalScratch.Add(PlanPoint(goals[i]));
+
         // A clicked province is a short destination bar, not a giant province outline.
-        if (points.Count == 1)
+        if (_offensiveGoalScratch.Count == 1)
         {
-            var point = points[0];
+            var point = _offensiveGoalScratch[0];
             var side = _flatMap ? Vector3.Right : point.Normalized().Cross(Vector3.Up).Normalized();
-            points[0] = OnOrderSurface(point - side * .012f);
-            points.Add(OnOrderSurface(point + side * .012f));
+            _offensiveGoalScratch[0] = OnOrderSurface(point - side * .014f);
+            _offensiveGoalScratch.Add(OnOrderSurface(point + side * .014f));
         }
-        var color = preview ? new Color(1f, .66f, .30f, .95f) : phaseState < 0
-            ? new Color(.48f, .68f, .52f, .72f) : phaseState > 1
-            ? new Color(.95f, .67f, .24f, .78f) : new Color(.95f, .29f, .20f, .95f);
-        PlanStroke(points, .0017f, color, false);
+
+        var color = preview ? new Color(1f, .70f, .28f, .96f) : phaseState < 0
+            ? new Color(.44f, .78f, .56f, .80f) : phaseState > 1
+            ? new Color(.98f, .68f, .22f, .86f) : new Color(.98f, .26f, .18f, .96f);
+        PlanStroke(_offensiveGoalScratch, .0021f, color, false);
+
         var end = PlanPoint(goals[goals.Count / 2]);
-        var starts = departure.Select(PlanPoint).ToArray();
-        if (starts.Length == 0) return;
-        var alongGoal = (points[^1] - points[0]).Normalized();
+        _offensiveStartScratch.Clear();
+        foreach (var dep in departure) _offensiveStartScratch.Add(PlanPoint(dep));
+        if (_offensiveStartScratch.Count == 0) return;
+
+        var alongGoal = (_offensiveGoalScratch[^1] - _offensiveGoalScratch[0]).Normalized();
         // Prefer approaching across the goal line, not running along and hiding inside it.
-        var start = starts.OrderBy(p => p.DistanceSquaredTo(end) *
-            (1f + 8f * MathF.Abs((end - p).Normalized().Dot(alongGoal)))).First();
+        var start = _offensiveStartScratch[0];
+        var bestScore = float.MaxValue;
+        for (var i = 0; i < _offensiveStartScratch.Count; i++)
+        {
+            var candidate = _offensiveStartScratch[i];
+            var d2 = candidate.DistanceSquaredTo(end);
+            var score = d2 * (1f + 8f * MathF.Abs((end - candidate).Normalized().Dot(alongGoal)));
+            if (score < bestScore) { bestScore = score; start = candidate; }
+        }
         if (start.DistanceSquaredTo(end) < .0004f) return;
+
         // A single operational axis connects the source sector to the destination bar.
-        // It is a plan symbol, not a substitute for the per-division province routes.
-        var axis = new List<Vector3>();
+        _offensiveAxisScratch.Clear();
         var middle = (start + end) * .5f;
         var normal = _flatMap ? Vector3.Forward : middle.Normalized();
-        var bend = normal.Cross(end - start).Normalized() * MathF.Min(.025f, start.DistanceTo(end) * .1f);
+        var bend = normal.Cross(end - start).Normalized() * MathF.Min(.026f, start.DistanceTo(end) * .11f);
         for (var i = 0; i <= 32; i++)
         {
             var t = i / 32f;
-            axis.Add(OnOrderSurface(start.Lerp(middle + bend, t).Lerp((middle + bend).Lerp(end, t), t)));
+            _offensiveAxisScratch.Add(OnOrderSurface(start.Lerp(middle + bend, t).Lerp((middle + bend).Lerp(end, t), t)));
         }
-        PlanStroke(axis, .0030f, color, true);
+        PlanStroke(_offensiveAxisScratch, .0034f, color, true);
     }
 
     private void PlanStroke(IReadOnlyList<Vector3> points, float width, Color color, bool arrow)
@@ -82,11 +103,18 @@ public sealed partial class GlobePresentation
         if (_drawingPlanId >= 0)
             for (var i = 1; i < _ribbonSamples.Count; i++)
                 _planHitSegments.Add((_drawingPlanId, _drawingPlanObjective, _ribbonSamples[i - 1], _ribbonSamples[i]));
-        // Quiet charcoal keyline keeps the red ink readable on political/terrain colours.
-        for (var pass = 0; pass < 2; pass++)
+
+        // Three-pass cartographic operational stroke:
+        // 0 = deep charcoal outer keyline for mountain/snow contrast,
+        // 1 = vivid saturated operational body,
+        // 2 = crisp luminous center spine on offensive arrows.
+        var passes = arrow ? 3 : 2;
+        var spineColor = color.Lightened(0.36f);
+        spineColor.A = color.A * 0.78f;
+        for (var pass = 0; pass < passes; pass++)
         {
-            var paint = pass == 0 ? new Color(.10f, .09f, .07f, .65f) : color;
-            var w = width * (pass == 0 ? 1.35f : 1f);
+            var paint = pass == 0 ? new Color(.06f, .055f, .05f, .82f) : pass == 1 ? color : spineColor;
+            var w = width * (pass == 0 ? 1.48f : pass == 1 ? 1.0f : 0.34f);
             _frontMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip);
             for (var i = 0; i < _ribbonSamples.Count; i++)
             {
@@ -95,10 +123,14 @@ public sealed partial class GlobePresentation
                     _ribbonSamples[Math.Max(i - 1, 0)]).Normalized();
                 var normal = _flatMap ? Vector3.Forward : point.Normalized();
                 var remaining = point.DistanceTo(_ribbonSamples[^1]);
-                var half = arrow && remaining < .028f ? w * 3f * remaining / .028f : w;
+                var headSpan = .032f;
+                var half = arrow && remaining < headSpan
+                    ? w * (pass == 2 ? 1.8f : 3.2f) * remaining / headSpan
+                    : w;
                 var side = normal.Cross(direction).Normalized() * half;
                 _frontMesh.SurfaceSetColor(paint);
                 _frontMesh.SurfaceAddVertex(OnOrderSurface(point + side));
+                _frontMesh.SurfaceSetColor(paint);
                 _frontMesh.SurfaceAddVertex(OnOrderSurface(point - side));
             }
             _frontMesh.SurfaceEnd();

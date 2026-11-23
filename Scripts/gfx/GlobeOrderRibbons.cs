@@ -26,18 +26,20 @@ void fragment() {
     float center_spine = 1.0 - smoothstep(0.0, 0.24, abs(UV.y - 0.5));
     float filled = 1.0 - smoothstep(COLOR.a - 0.006, COLOR.a + 0.006, UV2.x);
     float grain = mix(0.72, 1.10, texture(ink, UV).r);
-    // Flowing tactical chevrons along the shaft (suppressed inside the arrowhead UV2.y > 0.5)
-    float chevron_coord = fract(UV.x * 1.35 - abs(UV.y - 0.5) * 0.85 - TIME * 1.15);
-    float chevron = smoothstep(0.18, 0.34, chevron_coord) * (1.0 - smoothstep(0.55, 0.72, chevron_coord)) * (1.0 - step(0.5, UV2.y));
-    vec3 base_paint = order_color.rgb * grain * mix(0.68, 1.04, filled);
-    base_paint = mix(base_paint, clamp(order_color.rgb * 1.28 + vec3(0.12, 0.10, 0.06), vec3(0.0), vec3(1.0)), chevron * 0.42 + center_spine * 0.18);
-    ALBEDO = mix(vec3(0.04, 0.05, 0.07), base_paint, inner);
+    // Flowing tactical chevrons along the shaft + crisp highlight on the arrowhead (UV2.y > 0.5).
+    float is_head = step(0.5, UV2.y);
+    float chevron_coord = fract(UV.x * 1.40 - abs(UV.y - 0.5) * 0.90 - TIME * 1.25);
+    float chevron = smoothstep(0.18, 0.34, chevron_coord) * (1.0 - smoothstep(0.55, 0.72, chevron_coord)) * (1.0 - is_head);
+    vec3 base_paint = order_color.rgb * grain * mix(0.72, 1.08, filled);
+    base_paint = mix(base_paint, clamp(order_color.rgb * 1.32 + vec3(0.14, 0.11, 0.06), vec3(0.0), vec3(1.0)), chevron * 0.46 + center_spine * 0.20 + is_head * 0.22);
+    ALBEDO = mix(vec3(0.03, 0.04, 0.055), base_paint, inner);
     float hatch = support_order && UV2.y < 0.5 ? mix(0.55, 1.0, step(0.28, fract(UV.x * 2.0))) : 1.0;
-    ALPHA = coverage * mix(0.68, 0.98, filled) * hatch;
+    ALPHA = coverage * mix(0.72, 0.98, max(filled, is_head * 0.85)) * hatch;
 }
 """ };
         var kinds = new[] { "move", "attack", "support" };
-        var colors = new[] { new Color(1f, 0.78f, 0.22f), new Color(0.94f, 0.23f, 0.15f), new Color(1f, 0.46f, 0.24f) };
+        // Distinct HOI4-grade directional inks: emerald-brass march vs vivid crimson assault vs amber support.
+        var colors = new[] { new Color(0.32f, 0.84f, 0.54f), new Color(0.96f, 0.20f, 0.14f), new Color(1.0f, 0.58f, 0.18f) };
         for (var i = 0; i < kinds.Length; i++)
         {
             // The source PNG if it is on disk, the imported copy if it is not.
@@ -92,7 +94,8 @@ void fragment() {
         return image;
     }
 
-    private Vector3 OnOrderSurface(Vector3 point) => _flatMap ? point : point.Normalized() * SurfaceLineRadius;
+    private Vector3 OnOrderSurface(Vector3 point) =>
+        _flatMap ? LocalFlatPointFromWorld(point, FlatLineZ) : LocalSurfacePointFromNormal(point, SurfaceLineRadius);
 
     private void SampleRibbonTo(Vector3 point)
     {

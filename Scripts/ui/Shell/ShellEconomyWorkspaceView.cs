@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using DealOrForce.Simulation;
 using DealOrForce.Simulation.Shell;
@@ -9,11 +8,11 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// Full-screen 5-tab "Экономика" (Economy) workspace matching state-5.jpg (Revision 3):
-/// docked inside FullWorkspace so the L-corner, Date Plate, and compact Bottom Strip remain active;
-/// two-column Revenue & Spending sliders with inline quick presets, "Куда идут деньги" stacked
-/// spending share bar, 6-month ruled treasury trajectory chart, right-column Balance & Debt quick
-/// repayment controls, and brass-rimmed "Свести в ноль" primary CTA.
+/// Full-screen 5-tab "Economy" workspace docked inside FullWorkspace:
+/// top 4-card fiscal summary ribbon (Treasury, Weekly Flow, Debt/GDP, Inflation),
+/// responsive 2-col/1-col Revenue &amp; Spending sliders with inline quick presets,
+/// color-coded spending share bar, labeled 6-month treasury trajectory chart, prominent
+/// Grand Projects CTA card, domestic supply-shortage alerts, and Debt quick repayment.
 /// </summary>
 internal sealed class ShellEconomyWorkspaceView
 {
@@ -23,27 +22,33 @@ internal sealed class ShellEconomyWorkspaceView
     private PanelContainer _panel;
     private Label _subtitleLabel;
     private readonly Button[] _tabButtons = new Button[5];
+    private EconomyFiscalRibbonNodes _ribbon;
 
+    private GridContainer _budgetGrid;
     private VBoxContainer _revRows;
     private VBoxContainer _expRows;
     private Label _revSumLabel;
     private Label _expSumLabel;
+    private EconomyTaxEfficiencyNodes _taxEfficiencyBanner;
     private HBoxContainer _spendingStackBar;
     private Control _treasuryChart;
+    private VBoxContainer _productionMethodsBox;
 
+    private ScrollContainer _rightScroll;
     private Label _balanceBigLabel;
     private Control _balanceMeter;
     private Label _forecastNoteLabel;
+    private Label _gpCardStatusLabel;
+    private VBoxContainer _shortagesBox;
 
     private Label _debtSummaryLabel;
     private Button _repayAllBtn;
     private readonly Button[] _repayQuarterBtns = new Button[4];
     private Label _repayAmountField;
     private Label _repayPreviewLabel;
-
     private Label _feedbackLabel;
 
-    private int _selectedQuarter = 3; // 0..3 -> 25..100%
+    private int _selectedQuarter = 3;
     private string _focusedLineId = "";
     private bool _syncingSliders;
     private ShellLayoutProfile _profile;
@@ -53,6 +58,7 @@ internal sealed class ShellEconomyWorkspaceView
     private sealed class BudgetRowNodes
     {
         public BudgetLine Line;
+        public Button NameBtn;
         public HSlider Slider;
         public Label RateLabel;
         public Label MoneyLabel;
@@ -68,81 +74,61 @@ internal sealed class ShellEconomyWorkspaceView
 
     public void Build()
     {
-        _layer = new Control
-        {
-            Name = "ShellEconomyWorkspaceLayer",
-            Visible = false,
-            MouseFilter = Control.MouseFilterEnum.Ignore,
-            ZIndex = 25
-        };
+        _layer = new Control { Name = "ShellEconomyWorkspaceLayer", Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore, ZIndex = 25 };
         _layer.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _ctx.Root.AddChild(_layer);
 
-        // Soft map dim behind the workspace (MouseFilter Stop only inside the workspace rect / map area)
-        var dim = new ColorRect
-        {
-            Color = Ui.Colour("shell.well", 0.45f),
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
+        var dim = new ColorRect { Color = Ui.Colour("shell.well", 0.45f), MouseFilter = Control.MouseFilterEnum.Ignore };
         dim.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _layer.AddChild(dim);
 
-        _panel = new PanelContainer
-        {
-            Name = "ShellEconomyWorkspacePanel",
-            MouseFilter = Control.MouseFilterEnum.Stop
-        };
-        _panel.AddThemeStyleboxOverride("panel",
-            _ctx.NineSlice("plate_brass_9s", 16, 18, 12, 18, 12, "shell.body_top", "shell.brass_hi", 3));
+        _panel = new PanelContainer { Name = "ShellEconomyWorkspacePanel", ClipContents = true, MouseFilter = Control.MouseFilterEnum.Stop };
+        _panel.AddThemeStyleboxOverride("panel", _ctx.NineSlice("plate_brass_9s", 16, 16, 12, 16, 12, "shell.body_top", "shell.brass_hi", 3));
         _layer.AddChild(_panel);
         ChromePlateArt.AttachSurfaceTexture(_panel, "linen", 0.30f);
 
-        var rootCol = new VBoxContainer();
+        var rootCol = new VBoxContainer { ClipContents = true };
         rootCol.AddThemeConstantOverride("separation", 8);
         _panel.AddChild(rootCol);
 
         BuildHeader(rootCol);
+        _ribbon = ShellEconomyCharts.BuildFiscalSummaryRibbon(_ctx, rootCol);
         BuildBody(rootCol);
         BuildFooter(rootCol);
     }
 
     private void BuildHeader(VBoxContainer parent)
     {
-        var head = new HBoxContainer();
-        head.AddThemeConstantOverride("separation", 12);
+        var head = new HBoxContainer { ClipContents = true };
+        head.AddThemeConstantOverride("separation", 10);
         parent.AddChild(head);
 
-        var emb = new PanelContainer { CustomMinimumSize = new Vector2(46, 46), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
-        emb.AddThemeStyleboxOverride("panel",
-            _ctx.NineSlice("round_bezel", 0, 9, 9, 9, 9, "shell.plate_top", "shell.brass", 24));
-        var embIco = new TextureRect
+        var emb = new PanelContainer { CustomMinimumSize = new Vector2(44, 44), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+        emb.AddThemeStyleboxOverride("panel", _ctx.NineSlice("round_bezel", 0, 9, 9, 9, 9, "shell.plate_top", "shell.brass", 24));
+        emb.AddChild(new TextureRect
         {
-            Texture = _ctx.Icon("icon_economy"),
-            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            Modulate = Ui.Colour("shell.brass_hi")
-        };
-        emb.AddChild(embIco);
+            Texture = _ctx.Icon("icon_economy"), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, Modulate = Ui.Colour("shell.brass_hi")
+        });
         head.AddChild(emb);
 
-        var titleCol = new VBoxContainer { CustomMinimumSize = new Vector2(220, 0), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+        var titleCol = new VBoxContainer { CustomMinimumSize = new Vector2(180, 0), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter, ClipContents = true };
         titleCol.AddThemeConstantOverride("separation", 1);
         head.AddChild(titleCol);
 
-        var h2 = new Label { Text = Loc.Get("Economy") };
+        var h2 = new Label { Text = Loc.Get("Economy"), ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         h2.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
-        h2.AddThemeFontSizeOverride("font_size", 24);
+        h2.AddThemeFontSizeOverride("font_size", 22);
         h2.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         titleCol.AddChild(h2);
 
-        _subtitleLabel = new Label { Text = Loc.Get("shell.budget_weekly_sub") };
+        _subtitleLabel = new Label { Text = Loc.Get("shell.budget_weekly_sub"), ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         _subtitleLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-        _subtitleLabel.AddThemeFontSizeOverride("font_size", 12);
+        _subtitleLabel.AddThemeFontSizeOverride("font_size", 11);
         _subtitleLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
         titleCol.AddChild(_subtitleLabel);
 
-        // 5 engraved folder tabs matching state-5.jpg: Бюджет | Долг | Рынок | Стройка | Центробанк
-        var tabs = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ShrinkEnd };
+        var tabs = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ShrinkEnd, ClipContents = true };
         tabs.AddThemeConstantOverride("separation", 4);
         head.AddChild(tabs);
 
@@ -155,38 +141,47 @@ internal sealed class ShellEconomyWorkspaceView
             ("shell.tab_cbank", () => { Close(); _ctx.OpenScreen?.Invoke("State Affairs"); })
         };
 
+        var tabHover = _ctx.BorderedBox("shell.plate_hover", "shell.brass_hi", 1, 2, 10, 5, 10, 5);
         for (var i = 0; i < tabSpecs.Length; i++)
         {
             var act = tabSpecs[i].Act;
             var on = i == 0;
+            var txt = Loc.Get(tabSpecs[i].Key);
             var b = new Button
             {
-                Text = Loc.Get(tabSpecs[i].Key),
-                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-                CustomMinimumSize = new Vector2(0, 34),
-                MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-                FocusMode = Control.FocusModeEnum.None
+                Text = txt, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 32),
+                ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, TooltipText = Ui.Tip(txt),
+                MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None
             };
             b.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
-            b.AddThemeFontSizeOverride("font_size", 14);
-            b.AddThemeStyleboxOverride("normal", on
-                ? _ctx.NineSlice("tab_folder_9s", 10, 10, 5, 10, 5)
-                : _ctx.PressedWellStyle(padX: 10, padY: 5));
+            b.AddThemeFontSizeOverride("font_size", 13);
+            var norm = on ? _ctx.NineSlice("tab_folder_9s", 10, 8, 5, 8, 5, "shell.body_bottom", "shell.brass_hi", 2) : _ctx.PressedWellStyle(padX: 8, padY: 5);
+            b.AddThemeStyleboxOverride("normal", norm);
+            b.AddThemeStyleboxOverride("hover", on ? norm : tabHover);
             b.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_faint"));
             b.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); act(); };
             tabs.AddChild(b);
             _tabButtons[i] = b;
         }
 
-        var closeBtn = new Button
+        var gpBtn = new Button
         {
-            Text = "×",
-            CustomMinimumSize = new Vector2(34, 34),
-            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            FocusMode = Control.FocusModeEnum.None
+            Name = "ShellOpenGrandProjectsButton", Text = Loc.Get("gp.ui.title"),
+            CustomMinimumSize = new Vector2(0, 32), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None,
+            TooltipText = Ui.Tip(Loc.Get("gp.ui.subtitle"))
         };
-        closeBtn.AddThemeStyleboxOverride("normal", new StyleBoxEmpty());
+        gpBtn.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
+        gpBtn.AddThemeFontSizeOverride("font_size", 12);
+        gpBtn.AddThemeStyleboxOverride("normal", _ctx.NineSlice("button_brass_cta_9s", 8, 10, 4, 10, 4, "shell.plate_top", "shell.brass_hi", 3));
+        gpBtn.AddThemeStyleboxOverride("hover", _ctx.NineSlice("button_brass_cta_9s", 8, 10, 4, 10, 4, "shell.plate_hover", "shell.paper", 3));
+        gpBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
+        gpBtn.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); _ctx.OpenGrandProjects?.Invoke(); };
+        head.AddChild(gpBtn);
+
+        var closeBtn = new Button { Text = "×", CustomMinimumSize = new Vector2(32, 32), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter, MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None };
+        closeBtn.AddThemeStyleboxOverride("normal", _ctx.BorderedBox("shell.well", "shell.engrave", 1, 2, 0, 0, 0, 0));
+        closeBtn.AddThemeStyleboxOverride("hover", _ctx.BorderedBox("shell.plate_hover", "shell.brass_hi", 1, 2, 0, 0, 0, 0));
         closeBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
         closeBtn.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); Close(); };
         head.AddChild(closeBtn);
@@ -194,179 +189,152 @@ internal sealed class ShellEconomyWorkspaceView
 
     private void BuildBody(VBoxContainer parent)
     {
-        var bodyBox = new PanelContainer
-        {
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-        };
+        var bodyBox = new PanelContainer { ClipContents = true, SizeFlagsVertical = Control.SizeFlags.ExpandFill, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         var bodyStyle = new StyleBoxFlat
         {
-            BgColor = Ui.Colour("shell.body_bottom"),
-            BorderColor = new Color(0f, 0f, 0f, 0.6f),
-            ContentMarginLeft = 16,
-            ContentMarginRight = 16,
-            ContentMarginTop = 12,
-            ContentMarginBottom = 12
+            BgColor = Ui.Colour("shell.body_bottom"), BorderColor = Ui.Colour("shell.engrave"),
+            ContentMarginLeft = 14, ContentMarginRight = 10, ContentMarginTop = 10, ContentMarginBottom = 10
         };
         bodyStyle.SetBorderWidthAll(1);
+        bodyStyle.SetCornerRadiusAll(2);
         bodyBox.AddThemeStyleboxOverride("panel", bodyStyle);
         parent.AddChild(bodyBox);
 
-        var mainSplit = new HBoxContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        mainSplit.AddThemeConstantOverride("separation", 22);
+        var mainSplit = new HBoxContainer { ClipContents = true, SizeFlagsVertical = Control.SizeFlags.ExpandFill, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        mainSplit.AddThemeConstantOverride("separation", 16);
         bodyBox.AddChild(mainSplit);
 
-        // Left area: 2-column Revenue / Spending + Spending Stack + 6-Month Treasury Chart
         var leftScroll = new ScrollContainer
         {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            SizeFlagsStretchRatio = 2.6f,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+            Name = "ShellEconomyLeftScroll", ClipContents = true,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            SizeFlagsStretchRatio = 2.45f, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
         mainSplit.AddChild(leftScroll);
 
-        var leftCol = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        leftCol.AddThemeConstantOverride("separation", 12);
-        leftScroll.AddChild(leftCol);
+        var leftMargin = new MarginContainer { ClipContents = true, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        leftMargin.AddThemeConstantOverride("margin_right", 16);
+        leftScroll.AddChild(leftMargin);
 
-        var twoCols = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        twoCols.AddThemeConstantOverride("separation", 20);
-        leftCol.AddChild(twoCols);
+        var leftCol = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
+        leftCol.AddThemeConstantOverride("separation", 10);
+        leftMargin.AddChild(leftCol);
 
-        var revCol = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _budgetGrid = new GridContainer { Columns = 2, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
+        _budgetGrid.AddThemeConstantOverride("h_separation", 18);
+        _budgetGrid.AddThemeConstantOverride("v_separation", 10);
+        leftCol.AddChild(_budgetGrid);
+
+        var revCol = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
         revCol.AddThemeConstantOverride("separation", 2);
         revCol.AddChild(BuildSectionRule(Loc.Get("REVENUE"), out _revSumLabel));
-        _revRows = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _revRows = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
         _revRows.AddThemeConstantOverride("separation", 2);
         revCol.AddChild(_revRows);
-        twoCols.AddChild(revCol);
+        _taxEfficiencyBanner = ShellEconomyCharts.BuildTaxEfficiencyBanner(_ctx, revCol);
+        _budgetGrid.AddChild(revCol);
 
-        var expCol = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        var expCol = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
         expCol.AddThemeConstantOverride("separation", 2);
         expCol.AddChild(BuildSectionRule(Loc.Get("SPENDING"), out _expSumLabel));
-        _expRows = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _expRows = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
         _expRows.AddThemeConstantOverride("separation", 2);
         expCol.AddChild(_expRows);
-        twoCols.AddChild(expCol);
+        _budgetGrid.AddChild(expCol);
 
-        foreach (var line in BudgetCore.PlayerLines)
-            BuildBudgetSliderRow(line);
+        foreach (var line in BudgetCore.PlayerLines) BuildBudgetSliderRow(line);
 
-        // Proportional spending share bar: "Куда идут деньги"
         leftCol.AddChild(BuildSectionRule(Loc.Get("shell.where_money_goes"), out var shareRight));
         shareRight.Text = Loc.Get("shell.share_of_spending");
 
-        _spendingStackBar = new HBoxContainer { CustomMinimumSize = new Vector2(0, 42), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _spendingStackBar = new HBoxContainer { CustomMinimumSize = new Vector2(0, 42), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
         _spendingStackBar.AddThemeConstantOverride("separation", 2);
         leftCol.AddChild(_spendingStackBar);
 
-        // Ruled 6-month treasury trajectory chart
         leftCol.AddChild(BuildSectionRule(Loc.Get("shell.six_month_treasury"), out var chartRight));
         chartRight.Text = Loc.Get("shell.unit_billion");
 
-        _treasuryChart = new Control
-        {
-            CustomMinimumSize = new Vector2(0, 128),
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-        };
-        _treasuryChart.Draw += () => ShellEconomyCharts.DrawTreasuryChart(_treasuryChart, _ctx.World, _ctx.World?.Player);
+        _treasuryChart = new Control { Name = "ShellEconomyTreasuryChart", CustomMinimumSize = new Vector2(0, 128), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
+        _treasuryChart.Draw += () => ShellEconomyCharts.DrawTreasuryChart(_treasuryChart, _ctx, _ctx.World, _ctx.World?.Player);
         leftCol.AddChild(_treasuryChart);
 
-        // Right summary column: Balance + Debt quick repayment
-        var rightCol = new VBoxContainer
-        {
-            CustomMinimumSize = new Vector2(340, 0),
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            SizeFlagsStretchRatio = 1.0f
-        };
-        rightCol.AddThemeConstantOverride("separation", 12);
-        mainSplit.AddChild(rightCol);
+        ShellEconomyProductionMethods.BuildSection(_ctx, leftCol, out _productionMethodsBox);
 
+        _rightScroll = new ScrollContainer
+        {
+            Name = "ShellEconomyRightScroll", ClipContents = true, CustomMinimumSize = new Vector2(300, 0),
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            SizeFlagsStretchRatio = 1.0f, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+        };
+        mainSplit.AddChild(_rightScroll);
+
+        var rightMargin = new MarginContainer { ClipContents = true, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        rightMargin.AddThemeConstantOverride("margin_right", 15);
+        _rightScroll.AddChild(rightMargin);
+
+        var rightCol = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
+        rightCol.AddThemeConstantOverride("separation", 10);
+        rightMargin.AddChild(rightCol);
         BuildRightSummaryColumn(rightCol);
     }
 
     private void BuildBudgetSliderRow(BudgetLine line)
     {
         var parent = line.Side == BudgetSide.Revenue ? _revRows : _expRows;
-        var wrap = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        var wrap = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
         wrap.AddThemeConstantOverride("separation", 2);
 
-        var rowPanel = new PanelContainer { CustomMinimumSize = new Vector2(0, 34) };
+        var rowPanel = new PanelContainer { CustomMinimumSize = new Vector2(0, 32), ClipContents = true };
         var rowStyle = new StyleBoxFlat
         {
-            BgColor = new Color(0f, 0f, 0f, 0f),
-            BorderColor = Ui.Colour("shell.paper", 0.07f),
-            BorderWidthBottom = 1,
-            ContentMarginLeft = 4,
-            ContentMarginRight = 4
+            BgColor = Ui.Colour("shell.well", 0f), BorderColor = Ui.Colour("shell.paper", 0.08f),
+            BorderWidthBottom = 1, ContentMarginLeft = 4, ContentMarginRight = 4
         };
         rowPanel.AddThemeStyleboxOverride("panel", rowStyle);
         wrap.AddChild(rowPanel);
 
-        var h = new HBoxContainer();
-        h.AddThemeConstantOverride("separation", 8);
+        var h = new HBoxContainer { ClipContents = true };
+        h.AddThemeConstantOverride("separation", 6);
         rowPanel.AddChild(h);
 
         var nameBtn = new Button
         {
-            Text = Loc.Get(line.Name),
-            CustomMinimumSize = new Vector2(148, 0),
-            Alignment = HorizontalAlignment.Left,
-            ClipText = true,
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            FocusMode = Control.FocusModeEnum.None
+            Text = "▸ " + Loc.Get(line.Name), CustomMinimumSize = new Vector2(116, 0),
+            Alignment = HorizontalAlignment.Left, ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, TooltipText = Ui.Tip(Loc.Get(line.Name)),
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None
         };
         nameBtn.AddThemeStyleboxOverride("normal", new StyleBoxEmpty());
-        nameBtn.AddThemeStyleboxOverride("hover", new StyleBoxEmpty());
+        nameBtn.AddThemeStyleboxOverride("hover", _ctx.BorderedBox("shell.plate_hover", "shell.engrave", 1, 2, 4, 1, 4, 1));
         nameBtn.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
         nameBtn.AddThemeFontSizeOverride("font_size", 12);
         nameBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
         var lineId = line.Id;
-        nameBtn.Pressed += () =>
-        {
-            _focusedLineId = _focusedLineId == lineId ? "" : lineId;
-            Refresh();
-        };
+        nameBtn.Pressed += () => { _focusedLineId = _focusedLineId == lineId ? "" : lineId; Refresh(); };
         h.AddChild(nameBtn);
 
         var slider = new HSlider
         {
-            MinValue = line.Minimum,
-            MaxValue = line.Maximum,
-            Step = 0.005,
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
-            CustomMinimumSize = new Vector2(96, 20),
-            Scrollable = false
+            MinValue = line.Minimum, MaxValue = line.Maximum, Step = 0.005,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+            CustomMinimumSize = new Vector2(76, 20), Scrollable = false
         };
         slider.ValueChanged += val => OnRateChanged(lineId, (float)val);
         h.AddChild(slider);
 
-        var rateLbl = new Label
-        {
-            CustomMinimumSize = new Vector2(56, 0),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center
-        };
+        var rateLbl = new Label { CustomMinimumSize = new Vector2(46, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         rateLbl.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
-        rateLbl.AddThemeFontSizeOverride("font_size", 13);
+        rateLbl.AddThemeFontSizeOverride("font_size", 12);
         rateLbl.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         h.AddChild(rateLbl);
 
-        var moneyLbl = new Label
-        {
-            CustomMinimumSize = new Vector2(68, 0),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center
-        };
+        var moneyLbl = new Label { CustomMinimumSize = new Vector2(60, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         moneyLbl.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
-        moneyLbl.AddThemeFontSizeOverride("font_size", 12);
+        moneyLbl.AddThemeFontSizeOverride("font_size", 11);
         moneyLbl.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
         h.AddChild(moneyLbl);
 
-        // Inline quick-preset row shown when this budget row is focused (matching state-5.jpg .bquick)
-        var quick = new HBoxContainer { Visible = false };
+        var quick = new HBoxContainer { Visible = false, ClipContents = true };
         quick.AddThemeConstantOverride("separation", 4);
         AddQuickDeltaChip(quick, "−5%", () => StepRate(line, -0.05f));
         AddQuickDeltaChip(quick, "+5%", () => StepRate(line, +0.05f));
@@ -376,26 +344,14 @@ internal sealed class ShellEconomyWorkspaceView
         wrap.AddChild(quick);
 
         parent.AddChild(wrap);
-        _lineNodes[line.Id] = new BudgetRowNodes
-        {
-            Line = line,
-            Slider = slider,
-            RateLabel = rateLbl,
-            MoneyLabel = moneyLbl,
-            QuickBar = quick
-        };
+        _lineNodes[line.Id] = new BudgetRowNodes { Line = line, NameBtn = nameBtn, Slider = slider, RateLabel = rateLbl, MoneyLabel = moneyLbl, QuickBar = quick };
     }
 
     private void AddQuickDeltaChip(HBoxContainer parent, string label, Action onClick)
     {
-        var b = new Button
-        {
-            Text = label,
-            CustomMinimumSize = new Vector2(44, 23),
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            FocusMode = Control.FocusModeEnum.None
-        };
-        b.AddThemeStyleboxOverride("normal", _ctx.NineSlice("button_umber_9s", 8, 6, 2, 6, 2));
+        var b = new Button { Text = label, CustomMinimumSize = new Vector2(42, 22), MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None };
+        b.AddThemeStyleboxOverride("normal", _ctx.NineSlice("button_umber_9s", 8, 5, 2, 5, 2));
+        b.AddThemeStyleboxOverride("hover", _ctx.BorderedBox("shell.plate_hover", "shell.brass_hi", 1, 2, 5, 2, 5, 2));
         b.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
         b.AddThemeFontSizeOverride("font_size", 11);
         b.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
@@ -406,25 +362,16 @@ internal sealed class ShellEconomyWorkspaceView
     private void StepRate(BudgetLine line, float delta)
     {
         if (_ctx.World?.Player is not { } n) return;
-        var next = Math.Clamp(BudgetCore.RateOf(n, line) + delta, line.Minimum, line.Maximum);
-        OnRateChanged(line.Id, next);
+        OnRateChanged(line.Id, Math.Clamp(BudgetCore.RateOf(n, line) + delta, line.Minimum, line.Maximum));
     }
 
-    private void SetFractionRate(BudgetLine line, float frac)
-    {
-        var next = line.Minimum + (line.Maximum - line.Minimum) * frac;
-        OnRateChanged(line.Id, next);
-    }
+    private void SetFractionRate(BudgetLine line, float frac) =>
+        OnRateChanged(line.Id, line.Minimum + (line.Maximum - line.Minimum) * frac);
 
     private void OnRateChanged(string lineId, float value)
     {
         if (_syncingSliders || _ctx.World?.Player is not { } n) return;
-        _ctx.World.Commands.Enqueue(new SetPolicyRateCommand
-        {
-            IssuerId = n.Id,
-            LineId = lineId,
-            Value = value
-        });
+        _ctx.World.Commands.Enqueue(new SetPolicyRateCommand { IssuerId = n.Id, LineId = lineId, Value = value });
         _ctx.World.Commands.ApplyAll(_ctx.World);
         Refresh();
         _ctx.RefreshAll?.Invoke();
@@ -436,10 +383,9 @@ internal sealed class ShellEconomyWorkspaceView
 
         _balanceBigLabel = new Label { Text = "$0" };
         _balanceBigLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
-        _balanceBigLabel.AddThemeFontSizeOverride("font_size", 28);
+        _balanceBigLabel.AddThemeFontSizeOverride("font_size", 26);
         rightCol.AddChild(_balanceBigLabel);
 
-        // Double ledger underline below total balance figure
         var dblRule = new Control { CustomMinimumSize = new Vector2(0, 5) };
         dblRule.Draw += () =>
         {
@@ -455,40 +401,40 @@ internal sealed class ShellEconomyWorkspaceView
 
         _forecastNoteLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
         _forecastNoteLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-        _forecastNoteLabel.AddThemeFontSizeOverride("font_size", 12);
+        _forecastNoteLabel.AddThemeFontSizeOverride("font_size", 11);
         _forecastNoteLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
         rightCol.AddChild(_forecastNoteLabel);
+
+        _gpCardStatusLabel = ShellEconomyCharts.BuildGrandProjectsCtaCard(_ctx, rightCol);
+
+        rightCol.AddChild(BuildSectionRule(Loc.Get("shell.ws.eco.shortages_title"), out _));
+        _shortagesBox = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
+        _shortagesBox.AddThemeConstantOverride("separation", 4);
+        rightCol.AddChild(_shortagesBox);
 
         rightCol.AddChild(BuildSectionRule(Loc.Get("shell.tab_debt"), out _debtSummaryLabel));
 
         _repayAllBtn = new Button
         {
-            Text = Loc.Get("Repay all we can"),
-            CustomMinimumSize = new Vector2(0, 36),
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            FocusMode = Control.FocusModeEnum.None
+            Text = Loc.Get("Repay all we can"), CustomMinimumSize = new Vector2(0, 34),
+            ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None
         };
         _repayAllBtn.AddThemeStyleboxOverride("normal", _ctx.NineSlice("button_umber_9s", 10, 10, 4, 10, 4));
-        _repayAllBtn.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-        _repayAllBtn.AddThemeFontSizeOverride("font_size", 13);
+        _repayAllBtn.AddThemeStyleboxOverride("hover", _ctx.BorderedBox("shell.plate_hover", "shell.brass_hi", 1, 3, 10, 4, 10, 4));
+        _repayAllBtn.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
+        _repayAllBtn.AddThemeFontSizeOverride("font_size", 12);
         _repayAllBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         _repayAllBtn.Pressed += ExecuteQuickDebtRepay;
         rightCol.AddChild(_repayAllBtn);
 
-        var qRow = new HBoxContainer();
-        qRow.AddThemeConstantOverride("separation", 5);
+        var qRow = new HBoxContainer { ClipContents = true };
+        qRow.AddThemeConstantOverride("separation", 4);
         rightCol.AddChild(qRow);
-
         for (var i = 0; i < 4; i++)
         {
             var idx = i;
-            var qb = new Button
-            {
-                Text = $"{(i + 1) * 25}%",
-                CustomMinimumSize = new Vector2(48, 26),
-                MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-                FocusMode = Control.FocusModeEnum.None
-            };
+            var qb = new Button { Text = $"{(i + 1) * 25}%", CustomMinimumSize = new Vector2(44, 25), MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None };
             qb.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
             qb.AddThemeFontSizeOverride("font_size", 11);
             qb.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); _selectedQuarter = idx; Refresh(); };
@@ -497,47 +443,41 @@ internal sealed class ShellEconomyWorkspaceView
         }
 
         qRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
-
-        var amtWell = new PanelContainer { CustomMinimumSize = new Vector2(92, 26) };
-        amtWell.AddThemeStyleboxOverride("panel",
-            _ctx.NineSlice("well_recessed_9s", 8, 6, 2, 6, 2, "shell.well_top", "shell.engrave", 2));
+        var amtWell = new PanelContainer { CustomMinimumSize = new Vector2(82, 25), ClipContents = true };
+        amtWell.AddThemeStyleboxOverride("panel", _ctx.NineSlice("well_recessed_9s", 8, 6, 2, 6, 2, "shell.well_top", "shell.engrave", 2));
         _repayAmountField = new Label { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         _repayAmountField.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
-        _repayAmountField.AddThemeFontSizeOverride("font_size", 12);
+        _repayAmountField.AddThemeFontSizeOverride("font_size", 11);
         _repayAmountField.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         amtWell.AddChild(_repayAmountField);
         qRow.AddChild(amtWell);
 
         _repayPreviewLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
         _repayPreviewLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-        _repayPreviewLabel.AddThemeFontSizeOverride("font_size", 12);
+        _repayPreviewLabel.AddThemeFontSizeOverride("font_size", 11);
         _repayPreviewLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
         rightCol.AddChild(_repayPreviewLabel);
 
         _feedbackLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, Visible = false };
         _feedbackLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-        _feedbackLabel.AddThemeFontSizeOverride("font_size", 12);
+        _feedbackLabel.AddThemeFontSizeOverride("font_size", 11);
         _feedbackLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.state.positive"));
         rightCol.AddChild(_feedbackLabel);
     }
 
     private void BuildFooter(VBoxContainer parent)
     {
-        var foot = new HBoxContainer();
+        var foot = new HBoxContainer { ClipContents = true };
         foot.AddThemeConstantOverride("separation", 8);
         parent.AddChild(foot);
 
-        var openGov = CreateFooterButton(Loc.Get("State Affairs"), primary: false, () => { Close(); _ctx.OpenScreen?.Invoke("State Affairs"); });
-        var openDebt = CreateFooterButton(Loc.Get("Sovereign finance"), primary: false, () => { Close(); _ctx.OpenSovereignFinance?.Invoke(); });
-        foot.AddChild(openGov);
-        foot.AddChild(openDebt);
-
+        foot.AddChild(CreateFooterButton(Loc.Get("State Affairs"), primary: false, () => { Close(); _ctx.OpenScreen?.Invoke("State Affairs"); }));
+        foot.AddChild(CreateFooterButton(Loc.Get("Sovereign finance"), primary: false, () => { Close(); _ctx.OpenSovereignFinance?.Invoke(); }));
         foot.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
 
         var zeroBtn = CreateFooterButton(Loc.Get("shell.balance_to_zero"), primary: true, () =>
         {
-            var adjustTaxes = Input.IsKeyPressed(Key.Shift);
-            _ctx.ExecuteZeroBudget?.Invoke(adjustTaxes);
+            _ctx.ExecuteZeroBudget?.Invoke(Input.IsKeyPressed(Key.Shift));
             Refresh();
             _ctx.RefreshAll?.Invoke();
         });
@@ -560,18 +500,18 @@ internal sealed class ShellEconomyWorkspaceView
     {
         var b = new Button
         {
-            Text = text,
-            CustomMinimumSize = new Vector2(primary ? 172 : 132, primary ? 38 : 34),
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            FocusMode = Control.FocusModeEnum.None
+            Text = text, CustomMinimumSize = new Vector2(primary ? 168 : 126, primary ? 36 : 32),
+            ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None
         };
-        var st = primary
-            ? _ctx.NineSlice("button_brass_cta_9s", 10, 16, 5, 16, 5, "shell.plate_top", "shell.brass_hi", 3)
-            : _ctx.NineSlice("button_umber_9s", 10, 12, 4, 12, 4, "shell.plate_bottom", "shell.engrave", 3);
-        b.AddThemeStyleboxOverride("normal", st);
-        b.AddThemeStyleboxOverride("hover", st);
+        b.AddThemeStyleboxOverride("normal", primary
+            ? _ctx.NineSlice("button_brass_cta_9s", 10, 14, 5, 14, 5, "shell.plate_top", "shell.brass_hi", 3)
+            : _ctx.NineSlice("button_umber_9s", 10, 10, 4, 10, 4, "shell.plate_bottom", "shell.engrave", 3));
+        b.AddThemeStyleboxOverride("hover", primary
+            ? _ctx.NineSlice("button_brass_cta_9s", 10, 14, 5, 14, 5, "shell.plate_hover", "shell.paper", 3)
+            : _ctx.BorderedBox("shell.plate_hover", "shell.brass_hi", 1, 3, 10, 4, 10, 4));
         b.AddThemeFontOverride("font", _ctx.Font(primary ? "shell.serif_semibold" : "shell.sans"));
-        b.AddThemeFontSizeOverride("font_size", primary ? 15 : 13);
+        b.AddThemeFontSizeOverride("font_size", primary ? 14 : 12);
         b.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         b.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); onClick(); };
         return b;
@@ -579,26 +519,18 @@ internal sealed class ShellEconomyWorkspaceView
 
     private HBoxContainer BuildSectionRule(string title, out Label rightLabel)
     {
-        var h = new HBoxContainer();
+        var h = new HBoxContainer { ClipContents = true };
         h.AddThemeConstantOverride("separation", 8);
         var l = new Label { Text = title };
         l.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
-        l.AddThemeFontSizeOverride("font_size", 14);
+        l.AddThemeFontSizeOverride("font_size", 13);
         l.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
         h.AddChild(l);
-
-        var line = new ColorRect
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
-            CustomMinimumSize = new Vector2(12, 1),
-            Color = Ui.Colour("shell.engrave")
-        };
-        h.AddChild(line);
+        h.AddChild(new ColorRect { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter, CustomMinimumSize = new Vector2(10, 1), Color = Ui.Colour("shell.engrave") });
 
         rightLabel = new Label();
         rightLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans", tabular: true));
-        rightLabel.AddThemeFontSizeOverride("font_size", 12);
+        rightLabel.AddThemeFontSizeOverride("font_size", 11);
         rightLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
         h.AddChild(rightLabel);
         return h;
@@ -624,6 +556,8 @@ internal sealed class ShellEconomyWorkspaceView
         _profile = profile;
         if (_panel is null) return;
         ShellContext.PlaceRect(_panel, profile.FullWorkspace);
+        if (_budgetGrid is not null) _budgetGrid.Columns = profile.Compact ? 1 : 2;
+        if (_rightScroll is not null) _rightScroll.CustomMinimumSize = new Vector2(profile.Compact ? 280 : 336, 0);
     }
 
     public void Refresh()
@@ -647,35 +581,43 @@ internal sealed class ShellEconomyWorkspaceView
             var amt = BudgetCore.Amount(n, node.Line, weeklyOut, atWar);
             node.RateLabel.Text = $"{(rate * 100f):0.#}%";
             node.MoneyLabel.Text = Fmt.Money(amt);
-            node.QuickBar.Visible = _focusedLineId == id;
+            var focused = _focusedLineId == id;
+            node.QuickBar.Visible = focused;
+            node.NameBtn.Text = (focused ? "▾ " : "▸ ") + Loc.Get(node.Line.Name);
+            node.NameBtn.AddThemeColorOverride("font_color", Ui.Colour(focused ? "shell.paper" : "shell.paper_muted"));
 
             if (node.Line.Side == BudgetSide.Revenue) revTotal += amt;
-            else
-            {
-                expTotal += amt;
-                if (amt > 0.0001f) expShares.Add((Loc.Get(node.Line.Name), amt));
-            }
+            else { expTotal += amt; if (amt > 0.0001f) expShares.Add((Loc.Get(node.Line.Name), amt)); }
         }
         _syncingSliders = false;
 
         _revSumLabel.Text = Fmt.Money(revTotal);
         _expSumLabel.Text = Fmt.Money(expTotal);
+        ShellEconomyCharts.RefreshTaxEfficiencyBanner(_ctx, _taxEfficiencyBanner, n, weeklyOut, atWar);
 
         var bal = revTotal - expTotal;
+        var sheet = SovereignBalanceSheet.Read(world, n);
+        var debtPct = (sheet.Principal / MathF.Max(0.01f, n.Gdp)) * 100f;
+        var inflPct = n.Inflation * 100f;
+
+        ShellEconomyCharts.RefreshFiscalSummaryRibbon(_ribbon, n, sheet, revTotal, expTotal, bal, debtPct, inflPct);
+
         _balanceBigLabel.Text = Fmt.MoneyDelta(bal);
-        _balanceBigLabel.AddThemeColorOverride("font_color",
-            Ui.Colour(bal < -0.0005f ? "shell.state.negative_text" : "shell.state.positive"));
+        _balanceBigLabel.AddThemeColorOverride("font_color", Ui.Colour(bal < -0.0005f ? "shell.state.negative_text" : "shell.state.positive"));
         _balanceMeter.QueueRedraw();
 
         var yrCash = n.Treasury + bal * 52f;
-        var sheet = SovereignBalanceSheet.Read(world, n);
-        var debtPct = (sheet.Principal / MathF.Max(0.01f, n.Gdp)) * 100f;
-        _forecastNoteLabel.Text = Loc.Format("shell.year_budget_forecast_fmt",
-            Fmt.Money(MathF.Max(0f, yrCash)), $"{debtPct:0.1}%", $"{(n.Inflation * 100f):0.1}%");
+        _forecastNoteLabel.Text = Loc.Format("shell.year_budget_forecast_fmt", Fmt.Money(MathF.Max(0f, yrCash)), $"{debtPct:0.1}%", $"{inflPct:0.1}%");
 
+        var gpActive = world.GrandProjects.Count(p => (p.HostNationId == n.Id || p.PartnerNationId == n.Id) && p.Status != GrandProjectStatus.Completed);
+        var gpDone = world.GrandProjects.Count(p => (p.HostNationId == n.Id || p.PartnerNationId == n.Id) && p.Status == GrandProjectStatus.Completed);
+        _gpCardStatusLabel.Text = gpActive + gpDone > 0
+            ? Loc.Format("shell.ws.eco.gp_cta_active_fmt", gpActive, gpDone)
+            : Loc.Get("shell.ws.eco.gp_cta_none");
+
+        ShellEconomyCharts.PopulateSupplyShortages(_ctx, _shortagesBox, n, () => { Close(); _ctx.OpenScreen?.Invoke("Trade"); });
         ShellEconomyCharts.PopulateSpendingStack(_ctx, _spendingStackBar, expShares, expTotal);
 
-        // Debt quick repayment controls
         _debtSummaryLabel.Text = $"{Fmt.Money(sheet.Principal)} · {debtPct:0.1}% {Loc.Get("GDP")}";
         var maxRepay = MathF.Max(0f, MathF.Min(sheet.Cash, sheet.Principal));
         var chosenAmt = maxRepay * ((_selectedQuarter + 1) * 0.25f);
@@ -686,8 +628,8 @@ internal sealed class ShellEconomyWorkspaceView
             Fmt.Money(MathF.Max(0f, sheet.Cash - chosenAmt)),
             $"{((MathF.Max(0f, sheet.Principal - chosenAmt) / MathF.Max(0.01f, n.Gdp)) * 100f):0.1}%");
 
-        var chipNorm = _ctx.NineSlice("button_umber_9s", 8, 6, 2, 6, 2);
-        var chipOn = _ctx.PressedWellStyle(underlineBottom: true, padX: 6, padY: 2);
+        var chipNorm = _ctx.NineSlice("button_umber_9s", 8, 5, 2, 5, 2);
+        var chipOn = _ctx.PressedWellStyle(underlineBottom: true, padX: 5, padY: 2);
         for (var i = 0; i < 4; i++)
         {
             var on = i == _selectedQuarter;
@@ -695,7 +637,10 @@ internal sealed class ShellEconomyWorkspaceView
             _repayQuarterBtns[i].AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_muted"));
         }
 
+        _treasuryChart.TooltipText = Ui.Tip(Loc.Format("shell.ws.eco.chart_tip_fmt",
+            Fmt.Money(n.Treasury), Fmt.MoneyDelta(bal), Fmt.Money(-MathF.Max(0.2f, sheet.NewCredit))));
         _treasuryChart.QueueRedraw();
+        ShellEconomyProductionMethods.Refresh(_ctx, _productionMethodsBox, world, n, () => { Refresh(); _ctx.RefreshAll?.Invoke(); });
     }
 
     private void ExecuteQuickDebtRepay()
@@ -707,12 +652,7 @@ internal sealed class ShellEconomyWorkspaceView
         if (amt < 0.01f) return;
 
         _ctx.PlayCue?.Invoke("save_complete");
-        _ctx.World.Commands.Enqueue(new ManageDebtCommand
-        {
-            IssuerId = n.Id,
-            Action = "repay",
-            Amount = amt
-        });
+        _ctx.World.Commands.Enqueue(new ManageDebtCommand { IssuerId = n.Id, Action = "repay", Amount = amt });
         _ctx.World.Commands.ApplyAll(_ctx.World);
         EconomySystem.Explain(_ctx.World);
         _feedbackLabel.Visible = true;
@@ -720,5 +660,4 @@ internal sealed class ShellEconomyWorkspaceView
         Refresh();
         _ctx.RefreshAll?.Invoke();
     }
-
 }

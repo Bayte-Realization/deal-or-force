@@ -119,6 +119,10 @@ public static class UnitTypeCatalog
     {
         if (personnel >= 150_000f && nation.Gdp >= 300f && formationIndex == 0)
             return "armored_corps";
+        if (nation is not null &&
+            (string.Equals(nation.Tag, "TWN", StringComparison.OrdinalIgnoreCase) && formationIndex % 4 == 3 ||
+             nation.Tag is "USA" or "JPN" or "KOR" or "GBR" or "AUS" or "CHN" or "PHL" && formationIndex % 7 == 5))
+            return "marine_brigade";
         if (personnel >= 260_000f && nation.Gdp >= 600f && formationIndex % 7 == 3)
             return "mechanized_corps";
         if (personnel >= 80_000f && nation.Gdp >= 100f && formationIndex % 4 == 1)

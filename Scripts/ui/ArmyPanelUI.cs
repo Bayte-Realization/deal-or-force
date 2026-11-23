@@ -6,20 +6,10 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// The army panel, built the way Hearts of Iron builds one.
-///
-/// The commands were all here before - orders, posture, reinforcement priority, army
-/// groups, plan execution - but they were eighteen identical word-buttons stacked in a
-/// generic side panel, above a paragraph of statistics about a selection the player could
-/// not see. A player commanding forty divisions could not tell which ones they had, which
-/// of them was broken, or which one was about to be overrun.
-///
-/// So the panel is a roster. Every selected division is a row with its counter, its name,
-/// how much fight it has left and how many men, and the row itself is how you select,
-/// inspect and re-select. Orders are a compact bar of marks along the bottom, the way a
-/// battle-plan toolbar reads, rather than a wall of words - and every one of them still
-/// says in full what it does when you rest on it, because a familiar interface should not
-/// also be a guessing game.
+/// Selected-army command drawer: header with split &amp; combine-HQ shortcuts, inlaid 4-metric
+/// stack readiness summary (Strength, Organisation, Supply, Entrenchment/Planning), framed
+/// template composition badges, scrollable division roster (in <see cref="ArmyRosterUI"/>) with
+/// 16px scrollbar clearance, and tabbed Orders / Stance / Organise / Doctrines controls.
 /// </summary>
 public partial class DealOrForceGame
 {
@@ -27,6 +17,10 @@ public partial class DealOrForceGame
     private Label _armyPanelTitle = null!;
     private Label _armyPanelSubtitle = null!;
     private Label _armyPanelCount = null!;
+    private Button _armyMergeHqButton = null!;
+    private HBoxContainer _armyReadinessStrip = null!;
+    private readonly Label[] _armyKpiValues = new Label[4];
+    private readonly ColorRect[] _armyKpiFills = new ColorRect[4];
     private HBoxContainer _armyComposition = null!;
     private VBoxContainer _armyRoster = null!;
     private Label _armyRosterHint = null!;
@@ -39,45 +33,9 @@ public partial class DealOrForceGame
     private Button _withdrawSelectedButton;
     private VBoxContainer _armyAssaultReadiness;
     private Label _armyAssaultReadinessText;
-
-    /// <summary>
-    /// NATO-ish counters. A player who has played a Paradox game reads these before they
-    /// read the name next to them, which is the whole point of having them.
-    /// </summary>
-    private static string CounterGlyph(string counterSymbol) => counterSymbol switch
-    {
-        "armor" => "▬",
-        "mechanized" => "◈",
-        "motorized" => "⊙",
-        "artillery" => "●",
-        "cavalry" => "╱",
-        _ => "✕"
-    };
-
-    /// <summary>Where a formation is in its sea lift, or empty when it is not on one.</summary>
-    private string SeaLiftCaption(Simulation.Army army)
-    {
-        if (Simulation.SeaLift.Of(_campaign, army) is not { } lift) return "";
-        string Region(int province)
-        {
-            var map = _campaign.ProvinceMap;
-            if (map is null || province <= 0 || province > map.ProvinceCount) return "?";
-            return _campaign.States.Find(s => s.MapIndex == map.ProvinceToState[province])?.DisplayName ?? "?";
-        }
-        var fleet = _campaign.Fleets.Find(f => f.Id == lift.FleetId);
-        var fleetName = fleet is null ? "?" : Simulation.Loc.Get(fleet.Name);
-        if (army.EmbarkedFleetId >= 0) return Simulation.Loc.Format("⚓ aboard {0}, landing at {1}", fleetName, Region(lift.LandingProvinceId));
-        return army.ProvinceId == lift.PortProvinceId
-            ? Simulation.Loc.Format("⚓ waiting at {0} for {1}", Region(lift.PortProvinceId), fleetName)
-            : Simulation.Loc.Format("⚓ marching to {0} to board {1}", Region(lift.PortProvinceId), fleetName);
-    }
-
     private Button _armyDisbandButton;
     private ulong _disbandArmedUntil;
 
-    /// <summary>
-    /// Disband the selection: the first press asks, a second within four seconds sends them home.
-    /// </summary>
     private void DisbandSelectedDivisions()
     {
         var mine = SelectedPlayerDivisions();
@@ -107,46 +65,44 @@ public partial class DealOrForceGame
     {
         _armyCaptionIconButtons.Clear();
         _armyPanel = TexturedPanel(_hudLayer, PanelSurface.Command);
+        _armyPanel.ClipContents = true;
         Ui.Place(_armyPanel, "hud.army_panel");
         _armyPanel.Visible = false;
 
-        // panel_command_frame.png has an ornamental bevel inside the StyleBox content
-        // rectangle. Twenty-two semantic pixels keep text, scroll bars and tab controls
-        // within the *visible* rail, rather than merely within the Control's outer box.
-        var shell = PanelRows(_armyPanel, 22, 16, 6);
+        var shell = PanelRows(_armyPanel, 20, 14, 6);
         shell.ClipContents = true;
 
-        // ---- header: which army, who commands it, how much of it is selected ----------
+        // ---- header: army title, selection count, quick HQ merge & split, close ----
         var header = new HBoxContainer { ClipContents = true };
-        header.AddThemeConstantOverride("separation", 8);
+        header.AddThemeConstantOverride("separation", 6);
         shell.AddChild(header);
 
         _armyPanelTitle = Title("Army", (int)Ui.Metric("ui.font.title", 20), Ui.Colour("text.accent"));
         _armyPanelTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _armyPanelTitle.AutowrapMode = TextServer.AutowrapMode.Off;
         _armyPanelTitle.ClipText = true;
+        _armyPanelTitle.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         header.AddChild(_armyPanelTitle);
 
-        _armyPanelCount = Title("", (int)Ui.Metric("ui.font.heading", 16), Ui.Colour("text.bright"));
-        // A count of divisions is a figure, so it is set in the tabular face: a right-aligned
-        // count whose digits change width as the selection grows reads as a twitch.
-        _armyPanelCount.AddThemeFontOverride("font", Ui.NumberFont);
+        _armyPanelCount = Title("", (int)Ui.Metric("ui.font.heading", 15), Ui.Colour("text.bright"));
+        _armyPanelCount.AddThemeFontOverride("font", PresentationFonts.Tabular());
         _armyPanelCount.HorizontalAlignment = HorizontalAlignment.Right;
         _armyPanelCount.AutowrapMode = TextServer.AutowrapMode.Off;
         _armyPanelCount.ClipText = true;
-        _armyPanelCount.CustomMinimumSize = new Vector2(84, 0);
+        _armyPanelCount.CustomMinimumSize = new Vector2(74, 0);
         header.AddChild(_armyPanelCount);
-        // Halving the selection by hand as well as by Ctrl+X: half of several formations stay
-        // selected for the next order, and one formation of two or more divisions is cut in two.
-        var halve = ActionButton("½", SplitSelectionInHalf, 32, 28);
+
+        _armyMergeHqButton = ActionButton(Tr("shell.ws.army.merge_hq_btn"), CreateGroupFromSelection, 46, 28);
+        _armyMergeHqButton.Name = "ArmyQuickMergeHq";
+        _armyMergeHqButton.TooltipText = Ui.Tip(Tr("shell.ws.army.merge_hq_tip"));
+        header.AddChild(_armyMergeHqButton);
+
+        var halve = ActionButton("½", SplitSelectionInHalf, 30, 28);
         halve.TooltipText = Ui.Tip(Tr("Split in half (Ctrl+X): of several formations half stay selected for the next order and the rest stay where they stand; one formation of two or more divisions is cut in two."));
         header.AddChild(halve);
         header.AddChild(HandbookButton("orders"));
-        header.AddChild(ActionButton("×", ClearArmySelectionAndClose, 32, 28));
+        header.AddChild(ActionButton("×", ClearArmySelectionAndClose, 30, 28));
 
-        // The descriptive line gets the complete safe width instead of fighting the
-        // selection count and close button in the header. Long commander names wrap
-        // to a second line and are then clipped, never painted through the frame.
         _armyPanelSubtitle = Title("", (int)Ui.Metric("ui.font.body", 12), Ui.Colour("text.muted"));
         _armyPanelSubtitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _armyPanelSubtitle.ClipText = true;
@@ -154,24 +110,29 @@ public partial class DealOrForceGame
         _armyPanelSubtitle.CustomMinimumSize = new Vector2(0, 18);
         shell.AddChild(_armyPanelSubtitle);
 
-        // ---- composition: what the selection is made of, at a glance ------------------
+        // ---- inlaid 4-metric stack readiness strip ----
+        BuildArmyReadinessStrip(shell);
+
+        // ---- framed template composition pills ----
         _armyComposition = new HBoxContainer { ClipContents = true };
-        _armyComposition.AddThemeConstantOverride("separation", 12);
+        _armyComposition.AddThemeConstantOverride("separation", 6);
         shell.AddChild(_armyComposition);
 
-        // ---- the roster ---------------------------------------------------------------
+        // ---- division roster with explicit >=16px right scrollbar clearance ----
         var rosterFrame = new PanelContainer
         {
             Name = "ArmyRosterFrame",
+            ClipContents = true,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 76),
-            SizeFlagsStretchRatio = 0.75f
+            SizeFlagsStretchRatio = 0.78f
         };
         rosterFrame.SetMeta("atlas_section_ground", "surface.inset");
         rosterFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
         AtlasSurfaceSkin.Attach(rosterFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
         shell.AddChild(rosterFrame);
+
         var scroll = new ScrollContainer
         {
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
@@ -182,9 +143,14 @@ public partial class DealOrForceGame
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
         rosterFrame.AddChild(scroll);
-        _armyRoster = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+
+        var rosterMargin = new MarginContainer { ClipContents = true, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        rosterMargin.AddThemeConstantOverride("margin_right", 16);
+        scroll.AddChild(rosterMargin);
+
+        _armyRoster = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         _armyRoster.AddThemeConstantOverride("separation", 3);
-        scroll.AddChild(_armyRoster);
+        rosterMargin.AddChild(_armyRoster);
 
         _armyRosterHint = Title(
             "Click a division to command it alone · Ctrl+click to add or remove · double-click to take every division of the same template",
@@ -192,18 +158,15 @@ public partial class DealOrForceGame
         _armyRosterHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _armyRosterHint.ClipText = true;
         _armyRosterHint.MaxLinesVisible = 2;
-        _armyRosterHint.CustomMinimumSize = new Vector2(0, 34);
+        _armyRosterHint.CustomMinimumSize = new Vector2(0, 30);
         shell.AddChild(_armyRosterHint);
 
-        // Commands are split into three short pages. The former single 430 px column
-        // looked acceptable with seven divisions, then silently continued below the
-        // panel frame with a large selection. Tabs keep every control inside a stable
-        // surface and leave the roster the flexible part of the panel.
+        // ---- tabbed command deck ----
         var commandTabs = new TabContainer
         {
             Name = "ArmyCommandTabs",
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 180),
+            CustomMinimumSize = new Vector2(0, 176),
             ClipContents = true
         };
         commandTabs.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
@@ -212,17 +175,15 @@ public partial class DealOrForceGame
         var plansPage = CommandPage(commandTabs, "ORDERS");
         var doctrinePage = CommandPage(commandTabs, "STANCE");
         var organisationPage = CommandPage(commandTabs, "ORGANISE");
-        // The country's book of war belongs with the army rather than with the laws: it is paid
-        // for in the experience the army's own formations earn, and it is the army that reads it.
         var warBookPage = CommandPage(commandTabs, "DOCTRINES");
         _armyCommandTabs = commandTabs;
-        _armyDoctrineTab = commandTabs.GetTabIdxFromControl((Control)warBookPage.GetParent());
-        _armyDoctrineRows = new VBoxContainer { Name = "DoctrineRows" };
+        _armyDoctrineTab = commandTabs.GetTabIdxFromControl((Control)warBookPage.GetParent().GetParent());
+        _armyDoctrineRows = new VBoxContainer { Name = "DoctrineRows", ClipContents = true };
         _armyDoctrineRows.AddThemeConstantOverride("separation", 8);
         warBookPage.AddChild(_armyDoctrineRows);
-        commandTabs.TabChanged += _ => RefreshArmyPanel();
+        commandTabs.TabChanged += _ => { _armyDoctrineDay = -1; RefreshArmyPanel(); };
 
-        _armyAssaultReadiness = new VBoxContainer { Name = "AssaultReadiness", Visible = false };
+        _armyAssaultReadiness = new VBoxContainer { Name = "AssaultReadiness", Visible = false, ClipContents = true };
         _armyAssaultReadiness.AddThemeConstantOverride("separation", 2);
         plansPage.AddChild(_armyAssaultReadiness);
         _armyAssaultReadiness.AddChild(Title("AUTOMATIC ASSAULT", 11, Ui.Colour("text.caption")));
@@ -232,8 +193,7 @@ public partial class DealOrForceGame
         _armyAssaultReadinessText.MouseFilter = MouseFilterEnum.Stop;
         _armyAssaultReadiness.AddChild(_armyAssaultReadinessText);
 
-        // ---- battle plans -------------------------------------------------------------
-        var plans = new HFlowContainer();
+        var plans = new HFlowContainer { ClipContents = true };
         plans.AddThemeConstantOverride("h_separation", 4);
         plans.AddThemeConstantOverride("v_separation", 4);
         plansPage.AddChild(plans);
@@ -256,50 +216,30 @@ public partial class DealOrForceGame
         var autoFront = ArmyIconButton("", AutoDeployFront, 56, 36, false, "auto_deploy");
         ArmyCommandTip(autoFront, "Auto-deploy", "Spread the selection across unique sectors of the active front.");
         plans.AddChild(autoFront);
-        // The plan tools themselves - front, offensive, defensive line, eraser, execute - are
-        // on the map in the planning bar (PlanningBarUI), where the plan is drawn.
 
-        // (The brush, its feedback line and its instructions are the planning bar now.)
-
-
-        // ---- posture and reinforcement -------------------------------------------------
+        // ---- posture & reinforcement priority ----
         doctrinePage.AddChild(Title("POSTURE", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
-        var posture = new HFlowContainer();
+        var posture = new HFlowContainer { ClipContents = true };
         posture.AddThemeConstantOverride("h_separation", 4);
         posture.AddThemeConstantOverride("v_separation", 4);
         doctrinePage.AddChild(posture);
-        AddStanceButton(posture, "Cautious", ArmyStance.Cautious,
-            "Slower and more careful: better recovery, entrenchment and defence, fewer casualties.");
-        AddStanceButton(posture, "Balanced", ArmyStance.Balanced,
-            "No modifier either way. The right choice when supply or local superiority is uncertain.");
-        AddStanceButton(posture, "Aggressive", ArmyStance.Aggressive,
-            "Faster and harder-hitting, at the cost of recovery, defence and heavier casualties.");
-        AddStanceButton(posture, "Last stand", ArmyStance.LastStand,
-            "Hold this ground at any price: the strongest defence and the fastest digging, and the heaviest casualties of any posture.");
-        AddStanceButton(posture, "Force attack", ArmyStance.ForceAttack,
-            "Attack now rather than when ready: the heaviest attack, the worst defence, and the heaviest casualties.");
+        AddStanceButton(posture, "Cautious", ArmyStance.Cautious, "Slower and more careful: better recovery, entrenchment and defence, fewer casualties.");
+        AddStanceButton(posture, "Balanced", ArmyStance.Balanced, "No modifier either way. The right choice when supply or local superiority is uncertain.");
+        AddStanceButton(posture, "Aggressive", ArmyStance.Aggressive, "Faster and harder-hitting, at the cost of recovery, defence and heavier casualties.");
+        AddStanceButton(posture, "Last stand", ArmyStance.LastStand, "Hold this ground at any price: the strongest defence and the fastest digging, and the heaviest casualties of any posture.");
+        AddStanceButton(posture, "Force attack", ArmyStance.ForceAttack, "Attack now rather than when ready: the heaviest attack, the worst defence, and the heaviest casualties.");
 
         doctrinePage.AddChild(Title("REINFORCEMENT PRIORITY", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
-        var priority = new HBoxContainer();
+        var priority = new HBoxContainer { ClipContents = true };
         priority.AddThemeConstantOverride("separation", 4);
         doctrinePage.AddChild(priority);
-        AddReinforcementPriorityButton(priority, "Low", ReinforcementPriority.Low,
-            "0.45 weight. For quiet sectors and formations that are training rather than fighting.");
-        AddReinforcementPriorityButton(priority, "Normal", ReinforcementPriority.Normal,
-            "Standard weight. The sustainable allocation.", true);
-        AddReinforcementPriorityButton(priority, "High", ReinforcementPriority.High,
-            "1.90 weight. These recover first, and starve the lower priorities when reserves are short.");
+        AddReinforcementPriorityButton(priority, "Low", ReinforcementPriority.Low, "0.45 weight. For quiet sectors and formations that are training rather than fighting.");
+        AddReinforcementPriorityButton(priority, "Normal", ReinforcementPriority.Normal, "Standard weight. The sustainable allocation.", true);
+        AddReinforcementPriorityButton(priority, "High", ReinforcementPriority.High, "1.90 weight. These recover first, and starve the lower priorities when reserves are short.");
 
-        // ---- organisation --------------------------------------------------------------
+        // ---- organisation ----
         organisationPage.AddChild(Title("HEADQUARTERS", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
-        // Two columns keep translated captions and icon-bearing buttons within the
-        // narrow command frame. A single row could exceed the safe inner rail even
-        // when its declared minimum widths appeared to fit.
-        var grouping = new GridContainer
-        {
-            Columns = 2,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
+        var grouping = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         grouping.AddThemeConstantOverride("separation", 4);
         organisationPage.AddChild(grouping);
         var newGroup = ActionButton("New HQ", CreateGroupFromSelection, 96, 30, true, Icon("hq_new"));
@@ -315,81 +255,112 @@ public partial class DealOrForceGame
         selectHq.TooltipText = Ui.Tip(Tr("Select every division attached to the lead division's army headquarters."));
         grouping.AddChild(selectHq);
 
-        var selection = new HBoxContainer();
-        selection.AddThemeConstantOverride("separation", 4);
+        var selection = new HFlowContainer { ClipContents = true };
+        selection.AddThemeConstantOverride("h_separation", 4);
+        selection.AddThemeConstantOverride("v_separation", 4);
         organisationPage.AddChild(selection);
-        var everything = ActionButton("Every division", SelectAllPlayerArmies, 124, 30, false, Icon("select_all"));
+        var everything = ActionButton("Every division", SelectAllPlayerArmies, 120, 30, false, Icon("select_all"));
         everything.TooltipText = Ui.Tip(Tr("Take every field division your country has into the roster."));
         selection.AddChild(everything);
-        var dropLead = ActionButton("Drop lead", RemoveLeadFromSelection, 104, 30, false, Icon("drop_lead"));
+        var dropLead = ActionButton("Drop lead", RemoveLeadFromSelection, 100, 30, false, Icon("drop_lead"));
         dropLead.TooltipText = Ui.Tip(Tr("Remove the lead division from the selection without moving or disbanding it."));
         selection.AddChild(dropLead);
-        // Home: the men go back to the reserve. Asked twice, because there is no undo.
-        var disband = ActionButton("Disband", () => DisbandSelectedDivisions(), 96, 30);
+        var disband = ActionButton("Disband", () => DisbandSelectedDivisions(), 92, 30);
         disband.TooltipText = Ui.Tip(Tr("Disband (Delete)\nSend the selected divisions home: their men go back to the manpower reserve. Not in battle or aboard a ship. Press twice to confirm."));
         selection.AddChild(disband);
         _armyDisbandButton = disband;
-        var region = ActionButton("Region info", ShowSelectedArmyRegion, 102, 30, false, Icon("region"));
+        var region = ActionButton("Region info", ShowSelectedArmyRegion, 98, 30, false, Icon("region"));
         region.TooltipText = Ui.Tip(Tr("Open the region dossier for the lead division's position. ← Orders in its header, or Escape, brings the orders back."));
         selection.AddChild(region);
 
-        _armyCommandFeedback = Title("Right-click to march or attack · Shift+right-click queues a waypoint",
+        _armyCommandFeedback = Title(
+            Platform.PlatformProfile.Current.IsTouchPrimary
+                ? "mobile.override.army_orders"
+                : "Right-click to march or attack · Shift+right-click queues a waypoint",
             11, Ui.Colour("text.body_soft"));
         _armyCommandFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         organisationPage.AddChild(_armyCommandFeedback);
 
-        // The old order controls lived in the generic side panel; the panel is that
-        // container now, so the visibility flags the rest of the HUD sets still land.
         _armyOrders = commandTabs;
-        // Switching to the book of war must draw it. The page is built by the panel's own refresh,
-        // which runs on a campaign day - and a player who opens the tab while time is paused would
-        // otherwise look at an empty page until tomorrow.
-        commandTabs.TabChanged += _ =>
+    }
+
+    private void BuildArmyReadinessStrip(VBoxContainer parent)
+    {
+        _armyReadinessStrip = new HBoxContainer { Name = "ArmyStackReadinessStrip", ClipContents = true, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _armyReadinessStrip.AddThemeConstantOverride("separation", 5);
+        parent.AddChild(_armyReadinessStrip);
+
+        var specs = new[]
         {
-            _armyDoctrineDay = -1;
-            RefreshArmyPanel();
+            ("shell.ws.army.kpi_str", "combat.strength"),
+            ("shell.ws.army.kpi_org", "combat.organisation"),
+            ("shell.ws.army.kpi_sup", "combat.supply"),
+            ("shell.ws.army.kpi_plan", "state.info")
         };
+
+        for (var i = 0; i < specs.Length; i++)
+        {
+            var card = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+            var sb = new StyleBoxFlat
+            {
+                BgColor = Ui.Colour("surface.inset"), BorderColor = Ui.Colour("surface.line"),
+                ContentMarginLeft = 6, ContentMarginRight = 6, ContentMarginTop = 3, ContentMarginBottom = 4
+            };
+            sb.SetBorderWidthAll(1);
+            sb.SetCornerRadiusAll(3);
+            card.AddThemeStyleboxOverride("panel", sb);
+            _armyReadinessStrip.AddChild(card);
+
+            var col = new VBoxContainer { ClipContents = true };
+            col.AddThemeConstantOverride("separation", 2);
+            card.AddChild(col);
+
+            var top = new HBoxContainer { ClipContents = true };
+            var cap = Title(Tr(specs[i].Item1), 9, Ui.Colour("text.caption"));
+            cap.AutowrapMode = TextServer.AutowrapMode.Off; cap.ClipText = true; cap.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            top.AddChild(cap);
+
+            var val = Title("—", 11, Ui.Colour("text.bright"));
+            val.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            val.AutowrapMode = TextServer.AutowrapMode.Off; val.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
+            top.AddChild(val);
+            col.AddChild(top);
+            _armyKpiValues[i] = val;
+
+            var track = new ColorRect { Color = Ui.Colour("surface.base"), CustomMinimumSize = new Vector2(0, 4), SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            var fill = new ColorRect { Color = Ui.Colour(specs[i].Item2), AnchorRight = 0.5f, AnchorBottom = 1f };
+            track.AddChild(fill);
+            col.AddChild(track);
+            _armyKpiFills[i] = fill;
+        }
     }
 
     private static VBoxContainer CommandPage(TabContainer tabs, string name)
     {
-        // A command deck is a workspace, not a fixed-height poster. Translations,
-        // modded font sizes and the 720p layout must still expose the last action.
         var scroll = new ScrollContainer
         {
-            Name = name,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            Name = name, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill,
-            FollowFocus = true,
-            ClipContents = true
+            SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
+            FollowFocus = true, ClipContents = true
         };
-        var page = new VBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            ClipContents = true
-        };
+        var margin = new MarginContainer { ClipContents = true, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        margin.AddThemeConstantOverride("margin_right", 16);
+        scroll.AddChild(margin);
+
+        var page = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         page.AddThemeConstantOverride("separation", 6);
+        margin.AddChild(page);
         tabs.AddChild(scroll);
-        scroll.AddChild(page);
         scroll.SetMeta("loc_tab", name);
         tabs.SetTabTitle(tabs.GetTabIdxFromControl(scroll), Tr(name));
         return page;
     }
 
-    /// <summary>
-    /// The icon a control asks for, named as a sprite rather than as a file, so a mod
-    /// dropping its own `icon_army_advance.png` into its `gfx/` tree replaces it.
-    /// </summary>
     private static string Icon(string name) =>
-        Simulation.SpriteCatalog.TextureOf($"icon_{name}",
-            $"res://game/gfx/interface/icons/icon_{name}.png");
+        Simulation.SpriteCatalog.TextureOf($"icon_{name}", $"res://game/gfx/interface/icons/icon_{name}.png");
 
-    // ExpandIcon does not reserve the icon's full width in Godot's minimum size.
-    // A translated caption can otherwise squeeze a perfectly loaded PNG to a dot.
-    private Button ArmyIconButton(string caption, System.Action action, float width, float height,
-        bool primary, string icon)
+    private Button ArmyIconButton(string caption, System.Action action, float width, float height, bool primary, string icon)
     {
         var button = ActionButton(caption, action, width, height, primary, Icon(icon));
         if (icon != "stability")
@@ -406,14 +377,11 @@ public partial class DealOrForceGame
 
     private static void ReserveArmyIconSpace(Button button)
     {
-        var textWidth = button.GetThemeFont("font").GetStringSize(button.Text,
-            fontSize: button.GetThemeFontSize("font_size")).X;
+        var textWidth = button.GetThemeFont("font").GetStringSize(button.Text, fontSize: button.GetThemeFontSize("font_size")).X;
         var padding = button.GetThemeStylebox("normal").GetMinimumSize().X;
-        var iconWidth = button.Icon is null ? 0 : button.GetThemeConstant("icon_max_width") +
-            button.GetThemeConstant("h_separation");
+        var iconWidth = button.Icon is null ? 0 : button.GetThemeConstant("icon_max_width") + button.GetThemeConstant("h_separation");
         var minimum = button.GetMeta("army_icon_min_width").AsSingle();
-        button.CustomMinimumSize = new Vector2(Mathf.Max(minimum, textWidth + padding + iconWidth + 2),
-            button.CustomMinimumSize.Y);
+        button.CustomMinimumSize = new Vector2(Mathf.Max(minimum, textWidth + padding + iconWidth + 2), button.CustomMinimumSize.Y);
     }
 
     private void AddDrawButton(Container parent, string label, string icon, FrontLineKind kind, string name, string help)
@@ -456,7 +424,6 @@ public partial class DealOrForceGame
         button.SetMeta(LocTipAppliedMeta, button.TooltipText);
     }
 
-    /// <summary>Show the panel, or hide it and let the generic side panel have the space.</summary>
     private void SetArmyPanelVisible(bool visible)
     {
         if (visible && _resourceAtlasPanel is not null) _resourceAtlasPanel.Visible = false;
@@ -466,15 +433,9 @@ public partial class DealOrForceGame
         if (!visible) _armyRosterRows.Clear();
     }
 
-    /// <summary>
-    /// Rebuild the roster for the current selection. Called on every campaign refresh, so
-    /// the bars a player is watching move while the battle they are watching is fought.
-    /// </summary>
     private void RefreshArmyPanel()
     {
         if (_armyPanel is null || _campaign?.Player is null) return;
-        // Country switches, save loads or changed ownership must not leave an old
-        // roster capable of selecting a division that is no longer ours.
         _selectedArmies.RemoveAll(army => !ArmyInteraction.CanSelect(_campaign, army));
         if (!ArmyInteraction.CanSelect(_campaign, _selectedArmy))
         {
@@ -485,29 +446,21 @@ public partial class DealOrForceGame
             ? _selectedArmies.Where(army => army is not null).ToList()
             : _selectedArmy is null ? new List<Army>() : new List<Army> { _selectedArmy };
         var readingDoctrine = _armyCommandTabs is not null && _armyCommandTabs.CurrentTab == _armyDoctrineTab;
-        // The book is a country-level workspace. A hidden, expanding empty roster must
-        // not reserve half the drawer above it, even when formations are selected.
-        _armyRoster.GetParent<Control>().Visible = !readingDoctrine;
+        _armyRoster.GetParent<Control>().GetParent<Control>().Visible = !readingDoctrine;
         _armyRosterHint.Visible = !readingDoctrine;
         _armyPanelCount.Visible = !readingDoctrine;
-        if (divisions.Count == 0)
+        _armyReadinessStrip.Visible = divisions.Count > 0 && !readingDoctrine;
+        if (divisions.Count == 0 && (_armyCommandTabs is null || _armyCommandTabs.CurrentTab != _armyDoctrineTab))
         {
-            // A country with no divisions still has a book of war, and the Doctrines tab is where
-            // it is read: the panel stays open for that tab alone.
-            if (_armyCommandTabs is null || _armyCommandTabs.CurrentTab != _armyDoctrineTab)
-            { SetArmyPanelVisible(false); return; }
+            SetArmyPanelVisible(false);
+            return;
         }
-
-        // Daily refresh must not replace the roster row between mouse-down and
-        // mouse-up, nor dismiss a command popup that the player is reading.
         if (InterfaceInteractionGuard.Busy(_armyPanel)) return;
 
         SetArmyPanelVisible(true);
 
-        // Commands can change a country's doctrines and currencies on pause as well.
         var doctrineState = DoctrinePresentation(_campaign.Player);
-        if (_armyDoctrineRows is not null &&
-            (_armyDoctrineDay != _campaign.ElapsedDays || _armyDoctrineState != doctrineState))
+        if (_armyDoctrineRows is not null && (_armyDoctrineDay != _campaign.ElapsedDays || _armyDoctrineState != doctrineState))
         {
             _armyDoctrineDay = _campaign.ElapsedDays;
             _armyDoctrineState = doctrineState;
@@ -515,8 +468,6 @@ public partial class DealOrForceGame
             ShowDoctrineWorkspace(_campaign.Player, _armyDoctrineRows);
         }
 
-        // A book of war belongs to the country, not to divisions[0]. A doctrine can
-        // be read before recruitment or after the last selected formation is lost.
         _armyComposition.Visible = divisions.Count > 0 && !readingDoctrine;
         if (divisions.Count == 0)
         {
@@ -524,366 +475,40 @@ public partial class DealOrForceGame
             _armyPanelSubtitle.Text = _campaign.Player.DisplayName;
             _armyPanelCount.Text = Simulation.Loc.Format("{0:N0} selected", 0);
             _armyAssaultReadiness.Visible = false;
+            _armyMergeHqButton.Disabled = true;
             return;
         }
         var owner = _campaign.NationById(divisions[0].NationId);
         var mine = owner == _campaign.Player;
+        var canMergeHq = mine && divisions.Count >= 2;
+        _armyMergeHqButton.Disabled = !canMergeHq;
+        _armyMergeHqButton.TooltipText = Ui.Tip(Tr(canMergeHq ? "shell.ws.army.merge_hq_tip" : "shell.ws.army.merge_hq_refusal"));
 
-        // Also follows language/font changes made while the campaign is open.
         foreach (var button in _armyCaptionIconButtons) ReserveArmyIconSpace(button);
 
         var group = _campaign.ArmyGroups.FirstOrDefault(candidate => candidate.Id == divisions[0].ArmyGroupId);
-        _armyPanelTitle.Text = divisions.Count == 1
-            ? divisions[0].Name
-            : group?.Name ?? Simulation.Loc.Format("{0} field forces", owner?.Tag ?? "?");
+        _armyPanelTitle.Text = divisions.Count == 1 ? divisions[0].Name : group?.Name ?? Simulation.Loc.Format("{0} field forces", owner?.Tag ?? "?");
         _armyPanelSubtitle.Text = divisions.Count == 1
             ? OneLineSummary(divisions[0])
             : Simulation.Loc.Format("{0} · {1:N0} men · {2:N0} headquarters",
-                CommanderCaption(group),
-                divisions.Sum(army => army.Personnel),
-                divisions.Select(army => army.ArmyGroupId).Distinct().Count());
-        // A formation crossing the sea says where in the crossing it is.
+                CommanderCaption(group), divisions.Sum(army => army.Personnel), divisions.Select(army => army.ArmyGroupId).Distinct().Count());
         if (SeaLiftCaption(divisions[0]) is { Length: > 0 } crossing) _armyPanelSubtitle.Text = crossing + " · " + _armyPanelSubtitle.Text;
-        // And one in a pocket says how long its stores will last - the shortest among those
-        // selected. In the line that is already there, and only while it is true: the panel
-        // has rows enough.
-        if (Simulation.StrandedGarrisons.SelectionLine(_campaign, divisions) is { Length: > 0 } pocket)
-            _armyPanelSubtitle.Text = pocket + " · " + _armyPanelSubtitle.Text;
+        if (Simulation.StrandedGarrisons.SelectionLine(_campaign, divisions) is { Length: > 0 } pocket) _armyPanelSubtitle.Text = pocket + " · " + _armyPanelSubtitle.Text;
         _armyPanelSubtitle.TooltipText = Ui.Tip(CommanderCaption(group) + (group is null ? "" :
-            "\n" + Tr(Simulation.Generals.Trait(group.CommanderTrait).Description) +
-            "\n" + Tr("Every commander, and relieving one: Military → Generals.")));
+            "\n" + Tr(Simulation.Generals.Trait(group.CommanderTrait).Description) + "\n" + Tr("Every commander, and relieving one: Military → Generals.")));
         _armyPanelCount.Text = Simulation.Loc.Format("{0:N0} selected", divisions.Count);
-        // Selection counts are localised; a fixed English-sized slot clips Russian.
-        _armyPanelCount.CustomMinimumSize = new Vector2(Mathf.Max(84,
-            _armyPanelCount.GetThemeFont("font").GetStringSize(_armyPanelCount.Text,
-                fontSize: _armyPanelCount.GetThemeFontSize("font_size")).X + 2), 0);
+        _armyPanelCount.CustomMinimumSize = new Vector2(Mathf.Max(74,
+            _armyPanelCount.GetThemeFont("font").GetStringSize(_armyPanelCount.Text, fontSize: _armyPanelCount.GetThemeFontSize("font_size")).X + 4), 0);
 
+        RefreshArmyReadinessStrip(divisions);
         RefreshComposition(divisions);
         RefreshRoster(divisions, mine);
         RefreshAssaultReadiness(divisions);
 
         _armyRosterHint.Visible = mine && !readingDoctrine;
-        foreach (var (order, button) in _armyOrderButtons)
-        {
-            button.Disabled = !mine;
-            StyleButton(button, mine && divisions.All(army => army.OrderKind == order));
-        }
-        foreach (var (stance, button) in _armyStanceButtons)
-        {
-            button.Disabled = !mine;
-            StyleButton(button, mine && divisions.All(army => army.Stance == stance));
-        }
+        foreach (var (order, button) in _armyOrderButtons) { button.Disabled = !mine; StyleButton(button, mine && divisions.All(army => army.OrderKind == order)); }
+        foreach (var (stance, button) in _armyStanceButtons) { button.Disabled = !mine; StyleButton(button, mine && divisions.All(army => army.Stance == stance)); }
         ApplyArmyPriorityButtonStates();
         RefreshDrawingUi();
     }
-
-    private void RefreshComposition(List<Army> divisions)
-    {
-        foreach (var child in _armyComposition.GetChildren())
-        {
-            _armyComposition.RemoveChild(child);
-            child.QueueFree();
-        }
-
-        foreach (var group in divisions
-                     .GroupBy(army => army.TemplateId)
-                     .OrderByDescending(group => group.Count()))
-        {
-            var template = UnitTypeCatalog.Get(group.Key);
-            var entry = Title($"{CounterGlyph(template.CounterSymbol)} {group.Count()}", 13, Ui.Colour("text.body_soft"));
-            entry.TooltipText = Ui.Tip(Simulation.Loc.Format("{0} × {1}\nSoft attack {2:0.##} · hard attack {3:0.##}\nDefence {4:0.##} · breakthrough {5:0.##}\nArmour {6:0.##} · piercing {7:0.##}\nFrontage {8:0.#} of the 80 a province gives", group.Count(), template.Name, template.SoftAttack, template.HardAttack, template.Defense, template.Breakthrough, template.Armour, template.Piercing, template.CombatWidth));
-            entry.MouseFilter = MouseFilterEnum.Stop;
-            entry.AutowrapMode = TextServer.AutowrapMode.Off;
-            _armyComposition.AddChild(entry);
-        }
-    }
-
-    /// <summary>
-    /// One row per division: counter, name, organisation, strength. The bars are the point -
-    /// forty rows of numbers is a spreadsheet, forty rows of bars is a situation.
-    /// </summary>
-    private void RefreshRoster(List<Army> divisions, bool mine)
-    {
-        if (_withdrawSelectedButton is not null)
-            _withdrawSelectedButton.Disabled = !mine || !divisions.Any(army => army.InBattle);
-        foreach (var child in _armyRoster.GetChildren())
-        {
-            _armyRoster.RemoveChild(child);
-            child.QueueFree();
-        }
-        _armyRosterRows.Clear();
-        _armyRoster.AddChild(Title(Simulation.Loc.Get("Condition bars: organisation · strength · equipment"),
-            11, Ui.Colour("text.muted")));
-
-        foreach (var army in divisions.OrderBy(army => army.Name, System.StringComparer.Ordinal).Take(120))
-        {
-            var template = UnitTypeCatalog.Get(army.TemplateId);
-
-            // The row is a container, not a button with things floating on top of it: the
-            // name is the button, the bars and the mark are its siblings. Anchoring the
-            // bars inside the button pushed the row wider than the panel and clipped the
-            // right-hand bar off the edge.
-            var line = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            line.AddThemeConstantOverride("separation", 4);
-            _armyRoster.AddChild(line);
-
-            var rowFlat = new StyleBoxEmpty
-            {
-                ContentMarginLeft = 2,
-                ContentMarginRight = 4,
-                ContentMarginTop = 2,
-                ContentMarginBottom = 2
-            };
-            var rowHover = new StyleBoxFlat
-            {
-                BgColor = Ui.Colour("button.fill_hover", 0.55f),
-                ContentMarginLeft = 2,
-                ContentMarginRight = 4,
-                ContentMarginTop = 2,
-                ContentMarginBottom = 2
-            };
-            rowHover.SetCornerRadiusAll(2);
-            var row = new Button
-            {
-                // The name uses available width and Godot ellipsis only when needed, while
-                // compact right-side condition bars stay guaranteed inside the roster frame.
-                CustomMinimumSize = new Vector2(64, 26),
-                SizeFlagsHorizontal = SizeFlags.ExpandFill,
-                SizeFlagsStretchRatio = 1f,
-                Alignment = HorizontalAlignment.Left,
-                ClipText = true,
-                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-                TooltipText = Ui.Tip(DivisionTooltip(army)),
-                Flat = true,
-                Text = Simulation.Loc.Format(" {0}  {1}", CounterGlyph(template.CounterSymbol), army.Name)
-            };
-            row.AddThemeStyleboxOverride("normal", rowFlat);
-            row.AddThemeStyleboxOverride("pressed", rowFlat);
-            row.AddThemeStyleboxOverride("focus", rowFlat);
-            row.AddThemeStyleboxOverride("hover", rowHover);
-            row.AddThemeColorOverride("font_color", Ui.Colour("text.body"));
-            row.AddThemeColorOverride("font_hover_color", Ui.Colour("button.text_hover"));
-            row.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
-            var captured = army;
-            row.Pressed += () => OnRosterRowPressed(captured);
-            line.AddChild(row);
-            _armyRosterRows[army.Id] = row;
-
-            line.AddChild(Bar(army.Organisation, 32,
-                army.Organisation < 0.35f ? "state.negative" :
-                army.InBattle ? "state.warning" : "state.info",
-                Simulation.Loc.Format("Organisation {0:P0} — how much fight is left in it",
-                    army.Organisation)));
-            line.AddChild(Bar(army.Strength, 26,
-                army.Strength < 0.55f ? "state.warning" : "state.positive",
-                Simulation.Loc.Format("Fighting strength {0:P0} — {1:N0} of {2:N0} men",
-                    army.Strength, army.Personnel, army.MaxPersonnel)));
-            var equipmentBar = Bar(army.Equipment, 26, "combat.equipment",
-                Simulation.Loc.Format("Equipment: {0:P0}", army.Equipment) + "\n" + EquipmentLogistics.Description(_campaign, army), tooltipMeasure: 72);
-            equipmentBar.Name = "EquipmentBar_" + army.Id;
-            line.AddChild(equipmentBar);
-            var reason = Simulation.StaffReasons.Explain(_campaign, army);
-            var reasonMark = Fixed(Title(Simulation.StaffReasons.Label(_campaign, army), 10, Ui.Colour("text.caption")), 52);
-            reasonMark.Name = "StaffReason_" + army.Id;
-            reasonMark.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-            reasonMark.CustomMinimumSize = new Vector2(52, 16);
-            reasonMark.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
-            reasonMark.TooltipText = Ui.Tip(reason);
-            line.AddChild(reasonMark);
-            line.AddChild(StatusPip(army));
-        }
-
-        if (divisions.Count > 120)
-            _armyRoster.AddChild(Title(Simulation.Loc.Format("…and {0:N0} more", divisions.Count - 120),
-                11, Ui.Colour("text.faint")));
-    }
-
-    /// <summary>
-    /// A high-contrast filled bar. Organisation and strength read faster as bars than as
-    /// "84 % / 61 %", and forty of them read faster still. The fill is anchored rather
-    /// than sized, so the proportion is the layout instead of a number recomputed by hand.
-    /// </summary>
-    private Control Bar(float value, int width, string fillToken, string tooltip, int tooltipMeasure = 0)
-    {
-        var frame = new Control
-        {
-            CustomMinimumSize = new Vector2(width,
-                Mathf.Clamp(Simulation.InterfaceSkin.Metric("combat.panel_bar_height", 12), 10, 20)),
-            SizeFlagsVertical = SizeFlags.ShrinkCenter,
-            SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
-            MouseFilter = MouseFilterEnum.Stop,
-            TooltipText = tooltipMeasure > 0 ? Ui.Tip(tooltip, Mathf.Min(Ui.TooltipMeasure, tooltipMeasure)) : Ui.Tip(tooltip)
-        };
-
-        var back = new Panel { MouseFilter = MouseFilterEnum.Ignore };
-        back.AddThemeStyleboxOverride("panel", InstrumentMaterials.Meter("surface.inset", inset: true));
-        back.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        frame.AddChild(back);
-
-        var fill = new Panel { MouseFilter = MouseFilterEnum.Ignore, Visible = value > 0f };
-        fill.AddThemeStyleboxOverride("panel", InstrumentMaterials.Meter(fillToken));
-        fill.AnchorLeft = 0f;
-        fill.AnchorTop = 0f;
-        fill.AnchorBottom = 1f;
-        fill.AnchorRight = Mathf.Clamp(value, 0f, 1f);
-        fill.OffsetLeft = 0f;
-        fill.OffsetTop = 0f;
-        fill.OffsetRight = 0f;
-        fill.OffsetBottom = 0f;
-        frame.AddChild(fill);
-        return frame;
-    }
-
-    /// <summary>
-    /// One mark that says what is wrong with this division, if anything is. A division in a
-    /// pocket carries a number beside its mark: the days its stores will last, and a nought in
-    /// the colour of bad news once they are gone. The stores were always counted and never
-    /// shown, so a pocket read as a formation that might be gone on any morning.
-    /// </summary>
-    private Control StatusPip(Army army)
-    {
-        var stores = Simulation.StrandedGarrisons.StoresBadge(_campaign, army);
-        var (glyph, token, help) =
-            army.CutOff ? (stores.Text.Length > 0 ? "⊘ " + stores.Text : "⊘",
-                stores.Severity == Simulation.StrandedGarrisons.BadgeNegative ? "state.negative" : "state.warning",
-                LogisticsSystem.DescribeSupply(_campaign, army)) :
-            army.InBattle ? ("⚔", "state.warning", "In battle") :
-            army.LastMoveResult == ArmyMoveResult.RouteInterrupted ? ("!", "state.warning", "Route interrupted by changed territorial control. Issue a new destination.") :
-            // Fed by the people around it, not by a road: not a fault, so not a warning colour.
-            army.LivingOffLand ? ("≈", "state.info", LogisticsSystem.DescribeSupply(_campaign, army)) :
-            army.SupplyCongestion < 0.999f ? ("△", "state.warning", LogisticsSystem.DescribeSupply(_campaign, army)) :
-            army.SupplyLevel < 0.45f ? ("△", "state.warning", "Short of supply") :
-            army.Organisation < 0.35f ? ("↓", "state.critical", "Organisation is spent") :
-            // Held on the quay by an enemy fleet: it has an order and is not moving, which
-            // without a word about the strait reads as an order ignored.
-            LandCrossings.WaitingAt(_campaign, army) is { } shutFerry ? ("!", "state.warning", LandCrossings.WaitingSentence(shutFerry)) :
-            army.IsMoving ? ("→", "state.info", "On the march") :
-            IsOffensive(army) && army.PlanActive ? ("▶", "state.positive", "Plan executing") :
-            IsOffensive(army) ? ("◷", "text.muted", "Plan preparing") :
-            ("▪", "text.faint", "Holding");
-
-        var pip = Title(glyph, 12, Ui.Colour(token));
-        pip.Name = "SupplyStatus_" + army.Id;
-        pip.CustomMinimumSize = new Vector2(army.CutOff && stores.Text.Length > 0 ? 28 : 14, 0);
-        pip.HorizontalAlignment = HorizontalAlignment.Center;
-        pip.TooltipText = Ui.Tip(help, Mathf.Min(Ui.TooltipMeasure, 72));
-        pip.MouseFilter = MouseFilterEnum.Stop;
-        return pip;
-    }
-
-    /// <summary>
-    /// The fields Hearts of Iron puts in a division tooltip, because they are the ones a
-    /// player actually decides on: what it can still take, how many men are left, whether
-    /// it is being fed, and how ready its plan is.
-    /// </summary>
-    private string DivisionTooltip(Army army)
-    {
-        var template = UnitTypeCatalog.Get(army.TemplateId);
-        var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == army.StateMapIndex);
-        var text =
-            army.Name + "\n" + Simulation.Loc.Get(template.Name) + "\n\n" +
-            Simulation.Loc.Format("Organisation: {0:P0}", army.Organisation) + "\n" +
-            Simulation.Loc.Format("Cohesion: {0:P0}", army.Cohesion) + "\n" +
-            Simulation.Loc.Format("Fighting strength: {0:P0}", army.Strength) + "\n" +
-            Simulation.Loc.Format("Manpower: {0:N0} of {1:N0}", army.Personnel, army.MaxPersonnel) + "\n" +
-            Simulation.Loc.Format("Equipment: {0:P0} · experience: {1:P0}",
-                army.Equipment, army.Experience) + "\n" +
-            EquipmentLogistics.Description(_campaign, army) + "\n" +
-            Simulation.Loc.Format("Supply: {0:P0}", army.SupplyLevel) + "\n" +
-            LogisticsSystem.DescribeSupply(_campaign, army) + "\n" +
-            Simulation.Loc.Format("Entrenchment: {0:P0}", army.Entrenchment) + "\n";
-        if (IsOffensive(army))
-            text += Simulation.Loc.Format("Plan preparation: {0:P0} (up to +{1:P0} attack)",
-                army.Planning, _campaign.Defines.MaxPlanningAttackBonus) + "\n";
-        if (IsOffensive(army) && !army.InBattle)
-            text += ArmyAssaultPresentation.Description(_campaign, army) + "\n";
-        text += "\n" + Simulation.Loc.Format("{0} · province #{1:N0}",
-                    state is null ? Simulation.Loc.Get("Unmapped ground") : state.DisplayName,
-                    army.ProvinceId) + "\n" +
-                Simulation.Loc.Format("Order: {0} · posture: {1}",
-                    OrderName(army.OrderKind), StanceName(army.Stance)) + "\n" +
-                Simulation.ArmyVocabulary.Situation(_campaign, army) + "\n" +
-                Simulation.StaffReasons.Explain(_campaign, army);
-        if (army.LastMoveResult == ArmyMoveResult.RouteInterrupted)
-            text += "\n" + Simulation.Loc.Get(
-                "The route is cut. Choose a new destination.");
-        return text;
-    }
-
-    private void RefreshAssaultReadiness(List<Army> divisions)
-    {
-        var offensive = divisions.Where(IsOffensive).ToArray();
-        _armyAssaultReadiness.Visible = offensive.Length > 0;
-        if (offensive.Length == 0) return;
-        _armyAssaultReadinessText.Text = ArmyAssaultPresentation.Summary(_campaign, offensive);
-        _armyAssaultReadinessText.TooltipText = Ui.Tip(
-            _armyAssaultReadinessText.Text + "\n\n" + Simulation.Loc.Get(
-                "These are minimum conditions for an automatic assault, not an estimate of victory. Orders, access, enemy strength and battle frontage still matter."));
-    }
-
-    private string OneLineSummary(Army army)
-    {
-        var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == army.StateMapIndex);
-        return Simulation.Loc.Format("{0} · {1} · {2:N0} men",
-            Simulation.Loc.Get(UnitTypeCatalog.Get(army.TemplateId).Name),
-            state is null ? Simulation.Loc.Get("unmapped") : state.DisplayName,
-            army.Personnel);
-    }
-
-    private static string Shorten(string text, int limit) =>
-        string.IsNullOrEmpty(text) || text.Length <= limit ? text ?? "" : text[..(limit - 1)] + "…";
-
-    /// <summary>
-    /// Roster click semantics, matching what a Paradox player's hands already do: a click
-    /// commands that division alone, Ctrl adds or removes it, and a double-click takes
-    /// every division built to the same template - which is how you find all your armour.
-    /// </summary>
-    private void OnRosterRowPressed(Army army)
-    {
-        if (!ArmyInteraction.CanSelect(_campaign, army)) return;
-        var now = Time.GetTicksMsec();
-        var doubleClick = _lastRosterClickId == army.Id && now - _lastRosterClickMsec < 400;
-        _lastRosterClickId = army.Id;
-        _lastRosterClickMsec = now;
-
-        if (doubleClick)
-        {
-            var template = army.TemplateId;
-            _selectedArmies.Clear();
-            _selectedArmies.AddRange(_campaign.Armies.Where(candidate =>
-                candidate.NationId == _campaign.Player.Id && candidate.TemplateId == template));
-            _selectedArmy = _selectedArmies.FirstOrDefault();
-            SetArmyFeedback(Simulation.Loc.Format(
-                Simulation.Plural.Key("{0:N0} division of {1} selected.", _selectedArmies.Count),
-                _selectedArmies.Count, Simulation.Loc.Get(UnitTypeCatalog.Get(template).Name)));
-        }
-        else if (Input.IsKeyPressed(Key.Ctrl))
-        {
-            if (_selectedArmies.Contains(army)) _selectedArmies.Remove(army);
-            else _selectedArmies.Add(army);
-            if (_selectedArmies.Count == 0) { ClearArmySelectionAndClose(); return; }
-            _selectedArmy = _selectedArmies[0];
-            SetArmyFeedback(Simulation.Loc.Format(
-                Simulation.Plural.Key("{0:N0} division selected.", _selectedArmies.Count),
-                _selectedArmies.Count));
-        }
-        else
-        {
-            _selectedArmies.Clear();
-            _selectedArmies.Add(army);
-            _selectedArmy = army;
-            _globe.FocusOn(army.Latitude, army.Longitude, 6.8f);
-            SetArmyFeedback(Simulation.Loc.Format("{0} has the orders.", army.Name));
-        }
-
-        _globe.SelectArmies(_selectedArmies.Select(candidate => candidate.Id));
-        RefreshArmyPanel();
-    }
-
-    /// <summary>The commander of a group as the panel names them: name, temperament, skill and record.</summary>
-    private string CommanderCaption(ArmyGroup group) =>
-        group is null || group.Commander == Simulation.Generals.Unassigned || group.CommanderTrait.Length == 0
-            ? Tr(group?.Commander ?? "No commander assigned")
-            : Simulation.Loc.Format("{0} ({1}, skill {2:0}%, {3} won / {4} lost)", group.Commander,
-                Tr(Simulation.Generals.Trait(group.CommanderTrait).Name), group.StaffSkill * 100f, group.Victories, group.Defeats);
 }

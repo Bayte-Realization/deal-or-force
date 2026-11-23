@@ -242,7 +242,13 @@ public static class OffensivePlanning
         var map = c.ProvinceMap; var own = c.NationById(army.NationId); var enemy = c.NationById(line.BorderNationId);
         if (map is null || own is null || enemy is null) return;
         var control = c.ProvinceController ?? map.ProvinceToNation;
-        var war = Warfare.OpenWars(c).Find(w => !w.Ended && w.Opposes(own.Id, enemy.Id));
+        StrategicWar war = null;
+        var openWars = Warfare.OpenWars(c);
+        for (var wi = 0; wi < openWars.Count; wi++)
+        {
+            var candidate = openWars[wi];
+            if (!candidate.Ended && candidate.Opposes(own.Id, enemy.Id)) { war = candidate; break; }
+        }
         army.AssignedWarId = war?.Id ?? -1;
         army.Route.Clear(); army.PlannedRoute.Clear(); army.MoveProgress = 0;
         var goal = line.Objectives.GetValueOrDefault(army.Id, -1);
@@ -261,14 +267,19 @@ public static class OffensivePlanning
             target = DeparturePostFor(c, army, line);
             if (target <= 0) return;
         }
-        var route = army.PlanActive && war is not null
-            ? WarCoalition.OperationalRoute(c, war, army.NationId, army.ProvinceId, target, control)
-            : map.FindRoute(army.ProvinceId, target, (ushort)own.MapIndex, control);
+        if (army.PlanActive && war is not null)
+            WarCoalition.FillOperationalRoute(c, war, army.NationId, army.ProvinceId, target, control, army.PlannedRoute);
+        else
+            army.PlannedRoute.AddRange(map.FindRoute(army.ProvinceId, target, (ushort)own.MapIndex, control));
         army.OrderProvinceId = target; army.OrderStateMapIndex = map.ProvinceToState[target];
         army.OrderIssuedDay = c.ElapsedDays;
-        army.PlannedRoute.AddRange(route);
-        army.Route.AddRange(route.TakeWhile(p => WarCoalition.FriendlyController(c, war, army.NationId, control[p])));
-        army.OrderRouteSteps = route.Length; army.OrderStepsCompleted = 0;
+        for (var ri = 0; ri < army.PlannedRoute.Count; ri++)
+        {
+            var p = army.PlannedRoute[ri];
+            if (!WarCoalition.FriendlyController(c, war, army.NationId, control[p])) break;
+            army.Route.Add(p);
+        }
+        army.OrderRouteSteps = army.PlannedRoute.Count; army.OrderStepsCompleted = 0;
     }
 
     /// <summary>Allocate the whole departure front, not a separate front for each goal.</summary>

@@ -1,0 +1,11 @@
+{
+  "grand_projects": {
+    "category": "game",
+    "scope": "campaign",
+    "order": 106,
+    "kind": "toggle",
+    "name": "gp.setting.name",
+    "description": "gp.setting.desc",
+    "default": true
+  }
+}

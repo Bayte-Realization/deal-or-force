@@ -118,39 +118,68 @@ public sealed partial class GlobePresentation
                 return;
             }
             Visible = true;
-            var insignia = SettingsCatalog.Flag("movement_flags");
-            _flagPoll -= delta;
-            if (_flagPoll <= 0)
-            {
-                _flagPoll = .5;
-                var flags = FlagCatalog.VisualStateHash(campaign);
-                if (flags != _flags) { _flags = flags; _revision = -1; _roundels.Clear(); }
-            }
-            if (!ReferenceEquals(campaign, _campaign) || campaign.MovementRevision != _revision || insignia != _insignia)
-                Rebuild(campaign, insignia);
-
             var camera = _globe._camera;
+            if (!campaign.TryEnterRead(0, requestWindowOnMiss: true))
+            {
+                // Keep cached medallion transforms responsive at 60 FPS while DoF-Sim is mid-tick.
+                UpdateCachedMarkerTransforms(camera);
+                return;
+            }
+            try
+            {
+                var insignia = SettingsCatalog.Flag("movement_flags");
+                _flagPoll -= delta;
+                if (_flagPoll <= 0)
+                {
+                    _flagPoll = .5;
+                    var flags = FlagCatalog.VisualStateHash(campaign);
+                    if (flags != _flags) { _flags = flags; _revision = -1; _roundels.Clear(); }
+                }
+                if (!ReferenceEquals(campaign, _campaign) || campaign.MovementRevision != _revision || insignia != _insignia)
+                    Rebuild(campaign, insignia);
+
+                foreach (var marker in _markers)
+                {
+                    if (!IsInstanceValid(marker.Node)) continue;
+                    var state = marker.Nation.Movement;
+                    // A headquarters out on the street, or one that is no more, is nowhere on the map.
+                    var shown = Standing(state) && _globe.ViewDistance <= MedallionDistance;
+                    if (shown)
+                        UpdateSingleMarkerTransform(marker, camera, ref shown);
+                    if (marker.Node.Visible != shown) marker.Node.Visible = shown;
+                }
+                Spread(camera);
+            }
+            finally
+            {
+                campaign.ExitRead();
+            }
+        }
+
+        private void UpdateCachedMarkerTransforms(Camera3D camera)
+        {
             foreach (var marker in _markers)
             {
-                if (!IsInstanceValid(marker.Node)) continue;
-                var state = marker.Nation.Movement;
-                // A headquarters out on the street, or one that is no more, is nowhere on the map.
-                var shown = Standing(state) && _globe.ViewDistance <= MedallionDistance;
+                if (!IsInstanceValid(marker.Node) || !marker.Node.Visible) continue;
+                var shown = _globe.ViewDistance <= MedallionDistance;
                 if (shown)
-                {
-                    // FixedSize uses half the orthographic height on the flat map, versus
-                    // camera depth on the globe. Match its screen scale in both projections.
-                    marker.Node.Scale = Vector3.One * (_globe._flatMap && IsInstanceValid(camera)
-                        ? 1f / Mathf.Tan(Mathf.DegToRad(camera.Fov * 0.5f)) : 1f);
-                    marker.Node.Position = _globe.PresentationPoint(marker.Latitude, marker.Longitude,
-                        SurfaceMarkerRadius * 1.002f);
-                    // On the globe, only the side that faces the camera.
-                    if (!_globe._flatMap && IsInstanceValid(camera))
-                        shown = marker.Node.Position.Normalized().Dot(camera.GlobalPosition.Normalized()) > 0.05f;
-                }
-                if (marker.Node.Visible != shown) marker.Node.Visible = shown;
+                    UpdateSingleMarkerTransform(marker, camera, ref shown);
+                if (!shown && marker.Node.Visible) marker.Node.Visible = false;
             }
             Spread(camera);
+        }
+
+        private void UpdateSingleMarkerTransform(Marker marker, Camera3D camera, ref bool shown)
+        {
+            // FixedSize uses half the orthographic height on the flat map, versus
+            // camera depth on the globe. Match its screen scale in both projections.
+            marker.Node.Scale = Vector3.One * (_globe._flatMap && IsInstanceValid(camera)
+                ? 1f / Mathf.Tan(Mathf.DegToRad(camera.Fov * 0.5f)) : 1f);
+            marker.Node.Position = _globe.PresentationPoint(marker.Latitude, marker.Longitude,
+                GlobePresentation.SurfaceMarkerRadius * 1.002f);
+            // On the globe, only the side that faces the camera.
+            if (!_globe._flatMap && IsInstanceValid(camera))
+                shown = marker.Node.Position.Normalized().Dot(camera.GlobalPosition.Normalized()) > 0.05f;
         }
 
         // A beaten rising gone underground has no office anyone could point to: its fighters are
@@ -237,6 +266,7 @@ public sealed partial class GlobePresentation
                         OutlineSize = 12,
                         Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                         NoDepthTest = true,
+                        TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
                         RenderPriority = 23,
                         Modulate = Ui.Colour("globe.label"),
                         OutlineModulate = Ui.Colour("globe.label_outline", 0.95f),
@@ -257,6 +287,7 @@ public sealed partial class GlobePresentation
                             OutlineSize = 0,
                             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                             NoDepthTest = true,
+                            TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
                             RenderPriority = 24,
                             Modulate = Ui.Colour("globe.label"),
                             Offset = new Vector2(chipOffset * PixelSize / LabelPixelSize, -RowSink * PixelSize / LabelPixelSize)
@@ -390,6 +421,7 @@ public sealed partial class GlobePresentation
                     canvas.Fill(Colors.Transparent);
                     canvas.BlitRect(image, new Rect2I(0, 0, width, height),
                         new Vector2I((128 - width) / 2, (128 - height) / 2));
+                    canvas.GenerateMipmaps();
                     made = ImageTexture.CreateFromImage(canvas);
                 }
             }
@@ -404,6 +436,7 @@ public sealed partial class GlobePresentation
             FixedSize = true,
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             AlphaCut = SpriteBase3D.AlphaCutMode.Disabled,
+            TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
             Shaded = false,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             NoDepthTest = true,
@@ -426,6 +459,7 @@ public sealed partial class GlobePresentation
                 if (inner > 0f) alpha = Mathf.Min(alpha, Mathf.Clamp(distance - inner + 0.5f, 0f, 1f));
                 image.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
             }
+            image.GenerateMipmaps();
             return ImageTexture.CreateFromImage(image);
         }
     }

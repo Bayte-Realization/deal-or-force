@@ -237,19 +237,8 @@ public static class StrategicStockpiles
     /// </summary>
     private static float BaseCapacity(Campaign campaign, Nation nation)
     {
-        var barracks = 0;
-        var ports = 0;
-        var infra = 0;
-        var armsPlants = 0;
-        if (campaign is not null)
-            foreach (var st in campaign.StatesOf(nation))
-            {
-                barracks += st.Buildings.GetValueOrDefault(BuildingKind.Barracks);
-                ports += st.Buildings.GetValueOrDefault(BuildingKind.Port) + st.Buildings.GetValueOrDefault(BuildingKind.Shipyard);
-                infra += st.Buildings.GetValueOrDefault(BuildingKind.Infrastructure);
-                armsPlants += st.Buildings.GetValueOrDefault(BuildingKind.ArmsIndustry);
-            }
-        return 12f + barracks * 6f + armsPlants * 10f + ports * 4f + infra * 2.5f + MathF.Sqrt(MathF.Max(1f, nation.Gdp)) * 3.5f;
+        ReadInfrastructure(campaign, nation, out _, out var baseCapacity, includeCapacity: true);
+        return baseCapacity;
     }
 
     private static float Capacity(float baseCap, string goodId)
@@ -387,6 +376,38 @@ public static class StrategicStockpiles
     /// active battles, marching motorized/armored columns, and fleets at sea.
     /// When a depot runs dry, the nation's forces suffer real supply, organisation, speed and combat penalties!
     /// </summary>
+    private static readonly (bool HasComm, Commodity Comm)[] TrackedCommodities = BuildTrackedCommodities();
+
+    private static (bool HasComm, Commodity Comm)[] BuildTrackedCommodities()
+    {
+        var arr = new (bool, Commodity)[TrackedGoods.Length];
+        for (var i = 0; i < TrackedGoods.Length; i++)
+            arr[i] = (CommodityCatalog.TryParse(TrackedGoods[i], out var comm), comm);
+        return arr;
+    }
+
+    [ThreadStatic] private static float[] _totalDivsDenseScratch;
+    [ThreadStatic] private static float[] _marchingMobileDenseScratch;
+    [ThreadStatic] private static float[] _fightingDivsDenseScratch;
+    [ThreadStatic] private static int[] _seaHullsDenseScratch;
+    [ThreadStatic] private static int[] _actionHullsDenseScratch;
+    [ThreadStatic] private static List<Army>[] _armiesByNationDenseScratch;
+    [ThreadStatic] private static List<Fleet>[] _fleetsByNationDenseScratch;
+    [ThreadStatic] private static Dictionary<int, float> _totalDivsOverflowScratch;
+    [ThreadStatic] private static Dictionary<int, float> _marchingMobileOverflowScratch;
+    [ThreadStatic] private static Dictionary<int, float> _fightingDivsOverflowScratch;
+    [ThreadStatic] private static Dictionary<int, int> _seaHullsOverflowScratch;
+    [ThreadStatic] private static Dictionary<int, int> _actionHullsOverflowScratch;
+    [ThreadStatic] private static Dictionary<int, List<Army>> _armiesByNationOverflowScratch;
+    [ThreadStatic] private static Dictionary<int, List<Fleet>> _fleetsByNationOverflowScratch;
+
+    private static T[] EnsureDenseBuffer<T>(ref T[] buf, int len)
+    {
+        if (buf is null || buf.Length < len) buf = new T[Math.Max(len, 64)];
+        else Array.Clear(buf, 0, len);
+        return buf;
+    }
+
     public static void TickDay(Campaign campaign)
     {
         foreach (var _ in TickDayStages(campaign)) { }
@@ -398,43 +419,122 @@ public static class StrategicStockpiles
         if (campaign is null || !campaign.Defines.StrategicStockpilesEnabled) yield break;
         var defines = campaign.Defines;
 
-        // Pre-tally per nation: total divisions, marching divisions, fighting divisions, hulls at sea, hulls in action
-        var totalDivs = new Dictionary<int, float>();
-        var marchingMobile = new Dictionary<int, float>();
-        var fightingDivs = new Dictionary<int, float>();
-        var seaHulls = new Dictionary<int, int>();
-        var actionHulls = new Dictionary<int, int>();
+        var activeNations = campaign.ActiveNations;
+        var maxNationId = 0;
+        for (var i = 0; i < activeNations.Count; i++)
+            if (activeNations[i].Id > maxNationId) maxNationId = activeNations[i].Id;
+        var denseLen = Math.Min(Math.Max(maxNationId + 1, 64), 16384);
+
+        var totalDivsArr = EnsureDenseBuffer(ref _totalDivsDenseScratch, denseLen);
+        var marchingArr = EnsureDenseBuffer(ref _marchingMobileDenseScratch, denseLen);
+        var fightingArr = EnsureDenseBuffer(ref _fightingDivsDenseScratch, denseLen);
+        var seaArr = EnsureDenseBuffer(ref _seaHullsDenseScratch, denseLen);
+        var actionArr = EnsureDenseBuffer(ref _actionHullsDenseScratch, denseLen);
+
+        var armyBuckets = _armiesByNationDenseScratch;
+        if (armyBuckets is null || armyBuckets.Length < denseLen)
+            _armiesByNationDenseScratch = armyBuckets = new List<Army>[Math.Max(denseLen, 64)];
+        else
+            for (var i = 0; i < denseLen; i++) armyBuckets[i]?.Clear();
+
+        var fleetBuckets = _fleetsByNationDenseScratch;
+        if (fleetBuckets is null || fleetBuckets.Length < denseLen)
+            _fleetsByNationDenseScratch = fleetBuckets = new List<Fleet>[Math.Max(denseLen, 64)];
+        else
+            for (var i = 0; i < denseLen; i++) fleetBuckets[i]?.Clear();
+
+        Dictionary<int, float> totalDivsOv = _totalDivsOverflowScratch; totalDivsOv?.Clear();
+        Dictionary<int, float> marchingOv = _marchingMobileOverflowScratch; marchingOv?.Clear();
+        Dictionary<int, float> fightingOv = _fightingDivsOverflowScratch; fightingOv?.Clear();
+        Dictionary<int, int> seaOv = _seaHullsOverflowScratch; seaOv?.Clear();
+        Dictionary<int, int> actionOv = _actionHullsOverflowScratch; actionOv?.Clear();
+        Dictionary<int, List<Army>> armiesOv = _armiesByNationOverflowScratch;
+        if (armiesOv is not null) foreach (var b in armiesOv.Values) b.Clear();
+        Dictionary<int, List<Fleet>> fleetsOv = _fleetsByNationOverflowScratch;
+        if (fleetsOv is not null) foreach (var b in fleetsOv.Values) b.Clear();
 
         var scanned = 0;
-        foreach (var army in campaign.Armies)
+        var allArmies = campaign.Armies;
+        for (var ai = 0; ai < allArmies.Count; ai++)
         {
-            if (++scanned % 512 == 0) yield return 0;
-            if (army.Divisions <= 0f) continue;
-            totalDivs[army.NationId] = totalDivs.GetValueOrDefault(army.NationId) + army.Divisions;
-            if (army.InBattle)
-                fightingDivs[army.NationId] = fightingDivs.GetValueOrDefault(army.NationId) + army.Divisions;
-            if (army.IsMoving)
+            if (++scanned % 2048 == 0 && Campaign.StageOverdue()) yield return 0;
+            var army = allArmies[ai];
+            var nid = army.NationId;
+            if ((uint)nid < (uint)denseLen)
             {
-                var tmpl = UnitTypeCatalog.Get(army.TemplateId);
-                var fuelWeight = tmpl.Hardness > 0.1f || tmpl.Speed > 1.05f ? 1.8f : 0.45f;
-                marchingMobile[army.NationId] = marchingMobile.GetValueOrDefault(army.NationId) + army.Divisions * fuelWeight;
+                (armyBuckets[nid] ??= new List<Army>()).Add(army);
+                if (army.Divisions <= 0f) continue;
+                totalDivsArr[nid] += army.Divisions;
+                if (army.InBattle) fightingArr[nid] += army.Divisions;
+                if (army.IsMoving)
+                {
+                    var tmpl = UnitTypeCatalog.Get(army.TemplateId);
+                    var fuelWeight = tmpl.Hardness > 0.1f || tmpl.Speed > 1.05f ? 1.8f : 0.45f;
+                    marchingArr[nid] += army.Divisions * fuelWeight;
+                }
+            }
+            else
+            {
+                armiesOv ??= _armiesByNationOverflowScratch = new Dictionary<int, List<Army>>();
+                if (!armiesOv.TryGetValue(nid, out var aList)) armiesOv[nid] = aList = new List<Army>();
+                aList.Add(army);
+                if (army.Divisions <= 0f) continue;
+                totalDivsOv ??= _totalDivsOverflowScratch = new Dictionary<int, float>();
+                totalDivsOv[nid] = totalDivsOv.GetValueOrDefault(nid) + army.Divisions;
+                if (army.InBattle)
+                {
+                    fightingOv ??= _fightingDivsOverflowScratch = new Dictionary<int, float>();
+                    fightingOv[nid] = fightingOv.GetValueOrDefault(nid) + army.Divisions;
+                }
+                if (army.IsMoving)
+                {
+                    var tmpl = UnitTypeCatalog.Get(army.TemplateId);
+                    var fuelWeight = tmpl.Hardness > 0.1f || tmpl.Speed > 1.05f ? 1.8f : 0.45f;
+                    marchingOv ??= _marchingMobileOverflowScratch = new Dictionary<int, float>();
+                    marchingOv[nid] = marchingOv.GetValueOrDefault(nid) + army.Divisions * fuelWeight;
+                }
             }
         }
 
-        foreach (var fleet in campaign.Fleets)
+        var allFleets = campaign.Fleets;
+        for (var fi = 0; fi < allFleets.Count; fi++)
         {
-            if (fleet.Hulls <= 0) continue;
-            if (!fleet.InPort)
-                seaHulls[fleet.NationId] = seaHulls.GetValueOrDefault(fleet.NationId) + fleet.Hulls;
-            if (fleet.InAction)
-                actionHulls[fleet.NationId] = actionHulls.GetValueOrDefault(fleet.NationId) + fleet.Hulls;
+            var fleet = allFleets[fi];
+            var nid = fleet.NationId;
+            if ((uint)nid < (uint)denseLen)
+            {
+                (fleetBuckets[nid] ??= new List<Fleet>()).Add(fleet);
+                if (fleet.Hulls <= 0) continue;
+                if (!fleet.InPort) seaArr[nid] += fleet.Hulls;
+                if (fleet.InAction) actionArr[nid] += fleet.Hulls;
+            }
+            else
+            {
+                fleetsOv ??= _fleetsByNationOverflowScratch = new Dictionary<int, List<Fleet>>();
+                if (!fleetsOv.TryGetValue(nid, out var fList)) fleetsOv[nid] = fList = new List<Fleet>();
+                fList.Add(fleet);
+                if (fleet.Hulls <= 0) continue;
+                if (!fleet.InPort)
+                {
+                    seaOv ??= _seaHullsOverflowScratch = new Dictionary<int, int>();
+                    seaOv[nid] = seaOv.GetValueOrDefault(nid) + fleet.Hulls;
+                }
+                if (fleet.InAction)
+                {
+                    actionOv ??= _actionHullsOverflowScratch = new Dictionary<int, int>();
+                    actionOv[nid] = actionOv.GetValueOrDefault(nid) + fleet.Hulls;
+                }
+            }
         }
 
-        yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
+        var baseMil = MathF.Max(0.01f, defines.BaselineMilitarySpending);
+        var rootGdpWeight = MathF.Max(0f, defines.StockpileIndustryPerRootGdp);
         var ticked = 0;
-        foreach (var nation in campaign.Nations)
+        for (var ni = 0; ni < activeNations.Count; ni++)
         {
-            if (++ticked % 8 == 0 || Campaign.StageOverdue()) yield return 0;
+            var nation = activeNations[ni];
+            if (++ticked % 32 == 0 && Campaign.StageOverdue()) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null) continue;
             if (!nation.StockpilesSeeded) EnsureSeeded(campaign, nation);
             else EnsureArsenal(campaign, nation);
@@ -442,22 +542,27 @@ public static class StrategicStockpiles
             nation.DailyStockpileGain.Clear();
             nation.DailyEquipmentReplacement.Clear();
 
-            var divs = totalDivs.GetValueOrDefault(nation.Id);
-            var fighting = fightingDivs.GetValueOrDefault(nation.Id);
-            var marching = marchingMobile.GetValueOrDefault(nation.Id);
-            var afloat = seaHulls.GetValueOrDefault(nation.Id);
-            var navalCombat = actionHulls.GetValueOrDefault(nation.Id);
+            var nid = nation.Id;
+            var inDense = (uint)nid < (uint)denseLen;
+            var divs = inDense ? totalDivsArr[nid] : (totalDivsOv?.GetValueOrDefault(nid) ?? 0f);
+            var fighting = inDense ? fightingArr[nid] : (fightingOv?.GetValueOrDefault(nid) ?? 0f);
+            var marching = inDense ? marchingArr[nid] : (marchingOv?.GetValueOrDefault(nid) ?? 0f);
+            var afloat = inDense ? seaArr[nid] : (seaOv?.GetValueOrDefault(nid) ?? 0);
+            var navalCombat = inDense ? actionArr[nid] : (actionOv?.GetValueOrDefault(nid) ?? 0);
 
-            // 1. Refill from national production and imports (1/7th of weekly output + war industry bonus)
-            var plants = PlantsOf(campaign, nation);
-            // Nothing in the loop below builds or grows anything: one base for all the goods.
-            var baseCap = BaseCapacity(campaign, nation);
+            // 1. Refill from national production and imports (single walk of owned states' buildings)
+            ReadInfrastructure(campaign, nation, out var plants, out var baseCap, includeCapacity: true);
+            var spendScale = M.Clamp(nation.MilitarySpending / baseMil, 0.35f, 2.5f);
+            var baseGain = defines.StockpileMinimumTrickle * spendScale;
+            var arms = plants.Arms + MathF.Sqrt(MathF.Max(0f, nation.Gdp)) * rootGdpWeight;
 
-            foreach (var goodId in TrackedGoods)
+            for (var gi = 0; gi < TrackedGoods.Length; gi++)
             {
+                var goodId = TrackedGoods[gi];
+                var tc = TrackedCommodities[gi];
                 var cap = Capacity(baseCap, goodId);
                 var current = Get(campaign, nation, goodId);
-                var gain = Intake(campaign, nation, goodId, plants);
+                var gain = IntakePrepared(defines, nation, goodId, plants, tc.HasComm, tc.Comm, spendScale, baseGain, arms);
 
                 // Burn calculation
                 var burn = goodId switch
@@ -482,8 +587,9 @@ public static class StrategicStockpiles
                 // The army's fuel is bought on the national market like everybody's: the share
                 // of it the market met arrives, and the depot is what covers a market that
                 // fails - a blockade, an embargo, a refinery on fire.
-                if (defines.StockpileFuelFromMarket && goodId == "Oil")
-                    gain += burn * MarketMet(nation, goodId);
+                if (defines.StockpileFuelFromMarket && goodId == "Oil" && tc.HasComm &&
+                    nation.Market.TryGetValue(tc.Comm, out var fuelQuote))
+                    gain += burn * M.Clamp01(fuelQuote.Satisfaction);
 
                 nation.DailyStockpileGain[goodId] = gain;
                 nation.DailyStockpileBurn[goodId] = burn;
@@ -507,41 +613,51 @@ public static class StrategicStockpiles
 
             if (divs > 0f && (armsShort > 0f || ammoShort > 0f || oilShort > 0f || foodShort > 0f || electronicsShort > 0f))
             {
-                foreach (var army in campaign.Armies)
+                var nationArmies = inDense ? armyBuckets[nid] : (armiesOv is not null && armiesOv.TryGetValue(nid, out var aOv) ? aOv : null);
+                if (nationArmies is not null)
                 {
-                    if (army.NationId != nation.Id || MilitaryAccess.MustReturn(campaign, army)) continue;
-                    if (armsShort > 0f)
-                        army.Equipment = MathF.Min(army.Equipment,
-                            M.Clamp(army.Equipment - defines.StockpileShortArmsEquipmentLoss * armsShort, 0.20f, 1f));
-                    if (ammoShort > 0f && army.InBattle)
-                        army.Organisation = M.Clamp01(army.Organisation - defines.StockpileShortAmmunitionOrganisationLoss * ammoShort);
-                    if (oilShort > 0f && army.IsMoving)
-                        army.SupplyLevel = M.Clamp01(army.SupplyLevel - defines.StockpileShortOilSupplyLoss * oilShort);
-                    if (foodShort > 0f)
+                    for (var ai = 0; ai < nationArmies.Count; ai++)
                     {
-                        army.Organisation = M.Clamp01(army.Organisation - defines.StockpileShortFoodOrganisationLoss * foodShort);
-                        army.Cohesion = M.Clamp01(army.Cohesion - defines.StockpileShortFoodCohesionLoss * foodShort);
+                        var army = nationArmies[ai];
+                        if (MilitaryAccess.MustReturn(campaign, army)) continue;
+                        if (armsShort > 0f)
+                            army.Equipment = MathF.Min(army.Equipment,
+                                M.Clamp(army.Equipment - defines.StockpileShortArmsEquipmentLoss * armsShort, 0.20f, 1f));
+                        if (ammoShort > 0f && army.InBattle)
+                            army.Organisation = M.Clamp01(army.Organisation - defines.StockpileShortAmmunitionOrganisationLoss * ammoShort);
+                        if (oilShort > 0f && army.IsMoving)
+                            army.SupplyLevel = M.Clamp01(army.SupplyLevel - defines.StockpileShortOilSupplyLoss * oilShort);
+                        if (foodShort > 0f)
+                        {
+                            army.Organisation = M.Clamp01(army.Organisation - defines.StockpileShortFoodOrganisationLoss * foodShort);
+                            army.Cohesion = M.Clamp01(army.Cohesion - defines.StockpileShortFoodCohesionLoss * foodShort);
+                        }
+                        if (electronicsShort > 0f)
+                            army.Recon = M.Clamp01(army.Recon - 0.01f * electronicsShort);
                     }
-                    if (electronicsShort > 0f)
-                        army.Recon = M.Clamp01(army.Recon - 0.01f * electronicsShort);
                 }
             }
 
             if (afloat > 0 && (oilShort > 0f || ammoShort > 0f || electronicsShort > 0f))
             {
-                foreach (var fleet in campaign.Fleets)
+                var nationFleets = inDense ? fleetBuckets[nid] : (fleetsOv is not null && fleetsOv.TryGetValue(nid, out var fOv) ? fOv : null);
+                if (nationFleets is not null)
                 {
-                    if (fleet.NationId != nation.Id || fleet.InPort) continue;
-                    if (oilShort > 0f)
-                        fleet.Supply = M.Clamp01(fleet.Supply - 0.03f * oilShort);
-                    if (ammoShort > 0f && fleet.InAction)
-                        fleet.Organisation = M.Clamp01(fleet.Organisation - 0.04f * ammoShort);
-                    if (electronicsShort > 0f && fleet.InAction)
-                        fleet.Strength = M.Clamp01(fleet.Strength - 0.01f * electronicsShort);
+                    for (var fi = 0; fi < nationFleets.Count; fi++)
+                    {
+                        var fleet = nationFleets[fi];
+                        if (fleet.InPort) continue;
+                        if (oilShort > 0f)
+                            fleet.Supply = M.Clamp01(fleet.Supply - 0.03f * oilShort);
+                        if (ammoShort > 0f && fleet.InAction)
+                            fleet.Organisation = M.Clamp01(fleet.Organisation - 0.04f * ammoShort);
+                        if (electronicsShort > 0f && fleet.InAction)
+                            fleet.Strength = M.Clamp01(fleet.Strength - 0.01f * electronicsShort);
+                    }
                 }
             }
         }
-        yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
         EquipmentLogistics.ReplenishDay(campaign);
     }
 
@@ -637,26 +753,62 @@ public static class StrategicStockpiles
 
     private static Plants PlantsOf(Campaign campaign, Nation nation)
     {
-        int arms = 0, refineries = 0, smelters = 0, farms = 0, electronics = 0;
-        foreach (var st in campaign.StatesOf(nation))
-        {
-            arms += st.Buildings.GetValueOrDefault(BuildingKind.ArmsIndustry);
-            refineries += st.Buildings.GetValueOrDefault(BuildingKind.Refinery) + st.Buildings.GetValueOrDefault(BuildingKind.ExtractionIndustry);
-            smelters += st.Buildings.GetValueOrDefault(BuildingKind.Smelter);
-            farms += st.Buildings.GetValueOrDefault(BuildingKind.Agriculture);
-            electronics += st.Buildings.GetValueOrDefault(BuildingKind.ElectronicsPlant);
-        }
-        return new Plants(arms, refineries, smelters, farms, electronics);
+        ReadInfrastructure(campaign, nation, out var plants, out _, includeCapacity: false);
+        return plants;
     }
 
-    /// <summary>What a day of national production and imports adds to a depot.</summary>
+    private static void ReadInfrastructure(Campaign campaign, Nation nation, out Plants plants, out float baseCapacity, bool includeCapacity = true)
+    {
+        int arms = 0, refineries = 0, smelters = 0, farms = 0, electronics = 0;
+        int barracks = 0, ports = 0, infra = 0;
+        if (campaign is not null)
+        {
+            var states = campaign.StatesOf(nation);
+            for (var si = 0; si < states.Length; si++)
+            {
+                var buildings = states[si].Buildings;
+                if (buildings.Count == 0) continue;
+                foreach (var (kind, count) in buildings)
+                {
+                    if (count == 0) continue;
+                    switch (kind)
+                    {
+                        case BuildingKind.ArmsIndustry: arms += count; break;
+                        case BuildingKind.Refinery:
+                        case BuildingKind.ExtractionIndustry: refineries += count; break;
+                        case BuildingKind.Smelter: smelters += count; break;
+                        case BuildingKind.Agriculture: farms += count; break;
+                        case BuildingKind.ElectronicsPlant: electronics += count; break;
+                        case BuildingKind.Barracks: if (includeCapacity) barracks += count; break;
+                        case BuildingKind.Port:
+                        case BuildingKind.Shipyard: if (includeCapacity) ports += count; break;
+                        case BuildingKind.Infrastructure: if (includeCapacity) infra += count; break;
+                    }
+                }
+            }
+        }
+        plants = new Plants(arms, refineries, smelters, farms, electronics);
+        baseCapacity = includeCapacity
+            ? 12f + barracks * 6f + arms * 10f + ports * 4f + infra * 2.5f + MathF.Sqrt(MathF.Max(1f, nation.Gdp)) * 3.5f
+            : 0f;
+    }
+
     private static float Intake(Campaign campaign, Nation nation, string goodId, Plants plants)
     {
         var defines = campaign.Defines;
         var spendScale = M.Clamp(nation.MilitarySpending / MathF.Max(0.01f, defines.BaselineMilitarySpending), 0.35f, 2.5f);
-        var gain = defines.StockpileMinimumTrickle * spendScale;
+        var baseGain = defines.StockpileMinimumTrickle * spendScale;
         var arms = plants.Arms + MathF.Sqrt(MathF.Max(0f, nation.Gdp)) * MathF.Max(0f, defines.StockpileIndustryPerRootGdp);
-        if (CommodityCatalog.TryParse(goodId, out var comm) && nation.Market.TryGetValue(comm, out var quote))
+        var hasComm = CommodityCatalog.TryParse(goodId, out var comm);
+        return IntakePrepared(defines, nation, goodId, plants, hasComm, comm, spendScale, baseGain, arms);
+    }
+
+    /// <summary>What a day of national production and imports adds to a depot.</summary>
+    private static float IntakePrepared(Defines defines, Nation nation, string goodId, Plants plants,
+        bool hasComm, Commodity comm, float spendScale, float baseGain, float arms)
+    {
+        var gain = baseGain;
+        if (hasComm && nation.Market.TryGetValue(comm, out var quote))
         {
             var surplus = MathF.Max(0f, quote.Production + quote.Imports - quote.Demand * 0.72f);
             gain += (surplus / 7f) * defines.StockpileSurplusCaptureShare * quote.Satisfaction;

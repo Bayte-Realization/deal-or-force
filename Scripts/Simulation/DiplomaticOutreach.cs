@@ -44,16 +44,31 @@ public static class DiplomaticOutreach
     /// relation for every embassy. A second campaign keeps its own census.</summary>
     internal sealed class OfferScan
     {
-        private readonly Campaign _campaign;
-        private readonly int _issuer;
-        private int? _count;
+        private Campaign _campaign;
+        private int _issuer;
+        private bool _hasCount;
+        private int _count;
 
+        internal OfferScan() { }
         internal OfferScan(Campaign campaign, int issuer) { _campaign = campaign; _issuer = issuer; }
 
-        internal int Count(Campaign campaign, int issuer) =>
-            ReferenceEquals(campaign, _campaign) && issuer == _issuer
-                ? (_count ??= CountMissions(campaign, issuer))
-                : CountMissions(campaign, issuer);
+        internal void Reset(Campaign campaign, int issuer)
+        {
+            _campaign = campaign;
+            _issuer = issuer;
+            _hasCount = false;
+            _count = 0;
+        }
+
+        internal int Count(Campaign campaign, int issuer)
+        {
+            if (ReferenceEquals(campaign, _campaign) && issuer == _issuer)
+            {
+                if (!_hasCount) { _count = CountMissions(campaign, issuer); _hasCount = true; }
+                return _count;
+            }
+            return CountMissions(campaign, issuer);
+        }
     }
 
     sealed class MissionCensus
@@ -123,6 +138,29 @@ public static class DiplomaticOutreach
 
     public static string Refusal(Campaign c, int issuer, int target, bool active = true) =>
         Refusal(c, issuer, target, active, null);
+
+    internal static bool CanStartQuiet(Campaign c, int issuer, int target, OfferScan scan = null)
+    {
+        var n = c?.NationById(issuer); var other = c?.NationById(target);
+        if (n is null || other is null || n.Id == other.Id || c.Fallen.Contains(issuer) || c.Fallen.Contains(target) ||
+            n.Population <= 0 || other.Population <= 0) return false;
+        var relation = CampaignDiplomacy.Peek(c, issuer, target);
+        if (Of(relation, issuer) is not null) return false;
+        if (CampaignDiplomacy.AtWar(c, issuer, target)) return false;
+        if (relation is not null && relation.EmbargoBy(issuer)) return false;
+        if (relation is not null && c.ElapsedDays - relation.LastActionDay < 14) return false;
+        if (!c.Defines.DiplomaticMissionsEnabled) return n.Treasury >= .1f;
+        var d = c.Defines;
+        if (!Valid(d.DiplomaticMissionPoliticalCost) || !Valid(d.DiplomaticMissionWeeklyPoliticalCost) ||
+            !Valid(d.DiplomaticMissionStartCash) || !Valid(d.DiplomaticMissionWeeklyCash) ||
+            !Valid(d.DiplomaticMissionWeeklyOpinion) || !Valid(d.DiplomaticMissionOpinionCap))
+            return false;
+        if ((scan?.Count(c, issuer) ?? CountMissions(c, issuer)) >= Math.Clamp(d.DiplomaticMissionLimit, 1, 12))
+            return false;
+        if (!float.IsFinite(n.PoliticalPoints) || n.PoliticalPoints < d.DiplomaticMissionPoliticalCost) return false;
+        if (!float.IsFinite(n.Treasury) || n.Treasury < DiplomacyPrice.Of(c, n, d.DiplomaticMissionStartCash)) return false;
+        return true;
+    }
 
     internal static string Refusal(Campaign c, int issuer, int target, bool active, OfferScan scan)
     {
@@ -225,9 +263,14 @@ public static class DiplomaticOutreach
         var definition = OpinionCatalog.Find("diplomatic_outreach");
         if (definition is { Opinion: > 0 } reason)
         {
-            var held = r.Reasons.FirstOrDefault(x=>x.Id=="diplomatic_outreach");
-            var amount = Math.Min(mission.OpinionCap, (held is null ? 0 : OpinionSystem.Weight(c,held)) + mission.WeeklyOpinion * friction);
-            if (amount > 0) OpinionSystem.Remember(c,r,reason.Id,amount / reason.Opinion);
+            OpinionReason held = null;
+            var reasons = r.Reasons;
+            for (var i = 0; i < reasons.Count; i++)
+            {
+                if (reasons[i].Id == "diplomatic_outreach") { held = reasons[i]; break; }
+            }
+            var amount = Math.Min(mission.OpinionCap, (held is null ? 0 : OpinionSystem.Weight(c, held)) + mission.WeeklyOpinion * friction);
+            if (amount > 0) OpinionSystem.Remember(c, r, reason.Id, amount / reason.Opinion);
         }
         // And the old grievances wear down while the diplomats work: a little of the relation's
         // own every week, more of what the two hold over other countries' quarrels. A mission of

@@ -1,0 +1,37 @@
+{
+  "comet_of_third_sun": {
+    "title": "Comet Above the Third Sun",
+    "description": "A silver-tailed comet arcs over Aethelgard at dusk. Chroniclers argue whether it heralds triumph or war.",
+    "date": "0402-04-01",
+    "window_days": 15,
+    "options": [
+      {
+        "title": "Proclaim a blessing upon the crown",
+        "consequence": "Inspire subjects and steady the shires.",
+        "effects": { "stability": 0.03 }
+      },
+      {
+        "title": "Rally the marshals under the omen",
+        "consequence": "Channel martial fervour into the levy.",
+        "effects": { "war_support": 0.04, "manpower": 15000 }
+      }
+    ]
+  },
+  "border_harvest_festival": {
+    "title": "Great Harvest Fair",
+    "description": "Merchants and minstrels gather at the crossroads, filling market coffers with silver.",
+    "weight": 1.0,
+    "options": [
+      {
+        "title": "Collect fair tolls for the royal chest",
+        "consequence": "Add gold to the treasury.",
+        "effects": { "treasury": 8 }
+      },
+      {
+        "title": "Sponsor public feasts",
+        "consequence": "Raise realm stability.",
+        "effects": { "stability": 0.02 }
+      }
+    ]
+  }
+}

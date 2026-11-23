@@ -40,7 +40,11 @@ public partial class DealOrForceGame
         if (!_campaign.FeatureEnabled("research") && _researchLayer is { Visible: true }) CloseResearchScreen();
         if (!_campaign.FeatureEnabled("politics") && _stateAffairsLayer is { Visible: true }) CloseStateAffairs();
         if (!_campaign.FeatureEnabled("navy") && _fleetPanel is { Visible: true }) SetFleetPanelVisible(false);
-        var supportEnabled = Simulation.SupportTypeCatalog.All.Any(t => Simulation.SupportCore.Enabled(_campaign, t));
+        var supportEnabled = false;
+        foreach (var t in Simulation.SupportTypeCatalog.All)
+        {
+            if (Simulation.SupportCore.Enabled(_campaign, t)) { supportEnabled = true; break; }
+        }
         if (_screenButtons.TryGetValue("Support", out var supportButton)) supportButton.Visible = supportEnabled &&
             Simulation.MechanicFeatures.ScreenEnabled(_campaign, "Support") && NavigationDestinationVisible("Support");
         if (!supportEnabled && _supportLayer is { Visible: true }) CloseSupportScreen();

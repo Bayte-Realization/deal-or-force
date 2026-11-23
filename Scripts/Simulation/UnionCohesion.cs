@@ -130,32 +130,34 @@ public static class UnionCohesion
         foreach (var _ in TickStages(campaign)) { }
     }
 
+    [ThreadStatic] private static HashSet<int> _landlessHotspotsScratch;
+
     /// <summary>The same weekly review, yielded between unions so a fracturing world does not
     /// review every proclamation in one frame.</summary>
     public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(UnionCohesion))) yield break;
         var defines = campaign.Defines;
-        // SecessionEvents.Force appends a new country. Nation IDs keep their list
-        // indices, so review only the initial cohort without a mutable enumerator
-        // or a daily snapshot allocation. New countries join the next review.
-        var nationsAtStart = campaign.Nations.Count;
+        // SecessionEvents.Force appends a new country. ActiveNations is a snapshot array,
+        // so walking [0..active.Count) safely skips retired nations without mutating under iteration.
+        var active = campaign.ActiveNations;
+        var activeCount = active.Count;
         var liveWars = Warfare.LiveWars(campaign);
         HashSet<int> landlessHotspots = null;
-        for (var index = 0; index < nationsAtStart; index++)
+        for (var index = 0; index < activeCount; index++)
         {
-            if (index % 4 == 0) yield return 0;
-            var nation = campaign.Nations[index];
+            if (index > 0 && Campaign.StageOverdue()) yield return 0;
+            var nation = active[index];
             var isFormed = !string.IsNullOrEmpty(nation.FormedNationId);
-            var isVulnerableFederation = !isFormed && campaign.FeatureEnabled("federal_fracture") &&
+            var isVulnerableFederation = !isFormed && nation.Population >= 20_000_000 &&
                                          (nation.Government is "federation" or "confederation" || nation.Tag is "USA" or "RUS") &&
-                                         nation.Population >= 20_000_000 &&
-                                         campaign.StatesOf(nation).Length >= 4 &&
+                                         campaign.FeatureEnabled("federal_fracture") &&
                                          (nation.Stability < 0.38f ||
-                                          (nation.Stability < 0.48f && nation.DebtCondition >= DebtCondition.Insolvent) ||
                                           nation.DebtCondition >= DebtCondition.Default ||
+                                          (nation.Stability < 0.48f && nation.DebtCondition >= DebtCondition.Insolvent) ||
                                           (nation.DomesticCrisis?.CoupPressure > 0.40f) ||
-                                          (WarWeariness.NationalFatigue(campaign, nation) >= 0.55f));
+                                          (WarWeariness.NationalFatigue(campaign, nation) >= 0.55f)) &&
+                                         campaign.StatesOf(nation).Length >= 4;
             if (!isFormed && !isVulnerableFederation) continue;
             // A state proclaimed last month is not judged this month: the ink is still wet.
             if (campaign.ElapsedDays < nation.FormedNationDay + defines.UnionGraceDays) continue;
@@ -175,19 +177,19 @@ public static class UnionCohesion
             if (campaign.ElapsedDays - nation.UnionLastSecessionDay < defines.UnionSecessionCooldownDays) continue;
             // A foreign war abroad rallies a country only while stability holds; a broken state collapses under fire.
             if (atWar && nation.Stability >= 0.25f && WarWeariness.NationalFatigue(campaign, nation) < 0.50f) continue;
-            yield return 0;
+            if (Campaign.StageOverdue()) yield return 0;
             var states = campaign.StatesOf(nation);
             if (states.Length < 2) continue;
             if (landlessHotspots is null && campaign.ProvinceMap is not null)
             {
-                landlessHotspots = new HashSet<int>();
+                landlessHotspots = _landlessHotspotsScratch ??= new HashSet<int>();
                 FillLandlessHotspots(campaign, landlessHotspots);
             }
             ScenarioState angriest = null;
             var highestScore = -1f;
             for (var si = 0; si < states.Length; si++)
             {
-                if (si > 0 && (si % 4 == 0 || Campaign.StageOverdue())) yield return 0;
+                if (si > 0 && si % 16 == 0 && Campaign.StageOverdue()) yield return 0;
                 var state = states[si];
                 if (!TryScoreCandidate(campaign, nation, state, landlessHotspots, out var score)) continue;
                 if (angriest is null || score > highestScore)
@@ -197,18 +199,18 @@ public static class UnionCohesion
                 }
             }
             if (angriest is null) continue;
-            yield return 0;
+            if (Campaign.StageOverdue()) yield return 0;
             SecessionReport forced = null;
             foreach (var _ in SecessionEvents.ForceStages(campaign, angriest, result => forced = result, null, SecessionCause.Federal))
                 yield return 0;
             if (forced is null) continue;
-            yield return 0;
+            if (Campaign.StageOverdue()) yield return 0;
             if (landlessHotspots is not null) FillLandlessHotspots(campaign, landlessHotspots);
             nation.UnionLastSecessionDay = campaign.ElapsedDays;
             // Losing a region settles the rest for a while, the way a divorce does.
             nation.UnionCohesion = Math.Min(1f, nation.UnionCohesion + 0.25f);
             NationalModifiers.Invalidate(nation);
-            yield return 0;
+            if (Campaign.StageOverdue()) yield return 0;
         }
     }
 
@@ -226,7 +228,7 @@ public static class UnionCohesion
     {
         hotspots.Clear();
         if (campaign.ProvinceMap is null) return;
-        foreach (var candidate in campaign.Nations)
+        foreach (var candidate in campaign.ActiveNations)
         {
             if (candidate.Movement is not { Landless: true }) continue;
             if (campaign.Homelands.TryGetValue(candidate.Id, out var h))
@@ -271,7 +273,7 @@ public static class UnionCohesion
         HashSet<int> landlessHotspots = null;
         if (campaign.ProvinceMap is not null)
         {
-            landlessHotspots = new HashSet<int>();
+            landlessHotspots = _landlessHotspotsScratch ??= new HashSet<int>();
             FillLandlessHotspots(campaign, landlessHotspots);
         }
         ScenarioState angriest = null;

@@ -93,12 +93,38 @@ public partial class DealOrForceGame
             var status = entry.Status;
             var card = WorkbenchCard(cards);
             var future = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            future.AddThemeConstantOverride("separation", 10);
             var futureSprite = FlagCatalog.ResolveFormationPreview(_campaign, nation, d.Id);
-            future.AddChild(new TextureRect {
-                Name = "FormationFlag_" + d.Id, Texture = FlagSpriteTexture(futureSprite),
-                CustomMinimumSize = new Vector2(Ui.Metric("formation.flag_width", 72), Ui.Metric("formation.flag_height", 48)), SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
-                SizeFlagsVertical = SizeFlags.ShrinkCenter, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered });
+            var flagFrame = new PanelContainer
+            {
+                SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+                ClipContents = true
+            };
+            var flagBorder = new StyleBoxFlat
+            {
+                BgColor = Ui.Colour("surface.inset"),
+                BorderColor = Ui.Colour(status.CanForm ? "state.positive" : "surface.line"),
+                ContentMarginLeft = 2, ContentMarginRight = 2,
+                ContentMarginTop = 2, ContentMarginBottom = 2
+            };
+            flagBorder.SetBorderWidthAll(1);
+            flagBorder.SetCornerRadiusAll(3);
+            flagFrame.AddThemeStyleboxOverride("panel", flagBorder);
+            var previewFlag = new TextureRect
+            {
+                Name = "FormationFlag_" + d.Id,
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                TextureFilter = TextureFilterEnum.LinearWithMipmaps,
+                Material = FlagClothPresentation.Material,
+                CustomMinimumSize = new Vector2(Ui.Metric("formation.flag_width", 76), Ui.Metric("formation.flag_height", 50)),
+                SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+                Texture = FlagSpriteTexture(futureSprite)
+            };
+            flagFrame.AddChild(previewFlag);
+            future.AddChild(flagFrame);
             var heading = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             heading.AddChild(Title(d.Name, (int)Ui.Metric("formation.title_size", 20), Ui.Colour("text.accent")));
             heading.AddChild(Title(status.CanForm ? "Ready to proclaim" : d.PeacefulAccession ? "Treaty or territorial route" : "Territorial route",
@@ -107,14 +133,17 @@ public partial class DealOrForceGame
             var statusBadge = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ShrinkEnd, SizeFlagsVertical = SizeFlags.ShrinkCenter };
             var badgeStyle = new StyleBoxFlat
             {
-                BgColor = Ui.Colour(status.CanForm ? "state.positive" : "surface.card", status.CanForm ? 0.22f : 0.6f),
-                BorderColor = Ui.Colour(status.CanForm ? "state.positive" : "surface.line_faint"),
+                BgColor = Ui.Colour(status.CanForm ? "state.positive" : "surface.raised", status.CanForm ? 0.22f : 0.92f),
+                BorderColor = Ui.Colour(status.CanForm ? "state.positive" : "surface.line"),
+                ContentMarginLeft = 8, ContentMarginRight = 8,
+                ContentMarginTop = 4, ContentMarginBottom = 4
             };
             badgeStyle.SetBorderWidthAll(1);
             badgeStyle.SetCornerRadiusAll(4);
-            badgeStyle.SetContentMarginAll(6);
             statusBadge.AddThemeStyleboxOverride("panel", badgeStyle);
-            statusBadge.AddChild(Title(status.CanForm ? Tr("Ready").ToUpperInvariant() : $"{status.Owned}/{status.Total}", 11, Ui.Colour(status.CanForm ? "state.positive" : "text.accent")));
+            var badgeLabel = Title(status.CanForm ? Tr("Ready").ToUpperInvariant() : $"{status.Owned}/{status.Total}", 11, Ui.Colour(status.CanForm ? "state.positive" : "text.accent"));
+            badgeLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            statusBadge.AddChild(badgeLabel);
             future.AddChild(statusBadge);
             Tip(future, futureSprite.Length == 0 ? "No flag available" : "Flag after formation");
             card.AddChild(future);

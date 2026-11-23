@@ -201,9 +201,12 @@ public static class StrandedGarrisons
     /// share, bent by the people around it, its own cohesion and how little its army will do for
     /// its government. Averages to about the base share across an ordinary garrison.
     /// </summary>
+    [ThreadStatic] private static HashSet<string> _kinRisersScratch;
+    [ThreadStatic] private static HashSet<string> _kinRulersScratch;
+
     public static float DefectionChance(Campaign c, Nation parent, Nation born, Army army, float share)
     {
-        if (c is null || army is null || !c.Defines.StrandedGarrisonsEnabled) return share;
+        if (c is null || army is null || !c.Defines.StrandedGarrisonsEnabled || share >= 1f) return M.Clamp01(share);
         var d = c.Defines;
         var kin = Kin(c, parent, born, army.ProvinceId);
         var disloyalty = parent is null ? 0f : StateFailure.ArmyDisloyalty(c, parent);
@@ -222,8 +225,11 @@ public static class StrandedGarrisons
     {
         var region = RegionOf(c, province);
         if (region is null || born is null) return 0.5f;
-        var risers = WarAims.Cultures(born);
-        var rulers = parent is null ? new HashSet<string>() : WarAims.Cultures(parent);
+        var risers = _kinRisersScratch ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        WarAims.FillCultures(born, risers);
+        var rulers = _kinRulersScratch ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (parent is null) rulers.Clear();
+        else WarAims.FillCultures(parent, rulers);
         if (risers.Count > 0 && !risers.Overlaps(rulers))
             return M.Clamp01(WarAims.CultureShare(region, risers));
         return M.Clamp01(region.Radicalism * 0.6f + (1f - region.Stability) * 0.4f);

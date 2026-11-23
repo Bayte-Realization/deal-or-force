@@ -89,7 +89,9 @@ public static class CampaignChronicle
     {
         var stored = entry.Subject ?? "";
         if (stored.Length == 0) return "";
-        if (entry.Kind is "ultimatum_accepted" or "ultimatum_refused" && campaign.States is not null)
+        if (entry.Kind is "ultimatum_accepted" or "ultimatum_refused" or
+                "mainland_campaign_launched" or "mainland_bridgehead" or "mainland_rally" or "mainland_defection" &&
+            campaign.States is not null)
             foreach (var state in campaign.States)
                 if (state is not null && state.Name == stored && !string.IsNullOrEmpty(state.DisplayName))
                     return state.DisplayName;

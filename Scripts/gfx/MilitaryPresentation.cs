@@ -17,6 +17,7 @@ public sealed partial class GlobePresentation
     {
         _battleRoot = new Node3D { Name = "BattleMarkers" };
         world.AddChild(_battleRoot);
+        CreateBattleVfx(world);
     }
 
     /// <summary>
@@ -201,6 +202,7 @@ public sealed partial class GlobePresentation
         {
             using var image = Image.CreateFromData(w, h, false, Image.Format.Rgba8, pixels);
             image.Resize(width, height, Image.Interpolation.Lanczos);
+            image.GenerateMipmaps();
             var texture = ImageTexture.CreateFromImage(image);
             _armyCounterTextures[key] = texture;
             return texture;
@@ -688,6 +690,7 @@ public sealed partial class GlobePresentation
             WritePixel(pixels, glowWidth, x, y, new Color(1f, 1f, 1f, alpha));
         }
         using var image = Image.CreateFromData(glowWidth, glowHeight, false, Image.Format.Rgba8, pixels);
+        image.GenerateMipmaps();
         var texture = ImageTexture.CreateFromImage(image);
         _selectionGlows[key] = texture;
         return texture;
@@ -704,6 +707,7 @@ public sealed partial class GlobePresentation
             FixedSize = plate.FixedSize,
             Billboard = plate.Billboard,
             NoDepthTest = true,
+            TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
             RenderPriority = -1,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             Modulate = Ui.Colour("globe.selection"),
@@ -744,6 +748,8 @@ public sealed partial class GlobePresentation
         hash.Add(_campaign.Player?.Id);
         hash.Add(_campaign.Player?.IsHuman);
         hash.Add(_campaign.MapRevision);
+        hash.Add(_campaign.WarRevision);
+        hash.Add(_campaign.AllianceRevision);
         foreach (var id in _selectedArmyIds) hash.Add(id);
         foreach (var cachedMarker in _armyStacks.Values)
         {
@@ -755,18 +761,22 @@ public sealed partial class GlobePresentation
             var anyBattle = false;
             var anyMoving = false;
             var cutOff = false;
+            var entrenched = false;
             var organisationSum = 0f;
             var equipmentSum = 0f;
+            var strengthSum = 0f;
             var planningSum = 0f;
             var supplySum = 0f;
             foreach (var division in stack)
             {
                 if (_selectedArmyIds.Contains(division.Id)) anySelected = true;
                 if (division.InBattle) anyBattle = true;
-                if (division.IsMoving) anyMoving = true;
+                if (division.IsMoving || division.Route.Count > 0) anyMoving = true;
                 if (division.CutOff) cutOff = true;
+                if (division.Entrenchment >= 0.15f) entrenched = true;
                 organisationSum += division.Organisation;
                 equipmentSum += division.Equipment;
+                strengthSum += division.Strength;
                 planningSum += division.Planning;
                 supplySum += division.SupplyLevel;
             }
@@ -774,10 +784,12 @@ public sealed partial class GlobePresentation
             hash.Add(anyBattle);
             hash.Add(anyMoving);
             hash.Add(cutOff);
+            hash.Add(entrenched);
             if (stack.Count > 0)
             {
                 hash.Add((int)MathF.Round(organisationSum / stack.Count * 20f));
                 hash.Add((int)MathF.Round(equipmentSum / stack.Count * 20f));
+                hash.Add((int)MathF.Round(strengthSum / stack.Count * 20f));
                 hash.Add((int)MathF.Round(planningSum / stack.Count * 20f));
                 hash.Add((int)MathF.Round(supplySum / stack.Count * 20f));
             }
@@ -887,9 +899,9 @@ public sealed partial class GlobePresentation
         var viewer = FogOfWarActive && _campaign.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
         var active = 0;
         foreach (var battle in _campaign.Battles) if (!battle.Ended) active++;
-        var fastSim = _campaign is { IsPaused: false, Speed: >= 5 };
+        var fastSim = _campaign is { IsPaused: false, Speed: >= 4 };
         var timeSinceLast = System.Diagnostics.Stopwatch.GetElapsedTime(_lastBattleRebuildStamp).TotalSeconds;
-        var dueByTime = !fastSim || timeSinceLast >= 0.25;
+        var dueByTime = !fastSim || timeSinceLast >= 0.14;
         var structureChanged = _battleViewer != viewer || _battleMarkerCount != active;
 
         if (structureChanged || (_battleMarkerDay != _campaign.ElapsedHours && dueByTime))
@@ -905,6 +917,9 @@ public sealed partial class GlobePresentation
         FinishBattleMarkers();
     }
 
+    private const int BattleBadgePoolCap = 24;
+    private readonly Queue<Node3D> _battleBadgePool = new();
+
     private void RebuildBattleMarkers()
     {
         _activeBattleIds.Clear();
@@ -916,10 +931,20 @@ public sealed partial class GlobePresentation
             if (!_activeBattleIds.Contains(id)) _finishedBattleIds.Add(id);
         foreach (var old in _finishedBattleIds)
         {
-            if (IsInstanceValid(_battleMarkers[old].Node))
+            var oldNode = _battleMarkers[old].Node;
+            if (IsInstanceValid(oldNode))
             {
-                _battleRoot.RemoveChild(_battleMarkers[old].Node);
-                _battleMarkers[old].Node.QueueFree();
+                if (_battleBadgePool.Count < BattleBadgePoolCap)
+                {
+                    oldNode.Visible = false;
+                    oldNode.GetNodeOrNull<SurfaceBattleBadge>("SurfaceBadge")?.PrepareForPool();
+                    _battleBadgePool.Enqueue(oldNode);
+                }
+                else
+                {
+                    _battleRoot.RemoveChild(oldNode);
+                    oldNode.QueueFree();
+                }
             }
             _battleMarkers.Remove(old);
             _battleReadouts.Remove(old);
@@ -933,14 +958,35 @@ public sealed partial class GlobePresentation
             _battleAnchors = new ProvinceBoundaryAnchor(_battleAnchorMap);
         }
 
+        BeginBattleVfxFrame();
+        var qualityTier = CurrentShaderQualityTier();
+        var battleSymbol = BattleSymbolFor(SpriteCatalog.TextureOf("icon_battle", "res://game/gfx/interface/icons/icon_battle.png"));
+
         foreach (var battle in _campaign.Battles)
         {
             if (!_activeBattleIds.Contains(battle.Id)) continue;
             if (!_battleMarkers.TryGetValue(battle.Id, out var marker))
             {
-                var node = new Node3D { Name = $"Battle_{battle.Id}" };
-                _battleRoot.AddChild(node);
-                node.AddChild(new SurfaceBattleBadge { Name = "SurfaceBadge" });
+                Node3D node = null;
+                while (_battleBadgePool.Count > 0 && node is null)
+                {
+                    var pooled = _battleBadgePool.Dequeue();
+                    if (IsInstanceValid(pooled)) node = pooled;
+                }
+                if (node is not null)
+                {
+                    node.Name = $"Battle_{battle.Id}";
+                    node.Visible = true;
+                    node.GetNodeOrNull<SurfaceBattleBadge>("SurfaceBadge")?.RestoreFromPool(qualityTier);
+                }
+                else
+                {
+                    node = new Node3D { Name = $"Battle_{battle.Id}" };
+                    _battleRoot.AddChild(node);
+                    var badgeNode = new SurfaceBattleBadge { Name = "SurfaceBadge" };
+                    badgeNode.SetQualityTier(qualityTier);
+                    node.AddChild(badgeNode);
+                }
                 marker = (node, Vector3.Zero);
                 _battleMarkers[battle.Id] = marker;
             }
@@ -981,22 +1027,31 @@ public sealed partial class GlobePresentation
                 (battle.AttackerId == player.Id || battle.DefenderId == player.Id);
             var detailed = !FogOfWarActive || own;
             var assessment = BattleReadout.Assess(battle, _campaign.Defines.BattleBreakOrganisation);
+            var telemetry = BattleTelemetry.Build(_campaign, battle);
             var attacks = !own || battle.AttackerId == _campaign.Player.Id;
-            var share = assessment.ShareFor(attacks);
+            var share = detailed ? (attacks ? telemetry.AttackerProgress : 1f - telemetry.AttackerProgress) : assessment.ShareFor(attacks);
+            var momentum = detailed ? (attacks ? telemetry.Momentum : -telemetry.Momentum) : 0f;
+            var pocketAlert = detailed && (telemetry.HasPocketCollapse || telemetry.HasEncircledDefenders);
             var tone = !detailed || !assessment.Known ? "text.muted" : !own ? "state.info" :
                 share > .55f ? "state.positive" : share < .45f ? "state.negative" : "state.warning";
-            var text = detailed && assessment.Known ? $"{share * 100:0}" : "?";
-            var prevReadout = _battleReadouts.GetValueOrDefault(battle.Id);
+            var text = detailed && (assessment.Known || battle.Rounds.Count > 0) ? $"{share * 100:0}" : "?";
             _battleReadouts[battle.Id] = (text, share, tone);
 
-            if (prevReadout.Text != text || MathF.Abs(prevReadout.Share - share) > 0.001f || prevReadout.Tone != tone)
-            {
-                marker.Node.GetNode<SurfaceBattleBadge>("SurfaceBadge").SetReadout(text, share, tone,
-                    BattleSymbolFor(SpriteCatalog.TextureOf("icon_battle", "res://game/gfx/interface/icons/icon_battle.png")));
-            }
+            var attColor = _campaign.NationById(battle.AttackerId) is { } attNation
+                ? new Color(attNation.Color) : Ui.Colour("state.negative");
+            var defColor = _campaign.NationById(battle.DefenderId) is { } defNation
+                ? new Color(defNation.Color) : Ui.Colour("state.info");
+
+            var badge = marker.Node.GetNode<SurfaceBattleBadge>("SurfaceBadge");
+            badge.SetQualityTier(qualityTier);
+            badge.SetTelemetryReadout(text, share, tone, battleSymbol, attColor, defColor, momentum, pocketAlert);
             marker.Node.SetMeta("endurance_known", detailed && assessment.Known);
             marker.Node.SetMeta("endurance_share", detailed ? share : -1f);
+
+            var vfxIntensity = Math.Clamp(0.55f + (telemetry.Attacker.TotalDivisions + telemetry.Defender.TotalDivisions) * 0.04f, 0.55f, 1.35f);
+            RecordBattleVfx(location, origin, vfxIntensity, pocketAlert);
         }
+        CommitBattleVfxMeshes();
     }
 
     /// <summary>Which markers the camera can see. Cheap, and camera-dependent, so per frame.</summary>
@@ -1014,6 +1069,7 @@ public sealed partial class GlobePresentation
         else
             foreach (var marker in _battleMarkers.Values)
                 if (IsInstanceValid(marker.Node)) marker.Node.Visible = true;
+        FinishBattleVfxVisibility();
     }
 
     private void PositionBattleMarker(Node3D node, Vector3 normal)
@@ -1021,9 +1077,9 @@ public sealed partial class GlobePresentation
         if (_flatMap)
         {
             var geo = GeographicFromNormal(normal);
-            node.Position = FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ + .004f);
+            node.Position = LocalFlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ + .004f);
         }
-        else node.Position = normal * SurfaceMarkerRadius;
+        else node.Position = LocalSurfacePointFromNormal(normal, SurfaceMarkerRadius);
         OrientSurfaceCounter(node, normal);
         node.Scale = Vector3.One * (_flatMap ? _counterWorldPixel * _counterFlatFar * BattleMarkerRadius() * 2
             : SurfaceCounterWidth(node, "battle"));
@@ -1033,6 +1089,7 @@ public sealed partial class GlobePresentation
     {
         foreach (var marker in _battleMarkers.Values)
             if (IsInstanceValid(marker.Node)) PositionBattleMarker(marker.Node, marker.Normal);
+        if (_battleMarkers.Count > 0) _battleMarkerDay = -1;
     }
 
     private bool TryPickBattle(Vector2 pixel, out LandBattle battle)

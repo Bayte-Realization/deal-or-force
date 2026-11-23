@@ -54,16 +54,19 @@ public partial class DealOrForceGame
             string.IsNullOrEmpty(preview.Cause) ? Tr("No recognized justification") : Tr(CasusBelliNames.Of(preview.Cause))), 13));
         rows.AddChild(WrappedUltimatumText("Forecast uses the current diplomatic rules, not random percentages. Treaties, finances and other wars can change the answer.", 12));
 
-        var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
         body.AddThemeConstantOverride("separation", 18); rows.AddChild(body);
         AddWarSide(body, preview, false, _campaign.Player);
         AddWarSide(body, preview, true, target);
+        var footer = new VBoxContainer { Name = "WarDeclarationFooter", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkEnd, ClipContents = true };
+        footer.AddThemeConstantOverride("separation", 6);
+        rows.AddChild(footer);
         _warDeclarationFeedback = WrappedUltimatumText(preview.Allowed
             ? "Nothing is sent until you confirm. Unchecked partners will not receive an offensive invitation."
             : preview.Refusal, 12);
-        _warDeclarationFeedback.Name = "WarDeclarationFeedback"; rows.AddChild(_warDeclarationFeedback);
-        var actions = new HFlowContainer { Name = "WarDeclarationActions", Alignment = FlowContainer.AlignmentMode.End };
-        actions.AddThemeConstantOverride("h_separation", 10); actions.AddThemeConstantOverride("v_separation", 8); rows.AddChild(actions);
+        _warDeclarationFeedback.Name = "WarDeclarationFeedback"; footer.AddChild(_warDeclarationFeedback);
+        var actions = new HFlowContainer { Name = "WarDeclarationActions", Alignment = FlowContainer.AlignmentMode.End, SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+        actions.AddThemeConstantOverride("h_separation", 10); actions.AddThemeConstantOverride("v_separation", 8); footer.AddChild(actions);
         var cancel = ActionButton("Cancel", CloseWarDeclaration, 130, 38);
         cancel.Name = "CancelWarDeclaration"; actions.AddChild(cancel);
         var refresh = ActionButton("Refresh forecast", () =>
@@ -88,14 +91,14 @@ public partial class DealOrForceGame
     private void AddWarSide(HBoxContainer body, WarDeclarationPreview preview, bool defending, Nation leader)
     {
         var column = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
-            SizeFlagsStretchRatio = 1 };
+            SizeFlagsStretchRatio = 1, ClipContents = true };
         column.AddThemeConstantOverride("separation", 8); body.AddChild(column);
         SectionRule(column, defending ? "POSSIBLE OPPOSITION" : "YOUR POSSIBLE PARTNERS");
         var lead = new HBoxContainer(); lead.AddThemeConstantOverride("separation", 8); column.AddChild(lead);
         lead.AddChild(FlagBadge(leader.Tag, 26, leader.DisplayName));
         lead.AddChild(Title(leader.DisplayName, 17, Ui.Colour("text.bright")));
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, VerticalScrollMode = ScrollContainer.ScrollMode.Auto, FollowFocus = true };
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, VerticalScrollMode = ScrollContainer.ScrollMode.Auto, ClipContents = true, FollowFocus = true };
         column.AddChild(scroll);
         var list = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         list.AddThemeConstantOverride("separation", 8); scroll.AddChild(list);

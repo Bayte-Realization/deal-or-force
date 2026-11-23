@@ -326,6 +326,7 @@ public static class SeparatePeace
             if (bond.GuaranteedBy(memberId))
             {
                 if (memberId == bond.A) bond.GuaranteeByA = false; else bond.GuaranteeByB = false;
+                c.NoteAllianceChange();
                 OpinionSystem.Forget(c, bond, "guaranteed_us");
             }
             bond.LastActionDay = c.ElapsedDays;

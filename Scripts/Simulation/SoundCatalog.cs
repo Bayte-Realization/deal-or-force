@@ -98,6 +98,9 @@ public static class SoundCatalog
     private static readonly Dictionary<string, Channel> Channels = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string> Beds = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, (string Bed, float Share)[]> TerrainMixes = new(StringComparer.OrdinalIgnoreCase);
+    private static bool _baseLoaded;
+    private static bool _dirtyFromOverlay;
+    private static string _loadedKey = "";
 
     /// <summary>
     /// The sound of the ground under the tactical camera (MapAmbience, `map_ambience` in sound/):
@@ -137,29 +140,50 @@ public static class SoundCatalog
             : new Channel(name ?? "", 0f, 0, false);
 
     /// <summary>Read the base game's own `sound/` tree, replacing whatever was loaded.</summary>
-    public static void Load()
+    public static void Load() => Load(force: false);
+
+    public static void Load(bool force)
     {
+        var root = GameDataLoader.DataFolder("sound");
+        var cacheKey = $"{ModOverlayPolicy.IsActive}|{root ?? ""}";
+        if (!force && _baseLoaded && !_dirtyFromOverlay && string.Equals(_loadedKey, cacheKey, StringComparison.Ordinal))
+            return;
+
         Cues.Clear();
         Channels.Clear();
         Beds.Clear();
         TerrainMixes.Clear();
         OpenCountryBed = SeaBed = FrozenBed = "";
         HighWindFile = FrontFile = StaticNoiseFile = "";
-        DataCatalogLoader.LoadBaseTree("sound", (directory, assetRoot) => LoadTree(directory, assetRoot, null));
+        if (root is not null)
+            DataCatalogLoader.LoadTree("sound", root, null, (json, origin) => MergeInternal(json, "res://game/sound", origin, null), null);
+        _baseLoaded = true;
+        _dirtyFromOverlay = false;
+        _loadedKey = cacheKey;
         Changed?.Invoke();
     }
 
     /// <summary>Layer one package's `sound/` tree over what is already loaded.</summary>
-    public static void LoadTree(string directory, string assetRoot, List<string> errors) =>
+    public static void LoadTree(string directory, string assetRoot, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
+        _dirtyFromOverlay = true;
         DataCatalogLoader.LoadTree("sound", directory, errors,
-            (json, origin) => Merge(json, assetRoot, origin, errors),
+            (json, origin) => MergeInternal(json, assetRoot, origin, errors),
             () => Changed?.Invoke());
+    }
 
     /// <summary>
     /// Merge one declaration file. Both tables are optional and independent, so a mod that
     /// only wants the interface click quieter writes four lines and inherits every cue.
     /// </summary>
     public static void Merge(string json, string assetRoot, string origin, List<string> errors)
+    {
+        _dirtyFromOverlay = true;
+        MergeInternal(json, assetRoot, origin, errors);
+    }
+
+    private static void MergeInternal(string json, string assetRoot, string origin, List<string> errors)
     {
         using var document = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
         var root = document.RootElement;

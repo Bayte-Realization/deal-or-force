@@ -45,9 +45,31 @@ public sealed partial class Nation
 
 public static class NationalCourses
 {
-    private static readonly Dictionary<string, float> ScratchPressures = new(16, StringComparer.Ordinal);
-    private static readonly Dictionary<string, float> ScratchTargets = new(16, StringComparer.Ordinal);
-    private static readonly List<string> ScratchKeys = new();
+    [ThreadStatic] private static Dictionary<string, float> _scratchPressures;
+    [ThreadStatic] private static Dictionary<string, float> _scratchTargets;
+    [ThreadStatic] private static List<string> _scratchKeys;
+    private static readonly object CourseCacheLock = new();
+    private static int _cachedCoursesRevision = -1;
+    private static NationalCourseDefinition[] _cachedCourses = Array.Empty<NationalCourseDefinition>();
+
+    private static Dictionary<string, float> ScratchPressures => _scratchPressures ??= new(16, StringComparer.Ordinal);
+    private static Dictionary<string, float> ScratchTargets => _scratchTargets ??= new(16, StringComparer.Ordinal);
+    private static List<string> ScratchKeys => _scratchKeys ??= new();
+
+    private static NationalCourseDefinition[] CachedCourses()
+    {
+        var rev = NationalCourseCatalog.Revision;
+        if (System.Threading.Volatile.Read(ref _cachedCoursesRevision) == rev) return _cachedCourses;
+        lock (CourseCacheLock)
+        {
+            rev = NationalCourseCatalog.Revision;
+            if (_cachedCoursesRevision == rev) return _cachedCourses;
+            var arr = NationalCourseCatalog.All.ToArray();
+            _cachedCourses = arr;
+            System.Threading.Volatile.Write(ref _cachedCoursesRevision, rev);
+            return arr;
+        }
+    }
 
     public static Dictionary<string, float> Pressures(Campaign c, Nation n)
     {
@@ -60,8 +82,10 @@ public static class NationalCourses
     {
         result.Clear();
         var war = false; var exhaustion = 0f;
-        foreach (var w in Warfare.OpenWars(c))
+        var liveWars = Warfare.LiveWars(c);
+        for (var wi = 0; wi < liveWars.Count; wi++)
         {
+            var w = liveWars[wi];
             if (!w.Ended && w.Involves(n.Id))
             { war = true; exhaustion = MathF.Max(exhaustion, M.Clamp01((c.ElapsedDays - w.StartedDay) / 730f)); }
         }
@@ -102,8 +126,10 @@ public static class NationalCourses
     {
         scores.Clear();
         var sum = 0f;
-        foreach (var d in NationalCourseCatalog.All)
+        var courses = CachedCourses();
+        for (var ci = 0; ci < courses.Length; ci++)
         {
+            var d = courses[ci];
             var val = 0f;
             foreach (var p in d.Pressures)
                 val += p.Value * pressures.GetValueOrDefault(p.Key);
@@ -113,11 +139,12 @@ public static class NationalCourses
         }
         if (sum > 0)
         {
-            ScratchKeys.Clear();
-            foreach (var key in scores.Keys) ScratchKeys.Add(key);
-            for (var i = 0; i < ScratchKeys.Count; i++)
+            var keys = ScratchKeys;
+            keys.Clear();
+            foreach (var key in scores.Keys) keys.Add(key);
+            for (var i = 0; i < keys.Count; i++)
             {
-                var key = ScratchKeys[i];
+                var key = keys[i];
                 scores[key] /= sum;
             }
         }
@@ -136,7 +163,9 @@ public static class NationalCourses
     {
         var m = n.NationalCourse;
         if (m.Initialized) return;
-        m.Convictions = Targets(c, n);
+        m.Convictions ??= new Dictionary<string, float>(16, StringComparer.Ordinal);
+        FillPressures(ScratchPressures, c, n);
+        FillTargets(m.Convictions, ScratchPressures);
         var bestKey = "";
         var bestVal = float.NegativeInfinity;
         foreach (var pair in m.Convictions)
@@ -175,87 +204,103 @@ public static class NationalCourses
 
     public static void Tick(Campaign c)
     {
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    internal static IEnumerable<int> TickStages(Campaign c)
+    {
         var coursesEnabled = c.FeatureEnabled("national_courses");
         var reviewDays = Math.Clamp(c.Defines.CourseReviewDays, 1, 90);
-        for (var ni = 0; ni < c.Nations.Count; ni++)
+        var nations = c.Nations;
+        for (var start = 0; start < nations.Count; start += 32)
         {
-            var n = c.Nations[ni];
-            var m = n.NationalCourse;
-            n.NationalCourseActive = coursesEnabled;
-            if (!n.NationalCourseActive || c.Fallen.Contains(n.Id))
-            { m.LastReviewDay = c.ElapsedDays; continue; }
-            if (!m.Initialized) { Initialize(c, n); continue; }
-            if (c.ElapsedDays - m.LastReviewDay < reviewDays) continue;
-            var days = Math.Min(90, c.ElapsedDays - m.LastReviewDay);
-            m.LastReviewDay = c.ElapsedDays;
-            if (!MatchesPolitics(m.RememberedPolitics, n.Government, n.Ideology))
-            { Shock(c, n, .65f, "course.shock.institutional_change"); m.RememberedPolitics = n.Government + ":" + n.Ideology; }
-            if (n.LastSecessionDay > m.RememberedSecessionDay)
-            { Shock(c, n, .4f, "course.shock.territorial_loss"); m.RememberedSecessionDay = n.LastSecessionDay; }
-            if (m.PreviousLiving - n.StandardOfLiving >= .08f) Shock(c, n, .4f, "course.shock.living_collapse");
-            m.PreviousLiving = n.StandardOfLiving;
-            var fighting = false;
-            foreach (var w in Warfare.OpenWars(c))
+            if (start > 0 && Campaign.StageOverdue()) yield return 0;
+            var end = Math.Min(nations.Count, start + 32);
+            var pressures = ScratchPressures;
+            var targets = ScratchTargets;
+            var keys = ScratchKeys;
+            for (var ni = start; ni < end; ni++)
             {
-                if (!w.Ended && w.Involves(n.Id)) { fighting = true; break; }
-            }
-            // Peace does not erase yesterday's years of exhaustion.
-            m.WarExperience = PublicImage.Approach(m.WarExperience, fighting ? 1 : 0, days, fighting ? 730 : 1095);
-            FillPressures(ScratchPressures, c, n);
-            FillTargets(ScratchTargets, ScratchPressures);
-            if (ScratchTargets.Count == 0) continue;
-            ScratchKeys.Clear();
-            foreach (var k in m.Convictions.Keys)
-                if (!ScratchTargets.ContainsKey(k)) ScratchKeys.Add(k);
-            for (var ki = 0; ki < ScratchKeys.Count; ki++) m.Convictions.Remove(ScratchKeys[ki]);
-            var response = MathF.Max(28, c.Defines.CourseResponseDays) * (1 + m.Entrenchment);
-            var shockResponse = Math.Clamp(c.Defines.CourseShockResponseDays, 28, response);
-            response += (shockResponse - response) * m.Shock;
-            foreach (var p in ScratchTargets)
-                m.Convictions[p.Key] = PublicImage.Approach(m.Convictions.GetValueOrDefault(p.Key), p.Value, days, response);
-            var total = 0f;
-            foreach (var v in m.Convictions.Values) total += v;
-            if (total > 0)
-            {
-                ScratchKeys.Clear();
-                foreach (var k in m.Convictions.Keys) ScratchKeys.Add(k);
-                for (var ki = 0; ki < ScratchKeys.Count; ki++)
+                var n = nations[ni];
+                var m = n.NationalCourse;
+                n.NationalCourseActive = coursesEnabled;
+                if (!n.NationalCourseActive || c.Fallen.Contains(n.Id))
+                { m.LastReviewDay = c.ElapsedDays; continue; }
+                if (!m.Initialized) { Initialize(c, n); continue; }
+                if (c.ElapsedDays - m.LastReviewDay < reviewDays) continue;
+                var days = Math.Min(90, c.ElapsedDays - m.LastReviewDay);
+                m.LastReviewDay = c.ElapsedDays;
+                if (!MatchesPolitics(m.RememberedPolitics, n.Government, n.Ideology))
+                { Shock(c, n, .65f, "course.shock.institutional_change"); m.RememberedPolitics = n.Government + ":" + n.Ideology; }
+                if (n.LastSecessionDay > m.RememberedSecessionDay)
+                { Shock(c, n, .4f, "course.shock.territorial_loss"); m.RememberedSecessionDay = n.LastSecessionDay; }
+                if (m.PreviousLiving - n.StandardOfLiving >= .08f) Shock(c, n, .4f, "course.shock.living_collapse");
+                m.PreviousLiving = n.StandardOfLiving;
+                var fighting = false;
+                var wars = Warfare.LiveWars(c);
+                for (var wi = 0; wi < wars.Count; wi++)
                 {
-                    var k = ScratchKeys[ki];
-                    m.Convictions[k] /= total;
+                    var w = wars[wi];
+                    if (!w.Ended && w.Involves(n.Id)) { fighting = true; break; }
                 }
-            }
-            m.AgeDays = Math.Min(36500, m.AgeDays + days);
-            m.Entrenchment = PublicImage.Approach(m.Entrenchment, 1 - m.Shock, days, MathF.Max(28, c.Defines.CourseEntrenchmentDays));
-            var strongest = "";
-            var strongestVal = float.MinValue;
-            foreach (var p in m.Convictions)
-            {
-                if (p.Value > strongestVal || (p.Value == strongestVal && string.CompareOrdinal(p.Key, strongest) < 0))
+                // Peace does not erase yesterday's years of exhaustion.
+                m.WarExperience = PublicImage.Approach(m.WarExperience, fighting ? 1 : 0, days, fighting ? 730 : 1095);
+                FillPressures(pressures, c, n);
+                FillTargets(targets, pressures);
+                if (targets.Count == 0) continue;
+                keys.Clear();
+                foreach (var k in m.Convictions.Keys)
+                    if (!targets.ContainsKey(k)) keys.Add(k);
+                for (var ki = 0; ki < keys.Count; ki++) m.Convictions.Remove(keys[ki]);
+                var response = MathF.Max(28, c.Defines.CourseResponseDays) * (1 + m.Entrenchment);
+                var shockResponse = Math.Clamp(c.Defines.CourseShockResponseDays, 28, response);
+                response += (shockResponse - response) * m.Shock;
+                foreach (var p in targets)
+                    m.Convictions[p.Key] = PublicImage.Approach(m.Convictions.GetValueOrDefault(p.Key), p.Value, days, response);
+                var total = 0f;
+                foreach (var v in m.Convictions.Values) total += v;
+                if (total > 0)
                 {
-                    strongestVal = p.Value;
-                    strongest = p.Key;
+                    keys.Clear();
+                    foreach (var k in m.Convictions.Keys) keys.Add(k);
+                    for (var ki = 0; ki < keys.Count; ki++)
+                    {
+                        var k = keys[ki];
+                        m.Convictions[k] /= total;
+                    }
                 }
-            }
-            var lead = m.Convictions[strongest] - m.Convictions.GetValueOrDefault(m.Dominant);
-            if (strongest == m.Dominant || lead < .04f) { m.Challenger = ""; m.ChallengerDays = 0; }
-            else
-            {
-                if (m.Challenger != strongest) { m.Challenger = strongest; m.ChallengerDays = 0; }
-                m.ChallengerDays += days;
-                var severe = m.Shock > .3f;
-                var required = Math.Max(28, severe ? c.Defines.CourseShockChallengeDays : c.Defines.CourseChallengeDays);
-                var tenure = severe ? required : Math.Max(required, c.Defines.CourseMinimumTenureDays);
-                if (m.ChallengerDays >= required && m.AgeDays >= tenure)
+                m.AgeDays = Math.Min(36500, m.AgeDays + days);
+                m.Entrenchment = PublicImage.Approach(m.Entrenchment, 1 - m.Shock, days, MathF.Max(28, c.Defines.CourseEntrenchmentDays));
+                var strongest = "";
+                var strongestVal = float.MinValue;
+                foreach (var p in m.Convictions)
                 {
-                    m.Dominant = strongest; m.Challenger = ""; m.ChallengerDays = 0;
-                    m.AgeDays = 0; m.Entrenchment *= .5f;
-                    c.Chronicle.Record(c, "national_course_changed", n.Id, subject: NationalCourseCatalog.Find(strongest)?.Name ?? strongest);
-                    c.MarkStrategicChange();
+                    if (p.Value > strongestVal || (p.Value == strongestVal && string.CompareOrdinal(p.Key, strongest) < 0))
+                    {
+                        strongestVal = p.Value;
+                        strongest = p.Key;
+                    }
                 }
+                var lead = m.Convictions[strongest] - m.Convictions.GetValueOrDefault(m.Dominant);
+                if (strongest == m.Dominant || lead < .04f) { m.Challenger = ""; m.ChallengerDays = 0; }
+                else
+                {
+                    if (m.Challenger != strongest) { m.Challenger = strongest; m.ChallengerDays = 0; }
+                    m.ChallengerDays += days;
+                    var severe = m.Shock > .3f;
+                    var required = Math.Max(28, severe ? c.Defines.CourseShockChallengeDays : c.Defines.CourseChallengeDays);
+                    var tenure = severe ? required : Math.Max(required, c.Defines.CourseMinimumTenureDays);
+                    if (m.ChallengerDays >= required && m.AgeDays >= tenure)
+                    {
+                        m.Dominant = strongest; m.Challenger = ""; m.ChallengerDays = 0;
+                        m.AgeDays = 0; m.Entrenchment *= .5f;
+                        c.Chronicle.Record(c, "national_course_changed", n.Id, subject: NationalCourseCatalog.Find(strongest)?.Name ?? strongest);
+                        c.MarkStrategicChange();
+                    }
+                }
+                m.Shock *= MathF.Exp(-days / MathF.Max(28, c.Defines.CourseShockDecayDays));
+                m.ModifiersDirty = true; NationalModifiers.Invalidate(n);
             }
-            m.Shock *= MathF.Exp(-days / MathF.Max(28, c.Defines.CourseShockDecayDays));
-            m.ModifiersDirty = true; NationalModifiers.Invalidate(n);
         }
     }
 

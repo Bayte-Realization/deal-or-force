@@ -1,0 +1,28 @@
+{
+  "Flanking bypass": "Flanking bypass",
+  "Pocket collapse": "Pocket collapse",
+
+  "wf.phase.meeting_engagement.name": "Meeting Engagement",
+  "wf.phase.meeting_engagement.desc": "Forward echelons clash in mobile contact before either side completes full line deployment.",
+  "wf.phase.prepared_assault.name": "Prepared Assault",
+  "wf.phase.prepared_assault.desc": "Staff-planned offensive waves push into defensive belts with synchronized fire and logistics.",
+  "wf.phase.armoured_breakthrough.name": "Armoured Breakthrough",
+  "wf.phase.armoured_breakthrough.desc": "Concentrated mechanized and tank spearheads rupture the main line and exploit open flanks.",
+  "wf.phase.flanking_envelopment.name": "Flanking Envelopment",
+  "wf.phase.flanking_envelopment.desc": "Converging axes widen the combat front and strip away the protection of entrenched positions.",
+  "wf.phase.artillery_barrage.name": "Artillery & Air Barrage",
+  "wf.phase.artillery_barrage.desc": "Heavy long-range fire, strike sorties and drones dominate the sector and suppress frontline troops.",
+  "wf.phase.urban_grind.name": "Urban Attrition",
+  "wf.phase.urban_grind.desc": "Close-quarters street fighting slows armoured breakthroughs and favours entrenched defenders.",
+  "wf.phase.elastic_defence.name": "Elastic Defence",
+  "wf.phase.elastic_defence.desc": "Deeply dug-in units absorb the opening blow and punish advancing formations with prepared crossfire.",
+  "wf.phase.desperate_counterattack.name": "Counter-Attack",
+  "wf.phase.desperate_counterattack.desc": "Defending reserves strike back into an overextended assault, shattering attacker momentum.",
+  "wf.phase.pocket_collapse.name": "Pocket Collapse",
+  "wf.phase.pocket_collapse.desc": "Cut-off formations with exhausted supplies lose cohesion rapidly under converging fire.",
+
+  "wf.note.initial_contact": "Initial contact — formations deploying into line",
+  "wf.role.frontline": "Frontline",
+  "wf.role.reserve": "Reserve",
+  "wf.role.retreating": "Retreating"
+}

@@ -11,7 +11,7 @@ public sealed partial class Defines
     public bool LongCampaignEnabled { get; set; } = true;
 
     /// <summary>How long a country must have been gone before it is retired, in days. Zero or less: never.</summary>
-    public int RetireDeadAfterDays { get; set; } = 1820;
+    public int RetireDeadAfterDays { get; set; } = 365;
 
     /// <summary>How often the sweep runs, in days; rounded down to whole weeks, never under one.</summary>
     public int LongCampaignSweepDays { get; set; } = 28;
@@ -289,7 +289,7 @@ public static class LongCampaign
     /// not on the other, or on a different day depending on what the observer had selected.
     /// </summary>
     private static bool Gone(Campaign c, Nation n) =>
-        n.Population <= 0 && !n.IsHuman &&
+        n.Population <= 0 && !c.IsHumanControlled(n) &&
         (n.Movement is null ? c.Fallen.Contains(n.Id) : n.Movement.Dissolved) &&
         !n.IsSubject && !c.HasOwnedLand(n);
 
@@ -420,8 +420,10 @@ public static class LongCampaign
             foreach (var n in retiring) Retire(c, n, report);
             // What the living think of them goes with them: nothing asks about a country nothing
             // can deal with, and one that returns is judged as it is then.
-            foreach (var audience in c.Nations)
+            var activeForKeys = c.ActiveNations;
+            for (var ai = 0; ai < activeForKeys.Count; ai++)
             {
+                var audience = activeForKeys[ai];
                 if (audience.PublicImages.Count == 0) continue;
                 foreach (var key in keys)
                     if (audience.PublicImages.Remove(key)) report.ImagesDropped++;
@@ -432,6 +434,7 @@ public static class LongCampaign
         }
 
         DropRelations(c, report);
+        PrunePublicImages(c, report);
         TrimEndedWars(c, report);
         // The ledgers by age, here as well as at the year's turn: a campaign begun before the
         // landless were sampled monthly comes down to that the first time it is swept, not at
@@ -494,8 +497,12 @@ public static class LongCampaign
             }
             Mark(relation.A); Mark(relation.B);
         }
-        foreach (var n in c.Nations)
+        var activeSubjects = c.ActiveNations;
+        for (var ni = 0; ni < activeSubjects.Count; ni++)
+        {
+            var n = activeSubjects[ni];
             if (n.IsSubject) { Mark(n.Id); Mark(n.OverlordId); }
+        }
         foreach (var offer in c.DealOffers) if (offer.ClosedDay < 0) { Mark(offer.FromId); Mark(offer.ToId); }
         foreach (var paper in c.UltimatumPapers) if (paper.ClosedDay < 0) { Mark(paper.FromId); Mark(paper.ToId); }
         foreach (var request in c.AssistanceRequests) if (request.ClosedDay < 0) { Mark(request.RequesterId); Mark(request.DonorId); }
@@ -686,6 +693,52 @@ public static class LongCampaign
             }
             return true;
         };
+    }
+
+    [ThreadStatic] private static HashSet<string> _activeCoalitionKeysScratch;
+    [ThreadStatic] private static List<string> _prunedImageKeysScratch;
+
+    /// <summary>
+    /// Prunes disbanded coalition reputation entries and inert near-zero reputation records across
+    /// all three prefixes (<c>nation:</c>, <c>culture:</c>, <c>coalition:</c>) on living nations.
+    /// </summary>
+    private static void PrunePublicImages(Campaign c, Report report)
+    {
+        var activeCoalitions = _activeCoalitionKeysScratch ??= new HashSet<string>(StringComparer.Ordinal);
+        activeCoalitions.Clear();
+        for (var i = 0; i < c.Coalitions.Count; i++)
+            activeCoalitions.Add(SocialMemory.CoalitionKey(c.Coalitions[i]));
+        var toRemove = _prunedImageKeysScratch ??= new List<string>(32);
+        var today = c.ElapsedDays;
+        var active = c.ActiveNations;
+        for (var ai = 0; ai < active.Count; ai++)
+        {
+            var audience = active[ai];
+            if (audience.PublicImages.Count == 0) continue;
+            toRemove.Clear();
+            foreach (var (key, image) in audience.PublicImages)
+            {
+                if (key.StartsWith("coalition:", StringComparison.Ordinal) && !activeCoalitions.Contains(key))
+                {
+                    toRemove.Add(key);
+                    continue;
+                }
+                if (image is null ||
+                    (image.Status == 0 && MathF.Abs(image.Esteem) < 0.03f && MathF.Abs(image.Incident) < 0.02f &&
+                     (image.LastIncidentDay < 0 || today - image.LastIncidentDay > 365) &&
+                     (image.LastReviewDay < 0 || today - image.LastReviewDay > 180)))
+                {
+                    toRemove.Add(key);
+                }
+            }
+            for (var ki = 0; ki < toRemove.Count; ki++)
+            {
+                if (audience.PublicImages.Remove(toRemove[ki])) report.ImagesDropped++;
+            }
+            if (audience.PublicImages.Count == 0) audience.PublicImages.TrimExcess();
+        }
+        toRemove.Clear();
+        activeCoalitions.Clear();
     }
 
     /// <summary>

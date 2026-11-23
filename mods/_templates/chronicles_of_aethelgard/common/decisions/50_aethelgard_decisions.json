@@ -1,0 +1,22 @@
+{
+  "summon_royal_bannermen": {
+    "name": "Summon the royal bannermen",
+    "description": "Send wax-sealed writs across the shires to call sworn knights and levies to the colours.",
+    "cooldown_days": 365,
+    "gdp_cost_share": 0.002,
+    "effects": {
+      "manpower": 30000,
+      "war_support": 0.04
+    }
+  },
+  "charter_alchemist_guild": {
+    "name": "Charter the Alchemists' Guild",
+    "description": "Grant royal patronage to crystal artificers and chroniclers in exchange for tithes.",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.001,
+    "effects": {
+      "treasury": 10,
+      "stability": 0.02
+    }
+  }
+}

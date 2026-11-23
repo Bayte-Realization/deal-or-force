@@ -59,11 +59,19 @@ public static class IntelNetworks
     public static float Cost(Campaign c, Nation owner) =>
         MathF.Max(c.Defines.IntelNetworkMinimumCost, owner.Gdp * c.Defines.IntelNetworkCostShare);
 
+    [ThreadStatic] private static List<int> _tickTargetsScratch;
+
     /// <summary>How hard a country watches its own, 0 to 1: authority, war, and a settled state's means.</summary>
     public static float CounterIntelligence(Campaign c, Nation target)
     {
         var authority = M.Clamp01(PoliticsCore.IdeologyOf(target).Authority);
-        var atWar = Warfare.OpenWars(c).Any(w => !w.Ended && w.Involves(target.Id)) ? 0.15f : 0f;
+        var atWar = 0f;
+        var liveWars = Warfare.LiveWars(c);
+        for (var i = 0; i < liveWars.Count; i++)
+        {
+            var w = liveWars[i];
+            if (!w.Ended && w.Involves(target.Id)) { atWar = 0.15f; break; }
+        }
         return M.Clamp01(0.20f + 0.40f * authority + atWar + 0.15f * M.Clamp01(target.Stability));
     }
 
@@ -91,12 +99,17 @@ public static class IntelNetworks
         if (c.ElapsedDays % 7 != 0) yield break;
         var defines = c.Defines;
         var scanned = 0;
+        var targets = _tickTargetsScratch ??= new List<int>(8);
         foreach (var owner in c.Nations)
         {
             if (++scanned % 8 == 0 || Campaign.StageOverdue()) yield return 0;
             if (owner.IntelNetworks.Count == 0) continue;
-            foreach (var targetId in owner.IntelNetworks.Keys.OrderBy(id => id).ToList())
+            targets.Clear();
+            foreach (var key in owner.IntelNetworks.Keys) targets.Add(key);
+            if (targets.Count > 1) targets.Sort();
+            for (var ti = 0; ti < targets.Count; ti++)
             {
+                var targetId = targets[ti];
                 var target = c.NationById(targetId);
                 if (target is null || target.Population <= 0 || owner.Population <= 0) { owner.IntelNetworks.Remove(targetId); continue; }
                 var strength = owner.IntelNetworks[targetId];

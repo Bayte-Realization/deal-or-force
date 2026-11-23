@@ -506,7 +506,14 @@ public static partial class Movements
         var key = state.TraitsVersion;
         if (Become.TryGetValue(state, out var cached) && ReferenceEquals(cached.Item1, basic) && cached.Item2 == key)
             return cached.Item3;
-        var traits = basic.Traits.Where(t => !state.LostTraits.Contains(t)).Concat(state.GainedTraits.Where(t => !MovementDefinition.Listed(basic.Traits, t)));
+        var traits = new List<string>(basic.Traits.Count + state.GainedTraits.Count);
+        for (var i = 0; i < basic.Traits.Count; i++)
+        {
+            var t = basic.Traits[i];
+            if (!state.LostTraits.Contains(t)) traits.Add(t);
+        }
+        foreach (var t in state.GainedTraits)
+            if (!MovementDefinition.Listed(basic.Traits, t)) traits.Add(t);
         var become = basic.WithTraits(traits);
         Become.AddOrUpdate(state, Tuple.Create(basic, key, become));
         return become;

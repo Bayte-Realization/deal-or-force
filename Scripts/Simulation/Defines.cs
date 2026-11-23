@@ -229,11 +229,11 @@ public sealed partial class Defines
 	/// always run so time never stops; beyond that the budget decides. Lower means a
 	/// steadier frame rate and slower time, higher the reverse.
 	/// </summary>
-	public float FrameSimulationBudgetMs { get; set; } = 9f;
+	public float FrameSimulationBudgetMs { get; set; } = 8f;
 
 	/// <summary>Frame budget in milliseconds when running at top speed with smooth ticks enabled.
 	/// Ignored when <see cref="FrameSimulationBudgetMs"/> is zero or negative.</summary>
-	public float SmoothFastSpeedSimulationBudgetMs { get; set; } = 16f;
+	public float SmoothFastSpeedSimulationBudgetMs { get; set; } = 15f;
 
 	/// <summary>Frame budget in milliseconds when running at speed 4 without smooth ticks.
 	/// Ignored when <see cref="FrameSimulationBudgetMs"/> is zero or negative.</summary>
@@ -245,18 +245,17 @@ public sealed partial class Defines
 	public float UncheckedSpeedSimulationBudgetMs { get; set; } = 96f;
 
 	/// <summary>Steps (not days) a single frame may advance however cheap they turn out to be.
-	/// Twelve one-hour steps at sixty frames is thirty days a second, the top speed.</summary>
-	public int MaxDaysPerFrame { get; set; } = 12;
+	/// Twenty-four one-hour steps at sixty frames lets Speed 5 fly while frame budgets cap stalls.</summary>
+	public int MaxDaysPerFrame { get; set; } = 24;
 
 	/// <summary>
 	/// Multipliers applied to <see cref="SecondsPerDay"/> for speeds 1..5: about 5, 12, 32
-	/// campaign hours a second, then 4 and 30 days a second - the last is what twelve steps a
-	/// frame allows. Wider apart than they were, because the slowest speed is now slow.
+	/// campaign hours a second, then fast-paced Speed 4 and Speed 5 (frame-budget bounded).
 	/// </summary>
 	// Save loading otherwise populates this non-empty default list, appending the
 	// saved five speeds on every reload. A saved speed table replaces defaults.
 	[JsonObjectCreationHandling(JsonObjectCreationHandling.Replace)]
-	public List<float> SpeedFactors { get; set; } = new() { 1f, 0.4f, 0.15f, 0.05f, 0.0066f };
+	public List<float> SpeedFactors { get; set; } = new() { 1f, 0.4f, 0.15f, 0.035f, 0.002f };
 
 	// --- the globe ---
 

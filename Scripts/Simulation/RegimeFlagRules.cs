@@ -53,4 +53,16 @@ public static partial class FlagCatalog
             if (rule.Requires.All(term => term.Value.Contains(ValueOf(term.Key, c, n), StringComparer.OrdinalIgnoreCase)))
                 names.Add(rule.Sprite);
     }
+
+    /// <summary>
+    /// Resolve authored <c>regime_flags</c> of a parent country tag for a nationwide civil-war rebel
+    /// faction according to the rebel's own ideology and government.
+    /// </summary>
+    private static void AddRegimeFlagsForTag(Campaign c, Nation n, string parentTag, List<string> names)
+    {
+        if (string.IsNullOrWhiteSpace(parentTag) || !RegimeFlags.TryGetValue(Slug(parentTag), out var rules)) return;
+        foreach (var rule in rules)
+            if (rule.Requires.All(term => term.Value.Contains(ValueOf(term.Key, c, n), StringComparer.OrdinalIgnoreCase)))
+                names.Add(rule.Sprite);
+    }
 }

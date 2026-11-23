@@ -78,9 +78,16 @@ public partial class DealOrForceGame
         _selectedNation = _campaign.NationById(army.NationId);
         _globe.SelectArmy(army.Id);
         ShowSelectedArmy();
-        SetArmyFeedback((army.InBattle ? Tr("In combat: H leaves battle immediately. RMB on the formation's current province breaks off an attack and holds a defence. Other map orders wait; Alt+H cancels only the queue.") + " " : "") + Tr("RMB march · Shift+RMB waypoint · Alt+RMB split & move · Ctrl+RMB support · " +
-              "Shift-click adds · H halt · Ctrl+H off plan · Shift+H back · Ctrl+B rail · G consolidate · " +
-              ". next idle \u00b7 Ctrl+Alt+H brake all."));
+        if (Platform.PlatformProfile.Current.IsTouchPrimary)
+        {
+            SetArmyFeedback((army.InBattle ? Tr("mobile.override.army_in_battle") + " " : "") + Tr("mobile.override.army_orders"));
+        }
+        else
+        {
+            SetArmyFeedback((army.InBattle ? Tr("In combat: H leaves battle immediately. RMB on the formation's current province breaks off an attack and holds a defence. Other map orders wait; Alt+H cancels only the queue.") + " " : "") + Tr("RMB march · Shift+RMB waypoint · Alt+RMB split & move · Ctrl+RMB support · " +
+                  "Shift-click adds · H halt · Ctrl+H off plan · Shift+H back · Ctrl+B rail · G consolidate · " +
+                  ". next idle \u00b7 Ctrl+Alt+H brake all."));
+        }
         RecordHistoryArmies();
     }
 
@@ -126,7 +133,9 @@ public partial class DealOrForceGame
         SetArmyFeedback(Simulation.Loc.Format(
                             Simulation.Plural.Key("{0:N0} division selected.", _selectedArmies.Count),
                             _selectedArmies.Count) + " " +
-                        Simulation.Loc.Get("RMB march · Shift+RMB waypoint · Alt+RMB split & move · G consolidate · Ctrl+6..0 bind group."));
+                        Simulation.Loc.Get(Platform.PlatformProfile.Current.IsTouchPrimary
+                            ? "mobile.override.army_orders"
+                            : "RMB march · Shift+RMB waypoint · Alt+RMB split & move · G consolidate · Ctrl+6..0 bind group."));
         RecordHistoryArmies();
     }
 

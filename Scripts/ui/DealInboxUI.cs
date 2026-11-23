@@ -49,25 +49,67 @@ public partial class DealOrForceGame
             + AgreementSystem.OfferedTo(_campaign, _campaign.Player).Count;
     }
 
+    private readonly System.Collections.Generic.HashSet<int> _dealNoticeScratch = new();
+    private readonly System.Collections.Generic.HashSet<int> _ultimatumNoticeScratch = new();
+    private readonly System.Collections.Generic.HashSet<int> _assistanceNoticeScratch = new();
+    private readonly System.Collections.Generic.HashSet<int> _armsNoticeScratch = new();
+
+    private static bool SyncNoticeSet(System.Collections.Generic.HashSet<int> previous, System.Collections.Generic.HashSet<int> next)
+    {
+        var added = false;
+        foreach (var id in next)
+            if (!previous.Contains(id)) { added = true; break; }
+        previous.Clear();
+        foreach (var id in next) previous.Add(id);
+        return added;
+    }
+
     private void RefreshNegotiationNotifications()
     {
         var count = CountIncomingDiplomaticInbox();
-        var incoming = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.DealOffers
-            .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
-        var ultimatums = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.UltimatumPapers
-            .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
-        var assistance = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.AssistanceRequests
-            .Where(r => r.State == ForeignAssistanceState.Pending && r.DonorId == _campaign.Player.Id && r.ExpiresDay > _campaign.ElapsedDays).Select(r => r.Id).ToHashSet();
-        var armsPapers = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.ArmsShipmentRequests
-            .Where(r => r.State == ArmsShipmentState.Pending && r.DonorId == _campaign.Player.Id && r.ExpiresDay > _campaign.ElapsedDays).Select(r => r.Id).ToHashSet();
+        var playerId = _campaign.Player.Id;
+        var day = _campaign.ElapsedDays;
+        _dealNoticeScratch.Clear();
+        _ultimatumNoticeScratch.Clear();
+        _assistanceNoticeScratch.Clear();
+        _armsNoticeScratch.Clear();
+        if (!_observerMode)
+        {
+            var offers = _campaign.DealOffers;
+            for (var i = 0; i < offers.Count; i++)
+            {
+                var o = offers[i];
+                if (o.Pending && o.ToId == playerId && o.ExpiresDay > day) _dealNoticeScratch.Add(o.Id);
+            }
+            var papers = _campaign.UltimatumPapers;
+            for (var i = 0; i < papers.Count; i++)
+            {
+                var o = papers[i];
+                if (o.Pending && o.ToId == playerId && o.ExpiresDay > day) _ultimatumNoticeScratch.Add(o.Id);
+            }
+            var assistanceReqs = _campaign.AssistanceRequests;
+            for (var i = 0; i < assistanceReqs.Count; i++)
+            {
+                var r = assistanceReqs[i];
+                if (r.State == ForeignAssistanceState.Pending && r.DonorId == playerId && r.ExpiresDay > day) _assistanceNoticeScratch.Add(r.Id);
+            }
+            var armsReqs = _campaign.ArmsShipmentRequests;
+            for (var i = 0; i < armsReqs.Count; i++)
+            {
+                var r = armsReqs[i];
+                if (r.State == ArmsShipmentState.Pending && r.DonorId == playerId && r.ExpiresDay > day) _armsNoticeScratch.Add(r.Id);
+            }
+        }
+        var shouldNotify = !_observerMode && !_dealNoticeObserver && _dealNoticeViewer == playerId;
+        var hasNewDeal = SyncNoticeSet(_dealNoticeIds, _dealNoticeScratch);
+        var hasNewUltimatum = SyncNoticeSet(_ultimatumNoticeIds, _ultimatumNoticeScratch);
+        var hasNewAssistance = SyncNoticeSet(_assistanceNoticeIds, _assistanceNoticeScratch);
+        var hasNewArms = SyncNoticeSet(_armsNoticeIds, _armsNoticeScratch);
         // A load or hotseat change primes quietly; receipt still is not a signature.
-        if (!_observerMode && !_dealNoticeObserver && _dealNoticeViewer == _campaign.Player.Id &&
-            (incoming.Except(_dealNoticeIds).Any() || ultimatums.Except(_ultimatumNoticeIds).Any() || assistance.Except(_assistanceNoticeIds).Any() || armsPapers.Except(_armsNoticeIds).Any()))
+        if (shouldNotify && (hasNewDeal || hasNewUltimatum || hasNewAssistance || hasNewArms))
             PlayStrategicCue("deal_received");
-        _ultimatumNoticeIds = ultimatums;
-        _assistanceNoticeIds = assistance;
-        _armsNoticeIds = armsPapers;
-        _dealNoticeViewer = _campaign.Player.Id; _dealNoticeObserver = _observerMode; _dealNoticeIds = incoming;
+        _dealNoticeViewer = playerId;
+        _dealNoticeObserver = _observerMode;
         // The one way to the inbox on the campaign screen while offers wait: the chip on the date
         // plate, seen without opening anything. The report's own inbox button said the same and
         // went in step 4 of the interface plan. The chip keeps the plate's width (DatePlateUI), so
@@ -109,34 +151,35 @@ public partial class DealOrForceGame
             "Diplomatic letters await your decision. Reading is not consent; review the live terms before approving any transfer.",
             false, HandbookButton("deals"), ActionButton("×", CloseDealComposer, 38, 32));
         BuildDealAnswerStrip(rows);
-        var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
+        var body = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
         body.AddThemeConstantOverride("separation", 16); rows.AddChild(body);
-        var listFrame = new PanelContainer { Name = "OfferListFrame", CustomMinimumSize = new(290, 0) };
+        var listFrame = new PanelContainer { Name = "OfferListFrame", CustomMinimumSize = new(290, 0), SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
         listFrame.SetMeta("atlas_section_ground", "surface.inset");
         listFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
         AtlasSurfaceSkin.Attach(listFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
         body.AddChild(listFrame);
         _dealInboxScroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            SizeFlagsVertical = SizeFlags.ExpandFill, FollowFocus = true };
+            SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true, FollowFocus = true };
         listFrame.AddChild(_dealInboxScroll);
         _dealInboxRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _dealInboxRows.AddThemeConstantOverride("separation", 6); _dealInboxScroll.AddChild(_dealInboxRows);
-        var detailFrame = new PanelContainer { Name = "OfferDetailFrame", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        var detailFrame = new PanelContainer { Name = "OfferDetailFrame", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
         detailFrame.SetMeta("atlas_section_ground", "surface.inset");
         detailFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
         AtlasSurfaceSkin.Attach(detailFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
         body.AddChild(detailFrame);
         var detailColumn = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill };
+            SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
         detailFrame.AddChild(detailColumn);
         var detailScroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, FollowFocus = true };
+            SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true, FollowFocus = true };
         detailColumn.AddChild(detailScroll);
         _dealInboxDetail = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _dealInboxDetail.AddThemeConstantOverride("separation", 10); detailScroll.AddChild(_dealInboxDetail);
         // Keep consent actions visible even while a small window scrolls a long letter.
-        _dealInboxActions = new HFlowContainer { Name = "DealInboxActions", Visible = false };
+        _dealInboxActions = new HFlowContainer { Name = "DealInboxActions", Visible = false, SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkEnd, ClipContents = true };
         _dealInboxActions.AddThemeConstantOverride("h_separation", 10);
+        _dealInboxActions.AddThemeConstantOverride("v_separation", 6);
         detailColumn.AddChild(_dealInboxActions);
         if (!_campaign.UltimatumPapers.Any(paper => paper.Id == _ultimatumInboxSelected && paper.ToId == _campaign.Player.Id && paper.Pending))
             _ultimatumInboxSelected = -1;

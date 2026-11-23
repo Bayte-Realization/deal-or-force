@@ -1,0 +1,42 @@
+// AI weights for Taiwan's Mainland Return preparations so the bot actively builds up for the crossing.
+{
+  "ai_twn_project_national_glory": {
+    "base": 4.5,
+    "modifiers": [
+      {
+        "trigger": { "min_political_points": 14 },
+        "add": 2.5
+      },
+      {
+        "trigger": { "at_war": true },
+        "add": 3.0
+      }
+    ]
+  },
+  "ai_twn_strait_armada": {
+    "base": 3.5,
+    "modifiers": [
+      {
+        "trigger": { "min_political_points": 14 },
+        "add": 2.0
+      },
+      {
+        "trigger": { "at_war": true },
+        "add": 2.5
+      }
+    ]
+  },
+  "ai_twn_mainland_underground": {
+    "base": 3.2,
+    "modifiers": [
+      {
+        "trigger": { "min_political_points": 14 },
+        "add": 1.8
+      },
+      {
+        "trigger": { "at_war": true },
+        "add": 2.2
+      }
+    ]
+  }
+}

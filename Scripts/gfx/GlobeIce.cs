@@ -55,11 +55,14 @@ public sealed partial class GlobePresentation
                 tile.AddChild(sheet);
                 _iceSheets.Add(sheet);
             }
+        SyncWeatherReliefShells();
     }
 
     private void UpdateIce(double delta)
     {
-        var frozen = _campaign?.Curse == Simulation.WorldCurses.Snowgrave && Simulation.WorldLayers.On("ice");
+        var snap = _campaign?.RenderSnapshot;
+        var curse = snap is { Version: > 0 } ? snap.WorldCurse : _campaign?.Curse;
+        var frozen = curse == Simulation.WorldCurses.Snowgrave && Simulation.WorldLayers.On("ice");
         if (!frozen)
         {
             if (_iceShell is not null) { _iceShell.Visible = false; foreach (var sheet in _iceSheets) sheet.Visible = false; }

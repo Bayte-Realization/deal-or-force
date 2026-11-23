@@ -100,5 +100,12 @@ public partial class DealOrForceGame
 {
     internal void VerificationInspectResearch(string id) => SelectResearchTechnology(id, true);
     internal string VerificationResearchSelected => _researchSelected;
-    internal Control VerificationResearchLayer => _researchLayer;
+    internal Control VerificationResearchLayer
+    {
+        get
+        {
+            EnsureScreen("research", BuildResearchScreen);
+            return _researchLayer;
+        }
+    }
 }

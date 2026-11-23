@@ -141,6 +141,81 @@ public static class DefconSystem
     public static int CurrentLevel(Campaign campaign) =>
         campaign is null || !Enabled(campaign) ? 5 : Math.Clamp(campaign.DefconLevel, 1, 5);
 
+    private sealed class TierEntry
+    {
+        public readonly int Day;
+        public readonly int Flags;
+        public readonly int TechCount;
+        public readonly string Tag;
+        public readonly int Tier;
+
+        public TierEntry(int day, int flags, int techCount, string tag, int tier)
+        {
+            Day = day;
+            Flags = flags;
+            TechCount = techCount;
+            Tag = tag;
+            Tier = tier;
+        }
+    }
+
+    private sealed class TierCache
+    {
+        public readonly object Gate = new();
+        public TierEntry[] Entries = Array.Empty<TierEntry>();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, TierCache> TierCaches = new();
+
+    private static int TierFlags(Campaign campaign) =>
+        (campaign.Defines.MutualDeterrenceEnabled ? 1 : 0) |
+        (campaign.FeatureEnabled("defcon") ? 2 : 0) |
+        (campaign.FeatureEnabled("nuclear_posture") ? 4 : 0) |
+        (campaign.FeatureEnabled("nuclear_strikes") ? 8 : 0) |
+        (TechnologyCatalog.Revision << 4);
+
+    /// <summary>Thread-safe cached deterrent tier for hot DEFCON/military paths.</summary>
+    internal static int CachedDeterrenceTier(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null || !campaign.Defines.MutualDeterrenceEnabled) return 0;
+        var flags = TierFlags(campaign);
+        if ((flags & 14) == 0) return 0;
+        var id = nation.Id;
+        if (id < 0) return Deterrence.TierOf(campaign, nation);
+        var cache = TierCaches.GetOrCreateValue(campaign);
+        var day = campaign.ElapsedDays;
+        var techCount = nation.Technologies.Count;
+        var tag = nation.Tag ?? "";
+        var arr = System.Threading.Volatile.Read(ref cache.Entries);
+        if ((uint)id < (uint)arr.Length)
+        {
+            var entry = System.Threading.Volatile.Read(ref arr[id]);
+            if (entry is not null && entry.Day == day && entry.Flags == flags && entry.TechCount == techCount &&
+                string.Equals(entry.Tag, tag, StringComparison.Ordinal))
+                return entry.Tier;
+        }
+        var tier = Deterrence.TierOf(campaign, nation);
+        lock (cache.Gate)
+        {
+            var current = cache.Entries;
+            if ((uint)id >= (uint)current.Length)
+            {
+                var nextLen = Math.Max(id + 64, current.Length == 0 ? 512 : current.Length * 2);
+                var grown = new TierEntry[nextLen];
+                Array.Copy(current, grown, current.Length);
+                System.Threading.Volatile.Write(ref cache.Entries, grown);
+                current = grown;
+            }
+            System.Threading.Volatile.Write(ref current[id], new TierEntry(day, flags, techCount, tag, tier));
+        }
+        return tier;
+    }
+
+    [ThreadStatic] private static HashSet<int> _holdersScratch;
+    [ThreadStatic] private static List<int> _holderIdsScratch;
+    [ThreadStatic] private static HashSet<int> _strikeHoldersScratch;
+    [ThreadStatic] private static List<DiplomaticRelation> _holderTensionScratch;
+
     /// <summary>
     /// Evaluate the target DEFCON readiness required by the current world geopolitical state.
     /// </summary>
@@ -150,98 +225,131 @@ public static class DefconSystem
         if (campaign is null || !Enabled(campaign)) return 5;
 
         var target = 5;
-        var holders = new HashSet<int>();
+        var holders = _holdersScratch ??= new HashSet<int>();
+        var holderIds = _holderIdsScratch ??= new List<int>();
+        holders.Clear();
+        holderIds.Clear();
         using (SimProfiler.Measure("    defcon:holders"))
-            foreach (var nation in campaign.Nations)
-                if (Deterrence.TierOf(campaign, nation) >= 1)
-                    holders.Add(nation.Id);
+        {
+            var nations = campaign.ActiveNations;
+            for (var i = 0; i < nations.Count; i++)
+            {
+                var nation = nations[i];
+                if (nation.Population > 0 && CachedDeterrenceTier(campaign, nation) >= 1 && holders.Add(nation.Id))
+                    holderIds.Add(nation.Id);
+            }
+        }
 
         if (holders.Count == 0) return 5;
 
         // 1. Direct wars involving deterrent holders
+        HashSet<int> worldPowers = null;
         using (SimProfiler.Measure("    defcon:wars"))
-        foreach (var war in Warfare.OpenWars(campaign))
         {
-            if (war.Ended) continue;
-            var attackerHolder = holders.Contains(war.AttackerId);
-            var defenderHolder = holders.Contains(war.DefenderId);
-
-            if (attackerHolder && defenderHolder)
+            var openWars = Warfare.OpenWars(campaign);
+            var strikeHolders = _strikeHoldersScratch ??= new HashSet<int>();
+            strikeHolders.Clear();
+            var checkedStrikeHolders = false;
+            var controllers = campaign.ProvinceController;
+            for (var wi = 0; wi < openWars.Count; wi++)
             {
-                var attacker = campaign.NationById(war.AttackerId);
-                var defender = campaign.NationById(war.DefenderId);
-                var nameA = attacker?.DisplayName ?? "Holder";
-                var nameB = defender?.DisplayName ?? "Holder";
+                var war = openWars[wi];
+                if (war.Ended) continue;
+                var attackerHolder = holders.Contains(war.AttackerId);
+                var defenderHolder = holders.Contains(war.DefenderId);
 
-                // The brink itself only when one of them is losing on its own soil - its capital
-                // taken, its war lost past recovery (NuclearPosture.Existential). Six weeks of
-                // fighting used to be enough: Kargil, the Ussuri and every Indian-Pakistani
-                // exchange since would each have been a DEFCON 1, a level the real world has
-                // never once declared. Two holders at war, however long and however one-sided,
-                // is the brink's antechamber (2).
-                if (NuclearPosture.Existential(campaign, attacker) || NuclearPosture.Existential(campaign, defender))
+                if (attackerHolder && defenderHolder)
                 {
-                    primaryHotspot = Loc.Format("{0} — {1}: nuclear powers in open war", nameA, nameB);
-                    return 1; // Lowest possible
+                    var attacker = campaign.NationById(war.AttackerId);
+                    var defender = campaign.NationById(war.DefenderId);
+                    var nameA = attacker?.DisplayName ?? "Holder";
+                    var nameB = defender?.DisplayName ?? "Holder";
+
+                    if (!war.CivilConflict)
+                    {
+                        var needsCheckA = attacker is not null && ((controllers is not null && attacker.CapitalProvinceId > 0 && attacker.CapitalProvinceId < controllers.Length && controllers[attacker.CapitalProvinceId] != attacker.MapIndex) || war.WarScore < -60f);
+                        var needsCheckB = defender is not null && ((controllers is not null && defender.CapitalProvinceId > 0 && defender.CapitalProvinceId < controllers.Length && controllers[defender.CapitalProvinceId] != defender.MapIndex) || -war.WarScore < -60f);
+                        if ((needsCheckA || needsCheckB) && !checkedStrikeHolders)
+                        {
+                            checkedStrikeHolders = true;
+                            NuclearPosture.FillHoldersWithStrikeTarget(campaign, openWars, holders, strikeHolders);
+                        }
+                        if ((needsCheckA && strikeHolders.Contains(attacker.Id)) ||
+                            (needsCheckB && strikeHolders.Contains(defender.Id)))
+                        {
+                            primaryHotspot = Loc.Format("{0} — {1}: nuclear powers in open war", nameA, nameB);
+                            return 1; // Lowest possible
+                        }
+                    }
+                    if (target > 2)
+                    {
+                        target = 2;
+                        primaryHotspot = Loc.Format("{0} — {1}: nuclear powers in armed conflict", nameA, nameB);
+                    }
                 }
-                if (target > 2)
+                else if (attackerHolder || defenderHolder)
                 {
-                    target = 2;
-                    primaryHotspot = Loc.Format("{0} — {1}: nuclear powers in armed conflict", nameA, nameB);
+                    var holderId = attackerHolder ? war.AttackerId : war.DefenderId;
+                    var enemyId = attackerHolder ? war.DefenderId : war.AttackerId;
+                    var holder = campaign.NationById(holderId);
+                    var enemy = campaign.NationById(enemyId);
+
+                    // A holder involved in an active World War
+                    if (war.WorldWarDay >= 0 && target > 2)
+                    {
+                        target = 2;
+                        primaryHotspot = Loc.Format("{0}: in a world war", holder?.DisplayName ?? "");
+                    }
+                    else if (enemy is not null && target > 3 && (worldPowers ??= WorldWar.WorldPowers(campaign)).Contains(enemy.Id))
+                    {
+                        target = 3;
+                        primaryHotspot = Loc.Format("{0} — {1}: war with a leading military power", holder?.DisplayName ?? "", enemy.DisplayName);
+                    }
+                    else if (target > 4)
+                    {
+                        target = 4;
+                        primaryHotspot = Loc.Format("{0} — {1}: war", holder?.DisplayName ?? "", enemy?.DisplayName ?? "");
+                    }
                 }
             }
-            else if (attackerHolder || defenderHolder)
-            {
-                var holderId = attackerHolder ? war.AttackerId : war.DefenderId;
-                var enemyId = attackerHolder ? war.DefenderId : war.AttackerId;
-                var holder = campaign.NationById(holderId);
-                var enemy = campaign.NationById(enemyId);
-
-                // A holder involved in an active World War
-                if (war.WorldWarDay >= 0 && target > 2)
-                {
-                    target = 2;
-                    primaryHotspot = Loc.Format("{0}: in a world war", holder?.DisplayName ?? "");
-                }
-                else if (enemy is not null && WorldWar.WorldPowers(campaign).Contains(enemy.Id) && target > 3)
-                {
-                    target = 3;
-                    primaryHotspot = Loc.Format("{0} — {1}: war with a leading military power", holder?.DisplayName ?? "", enemy.DisplayName);
-                }
-                else if (target > 4)
-                {
-                    target = 4;
-                    primaryHotspot = Loc.Format("{0} — {1}: war", holder?.DisplayName ?? "", enemy?.DisplayName ?? "");
-                }
-            }
+            strikeHolders.Clear();
         }
 
-        // 2. Tensions between deterrent holders
+        // 2. Active-tension standoffs between deterrent holders (ordered by pair id, stops early at DEFCON 2).
         using (SimProfiler.Measure("    defcon:relations"))
-        foreach (var relation in campaign.Relations.Values)
         {
-            if (!holders.Contains(relation.A) || !holders.Contains(relation.B)) continue;
-
-            if (relation.TensionStage == (int)TensionStage.War && target > 2)
+            if (target > 2)
             {
-                var a = campaign.NationById(relation.A);
-                var b = campaign.NationById(relation.B);
-                target = 2;
-                primaryHotspot = Loc.Format("{0} — {1}: war", a?.DisplayName ?? "", b?.DisplayName ?? "");
-            }
-            else if (relation.TensionStage == (int)TensionStage.Clashes && target > 3)
-            {
-                var a = campaign.NationById(relation.A);
-                var b = campaign.NationById(relation.B);
-                target = 3;
-                primaryHotspot = Loc.Format("{0} — {1}: border clashes", a?.DisplayName ?? "", b?.DisplayName ?? "");
-            }
-            else if ((relation.TensionStage == (int)TensionStage.Crisis || relation.CrisisOpenedDay >= 0) && target > 4)
-            {
-                var a = campaign.NationById(relation.A);
-                var b = campaign.NationById(relation.B);
-                target = 4;
-                primaryHotspot = Loc.Format("{0} — {1}: diplomatic crisis", a?.DisplayName ?? "", b?.DisplayName ?? "");
+                holderIds.Sort();
+                var tensePairs = _holderTensionScratch ??= new List<DiplomaticRelation>();
+                NuclearPosture.FillActiveHolderTensionRelations(campaign, holders, holderIds, tensePairs);
+                for (var pi = 0; pi < tensePairs.Count; pi++)
+                {
+                    var relation = tensePairs[pi];
+                    if (relation.TensionStage == (int)TensionStage.War && target > 2)
+                    {
+                        var a = campaign.NationById(relation.A);
+                        var b = campaign.NationById(relation.B);
+                        target = 2;
+                        primaryHotspot = Loc.Format("{0} — {1}: war", a?.DisplayName ?? "", b?.DisplayName ?? "");
+                        break;
+                    }
+                    else if (relation.TensionStage == (int)TensionStage.Clashes && target > 3)
+                    {
+                        var a = campaign.NationById(relation.A);
+                        var b = campaign.NationById(relation.B);
+                        target = 3;
+                        primaryHotspot = Loc.Format("{0} — {1}: border clashes", a?.DisplayName ?? "", b?.DisplayName ?? "");
+                    }
+                    else if ((relation.TensionStage == (int)TensionStage.Crisis || relation.CrisisOpenedDay >= 0) && target > 4)
+                    {
+                        var a = campaign.NationById(relation.A);
+                        var b = campaign.NationById(relation.B);
+                        target = 4;
+                        primaryHotspot = Loc.Format("{0} — {1}: diplomatic crisis", a?.DisplayName ?? "", b?.DisplayName ?? "");
+                    }
+                }
+                tensePairs.Clear();
             }
         }
 
@@ -336,8 +444,12 @@ public static class DefconSystem
     {
         NuclearPosture.Lowest(campaign, out var alarmed);
         if (alarmed is not null) return alarmed.Id;
-        foreach (var n in campaign.Nations)
-            if (n.Population > 0 && NuclearPosture.IsHolder(campaign, n)) return n.Id;
+        var active = campaign.ActiveNations;
+        for (var i = 0; i < active.Count; i++)
+        {
+            var n = active[i];
+            if (n.Population > 0 && CachedDeterrenceTier(campaign, n) >= 1) return n.Id;
+        }
         return campaign.Player?.Id ?? 0;
     }
 
@@ -365,7 +477,7 @@ public static class DefconSystem
         var nation = campaign.NationById(nationId);
         var world = Math.Clamp(campaign.DefconLevel, 1, 5);
         if (nation is not null && world >= 4 && Math.Clamp(nation.NuclearPosture, 1, 5) >= 4) return 1f;
-        var isHolder = nation is not null && Deterrence.TierOf(campaign, nation) >= 1;
+        var isHolder = nation is not null && CachedDeterrenceTier(campaign, nation) >= 1;
         // A holder's forces stand at its own alert when that is higher than the world's.
         var level = nation is null ? campaign.DefconLevel
             : isHolder ? Math.Min(world, Math.Clamp(nation.NuclearPosture, 1, 5)) : world;
@@ -432,7 +544,7 @@ public static class DefconSystem
     public static float UpkeepMultiplier(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null || !Enabled(campaign)) return 1f;
-        var isHolder = Deterrence.TierOf(campaign, nation) >= 1;
+        var isHolder = CachedDeterrenceTier(campaign, nation) >= 1;
         var level = isHolder ? Math.Clamp(nation.NuclearPosture, 1, 5) : CurrentLevel(campaign);
         if (level >= 5) return 1f;
         if (!isHolder && !AtWar(campaign, nation)) return 1f;

@@ -45,7 +45,9 @@ public partial class DealOrForceGame
         var rows = PanelRows(panel, 22, 16, 10);
 
         ScreenHeader(rows, "HANDBOOK",
-            "What every screen is for, what its figures mean and what to do about them. F1 opens this from anywhere.",
+            Platform.PlatformProfile.Current.IsTouchPrimary
+                ? "mobile.override.handbook_subtitle"
+                : "What every screen is for, what its figures mean and what to do about them. F1 opens this from anywhere.",
             true, ActionButton("×", CloseHandbook, 38, 32));
 
         var body = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
@@ -104,6 +106,7 @@ public partial class DealOrForceGame
     /// <summary>Open the handbook at an article, at the one for the screen in front of the player, or at the start.</summary>
     internal void OpenHandbook(string articleId = "")
     {
+        EnsureScreen("handbook", BuildHandbook);
         if (_handbookLayer is null) return;
         if (string.IsNullOrEmpty(articleId)) articleId = HandbookCatalog.ForScreen(_openScreen);
         if (string.IsNullOrEmpty(articleId) || HandbookCatalog.Find(articleId) is null) articleId = "first_steps";

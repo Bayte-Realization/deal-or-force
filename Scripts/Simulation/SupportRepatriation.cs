@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace DealOrForce.Simulation;
 
 /// <summary>
@@ -22,5 +24,16 @@ public static class SupportRepatriation
         var changed = LongRangeMovement.Withdraw(c);
         if (changed > 0) c.MarkStrategicChange();
         return changed;
+    }
+
+    internal static IEnumerable<int> ReconcileStages(Campaign c)
+    {
+        if (c?.ProvinceMap is null || c.ProvinceController is null) yield break;
+        if (!MechanicFeatures.SystemEnabled(c, nameof(SupportCore))) yield break;
+        LongRangeMovement.Settle(c);
+        var pass = c.Caches.SupportPass;
+        pass.LastWithdrawChanged = 0;
+        foreach (var _ in LongRangeMovement.WithdrawStages(c)) yield return 0;
+        if (pass.LastWithdrawChanged > 0) c.MarkStrategicChange();
     }
 }

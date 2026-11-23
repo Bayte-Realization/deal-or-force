@@ -269,6 +269,7 @@ public partial class DealOrForceGame
 
     private void OpenTradeScreen()
     {
+        EnsureScreen("trade", BuildTradeScreen);
         _openScreen = "Trade";
         _sidePanel.Visible = false;
         RaiseWorkspaceLayer(_tradeScreenLayer);
@@ -278,6 +279,7 @@ public partial class DealOrForceGame
 
     private void CloseTradeScreen()
     {
+        if (_tradeScreenLayer is null) return;
         _tradeScreenLayer.Visible = false;
         if (_openScreen == "Trade") _openScreen = "";
         UpdateScreenButtons();

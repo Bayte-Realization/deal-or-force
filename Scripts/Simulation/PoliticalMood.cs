@@ -112,10 +112,18 @@ public static class PoliticalMood
     public static (float Economic, float Authority) PopularPosition(Campaign c, Nation nation)
     {
         if (c is null || nation is null) return (0f, 0f);
-        var atWar = Warfare.OpenWars(c).Any(war => !war.Ended && war.Involves(nation.Id));
-        double people = 0, economic = 0, authority = 0;
-        foreach (var region in c.StatesOf(nation))
+        var atWar = false;
+        var liveWars = Warfare.LiveWars(c);
+        for (var wi = 0; wi < liveWars.Count; wi++)
         {
+            var war = liveWars[wi];
+            if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
+        }
+        double people = 0, economic = 0, authority = 0;
+        var regions = c.StatesOf(nation);
+        for (var ri = 0; ri < regions.Length; ri++)
+        {
+            var region = regions[ri];
             if (region.Population <= 0) continue;
             var (regionEconomic, regionAuthority) = RegionPosition(c, region, atWar);
             people += region.Population;
@@ -132,6 +140,12 @@ public static class PoliticalMood
                 (support - .50f) * c.Defines.PoliticalMoodWarWeight + (atWar ? .25f : 0f), -1f, 1f));
     }
 
+    private static int CompareMoodShareDesc(PoliticalMoodShare left, PoliticalMoodShare right)
+    {
+        var cmp = right.Share.CompareTo(left.Share);
+        return cmp != 0 ? cmp : string.CompareOrdinal(left.Ideology, right.Ideology);
+    }
+
     /// <summary>Every ideology, ordered by the share of the country that leans towards it.</summary>
     public static IReadOnlyList<PoliticalMoodShare> Shares(Campaign c, Nation nation)
     {
@@ -139,22 +153,36 @@ public static class PoliticalMood
         var (economic, authority) = PopularPosition(c, nation);
         var governing = IdeologyCatalog.Knows(nation.Ideology) ? nation.Ideology : "";
         var floor = MathF.Max(.05f, c.Defines.PoliticalMoodTemperature);
-        var appeals = new List<(IdeologyDefinition Ideology, float Appeal)>();
-        var total = 0f;
-        foreach (var ideology in IdeologyCatalog.All)
+        var all = IdeologyCatalog.All;
+        var count = all.Count;
+        if (count == 0) return Array.Empty<PoliticalMoodShare>();
+        var appeals = System.Buffers.ArrayPool<float>.Shared.Rent(count);
+        try
         {
-            var distance = MathF.Abs(economic - ideology.Economic) + MathF.Abs(authority - ideology.Authority);
-            var appeal = MathF.Exp(-distance / floor);
-            appeals.Add((ideology, appeal));
-            total += appeal;
+            var total = 0f;
+            for (var i = 0; i < count; i++)
+            {
+                var ideology = all[i];
+                var distance = MathF.Abs(economic - ideology.Economic) + MathF.Abs(authority - ideology.Authority);
+                var appeal = MathF.Exp(-distance / floor);
+                appeals[i] = appeal;
+                total += appeal;
+            }
+            if (total <= 0f) return Array.Empty<PoliticalMoodShare>();
+            var shares = new PoliticalMoodShare[count];
+            for (var i = 0; i < count; i++)
+            {
+                var ideology = all[i];
+                shares[i] = new PoliticalMoodShare(ideology.Id, ideology.Name, appeals[i] / total,
+                    string.Equals(ideology.Id, governing, StringComparison.OrdinalIgnoreCase));
+            }
+            Array.Sort(shares, CompareMoodShareDesc);
+            return shares;
         }
-        if (total <= 0f) return Array.Empty<PoliticalMoodShare>();
-        return appeals
-            .Select(pair => new PoliticalMoodShare(pair.Ideology.Id, pair.Ideology.Name, pair.Appeal / total,
-                string.Equals(pair.Ideology.Id, governing, StringComparison.OrdinalIgnoreCase)))
-            .OrderByDescending(share => share.Share)
-            .ThenBy(share => share.Ideology, StringComparer.Ordinal)
-            .ToArray();
+        finally
+        {
+            System.Buffers.ArrayPool<float>.Shared.Return(appeals);
+        }
     }
 
     /// <summary>
@@ -172,8 +200,12 @@ public static class PoliticalMood
         var (economic, authority) = RegionPosition(c, region, atWar);
         if (c is null || region is null || nation is null || region.LawApproval < 0f) return (economic, authority);
         IdeologyDefinition governing = null;
-        foreach (var ideology in IdeologyCatalog.All)
+        var all = IdeologyCatalog.All;
+        for (var i = 0; i < all.Count; i++)
+        {
+            var ideology = all[i];
             if (string.Equals(ideology.Id, nation.Ideology, StringComparison.OrdinalIgnoreCase)) { governing = ideology; break; }
+        }
         if (governing is null) return (economic, authority);
         var pull = M.Clamp01(1f - region.LawApproval) * MathF.Max(0f, c.Defines.PoliticalMoodLawWeight);
         return (M.Clamp(economic - governing.Economic * pull, -1f, 1f),
@@ -194,48 +226,101 @@ public static class PoliticalMood
     {
         if (c is null || region is null || nation is null) return Array.Empty<PoliticalMoodShare>();
         var atWar = false;
-        foreach (var war in Warfare.OpenWars(c))
+        var liveWars = Warfare.LiveWars(c);
+        for (var wi = 0; wi < liveWars.Count; wi++)
+        {
+            var war = liveWars[wi];
             if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
+        }
         var (economic, authority) = RegionPositionWithLaws(c, region, nation, atWar);
         var governing = IdeologyCatalog.Knows(nation.Ideology) ? nation.Ideology : "";
         var temperature = MathF.Max(.05f, c.Defines.PoliticalMoodTemperature);
         var formWeight = MathF.Max(0f, c.Defines.PoliticalMoodGovernmentFormWeight);
-        var appeals = new List<(IdeologyDefinition Ideology, float Appeal)>();
-        var total = 0f;
-        foreach (var ideology in IdeologyCatalog.All)
+        var all = IdeologyCatalog.All;
+        var count = all.Count;
+        if (count == 0) return Array.Empty<PoliticalMoodShare>();
+        var appeals = System.Buffers.ArrayPool<float>.Shared.Rent(count);
+        try
         {
-            var distance = MathF.Abs(economic - ideology.Economic) + MathF.Abs(authority - ideology.Authority);
-            var appeal = MathF.Exp(-distance / temperature);
-            // The form of government people actually live under is one they have come to terms
-            // with: an ideology comfortable in it appeals a little more, one that is not a
-            // little less. Symmetric, so it moves shares between positions rather than
-            // inventing enthusiasm, and an ideology that minds no arrangement is left alone.
-            if (formWeight > 0f && ideology.PrefersGovernments.Count > 0)
+            var total = 0f;
+            for (var i = 0; i < count; i++)
             {
-                var comfortable = ideology.PrefersGovernments.Contains(nation.Government, StringComparer.OrdinalIgnoreCase);
-                appeal *= comfortable ? 1f + formWeight : 1f - formWeight;
+                var ideology = all[i];
+                var distance = MathF.Abs(economic - ideology.Economic) + MathF.Abs(authority - ideology.Authority);
+                var appeal = MathF.Exp(-distance / temperature);
+                // The form of government people actually live under is one they have come to terms
+                // with: an ideology comfortable in it appeals a little more, one that is not a
+                // little less. Symmetric, so it moves shares between positions rather than
+                // inventing enthusiasm, and an ideology that minds no arrangement is left alone.
+                if (formWeight > 0f && ideology.PrefersGovernments.Count > 0)
+                {
+                    var comfortable = false;
+                    for (var gi = 0; gi < ideology.PrefersGovernments.Count; gi++)
+                    {
+                        if (string.Equals(ideology.PrefersGovernments[gi], nation.Government, StringComparison.OrdinalIgnoreCase))
+                        {
+                            comfortable = true;
+                            break;
+                        }
+                    }
+                    appeal *= comfortable ? 1f + formWeight : 1f - formWeight;
+                }
+                appeals[i] = appeal;
+                total += appeal;
             }
-            appeals.Add((ideology, appeal));
-            total += appeal;
+            if (total <= 0f) return Array.Empty<PoliticalMoodShare>();
+            var shares = new PoliticalMoodShare[count];
+            for (var i = 0; i < count; i++)
+            {
+                var ideology = all[i];
+                shares[i] = new PoliticalMoodShare(ideology.Id, ideology.Name, appeals[i] / total,
+                    string.Equals(ideology.Id, governing, StringComparison.OrdinalIgnoreCase));
+            }
+            Array.Sort(shares, CompareMoodShareDesc);
+            return shares;
         }
-        if (total <= 0f) return Array.Empty<PoliticalMoodShare>();
-        return appeals
-            .Select(pair => new PoliticalMoodShare(pair.Ideology.Id, pair.Ideology.Name, pair.Appeal / total,
-                string.Equals(pair.Ideology.Id, governing, StringComparison.OrdinalIgnoreCase)))
-            .OrderByDescending(share => share.Share)
-            .ThenBy(share => share.Ideology, StringComparer.Ordinal)
-            .ToArray();
+        finally
+        {
+            System.Buffers.ArrayPool<float>.Shared.Return(appeals);
+        }
     }
 
     /// <summary>The share of the country that leans towards the government's own ideology.</summary>
     public static float Mandate(Campaign c, Nation nation)
     {
-        foreach (var share in Shares(c, nation)) if (share.Governing) return share.Share;
-        return 0f;
+        if (c is null || nation is null) return 0f;
+        var governing = IdeologyCatalog.Knows(nation.Ideology) ? nation.Ideology : "";
+        if (governing.Length == 0) return 0f;
+        var (economic, authority) = PopularPosition(c, nation);
+        var floor = MathF.Max(.05f, c.Defines.PoliticalMoodTemperature);
+        var all = IdeologyCatalog.All;
+        var total = 0f;
+        var govAppeal = 0f;
+        for (var i = 0; i < all.Count; i++)
+        {
+            var ideology = all[i];
+            var distance = MathF.Abs(economic - ideology.Economic) + MathF.Abs(authority - ideology.Authority);
+            var appeal = MathF.Exp(-distance / floor);
+            total += appeal;
+            if (string.Equals(ideology.Id, governing, StringComparison.OrdinalIgnoreCase))
+                govAppeal = appeal;
+        }
+        return total > 0f ? govAppeal / total : 0f;
     }
 
     /// <summary>What the residents want that the government is not giving them, 0 to 1.</summary>
     public static float Opposition(Campaign c, Nation nation) => MathF.Max(0f, 1f - Mandate(c, nation));
+
+    /// <summary>
+    /// Structural friction from domestic political cleavages (POL-01): 0 for cohesive or
+    /// unreviewed states, rising gently when regionalist and competing blocs polarize society.
+    /// Read-only helper safe for UI summaries and weekly mood drift.
+    /// </summary>
+    public static float CleavageFriction(Campaign c, Nation nation)
+    {
+        var summary = PoliticalCohorts.NationalBlocs(c, nation);
+        return summary.Reviewed ? summary.ReformFriction : 0f;
+    }
 
     /// <summary>
     /// The country broken down by the groups the population data actually has - culture and
@@ -320,8 +405,12 @@ public static class PoliticalMood
             if (++scanned % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null || !IdeologyCatalog.Knows(nation.Ideology)) continue;
             var mandate = Mandate(c, nation);
-            var missing = MathF.Max(0f, floor - mandate);
-            var surplus = MathF.Max(0f, mandate - floor);
+            var cleavageFriction = CleavageFriction(c, nation);
+            // High polarization and regionalist cleavage gently impede institutional consensus
+            // (at most +0.06 effective mandate hurdle on deeply fractured states, 0 on settled ones).
+            var effectiveFloor = floor + MathF.Max(0f, cleavageFriction - 0.35f) * 0.12f;
+            var missing = MathF.Max(0f, effectiveFloor - mandate);
+            var surplus = MathF.Max(0f, mandate - effectiveFloor);
             if (missing <= 0f && surplus <= 0f) continue;
             foreach (var region in c.StatesOf(nation))
             {

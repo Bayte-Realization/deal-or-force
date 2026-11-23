@@ -84,10 +84,17 @@ public static class WarAims
     public static HashSet<string> Cultures(Nation nation)
     {
         var peoples = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (nation is null) return peoples;
-        foreach (var people in DemographyCatalog.PrimaryCultures(nation.Tag)) peoples.Add(people);
-        foreach (var people in nation.FoundedCultures) peoples.Add(people);
+        FillCultures(nation, peoples);
         return peoples;
+    }
+
+    internal static void FillCultures(Nation nation, HashSet<string> peoples)
+    {
+        peoples.Clear();
+        if (nation is null) return;
+        var primary = DemographyCatalog.PrimaryCultures(nation.Tag);
+        for (var i = 0; i < primary.Count; i++) peoples.Add(primary[i]);
+        for (var i = 0; i < nation.FoundedCultures.Count; i++) peoples.Add(nation.FoundedCultures[i]);
     }
 
     /// <summary>The share of a region's people that belong to any of these cultures.</summary>

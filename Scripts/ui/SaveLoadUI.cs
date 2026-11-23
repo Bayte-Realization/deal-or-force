@@ -97,7 +97,9 @@ public partial class DealOrForceGame
         var headerClose = ActionButton("×", HideSaveLoadInterface, 38, 32);
         MenuChromeTheme.StyleWellButton(headerClose, false, 15);
         ScreenHeader(rows, "CAMPAIGN ARCHIVE",
-            "Compressed saves by default · F5 quicksave · F9 quickload",
+            Platform.PlatformProfile.Current.IsTouchPrimary
+                ? "mobile.override.archive_subtitle"
+                : "Compressed saves by default · F5 quicksave · F9 quickload",
             false, openFolder, headerClose);
         MenuChromeTheme.StyleScreenHeader(rows.GetChildOrNull<PanelContainer>(0));
 
@@ -180,6 +182,7 @@ public partial class DealOrForceGame
 
     private void ShowSaveLoadInterface()
     {
+        EnsureScreen("save_load", BuildSaveLoadInterface);
         _saveLoadFromPause = _pauseMenuLayer is { Visible: true };
         if (_campaign is not null) _campaign.IsPaused = true;
         if (_pause is not null) _pause.Text = Tr("▶");
@@ -193,7 +196,7 @@ public partial class DealOrForceGame
 
     private void HideSaveLoadInterface()
     {
-        _saveLoadLayer.Visible = false;
+        if (_saveLoadLayer is not null) _saveLoadLayer.Visible = false;
         if (_saveLoadFromPause && _hudLayer is { Visible: true } && _campaign is not null) ShowPauseMenu();
         _saveLoadFromPause = false;
     }
@@ -207,6 +210,7 @@ public partial class DealOrForceGame
     /// </summary>
     private void RefreshSaveSlots()
     {
+        if (!IsInstanceValid(_saveFolderLine) || !IsInstanceValid(_saveList)) return;
         _saveFolderLine.Text = SaveRoot;
         foreach (var child in _saveList.GetChildren())
         {
@@ -533,7 +537,7 @@ public partial class DealOrForceGame
         DiagnosticLogs.Write(result.Success ? "system" : "errors", $"LOAD_RESULT slot={slot} success={result.Success} detail={result.Warning}");
         if (!result.Success)
         {
-            _saveStatus.Text = result.Warning;
+            if (IsInstanceValid(_saveStatus)) _saveStatus.Text = result.Warning;
             throw new System.InvalidOperationException(result.Warning);
         }
         await LoadingPhase("Restoring countries, armies and orders", 70);
@@ -597,7 +601,9 @@ public partial class DealOrForceGame
         SetArmyPanelVisible(false);
         _pause.Text = _campaign.IsPaused ? "▶" : "II";
         StyleButton(_pause, _campaign.IsPaused);
-        _saveStatus.Text = string.IsNullOrWhiteSpace(result.Warning) ? Tr("Campaign restored.") : result.Warning;
+        if (IsInstanceValid(_saveStatus))
+            _saveStatus.Text = string.IsNullOrWhiteSpace(result.Warning) ? Tr("Campaign restored.") : result.Warning;
+        _lastFastHudRefreshMsec = 0;
         Refresh();
     }
 

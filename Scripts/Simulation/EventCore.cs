@@ -543,6 +543,15 @@ public static class EventSystem
         foreach (var _ in TickStages(campaign)) { }
     }
 
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, List<PendingCampaignEvent>> _pendingScratch = new();
+
+    private static bool HasPendingForNation(List<PendingCampaignEvent> pending, int nationId)
+    {
+        for (var i = 0; i < pending.Count; i++)
+            if (pending[i].NationId == nationId) return true;
+        return false;
+    }
+
     /// <summary>The same daily pass, yielded between its three phases so a table full of
     /// questions does not resolve in one frame.</summary>
     public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
@@ -553,15 +562,17 @@ public static class EventSystem
         // modal window waiting for an answer ends it.
         if (!campaign.ObserverMode && campaign.ElapsedDays > 0)
         {
-            foreach (var nationId in campaign.HumanSeats)
+            var humanSeats = campaign.HumanSeats;
+            for (var i = 0; i < humanSeats.Count; i++)
             {
+                var nationId = humanSeats[i];
                 yield return 0;
                 var nation = campaign.NationById(nationId);
                 if (nation is null) continue;
                 var interval = nation.Landless && campaign.Defines.MovementEventIntervalDays >= 0
                     ? campaign.Defines.MovementEventIntervalDays : campaign.Defines.EventIntervalDays;
                 if (interval <= 0 || campaign.ElapsedDays % interval != 0) continue;
-                if (campaign.PendingEvents.Any(item => item.NationId == nationId)) continue;
+                if (HasPendingForNation(campaign.PendingEvents, nationId)) continue;
                 var created = Create(campaign, nationId);
                 if (created is not null) campaign.PendingEvents.Add(created);
             }
@@ -573,17 +584,36 @@ public static class EventSystem
         // the mode on in the middle of a campaign does not leave a window behind it.
         // A union or a merger is the one question the first answer must not settle: it is
         // "yes". Those are answered the way a government nobody plays would answer them.
-        if (campaign.NobodyPlays)
-            foreach (var item in campaign.PendingEvents.ToArray())
+        var snapshot = _pendingScratch.GetOrCreateValue(campaign);
+        if (campaign.NobodyPlays && campaign.PendingEvents.Count > 0)
+        {
+            snapshot.Clear();
+            snapshot.AddRange(campaign.PendingEvents);
+            for (var i = 0; i < snapshot.Count; i++)
             {
+                var item = snapshot[i];
                 yield return 0;
                 Resolve(campaign, item, ObserverAnswer(campaign, item));
             }
+            snapshot.Clear();
+        }
 
-        foreach (var item in campaign.PendingEvents.Where(item => item.ExpiresDay <= campaign.ElapsedDays).ToArray())
+        if (campaign.PendingEvents.Count > 0)
         {
-            yield return 0;
-            Resolve(campaign, item, 1);
+            snapshot.Clear();
+            var pending = campaign.PendingEvents;
+            for (var i = 0; i < pending.Count; i++)
+            {
+                var item = pending[i];
+                if (item.ExpiresDay <= campaign.ElapsedDays) snapshot.Add(item);
+            }
+            for (var i = 0; i < snapshot.Count; i++)
+            {
+                var item = snapshot[i];
+                yield return 0;
+                Resolve(campaign, item, 1);
+            }
+            snapshot.Clear();
         }
     }
 
@@ -634,7 +664,7 @@ public static class EventSystem
                 Consolidation.ExecuteShardConsolidation(campaign, founder, nation);
         }
         if (option.SeparatePeaceWarId >= 0 && item.ExpiresDay > campaign.ElapsedDays &&
-            campaign.Wars.Find(w => w.Id == option.SeparatePeaceWarId) is { Ended: false } separateWar)
+            Warfare.WarById(campaign, option.SeparatePeaceWarId) is { Ended: false } separateWar)
             SeparatePeace.Sign(campaign, separateWar, option.SeparatePeaceMemberId, (SeparatePeaceTerms)option.SeparatePeaceTermsId);
         option.Effect.Apply(campaign, nation);
         foreach (var (id, days) in option.Modifiers) ModifierSystem.Grant(campaign, nation, id, days);

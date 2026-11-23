@@ -1,7 +1,10 @@
 using System;
+using System.Buffers;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
+using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace DealOrForce.Simulation;
@@ -240,10 +243,43 @@ public static class BuildingCatalog
     private static readonly BuildingDefinition Unknown =
         new("Unknown building", 1f, 180, 0f, "Declared by content that is no longer loaded.");
 
-    public static BuildingDefinition Get(BuildingKind kind) =>
-        Definitions.TryGetValue(kind, out var definition) ? definition : Unknown;
+    private static volatile (BuildingDefinition Def, bool Present)[] _slots = Array.Empty<(BuildingDefinition, bool)>();
+    internal static volatile int Version;
+    internal static bool HasExtraJobBuildings { get; private set; }
 
-    public static bool Contains(BuildingKind kind) => Definitions.ContainsKey(kind);
+    private static void RebuildIndex()
+    {
+        var maxIdx = -1;
+        var hasExtra = false;
+        foreach (var kv in Definitions)
+        {
+            var idx = (int)kv.Key;
+            if (idx > maxIdx) maxIdx = idx;
+            if (idx > (int)BuildingKind.ResearchLab && kv.Value.Jobs > 0f) hasExtra = true;
+        }
+        var slots = maxIdx >= 0 ? new (BuildingDefinition Def, bool Present)[maxIdx + 1] : Array.Empty<(BuildingDefinition, bool)>();
+        foreach (var kv in Definitions)
+            if ((uint)kv.Key < (uint)slots.Length) slots[(int)kv.Key] = (kv.Value, true);
+        _slots = slots;
+        HasExtraJobBuildings = hasExtra;
+        unchecked { Version++; }
+    }
+
+    public static BuildingDefinition Get(BuildingKind kind)
+    {
+        var slots = _slots;
+        var idx = (int)kind;
+        if ((uint)idx < (uint)slots.Length && slots[idx].Present) return slots[idx].Def;
+        return Definitions.TryGetValue(kind, out var definition) ? definition : Unknown;
+    }
+
+    public static bool Contains(BuildingKind kind)
+    {
+        var slots = _slots;
+        var idx = (int)kind;
+        if ((uint)idx < (uint)slots.Length) return slots[idx].Present;
+        return Definitions.ContainsKey(kind);
+    }
 
     public static IEnumerable<BuildingKind> All => Definitions.Keys;
 
@@ -296,6 +332,7 @@ public static class BuildingCatalog
                 Number(value, "jobs", out var jobs);
                 Declare(entry.Name, name, cost, days, capacity, description, needsWater, jobs);
             }
+        RebuildIndex();
         BuildingRules.ResetCatalog();
     }
 
@@ -320,6 +357,7 @@ public static class BuildingCatalog
         Definitions[kind] = new BuildingDefinition(name, cost.Value, days.Value,
             capacityGain ?? 0f, description ?? "", needsWater ?? false,
             jobs is >= 0f and < float.PositiveInfinity ? jobs.Value : 0f);
+        RebuildIndex();
         return true;
     }
 
@@ -331,8 +369,12 @@ public static class BuildingCatalog
         {
             Definitions.Remove(kind);
             Ids.Remove(kind);
-            foreach (var key in Named.Where(kv => kv.Value == kind).Select(kv => kv.Key).ToArray())
-                Named.Remove(key);
+            var keysToRemove = new List<string>();
+            foreach (var kv in Named)
+                if (kv.Value == kind) keysToRemove.Add(kv.Key);
+            for (var i = 0; i < keysToRemove.Count; i++)
+                Named.Remove(keysToRemove[i]);
+            RebuildIndex();
         }
         return true;
     }
@@ -352,6 +394,7 @@ public static class BuildingCatalog
             NeedsWater = needsWater ?? current.NeedsWater,
             Jobs = jobs ?? current.Jobs
         };
+        RebuildIndex();
         return true;
     }
 
@@ -591,111 +634,141 @@ public static class EconomySystem
             //
             // A region history/states writes a number for has exactly that number, ahead of any
             // compiled correction: the file is the figure a mod can change.
-            var authored = new long[states.Length];
-            var fixedAt = new long[states.Length];
-            var isFixed = new bool[states.Length];
-            long claimed = 0, settled = 0;
-            for (var index = 0; index < states.Length; index++)
+            var stateCount = states.Length;
+            var authored = ArrayPool<long>.Shared.Rent(stateCount);
+            var fixedAt = ArrayPool<long>.Shared.Rent(stateCount);
+            var isFixed = ArrayPool<bool>.Shared.Rent(stateCount);
+            var free = ArrayPool<int>.Shared.Rent(stateCount);
+            var weights = ArrayPool<double>.Shared.Rent(stateCount);
+            Array.Clear(authored, 0, stateCount);
+            Array.Clear(fixedAt, 0, stateCount);
+            Array.Clear(isFixed, 0, stateCount);
+
+            try
             {
-                if (written.TryGetValue(states[index].MapIndex, out var figures) && figures.Population is { } people)
+                long claimed = 0, settled = 0;
+                var anyFixed = false;
+                for (var index = 0; index < stateCount; index++)
                 {
-                    isFixed[index] = true;
-                    fixedAt[index] = people;
-                    settled += people;
+                    if (written.TryGetValue(states[index].MapIndex, out var figures) && figures.Population is { } people)
+                    {
+                        isFixed[index] = true;
+                        anyFixed = true;
+                        fixedAt[index] = people;
+                        settled += people;
+                    }
+                    else if (TerritorialTopology.AuthoredPopulation(states[index].MapIndex, out var stated))
+                    {
+                        authored[index] = stated;
+                        claimed += stated;
+                    }
                 }
-                else if (TerritorialTopology.AuthoredPopulation(states[index].MapIndex, out var stated))
+
+                // If the authored regions between them claim more than the country has, they
+                // are scaled to fit rather than allowed to invent people.
+                var remaining = nation.Population - settled - claimed;
+                var scale = 1.0;
+                if (remaining < 0 && claimed > 0)
                 {
-                    authored[index] = stated;
-                    claimed += stated;
+                    scale = Math.Max(0, nation.Population - settled) / (double)claimed;
+                    remaining = 0;
+                }
+                remaining = Math.Max(0, remaining);
+
+                // Nobody lives on a lake. Water regions are owned and drawn like any other, so
+                // without this they take a full share of the country's population - which put two
+                // million Ukrainians in the Kakhovka reservoir and forty-seven million Chinese in
+                // Qinghai Lake, and took those people away from the land they actually live on.
+                var freeCount = 0;
+                for (var index = 0; index < stateCount; index++)
+                    if (authored[index] == 0 && !isFixed[index] && !LakeRegions.IsWaterState(states[index]))
+                        free[freeCount++] = index;
+                // Unless there is nowhere else: a country of nothing but water still has to put
+                // its people somewhere, and losing them silently is worse than drowning them.
+                if (freeCount == 0)
+                {
+                    for (var index = 0; index < stateCount; index++)
+                        if (authored[index] == 0 && !isFixed[index])
+                            free[freeCount++] = index;
+                }
+                double totalWeight = 0;
+                for (var slot = 0; slot < freeCount; slot++)
+                {
+                    var weight = 0.75 + StableFraction(states[free[slot]].MapIndex) * 0.50;
+                    weights[slot] = weight;
+                    totalWeight += weight;
+                }
+
+                // Every region's head-count first, and only then who those people are. It cannot
+                // be done a region at a time: a people who named the regions they live in have a
+                // national number to place, and placing it means knowing how big those regions
+                // are relative to one another.
+                var counts = new long[stateCount];
+                long assigned = 0;
+                for (var slot = 0; slot < freeCount; slot++)
+                {
+                    var index = free[slot];
+                    counts[index] = Math.Max(0, slot == freeCount - 1
+                        ? remaining - assigned
+                        : (long)(remaining * weights[slot] / totalWeight));
+                    assigned += counts[index];
+                }
+                for (var index = 0; index < stateCount; index++)
+                    if (isFixed[index]) counts[index] = Math.Max(0, fixedAt[index]);
+                    else if (authored[index] > 0) counts[index] = Math.Max(0, (long)(authored[index] * scale));
+
+                // Where the file wrote regions down, the country is the sum of them: raising one
+                // region in a mod raises the country, rather than being taken back from its
+                // neighbours or quietly lost. A country nobody wrote a region for keeps its own
+                // figure exactly as before.
+                if (anyFixed) nation.Population = SumLong(counts);
+
+                // How urban each region is: as history writes it where it does, and otherwise spread
+                // around the national figure the way it always was.
+                var urban = new float[stateCount];
+                for (var index = 0; index < stateCount; index++)
+                    urban[index] = written.TryGetValue(states[index].MapIndex, out var figures) && figures.Urbanisation is { } share
+                        ? share
+                        : StateUrbanisation(nation, states[index].MapIndex);
+
+                // Who lives there, as history writes it where it does: a region's own list is its
+                // people, and only the rest are worked out from the country.
+                var peoples = new IReadOnlyList<(string Culture, float Share)>[stateCount];
+                for (var index = 0; index < stateCount; index++)
+                    peoples[index] = written.TryGetValue(states[index].MapIndex, out var figures) ? figures.Cultures : null;
+                var composition = DemographyCatalog.AllocateCultures(nation.Tag, states, counts, peoples);
+                var farming = StatedAgricultureScale(nation, states, counts, urban);
+                var buildings = SeedBuildings(campaign, nation, states, counts, urban);
+                for (var index = 0; index < stateCount; index++)
+                {
+                    var state = states[index];
+                    SeedState(campaign, state, nation, counts[index], composition[index], farming, buildings[index],
+                        urban[index]);
+                    if (!written.TryGetValue(state.MapIndex, out var figures)) continue;
+                    state.DealtCultures = figures.Cultures is { Count: > 0 } ? HistoryDataLoader.MixSignature(figures.Cultures) : null;
+                    // What is built and what lies under the ground, as written: the file is the
+                    // region, and a building or a deposit it leaves out is not there.
+                    if (figures.Buildings is not null)
+                    {
+                        state.Buildings.Clear();
+                        foreach (var (kind, level) in figures.Buildings)
+                            if (level > 0) state.Buildings[kind] = level;
+                    }
+                    if (figures.Resources is not null)
+                    {
+                        state.ResourceDeposits.Clear();
+                        foreach (var (commodity, amount) in figures.Resources)
+                            if (amount > 0f) state.ResourceDeposits[commodity] = amount;
+                    }
                 }
             }
-
-            // If the authored regions between them claim more than the country has, they
-            // are scaled to fit rather than allowed to invent people.
-            var remaining = nation.Population - settled - claimed;
-            var scale = 1.0;
-            if (remaining < 0 && claimed > 0)
+            finally
             {
-                scale = Math.Max(0, nation.Population - settled) / (double)claimed;
-                remaining = 0;
-            }
-            remaining = Math.Max(0, remaining);
-
-            // Nobody lives on a lake. Water regions are owned and drawn like any other, so
-            // without this they take a full share of the country's population - which put two
-            // million Ukrainians in the Kakhovka reservoir and forty-seven million Chinese in
-            // Qinghai Lake, and took those people away from the land they actually live on.
-            var free = Enumerable.Range(0, states.Length)
-                .Where(index => authored[index] == 0 && !isFixed[index] && !LakeRegions.IsWaterState(states[index]))
-                .ToArray();
-            // Unless there is nowhere else: a country of nothing but water still has to put
-            // its people somewhere, and losing them silently is worse than drowning them.
-            if (free.Length == 0)
-                free = Enumerable.Range(0, states.Length).Where(index => authored[index] == 0 && !isFixed[index]).ToArray();
-            var weights = free.Select(index => 0.75 + StableFraction(states[index].MapIndex) * 0.50).ToArray();
-            var totalWeight = weights.Sum();
-
-            // Every region's head-count first, and only then who those people are. It cannot
-            // be done a region at a time: a people who named the regions they live in have a
-            // national number to place, and placing it means knowing how big those regions
-            // are relative to one another.
-            var counts = new long[states.Length];
-            long assigned = 0;
-            for (var slot = 0; slot < free.Length; slot++)
-            {
-                var index = free[slot];
-                counts[index] = Math.Max(0, slot == free.Length - 1
-                    ? remaining - assigned
-                    : (long)(remaining * weights[slot] / totalWeight));
-                assigned += counts[index];
-            }
-            for (var index = 0; index < states.Length; index++)
-                if (isFixed[index]) counts[index] = Math.Max(0, fixedAt[index]);
-                else if (authored[index] > 0) counts[index] = Math.Max(0, (long)(authored[index] * scale));
-
-            // Where the file wrote regions down, the country is the sum of them: raising one
-            // region in a mod raises the country, rather than being taken back from its
-            // neighbours or quietly lost. A country nobody wrote a region for keeps its own
-            // figure exactly as before.
-            if (isFixed.Any(value => value)) nation.Population = counts.Sum();
-
-            // How urban each region is: as history writes it where it does, and otherwise spread
-            // around the national figure the way it always was.
-            var urban = new float[states.Length];
-            for (var index = 0; index < states.Length; index++)
-                urban[index] = written.TryGetValue(states[index].MapIndex, out var figures) && figures.Urbanisation is { } share
-                    ? share
-                    : StateUrbanisation(nation, states[index].MapIndex);
-
-            // Who lives there, as history writes it where it does: a region's own list is its
-            // people, and only the rest are worked out from the country.
-            var peoples = new IReadOnlyList<(string Culture, float Share)>[states.Length];
-            for (var index = 0; index < states.Length; index++)
-                peoples[index] = written.TryGetValue(states[index].MapIndex, out var figures) ? figures.Cultures : null;
-            var composition = DemographyCatalog.AllocateCultures(nation.Tag, states, counts, peoples);
-            var farming = StatedAgricultureScale(nation, states, counts, urban);
-            var buildings = SeedBuildings(campaign, nation, states, counts, urban);
-            for (var index = 0; index < states.Length; index++)
-            {
-                var state = states[index];
-                SeedState(campaign, state, nation, counts[index], composition[index], farming, buildings[index],
-                    urban[index]);
-                if (!written.TryGetValue(state.MapIndex, out var figures)) continue;
-                state.DealtCultures = figures.Cultures is { Count: > 0 } ? HistoryDataLoader.MixSignature(figures.Cultures) : null;
-                // What is built and what lies under the ground, as written: the file is the
-                // region, and a building or a deposit it leaves out is not there.
-                if (figures.Buildings is not null)
-                {
-                    state.Buildings.Clear();
-                    foreach (var (kind, level) in figures.Buildings)
-                        if (level > 0) state.Buildings[kind] = level;
-                }
-                if (figures.Resources is not null)
-                {
-                    state.ResourceDeposits.Clear();
-                    foreach (var (commodity, amount) in figures.Resources)
-                        if (amount > 0f) state.ResourceDeposits[commodity] = amount;
-                }
+                ArrayPool<long>.Shared.Return(authored);
+                ArrayPool<long>.Shared.Return(fixedAt);
+                ArrayPool<bool>.Shared.Return(isFixed);
+                ArrayPool<int>.Shared.Return(free);
+                ArrayPool<double>.Shared.Return(weights);
             }
         }
     }
@@ -720,36 +793,80 @@ public static class EconomySystem
     internal static (int Farms, int Industry)[] SeedBuildings(Campaign campaign, Nation nation,
         IReadOnlyList<ScenarioState> states, IReadOnlyList<long> counts, IReadOnlyList<float> urban = null)
     {
+        var count = states.Count;
+        var result = new (int Farms, int Industry)[count];
+        if (count == 0) return result;
+
         var defines = campaign?.Defines ?? new Defines();
-        var rural = new double[states.Count];
-        var industry = new double[states.Count];
-        double everyone = 0;
-        for (var index = 0; index < states.Count; index++)
+        var rural = ArrayPool<double>.Shared.Rent(count);
+        var industry = ArrayPool<double>.Shared.Rent(count);
+        var farms = ArrayPool<double>.Shared.Rent(count);
+        var farmShares = ArrayPool<int>.Shared.Rent(count);
+        var industryShares = ArrayPool<int>.Shared.Rent(count);
+        try
         {
-            var people = Math.Max(0, counts[index]);
-            everyone += people;
-            var share = urban is null ? StateUrbanisation(nation, states[index].MapIndex) : urban[index];
-            rural[index] = people * (1.0 - share);
-            industry[index] = people * (double)share / MathF.Max(1f, defines.SeedUrbanPeoplePerIndustry);
+            double everyone = 0;
+            double countryside = 0;
+            double industrySum = 0;
+            for (var index = 0; index < count; index++)
+            {
+                var people = Math.Max(0, counts[index]);
+                everyone += people;
+                var share = urban is null ? StateUrbanisation(nation, states[index].MapIndex) : urban[index];
+                var ruralVal = people * (1.0 - share);
+                var industryVal = people * (double)share / MathF.Max(1f, defines.SeedUrbanPeoplePerIndustry);
+                rural[index] = ruralVal;
+                industry[index] = industryVal;
+                countryside += ruralVal;
+                industrySum += industryVal;
+            }
+
+            // The old floor of one farm, kept for the country rather than for each of its regions:
+            // a country with anybody in it farms somewhere, however small it is.
+            var farmTotal = (int)Math.Round(everyone / MathF.Max(1f, defines.SeedPeoplePerFarm));
+            if (farmTotal == 0 && everyone > 0) farmTotal = 1;
+            for (var index = 0; index < count; index++)
+                farms[index] = countryside > 0
+                    ? farmTotal * rural[index] / countryside
+                    : everyone > 0 ? farmTotal * Math.Max(0, counts[index]) / everyone : 0;
+
+            FillLargestRemainder(farms.AsSpan(0, count), farmTotal, counts, farmShares.AsSpan(0, count));
+            FillLargestRemainder(industry.AsSpan(0, count), (int)Math.Round(industrySum), counts, industryShares.AsSpan(0, count));
+
+            for (var index = 0; index < count; index++) result[index] = (farmShares[index], industryShares[index]);
+            return result;
         }
-
-        // The old floor of one farm, kept for the country rather than for each of its regions:
-        // a country with anybody in it farms somewhere, however small it is.
-        var farmTotal = (int)Math.Round(everyone / MathF.Max(1f, defines.SeedPeoplePerFarm));
-        if (farmTotal == 0 && everyone > 0) farmTotal = 1;
-        var countryside = rural.Sum();
-        var farms = new double[states.Count];
-        for (var index = 0; index < states.Count; index++)
-            farms[index] = countryside > 0
-                ? farmTotal * rural[index] / countryside
-                : everyone > 0 ? farmTotal * Math.Max(0, counts[index]) / everyone : 0;
-        var farmShares = LargestRemainder(farms, farmTotal, counts);
-        var industryShares = LargestRemainder(industry, (int)Math.Round(industry.Sum()), counts);
-
-        var result = new (int Farms, int Industry)[states.Count];
-        for (var index = 0; index < states.Count; index++) result[index] = (farmShares[index], industryShares[index]);
-        return result;
+        finally
+        {
+            ArrayPool<double>.Shared.Return(rural);
+            ArrayPool<double>.Shared.Return(industry);
+            ArrayPool<double>.Shared.Return(farms);
+            ArrayPool<int>.Shared.Return(farmShares);
+            ArrayPool<int>.Shared.Return(industryShares);
+        }
     }
+
+    private readonly struct RemainderSlot
+    {
+        public readonly double Fraction;
+        public readonly long People;
+        public readonly int Index;
+
+        public RemainderSlot(double fraction, long people, int index)
+        {
+            Fraction = fraction;
+            People = people;
+            Index = index;
+        }
+    }
+
+    private static readonly Comparison<RemainderSlot> CompareRemainderSlot = static (a, b) =>
+    {
+        var cmp = b.Fraction.CompareTo(a.Fraction);
+        if (cmp != 0) return cmp;
+        cmp = b.People.CompareTo(a.People);
+        return cmp != 0 ? cmp : a.Index.CompareTo(b.Index);
+    };
 
     /// <summary>
     /// Whole shares of a whole total, in proportion to exact ones: everybody gets the whole
@@ -759,22 +876,53 @@ public static class EconomySystem
     /// </summary>
     internal static int[] LargestRemainder(IReadOnlyList<double> exact, int total, IReadOnlyList<long> people)
     {
-        var shares = new int[exact.Count];
-        var given = 0;
-        for (var index = 0; index < exact.Count; index++)
+        var count = exact.Count;
+        var shares = new int[count];
+        if (count == 0) return shares;
+        if (exact is double[] arr)
         {
-            shares[index] = (int)Math.Floor(Math.Max(0, exact[index]));
-            given += shares[index];
+            FillLargestRemainder(arr.AsSpan(0, count), total, people, shares.AsSpan());
+            return shares;
         }
-        if (given >= total) return shares;
-        var order = Enumerable.Range(0, exact.Count)
-            .OrderByDescending(index => Math.Max(0, exact[index]) - shares[index])
-            .ThenByDescending(index => people[index])
-            .ThenBy(index => index)
-            .ToArray();
-        for (var step = 0; given < total && order.Length > 0; step++, given++)
-            shares[order[step % order.Length]]++;
-        return shares;
+        var rented = ArrayPool<double>.Shared.Rent(count);
+        try
+        {
+            for (var i = 0; i < count; i++) rented[i] = exact[i];
+            FillLargestRemainder(rented.AsSpan(0, count), total, people, shares.AsSpan());
+            return shares;
+        }
+        finally
+        {
+            ArrayPool<double>.Shared.Return(rented);
+        }
+    }
+
+    private static void FillLargestRemainder(ReadOnlySpan<double> exact, int total, IReadOnlyList<long> people, Span<int> shares)
+    {
+        var count = exact.Length;
+        if (count == 0) return;
+        var given = 0;
+        for (var index = 0; index < count; index++)
+        {
+            var whole = (int)Math.Floor(Math.Max(0, exact[index]));
+            shares[index] = whole;
+            given += whole;
+        }
+        if (given >= total) return;
+        var slots = ArrayPool<RemainderSlot>.Shared.Rent(count);
+        try
+        {
+            for (var index = 0; index < count; index++)
+                slots[index] = new RemainderSlot(Math.Max(0, exact[index]) - shares[index], people[index], index);
+            var span = slots.AsSpan(0, count);
+            span.Sort(CompareRemainderSlot);
+            for (var step = 0; given < total; step++, given++)
+                shares[span[step % count].Index]++;
+        }
+        finally
+        {
+            ArrayPool<RemainderSlot>.Shared.Return(slots);
+        }
     }
 
     /// <summary>
@@ -814,11 +962,15 @@ public static class EconomySystem
     private static string BuildCalibrationReport(Campaign campaign)
     {
         var lines = new List<string> { "Emergent output calibration (day zero):" };
-        foreach (var nation in campaign.Nations
-                     .Where(candidate => candidate.Gdp > 0f)
-                     .OrderByDescending(candidate => candidate.Gdp)
-                     .Take(10))
+        var top = new List<Nation>();
+        var nations = campaign.Nations;
+        for (var i = 0; i < nations.Count; i++)
+            if (nations[i].Gdp > 0f) top.Add(nations[i]);
+        top.Sort(static (a, b) => b.Gdp.CompareTo(a.Gdp));
+        var limit = Math.Min(10, top.Count);
+        for (var i = 0; i < limit; i++)
         {
+            var nation = top[i];
             var emergent = nation.GrossOutput * 52f * nation.OutputScale;
             var drift = nation.Gdp <= 0f ? 0f : (emergent - nation.Gdp) / nation.Gdp * 100f;
             lines.Add($"  {nation.Tag} {nation.Name}: authored {nation.Gdp:N1}B, emergent {emergent:N1}B " +
@@ -867,8 +1019,12 @@ public static class EconomySystem
             if (!nation.IsHuman) continue;
             SovereignFinance.Prepare(campaign, nation, false);
             var atWar = false;
-            foreach (var war in Warfare.OpenWars(campaign))
+            var liveWars = Warfare.LiveWars(campaign);
+            for (var wi = 0; wi < liveWars.Count; wi++)
+            {
+                var war = liveWars[wi];
                 if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
+            }
 
             var weeklyOutput = nation.Gdp / 52f;
             var budget = BudgetCore.Evaluate(nation, weeklyOutput, atWar);
@@ -902,7 +1058,7 @@ public static class EconomySystem
     {
         if (campaign is null || nation is null) return "";
         var atWar = false;
-        var wars = Warfare.OpenWars(campaign);
+        var wars = Warfare.LiveWars(campaign);
         for (var i = 0; i < wars.Count; i++)
         {
             var war = wars[i];
@@ -977,7 +1133,7 @@ public static class EconomySystem
         // week, on a day of its own, against the latest market, instead of all of them on the
         // market's day - a seventh of the countries a day. The heavy weekly step loses most of
         // its country half. The world it makes is not the shipped one; see the define.
-        var staggered = campaign.Defines.EconomyWeekStaggered;
+        var staggered = campaign.Defines.StaggerWeeklyEconomy || campaign.Defines.EconomyWeekStaggered;
         if (!marketDay && !staggered) yield break;
         // The market pass had no top-level scope of its own: a hundred and fifty milliseconds
         // of a late week vanished into the day's unmeasured remainder instead of naming the
@@ -993,237 +1149,274 @@ public static class EconomySystem
                 yield return 0;
             }
         }
-        for (var index = 0; index < campaign.Nations.Count; index++)
+        var nationsList = staggered ? (IReadOnlyList<Nation>)campaign.Nations : campaign.ActiveNations;
+        var maxNationId = -1;
+        for (var i = 0; i < nationsList.Count; i++)
+            if (nationsList[i].Id > maxNationId) maxNationId = nationsList[i].Id;
+        var atWarById = maxNationId >= 0 ? ArrayPool<bool>.Shared.Rent(maxNationId + 1) : Array.Empty<bool>();
+        if (maxNationId >= 0) Array.Clear(atWarById, 0, maxNationId + 1);
+        HashSet<int> atWarOverflow = null;
+        try
         {
-            if (index > 0 && (index % EconomyStageCountries == 0 || Campaign.StageOverdue())) yield return 0;
-            if (staggered && index % every != campaign.ElapsedDays % every) continue;
-            using var stage = SimProfiler.Measure("economy");
-            var nation = campaign.Nations[index];
-            // A retired country (LongCampaign) keeps no books: no ledger to close, nothing to zero.
-            if (campaign.IsRetired(nation)) continue;
-            // The money ledger's week closes here, before this week's budget is booked, so each
-            // closed week holds exactly one budget; and penalties that have run out go first.
-            MoneyLedger.Close(campaign, nation);
-            IncomePenalties.Expire(campaign, nation);
-            // Empty map entities (e.g. the unclaimed Antarctic mask) are not economies.
-            // Their nominal placeholder GDP used to finance imaginary arms output forever.
-            // Fallen countries (all ground lost, the fall flow has ruled) are not economies:
-            // their books close the day the fall is decided, instead of a stateless remnant
-            // financing a phantom army for months.
-            // The list alone is not proof of a fall, though: a country on it that holds a region
-            // of its own is a list that was not kept (MovementFall.ReturnTheLanded), and emptying
-            // its regions' people on the strength of it is how 41 countries in one long campaign
-            // stood on the map with nobody in them. Ground decides; the list only confirms.
-            var fallen = campaign.Fallen.Contains(nation.Id) && campaign.StatesOf(nation).Length == 0;
-            if (nation.Movement is null && (!campaign.HasOwnedLand(nation) || fallen))
-            {
-                nation.Population = fallen ? 0 : nation.Population;
-                nation.Gdp = nation.GrossOutput = 0;
-                nation.WeeklyTaxIncome = nation.WeeklyExpenses = nation.WeeklyBalance = 0;
-                continue;
-            }
-            // A country at war is one in a war still being fought. An ended war stays
-            // on the record and does not keep this week's budget or drift.
-            var atWar = false;
             var live = Warfare.LiveWars(campaign);
-            for (var warIndex = 0; warIndex < live.Count; warIndex++)
-                if (live[warIndex].Involves(nation.Id)) { atWar = true; break; }
-            SovereignFinance.Prepare(campaign, nation);
-            var weeklyOutput = nation.Gdp / 52f;
-            // GDP is total economic activity, not the taxable budget base. Only a
-            // calibrated share reaches the treasury; this keeps modern states near a
-            // plausible balanced budget instead of banking 10-15% of GDP every year.
-            //
-            // What that share is, and what it is spent on, is now `common/budget` rather
-            // than eight multiplications written out here. The eight lines this replaced
-            // are the first eight rows of that file and produce the same figures; what it
-            // buys is that a ninth is a row rather than an edit to the weekly tick.
-            // Looked up once. Every one of the cabinet's seven effects used to be its own
-            // switch on the enum, in five different places in this method.
-            var cabinet = GovernmentFocusCatalog.Of(nation.GovernmentFocus);
-            // How the country is arranged, and what it is trying to do. Two more sources of
-            // the same six pressures the cabinet applies, looked up once for the same reason.
-            var government = PoliticsCore.GovernmentOf(nation);
-            var ideology = PoliticsCore.IdeologyOf(nation);
-            // An ideology living in a form of government it has no business in. Not
-            // forbidden - it is a real arrangement - but it costs every week it lasts.
-            var mismatch = PoliticsCore.IsMismatched(nation) ? ideology.MismatchStability : 0f;
-            var budget = BudgetCore.Evaluate(nation, weeklyOutput, atWar, MoneyLedger.BudgetWeek(nation));
-            nation.WeeklyTaxIncome = budget.Taxation;
-            nation.WeeklyExpenses = budget.Expenses;
-            nation.WeeklyBalance = budget.Balance;
-            nation.WeeklyGrossIncome = budget.GrossRevenue;
-            nation.WeeklyIncomePenalty = budget.IncomePenalty;
-            MoneyLedger.BookPenalty(nation, budget.IncomePenalty);
-
-            // Itemised for whoever is going to read it, which is a human. The labels that
-            // carry a rate have to be composed fresh every week, and composing them for the
-            // two hundred and sixty cabinets nobody is looking at was fifty thousand
-            // sentences a simulated year written for an empty room.
-            if (nation.IsHuman)
+            for (var wi = 0; wi < live.Count; wi++)
             {
-                BudgetCore.Itemise(nation, weeklyOutput, atWar);
-                nation.Budget.Settle(nation.WeeklyBalance, Loc.Get("rounding"));
+                var w = live[wi];
+                if ((uint)w.AttackerId <= (uint)maxNationId) atWarById[w.AttackerId] = true;
+                else (atWarOverflow ??= new()).Add(w.AttackerId);
+                if ((uint)w.DefenderId <= (uint)maxNationId) atWarById[w.DefenderId] = true;
+                else (atWarOverflow ??= new()).Add(w.DefenderId);
+                foreach (var id in w.AttackerAllies)
+                {
+                    if ((uint)id <= (uint)maxNationId) atWarById[id] = true;
+                    else (atWarOverflow ??= new()).Add(id);
+                }
+                foreach (var id in w.DefenderAllies)
+                {
+                    if ((uint)id <= (uint)maxNationId) atWarById[id] = true;
+                    else (atWarOverflow ??= new()).Add(id);
+                }
             }
 
-            var interest = 0f;
-            foreach (var line in BudgetCore.All)
-                if (line.Charge == BudgetBasis.Debt && line.Side == BudgetSide.Expense)
-                    interest += BudgetCore.Amount(nation, line, weeklyOutput, atWar);
-            // Self-governing regions keep a share of the taxes just raised (RegionalAutonomy). Paid
-            // before the week is settled, so a treasury it empties borrows for it like any other bill.
-            RegionalAutonomy.PayWeek(campaign, nation);
-            SovereignFinance.Settle(campaign, nation, nation.WeeklyBalance, interest);
-            if (!nation.IsHuman || Delegation.Holds(nation, Delegation.Budget))
-                SovereignFinance.ManageLiquidity(campaign, nation);
-
-            // What the week did to prices, before what prices do to the week. Placed here
-            // on purpose: the budget has been worked out and paid, so the deficit inflation
-            // reads is the one that actually happened, and the standard of living and the
-            // radicalism it moves are read further down by everything that cares.
-            //
-            // The market's shortfall is forgiven up to a tolerance - a market that is 98 %
-            // supplied is a working market, not a shortage - so an ordinary world does not
-            // spend its whole campaign being told it has a supply crisis.
-            var scarcity = MathF.Max(0f, nation.ShortageIndex - campaign.Defines.ScarcityTolerance);
-            InflationCore.Tick(campaign, nation, weeklyOutput, atWar, scarcity);
-
-            var industrialSupply = nation.Market.GetValueOrDefault(Commodity.IndustrialMaterials)?.Satisfaction ?? 1f;
-            var energySupply = nation.Market.GetValueOrDefault(Commodity.Energy)?.Satisfaction ?? 1f;
-            var marketOutput = 0.65f + industrialSupply * 0.18f + energySupply * 0.17f;
-
-            // Everything that used to be applied straight to GDP now moves productivity
-            // instead, and productivity is an input to production over in MarketCore. The
-            // causal chain runs one way - policy and conditions change how much the
-            // country can make, what it makes is priced by the market, and GDP is the
-            // value of that - rather than GDP being a free-running number with the
-            // economy simulated alongside it.
-            //
-            // Fiscal policy is still a real trade-off, and now every line of it is: a tax
-            // above its neutral rate funds the state now and costs output later, and the
-            // three lines that buy growth - infrastructure, research, and the schools -
-            // pay it back over years rather than weeks. Each line says which by how much
-            // in `common/budget`; none of it is a constant here any more.
-            var taxEffect = budget.Growth;
-            var conditions = 0.006f + (nation.Stability - 0.5f) * 0.018f - (atWar ? 0.018f : 0f) -
-                             nation.ShortageIndex * campaign.Defines.ShortageAnnualGrowthPenalty + taxEffect +
-                             GovernmentFocusRules.AnnualGrowth(nation.GovernmentFocus) +
-                             government.Growth + ideology.Growth -
-                             (1f - marketOutput) * 0.020f;
-            nation.Productivity = M.Clamp(nation.Productivity * (1f + conditions / 52f), 0.15f, 4f);
-
-            // GDP is the annualised market value of what the country produced, converted
-            // to the scale the scenario was authored in by a factor calibrated once at
-            // seed. Smoothed, because an economy that reprices its entire output every
-            // week reads as noise rather than as a trend the player can act on.
-            // And the slow drift of what the country's work is worth: catch-up, the long wave,
-            // the drags of war and empire (SecularCycle) - the only thing that lets the order of
-            // 2024 change.
-            SecularCycle.Week(campaign, nation, atWar);
-            // The spin-up (Defines.OutputSpinUpDays): the market is still settling, so the
-            // calibration follows it and GDP stays where the scenario put it.
-            if (campaign.ElapsedDays < campaign.Defines.OutputSpinUpDays && nation.GrossOutput > 0f && nation.Gdp > 0f)
+            if (nationsList.Count > 0) ControlTally.World(campaign, 0, 0);
+            var prepList = _nationPrepScratch ??= new List<EconomyNationPrep>(64);
+            var workList = _stateWorkScratch ??= new List<(int PrepIndex, ScenarioState State)>(512);
+            prepList.Clear();
+            workList.Clear();
+            try
             {
-                var spun = nation.Gdp / (nation.GrossOutput * 52d);
-                if (double.IsFinite(spun) && spun > 0d && spun < float.MaxValue) nation.OutputScale = (float)spun;
+                var batchYieldLimit = Campaign.IsUnboundedStep ? int.MaxValue : 32;
+                var ranInBatch = 0;
+                for (var index = 0; index < nationsList.Count; index++)
+                {
+                    if (staggered && index % every != campaign.ElapsedDays % every) continue;
+                    var nation = nationsList[index];
+                    // A retired country (LongCampaign) keeps no books: no ledger to close, nothing to zero.
+                    if (staggered && campaign.IsRetired(nation)) continue;
+                    if (ranInBatch >= batchYieldLimit && Campaign.StageOverdue())
+                    {
+                        FlushEconomyBatch(campaign, prepList, workList);
+                        prepList.Clear();
+                        workList.Clear();
+                        ranInBatch = 0;
+                        yield return 0;
+                    }
+                    ranInBatch++;
+                    using var stage = SimProfiler.Measure("economy");
+                    // The money ledger's week closes here, before this week's budget is booked, so each
+                    // closed week holds exactly one budget; and penalties that have run out go first.
+                    MoneyLedger.Close(campaign, nation);
+                    IncomePenalties.Expire(campaign, nation);
+                    var states = campaign.StatesOf(nation);
+                    var fallen = campaign.Fallen.Contains(nation.Id) && states.Length == 0;
+                    if (nation.Movement is null && (states.Length == 0 || fallen))
+                    {
+                        nation.Population = fallen ? 0 : nation.Population;
+                        nation.Gdp = nation.GrossOutput = 0;
+                        nation.WeeklyTaxIncome = nation.WeeklyExpenses = nation.WeeklyBalance = 0;
+                        continue;
+                    }
+                    var atWar = (uint)nation.Id <= (uint)maxNationId
+                        ? atWarById[nation.Id]
+                        : (atWarOverflow is not null && atWarOverflow.Contains(nation.Id));
+                    SovereignFinance.Prepare(campaign, nation);
+                    var weeklyOutput = nation.Gdp / 52f;
+                    var cabinet = GovernmentFocusCatalog.Of(nation.GovernmentFocus);
+                    var government = PoliticsCore.GovernmentOf(nation);
+                    var ideology = PoliticsCore.IdeologyOf(nation);
+                    var mismatch = PoliticsCore.IsMismatched(nation) ? ideology.MismatchStability : 0f;
+                    var budget = BudgetCore.Evaluate(nation, weeklyOutput, atWar, MoneyLedger.BudgetWeek(nation), out var interest);
+                    nation.WeeklyTaxIncome = budget.Taxation;
+                    nation.WeeklyExpenses = budget.Expenses;
+                    nation.WeeklyBalance = budget.Balance;
+                    nation.WeeklyGrossIncome = budget.GrossRevenue;
+                    nation.WeeklyIncomePenalty = budget.IncomePenalty;
+                    MoneyLedger.BookPenalty(nation, budget.IncomePenalty);
+
+                    if (nation.IsHuman)
+                    {
+                        BudgetCore.Itemise(nation, weeklyOutput, atWar);
+                        nation.Budget.Settle(nation.WeeklyBalance, Loc.Get("rounding"));
+                    }
+
+                    RegionalAutonomy.PayWeek(campaign, nation);
+                    SovereignFinance.Settle(campaign, nation, nation.WeeklyBalance, interest);
+                    if (!nation.IsHuman || Delegation.Holds(nation, Delegation.Budget))
+                        SovereignFinance.ManageLiquidity(campaign, nation);
+                    ProductionMethods.EvaluateAi(campaign, nation);
+                    NationalAmbitions.TickWeekly(campaign, nation);
+
+                    var scarcity = MathF.Max(0f, nation.ShortageIndex - campaign.Defines.ScarcityTolerance);
+                    InflationCore.Tick(campaign, nation, weeklyOutput, atWar, scarcity);
+
+                    var industrialSupply = nation.Market.GetValueOrDefault(Commodity.IndustrialMaterials)?.Satisfaction ?? 1f;
+                    var energySupply = nation.Market.GetValueOrDefault(Commodity.Energy)?.Satisfaction ?? 1f;
+                    var marketOutput = 0.65f + industrialSupply * 0.18f + energySupply * 0.17f;
+
+                    var taxEffect = budget.Growth;
+                    var conditions = 0.006f + (nation.Stability - 0.5f) * 0.018f - (atWar ? 0.018f : 0f) -
+                                     nation.ShortageIndex * campaign.Defines.ShortageAnnualGrowthPenalty + taxEffect +
+                                     GovernmentFocusRules.AnnualGrowth(nation.GovernmentFocus) +
+                                     government.Growth + ideology.Growth -
+                                     (1f - marketOutput) * 0.020f;
+                    nation.Productivity = M.Clamp(nation.Productivity * (1f + conditions / 52f), 0.15f, 4f);
+
+                    SecularCycle.Week(campaign, nation, atWar);
+                    if (campaign.ElapsedDays < campaign.Defines.OutputSpinUpDays && nation.GrossOutput > 0f && nation.Gdp > 0f)
+                    {
+                        var spun = nation.Gdp / (nation.GrossOutput * 52d);
+                        if (double.IsFinite(spun) && spun > 0d && spun < float.MaxValue) nation.OutputScale = (float)spun;
+                    }
+                    if (nation.GrossOutput > 0f && nation.OutputScale > 0f)
+                    {
+                        var target = nation.GrossOutput * 52d * nation.OutputScale;
+                        var next = nation.Gdp + (target - nation.Gdp) * campaign.Defines.GdpConvergenceRate;
+                        if (!double.IsFinite(target) || !double.IsFinite(next) || next > float.MaxValue || next < -float.MaxValue)
+                            throw new CampaignIntegrityException("country " + nation.Tag + ".Gdp from production");
+                        nation.Gdp = (float)Math.Max(0.01, next);
+                    }
+                    var welfareRadicalism = budget.Radicalism;
+                    var focusRadicalism = cabinet.Radicalism + government.Radicalism + ideology.Radicalism;
+                    var foodSupply = nation.Market.TryGetValue(Commodity.Food, out var fq) ? Math.Clamp(fq.Satisfaction, 0f, 1f) : 1f;
+                    var medSupply = nation.Market.TryGetValue(Commodity.Pharmaceuticals, out var mq) ? Math.Clamp(mq.Satisfaction, 0f, 1f) : 1f;
+                    var energySupplyClamped = Math.Clamp(energySupply, 0f, 1f);
+
+                    var prepIdx = prepList.Count;
+                    prepList.Add(new EconomyNationPrep(
+                        nation, states, conditions, atWar,
+                        welfareRadicalism, focusRadicalism, foodSupply, energySupplyClamped, medSupply,
+                        cabinet, government, ideology, budget.Living, budget.Stability, mismatch));
+                    for (var s = 0; s < states.Length; s++)
+                        workList.Add((prepIdx, states[s]));
+                }
+                if (prepList.Count > 0)
+                {
+                    using var stage = SimProfiler.Measure("economy");
+                    FlushEconomyBatch(campaign, prepList, workList);
+                }
             }
-            if (nation.GrossOutput > 0f && nation.OutputScale > 0f)
+            finally
             {
-                // Multiply in double: finite operands can overflow an intermediate float
-                // even when smoothing would conceal the initial source of corruption.
-                var target = nation.GrossOutput * 52d * nation.OutputScale;
-                var next = nation.Gdp + (target - nation.Gdp) * campaign.Defines.GdpConvergenceRate;
-                if (!double.IsFinite(target) || !double.IsFinite(next) || next > float.MaxValue || next < -float.MaxValue)
-                    throw new CampaignIntegrityException("country " + nation.Tag + ".Gdp from production");
-                nation.Gdp = (float)Math.Max(0.01, next);
+                prepList.Clear();
+                workList.Clear();
             }
-            var annualGrowth = conditions;
+        }
+        finally
+        {
+            if (maxNationId >= 0) ArrayPool<bool>.Shared.Return(atWarById);
+        }
+    }
 
-            var states = campaign.StatesOf(nation);
-            long totalPopulation = 0;
-            using var stateScope = SimProfiler.Measure("eco:states");
-            // Each region's week reads the country and writes only that region - its households,
-            // its births and deaths, its faiths, its living and its anger - so a large country's
-            // regions are worked side by side, to the same bytes in any order.
-            var welfareRadicalism = budget.Radicalism;
-            var focusRadicalism = cabinet.Radicalism + government.Radicalism + ideology.Radicalism;
-            // The tally the anger reads is a shared index of the whole map: it is built here,
-            // on this thread, before any region is handed out, so a worker never builds it.
-            if (states.Length >= DeterministicParallel.MinItems && DeterministicParallel.Enabled(campaign))
-                ControlTally.World(campaign, nation.MapIndex, states[0].MapIndex);
-            // A small country is not worth the hand-off; DeterministicParallel decides that and
-            // keeps the serial and the parallel path to the same bytes.
-            DeterministicParallel.For(campaign, 0, states.Length, index =>
-                WeekState(campaign, nation, annualGrowth, atWar, welfareRadicalism, focusRadicalism, states[index]));
-            foreach (var state in states)
+    private readonly record struct EconomyNationPrep(
+        Nation Nation,
+        ScenarioState[] States,
+        float AnnualGrowth,
+        bool AtWar,
+        float WelfareRadicalism,
+        float FocusRadicalism,
+        float FoodSupply,
+        float EnergySupply,
+        float MedSupply,
+        GovernmentFocusDefinition Cabinet,
+        GovernmentDefinition Government,
+        IdeologyDefinition Ideology,
+        float BudgetLiving,
+        float BudgetStability,
+        float Mismatch);
+
+    [ThreadStatic] private static List<EconomyNationPrep> _nationPrepScratch;
+    [ThreadStatic] private static List<(int PrepIndex, ScenarioState State)> _stateWorkScratch;
+
+    private static void FlushEconomyBatch(Campaign campaign, List<EconomyNationPrep> preps,
+        List<(int PrepIndex, ScenarioState State)> work)
+    {
+        const int FlatStateParallelMin = 16;
+        using (SimProfiler.Measure("eco:states"))
+        {
+            var workCount = work.Count;
+            if (workCount >= FlatStateParallelMin && DeterministicParallel.Enabled(campaign))
             {
-                totalPopulation += state.Population;
-                // After the week's anger is settled, the week's acceptance: one region at a time on
-                // this thread, because it reads titles and the map's tally (ConquestAcceptance).
-                ConquestAcceptance.Week(campaign, nation, state);
+                DeterministicParallel.ForRange(campaign, 0, workCount, (from, to) =>
+                {
+                    for (var i = from; i < to; i++)
+                    {
+                        var (prepIdx, state) = work[i];
+                        var p = preps[prepIdx];
+                        WeekState(campaign, p.Nation, p.AnnualGrowth, p.AtWar,
+                            p.WelfareRadicalism, p.FocusRadicalism, p.FoodSupply, p.EnergySupply, p.MedSupply, state);
+                    }
+                }, minItems: FlatStateParallelMin);
             }
-            if (states.Length > 0) nation.Population = totalPopulation;
-            var focusSol = cabinet.Living + government.Living + ideology.Living;
-            // The same tolerance growth and prices already forgive: a market 94% supplied is a
-            // working market, and charging every point of it to how people live took five
-            // hundredths a year off the living standard of every poor country, whose markets run 80% supplied.
-            nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + annualGrowth * 0.004f -
-                MathF.Max(0f, nation.ShortageIndex - campaign.Defines.ScarcityTolerance) * campaign.Defines.ShortageSolWeeklyPenalty +
-                budget.Living + focusSol);
-            // And back towards what the economy can carry. The terms above were added up for
-            // ever and pulled towards nothing, so a century of small leanings ran every
-            // country to an end of the scale: Japan, India and Bangladesh at nought, the
-            // stability that reads it at a twentieth, and a civil war in every other country.
-            // Policy still moves a country off its economy - by about a tenth, not to ruin.
-            var anchor = M.Clamp01(EconomicLiving(nation) + nation.LivingOffset);
-            nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving +
-                (anchor - nation.StandardOfLiving) * campaign.Defines.LivingReversionPerWeek);
-            var focusLiteracy = cabinet.Literacy + government.Literacy + ideology.Literacy;
-            var highTechModifier = 1f;
-            if (nation.Market.TryGetValue(Commodity.Electronics, out var electQuote) && electQuote.Demand > 0.05f)
-                highTechModifier *= (0.88f + 0.12f * Math.Clamp(electQuote.Satisfaction, 0f, 1f));
-            if (nation.Market.TryGetValue(Commodity.RareEarths, out var reQuote) && reQuote.Demand > 0.05f)
-                highTechModifier *= (0.90f + 0.10f * Math.Clamp(reQuote.Satisfaction, 0f, 1f));
-            var productivityTarget = (0.72f + nation.HumanCapital * 0.50f + cabinet.ProductivityTarget) * highTechModifier;
-            nation.Productivity = M.Lerp(nation.Productivity, productivityTarget, 0.015f);
-            // How a country is governed does not settle it this week; it builds up, slowly
-            // and only so far. Government, ideology, cabinet and budget keep the accumulating
-            // character they were written with, and accumulate into a bounded term that also
-            // gives itself back - so a good cabinet steadies a country rather than making it
-            // permanently unfallable, and a bad decade is something a country can come out of.
-            var securityStability = cabinet.Stability + government.Stability + ideology.Stability + mismatch;
-            var limit = StabilityCore.Weights.GovernanceLimit;
-            var governance = nation.StabilityGovernance + securityStability + budget.Stability;
-            governance -= governance * M.Clamp01(StabilityCore.Weights.GovernanceDecay);
-            nation.StabilityGovernance = M.Clamp(governance, -limit, limit);
+            else
+            {
+                for (var i = 0; i < workCount; i++)
+                {
+                    var (prepIdx, state) = work[i];
+                    var p = preps[prepIdx];
+                    WeekState(campaign, p.Nation, p.AnnualGrowth, p.AtWar,
+                        p.WelfareRadicalism, p.FocusRadicalism, p.FoodSupply, p.EnergySupply, p.MedSupply, state);
+                }
+            }
 
-            // And then the country is pulled towards what its regions, its capital and its
-            // wars actually add up to. A tenth of the gap a week: a shock arrives over a
-            // season rather than in an afternoon.
-            if (atWar || nation.Stability < 0.42f || nation.DebtCondition >= DebtCondition.Default)
-                nation.StabilityBias *= 0.996f;
-            else if (nation.StabilityBias > 0.12f)
-                nation.StabilityBias = 0.12f + (nation.StabilityBias - 0.12f) * 0.999f;
-            else if (nation.StabilityBias < -0.10f)
-                nation.StabilityBias = -0.10f + (nation.StabilityBias + 0.10f) * 0.999f;
-            var settledStability = StabilityCore.Target(campaign, nation, nation.StabilityDrivers);
-            nation.Stability = M.Lerp(nation.Stability, settledStability,
-                M.Clamp01(StabilityCore.Weights.Approach));
+            for (var pi = 0; pi < preps.Count; pi++)
+            {
+                var p = preps[pi];
+                var nation = p.Nation;
+                var states = p.States;
+                long totalPopulation = 0;
+                for (var s = 0; s < states.Length; s++)
+                {
+                    var state = states[s];
+                    totalPopulation += state.Population;
+                    ConquestAcceptance.Week(campaign, nation, state);
+                }
+                if (states.Length > 0) nation.Population = totalPopulation;
+                var focusSol = p.Cabinet.Living + p.Government.Living + p.Ideology.Living;
+                nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + p.AnnualGrowth * 0.004f -
+                    MathF.Max(0f, nation.ShortageIndex - campaign.Defines.ScarcityTolerance) * campaign.Defines.ShortageSolWeeklyPenalty +
+                    p.BudgetLiving + focusSol);
+                var anchor = M.Clamp01(EconomicLiving(nation) + nation.LivingOffset);
+                nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving +
+                    (anchor - nation.StandardOfLiving) * campaign.Defines.LivingReversionPerWeek);
+                var highTechModifier = 1f;
+                if (nation.Market.TryGetValue(Commodity.Electronics, out var electQuote) && electQuote.Demand > 0.05f)
+                    highTechModifier *= (0.88f + 0.12f * Math.Clamp(electQuote.Satisfaction, 0f, 1f));
+                if (nation.Market.TryGetValue(Commodity.RareEarths, out var reQuote) && reQuote.Demand > 0.05f)
+                    highTechModifier *= (0.90f + 0.10f * Math.Clamp(reQuote.Satisfaction, 0f, 1f));
+                var productivityTarget = (0.72f + nation.HumanCapital * 0.50f + p.Cabinet.ProductivityTarget) * highTechModifier;
+                nation.Productivity = M.Lerp(nation.Productivity, productivityTarget, 0.015f);
+                var securityStability = p.Cabinet.Stability + p.Government.Stability + p.Ideology.Stability + p.Mismatch;
+                var limit = StabilityCore.Weights.GovernanceLimit;
+                var governance = nation.StabilityGovernance + securityStability + p.BudgetStability;
+                governance -= governance * M.Clamp01(StabilityCore.Weights.GovernanceDecay);
+                nation.StabilityGovernance = M.Clamp(governance, -limit, limit);
 
-            var focusWarSupport = cabinet.WarSupport + government.WarSupport + ideology.WarSupport;
-            var settledWarSupport = M.Clamp01(nation.WarSupport + focusWarSupport);
-            nation.WarSupportDrivers.Begin("War support, weekly", "share");
-            nation.WarSupportDrivers.Add("Government focus on national security", focusWarSupport);
-            nation.WarSupportDrivers.Settle(settledWarSupport - nation.WarSupport, "held at its limit");
-            nation.WarSupport = settledWarSupport;
+                if (p.AtWar || nation.Stability < 0.42f || nation.DebtCondition >= DebtCondition.Default)
+                    nation.StabilityBias *= 0.996f;
+                else if (nation.StabilityBias > 0.12f)
+                    nation.StabilityBias = 0.12f + (nation.StabilityBias - 0.12f) * 0.999f;
+                else if (nation.StabilityBias < -0.10f)
+                    nation.StabilityBias = -0.10f + (nation.StabilityBias + 0.10f) * 0.999f;
+                var settledStability = StabilityCore.Target(campaign, nation, nation.StabilityDrivers);
+                nation.Stability = M.Lerp(nation.Stability, settledStability,
+                    M.Clamp01(StabilityCore.Weights.Approach));
+
+                var focusWarSupport = p.Cabinet.WarSupport + p.Government.WarSupport + p.Ideology.WarSupport;
+                var settledWarSupport = M.Clamp01(nation.WarSupport + focusWarSupport);
+                nation.WarSupportDrivers.Begin("War support, weekly", "share");
+                nation.WarSupportDrivers.Add("Government focus on national security", focusWarSupport);
+                nation.WarSupportDrivers.Settle(settledWarSupport - nation.WarSupport, "held at its limit");
+                nation.WarSupport = settledWarSupport;
+            }
         }
     }
 
     private static void WeekState(Campaign campaign, Nation nation, float annualGrowth, bool atWar,
-        float welfareRadicalism, float focusRadicalism, ScenarioState state)
+        float welfareRadicalism, float focusRadicalism, float foodSupply, float energySupply, float medicineSupply,
+        ScenarioState state)
     {
         if (campaign.Defines.HouseholdDynamicsEnabled)
-            HouseholdEconomy.Review(campaign, nation, state, annualGrowth);
+            HouseholdEconomy.ReviewFast(campaign, nation, state, annualGrowth, foodSupply, energySupply, medicineSupply, atWar);
         else
         {
             var hospital = state.Buildings.GetValueOrDefault(BuildingKind.Hospital);
@@ -1233,10 +1426,8 @@ public static class EconomySystem
         state.StandardOfLiving = M.Lerp(state.StandardOfLiving, nation.StandardOfLiving, 0.04f);
         state.Radicalism += RadicalismCore.WeeklyChange(campaign, nation, state, atWar, welfareRadicalism, focusRadicalism);
         MinorityPressure(campaign, nation, state);
+        MovementRules.MarkPeopleStateDirty(campaign, state);
     }
-
-    /// <summary>How many countries one stage of the weekly pass settles.</summary>
-    private const int EconomyStageCountries = 2;
 
     /// <summary>
     /// The share of a region's people who are not of the nation that governs them.
@@ -1420,19 +1611,41 @@ public static class EconomySystem
     /// minority a year into the first group of the state's people it found; DemographicCycle's
     /// assimilation is now the only one.
     /// </summary>
-    private static void MinorityPressure(Campaign campaign, Nation nation, ScenarioState state)
+    private static void MinorityPressure(Campaign campaign, Nation nation, ScenarioState state) =>
+        CompactEmptiedGroups(state);
+
+    /// <summary>
+    /// Removes emptied (size <= 0) population cohorts in place while preserving list order and avoiding allocations.
+    /// </summary>
+    internal static void CompactEmptiedGroups(ScenarioState state)
     {
-        // Compacted by hand, in order: RemoveAll's predicate would allocate a closure per region
-        // per week.
         var groups = state.PopulationGroups;
+        var count = groups.Count;
         var kept = 0;
-        for (var index = 0; index < groups.Count; index++)
+        while (kept < count && groups[kept].Size > 0) kept++;
+        if (kept == count) return;
+        for (var index = kept + 1; index < count; index++)
         {
             var group = groups[index];
             if (group.Size <= 0) continue;
             groups[kept++] = group;
         }
-        if (kept < groups.Count) groups.RemoveRange(kept, groups.Count - kept);
+        groups.RemoveRange(kept, count - kept);
+    }
+
+    /// <summary>
+    /// Strips any population group emptied on a shared weekly pass (migration, brain drain, war damage)
+    /// when staggered economies defer a region's own demographic review to another weekday.
+    /// </summary>
+    internal static void CompactWorldEmptiedGroups(Campaign campaign)
+    {
+        var states = campaign.States;
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            if (state is null || state.Unclaimed || state.PopulationGroups.Count == 0) continue;
+            CompactEmptiedGroups(state);
+        }
     }
 
     internal static void SeedState(Campaign campaign, ScenarioState state, Nation nation, long population) =>
@@ -1503,37 +1716,46 @@ public static class EconomySystem
         return M.Clamp(0.12f + 0.27f * MathF.Log10(Math.Max(300f, perHead) / 300f), 0.10f, 0.90f);
     }
 
+    private static readonly FrozenSet<string> CoalRichTags =
+        FrozenSet.ToFrozenSet(new[] { "CHN", "USA", "IND", "RUS", "AUS", "DEU", "POL", "IDN", "ZAF", "UKR" }, StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> OilRichTags =
+        FrozenSet.ToFrozenSet(new[] { "SAU", "RUS", "USA", "CAN", "IRN", "IRQ", "ARE", "VEN", "KWT", "QAT", "NOR", "KAZ", "AZE", "NGA", "BRA" }, StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> IronOreRichTags =
+        FrozenSet.ToFrozenSet(new[] { "AUS", "BRA", "CHN", "IND", "RUS", "UKR", "CAN", "SWE", "ZAF", "KAZ" }, StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> RareEarthsRichTags =
+        FrozenSet.ToFrozenSet(new[] { "CHN", "USA", "AUS", "MMR", "VNM", "BRA", "IND", "RUS" }, StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> NaturalGasRichTags =
+        FrozenSet.ToFrozenSet(new[] { "RUS", "USA", "QAT", "IRN", "TKM", "SAU", "AUS", "NOR", "DZA", "CAN", "CHN", "NGA", "EGY" }, StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> BauxiteRichTags =
+        FrozenSet.ToFrozenSet(new[] { "AUS", "GIN", "BRA", "CHN", "IND", "IDN", "JAM", "RUS", "KAZ", "VNM" }, StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> UraniumRichTags =
+        FrozenSet.ToFrozenSet(new[] { "KAZ", "CAN", "AUS", "NAM", "NER", "RUS", "UZB", "USA", "ZAF", "UKR" }, StringComparer.OrdinalIgnoreCase);
+
+    [ThreadStatic] private static (string Culture, float Share)[] _fallbackComposition;
+
     private static void SeedResources(ScenarioState state, Nation nation)
     {
         state.ResourceDeposits.Clear();
         var basePotential = 0.15f + StableFraction(state.MapIndex + 101) * 0.55f;
         state.ResourceDeposits[Commodity.Food] = 0.75f + StableFraction(state.MapIndex + 131) * 1.75f;
-        state.ResourceDeposits[Commodity.Coal] = TaggedPotential(nation.Tag,
-            "CHN USA IND RUS AUS DEU POL IDN ZAF UKR", basePotential, state.MapIndex + 151);
-        state.ResourceDeposits[Commodity.Oil] = TaggedPotential(nation.Tag,
-            "SAU RUS USA CAN IRN IRQ ARE VEN KWT QAT NOR KAZ AZE NGA BRA", basePotential * 0.55f, state.MapIndex + 181) * 2.85f;
-        state.ResourceDeposits[Commodity.IronOre] = TaggedPotential(nation.Tag,
-            "AUS BRA CHN IND RUS UKR CAN SWE ZAF KAZ", basePotential * 0.75f, state.MapIndex + 211);
-        state.ResourceDeposits[Commodity.RareEarths] = TaggedPotential(nation.Tag,
-            "CHN USA AUS MMR VNM BRA IND RUS", basePotential * 0.22f, state.MapIndex + 241);
+        state.ResourceDeposits[Commodity.Coal] = TaggedPotential(nation.Tag, CoalRichTags, basePotential, state.MapIndex + 151);
+        state.ResourceDeposits[Commodity.Oil] = TaggedPotential(nation.Tag, OilRichTags, basePotential * 0.55f, state.MapIndex + 181) * 2.85f;
+        state.ResourceDeposits[Commodity.IronOre] = TaggedPotential(nation.Tag, IronOreRichTags, basePotential * 0.75f, state.MapIndex + 211);
+        state.ResourceDeposits[Commodity.RareEarths] = TaggedPotential(nation.Tag, RareEarthsRichTags, basePotential * 0.22f, state.MapIndex + 241);
 
         // The four the second tier of industry starts from. Gas and bauxite decide who can
         // run a chemical industry and a smelter at all; uranium decides who is watched.
         // Timber is deliberately not tagged to a short list - almost everywhere has some,
         // and a good that everybody has is a useful counterweight to four that they do not.
-        state.ResourceDeposits[Commodity.NaturalGas] = TaggedPotential(nation.Tag,
-            "RUS USA QAT IRN TKM SAU AUS NOR DZA CAN CHN NGA EGY", basePotential * 0.60f, state.MapIndex + 271) * 2.70f;
-        state.ResourceDeposits[Commodity.Bauxite] = TaggedPotential(nation.Tag,
-            "AUS GIN BRA CHN IND IDN JAM RUS KAZ VNM", basePotential * 0.30f, state.MapIndex + 307);
-        state.ResourceDeposits[Commodity.Uranium] = TaggedPotential(nation.Tag,
-            "KAZ CAN AUS NAM NER RUS UZB USA ZAF UKR", basePotential * 0.14f, state.MapIndex + 337) * 0.23f;
+        state.ResourceDeposits[Commodity.NaturalGas] = TaggedPotential(nation.Tag, NaturalGasRichTags, basePotential * 0.60f, state.MapIndex + 271) * 2.70f;
+        state.ResourceDeposits[Commodity.Bauxite] = TaggedPotential(nation.Tag, BauxiteRichTags, basePotential * 0.30f, state.MapIndex + 307);
+        state.ResourceDeposits[Commodity.Uranium] = TaggedPotential(nation.Tag, UraniumRichTags, basePotential * 0.14f, state.MapIndex + 337) * 0.23f;
         state.ResourceDeposits[Commodity.Timber] = (0.35f + StableFraction(state.MapIndex + 367) * 1.45f) * 1.90f;
     }
 
-    private static float TaggedPotential(string tag, string richTags, float fallback, int seed)
+    private static float TaggedPotential(string tag, FrozenSet<string> richTags, float fallback, int seed)
     {
-        var rich = richTags.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Contains(tag, StringComparer.OrdinalIgnoreCase);
+        var rich = !string.IsNullOrEmpty(tag) && richTags.Contains(tag);
         return rich
             ? 1.25f + StableFraction(seed) * 3.25f
             : fallback * (0.35f + StableFraction(seed) * 0.65f);
@@ -1556,7 +1778,11 @@ public static class EconomySystem
         // detail, right in shape, and the population screen says so rather than inventing
         // a breakdown nobody wrote.
         if (composition is null || composition.Count == 0)
-            composition = new[] { (nation.Tag.ToLowerInvariant(), 1f) };
+        {
+            var fallback = _fallbackComposition ??= new (string Culture, float Share)[1];
+            fallback[0] = (nation.Tag.ToLowerInvariant(), 1f);
+            composition = fallback;
+        }
 
         var trades = DemographyCatalog.Professions;
         if (trades.Count == 0)
@@ -1685,53 +1911,64 @@ public static class EconomySystem
         IReadOnlyList<ScenarioState> states, IReadOnlyList<long> counts, IReadOnlyList<float> urbanisation)
     {
         var trades = DemographyCatalog.Professions;
-        if (nation.AgricultureShare <= 0f || trades.Count == 0) return (1f, 1f);
+        if (nation.AgricultureShare <= 0f || trades.Count == 0 || states.Count == 0) return (1f, 1f);
 
-        var people = new List<double>();
-        var fieldShare = new List<double>();
-        double everything = 0;
-        for (var index = 0; index < states.Count; index++)
+        var people = ArrayPool<double>.Shared.Rent(states.Count);
+        var fieldShare = ArrayPool<double>.Shared.Rent(states.Count);
+        try
         {
-            var here = Math.Max(0, counts[index]);
-            if (here <= 0) continue;
-            double all = 0, fields = 0;
-            foreach (var trade in trades)
+            var activeCount = 0;
+            double everything = 0;
+            var anyPositiveField = false;
+            for (var index = 0; index < states.Count; index++)
             {
-                var share = Math.Max(0f, trade.ShareAt(urbanisation[index]));
-                all += share;
-                if (trade.Sector == Sector.Agriculture) fields += share;
+                var here = Math.Max(0, counts[index]);
+                if (here <= 0) continue;
+                double all = 0, fields = 0;
+                for (var t = 0; t < trades.Count; t++)
+                {
+                    var trade = trades[t];
+                    var share = Math.Max(0f, trade.ShareAt(urbanisation[index]));
+                    all += share;
+                    if (trade.Sector == Sector.Agriculture) fields += share;
+                }
+                if (all <= 0) continue;
+                var fs = fields / all;
+                if (fs > 0) anyPositiveField = true;
+                people[activeCount] = here;
+                fieldShare[activeCount] = fs;
+                activeCount++;
+                everything += here;
             }
-            if (all <= 0) continue;
-            people.Add(here);
-            fieldShare.Add(fields / all);
-            everything += here;
-        }
-        if (everything <= 0 || fieldShare.All(share => share <= 0)) return (1f, 1f);
+            if (everything <= 0 || !anyPositiveField) return (1f, 1f);
 
-        var stated = M.Clamp(nation.AgricultureShare, 0.001f, 0.95f);
-        double Farming(double ratio)
-        {
-            double farmers = 0;
-            for (var index = 0; index < people.Count; index++)
+            var stated = M.Clamp(nation.AgricultureShare, 0.001f, 0.95f);
+
+            // Farming rises with the ratio, from nobody at zero towards everybody who can farm at
+            // all, so the answer is bracketed and bisection on its logarithm finds it.
+            double low = -12, high = 12;
+            for (var step = 0; step < 60; step++)
             {
-                var f = fieldShare[index];
-                var denominator = ratio * f + (1 - f);
-                if (denominator > 0) farmers += people[index] * ratio * f / denominator;
+                var middle = (low + high) / 2;
+                var ratio = Math.Exp(middle);
+                double farmers = 0;
+                for (var index = 0; index < activeCount; index++)
+                {
+                    var f = fieldShare[index];
+                    var denominator = ratio * f + (1 - f);
+                    if (denominator > 0) farmers += people[index] * ratio * f / denominator;
+                }
+                if (farmers / everything < stated) low = middle; else high = middle;
             }
-            return farmers / everything;
+            // The fields scaled and the towns left alone: only the ratio between them survives each
+            // region's normalisation, so no trade is invented and none is quietly lost.
+            return ((float)Math.Exp((low + high) / 2), 1f);
         }
-
-        // Farming rises with the ratio, from nobody at zero towards everybody who can farm at
-        // all, so the answer is bracketed and bisection on its logarithm finds it.
-        double low = -12, high = 12;
-        for (var step = 0; step < 60; step++)
+        finally
         {
-            var middle = (low + high) / 2;
-            if (Farming(Math.Exp(middle)) < stated) low = middle; else high = middle;
+            ArrayPool<double>.Shared.Return(people);
+            ArrayPool<double>.Shared.Return(fieldShare);
         }
-        // The fields scaled and the towns left alone: only the ratio between them survives each
-        // region's normalisation, so no trade is invented and none is quietly lost.
-        return ((float)Math.Exp((low + high) / 2), 1f);
     }
 
     private static PopulationGroup Add(ScenarioState state, string culture, string religion,
@@ -1766,17 +2003,41 @@ public static class EconomySystem
 
     private static void GrowGroups(ScenarioState state, long delta)
     {
-        if (state.PopulationGroups.Count == 0 || delta == 0) return;
-        var total = state.PopulationGroups.Sum(g => g.Size);
+        var groups = CollectionsMarshal.AsSpan(state.PopulationGroups);
+        if (groups.Length == 0 || delta == 0) return;
+        long total = 0;
+        for (var i = 0; i < groups.Length; i++) total += groups[i].Size;
         long cumulative = 0, assigned = 0;
-        for (var index = 0; index < state.PopulationGroups.Count; index++)
+        var anyEmptied = false;
+        for (var index = 0; index < groups.Length; index++)
         {
-            cumulative += state.PopulationGroups[index].Size;
-            var through = index == state.PopulationGroups.Count - 1 ? state.Population :
+            cumulative += groups[index].Size;
+            var through = index == groups.Length - 1 ? state.Population :
                 (long)Math.Round(state.Population * (cumulative / (double)Math.Max(1, total)));
-            state.PopulationGroups[index].Size = Math.Max(0, through - assigned);
+            var next = Math.Max(0, through - assigned);
+            groups[index].Size = next;
+            if (next == 0) anyEmptied = true;
             assigned = through;
         }
+        if (anyEmptied) CompactEmptiedGroups(state);
+    }
+
+    private static long SumLong(ReadOnlySpan<long> values)
+    {
+        long sum = 0;
+        var i = 0;
+        var len = values.Length;
+        if (Vector.IsHardwareAccelerated && len >= Vector<long>.Count)
+        {
+            var acc = Vector<long>.Zero;
+            var limit = len - Vector<long>.Count;
+            for (; i <= limit; i += Vector<long>.Count)
+                acc += new Vector<long>(values.Slice(i, Vector<long>.Count));
+            for (var j = 0; j < Vector<long>.Count; j++)
+                sum += acc[j];
+        }
+        for (; i < len; i++) sum += values[i];
+        return sum;
     }
 
     private static float StableFraction(int value)
@@ -1814,16 +2075,23 @@ public static class ConstructionSystem
         // single project used to move: a country with forty-eight sites finished one at a time, so
         // India and China completed what Malta did, a building or two a year, and their real
         // output stood still for a decade. ConstructionSitesInParallel false is the old queue.
-        foreach (var list in Working.Values) list.Clear();
-        foreach (var item in campaign.Construction)
+        var construction = campaign.Construction;
+        if (construction.Count == 0) return;
+
+        var workingMap = _working ??= new Dictionary<int, List<ConstructionProject>>();
+        foreach (var list in workingMap.Values) list.Clear();
+        for (var i = 0; i < construction.Count; i++)
         {
-            if (!Working.TryGetValue(item.NationId, out var list)) Working[item.NationId] = list = new List<ConstructionProject>();
+            var item = construction[i];
+            if (!workingMap.TryGetValue(item.NationId, out var list)) workingMap[item.NationId] = list = new List<ConstructionProject>();
             list.Add(item);
         }
-        foreach (var nation in campaign.Nations)
+        var nations = campaign.Nations;
+        for (var n = 0; n < nations.Count; n++)
         {
-            if (!Working.TryGetValue(nation.Id, out var sites) || sites.Count == 0) continue;
-            sites.Sort((a, b) => a.Id.CompareTo(b.Id));
+            var nation = nations[n];
+            if (!workingMap.TryGetValue(nation.Id, out var sites) || sites.Count == 0) continue;
+            sites.Sort(CompareProjectById);
             var working = ConstructionCost.WorkingSites(campaign, nation);
             // Construction capacity is the speed of the work (ConstructionCost.Pace): each working
             // site does `pace` days of work today and is paid `pace` days of its price, so the
@@ -1834,8 +2102,9 @@ public static class ConstructionSystem
             // The console's "instabuild": everything this country has under way is finished today, free.
             if (nation.InstantConstruction)
             {
-                foreach (var project in sites)
+                for (var s = 0; s < sites.Count; s++)
                 {
+                    var project = sites[s];
                     project.Paid = project.Cost;
                     project.ProgressDays = project.DurationDays;
                     Complete(campaign, nation, project);
@@ -1848,8 +2117,9 @@ public static class ConstructionSystem
             // sites are paid from it first, and those it no longer reaches wait for tomorrow's and
             // say so. Infinity when the country has no ceiling.
             var allowance = ConstructionQueue.WeeklyCeiling(campaign, nation) / 7f;
-            foreach (var project in sites)
+            for (var s = 0; s < sites.Count; s++)
             {
+                var project = sites[s];
                 if (!float.IsFinite(project.Cost) || project.Cost < 0 ||
                     !float.IsFinite(project.Paid) || project.Paid < 0 ||
                     !float.IsFinite(project.ProgressDays) ||
@@ -1891,7 +2161,8 @@ public static class ConstructionSystem
         }
     }
 
-    private static readonly Dictionary<int, List<ConstructionProject>> Working = new();
+    private static readonly Comparison<ConstructionProject> CompareProjectById = static (a, b) => a.Id.CompareTo(b.Id);
+    [ThreadStatic] private static Dictionary<int, List<ConstructionProject>> _working;
 
     private static void Complete(Campaign campaign, Nation nation, ConstructionProject project)
     {
@@ -1916,6 +2187,11 @@ public static class ConstructionSystem
         }
         if (project.Building == BuildingKind.Hospital)
             state.StandardOfLiving = M.Clamp01(state.StandardOfLiving + BuildingCatalog.HospitalLiving);
+        if (string.Equals(BuildingCatalog.IdOf(project.Building), "SemiconductorFab", StringComparison.OrdinalIgnoreCase))
+        {
+            state.Literacy = M.Clamp01(state.Literacy + 0.008f);
+            nation.Productivity = M.Clamp(nation.Productivity + 0.004f, 0.15f, 4f);
+        }
     }
 }
 

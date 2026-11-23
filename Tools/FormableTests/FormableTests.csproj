@@ -21,6 +21,12 @@
   <ItemGroup><Compile Include="../../Scripts/Presentation/MapPanScale.cs" /><Compile Include="../../Scripts/Presentation/TerritoryLabelLayout.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Presentation/CameraInertia.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Presentation/DecisionReadability.cs" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Scripts/Platform/PlatformProfile.cs" />
+    <Compile Include="../../Scripts/Platform/TouchTapMode.cs" />
+    <Compile Include="../../Scripts/Platform/TouchGestureMath.cs" />
+    <Compile Include="../../Scripts/Platform/MobileTextAdapter.cs" />
+  </ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Modding/ModScalarAccess.cs" /></ItemGroup>
   <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />
   <ItemGroup><Compile Include="../Shared/ArmyOrderObservation.cs" /></ItemGroup>

@@ -124,13 +124,12 @@ public static class InternalMigration
         var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
         var centres = LandAtlas.CentresOf(campaign);
         campaign.StatesOf(0);
-        var reset = 0;
-        foreach (var state in campaign.States) { if (++reset % 512 == 0) yield return 0; state.ReviewInternalMigration = 0; }
-        yield return 0;
+        var states = campaign.States;
+        for (var i = 0; i < states.Count; i++) states[i].ReviewInternalMigration = 0;
 
         var active = movedState.ActiveNations;
         active.Clear();
-        var nations = campaign.Nations;
+        var nations = campaign.ActiveNations;
         for (var i = 0; i < nations.Count; i++)
         {
             var nation = nations[i];
@@ -138,8 +137,18 @@ public static class InternalMigration
             if (campaign.StatesOf(nation).Length < 2) continue;
             active.Add(nation);
         }
+        // Largest-Processing-Time-first by region count (ascending Nation.Id tie-break) so
+        // multi-region empires run at the front of worker batches rather than creating tail lag.
+        if (active.Count > 2)
+        {
+            active.Sort((a, b) =>
+            {
+                var cmp = campaign.StatesOf(b).Length.CompareTo(campaign.StatesOf(a).Length);
+                return cmp != 0 ? cmp : a.Id.CompareTo(b.Id);
+            });
+        }
         var activeCount = active.Count;
-        const int batchSize = 32;
+        const int batchSize = 16;
         for (var start = 0; start < activeCount; start += batchSize)
         {
             var count = Math.Min(batchSize, activeCount - start);
@@ -149,7 +158,7 @@ public static class InternalMigration
             DeterministicParallel.Slots(campaign, count, _migrationResultsScratch,
                 i => MigrateNation(campaign, active[batchStart + i], defines, interval, centres),
                 (_, moved) => { movedState.Moved += moved; MovedToday = movedState.Moved; });
-            if (start + count < activeCount) yield return 0;
+            if (start + count < activeCount && Campaign.StageOverdue()) yield return 0;
         }
         active.Clear();
     }
@@ -218,6 +227,11 @@ public static class InternalMigration
                 var count = index == destinations.Count - 1 ? left : (long)Math.Round(leaving * weight / total);
                 count = Math.Min(count, left);
                 var moved = Move(source, target, count);
+                if (moved > 0)
+                {
+                    MovementRules.MarkPeopleStateDirty(campaign, source);
+                    MovementRules.MarkPeopleStateDirty(campaign, target);
+                }
                 left -= moved;
                 movedTotal += moved;
             }
@@ -237,7 +251,7 @@ public static class InternalMigration
     /// </summary>
     private static long Settle(Campaign campaign, Nation nation, float interval)
     {
-        var policy = NationalModifiers.Of(nation, "settlement");
+        var policy = NationalModifiers.OfSlot(nation, NationalModifiers.SlotSettlement);
         if (policy <= 0f) return 0;
         var defines = campaign.Defines;
         var national = DemographyCatalog.PrimaryCulture(nation.Tag);
@@ -245,8 +259,9 @@ public static class InternalMigration
         var regions = Regions;
         ScenarioState home = null;
         long homePeople = 0;
-        foreach (var state in regions)
+        for (var i = 0; i < regions.Count; i++)
         {
+            var state = regions[i];
             var own = PeopleOf(state, national);
             if (own < state.Population / 2 || own <= homePeople) continue;
             home = state;
@@ -254,17 +269,26 @@ public static class InternalMigration
         }
         if (home is null) return 0;
         long movedTotal = 0;
-        foreach (var state in regions)
+        var ownerPrimary = DemographyCatalog.PrimarySet(nation.Tag);
+        for (var i = 0; i < regions.Count; i++)
         {
+            var state = regions[i];
             if (ReferenceEquals(state, home) || state.WarDamage >= 0.10f) continue;
             if (PeopleOf(state, national) >= state.Population * (double)defines.SettlementBelowShare) continue;
             // Not into the land of another of the country's own peoples: settlement is done to
             // the peoples a state is not for.
-            if (DemographyCatalog.IsPrimary(nation.Tag, MajorityOf(state))) continue;
+            var majority = MajorityOf(state);
+            if (ownerPrimary is not null && majority is not null && ownerPrimary.Contains(majority)) continue;
             var settlers = (long)Math.Round(state.Population * (double)(defines.SettlementAnnual * policy * interval));
             settlers = Math.Min(settlers, PeopleOf(home, national) / 100);
             if (settlers < 50) continue;
-            movedTotal += Move(home, state, settlers, culture: national);
+            var movedSettlers = Move(home, state, settlers, culture: national);
+            if (movedSettlers > 0)
+            {
+                MovementRules.MarkPeopleStateDirty(campaign, home);
+                MovementRules.MarkPeopleStateDirty(campaign, state);
+            }
+            movedTotal += movedSettlers;
         }
         return movedTotal;
     }
@@ -275,8 +299,13 @@ public static class InternalMigration
     private static string MajorityOf(ScenarioState state)
     {
         Tally.Clear();
-        foreach (var group in state.PopulationGroups)
-            if (group.Size > 0) Tally[group.Culture ?? ""] = Tally.GetValueOrDefault(group.Culture ?? "") + group.Size;
+        var groups = state.PopulationGroups;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var group = groups[i];
+            if (group.Size > 0)
+                System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(Tally, group.Culture ?? "", out _) += group.Size;
+        }
         string majority = "";
         long most = -1;
         foreach (var (culture, people) in Tally)
@@ -287,8 +316,12 @@ public static class InternalMigration
     private static long PeopleOf(ScenarioState state, string culture)
     {
         long people = 0;
-        foreach (var group in state.PopulationGroups)
+        var groups = state.PopulationGroups;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var group = groups[i];
             if (string.Equals(group.Culture, culture, StringComparison.OrdinalIgnoreCase)) people += Math.Max(0, group.Size);
+        }
         return people;
     }
 

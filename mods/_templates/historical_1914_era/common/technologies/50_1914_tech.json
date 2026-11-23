@@ -1,0 +1,48 @@
+{
+  "bolt_action_standardisation": {
+    "name": "Bolt-action standardisation",
+    "description": "Uniform infantry rifles and brass cartridge logistics across the field army.",
+    "category": "military",
+    "cost": 80,
+    "effects": { "army_attack": 0.04, "army_defense": 0.03 }
+  },
+  "field_howitzers": {
+    "name": "Heavy field howitzers",
+    "description": "Indirect-fire artillery batteries capable of shattering fortified lines.",
+    "category": "military",
+    "cost": 140,
+    "requires": ["bolt_action_standardisation"],
+    "effects": { "army_attack": 0.06 }
+  },
+  "trench_fortifications": {
+    "name": "Deep trench fortifications",
+    "description": "Layered entrenchments, barbed wire and subterranean dugouts.",
+    "category": "military",
+    "cost": 130,
+    "requires": ["bolt_action_standardisation"],
+    "effects": { "army_defense": 0.08 }
+  },
+  "railway_mobilisation": {
+    "name": "Strategic railway timetables",
+    "description": "Synchronised troop trains and forward supply depots along border railheads.",
+    "category": "logistics",
+    "cost": 110,
+    "effects": { "army_speed": 0.05, "supply": 0.08 }
+  },
+  "reconnaissance_biplanes": {
+    "name": "Reconnaissance biplanes",
+    "description": "Early observation squadrons unlocking aerial warfare for the Great War.",
+    "category": "military",
+    "cost": 180,
+    "requires": ["field_howitzers", "railway_mobilisation"],
+    "effects": { "army_attack": 0.03, "army_speed": 0.03 }
+  },
+  "armoured_landships": {
+    "name": "Armoured landships",
+    "description": "Tracked assault vehicles engineered to cross shell-cratered no-man's-land.",
+    "category": "industry",
+    "cost": 260,
+    "requires": ["trench_fortifications", "field_howitzers"],
+    "effects": { "army_attack": 0.08, "output": 0.03 }
+  }
+}

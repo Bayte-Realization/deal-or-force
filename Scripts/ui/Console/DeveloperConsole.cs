@@ -43,8 +43,10 @@ internal sealed class DeveloperConsole
     private Dictionary<string, ConsoleCommand> _byName;
 
     private Control _layer = null!;
+    private PanelContainer _panel = null!;
     private RichTextLabel _output = null!;
     private LineEdit _input = null!;
+    private bool _isTouch;
 
     public Control Layer => _layer;
 
@@ -64,15 +66,27 @@ internal sealed class DeveloperConsole
         shade.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _layer.AddChild(shade);
 
-        var panel = _context.CreateTexturedPanel(_layer);
-        panel.AnchorLeft = 0.04f;
-        panel.AnchorRight = 0.72f;
-        panel.AnchorTop = 0.03f;
-        panel.AnchorBottom = 0.48f;
-        var rows = _context.CreatePanelRows(panel, 18, 14, 7);
+        var isTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        _isTouch = isTouch;
+        _panel = _context.CreateTexturedPanel(_layer);
+        if (isTouch)
+        {
+            _panel.AnchorLeft = 0.03f;
+            _panel.AnchorRight = 0.97f;
+            _panel.AnchorTop = 0.03f;
+            _panel.AnchorBottom = 0.54f;
+        }
+        else
+        {
+            _panel.AnchorLeft = 0.04f;
+            _panel.AnchorRight = 0.72f;
+            _panel.AnchorTop = 0.03f;
+            _panel.AnchorBottom = 0.48f;
+        }
+        var rows = _context.CreatePanelRows(_panel, 18, 14, 7);
         var header = new HBoxContainer
         {
-            CustomMinimumSize = new Vector2(0, 30),
+            CustomMinimumSize = new Vector2(0, isTouch ? 40 : 30),
             SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
             Alignment = BoxContainer.AlignmentMode.Begin
         };
@@ -84,13 +98,18 @@ internal sealed class DeveloperConsole
         title.VerticalAlignment = VerticalAlignment.Center;
         header.AddChild(title);
 
-        var closeHint = _context.CreateTitle("~ / Esc to close", 12, Ui.Colour("text.hint"));
-        closeHint.CustomMinimumSize = new Vector2(112, 28);
-        closeHint.VerticalAlignment = VerticalAlignment.Center;
-        closeHint.HorizontalAlignment = HorizontalAlignment.Right;
-        header.AddChild(closeHint);
+        if (!isTouch)
+        {
+            var closeHint = _context.CreateTitle("~ / Esc to close", 12, Ui.Colour("text.hint"));
+            closeHint.CustomMinimumSize = new Vector2(112, 28);
+            closeHint.VerticalAlignment = VerticalAlignment.Center;
+            closeHint.HorizontalAlignment = HorizontalAlignment.Right;
+            header.AddChild(closeHint);
+        }
 
-        var close = _context.CreateActionButton("×", Close, 28, 28);
+        var closeSize = isTouch ? 44 : 28;
+        var close = _context.CreateActionButton("×", Close, closeSize, closeSize);
+        close.Name = "ConsoleCloseButton";
         close.TooltipText = Ui.Tip(_context.Tr("Close console (~ or Esc)"));
         header.AddChild(close);
 
@@ -100,25 +119,44 @@ internal sealed class DeveloperConsole
             ScrollFollowing = true,
             SelectionEnabled = true,
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 260),
+            CustomMinimumSize = new Vector2(0, isTouch ? 130 : 260),
             Text = ConsoleContext.Bb("text.accent") + "Deal or Force console[/color]\n" +
                    ConsoleContext.Bb("state.info") + "help[/color] lists everything · " +
-                   ConsoleContext.Bb("state.info") + "help NAME[/color] explains one · Tab completes · " +
-                   "Up and Down are the history\nCommands are local and deterministic."
+                   ConsoleContext.Bb("state.info") + "help NAME[/color] explains one" +
+                   (isTouch ? "" : " · Tab completes · Up and Down are the history") +
+                   "\nCommands are local and deterministic."
         };
-        _output.AddThemeFontSizeOverride("normal_font_size", (int)Ui.Metric("ui.font.console", 14));
+        _output.AddThemeFontSizeOverride("normal_font_size", (int)Ui.Metric("ui.font.console", isTouch ? 15 : 14));
         rows.AddChild(_output);
 
         // Through Placeholder rather than straight into the field, so the hint follows a change
         // of language like every other caption instead of staying in the one it was built in.
         _input = _context.ApplyPlaceholder(new LineEdit
         {
-            CustomMinimumSize = new Vector2(0, 38),
-            ClearButtonEnabled = true
+            CustomMinimumSize = new Vector2(0, isTouch ? 44 : 38),
+            ClearButtonEnabled = true,
+            VirtualKeyboardEnabled = true,
+            VirtualKeyboardShowOnFocus = true,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         }, "Enter command…");
         _input.TextSubmitted += Execute;
         _input.GuiInput += OnInputKey;
-        rows.AddChild(_input);
+        if (isTouch)
+        {
+            _input.FocusEntered += AdjustTouchPanelForKeyboard;
+            _input.FocusExited += AdjustTouchPanelForKeyboard;
+            var inputRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+            inputRow.AddThemeConstantOverride("separation", 8);
+            inputRow.AddChild(_input);
+            var runButton = _context.CreateActionButton("Run", () => Execute(_input.Text), 96, 44);
+            runButton.Name = "ConsoleRunButton";
+            inputRow.AddChild(runButton);
+            rows.AddChild(inputRow);
+        }
+        else
+        {
+            rows.AddChild(_input);
+        }
         EnsureCommands();
     }
 
@@ -130,7 +168,9 @@ internal sealed class DeveloperConsole
         {
             _layer.Visible = true;
             _layer.MoveToFront();
-            _input.GrabFocus();
+            if (_isTouch) _input.CallDeferred(Control.MethodName.GrabFocus);
+            else _input.GrabFocus();
+            AdjustTouchPanelForKeyboard();
         }
         SyncFreeCameraPointer();
     }
@@ -140,7 +180,50 @@ internal sealed class DeveloperConsole
         if (_layer is null) return;
         _layer.Visible = false;
         _input.ReleaseFocus();
+        if (_isTouch && DisplayServer.HasFeature(DisplayServer.Feature.VirtualKeyboard))
+            DisplayServer.VirtualKeyboardHide();
+        if (_panel is not null && GodotObject.IsInstanceValid(_panel))
+            _panel.AnchorBottom = _isTouch ? 0.54f : 0.48f;
         SyncFreeCameraPointer();
+    }
+
+    public void UpdateTouchKeyboardLayout()
+    {
+        if (!_isTouch || _layer is not { Visible: true }) return;
+        AdjustTouchPanelForKeyboard();
+    }
+
+    private void AdjustTouchPanelForKeyboard()
+    {
+        if (!_isTouch || _panel is null || !GodotObject.IsInstanceValid(_panel)) return;
+        const float defaultBottom = 0.54f;
+        var target = defaultBottom;
+        if (DisplayServer.HasFeature(DisplayServer.Feature.VirtualKeyboard) && !DisplayServer.HasHardwareKeyboard())
+        {
+            var kbHeight = DisplayServer.VirtualKeyboardGetHeight();
+            if (kbHeight > 0)
+            {
+                var vpHeight = _layer.GetViewportRect().Size.Y;
+                var scaleY = _layer.GetViewport().GetScreenTransform().Scale.Y;
+                if (vpHeight > 0f && scaleY > 0.01f)
+                {
+                    var kbUiPx = kbHeight / scaleY;
+                    var marginUiPx = MathF.Max(8f, vpHeight * 0.015f);
+                    target = Math.Clamp((vpHeight - kbUiPx - marginUiPx) / vpHeight, 0.28f, defaultBottom);
+                }
+                else
+                {
+                    var winHeight = (float)DisplayServer.WindowGetSize().Y;
+                    if (winHeight > 0f)
+                    {
+                        var marginPx = MathF.Max(8f, winHeight * 0.015f);
+                        target = Math.Clamp((winHeight - kbHeight - marginPx) / winHeight, 0.28f, defaultBottom);
+                    }
+                }
+            }
+        }
+        if (MathF.Abs(_panel.AnchorBottom - target) > 0.002f)
+            _panel.AnchorBottom = target;
     }
 
     public void Execute(string raw)

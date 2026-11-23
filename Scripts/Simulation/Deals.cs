@@ -60,7 +60,17 @@ public static partial class Ultimatum
         public bool LiftEmbargo;
         public bool NonAggression;
         public bool TradeAgreement;
-        public bool IsEmpty => (Regions?.Length ?? 0) == 0 && Cash <= 0 && !LiftEmbargo && !NonAggression && !TradeAgreement;
+        /// <summary>CONS-03: grant a sovereign land-transit corridor &amp; customs passage to partner enclaves.</summary>
+        public bool EnclaveCorridor;
+        /// <summary>DIP-01: share industrial/scientific blueprints and accelerate partner's active research.</summary>
+        public bool TechnologyTransfer;
+        /// <summary>DIP-01: lease naval and air basing / logistics access rights.</summary>
+        public bool BaseAccessLease;
+        /// <summary>DIP-01: underwrite a sovereign credit / debt-relief package from this side's treasury.</summary>
+        public bool SovereignCredit;
+        public bool IsEmpty => (Regions?.Length ?? 0) == 0 && Cash <= 0 && !LiftEmbargo && !NonAggression &&
+                               !TradeAgreement && !EnclaveCorridor && !TechnologyTransfer &&
+                               !BaseAccessLease && !SovereignCredit;
     }
 
     /// <summary>
@@ -72,6 +82,10 @@ public static partial class Ultimatum
     public sealed record Deal(Side From, Side To)
     {
         public TradeTerms Trade { get; init; }
+        /// <summary>DIP-01: mutual chokepoint / strait commercial transit guarantee.</summary>
+        public bool ChokepointTransit { get; init; }
+        /// <summary>DIP-01: multilateral ceasefire mediation and extended 2-year protected truce.</summary>
+        public bool CeasefireMediation { get; init; }
     }
 
     /// <summary>The trade terms on a table: the shared term, or the old terms for a side's tick, or null.</summary>
@@ -82,8 +96,10 @@ public static partial class Ultimatum
     /// <summary>A table whose only term is a trade agreement: what the button on a country page puts.</summary>
     public static bool IsTradeOnly(Deal deal)
     {
-        if (TradeOf(deal) is null) return false;
-        static bool Bare(Side s) => s is null || ((s.Regions?.Length ?? 0) == 0 && s.Cash <= 0f && !s.LiftEmbargo && !s.NonAggression);
+        if (TradeOf(deal) is null || deal.ChokepointTransit || deal.CeasefireMediation) return false;
+        static bool Bare(Side s) => s is null || ((s.Regions?.Length ?? 0) == 0 && s.Cash <= 0f &&
+            !s.LiftEmbargo && !s.NonAggression && !s.EnclaveCorridor && !s.TechnologyTransfer &&
+            !s.BaseAccessLease && !s.SovereignCredit);
         return Bare(deal.From) && Bare(deal.To);
     }
 
@@ -139,10 +155,86 @@ public static partial class Ultimatum
     /// </summary>
     public static float DealValue(Campaign c, Nation recipient, Nation counterparty, Side receive, Side give,
         TradeTerms trade = null)
-        => ValueDealSide(c, recipient, counterparty, receive, give, trade).Total;
+        => ValueDealSide(c, recipient, counterparty, receive, give, trade, false, false).Total;
+
+    /// <summary>Deterministic sovereign credit / debt-relief transfer amount ($B) from giver to receiver.</summary>
+    public static float SovereignCreditAmount(Nation giver, Nation receiver)
+    {
+        if (giver is null || receiver is null) return 0f;
+        var need = MathF.Max(0.25f, MathF.Max(0f, receiver.PublicDebt) * 0.12f);
+        var cap = MathF.Max(0f, giver.Treasury) * 0.25f;
+        var amount = MathF.Min(need, cap);
+        return amount >= 0.05f && float.IsFinite(amount) ? MathF.Floor(amount * 100f) / 100f : 0f;
+    }
+
+    /// <summary>Single source of truth for why a strategic deal clause cannot be selected, or empty if allowed.</summary>
+    public static string ClauseRefusal(Campaign c, Nation giver, Nation receiver, string clauseId)
+    {
+        if (c?.ProvinceMap is null || giver is null || receiver is null || giver.Id == receiver.Id)
+            return Loc.Get("Invalid target.");
+        var relation = CampaignDiplomacy.Peek(c, giver.Id, receiver.Id);
+        int CooldownLeft(string key) => giver.DecisionAvailableDay.TryGetValue(key, out var d) && d > c.ElapsedDays ? d - c.ElapsedDays : 0;
+        switch (clauseId)
+        {
+            case "enclave_corridor":
+                return BorderDiplomacy.CorridorRefusal(c, giver, receiver);
+            case "tech_transfer":
+            {
+                var left = CooldownLeft($"deal_tech/{giver.Id}/{receiver.Id}");
+                return left > 0 ? Loc.Format("deal.refuse.clause_cooldown_fmt", left) : "";
+            }
+            case "base_access":
+            {
+                var left = CooldownLeft($"deal_base/{giver.Id}/{receiver.Id}");
+                if (left > 0) return Loc.Format("deal.refuse.clause_cooldown_fmt", left);
+                if (relation?.GrantsMilitaryAccess(giver.Id) == true &&
+                    receiver.DecisionAvailableDay.TryGetValue($"deal_base_active/{giver.Id}", out var act) && act > c.ElapsedDays)
+                    return Loc.Get("deal.refuse.base_already_leased");
+                return "";
+            }
+            case "sovereign_credit":
+            {
+                var left = CooldownLeft($"deal_credit/{giver.Id}/{receiver.Id}");
+                if (left > 0) return Loc.Format("deal.refuse.clause_cooldown_fmt", left);
+                var amount = SovereignCreditAmount(giver, receiver);
+                if (amount < 0.05f) return Loc.Get("deal.refuse.credit_no_funds");
+                return "";
+            }
+            case "chokepoint_transit":
+            {
+                var lo = Math.Min(giver.Id, receiver.Id);
+                var hi = Math.Max(giver.Id, receiver.Id);
+                var left = Math.Max(CooldownLeft($"deal_chokepoint/{lo}/{hi}"),
+                    receiver.DecisionAvailableDay.TryGetValue($"deal_chokepoint/{lo}/{hi}", out var d2) && d2 > c.ElapsedDays ? d2 - c.ElapsedDays : 0);
+                return left > 0 ? Loc.Format("deal.refuse.clause_cooldown_fmt", left) : "";
+            }
+            case "ceasefire_mediation":
+            {
+                var lo = Math.Min(giver.Id, receiver.Id);
+                var hi = Math.Max(giver.Id, receiver.Id);
+                var left = Math.Max(CooldownLeft($"deal_mediation/{lo}/{hi}"),
+                    receiver.DecisionAvailableDay.TryGetValue($"deal_mediation/{lo}/{hi}", out var d2) && d2 > c.ElapsedDays ? d2 - c.ElapsedDays : 0);
+                return left > 0 ? Loc.Format("deal.refuse.clause_cooldown_fmt", left) : "";
+            }
+            default:
+                return "";
+        }
+    }
+
+    /// <summary>Transparent line-by-line AI diplomatic utility breakdown for the strategic clauses on a deal table.</summary>
+    public static IReadOnlyList<(string Label, float Points)> ExplainClauseWeights(
+        Campaign c, Nation recipient, Nation counterparty, Deal deal)
+    {
+        var list = new List<(string Label, float Points)>();
+        if (c?.ProvinceMap is null || recipient is null || counterparty is null || deal?.From is null || deal.To is null)
+            return list;
+        ValueDealSide(c, recipient, counterparty, deal.From, deal.To, TradeOf(deal), deal.ChokepointTransit, deal.CeasefireMediation, list);
+        return list;
+    }
 
     private static DealValuation ValueDealSide(Campaign c, Nation recipient, Nation counterparty, Side receive, Side give,
-        TradeTerms trade)
+        TradeTerms trade, bool chokepointTransit, bool ceasefireMediation,
+        List<(string Label, float Points)> breakdown = null)
     {
         if (c?.ProvinceMap is null || recipient is null || counterparty is null || receive is null || give is null)
             return new(0, 0, 0);
@@ -180,19 +272,99 @@ public static partial class Ultimatum
         // A promise received is worth what its maker's name can carry.
         var trust = 1f - M.Clamp01(counterparty.Notoriety / 100f) * .5f;
         var treaties = 0f;
-        if (receive.NonAggression) treaties += 10f * trust;
-        if (give.NonAggression) treaties -= 10f;
+        var relation = CampaignDiplomacy.Peek(c, recipient.Id, counterparty.Id);
+        var isRival = relation?.Stance == DiplomaticStance.Rival;
+
+        if (receive.NonAggression) { var v = 10f * trust; treaties += v; breakdown?.Add((Loc.Get("Non-aggression pact"), v)); }
+        if (give.NonAggression) { treaties -= 10f; breakdown?.Add((Loc.Get("Non-aggression pact"), -10f)); }
         if (receive.LiftEmbargo || give.LiftEmbargo)
         {
             var partnerLeverage = CommodityLeverage.Calculate(c, counterparty, recipient);
             var ourLeverage = CommodityLeverage.Calculate(c, recipient, counterparty);
-            if (receive.LiftEmbargo) treaties += 5f + partnerLeverage * 10f;
-            if (give.LiftEmbargo) treaties -= 5f + ourLeverage * 8f;
+            if (receive.LiftEmbargo) { var v = 5f + partnerLeverage * 10f; treaties += v; breakdown?.Add((Loc.Get("Lift embargo"), v)); }
+            if (give.LiftEmbargo) { var v = -(5f + ourLeverage * 8f); treaties += v; breakdown?.Add((Loc.Get("Lift embargo"), v)); }
         }
+
+        // ---- Wave 5F Strategic Clauses (DIP-01 + CONS-03)
+        if (receive.EnclaveCorridor)
+        {
+            var v = BorderDiplomacy.CorridorReliefValue(c, recipient, counterparty) * trust;
+            borders += v;
+            breakdown?.Add((Loc.Get("deal.clause.enclave_corridor"), v));
+        }
+        if (give.EnclaveCorridor)
+        {
+            var v = -(7f + (isRival ? 5f : 0f));
+            borders += v;
+            breakdown?.Add((Loc.Get("deal.clause.enclave_corridor"), v));
+        }
+        if (receive.TechnologyTransfer)
+        {
+            var lead = Math.Max(0, counterparty.Technologies.Count - recipient.Technologies.Count);
+            var v = (11f + Math.Min(6, lead) * 1.8f) * trust;
+            treaties += v;
+            breakdown?.Add((Loc.Get("deal.clause.tech_transfer"), v));
+        }
+        if (give.TechnologyTransfer)
+        {
+            var lead = Math.Max(0, recipient.Technologies.Count - counterparty.Technologies.Count);
+            var v = -(10f + Math.Min(6, lead) * 1.5f + (isRival ? 4f : 0f));
+            treaties += v;
+            breakdown?.Add((Loc.Get("deal.clause.tech_transfer"), v));
+        }
+        if (receive.BaseAccessLease)
+        {
+            var hasForces = c.Fleets.Any(f => f.NationId == recipient.Id) || recipient.AirExperience > 0f;
+            var v = (hasForces ? 14f : 10f) * trust;
+            treaties += v;
+            breakdown?.Add((Loc.Get("deal.clause.base_access"), v));
+        }
+        if (give.BaseAccessLease)
+        {
+            var v = -(9f + (isRival ? 7f : 0f) + (relation is { Opinion: < -15f } ? 3f : 0f));
+            treaties += v;
+            breakdown?.Add((Loc.Get("deal.clause.base_access"), v));
+        }
+        if (receive.SovereignCredit)
+        {
+            var amt = SovereignCreditAmount(counterparty, recipient);
+            var debtBonus = recipient.PublicDebt > 0.5f ? 6f : 2f;
+            var v = amt * CashWeight(recipient) * 1.25f + debtBonus;
+            treaties += v;
+            breakdown?.Add((Loc.Get("deal.clause.sovereign_credit"), v));
+        }
+        if (give.SovereignCredit)
+        {
+            var amt = SovereignCreditAmount(recipient, counterparty);
+            var v = -(amt * CashWeight(recipient) + 3f);
+            treaties += v;
+            breakdown?.Add((Loc.Get("deal.clause.sovereign_credit"), v));
+        }
+        if (chokepointTransit)
+        {
+            var tradeDep = recipient.TradeDependenceOn(counterparty.Id);
+            var v = isRival ? -3f : (4f + MathF.Min(10f, tradeDep * 35f)) * trust;
+            treaties += v;
+            breakdown?.Add((Loc.Get("deal.clause.chokepoint_transit"), v));
+        }
+        if (ceasefireMediation)
+        {
+            var thirdWar = DiplomaticGestures.HasActiveThirdPartyWar(c, recipient, counterparty);
+            var weary = 1f - M.Clamp01(recipient.WarSupport);
+            var v = isRival && !thirdWar ? -4f : ((thirdWar ? 11f : 5f) + weary * 6f) * trust;
+            treaties += v;
+            breakdown?.Add((Loc.Get("deal.clause.ceasefire_mediation"), v));
+        }
+
         // A trade agreement is one shared term, counted by this country from its own seat - the
         // same count the button, the computer and the standing answers use (TradeTermsValue). It
         // used to be a gain in one column and a loss in the other for the same signature.
-        if (trade is not null) treaties += TradeTermsValue.For(c, recipient, counterparty, trade);
+        if (trade is not null)
+        {
+            var tv = TradeTermsValue.For(c, recipient, counterparty, trade);
+            treaties += tv;
+            breakdown?.Add((Loc.Get("Trade agreement"), tv));
+        }
         return new(cash, land, treaties, borders);
     }
 
@@ -279,24 +451,31 @@ public static partial class Ultimatum
         if (deal.From.ReleaseRegions && deal.To.ReleaseRegions)
         { reason = Loc.Get("Only one independent settlement may be established per deal."); return false; }
         var trade = TradeOf(deal);
-        if (deal.From.IsEmpty && deal.To.IsEmpty && trade is null) { reason = Loc.Get("Select at least one demand."); return false; }
+        var hasSharedClause = deal.ChokepointTransit || deal.CeasefireMediation;
+        if (deal.From.IsEmpty && deal.To.IsEmpty && trade is null && !hasSharedClause) { reason = Loc.Get("Select at least one demand."); return false; }
+        var hasSideClause = deal.From.EnclaveCorridor || deal.To.EnclaveCorridor ||
+                            deal.From.TechnologyTransfer || deal.To.TechnologyTransfer ||
+                            deal.From.BaseAccessLease || deal.To.BaseAccessLease ||
+                            deal.From.SovereignCredit || deal.To.SovereignCredit;
         if (deal.From.Cash == deal.To.Cash && (deal.From.Regions?.Length ?? 0) == 0 &&
             (deal.To.Regions?.Length ?? 0) == 0 && !deal.From.LiftEmbargo && !deal.To.LiftEmbargo &&
-            !deal.From.NonAggression && !deal.To.NonAggression && trade is null)
+            !deal.From.NonAggression && !deal.To.NonAggression && !hasSideClause && trade is null && !hasSharedClause)
         { reason = Loc.Get("The deal must change at least one term."); return false; }
         if (!float.IsFinite(deal.From.Cash) || !float.IsFinite(deal.To.Cash) ||
             deal.From.Cash < 0 || deal.To.Cash < 0)
         { reason = Loc.Get("A payment cannot be negative."); return false; }
         if (!float.IsFinite(from.Treasury) || !float.IsFinite(to.Treasury))
         { reason = Loc.Get("This deal cannot be made."); return false; }
-        if (deal.From.Cash > MathF.Max(0f, from.Treasury))
+        var fromCredit = deal.From.SovereignCredit ? SovereignCreditAmount(from, to) : 0f;
+        var toCredit = deal.To.SovereignCredit ? SovereignCreditAmount(to, from) : 0f;
+        if (deal.From.Cash + fromCredit > MathF.Max(0f, from.Treasury) + 0.001f)
         { reason = Loc.Get("The offer exceeds our treasury."); return false; }
         var maxShare = float.IsFinite(c.Defines.DealMaxTreasuryShare)
             ? Math.Clamp(c.Defines.DealMaxTreasuryShare, 0f, 1f) : 1f;
-        if (deal.To.Cash > MathF.Max(0f, to.Treasury) * maxShare)
+        if (deal.To.Cash + toCredit > MathF.Max(0f, to.Treasury) * maxShare + 0.001f)
         { reason = Loc.Get("They cannot pay that."); return false; }
-        var fromAfter = (double)from.Treasury - deal.From.Cash + deal.To.Cash;
-        var toAfter = (double)to.Treasury - deal.To.Cash + deal.From.Cash;
+        var fromAfter = (double)from.Treasury - deal.From.Cash - fromCredit + deal.To.Cash;
+        var toAfter = (double)to.Treasury - deal.To.Cash - toCredit + deal.From.Cash;
         if (Math.Abs(fromAfter) > float.MaxValue || Math.Abs(toAfter) > float.MaxValue)
         { reason = Loc.Get("The sums in this deal are too large."); return false; }
         if (!ValidateSide(c, from, deal.From, out reason)) return false;
@@ -306,9 +485,21 @@ public static partial class Ultimatum
         // term (TradeTerms) and has no side to be doubled on.
         if (deal.From.NonAggression && deal.To.NonAggression)
         { reason = Loc.Get("Only one side may offer this term."); return false; }
+        if (deal.From.SovereignCredit && deal.To.SovereignCredit)
+        { reason = Loc.Get("Only one side may offer this term."); return false; }
         var relation = CampaignDiplomacy.Peek(c, from.Id, to.Id);
         if ((deal.From.NonAggression || deal.To.NonAggression) && relation?.NonAggressionPact == true)
         { reason = Loc.Get("Already signed."); return false; }
+        if (deal.From.EnclaveCorridor && (reason = ClauseRefusal(c, from, to, "enclave_corridor")).Length > 0) return false;
+        if (deal.To.EnclaveCorridor && (reason = ClauseRefusal(c, to, from, "enclave_corridor")).Length > 0) return false;
+        if (deal.From.TechnologyTransfer && (reason = ClauseRefusal(c, from, to, "tech_transfer")).Length > 0) return false;
+        if (deal.To.TechnologyTransfer && (reason = ClauseRefusal(c, to, from, "tech_transfer")).Length > 0) return false;
+        if (deal.From.BaseAccessLease && (reason = ClauseRefusal(c, from, to, "base_access")).Length > 0) return false;
+        if (deal.To.BaseAccessLease && (reason = ClauseRefusal(c, to, from, "base_access")).Length > 0) return false;
+        if (deal.From.SovereignCredit && (reason = ClauseRefusal(c, from, to, "sovereign_credit")).Length > 0) return false;
+        if (deal.To.SovereignCredit && (reason = ClauseRefusal(c, to, from, "sovereign_credit")).Length > 0) return false;
+        if (deal.ChokepointTransit && (reason = ClauseRefusal(c, from, to, "chokepoint_transit")).Length > 0) return false;
+        if (deal.CeasefireMediation && (reason = ClauseRefusal(c, from, to, "ceasefire_mediation")).Length > 0) return false;
         if (trade is not null)
         {
             if (trade.Renewal ? relation?.TradeAgreement != true : relation?.TradeAgreement == true)
@@ -425,8 +616,8 @@ public static partial class Ultimatum
             return new(false, reason, false, new(0, 0, 0), new(0, 0, 0), 0,
                 from?.Treasury ?? 0, to?.Treasury ?? 0);
         var trade = TradeOf(deal);
-        var theirs = ValueDealSide(c, to, from, deal.From, deal.To, trade);
-        var ours = ValueDealSide(c, from, to, deal.To, deal.From, trade);
+        var theirs = ValueDealSide(c, to, from, deal.From, deal.To, trade, deal.ChokepointTransit, deal.CeasefireMediation);
+        var ours = ValueDealSide(c, from, to, deal.To, deal.From, trade, deal.ChokepointTransit, deal.CeasefireMediation);
         var penalty = GrudgePenalty(c, from, to);
         // A bigger cheque cannot substitute for consent to sell a national heartland.
         // Genuine territorial swaps retain the existing valuation; human recipients
@@ -434,8 +625,10 @@ public static partial class Ultimatum
         var protectedLand = !to.IsHuman && (deal.From.Regions?.Length ?? 0) == 0 &&
             (deal.To.Regions ?? Array.Empty<int>()).Any(id => ProtectsHomelandSale(c, to, c.States.FirstOrDefault(s => s.MapIndex == id)));
         var acceptable = !protectedLand && theirs.Total - penalty >= 0;
-        var fromCash = (float)((double)from.Treasury - deal.From.Cash + deal.To.Cash);
-        var toCash = (float)((double)to.Treasury - deal.To.Cash + deal.From.Cash);
+        var fromCredit = deal.From.SovereignCredit ? SovereignCreditAmount(from, to) : 0f;
+        var toCredit = deal.To.SovereignCredit ? SovereignCreditAmount(to, from) : 0f;
+        var fromCash = (float)((double)from.Treasury - deal.From.Cash - fromCredit + deal.To.Cash + MathF.Max(0f, toCredit - MathF.Max(0f, from.PublicDebt)));
+        var toCash = (float)((double)to.Treasury - deal.To.Cash - toCredit + deal.From.Cash + MathF.Max(0f, fromCredit - MathF.Max(0f, to.PublicDebt)));
         if (deal.From.ReleaseRegions) fromCash -= Math.Max(0, fromCash) * Dismantlement.Share(c, from, deal.From.Regions);
         if (deal.To.ReleaseRegions) toCash -= Math.Max(0, toCash) * Dismantlement.Share(c, to, deal.To.Regions);
         return new(true, protectedLand ? Loc.Get("They will not sell their national heartland for money or treaty promises.") :
@@ -535,6 +728,85 @@ public static partial class Ultimatum
         }
         // One side's promise is the pair's pact: the flag is on the relation, not on a side.
         if (deal.From.NonAggression || deal.To.NonAggression) relation.NonAggressionPact = true;
+        // ---- Wave 5F Strategic Clauses execution (DIP-01 + CONS-03)
+        void ApplyStrategicHalf(Nation giver, Nation receiver, Side side)
+        {
+            if (side.EnclaveCorridor)
+            {
+                if (relation.A == giver.Id) relation.MilitaryAccessByA = true; else relation.MilitaryAccessByB = true;
+                ModifierSystem.Grant(c, giver, "border_commission", 365);
+                ModifierSystem.Grant(c, receiver, "border_commission", 365);
+                relation.Tension = MathF.Max(0f, relation.Tension - 12f);
+                OpinionSystem.Remember(c, relation, "border_commission");
+                giver.DecisionAvailableDay[$"deal_corridor/{giver.Id}/{receiver.Id}"] = c.ElapsedDays + 365;
+            }
+            if (side.TechnologyTransfer)
+            {
+                ModifierSystem.Grant(c, receiver, "technology_licence", 365);
+                ModifierSystem.Grant(c, giver, "research_cooperation", 365);
+                ModifierSystem.Grant(c, receiver, "research_cooperation", 365);
+                if (!string.IsNullOrEmpty(receiver.CurrentResearch) && TechnologyCatalog.Of(receiver.CurrentResearch) is { } tech)
+                {
+                    var cur = receiver.ResearchProgress.GetValueOrDefault(tech.Id);
+                    receiver.ResearchProgress[tech.Id] = MathF.Min(tech.Cost, cur + tech.Cost * 0.15f);
+                }
+                OpinionSystem.Remember(c, relation, "technology_licence");
+                giver.DecisionAvailableDay[$"deal_tech/{giver.Id}/{receiver.Id}"] = c.ElapsedDays + 365;
+            }
+            if (side.BaseAccessLease)
+            {
+                if (relation.A == giver.Id) relation.MilitaryAccessByA = true; else relation.MilitaryAccessByB = true;
+                ModifierSystem.Grant(c, receiver, "airspace_cooperation", 365);
+                receiver.NavalExperience += 3f;
+                receiver.AirExperience += 3f;
+                OpinionSystem.Remember(c, relation, "port_visit");
+                giver.DecisionAvailableDay[$"deal_base/{giver.Id}/{receiver.Id}"] = c.ElapsedDays + 365;
+                receiver.DecisionAvailableDay[$"deal_base_active/{giver.Id}"] = c.ElapsedDays + 365;
+            }
+            if (side.SovereignCredit)
+            {
+                var amt = SovereignCreditAmount(giver, receiver);
+                if (amt > 0f && giver.Treasury + 0.001f >= amt)
+                {
+                    giver.Treasury = MathF.Max(0f, giver.Treasury - amt);
+                    MoneyLedger.Book(giver, MoneyFlow.Diplomacy, -amt);
+                    var debtPay = MathF.Min(MathF.Max(0f, receiver.PublicDebt), amt);
+                    receiver.PublicDebt = MathF.Max(0f, receiver.PublicDebt - debtPay);
+                    var remainder = amt - debtPay;
+                    if (remainder > 0f)
+                    {
+                        receiver.Treasury += remainder;
+                        MoneyLedger.Book(receiver, MoneyFlow.Diplomacy, remainder);
+                    }
+                    receiver.CreditConfidence = Math.Clamp(receiver.CreditConfidence + 0.04f, 0f, 1f);
+                    receiver.Stability = Math.Clamp(receiver.Stability + 0.025f, 0f, 1f);
+                    OpinionSystem.Remember(c, relation, "subsidy_paid");
+                    giver.DecisionAvailableDay[$"deal_credit/{giver.Id}/{receiver.Id}"] = c.ElapsedDays + 365;
+                }
+            }
+        }
+        ApplyStrategicHalf(from, to, deal.From);
+        ApplyStrategicHalf(to, from, deal.To);
+        var pairLo = Math.Min(from.Id, to.Id);
+        var pairHi = Math.Max(from.Id, to.Id);
+        if (deal.ChokepointTransit)
+        {
+            ModifierSystem.Grant(c, from, "consular_convention", 365);
+            ModifierSystem.Grant(c, to, "consular_convention", 365);
+            relation.Tension = MathF.Max(0f, relation.Tension - 8f);
+            OpinionSystem.Remember(c, relation, "port_visit");
+            from.DecisionAvailableDay[$"deal_chokepoint/{pairLo}/{pairHi}"] = c.ElapsedDays + 365;
+            to.DecisionAvailableDay[$"deal_chokepoint/{pairLo}/{pairHi}"] = c.ElapsedDays + 365;
+        }
+        if (deal.CeasefireMediation)
+        {
+            relation.TruceUntil = Math.Max(relation.TruceUntil, c.ElapsedDays + 730);
+            relation.TalksUntilDay = Math.Max(relation.TalksUntilDay, c.ElapsedDays + 180);
+            relation.Tension = MathF.Max(0f, relation.Tension - 10f);
+            OpinionSystem.Remember(c, relation, "staff_talks");
+            from.DecisionAvailableDay[$"deal_mediation/{pairLo}/{pairHi}"] = c.ElapsedDays + 365;
+            to.DecisionAvailableDay[$"deal_mediation/{pairLo}/{pairHi}"] = c.ElapsedDays + 365;
+        }
         // The trade agreement is signed where every trade agreement is signed, with its terms.
         var trade = TradeOf(deal);
         if (trade is not null)
@@ -571,9 +843,15 @@ public static partial class Ultimatum
                 Loc.Format("One-time payment: {0}", Fmt.Money(side.Cash))));
             if (side.NonAggression) parts.Add(Loc.Get("Non-aggression pact"));
             if (side.LiftEmbargo) parts.Add(Loc.Format("{0}: lift embargo against {1}", giver.DisplayName, receiver.DisplayName));
+            if (side.EnclaveCorridor) parts.Add(Loc.Format("deal.summary.corridor_fmt", giver.DisplayName, receiver.DisplayName));
+            if (side.TechnologyTransfer) parts.Add(Loc.Format("deal.summary.tech_fmt", giver.DisplayName, receiver.DisplayName));
+            if (side.BaseAccessLease) parts.Add(Loc.Format("deal.summary.base_fmt", giver.DisplayName, receiver.DisplayName));
+            if (side.SovereignCredit) parts.Add(Loc.Format("deal.summary.credit_fmt", giver.DisplayName, Fmt.Money(SovereignCreditAmount(giver, receiver)), receiver.DisplayName));
         }
         Half(from, to, deal.From);
         Half(to, from, deal.To);
+        if (deal.ChokepointTransit) parts.Add(Loc.Get("deal.clause.chokepoint_transit"));
+        if (deal.CeasefireMediation) parts.Add(Loc.Get("deal.clause.ceasefire_mediation"));
         if (TradeOf(deal) is { } trade) parts.Add(TradeTermsText.Describe(c, trade, from, to));
         return string.Join(" · ", parts);
     }
@@ -596,15 +874,25 @@ public sealed class ProposeDealCommand : ICampaignCommand
     public bool FromLiftEmbargo;
     public bool FromNonAggression;
     public bool FromTradeAgreement;
+    public bool FromEnclaveCorridor;
+    public bool FromTechnologyTransfer;
+    public bool FromBaseAccessLease;
+    public bool FromSovereignCredit;
     public int[] ToRegions = Array.Empty<int>();
     public bool ToReleaseRegions;
     public float ToCash;
     public bool ToLiftEmbargo;
     public bool ToNonAggression;
     public bool ToTradeAgreement;
+    public bool ToEnclaveCorridor;
+    public bool ToTechnologyTransfer;
+    public bool ToBaseAccessLease;
+    public bool ToSovereignCredit;
     /// <summary>The trade agreement on the table, a term of the pair (TradeTerms). The two side
     /// ticks above are the old way of saying "the ordinary terms" and are read as that.</summary>
     public TradeTerms Trade;
+    public bool ChokepointTransit;
+    public bool CeasefireMediation;
 
     public Ultimatum.DealOutcome Outcome { get; private set; } = new(false, "No deal was proposed.");
 
@@ -618,11 +906,15 @@ public sealed class ProposeDealCommand : ICampaignCommand
         var deal = new Ultimatum.Deal(
             new Ultimatum.Side { Regions = FromRegions ?? Array.Empty<int>(), Cash = FromCash,
                 ReleaseRegions = FromReleaseRegions,
-                LiftEmbargo = FromLiftEmbargo, NonAggression = FromNonAggression, TradeAgreement = FromTradeAgreement },
+                LiftEmbargo = FromLiftEmbargo, NonAggression = FromNonAggression, TradeAgreement = FromTradeAgreement,
+                EnclaveCorridor = FromEnclaveCorridor, TechnologyTransfer = FromTechnologyTransfer,
+                BaseAccessLease = FromBaseAccessLease, SovereignCredit = FromSovereignCredit },
             new Ultimatum.Side { Regions = ToRegions ?? Array.Empty<int>(), Cash = ToCash,
                 ReleaseRegions = ToReleaseRegions,
-                LiftEmbargo = ToLiftEmbargo, NonAggression = ToNonAggression, TradeAgreement = ToTradeAgreement })
-        { Trade = TradeTerms.Copy(Trade) };
+                LiftEmbargo = ToLiftEmbargo, NonAggression = ToNonAggression, TradeAgreement = ToTradeAgreement,
+                EnclaveCorridor = ToEnclaveCorridor, TechnologyTransfer = ToTechnologyTransfer,
+                BaseAccessLease = ToBaseAccessLease, SovereignCredit = ToSovereignCredit })
+        { Trade = TradeTerms.Copy(Trade), ChokepointTransit = ChokepointTransit, CeasefireMediation = CeasefireMediation };
         if (to?.IsHuman == true || ParentOfferId != 0)
         {
             Outcome = DealNegotiations.Submit(campaign, from, to, deal, ParentOfferId);

@@ -91,28 +91,53 @@ public static class OrganizationDiscipline
     /// the world as it stands, every week, so a cause that is gone is gone.
     /// "aggression", "nuclear", "coup", "sanctions", "pariah", or "".
     /// </summary>
+    [ThreadStatic] private static List<int> _othersScratch;
+    [ThreadStatic] private static List<int> _membersCopyScratch;
+    [ThreadStatic] private static List<(int Id, int Since)> _suspendedScratch;
+    [ThreadStatic] private static List<(Nation Nation, float Influence, bool IsLeader)> _candidatesScratch;
+
     public static string Cause(Campaign c, InternationalOrganization org, Nation member)
     {
         if (c is null || org is null || member is null) return "";
-        var others = org.Members.Where(id => id != member.Id).ToList();
-        if (others.Count == 0) return "";
-        foreach (var war in Warfare.OpenWars(c))
+        var others = _othersScratch ??= new List<int>();
+        others.Clear();
+        for (var i = 0; i < org.Members.Count; i++)
         {
+            var id = org.Members[i];
+            if (id != member.Id) others.Add(id);
+        }
+        if (others.Count == 0) return "";
+        var liveWars = Warfare.LiveWars(c);
+        for (var wi = 0; wi < liveWars.Count; wi++)
+        {
+            var war = liveWars[wi];
             if (war.Ended || war.CivilConflict || war.AttackerId != member.Id) continue;
-            if (war.Side(false).Any(others.Contains)) return "aggression";
+            foreach (var e in war.Side(false))
+                if (others.Contains(e)) return "aggression";
         }
         if (member.NuclearFirstUseDay > -100000 && c.ElapsedDays - member.NuclearFirstUseDay < c.Defines.NuclearShadowDays) return "nuclear";
         // A coup is a breach of the charter only for an assembly of governments that answer to
         // elections: the Arab League never suspended Egypt for 2013, the African Union did.
         if (member.Government == "military_junta" && c.ElapsedDays - member.LastMilitaryCoupDay < Math.Max(30, c.Defines.OrganizationCoupDays))
         {
-            var democracies = others.Count(id => IsDemocratic(c.NationById(id)));
+            var democracies = 0;
+            for (var i = 0; i < others.Count; i++)
+                if (IsDemocratic(c.NationById(others[i]))) democracies++;
             if (democracies * 10 >= others.Count * 7) return "coup";
         }
-        var embargoing = others.Count(id => CampaignDiplomacy.Peek(c, id, member.Id)?.EmbargoBy(id) == true);
-        if (others.Count >= 2 && embargoing * 2 > others.Count) return "sanctions";
+        var embargoing = 0;
         var opinion = 0f;
-        foreach (var id in others) opinion += CampaignDiplomacy.Peek(c, id, member.Id)?.Opinion ?? 0f;
+        for (var i = 0; i < others.Count; i++)
+        {
+            var id = others[i];
+            var rel = CampaignDiplomacy.Peek(c, id, member.Id);
+            if (rel is not null)
+            {
+                if (rel.EmbargoBy(id)) embargoing++;
+                opinion += rel.Opinion;
+            }
+        }
+        if (others.Count >= 2 && embargoing * 2 > others.Count) return "sanctions";
         // A pariah is loathed by the rest and has stopped belonging itself: a member merely
         // unpopular, or quarrelling with one neighbour, is not put out of the room for it.
         if (others.Count >= 2 && opinion / others.Count <= c.Defines.OrganizationPariahOpinion &&
@@ -149,7 +174,15 @@ public static class OrganizationDiscipline
         if (relation?.Stance == DiplomaticStance.Allied || opinion >= 50f || voter.AnswersTo(target.Id)) return false;
         // The pot does not vote against the kettle.
         if (cause == "coup" && voter.Government == "military_junta") return false;
-        if (cause == "aggression" && Warfare.OpenWars(c).Any(w => !w.Ended && !w.CivilConflict && w.IsAttacking(voter.Id) && w.IsAttacking(target.Id))) return false;
+        if (cause == "aggression")
+        {
+            var liveWars = Warfare.LiveWars(c);
+            for (var wi = 0; wi < liveWars.Count; wi++)
+            {
+                var w = liveWars[wi];
+                if (!w.Ended && !w.CivilConflict && w.IsAttacking(voter.Id) && w.IsAttacking(target.Id)) return false;
+            }
+        }
         if (m.Kind == "suspend") return cause.Length > 0 ? opinion < 30f : opinion < -45f;
         // Expulsion is for good: a member votes for it only against a government it has fallen out with.
         return cause.Length > 0 ? opinion < -10f : opinion < -55f;
@@ -158,9 +191,15 @@ public static class OrganizationDiscipline
     /// <summary>Whether a finished vote on a seat carried: the accused has no vote, an expulsion needs two thirds.</summary>
     public static bool Carried(Campaign c, InternationalOrganization org, OrganizationMotion m, out int yes, out int voters)
     {
-        var seated = org.Members.Where(id => id != m.TargetId).ToList();
-        voters = seated.Count;
-        yes = seated.Count(id => m.Votes.GetValueOrDefault(id));
+        voters = 0;
+        yes = 0;
+        for (var i = 0; i < org.Members.Count; i++)
+        {
+            var id = org.Members[i];
+            if (id == m.TargetId) continue;
+            voters++;
+            if (m.Votes.GetValueOrDefault(id)) yes++;
+        }
         if (voters == 0) return false;
         if (InternationalOrganizations.Charter(org.CharterId)?.Unanimity == true) return yes == voters;
         if (m.Kind == "expel") return yes >= (int)MathF.Ceiling(voters * M.Clamp(c.Defines.OrganizationExpelMajority, 0.5f, 1f) - 0.0001f);
@@ -202,15 +241,29 @@ public static class OrganizationDiscipline
     public static bool Week(Campaign c, InternationalOrganization org)
     {
         // Seats of countries that are no more.
-        foreach (var id in org.Suspended.Keys.ToArray())
-            if (c.NationById(id) is not { } held || !InternationalOrganizations.Eligible(c, held))
-            { org.Suspended.Remove(id); org.SuspendedFor.Remove(id); }
+        if (org.Suspended.Count > 0)
+        {
+            var suspScratch = _suspendedScratch ??= new List<(int Id, int Since)>();
+            suspScratch.Clear();
+            foreach (var p in org.Suspended) suspScratch.Add((p.Key, p.Value));
+            for (var i = 0; i < suspScratch.Count; i++)
+            {
+                var id = suspScratch[i].Id;
+                if (c.NationById(id) is not { } held || !InternationalOrganizations.Eligible(c, held))
+                { org.Suspended.Remove(id); org.SuspendedFor.Remove(id); }
+            }
+        }
 
         // An attack on a fellow member: suspended the same week, its expulsion tabled.
-        foreach (var war in Warfare.OpenWars(c))
+        var liveWars = Warfare.LiveWars(c);
+        for (var wi = 0; wi < liveWars.Count; wi++)
         {
+            var war = liveWars[wi];
             if (war.Ended || war.CivilConflict || !org.Members.Contains(war.AttackerId)) continue;
-            if (!war.Side(false).Any(id => id != war.AttackerId && org.Members.Contains(id))) continue;
+            var hitMember = false;
+            foreach (var id in war.Side(false))
+                if (id != war.AttackerId && org.Members.Contains(id)) { hitMember = true; break; }
+            if (!hitMember) continue;
             var aggressor = c.NationById(war.AttackerId);
             if (aggressor is null || org.Members.Count < 3)
             {
@@ -225,23 +278,35 @@ public static class OrganizationDiscipline
 
         if (org.Motion is not null || org.Members.Count < 2) return false;
         // The seats already in question come first: expel those whose cause stands, give back the rest.
-        foreach (var (id, since) in org.Suspended.OrderBy(p => p.Key).ToArray())
+        if (org.Suspended.Count > 0)
         {
-            var held = c.NationById(id);
-            if (held is null) continue;
-            var cause = StandingCause(c, org, held);
-            var days = c.ElapsedDays - since;
-            // A junta is kept suspended, not thrown out: the African Union and ECOWAS hold the seat
-            // for the election that gives it back. Expulsion is for what a member does to others.
-            var kind = cause.Length > 0 ? (cause != "coup" && days >= c.Defines.OrganizationExpelAfterDays ? "expel" : "")
-                                        : (days >= c.Defines.OrganizationReadmitAfterDays ? "readmit" : "");
-            if (kind.Length == 0) continue;
-            if (MovementRules.Roll(c.Seed, id, c.ElapsedDays, 4810 + org.Id) >= c.Defines.OrganizationSeatMotionChance) continue;
-            if (Table(c, org, held, kind)) return org.Dissolved;
+            var suspScratch = _suspendedScratch ??= new List<(int Id, int Since)>();
+            suspScratch.Clear();
+            foreach (var p in org.Suspended) suspScratch.Add((p.Key, p.Value));
+            if (suspScratch.Count > 1) suspScratch.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+            for (var i = 0; i < suspScratch.Count; i++)
+            {
+                var (id, since) = suspScratch[i];
+                var held = c.NationById(id);
+                if (held is null) continue;
+                var cause = StandingCause(c, org, held);
+                var days = c.ElapsedDays - since;
+                // A junta is kept suspended, not thrown out: the African Union and ECOWAS hold the seat
+                // for the election that gives it back. Expulsion is for what a member does to others.
+                var kind = cause.Length > 0 ? (cause != "coup" && days >= c.Defines.OrganizationExpelAfterDays ? "expel" : "")
+                                            : (days >= c.Defines.OrganizationReadmitAfterDays ? "readmit" : "");
+                if (kind.Length == 0) continue;
+                if (MovementRules.Roll(c.Seed, id, c.ElapsedDays, 4810 + org.Id) >= c.Defines.OrganizationSeatMotionChance) continue;
+                if (Table(c, org, held, kind)) return org.Dissolved;
+            }
         }
         if (org.Members.Count < 3) return false;
-        foreach (var id in org.Members.ToArray())
+        var membersCopy = _membersCopyScratch ??= new List<int>();
+        membersCopy.Clear();
+        for (var i = 0; i < org.Members.Count; i++) membersCopy.Add(org.Members[i]);
+        for (var i = 0; i < membersCopy.Count; i++)
         {
+            var id = membersCopy[i];
             var member = c.NationById(id);
             if (member is null) continue;
             var cause = Cause(c, org, member);
@@ -259,11 +324,27 @@ public static class OrganizationDiscipline
     private static bool Table(Campaign c, InternationalOrganization org, Nation target, string kind)
     {
         var leader = InternationalOrganizations.Leader(c, org);
-        var candidates = org.Members.Where(id => id != target.Id).Select(c.NationById)
-            .Where(n => n is { IsHuman: false, IsSubject: false })
-            .OrderBy(n => n.Id == leader?.Id ? 0 : 1).ThenByDescending(n => InternationalOrganizations.Influence(c, org, n)).ThenBy(n => n.Id);
-        foreach (var proposer in candidates)
+        var leaderId = leader?.Id ?? -1;
+        var candidates = _candidatesScratch ??= new List<(Nation Nation, float Influence, bool IsLeader)>();
+        candidates.Clear();
+        for (var i = 0; i < org.Members.Count; i++)
         {
+            var id = org.Members[i];
+            if (id == target.Id) continue;
+            if (c.NationById(id) is { IsHuman: false, IsSubject: false } n)
+                candidates.Add((n, InternationalOrganizations.Influence(c, org, n), id == leaderId));
+        }
+        if (candidates.Count > 1)
+            candidates.Sort(static (a, b) =>
+            {
+                var cmp = b.IsLeader.CompareTo(a.IsLeader);
+                if (cmp != 0) return cmp;
+                cmp = b.Influence.CompareTo(a.Influence);
+                return cmp != 0 ? cmp : a.Nation.Id.CompareTo(b.Nation.Id);
+            });
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var proposer = candidates[i].Nation;
             var probe = new OrganizationMotion { Kind = kind, TargetId = target.Id, ProposerId = proposer.Id };
             if (!Vote(c, org, proposer, probe)) continue;
             var command = new OrganizationCommand { IssuerId = proposer.Id, OrganizationId = org.Id, Action = "propose", Kind = kind, TargetId = target.Id };

@@ -181,7 +181,7 @@ public partial class DealOrForceGame
         _countryRankingSearch.Text = ""; LocateRankingSelection();
         _countryRankingsLayer.Show(); _countryRankingsLayer.MoveToFront();
         if (_globe is not null) _globe.MediaLibraryInputBlocked = true;
-        RefreshCountryRankingPage(); _countryRankingSearch.GrabFocus();
+        RefreshCountryRankingPage(); Ui.FocusInputIfDesktop(_countryRankingSearch);
     }
 
     private void CloseCountryRankings()

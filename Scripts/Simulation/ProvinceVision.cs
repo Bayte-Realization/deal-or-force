@@ -20,6 +20,10 @@ public sealed class ProvinceVision
     internal int TerritoryMapRevision = -1;
     internal int TerritoryMapIndex = -1;
     internal int TerritoryDepth = -1;
+    internal int TerritoryGeneration = -1;
+    internal int TerritoryControllerVersion = -1;
+    internal ProvinceTopology TerritoryMap;
+    internal ProvinceTopology StampMap;
     public int Revision { get; internal set; }
     public bool Sees(int province) => province > 0 && province < Reach.Length && Reach[province] > 0;
 }
@@ -29,22 +33,31 @@ public static partial class CampaignIntel
     private sealed class Cache
     {
         public int Epoch;
+        public int ManualEpoch;
         public readonly Dictionary<int, ProvinceVision> Viewers = new();
         // Provinces grouped by who controls them (ProvincesHeldBy), with what they were built from.
-        public int HeldEpoch = -1, HeldRevision = -1;
+        public int HeldManualEpoch = -1, HeldRevision = -1;
         public ushort[] HeldSource;
         /// <summary>The controllers as they stood when the grouping was built.</summary>
         public ushort[] HeldCopy = Array.Empty<ushort>();
         public int[] HeldStart = Array.Empty<int>(), HeldNext = Array.Empty<int>(), HeldProvinces = Array.Empty<int>();
+        public int[] ControllerVersion = Array.Empty<int>();
+        public int ControllerGeneration = 1;
 
         public bool HasActorIndex;
         public bool HasActiveBattles;
         public int ActorStamp;
         public long ActorHour;
         public float ActorLandingRange;
-        public readonly Dictionary<int, List<int>> ArmiesByNation = new();
-        public readonly Dictionary<int, List<int>> BattlesByNation = new();
-        public readonly Dictionary<int, int> ArmyProvinceById = new();
+        public ProvinceTopology ActorMap;
+        public List<int>[] ArmiesByNationDense = Array.Empty<List<int>>();
+        public readonly List<int> ActiveArmyNations = new();
+        public List<int>[] BattlesByNationDense = Array.Empty<List<int>>();
+        public readonly List<int> ActiveBattleNations = new();
+        public int[] ArmyProvinceByIdDense = Array.Empty<int>();
+        public int[] ArmyProvinceStampDense = Array.Empty<int>();
+        public int ArmyProvinceStamp = 1;
+        public readonly Dictionary<int, int> ArmyProvinceOverflow = new();
         public readonly Dictionary<int, List<int>> InvasionBeachesByNation = new();
     }
 
@@ -57,40 +70,71 @@ public static partial class CampaignIntel
     internal static ReadOnlySpan<int> ProvincesHeldBy(Campaign c, ushort[] controllers, int mapIndex)
     {
         var cache = Caches.GetOrCreateValue(c);
-        // The epoch moves at the end of every step, so the grouping was built again every hour
-        // somebody looked - a hundred microseconds, a fifth of every country's sight rebuilt
-        // (intel.visibility) - though it is made of nothing but the controllers. When the stamp
-        // has moved the controllers are compared with the ones it was built from first: the
-        // same controllers are the same grouping, and only a province that really changed
-        // hands builds it again.
-        if ((cache.HeldEpoch != cache.Epoch || cache.HeldRevision != c.MapRevision || !ReferenceEquals(cache.HeldSource, controllers)) &&
-            controllers.AsSpan().SequenceEqual(cache.HeldCopy))
+        // Only check controller bytes when MapRevision changed, controllers reference changed,
+        // or a caller explicitly invoked CampaignIntel.Invalidate(c). Hourly actor-position
+        // refreshes (InvalidateActors) skip the 70 KB SequenceEqual completely.
+        if (cache.HeldManualEpoch != cache.ManualEpoch || cache.HeldRevision != c.MapRevision || !ReferenceEquals(cache.HeldSource, controllers))
         {
-            cache.HeldSource = controllers;
-            cache.HeldRevision = c.MapRevision;
-            cache.HeldEpoch = cache.Epoch;
-        }
-        if (cache.HeldEpoch != cache.Epoch || cache.HeldRevision != c.MapRevision || !ReferenceEquals(cache.HeldSource, controllers))
-        {
-            // Rebuilt every time a province changes hands, which in a world at war is hourly:
-            // the arrays are kept and refilled rather than allocated again.
-            var top = 0;
-            for (var p = 1; p < controllers.Length; p++) if (controllers[p] > top) top = controllers[p];
-            if (cache.HeldStart.Length < top + 2) { cache.HeldStart = new int[top + 2]; cache.HeldNext = new int[top + 2]; }
-            if (cache.HeldProvinces.Length < controllers.Length) cache.HeldProvinces = new int[controllers.Length];
-            var start = cache.HeldStart;
-            Array.Clear(start);
-            for (var p = 1; p < controllers.Length; p++) start[controllers[p] + 1]++;
-            for (var i = 1; i < start.Length; i++) start[i] += start[i - 1];
-            var next = cache.HeldNext;
-            Array.Copy(start, next, start.Length);
-            var provinces = cache.HeldProvinces;
-            for (var p = 1; p < controllers.Length; p++) provinces[next[controllers[p]]++] = p;
-            cache.HeldSource = controllers;
-            if (cache.HeldCopy.Length != controllers.Length) cache.HeldCopy = new ushort[controllers.Length];
-            Array.Copy(controllers, cache.HeldCopy, controllers.Length);
-            cache.HeldRevision = c.MapRevision;
-            cache.HeldEpoch = cache.Epoch;
+            if (controllers.AsSpan().SequenceEqual(cache.HeldCopy))
+            {
+                cache.HeldSource = controllers;
+                cache.HeldRevision = c.MapRevision;
+                cache.HeldManualEpoch = cache.ManualEpoch;
+            }
+            else
+            {
+                // Rebuilt every time a province changes hands, which in a world at war is hourly:
+                // the arrays are kept and refilled rather than allocated again.
+                var top = 0;
+                var prevCopy = cache.HeldCopy;
+                var sameLength = prevCopy.Length == controllers.Length;
+                for (var p = 1; p < controllers.Length; p++)
+                {
+                    var cur = controllers[p];
+                    if (cur > top) top = cur;
+                    if (sameLength)
+                    {
+                        var old = prevCopy[p];
+                        if (old > top) top = old;
+                    }
+                }
+                if (cache.HeldStart.Length < top + 2) { cache.HeldStart = new int[top + 2]; cache.HeldNext = new int[top + 2]; }
+                if (cache.HeldProvinces.Length < controllers.Length) cache.HeldProvinces = new int[controllers.Length];
+                if (cache.ControllerVersion.Length < top + 2) Array.Resize(ref cache.ControllerVersion, top + 2);
+
+                if (!sameLength)
+                {
+                    cache.ControllerGeneration++;
+                }
+                else
+                {
+                    var versions = cache.ControllerVersion;
+                    for (var p = 1; p < controllers.Length; p++)
+                    {
+                        var cur = controllers[p];
+                        var old = prevCopy[p];
+                        if (cur != old)
+                        {
+                            versions[cur]++;
+                            versions[old]++;
+                        }
+                    }
+                }
+
+                var start = cache.HeldStart;
+                Array.Clear(start);
+                for (var p = 1; p < controllers.Length; p++) start[controllers[p] + 1]++;
+                for (var i = 1; i < start.Length; i++) start[i] += start[i - 1];
+                var next = cache.HeldNext;
+                Array.Copy(start, next, start.Length);
+                var provinces = cache.HeldProvinces;
+                for (var p = 1; p < controllers.Length; p++) provinces[next[controllers[p]]++] = p;
+                cache.HeldSource = controllers;
+                if (!sameLength) cache.HeldCopy = new ushort[controllers.Length];
+                Array.Copy(controllers, cache.HeldCopy, controllers.Length);
+                cache.HeldRevision = c.MapRevision;
+                cache.HeldManualEpoch = cache.ManualEpoch;
+            }
         }
         if (mapIndex < 0 || mapIndex + 1 >= cache.HeldStart.Length) return ReadOnlySpan<int>.Empty;
         var from = cache.HeldStart[mapIndex];
@@ -100,7 +144,17 @@ public static partial class CampaignIntel
 
     public static void Invalidate(Campaign c)
     {
-        if (c is not null && Caches.TryGetValue(c, out var cache)) cache.Epoch++;
+        if (c is not null && Caches.TryGetValue(c, out var cache))
+        {
+            cache.Epoch++;
+            cache.ManualEpoch++;
+        }
+    }
+
+    internal static void InvalidateActors(Campaign c)
+    {
+        if (c is not null && Caches.TryGetValue(c, out var cache))
+            cache.Epoch++;
     }
 
     public static ProvinceVision Vision(Campaign c, int viewerId)
@@ -109,121 +163,241 @@ public static partial class CampaignIntel
         var cache = Caches.GetOrCreateValue(c);
         if (!cache.Viewers.TryGetValue(viewerId, out var view))
             cache.Viewers[viewerId] = view = new ProvinceVision();
+        var map = c.ProvinceMap;
         var stamp = HashCode.Combine(c.ElapsedDays, c.MapRevision, cache.Epoch, c.Armies.Count,
-            c.Battles.Count, c.Fleets.Count, c.ProvinceMap);
-        if (view.Revision > 0 && view.Stamp == stamp) return view;
+            c.Battles.Count, c.Fleets.Count, map?.ProvinceCount ?? 0);
+        if (view.Revision > 0 && view.Stamp == stamp && ReferenceEquals(view.StampMap, map)) return view;
         view.Stamp = stamp;
+        view.StampMap = map;
         view.Revision++;
         using var timer = SimProfiler.Measure("intel.visibility");
-        var map = c.ProvinceMap;
         var nation = c.NationById(viewerId);
         if (map is null || nation is null) { view.Reach = Array.Empty<byte>(); return view; }
         if (view.Reach.Length != map.ProvinceCount + 1) view.Reach = new byte[map.ProvinceCount + 1];
-        else Array.Clear(view.Reach);
         view.Frontier.Clear();
         view.CombatContacts.Clear();
         var borderDepth = Math.Clamp(c.Defines.BorderVisionDepth, 0, 6);
         var armyDepth = Math.Clamp(c.Defines.ArmyVisionDepth, 0, 6);
         var controllers = c.ProvinceController ?? map.ProvinceToNation;
-        void Reveal(int province, int depth)
-        {
-            if (province <= 0 || province >= view.Reach.Length || view.Reach[province] >= depth + 1) return;
-            view.Reach[province] = (byte)(depth + 1);
-            view.Frontier.Enqueue(province);
-        }
-        void Flood()
-        {
-            while (view.Frontier.Count > 0)
-            {
-                var p = view.Frontier.Dequeue();
-                var nextDepth = view.Reach[p] - 2;
-                if (nextDepth < 0) continue;
-                foreach (var next in map.Neighbors[p]) Reveal(next, nextDepth);
-            }
-        }
 
-        // The ground first, from the copy when nobody's ground has changed hands since. The
-        // flood is a maximum - each province keeps the deepest reach anything gives it - so
-        // flooding the armies over a finished territory arrives exactly where flooding
-        // everything at once did.
-        if (view.TerritoryMapIndex == nation.MapIndex && view.TerritoryDepth == borderDepth &&
-            view.TerritoryMapRevision == c.MapRevision &&
+        // Refresh the per-controller index once; nations whose own controlled provinces did not
+        // change reuse their cached TerritoryReach directly instead of re-flooding 35k provinces.
+        var owned = ProvincesHeldBy(c, controllers, nation.MapIndex);
+        var controllerVersion = (uint)nation.MapIndex < (uint)cache.ControllerVersion.Length
+            ? cache.ControllerVersion[nation.MapIndex] : 0;
+
+        if (view.TerritoryMapIndex == nation.MapIndex &&
+            view.TerritoryDepth == borderDepth &&
+            view.TerritoryGeneration == cache.ControllerGeneration &&
+            view.TerritoryControllerVersion == controllerVersion &&
+            ReferenceEquals(view.TerritoryMap, map) &&
             view.TerritoryReach.Length == view.Reach.Length)
         {
             Array.Copy(view.TerritoryReach, view.Reach, view.Reach.Length);
         }
         else
         {
-            for (var p = 1; p < controllers.Length; p++)
-                if (controllers[p] == nation.MapIndex) Reveal(p, borderDepth);
-            Flood();
-            if (view.TerritoryReach.Length != view.Reach.Length) view.TerritoryReach = new byte[view.Reach.Length];
-            Array.Copy(view.Reach, view.TerritoryReach, view.Reach.Length);
+            var reach = view.Reach;
+            Array.Clear(reach);
+            var ownLevel = (byte)(borderDepth + 1);
+            var reachLen = reach.Length;
+            for (var i = 0; i < owned.Length; i++)
+            {
+                var p = owned[i];
+                if (p > 0 && p < reachLen) reach[p] = ownLevel;
+            }
+            if (borderDepth > 0)
+            {
+                // Only enqueue border provinces (those adjacent to at least one non-owned tile);
+                // interior tiles have all neighbors at ownLevel and would pop as no-ops in FloodVision.
+                var neighbors = map.Neighbors;
+                var frontier = view.Frontier;
+                for (var i = 0; i < owned.Length; i++)
+                {
+                    var p = owned[i];
+                    if (p <= 0 || p >= neighbors.Length) continue;
+                    var adj = neighbors[p];
+                    if (adj is null) continue;
+                    for (var j = 0; j < adj.Length; j++)
+                    {
+                        var n = adj[j];
+                        if (n > 0 && n < reachLen && reach[n] < ownLevel)
+                        {
+                            frontier.Enqueue(p);
+                            break;
+                        }
+                    }
+                }
+                FloodVision(reach, frontier, map);
+            }
+            if (view.TerritoryReach.Length != reach.Length) view.TerritoryReach = new byte[reach.Length];
+            Array.Copy(reach, view.TerritoryReach, reach.Length);
             view.TerritoryMapRevision = c.MapRevision;
             view.TerritoryMapIndex = nation.MapIndex;
             view.TerritoryDepth = borderDepth;
+            view.TerritoryGeneration = cache.ControllerGeneration;
+            view.TerritoryControllerVersion = controllerVersion;
+            view.TerritoryMap = map;
         }
         var hasBattles = EnsureActorIndex(c, cache, stamp, map, Math.Clamp(c.Defines.LandingVisionRangeDegrees, .1f, 3f));
-        if (cache.ArmiesByNation.TryGetValue(viewerId, out var myArmies))
-            for (var i = 0; i < myArmies.Count; i++) Reveal(myArmies[i], armyDepth);
-        if (hasBattles && cache.BattlesByNation.TryGetValue(viewerId, out var myBattles))
+        if ((uint)viewerId < (uint)cache.ArmiesByNationDense.Length && cache.ArmiesByNationDense[viewerId] is { Count: > 0 } myArmies)
+            for (var i = 0; i < myArmies.Count; i++) RevealProvince(view.Reach, view.Frontier, myArmies[i], armyDepth);
+        if (hasBattles && (uint)viewerId < (uint)cache.BattlesByNationDense.Length && cache.BattlesByNationDense[viewerId] is { Count: > 0 } myBattles)
         {
             for (var i = 0; i < myBattles.Count; i++)
             {
                 var battle = c.Battles[myBattles[i]];
-                Reveal(battle.ProvinceId, armyDepth);
+                RevealProvince(view.Reach, view.Frontier, battle.ProvinceId, armyDepth);
                 view.CombatContacts.UnionWith(battle.Attackers);
                 view.CombatContacts.UnionWith(battle.Defenders);
             }
         }
         if (view.CombatContacts.Count > 0)
+        {
+            var denseProv = cache.ArmyProvinceByIdDense;
+            var denseStamp = cache.ArmyProvinceStampDense;
+            var curStamp = cache.ArmyProvinceStamp;
             foreach (var contactId in view.CombatContacts)
-                if (cache.ArmyProvinceById.TryGetValue(contactId, out var prov)) Reveal(prov, 0);
+            {
+                if ((uint)contactId < (uint)denseProv.Length)
+                {
+                    if (denseStamp[contactId] == curStamp) RevealProvince(view.Reach, view.Frontier, denseProv[contactId], 0);
+                }
+                else if (cache.ArmyProvinceOverflow.TryGetValue(contactId, out var prov))
+                    RevealProvince(view.Reach, view.Frontier, prov, 0);
+            }
+        }
         // An invasion order alone is NOT reconnaissance across the world. The fleet
         // must actually have approached its beach, or combat must already have begun.
         if (cache.InvasionBeachesByNation.TryGetValue(viewerId, out var beaches))
-            for (var i = 0; i < beaches.Count; i++) Reveal(beaches[i], armyDepth);
-        Flood();
+            for (var i = 0; i < beaches.Count; i++) RevealProvince(view.Reach, view.Frontier, beaches[i], armyDepth);
+        FloodVision(view.Reach, view.Frontier, map);
         // What agents report and what reconnaissance flights photograph: seen, not seen past.
         IntelNetworks.RevealInto(c, viewerId, view.Reach);
         AirReconnaissance.RevealInto(c, viewerId, view.Reach);
         return view;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void RevealProvince(byte[] reach, Queue<int> frontier, int province, int depth)
+    {
+        if (province <= 0 || province >= reach.Length || reach[province] >= depth + 1) return;
+        reach[province] = (byte)(depth + 1);
+        frontier.Enqueue(province);
+    }
+
+    private static void FloodVision(byte[] reach, Queue<int> frontier, ProvinceTopology map)
+    {
+        var neighborsByProv = map.Neighbors;
+        while (frontier.Count > 0)
+        {
+            var p = frontier.Dequeue();
+            var nextDepth = reach[p] - 2;
+            if (nextDepth < 0) continue;
+            var adj = neighborsByProv[p];
+            for (var i = 0; i < adj.Length; i++)
+                RevealProvince(reach, frontier, adj[i], nextDepth);
+        }
+    }
+
     private static bool EnsureActorIndex(Campaign c, Cache cache, int stamp, ProvinceTopology map, float landingRange)
     {
-        if (cache.HasActorIndex && cache.ActorStamp == stamp && cache.ActorHour == c.ElapsedHours && cache.ActorLandingRange == landingRange)
+        if (cache.HasActorIndex && cache.ActorStamp == stamp && cache.ActorHour == c.ElapsedHours &&
+            cache.ActorLandingRange == landingRange && ReferenceEquals(cache.ActorMap, map))
             return cache.HasActiveBattles;
 
-        foreach (var list in cache.ArmiesByNation.Values) list.Clear();
-        foreach (var list in cache.BattlesByNation.Values) list.Clear();
-        cache.ArmyProvinceById.Clear();
+        for (var i = 0; i < cache.ActiveArmyNations.Count; i++)
+            cache.ArmiesByNationDense[cache.ActiveArmyNations[i]].Clear();
+        cache.ActiveArmyNations.Clear();
+        for (var i = 0; i < cache.ActiveBattleNations.Count; i++)
+            cache.BattlesByNationDense[cache.ActiveBattleNations[i]].Clear();
+        cache.ActiveBattleNations.Clear();
+        cache.ArmyProvinceOverflow.Clear();
         foreach (var list in cache.InvasionBeachesByNation.Values) list.Clear();
 
+        var nationCap = Math.Max(c.Nations.Count, 64);
+        if (cache.ArmiesByNationDense.Length < nationCap)
+            Array.Resize(ref cache.ArmiesByNationDense, nationCap + 64);
+        if (cache.BattlesByNationDense.Length < nationCap)
+            Array.Resize(ref cache.BattlesByNationDense, nationCap + 64);
+
         var hasBattles = false;
+        var battlesByNation = cache.BattlesByNationDense;
+        var activeBattleNations = cache.ActiveBattleNations;
         for (var i = 0; i < c.Battles.Count; i++)
         {
             var battle = c.Battles[i];
             if (battle.Ended) continue;
             hasBattles = true;
-            if (!cache.BattlesByNation.TryGetValue(battle.AttackerId, out var atkList))
-                cache.BattlesByNation[battle.AttackerId] = atkList = new List<int>();
-            atkList.Add(i);
-            if (battle.DefenderId != battle.AttackerId)
+            var atk = battle.AttackerId;
+            if ((uint)atk >= (uint)battlesByNation.Length)
             {
-                if (!cache.BattlesByNation.TryGetValue(battle.DefenderId, out var defList))
-                    cache.BattlesByNation[battle.DefenderId] = defList = new List<int>();
+                Array.Resize(ref cache.BattlesByNationDense, atk + 64);
+                battlesByNation = cache.BattlesByNationDense;
+            }
+            var atkList = battlesByNation[atk] ??= new List<int>(4);
+            if (atkList.Count == 0) activeBattleNations.Add(atk);
+            atkList.Add(i);
+
+            var def = battle.DefenderId;
+            if (def != atk)
+            {
+                if ((uint)def >= (uint)battlesByNation.Length)
+                {
+                    Array.Resize(ref cache.BattlesByNationDense, def + 64);
+                    battlesByNation = cache.BattlesByNationDense;
+                }
+                var defList = battlesByNation[def] ??= new List<int>(4);
+                if (defList.Count == 0) activeBattleNations.Add(def);
                 defList.Add(i);
             }
         }
 
-        for (var i = 0; i < c.Armies.Count; i++)
+        var armyStamp = 0;
+        if (hasBattles)
         {
-            var army = c.Armies[i];
-            if (!cache.ArmiesByNation.TryGetValue(army.NationId, out var list))
-                cache.ArmiesByNation[army.NationId] = list = new List<int>();
+            if (cache.ArmyProvinceStamp == int.MaxValue)
+            {
+                Array.Clear(cache.ArmyProvinceStampDense);
+                cache.ArmyProvinceStamp = 1;
+            }
+            else cache.ArmyProvinceStamp++;
+            armyStamp = cache.ArmyProvinceStamp;
+        }
+
+        var armiesByNation = cache.ArmiesByNationDense;
+        var activeArmyNations = cache.ActiveArmyNations;
+        var armies = c.Armies;
+        for (var i = 0; i < armies.Count; i++)
+        {
+            var army = armies[i];
+            var nid = army.NationId;
+            if ((uint)nid >= (uint)armiesByNation.Length)
+            {
+                Array.Resize(ref cache.ArmiesByNationDense, nid + 64);
+                armiesByNation = cache.ArmiesByNationDense;
+            }
+            var list = armiesByNation[nid] ??= new List<int>(8);
+            if (list.Count == 0) activeArmyNations.Add(nid);
             list.Add(army.ProvinceId);
-            if (hasBattles) cache.ArmyProvinceById[army.Id] = army.ProvinceId;
+
+            if (hasBattles)
+            {
+                var aid = army.Id;
+                if ((uint)aid < 65536u)
+                {
+                    if (aid >= cache.ArmyProvinceByIdDense.Length)
+                    {
+                        var nextCap = Math.Max(aid + 256, cache.ArmyProvinceByIdDense.Length * 2);
+                        if (nextCap > 65536) nextCap = 65536;
+                        Array.Resize(ref cache.ArmyProvinceByIdDense, nextCap);
+                        Array.Resize(ref cache.ArmyProvinceStampDense, nextCap);
+                    }
+                    cache.ArmyProvinceByIdDense[aid] = army.ProvinceId;
+                    cache.ArmyProvinceStampDense[aid] = armyStamp;
+                }
+                else cache.ArmyProvinceOverflow[aid] = army.ProvinceId;
+            }
         }
 
         for (var i = 0; i < c.Fleets.Count; i++)
@@ -245,6 +419,7 @@ public static partial class CampaignIntel
         cache.ActorStamp = stamp;
         cache.ActorHour = c.ElapsedHours;
         cache.ActorLandingRange = landingRange;
+        cache.ActorMap = map;
         return hasBattles;
     }
 

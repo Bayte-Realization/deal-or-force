@@ -17,18 +17,24 @@ internal sealed class ShellOrchestrator
     public ShellContext Context { get; }
     public ShellCornerView Corner { get; }
     public ShellDatePlateView DatePlate { get; }
+    public ShellTouchModeBarView TouchModeBar { get; }
     public ShellMessageModalView Messages { get; }
     public ShellAlertColumnView Alerts { get; }
     public ShellMapBarView MapBar { get; }
     public ShellStripView Strip { get; }
     public ShellWorkPanelView WorkPanel { get; }
     public ShellEconomyWorkspaceView EconomyWorkspace { get; }
+    public GrandProjectsView GrandProjects { get; }
 
     private long _refreshHour = long.MinValue;
     private int _refreshDay = int.MinValue;
     private int _refreshRevision = int.MinValue;
     private int _refreshWarRevision = int.MinValue;
+    private int _refreshPlayerId = int.MinValue;
+    private int _refreshObservedId = int.MinValue;
+    private bool _refreshObserverMode;
     private ulong _lastHeavyRefreshMsec;
+    private ulong _lastResourceRefreshMsec;
     private Campaign _lastWorld;
     private bool _lastPaused;
     private int _lastSpeed = -1;
@@ -38,13 +44,14 @@ internal sealed class ShellOrchestrator
 
     private float _cachedProfileW = -1f;
     private float _cachedProfileH = -1f;
+    private float _cachedSafeL, _cachedSafeT, _cachedSafeR, _cachedSafeB;
     private bool _cachedProfileWar;
     private ShellLayoutProfile _cachedProfile;
 
     public double LastRefreshMs { get; private set; }
 
     public bool HasTransientPopover =>
-        Messages.IsVisible || MapBar.IsPopoverOpen || EconomyWorkspace.IsVisible;
+        Messages.IsVisible || MapBar.IsPopoverOpen || EconomyWorkspace.IsVisible || GrandProjects.IsVisible;
 
     public ShellOrchestrator(ShellContext ctx)
     {
@@ -53,22 +60,26 @@ internal sealed class ShellOrchestrator
         Messages = new ShellMessageModalView(ctx);
         Corner = new ShellCornerView(ctx);
         DatePlate = new ShellDatePlateView(ctx, () => Messages.Toggle());
+        TouchModeBar = new ShellTouchModeBarView(ctx);
         Alerts = new ShellAlertColumnView(ctx, Messages);
         MapBar = new ShellMapBarView(ctx);
         Strip = new ShellStripView(ctx);
         WorkPanel = new ShellWorkPanelView(ctx);
         EconomyWorkspace = new ShellEconomyWorkspaceView(ctx);
+        GrandProjects = new GrandProjectsView(ctx);
     }
 
     public void Build()
     {
         Corner.Build();
         DatePlate.Build();
+        TouchModeBar.Build();
         Alerts.Build();
         MapBar.Build();
         Strip.Build();
         WorkPanel.Build();
         EconomyWorkspace.Build();
+        GrandProjects.Build();
     }
 
     public void ResetCadence()
@@ -77,7 +88,11 @@ internal sealed class ShellOrchestrator
         _refreshDay = int.MinValue;
         _refreshRevision = int.MinValue;
         _refreshWarRevision = int.MinValue;
+        _refreshPlayerId = int.MinValue;
+        _refreshObservedId = int.MinValue;
+        _refreshObserverMode = false;
         _lastHeavyRefreshMsec = 0;
+        _lastResourceRefreshMsec = 0;
         _cachedProfile = null;
     }
 
@@ -85,6 +100,7 @@ internal sealed class ShellOrchestrator
     {
         if (_modalObscured == obscured) return;
         _modalObscured = obscured;
+        TouchModeBar.SetModalObscured(obscured);
         Alerts.SetModalObscured(obscured);
         MapBar.SetModalObscured(obscured);
         if (obscured) Messages.Close();
@@ -106,16 +122,22 @@ internal sealed class ShellOrchestrator
     {
         var vp = Context.GetViewportSize();
         var atWar = IsPlayerAtWar(Context.World);
+        var touchMode = Context.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true);
+        var sa = touchMode ? (DealOrForce.Platform.PlatformProfile.Current?.SafeArea ?? default) : default;
         if (_cachedProfile is not null &&
             MathF.Abs(_cachedProfileW - vp.X) < 0.5f &&
             MathF.Abs(_cachedProfileH - vp.Y) < 0.5f &&
-            _cachedProfileWar == atWar)
+            MathF.Abs(_cachedSafeL - sa.Left) < 0.5f && MathF.Abs(_cachedSafeT - sa.Top) < 0.5f &&
+            MathF.Abs(_cachedSafeR - sa.Right) < 0.5f && MathF.Abs(_cachedSafeB - sa.Bottom) < 0.5f &&
+            _cachedProfileWar == atWar &&
+            _cachedProfile.TouchMode == touchMode)
             return _cachedProfile;
 
         _cachedProfileW = vp.X;
         _cachedProfileH = vp.Y;
+        _cachedSafeL = sa.Left; _cachedSafeT = sa.Top; _cachedSafeR = sa.Right; _cachedSafeB = sa.Bottom;
         _cachedProfileWar = atWar;
-        _cachedProfile = ShellLayout.ForViewport(vp.X, vp.Y, atWar);
+        _cachedProfile = ShellLayout.ForViewport(vp.X, vp.Y, atWar, touchMode, sa.Left, sa.Top, sa.Right, sa.Bottom);
         return _cachedProfile;
     }
 
@@ -126,10 +148,12 @@ internal sealed class ShellOrchestrator
         var profile = CurrentProfile();
         Corner.Layout(profile, atWar);
         DatePlate.Layout(profile);
+        TouchModeBar.Layout(profile);
         Messages.Layout(profile);
         Alerts.Layout(profile);
         MapBar.Layout(profile);
         EconomyWorkspace.Layout(profile);
+        GrandProjects.Layout(profile);
     }
 
     public void Refresh(Campaign world, int speed, bool force)
@@ -147,6 +171,10 @@ internal sealed class ShellOrchestrator
         var pausedChanged = _lastPaused != world.IsPaused;
         var speedChanged = _lastSpeed != speed;
         var hourChanged = _refreshHour != world.ElapsedHours;
+        var playerId = world.Player?.Id ?? -1;
+        var observerMode = Context.IsObserverMode?.Invoke() ?? world.ObserverMode;
+        var observedId = Context.GetObservedNation?.Invoke()?.Id ?? -1;
+        var identityChanged = _refreshPlayerId != playerId || _refreshObserverMode != observerMode || _refreshObservedId != observedId;
         var dayOrRevChanged = _refreshDay != world.ElapsedDays || _refreshRevision != world.MapRevision ||
             _refreshWarRevision != world.WarRevision;
         _lastPaused = world.IsPaused;
@@ -157,49 +185,69 @@ internal sealed class ShellOrchestrator
             SetModalObscured(obscured);
 
         var nowMsec = Time.GetTicksMsec();
-        var minIntervalMsec = (ulong)(_isMobileRuntime ? 350 : 220);
-        var heavyDue = force || worldChanged ||
+        var fastForward = !world.IsPaused && speed >= 4;
+        var minIntervalMsec = (ulong)(_isMobileRuntime ? 350 : fastForward ? 150 : 220);
+        var heavyDue = force || worldChanged || identityChanged ||
             (dayOrRevChanged && (world.IsPaused || pausedChanged || nowMsec - _lastHeavyRefreshMsec >= minIntervalMsec));
 
         // Orders can charge the treasury and reserve without advancing the clock or changing the map.
-        Corner.RefreshResources(world.Player);
+        // At Speed 4/5, throttle resource-label repaints to ~125ms so DatePlate stays silk-smooth every frame.
+        var resourceDue = force || worldChanged || identityChanged || world.IsPaused || pausedChanged ||
+            !fastForward || nowMsec - _lastResourceRefreshMsec >= 125;
+        if (resourceDue)
+        {
+            _lastResourceRefreshMsec = nowMsec;
+            Corner.RefreshResources(world.Player);
+        }
         if (heavyDue)
         {
             _refreshDay = world.ElapsedDays;
             _refreshRevision = world.MapRevision;
             _refreshWarRevision = world.WarRevision;
+            _refreshPlayerId = playerId;
+            _refreshObserverMode = observerMode;
+            _refreshObservedId = observedId;
+            if (identityChanged) _cachedProfile = null;
             _lastHeavyRefreshMsec = nowMsec;
             Corner.Refresh();
             Alerts.Refresh();
             Strip.Refresh();
             WorkPanel.Refresh();
             EconomyWorkspace.Refresh();
+            GrandProjects.Refresh();
         }
-        if (force || worldChanged || hourChanged || pausedChanged || speedChanged)
+        if (force || worldChanged || identityChanged || hourChanged || pausedChanged || speedChanged)
         {
             _refreshHour = world.ElapsedHours;
             DatePlate.Refresh();
         }
-        if (force || worldChanged || pausedChanged)
+        if (force || worldChanged || identityChanged || pausedChanged)
+        {
             MapBar.Refresh();
+            TouchModeBar.Refresh();
+        }
 
         LastRefreshMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
     }
 
     public void Tick(double delta)
     {
-        var altNow = Input.IsKeyPressed(Key.Alt);
-        if (altNow != _lastAlt)
+        if (!_isMobileRuntime)
         {
-            _lastAlt = altNow;
-            Context.AltKeycapsVisible = altNow;
-            Corner.SyncKeycapVisibility();
-            DatePlate.Refresh();
-            Alerts.Refresh();
-            MapBar.Refresh();
+            var altNow = Input.IsKeyPressed(Key.Alt);
+            if (altNow != _lastAlt)
+            {
+                _lastAlt = altNow;
+                Context.AltKeycapsVisible = altNow;
+                Corner.SyncKeycapVisibility();
+                DatePlate.Refresh();
+                Alerts.Refresh();
+                MapBar.Refresh();
+            }
         }
         Alerts.TickNews(delta);
         MapBar.TickMinimap();
+        TouchModeBar.Refresh();
         Strip.TickDivisionVisibility(delta);
     }
 
@@ -234,7 +282,8 @@ internal sealed class ShellOrchestrator
             }
             if (child is not PanelContainer panel || !panel.HasMeta("skin_layout")) continue;
             var key = panel.GetMeta("skin_layout").AsString();
-            if (!key.StartsWith("modal.", StringComparison.Ordinal) && key != "hud.support_panel") continue;
+            if (!key.StartsWith("modal.", StringComparison.Ordinal) &&
+                key is not ("hud.support_panel" or "hud.peace_panel" or "workspace.situation")) continue;
 
             var authored = InterfaceSkin.Layout(key);
             var vw = profile.ViewportWidth;

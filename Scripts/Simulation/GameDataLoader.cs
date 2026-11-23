@@ -38,13 +38,21 @@ public static class GameDataLoader
     {
         // Порядок только внутри одной категории. Номер 90_... не позволяет файлу
         // раннего пакета обойти более поздний мод: порядок пакетов задаёт ModLoader.
+        if (ModOverlayPolicy.IsActive && ModOverlayPolicy.IsBasePathReplaced(relativeFolder))
+            return Array.Empty<string>();
         var folder = DataFolder(relativeFolder);
         if (folder is null) return Array.Empty<string>();
         try
         {
-            return StructuredData.Files(folder, SearchOption.TopDirectoryOnly)
-                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            var files = StructuredData.Files(folder, SearchOption.TopDirectoryOnly)
+                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase);
+            if (!ModOverlayPolicy.IsActive) return files.ToArray();
+            var prefix = string.Join("/", relativeFolder).Replace('\\', '/').Trim('/');
+            return files.Where(file =>
+            {
+                var rel = prefix.Length == 0 ? Path.GetFileName(file) : $"{prefix}/{Path.GetFileName(file)}";
+                return !ModOverlayPolicy.IsBaseFileExcluded(rel);
+            }).ToArray();
         }
         catch (Exception exception)
         {
@@ -62,20 +70,61 @@ public static class GameDataLoader
         // Владение документом передаётся вызывающему каталогу: его нужно Dispose/using.
         // JsonElement живёт не дольше документа; для хранения вне using нужен Clone
         // или собственная типизированная запись. Это важно при добавлении каталога.
-        foreach (var file in DataFiles(relativeFolder))
+        var files = DataFiles(relativeFolder);
+        if (files.Count == 0) yield break;
+        var patchActive = ModJsonPatcher.IsActive;
+        var patchCategory = patchActive ? string.Join("/", relativeFolder) : "";
+        if (files.Count < 4)
         {
-            JsonDocument document;
-            try
+            for (var i = 0; i < files.Count; i++)
             {
-                document = JsonDocument.Parse(StructuredData.ReadJson(file), ForgivingJson);
+                var file = files[i];
+                JsonDocument document;
+                try
+                {
+                    document = DataDocumentParser.ParseDataDocument(file);
+                    if (patchActive)
+                        document = ModJsonPatcher.ApplyToBaseDocument(patchCategory, Path.GetFileName(file), document);
+                }
+                catch (Exception exception)
+                {
+                    Debug.WriteLine($"[dof] {Path.GetFileName(file)} ignored: {exception.Message}");
+                    DiagnosticLogs.Write("errors", $"DATA_FILE_REJECTED file={file} error={exception.Message}");
+                    continue;
+                }
+                yield return document;
             }
-            catch (Exception exception)
+            yield break;
+        }
+
+        // Parse multi-file categories in parallel via standalone DataDocumentParser (zero
+        // references to GameDataLoader inside Parallel.For, preventing any .cctor lock cycle),
+        // then yield strictly in deterministic sorted file order (preserving last-file-wins).
+        DataDocumentParser.ParseBatch(files, out var docs, out var errors);
+        var index = 0;
+        try
+        {
+            for (; index < files.Count; index++)
             {
-                Debug.WriteLine($"[dof] {Path.GetFileName(file)} ignored: {exception.Message}");
-                DiagnosticLogs.Write("errors", $"DATA_FILE_REJECTED file={file} error={exception.Message}");
-                continue;
+                if (errors[index] is not null)
+                {
+                    Debug.WriteLine($"[dof] {Path.GetFileName(files[index])} ignored: {errors[index].Message}");
+                    DiagnosticLogs.Write("errors", $"DATA_FILE_REJECTED file={files[index]} error={errors[index].Message}");
+                    continue;
+                }
+                var doc = docs[index];
+                docs[index] = null;
+                if (doc is not null)
+                {
+                    if (patchActive)
+                        doc = ModJsonPatcher.ApplyToBaseDocument(patchCategory, Path.GetFileName(files[index]), doc);
+                    yield return doc;
+                }
             }
-            yield return document;
+        }
+        finally
+        {
+            for (; index < docs.Length; index++) docs[index]?.Dispose();
         }
     }
 
@@ -213,20 +262,19 @@ public static class GameDataLoader
     public static readonly HashSet<string> Asked = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The shipped data documents itself with comments, so every reader allows them.</summary>
-    public static readonly JsonDocumentOptions ForgivingJson = new()
-    {
-        AllowTrailingCommas = true,
-        CommentHandling = JsonCommentHandling.Skip
-    };
+    public static readonly JsonDocumentOptions ForgivingJson = DataDocumentParser.ForgivingJson;
+
+    private static readonly Dictionary<string, PropertyInfo> DefinesProperties =
+        typeof(Defines).GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Where(property => property.CanWrite)
+            .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
 
     public static void ApplyDefines(Defines defines)
     {
         // Defines принадлежат конкретной кампании; каталоги обычно process-wide.
         // Новый модификатор не должен прятать состояние страны в static-поле каталога:
         // сохранение и другая кампания этого поля не получат.
-        var properties = typeof(Defines).GetProperties(BindingFlags.Instance | BindingFlags.Public)
-            .Where(property => property.CanWrite)
-            .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
+        var properties = DefinesProperties;
 
         foreach (var document in DataDocuments("common", "defines"))
             using (document)
@@ -265,19 +313,77 @@ public static class GameDataLoader
         return result;
     }
 
+    private static readonly object GameRootCacheLock = new();
+    private static string _cachedCwd;
+    private static string _cachedBaseDir;
+    private static string _cachedGameRoot;
+
+    private static string PrimaryGameRoot()
+    {
+        var cwd = Directory.GetCurrentDirectory();
+        var baseDir = AppContext.BaseDirectory;
+        lock (GameRootCacheLock)
+        {
+            if (string.Equals(_cachedCwd, cwd, StringComparison.Ordinal) &&
+                string.Equals(_cachedBaseDir, baseDir, StringComparison.Ordinal) &&
+                _cachedGameRoot is not null &&
+                Directory.Exists(_cachedGameRoot))
+                return _cachedGameRoot;
+        }
+
+        string found = null;
+        foreach (var root in CandidateRoots())
+        {
+            if (string.IsNullOrEmpty(root)) continue;
+            var candidate = Path.Combine(root, "game");
+            if (Directory.Exists(candidate)) { found = candidate; break; }
+        }
+
+        lock (GameRootCacheLock)
+        {
+            _cachedCwd = cwd;
+            _cachedBaseDir = baseDir;
+            _cachedGameRoot = found;
+        }
+        return found;
+    }
+
     /// <summary>One named asset - a raster, a descriptor - rather than a category folder.</summary>
     public static string FindDataFile(params string[] relativePath)
     {
+        if (ModOverlayPolicy.IsActive && ModOverlayPolicy.IsBaseFileExcluded(string.Join("/", relativePath)))
+            return null;
         var suffix = Path.Combine(relativePath);
-        return CandidateRoots().Select(root => Path.Combine(root, "game", suffix)).FirstOrDefault(File.Exists);
+        var primary = PrimaryGameRoot();
+        if (primary is not null)
+        {
+            var direct = Path.Combine(primary, suffix);
+            if (File.Exists(direct)) return direct;
+        }
+        foreach (var root in CandidateRoots())
+        {
+            var candidate = Path.Combine(root, "game", suffix);
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
     }
 
     public static string DataFolder(params string[] relativeFolder)
     {
         if (relativeFolder.Length > 0) Asked.Add(string.Join("/", relativeFolder));
         var suffix = Path.Combine(relativeFolder);
-        return CandidateRoots().Select(root => Path.Combine(root, "game", suffix))
-            .FirstOrDefault(Directory.Exists);
+        var primary = PrimaryGameRoot();
+        if (primary is not null)
+        {
+            var direct = Path.Combine(primary, suffix);
+            if (Directory.Exists(direct)) return direct;
+        }
+        foreach (var root in CandidateRoots())
+        {
+            var candidate = Path.Combine(root, "game", suffix);
+            if (Directory.Exists(candidate)) return candidate;
+        }
+        return null;
     }
 
     /// <summary>
@@ -393,5 +499,46 @@ public static class GameDataLoader
             catch (Exception) { continue; }
             if (parent is not null) yield return parent.FullName;
         }
+    }
+}
+
+/// <summary>
+/// Standalone parallel document parser kept strictly outside <see cref="GameDataLoader"/> so
+/// worker threads inside <see cref="System.Threading.Tasks.Parallel.For"/> never touch
+/// <see cref="GameDataLoader"/>'s type initializer.
+/// </summary>
+internal static class DataDocumentParser
+{
+    internal static readonly JsonDocumentOptions ForgivingJson = new()
+    {
+        AllowTrailingCommas = true,
+        CommentHandling = JsonCommentHandling.Skip
+    };
+
+    internal static JsonDocument ParseDataDocument(string file)
+    {
+        if (file.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            var bytes = File.ReadAllBytes(file);
+            var payload = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
+                ? bytes.AsMemory(3)
+                : bytes.AsMemory();
+            return JsonDocument.Parse(payload, ForgivingJson);
+        }
+        return JsonDocument.Parse(StructuredData.ReadJson(file), ForgivingJson);
+    }
+
+    internal static void ParseBatch(IReadOnlyList<string> files, out JsonDocument[] docs, out Exception[] errors)
+    {
+        var count = files.Count;
+        var localDocs = new JsonDocument[count];
+        var localErrors = new Exception[count];
+        System.Threading.Tasks.Parallel.For(0, count, i =>
+        {
+            try { localDocs[i] = ParseDataDocument(files[i]); }
+            catch (Exception ex) { localErrors[i] = ex; }
+        });
+        docs = localDocs;
+        errors = localErrors;
     }
 }

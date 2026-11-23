@@ -1,0 +1,198 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dealorforce.local/schemas/manifest.schema.json",
+  "title": "Deal or Force Mod Manifest",
+  "description": "Root manifest.json declaring a Deal or Force data mod, balance patch, reskin, total conversion, or code extension.",
+  "type": "object",
+  "required": ["id", "name"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "description": "Unique lowercase mod identifier (1-64 characters: letters, digits, underscores, or hyphens)."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable display name shown in the launcher and Mod Manager."
+    },
+    "version": {
+      "type": "string",
+      "default": "1.0.0",
+      "description": "Semantic version string for this mod (e.g. '1.0.0')."
+    },
+    "supported_game_version": {
+      "type": "string",
+      "default": "*",
+      "description": "Game version compatibility filter (e.g. '*' or '0.8.*')."
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether the mod is enabled by default when discovered."
+    },
+    "load_order": {
+      "type": "integer",
+      "default": 0,
+      "description": "Numeric priority used to order independent mods; higher values load later and win conflicts."
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "List of mod IDs that must load before this mod."
+    },
+    "total_conversion": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, suppresses default base-2024 narrative/era roots (events, technologies, decisions, history diplomacy/conflicts/factions) unless replace_paths overrides the list."
+    },
+    "replace_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "common/technologies",
+          "common/decisions",
+          "common/ideologies",
+          "common/governments",
+          "common/goods",
+          "common/units",
+          "common/buildings",
+          "common/production",
+          "common/budget",
+          "common/government_focus",
+          "common/trade_policies",
+          "common/laws",
+          "common/agendas",
+          "common/national_courses",
+          "common/goals",
+          "common/grand_projects",
+          "common/promises",
+          "common/modifiers",
+          "common/opinion_modifiers",
+          "common/ai_strategy",
+          "common/formable_nations",
+          "common/organizations",
+          "common/religions",
+          "common/cultures",
+          "common/professions",
+          "common/rulers",
+          "common/deterrence",
+          "common/support",
+          "common/tactical_doctrines",
+          "common/strategic_doctrines",
+          "events",
+          "history/countries",
+          "history/states",
+          "history/diplomacy",
+          "history/conflicts",
+          "history/factions",
+          "history/units",
+          "history/pops",
+          "history/faiths",
+          "history/provinces",
+          "localization",
+          "music",
+          "interface",
+          "gui",
+          "skins"
+        ]
+      },
+      "description": "Virtual game/ category roots cleanly suppressed from the base game before loading this mod's files."
+    },
+    "exclude_paths": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Specific relative base-game files to omit (e.g. 'events/20_ukraine.json')."
+    },
+    "scenario_id": {
+      "type": "string",
+      "description": "Optional scenario ID associated with this package."
+    },
+    "era_name": {
+      "type": "string",
+      "description": "Optional display era name shown in the campaign date plate."
+    },
+    "theme": {
+      "type": "string",
+      "description": "Optional interface skin/theme overlay identifier."
+    },
+    "music_playlist": {
+      "type": "string",
+      "description": "Optional soundtrack playlist ID for this mod."
+    },
+    "calendar": {
+      "type": "object",
+      "description": "Custom display calendar profile (separated from internal Gregorian simulation dates).",
+      "properties": {
+        "era_name": { "type": "string", "description": "Display era name (e.g. 'Age of Iron', 'Third Sun')." },
+        "year_offset": { "type": "integer", "default": 0, "description": "Offset added to the Gregorian simulation year for display." },
+        "year_prefix": { "type": "string", "default": "", "description": "Prefix before the displayed year (e.g. 'Year ')." },
+        "year_suffix": { "type": "string", "default": "", "description": "Suffix after the displayed year (e.g. ' AD', ' BCE', ' AE')." },
+        "month_names": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Optional 12 custom month names."
+        }
+      }
+    },
+    "disabled_features": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Feature IDs or aliases (e.g. 'nukes', 'missiles', 'modern_air_force', 'aviation', 'drones') marked unavailable in this mod."
+    },
+    "era_features": {
+      "type": "object",
+      "description": "Tri-state map of feature ID/alias -> 'available' | 'restricted' | 'unavailable'.",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string", "enum": ["available", "restricted", "unavailable"] },
+          { "type": "boolean" }
+        ]
+      }
+    },
+    "gdscript_entry": { "type": "string", "description": "Optional GDScript entrypoint relative to the mod folder." },
+    "engine_script_entry": { "type": "string", "description": "Optional Luau script entrypoint relative to the mod folder." },
+    "corecode_assembly": { "type": "string", "description": "Optional compiled .NET IGlobalityMod assembly path (e.g. 'corecode/MyMod.dll')." },
+    "worker_executable": { "type": "string", "description": "Optional external worker executable path (single-player)." },
+    "worker_script": { "type": "string", "description": "Optional script argument for worker_executable." },
+    "worker_timeout_ms": { "type": "integer", "minimum": 50, "default": 500 },
+    "worker_interval_days": { "type": "integer", "minimum": 1, "default": 7 }
+  },
+  "defaultSnippets": [
+    {
+      "label": "Data / Balance Mod Manifest",
+      "description": "Minimal manifest for a JSON overlay or patch mod",
+      "body": {
+        "id": "${1:my_balance_mod}",
+        "name": "${2:My Balance Mod}",
+        "version": "1.0.0",
+        "supported_game_version": "*",
+        "enabled": true,
+        "load_order": 10,
+        "dependencies": []
+      }
+    },
+    {
+      "label": "Total Conversion Manifest",
+      "description": "Manifest for a historical, sci-fi, or fantasy total conversion",
+      "body": {
+        "id": "${1:my_total_conversion}",
+        "name": "${2:My Total Conversion}",
+        "version": "1.0.0",
+        "enabled": true,
+        "total_conversion": true,
+        "replace_paths": ["events", "common/technologies", "common/decisions", "history/diplomacy"],
+        "disabled_features": ["nukes", "missiles"],
+        "calendar": {
+          "era_name": "${3:Age of Iron}",
+          "year_offset": 0,
+          "year_suffix": " AD"
+        }
+      }
+    }
+  ]
+}

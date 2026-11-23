@@ -76,15 +76,34 @@ public sealed partial class GlobePresentation
         ["nuclear_devastation"] = new("war", new Color(1f, 0.85f, 0.6f), 730),
         ["nuclear_test"] = new("alert_battle", new Color(0.95f, 0.78f, 0.35f), 45),
         ["nuclear_incident"] = new("alert_battle", new Color(0.95f, 0.5f, 0.25f), 30),
+        ["nuclear_alert"] = new("alert_battle", new Color(0.98f, 0.42f, 0.18f), 45),
+        ["arms_control_signed"] = new("treaty", new Color(0.56f, 0.82f, 0.74f), 45),
+        // Strategic megaprojects & supply-chain chokepoint shocks (Wave 2/5).
+        ["grand_project_started"] = new("industry", new Color(0.92f, 0.76f, 0.34f), 40),
+        ["grand_project_completed"] = new("industry", new Color(0.54f, 0.88f, 0.62f), 60),
+        ["grand_project_sabotaged"] = new("alert_battle", new Color(0.92f, 0.38f, 0.22f), 45),
+        ["chokepoint_weaponized"] = new("alert_event", new Color(0.94f, 0.52f, 0.20f), 45),
+        ["battle_major"] = new("battle", new Color(0.94f, 0.26f, 0.18f), 30),
     };
 
     private const int PulseLimit = 48;
     private const float PulseSize = 0.05f;
+    private float _pulseQualityTier;
+
+    private int ActivePulseCap => _pulseQualityTier > 1.5f ? 12 : _pulseQualityTier > 0.5f ? 20 : PulseLimit;
+
+    private void ApplyEventPulseQualityTier(float tier)
+    {
+        _pulseQualityTier = tier;
+        for (var i = 0; i < _pulses.Count; i++)
+            _pulses[i].Material?.SetShaderParameter("quality_tier", tier);
+    }
 
     private sealed class EventPulse
     {
         public long Sequence;
         public int Day;
+        public string Kind = "";
         public PulseStyle Style;
         public float Latitude, Longitude;
         public MeshInstance3D Node;
@@ -106,25 +125,34 @@ uniform sampler2D icon : source_color, filter_linear_mipmap;
 uniform vec4 tint : source_color = vec4(1.0);
 uniform float phase = 0.0;
 uniform float fade = 1.0;
+uniform float quality_tier = 0.0;
 void fragment() {
     vec2 p = UV * 2.0 - 1.0;
     float r = length(p);
+    if (r > 1.02) discard;
     float wave1 = fract(phase);
     float wave2 = fract(phase + 0.5);
-    float ring1 = smoothstep(0.065, 0.0, abs(r - mix(0.42, 1.0, wave1))) * (1.0 - wave1);
-    float ring2 = smoothstep(0.055, 0.0, abs(r - mix(0.42, 0.92, wave2))) * (1.0 - wave2) * 0.65;
+    float ring1 = smoothstep(0.068, 0.0, abs(r - mix(0.42, 0.98, wave1))) * (1.0 - wave1);
+    float ring2 = quality_tier < 1.5 ? smoothstep(0.055, 0.0, abs(r - mix(0.42, 0.90, wave2))) * (1.0 - wave2) * 0.65 : 0.0;
     float ring = max(ring1, ring2);
+    // Crisp directional crisis sparks on DesktopHigh only (zero extra samplers).
+    float sparks = 0.0;
+    if (quality_tier < 0.5) {
+        float ang = atan(p.y, p.x);
+        float rays = pow(max(cos(ang * 8.0 + phase * 3.14159), 0.0), 6.0);
+        sparks = rays * smoothstep(0.42, 0.56, r) * (1.0 - smoothstep(0.56, 0.86, r)) * (1.0 - wave1) * 0.42;
+    }
     float disc = smoothstep(0.43, 0.39, r);
-    float inner_bevel = smoothstep(0.03, 0.0, abs(r - 0.35));
-    float rim = smoothstep(0.04, 0.0, abs(r - 0.41));
+    float inner_bevel = smoothstep(0.03, 0.0, abs(r - 0.34));
+    float rim = smoothstep(0.045, 0.0, abs(r - 0.41));
     vec2 iuv = clamp(p / 0.56 * 0.5 + 0.5, 0.0, 1.0);
     float glyph = texture(icon, iuv).a * step(max(abs(p.x), abs(p.y)), 0.28);
-    vec3 dark_core = mix(vec3(0.025, 0.035, 0.05), vec3(0.06, 0.08, 0.11), 1.0 - r * 1.5);
-    vec3 col = mix(dark_core, tint.rgb * 1.12, max(rim, glyph));
-    col = mix(col, tint.rgb * 0.75, inner_bevel * 0.45);
-    col = mix(col, tint.rgb * 1.15, ring * (1.0 - disc));
+    vec3 dark_core = mix(vec3(0.022, 0.032, 0.046), vec3(0.065, 0.085, 0.115), 1.0 - r * 1.5);
+    vec3 col = mix(dark_core, tint.rgb * 1.16, max(rim, glyph));
+    col = mix(col, tint.rgb * 0.78, inner_bevel * 0.48);
+    col = mix(col, tint.rgb * 1.24 + vec3(0.14, 0.10, 0.04), clamp(ring + sparks, 0.0, 1.0) * (1.0 - disc));
     ALBEDO = col;
-    ALPHA = clamp(max(disc * 0.90, ring * 0.88), 0.0, 1.0) * fade;
+    ALPHA = clamp(max(disc * 0.92, clamp(ring * 0.88 + sparks * 0.72, 0.0, 1.0)), 0.0, 1.0) * fade;
 }";
 
     /// <summary>The events marked on the map, or not.</summary>
@@ -163,6 +191,7 @@ void fragment() {
         TakeNewEvents();
         var today = _campaign.ElapsedDays;
         var zoom = _flatMap ? Mathf.Clamp(_flatZoom / 1.6f, 0.45f, 2f) : Mathf.Clamp(_distance / 9f, 0.45f, 2f);
+        var wideLodFade = 1f - Mathf.SmoothStep(15.5f, 22.0f, ViewDistance) * 0.55f;
         var time = (float)Time.GetTicksMsec() / 1000f;
         for (var i = _pulses.Count - 1; i >= 0; i--)
         {
@@ -175,18 +204,20 @@ void fragment() {
                 continue;
             }
             var position = _flatMap
-                ? FlatPoint(pulse.Latitude, pulse.Longitude, FlatMarkerZ + 0.001f)
-                : SurfacePoint(pulse.Latitude, pulse.Longitude, GlobeRadius * 1.0024f);
+                ? LocalFlatPoint(pulse.Latitude, pulse.Longitude, FlatMarkerZ + 0.001f)
+                : LocalSurfacePoint(pulse.Latitude, pulse.Longitude, GlobeRadius * 1.0024f);
             var up = _flatMap ? Vector3.Back : position.Normalized();
             var east = up.Cross(Vector3.Up);
             if (east.LengthSquared() < 1e-6f) east = Vector3.Right;
             east = east.Normalized();
             var north = east.Cross(up).Normalized();
             // A quad faces +Z: lay it on the ground, its face along the local up.
-            var size = PulseSize * zoom * (1f + 0.25f * (1f - age));
+            var highPriority = pulse.Kind is "world_war_began" or "nuclear_strike" or "nuclear_retaliation" or "nuclear_devastation";
+            var lodAlpha = highPriority ? 1f : wideLodFade;
+            var size = PulseSize * zoom * (1f + 0.25f * (1f - age)) * (highPriority ? 1.18f : 1f);
             pulse.Node.Transform = new Transform3D(new Basis(east * size, north * size, up * size), position);
             pulse.Material.SetShaderParameter("phase", time * 0.6f + pulse.Sequence * 0.37f);
-            pulse.Material.SetShaderParameter("fade", 1f - Mathf.SmoothStep(0.65f, 1f, age));
+            pulse.Material.SetShaderParameter("fade", (1f - Mathf.SmoothStep(0.65f, 1f, age)) * lodAlpha);
         }
     }
 
@@ -202,8 +233,10 @@ void fragment() {
         }
         var maxSeq = Math.Max(entries[0].Sequence, entries[^1].Sequence);
         if (maxSeq <= _pulseSeen) return;
-        foreach (var entry in entries)
+        var cap = ActivePulseCap;
+        for (var e = 0; e < entries.Count; e++)
         {
+            var entry = entries[e];
             if (entry.Sequence <= _pulseSeen) continue;
             _pulseSeen = entry.Sequence;
             // The covert outcomes only their own country is told of are marked for it too, as the
@@ -212,23 +245,36 @@ void fragment() {
             if (!entry.Public && !told || !PulseStyles.TryGetValue(entry.Kind, out var style)) continue;
             if (_campaign.ElapsedDays - entry.Day >= style.Days) continue;
             if (!PulsePlace(entry, out var latitude, out var longitude)) continue;
-            // One mark per place and kind: a second clash on the same border renews the first.
-            var same = _pulses.FirstOrDefault(p => p.Style == style && MathF.Abs(p.Latitude - latitude) < 0.5f && MathF.Abs(p.Longitude - longitude) < 0.5f);
-            if (same is not null) { same.Day = entry.Day; same.Sequence = entry.Sequence; continue; }
-            if (_pulses.Count >= PulseLimit)
+            // One mark per place and kind: a second clash on the same border renews the first (zero LINQ alloc).
+            EventPulse same = null;
+            for (var p = 0; p < _pulses.Count; p++)
             {
-                var oldest = _pulses.OrderBy(p => p.Day).First();
+                var existing = _pulses[p];
+                if (existing.Style == style && MathF.Abs(existing.Latitude - latitude) < 0.5f && MathF.Abs(existing.Longitude - longitude) < 0.5f)
+                {
+                    same = existing;
+                    break;
+                }
+            }
+            if (same is not null) { same.Day = entry.Day; same.Sequence = entry.Sequence; same.Kind = entry.Kind; continue; }
+            while (_pulses.Count >= cap && _pulses.Count > 0)
+            {
+                var oldestIndex = 0;
+                for (var p = 1; p < _pulses.Count; p++)
+                    if (_pulses[p].Day < _pulses[oldestIndex].Day) oldestIndex = p;
+                var oldest = _pulses[oldestIndex];
                 if (IsInstanceValid(oldest.Node)) oldest.Node.QueueFree();
-                _pulses.Remove(oldest);
+                _pulses.RemoveAt(oldestIndex);
             }
             var material = new ShaderMaterial { Shader = _pulseShader, RenderPriority = 6 };
             material.SetShaderParameter("tint", style.Tint);
+            material.SetShaderParameter("quality_tier", _pulseQualityTier);
             var icon = PulseIcon(style.Icon);
             if (icon is not null) material.SetShaderParameter("icon", icon);
             var node = new MeshInstance3D { Name = "Pulse_" + entry.Kind, Mesh = _pulseQuad, MaterialOverride = material,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
             _pulseRoot.AddChild(node);
-            _pulses.Add(new EventPulse { Sequence = entry.Sequence, Day = entry.Day, Style = style, Latitude = latitude, Longitude = longitude, Node = node, Material = material });
+            _pulses.Add(new EventPulse { Sequence = entry.Sequence, Day = entry.Day, Kind = entry.Kind, Style = style, Latitude = latitude, Longitude = longitude, Node = node, Material = material });
         }
     }
 

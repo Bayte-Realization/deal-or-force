@@ -141,74 +141,310 @@ public sealed partial class GlobePresentation
         if (ReducedMap) return;
         if (_terrainImages is not null) return;
         var definitions = TerrainCatalog.All.ToArray();
-        _terrainImages = Task.Run(() => PrepareTerrainImages(definitions));
+        var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var cacheDir = Path.Combine(GamePaths.Root, "cache");
+        var shippedCache = GameDataLoader.FindDataFile("cache", MobileTerrainCacheFile);
+        _terrainImages = Task.Run(() => PrepareTerrainImages(definitions, isTouchPrimary, cacheDir, shippedCache));
     }
 
     /// <summary>What the terrain pictures are made from, so pictures made from something else are not used.</summary>
-    private static string TerrainImagesKey(IReadOnlyList<TerrainDefinition> definitions)
+    private static string TerrainImagesKey(IReadOnlyList<TerrainDefinition> definitions, bool isTouchPrimary)
     {
         var water = TerrainCatalog.Water;
         return string.Join("|", definitions.Select(d => d.Id + "=" + d.Texture + "#" + d.Color)) +
-               $"|{TerrainCatalog.TileResolution}|{TerrainCatalog.SeamlessTiles}|{TerrainCatalog.HeightPath}|{TerrainCatalog.ReliefColorPath}|{TerrainCatalog.ReliefColorOpacity > 0f}|" +
+               $"|{TerrainCatalog.TileResolution}|{TerrainCatalog.SeamlessTiles}|{isTouchPrimary}|{TerrainCatalog.HeightPath}|{TerrainCatalog.ReliefColorPath}|{TerrainCatalog.ReliefColorOpacity > 0f}|" +
                $"{TerrainCatalog.BathymetryPath}|{water.LakeTexture}|{water.RiverTexture}|{water.TileResolution}";
     }
 
-    private static TerrainImages PrepareTerrainImages(IReadOnlyList<TerrainDefinition> definitions)
+    private static TerrainImages PrepareTerrainImages(
+        IReadOnlyList<TerrainDefinition> definitions,
+        bool isTouchPrimary,
+        string cacheDirectory = "",
+        string shippedCachePath = "")
     {
-        var prepared = new TerrainImages { Key = TerrainImagesKey(definitions), Tiles = new Image[definitions.Count] };
-        // A tile to a core, leaving room for the map worker and the main thread.
-        var options = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(System.Environment.ProcessorCount - 2, 1, 6) };
-        Parallel.For(0, definitions.Count, options, index => prepared.Tiles[index] = PrepareTerrainTile(definitions[index]));
-        prepared.Height = ReliefImage(TerrainCatalog.HeightPath, new Color(.5f, .5f, .5f));
+        var key = TerrainImagesKey(definitions, isTouchPrimary);
+        var water = TerrainCatalog.Water;
+        if (isTouchPrimary && !ModOverlayPolicy.IsActive &&
+            TryReadMobileTerrainCache(cacheDirectory, shippedCachePath, key, definitions.Count, out var cached))
+        {
+            cached.Height = ReliefImage("", new Color(.5f, .5f, .5f));
+            cached.Colour = ReliefImage("", new Color(.57f, .58f, .47f));
+            cached.Floor = ReliefImage("", new Color(0f, 0f, 0f));
+            return cached;
+        }
+
+        var prepared = new TerrainImages { Key = key, Tiles = new Image[definitions.Count] };
+        var rawTiles = isTouchPrimary && !ModOverlayPolicy.IsActive ? new byte[definitions.Count + 2][] : null;
+        var tileSides = isTouchPrimary && !ModOverlayPolicy.IsActive ? new int[definitions.Count + 2] : null;
+
+        // Bounded parallelism keeps Windows OS/DWM/audio responsive on 16-32 core CPUs and prevents RAM spikes on mobile.
+        var maxPar = isTouchPrimary
+            ? Math.Clamp(System.Environment.ProcessorCount, 1, 2)
+            : Math.Clamp(System.Environment.ProcessorCount / 2, 1, 4);
+        var options = new ParallelOptions { MaxDegreeOfParallelism = maxPar };
+        Parallel.For(0, definitions.Count, options, index =>
+        {
+            var img = PrepareTerrainTile(definitions[index], isTouchPrimary, out var raw, out var side);
+            prepared.Tiles[index] = img;
+            if (rawTiles is not null && raw is not null)
+            {
+                rawTiles[index] = raw;
+                tileSides![index] = side;
+            }
+        });
+        // On mobile/touch hardware (Android & BlueStacks), skip decoding three 5760x2880 relief/bathymetry
+        // PNGs (+mipmaps + >120 MiB VRAM) so terrain boot stays under 1.5s. Desktop PC keeps full 5760px relief.
+        prepared.Height = isTouchPrimary
+            ? ReliefImage("", new Color(.5f, .5f, .5f))
+            : ReliefImage(TerrainCatalog.HeightPath, new Color(.5f, .5f, .5f));
         // The relief's own colours are drawn at relief_color_opacity, and the shipped map draws
         // them at nought: the 5760-wide picture was decoded, given mipmaps and uploaded - 63 MB of
         // video memory and a second of loading - to be multiplied by zero. A map that shows them
         // (a mod raising the opacity) loads them; one that does not gets a texel of the fallback.
-        prepared.Colour = TerrainCatalog.ReliefColorOpacity > 0f
+        prepared.Colour = !isTouchPrimary && TerrainCatalog.ReliefColorOpacity > 0f
             ? ReliefImage(TerrainCatalog.ReliefColorPath, new Color(.57f, .58f, .47f))
             : ReliefImage("", new Color(.57f, .58f, .47f));
-        prepared.Floor = ReliefImage(TerrainCatalog.BathymetryPath, new Color(0f, 0f, 0f));
-        var water = TerrainCatalog.Water;
-        prepared.Lake = WaterTileImage(water.LakeTexture, water.TileResolution);
-        prepared.River = WaterTileImage(water.RiverTexture, water.TileResolution);
+        prepared.Floor = isTouchPrimary
+            ? ReliefImage("", new Color(0f, 0f, 0f))
+            : ReliefImage(TerrainCatalog.BathymetryPath, new Color(0f, 0f, 0f));
+        prepared.Lake = PrepareWaterTileFromDisk(water.LakeTexture, water.TileResolution, isTouchPrimary, out var lakeRaw, out var lakeSide);
+        prepared.River = PrepareWaterTileFromDisk(water.RiverTexture, water.TileResolution, isTouchPrimary, out var riverRaw, out var riverSide);
+        if (rawTiles is not null)
+        {
+            if (lakeRaw is not null) { rawTiles[definitions.Count] = lakeRaw; tileSides![definitions.Count] = lakeSide; }
+            if (riverRaw is not null) { rawTiles[definitions.Count + 1] = riverRaw; tileSides![definitions.Count + 1] = riverSide; }
+            TryWriteMobileTerrainCache(cacheDirectory, key, rawTiles, tileSides!);
+        }
         return prepared;
     }
 
+    private static TerrainImages PrepareTerrainImages(IReadOnlyList<TerrainDefinition> definitions, bool isTouchPrimary) =>
+        PrepareTerrainImages(definitions, isTouchPrimary, "", "");
+
     /// <summary>The pictures started beside the map when they are still the right ones, else made here and now.</summary>
-    private TerrainImages TakeTerrainImages(IReadOnlyList<TerrainDefinition> definitions)
+    private TerrainImages TakeTerrainImages(IReadOnlyList<TerrainDefinition> definitions, bool isTouchPrimary)
     {
         var task = _terrainImages;
         _terrainImages = null;
+        TerrainImages result = null;
         if (task is not null)
         {
             try
             {
                 var ready = task.Result;
-                if (ready.Key == TerrainImagesKey(definitions) && ready.Tiles.Length == definitions.Count) return ready;
+                if (ready.Key == TerrainImagesKey(definitions, isTouchPrimary) && ready.Tiles.Length == definitions.Count)
+                    result = ready;
             }
             catch (Exception exception)
             {
                 GD.PushWarning($"[dof] terrain pictures made in the background failed, making them here: {exception.GetBaseException().Message}");
             }
         }
-        return PrepareTerrainImages(definitions);
+        if (result is null)
+        {
+            var cacheDir = Path.Combine(GamePaths.Root, "cache");
+            var shippedCache = GameDataLoader.FindDataFile("cache", MobileTerrainCacheFile);
+            result = PrepareTerrainImages(definitions, isTouchPrimary, cacheDir, shippedCache);
+        }
+        for (var i = 0; i < definitions.Count; i++)
+        {
+            if (result.Tiles[i] is not null) continue;
+            var resImg = TryLoadResourceImageCopy(definitions[i].TextureRelative);
+            result.Tiles[i] = FinalizeTerrainTileImage(resImg, definitions[i], isTouchPrimary, out _, out _);
+        }
+        if (result.Lake is null)
+            result.Lake = WaterTileImageOrResource(TerrainCatalog.Water.LakeTexture, TerrainCatalog.Water.LakeRelative, TerrainCatalog.Water.TileResolution, isTouchPrimary);
+        if (result.River is null)
+            result.River = WaterTileImageOrResource(TerrainCatalog.Water.RiverTexture, TerrainCatalog.Water.RiverRelative, TerrainCatalog.Water.TileResolution, isTouchPrimary);
+        return result;
     }
 
-    private static Image PrepareTerrainTile(TerrainDefinition definition)
+    private static Image PrepareTerrainTile(TerrainDefinition definition, bool isTouchPrimary, out byte[] rawRgba, out int outSide)
     {
         var tile = File.Exists(definition.Texture) ? Image.LoadFromFile(definition.Texture) : null;
+        if (tile is null && !File.Exists(definition.Texture))
+        {
+            // Return null when disk asset is missing so TakeTerrainImages can fill from res:// on main thread.
+            rawRgba = null;
+            outSide = 0;
+            return null;
+        }
+        return FinalizeTerrainTileImage(tile, definition, isTouchPrimary, out rawRgba, out outSide);
+    }
+
+    private static Image FinalizeTerrainTileImage(Image tile, TerrainDefinition definition, bool isTouchPrimary, out byte[] rawRgba, out int outSide)
+    {
         if (tile is null || tile.IsEmpty())
         {
             GD.PushWarning($"[dof] terrain {definition.Id}: texture unavailable; using its map color (data root: {GameDataLoader.DataFolder()})");
-            tile = Image.CreateEmpty(256, 256, false, Image.Format.Rgba8);
+            tile = Image.CreateEmpty(isTouchPrimary ? 128 : 256, isTouchPrimary ? 128 : 256, false, Image.Format.Rgba8);
             tile.Fill(new Color($"#{definition.Color:X6}"));
         }
-        tile.Convert(Image.Format.Rgba8);
-        var side = Math.Clamp(TerrainCatalog.TileResolution, 64, 2048);
-        tile.Resize(side, side, Image.Interpolation.Lanczos);
-        if (TerrainCatalog.SeamlessTiles) tile = SeamlessTile(tile);
+        if (tile.IsCompressed()) tile.Decompress();
+        if (tile.GetFormat() != Image.Format.Rgba8) tile.Convert(Image.Format.Rgba8);
+        // On touch/mobile hardware cap tile resolution at 128, use fast Bilinear interpolation,
+        // and skip the heavy CPU SeamlessTile blur/crossfade pass across 12 ground photographs.
+        var side = Math.Clamp(TerrainCatalog.TileResolution, 64, isTouchPrimary ? 128 : 2048);
+        var interp = isTouchPrimary ? Image.Interpolation.Bilinear : Image.Interpolation.Lanczos;
+        if (tile.GetWidth() != side || tile.GetHeight() != side)
+            tile.Resize(side, side, interp);
+        if (TerrainCatalog.SeamlessTiles && !isTouchPrimary) tile = SeamlessTile(tile);
+        outSide = tile.GetWidth();
+        rawRgba = isTouchPrimary && tile.GetFormat() == Image.Format.Rgba8 && !tile.HasMipmaps() ? tile.GetData() : null;
         tile.GenerateMipmaps();
         return tile;
+    }
+
+    private static Image PrepareWaterTileFromDisk(string path, int resolution, bool isTouchPrimary, out byte[] rawRgba, out int outSide)
+    {
+        if (!File.Exists(path))
+        {
+            rawRgba = null;
+            outSide = 0;
+            return null;
+        }
+        var img = WaterTileImage(path, resolution, isTouchPrimary);
+        outSide = img.GetWidth();
+        rawRgba = isTouchPrimary && img.GetFormat() == Image.Format.Rgba8 ? ExtractLevel0Rgba(img, outSide) : null;
+        return img;
+    }
+
+    private static byte[] ExtractLevel0Rgba(Image img, int side)
+    {
+        var need = side * side * 4;
+        var data = img.GetData();
+        if (data.Length == need) return data;
+        if (data.Length > need)
+        {
+            var level0 = new byte[need];
+            Buffer.BlockCopy(data, 0, level0, 0, need);
+            return level0;
+        }
+        return null;
+    }
+
+    private static Image TryLoadResourceImageCopy(string relative)
+    {
+        if (string.IsNullOrWhiteSpace(relative)) return null;
+        var resPath = relative.StartsWith("res://", StringComparison.OrdinalIgnoreCase)
+            ? relative
+            : "res://game/" + relative.TrimStart('/');
+        if (!ResourceLoader.Exists(resPath)) return null;
+        var texture = GD.Load<Texture2D>(resPath);
+        var image = texture?.GetImage();
+        return image is null || image.IsEmpty() ? null : image;
+    }
+
+    private const string MobileTerrainCacheFile = "terrain_mobile_v1.bin";
+    private const uint MobileTerrainCacheMagic = 0x43544D44u; // DMTC
+
+    private static ulong HashTerrainKey(string key)
+    {
+        var hash = 14695981039346656037UL;
+        for (var i = 0; i < key.Length; i++)
+        {
+            var ch = key[i];
+            hash = (hash ^ (byte)ch) * 1099511628211UL;
+            hash = (hash ^ (byte)(ch >> 8)) * 1099511628211UL;
+        }
+        return hash;
+    }
+
+    private static ulong HashBytesFnv1a(byte[] data)
+    {
+        var hash = 14695981039346656037UL;
+        for (var i = 0; i < data.Length; i++)
+            hash = (hash ^ data[i]) * 1099511628211UL;
+        return hash;
+    }
+
+    private static bool TryReadMobileTerrainCache(string cacheDir, string shippedPath, string key, int defCount, out TerrainImages prepared)
+    {
+        prepared = null;
+        var total = defCount + 2;
+        var keyHash = HashTerrainKey(key);
+        foreach (var path in new[]
+        {
+            string.IsNullOrWhiteSpace(cacheDir) ? "" : Path.Combine(cacheDir, MobileTerrainCacheFile),
+            shippedPath ?? ""
+        })
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) continue;
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read);
+                using var br = new BinaryReader(fs);
+                if (br.ReadUInt32() != MobileTerrainCacheMagic || br.ReadInt32() != 1) continue;
+                if (br.ReadUInt64() != keyHash || br.ReadInt32() != total) continue;
+                var expectedCsum = br.ReadUInt64();
+                var compLen = br.ReadInt32();
+                if (compLen <= 0 || compLen > 64 * 1024 * 1024) continue;
+                var compressed = br.ReadBytes(compLen);
+                if (compressed.Length != compLen) continue;
+                var raw = K4os.Compression.LZ4.LZ4Pickler.Unpickle(compressed);
+                if (HashBytesFnv1a(raw) != expectedCsum) continue;
+                using var ms = new MemoryStream(raw, writable: false);
+                using var pr = new BinaryReader(ms);
+                var result = new TerrainImages { Key = key, Tiles = new Image[defCount] };
+                for (var i = 0; i < total; i++)
+                {
+                    var side = pr.ReadInt32();
+                    var len = pr.ReadInt32();
+                    if (side <= 0 || len != side * side * 4) throw new InvalidDataException("corrupt mobile tile");
+                    var pixels = pr.ReadBytes(len);
+                    var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, pixels);
+                    img.GenerateMipmaps();
+                    if (i < defCount) result.Tiles[i] = img;
+                    else if (i == defCount) result.Lake = img;
+                    else result.River = img;
+                }
+                prepared = result;
+                return true;
+            }
+            catch { /* Fall back cleanly to source PNGs if cache invalid */ }
+        }
+        return false;
+    }
+
+    private static void TryWriteMobileTerrainCache(string cacheDir, string key, byte[][] rawTiles, int[] sides)
+    {
+        if (string.IsNullOrWhiteSpace(cacheDir)) return;
+        for (var i = 0; i < rawTiles.Length; i++)
+            if (rawTiles[i] is null || sides[i] <= 0) return;
+        try
+        {
+            Directory.CreateDirectory(cacheDir);
+            var target = Path.Combine(cacheDir, MobileTerrainCacheFile);
+            var tmp = target + ".tmp." + System.Environment.ProcessId;
+            byte[] payload;
+            using (var ms = new MemoryStream())
+            using (var bw = new BinaryWriter(ms))
+            {
+                for (var i = 0; i < rawTiles.Length; i++)
+                {
+                    bw.Write(sides[i]);
+                    bw.Write(rawTiles[i].Length);
+                    bw.Write(rawTiles[i]);
+                }
+                bw.Flush();
+                payload = ms.ToArray();
+            }
+            var compressed = K4os.Compression.LZ4.LZ4Pickler.Pickle(payload);
+            var csum = HashBytesFnv1a(payload);
+            using (var fs = new FileStream(tmp, FileMode.Create, System.IO.FileAccess.Write, FileShare.None))
+            using (var hw = new BinaryWriter(fs))
+            {
+                hw.Write(MobileTerrainCacheMagic);
+                hw.Write(1);
+                hw.Write(HashTerrainKey(key));
+                hw.Write(rawTiles.Length);
+                hw.Write(csum);
+                hw.Write(compressed.Length);
+                hw.Write(compressed);
+            }
+            File.Move(tmp, target, overwrite: true);
+        }
+        catch { /* Non-fatal cache write error */ }
     }
 
     // All allocations happen once when the map loads, not once per province per frame.
@@ -226,7 +462,8 @@ public sealed partial class GlobePresentation
         }
         if (TerrainCatalog.LoadError.Length > 0) GD.PushWarning("[dof] terrain catalog: " + TerrainCatalog.LoadError);
         var definitions = TerrainCatalog.All;
-        var prepared = TakeTerrainImages(definitions);
+        var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var prepared = TakeTerrainImages(definitions, isTouchPrimary);
         var images = new Godot.Collections.Array<Image>();
         var slots = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
         for (var index = 0; index < definitions.Count; index++)
@@ -248,12 +485,33 @@ public sealed partial class GlobePresentation
             lookup[province] = slots[topology.TerrainAt(province).Id];
         using (var lookupImg = Image.CreateFromData(256, 256, false, Image.Format.R8, lookup))
             UploadMapImage("province_terrain", lookupImg);
-        _globeMaterial.SetShaderParameter("relief_height", ImageTexture.CreateFromImage(prepared.Height));
+        if (!isTouchPrimary && prepared.Height is not null && !prepared.Height.IsEmpty())
+        {
+            using var cpuHeight = (Image)prepared.Height.Duplicate();
+            cpuHeight.ClearMipmaps();
+            if (cpuHeight.GetFormat() != Image.Format.L8 && cpuHeight.GetFormat() != Image.Format.R8)
+                cpuHeight.Convert(Image.Format.L8);
+            const int gridW = 768;
+            const int gridH = 384;
+            if (cpuHeight.GetWidth() != gridW || cpuHeight.GetHeight() != gridH)
+                cpuHeight.Resize(gridW, gridH, Image.Interpolation.Bilinear);
+            _reliefHeightWidth = cpuHeight.GetWidth();
+            _reliefHeightHeight = cpuHeight.GetHeight();
+            _reliefHeightGrid = cpuHeight.GetData();
+        }
+        else
+        {
+            _reliefHeightGrid = null;
+            _reliefHeightWidth = 0;
+            _reliefHeightHeight = 0;
+        }
+        _reliefHeightTexture = ImageTexture.CreateFromImage(prepared.Height);
+        _globeMaterial.SetShaderParameter("relief_height", _reliefHeightTexture);
         prepared.Height?.Dispose();
         _globeMaterial.SetShaderParameter("relief_color", ImageTexture.CreateFromImage(prepared.Colour));
         prepared.Colour?.Dispose();
         // The sea floor: a map without it is a flat navy sheet, one without shelves or coasts.
-        var hasFloor = File.Exists(TerrainCatalog.BathymetryPath);
+        var hasFloor = !isTouchPrimary && File.Exists(TerrainCatalog.BathymetryPath);
         _globeMaterial.SetShaderParameter("ocean_depth", ImageTexture.CreateFromImage(prepared.Floor));
         prepared.Floor?.Dispose();
         _globeMaterial.SetShaderParameter("ocean_depth_ready", hasFloor ? 1f : 0f);

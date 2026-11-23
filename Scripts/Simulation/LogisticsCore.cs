@@ -78,6 +78,8 @@ public static class LogisticsSystem
         public readonly List<Fleet> Blockaders = new();
         // The countries to trace today, in the list's order (shared board only).
         public readonly List<(Nation Nation, List<Army> Armies, List<int> Held)> Due = new();
+        public readonly List<Nation> LivingNations = new();
+        public readonly List<Sponsorship> Level2Sponsorships = new();
     }
 
     private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
@@ -202,7 +204,7 @@ public static class LogisticsSystem
         var scanned = 0;
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
-            if (++scanned % 2048 == 0) yield return 0;
+            if (++scanned % 2048 == 0 && Campaign.StageOverdue()) yield return 0;
             var map = controllers[province];
             if (map == 0) continue;
             if (!board.Controlled.TryGetValue(map, out var list)) board.Controlled[map] = list = new List<int>();
@@ -214,9 +216,11 @@ public static class LogisticsSystem
         // sixty-five thousand comparisons a tick turned into fourteen hundred.
         foreach (var list in board.ArmiesByNation.Values) list.Clear();
         var indexed = 0;
-        foreach (var army in campaign.Armies)
+        var allArmies = campaign.Armies;
+        for (var ai = 0; ai < allArmies.Count; ai++)
         {
-            if (++indexed % 512 == 0) yield return 0;
+            if (++indexed % 512 == 0 && Campaign.StageOverdue()) yield return 0;
+            var army = allArmies[ai];
             if (!board.ArmiesByNation.TryGetValue(army.NationId, out var list))
                 board.ArmiesByNation[army.NationId] = list = new List<Army>();
             list.Add(army);
@@ -224,7 +228,7 @@ public static class LogisticsSystem
 
         var length = topology.ProvinceCount + 1;
 
-        yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
         // The countries with an army in the field, in the list's order, and then their traces
         // side by side (DeterministicParallel). A country's trace reads the map, the wars, the
         // fleets and its own ground, and writes only its own formations and its own
@@ -243,28 +247,45 @@ public static class LogisticsSystem
         SeaLanes.CoastalProvinceArray(topology);
         var due = board.Due;
         due.Clear();
-        foreach (var nation in campaign.Nations)
+        var nations = campaign.ActiveNations;
+        var livingNations = board.LivingNations;
+        livingNations.Clear();
+        for (var i = 0; i < nations.Count; i++)
         {
+            var nation = nations[i];
+            if (nation.Population > 0 && nation.MapIndex > 0) livingNations.Add(nation);
             if (!board.ArmiesByNation.TryGetValue(nation.Id, out var armies) || armies.Count == 0) continue;
             board.Controlled.TryGetValue((ushort)nation.MapIndex, out var held);
             due.Add((nation, armies, held));
             if (held is { Count: > 0 }) EnsureLandCounted(campaign, board);
+        }
+        var sponsorships = board.Level2Sponsorships;
+        sponsorships.Clear();
+        if (due.Count > 0)
+        {
+            var allSponsorships = campaign.Sponsorships;
+            for (var i = 0; i < allSponsorships.Count; i++)
+                if (allSponsorships[i].Level >= 2) sponsorships.Add(allSponsorships[i]);
         }
         // In handfuls, with a seam between them: a late world has three hundred countries in the
         // field, and the whole trace in one piece was a stage of its own on one thread.
         for (var start = 0; start < due.Count; start += TraceHandful)
         {
             var end = Math.Min(due.Count, start + TraceHandful);
-            DeterministicParallel.For(campaign, start, end, index =>
+            DeterministicParallel.ForRange(campaign, start, end, (from, to) =>
             {
-                var (nation, armies, held) = due[index];
-                UpdateNation(campaign, nation, armies, held, WorkerScratch(length), board);
+                var work = WorkerScratch(length);
+                for (var index = from; index < to; index++)
+                {
+                    var (nation, armies, held) = due[index];
+                    UpdateNation(campaign, nation, armies, held, work, board);
+                }
             }, minItems: 4);
-            if (end < due.Count) yield return 0;
+            if (end < due.Count && Campaign.StageOverdue()) yield return 0;
         }
         } // The trace above is every third day. The clock below is every day.
 
-        yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
         AgeCutOff(campaign);
     }
 
@@ -280,7 +301,7 @@ public static class LogisticsSystem
             var landless = topology is not null && controllers is not null && Partisans.MayForage(campaign, nation);
             if (landless)
             {
-                CollectCorridors(campaign, nation, board);
+                CollectCorridors(campaign, nation, board, shared);
                 board.Unreached.Clear();
                 foreach (var army in armies)
                     if (!Visiting(campaign, nation, army)) CountUnreached(topology, army, board);
@@ -308,7 +329,7 @@ public static class LogisticsSystem
         // hold a depot, which is a different question from which ground it owns - see
         // CollectRoots and TraceNetwork.
         var reach = board.Reach;
-        CollectCorridors(campaign, nation, board);
+        CollectCorridors(campaign, nation, board, shared);
         // A rising holds ground it does not own: the map still says whose the provinces are,
         // and a rebel army that looked only at owned ground found no depot anywhere and starved
         // in its own heartland (Sakha, 2034). For a side with no land of its own, the ground it
@@ -316,7 +337,7 @@ public static class LogisticsSystem
         var insurgent = true;
         foreach (var province in territory)
             if (topology.ProvinceToNation[province] == nation.MapIndex) { insurgent = false; break; }
-        CollectRoots(campaign, nation, territory, board);
+        CollectRoots(campaign, nation, territory, board, shared);
         if (insurgent && board.Roots.Count == 0 && InsurgentSeat(campaign, nation, territory) is var seat and > 0) board.Roots.Add(seat);
         TraceNetwork(nation, topology, controllers, generation, board);
 
@@ -625,15 +646,19 @@ public static class LogisticsSystem
     /// and the trace's distance still counts every province of the way. Built only for a
     /// country at war; at peace supply never needs to leave home.
     /// </summary>
-    private static void CollectCorridors(Campaign campaign, Nation nation, Scratch board)
+    private static void CollectCorridors(Campaign campaign, Nation nation, Scratch board, Scratch shared)
     {
         board.Corridors.Clear();
         // A subject's ground is its overlord's road and the overlord's is the subject's, at war and at peace.
-        foreach (var host in campaign.Nations)
-            if (host.Id != nation.Id && host.Population > 0 && host.MapIndex > 0 &&
+        var livingNations = shared.LivingNations;
+        for (var i = 0; i < livingNations.Count; i++)
+        {
+            var host = livingNations[i];
+            if (host.Id != nation.Id &&
                 (host.AnswersTo(nation.Id) || nation.AnswersTo(host.Id)) &&
                 !MilitaryAccess.Hostile(campaign, nation.Id, host.Id))
                 board.Corridors.Add((ushort)host.MapIndex);
+        }
         var atWar = false;
         var wars = Warfare.LiveWars(campaign);
         for (var index = 0; index < wars.Count; index++)
@@ -645,10 +670,13 @@ public static class LogisticsSystem
                 if (id != nation.Id && campaign.NationById(id) is { } friend) board.Corridors.Add((ushort)friend.MapIndex);
         }
         if (!atWar) return;
-        foreach (var host in campaign.Nations)
-            if (host.Id != nation.Id && host.Population > 0 && MilitaryAccess.Granted(campaign, nation.Id, host.Id) &&
+        for (var i = 0; i < livingNations.Count; i++)
+        {
+            var host = livingNations[i];
+            if (host.Id != nation.Id && MilitaryAccess.Granted(campaign, nation.Id, host.Id) &&
                 !MilitaryAccess.Hostile(campaign, nation.Id, host.Id))
                 board.Corridors.Add((ushort)host.MapIndex);
+        }
     }
 
     private static bool Passable(Nation nation, ushort controller, Scratch board) =>
@@ -677,12 +705,12 @@ public static class LogisticsSystem
         return best;
     }
 
-    private static void CollectRoots(Campaign campaign, Nation nation, List<int> territory, Scratch board)
+    private static void CollectRoots(Campaign campaign, Nation nation, List<int> territory, Scratch board, Scratch shared)
     {
         board.Roots.Clear();
         var origin = CapitalCore.SupplyOriginProvinceId(campaign, nation);
         if (origin > 0) board.Roots.Add(origin);
-        PatronBorders(campaign, nation, territory, board);
+        PatronBorders(campaign, nation, territory, board, shared);
     }
 
     /// <summary>
@@ -693,19 +721,25 @@ public static class LogisticsSystem
     /// starved as fast as one alone on an island, and surrendered with the arms still waiting
     /// at the crossing. The same for any country - nobody is named here.
     /// </summary>
-    private static void PatronBorders(Campaign campaign, Nation nation, List<int> territory, Scratch board)
+    private static void PatronBorders(Campaign campaign, Nation nation, List<int> territory, Scratch board, Scratch shared)
     {
+        var sponsorships = shared.Level2Sponsorships;
+        if (sponsorships.Count == 0) return;
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         board.Patrons.Clear();
-        foreach (var backing in campaign.Sponsorships)
-            if (backing.ClientId == nation.Id && backing.Level >= 2 &&
+        for (var i = 0; i < sponsorships.Count; i++)
+        {
+            var backing = sponsorships[i];
+            if (backing.ClientId == nation.Id &&
                 campaign.NationById(backing.SponsorId) is { Population: > 0 } sponsor &&
                 !CampaignDiplomacy.AtWar(campaign, sponsor.Id, nation.Id))
                 board.Patrons.Add((ushort)sponsor.MapIndex);
+        }
         if (board.Patrons.Count == 0) return;
-        foreach (var province in territory)
+        for (var ti = 0; ti < territory.Count; ti++)
         {
+            var province = territory[ti];
             if (controllers[province] != nation.MapIndex || topology.IsWater(province)) continue;
             foreach (var neighbor in topology.Neighbors[province])
                 if (board.Patrons.Contains(controllers[neighbor]) && !topology.IsWater(neighbor))
@@ -872,6 +906,8 @@ public static class LogisticsSystem
     /// neighbour around it, and the first morning of the next war must not find it already
     /// starved by a siege that ended years ago.
     /// </summary>
+    [ThreadStatic] private static GenerationalStampSet _besiegedNations;
+
     private static void AgeCutOff(Campaign campaign)
     {
         var span = Math.Max(1, campaign.Defines.SupplyCutoffDays);
@@ -880,8 +916,12 @@ public static class LogisticsSystem
         var supplyFloor = M.Clamp01(campaign.Defines.PocketHungerSupplyFloor);
         var storesOn = campaign.Defines.StrandedGarrisonsEnabled;
         Dictionary<int, float> cutOffDivisions = null;
-        foreach (var army in campaign.Armies)
+        var besiegedBuilt = false;
+        GenerationalStampSet besieged = null;
+        var armies = campaign.Armies;
+        for (var i = 0; i < armies.Count; i++)
         {
+            var army = armies[i];
             if (!army.CutOff)
             {
                 // The road is open: the next pocket counts its stores afresh.
@@ -898,7 +938,23 @@ public static class LogisticsSystem
             }
             // Nobody is besieging a country at peace: the stores keep, the clock unwinds, and
             // the formation is kept where rationing would keep it.
-            if (!Besieged(campaign, army.NationId))
+            if (!besiegedBuilt)
+            {
+                besiegedBuilt = true;
+                besieged = _besiegedNations ??= new GenerationalStampSet();
+                besieged.Clear();
+                var wars = Warfare.LiveWars(campaign);
+                for (var wi = 0; wi < wars.Count; wi++)
+                {
+                    var war = wars[wi];
+                    if (war.Ended) continue;
+                    besieged.Add(war.AttackerId);
+                    besieged.Add(war.DefenderId);
+                    foreach (var ally in war.AttackerAllies) besieged.Add(ally);
+                    foreach (var ally in war.DefenderAllies) besieged.Add(ally);
+                }
+            }
+            if (!besieged.Contains(army.NationId))
             {
                 army.DaysCutOff = Math.Max(0, army.DaysCutOff - add);
                 army.SupplyLevel = M.Lerp(army.SupplyLevel, campaign.Defines.PocketStoresSupplyLevel, 0.25f);

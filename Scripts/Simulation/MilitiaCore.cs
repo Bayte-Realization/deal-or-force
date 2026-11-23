@@ -137,7 +137,7 @@ public static class MilitiaCore
     /// alternative is a list lookup per province per neighbour per day.
     /// </summary>
     private static void CollectEnemies(Campaign campaign, Nation nation, HashSet<ushort> into) =>
-        CollectEnemies(campaign, nation, into, WarMembers(campaign));
+        CollectEnemies(campaign, nation, into, FillWarMembers(campaign));
 
     /// <summary>
     /// Every flag this country is at war with, read off the day's member lists: the same
@@ -145,18 +145,18 @@ public static class MilitiaCore
     /// nation once per country.
     /// </summary>
     private static void CollectEnemies(Campaign campaign, Nation nation, HashSet<ushort> into,
-        IReadOnlyDictionary<int, int[]> warMembers)
+        IReadOnlyDictionary<int, List<int>> warMembers)
     {
-        if (campaign is null || nation is null) return;
-        // The wars still being fought, in the record's order (Warfare.OpenWars): asked of the
-        // whole record this was every war there has ever been, for every country, every
-        // morning - 2,476 wars on a save 107 years long to find the 26 not over.
-        foreach (var war in Warfare.OpenWars(campaign))
+        if (campaign is null || nation is null || warMembers is null) return;
+        var live = Warfare.LiveWars(campaign);
+        for (var wi = 0; wi < live.Count; wi++)
         {
+            var war = live[wi];
             if (war.Ended || !war.Involves(nation.Id)) continue;
             if (!warMembers.TryGetValue(war.Id, out var members)) continue;
-            foreach (var otherId in members)
+            for (var mi = 0; mi < members.Count; mi++)
             {
+                var otherId = members[mi];
                 if (otherId == nation.Id) continue;
                 var other = campaign.NationById(otherId);
                 if (other is not null) into.Add((ushort)other.MapIndex);
@@ -164,26 +164,30 @@ public static class MilitiaCore
         }
     }
 
+    [ThreadStatic] private static Dictionary<int, List<int>> _warMembersScratch;
+    [ThreadStatic] private static Stack<List<int>> _warMembersPool;
+
     /// <summary>Both sides of every open war as a flat id list, built once per day.</summary>
-    private static Dictionary<int, int[]> WarMembers(Campaign campaign)
+    private static Dictionary<int, List<int>> FillWarMembers(Campaign campaign)
     {
-        var open = Warfare.OpenWars(campaign);
-        var map = new Dictionary<int, int[]>(open.Count);
-        foreach (var war in open)
+        var map = _warMembersScratch ??= new Dictionary<int, List<int>>();
+        var pool = _warMembersPool ??= new Stack<List<int>>();
+        foreach (var existing in map.Values)
         {
+            existing.Clear();
+            pool.Push(existing);
+        }
+        map.Clear();
+        var live = Warfare.LiveWars(campaign);
+        for (var i = 0; i < live.Count; i++)
+        {
+            var war = live[i];
             if (war.Ended) continue;
-            var members = new List<int>(war.BelligerentCount);
+            var members = pool.Count > 0 ? pool.Pop() : new List<int>(war.BelligerentCount);
             foreach (var id in war.Side(true)) members.Add(id);
             foreach (var id in war.Side(false)) members.Add(id);
-            map[war.Id] = members.ToArray();
+            map[war.Id] = members;
         }
-        return map;
-    }
-
-    private static Dictionary<int, ScenarioState> StateByMap(Campaign campaign)
-    {
-        var map = new Dictionary<int, ScenarioState>(campaign.States.Count);
-        foreach (var state in campaign.States) map[state.MapIndex] = state;
         return map;
     }
 
@@ -212,12 +216,12 @@ public static class MilitiaCore
         if (campaign?.ProvinceMap is null) yield break;
 
         var fighting = false;
-        foreach (var war in Warfare.OpenWars(campaign))
-            if (!war.Ended) { fighting = true; break; }
+        var liveWars = Warfare.LiveWars(campaign);
+        for (var i = 0; i < liveWars.Count; i++)
+            if (!liveWars[i].Ended) { fighting = true; break; }
 
-        // Who each war is between, once for the whole day: the per-country enemy lists
-        // below used to ask every war about every nation, which was the pass's whole cost.
-        var warMembers = WarMembers(campaign);
+        // Who each war is between, once for the whole day: skip allocating/populating when at peace.
+        Dictionary<int, List<int>> warMembers = fighting ? FillWarMembers(campaign) : null;
 
         foreach (var _ in StandDownStages(campaign, fighting, warMembers)) yield return 0;
         if (!fighting) yield break;
@@ -366,8 +370,9 @@ public static class MilitiaCore
         var men = (int)Weights.Formation;
         var place = town?.Name ?? state.Name;
         if (FoundAt(campaign, nation, state, province, men, 0.45f, town) is null) return false;
-        DiagnosticLogs.Write("simulation",
-            $"MILITIA_RAISED nation={nation.Tag} region={state.Name} town={place} province={province} men={men}");
+        if (DiagnosticLogs.Enabled)
+            DiagnosticLogs.Write("simulation",
+                $"MILITIA_RAISED nation={nation.Tag} region={state.Name} town={place} province={province} men={men}");
         // In the country's own chronicle: a town taking up arms is news to the people whose
         // town it is, and forty of them across a world war are noise to everybody else.
         campaign.Chronicle.Record(campaign, "militia_raised", nation.Id,
@@ -461,20 +466,23 @@ public static class MilitiaCore
 
         // The middle of what is still held, as a direction from the centre of the Earth, so a
         // region across the date line does not average to the far side of the planet.
+        var regionProvinces = topology.ProvincesOfState(region);
         var seat = -1;
         double x = 0, y = 0, z = 0;
-        for (var province = 1; province <= topology.ProvinceCount && province < control.Length; province++)
+        for (var i = 0; i < regionProvinces.Length; i++)
         {
-            if (topology.ProvinceToState[province] != region || control[province] != flag || topology.IsWater(province))
+            var province = regionProvinces[i];
+            if (province <= 0 || province >= control.Length || control[province] != flag || topology.IsWater(province))
                 continue;
             var (latitude, longitude) = topology.CenterOf(province);
             var (px, py, pz) = Direction(latitude, longitude);
             x += px; y += py; z += pz;
         }
         var best = double.MinValue;
-        for (var province = 1; province <= topology.ProvinceCount && province < control.Length; province++)
+        for (var i = 0; i < regionProvinces.Length; i++)
         {
-            if (topology.ProvinceToState[province] != region || control[province] != flag || topology.IsWater(province))
+            var province = regionProvinces[i];
+            if (province <= 0 || province >= control.Length || control[province] != flag || topology.IsWater(province))
                 continue;
             var (latitude, longitude) = topology.CenterOf(province);
             var (px, py, pz) = Direction(latitude, longitude);
@@ -500,12 +508,11 @@ public static class MilitiaCore
     /// out of one; they go back to the region they were always in.
     /// </summary>
     private static IEnumerable<int> StandDownStages(Campaign campaign, bool fighting,
-        IReadOnlyDictionary<int, int[]> warMembers)
+        IReadOnlyDictionary<int, List<int>> warMembers)
     {
         var weights = Weights;
         List<Army> going = null;
         var lastNation = -1;
-        Dictionary<int, ScenarioState> stateByMap = null;
         var scanned = 0;
         foreach (var army in campaign.Armies)
         {
@@ -523,8 +530,7 @@ public static class MilitiaCore
                 lastNation = army.NationId;
             }
 
-            stateByMap ??= StateByMap(campaign);
-            var state = stateByMap.GetValueOrDefault(army.StateMapIndex);
+            var state = campaign.StateByMapIndex(army.StateMapIndex);
 
             var threatened = state is not null && nation is not null &&
                              Threat(ControlTally.World(campaign, nation.MapIndex, state.MapIndex)) > 0.0001f;
@@ -543,11 +549,12 @@ public static class MilitiaCore
         }
         if (going is null) yield break;
 
-        foreach (var army in going)
+        for (var i = 0; i < going.Count; i++)
         {
+            var army = going[i];
             campaign.NationById(army.NationId)?.MilitiaQuietSince.Remove(army.Id);
             campaign.Armies.Remove(army);
-            DiagnosticLogs.Write("simulation", $"MILITIA_STOOD_DOWN army={army.Id}");
+            if (DiagnosticLogs.Enabled) DiagnosticLogs.Write("simulation", $"MILITIA_STOOD_DOWN army={army.Id}");
             campaign.Chronicle.Record(campaign, "militia_stood_down", army.NationId, subject: army.Name, isPublic: false);
         }
         campaign.MarkStrategicChange();

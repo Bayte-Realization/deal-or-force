@@ -32,8 +32,10 @@ public sealed partial class GlobePresentation
     private DirectionalLight3D _weatherSun;
     private Node3D _weatherWorld;
     private double _weatherClock;
+    private double _weatherMobileAccum;
+    private float _weatherQualityTier;
     private bool _weatherEnabled = true;
-    private bool _cloudsShown = true;
+    private bool _cloudsShown = !(Platform.PlatformProfile.Current?.IsTouchPrimary == true);
     private bool _mistShown = true;
 
     /// <summary>Visual clouds only; a legacy WeatherEnabled master never overwrites this preference.</summary>
@@ -75,6 +77,10 @@ public sealed partial class GlobePresentation
         _cloudMaterial = new ShaderMaterial { Shader = cloud, RenderPriority = -20 };
         _cloudShadeMaterial = new ShaderMaterial { Shader = cloud, RenderPriority = -22 };
         _cloudShadeMaterial.SetShaderParameter("shade_pass", 1f);
+        var tier = CurrentShaderQualityTier();
+        _weatherQualityTier = tier;
+        _cloudMaterial.SetShaderParameter("quality_tier", tier);
+        _cloudShadeMaterial.SetShaderParameter("quality_tier", tier);
         var mistCode = MistShader;
         if (_packedLookups is not null)
         {
@@ -91,6 +97,7 @@ public sealed partial class GlobePresentation
                     "vec4 mist_visibility(vec2 uv) { return texture(packed_lookups, vec3(uv, 11.0)); }\nuvec3 scramble(");
         }
         _mistMaterial = new ShaderMaterial { Shader = new Shader { Code = mistCode }, RenderPriority = -21 };
+        _mistMaterial.SetShaderParameter("quality_tier", tier);
 
         _cloudShade = Shell("CloudShadows", GlobeRadius * 1.0016f, _cloudShadeMaterial, 192, 96);
         _mistShell = Shell("FogOfWarMist", GlobeRadius * 1.0026f, _mistMaterial, 256, 128);
@@ -123,7 +130,87 @@ public sealed partial class GlobePresentation
                     _flatSheets.Add(sheet);
                 }
             }
+        if (Platform.PlatformProfile.Current?.IsTouchPrimary == true && !Simulation.PlayerSettings.Has("map_clouds"))
+            _cloudsShown = false;
+        SyncWeatherReliefShells();
         UpdateWeather(0);
+    }
+
+    private void SyncWeatherReliefShells()
+    {
+        var tier = CurrentShaderQualityTier();
+        var reliefActive = _reliefDisplacement > 0.0001f && _reliefHeightTexture is not null && tier < 1.5f;
+        var flatProj = _flatMap ? 1f : 0f;
+        var paperMix = _mapLookPaper ? 1f : 0f;
+        var high = reliefActive && tier < 0.5f;
+
+        if (IsInstanceValid(_atmosphereLayer) && _atmosphereLayer.Mesh is SphereMesh atmoMesh)
+        {
+            var r = GlobeRadius * (1f + AtmosphereThickness) + _reliefDisplacement * 1.08f;
+            if (!Mathf.IsEqualApprox(atmoMesh.Radius, r)) { atmoMesh.Radius = r; atmoMesh.Height = r * 2f; }
+        }
+        if (IsInstanceValid(_cloudDeck) && _cloudDeck.Mesh is SphereMesh deckMesh)
+        {
+            var r = GlobeRadius * 1.011f + _reliefDisplacement * 1.15f;
+            if (!Mathf.IsEqualApprox(deckMesh.Radius, r)) { deckMesh.Radius = r; deckMesh.Height = r * 2f; }
+        }
+        if (IsInstanceValid(_iceShell) && _iceShell.Mesh is SphereMesh iceMesh)
+        {
+            var r = GlobeRadius * 1.004f + _reliefDisplacement * 1.08f;
+            if (!Mathf.IsEqualApprox(iceMesh.Radius, r)) { iceMesh.Radius = r; iceMesh.Height = r * 2f; }
+        }
+        if (IsInstanceValid(_cloudShade) && _cloudShade.Mesh is SphereMesh shadeMesh)
+        {
+            var targetSeg = reliefActive ? (high ? 512 : 256) : 192;
+            var targetRings = reliefActive ? (high ? 256 : 128) : 96;
+            if (shadeMesh.RadialSegments != targetSeg) shadeMesh.RadialSegments = targetSeg;
+            if (shadeMesh.Rings != targetRings) shadeMesh.Rings = targetRings;
+        }
+        if (IsInstanceValid(_mistShell) && _mistShell.Mesh is SphereMesh mistMesh)
+        {
+            var targetSeg = reliefActive ? (high ? 512 : 256) : 256;
+            var targetRings = reliefActive ? (high ? 256 : 128) : 128;
+            if (mistMesh.RadialSegments != targetSeg) mistMesh.RadialSegments = targetSeg;
+            if (mistMesh.Rings != targetRings) mistMesh.Rings = targetRings;
+        }
+        foreach (var sheet in _flatSheets)
+        {
+            if (!IsInstanceValid(sheet)) continue;
+            if (sheet.MaterialOverride == _cloudMaterial)
+            {
+                var z = 0.02f + _reliefDisplacement * 1.95f * 1.15f;
+                if (!Mathf.IsEqualApprox(sheet.Position.Z, z)) sheet.Position = sheet.Position with { Z = z };
+            }
+            else if (sheet.Mesh is QuadMesh quad)
+            {
+                var subW = reliefActive ? (high ? 256 : 128) : 0;
+                var subD = reliefActive ? (high ? 128 : 64) : 0;
+                if (quad.SubdivideWidth != subW) quad.SubdivideWidth = subW;
+                if (quad.SubdivideDepth != subD) quad.SubdivideDepth = subD;
+            }
+        }
+        foreach (var sheet in _iceSheets)
+        {
+            if (!IsInstanceValid(sheet)) continue;
+            var z = 0.012f + _reliefDisplacement * 1.95f * 1.08f;
+            if (!Mathf.IsEqualApprox(sheet.Position.Z, z)) sheet.Position = sheet.Position with { Z = z };
+        }
+        if (_cloudShadeMaterial is not null)
+        {
+            if (_reliefHeightTexture is not null) _cloudShadeMaterial.SetShaderParameter("relief_height", _reliefHeightTexture);
+            _cloudShadeMaterial.SetShaderParameter("relief_displacement", _reliefDisplacement);
+            _cloudShadeMaterial.SetShaderParameter("paper_mix", paperMix);
+            _cloudShadeMaterial.SetShaderParameter("flat_projection", flatProj);
+            _cloudShadeMaterial.SetShaderParameter("terrain_ready", _reliefHeightTexture is not null ? 1f : 0f);
+        }
+        if (_mistMaterial is not null)
+        {
+            if (_reliefHeightTexture is not null) _mistMaterial.SetShaderParameter("relief_height", _reliefHeightTexture);
+            _mistMaterial.SetShaderParameter("relief_displacement", _reliefDisplacement);
+            _mistMaterial.SetShaderParameter("paper_mix", paperMix);
+            _mistMaterial.SetShaderParameter("flat_projection", flatProj);
+            _mistMaterial.SetShaderParameter("terrain_ready", _reliefHeightTexture is not null ? 1f : 0f);
+        }
     }
 
     private readonly System.Collections.Generic.List<MeshInstance3D> _flatSheets = new();
@@ -149,12 +236,24 @@ public sealed partial class GlobePresentation
     private void UpdateWeather(double delta)
     {
         if (_cloudMaterial is null || _mistMaterial is null) return;
-        // A game without weather (common/world_layers) draws none of it.
-        if (!Simulation.WorldLayers.On("weather"))
+        // A game without weather (common/world_layers) or MobileLow (quality_tier >= 2) draws none of it.
+        if (!Simulation.WorldLayers.On("weather") || _weatherQualityTier >= 1.5f)
         {
-            foreach (var layer in new[] { _cloudDeck, _cloudShade, _mistShell, _airGlow })
-                if (IsInstanceValid(layer)) layer.Visible = false;
+            if (IsInstanceValid(_cloudDeck)) _cloudDeck.Visible = false;
+            if (IsInstanceValid(_cloudShade)) _cloudShade.Visible = false;
+            if (IsInstanceValid(_mistShell)) _mistShell.Visible = false;
+            if (IsInstanceValid(_airGlow)) _airGlow.Visible = false;
+            foreach (var sheet in _flatSheets)
+                if (IsInstanceValid(sheet)) sheet.Visible = false;
             return;
+        }
+        // On MobileMedium (quality_tier == 1), halve per-frame weather uniform updates.
+        if (_weatherQualityTier >= 0.5f && delta > 0.0)
+        {
+            _weatherMobileAccum += delta;
+            if (_weatherMobileAccum < 0.033) return;
+            delta = _weatherMobileAccum;
+            _weatherMobileAccum = 0.0;
         }
         var defines = _campaign?.Defines;
         var distance = ViewDistance;
@@ -183,57 +282,87 @@ public sealed partial class GlobePresentation
         var mist = !allowed || !_weatherEnabled || !_mistShown || !fogged || mistClear <= mistFull ? 0f
             : 1f - Mathf.SmoothStep(mistFull, mistClear, distance);
 
-        // Weather keeps moving while the game is paused, only slower: a frozen sky reads as a
-        // frozen program.
-        var paused = _campaign is null || _campaign.IsPaused;
-        // Except under the ice, where the sky is as still as everything else.
-        if (!Simulation.WorldCurses.Frozen(_campaign)) _weatherClock += delta * (paused ? 0.25 : 1.0);
-        var clock = (float)((VerificationWeatherTime ?? _weatherClock) % 100000.0);
-        var readability = Simulation.WeatherReadability.Read(defines);
-
-        _cloudMaterial.SetShaderParameter("realistic_cumulus", realisticCumulus ? 1f : 0f);
-        _cloudShadeMaterial.SetShaderParameter("realistic_cumulus", realisticCumulus ? 1f : 0f);
-        _cloudMaterial.SetShaderParameter("presence", clouds);
-        _cloudShadeMaterial.SetShaderParameter("presence", clouds);
-        _cloudMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale * 0.38f);
-        _cloudShadeMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale * 0.38f);
-        _cloudMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
-        _cloudShadeMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
-        _cloudMaterial.SetShaderParameter("detail_strength", readability.DetailStrength);
-        _cloudShadeMaterial.SetShaderParameter("detail_strength", readability.DetailStrength);
-        _cloudMaterial.SetShaderParameter("wind", clock);
-        _cloudShadeMaterial.SetShaderParameter("wind", clock);
-        var sun = IsInstanceValid(_weatherSun) ? _weatherSun.GlobalBasis.Z.Normalized() : new Vector3(0.4f, 0.5f, 0.75f);
-        _cloudMaterial.SetShaderParameter("sun_dir", sun);
-        _cloudMaterial.SetShaderParameter("flat_map", _flatMap ? 1f : 0f);
-        _cloudShadeMaterial.SetShaderParameter("flat_map", _flatMap ? 1f : 0f);
-
-        _mistMaterial.SetShaderParameter("presence", mist);
-        _mistMaterial.SetShaderParameter("opacity", readability.MistOpacity);
-        _mistMaterial.SetShaderParameter("wind", clock);
-        if (mist > 0.001f && _globeMaterial is not null)
+        var cloudsVisible = clouds > 0.002f;
+        var mistVisible = mist > 0.002f;
+        var globe = !_flatMap;
+        if (cloudsVisible || mistVisible)
         {
-            // The ground's own maps, read where the ground reads them.
-            if (_packedLookups is not null)
+            // Weather keeps moving while the game is paused, only slower: a frozen sky reads as a
+            // frozen program.
+            var paused = _campaign is null || _campaign.IsPaused;
+            // Except under the ice, where the sky is as still as everything else.
+            if (!Simulation.WorldCurses.Frozen(_campaign)) _weatherClock += delta * (paused ? 0.25 : 1.0);
+            var clock = (float)((VerificationWeatherTime ?? _weatherClock) % 100000.0);
+            var readability = Simulation.WeatherReadability.Read(defines);
+
+            if (cloudsVisible)
             {
-                _mistMaterial.SetShaderParameter("packed_ids", _packedIds);
-                _mistMaterial.SetShaderParameter("packed_lookups", _packedLookups);
+                _cloudMaterial.SetShaderParameter("realistic_cumulus", realisticCumulus ? 1f : 0f);
+                _cloudShadeMaterial.SetShaderParameter("realistic_cumulus", realisticCumulus ? 1f : 0f);
+                _cloudMaterial.SetShaderParameter("presence", clouds);
+                _cloudShadeMaterial.SetShaderParameter("presence", clouds);
+                _cloudMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale * 0.38f);
+                _cloudShadeMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale * 0.38f);
+                _cloudMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
+                _cloudShadeMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
+                _cloudMaterial.SetShaderParameter("detail_strength", readability.DetailStrength);
+                _cloudShadeMaterial.SetShaderParameter("detail_strength", readability.DetailStrength);
+                _cloudMaterial.SetShaderParameter("wind", clock);
+                _cloudShadeMaterial.SetShaderParameter("wind", clock);
+                var sun = IsInstanceValid(_weatherSun) ? _weatherSun.GlobalBasis.Z.Normalized() : new Vector3(0.4f, 0.5f, 0.75f);
+                _cloudMaterial.SetShaderParameter("sun_dir", sun);
+                _cloudMaterial.SetShaderParameter("flat_map", _flatMap ? 1f : 0f);
+                _cloudShadeMaterial.SetShaderParameter("flat_map", _flatMap ? 1f : 0f);
             }
-            else
+
+            if (mistVisible)
             {
-                _mistMaterial.SetShaderParameter("fog_visibility", _visionTexture);
-                _mistMaterial.SetShaderParameter("province_ids", _globeMaterial.GetShaderParameter("province_ids"));
+                _mistMaterial.SetShaderParameter("presence", mist);
+                _mistMaterial.SetShaderParameter("opacity", readability.MistOpacity);
+                _mistMaterial.SetShaderParameter("wind", clock);
+                if (mist > 0.001f && _globeMaterial is not null)
+                {
+                    // The ground's own maps, read where the ground reads them.
+                    if (_packedLookups is not null)
+                    {
+                        _mistMaterial.SetShaderParameter("packed_ids", _packedIds);
+                        _mistMaterial.SetShaderParameter("packed_lookups", _packedLookups);
+                    }
+                    else
+                    {
+                        _mistMaterial.SetShaderParameter("fog_visibility", _visionTexture);
+                        _mistMaterial.SetShaderParameter("province_ids", _globeMaterial.GetShaderParameter("province_ids"));
+                    }
+                    _mistMaterial.SetShaderParameter("political_map", _globeMaterial.GetShaderParameter("political_map"));
+                }
             }
-            _mistMaterial.SetShaderParameter("political_map", _globeMaterial.GetShaderParameter("political_map"));
         }
 
-        var globe = !_flatMap;
-        if (IsInstanceValid(_airGlow)) _airGlow.Visible = globe && !_mapLookPaper;
-        _cloudDeck.Visible = _cloudShade.Visible = globe && clouds > 0.002f;
-        _mistShell.Visible = globe && mist > 0.002f;
+        if (IsInstanceValid(_airGlow))
+        {
+            var airVisible = globe && !_mapLookPaper;
+            if (_airGlow.Visible != airVisible) _airGlow.Visible = airVisible;
+        }
+        var drawClouds = globe && cloudsVisible;
+        if (_cloudDeck.Visible != drawClouds) _cloudDeck.Visible = drawClouds;
+        if (_cloudShade.Visible != drawClouds) _cloudShade.Visible = drawClouds;
+        var drawMist = globe && mistVisible;
+        if (_mistShell.Visible != drawMist) _mistShell.Visible = drawMist;
         foreach (var sheet in _flatSheets)
-            if (IsInstanceValid(sheet))
-                sheet.Visible = sheet.MaterialOverride == _mistMaterial ? mist > 0.002f : clouds > 0.002f;
+        {
+            if (!IsInstanceValid(sheet)) continue;
+            var want = sheet.MaterialOverride == _mistMaterial ? mistVisible : cloudsVisible;
+            if (sheet.Visible != want) sheet.Visible = want;
+        }
+    }
+
+    private void ApplyWeatherQualityTier(float tier)
+    {
+        _weatherQualityTier = tier;
+        _cloudMaterial?.SetShaderParameter("quality_tier", tier);
+        _cloudShadeMaterial?.SetShaderParameter("quality_tier", tier);
+        _mistMaterial?.SetShaderParameter("quality_tier", tier);
+        UpdateWeather(0);
     }
 
     // The clouds are gradient noise - smooth at every scale, no grid to show - turned by a
@@ -253,6 +382,30 @@ uniform float opacity = 0.50;
 uniform float edge_softness = 0.20;
 uniform float detail_strength = 0.08;
 uniform float realistic_cumulus = 0.0;
+uniform float quality_tier = 0.0;
+uniform sampler2D relief_height : filter_linear, repeat_enable;
+uniform float relief_displacement = 0.0;
+uniform float paper_mix = 0.0;
+uniform float flat_projection = 0.0;
+uniform float terrain_ready = 0.0;
+
+void vertex() {
+    if (shade_pass > 0.5 && relief_displacement > 0.0001 && terrain_ready > 0.5) {
+        float paper_fade = smoothstep(0.92, 0.25, paper_mix);
+        float disp_scale = relief_displacement * paper_fade;
+        if (disp_scale > 0.0001) {
+            vec2 uv = vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0));
+            float pole_fade = flat_projection > 0.5 ? 1.0 : smoothstep(0.495, 0.435, abs(uv.y - 0.5));
+            float sample_lod = quality_tier < 0.5 ? 0.5 : 1.0;
+            float h = textureLod(relief_height, uv, sample_lod).r;
+            float h_land = max(0.0, h - 0.015) / 0.985;
+            float land_lift = pow(h_land, 0.85) * disp_scale;
+            float proj_scale = mix(1.0, 1.95, flat_projection);
+            vec3 up_dir = flat_projection > 0.5 ? vec3(0.0, 0.0, 1.0) : normalize(NORMAL);
+            VERTEX += up_dir * (land_lift * pole_fade * proj_scale);
+        }
+    }
+}
 
 uvec3 scramble(uvec3 v) {
     v = v * 1664525u + 1013904223u;
@@ -298,20 +451,30 @@ vec3 sphere_at(vec2 uv) {
     return vec3(cos(lat) * sin(lon), sin(lat), cos(lat) * cos(lon));
 }
 // The sky at one point of the planet: turned with the wind, warped gently, and morphing.
+// Tiered by quality_tier to keep fragment ALU fast across RTX/desktop/mobile while retaining cloud form.
 float field(vec3 n) {
     float drift = wind * 0.0016;
     float c = cos(drift), s = sin(drift);
     vec3 p = vec3(c * n.x + s * n.z, n.y, -s * n.x + c * n.z) * 3.1;
+    if (quality_tier > 1.5) {
+        return fbm(p * 1.5, 2);
+    }
     float evolve = wind * 0.0011;
-    vec3 warp = vec3(fbm(p + vec3(0.0, 0.0, evolve), 2),
-                     fbm(p + vec3(5.2, 1.3, 2.8 - evolve), 2),
-                     fbm(p + vec3(1.7 + evolve, 9.2, 4.4), 2)) - 0.5;
-    vec3 q = p * 1.5 + warp * 0.6;
-    float body = fbm(q, 5);
-    float detail = fbm(q * 2.2 + vec3(11.0, 4.0, 7.0), 2);
+    if (quality_tier > 0.5) {
+        vec3 warp_m = vec3(fbm(p + vec3(0.0, 0.0, evolve), 1),
+                           fbm(p + vec3(5.2, 1.3, 2.8 - evolve), 1), 0.5) - 0.5;
+        return fbm(p * 1.5 + warp_m * 0.55, 2);
+    }
+    vec3 warp = vec3(fbm(p + vec3(0.0, 0.0, evolve), 1),
+                     fbm(p + vec3(5.2, 1.3, 2.8 - evolve), 1),
+                     fbm(p + vec3(1.7 + evolve, 9.2, 4.4), 1)) - 0.5;
+    vec3 q = p * 1.5 + warp * 0.58;
+    float body = fbm(q, 4);
+    float detail = detail_strength > 0.005 ? fbm(q * 2.2 + vec3(11.0, 4.0, 7.0), 1) : body;
     return mix(body, detail, detail_strength);
 }
 void fragment() {
+    if (presence <= 0.002 || opacity <= 0.001) discard;
     vec2 uv = UV;
     if (shade_pass > 0.5) uv += vec2(0.0030, 0.0040);
     vec3 n = sphere_at(uv);
@@ -337,10 +500,13 @@ void fragment() {
     } else {
         float sun_dot = clamp(dot(sphere_at(UV), normalize(sun_dir)), -0.2, 1.0);
         float light = flat_map > 0.5 ? 0.95 : 0.80 + 0.20 * clamp(sun_dot, 0.0, 1.0);
-        // Thin cloud is a cool Rayleigh veil; thick cumulus catches crisp D65 sunlight on its crowns.
+        // Subtle twilight silver-warmth near planetary dusk + crisp D65 cumulus crowns.
+        float dusk = flat_map > 0.5 ? 0.0 : smoothstep(-0.18, 0.06, sun_dot) * (1.0 - smoothstep(0.06, 0.36, sun_dot));
         vec3 thin = mix(vec3(0.86, 0.89, 0.93), vec3(0.79, 0.84, 0.92), realistic_cumulus);
         vec3 thick = mix(vec3(0.98, 0.985, 1.0), vec3(0.985, 0.99, 1.00), realistic_cumulus);
-        ALBEDO = mix(thin, thick, core) * light;
+        vec3 cloud_col = mix(thin, thick, core) * light;
+        cloud_col = mix(cloud_col, cloud_col * vec3(1.06, 0.92, 0.80), dusk * 0.42);
+        ALBEDO = cloud_col;
         ALPHA = body * mix(0.30, 1.0, core) * opacity * presence * limb;
     }
 }";
@@ -356,13 +522,14 @@ void fragment() {
     vec3 ray = normalize(VERTEX);
     float along = dot(centre, ray);
     float miss = length(centre - ray * along);
+    if (miss < inner * 0.985 || miss >= outer) discard;
     float depth = clamp((outer - miss) / (outer - inner), 0.0, 1.0);
-    float glow = pow(depth, 2.4) * step(inner * 0.985, miss);
+    float glow = pow(depth, 2.4);
     float horizon_band = pow(depth, 5.2) * step(inner * 0.992, miss);
     // Seen from close by, the haze is the horizon itself; keep it, but quieter.
     float height = clamp((length(centre) - inner) / (inner * 1.4), 0.0, 1.0);
-    vec3 rayleigh = mix(vec3(0.24, 0.48, 0.92), vec3(0.46, 0.72, 1.0), horizon_band);
-    ALBEDO = rayleigh * glow * mix(0.15, 0.36, height);
+    vec3 rayleigh = mix(vec3(0.24, 0.48, 0.92), vec3(0.50, 0.76, 1.0), horizon_band);
+    ALBEDO = rayleigh * glow * mix(0.15, 0.38, height);
     ALPHA = 1.0;
 }";
 
@@ -374,6 +541,30 @@ uniform sampler2D fog_visibility : filter_nearest, repeat_disable;
 uniform float presence = 0.0;
 uniform float wind = 0.0;
 uniform float opacity = 0.22;
+uniform float quality_tier = 0.0;
+uniform sampler2D relief_height : filter_linear, repeat_enable;
+uniform float relief_displacement = 0.0;
+uniform float paper_mix = 0.0;
+uniform float flat_projection = 0.0;
+uniform float terrain_ready = 0.0;
+
+void vertex() {
+    if (relief_displacement > 0.0001 && terrain_ready > 0.5) {
+        float paper_fade = smoothstep(0.92, 0.25, paper_mix);
+        float disp_scale = relief_displacement * paper_fade;
+        if (disp_scale > 0.0001) {
+            vec2 uv = vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0));
+            float pole_fade = flat_projection > 0.5 ? 1.0 : smoothstep(0.495, 0.435, abs(uv.y - 0.5));
+            float sample_lod = quality_tier < 0.5 ? 0.5 : 1.0;
+            float h = textureLod(relief_height, uv, sample_lod).r;
+            float h_land = max(0.0, h - 0.015) / 0.985;
+            float land_lift = pow(h_land, 0.85) * disp_scale;
+            float proj_scale = mix(1.0, 1.95, flat_projection);
+            vec3 up_dir = flat_projection > 0.5 ? vec3(0.0, 0.0, 1.0) : normalize(NORMAL);
+            VERTEX += up_dir * (land_lift * pole_fade * proj_scale);
+        }
+    }
+}
 
 uvec3 scramble(uvec3 v) {
     v = v * 1664525u + 1013904223u;
@@ -398,9 +589,9 @@ float gnoise(vec3 p) {
                    mix(dot(gradient(i + vec3(0, 1, 1)), f - vec3(0, 1, 1)), dot(gradient(i + vec3(1, 1, 1)), f - vec3(1, 1, 1)), u.x), u.y), u.z);
 }
 const mat3 TURN = mat3(vec3(0.00, 0.80, 0.60), vec3(-0.80, 0.36, -0.48), vec3(-0.60, -0.48, 0.64));
-float fbm(vec3 p) {
+float fbm(vec3 p, int octaves) {
     float sum = 0.0, amp = 0.5, norm = 0.0;
-    for (int k = 0; k < 4; k++) {
+    for (int k = 0; k < octaves; k++) {
         sum += amp * gnoise(p);
         norm += amp;
         p = TURN * p * 2.03 + vec3(17.1, 3.7, 9.3);
@@ -420,20 +611,31 @@ float hidden_at(vec2 uv) {
     return 1.0 - step(0.5, texture(fog_visibility, lookup).r);
 }
 void fragment() {
+    if (presence <= 0.002 || opacity <= 0.001) discard;
     vec2 texel = 1.0 / vec2(textureSize(province_ids, 0));
     // Banks a couple of degrees across with wisps inside them, in two layers drifting
-    // different ways.
+    // different ways. Tiered by quality_tier to keep fragment ALU fast across desktop & mobile.
     vec3 q = sphere_at(UV) * 26.0;
-    float slow = fbm(q + vec3(wind * 0.020, 0.0, wind * 0.006));
-    float fast = fbm(q * 2.1 - vec3(wind * 0.050, wind * 0.012, 0.0));
+    int slow_oct = quality_tier > 0.5 ? 2 : 3;
+    int fast_oct = quality_tier > 0.5 ? 1 : 2;
+    float slow = fbm(q + vec3(wind * 0.020, 0.0, wind * 0.006), slow_oct);
+    float fast = quality_tier > 1.5 ? slow : fbm(q * 2.1 - vec3(wind * 0.050, wind * 0.012, 0.0), fast_oct);
     // The edge of the unknown billows: the taps that find it are bent by the mist itself.
     vec2 bend = (vec2(slow, fast) - 0.5) * texel * 14.0;
     float hidden = hidden_at(UV + bend) * 2.0;
-    for (int k = 0; k < 8; k++) {
-        float a = float(k) * 0.785398;
-        hidden += hidden_at(UV + bend + vec2(cos(a), sin(a)) * texel * 5.0);
+    if (quality_tier > 0.5) {
+        for (int k = 0; k < 4; k++) {
+            float a = float(k) * 1.570796;
+            hidden += hidden_at(UV + bend + vec2(cos(a), sin(a)) * texel * 5.0);
+        }
+        hidden /= 6.0;
+    } else {
+        for (int k = 0; k < 8; k++) {
+            float a = float(k) * 0.785398;
+            hidden += hidden_at(UV + bend + vec2(cos(a), sin(a)) * texel * 5.0);
+        }
+        hidden /= 10.0;
     }
-    hidden /= 10.0;
     float land = smoothstep(0.25, 0.75, texture(political_map, UV).a);
     // A thin veil that drifts, not a wall: thickest in banks, nearly clear between them, so
     // the ground under it stays readable. The intelligence mask remains unchanged.

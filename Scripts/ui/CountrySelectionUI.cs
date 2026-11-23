@@ -168,9 +168,10 @@ public partial class DealOrForceGame
         MenuChromeTheme.StylePlateButton(_pickerSeatToggle, false, 13);
         rows.AddChild(_pickerSeatToggle);
 
-        _pickerBegin = ActionButton("BEGIN CAMPAIGN", BeginPickedCampaign, 330, 44, true);
+        var touchBtn = DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        _pickerBegin = ActionButton("BEGIN CAMPAIGN", BeginPickedCampaign, 330, touchBtn ? 50 : 44, true);
         _pickerBegin.Name = "PickerBeginButton";
-        MenuChromeTheme.StylePrimaryCta(_pickerBegin, 16, serif: true);
+        MenuChromeTheme.StylePrimaryCta(_pickerBegin, touchBtn ? 17 : 16, serif: true);
         rows.AddChild(_pickerBegin);
 
         var actions = TexturedPanel(_pickerLayer);
@@ -211,9 +212,9 @@ public partial class DealOrForceGame
         advancedFold = ActionButton("Advanced", () =>
         {
             advanced.Visible = !advanced.Visible;
-            MenuChromeTheme.StylePlateButton(advancedFold, advanced.Visible, 13);
+            MenuChromeTheme.StylePlateButton(advancedFold, advanced.Visible, touchBtn ? 14 : 13);
             QueuePickerActionsLayout();
-        }, 114, 36);
+        }, 114, touchBtn ? 46 : 36);
         advancedFold.Name = "PickerAdvancedFold";
         MenuChromeTheme.StylePlateButton(advancedFold, false, 13);
         advancedFold.TooltipText = Tr("Clouds, mist and the seed the world is built from.");
@@ -266,8 +267,9 @@ public partial class DealOrForceGame
 
     private Button PickerActionChip(string text, Action onPressed, float width)
     {
-        var button = ActionButton(text, onPressed, width, 36);
-        MenuChromeTheme.StyleWellButton(button, selected: false, fontSize: 13);
+        var touch = DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var button = ActionButton(text, onPressed, touch ? MathF.Max(width, 108f) : width, touch ? 46 : 36);
+        MenuChromeTheme.StyleWellButton(button, selected: false, fontSize: touch ? 14 : 13);
         return button;
     }
 
@@ -445,7 +447,7 @@ public partial class DealOrForceGame
         _pickerSeatToggle.Visible = false;
         SetPickerNation(_pickerNation ?? _campaign.Player, true);
         RefreshPickerSeedNote();
-        _pickerSearch.GrabFocus();
+        Ui.FocusInputIfDesktop(_pickerSearch);
     }
 
     /// <summary>
@@ -521,7 +523,9 @@ public partial class DealOrForceGame
                 _pickerDossier.SetStats(chips, identityBrief);
             }
         }
-        _pickerLocation.Text = Tr("Click a country on the map, or search for it by name.");
+        _pickerLocation.Text = Platform.PlatformProfile.Current.IsTouchPrimary
+            ? Tr("mobile.override.country_picker_hint")
+            : Tr("Click a country on the map, or search for it by name.");
         _pickerBegin.Text = _pickerHotseatMode
             ? Simulation.Loc.Format("START HOTSEAT · {0} PLAYERS", _campaign.HumanSeats.Count)
             : Simulation.Loc.Format("BEGIN AS {0}", nation.Tag);
@@ -684,7 +688,7 @@ public partial class DealOrForceGame
         _pickerSeats.Visible = true;
         _pickerSeatToggle.Visible = true;
         SetPickerNation(_pickerNation ?? _campaign.Player, true);
-        _pickerSearch.GrabFocus();
+        Ui.FocusInputIfDesktop(_pickerSearch);
     }
 
     private void TogglePickerSeat()

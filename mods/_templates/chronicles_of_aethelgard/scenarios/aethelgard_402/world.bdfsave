@@ -1,0 +1,86 @@
+{
+  "FormatVersion": 2,
+  "MapDataVersion": "2024.11.09-a",
+  "ProvinceCount": 3,
+  "ProvinceOwner": [0, 1, 2, 3],
+  "ProvinceState": [0, 1, 2, 3],
+  "ProvinceController": [0, 1, 2, 3],
+  "ProvinceOccupation": [0, 0, 0, 0],
+  "Date": { "Year": 402, "Month": 3, "Day": 14, "Hour": 0 },
+  "PlayerId": 0,
+  "Nations": [
+    {
+      "Id": 0,
+      "MapIndex": 1,
+      "Tag": "VAL",
+      "Iso": "VAL",
+      "Name": "Kingdom of Valoria",
+      "CapitalName": "Solhaven",
+      "Color": "#3C6E9E",
+      "Government": "high_monarchy",
+      "Ideology": "chivalric_order",
+      "Population": 8500000,
+      "Gdp": 140.0,
+      "Treasury": 35.0,
+      "Stability": 0.72
+    },
+    {
+      "Id": 1,
+      "MapIndex": 2,
+      "Tag": "IRN",
+      "Iso": "IRN",
+      "Name": "Ironhold Dominion",
+      "CapitalName": "Kragspire",
+      "Color": "#8C3B32",
+      "Government": "runic_council",
+      "Ideology": "iron_hegemony",
+      "Population": 7200000,
+      "Gdp": 155.0,
+      "Treasury": 40.0,
+      "Stability": 0.68
+    },
+    {
+      "Id": 2,
+      "MapIndex": 3,
+      "Tag": "SYL",
+      "Iso": "SYL",
+      "Name": "Sylvan Concord",
+      "CapitalName": "Lirien",
+      "Color": "#3E7A56",
+      "Government": "warden_conclave",
+      "Ideology": "arcane_mercantilism",
+      "Population": 5100000,
+      "Gdp": 115.0,
+      "Treasury": 30.0,
+      "Stability": 0.78
+    }
+  ],
+  "States": [
+    {
+      "Id": "val_sunward_plains",
+      "Name": "Sunward Plains",
+      "MapIndex": 1,
+      "NationMapIndex": 1,
+      "NationId": "VAL",
+      "Population": 8500000
+    },
+    {
+      "Id": "irn_blackforge_peaks",
+      "Name": "Blackforge Peaks",
+      "MapIndex": 2,
+      "NationMapIndex": 2,
+      "NationId": "IRN",
+      "Population": 7200000
+    },
+    {
+      "Id": "syl_silverwood",
+      "Name": "Silverwood Canopy",
+      "MapIndex": 3,
+      "NationMapIndex": 3,
+      "NationId": "SYL",
+      "Population": 5100000
+    }
+  ],
+  "Armies": [],
+  "ScenarioTerritories": {}
+}

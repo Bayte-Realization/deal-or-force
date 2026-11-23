@@ -1,0 +1,1682 @@
+{
+  "drone_swarm_tactics": {
+    "name": "Doctrine of Autonomous Swarms",
+    "description": "Replace scarce heavy shells with ubiquitous reconnaissance and loitering unmanned systems across every battalion.",
+    "experience": "army",
+    "ai_profiles": {
+      "irredentist": 1.6,
+      "expeditionary": 1.4,
+      "default": 1.0
+    },
+    "nodes": [
+      {
+        "id": "dst_platoon_uav",
+        "name": "Platoon Recon Quadcopters",
+        "description": "Every rifle platoon flies organic short-range optics to unmask ambushes before contact.",
+        "cost": 18,
+        "days": 110,
+        "rush_cost": 48,
+        "modifiers": {
+          "army_attack": 0.03,
+          "organisation_recovery": 0.03
+        }
+      },
+      {
+        "id": "dst_relay_mesh",
+        "name": "Tactical Mesh Relays",
+        "description": "Airborne relay nodes keep frontline operators linked across broken terrain and jamming.",
+        "cost": 22,
+        "days": 130,
+        "rush_cost": 60,
+        "requires": [
+          "dst_platoon_uav"
+        ],
+        "modifiers": {
+          "supply": 0.03,
+          "support_recovery": 0.04
+        }
+      },
+      {
+        "id": "dst_field_workshops",
+        "name": "Mobile 3D-Print Workshops",
+        "description": "Rear-area vans assemble airframes and battery packs close to the front.",
+        "cost": 24,
+        "days": 140,
+        "rush_cost": 65,
+        "requires": [
+          "dst_platoon_uav"
+        ],
+        "modifiers": {
+          "recruitment_cost": -0.04,
+          "reinforcement_rate": 0.04
+        }
+      },
+      {
+        "id": "dst_sub_mass_fpv",
+        "name": "Saturation FPV Swarms",
+        "description": "Flood every trench and road with expendable strike drones at the cost of higher operator fatigue and supply draw.",
+        "cost": 30,
+        "days": 165,
+        "rush_cost": 82,
+        "requires": [
+          "dst_relay_mesh"
+        ],
+        "excludes": [
+          "dst_sub_precision_loiter"
+        ],
+        "ai_profiles": {
+          "irredentist": 3,
+          "major_offensive": 2.5,
+          "expeditionary": 1
+        },
+        "modifiers": {
+          "army_attack": 0.07,
+          "recruitment_speed": 0.05,
+          "supply": -0.04
+        }
+      },
+      {
+        "id": "dst_sub_precision_loiter",
+        "name": "Precision Loitering Munitions",
+        "description": "Target command posts and radar vans surgically, conserving logistics at a higher unit cost.",
+        "cost": 30,
+        "days": 165,
+        "rush_cost": 82,
+        "requires": [
+          "dst_relay_mesh"
+        ],
+        "excludes": [
+          "dst_sub_mass_fpv"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "defensive": 2.5,
+          "irredentist": 1
+        },
+        "modifiers": {
+          "support_losses": -0.08,
+          "army_defense": 0.05,
+          "recruitment_cost": 0.06
+        }
+      },
+      {
+        "id": "dst_fpv_corridors",
+        "name": "Continuous Strike Corridors",
+        "description": "Rotating pilot shifts pin enemy reserves inside shelters day and night.",
+        "cost": 40,
+        "days": 195,
+        "rush_cost": 110,
+        "requires": [
+          "dst_sub_mass_fpv"
+        ],
+        "modifiers": {
+          "army_attack": 0.04,
+          "army_speed": 0.03
+        }
+      },
+      {
+        "id": "dst_loiter_hunter",
+        "name": "Automated Counter-Battery Hunting",
+        "description": "Loitering seekers silence enemy artillery minutes after the first salvo.",
+        "cost": 40,
+        "days": 195,
+        "rush_cost": 110,
+        "requires": [
+          "dst_sub_precision_loiter"
+        ],
+        "modifiers": {
+          "army_defense": 0.04,
+          "support_recovery": 0.05
+        }
+      },
+      {
+        "id": "dst_sub_ew_hardened",
+        "name": "Fiber-Optic Jam-Proof Links",
+        "description": "Unjammable tethered drones dominate contested valleys while slowing forward tempo.",
+        "cost": 46,
+        "days": 220,
+        "rush_cost": 125,
+        "requires": [
+          "dst_field_workshops"
+        ],
+        "excludes": [
+          "dst_sub_ai_autonomy"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "garrison_state": 2.5,
+          "blitzkrieg": 1
+        },
+        "modifiers": {
+          "army_defense": 0.06,
+          "entrenchment_speed": 0.07,
+          "army_speed": -0.04
+        }
+      },
+      {
+        "id": "dst_sub_ai_autonomy",
+        "name": "Terminal Machine-Vision Homing",
+        "description": "Onboard target recognition accelerates breakthroughs while straining support maintenance.",
+        "cost": 46,
+        "days": 220,
+        "rush_cost": 125,
+        "requires": [
+          "dst_field_workshops"
+        ],
+        "excludes": [
+          "dst_sub_ew_hardened"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2.5,
+          "defensive": 1
+        },
+        "modifiers": {
+          "army_speed": 0.06,
+          "army_attack": 0.05,
+          "support_losses": 0.04
+        }
+      },
+      {
+        "id": "dst_ew_shield",
+        "name": "Counter-Drone Infantry Screens",
+        "description": "Every rifle company deploys portable jammers and interceptor nets.",
+        "cost": 58,
+        "days": 250,
+        "rush_cost": 155,
+        "requires": [
+          "dst_sub_ew_hardened"
+        ],
+        "modifiers": {
+          "army_defense": 0.04,
+          "organisation_recovery": 0.04
+        }
+      },
+      {
+        "id": "dst_swarm_doctrine",
+        "name": "Unified Swarm Battle-Space",
+        "description": "Autonomous aerial and ground scouts cue strikes across the entire front automatically.",
+        "cost": 58,
+        "days": 250,
+        "rush_cost": 155,
+        "requires": [
+          "dst_sub_ai_autonomy"
+        ],
+        "modifiers": {
+          "army_attack": 0.05,
+          "organisation_recovery": 0.04
+        }
+      }
+    ]
+  },
+  "urban_counterinsurgency": {
+    "name": "Doctrine of Urban & Stabilization Ops",
+    "description": "Master dense metropolitan combat, civil-military security and resilient garrison control without shattering infrastructure.",
+    "experience": "army",
+    "ai_profiles": {
+      "garrison_state": 1.8,
+      "default": 1.2,
+      "isolated": 1.3
+    },
+    "nodes": [
+      {
+        "id": "uci_block_clearing",
+        "name": "Combined-Arms Street Clearing",
+        "description": "Sappers, thermal optics and armored support clear high-rise blocks systematically.",
+        "cost": 18,
+        "days": 110,
+        "rush_cost": 48,
+        "modifiers": {
+          "army_defense": 0.04,
+          "entrenchment_speed": 0.05
+        }
+      },
+      {
+        "id": "uci_civil_liaison",
+        "name": "Civil-Military District Desks",
+        "description": "Municipal utility teams follow directly behind assault companies to stabilize neighborhoods.",
+        "cost": 22,
+        "days": 130,
+        "rush_cost": 60,
+        "requires": [
+          "uci_block_clearing"
+        ],
+        "modifiers": {
+          "reconstruction_speed": 0.07,
+          "stability_weekly": 0.002
+        }
+      },
+      {
+        "id": "uci_sensor_cordon",
+        "name": "Smart Perimeter Cordons",
+        "description": "Layered checkpoints and acoustic sensors seal urban districts against infiltration.",
+        "cost": 24,
+        "days": 140,
+        "rush_cost": 65,
+        "requires": [
+          "uci_block_clearing"
+        ],
+        "modifiers": {
+          "militia_readiness": 0.06,
+          "army_defense": 0.03
+        }
+      },
+      {
+        "id": "uci_sub_hearts_minds",
+        "name": "Civic Stabilization Compacts",
+        "description": "Restrained rules of engagement calm local populations and speed rebuilding at the cost of slower assaults.",
+        "cost": 30,
+        "days": 165,
+        "rush_cost": 82,
+        "requires": [
+          "uci_civil_liaison"
+        ],
+        "excludes": [
+          "uci_sub_hard_cordon"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "default": 2.5,
+          "garrison_state": 1
+        },
+        "modifiers": {
+          "reconstruction_speed": 0.1,
+          "radicalism_weekly": -0.0015,
+          "army_attack": -0.03
+        }
+      },
+      {
+        "id": "uci_sub_hard_cordon",
+        "name": "Heavy Siege & Curfew Regime",
+        "description": "Crush fortified urban pockets quickly with direct-fire support, accepting higher local unrest.",
+        "cost": 30,
+        "days": 165,
+        "rush_cost": 82,
+        "requires": [
+          "uci_civil_liaison"
+        ],
+        "excludes": [
+          "uci_sub_hearts_minds"
+        ],
+        "ai_profiles": {
+          "garrison_state": 3,
+          "irredentist": 2.5,
+          "trading_state": 1
+        },
+        "modifiers": {
+          "army_attack": 0.06,
+          "army_defense": 0.05,
+          "radicalism_weekly": 0.0012
+        }
+      },
+      {
+        "id": "uci_local_auxiliaries",
+        "name": "Municipal Security Auxiliaries",
+        "description": "Vetted neighborhood guards free regular divisions for frontline maneuvers.",
+        "cost": 40,
+        "days": 195,
+        "rush_cost": 110,
+        "requires": [
+          "uci_sub_hearts_minds"
+        ],
+        "modifiers": {
+          "militia_readiness": 0.08,
+          "stability_weekly": 0.002
+        }
+      },
+      {
+        "id": "uci_breach_batteries",
+        "name": "Heavy Urban Breaching Batteries",
+        "description": "Armored engineering vehicles dismantle reinforced concrete strongpoints methodically.",
+        "cost": 40,
+        "days": 195,
+        "rush_cost": 110,
+        "requires": [
+          "uci_sub_hard_cordon"
+        ],
+        "modifiers": {
+          "army_attack": 0.05,
+          "entrenchment_speed": 0.05
+        }
+      },
+      {
+        "id": "uci_sub_fortress_cities",
+        "name": "Fortified Metropolitan Anchors",
+        "description": "Turn rail junctions and capitals into subterranean bastions at the price of heavier construction bills.",
+        "cost": 46,
+        "days": 220,
+        "rush_cost": 125,
+        "requires": [
+          "uci_sensor_cordon"
+        ],
+        "excludes": [
+          "uci_sub_mobile_qrf"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "garrison_state": 2.5,
+          "expeditionary": 1
+        },
+        "modifiers": {
+          "army_defense": 0.07,
+          "entrenchment_speed": 0.08,
+          "construction_cost": 0.05
+        }
+      },
+      {
+        "id": "uci_sub_mobile_qrf",
+        "name": "Heliborne Quick-Reaction Forces",
+        "description": "Air-mobile tactical reserves respond across provinces in hours while cutting static trench work.",
+        "cost": 46,
+        "days": 220,
+        "rush_cost": 125,
+        "requires": [
+          "uci_sensor_cordon"
+        ],
+        "excludes": [
+          "uci_sub_fortress_cities"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "default": 2.5,
+          "fortress": 1
+        },
+        "modifiers": {
+          "army_speed": 0.07,
+          "organisation_recovery": 0.06,
+          "entrenchment_speed": -0.06
+        }
+      },
+      {
+        "id": "uci_metro_bunkers",
+        "name": "Civil Defence & Grid Hardening",
+        "description": "Hardened substations and shelters keep cities functioning under sustained bombardment.",
+        "cost": 58,
+        "days": 250,
+        "rush_cost": 155,
+        "requires": [
+          "uci_sub_fortress_cities"
+        ],
+        "modifiers": {
+          "deterrence": 0.04,
+          "army_defense": 0.04
+        }
+      },
+      {
+        "id": "uci_rapid_corridor",
+        "name": "Rapid Highway Security Sweeps",
+        "description": "Mobile convoys keep logistics arteries open across contested hinterlands.",
+        "cost": 58,
+        "days": 250,
+        "rush_cost": 155,
+        "requires": [
+          "uci_sub_mobile_qrf"
+        ],
+        "modifiers": {
+          "supply": 0.05,
+          "reinforcement_rate": 0.05
+        }
+      }
+    ]
+  },
+  "standoff_precision_air": {
+    "name": "Doctrine of Standoff Precision Air",
+    "description": "Keep high-value airframes outside hostile missile envelopes while dismantling air defenses and logistics from afar.",
+    "experience": "air",
+    "ai_profiles": {
+      "expeditionary": 1.8,
+      "major_offensive": 1.5,
+      "default": 1.0
+    },
+    "nodes": [
+      {
+        "id": "spa_sead_cells",
+        "name": "Dedicated SEAD Planning Cells",
+        "description": "Electronic intelligence maps hostile radar sites before strike packages ever take off.",
+        "cost": 16,
+        "days": 110,
+        "rush_cost": 44,
+        "modifiers": {
+          "support_losses": -0.06,
+          "support_recovery": 0.04
+        }
+      },
+      {
+        "id": "spa_glide_kits",
+        "name": "Long-Range Glide Munitions",
+        "description": "Winged standoff kits let tactical jets strike depots beyond medium-range SAM reach.",
+        "cost": 22,
+        "days": 135,
+        "rush_cost": 60,
+        "requires": [
+          "spa_sead_cells"
+        ],
+        "modifiers": {
+          "army_attack": 0.03,
+          "support_losses": -0.05
+        }
+      },
+      {
+        "id": "spa_tanker_bridges",
+        "name": "Aerial Refuelling Bridges",
+        "description": "Tanker orbits extend strike reach across entire theaters without forward airfields.",
+        "cost": 24,
+        "days": 145,
+        "rush_cost": 65,
+        "requires": [
+          "spa_sead_cells"
+        ],
+        "modifiers": {
+          "support_recovery": 0.05,
+          "supply": 0.03
+        }
+      },
+      {
+        "id": "spa_sub_stealth_penetration",
+        "name": "Low-Observable Penetration",
+        "description": "Stealth strike corridors shatter deep strategic targets at a steep peacetime maintenance burden.",
+        "cost": 32,
+        "days": 175,
+        "rush_cost": 88,
+        "requires": [
+          "spa_glide_kits"
+        ],
+        "excludes": [
+          "spa_sub_cruise_salvos"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "major_offensive": 2.5,
+          "attrition": 1
+        },
+        "modifiers": {
+          "support_losses": -0.09,
+          "army_attack": 0.04,
+          "borrowing_cost": 0.04
+        }
+      },
+      {
+        "id": "spa_sub_cruise_salvos",
+        "name": "Massed Standoff Cruise Salvos",
+        "description": "Saturate enemy defenses from afar using heavy air-launched volleys, slowing sortie turnaround.",
+        "cost": 32,
+        "days": 175,
+        "rush_cost": 88,
+        "requires": [
+          "spa_glide_kits"
+        ],
+        "excludes": [
+          "spa_sub_stealth_penetration"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "irredentist": 2.5,
+          "expeditionary": 1
+        },
+        "modifiers": {
+          "army_attack": 0.06,
+          "deterrence": 0.05,
+          "support_recovery": -0.05
+        }
+      },
+      {
+        "id": "spa_blind_sky",
+        "name": "Integrated Electronic Escort",
+        "description": "Stand-in jammers blind enemy interceptors throughout deep penetration raids.",
+        "cost": 42,
+        "days": 205,
+        "rush_cost": 115,
+        "requires": [
+          "spa_sub_stealth_penetration"
+        ],
+        "modifiers": {
+          "support_losses": -0.06,
+          "deterrence": 0.03
+        }
+      },
+      {
+        "id": "spa_depot_paralysis",
+        "name": "Theater Logistics Interdiction",
+        "description": "Coordinated missile salvos sever rail bridges and fuel farms behind the front.",
+        "cost": 42,
+        "days": 205,
+        "rush_cost": 115,
+        "requires": [
+          "spa_sub_cruise_salvos"
+        ],
+        "modifiers": {
+          "army_attack": 0.04,
+          "supply": 0.03
+        }
+      },
+      {
+        "id": "spa_sub_awacs_web",
+        "name": "Airborne Battle-Management Web",
+        "description": "High-altitude radar planes orchestrate joint operations while demanding skilled technical cadres.",
+        "cost": 48,
+        "days": 225,
+        "rush_cost": 130,
+        "requires": [
+          "spa_tanker_bridges"
+        ],
+        "excludes": [
+          "spa_sub_dispersed_highways"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "expeditionary": 2.5,
+          "defensive": 1
+        },
+        "modifiers": {
+          "organisation_recovery": 0.06,
+          "support_recovery": 0.07,
+          "recruitment_cost": 0.05
+        }
+      },
+      {
+        "id": "spa_sub_dispersed_highways",
+        "name": "Dispersed Highway Basing",
+        "description": "Roadside strips survive enemy counter-air strikes while reducing maximum sortie tempo.",
+        "cost": 48,
+        "days": 225,
+        "rush_cost": 130,
+        "requires": [
+          "spa_tanker_bridges"
+        ],
+        "excludes": [
+          "spa_sub_awacs_web"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "isolated": 2.5,
+          "major_offensive": 1
+        },
+        "modifiers": {
+          "support_losses": -0.08,
+          "army_defense": 0.04,
+          "support_recovery": -0.04
+        }
+      },
+      {
+        "id": "spa_joint_datalink",
+        "name": "Real-Time Joint Kill-Web",
+        "description": "Satellites, fighters and naval batteries share one live targeting picture.",
+        "cost": 60,
+        "days": 260,
+        "rush_cost": 160,
+        "requires": [
+          "spa_sub_awacs_web"
+        ],
+        "modifiers": {
+          "army_attack": 0.04,
+          "support_recovery": 0.05
+        }
+      },
+      {
+        "id": "spa_agile_combat",
+        "name": "Agile Combat Turnaround",
+        "description": "Mobile ground crews refuel and rearm jets from improvised strips within twenty minutes.",
+        "cost": 60,
+        "days": 260,
+        "rush_cost": 160,
+        "requires": [
+          "spa_sub_dispersed_highways"
+        ],
+        "modifiers": {
+          "support_recovery": 0.06,
+          "support_losses": -0.04
+        }
+      }
+    ]
+  },
+  "low_cost_unmanned_air": {
+    "name": "Doctrine of Mass Unmanned Air",
+    "description": "Contest the skies without billion-dollar fighter fleets using attritable UAV wings, decoys and mobile launch rails.",
+    "experience": "air",
+    "ai_profiles": {
+      "attrition": 1.6,
+      "minor_power": 1.4,
+      "isolated": 1.2
+    },
+    "nodes": [
+      {
+        "id": "lua_rail_launch",
+        "name": "Mobile Rail-Launch Batteries",
+        "description": "Truck-mounted catapults launch reconnaissance and strike drones from hidden clearings.",
+        "cost": 14,
+        "days": 100,
+        "rush_cost": 40,
+        "modifiers": {
+          "support_recovery": 0.06,
+          "recruitment_cost": -0.03
+        }
+      },
+      {
+        "id": "lua_decoy_screens",
+        "name": "Radar-Reflector Decoy Waves",
+        "description": "Cheap radar decoys force enemy missile batteries to reveal positions and exhaust interceptors.",
+        "cost": 20,
+        "days": 130,
+        "rush_cost": 55,
+        "requires": [
+          "lua_rail_launch"
+        ],
+        "modifiers": {
+          "support_losses": -0.06,
+          "army_attack": 0.02
+        }
+      },
+      {
+        "id": "lua_civil_supply",
+        "name": "Commercial-Off-The-Shelf Supply",
+        "description": "Standardized civilian motors and avionics allow rapid mass production in small factories.",
+        "cost": 22,
+        "days": 135,
+        "rush_cost": 60,
+        "requires": [
+          "lua_rail_launch"
+        ],
+        "modifiers": {
+          "output": 0.03,
+          "support_recovery": 0.05
+        }
+      },
+      {
+        "id": "lua_sub_long_range_oneway",
+        "name": "Deep One-Way Strike Wings",
+        "description": "Constant night raids pressure hostile refineries and depots while offering little frontline air cover.",
+        "cost": 28,
+        "days": 160,
+        "rush_cost": 78,
+        "requires": [
+          "lua_decoy_screens"
+        ],
+        "excludes": [
+          "lua_sub_tactical_wingmen"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "irredentist": 2.5,
+          "defensive": 1
+        },
+        "modifiers": {
+          "army_attack": 0.05,
+          "deterrence": 0.04,
+          "army_defense": -0.03
+        }
+      },
+      {
+        "id": "lua_sub_tactical_wingmen",
+        "name": "Loyal Unmanned Wingmen",
+        "description": "Attritable jet drones fly forward of manned aircraft, saving pilots while increasing support costs.",
+        "cost": 28,
+        "days": 160,
+        "rush_cost": 78,
+        "requires": [
+          "lua_decoy_screens"
+        ],
+        "excludes": [
+          "lua_sub_long_range_oneway"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "expeditionary": 2.5,
+          "attrition": 1
+        },
+        "modifiers": {
+          "support_losses": -0.08,
+          "support_recovery": 0.06,
+          "construction_cost": 0.04
+        }
+      },
+      {
+        "id": "lua_night_raids",
+        "name": "Sustained Night Saturation",
+        "description": "Multi-axis nocturnal routes keep hostile air-defense crews perpetually exhausted.",
+        "cost": 38,
+        "days": 190,
+        "rush_cost": 105,
+        "requires": [
+          "lua_sub_long_range_oneway"
+        ],
+        "modifiers": {
+          "army_attack": 0.04,
+          "war_support_weekly": 0.002
+        }
+      },
+      {
+        "id": "lua_manned_teaming",
+        "name": "Manned-Unmanned Air Teaming",
+        "description": "A single manned flight director guides six unmanned scouts and jammers in real time.",
+        "cost": 38,
+        "days": 190,
+        "rush_cost": 105,
+        "requires": [
+          "lua_sub_tactical_wingmen"
+        ],
+        "modifiers": {
+          "support_losses": -0.05,
+          "army_attack": 0.03
+        }
+      },
+      {
+        "id": "lua_sub_hunter_interceptors",
+        "name": "Low-Cost Drone Interceptors",
+        "description": "High-speed prop and jet interceptors defend cities cheaply while diverting workshops from offensive drones.",
+        "cost": 44,
+        "days": 210,
+        "rush_cost": 120,
+        "requires": [
+          "lua_civil_supply"
+        ],
+        "excludes": [
+          "lua_sub_modular_factories"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "isolated": 2.5,
+          "major_offensive": 1
+        },
+        "modifiers": {
+          "army_defense": 0.06,
+          "support_losses": -0.06,
+          "army_attack": -0.03
+        }
+      },
+      {
+        "id": "lua_sub_modular_factories",
+        "name": "Distributed Micro-Factories",
+        "description": "Hundreds of dispersed workshops sustain high replacement volume at a slight dip in industrial efficiency.",
+        "cost": 44,
+        "days": 210,
+        "rush_cost": 120,
+        "requires": [
+          "lua_civil_supply"
+        ],
+        "excludes": [
+          "lua_sub_hunter_interceptors"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "attrition": 2.5,
+          "minor_power": 1
+        },
+        "modifiers": {
+          "support_recovery": 0.09,
+          "reinforcement_rate": 0.05,
+          "output": -0.02
+        }
+      },
+      {
+        "id": "lua_sky_curtain",
+        "name": "Layered Anti-Drone Dome",
+        "description": "Acoustic arrays and cheap interceptors protect rail hubs and power grids.",
+        "cost": 56,
+        "days": 245,
+        "rush_cost": 150,
+        "requires": [
+          "lua_sub_hunter_interceptors"
+        ],
+        "modifiers": {
+          "army_defense": 0.04,
+          "deterrence": 0.03
+        }
+      },
+      {
+        "id": "lua_endless_wings",
+        "name": "Attrition-Proof Air Replacement",
+        "description": "Losses are absorbed immediately by decentralized assembly lines.",
+        "cost": 56,
+        "days": 245,
+        "rush_cost": 150,
+        "requires": [
+          "lua_sub_modular_factories"
+        ],
+        "modifiers": {
+          "support_recovery": 0.06,
+          "supply": 0.04
+        }
+      }
+    ]
+  },
+  "amphibious_expeditionary": {
+    "name": "Doctrine of Amphibious Projection",
+    "description": "Seize littorals, straits and distant beachheads through integrated marine task forces and sea-basing.",
+    "experience": "navy",
+    "ai_profiles": {
+      "expeditionary": 2.0,
+      "major_offensive": 1.5,
+      "default": 1.0
+    },
+    "nodes": [
+      {
+        "id": "aex_marine_cadres",
+        "name": "Standing Amphibious Brigades",
+        "description": "Dedicated landing formations train year-round for contested littoral assaults.",
+        "cost": 16,
+        "days": 110,
+        "rush_cost": 44,
+        "modifiers": {
+          "naval_speed": 0.04,
+          "army_attack": 0.02
+        }
+      },
+      {
+        "id": "aex_sea_basing",
+        "name": "Floating Sea-Base Logistics",
+        "description": "Roll-on cargo ships sustain landed divisions before a single deepwater port is captured.",
+        "cost": 22,
+        "days": 140,
+        "rush_cost": 60,
+        "requires": [
+          "aex_marine_cadres"
+        ],
+        "modifiers": {
+          "supply": 0.05,
+          "naval_speed": 0.03
+        }
+      },
+      {
+        "id": "aex_littoral_mines",
+        "name": "Fast Littoral Mine-Clearing",
+        "description": "Unmanned minehunters open beach approaches hours ahead of the main landing wave.",
+        "cost": 24,
+        "days": 145,
+        "rush_cost": 65,
+        "requires": [
+          "aex_marine_cadres"
+        ],
+        "modifiers": {
+          "naval_speed": 0.04,
+          "support_losses": -0.04
+        }
+      },
+      {
+        "id": "aex_sub_over_horizon",
+        "name": "Over-The-Horizon Vertical Assault",
+        "description": "Tiltrotors and hovercraft bypass beach obstacles rapidly while increasing fuel and hull expenses.",
+        "cost": 32,
+        "days": 175,
+        "rush_cost": 88,
+        "requires": [
+          "aex_sea_basing"
+        ],
+        "excludes": [
+          "aex_sub_heavy_bridgehead"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "blitzkrieg": 2.5,
+          "major_offensive": 1
+        },
+        "modifiers": {
+          "naval_speed": 0.08,
+          "army_speed": 0.05,
+          "shipbuilding_speed": -0.05
+        }
+      },
+      {
+        "id": "aex_sub_heavy_bridgehead",
+        "name": "Armored Heavy Bridgeheads",
+        "description": "Land heavy armor and artillery in methodical waves, trading speed for unbreakable beachheads.",
+        "cost": 32,
+        "days": 175,
+        "rush_cost": 88,
+        "requires": [
+          "aex_sea_basing"
+        ],
+        "excludes": [
+          "aex_sub_over_horizon"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "attrition": 2.5,
+          "expeditionary": 1
+        },
+        "modifiers": {
+          "army_attack": 0.05,
+          "army_defense": 0.05,
+          "naval_speed": -0.04
+        }
+      },
+      {
+        "id": "aex_island_hopping",
+        "name": "Archipelagic Leapfrogging",
+        "description": "Bypass heavily fortified garrisons to seize undefended airfields and fuel dumps behind them.",
+        "cost": 42,
+        "days": 205,
+        "rush_cost": 115,
+        "requires": [
+          "aex_sub_over_horizon"
+        ],
+        "modifiers": {
+          "army_speed": 0.04,
+          "supply": 0.04
+        }
+      },
+      {
+        "id": "aex_floating_piers",
+        "name": "Modular Mulberry Piers",
+        "description": "Engineered causeways turn open beaches into heavy-lift military ports within days.",
+        "cost": 42,
+        "days": 205,
+        "rush_cost": 115,
+        "requires": [
+          "aex_sub_heavy_bridgehead"
+        ],
+        "modifiers": {
+          "supply": 0.05,
+          "reinforcement_rate": 0.05
+        }
+      },
+      {
+        "id": "aex_sub_carrier_cover",
+        "name": "Carrier Air-Umbrella Groups",
+        "description": "Organic naval aviation shields landings anywhere on earth at a steep shipyard overhead.",
+        "cost": 48,
+        "days": 225,
+        "rush_cost": 130,
+        "requires": [
+          "aex_littoral_mines"
+        ],
+        "excludes": [
+          "aex_sub_missile_screen"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "major_offensive": 2.5,
+          "trading_state": 1
+        },
+        "modifiers": {
+          "support_recovery": 0.07,
+          "deterrence": 0.05,
+          "borrowing_cost": 0.04
+        }
+      },
+      {
+        "id": "aex_sub_missile_screen",
+        "name": "Surface-Action Missile Escorts",
+        "description": "Fast frigates and destroyers screen landing ships cheaply while offering thinner air support.",
+        "cost": 48,
+        "days": 225,
+        "rush_cost": 130,
+        "requires": [
+          "aex_littoral_mines"
+        ],
+        "excludes": [
+          "aex_sub_carrier_cover"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "minor_power": 2.5,
+          "expeditionary": 1
+        },
+        "modifiers": {
+          "shipbuilding_speed": 0.09,
+          "naval_speed": 0.05,
+          "support_recovery": -0.04
+        }
+      },
+      {
+        "id": "aex_global_reach",
+        "name": "Blue-Water Joint Task Force",
+        "description": "Sustained expeditionary flotillas operate indefinitely across two oceans.",
+        "cost": 60,
+        "days": 260,
+        "rush_cost": 160,
+        "requires": [
+          "aex_sub_carrier_cover"
+        ],
+        "modifiers": {
+          "naval_speed": 0.05,
+          "trade_reach": 0.05
+        }
+      },
+      {
+        "id": "aex_strait_control",
+        "name": "Chokepoint Escort Dominance",
+        "description": "Escort squadrons secure vital maritime narrows for allied shipping and amphibious forces.",
+        "cost": 60,
+        "days": 260,
+        "rush_cost": 160,
+        "requires": [
+          "aex_sub_missile_screen"
+        ],
+        "modifiers": {
+          "trade_reach": 0.06,
+          "naval_speed": 0.04
+        }
+      }
+    ]
+  },
+  "undersea_hunter_killer": {
+    "name": "Doctrine of Silent Undersea Warfare",
+    "description": "Control the abyss with quiet attack submarines, seabed sensor arrays and uncrewed maritime strike craft.",
+    "experience": "navy",
+    "ai_profiles": {
+      "isolated": 1.8,
+      "fortress": 1.6,
+      "garrison_state": 1.3
+    },
+    "nodes": [
+      {
+        "id": "uhk_quiet_patrols",
+        "name": "Acoustic Stealth Patrols",
+        "description": "Strict sound-silencing drills make submarines nearly invisible along thermal layers.",
+        "cost": 16,
+        "days": 110,
+        "rush_cost": 44,
+        "modifiers": {
+          "deterrence": 0.04,
+          "naval_speed": 0.03
+        }
+      },
+      {
+        "id": "uhk_seabed_hydrophones",
+        "name": "Seabed Hydrophone Arrays",
+        "description": "Fixed acoustic cables across straits track every passing surface vessel and submarine.",
+        "cost": 22,
+        "days": 135,
+        "rush_cost": 60,
+        "requires": [
+          "uhk_quiet_patrols"
+        ],
+        "modifiers": {
+          "army_defense": 0.03,
+          "deterrence": 0.04
+        }
+      },
+      {
+        "id": "uhk_sub_tenders",
+        "name": "Dispersed Submarine Pens",
+        "description": "Hardened fjords and coastal tunnels shelter boats from satellite and missile strikes.",
+        "cost": 24,
+        "days": 145,
+        "rush_cost": 65,
+        "requires": [
+          "uhk_quiet_patrols"
+        ],
+        "modifiers": {
+          "shipbuilding_speed": 0.05,
+          "support_losses": -0.04
+        }
+      },
+      {
+        "id": "uhk_sub_bastion_deterrence",
+        "name": "Strategic Bastion Patrols",
+        "description": "Protect missile-carrying boats inside home waters to maximize deterrence at the cost of trade reach.",
+        "cost": 32,
+        "days": 175,
+        "rush_cost": 88,
+        "requires": [
+          "uhk_seabed_hydrophones"
+        ],
+        "excludes": [
+          "uhk_sub_commerce_pack"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "isolated": 2.5,
+          "irredentist": 1
+        },
+        "modifiers": {
+          "deterrence": 0.09,
+          "army_defense": 0.04,
+          "trade_reach": -0.05
+        }
+      },
+      {
+        "id": "uhk_sub_commerce_pack",
+        "name": "Chokepoint Wolfpacks",
+        "description": "Hunt hostile tankers and escorts far from home, trading static coastal defense for oceanic pressure.",
+        "cost": 32,
+        "days": 175,
+        "rush_cost": 88,
+        "requires": [
+          "uhk_seabed_hydrophones"
+        ],
+        "excludes": [
+          "uhk_sub_bastion_deterrence"
+        ],
+        "ai_profiles": {
+          "irredentist": 3,
+          "major_offensive": 2.5,
+          "fortress": 1
+        },
+        "modifiers": {
+          "naval_speed": 0.07,
+          "trade_reach": 0.06,
+          "army_defense": -0.03
+        }
+      },
+      {
+        "id": "uhk_second_strike_shield",
+        "name": "Assured Undersea Second Strike",
+        "description": "Continuous at-sea deterrence patrols keep strategic stability unshakable.",
+        "cost": 42,
+        "days": 205,
+        "rush_cost": 115,
+        "requires": [
+          "uhk_sub_bastion_deterrence"
+        ],
+        "modifiers": {
+          "deterrence": 0.06,
+          "stability_weekly": 0.002
+        }
+      },
+      {
+        "id": "uhk_deep_interdiction",
+        "name": "Oceanic Supply-Line Interdiction",
+        "description": "Coordinated submarine pickets disrupt hostile war shipping across maritime basins.",
+        "cost": 42,
+        "days": 205,
+        "rush_cost": 115,
+        "requires": [
+          "uhk_sub_commerce_pack"
+        ],
+        "modifiers": {
+          "naval_speed": 0.05,
+          "army_attack": 0.03
+        }
+      },
+      {
+        "id": "uhk_sub_usv_swarms",
+        "name": "Uncrewed Surface Strike Boats",
+        "description": "Low-profile drone boats threaten capital ships cheaply while sacrificing long-range shipyard output.",
+        "cost": 48,
+        "days": 225,
+        "rush_cost": 130,
+        "requires": [
+          "uhk_sub_tenders"
+        ],
+        "excludes": [
+          "uhk_sub_nuclear_hunters"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "isolated": 2.5,
+          "expeditionary": 1
+        },
+        "modifiers": {
+          "shipbuilding_speed": 0.09,
+          "deterrence": 0.05,
+          "naval_speed": -0.03
+        }
+      },
+      {
+        "id": "uhk_sub_nuclear_hunters",
+        "name": "Long-Endurance Hunter-Killers",
+        "description": "High-speed deep-diving attack submarines dominate open oceans at a heavier construction cost.",
+        "cost": 48,
+        "days": 225,
+        "rush_cost": 130,
+        "requires": [
+          "uhk_sub_tenders"
+        ],
+        "excludes": [
+          "uhk_sub_usv_swarms"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "fortress": 2.5,
+          "minor_power": 1
+        },
+        "modifiers": {
+          "naval_speed": 0.08,
+          "deterrence": 0.06,
+          "construction_cost": 0.05
+        }
+      },
+      {
+        "id": "uhk_littoral_denial",
+        "name": "Unmanned Littoral Exclusion Zone",
+        "description": "Drone boats and smart mines seal coastal approaches against hostile fleets.",
+        "cost": 60,
+        "days": 260,
+        "rush_cost": 160,
+        "requires": [
+          "uhk_sub_usv_swarms"
+        ],
+        "modifiers": {
+          "army_defense": 0.05,
+          "deterrence": 0.04
+        }
+      },
+      {
+        "id": "uhk_abyss_mastery",
+        "name": "Mastery of the Deep",
+        "description": "Silent attack submarines hold every strait and ocean basin at risk.",
+        "cost": 60,
+        "days": 260,
+        "rush_cost": 160,
+        "requires": [
+          "uhk_sub_nuclear_hunters"
+        ],
+        "modifiers": {
+          "deterrence": 0.06,
+          "naval_speed": 0.04
+        }
+      }
+    ]
+  },
+  "cyber_electronic_staff": {
+    "name": "Doctrine of Cyber & Information Staff",
+    "description": "Treat spectrum control, encrypted command networks and cognitive resilience as decisive instruments of the general staff.",
+    "experience": "command",
+    "ai_profiles": {
+      "expeditionary": 1.8,
+      "trading_state": 1.5,
+      "default": 1.1
+    },
+    "nodes": [
+      {
+        "id": "ces_encrypted_c2",
+        "name": "Zero-Trust Command Networks",
+        "description": "Quantum-resistant encryption keeps operational orders intact under cyber attack.",
+        "cost": 10,
+        "days": 115,
+        "rush_cost": 28,
+        "modifiers": {
+          "organisation_recovery": 0.04,
+          "research_speed": 0.03
+        }
+      },
+      {
+        "id": "ces_spectrum_cells",
+        "name": "Spectrum Dominance Sections",
+        "description": "Electronic warfare officers sit beside operations chiefs at every corps headquarters.",
+        "cost": 14,
+        "days": 145,
+        "rush_cost": 40,
+        "requires": [
+          "ces_encrypted_c2"
+        ],
+        "modifiers": {
+          "army_defense": 0.03,
+          "support_losses": -0.04
+        }
+      },
+      {
+        "id": "ces_osint_fusion",
+        "name": "Open-Source Intelligence Fusion",
+        "description": "Automated satellite and commercial telemetry give commanders a clearer map of enemy movement.",
+        "cost": 14,
+        "days": 145,
+        "rush_cost": 40,
+        "requires": [
+          "ces_encrypted_c2"
+        ],
+        "modifiers": {
+          "army_attack": 0.02,
+          "trade_reach": 0.04
+        }
+      },
+      {
+        "id": "ces_sub_cyber_offense",
+        "name": "Offensive Cyber Disruption",
+        "description": "Disrupt hostile logistics grids and radar nets before offensives at the risk of heightened diplomatic friction.",
+        "cost": 18,
+        "days": 175,
+        "rush_cost": 52,
+        "requires": [
+          "ces_spectrum_cells"
+        ],
+        "excludes": [
+          "ces_sub_resilient_grid"
+        ],
+        "ai_profiles": {
+          "irredentist": 3,
+          "expeditionary": 2.5,
+          "trading_state": 1
+        },
+        "modifiers": {
+          "army_attack": 0.05,
+          "army_speed": 0.04,
+          "trade_reach": -0.04
+        }
+      },
+      {
+        "id": "ces_sub_resilient_grid",
+        "name": "National Cyber Shield",
+        "description": "Harden banks, power plants and military relays against sabotage while diverting talent from offense.",
+        "cost": 18,
+        "days": 175,
+        "rush_cost": 52,
+        "requires": [
+          "ces_spectrum_cells"
+        ],
+        "excludes": [
+          "ces_sub_cyber_offense"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "defensive": 2.5,
+          "irredentist": 1
+        },
+        "modifiers": {
+          "credit_capacity": 0.07,
+          "stability_weekly": 0.003,
+          "army_attack": -0.02
+        }
+      },
+      {
+        "id": "ces_grid_blackout",
+        "name": "Synchronized Electronic Paralysis",
+        "description": "Time cyber intrusions to coincide with breakthrough assaults, confusing enemy reserves.",
+        "cost": 22,
+        "days": 205,
+        "rush_cost": 64,
+        "requires": [
+          "ces_sub_cyber_offense"
+        ],
+        "modifiers": {
+          "army_attack": 0.04,
+          "organisation_recovery": 0.04
+        }
+      },
+      {
+        "id": "ces_civic_resilience",
+        "name": "Hardened Digital Infrastructure",
+        "description": "Redundant fiber rings and sovereign cloud backups keep state administration online in wartime.",
+        "cost": 22,
+        "days": 205,
+        "rush_cost": 64,
+        "requires": [
+          "ces_sub_resilient_grid"
+        ],
+        "modifiers": {
+          "output": 0.04,
+          "research_speed": 0.04
+        }
+      },
+      {
+        "id": "ces_sub_ai_staff",
+        "name": "Algorithmic Logistics & Wargaming",
+        "description": "Machine-assisted staff tools compress planning cycles while raising technical overhead.",
+        "cost": 24,
+        "days": 225,
+        "rush_cost": 70,
+        "requires": [
+          "ces_osint_fusion"
+        ],
+        "excludes": [
+          "ces_sub_human_humint"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "trading_state": 2.5,
+          "isolated": 1
+        },
+        "modifiers": {
+          "supply": 0.06,
+          "research_speed": 0.05,
+          "borrowing_cost": 0.04
+        }
+      },
+      {
+        "id": "ces_sub_human_humint",
+        "name": "Deep Diplomatic & Field Liaison",
+        "description": "Human liaison networks read adversary intentions cheaply while accepting slower automated data fusion.",
+        "cost": 24,
+        "days": 225,
+        "rush_cost": 70,
+        "requires": [
+          "ces_osint_fusion"
+        ],
+        "excludes": [
+          "ces_sub_ai_staff"
+        ],
+        "ai_profiles": {
+          "isolated": 3,
+          "garrison_state": 2.5,
+          "expeditionary": 1
+        },
+        "modifiers": {
+          "deterrence": 0.05,
+          "organisation_recovery": 0.05,
+          "research_speed": -0.03
+        }
+      },
+      {
+        "id": "ces_digital_command",
+        "name": "Autonomous Joint Command Bus",
+        "description": "Orders, supply requisitions and intelligence flow across all four services seamlessly.",
+        "cost": 28,
+        "days": 260,
+        "rush_cost": 82,
+        "requires": [
+          "ces_sub_ai_staff"
+        ],
+        "modifiers": {
+          "organisation_recovery": 0.05,
+          "supply": 0.04
+        }
+      },
+      {
+        "id": "ces_strategic_insight",
+        "name": "Strategic Net Assessment Bureau",
+        "description": "Seasoned analysts prevent surprise crises and steady government resolve.",
+        "cost": 28,
+        "days": 260,
+        "rush_cost": 82,
+        "requires": [
+          "ces_sub_human_humint"
+        ],
+        "modifiers": {
+          "stability_weekly": 0.003,
+          "deterrence": 0.04
+        }
+      }
+    ]
+  },
+  "wartime_industrial_staff": {
+    "name": "Doctrine of Industrial Logistics Staff",
+    "description": "Win prolonged conflicts on the factory floor, the rail yard and the treasury ledger before the front line ever buckles.",
+    "experience": "command",
+    "ai_profiles": {
+      "attrition": 1.8,
+      "garrison_state": 1.5,
+      "minor_power": 1.2
+    },
+    "nodes": [
+      {
+        "id": "wis_dual_use_tooling",
+        "name": "Dual-Use Factory Tooling",
+        "description": "Civilian machine shops keep standardized dies ready to pivot to defense parts within weeks.",
+        "cost": 10,
+        "days": 115,
+        "rush_cost": 28,
+        "modifiers": {
+          "output": 0.04,
+          "construction_speed": 0.04
+        }
+      },
+      {
+        "id": "wis_strategic_stockpiles",
+        "name": "Strategic Raw-Material Reserves",
+        "description": "State warehouses buffer metals, energy and semiconductors against sudden embargoes.",
+        "cost": 14,
+        "days": 145,
+        "rush_cost": 40,
+        "requires": [
+          "wis_dual_use_tooling"
+        ],
+        "modifiers": {
+          "supply": 0.04,
+          "credit_capacity": 0.05
+        }
+      },
+      {
+        "id": "wis_rail_command",
+        "name": "Military Rail & Port Authority",
+        "description": "Unified dispatch tables synchronize troop trains, shell deliveries and civilian freight.",
+        "cost": 14,
+        "days": 145,
+        "rush_cost": 40,
+        "requires": [
+          "wis_dual_use_tooling"
+        ],
+        "modifiers": {
+          "reinforcement_rate": 0.05,
+          "supply": 0.03
+        }
+      },
+      {
+        "id": "wis_sub_total_conversion",
+        "name": "Command Economy Conversion",
+        "description": "Maximize defense manufacturing and construction speed at the cost of household living standards.",
+        "cost": 18,
+        "days": 175,
+        "rush_cost": 52,
+        "requires": [
+          "wis_strategic_stockpiles"
+        ],
+        "excludes": [
+          "wis_sub_allied_procurement"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "garrison_state": 2.5,
+          "trading_state": 1
+        },
+        "modifiers": {
+          "output": 0.07,
+          "construction_speed": 0.08,
+          "living_weekly": -0.0012
+        }
+      },
+      {
+        "id": "wis_sub_allied_procurement",
+        "name": "Allied Defense Supply Chains",
+        "description": "Source components across partner markets to protect citizens while accepting higher borrowing costs.",
+        "cost": 18,
+        "days": 175,
+        "rush_cost": 52,
+        "requires": [
+          "wis_strategic_stockpiles"
+        ],
+        "excludes": [
+          "wis_sub_total_conversion"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "expeditionary": 2.5,
+          "attrition": 1
+        },
+        "modifiers": {
+          "trade_reach": 0.08,
+          "supply": 0.05,
+          "borrowing_cost": 0.05
+        }
+      },
+      {
+        "id": "wis_three_shift_arsenals",
+        "name": "Three-Shift Arsenal Output",
+        "description": "Round-the-clock production guarantees uninterrupted shell and vehicle replenishment.",
+        "cost": 22,
+        "days": 205,
+        "rush_cost": 64,
+        "requires": [
+          "wis_sub_total_conversion"
+        ],
+        "modifiers": {
+          "reinforcement_rate": 0.06,
+          "recruitment_cost": -0.05
+        }
+      },
+      {
+        "id": "wis_consortium_logistics",
+        "name": "Joint Procurement Consortium",
+        "description": "Pooled industrial orders lower unit costs and accelerate allied hardware upgrades.",
+        "cost": 22,
+        "days": 205,
+        "rush_cost": 64,
+        "requires": [
+          "wis_sub_allied_procurement"
+        ],
+        "modifiers": {
+          "research_speed": 0.04,
+          "recruitment_cost": -0.05
+        }
+      },
+      {
+        "id": "wis_sub_war_bonds",
+        "name": "Sovereign War-Bond Discipline",
+        "description": "Mobilize domestic savings and tax collection efficiently while slowing rapid peacetime construction.",
+        "cost": 24,
+        "days": 225,
+        "rush_cost": 70,
+        "requires": [
+          "wis_rail_command"
+        ],
+        "excludes": [
+          "wis_sub_rapid_repair"
+        ],
+        "ai_profiles": {
+          "default": 3,
+          "trading_state": 2.5,
+          "fortress": 1
+        },
+        "modifiers": {
+          "tax_efficiency": 0.07,
+          "borrowing_cost": -0.06,
+          "construction_speed": -0.04
+        }
+      },
+      {
+        "id": "wis_sub_rapid_repair",
+        "name": "Frontline Depot & Bridge Corps",
+        "description": "Dedicated engineering brigades rebuild blasted rail lines overnight at a higher fiscal cost.",
+        "cost": 24,
+        "days": 225,
+        "rush_cost": 70,
+        "requires": [
+          "wis_rail_command"
+        ],
+        "excludes": [
+          "wis_sub_war_bonds"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "attrition": 2.5,
+          "default": 1
+        },
+        "modifiers": {
+          "reconstruction_speed": 0.12,
+          "supply": 0.05,
+          "construction_cost": 0.05
+        }
+      },
+      {
+        "id": "wis_fiscal_endurance",
+        "name": "Long-War Fiscal Endurance",
+        "description": "Disciplined treasury management keeps armies paid and credit markets calm through multi-year wars.",
+        "cost": 28,
+        "days": 260,
+        "rush_cost": 82,
+        "requires": [
+          "wis_sub_war_bonds"
+        ],
+        "modifiers": {
+          "credit_capacity": 0.07,
+          "stability_weekly": 0.002
+        }
+      },
+      {
+        "id": "wis_unbreakable_arteries",
+        "name": "Unbreakable Supply Arteries",
+        "description": "Redundant bridges, pipelines and mobile depots keep divisions supplied under heavy fire.",
+        "cost": 28,
+        "days": 260,
+        "rush_cost": 82,
+        "requires": [
+          "wis_sub_rapid_repair"
+        ],
+        "modifiers": {
+          "supply": 0.05,
+          "organisation_recovery": 0.04
+        }
+      }
+    ]
+  }
+}
