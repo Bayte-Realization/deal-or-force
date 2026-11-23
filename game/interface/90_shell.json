@@ -64,7 +64,7 @@
     "shell.max_rest_panels": 6.0,
     "shell.max_map_signs": 20.0,
     "shell.next_hint_days": 60.0,
-    "shell.portrait_bezel_alpha": 0.92,
+    "shell.portrait_bezel_alpha": 0.0,
     "shell.card_wrapper_enabled": 1.0,
     "shell.dossier_grain_alpha": 0.34,
     "shell.surface_texture_alpha": 0.32,

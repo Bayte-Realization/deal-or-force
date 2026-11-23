@@ -90,7 +90,9 @@ public partial class DealOrForceGame
 
         if (!PortraitCache.TryGetValue(anonymousKey, out var anonymous))
         {
-            var silhouettePath = SpriteCatalog.TextureOf("leader_anonymous", "res://game/gfx/interface/shell/portrait_cameo_anonymous.png");
+            // The plain silhouette (game/gfx/leaders). The engraved 18th-century cameo in
+            // interface/shell is an invented face: an era skin may point leader_anonymous at it.
+            var silhouettePath = SpriteCatalog.TextureOf("leader_anonymous", "res://game/gfx/leaders/leader_anonymous.png");
             if (LoadLeaderPhoto(silhouettePath) is { } silhouette)
             {
                 anonymous = RememberPortrait(anonymousKey, silhouette);

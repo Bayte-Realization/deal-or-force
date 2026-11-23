@@ -379,14 +379,16 @@ internal static class ChromePlateArt
     }
 
     /// <summary>
-    /// Attaches or updates the ornate cameo bezel frame over a leader or ruler portrait.
+    /// Attaches or updates the ornate bezel frame over a leader or ruler portrait. Off in the
+    /// default skin (<c>shell.portrait_bezel_alpha</c> 0): the portrait keeps its plain one-pixel
+    /// frame, and a skin that wants the ornament sets the alpha.
     /// </summary>
     internal static void AttachPortraitBezel(Control host, float alpha = -1f)
     {
         if (host is null) return;
         var effectiveAlpha = alpha >= 0f
             ? Math.Clamp(alpha, 0f, 1f)
-            : Math.Clamp(InterfaceSkin.Metric("shell.portrait_bezel_alpha", 0.92f), 0f, 1f);
+            : Math.Clamp(InterfaceSkin.Metric("shell.portrait_bezel_alpha", 0f), 0f, 1f);
         var tex = LoadSpriteTexture("shell_portrait_bezel", "res://game/gfx/interface/shell/round_bezel.png");
         var existing = host.GetNodeOrNull<TextureRect>("PortraitBezelOverlay");
         if (tex is null || effectiveAlpha <= 0.005f)

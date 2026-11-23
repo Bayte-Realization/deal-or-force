@@ -10,6 +10,10 @@ Its provenance is in `anonymous_portrait.source.json`. Override the same sprite 
 a mod to replace the global fallback; if it is missing, a small procedural silhouette
 still keeps the interface usable. The generated asset is shared, not cloned per person.
 
+The engraved 18th-century cameo `game/gfx/interface/shell/portrait_cameo_anonymous.png`
+is an invented face and is not used by the default skin (23 November 2026). An era skin may
+point `leader_anonymous` at it; the ornate frame comes back with `shell.portrait_bezel_alpha` above 0.
+
 Alternatively declare a sprite in a mod's `gfx/*.json`; paths are relative to its `gfx` root:
 
 ```json

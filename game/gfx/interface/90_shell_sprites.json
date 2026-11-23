@@ -1,7 +1,7 @@
 {
   "sprites": {
     "icon_atlas_terrain": "res://game/gfx/interface/shell/icon_atlas_terrain.png",
-    "leader_anonymous": "res://game/gfx/interface/shell/portrait_cameo_anonymous.png",
+    "leader_anonymous": "res://game/gfx/leaders/leader_anonymous.png",
     "shell_button_bevel": "res://game/gfx/interface/panels/button_bevel_uniform_9s.png",
     "shell_button_brass_cta_9s": "res://game/gfx/interface/shell/button_brass_cta_9s.png",
     "shell_button_brass_cta_9s_2x": "res://game/gfx/interface/shell/button_brass_cta_9s@2x.png",
