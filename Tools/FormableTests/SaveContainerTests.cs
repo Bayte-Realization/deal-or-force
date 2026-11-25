@@ -34,7 +34,7 @@ static class SaveContainerTests
 
         campaign.Defines.SaveTextFormat = false;
         var saved = SaveSystem.Save(folder, "framed", campaign, "tests");
-        var framed = File.ReadAllBytes(Path.Combine(folder, "framed.dfsave"));
+        var framed = File.ReadAllBytes(Path.Combine(folder, "framed.dofsave"));
         // Reference values come from the world as it loads, not as it stood: Restore normalises
         // a few derived fields, and the claim is that every container restores the same world.
         var reference = SaveSystem.Load(folder, "framed", "tests");
@@ -58,7 +58,7 @@ static class SaveContainerTests
         // was written: plain JSON, with a byte-order mark, gzip, and Brotli under "BDF2".
         campaign.Defines.SaveTextFormat = true;
         var textSaved = SaveSystem.Save(folder, "text", campaign, "tests");
-        var plain = File.ReadAllBytes(Path.Combine(folder, "text.dfsave"));
+        var plain = File.ReadAllBytes(Path.Combine(folder, "text.dofsave"));
         Check(plain[0] == (byte)'{', "the text save is still the editable JSON the setting chose");
         Check(textSaved.CompressedBytes == plain.Length && textSaved.Checksum.Length == 0,
             "the streamed text save reports its exact file size and has no checksum");
@@ -87,16 +87,21 @@ static class SaveContainerTests
             }
         foreach (var (name, bytes) in variants)
         {
-            File.WriteAllBytes(Path.Combine(folder, name + ".dfsave"), bytes);
+            File.WriteAllBytes(Path.Combine(folder, name + ".dofsave"), bytes);
             var loaded = SaveSystem.Load(folder, name, "tests");
             Check(loaded.Success, $"an older save ({name}) still loads: {loaded.Warning}");
             Check(CampaignFingerprint.Of(loaded.Campaign) == fingerprint && HistoryDigest(loaded.Campaign) == history,
                 $"an older save ({name}) restores the same world and the same history as the framed one");
         }
-        // Previous .bdfsave and .bdfsave.json extension variants still list and load identically.
+        // Previous .dfsave, .bdfsave, and .bdfsave.json extension variants still list and load identically.
+        File.WriteAllBytes(Path.Combine(folder, "prev_ext.dfsave"), framed);
+        var prevExt = SaveSystem.Load(folder, "prev_ext", "tests");
+        Check(prevExt.Success && SaveSystem.List(folder).Any(m => m.Slot == "prev_ext" && m.FormatLabel == "DOF3") &&
+              CampaignFingerprint.Of(prevExt.Campaign) == fingerprint && HistoryDigest(prevExt.Campaign) == history,
+            "a legacy .dfsave still lists and loads identically");
         File.WriteAllBytes(Path.Combine(folder, "legacy_ext.bdfsave"), framed);
         var legacyExt = SaveSystem.Load(folder, "legacy_ext", "tests");
-        Check(legacyExt.Success && SaveSystem.List(folder).Any(m => m.Slot == "legacy_ext" && m.FormatLabel == "DF3") &&
+        Check(legacyExt.Success && SaveSystem.List(folder).Any(m => m.Slot == "legacy_ext" && m.FormatLabel == "DOF3") &&
               CampaignFingerprint.Of(legacyExt.Campaign) == fingerprint && HistoryDigest(legacyExt.Campaign) == history,
             "a legacy .bdfsave still lists and loads identically");
         File.WriteAllBytes(Path.Combine(folder, "legacy.bdfsave.json"), plain);
@@ -106,7 +111,7 @@ static class SaveContainerTests
         // The slot list reads the framed file's embedded metadata from its first section.
         var listed = SaveSystem.List(folder).FirstOrDefault(m => m.Slot == "framed");
         Check(listed is not null && listed.NationTag == campaign.Player.Tag && listed.CompressedBytes == framed.Length &&
-              listed.FormatLabel == "DF3",
+              listed.FormatLabel == "DOF3",
             "the save list reads a framed slot's metadata");
 
         // Damage. Each of these must be refused, never loaded as some other world.
@@ -122,7 +127,7 @@ static class SaveContainerTests
         var longer = framed.Concat(new byte[] { 0 }).ToArray();
         // A trailing byte is not covered by any section; it is the one change that is harmless,
         // and the reader may load it. It must not load a different world.
-        File.WriteAllBytes(Path.Combine(folder, "longer.dfsave"), longer);
+        File.WriteAllBytes(Path.Combine(folder, "longer.dofsave"), longer);
         var longerLoaded = SaveSystem.Load(folder, "longer", "tests");
         Check(!longerLoaded.Success || CampaignFingerprint.Of(longerLoaded.Campaign) == fingerprint,
             "a trailing byte never loads as another world");
@@ -130,9 +135,9 @@ static class SaveContainerTests
         // Stored (uncompressed) sections: nothing but the checksum stands between a flipped bit
         // in a figure and a wrong chart. This is the case the checksum exists for.
         var payload = SaveSystem.CampaignSave.Capture(campaign, "tests");
-        using (var stored = new FileStream(Path.Combine(folder, "stored.dfsave"), FileMode.Create, FileAccess.ReadWrite))
+        using (var stored = new FileStream(Path.Combine(folder, "stored.dofsave"), FileMode.Create, FileAccess.ReadWrite))
             SaveSystem.WriteBinary(stored, payload, null, SaveContainer.StoredCodec, 0);
-        var storedBytes = File.ReadAllBytes(Path.Combine(folder, "stored.dfsave"));
+        var storedBytes = File.ReadAllBytes(Path.Combine(folder, "stored.dofsave"));
         var storedLoaded = SaveSystem.Load(folder, "stored", "tests");
         Check(storedLoaded.Success && CampaignFingerprint.Of(storedLoaded.Campaign) == fingerprint &&
               HistoryDigest(storedLoaded.Campaign) == history, "an uncompressed framed save round-trips");
@@ -240,7 +245,7 @@ static class SaveContainerTests
 
     static void Refused(string folder, string slot, byte[] bytes, string what)
     {
-        File.WriteAllBytes(Path.Combine(folder, slot + ".dfsave"), bytes);
+        File.WriteAllBytes(Path.Combine(folder, slot + ".dofsave"), bytes);
         var loaded = SaveSystem.Load(folder, slot, "tests");
         Check(!loaded.Success, what + " is refused" + (loaded.Success ? "" : $" ({loaded.Warning})"));
     }

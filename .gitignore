@@ -101,5 +101,6 @@ addons/GD-Sync/keys.cfg
 /Assets/
 
 # Local save / benchmark scratch dropped in repo root.
+/*.dofsave*
 /*.dfsave*
 /*.bdfsave*

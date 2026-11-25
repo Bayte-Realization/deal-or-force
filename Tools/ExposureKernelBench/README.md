@@ -7,7 +7,7 @@ RNG use, networking or gameplay rule is introduced into the game.
 Run from the repository root in PowerShell with an explicit portable Odin compiler:
 
 ```powershell
-./Tools/ExposureKernelBench/run.ps1 -OdinExecutable 'C:/path/to/odin.exe' -World -Save 'C:/path/to/copy.dfsave'
+./Tools/ExposureKernelBench/run.ps1 -OdinExecutable 'C:/path/to/odin.exe' -World -Save 'C:/path/to/copy.dofsave'
 ```
 
 The recorded real-world run used `DOTNET_GCConserveMemory=9` and

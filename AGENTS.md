@@ -83,7 +83,7 @@ instead of re-deriving the commands.
   scratch directories out of `res://`, or give them a `.gdignore` on the same day they appear.
   Closing Godot before opening the editor also matters: a second editor on the same project and
   the `godot-ai` daemons left over from earlier sessions compete for the same files.
-- **`Tools/profile-tracy.ps1 -Save <copy.dfsave> -Days 30`** — a Tracy timeline of a save, headless:
+- **`Tools/profile-tracy.ps1 -Save <copy.dofsave> -Days 30`** — a Tracy timeline of a save, headless:
   builds SimBench with `-p:DofTracy=true` into `tmp_logs\tracy`, records through `tracy-capture`
   (0.13.1, in `deal-or-force-tools\tracy\0.13.1`; the viewer must match the packaged client) and
   writes zone tables. Every `SimProfiler.Measure` scope is a zone; a finished day is a `sim day`
@@ -119,7 +119,7 @@ instead of re-deriving the commands.
   world), the last three logs, `settings.json`, and the newest save when it is under 32 MB.
   Nothing in it touches Godot, so `Tools/FormableTests --support-report-only` exercises the same
   code without the engine.
-- **`Tools/FormableTests --replay-save <file.dfsave> [days]`** — the player's own campaign, run
+- **`Tools/FormableTests --replay-save <file.dofsave> [days]`** — the player's own campaign, run
   forward. A crash report says "it broke on 24 July"; this loads that save **read-only**, builds
   the province topology, unpauses, and ticks day by day, stopping at the first day the simulation
   refuses with the day, the exception type and the top stack frames (the in-game snapshot keeps no

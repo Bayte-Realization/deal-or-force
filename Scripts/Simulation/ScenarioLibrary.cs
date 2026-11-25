@@ -100,15 +100,26 @@ public static class ScenarioLibrary
         var path = SafePath(root, relative);
         if (File.Exists(path) || string.IsNullOrWhiteSpace(relative)) return path;
 
-        string fallback = null;
-        if (relative.EndsWith(SaveSystem.Extension, StringComparison.OrdinalIgnoreCase))
-            fallback = relative[..^SaveSystem.Extension.Length] + SaveSystem.LegacyExtension;
-        else if (relative.EndsWith(SaveSystem.LegacyExtension, StringComparison.OrdinalIgnoreCase))
-            fallback = relative[..^SaveSystem.LegacyExtension.Length] + SaveSystem.Extension;
+        string matchedExt = null;
+        string[] known = { SaveSystem.Extension, SaveSystem.PreviousExtension, SaveSystem.LegacyExtension };
+        foreach (var ext in known)
+        {
+            if (relative.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+            {
+                matchedExt = ext;
+                break;
+            }
+        }
+        if (matchedExt is null) return path;
 
-        if (fallback is null) return path;
-        var candidate = SafePath(root, fallback);
-        return File.Exists(candidate) ? candidate : path;
+        var stem = relative[..^matchedExt.Length];
+        foreach (var ext in known)
+        {
+            if (string.Equals(ext, matchedExt, StringComparison.OrdinalIgnoreCase)) continue;
+            var candidate = SafePath(root, stem + ext);
+            if (File.Exists(candidate)) return candidate;
+        }
+        return path;
     }
 
     public static string SafePath(string root, string relative)

@@ -18,7 +18,7 @@ static class SaveReplay
     public static void Run(string[] args)
     {
         var at = Array.IndexOf(args, "--replay-save");
-        if (at < 0 || at + 1 >= args.Length) throw new Exception("--replay-save needs a path to a .dfsave (or legacy .bdfsave)");
+        if (at < 0 || at + 1 >= args.Length) throw new Exception("--replay-save needs a path to a .dofsave (or legacy .dfsave/.bdfsave)");
         var path = Path.GetFullPath(args[at + 1]);
         var days = at + 2 < args.Length && int.TryParse(args[at + 2], out var requested) ? requested : 35;
         if (!File.Exists(path)) throw new Exception($"No save at {path}");

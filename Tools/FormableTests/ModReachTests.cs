@@ -181,7 +181,7 @@ static class ModReachTests
                     var scenDir = Path.Combine(scenMod, "scenarios", "reach_scenario");
                     Directory.CreateDirectory(scenDir);
                     File.WriteAllText(Path.Combine(scenMod, "manifest.json"), "{\"id\":\"scen_probe\",\"enabled\":true}");
-                    File.WriteAllText(Path.Combine(scenDir, "world.dfsave"), "{}");
+                    File.WriteAllText(Path.Combine(scenDir, "world.dofsave"), "{}");
                     File.WriteAllText(Path.Combine(scenDir, "scenario.json"), probe.Content);
                     var found = ScenarioLibrary.Discover(new[] { scenMod }, "");
                     Check(found.Any(s => s.Id == "reach_scenario"), "reach probe: scenarios");
@@ -434,7 +434,7 @@ static class ModReachTests
             (_, _, _) => MediaLibraryCatalog.Find("reach_media") is not null, PresentationOnly: true),
         new("localization", "localization/english/90_reach.json", "{\"reach.loc.key\":\"Reach Localized\"}",
             (_, _, _) => Loc.Get("reach.loc.key") == "Reach Localized", PresentationOnly: true),
-        new("scenarios", "scenarios/reach_scenario/scenario.json", "{\"id\":\"reach_scenario\",\"name\":\"Reach Scenario\",\"world\":\"world.dfsave\"}",
+        new("scenarios", "scenarios/reach_scenario/scenario.json", "{\"id\":\"reach_scenario\",\"name\":\"Reach Scenario\",\"world\":\"world.dofsave\"}",
             (_, _, _) => true),
         new("skins", "interface/90_reach_skin.json", "{\"colors\":{\"reach.skin.alias\":\"#654321\"}}",
             (_, _, _) => InterfaceSkin.Colour("reach.skin.alias") == "#654321", PresentationOnly: true),

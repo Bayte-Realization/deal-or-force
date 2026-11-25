@@ -7,7 +7,7 @@
   "simulationStaticMutable": 1355,
   "deadCandidates": 161,
   "totalFiles": 995,
-  "totalLines": 334786,
+  "totalLines": 334809,
   "files": {
     "Scripts/AudioAssets.cs": {
       "lines": 46,
@@ -3174,7 +3174,7 @@
       "magicNumbers": 8
     },
     "Scripts/Simulation/SaveSystem.cs": {
-      "lines": 1781,
+      "lines": 1793,
       "maxMethodLines": 64,
       "maxCyclomatic": 27,
       "staticMutable": 0,
@@ -3195,7 +3195,7 @@
       "magicNumbers": 5
     },
     "Scripts/Simulation/ScenarioLibrary.cs": {
-      "lines": 122,
+      "lines": 133,
       "maxMethodLines": 40,
       "maxCyclomatic": 17,
       "staticMutable": 0,

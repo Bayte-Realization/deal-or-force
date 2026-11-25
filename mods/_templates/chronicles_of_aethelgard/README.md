@@ -11,7 +11,7 @@ non-modern and non-Earth settings (fantasy, medieval, or sci-fi) using pure data
 - **Custom fantasy calendar (`CalendarProfile`)**: `"Year 402 of the Third Sun"` with 12
   custom localized month names (`Frostfall`..`Starquiet` / `Листопадень`..`Звездотих`)
   while keeping internal simulation ticks 100% deterministic.
-- **Custom world snapshot (`world.dfsave`)**: 3 rival fantasy realms (`VAL`, `IRN`, `SYL`),
+- **Custom world snapshot (`world.dofsave`)**: 3 rival fantasy realms (`VAL`, `IRN`, `SYL`),
   starting alliance (`Pact of the Silver Leaf`) and starting war (`Siege of the Iron Marches`).
 - **Era feature gating**: disables `nukes`, `modern_air_force`, `missiles`, `drones`, and
   `modern_intelligence` via declarative `disabled_features`.

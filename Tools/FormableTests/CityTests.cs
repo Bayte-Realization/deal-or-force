@@ -441,7 +441,7 @@ static class CityTests
                 (differing.Count > 0 ? ": " + string.Join(", ", differing.Take(6).Select(nation => nation.Tag)) : ""));
 
             // The same save as an older build would have written it: no such field at all.
-            var path = Path.Combine(folder, "cities.dfsave");
+            var path = Path.Combine(folder, "cities.dofsave");
             var text = JsonNode.Parse(File.ReadAllText(path));
             var removed = Forget(text, "CapitalCityId");
             File.WriteAllText(path, text.ToJsonString());

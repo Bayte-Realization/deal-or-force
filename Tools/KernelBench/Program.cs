@@ -12,7 +12,7 @@ namespace DealOrForce.Tools.KernelBench;
 /// Data layout and native code, decided by measurement on the heaviest numeric loop of a late
 /// week: the household review over every population group of a loaded save.
 ///
-///   KernelBench &lt;save.dfsave&gt; [--samples N] [--warmup N]
+///   KernelBench &lt;save.dofsave&gt; [--samples N] [--warmup N]
 ///
 /// The save is read, never written. Every variant starts every sample from the same bytes,
 /// and every sample's result is hashed and compared to the game's code; a variant that is
@@ -28,7 +28,7 @@ internal static class Program
     {
         if (args.Length < 1 || !File.Exists(args[0]))
         {
-            Console.WriteLine("usage: KernelBench <save.dfsave> [--samples N] [--warmup N]");
+            Console.WriteLine("usage: KernelBench <save.dofsave> [--samples N] [--warmup N]");
             return 2;
         }
         var samples = Arg(args, "--samples", 31);

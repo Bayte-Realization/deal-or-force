@@ -49,10 +49,10 @@ static class SaveAndSeedTests
         {
             campaign.Defines.SaveTextFormat = true;
             var metadata = SaveSystem.Save(folder, "editable", campaign, "test-mod", "Editable fixture");
-            var textPath = Path.Combine(folder, "editable.dfsave");
+            var textPath = Path.Combine(folder, "editable.dofsave");
             Check(File.Exists(textPath) && File.ReadAllText(textPath).TrimStart().StartsWith('{') &&
                   metadata.Checksum == "" && metadata.FormatLabel == "JSON",
-                "default .dfsave is editable JSON without an edit-blocking checksum");
+                "default .dofsave is editable JSON without an edit-blocking checksum");
             Check(Directory.GetFiles(folder).Length == 1, "new text save is one file with its own metadata");
             var editableListed = SaveSystem.List(folder).Single();
             Check(metadata.Seed == campaign.Seed && editableListed.Seed == campaign.Seed && editableListed.FormatLabel == "JSON",
@@ -112,18 +112,18 @@ static class SaveAndSeedTests
             Check(SaveSystem.List(folder).Any(item => item.Slot == "editable"),
                 "save remains visible after an editor reorders JSON properties");
 
-            // Earlier releases wrote .bdfsave and .bdfsave.json.
-            // Both must remain discoverable, loadable, and cleanly migrate to .dfsave on overwrite.
+            // Earlier releases wrote .dfsave, .bdfsave and .bdfsave.json.
+            // All must remain discoverable, loadable, and cleanly migrate to .dofsave on overwrite.
             var previousText = Path.Combine(folder, "previous_text.bdfsave.json");
             File.WriteAllText(previousText, savedText);
             Check(SaveSystem.List(folder).Any(item => item.Slot == "previous_text") &&
                   SaveSystem.Load(folder, "previous_text", "test-mod").Success,
                 "previous one-file .bdfsave.json is still listed and loadable");
             SaveSystem.Save(folder, "previous_text", campaign, "test-mod");
-            Check(File.Exists(Path.Combine(folder, "previous_text.dfsave")) &&
+            Check(File.Exists(Path.Combine(folder, "previous_text.dofsave")) &&
                   !File.Exists(previousText) &&
                   Directory.GetFiles(folder, "previous_text.*").Length == 1,
-                "rewriting a previous .bdfsave.json save adopts the single .dfsave extension");
+                "rewriting a previous .bdfsave.json save adopts the single .dofsave extension");
 
             // Files written before the embedded-header change had a separate .meta.json.
             // Build that exact layout to guarantee old campaigns remain discoverable.
@@ -138,11 +138,11 @@ static class SaveAndSeedTests
                   SaveSystem.Load(folder, "old_text", "test-mod").Success,
                 "legacy text save with sidecar still lists and loads");
             SaveSystem.Save(folder, "old_text", campaign, "test-mod");
-            Check(File.Exists(Path.Combine(folder, "old_text.dfsave")) &&
+            Check(File.Exists(Path.Combine(folder, "old_text.dofsave")) &&
                   !File.Exists(Path.Combine(folder, "old_text.bdfsave.json")) &&
                   !File.Exists(Path.Combine(folder, "old_text.meta.json")) &&
                   SaveSystem.Load(folder, "old_text", "test-mod").Success,
-                "overwriting a legacy slot migrates it to .dfsave safely");
+                "overwriting a legacy slot migrates it to .dofsave safely");
 
             var oldCompressed = Path.Combine(folder, "old_gzip.bdfsave");
             using (var file = File.Create(oldCompressed))
@@ -158,29 +158,37 @@ static class SaveAndSeedTests
 
             campaign.Defines.SaveTextFormat = false;
             var compressed = SaveSystem.Save(folder, "legacy", campaign, "test-mod");
-            Check(File.Exists(Path.Combine(folder, "legacy.dfsave")) &&
+            Check(File.Exists(Path.Combine(folder, "legacy.dofsave")) &&
                   !File.Exists(Path.Combine(folder, "legacy.meta.json")) &&
-                  compressed.FormatLabel == "DF3" &&
-                  SaveSystem.List(folder).Any(item => item.Slot == "legacy" && item.Seed == campaign.Seed && item.FormatLabel == "DF3"),
-                "compressed .dfsave format is one file and reports DF3 in List()");
+                  compressed.FormatLabel == "DOF3" &&
+                  SaveSystem.List(folder).Any(item => item.Slot == "legacy" && item.Seed == campaign.Seed && item.FormatLabel == "DOF3"),
+                "compressed .dofsave format is one file and reports DOF3 in List()");
             Check(SaveSystem.Load(folder, "legacy", "test-mod").Success,
-                "new compressed .dfsave remains loadable");
+                "new compressed .dofsave remains loadable");
 
-            // Legacy .bdfsave saves (binary DF3 and JSON) must list, load, migrate cleanly on save, and delete cleanly.
+            // Previous .dfsave and legacy .bdfsave saves (binary DOF3 and JSON) must list, load, migrate cleanly on save, and delete cleanly.
             var legacyBdfBinary = Path.Combine(folder, "legacy_bdf_bin.bdfsave");
-            File.Copy(Path.Combine(folder, "legacy.dfsave"), legacyBdfBinary);
+            File.Copy(Path.Combine(folder, "legacy.dofsave"), legacyBdfBinary);
             var legacyBdfJson = Path.Combine(folder, "legacy_bdf_json.bdfsave");
             File.WriteAllText(legacyBdfJson, savedText);
-            Check(SaveSystem.List(folder).Any(item => item.Slot == "legacy_bdf_bin" && item.FormatLabel == "DF3") &&
+            var prevDfBinary = Path.Combine(folder, "prev_df_bin.dfsave");
+            File.Copy(Path.Combine(folder, "legacy.dofsave"), prevDfBinary);
+            Check(SaveSystem.List(folder).Any(item => item.Slot == "legacy_bdf_bin" && item.FormatLabel == "DOF3") &&
                   SaveSystem.List(folder).Any(item => item.Slot == "legacy_bdf_json" && item.FormatLabel == "JSON") &&
+                  SaveSystem.List(folder).Any(item => item.Slot == "prev_df_bin" && item.FormatLabel == "DOF3") &&
                   SaveSystem.Load(folder, "legacy_bdf_bin", "test-mod").Success &&
-                  SaveSystem.Load(folder, "legacy_bdf_json", "test-mod").Success,
-                "legacy .bdfsave saves (binary DF3 and JSON) remain discoverable and loadable");
+                  SaveSystem.Load(folder, "legacy_bdf_json", "test-mod").Success &&
+                  SaveSystem.Load(folder, "prev_df_bin", "test-mod").Success,
+                "legacy .bdfsave and .dfsave saves remain discoverable and loadable");
             SaveSystem.Save(folder, "legacy_bdf_bin", campaign, "test-mod");
-            Check(File.Exists(Path.Combine(folder, "legacy_bdf_bin.dfsave")) &&
+            SaveSystem.Save(folder, "prev_df_bin", campaign, "test-mod");
+            Check(File.Exists(Path.Combine(folder, "legacy_bdf_bin.dofsave")) &&
                   !File.Exists(legacyBdfBinary) &&
-                  SaveSystem.Load(folder, "legacy_bdf_bin", "test-mod").Success,
-                "overwriting a legacy .bdfsave slot migrates it to .dfsave and removes the old .bdfsave");
+                  File.Exists(Path.Combine(folder, "prev_df_bin.dofsave")) &&
+                  !File.Exists(prevDfBinary) &&
+                  SaveSystem.Load(folder, "legacy_bdf_bin", "test-mod").Success &&
+                  SaveSystem.Load(folder, "prev_df_bin", "test-mod").Success,
+                "overwriting legacy .bdfsave and .dfsave slots migrates them to .dofsave and removes old extensions");
             Check(SaveSystem.Delete(folder, "legacy_bdf_json") &&
                   !File.Exists(legacyBdfJson) &&
                   !SaveSystem.Delete(folder, "legacy_bdf_json"),
@@ -190,19 +198,19 @@ static class SaveAndSeedTests
             SaveSystem.Save(folder, "format_switch", campaign, "test-mod");
             campaign.Defines.SaveTextFormat = false;
             SaveSystem.Save(folder, "format_switch", campaign, "test-mod");
-            // SaveSystem.AtomicWrite keeps the outgoing version as <slot>.dfsave.bak (PERF-04).
+            // SaveSystem.AtomicWrite keeps the outgoing version as <slot>.dofsave.bak (PERF-04).
             // That one-generation backup is not a second save, and List() never shows it.
             Check(Directory.GetFiles(folder, "format_switch.*")
                       .Count(path => !path.EndsWith(".bak", StringComparison.OrdinalIgnoreCase)) == 1 &&
                   SaveSystem.Load(folder, "format_switch", "test-mod").Success,
-                "changing format keeps one .dfsave without losing the campaign");
+                "changing format keeps one .dofsave without losing the campaign");
             campaign.Defines.SaveTextFormat = true;
             SaveSystem.Save(folder, "format_switch", campaign, "test-mod");
             Check(Directory.GetFiles(folder, "format_switch.*")
                       .Count(path => !path.EndsWith(".bak", StringComparison.OrdinalIgnoreCase)) == 1 &&
-                  File.ReadAllText(Path.Combine(folder, "format_switch.dfsave")).TrimStart().StartsWith('{') &&
+                  File.ReadAllText(Path.Combine(folder, "format_switch.dofsave")).TrimStart().StartsWith('{') &&
                   SaveSystem.Load(folder, "format_switch", "test-mod").Success,
-                "switching back makes the same .dfsave editable again");
+                "switching back makes the same .dofsave editable again");
             File.WriteAllText(Path.Combine(folder, "legacy.meta.json"),
                 JsonSerializer.Serialize(new SaveMetadata { Slot = "legacy", Checksum = "STALE" }));
             Check(SaveSystem.Load(folder, "legacy", "test-mod").Success,

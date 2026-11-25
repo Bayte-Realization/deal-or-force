@@ -24,11 +24,11 @@
     "base_world": {
       "type": "boolean",
       "default": false,
-      "description": "Set true to launch on the base Earth map without shipping a separate world.dfsave."
+      "description": "Set true to launch on the base Earth map without shipping a separate world.dofsave."
     },
     "world": {
       "type": "string",
-      "description": "Relative filename of a custom world snapshot inside this scenario folder (e.g. 'world.dfsave')."
+      "description": "Relative filename of a custom world snapshot inside this scenario folder (e.g. 'world.dofsave')."
     },
     "player_country": {
       "type": "string",

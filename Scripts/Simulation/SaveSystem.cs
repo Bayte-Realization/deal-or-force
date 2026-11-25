@@ -65,7 +65,8 @@ public static partial class SaveSystem
     public const string MapDataVersion = "2024.11.09-a";
     public const string QuickSlot = "quicksave";
     public const string AutoSlot = "autosave";
-    public const string Extension = ".dfsave";
+    public const string Extension = ".dofsave";
+    public const string PreviousExtension = ".dfsave";
     public const string LegacyExtension = ".bdfsave";
     public const string LegacyJsonExtension = ".bdfsave.json";
 
@@ -515,7 +516,7 @@ public static partial class SaveSystem
                     (bytes, checksum) = WriteBinary(file, _payload, _history, StorageCodec, StorageLevel(_thorough)));
                 Metadata.Checksum = checksum;
                 Metadata.CompressedBytes = bytes;
-                Metadata.FormatLabel = "DF3";
+                Metadata.FormatLabel = "DOF3";
                 RemoveLegacyVariants(_root, _slot);
                 DiagnosticLogs.Write("system", $"SAVE_END slot={_slot} bytes={bytes} container=BDF3 codec={StorageCodec} " +
                                                $"level={StorageLevel(_thorough)} checksum={checksum[..Math.Min(16, checksum.Length)]} " +
@@ -530,6 +531,8 @@ public static partial class SaveSystem
 
         private static void RemoveLegacyVariants(string root, string slot)
         {
+            Stale(PreviousDfPath(root, slot));
+            Stale(PreviousDfPath(root, slot) + ".bak");
             Stale(LegacyBdfPath(root, slot));
             Stale(LegacyBdfPath(root, slot) + ".bak");
             Stale(LegacyTextPath(root, slot));
@@ -745,7 +748,7 @@ public static partial class SaveSystem
     {
         if (!Directory.Exists(root)) return Array.Empty<SaveMetadata>();
         var bySlot = new Dictionary<string, (string Path, DateTime WriteUtc)>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in Directory.EnumerateFiles(root, "*.*dfsave*", SearchOption.TopDirectoryOnly))
+        foreach (var path in Directory.EnumerateFiles(root, "*.*fsave*", SearchOption.TopDirectoryOnly))
         {
             if (!IsSavePayloadPath(path))
                 continue;
@@ -775,19 +778,25 @@ public static partial class SaveSystem
 
     private static bool IsSavePayloadPath(string path) =>
         path.EndsWith(Extension, StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(PreviousExtension, StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(LegacyExtension, StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".dofsave.json", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".dfsave.json", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(LegacyJsonExtension, StringComparison.OrdinalIgnoreCase);
 
     public static string SlotFromPath(string path)
     {
         var name = Path.GetFileName(path);
+        if (name.EndsWith(".dofsave.json", StringComparison.OrdinalIgnoreCase))
+            return name[..^".dofsave.json".Length];
         if (name.EndsWith(".dfsave.json", StringComparison.OrdinalIgnoreCase))
             return name[..^".dfsave.json".Length];
         if (name.EndsWith(LegacyJsonExtension, StringComparison.OrdinalIgnoreCase))
             return name[..^LegacyJsonExtension.Length];
         if (name.EndsWith(Extension, StringComparison.OrdinalIgnoreCase))
             return name[..^Extension.Length];
+        if (name.EndsWith(PreviousExtension, StringComparison.OrdinalIgnoreCase))
+            return name[..^PreviousExtension.Length];
         if (name.EndsWith(LegacyExtension, StringComparison.OrdinalIgnoreCase))
             return name[..^LegacyExtension.Length];
         return Path.GetFileNameWithoutExtension(name);
@@ -813,7 +822,7 @@ public static partial class SaveSystem
         file.Position = pos;
         if (read == 4 && prefix[0] == (byte)'B' && prefix[1] == (byte)'D' && prefix[2] == (byte)'F')
         {
-            if (prefix[3] == (byte)'3') return "DF3";
+            if (prefix[3] == (byte)'3') return "DOF3";
             if (prefix[3] == (byte)'2') return "BROTLI";
         }
         if (read >= 2 && prefix[0] == GzipMagic0 && prefix[1] == GzipMagic1) return "GZIP";
@@ -1090,6 +1099,7 @@ public static partial class SaveSystem
         foreach (var path in new[]
         {
             DataPath(root, slot),
+            PreviousDfPath(root, slot),
             LegacyBdfPath(root, slot),
             LegacyTextPath(root, slot),
             MetaPath(root, slot)
@@ -1100,6 +1110,7 @@ public static partial class SaveSystem
         foreach (var bak in new[]
         {
             DataPath(root, slot) + ".bak",
+            PreviousDfPath(root, slot) + ".bak",
             LegacyBdfPath(root, slot) + ".bak"
         })
         {
@@ -1144,6 +1155,7 @@ public static partial class SaveSystem
     }
 
     private static string DataPath(string root, string slot) => Path.Combine(root, slot + Extension);
+    private static string PreviousDfPath(string root, string slot) => Path.Combine(root, slot + PreviousExtension);
     private static string LegacyBdfPath(string root, string slot) => Path.Combine(root, slot + LegacyExtension);
     private static string LegacyTextPath(string root, string slot) => Path.Combine(root, slot + LegacyJsonExtension);
 
@@ -1151,7 +1163,7 @@ public static partial class SaveSystem
     {
         string bestPath = null;
         DateTime bestWrite = DateTime.MinValue;
-        foreach (var candidate in new[] { DataPath(root, slot), LegacyBdfPath(root, slot), LegacyTextPath(root, slot) })
+        foreach (var candidate in new[] { DataPath(root, slot), PreviousDfPath(root, slot), LegacyBdfPath(root, slot), LegacyTextPath(root, slot) })
         {
             if (!File.Exists(candidate)) continue;
             var writeUtc = File.GetLastWriteTimeUtc(candidate);

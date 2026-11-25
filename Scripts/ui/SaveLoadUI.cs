@@ -303,7 +303,7 @@ public partial class DealOrForceGame
         MenuChromeTheme.StyleExistingLabel(heading, 15, MenuChromeTheme.Paper, serif: true);
         textCol.AddChild(heading);
 
-        var formatPill = string.IsNullOrEmpty(save.FormatLabel) ? "DF3" : save.FormatLabel;
+        var formatPill = string.IsNullOrEmpty(save.FormatLabel) ? "DOF3" : save.FormatLabel;
         var meta = new Label
         {
             Text = Simulation.Loc.Format("{0} · {1} · {2} · {3} KiB · [{4}]",

@@ -10,7 +10,7 @@ using DealOrForce.Simulation;
 namespace DealOrForce.Tools;
 
 /// <summary>
-/// `--save-roundtrip-file &lt;file.dfsave&gt; [N] [out-folder]`: the player's own campaign through the
+/// `--save-roundtrip-file &lt;file.dofsave&gt; [N] [out-folder]`: the player's own campaign through the
 /// game's own save path, N times, timed by halves, with the peak memory of each half.
 ///
 /// SaveFormatBench measures formats on a captured payload; this measures what the player waits
@@ -67,7 +67,7 @@ internal static class SaveRoundTripReport
             Collect();
             var prepare = Measured(() => SaveSystem.Prepare(outFolder, "roundtrip", original, ""));
             var commit = Measured(() => prepare.Value.Commit());
-            var file = Path.Combine(outFolder, "roundtrip.dfsave");
+            var file = Path.Combine(outFolder, "roundtrip.dofsave");
             size = new FileInfo(file).Length;
             magic = Magic(file);
             var prepareMs = prepare.Ms;
@@ -104,7 +104,7 @@ internal static class SaveRoundTripReport
         original.Defines.SaveTextFormat = true;
         Collect();
         var textSave = Measured(() => SaveSystem.Save(outFolder, "roundtrip_text", original, ""));
-        var textPath = Path.Combine(outFolder, "roundtrip_text.dfsave");
+        var textPath = Path.Combine(outFolder, "roundtrip_text.dofsave");
         var textSize = new FileInfo(textPath).Length;
         original.Defines.SaveTextFormat = false;
         Collect();
@@ -120,7 +120,7 @@ internal static class SaveRoundTripReport
         var older = new List<(string Name, string Extension, Action<Stream> Write)>
         {
             ("legacy_bdf2_q4", SaveSystem.LegacyExtension, s => { s.Write("BDF2"u8); using var b = new BrotliStream(s, CompressionLevel.Optimal, true); b.Write(plain); }),
-            ("legacy_gzip", SaveSystem.LegacyExtension, s => { using var g = new GZipStream(s, CompressionLevel.Fastest, true); g.Write(plain); }),
+            ("legacy_gzip", SaveSystem.PreviousExtension, s => { using var g = new GZipStream(s, CompressionLevel.Fastest, true); g.Write(plain); }),
         };
         foreach (var (name, ext, write) in older)
         {

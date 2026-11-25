@@ -347,7 +347,7 @@ static class HighPerfLibraryTests
             netLoaded.Campaign.AttachProvinceTopology(topology);
             Check(CampaignFingerprint.Of(netLoaded.Campaign) == expectedFp, "network snapshot round-trip preserves exact CampaignFingerprint");
 
-            var binSavePath = Path.Combine(tempDir, "hp_bin.dfsave");
+            var binSavePath = Path.Combine(tempDir, "hp_bin.dofsave");
             using (var binStream = File.OpenRead(binSavePath))
             {
                 var header = SaveContainer.ReadHeader(binStream);

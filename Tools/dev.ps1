@@ -200,7 +200,7 @@ function Invoke-Doctor {
     }
     $saves = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Bayte Realization\Deal or Force\saves'
     if (Test-Path -LiteralPath $saves) {
-        $count = @(Get-ChildItem -LiteralPath $saves -File | Where-Object { $_.Name -match '\.b?dfsave$' }).Count
+        $count = @(Get-ChildItem -LiteralPath $saves -File | Where-Object { $_.Name -match '\.(dofsave|b?dfsave)$' }).Count
         Write-Host ("  saves           {0} campaigns in {1}" -f $count, $saves)
     }
     $baselinePath = Join-Path $project 'Tools\CodeAudit\baseline.json'

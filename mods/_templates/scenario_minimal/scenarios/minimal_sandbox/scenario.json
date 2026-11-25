@@ -2,7 +2,7 @@
   "id": "minimal_sandbox",
   "name": "Minimal Sandbox (1995)",
   "description": "Compact single-province sandbox starter scenario.",
-  "world": "world.dfsave",
+  "world": "world.dofsave",
   "player_country": "ALF",
   "skin": ""
 }
