@@ -67,7 +67,7 @@ internal static class LongCampaignReport
             c.Defines.SaveTextFormat = true;
             SaveSystem.Save(folder, label + "_text", c, "bench");
             var textMs = clock.ElapsedMilliseconds;
-            long Length(string slot) => new FileInfo(Path.Combine(folder, slot + ".bdfsave")) is { Exists: true } file ? file.Length : 0;
+            long Length(string slot) => new FileInfo(Path.Combine(folder, slot + SaveSystem.Extension)) is { Exists: true } file ? file.Length : 0;
             Console.WriteLine($"SAVE {label}: compressed {Length(label) / 1048576.0:N1} MB in {packedMs:N0} ms, text {Length(label + "_text") / 1048576.0:N1} MB in {textMs:N0} ms.");
         }
         finally { c.Defines.SaveTextFormat = text; }

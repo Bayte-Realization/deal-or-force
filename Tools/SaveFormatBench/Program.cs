@@ -25,8 +25,8 @@ namespace DealOrForce.Tools;
 /// Usage, from the repository root:
 ///   SaveFormatBench --types
 ///   SaveFormatBench --list
-///   SaveFormatBench &lt;save.bdfsave&gt; --sizes | --history [--samples 15] [--warmup 2]
-///   SaveFormatBench &lt;save.bdfsave&gt; --candidate &lt;name&gt; [--samples 15] [--warmup 2]
+///   SaveFormatBench &lt;save.dfsave&gt; --sizes | --history [--samples 15] [--warmup 2]
+///   SaveFormatBench &lt;save.dfsave&gt; --candidate &lt;name&gt; [--samples 15] [--warmup 2]
 /// </summary>
 internal static class Program
 {
@@ -43,7 +43,7 @@ internal static class Program
             return HistoryBench.Run(Path.GetFullPath(args[0]), int.Parse(Arg(args, "--samples", "15")), int.Parse(Arg(args, "--warmup", "2")));
         if (args.Length < 3 || Array.IndexOf(args, "--candidate") < 0)
         {
-            Console.WriteLine("usage: SaveFormatBench <save.bdfsave> --candidate <name> [--samples N] [--warmup N] | --types | --list");
+            Console.WriteLine("usage: SaveFormatBench <save.dfsave> --candidate <name> [--samples N] [--warmup N] | --types | --list");
             return 2;
         }
         var savePath = Path.GetFullPath(args[0]);

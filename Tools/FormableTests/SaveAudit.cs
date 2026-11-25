@@ -78,7 +78,7 @@ static class SaveAudit
             var prepareMs = clock.ElapsedMilliseconds;
             var expected = CampaignFingerprint.Of(c);
             clock.Restart(); prepared.Commit(); var commitMs = clock.ElapsedMilliseconds;
-            var written = Path.Combine(folder, "compressed.bdfsave");
+            var written = Path.Combine(folder, "compressed.dfsave");
             clock.Restart(); var copy = SaveSystem.Load(folder, "compressed", "");
             if (!copy.Success) throw new Exception(copy.Warning);
             copy.Campaign.AttachProvinceTopology(topology);

@@ -1,7 +1,7 @@
 # Historical Era Starter: July Crisis 1914 / Шаблон исторической эпохи: 1914
 
 Ready-to-clone historical scenario template built on top of the Earth map (`"base_world": true`)
-without requiring a 20 MB exported `world.bdfsave`.
+without requiring a 20 MB exported `world.dfsave`.
 
 ## What it demonstrates
 
@@ -18,5 +18,5 @@ without requiring a 20 MB exported `world.bdfsave`.
 
 ---
 
-Готовый шаблон исторического сценария на базовой карте Земли (`"base_world": true`) без тяжёлого `world.bdfsave`.
+Готовый шаблон исторического сценария на базовой карте Земли (`"base_world": true`) без тяжёлого `world.dfsave`.
 Скопируйте папку в `mods/my_1914_mod`, поменяйте `id`, поставьте `"enabled": true` и правьте даты, союзы, войны, технологии и события прямо в JSON/YAML.

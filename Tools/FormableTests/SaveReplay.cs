@@ -18,7 +18,7 @@ static class SaveReplay
     public static void Run(string[] args)
     {
         var at = Array.IndexOf(args, "--replay-save");
-        if (at < 0 || at + 1 >= args.Length) throw new Exception("--replay-save needs a path to a .bdfsave");
+        if (at < 0 || at + 1 >= args.Length) throw new Exception("--replay-save needs a path to a .dfsave (or legacy .bdfsave)");
         var path = Path.GetFullPath(args[at + 1]);
         var days = at + 2 < args.Length && int.TryParse(args[at + 2], out var requested) ? requested : 35;
         if (!File.Exists(path)) throw new Exception($"No save at {path}");
@@ -34,14 +34,14 @@ static class SaveReplay
         // with spaces is a real file on disk and must still open. The copy is a temp name
         // only; the evidence file is never written back.
         var loadRoot = Path.GetDirectoryName(path)!;
-        var loadSlot = Path.GetFileNameWithoutExtension(path);
+        var loadSlot = SaveSystem.SlotFromPath(path);
         var safeSlot = new string(loadSlot.Where(character => char.IsLetterOrDigit(character) || character is '_' or '-').ToArray()).ToLowerInvariant();
         string stagedDir = null;
         if (!string.Equals(loadSlot, safeSlot, StringComparison.Ordinal))
         {
             stagedDir = Path.Combine(Path.GetTempPath(), "dof-replay-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(stagedDir);
-            File.Copy(path, Path.Combine(stagedDir, safeSlot + ".bdfsave"));
+            File.Copy(path, Path.Combine(stagedDir, safeSlot + SaveSystem.Extension));
             loadRoot = stagedDir;
             loadSlot = safeSlot;
             Console.WriteLine($"REPLAY_STAGED slot={safeSlot} source={Path.GetFileName(path)}");

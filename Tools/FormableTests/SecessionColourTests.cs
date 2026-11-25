@@ -44,7 +44,7 @@ static class SecessionColourTests
         try
         {
             SaveSystem.Save(folder,"fixture",disk,"colours");
-            var path = Path.Combine(folder,"fixture.bdfsave");
+            var path = Path.Combine(folder,"fixture.dfsave");
             var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
             var loaded = SaveSystem.Load(folder,"fixture","colours");
             Check(loaded.Success && loaded.Campaign.NationById(originalRebel.Id).Color != "#A87470", "disk loading repairs an exact old generated colour in memory");

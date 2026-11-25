@@ -90,9 +90,10 @@ the player's country, the game date, the time it was written and the compressed 
   control and occupation progress, diplomacy, events, the Ledger's history and the state of
   the deterministic generator all come back together.
 
-Files live in `user://save_games`. Each new slot is one `.bdfsave`: readable JSON by
-default, or optional gzip. The game detects which it is from the file contents. Old
-slots with a separate `.meta.json` still load.
+Files live in `user://save_games`. Each new slot is one `.dfsave`: compressed binary or
+readable JSON. The game detects which it is from the file contents. Existing `.bdfsave`,
+`.bdfsave.json` saves and old slots with a separate `.meta.json` still load and migrate
+to `.dfsave` when overwritten.
 
 ## Time, economy and construction
 

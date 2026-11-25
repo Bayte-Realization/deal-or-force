@@ -53,7 +53,7 @@ internal static class CampaignIntegrityReport
     public static int Run(Campaign fresh, string path, int days)
     {
         var full = Path.GetFullPath(path);
-        var slot = Path.GetFileName(full).Replace(".bdfsave.json", "").Replace(".bdfsave", "");
+        var slot = SaveSystem.SlotFromPath(full);
         var loaded = SaveSystem.Load(Path.GetDirectoryName(full), slot, "");
         if (!loaded.Success) { Console.WriteLine("LOAD FAILED: " + loaded.Warning); return 2; }
         var c = loaded.Campaign;

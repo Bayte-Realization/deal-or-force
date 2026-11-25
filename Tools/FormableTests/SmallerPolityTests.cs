@@ -293,12 +293,12 @@ static class SmallerPolityTests
             "joining peers preserve the host's authoritative proclamation and request no local repair");
         var folder = Path.Combine(Path.GetTempPath(), "dof-smaller-save-" + Guid.NewGuid().ToString("N"));
         SaveSystem.Save(folder, "fixture", campaign, "tests");
-        var source = File.ReadAllBytes(Path.Combine(folder, "fixture.bdfsave"));
+        var source = File.ReadAllBytes(Path.Combine(folder, "fixture.dfsave"));
         var disk = SaveSystem.Load(folder, "fixture", "tests");
         Check(disk.Success && disk.Campaign.RepairDiminishedRestorationsAfterAttach &&
                 disk.Campaign.NationById(holder.Id).FormedNationId == "restore_pmr",
             "disk loading defers the migration until saved borders are attached");
-        Check(source.SequenceEqual(File.ReadAllBytes(Path.Combine(folder, "fixture.bdfsave"))),
+        Check(source.SequenceEqual(File.ReadAllBytes(Path.Combine(folder, "fixture.dfsave"))),
             "loading for the identity repair never writes the source save");
         Console.WriteLine("Private smaller-polity save fixture: " + folder);
     }

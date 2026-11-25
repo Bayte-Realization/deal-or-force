@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using DealOrForce.Simulation;
 
 /// <summary>
@@ -33,7 +34,7 @@ static class SaveContainerTests
 
         campaign.Defines.SaveTextFormat = false;
         var saved = SaveSystem.Save(folder, "framed", campaign, "tests");
-        var framed = File.ReadAllBytes(Path.Combine(folder, "framed.bdfsave"));
+        var framed = File.ReadAllBytes(Path.Combine(folder, "framed.dfsave"));
         // Reference values come from the world as it loads, not as it stood: Restore normalises
         // a few derived fields, and the claim is that every container restores the same world.
         var reference = SaveSystem.Load(folder, "framed", "tests");
@@ -56,9 +57,17 @@ static class SaveContainerTests
         // Every older generation of the same world, made from the text save the way each one
         // was written: plain JSON, with a byte-order mark, gzip, and Brotli under "BDF2".
         campaign.Defines.SaveTextFormat = true;
-        SaveSystem.Save(folder, "text", campaign, "tests");
-        var plain = File.ReadAllBytes(Path.Combine(folder, "text.bdfsave"));
+        var textSaved = SaveSystem.Save(folder, "text", campaign, "tests");
+        var plain = File.ReadAllBytes(Path.Combine(folder, "text.dfsave"));
         Check(plain[0] == (byte)'{', "the text save is still the editable JSON the setting chose");
+        Check(textSaved.CompressedBytes == plain.Length && textSaved.Checksum.Length == 0,
+            "the streamed text save reports its exact file size and has no checksum");
+        using (var json = JsonDocument.Parse(plain))
+        {
+            var ledger = json.RootElement.GetProperty("History");
+            Check(ledger.EnumerateObject().Any() && !ledger.GetRawText().Contains('\n'),
+                "the history stays compact inside the readable JSON");
+        }
         var variants = new Dictionary<string, byte[]>
         {
             ["text"] = plain,
@@ -78,20 +87,26 @@ static class SaveContainerTests
             }
         foreach (var (name, bytes) in variants)
         {
-            File.WriteAllBytes(Path.Combine(folder, name + ".bdfsave"), bytes);
+            File.WriteAllBytes(Path.Combine(folder, name + ".dfsave"), bytes);
             var loaded = SaveSystem.Load(folder, name, "tests");
             Check(loaded.Success, $"an older save ({name}) still loads: {loaded.Warning}");
             Check(CampaignFingerprint.Of(loaded.Campaign) == fingerprint && HistoryDigest(loaded.Campaign) == history,
                 $"an older save ({name}) restores the same world and the same history as the framed one");
         }
-        // The pre-2026 sidecar name still loads too.
+        // Previous .bdfsave and .bdfsave.json extension variants still list and load identically.
+        File.WriteAllBytes(Path.Combine(folder, "legacy_ext.bdfsave"), framed);
+        var legacyExt = SaveSystem.Load(folder, "legacy_ext", "tests");
+        Check(legacyExt.Success && SaveSystem.List(folder).Any(m => m.Slot == "legacy_ext" && m.FormatLabel == "DF3") &&
+              CampaignFingerprint.Of(legacyExt.Campaign) == fingerprint && HistoryDigest(legacyExt.Campaign) == history,
+            "a legacy .bdfsave still lists and loads identically");
         File.WriteAllBytes(Path.Combine(folder, "legacy.bdfsave.json"), plain);
         var legacy = SaveSystem.Load(folder, "legacy", "tests");
         Check(legacy.Success && CampaignFingerprint.Of(legacy.Campaign) == fingerprint, "a legacy .bdfsave.json still loads");
 
         // The slot list reads the framed file's embedded metadata from its first section.
         var listed = SaveSystem.List(folder).FirstOrDefault(m => m.Slot == "framed");
-        Check(listed is not null && listed.NationTag == campaign.Player.Tag && listed.CompressedBytes == framed.Length,
+        Check(listed is not null && listed.NationTag == campaign.Player.Tag && listed.CompressedBytes == framed.Length &&
+              listed.FormatLabel == "DF3",
             "the save list reads a framed slot's metadata");
 
         // Damage. Each of these must be refused, never loaded as some other world.
@@ -107,7 +122,7 @@ static class SaveContainerTests
         var longer = framed.Concat(new byte[] { 0 }).ToArray();
         // A trailing byte is not covered by any section; it is the one change that is harmless,
         // and the reader may load it. It must not load a different world.
-        File.WriteAllBytes(Path.Combine(folder, "longer.bdfsave"), longer);
+        File.WriteAllBytes(Path.Combine(folder, "longer.dfsave"), longer);
         var longerLoaded = SaveSystem.Load(folder, "longer", "tests");
         Check(!longerLoaded.Success || CampaignFingerprint.Of(longerLoaded.Campaign) == fingerprint,
             "a trailing byte never loads as another world");
@@ -115,9 +130,9 @@ static class SaveContainerTests
         // Stored (uncompressed) sections: nothing but the checksum stands between a flipped bit
         // in a figure and a wrong chart. This is the case the checksum exists for.
         var payload = SaveSystem.CampaignSave.Capture(campaign, "tests");
-        using (var stored = new FileStream(Path.Combine(folder, "stored.bdfsave"), FileMode.Create, FileAccess.ReadWrite))
+        using (var stored = new FileStream(Path.Combine(folder, "stored.dfsave"), FileMode.Create, FileAccess.ReadWrite))
             SaveSystem.WriteBinary(stored, payload, null, SaveContainer.StoredCodec, 0);
-        var storedBytes = File.ReadAllBytes(Path.Combine(folder, "stored.bdfsave"));
+        var storedBytes = File.ReadAllBytes(Path.Combine(folder, "stored.dfsave"));
         var storedLoaded = SaveSystem.Load(folder, "stored", "tests");
         Check(storedLoaded.Success && CampaignFingerprint.Of(storedLoaded.Campaign) == fingerprint &&
               HistoryDigest(storedLoaded.Campaign) == history, "an uncompressed framed save round-trips");
@@ -225,7 +240,7 @@ static class SaveContainerTests
 
     static void Refused(string folder, string slot, byte[] bytes, string what)
     {
-        File.WriteAllBytes(Path.Combine(folder, slot + ".bdfsave"), bytes);
+        File.WriteAllBytes(Path.Combine(folder, slot + ".dfsave"), bytes);
         var loaded = SaveSystem.Load(folder, slot, "tests");
         Check(!loaded.Success, what + " is refused" + (loaded.Success ? "" : $" ({loaded.Warning})"));
     }

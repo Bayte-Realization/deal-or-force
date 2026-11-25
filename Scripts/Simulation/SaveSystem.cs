@@ -46,6 +46,8 @@ public sealed class SaveMetadata
     public string Checksum { get; set; } = "";
     public long CompressedBytes { get; set; }
     public bool IsAutosave { get; set; }
+    [JsonIgnore]
+    public string FormatLabel { get; set; } = "";
 }
 
 public readonly record struct SaveLoadResult(Campaign Campaign, SaveMetadata Metadata, string Warning)
@@ -63,6 +65,9 @@ public static partial class SaveSystem
     public const string MapDataVersion = "2024.11.09-a";
     public const string QuickSlot = "quicksave";
     public const string AutoSlot = "autosave";
+    public const string Extension = ".dfsave";
+    public const string LegacyExtension = ".bdfsave";
+    public const string LegacyJsonExtension = ".bdfsave.json";
 
     private const int DefaultIoBufferBytes = 64 * 1024;
     private const int ScanIoBufferBytes = 16 * 1024;
@@ -446,31 +451,30 @@ public static partial class SaveSystem
             var interned = SaveStringTable.InternIds;
             SaveStringTable.Use(_payload.StringTable);
             SaveStringTable.InternIds = false;
-            var historyToSplice = _history;
             try
             {
-                using var payloadBuffer = new ArrayPoolBufferWriter<byte>(DefaultIoBufferBytes);
-                var writerOptions = new JsonWriterOptions
+                long jsonBytes = 0;
+                AtomicWrite(DataPath(_root, _slot), file =>
                 {
-                    Indented = options.WriteIndented,
-                    Encoder = options.Encoder,
-                    MaxDepth = options.MaxDepth
-                };
-                using (var writer = new Utf8JsonWriter(payloadBuffer, writerOptions))
-                    JsonSerializer.Serialize(writer, _payload, options);
+                    JsonSerializer.Serialize(file, _payload, options);
+                    if (_history is not null && !TryWriteTextHistory(file))
+                    {
+                        // The history field is normally last. A different JSON contract can
+                        // still write the same data with the regular serializer.
+                        _payload.History = _history;
+                        file.SetLength(0);
+                        file.Position = 0;
+                        JsonSerializer.Serialize(file, _payload, options);
+                    }
+                    jsonBytes = file.Position;
+                });
 
-                var matchedTail = payloadBuffer.WrittenSpan.EndsWith(TextHistoryTailCrLf) ||
-                                  payloadBuffer.WrittenSpan.EndsWith(TextHistoryTailLf);
-                if (!matchedTail && historyToSplice is not null)
-                {
-                    payloadBuffer.Clear();
-                    _payload.History = historyToSplice;
-                    historyToSplice = null;
-                    using var writer = new Utf8JsonWriter(payloadBuffer, writerOptions);
-                    JsonSerializer.Serialize(writer, _payload, options);
-                }
-
-                return WriteTextPayload(payloadBuffer, historyToSplice);
+                Metadata.Checksum = "";
+                Metadata.CompressedBytes = jsonBytes;
+                Metadata.FormatLabel = "JSON";
+                RemoveLegacyVariants(_root, _slot);
+                DiagnosticLogs.Write("system", $"SAVE_END slot={_slot} text=true bytes={jsonBytes} format={FormatVersion} map={MapDataVersion}");
+                return Metadata;
             }
             catch (Exception exception) when (exception is ArgumentException or JsonException)
             {
@@ -482,57 +486,23 @@ public static partial class SaveSystem
             }
         }
 
-        private SaveMetadata WriteTextPayload(
-            ArrayPoolBufferWriter<byte> payloadBuffer,
-            Dictionary<int, List<NationHistorySample>> historyToSplice)
+        private bool TryWriteTextHistory(FileStream file)
         {
-            ArrayPoolBufferWriter<byte> historyBuffer = null;
-            try
-            {
-                long jsonBytes = payloadBuffer.WrittenCount;
-                if (historyToSplice is not null)
-                {
-                    historyBuffer = new ArrayPoolBufferWriter<byte>(DefaultIoBufferBytes);
-                    var historyWriterOptions = new JsonWriterOptions
-                    {
-                        Encoder = JsonOptions.Encoder,
-                        MaxDepth = JsonOptions.MaxDepth
-                    };
-                    using (var hw = new Utf8JsonWriter(historyBuffer, historyWriterOptions))
-                        JsonSerializer.Serialize(hw, historyToSplice, JsonOptions);
+            var end = file.Position;
+            if (end < TextHistoryTailLf.Length) return false;
+            Span<byte> tail = stackalloc byte[TextHistoryTailCrLf.Length];
+            tail = tail[..(int)Math.Min(tail.Length, end)];
+            file.Position = end - tail.Length;
+            file.ReadExactly(tail);
+            var crlf = tail.EndsWith(TextHistoryTailCrLf);
+            if (!crlf && !tail.EndsWith(TextHistoryTailLf)) return false;
 
-                    var crlf = payloadBuffer.WrittenSpan.EndsWith(TextHistoryTailCrLf);
-                    jsonBytes = payloadBuffer.WrittenCount - (crlf ? 5 : 4) + historyBuffer.WrittenCount + (crlf ? 3 : 2);
-                }
-
-                AtomicWrite(DataPath(_root, _slot), file =>
-                {
-                    if (historyToSplice is not null)
-                    {
-                        var span = payloadBuffer.WrittenSpan;
-                        var crlf = span.EndsWith(TextHistoryTailCrLf);
-                        var tailLen = crlf ? 5 : 4;
-                        file.Write(span[..^tailLen]);
-                        file.Write(historyBuffer!.WrittenSpan);
-                        file.Write(crlf ? "\r\n}"u8 : "\n}"u8);
-                    }
-                    else
-                    {
-                        file.Write(payloadBuffer.WrittenSpan);
-                    }
-                });
-
-                Metadata.Checksum = "";
-                Metadata.CompressedBytes = jsonBytes;
-                Stale(LegacyTextPath(_root, _slot));
-                Stale(MetaPath(_root, _slot));
-                DiagnosticLogs.Write("system", $"SAVE_END slot={_slot} text=true bytes={jsonBytes} format={FormatVersion} map={MapDataVersion}");
-                return Metadata;
-            }
-            finally
-            {
-                historyBuffer?.Dispose();
-            }
+            // Replace the empty object in-place, keeping the large ledger compact and the
+            // surrounding save indented. The file is still the unpublished atomic-write temp.
+            file.Position = end - (crlf ? "{}\r\n}"u8.Length : "{}\n}"u8.Length);
+            JsonSerializer.Serialize(file, _history, JsonOptions);
+            file.Write(crlf ? "\r\n}"u8 : "\n}"u8);
+            return true;
         }
 
         private SaveMetadata CommitBinary()
@@ -545,8 +515,8 @@ public static partial class SaveSystem
                     (bytes, checksum) = WriteBinary(file, _payload, _history, StorageCodec, StorageLevel(_thorough)));
                 Metadata.Checksum = checksum;
                 Metadata.CompressedBytes = bytes;
-                Stale(LegacyTextPath(_root, _slot));
-                Stale(MetaPath(_root, _slot));
+                Metadata.FormatLabel = "DF3";
+                RemoveLegacyVariants(_root, _slot);
                 DiagnosticLogs.Write("system", $"SAVE_END slot={_slot} bytes={bytes} container=BDF3 codec={StorageCodec} " +
                                                $"level={StorageLevel(_thorough)} checksum={checksum[..Math.Min(16, checksum.Length)]} " +
                                                $"format={FormatVersion} map={MapDataVersion}");
@@ -556,6 +526,14 @@ public static partial class SaveSystem
             {
                 throw ThrowIntegrityFailure(exception);
             }
+        }
+
+        private static void RemoveLegacyVariants(string root, string slot)
+        {
+            Stale(LegacyBdfPath(root, slot));
+            Stale(LegacyBdfPath(root, slot) + ".bak");
+            Stale(LegacyTextPath(root, slot));
+            Stale(MetaPath(root, slot));
         }
 
         private CampaignIntegrityException ThrowIntegrityFailure(Exception exception)
@@ -634,6 +612,7 @@ public static partial class SaveSystem
             DefaultIoBufferBytes, FileOptions.SequentialScan);
         var storedLength = file.Length;
         var metadata = ReadMetadata(root, slot);
+        var detectedFormat = DetectContainerFormat(file);
 
         if (!TryReadValidatedPayload(file, dataPath, metadata, out var payload, out var failureResult))
             return failureResult;
@@ -641,7 +620,11 @@ public static partial class SaveSystem
             return new SaveLoadResult(null, metadata, validationError);
 
         metadata = payload.EmbeddedMetadata ?? metadata;
-        if (metadata is not null) metadata.CompressedBytes = storedLength;
+        if (metadata is not null)
+        {
+            metadata.CompressedBytes = storedLength;
+            metadata.FormatLabel = detectedFormat;
+        }
         return FinalizeLoadedCampaign(payload, metadata, activeModFingerprint);
     }
 
@@ -762,14 +745,14 @@ public static partial class SaveSystem
     {
         if (!Directory.Exists(root)) return Array.Empty<SaveMetadata>();
         var bySlot = new Dictionary<string, (string Path, DateTime WriteUtc)>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in Directory.EnumerateFiles(root, "*.bdfsave*", SearchOption.TopDirectoryOnly))
+        foreach (var path in Directory.EnumerateFiles(root, "*.*dfsave*", SearchOption.TopDirectoryOnly))
         {
-            if (!path.EndsWith(".bdfsave", StringComparison.OrdinalIgnoreCase) &&
-                !path.EndsWith(".bdfsave.json", StringComparison.OrdinalIgnoreCase))
+            if (!IsSavePayloadPath(path))
                 continue;
             var slot = SlotFromPath(path);
             var writeUtc = File.GetLastWriteTimeUtc(path);
-            if (!bySlot.TryGetValue(slot, out var existing) || writeUtc > existing.WriteUtc)
+            if (!bySlot.TryGetValue(slot, out var existing) || writeUtc > existing.WriteUtc ||
+                (writeUtc == existing.WriteUtc && path.EndsWith(Extension, StringComparison.OrdinalIgnoreCase)))
                 bySlot[slot] = (path, writeUtc);
         }
         if (bySlot.Count == 0) return Array.Empty<SaveMetadata>();
@@ -782,6 +765,7 @@ public static partial class SaveSystem
             if (metadata is null) continue;
             metadata.Slot = slot;
             metadata.CompressedBytes = new FileInfo(info.Path).Length;
+            metadata.FormatLabel = DetectContainerFormat(info.Path);
             entries.Add(metadata);
         }
         return entries.AsValueEnumerable()
@@ -789,11 +773,51 @@ public static partial class SaveSystem
             .ToArray();
     }
 
-    private static string SlotFromPath(string path)
+    private static bool IsSavePayloadPath(string path) =>
+        path.EndsWith(Extension, StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(LegacyExtension, StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".dfsave.json", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(LegacyJsonExtension, StringComparison.OrdinalIgnoreCase);
+
+    public static string SlotFromPath(string path)
     {
         var name = Path.GetFileName(path);
-        return name.EndsWith(".bdfsave.json", StringComparison.OrdinalIgnoreCase)
-            ? name[..^".bdfsave.json".Length] : name[..^".bdfsave".Length];
+        if (name.EndsWith(".dfsave.json", StringComparison.OrdinalIgnoreCase))
+            return name[..^".dfsave.json".Length];
+        if (name.EndsWith(LegacyJsonExtension, StringComparison.OrdinalIgnoreCase))
+            return name[..^LegacyJsonExtension.Length];
+        if (name.EndsWith(Extension, StringComparison.OrdinalIgnoreCase))
+            return name[..^Extension.Length];
+        if (name.EndsWith(LegacyExtension, StringComparison.OrdinalIgnoreCase))
+            return name[..^LegacyExtension.Length];
+        return Path.GetFileNameWithoutExtension(name);
+    }
+
+    private static string DetectContainerFormat(string path)
+    {
+        try
+        {
+            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 64);
+            return DetectContainerFormat(file);
+        }
+        catch { return ""; }
+    }
+
+    private static string DetectContainerFormat(Stream file)
+    {
+        if (!file.CanSeek) return "";
+        var pos = file.Position;
+        file.Position = 0;
+        Span<byte> prefix = stackalloc byte[4];
+        var read = file.Read(prefix);
+        file.Position = pos;
+        if (read == 4 && prefix[0] == (byte)'B' && prefix[1] == (byte)'D' && prefix[2] == (byte)'F')
+        {
+            if (prefix[3] == (byte)'3') return "DF3";
+            if (prefix[3] == (byte)'2') return "BROTLI";
+        }
+        if (read >= 2 && prefix[0] == GzipMagic0 && prefix[1] == GzipMagic1) return "GZIP";
+        return "JSON";
     }
 
     /// <summary>Read only the header of a save, not a campaign-sized JSON tree, to list a slot.</summary>
@@ -1063,8 +1087,24 @@ public static partial class SaveSystem
     {
         slot = SafeSlot(slot);
         var removed = false;
-        foreach (var path in new[] { DataPath(root, slot), LegacyTextPath(root, slot), MetaPath(root, slot) })
+        foreach (var path in new[]
+        {
+            DataPath(root, slot),
+            LegacyBdfPath(root, slot),
+            LegacyTextPath(root, slot),
+            MetaPath(root, slot)
+        })
+        {
             if (File.Exists(path)) { File.Delete(path); removed = true; }
+        }
+        foreach (var bak in new[]
+        {
+            DataPath(root, slot) + ".bak",
+            LegacyBdfPath(root, slot) + ".bak"
+        })
+        {
+            if (File.Exists(bak)) File.Delete(bak);
+        }
         return removed;
     }
 
@@ -1103,17 +1143,25 @@ public static partial class SaveSystem
         return safe.ToLowerInvariant();
     }
 
-    private static string DataPath(string root, string slot) => Path.Combine(root, slot + ".bdfsave");
-    private static string LegacyTextPath(string root, string slot) => Path.Combine(root, slot + ".bdfsave.json");
+    private static string DataPath(string root, string slot) => Path.Combine(root, slot + Extension);
+    private static string LegacyBdfPath(string root, string slot) => Path.Combine(root, slot + LegacyExtension);
+    private static string LegacyTextPath(string root, string slot) => Path.Combine(root, slot + LegacyJsonExtension);
 
     private static string ExistingDataPath(string root, string slot)
     {
-        var canonical = DataPath(root, slot);
-        var legacyText = LegacyTextPath(root, slot);
-        if (!File.Exists(canonical)) return legacyText;
-        if (!File.Exists(legacyText)) return canonical;
-        return File.GetLastWriteTimeUtc(canonical) >= File.GetLastWriteTimeUtc(legacyText)
-            ? canonical : legacyText;
+        string bestPath = null;
+        DateTime bestWrite = DateTime.MinValue;
+        foreach (var candidate in new[] { DataPath(root, slot), LegacyBdfPath(root, slot), LegacyTextPath(root, slot) })
+        {
+            if (!File.Exists(candidate)) continue;
+            var writeUtc = File.GetLastWriteTimeUtc(candidate);
+            if (bestPath is null || writeUtc > bestWrite)
+            {
+                bestPath = candidate;
+                bestWrite = writeUtc;
+            }
+        }
+        return bestPath ?? DataPath(root, slot);
     }
 
     private static string MetaPath(string root, string slot) => Path.Combine(root, slot + ".meta.json");
@@ -1224,7 +1272,7 @@ public static partial class SaveSystem
         public List<ConstructionProject> Construction = new();
         public List<PendingCampaignEvent> PendingEvents = new();
         public List<ChronicleEntry> Chronicle = new();
-        public Dictionary<long, DiplomaticRelation> Relations = new();
+        public Dictionary<long, DiplomaticRelation> Relations = new(PairKeyComparer.Instance);
         public int TradeRoutesDay = -1;
         public List<TradeRoute> TradeRoutes = new();
         [JsonPropertyOrder(1)]
@@ -1343,7 +1391,7 @@ public static partial class SaveSystem
             save.Construction = new List<ConstructionProject>(campaign.Construction);
             save.PendingEvents = new List<PendingCampaignEvent>(campaign.PendingEvents);
             save.Chronicle = new List<ChronicleEntry>(campaign.Chronicle.Entries);
-            save.Relations = includeRelations ? AllRelations(campaign) : new Dictionary<long, DiplomaticRelation>();
+            if (includeRelations) save.Relations = AllRelations(campaign);
             save.TradeRoutesDay = campaign.TradeRoutesDay;
             save.TradeRoutes = CopyTradeRoutes(campaign.TradeRoutes);
             save.History = campaign.History.Export();
@@ -1361,7 +1409,8 @@ public static partial class SaveSystem
 
         private static Dictionary<long, DiplomaticRelation> AllRelations(Campaign campaign)
         {
-            var all = new Dictionary<long, DiplomaticRelation>(campaign.Relations.Count + campaign.DormantRelations.Count);
+            var all = new Dictionary<long, DiplomaticRelation>(
+                campaign.Relations.Count + campaign.DormantRelations.Count, PairKeyComparer.Instance);
             foreach (var entry in campaign.Relations) all[entry.Key] = entry.Value;
             foreach (var entry in campaign.DormantRelations) all[entry.Key] = entry.Value;
             return all;
@@ -1480,7 +1529,7 @@ public static partial class SaveSystem
                 (sourceCampaign.Relations.Count > 0 || sourceCampaign.DormantRelations.Count > 0))
             {
                 var cloned = new Dictionary<long, DiplomaticRelation>(
-                    sourceCampaign.Relations.Count + sourceCampaign.DormantRelations.Count);
+                    sourceCampaign.Relations.Count + sourceCampaign.DormantRelations.Count, PairKeyComparer.Instance);
                 SaveSnapshotCloner.CopyClonedDictionaryValues(sourceCampaign.Relations, cloned, visited);
                 SaveSnapshotCloner.CopyClonedDictionaryValues(sourceCampaign.DormantRelations, cloned, visited);
                 Relations = cloned;

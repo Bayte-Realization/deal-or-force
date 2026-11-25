@@ -232,7 +232,7 @@ static class ScenarioModdingTests
         Check(report.IsValid && report.WarningCount == 0,
             $"historical_1914_era passes ModValidator cleanly (errors={report.ErrorCount}, warnings={report.WarningCount}): {report.FormatSummary()}");
 
-        // 2. Discover & launch via ModLoader + ScenarioLibrary (using base_world: true, no world.bdfsave!)
+        // 2. Discover & launch via ModLoader + ScenarioLibrary (using base_world: true, no world.dfsave!)
         var tempRoot = Path.Combine(Path.GetTempPath(), "dof-1914-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempRoot);
         try
@@ -247,7 +247,7 @@ static class ScenarioModdingTests
             var entry = ScenarioLibrary.Discover(new[] { pkgDir }, null)
                 .FirstOrDefault(e => e.Id == "great_war_1914");
             Check(entry is not null && entry.WorldFile.Length == 0,
-                "great_war_1914 discovered via base_world: true without needing world.bdfsave");
+                "great_war_1914 discovered via base_world: true without needing world.dfsave");
 
             var campaign = ScenarioLibrary.Create(entry!, 19140728);
             loader.ApplyCampaignData(campaign);

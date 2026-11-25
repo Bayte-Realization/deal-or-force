@@ -11,8 +11,8 @@ set a unique lowercase `"id"` in `manifest.json`, and change `"enabled": true`.
 | Template | Setting | Highlights |
 | --- | --- | --- |
 | **`historical_1914_era/`** | Historical Earth (`1914-07-28`) | Uses `"base_world": true` (no 20 MB world file needed), custom era label `"Great War Era"`, `replace_paths` for 2024 tech/events/decisions, disables `nukes`/`drones`/`missiles`, restricts `aviation` until `reconnaissance_biplanes` is researched, seeds Triple Entente, Central Powers & Great War opening, full EN+RU loc. |
-| **`chronicles_of_aethelgard/`** | Fantasy Total Conversion (`Year 402 of the Third Sun`) | `total_conversion: true`, `replace_paths` replacing 2024 tech/events/decisions/ideologies/governments, custom 12-month fantasy calendar (`Frostfall`..`Starquiet`), self-contained 3-realm `world.bdfsave`, custom goods/ideologies/governments/techs/decisions/events, parchment era skin, full EN+RU loc. |
-| **`scenario_minimal/`** | Minimal Sandbox (`1995`) | Smallest possible standalone `scenario.json` + single-province `world.bdfsave`. |
+| **`chronicles_of_aethelgard/`** | Fantasy Total Conversion (`Year 402 of the Third Sun`) | `total_conversion: true`, `replace_paths` replacing 2024 tech/events/decisions/ideologies/governments, custom 12-month fantasy calendar (`Frostfall`..`Starquiet`), self-contained 3-realm `world.dfsave`, custom goods/ideologies/governments/techs/decisions/events, parchment era skin, full EN+RU loc. |
+| **`scenario_minimal/`** | Minimal Sandbox (`1995`) | Smallest possible standalone `scenario.json` + single-province `world.dfsave`. |
 | **`bce_calendar/`** | Ancient BCE Reference (`3500 BCE`) | Astronomical vs civil BCE date conventions (`game/documentation/calendar_eras.md`). |
 | **`era_features/`** | Era Mechanic Switches | Dynamic `Features`, `FeatureUnlocks`, `FeatureDefines`, and scripted triggers. |
 | **`nuclear_age/`** | Phased Nuclear Ladder | Step-by-step unlocking of `defcon`, `nuclear_posture`, and `nuclear_strikes`. |

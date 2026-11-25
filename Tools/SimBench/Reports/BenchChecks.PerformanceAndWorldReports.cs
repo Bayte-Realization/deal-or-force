@@ -1284,12 +1284,12 @@ internal static partial class BenchChecks
             Enumerable.Range(0, campaign.Nations.Count).ToDictionary(id => id, id => campaign.History.ForNation(id)));
         Console.WriteLine($"  on the frame once warm: {string.Join(", ", warm.Select(ms => $"{ms:N0}"))} ms; " +
                           $"the history alone {watch.Elapsed.TotalMilliseconds:N0} ms for {historyBytes.Length / 1048576.0:0.0} MB.");
-        var compressed = File.ReadAllBytes(Path.Combine(folder, "probe.bdfsave"));
+        var compressed = File.ReadAllBytes(Path.Combine(folder, "probe.dfsave"));
         byte[] json;
         // Whatever container was written (framed BDF3, Brotli BDF2, gzip, plain JSON), opened
         // the way the game opens it. The framed file's history is its own binary section, so
         // the JSON here is the campaign without it.
-        using (var file = new FileStream(Path.Combine(folder, "probe.bdfsave"), FileMode.Open, FileAccess.Read))
+        using (var file = new FileStream(Path.Combine(folder, "probe.dfsave"), FileMode.Open, FileAccess.Read))
         using (var source = SaveSystem.OpenJson(file))
         using (var output = new MemoryStream())
         {

@@ -393,12 +393,12 @@ public static class ModValidator
             {
                 try
                 {
-                    var worldPath = ScenarioLibrary.SafePath(Path.GetDirectoryName(file)!, manifest.World);
+                    var worldPath = ScenarioLibrary.ResolveWorldPath(Path.GetDirectoryName(file)!, manifest.World);
                     if (!File.Exists(worldPath))
                     {
                         report.Add(ModDiagnosticSeverity.Error, "ERR_SCENARIO_WORLD_MISSING", rel, "world",
                             $"Declared world file '{manifest.World}' does not exist next to {rel}.",
-                            "Export world.bdfsave into the scenario folder, or remove 'world' and set \"base_world\": true.");
+                            "Export world.dfsave into the scenario folder, or remove 'world' and set \"base_world\": true.");
                     }
                     else
                     {
@@ -409,14 +409,14 @@ public static class ModValidator
                 {
                     report.Add(ModDiagnosticSeverity.Error, "ERR_SCENARIO_WORLD_PATH", rel, "world",
                         $"Unsafe world path '{manifest.World}': {ex.Message}",
-                        "Keep world.bdfsave inside the scenario folder (e.g. \"world\": \"world.bdfsave\").");
+                        "Keep world.dfsave inside the scenario folder (e.g. \"world\": \"world.dfsave\").");
                 }
             }
             else if (!manifest.BaseWorld && !string.Equals(manifest.Id, "2024", StringComparison.OrdinalIgnoreCase))
             {
                 report.Add(ModDiagnosticSeverity.Error, "ERR_SCENARIO_NO_WORLD", rel, "world",
                     "Scenario specifies neither a 'world' file nor '\"base_world\": true'.",
-                    "Add \"base_world\": true to build on the Earth map, or provide \"world\": \"world.bdfsave\".");
+                    "Add \"base_world\": true to build on the Earth map, or provide \"world\": \"world.dfsave\".");
             }
 
             // Start date validation.
@@ -458,7 +458,7 @@ public static class ModValidator
                     if (!scenarioTagPool.Contains(tag))
                         report.Add(ModDiagnosticSeverity.Error, "ERR_UNKNOWN_COUNTRY_TAG", rel, jsonPath,
                             $"Country tag '{tag}' does not exist in the scenario's world.",
-                            "Check the 3-letter ISO/country tag in game/common/countries/00_countries.json or your custom world.bdfsave.");
+                            "Check the 3-letter ISO/country tag in game/common/countries/00_countries.json or your custom world.dfsave.");
                 }
 
                 CheckTag(manifest.PlayerCountry, "player_country");
@@ -893,7 +893,7 @@ public static class ModValidator
             using var doc = JsonDocument.Parse(raw, GameDataLoader.ForgivingJson);
             if (doc.RootElement.TryGetProperty("Nations", out var nations) && nations.ValueKind == JsonValueKind.Array)
             {
-                // When a custom world.bdfsave defines its own Nations array, validate scenario tags strictly against it!
+                // When a custom world.dfsave defines its own Nations array, validate scenario tags strictly against it!
                 var customTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var n in nations.EnumerateArray())
                     if (n.ValueKind == JsonValueKind.Object && n.TryGetProperty("Tag", out var tagEl) && tagEl.ValueKind == JsonValueKind.String)

@@ -99,3 +99,7 @@ addons/GD-Sync/keys.cfg
 
 # Empty legacy Godot resource folder stays local; authored game assets live in game/gfx.
 /Assets/
+
+# Local save / benchmark scratch dropped in repo root.
+/*.dfsave*
+/*.bdfsave*

@@ -48,7 +48,7 @@ cargo build --release --manifest-path Tools/KernelBench/native/Cargo.toml --targ
 $env:RUSTFLAGS='-C target-cpu=x86-64-v3'; cargo build --release --manifest-path Tools/KernelBench/native/Cargo.toml --target-dir tmp_logs/kb_rust/v3
 copy tmp_logs/kb_rust/v1/release/household_kernel.dll tmp_logs/kb_build/bin/KernelBench/release/household_kernel_v1.dll
 copy tmp_logs/kb_rust/v3/release/household_kernel.dll tmp_logs/kb_build/bin/KernelBench/release/household_kernel_v3.dll
-dotnet tmp_logs/kb_build/bin/KernelBench/release/KernelBench.dll <copy-of-save.bdfsave> --samples 31 --warmup 10
+dotnet tmp_logs/kb_build/bin/KernelBench/release/KernelBench.dll <copy-of-save.dfsave> --samples 31 --warmup 10
 ```
 
 Loading the save takes about half a minute; the run about two minutes. Start it hidden and

@@ -425,11 +425,11 @@ derived from the position of a UI node.
 
 `SaveSystem` serialises only engine-neutral campaign state and stable identifiers — never
 Godot nodes or visual resources. The format holds its own version, the game version, the seed
-and RNG state, and a fingerprint of the active mods. New slots use one `.bdfsave`
-file: editable JSON by default or optional GZip, detected by content. The write goes
+and RNG state, and a fingerprint of the active mods. New slots use one `.dfsave`
+file: editable JSON by default or compressed binary (`BDF3`), detected by content. The write goes
 to `.tmp`, and on success the old slot is replaced atomically. Embedded metadata at
-the front lets the menu list slots without reading whole campaigns; old sidecars and
-their SHA-256 checksums remain supported on load.
+the front lets the menu list slots without reading whole campaigns; legacy `.bdfsave`, `.bdfsave.json`
+sidecars and their SHA-256 checksums remain supported on load.
 
 Loading restores countries, regions and pops, the market, construction, armies and fleets,
 routes and orders, wars, battles and peaces, diplomatic relations, provincial control and

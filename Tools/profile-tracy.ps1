@@ -21,7 +21,7 @@
     The save is only read: --profile-save loads it into memory and never writes it back.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File Tools\profile-tracy.ps1 -Save tmp_logs\perf\bozhe.bdfsave -Days 30
+    powershell -ExecutionPolicy Bypass -File Tools\profile-tracy.ps1 -Save tmp_logs\perf\bozhe.dfsave -Days 30
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Save,

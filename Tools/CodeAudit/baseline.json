@@ -4,10 +4,10 @@
   "maxFileLines": 3160,
   "maxMethodLines": 1328,
   "maxCyclomatic": 233,
-  "simulationStaticMutable": 1356,
+  "simulationStaticMutable": 1355,
   "deadCandidates": 161,
   "totalFiles": 995,
-  "totalLines": 334702,
+  "totalLines": 334786,
   "files": {
     "Scripts/AudioAssets.cs": {
       "lines": 46,
@@ -2572,10 +2572,10 @@
       "magicNumbers": 76
     },
     "Scripts/Simulation/NumericIntegrity.cs": {
-      "lines": 652,
+      "lines": 671,
       "maxMethodLines": 91,
       "maxCyclomatic": 89,
-      "staticMutable": 13,
+      "staticMutable": 12,
       "magicNumbers": 11
     },
     "Scripts/Simulation/OccupationResistance.cs": {
@@ -3174,7 +3174,7 @@
       "magicNumbers": 8
     },
     "Scripts/Simulation/SaveSystem.cs": {
-      "lines": 1732,
+      "lines": 1781,
       "maxMethodLines": 64,
       "maxCyclomatic": 27,
       "staticMutable": 0,
@@ -3195,7 +3195,7 @@
       "magicNumbers": 5
     },
     "Scripts/Simulation/ScenarioLibrary.cs": {
-      "lines": 106,
+      "lines": 122,
       "maxMethodLines": 40,
       "maxCyclomatic": 17,
       "staticMutable": 0,

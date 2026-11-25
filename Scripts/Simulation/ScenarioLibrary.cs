@@ -39,7 +39,7 @@ public static class ScenarioLibrary
                     }
                     if (string.IsNullOrWhiteSpace(manifest.Id) || string.IsNullOrWhiteSpace(manifest.Name)) continue;
                     var path = !string.IsNullOrWhiteSpace(manifest.World)
-                        ? SafePath(Path.GetDirectoryName(file), manifest.World)
+                        ? ResolveWorldPath(Path.GetDirectoryName(file), manifest.World)
                         : "";
                     var usesBaseWorld = manifest.Id == "2024" || (manifest.BaseWorld && path.Length == 0);
                     if (!usesBaseWorld && !File.Exists(path)) continue;
@@ -93,6 +93,22 @@ public static class ScenarioLibrary
         }
 
         return campaign;
+    }
+
+    public static string ResolveWorldPath(string root, string relative)
+    {
+        var path = SafePath(root, relative);
+        if (File.Exists(path) || string.IsNullOrWhiteSpace(relative)) return path;
+
+        string fallback = null;
+        if (relative.EndsWith(SaveSystem.Extension, StringComparison.OrdinalIgnoreCase))
+            fallback = relative[..^SaveSystem.Extension.Length] + SaveSystem.LegacyExtension;
+        else if (relative.EndsWith(SaveSystem.LegacyExtension, StringComparison.OrdinalIgnoreCase))
+            fallback = relative[..^SaveSystem.LegacyExtension.Length] + SaveSystem.Extension;
+
+        if (fallback is null) return path;
+        var candidate = SafePath(root, fallback);
+        return File.Exists(candidate) ? candidate : path;
     }
 
     public static string SafePath(string root, string relative)

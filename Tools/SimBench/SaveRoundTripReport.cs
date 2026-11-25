@@ -10,7 +10,7 @@ using DealOrForce.Simulation;
 namespace DealOrForce.Tools;
 
 /// <summary>
-/// `--save-roundtrip-file &lt;file.bdfsave&gt; [N] [out-folder]`: the player's own campaign through the
+/// `--save-roundtrip-file &lt;file.dfsave&gt; [N] [out-folder]`: the player's own campaign through the
 /// game's own save path, N times, timed by halves, with the peak memory of each half.
 ///
 /// SaveFormatBench measures formats on a captured payload; this measures what the player waits
@@ -67,7 +67,7 @@ internal static class SaveRoundTripReport
             Collect();
             var prepare = Measured(() => SaveSystem.Prepare(outFolder, "roundtrip", original, ""));
             var commit = Measured(() => prepare.Value.Commit());
-            var file = Path.Combine(outFolder, "roundtrip.bdfsave");
+            var file = Path.Combine(outFolder, "roundtrip.dfsave");
             size = new FileInfo(file).Length;
             magic = Magic(file);
             var prepareMs = prepare.Ms;
@@ -104,7 +104,7 @@ internal static class SaveRoundTripReport
         original.Defines.SaveTextFormat = true;
         Collect();
         var textSave = Measured(() => SaveSystem.Save(outFolder, "roundtrip_text", original, ""));
-        var textPath = Path.Combine(outFolder, "roundtrip_text.bdfsave");
+        var textPath = Path.Combine(outFolder, "roundtrip_text.dfsave");
         var textSize = new FileInfo(textPath).Length;
         original.Defines.SaveTextFormat = false;
         Collect();
@@ -117,20 +117,21 @@ internal static class SaveRoundTripReport
 
         // Every older binary shape, made from the text save's bytes the way each was written.
         var plain = File.ReadAllBytes(textPath);
-        var older = new List<(string Name, Action<Stream> Write)>
+        var older = new List<(string Name, string Extension, Action<Stream> Write)>
         {
-            ("legacy_bdf2_q4", s => { s.Write("BDF2"u8); using var b = new BrotliStream(s, CompressionLevel.Optimal, true); b.Write(plain); }),
-            ("legacy_gzip", s => { using var g = new GZipStream(s, CompressionLevel.Fastest, true); g.Write(plain); }),
+            ("legacy_bdf2_q4", SaveSystem.LegacyExtension, s => { s.Write("BDF2"u8); using var b = new BrotliStream(s, CompressionLevel.Optimal, true); b.Write(plain); }),
+            ("legacy_gzip", SaveSystem.LegacyExtension, s => { using var g = new GZipStream(s, CompressionLevel.Fastest, true); g.Write(plain); }),
         };
-        foreach (var (name, write) in older)
+        foreach (var (name, ext, write) in older)
         {
-            using (var file = File.Create(Path.Combine(outFolder, name + ".bdfsave"))) write(file);
+            var legacyPath = Path.Combine(outFolder, name + ext);
+            using (var file = File.Create(legacyPath)) write(file);
             Collect();
             var load = Measured(() => SaveSystem.Load(outFolder, name, ""));
             var same = Same(load.Value, fresh, fingerprint, history);
             if (!same) failures++;
             Console.WriteLine($"ROUNDTRIP {name}: load {load.Ms:N0} ms (peak +{load.PeakMb:N0} MB), " +
-                              $"{new FileInfo(Path.Combine(outFolder, name + ".bdfsave")).Length:N0} bytes, {(same ? "SAME" : "DIFFERENT " + load.Value.Warning)}");
+                              $"{new FileInfo(legacyPath).Length:N0} bytes, {(same ? "SAME" : "DIFFERENT " + load.Value.Warning)}");
         }
         plain = null;
 

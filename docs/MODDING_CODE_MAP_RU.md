@@ -69,7 +69,7 @@ powershell -ExecutionPolicy Bypass -File Tools\dev.ps1 -All       # сборка
 dotnet run --project Tools\FormableTests -- --living-world-fingerprint-only
 dotnet run --project Tools\SimBench\SimBench.csproj -c Release -- 1095 1 --soak
 dotnet run --project Tools\SimBench\SimBench.csproj -c Release -- 1095 1 --wars
-dotnet run --project Tools\FormableTests -- --replay-save "<путь к .bdfsave>" 30
+dotnet run --project Tools\FormableTests -- --replay-save "<путь к .dfsave>" 30
 ```
 
 Отпечатки — это доказательство, что мир не изменился там, где ты не собирался его менять.

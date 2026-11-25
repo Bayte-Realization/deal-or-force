@@ -31,9 +31,9 @@ static class HeapCensusTests
         // SafeSlot strips spaces, so staged copies carry sanitized slot names; the third
         // argument picks which staged save to count.
         var staged = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dof-staged-save");
-        var file = slot >= 0 && slot + 2 < args.Length && !args[slot + 2].StartsWith("-") ? args[slot + 2] : "50sofslowtimes.bdfsave";
+        var file = slot >= 0 && slot + 2 < args.Length && !args[slot + 2].StartsWith("-") ? args[slot + 2] : "50sofslowtimes.dfsave";
         var path = System.IO.Path.Combine(staged, file);
-        var loaded = SaveSystem.Load(System.IO.Path.GetDirectoryName(path)!, System.IO.Path.GetFileNameWithoutExtension(path), "");
+        var loaded = SaveSystem.Load(System.IO.Path.GetDirectoryName(path)!, SaveSystem.SlotFromPath(path), "");
         if (!loaded.Success || loaded.Campaign is null) throw new Exception("heap census: could not load " + loaded.Warning);
         var campaign = loaded.Campaign;
         Census(campaign, 0);

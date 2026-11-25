@@ -2,7 +2,7 @@
   "id": "aethelgard_402",
   "name": "Chronicles of Aethelgard",
   "description": "Year 402 of the Third Sun. Three rival realms contest the Iron Marches in a complete fantasy total conversion with custom months, guilds, ideologies, technologies and parchment skin.",
-  "world": "world.bdfsave",
+  "world": "world.dfsave",
   "total_conversion": true,
   "player_country": "VAL",
   "start_year": 402,

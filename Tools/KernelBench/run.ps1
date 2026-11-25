@@ -1,7 +1,7 @@
 # Builds the Rust kernel (both CPU levels) and the C# bench, puts the two DLLs beside the
 # bench, and runs it on a COPY of a save. Everything lands in tmp_logs (git-ignored).
 #
-#   powershell -ExecutionPolicy Bypass -File Tools\KernelBench\run.ps1 -Save C:\path\copy.bdfsave
+#   powershell -ExecutionPolicy Bypass -File Tools\KernelBench\run.ps1 -Save C:\path\copy.dfsave
 #
 # Rust is looked for in tmp_logs\rust (where the 17 November run installed it with
 # --no-modify-path) and then on PATH. Without it the C# variants still build, but the run

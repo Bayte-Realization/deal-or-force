@@ -68,7 +68,7 @@ static class PerformanceRegressionTests
         c.Defines.SaveTextFormat = true;
         var folder = Path.Combine(Path.GetTempPath(), "dof-stream-tests-" + Guid.NewGuid().ToString("N"));
         SaveSystem.Save(folder, "source", c, "tests");
-        var plain = File.ReadAllBytes(Path.Combine(folder, "source.bdfsave"));
+        var plain = File.ReadAllBytes(Path.Combine(folder, "source.dfsave"));
         var variants = new System.Collections.Generic.Dictionary<string, byte[]> { ["plain"] = plain,
             ["bom"] = new byte[] {239,187,191}.Concat(plain).ToArray() };
         using (var output = new MemoryStream())
@@ -83,16 +83,16 @@ static class PerformanceRegressionTests
         ulong? expected = null;
         foreach (var pair in variants)
         {
-            File.WriteAllBytes(Path.Combine(folder, pair.Key + ".bdfsave"), pair.Value);
+            File.WriteAllBytes(Path.Combine(folder, pair.Key + ".dfsave"), pair.Value);
             var loaded = SaveSystem.Load(folder, pair.Key, "tests");
             Check(loaded.Success, "actual Load accepts " + pair.Key + ": " + loaded.Warning);
             var hash = CampaignFingerprint.Of(loaded.Campaign);
             expected ??= hash;
             Check(hash == expected, "same restored world through " + pair.Key);
         }
-        File.WriteAllBytes(Path.Combine(folder, "broken.bdfsave"), plain.Take(plain.Length / 2).ToArray());
+        File.WriteAllBytes(Path.Combine(folder, "broken.dfsave"), plain.Take(plain.Length / 2).ToArray());
         Check(!SaveSystem.Load(folder, "broken", "tests").Success, "actual Load refuses truncated payload");
-        Check(File.ReadAllBytes(Path.Combine(folder, "source.bdfsave")).SequenceEqual(plain), "source save is never rewritten by loading");
+        Check(File.ReadAllBytes(Path.Combine(folder, "source.dfsave")).SequenceEqual(plain), "source save is never rewritten by loading");
         Console.WriteLine("Private stream fixtures: " + folder);
     }
     static void AllianceGraph(Campaign c)

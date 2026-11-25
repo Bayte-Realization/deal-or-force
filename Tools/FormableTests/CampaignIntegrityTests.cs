@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -98,6 +99,17 @@ static class CampaignIntegrityTests
         var broken = sample with { Treasury = float.PositiveInfinity };
         Check(NumericIntegrity.Inspect(new[] { broken }).Single().Contains("Treasury"),
             "numeric validation sees record properties in history");
+        var relation = new DiplomaticRelation { A = 0, B = 1, Opinion = float.NaN, Dormant = true };
+        relation.Reasons.Add(new OpinionReason { Id = "fear_of_strength", Scale = float.PositiveInfinity });
+        var table = new Dictionary<long, DiplomaticRelation>
+        {
+            [1] = relation,
+            [2] = new() { A = 0, B = 2, Tension = float.NegativeInfinity }
+        };
+        var paths = NumericIntegrity.Inspect(table).Select(issue => issue.Split(" = ")[0]).ToArray();
+        Check(paths.SequenceEqual(new[] { "campaign[1].Opinion", "campaign[1].Reasons[0].Scale", "campaign[2].Tension" }) &&
+              NumericIntegrity.Inspect(table, 2).Count == 2,
+            "deep validation keeps nested floating-point diagnostics in order while skipping integer members");
         try { JsonSerializer.Serialize(broken); throw new Exception("ordinary JSON accepted infinity"); }
         catch (ArgumentException) { Check(true, "ordinary saves still reject named non-finite values"); }
         var diagnosticOptions = new JsonSerializerOptions { NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals };
@@ -115,7 +127,7 @@ static class CampaignIntegrityTests
         var folder = Path.Combine(Path.GetTempPath(), "dof-integrity-" + Guid.NewGuid().ToString("N"));
         c.Defines.SaveTextFormat = true;
         SaveSystem.Save(folder, SaveSystem.AutoSlot, c, "tests");
-        var path = Path.Combine(folder, SaveSystem.AutoSlot + ".bdfsave");
+        var path = Path.Combine(folder, SaveSystem.AutoSlot + SaveSystem.Extension);
         var good = File.ReadAllBytes(path);
         var scenario = JsonNode.Parse(SaveSystem.ExportScenarioJson(c, "complete_schema"));
         Check(scenario["Nations"].AsArray().All(n => n["MapIndex"] is not null && n["Color"] is not null) &&

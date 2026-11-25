@@ -601,7 +601,7 @@ static class LongCampaignTests
             var old = Build();
             old.C.Defines.SaveTextFormat = true;
             SaveSystem.Save(folder, "old", old.C, "tests");
-            var oldText = File.ReadAllText(Path.Combine(folder, "old.bdfsave"));
+            var oldText = File.ReadAllText(Path.Combine(folder, "old.dfsave"));
             Check(!oldText.Contains("\"RetiredDay\"") && !oldText.Contains("\"GoneSinceDay\""),
                 "a world nobody has been retired in is written as it always was: no archive in the file");
             Check(!oldText.Contains("\"MediatorId\"") && oldText.Contains("\"TruceUntil\""),
@@ -620,7 +620,7 @@ static class LongCampaignTests
             var ancientText = OldLayout(oldText);
             foreach (var file in Directory.GetFiles(folder, "old.*"))
                 File.Copy(file, Path.Combine(folder, "ancient" + Path.GetExtension(file)), overwrite: true);
-            File.WriteAllText(Path.Combine(folder, "ancient.bdfsave"), ancientText);
+            File.WriteAllText(Path.Combine(folder, "ancient.dfsave"), ancientText);
             var relationCount = old.C.Relations.Count + old.C.DormantRelations.Count;
             Check(Occurrences(ancientText, "\"InterventionTargetId\": -1") == relationCount && ancientText.Contains("\"TruceUntil\": ") &&
                   !oldText.Contains("\"TruceUntil\": "),
@@ -670,8 +670,8 @@ static class LongCampaignTests
                     $"and the clock of the not yet retired ({slot})");
                 Check(LongCampaign.Run(loaded).Retired == 0, $"a sweep of the loaded world finds nothing new ({slot})");
             }
-            var before = new FileInfo(Path.Combine(folder, "old.bdfsave")).Length;
-            var after = new FileInfo(Path.Combine(folder, "text.bdfsave")).Length;
+            var before = new FileInfo(Path.Combine(folder, "old.dfsave")).Length;
+            var after = new FileInfo(Path.Combine(folder, "text.dfsave")).Length;
             Check(after < before, $"the file with the archive is the smaller one ({after:N0} bytes against {before:N0})");
         }
         finally
