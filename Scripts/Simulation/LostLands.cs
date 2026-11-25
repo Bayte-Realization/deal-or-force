@@ -13,9 +13,9 @@ public sealed partial class Defines
     /// <summary>How much stronger than its holder a country must be before its lost ground is put to it as a question.</summary>
     public float LostLandStrengthRatio { get; set; } = 1.3f;
     /// <summary>What the AI's judgement of a war makes of its own lost homeland on the other side, per its weight (see LostLands.Weight).</summary>
-    public float AiRevancheAppetite { get; set; } = 0.6f;
+    public float AiRevancheAppetite { get; set; } = 1.15f;
     public float AiRevancheRelativeWeight { get; set; } = 1.2f;
-    public float AiRevancheOpportunityWeight { get; set; } = 0.5f;
+    public float AiRevancheOpportunityWeight { get; set; } = 0.85f;
 }
 
 public sealed partial class Nation
@@ -47,18 +47,26 @@ public static class LostLands
     public static List<(ScenarioState Region, Nation Holder)> Of(Campaign campaign, Nation nation)
     {
         var lost = new List<(ScenarioState, Nation)>();
-        if (campaign is null || nation is null) return lost;
-        foreach (var region in campaign.States)
+        FillOf(campaign, nation, lost);
+        return lost;
+    }
+
+    internal static void FillOf(Campaign campaign, Nation nation, List<(ScenarioState Region, Nation Holder)> destination)
+    {
+        destination.Clear();
+        if (campaign is null || nation is null) return;
+        var states = campaign.States;
+        for (var i = 0; i < states.Count; i++)
         {
+            var region = states[i];
             if (TerritorialClaims.TitleOf(campaign, nation, region) != TerritorialTitle.Homeland || region.NationMapIndex == nation.MapIndex) continue;
             var holder = NavalOperations.NationAt(campaign, region.NationMapIndex);
             if (holder is null || holder.Id == nation.Id || holder.Population <= 0) continue;
             // Ground our own dependency holds is ours to dispose of already; ground our overlord
             // holds is not ours to fight for.
             if (holder.AnswersTo(nation.Id) || nation.AnswersTo(holder.Id)) continue;
-            lost.Add((region, holder));
+            destination.Add((region, holder));
         }
-        return lost;
     }
 
     internal static void FillOfHolder(Campaign campaign, Nation nation, Nation holder, HashSet<int> regionIndices)
@@ -160,9 +168,16 @@ public static class LostLands
         var mine = AiStatecraft.StrengthOf(campaign, nation);
         ScenarioState region = null;
         Nation holder = null;
-        foreach (var (candidate, by) in Of(campaign, nation).OrderByDescending(pair => pair.Region.Population)
-                     .ThenBy(pair => pair.Region.MapIndex))
+        var candidates = new List<(ScenarioState Region, Nation Holder)>();
+        FillOf(campaign, nation, candidates);
+        candidates.Sort(static (left, right) =>
         {
+            var popCmp = right.Region.Population.CompareTo(left.Region.Population);
+            return popCmp != 0 ? popCmp : left.Region.MapIndex.CompareTo(right.Region.MapIndex);
+        });
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var (candidate, by) = candidates[i];
             if (CampaignDiplomacy.AtWar(campaign, nation.Id, by.Id)) continue;
             if (mine < AiStatecraft.StrengthOf(campaign, by) * campaign.Defines.LostLandStrengthRatio) continue;
             if (!CampaignDiplomacy.CanDeclareWar(campaign, nation.Id, by.Id, out _)) continue;

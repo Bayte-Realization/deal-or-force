@@ -4,28 +4,28 @@ namespace DealOrForce.Simulation;
 
 public sealed partial class Defines
 {
-    /// <summary>Off until calibrated: the first bench filled the streets of 181 countries in a year.</summary>
-    public bool ProtestsEnabled { get; set; } = false;
+    /// <summary>Street protests enabled with balanced inflation, stability and grace thresholds.</summary>
+    public bool ProtestsEnabled { get; set; } = true;
     /// <summary>Grievance from a cut in welfare and education against last year's level: a 10% cut is 0.1 times this.</summary>
     public float ProtestCutWeight { get; set; } = 3f;
     /// <summary>Military spending rising while the cut is made: the budget read as guns for butter.</summary>
     public float ProtestGunsWeight { get; set; } = 0.5f;
-    public float ProtestInflationFloor { get; set; } = 0.04f;
+    public float ProtestInflationFloor { get; set; } = 0.05f;
     public float ProtestInflationWeight { get; set; } = 4f;
-    public float ProtestStabilityFloor { get; set; } = 0.45f;
+    public float ProtestStabilityFloor { get; set; } = 0.42f;
     public float ProtestStabilityWeight { get; set; } = 0.8f;
     /// <summary>Radical regions count above this floor only: every country has its fringe.</summary>
-    public float ProtestRadicalismFloor { get; set; } = 0.30f;
+    public float ProtestRadicalismFloor { get; set; } = 0.32f;
     public float ProtestRadicalismWeight { get; set; } = 0.6f;
     /// <summary>A budget moving by less than this is the year's noise, not a cut anyone marches over.</summary>
     public float ProtestCutNoise { get; set; } = 0.03f;
     /// <summary>The strongest neighbouring wave, carried over the border at this share.</summary>
     public float ProtestContagion { get; set; } = 0.35f;
     /// <summary>Grievance below which nobody goes out.</summary>
-    public float ProtestThreshold { get; set; } = 0.40f;
+    public float ProtestThreshold { get; set; } = 0.42f;
     /// <summary>Days the budgets settle before anyone marches: every cabinet redraws its budget in the
-    /// first months, and counted as cuts that filled the streets of ninety countries in year one.</summary>
-    public int ProtestGraceDays { get; set; } = 180;
+    /// first year, and counted as cuts that filled the streets of ninety countries in year one.</summary>
+    public int ProtestGraceDays { get; set; } = 365;
     public float ProtestGrievancePerDay { get; set; } = 0.01f;
     public float ProtestRisePerDay { get; set; } = 0.03f;
     public float ProtestFallPerDay { get; set; } = 0.015f;

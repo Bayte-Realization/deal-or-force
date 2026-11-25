@@ -221,6 +221,54 @@ public static class OpinionSystem
     /// is the thing this replaced - the player used to read a number with no story behind
     /// it and no way to find one.
     /// </summary>
+    internal static float GrievanceWeight(Campaign campaign, DiplomaticRelation relation)
+    {
+        if (campaign is null || relation is null || relation.Reasons.Count == 0) return 0f;
+        var sum = 0f;
+        for (var i = 0; i < relation.Reasons.Count; i++)
+        {
+            var reason = relation.Reasons[i];
+            var def = OpinionCatalog.Find(reason.Id);
+            if (def is null) continue;
+            var w = WeightOf(campaign, reason, def.Value);
+            if (w < 0f) sum += -w;
+        }
+        return sum;
+    }
+
+    internal static void StandingClaimAndCycle(Campaign campaign, Nation leftNation, Nation rightNation,
+        out float claimFriction, out float geopolitics)
+    {
+        claimFriction = 0f;
+        geopolitics = 0f;
+        if (campaign is null || leftNation is null || rightNation is null || leftNation.Id == rightNation.Id) return;
+
+        var leftClaim = LostLands.HasClaimedLand(campaign, leftNation, rightNation);
+        var rightClaim = LostLands.HasClaimedLand(campaign, rightNation, leftNation);
+        var leftHome = TerritorialClaims.HoldsOurHomeland(campaign, leftNation, rightNation);
+        var rightHome = TerritorialClaims.HoldsOurHomeland(campaign, rightNation, leftNation);
+        if (leftClaim || rightClaim || leftHome || rightHome)
+        {
+            var wLeft = leftClaim ? MathF.Max(0.25f, LostLands.Weight(campaign, leftNation, rightNation)) : (leftHome ? 0.50f : 0f);
+            var wRight = rightClaim ? MathF.Max(0.25f, LostLands.Weight(campaign, rightNation, leftNation)) : (rightHome ? 0.50f : 0f);
+            var claimBonus = (leftClaim || rightClaim) ? Math.Clamp(campaign.Defines.TerritorialClaimWeight, 0f, 1f) * 0.35f : 0f;
+            var intensity = Math.Clamp(MathF.Max(wLeft, wRight) + MathF.Min(wLeft, wRight) * 0.5f + claimBonus, 0f, 1f);
+            claimFriction = -(22f + 13f * intensity);
+        }
+
+        var ramp = M.Clamp01((campaign.ElapsedDays - 365f) / 1095f);
+        if (ramp > 0f)
+        {
+            geopolitics = GeopoliticalCycle.BilateralRealignmentBias(campaign, leftNation, rightNation) * 18f * ramp;
+            var greatPowers = AllianceSystem.GreatPowers(campaign);
+            if (greatPowers.Contains(leftNation.Id) && greatPowers.Contains(rightNation.Id))
+            {
+                var distance = PoliticsCore.IdeologicalDistance(leftNation, rightNation);
+                geopolitics -= (8f + 10f * MathF.Min(1f, distance)) * ramp;
+            }
+        }
+    }
+
     public static void Settle(Campaign campaign, DiplomaticRelation relation) =>
         Settle(campaign, relation, out _, out _, out _);
 
@@ -232,18 +280,22 @@ public static class OpinionSystem
     /// </summary>
     internal static void Settle(Campaign campaign, DiplomaticRelation relation,
         out float politics, out float identity, out float social) =>
-        Settle(campaign, relation, true, out politics, out identity, out social);
+        Settle(campaign, relation, true, out politics, out identity, out social, out _, out _);
+
+    internal static void Settle(Campaign campaign, DiplomaticRelation relation,
+        out float politics, out float identity, out float social, out float claims, out float geopolitics) =>
+        Settle(campaign, relation, true, out politics, out identity, out social, out claims, out geopolitics);
 
     internal static void Settle(Campaign campaign, DiplomaticRelation relation, bool explain) =>
-        Settle(campaign, relation, explain, out _, out _, out _);
+        Settle(campaign, relation, explain, out _, out _, out _, out _, out _);
 
     private static void Settle(Campaign campaign, DiplomaticRelation relation, bool explain,
-        out float politics, out float identity, out float social)
+        out float politics, out float identity, out float social, out float claims, out float geopolitics)
     {
-        politics = identity = social = 0f;
+        politics = identity = social = claims = geopolitics = 0f;
         if (relation is null) return;
         PruneInertReasons(campaign, relation);
-        Explain(campaign, relation, true, out politics, out identity, out social, explain);
+        Explain(campaign, relation, true, out politics, out identity, out social, out claims, out geopolitics, explain);
     }
 
     internal static void PruneInertReasons(Campaign campaign, DiplomaticRelation relation)
@@ -273,12 +325,13 @@ public static class OpinionSystem
     }
 
     public static void Explain(Campaign campaign, DiplomaticRelation relation, bool updateOpinion = false) =>
-        Explain(campaign, relation, updateOpinion, out _, out _, out _, true);
+        Explain(campaign, relation, updateOpinion, out _, out _, out _, out _, out _, true);
 
     private static void Explain(Campaign campaign, DiplomaticRelation relation, bool updateOpinion,
-        out float politics, out float declared, out float reputation, bool explain = true)
+        out float politics, out float declared, out float reputation, out float claims, out float geopolitics,
+        bool explain = true)
     {
-        politics = declared = reputation = 0f;
+        politics = declared = reputation = claims = geopolitics = 0f;
         if (relation is null) return;
         if (explain) relation.OpinionDrivers.Begin("Opinion", "share");
         var total = 0f;
@@ -359,6 +412,18 @@ public static class OpinionSystem
         {
             total += memory;
             if (explain) relation.OpinionDrivers.Add(Loc.Get("Accumulated public reputation"), memory);
+        }
+        StandingClaimAndCycle(campaign, leftNation, rightNation, out claims, out geopolitics);
+        if (MathF.Abs(claims) >= 0.05f)
+        {
+            total += claims;
+            if (explain) relation.OpinionDrivers.Add(Loc.Get("Unresolved territorial claims"), claims);
+        }
+        if (MathF.Abs(geopolitics) >= 0.05f)
+        {
+            total += geopolitics;
+            if (explain) relation.OpinionDrivers.Add(
+                Loc.Get(geopolitics >= 0f ? "Geopolitical alignment" : "Geopolitical rivalry"), geopolitics);
         }
         if (updateOpinion) relation.Opinion = M.Clamp(total, -100f, 100f);
         if (explain) relation.OpinionDrivers.Settle(relation.Opinion, Loc.Get("aaa.ui.opinion_clamped"));
@@ -452,13 +517,17 @@ public static class OpinionSystem
         // and settled where the walk meets it, as before: the mission's week writes that
         // relation, its sender's purse and a private line of the chronicle, none of which the
         // relations still waiting read.
+        _ = AllianceSystem.GreatPowers(campaign);
         var queue = SettleQueues.GetValue(campaign, static c => new SettleQueue(c));
         queue.Waiting.Clear();
         var scanned = 0;
+        var today = campaign.ElapsedDays;
         foreach (var relation in campaign.Relations.Values)
         {
             if (++scanned % 512 == 0) yield return 0;
-            var due = (campaign.ElapsedDays + (relation.A + relation.B) % 7) % 7 == 0;
+            if (relation.Stance == DiplomaticStance.Truce && today >= relation.TruceUntil)
+                CampaignDiplomacy.RefreshExpiredTruce(campaign, relation);
+            var due = (today + (relation.A + relation.B) % 7) % 7 == 0;
             if (relation.MissionByA is not null || relation.MissionByB is not null)
             {
                 DiplomaticOutreach.Tick(campaign, relation);

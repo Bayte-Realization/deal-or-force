@@ -1,6 +1,6 @@
 # One redistribution register beside the executable, not a licenses/docs directory.
 function Write-PlayerNotices([string]$ProjectRoot, [string]$OutputDirectory) {
-    $register = Join-Path $ProjectRoot 'THIRD_PARTY_NOTICES.md'
+    $register = Join-Path $ProjectRoot 'game/THIRD_PARTY_NOTICES.md'
     if (-not (Test-Path -LiteralPath $register -PathType Leaf)) {
         throw 'Player redistribution notices are missing.'
     }
@@ -8,7 +8,7 @@ function Write-PlayerNotices([string]$ProjectRoot, [string]$OutputDirectory) {
     # Ship the reviewed player document, not internal art briefs. Original-art provenance
     # stays in docs/art_sources; actual third-party attribution stays in this register/CREDITS.
     $parts.Add([IO.File]::ReadAllText($register))
-    if (Test-Path -LiteralPath (Join-Path $OutputDirectory 'libluau-script.windows.editor.x86_64.dll')) {
+    if (Get-ChildItem -Path $OutputDirectory -Filter '*luau-script*' -File -ErrorAction SilentlyContinue | Select-Object -First 1) {
         foreach ($notice in @('LICENSE.txt', 'COPYRIGHT.txt')) {
             $source = Join-Path $ProjectRoot "game/extensions/luau/$notice"
             if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {

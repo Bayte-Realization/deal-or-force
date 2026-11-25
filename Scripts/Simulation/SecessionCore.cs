@@ -251,6 +251,16 @@ public static class SecessionCore
         var identity = federal ? M.Clamp01(state.PoliticalDivergence) : M.Clamp01(foreign);
         var scale = federal ? MathF.Max(0f, campaign.Defines.FederalPressureScale) : 1f;
         var overstretchScale = 1f + MathF.Max(0f, owner.ImperialOverstretch) * campaign.Defines.SecessionOverstretchMultiplier;
+        var cycleRamp = M.Clamp01((campaign.ElapsedDays - 730f) / 1095f);
+        var cycleScale = 1f;
+        if (cycleRamp > 0f)
+        {
+            var macroWave = GeopoliticalCycle.MacroEconomicWave(campaign, owner);
+            var downturnBoost = macroWave < -0.10f ? 1f + (-macroWave - 0.10f) * 0.75f : 1f;
+            var sclerosisBoost = 1f + GeopoliticalCycle.InstitutionalSclerosis(campaign, owner) * 0.45f;
+            var sysFrag = GeopoliticalCycle.SystemicFragmentationPressure(campaign, owner);
+            cycleScale = M.Lerp(1f, sysFrag * downturnBoost * sclerosisBoost, cycleRamp);
+        }
         return weights.Base
                * MathF.Pow(identity, MathF.Max(0.01f, weights.Nationality))
                * (weights.RadicalismFloor + weights.Radicalism * M.Clamp01(state.Radicalism))
@@ -260,7 +270,8 @@ public static class SecessionCore
                * (torn ? campaign.Defines.SecessionCivilWarMultiplier : 1f)
                * (1f - SocialMemory.BorderRelief(campaign, state))
                * scale
-               * overstretchScale;
+               * overstretchScale
+               * cycleScale;
     }
 
     public static bool IsFederalBreak(Campaign campaign, Nation owner, ScenarioState state)
@@ -300,6 +311,13 @@ public static class SecessionCore
                 || debt == DebtCondition.Insolvent || debt == DebtCondition.Restructuring) return true;
         }
         if (StateIdentity.RegionAlienation(campaign, owner, state) >= 0.50f) return true;
+        if (campaign.ElapsedDays >= 1095 &&
+            (campaign.StatesOf(owner).Length >= 5 || owner.ImperialOverstretch > 0.08f) &&
+            state.Radicalism >= 0.22f &&
+            (GeopoliticalCycle.MacroEconomicWave(campaign, owner) <= -0.30f ||
+             GeopoliticalCycle.SystemicFragmentationPressure(campaign, owner) >= 1.12f ||
+             GeopoliticalCycle.InstitutionalSclerosis(campaign, owner) >= 0.55f))
+            return true;
         return state.StandardOfLiving + defines.FederalLivingGap < owner.StandardOfLiving;
     }
 

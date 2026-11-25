@@ -138,8 +138,13 @@ public partial class DealOrForceGame
                 var settle = ActionButton(_crisisResponseConfirmation == "settle" ? "Confirm settlement" : "Settle this region", () =>
                 {
                     if (_crisisResponseConfirmation != "settle") { _crisisResponseConfirmation = "settle"; ShowDomesticCrisisWorkspace(); return; }
-                    _campaign.Commands.Enqueue(new ConciliateRegionCommand { IssuerId = nation.Id, StateMapIndex = selected.Region.MapIndex });
-                    _campaign.Commands.ApplyAll(_campaign);
+                    var issuerId = nation.Id;
+                    var stateMapIndex = selected.Region.MapIndex;
+                    RunConsoleWrite(campaign =>
+                    {
+                        campaign.Commands.Enqueue(new ConciliateRegionCommand { IssuerId = issuerId, StateMapIndex = stateMapIndex });
+                        campaign.Commands.ApplyAll(campaign);
+                    });
                     _crisisResponseConfirmation = "";
                     ShowDomesticCrisisWorkspace();
                     Refresh();
@@ -169,8 +174,13 @@ public partial class DealOrForceGame
                 var grant = ActionButton(armed ? Simulation.Loc.Format("Confirm: grant autonomy to {0}", region.DisplayName) : "Grant autonomy", () =>
                 {
                     if (_crisisResponseConfirmation != "autonomy") { _crisisResponseConfirmation = "autonomy"; ShowDomesticCrisisWorkspace(); return; }
-                    _campaign.Commands.Enqueue(new GrantRegionalAutonomyCommand { IssuerId = nation.Id, StateMapIndex = region.MapIndex });
-                    _campaign.Commands.ApplyAll(_campaign);
+                    var issuerId = nation.Id;
+                    var stateMapIndex = region.MapIndex;
+                    RunConsoleWrite(campaign =>
+                    {
+                        campaign.Commands.Enqueue(new GrantRegionalAutonomyCommand { IssuerId = issuerId, StateMapIndex = stateMapIndex });
+                        campaign.Commands.ApplyAll(campaign);
+                    });
                     _crisisResponseConfirmation = "";
                     ShowDomesticCrisisWorkspace();
                     Refresh();
@@ -293,8 +303,13 @@ public partial class DealOrForceGame
         var button = ActionButton(_crisisResponseConfirmation == action ? "Confirm response" : "Review response", () =>
         {
             if (_crisisResponseConfirmation != action) { _crisisResponseConfirmation = action; ShowDomesticCrisisWorkspace(); return; }
-            _campaign.Commands.Enqueue(new StartCrisisResponseCommand { IssuerId = nation.Id, ActionId = action });
-            _campaign.Commands.ApplyAll(_campaign); _crisisResponseConfirmation = "";
+            var issuerId = nation.Id;
+            RunConsoleWrite(campaign =>
+            {
+                campaign.Commands.Enqueue(new StartCrisisResponseCommand { IssuerId = issuerId, ActionId = action });
+                campaign.Commands.ApplyAll(campaign);
+            });
+            _crisisResponseConfirmation = "";
             ShowDomesticCrisisWorkspace(); Refresh();
         }, 0, 32, _crisisResponseConfirmation == action,
             "res://game/gfx/interface/icons/icon_agenda.png");

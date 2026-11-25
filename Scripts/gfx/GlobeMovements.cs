@@ -84,6 +84,7 @@ public sealed partial class GlobePresentation
         private bool _insignia;
         private int _flags;
         private double _flagPoll;
+        private double _sinceLastMovementSync;
         private Texture2D _ring;
         private Texture2D _disc;
         private Texture2D _mark;
@@ -119,12 +120,14 @@ public sealed partial class GlobePresentation
             }
             Visible = true;
             var camera = _globe._camera;
-            if (!campaign.TryEnterRead(0, requestWindowOnMiss: true))
+            _sinceLastMovementSync += delta;
+            if (!campaign.TryEnterRead(0, requestWindowOnMiss: _revision < 0 || !ReferenceEquals(campaign, _campaign) || _sinceLastMovementSync >= 0.25))
             {
                 // Keep cached medallion transforms responsive at 60 FPS while DoF-Sim is mid-tick.
                 UpdateCachedMarkerTransforms(camera);
                 return;
             }
+            _sinceLastMovementSync = 0;
             try
             {
                 var insignia = SettingsCatalog.Flag("movement_flags");

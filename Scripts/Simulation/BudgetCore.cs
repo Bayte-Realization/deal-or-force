@@ -195,13 +195,6 @@ public static class BudgetCore
 
     private const int SlotCount = 8;
 
-    /// <summary>
-    /// Filled once per country per week and read by every line. Static and reused for the
-    /// same reason the production slot table is: the weekly tick walks two hundred and
-    /// sixty countries and must not leave two hundred and sixty arrays behind it.
-    /// </summary>
-    private static readonly float[] Slots = new float[SlotCount];
-
     private static readonly List<BudgetLine> Lines = new();
     private static BudgetLine[] LevyLines = Array.Empty<BudgetLine>();
 
@@ -580,16 +573,16 @@ public static class BudgetCore
         }
     }
 
-    private static void FillSlots(Nation nation, bool atWar)
+    private static void FillSlots(Nation nation, bool atWar, Span<float> slots)
     {
-        Slots[SlotStability] = nation.Stability;
-        Slots[SlotLiteracy] = nation.Literacy;
-        Slots[SlotStandardOfLiving] = nation.StandardOfLiving;
-        Slots[SlotUrbanisation] = nation.Urbanisation > 0f ? nation.Urbanisation : 0.55f;
-        Slots[SlotEmployment] = nation.EmployedShare;
-        Slots[SlotAtWar] = atWar ? 1f : 0f;
-        Slots[SlotShortage] = nation.ShortageIndex;
-        Slots[SlotInflation] = nation.Inflation;
+        slots[SlotStability] = nation.Stability;
+        slots[SlotLiteracy] = nation.Literacy;
+        slots[SlotStandardOfLiving] = nation.StandardOfLiving;
+        slots[SlotUrbanisation] = nation.Urbanisation > 0f ? nation.Urbanisation : 0.55f;
+        slots[SlotEmployment] = nation.EmployedShare;
+        slots[SlotAtWar] = atWar ? 1f : 0f;
+        slots[SlotShortage] = nation.ShortageIndex;
+        slots[SlotInflation] = nation.Inflation;
     }
 
     private static float YieldOf(Nation nation, BudgetLine line, float weeklyOutput) =>
@@ -623,15 +616,16 @@ public static class BudgetCore
     public static float Amount(Nation nation, BudgetLine line, float weeklyOutput, bool atWar)
     {
         if (nation is null || line is null) return 0f;
-        FillSlots(nation, atWar);
-        return AmountFromSlots(nation, line, weeklyOutput, Compliance(nation, weeklyOutput));
+        Span<float> slots = stackalloc float[SlotCount];
+        FillSlots(nation, atWar, slots);
+        return AmountFromSlots(nation, line, weeklyOutput, ComplianceCore(nation, weeklyOutput, slots), slots);
     }
 
-    private static float ScaleOf(BudgetLine line)
+    private static float ScaleOf(BudgetLine line, ReadOnlySpan<float> slots)
     {
         var scale = line.Constant;
         for (var index = 0; index < line.Factors.Length; index++)
-            scale += line.Weights[index] * Slots[line.Factors[index]];
+            scale += line.Weights[index] * slots[line.Factors[index]];
         return scale;
     }
 
@@ -650,10 +644,17 @@ public static class BudgetCore
     /// `overridden` lets a panel ask what a rate nobody has set yet would collect - and,
     /// just as importantly, what it would do to the five lines already running, which is the
     /// part a player needs to see before moving the slider rather than after.
-    ///
-    /// Slots must be filled for the country first.
     /// </summary>
     public static float Compliance(Nation nation, float weeklyOutput,
+        BudgetLine overridden = null, float overriddenRate = 0f)
+    {
+        if (nation is null || weeklyOutput <= 0f || TaxEvasion <= 0f) return 1f;
+        Span<float> slots = stackalloc float[SlotCount];
+        FillSlots(nation, false, slots);
+        return ComplianceCore(nation, weeklyOutput, slots, overridden, overriddenRate);
+    }
+
+    private static float ComplianceCore(Nation nation, float weeklyOutput, ReadOnlySpan<float> slots,
         BudgetLine overridden = null, float overriddenRate = 0f)
     {
         if (nation is null || weeklyOutput <= 0f || TaxEvasion <= 0f) return 1f;
@@ -663,7 +664,7 @@ public static class BudgetCore
         {
             var line = levies[i];
             var rate = ReferenceEquals(line, overridden) ? overriddenRate : RateOf(nation, line);
-            burden += rate * line.Yield * ScaleOf(line);
+            burden += rate * line.Yield * ScaleOf(line, slots);
         }
         return EconomyRulesHook.TaxCompliance(true, burden, TaxEvasion, TaxTolerance);
     }
@@ -673,8 +674,9 @@ public static class BudgetCore
         BudgetLine overridden = null, float overriddenRate = 0f)
     {
         if (nation is null) return 1f;
-        FillSlots(nation, atWar);
-        return Compliance(nation, weeklyOutput, overridden, overriddenRate);
+        Span<float> slots = stackalloc float[SlotCount];
+        FillSlots(nation, atWar, slots);
+        return ComplianceCore(nation, weeklyOutput, slots, overridden, overriddenRate);
     }
 
     /// <summary>
@@ -689,18 +691,19 @@ public static class BudgetCore
         bool atWar, float rate)
     {
         if (nation is null || line is null) return 0f;
-        FillSlots(nation, atWar);
+        Span<float> slots = stackalloc float[SlotCount];
+        FillSlots(nation, atWar, slots);
         var isLevy = IsLevy(line);
-        var compliance = isLevy ? Compliance(nation, weeklyOutput, line, rate) : 1f;
+        var compliance = isLevy ? ComplianceCore(nation, weeklyOutput, slots, line, rate) : 1f;
         var taxEfficiency = isLevy ? NationalModifiers.FactorSlot(nation, NationalModifiers.SlotTaxEfficiency) : 1f;
         return EconomyRulesHook.EvaluateBudgetLineAmount(
-            BasisOf(nation, line, weeklyOutput), rate, YieldOf(nation, line, weeklyOutput), ScaleOf(line),
+            BasisOf(nation, line, weeklyOutput), rate, YieldOf(nation, line, weeklyOutput), ScaleOf(line, slots),
             nation.DebtMechanicActive && (line.IsDebtInterest || line.Id == "debt_interest"), nation.PublicDebt, nation.DebtSpreadAnnual,
             isLevy, compliance, taxEfficiency, line.Charge == BudgetBasis.TradeBalance);
     }
 
     private static float AmountFromSlots(Nation nation, BudgetLine line, float weeklyOutput,
-        float compliance)
+        float compliance, ReadOnlySpan<float> slots)
     {
         var isLevy = IsLevy(line);
         var taxEfficiency = isLevy ? NationalModifiers.FactorSlot(nation, NationalModifiers.SlotTaxEfficiency) : 1f;
@@ -708,7 +711,7 @@ public static class BudgetCore
         // because a tax that pays money out because the country is miserable is a bug
         // wearing a formula's clothes.
         return EconomyRulesHook.EvaluateBudgetLineAmount(
-            BasisOf(nation, line, weeklyOutput), RateOf(nation, line), YieldOf(nation, line, weeklyOutput), ScaleOf(line),
+            BasisOf(nation, line, weeklyOutput), RateOf(nation, line), YieldOf(nation, line, weeklyOutput), ScaleOf(line, slots),
             nation.DebtMechanicActive && (line.IsDebtInterest || line.Id == "debt_interest"), nation.PublicDebt, nation.DebtSpreadAnnual,
             isLevy, compliance, taxEfficiency, line.Charge == BudgetBasis.TradeBalance);
     }
@@ -736,10 +739,11 @@ public static class BudgetCore
     {
         debtInterest = 0f;
         if (nation is null) return default;
-        FillSlots(nation, atWar);
+        Span<float> slots = stackalloc float[SlotCount];
+        FillSlots(nation, atWar, slots);
         // Once for the whole budget: every levy is charged against the same week's output,
         // so what the country is willing to hand over is one number, not six.
-        var compliance = Compliance(nation, weeklyOutput);
+        var compliance = ComplianceCore(nation, weeklyOutput, slots);
 
         float revenue = 0f, taxation = 0f, expenses = 0f;
         float growth = 0f, living = 0f, literacy = 0f, radicalism = 0f, stability = 0f;
@@ -757,7 +761,7 @@ public static class BudgetCore
             var yield = !float.IsNaN(line.LossYield) && basis < 0f ? line.LossYield : line.Yield;
             var rate = RateOf(nation, line);
             var amount = EconomyRulesHook.EvaluateBudgetLineAmount(
-                basis, rate, yield, ScaleOf(line),
+                basis, rate, yield, ScaleOf(line, slots),
                 nation.DebtMechanicActive && (line.IsDebtInterest || line.Id == "debt_interest"),
                 nation.PublicDebt, nation.DebtSpreadAnnual,
                 isLevy, compliance, isLevy ? taxEfficiency : 1f, line.Charge == BudgetBasis.TradeBalance);
@@ -808,13 +812,14 @@ public static class BudgetCore
     public static void Itemise(Nation nation, float weeklyOutput, bool atWar)
     {
         if (nation is null) return;
-        FillSlots(nation, atWar);
-        var compliance = Compliance(nation, weeklyOutput);
+        Span<float> slots = stackalloc float[SlotCount];
+        FillSlots(nation, atWar, slots);
+        var compliance = ComplianceCore(nation, weeklyOutput, slots);
         nation.Budget.Begin(Loc.Get("Weekly balance"), "money");
         var revenue = 0f;
         foreach (var line in Lines)
         {
-            var amount = AmountFromSlots(nation, line, weeklyOutput, compliance);
+            var amount = AmountFromSlots(nation, line, weeklyOutput, compliance, slots);
             var sign = line.Side == BudgetSide.Expense ? -1f : 1f;
             if (line.Side == BudgetSide.Revenue) revenue += amount;
             nation.Budget.Add(Label(nation, line), sign * amount);

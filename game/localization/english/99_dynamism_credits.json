@@ -1,0 +1,43 @@
+{
+  "credits.third_party_heading": "Third-party frameworks, libraries & open data",
+  "credits.third_party_body": "Built with gratitude on open-source software and open geospatial data:\n• Engine, Physics & Runtimes: Godot Engine 4.8 (Juan Linietsky, Ariel Manzur & contributors — MIT); Jolt Physics / Godot Jolt (Jorrit Rouwe, Mikael Hermansson & contributors — MIT); .NET 10, WPF, System.IO.Hashing, System.Numerics.Tensors & RecyclableMemoryStream (Microsoft & .NET Foundation — MIT); F# & FSharp.Core (Don Syme, Microsoft & F# Software Foundation — MIT).\n• Performance, Spatial & Compression: ZLinq & SimdLinq (Yoshifumi Kawai / Cysharp — MIT); CommunityToolkit.HighPerformance (Sergio Pedri & .NET Foundation — MIT); DotNext (Roman Sakno / .NET Foundation — MIT); BitFaster.Caching (Alex Peck — MIT); ZeroAlloc.Collections (Marcel Roozekrans — MIT); Equativ.RoaringBitmaps (Equativ Contributors & Daniel Lemire's Roaring format — Apache-2.0); RBush (Daniel Newman / viceroypenguin & Vladimir Agafonkin — MIT); K4os.Compression.LZ4 (Milosz Krajewski & Yann Collet — MIT); YamlDotNet (Antoine Aubry & contributors — MIT); Ben.Demystifier (Ben Adams & contributors — Apache-2.0).\n• Profiling, Language Kit, Addons & Typography: Tracy Profiler (Bartosz Taudul — BSD-3-Clause) & Tracy-CSharp (clibequilibrium — MIT); optional LanguageKit integrations (godot-rust/gdext, godot-luau-script, gdext-nim, odin-godot, godot-jvm, lua-gdextension, godot-sandbox, gdzig, graphics.gd, py4godot); local Godot addons (Fennara, LimboAI, GodotSteam, Dialogue Manager, Ezcha Network, Lit); Source Serif 4 (Frank Grießhammer / Adobe — OFL-1.1).\n• Open Map & Flag Data: ESA GlobCover 2009 (ESA & UCLouvain); NASA Earth Observatory Blue Marble (Jesse Allen / NASA) & GEBCO (BODC); Natural Earth (Public Domain); Wikimedia Commons flag illustrators.",
+
+  "dyn.ui.global_era_label": "Global era",
+  "dyn.ui.era.multipolar_concert": "Multipolar Concert",
+  "dyn.ui.era.revisionist_tide": "Revisionist Tide",
+  "dyn.ui.era.armed_detente": "Armed Détente",
+  "dyn.ui.era.post_imperial_turbulence": "Post-Imperial Turbulence",
+  "dyn.ui.era_tip_fmt": "Current macro-historical regime ({0}). Shifts international tension, bloc cohesion, and great-power posture across decades.",
+
+  "dyn.ui.truce_active_fmt": "Truce: {0}d left",
+  "dyn.ui.truce_tip_fmt": "An active truce prevents war declarations for {0} more day(s) (expires on campaign day {1}).",
+  "dyn.ui.truce_row_label": "Active truce",
+  "dyn.ui.truce_days_remaining_fmt": "{0} day(s) remaining",
+
+  "dyn.ui.revanchism_title": "Territorial claims & lost homeland",
+  "dyn.ui.revanchism_badge_ours_fmt": "Lost homeland: {0} held",
+  "dyn.ui.revanchism_badge_theirs_fmt": "Revanchism: {0} of theirs",
+  "dyn.ui.revanchism_we_claim_fmt": "They hold {0} of our homeland ({1})",
+  "dyn.ui.revanchism_they_claim_fmt": "They claim {0} of our homeland ({1})",
+  "dyn.ui.revanchism_tip_ours_fmt": "They govern {0} region(s) recognized as our lost homeland ({1}). Fuels revanchism, opinion penalties, and reconquest momentum.",
+  "dyn.ui.revanchism_tip_theirs_fmt": "We govern {0} region(s) they regard as lost homeland ({1}). Fuels revanchism and reconquest pressure once any truce ends.",
+  "dyn.ui.revanchism_region_more_fmt": "{0} (+{1} more)",
+
+  "dyn.ui.inline_income_penalty_fmt": "Income: −{0}% / {1}d (~{2}/wk)",
+  "dyn.ui.inline_income_penalty_nodollar_fmt": "Income: −{0}% / {1}d",
+  "dyn.ui.inline_income_share_fmt": "{0} ({1}% income)",
+  "dyn.ui.inline_income_share_nodollar_fmt": "{0}: {1}% income",
+  "dyn.ui.inline_gdp_share_fmt": "{0} ({1}% GDP)",
+  "dyn.ui.inline_gdp_share_nodollar_fmt": "{0}: {1}% GDP",
+  "dyn.ui.inline_spirit_days_fmt": "«{0}» ({1}d)",
+  "dyn.ui.inline_spirit_fmt": "«{0}»",
+  "dyn.ui.inline_field_fmt": "{0} {1}",
+  "dyn.ui.label_treasury": "Treasury",
+  "dyn.ui.label_notoriety": "Notoriety",
+  "dyn.ui.label_sol": "SoL",
+  "dyn.ui.label_research": "Research",
+  "dyn.ui.label_political_credit": "Pol. credit",
+  "dyn.ui.label_construction": "Build cap.",
+  "dyn.ui.label_credit_conf": "Credit conf.",
+  "dyn.ui.label_prod": "Productivity"
+}

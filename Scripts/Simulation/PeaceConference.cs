@@ -547,10 +547,22 @@ public static class PeaceConference
 
         if (demand.Provinces.Count > 0)
         {
-            var cededOwners = demand.Provinces.Select(province => campaign.ProvinceMap.ProvinceToNation[province]).ToHashSet();
+            var cededOwners = new HashSet<ushort>();
+            var provToNation = campaign.ProvinceMap.ProvinceToNation;
+            foreach (var provId in demand.Provinces)
+                cededOwners.Add(provToNation[provId]);
             if (demand.ReleaseRegions)
             {
-                var regions = demand.Provinces.Select(p => (int)campaign.ProvinceMap.ProvinceToState[p]).Distinct().OrderBy(id => id).ToArray();
+                var regionList = new List<int>();
+                var seenRegions = new HashSet<int>();
+                var provToState = campaign.ProvinceMap.ProvinceToState;
+                foreach (var provId in demand.Provinces)
+                {
+                    var stId = (int)provToState[provId];
+                    if (seenRegions.Add(stId)) regionList.Add(stId);
+                }
+                regionList.Sort();
+                var regions = regionList.ToArray();
                 Dismantlement.Apply(campaign, loser, regions, voluntary: false);
                 war.AnnexedProvinces = 0; war.CreatedStates = 0;
             }
@@ -574,8 +586,19 @@ public static class PeaceConference
 
             // Losing ground is not a one-day event. The country goes on naming the land
             // for years, which is quieter than a humiliation and lasts longer.
-            foreach (var formerOwner in campaign.Nations.Where(nation => cededOwners.Contains((ushort)nation.MapIndex)))
+            for (var ni = 0; ni < campaign.Nations.Count; ni++)
+            {
+                var formerOwner = campaign.Nations[ni];
+                if (!cededOwners.Contains((ushort)formerOwner.MapIndex)) continue;
                 ModifierSystem.Grant(campaign, formerOwner, "ceded_territory", 0);
+                if (!war.CivilConflict && formerOwner.Id != beneficiary.Id && formerOwner.Id != winner.Id)
+                {
+                    NationalCourses.Shock(campaign, formerOwner, 0.55f, "course.shock.territorial_loss");
+                    var formerStates = campaign.StatesOf(formerOwner);
+                    for (var si = 0; si < formerStates.Length; si++)
+                        formerStates[si].Radicalism = M.Clamp01(formerStates[si].Radicalism + 0.06f);
+                }
+            }
         }
 
         // ---- Wave 6J Bilateral Offers / Concessions from proposer to opponent
@@ -601,8 +624,10 @@ public static class PeaceConference
         }
 
         if (demand.OfferDemilitarise)
-            foreach (var division in campaign.Armies.Where(division => division.NationId == winner.Id))
+            for (var i = 0; i < campaign.Armies.Count; i++)
             {
+                var division = campaign.Armies[i];
+                if (division.NationId != winner.Id) continue;
                 division.Equipment = MathF.Min(division.Equipment, 0.45f);
                 division.Cohesion = MathF.Min(division.Cohesion, 0.55f);
                 division.Strength = MathF.Min(division.Strength, 0.72f);
@@ -630,8 +655,10 @@ public static class PeaceConference
         }
 
         if (demand.Demilitarise)
-            foreach (var division in campaign.Armies.Where(division => division.NationId == loser.Id))
+            for (var i = 0; i < campaign.Armies.Count; i++)
             {
+                var division = campaign.Armies[i];
+                if (division.NationId != loser.Id) continue;
                 division.Equipment = MathF.Min(division.Equipment, 0.45f);
                 division.Cohesion = MathF.Min(division.Cohesion, 0.55f);
                 division.Strength = MathF.Min(division.Strength, 0.72f);
@@ -692,14 +719,19 @@ public static class PeaceConference
                     OpinionSystem.Remember(campaign, relation, "unfinished_war_claim");
             }
 
-        var released = campaign.Armies.Where(army => army.AssignedWarId == war.Id).ToList();
-        foreach (var army in released)
+        var released = new List<Army>();
+        for (var ai = 0; ai < campaign.Armies.Count; ai++)
         {
+            var army = campaign.Armies[ai];
+            if (army.AssignedWarId != war.Id) continue;
+            released.Add(army);
             PostwarArmyOrders.Release(army);
         }
-        foreach (var battle in campaign.Battles.Where(battle => battle.WarId == war.Id && !battle.Ended))
+        for (var bi = 0; bi < campaign.Battles.Count; bi++)
         {
-            Warfare.EndBattleWithoutVictory(campaign, battle, "Peace agreement");
+            var battle = campaign.Battles[bi];
+            if (battle.WarId == war.Id && !battle.Ended)
+                Warfare.EndBattleWithoutVictory(campaign, battle, "Peace agreement");
         }
         // A division on the whole front goes back to holding it if another war still has one.
         BorderFronts.ReturnToWholeFronts(campaign, released);

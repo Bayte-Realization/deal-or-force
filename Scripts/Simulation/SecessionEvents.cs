@@ -271,13 +271,21 @@ public static class SecessionEvents
         {
             foreach (var bloc in Contiguous(campaign, states))
             {
-                // A people whose own state is next door does not found a second one: Ukrainians
-                // on ground Russia took are Ukraine's lost land (LostLands), not a "Republic of
-                // Ukraine" that seceded five times and was taken back five times. A people far
-                // from it - a diaspora that has become the land's own majority - can: that is how
-                // new nations were made, from the Boers to the Americans, and it is named for its
-                // land rather than as a second copy of the old country (NationNaming.AvoidClash).
-                if (KinNear(campaign, owner, people, bloc)) continue;
+                // A people whose own state is next door normally looks to it while the border is fresh;
+                // over prolonged crises/decades or when kin cannot/will not intervene, local secession still proceeds.
+                if (KinNear(campaign, owner, people, bloc))
+                {
+                    var avgPressure = 0f;
+                    for (var bi = 0; bi < bloc.Count; bi++) avgPressure += bloc[bi].SecessionPressure;
+                    avgPressure /= Math.Max(1, bloc.Count);
+                    var kin = KinState(campaign, owner, people);
+                    var alliedWithKin = kin is not null &&
+                        CampaignDiplomacy.Peek(campaign, owner.Id, kin.Id) is { Stance: DiplomaticStance.Allied };
+                    var prolongedBypass = campaign.ElapsedDays >= 1095 &&
+                        (owner.Stability < 0.38f || avgPressure >= 1.15f || alliedWithKin ||
+                         (kin is not null && (kin.Stability < 0.40f || AiStatecraft.CachedStrength(campaign, kin) < AiStatecraft.CachedStrength(campaign, owner) * 0.5f)));
+                    if (!prolongedBypass) continue;
+                }
                 long here = 0;
                 foreach (var state in bloc) here += state.Population;
                 if (best.Count > 0 && here <= bestPeople) continue;

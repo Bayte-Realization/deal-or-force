@@ -370,6 +370,25 @@ public static class CampaignDiplomacy
         return true;
     }
 
+    /// <summary>Transition expired truces out of Truce into Rival or Neutral once elapsed days pass TruceUntil.</summary>
+    internal static bool RefreshExpiredTruce(Campaign campaign, DiplomaticRelation relation)
+    {
+        if (campaign is null || relation is null || relation.Stance != DiplomaticStance.Truce) return false;
+        if (relation.TruceUntil > campaign.ElapsedDays) return false;
+        if (AtWar(campaign, relation.A, relation.B)) return false;
+        var left = campaign.NationById(relation.A);
+        var right = campaign.NationById(relation.B);
+        var becomesRival = relation.Opinion <= campaign.Defines.AiRivalryThreshold ||
+                           OpinionSystem.GrievanceWeight(campaign, relation) > 15f ||
+                           (left is not null && right is not null &&
+                            (LostLands.HasClaimedLand(campaign, left, right) ||
+                             LostLands.HasClaimedLand(campaign, right, left) ||
+                             TerritorialClaims.HoldsOurHomeland(campaign, left, right) ||
+                             TerritorialClaims.HoldsOurHomeland(campaign, right, left)));
+        relation.Stance = becomesRival ? DiplomaticStance.Rival : DiplomaticStance.Neutral;
+        return true;
+    }
+
     internal static bool CanDeclareWarQuiet(Campaign campaign, int attackerId, int defenderId,
         bool onOwnInitiative = true)
     {
@@ -729,12 +748,17 @@ public sealed class DenounceCommand : ICampaignCommand
     public void Apply(Campaign campaign)
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
+        if (IssuerId == TargetId || CampaignDiplomacy.AtWar(campaign, IssuerId, TargetId)) return;
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
-        if (relation is null || campaign.ElapsedDays - relation.LastActionDay < 14) return;
+        if (relation is null) return;
+        CampaignDiplomacy.RefreshExpiredTruce(campaign, relation);
+        if (relation.Stance == DiplomaticStance.Truce && campaign.ElapsedDays < relation.TruceUntil) return;
+        if (campaign.ElapsedDays - relation.LastActionDay < 14) return;
         OpinionSystem.Remember(campaign, relation, "denounced");
+        OpinionSystem.Explain(campaign, relation, updateOpinion: true);
         campaign.Chronicle.Record(campaign, "denunciation", IssuerId, TargetId);
         relation.LastActionDay = campaign.ElapsedDays;
-        if (relation.Opinion <= -35f &&
+        if (relation.Opinion <= campaign.Defines.AiRivalryThreshold &&
             relation.Stance is (DiplomaticStance.Neutral or DiplomaticStance.Friendly))
             relation.Stance = DiplomaticStance.Rival;
     }

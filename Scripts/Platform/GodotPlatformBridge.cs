@@ -131,6 +131,48 @@ public static class GodotPlatformBridge
         {
             // Older or restricted sandboxes may omit physical RAM reporting.
         }
+
+        // Godot Android's FileAccess procfs reader sees size == 0 on /proc/meminfo and returns -1.
+        if (OperatingSystem.IsAndroid() || OperatingSystem.IsLinux())
+        {
+            try
+            {
+                if (System.IO.File.Exists("/proc/meminfo"))
+                {
+                    foreach (var line in System.IO.File.ReadLines("/proc/meminfo"))
+                    {
+                        if (!line.StartsWith("MemTotal:", StringComparison.Ordinal)) continue;
+                        var kb = ParseMemInfoKb(line);
+                        if (kb > 0) return (int)Math.Clamp(kb / 1024L, 0L, int.MaxValue);
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+                // Procfs may be inaccessible in restricted sandboxes.
+            }
+        }
         return 0;
+    }
+
+    private static long ParseMemInfoKb(string line)
+    {
+        long value = 0;
+        var inDigits = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var ch = line[i];
+            if (ch is >= '0' and <= '9')
+            {
+                inDigits = true;
+                value = value * 10 + (ch - '0');
+            }
+            else if (inDigits)
+            {
+                break;
+            }
+        }
+        return inDigits ? value : 0;
     }
 }

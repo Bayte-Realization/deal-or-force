@@ -44,7 +44,7 @@
     "gdp_cost_share": 0.0,
     "unavailable": "War bonds may only be issued during an active armed conflict",
     "trigger": { "use": [ "at_war" ] },
-    "effects": { "treasury_percent": 0.025, "war_support": 0.015, "stability": -0.010 },
+    "effects": { "gdp_share": 0.003, "war_support": 0.015, "stability": -0.010 },
     "ai_will_do": "ai_war_bonds"
   },
   "red_sea_maritime_security": {

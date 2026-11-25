@@ -29,7 +29,7 @@ public static partial class DomesticCrises
         if (capitalAnger > .35f) drivers?.Add("Capital unrest");
         if (HasDefeat(c, n))
         { target += d.CoupDefeatWeight; drivers?.Add("War defeat"); }
-        if (n.DebtCondition is DebtCondition.Default or DebtCondition.Insolvent && c.FeatureEnabled("public_debt"))
+        if (n.DebtCondition >= DebtCondition.Default && c.FeatureEnabled("public_debt"))
         { target += d.CoupDefaultWeight; drivers?.Add("Debt payment crisis"); }
         if (PoliticsCore.IsMismatched(n))
         { target += d.CoupPoliticalMismatchWeight; drivers?.Add("Political mismatch"); }
@@ -46,6 +46,23 @@ public static partial class DomesticCrises
         {
             target += cleavage;
             drivers?.Add("Deep political and regional polarization");
+        }
+        var macroWave = GeopoliticalCycle.MacroEconomicWave(c, n);
+        if (macroWave < -0.15f)
+        {
+            target += (-macroWave - 0.15f) * 0.18f;
+            drivers?.Add("Economic downturn and contraction");
+        }
+        if (n.Inflation > 0.08f)
+        {
+            target += MathF.Min(0.10f, (n.Inflation - 0.08f) * 0.25f);
+            drivers?.Add("High inflation eroding living standards");
+        }
+        var sclerosis = GeopoliticalCycle.InstitutionalSclerosis(c, n);
+        if (sclerosis > 0.15f)
+        {
+            target += (sclerosis - 0.15f) * 0.16f;
+            drivers?.Add("Entrenched regime stagnation");
         }
         var memory = n.DomesticCrisis;
         if (memory is not null && memory.ResponseUntilDay > c.ElapsedDays)

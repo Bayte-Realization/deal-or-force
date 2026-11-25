@@ -18,10 +18,10 @@ public sealed partial class GlobePresentation
     private void InitializePackedTextures()
     {
         if (!UsePackedMapShader) return;
-        using var lookup = Image.CreateEmpty(256, 256, false, Image.Format.Rgba8);
+        var lookup = Image.CreateEmpty(256, 256, false, Image.Format.Rgba8);
         _packedLookups = CreateArray(lookup, PackedMapShader.Lookups.Count);
         _globeMaterial.SetShaderParameter("packed_lookups", _packedLookups);
-        using var ids = Image.CreateEmpty(2, 2, false, Image.Format.Rg8);
+        var ids = Image.CreateEmpty(2, 2, false, Image.Format.Rg8);
         _packedIds = CreateArray(ids, PackedMapShader.Ids.Count);
         _globeMaterial.SetShaderParameter("packed_ids", _packedIds);
     }
@@ -54,7 +54,7 @@ public sealed partial class GlobePresentation
             }
             else
             {
-                using var rgba = (Image)image.Duplicate();
+                var rgba = (Image)image.Duplicate();
                 rgba.Convert(Image.Format.Rgba8);
                 _packedLookups.UpdateLayer(rgba, layer);
             }
@@ -68,11 +68,9 @@ public sealed partial class GlobePresentation
         {
             if (_packedIds.GetWidth() != 2)
                 throw new InvalidDataException("Geographic ID layers must have identical dimensions.");
-            using var blank = Image.CreateEmpty(image.GetWidth(), image.GetHeight(), false, Image.Format.Rg8);
-            var previous = _packedIds;
+            var blank = Image.CreateEmpty(image.GetWidth(), image.GetHeight(), false, Image.Format.Rg8);
             _packedIds = CreateArray(blank, PackedMapShader.Ids.Count);
             _globeMaterial.SetShaderParameter("packed_ids", _packedIds);
-            previous.Dispose();
         }
         _packedIds.UpdateLayer(image, layer);
         return true;
@@ -93,11 +91,9 @@ public sealed partial class GlobePresentation
         var layers = new Godot.Collections.Array<Image> { regionIds, provinceIds, nationIds };
         var created = new Texture2DArray();
         var result = created.CreateFromImages(layers);
-        if (result != Error.Ok) { created.Dispose(); throw new InvalidDataException("Map ID texture array: " + result); }
-        var previous = _packedIds;
+        if (result != Error.Ok) throw new InvalidDataException("Map ID texture array: " + result);
         _packedIds = created;
         _globeMaterial.SetShaderParameter("packed_ids", created);
-        previous?.Dispose();
         return true;
     }
 
@@ -134,7 +130,7 @@ public sealed partial class GlobePresentation
         for (var i = 0; i < count; i++) layers.Add(image);
         var texture = new Texture2DArray();
         var result = texture.CreateFromImages(layers);
-        if (result != Error.Ok) { texture.Dispose(); throw new InvalidDataException("Map texture array: " + result); }
+        if (result != Error.Ok) throw new InvalidDataException("Map texture array: " + result);
         return texture;
     }
 }

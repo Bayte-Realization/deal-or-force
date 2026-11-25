@@ -38,7 +38,7 @@
         "title": "w5h.ev.language_charter.opt1",
         "consequence": "w5h.ev.language_charter.con1",
         "effects": {
-          "income_share": -0.03,
+          "income_penalty": { "share": 0.05, "days": 210 },
           "stability": 0.022,
           "state.radicalism": -0.025
         }
@@ -67,14 +67,14 @@
         "effects": {
           "market_access": 0.045,
           "productivity": 0.010,
-          "income_share": -0.03
+          "income_penalty": { "share": 0.05, "days": 210 }
         }
       },
       {
         "title": "w5h.ev.customs_union.opt2",
         "consequence": "w5h.ev.customs_union.con2",
         "effects": {
-          "treasury_percent": 0.04,
+          "income_share": 0.04,
           "market_access": -0.02,
           "credit_confidence": -0.015
         }
@@ -128,7 +128,7 @@
         "title": "w5h.ev.currency_corridor.opt2",
         "consequence": "w5h.ev.currency_corridor.con2",
         "effects": {
-          "treasury_percent": 0.03,
+          "income_share": 0.03,
           "inflation": 0.008,
           "political_points": 6.0
         }
@@ -146,7 +146,7 @@
         "title": "w5h.ev.rail_gauge.opt1",
         "consequence": "w5h.ev.rail_gauge.con1",
         "effects": {
-          "gdp_share": -0.004,
+          "income_penalty": { "share": 0.07, "days": 300 },
           "construction_capacity": 0.20,
           "market_access": 0.03
         }
@@ -172,7 +172,7 @@
         "title": "w5h.ev.diaspora_summit.opt1",
         "consequence": "w5h.ev.diaspora_summit.con1",
         "effects": {
-          "treasury_percent": 0.04,
+          "income_share": 0.04,
           "state.standard_of_living": 0.012,
           "notoriety": -1.5
         }
@@ -227,7 +227,7 @@
         "effects": {
           "market_access": 0.035,
           "naval_experience": 6.0,
-          "income_share": -0.03,
+          "income_penalty": { "share": 0.05, "days": 210 },
           "prestige": 4.0
         }
       },
@@ -235,7 +235,7 @@
         "title": "w5h.ev.archipelago_compact.opt2",
         "consequence": "w5h.ev.archipelago_compact.con2",
         "effects": {
-          "treasury_percent": 0.025,
+          "income_share": 0.025,
           "notoriety": 2.0
         }
       }

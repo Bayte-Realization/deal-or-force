@@ -43,19 +43,30 @@ Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 Built on **Godot 4.8 Beta 3 .NET** and **.NET 10**. The full history of the 0.8 series is in
 [CHANGELOG 0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md).
 
-- **The day is calculated on its own thread & Release Server GC.** Without runtime-code mods and
+- **The day is calculated on its own thread, Release Server GC & `.dofsave`.** Without runtime-code mods and
   without multiplayer, the map and panels keep drawing from a lock-free `CampaignHudSnapshot` while
   the next day is worked out, draining heavy HUD views within a `1.5 ms` frame budget (`1.25 ms` on
   mobile). Exported PC builds enable `System.GC.Server`, `System.GC.Concurrent`, `Optimize`, and
-  `TieredPGO` in Release too, saves prepare and commit off the main thread (`RequestYield`), and
-  pure-data mods no longer disable background simulation.
-- **Zero-stutter map & zero-degradation smooth panning.** Moving the camera keeps full shader
+  `TieredPGO` in Release too, saves prepare and commit off the main thread (`RequestYield`) using the
+  canonical **`.dofsave`** extension (with seamless loading of legacy `.dfsave`, `.bdfsave`, and
+  `.bdfsave.json` saves), and pure-data mods no longer disable background simulation.
+- **Zero-stutter map, Country Highlight & Capital jump.** Moving the camera keeps full shader
   resolution and 3D terrain relief without dropping detail mid-motion. Dynamic map overlays
-  (trade lanes, battle arrows, fleet routes, front/order ribbons, supply lines, strait crossings)
   moved from per-frame `ImmediateMesh` rebuilds to dirty-versioned indexed `ArrayMesh` surfaces,
   `RBush` R-tree spatial culling handles 7,000+ cities, rivers and labels, `CloudShader` cuts
-  fragment octaves from 16 to 9 per pixel, GPU textures update in place across staggered frames,
-  and **Spin** (`F6`) returns to the map bar.
+  fragment octaves from 16 to 9 per pixel, and **Spin** (`F6`) returns to the map bar. Inspecting
+  any country in the Country Panel (yours or foreign) highlights its full territory with a crisp
+  parchment lift and zoom-invariant outline across both Forward+ and GLES3 shaders; clicking any
+  row in **Country Rankings** flies the camera directly to its capital; and general territory
+  badges/tooltips use **"Controlled"** wording across war occupation and land leases.
+- **100-year cyclical history, interstate dynamism & diplomatic readouts.** Multi-decade campaigns
+  stay alive across century horizons: blocs dissolve or fracture under intra-bloc rivalry and
+  claims, active diplomacy confronts rivals and transitions expired truces cleanly to `Rival` or
+  `Neutral`, revanchism over lost homelands and follow-up wars on conquered rumps drive reckonings,
+  and rising expectations, Juglar/Kondratiev economic/debt cycles, and institutional sclerosis fuel
+  recurring crises, secessions, collapses, and regime evolution. Country Dossier and Diplomacy now
+  surface **Truce countdowns**, **Lost Homeland / Revanchism** warnings, and the active **Global Era**,
+  protected by `TryEnterRead` fences in `MovementUI` and Diplomacy screens.
 - **Multi-decade & late-game scaling on .NET 10.** An active-wars index skips finished wars,
   tiny/duplicate population cohorts coalesce deterministically, expired opinions/memories/history
   prune over decades, late-game organization life, identity caching, corridors, and long-range
@@ -68,12 +79,14 @@ Built on **Godot 4.8 Beta 3 .NET** and **.NET 10**. The full history of the 0.8 
   (13 → 5), and Day-365 allocation by **35.1%** (4145 → 2690 kB/day); on a real Day 13,358 save,
   `organization life` fell from **5.2% to 1.7–1.8%** (`185 → 59 ms` pre-throttle) and daily
   allocations fell from **5,810 to 5,375 kB/day**.
-- **Android build (Galaxy S21 / Mali-G78 fix & diagnostics).** The same simulation with touch
-  controls and scaled close targets (`gl_compatibility` GLES3 default avoiding Mali-G78 Vulkan
-  crashes, `HeapHardLimitPercent=40`, compact texture caps with largest `.ctex` at `2.55 MB`,
-  loading-texture release on menu exit, bounded extraction under Mono SGen's 8 KB LOS threshold,
-  zero-PNG 3-tier LZ4 fast boot cache, and synchronous `boot_trace.txt` / `last_crash.txt` logs in
-  `Android/data/com.bayterealization.dealorforce/files/logs/`). Still a technical preview you
+- **Android build (Galaxy S21 / S22 Exynos crash fix & PC-faithful visuals).** The same simulation
+  with touch controls, GLES3 (`gl_compatibility`, `msaa_3d=0`, single-safe `thread_model=1`),
+  eliminated post-menu `pthread_mutex_lock` teardown crashes (safe `RefCounted`/prewarm lifecycle,
+  deferred scene warmup, `DUMMY` unused physics), `/proc/meminfo` physical RAM detection so 6+ GB
+  flagships (`Xclipse 920`, `Mali-G78`, `Adreno`) run at PC-faithful **`MobileMedium`** quality
+  instead of degraded `MobileLow`, `HeapHardLimitPercent=75`, zero-PNG 3-tier LZ4 fast boot cache,
+  and synchronous `boot_trace.txt` / `last_crash.txt` logs in
+  `Android/data/com.bayterealization.dealorforce/files/logs/`. Still a technical preview you
   install by hand; phone-specific UI scaling remains partial.
 - **Terrain relief, Country Picker & clearer dossiers.** Armies, cities, front lines, battles and
   labels sit at ground height. The Country Picker adds a 16/24-row scrollable list and an
@@ -296,6 +309,42 @@ Ideas and questions go to [Discussions](https://github.com/Bayte-Realization/dea
 - The interface is built in code, though where every panel sits is declared in
   `game/gui/` and the palette in `game/interface/`, so a reskin needs no compiler.
 - No host migration in multiplayer: losing the host ends the session.
+
+## Third-Party Frameworks, Libraries & Open Data — Acknowledgements
+
+Deal or Force stands on the shoulders of extraordinary open-source engineers, language designers,
+cartographers, typographers, and Wikimedia contributors. Every single library, runtime, dataset, and
+tool listed below makes this project faster, sharper, and possible for one person to build — thank you
+sincerely to every creator and maintainer! Full copyright texts and licence terms live in
+[`game/THIRD_PARTY_NOTICES.md`](game/THIRD_PARTY_NOTICES.md) and inside the in-game **Credits** screen.
+
+| Component / Dataset | Creators & Maintainers | Role in Deal or Force | Licence |
+|---|---|---|---|
+| **Godot Engine 4.8** (`4.8.0-beta.3` .NET) | Juan Linietsky, Ariel Manzur & Godot Engine contributors | Rendering, 3D globe, shaders, scene tree, cross-platform PC & Android runtime | MIT |
+| **Jolt Physics / Godot Jolt** | Jorrit Rouwe, Mikael Hermansson (`mihe`) & contributors | 3D physics engine configured for desktop builds (`project.godot`) | MIT |
+| **.NET 10**, **WPF**, **`System.IO.Hashing`**, **`System.Numerics.Tensors`**, **`RecyclableMemoryStream`** | Microsoft Corporation & .NET Foundation contributors | Managed simulation runtime, Launcher UI, `XxHash3` hashing, SIMD tensor math, pooled save/cache streams | MIT |
+| **F# & `FSharp.Core`** (10.1.402) | Don Syme, Microsoft & F# Software Foundation | Pure functional rules assembly (`DealOrForce.Rules`) | MIT |
+| **`ZLinq`** (1.6.1) & **`SimdLinq`** (1.3.2) | Yoshifumi Kawai (`neuecc`) / Cysharp, Inc. | Zero-allocation value enumerables and SIMD-accelerated reductions | MIT |
+| **`CommunityToolkit.HighPerformance`** (8.4.2) | Sergio Pedri, Microsoft & .NET Foundation | High-throughput spans, pools, and contiguous matrix buffers | MIT |
+| **`DotNext`** (6.13.0) | Roman Sakno (`sakno`), .NET Foundation & Contributors | Low-allocation primitives and lock/threading utilities | MIT |
+| **`BitFaster.Caching`** (2.6.1) | Alex Peck | Concurrent LRU caches in map boot and simulation lookups | MIT |
+| **`ZeroAlloc.Collections`** (2.0.1) | Marcel Roozekrans | Pooled & stack-friendly collections on hot campaign paths | MIT |
+| **`Equativ.RoaringBitmaps`** (0.1.6) | Equativ.RoaringBitmaps Contributors (Roaring Bitmap format by Daniel Lemire et al.) | Compressed integer bitsets in simulation indexes and caches | Apache-2.0 |
+| **`RBush`** (4.0.0) | Daniel Newman / Turning Code (`viceroypenguin`) & Vladimir Agafonkin (JS RBush) | R-tree spatial culling for 7,000+ cities, rivers, capitals, and labels | MIT |
+| **`K4os.Compression.LZ4`** & **`.Streams`** (1.3.8) | Milosz Krajewski & Yann Collet (LZ4) | Fast LZ4 save & boot raster compression | MIT / BSD-2-Clause |
+| **`YamlDotNet`** (18.1.0) | Antoine Aubry & contributors | Modding YAML parsing and data workbench | MIT |
+| **`Ben.Demystifier`** (0.4.1) | Ben Adams & contributors | Readable source-like crash traces in `last_crash.txt` | Apache-2.0 |
+| **`Tracy Profiler`** & **`Tracy-CSharp`** (0.13.1) | Bartosz Taudul (`wolfpld`) & `clibequilibrium` | Optional opt-in frame & simulation zone profiling (`-p:DofTracy=true`) | BSD-3-Clause / MIT |
+| **Roslyn (`Microsoft.CodeAnalysis`)** & `Tools/*Bench` Packages | Microsoft (`Microsoft.CodeAnalysis`, `Microsoft.Extensions.ObjectPool`, `System.Runtime.CompilerServices.Unsafe`); `genaray` (`Arch`, `Arch.LowLevel`, `ZeroAllocJobScheduler`); Joel Mueller (`Collections.Pooled`); Ullrich Praetz (`Friflo.Engine.ECS`); `neuecc`/`aarnott` (`MessagePack`/`MemoryPack`); Oleg Stepanischev (`ZstdSharp.Port`) | Dev-only static auditing (`Tools/CodeAudit`) and `Tools/KernelBench` / `Tools/SaveFormatBench` harnesses (not shipped) | MIT / Apache-2.0 / LGPL-3.0-only (dev-only) |
+| **`LanguageKit/` Integrations** | **`godot-rust/gdext`** (Rust), **`Fumohouse/godot-luau-script`** (`voided_etc`, Luau), **`godot-nim/gdext-nim`** (Nim), **`dresswithpockets/odin-godot`** (Odin), **`utopia-rise/godot-jvm`** (Kotlin), **`gilzoide/lua-gdextension`** (Lua), **`libriscv/godot-sandbox`** (Sandbox), **`gdzig/gdzig`** (Zig), **`quaadgras/graphics.gd`** (Go), **`niklas2902/py4godot`** (Python) | Optional polyglot GDExtension & scripting workbench recipes (`LanguageKit/README.md`) | MIT / Apache-2.0 / MPL-2.0 / BSD-3-Clause |
+| **Godot Editor Plugins (`addons/`)** | **Fennara**, **LimboAI** (Serhii Snitsaruk), **GodotSteam** (GP Garcia & Chris Ridenour), **Dialogue Manager** (Nathan Hoad), **Ezcha Network** (Ezcha LLC), **Lit** (Shawn Deprey), **Scalable Vector Shapes 2D**, **Script-IDE** (Marius Hanl), **Godot AI**, **GDQuest**, **Ziva Agent** | Local editor tooling excluded from Git and release builds (`addons/`) | MIT (and respective terms) |
+| **`Source Serif 4`** | Frank Grießhammer / Adobe Systems Incorporated | Display and document serif typography (`game/fonts/NOTICE.txt`) | SIL OFL-1.1 |
+| **ESA GlobCover 2009** | European Space Agency (ESA) & Université catholique de Louvain (UCLouvain) | Global land-cover classification for map terrain | Attribution required |
+| **NASA Blue Marble & GEBCO** | Jesse Allen / NASA Earth Observatory & British Oceanographic Data Centre (BODC) | Topographic relief and ocean bathymetry | Attribution required |
+| **Natural Earth** | Natural Earth contributors | Public-domain rivers, lakes, hydrography, cities, and base population inputs | Public Domain |
+| **Wikimedia Commons Flags** | Wikimedia Commons illustrators (`game/gfx/CREDITS.md`) | Historical, national, regional, and movement flag artwork | PD / CC0 / CC BY / CC BY-SA |
+
+Local workspace editor plugins under `addons/` (such as `Fennara`, `LimboAI`, `GodotSteam`, `Dialogue Manager`, `Script-IDE`, and `Scalable Vector Shapes 2D`) remain excluded from Git and keep their own respective licences.
 
 ## Licence
 

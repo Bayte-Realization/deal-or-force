@@ -262,7 +262,10 @@ public static class GovernanceEvents
             // How hard the week is pushing. A country at the floor of its stability with a
             // furious population changes some weeks; a country merely having a bad year
             // almost never does.
-            var pressure = (1f - M.Clamp01(nation.Stability)) + M.Clamp01(radicalism);
+            var macroWave = GeopoliticalCycle.MacroEconomicWave(campaign, nation);
+            var sclerosis = GeopoliticalCycle.InstitutionalSclerosis(campaign, nation);
+            var cycleDrive = (macroWave < -0.15f ? (-macroWave - 0.15f) * 0.30f : 0f) + sclerosis * 0.25f;
+            var pressure = (1f - M.Clamp01(nation.Stability)) + M.Clamp01(radicalism) + cycleDrive;
             if (!campaign.Random.Chance(Base * pressure)) continue;
 
             var roll = campaign.Random.NextFloat() * total;

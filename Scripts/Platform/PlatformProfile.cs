@@ -363,7 +363,6 @@ public sealed class PlatformProfile
         "powervr ge8",
         "mali-g52",
         "mali-g57",
-        "mali-g78",
         "mali-t8",
         "mali-400",
         "adreno (tm) 5",
@@ -377,19 +376,20 @@ public sealed class PlatformProfile
         "virtio",
         "goldfish",
         "ranchu",
-        "angle",
         "vbox",
-        "vmware"
+        "vmware",
+        "direct3d",
+        "d3d11",
+        "microsoft basic"
     };
 
-    /// <summary>Heuristic detector for older mobile GPUs, Android emulators, or GLES3 fallback where <see cref="PlatformGraphicsTier.MobileLow"/> is safer.</summary>
+    /// <summary>
+    /// Heuristic detector for budget/legacy mobile GPUs and desktop/emulator software translators
+    /// while letting flagship Android GPUs (e.g. Samsung Xclipse via ANGLE-on-Vulkan, Mali-G78, Adreno 7xx)
+    /// run at PC-faithful <see cref="PlatformGraphicsTier.MobileMedium"/> quality on <c>gl_compatibility</c>.
+    /// </summary>
     public static bool IsLowEndMobileAdapter(string adapterName, string renderingMethod)
     {
-        if (!string.IsNullOrWhiteSpace(renderingMethod) &&
-            renderingMethod.Contains("gl_compatibility", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
         if (string.IsNullOrWhiteSpace(adapterName)) return false;
 
         var name = adapterName.ToLowerInvariant();
@@ -398,6 +398,34 @@ public sealed class PlatformProfile
             if (name.Contains(token, StringComparison.Ordinal))
                 return true;
         }
+
+        if (name.Contains("angle", StringComparison.Ordinal))
+        {
+            if (ContainsAnyDesktopOrHostAngleToken(name)) return true;
+            if (ContainsAnyMobileHardwareGpuToken(name)) return false;
+            return true;
+        }
         return false;
     }
+
+    private static bool ContainsAnyDesktopOrHostAngleToken(string name) =>
+        name.Contains("nvidia", StringComparison.Ordinal) ||
+        name.Contains("amd", StringComparison.Ordinal) ||
+        name.Contains("radeon", StringComparison.Ordinal) ||
+        name.Contains("intel", StringComparison.Ordinal) ||
+        name.Contains("mesa", StringComparison.Ordinal) ||
+        name.Contains("google", StringComparison.Ordinal) ||
+        name.Contains("direct3d", StringComparison.Ordinal) ||
+        name.Contains("d3d", StringComparison.Ordinal) ||
+        name.Contains("llvmpipe", StringComparison.Ordinal) ||
+        name.Contains("swiftshader", StringComparison.Ordinal);
+
+    private static bool ContainsAnyMobileHardwareGpuToken(string name) =>
+        name.Contains("xclipse", StringComparison.Ordinal) ||
+        name.Contains("adreno", StringComparison.Ordinal) ||
+        name.Contains("mali", StringComparison.Ordinal) ||
+        name.Contains("immortalis", StringComparison.Ordinal) ||
+        name.Contains("powervr", StringComparison.Ordinal) ||
+        name.Contains("maleoon", StringComparison.Ordinal) ||
+        name.Contains("apple", StringComparison.Ordinal);
 }

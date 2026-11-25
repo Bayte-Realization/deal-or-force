@@ -878,8 +878,11 @@ public sealed partial class GlobePresentation
     private long _battleMarkerDay = -1;
     private int _battleMarkerCount = -1;
     private int _battleViewer = -1;
+    private int _lastBattleSelectedHash = int.MinValue;
     private readonly HashSet<int> _activeBattleIds = new();
     private readonly List<int> _finishedBattleIds = new();
+    private readonly HashSet<int> _battleOriginScratch = new();
+    private readonly HashSet<int> _selectedBattleOriginScratch = new();
     private readonly Dictionary<int, Simulation.Army> _armyById = new();
     private long _lastBattleRebuildStamp;
 
@@ -899,10 +902,12 @@ public sealed partial class GlobePresentation
         var viewer = FogOfWarActive && _campaign.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
         var active = 0;
         foreach (var battle in _campaign.Battles) if (!battle.Ended) active++;
+        var selHash = _selectedArmyIds.Count;
+        foreach (var id in _selectedArmyIds) selHash ^= HashCode.Combine(id);
         var fastSim = _campaign is { IsPaused: false, Speed: >= 4 };
         var timeSinceLast = System.Diagnostics.Stopwatch.GetElapsedTime(_lastBattleRebuildStamp).TotalSeconds;
         var dueByTime = !fastSim || timeSinceLast >= 0.14;
-        var structureChanged = _battleViewer != viewer || _battleMarkerCount != active;
+        var structureChanged = _battleViewer != viewer || _battleMarkerCount != active || selHash != _lastBattleSelectedHash;
 
         if (structureChanged || (_battleMarkerDay != _campaign.ElapsedHours && dueByTime))
         {
@@ -910,7 +915,13 @@ public sealed partial class GlobePresentation
             _battleViewer = viewer;
             _battleMarkerDay = _campaign.ElapsedHours;
             _battleMarkerCount = active;
+            _lastBattleSelectedHash = selHash;
             RebuildBattleMarkers();
+        }
+        else
+        {
+            RefreshBattleVfxZoomIfNeeded();
+            RefreshFrontPreviewZoomIfNeeded();
         }
         foreach (var marker in _battleMarkers.Values)
             if (IsInstanceValid(marker.Node)) PositionBattleMarker(marker.Node, marker.Normal);
@@ -1048,8 +1059,34 @@ public sealed partial class GlobePresentation
             marker.Node.SetMeta("endurance_known", detailed && assessment.Known);
             marker.Node.SetMeta("endurance_share", detailed ? share : -1f);
 
-            var vfxIntensity = Math.Clamp(0.55f + (telemetry.Attacker.TotalDivisions + telemetry.Defender.TotalDivisions) * 0.04f, 0.55f, 1.35f);
-            RecordBattleVfx(location, origin, vfxIntensity, pocketAlert);
+            var playerId = _campaign.Player?.Id ?? -1;
+            _selectedBattleOriginScratch.Clear();
+            foreach (var armyId in battle.Attackers)
+            {
+                if (_armyById.TryGetValue(armyId, out var attArmy) &&
+                    attArmy.NationId == playerId &&
+                    _selectedArmyIds.Contains(armyId) &&
+                    attArmy.ProvinceId > 0 && attArmy.ProvinceId != battle.ProvinceId)
+                {
+                    _selectedBattleOriginScratch.Add(attArmy.ProvinceId);
+                }
+            }
+            var battleProgress = Math.Clamp(telemetry.AttackerProgress, 0.42f, 0.98f);
+            _battleOriginScratch.Clear();
+            foreach (var armyId in battle.Attackers)
+            {
+                if (_armyById.TryGetValue(armyId, out var attArmy) &&
+                    attArmy.ProvinceId > 0 && attArmy.ProvinceId != battle.ProvinceId &&
+                    _battleOriginScratch.Add(attArmy.ProvinceId) &&
+                    !_selectedBattleOriginScratch.Contains(attArmy.ProvinceId))
+                {
+                    var targetAnchor = attArmy.ProvinceId != origin &&
+                        _battleAnchors.TryFind(battle.ProvinceId, attArmy.ProvinceId, out var flankBorder)
+                        ? flankBorder
+                        : location;
+                    RecordBattleAssaultArrow(targetAnchor, attArmy.ProvinceId, battleProgress);
+                }
+            }
         }
         CommitBattleVfxMeshes();
     }

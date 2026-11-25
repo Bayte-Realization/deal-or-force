@@ -321,12 +321,19 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private float _cachedProvinceDetail = -1f;
     private int _cachedFogViewerParam = -999;
     private double _pendingWorldDelta;
+    private double _sinceLastFencedSync;
     private string _cachedHoverTooltip = "";
+    private bool _lastCounterScaleFlatMap;
+    private float _lastCounterScaleDistance = -1f;
+    private float _lastCounterScaleFlatZoom = -1f;
 
-    private bool TryBeginFrameRead(out Simulation.Campaign campaign)
+    private bool TryBeginFrameRead(bool fastSim, out Simulation.Campaign campaign)
     {
         campaign = _campaign;
-        return campaign is null || campaign.TryEnterRead(0, true);
+        if (campaign is null) return true;
+        var wantWindow = !_mapApplied || _controlRevision < 0 || _routeFingerprint == int.MinValue ||
+                         _sinceLastFencedSync >= (fastSim ? 0.11 : 0.045);
+        return campaign.TryEnterRead(0, wantWindow);
     }
 
     private bool TryBeginActionRead(out Simulation.Campaign campaign, int timeoutMs = 150)
@@ -381,6 +388,18 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
         UpdateShaderZoomAndSurfaceState(delta);
 
+        // Smooth counter scaling directly on camera distance/zoom changes instead of stepping at 120-180ms visual phases.
+        if (_mapApplied &&
+            (_flatMap != _lastCounterScaleFlatMap ||
+             (_flatMap ? Mathf.Abs(_flatZoom - _lastCounterScaleFlatZoom) > 1e-4f
+                       : Mathf.Abs(ViewDistance - _lastCounterScaleDistance) > 1e-4f)))
+        {
+            _lastCounterScaleFlatMap = _flatMap;
+            _lastCounterScaleDistance = ViewDistance;
+            _lastCounterScaleFlatZoom = _flatZoom;
+            UpdateCounterScale();
+        }
+
         // Counters glide every frame, on the visual cadence nothing else about them runs at.
         // This is the one thing in the frame loop that has to be continuous for the map to
         // read as a place rather than a flipbook.
@@ -390,13 +409,14 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // Accumulate wall time outside the read fence so frames skipped while DoF-Sim is mid-tick
         // catch up cleanly on the very next step-boundary read window without stalling 60 FPS.
         _pendingWorldDelta += delta;
+        _sinceLastFencedSync += delta;
         _visualClock += delta;
         for (var p = 0; p < 4; p++) _visualPhaseAccum[p] += delta;
         _militaryVisualAccumulator += delta;
         _routeVisualAccumulator += delta;
         _controllerUploadTimer += delta;
 
-        if (TryBeginFrameRead(out var fencedCampaign))
+        if (TryBeginFrameRead(fastSim, out var fencedCampaign))
         {
             try
             {
@@ -481,6 +501,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     private void SyncFencedWorldVisuals(Simulation.CampaignRenderSnapshot snap, Simulation.Campaign fencedCampaign, bool fastSim)
     {
+        _sinceLastFencedSync = 0;
         var heavyGpuUploadedThisFrame = PollPlateRepaint();
         var fogViewer = FogOfWarActive && fencedCampaign?.Player is { IsHuman: true } ? fencedCampaign.Player.Id : -1;
         if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; }
@@ -1605,4 +1626,4 @@ public sealed partial class GlobePresentation : SubViewportContainer
             return fallback;
         return (rgb << 8) | 0xFFu;
     }
-}
+}

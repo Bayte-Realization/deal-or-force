@@ -29,7 +29,7 @@
     "date": "1884-11-15",
     "window_days": 90,
     "trigger": { "tags": ["GER", "GBR", "FRA", "BEL", "POR"] },
-    "effects": { "political_points": 8, "treasury_percent": 0.015 }
+    "effects": { "political_points": 8, "income_share": 0.02 }
   },
   "treaty_of_versailles_1919": {
     "title": "The Peace of Versailles",

@@ -546,21 +546,26 @@ float occupation_mask(vec4 control) {
     return step(0.10, control.a) * (1.0 - step(0.75, control.a));
 }
 vec3 occupation_ribbons(vec3 owner, vec3 controller, vec2 at, float detail, float active) {
-    float phase = (at.x * 2.0 + at.y) * mix(56.0, 360.0, detail);
-    float footprint = max(fwidth(phase), 0.0001);
-    float distance_to_band = abs(fract(phase) - 0.5);
-    // Held ground wears the colour of whoever holds it, striped with the owner's (as every
-    // grand strategy draws it): a conquered country left in its own colour read as a highlight
-    // pasted over the conqueror's map. From far away, where the ribbons cannot be resolved, it is
-    // the holder's colour: held ground reads as the holder's from orbit, as on every strategy map.
+    float axis = at.x * 2.0 + at.y;
+    float deriv = max(fwidth(axis), 0.000001);
+    float freq_lo = mix(72.0, 360.0, detail);
+    float fp_lo = deriv * freq_lo;
+    float d_lo = abs(fract(axis * freq_lo) - 0.5);
+    float freq_hi = 1800.0;
+    float fp_hi = deriv * freq_hi;
+    float d_hi = abs(fract(axis * freq_hi) - 0.5);
+    float fine_mix = 1.0 - smoothstep(0.018, 0.055, fp_lo);
+    float d = mix(d_lo, d_hi, fine_mix);
+    float footprint = max(mix(fp_lo, fp_hi, fine_mix), 0.0001);
+    // Held ground wears the colour of whoever holds it, hatched subtly with the owner's
+    // across two world-anchored octaves; at orbit distance it reads cleanly as the holder's.
     float visible = 1.0 - smoothstep(0.18, 0.42, footprint);
     float aa = min(footprint * 0.6, 0.055);
-    float key = 1.0 - smoothstep(0.135 - aa, 0.135 + aa, distance_to_band);
-    float ribbon = 1.0 - smoothstep(0.085 - aa, 0.085 + aa, distance_to_band);
-    vec3 inked = mix(controller, vec3(0.055, 0.075, 0.085), key * 0.55);
-    inked = mix(inked, owner, ribbon * 0.94);
-    vec3 far_away = controller;
-    return mix(owner, mix(far_away, inked, visible), active);
+    float key = 1.0 - smoothstep(0.095 - aa, 0.095 + aa, d);
+    float ribbon = 1.0 - smoothstep(0.060 - aa, 0.060 + aa, d);
+    vec3 inked = mix(controller, vec3(0.055, 0.075, 0.085), key * 0.45);
+    inked = mix(inked, owner, ribbon * 0.50);
+    return mix(owner, mix(controller, inked, visible), active);
 }
 float lease_mask(vec4 control) {
     return step(0.76, control.a) * (1.0 - step(0.92, control.a));
@@ -1681,20 +1686,16 @@ void fragment() {
     // the border above - the same stroke at a different weight and colour, rather than a
     // second idea of where a country ends - with a faint wash inside it so the outline reads
     // as a country rather than as a region that happens to be lit.
-    float highlighted = step(0.0, highlighted_nation) *
-                        (abs(near_nation - highlighted_nation) < 0.5 ? 1.0 : 0.0) * political.a;
-    // The atlas draws the gold a little heavier (look_selection_width) and nothing more: a glow
-    // round it would need to know which side of a line is the picked country further out than
-    // the block of ids around the line can say, so it came out clipped to a texel and unseen -
-    // and a stroke suits a map of ink better than a lit edge.
+    float country_hit = step(0.0, highlighted_nation) * political.a;
+    float country_highlighted = (abs(near_nation - highlighted_nation) < 0.5 ? nation_cover
+        : abs(other_nation - highlighted_nation) < 0.5 ? (1.0 - nation_cover) : 0.0) * country_hit;
+    // Match Selected Region's crisp screen-pixel selection_ink outline and pale parchment interior
+    // lift so an inspected country stays legible at every zoom on frontiers and coastlines.
     float selection_width = mix(1.0, look_selection_width, step(0.5, atlas_look));
-    // Ink, not light (23 November 2026): a solid dark stroke on the picked country's frontier.
-    // The pale gold edge faded out over three border widths and read as a glow round the country.
-    float highlight_edge = 1.0 - smoothstep(border_pixels * 0.9 * selection_width, border_pixels * 1.8 * selection_width,
-        nation_edge_pixels);
-    highlight_edge *= step(0.5, abs(near_nation - other_nation)) * highlighted;
-    base = mix(base, vec3(0.93, 0.81, 0.44), highlighted * 0.105);
-    base = mix(base, selection_ink, highlight_edge * 0.92);
+    float highlight_px = selected_region_pixels * selection_width;
+    float highlight_edge = (1.0 - smoothstep(highlight_px, highlight_px + 0.8, nation_edge_pixels))
+        * has_nation_border
+        * (abs(near_nation - highlighted_nation) < 0.5 ? 1.0 : 0.0) * country_hit;
     // A line the player drew. Blue holds it, amber takes it, grey falls back to it.
     float plan = round(front.b * 4.0);
     vec3 plan_color = plan < 1.5 ? vec3(0.24, 0.56, 0.96)
@@ -1742,10 +1743,12 @@ void fragment() {
     base = mix(base, vec3(0.22, 0.012, 0.008), front_edge);
     // One narrow cartographic stroke on the shared boundary, never a filled province.
     base = mix(base, vec3(0.30, 0.72, 0.96), border_plan * 0.95);
-    // A flat, slightly lighter paper wash inside the picked region, not a gold light.
-    base = mix(base, clamp(base * 1.10 + vec3(0.045, 0.042, 0.036), vec3(0.0), vec3(1.0)), region_selected * 0.55);
+    // A flat, slightly lighter paper wash inside the picked region or country, not a gold light.
+    base = mix(base, clamp(base * 1.10 + vec3(0.045, 0.042, 0.036), vec3(0.0), vec3(1.0)),
+        max(region_selected, country_highlighted) * 0.55);
     base = mix(base, vec3(1.0, 0.84, 0.30), province_selected * province_detail * 0.18);
-    float selection_edge = max(region_edge * region_selected, province_edge * province_selected * province_detail);
+    float selection_edge = max(max(region_edge * region_selected, province_edge * province_selected * province_detail),
+        highlight_edge);
     // Excavation exposes earth in its exact footprint, never the space behind the globe.
     base = mix(base, vec3(0.20, 0.13, 0.09), clamp(excavation, 0.0, 1.0));
     float known = 1.0;

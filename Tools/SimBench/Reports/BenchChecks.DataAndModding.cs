@@ -967,8 +967,9 @@ internal static partial class BenchChecks
             var amount = BudgetCore.Amount(nation, line, output, atWar: false);
             if (line.Side == BudgetSide.Revenue) revenue += amount; else expenses += amount;
         }
-        if (MathF.Abs(outcome.Balance - (revenue - expenses)) > MathF.Max(tolerance, MathF.Abs(revenue) * 1e-4f))
-            return $"the itemised lines come to {revenue - expenses:0.##} and the week's balance is {outcome.Balance:0.##}";
+        var expectedBalance = revenue - outcome.IncomePenalty - expenses;
+        if (MathF.Abs(outcome.Balance - expectedBalance) > MathF.Max(tolerance, MathF.Abs(revenue) * 1e-4f))
+            return $"the itemised lines come to {expectedBalance:0.##} (gross {revenue:0.##} - income penalty {outcome.IncomePenalty:0.##} - expenses {expenses:0.##}) and the week's balance is {outcome.Balance:0.##}";
 
         // And a tax the game has never had.
         var before = BudgetCore.All.Count;

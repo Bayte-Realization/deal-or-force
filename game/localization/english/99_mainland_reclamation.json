@@ -37,9 +37,9 @@
   "mr.ev.coastal_ferment.title": "Restlessness in the Contested Provinces",
   "mr.ev.coastal_ferment.desc": "Wartime strain and broadcasts from a kindred rival across the divide are stirring quiet defiance in key provincial cities.",
   "mr.ev.coastal_ferment.opt1": "Impose strict internal security measures",
-  "mr.ev.coastal_ferment.con1": "Keeps the treasury intact, but deepens stability loss and regional radicalism.",
+  "mr.ev.coastal_ferment.con1": "Avoids budget outlay, but deepens stability loss and regional radicalism.",
   "mr.ev.coastal_ferment.opt2": "Dispatch emergency subsidies to restless provinces",
-  "mr.ev.coastal_ferment.con2": "Draws public funds and dampens war enthusiasm to calm the cities.",
+  "mr.ev.coastal_ferment.con2": "Draws on ongoing revenue and dampens war enthusiasm to calm the cities.",
 
   "chronicle.mainland_campaign_launched": "{0} has launched a military campaign to reclaim the divided homeland from {1}.",
   "chronicle.mainland_bridgehead": "{0} has crossed the sea and secured a liberation bridgehead against {1} in {2}!",

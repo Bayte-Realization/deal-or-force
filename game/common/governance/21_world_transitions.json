@@ -126,6 +126,53 @@
       "stability_above": 0.45,
       "at_war": false,
       "weight": 0.7
+    },
+
+    "reform_opening": {
+      "name": "Constitutional reform",
+      "government": "presidential_republic",
+      "ideology": "liberalism",
+      "from_government": ["one_party_state", "absolute_monarchy", "military_junta", "theocracy", "technocracy"],
+      "stability_above": 0.54,
+      "living_above": 0.50,
+      "literacy_above": 0.65,
+      "at_war": false,
+      "weight": 0.9
+    },
+
+    "revanchist_turn": {
+      "name": "Revanchist turn",
+      "government": "presidential_republic",
+      "ideology": "nationalism",
+      "from_government": ["parliamentary_republic", "presidential_republic", "constitutional_monarchy", "federation"],
+      "from_ideology": ["liberalism", "conservatism", "social_democracy", "socialism"],
+      "stability_below": 0.45,
+      "radicalism_above": 0.14,
+      "losing_war": true,
+      "weight": 1.6
+    },
+
+    "crisis_authoritarian_shift": {
+      "name": "Populist emergency rule",
+      "government": "one_party_state",
+      "ideology": "nationalism",
+      "from_government": ["parliamentary_republic", "presidential_republic", "federation", "technocracy"],
+      "from_ideology": ["liberalism", "conservatism", "social_democracy"],
+      "stability_below": 0.40,
+      "radicalism_above": 0.24,
+      "living_below": 0.65,
+      "weight": 0.9
+    },
+
+    "pragmatic_moderation": {
+      "name": "Pragmatic moderation",
+      "government": "parliamentary_republic",
+      "ideology": "conservatism",
+      "from_government": ["one_party_state", "theocracy"],
+      "stability_below": 0.46,
+      "literacy_above": 0.50,
+      "at_war": false,
+      "weight": 0.85
     }
   }
 }

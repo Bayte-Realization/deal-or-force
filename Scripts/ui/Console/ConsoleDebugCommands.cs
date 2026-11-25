@@ -82,7 +82,7 @@ internal static class ConsoleDebugCommands
         add("decisions", "CONTENT", "decisions",
             "What you could enact, what it costs, and the reason for each one you cannot.",
             _ => Decisions(ctx));
-        add("decision", "CONTENT", "decision ID", "Enact one by id, cost and blocks ignored.",
+        add("decision", "CONTENT", "decision ID", "Enact one by id if eligible (checks prerequisites and costs).",
             a => Decision(ctx, a));
         add("events", "CONTENT", "events [filter]", "The event catalogue, by id.", Events);
         add("event", "CONTENT", "event [ID]",

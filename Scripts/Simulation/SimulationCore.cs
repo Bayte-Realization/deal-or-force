@@ -658,7 +658,18 @@ public sealed partial class Campaign
     /// something a campaign can actually be run in: below an hour nothing accumulates
     /// enough to see, and beyond ten days a single step hides a war.
     /// </summary>
-    public int TickHours => Math.Clamp(Defines?.HoursPerTick ?? 24, 1, 240);
+    public int TickHours
+    {
+        get
+        {
+            var defined = Math.Clamp(Defines?.HoursPerTick ?? 24, 1, 240);
+            if (RuntimeStepHoursOverride <= 1 || defined != 1) return defined;
+            var target = Math.Clamp(RuntimeStepHoursOverride, 1, 24);
+            var referenceHours = _step is not null ? _stepStartedHours : ElapsedHours;
+            var hourOfDay = (int)((referenceHours % 24 + 24) % 24);
+            return hourOfDay == 0 ? target : Math.Min(target, 24 - hourOfDay);
+        }
+    }
 
     /// <summary>
     /// Whether this step is the one that opened its campaign day.
@@ -746,6 +757,8 @@ public sealed partial class Campaign
     internal volatile bool DeferMainThreadNotifications;
     [System.Text.Json.Serialization.JsonIgnore]
     internal int SimulationTickClockSeq;
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal int RuntimeStepHoursOverride;
 
     public CampaignRenderSnapshot RenderSnapshot =>
         System.Threading.Volatile.Read(ref _renderSnapshot) ?? CampaignRenderSnapshot.Empty;

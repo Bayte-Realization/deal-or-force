@@ -771,7 +771,7 @@ public sealed partial class GlobePresentation
                    : pick.State is not null && Simulation.LandArrangementSystem.Covering(_campaign, pick.State.MapIndex, controller.Id) is not null
                        ? "\n" + Simulation.LandArrangementSystem.Describe(_campaign, pick.State)
                        : "\n" + Simulation.Loc.Format(
-                   "Occupied by {0} · {1:P0} secured\nStill owned by {2}: an occupation is not an annexation. Only a signed peace moves the border.",
+                   "Controlled by {0} · {1:P0} secured\nStill owned by {2}: control is not an annexation. Only a signed peace moves the border.",
                    controller.DisplayName, occupation, pick.Nation.DisplayName)) +
                (_mapMode == StrategicMapMode.Resources && pick.State is not null ? "\n" + Simulation.Loc.Format(
                    "{0} · resource potential {1:0.##}", Simulation.Loc.Get(Simulation.CommodityCatalog.Get(_resourceGood).Name),

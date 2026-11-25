@@ -424,6 +424,12 @@ public static partial class ScriptedEffects
         internal void IncomePenalty(float share, int days, string source) =>
             (_incomePenalties ??= new List<(float, int, string)>(1)).Add((share, days, source ?? ""));
 
+        internal Effect WithIncomePenalty(float share, int days, string source)
+        {
+            IncomePenalty(share, days, source);
+            return this;
+        }
+
         public void Apply(Campaign campaign, Nation nation)
         {
             if (nation is null) return;

@@ -33,6 +33,8 @@ public partial class DealOrForceGame
 {
     private Control _diplomacyLayer = null!;
     private Label _diplomacySummary = null!;
+    private PanelContainer _diplomacyEraBadge = null!;
+    private Label _diplomacyEraLabel = null!;
     private LineEdit _diplomacySearch = null!;
     private VBoxContainer _diplomacyListRows = null!;
     private Control _diplomacyDetailRows = null!;
@@ -143,9 +145,37 @@ public partial class DealOrForceGame
         foreach (var shortcut in new[] { ownCountry, _diplomacyInboxButton, toConflicts, toWars, organizations, subjects, release })
             shortcuts.AddChild(shortcut);
 
+        var summaryRow = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        summaryRow.AddThemeConstantOverride("separation", 10);
+        rows.AddChild(summaryRow);
+
         _diplomacySummary = Title("", (int)Ui.Metric("ui.font.body", 12), Ui.Colour("text.body_soft"));
         _diplomacySummary.CustomMinimumSize = new Vector2(0, 22);
-        rows.AddChild(_diplomacySummary);
+        _diplomacySummary.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        summaryRow.AddChild(_diplomacySummary);
+
+        _diplomacyEraBadge = new PanelContainer
+        {
+            Name = "DiplomacyGlobalEraBadge",
+            MouseFilter = MouseFilterEnum.Pass,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            ClipContents = true
+        };
+        var eraStyle = new StyleBoxFlat
+        {
+            BgColor = Ui.Colour("surface.inset"),
+            BorderColor = Ui.Colour("surface.line"),
+            ContentMarginLeft = 9,
+            ContentMarginRight = 9,
+            ContentMarginTop = 2,
+            ContentMarginBottom = 2
+        };
+        eraStyle.SetBorderWidthAll(1);
+        eraStyle.SetCornerRadiusAll(3);
+        _diplomacyEraBadge.AddThemeStyleboxOverride("panel", eraStyle);
+        _diplomacyEraLabel = Title("", (int)Ui.Metric("ui.font.caption", 11), Ui.Colour("text.caption"));
+        _diplomacyEraBadge.AddChild(_diplomacyEraLabel);
+        summaryRow.AddChild(_diplomacyEraBadge);
 
         // ------------------------------------------------------------------ the three columns
         var body = new HBoxContainer
@@ -410,12 +440,22 @@ public partial class DealOrForceGame
         EnsureScreen("diplomacy", BuildDiplomacyScreen);
         _openScreen = "Diplomacy";
         _sidePanel.Visible = false;
-        if (_selectedNation is null || _selectedNation.Id == _campaign.Player.Id)
-            _selectedNation = DiplomacyDefaultPartner() ?? _selectedNation;
-        _diplomacySelectedId = _selectedNation?.Id ?? -1;
         RaiseWorkspaceLayer(_diplomacyLayer);
-        RebuildDiplomacyList(force: true);
-        ForceDiplomacyRefresh();
+        if (_campaign is not null && _campaign.TryEnterRead(50, true))
+        {
+            try
+            {
+                if (_selectedNation is null || _selectedNation.Id == _campaign.Player.Id)
+                    _selectedNation = DiplomacyDefaultPartner() ?? _selectedNation;
+                _diplomacySelectedId = _selectedNation?.Id ?? -1;
+                RebuildDiplomacyList(force: true);
+                ForceDiplomacyRefresh();
+            }
+            finally
+            {
+                _campaign.ExitRead();
+            }
+        }
         UpdateScreenButtons();
     }
 
@@ -466,63 +506,72 @@ public partial class DealOrForceGame
 
     private void RebuildDiplomacyList(bool force = false)
     {
-        if (_diplomacyLayer is null || !_diplomacyLayer.Visible || _campaign?.Player is null) return;
-
-        var query = _diplomacySearch.Text?.Trim() ?? "";
-        var key = $"{_diplomacyFilter}|{query}|{_campaign.ElapsedDays}";
-        // The list is rebuilt when what it is made of changes - a filter, a search, a new
-        // day - and only has its figures repainted the rest of the time. A list torn down
-        // and remade between a mouse going down and coming up is a list that cannot be
-        // clicked, and at speed five that is five times a second.
-        if (!force && key == _diplomacyListBuiltKey) return;
-        _diplomacyListBuiltKey = key;
-        _diplomacyListBuiltDay = _campaign.ElapsedDays;
-
-        var player = _campaign.Player;
-        HashSet<int> neighbours = null;
-        if (_diplomacyFilter == DiplomacyFilter.Neighbours)
+        if (_diplomacyLayer is null || !_diplomacyLayer.Visible || _campaign is null) return;
+        if (!_campaign.TryEnterRead(50, true)) return;
+        try
         {
-            neighbours = new HashSet<int>();
-            foreach (var mapIndex in CampaignDiplomacy.Neighbours(_campaign, player.MapIndex))
-                neighbours.Add(mapIndex);
+            var player = _campaign.Player;
+            if (player is null) return;
+
+            var query = _diplomacySearch.Text?.Trim() ?? "";
+            var key = $"{_diplomacyFilter}|{query}|{_campaign.ElapsedDays}|{Loc.Language}";
+            // The list is rebuilt when what it is made of changes - a filter, a search, a new
+            // day - and only has its figures repainted the rest of the time. A list torn down
+            // and remade between a mouse going down and coming up is a list that cannot be
+            // clicked, and at speed five that is five times a second.
+            if (!force && key == _diplomacyListBuiltKey) return;
+            _diplomacyListBuiltKey = key;
+            _diplomacyListBuiltDay = _campaign.ElapsedDays;
+
+            HashSet<int> neighbours = null;
+            if (_diplomacyFilter == DiplomacyFilter.Neighbours)
+            {
+                neighbours = new HashSet<int>();
+                foreach (var mapIndex in CampaignDiplomacy.Neighbours(_campaign, player.MapIndex))
+                    neighbours.Add(mapIndex);
+            }
+
+            var matches = _campaign.Nations
+                .Where(nation => DiplomacyListShows(nation, neighbours))
+                .Where(nation => query.Length == 0 ||
+                                 nation.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                                 nation.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                                 nation.Tag.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                                 Simulation.StateIdentity.Caption(_campaign, nation, true)
+                                     .Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                                 Simulation.StateIdentity.Caption(_campaign, nation, false)
+                                     .Contains(query, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(nation => nation.Gdp)
+                .ToArray();
+
+            // Keep the warmed row pool through search/filter changes. Recreating hundreds
+            // of flag controls every time the query is cleared makes typing hitch.
+            for (var spareIndex = matches.Length; spareIndex < _diplomacyRows.Count; spareIndex++)
+            {
+                var spare = _diplomacyRows[spareIndex];
+                spare.Nation = null;
+                spare.Select.Visible = false;
+            }
+            var added = false;
+            for (var index = 0; index < matches.Length; index++)
+            {
+                if (index >= _diplomacyRows.Count) { _diplomacyRows.Add(BuildDiplomacyRow()); added = true; }
+                // A stable name per place in the list, for tests and tours to press.
+                _diplomacyRows[index].Select.Name = "DiplomacyRow" + index;
+                _diplomacyRows[index].Select.Visible = true;
+                RepaintDiplomacyRow(_diplomacyRows[index], matches[index]);
+                _diplomacyListRows.MoveChild(_diplomacyRows[index].Select, index);
+            }
+
+            _diplomacySummary.Text = Simulation.Loc.Format("Countries shown: {0:N0}", (float)matches.Length) +
+                                     (query.Length > 0 ? " · " + Tr("found by name") : "");
+            _diplomacyCountryEmpty.Visible = matches.Length == 0;
+            FitNegotiationTypography(_diplomacyLayer, full: added);
         }
-
-        var matches = _campaign.Nations
-            .Where(nation => DiplomacyListShows(nation, neighbours))
-            .Where(nation => query.Length == 0 ||
-                             nation.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                             nation.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                             nation.Tag.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                             Simulation.StateIdentity.Caption(_campaign, nation, true)
-                                 .Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                             Simulation.StateIdentity.Caption(_campaign, nation, false)
-                                 .Contains(query, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(nation => nation.Gdp)
-            .ToArray();
-
-        // Keep the warmed row pool through search/filter changes. Recreating hundreds
-        // of flag controls every time the query is cleared makes typing hitch.
-        for (var spareIndex = matches.Length; spareIndex < _diplomacyRows.Count; spareIndex++)
+        finally
         {
-            var spare = _diplomacyRows[spareIndex];
-            spare.Nation = null;
-            spare.Select.Visible = false;
+            _campaign.ExitRead();
         }
-        var added = false;
-        for (var index = 0; index < matches.Length; index++)
-        {
-            if (index >= _diplomacyRows.Count) { _diplomacyRows.Add(BuildDiplomacyRow()); added = true; }
-            // A stable name per place in the list, for tests and tours to press.
-            _diplomacyRows[index].Select.Name = "DiplomacyRow" + index;
-            _diplomacyRows[index].Select.Visible = true;
-            RepaintDiplomacyRow(_diplomacyRows[index], matches[index]);
-            _diplomacyListRows.MoveChild(_diplomacyRows[index].Select, index);
-        }
-
-        _diplomacySummary.Text = Simulation.Loc.Format("Countries shown: {0:N0}", (float)matches.Length) +
-                                 (query.Length > 0 ? " · " + Tr("found by name") : "");
-        _diplomacyCountryEmpty.Visible = matches.Length == 0;
-        FitNegotiationTypography(_diplomacyLayer, full: added);
     }
 
     /// <summary>
@@ -671,7 +720,16 @@ public partial class DealOrForceGame
         row.Opinion.AddThemeColorOverride("font_color",
             opinion > 20 ? Ui.Colour("state.positive") :
             opinion < -20 ? Ui.Colour("state.negative") : Ui.Colour("text.caption"));
-        row.Stance.Text = relation is null ? "" : Tr(DiplomaticVocabulary.StanceName(relation.Stance));
+        var truceRem = relation is not null && relation.TruceUntil > _campaign.ElapsedDays
+            ? relation.TruceUntil - _campaign.ElapsedDays
+            : 0;
+        row.Stance.Text = relation is null ? ""
+            : relation.Stance == DiplomaticStance.Truce && truceRem > 0
+                ? Simulation.Loc.Format("shell.dip.badge_truce_fmt", truceRem)
+                : Tr(DiplomaticVocabulary.StanceName(relation.Stance));
+        row.Stance.TooltipText = truceRem > 0
+            ? Ui.Tip(Simulation.Loc.Format("dyn.ui.truce_tip_fmt", truceRem, relation!.TruceUntil))
+            : "";
         ((Control)row.Stance.GetParent()).Visible = row.Stance.Text.Length > 0 || opinion != 0;
         StyleDiplomacyCountrySelection(row);
     }
@@ -709,9 +767,17 @@ public partial class DealOrForceGame
     private void ForceDiplomacyRefresh()
     {
         _diplomacyPageKey = "";
-        RefreshDiplomacyScreen();
-        foreach (var row in _diplomacyRows)
-            if (row.Nation is not null) RepaintDiplomacyRow(row, row.Nation);
+        if (_campaign is null || !_campaign.TryEnterRead(50, true)) return;
+        try
+        {
+            RefreshDiplomacyScreen();
+            foreach (var row in _diplomacyRows)
+                if (row.Nation is not null) RepaintDiplomacyRow(row, row.Nation);
+        }
+        finally
+        {
+            _campaign.ExitRead();
+        }
     }
 
     /// <summary>Another country on this page - from the list, or from a flag on the page itself.</summary>
@@ -829,14 +895,39 @@ public partial class DealOrForceGame
     /// </summary>
     private void RefreshDiplomacyScreen()
     {
-        if (_diplomacyLayer is null || !_diplomacyLayer.Visible || _campaign?.Player is null) return;
+        if (_diplomacyLayer is null || !_diplomacyLayer.Visible || _campaign is null) return;
+        if (!_campaign.TryEnterRead(50, true)) return;
+        try
+        {
+            RefreshDiplomacyScreenLocked();
+        }
+        finally
+        {
+            _campaign.ExitRead();
+        }
+    }
+
+    private void RefreshDiplomacyScreenLocked()
+    {
         var player = _campaign.Player;
+        if (player is null) return;
         var nation = _campaign.Nations.Find(candidate => candidate.Id == _diplomacySelectedId) ?? player;
         _diplomacySelectedId = nation.Id;
 
+        if (_diplomacyEraBadge is not null && _diplomacyEraLabel is not null)
+        {
+            var era = GeopoliticalCycle.CurrentEraRegime(_campaign);
+            var eraName = Simulation.Loc.Get(EraDisplayKey(era));
+            _diplomacyEraLabel.Text = $"{Simulation.Loc.Get("dyn.ui.global_era_label")}: {eraName}";
+            _diplomacyEraLabel.AddThemeColorOverride("font_color", Ui.Colour(EraModalColorToken(era)));
+            _diplomacyEraBadge.TooltipText = Ui.Tip(Simulation.Loc.Format("dyn.ui.era_tip_fmt", eraName));
+        }
+
         RebuildDiplomacyList();
         MarkDiplomacySelection();
-        var key = $"{nation.Id}|{_campaign.ElapsedDays}|{_diplomacyPendingWarTarget}|{_diplomacyPendingPartitionTarget}|{_diplomacyDossierPage}|{Loc.Language}";
+        var relPeek = nation.Id != player.Id ? CampaignDiplomacy.Peek(_campaign, player.Id, nation.Id) : null;
+        var truceUntil = relPeek?.TruceUntil ?? 0;
+        var key = $"{nation.Id}|{_campaign.ElapsedDays}|{_campaign.WarRevision}|{truceUntil}|{_diplomacyPendingWarTarget}|{_diplomacyPendingPartitionTarget}|{_diplomacyDossierPage}|{Loc.Language}";
         if (key == _diplomacyPageKey) return;
         _diplomacyPageKey = key;
         var scrollY = _diplomacyDossierScroll.ScrollVertical;
@@ -961,13 +1052,29 @@ public partial class DealOrForceGame
         var mood = Bar(8, 160);
         mood.Lean(relation.Opinion / 100f, positive, negative);
         aside.AddChild(mood);
-        aside.AddChild(Right(Text(DiplomaticVocabulary.StanceName(relation.Stance).ToUpperInvariant(), 11,
+        var truceDaysRemaining = relation.TruceUntil > _campaign.ElapsedDays
+            ? relation.TruceUntil - _campaign.ElapsedDays
+            : 0;
+        var stanceLabelText = relation.Stance == DiplomaticStance.Truce && truceDaysRemaining > 0
+            ? Simulation.Loc.Format("shell.dip.badge_truce_fmt", truceDaysRemaining).ToUpperInvariant()
+            : DiplomaticVocabulary.StanceName(relation.Stance).ToUpperInvariant();
+        var stanceLbl = Right(Text(stanceLabelText, 11,
             relation.Stance switch
             {
                 DiplomaticStance.Allied or DiplomaticStance.Friendly => positive,
                 DiplomaticStance.Rival or DiplomaticStance.AtWar => negative,
+                DiplomaticStance.Truce when truceDaysRemaining > 0 => Ui.Colour("state.info"),
                 _ => Ui.Colour("text.caption")
-            })));
+            }));
+        if (truceDaysRemaining > 0)
+        {
+            stanceLbl.MouseFilter = MouseFilterEnum.Pass;
+            stanceLbl.TooltipText = Ui.Tip(Simulation.Loc.Format("dyn.ui.truce_tip_fmt", truceDaysRemaining, relation.TruceUntil));
+        }
+        aside.AddChild(stanceLbl);
+
+        if (_diplomacyDossierPage == "Overview" || _diplomacyDossierPage == "Relations")
+            AddDiplomacyDynamismField(player, nation, relation, truceDaysRemaining, Field, Text, Giving);
 
         // ---- what they are in: wars, blocs, backers, claims (DiplomacyStandingUI).
         if (_diplomacyDossierPage == "Overview") AddWorldStanding(nation, Field, Text, Bar);
@@ -1209,6 +1316,13 @@ public partial class DealOrForceGame
             var rivalNote = WrappedUltimatumText(rivalLine, 13);
             rivalNote.Name = "AllyRivalReason";
             _diplomacyPactRows.AddChild(rivalNote);
+        }
+
+        if (relation.TruceUntil > _campaign.ElapsedDays)
+        {
+            var rem = relation.TruceUntil - _campaign.ElapsedDays;
+            Pact(Simulation.Loc.Get("dyn.ui.truce_row_label"),
+                Simulation.Loc.Format("dyn.ui.truce_days_remaining_fmt", rem), "state.info");
         }
 
         var allies = AllianceSystem.AlliesOf(_campaign, nation);
@@ -1568,6 +1682,190 @@ public partial class DealOrForceGame
         feedback.Text = command.Note;
         if (command.Coordinated) PlayStrategicCue("war_declared");
         ForceDiplomacyRefresh();
+    }
+
+    private static string EraShellColorToken(GlobalEraRegime era) => era switch
+    {
+        GlobalEraRegime.RevisionistTide => "shell.state.negative_text",
+        GlobalEraRegime.ArmedDetente => "shell.state.info",
+        GlobalEraRegime.PostImperialTurbulence => "shell.state.warning_text",
+        _ => "shell.state.positive"
+    };
+
+    internal static void AddShellOverviewDynamismPills(
+        ShellContext ctx, VBoxContainer dipStrip, Campaign world, Nation nation, bool isOwn)
+    {
+        var flow = ShellCountryDiplomacyView.MakeChipFlow(dipStrip);
+        var era = GeopoliticalCycle.CurrentEraRegime(world);
+        var eraName = Simulation.Loc.Get(EraDisplayKey(era));
+        void AddPill(string text, string tok, string tip)
+        {
+            var pill = ShellCountryDiplomacyView.MakeStatusPill(ctx, text, tok);
+            pill.TooltipText = Ui.Tip(tip);
+            flow.AddChild(pill);
+        }
+        AddPill($"{Simulation.Loc.Get("dyn.ui.global_era_label")}: {eraName}", EraShellColorToken(era),
+            Simulation.Loc.Format("dyn.ui.era_tip_fmt", eraName));
+        if (isOwn || world.Player is not { } player || player.Id == nation.Id) return;
+
+        var rel = CampaignDiplomacy.Peek(world, player.Id, nation.Id);
+        if (rel is not null && rel.TruceUntil > world.ElapsedDays)
+        {
+            var rem = rel.TruceUntil - world.ElapsedDays;
+            AddPill(Simulation.Loc.Format("dyn.ui.truce_active_fmt", rem), "shell.state.info",
+                Simulation.Loc.Format("dyn.ui.truce_tip_fmt", rem, rel.TruceUntil));
+        }
+        var ourLost = CountLostHomeland(world, player, nation, out var ourLostNames);
+        if (ourLost > 0)
+            AddPill(Simulation.Loc.Format("dyn.ui.revanchism_badge_ours_fmt", ourLost), "shell.state.warning_text",
+                Simulation.Loc.Format("dyn.ui.revanchism_tip_ours_fmt", ourLost, ourLostNames));
+        var theirLost = CountLostHomeland(world, nation, player, out var theirLostNames);
+        if (theirLost > 0)
+            AddPill(Simulation.Loc.Format("dyn.ui.revanchism_badge_theirs_fmt", theirLost), "shell.state.negative_text",
+                Simulation.Loc.Format("dyn.ui.revanchism_tip_theirs_fmt", theirLost, theirLostNames));
+    }
+
+    internal static void AppendShellDiplomacyDynamismCard(
+        ShellContext ctx, VBoxContainer bodyRows, Campaign world, Nation nation, bool isOwn)
+    {
+        if (bodyRows.FindChild("ShellDipContent", true, false) is not VBoxContainer dipContent) return;
+        var era = GeopoliticalCycle.CurrentEraRegime(world);
+        var eraName = Simulation.Loc.Get(EraDisplayKey(era));
+        var card = ShellCountryDossierView.MakeSectionCard(ctx, dipContent, "ShellDipDynamismCard", "icon_world",
+            Simulation.Loc.Get("dyn.ui.global_era_label"), eraName, EraShellColorToken(era));
+        if (card.GetParent<Control>() is { } panel)
+            panel.TooltipText = Ui.Tip(Simulation.Loc.Format("dyn.ui.era_tip_fmt", eraName));
+        if (isOwn || world.Player is not { } player || player.Id == nation.Id) return;
+
+        void AddNote(string text, string tok, string tip)
+        {
+            var lbl = ShellCountryDossierView.MakeLabel(ctx, text, "shell.sans", 11, tok);
+            lbl.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            lbl.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            lbl.MouseFilter = MouseFilterEnum.Pass;
+            lbl.TooltipText = Ui.Tip(tip);
+            card.AddChild(lbl);
+        }
+        var rel = CampaignDiplomacy.Peek(world, player.Id, nation.Id);
+        if (rel is not null && rel.TruceUntil > world.ElapsedDays)
+        {
+            var rem = rel.TruceUntil - world.ElapsedDays;
+            AddNote($"{Simulation.Loc.Get("dyn.ui.truce_row_label")}: {Simulation.Loc.Format("dyn.ui.truce_days_remaining_fmt", rem)}",
+                "shell.state.info", Simulation.Loc.Format("dyn.ui.truce_tip_fmt", rem, rel.TruceUntil));
+        }
+        var ourLost = CountLostHomeland(world, player, nation, out var ourNames);
+        if (ourLost > 0)
+            AddNote(Simulation.Loc.Format("dyn.ui.revanchism_we_claim_fmt", ourLost, ourNames),
+                "shell.state.warning_text", Simulation.Loc.Format("dyn.ui.revanchism_tip_ours_fmt", ourLost, ourNames));
+        var theirLost = CountLostHomeland(world, nation, player, out var theirNames);
+        if (theirLost > 0)
+            AddNote(Simulation.Loc.Format("dyn.ui.revanchism_they_claim_fmt", theirLost, theirNames),
+                "shell.state.negative_text", Simulation.Loc.Format("dyn.ui.revanchism_tip_theirs_fmt", theirLost, theirNames));
+    }
+
+    internal static string EraDisplayKey(GlobalEraRegime era) => era switch
+    {
+        GlobalEraRegime.RevisionistTide => "dyn.ui.era.revisionist_tide",
+        GlobalEraRegime.ArmedDetente => "dyn.ui.era.armed_detente",
+        GlobalEraRegime.PostImperialTurbulence => "dyn.ui.era.post_imperial_turbulence",
+        _ => "dyn.ui.era.multipolar_concert"
+    };
+
+    private static string EraModalColorToken(GlobalEraRegime era) => era switch
+    {
+        GlobalEraRegime.RevisionistTide => "state.negative",
+        GlobalEraRegime.ArmedDetente => "state.info",
+        GlobalEraRegime.PostImperialTurbulence => "state.warning",
+        _ => "state.positive"
+    };
+
+    /// <summary>
+    /// Counts homeland regions of <paramref name="claimant"/> currently governed by <paramref name="holder"/>
+    /// with zero LINQ or heap list allocations.
+    /// </summary>
+    internal static int CountLostHomeland(Campaign world, Nation claimant, Nation holder, out string sampleNames)
+    {
+        sampleNames = "";
+        if (world is null || claimant is null || holder is null || claimant.Id == holder.Id ||
+            holder.Population <= 0 || holder.AnswersTo(claimant.Id) || claimant.AnswersTo(holder.Id))
+            return 0;
+
+        var states = world.StatesOf(holder);
+        ScenarioState top0 = null, top1 = null, top2 = null;
+        var count = 0;
+        for (var i = 0; i < states.Length; i++)
+        {
+            var s = states[i];
+            if (s is null || s.Population <= 0 || s.NationMapIndex == claimant.MapIndex) continue;
+            if (TerritorialClaims.TitleOf(world, claimant, s) != TerritorialTitle.Homeland) continue;
+            count++;
+            if (top0 is null || s.Population > top0.Population || (s.Population == top0.Population && s.MapIndex < top0.MapIndex))
+            {
+                top2 = top1; top1 = top0; top0 = s;
+            }
+            else if (top1 is null || s.Population > top1.Population || (s.Population == top1.Population && s.MapIndex < top1.MapIndex))
+            {
+                top2 = top1; top1 = s;
+            }
+            else if (top2 is null || s.Population > top2.Population || (s.Population == top2.Population && s.MapIndex < top2.MapIndex))
+            {
+                top2 = s;
+            }
+        }
+        if (count == 0) return 0;
+
+        var joined = top0!.DisplayName;
+        if (top1 is not null) joined += ", " + top1.DisplayName;
+        if (top2 is not null) joined += ", " + top2.DisplayName;
+        sampleNames = count > 3
+            ? Simulation.Loc.Format("dyn.ui.revanchism_region_more_fmt", joined, count - 3)
+            : joined;
+        return count;
+    }
+
+    private void AddDiplomacyDynamismField(
+        Nation player,
+        Nation nation,
+        DiplomaticRelation relation,
+        int truceDaysRemaining,
+        Func<string, string, Color?, VBoxContainer> field,
+        Func<string, int, Color, Label> text,
+        Func<Label, Label> giving)
+    {
+        var ourLost = CountLostHomeland(_campaign, player, nation, out var ourNames);
+        var theirLost = CountLostHomeland(_campaign, nation, player, out var theirNames);
+        if (truceDaysRemaining <= 0 && ourLost == 0 && theirLost == 0) return;
+
+        var aside = truceDaysRemaining > 0
+            ? Simulation.Loc.Format("dyn.ui.truce_active_fmt", truceDaysRemaining)
+            : "";
+        var box = field(Simulation.Loc.Get("dyn.ui.revanchism_title"), aside, Ui.Colour("state.info"));
+
+        if (truceDaysRemaining > 0)
+        {
+            var truceLbl = giving(text(
+                Simulation.Loc.Format("dyn.ui.truce_tip_fmt", truceDaysRemaining, relation.TruceUntil),
+                12, Ui.Colour("state.info")));
+            box.AddChild(truceLbl);
+        }
+        if (ourLost > 0)
+        {
+            var ourLbl = giving(text(
+                Simulation.Loc.Format("dyn.ui.revanchism_we_claim_fmt", ourLost, ourNames),
+                12, Ui.Colour("state.warning")));
+            ourLbl.MouseFilter = MouseFilterEnum.Pass;
+            ourLbl.TooltipText = Ui.Tip(Simulation.Loc.Format("dyn.ui.revanchism_tip_ours_fmt", ourLost, ourNames));
+            box.AddChild(ourLbl);
+        }
+        if (theirLost > 0)
+        {
+            var theirLbl = giving(text(
+                Simulation.Loc.Format("dyn.ui.revanchism_they_claim_fmt", theirLost, theirNames),
+                12, Ui.Colour("state.negative")));
+            theirLbl.MouseFilter = MouseFilterEnum.Pass;
+            theirLbl.TooltipText = Ui.Tip(Simulation.Loc.Format("dyn.ui.revanchism_tip_theirs_fmt", theirLost, theirNames));
+            box.AddChild(theirLbl);
+        }
     }
 
     private void ConfirmOrProposeDeal()

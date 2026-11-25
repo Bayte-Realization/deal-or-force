@@ -594,20 +594,24 @@ public partial class MainMenuScene : Control
         _credits = veil;
 
         var panel = new PanelContainer { ClipContents = true };
-        MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true, padX: 28, padY: 24);
+        MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true, padX: 28, padY: 22);
         panel.SetAnchorsPreset(LayoutPreset.Center);
         panel.AnchorLeft = panel.AnchorRight = 0.5f;
         panel.AnchorTop = panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = -240;
-        panel.OffsetRight = 240;
-        panel.OffsetTop = -215;
-        panel.OffsetBottom = 215;
+        panel.OffsetLeft = -340;
+        panel.OffsetRight = 340;
+        panel.OffsetTop = -250;
+        panel.OffsetBottom = 250;
         panel.GrowHorizontal = GrowDirection.Both;
         panel.GrowVertical = GrowDirection.Both;
         veil.AddChild(panel);
         _creditsPanel = panel;
 
-        var rows = new VBoxContainer();
+        var rows = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
         rows.AddThemeConstantOverride("separation", 10);
         panel.AddChild(rows);
 
@@ -615,28 +619,68 @@ public partial class MainMenuScene : Control
         heading.HorizontalAlignment = HorizontalAlignment.Left;
         rows.AddChild(heading);
         rows.AddChild(MenuChromeTheme.CreateEngravedRule("CreditsRule", 2f));
-        rows.AddChild(LeftCaption("Made by", 12, MenuChromeTheme.PaperFaint));
-        rows.AddChild(LeftCaption("Bayte Realization (Kamil Suleymanov)", 18, MenuChromeTheme.Paper, serif: true));
+
+        var bodyWell = new PanelContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            ClipContents = true
+        };
+        bodyWell.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(14, 12));
+        rows.AddChild(bodyWell);
+
+        var scroll = new ScrollContainer
+        {
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        bodyWell.AddChild(scroll);
+
+        var body = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        body.AddThemeConstantOverride("separation", 8);
+        scroll.AddChild(body);
+
+        body.AddChild(LeftCaption("Made by", 12, MenuChromeTheme.PaperFaint));
+        body.AddChild(LeftCaption("Bayte Realization (Kamil Suleymanov)", 18, MenuChromeTheme.Paper, serif: true));
 
         // The line the summary above promises, which had gone missing: the screen said who
         // and never said how. Plain, and in the game itself rather than in a readme.
-        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 4) });
-        rows.AddChild(LeftCaption("How it was made", 12, MenuChromeTheme.PaperFaint));
+        body.AddChild(new Control { CustomMinimumSize = new Vector2(0, 4) });
+        body.AddChild(LeftCaption("How it was made", 12, MenuChromeTheme.PaperFaint));
         var made = LeftCaption("credits.made_with_ai", 13, MenuChromeTheme.PaperDim);
         made.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         made.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        rows.AddChild(made);
+        body.AddChild(made);
 
-        // Expanding, with a floor under it: the expansion pushes the way back to the
-        // bottom of the panel, and the floor stops it sitting flush against the last line
-        // if the panel is ever shorter than its contents.
-        rows.AddChild(new Control
-        {
-            SizeFlagsVertical = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 14)
-        });
+        body.AddChild(new Control { CustomMinimumSize = new Vector2(0, 4) });
+        body.AddChild(MenuChromeTheme.CreateEngravedRule("CreditsThirdPartyRule", 1f));
+        body.AddChild(new Control { CustomMinimumSize = new Vector2(0, 2) });
+        body.AddChild(LeftCaptionWithFallback(
+            "credits.third_party_heading",
+            "Third-party frameworks, libraries & open data",
+            12,
+            MenuChromeTheme.PaperFaint));
+        var thirdParty = LeftCaptionWithFallback(
+            "credits.third_party_body",
+            ThirdPartyCreditsFallback,
+            13,
+            MenuChromeTheme.PaperDim);
+        thirdParty.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        thirdParty.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        body.AddChild(thirdParty);
+
         rows.AddChild(MenuAction("Back", HideCredits, 40, primary: true));
     }
+
+    private const string ThirdPartyCreditsFallback =
+        "Engine & Runtimes: Godot Engine 4.8 (MIT), Jolt Physics / Godot Jolt (Jorrit Rouwe, Mikael Hermansson & contributors, MIT), .NET 10 / WPF / System.IO.Hashing / System.Numerics.Tensors / RecyclableMemoryStream (Microsoft & .NET Foundation, MIT), F# & FSharp.Core (Don Syme & contributors, MIT).\n\n" +
+        "Libraries & Compression: ZLinq & SimdLinq (Yoshifumi Kawai / Cysharp, MIT), CommunityToolkit.HighPerformance (Sergio Pedri & .NET Foundation, MIT), DotNext (Roman Sakno, MIT), BitFaster.Caching (Alex Peck, MIT), ZeroAlloc.Collections (Marcel Roozekrans, MIT), Equativ.RoaringBitmaps & RoaringBitmap format (Equativ Contributors & Daniel Lemire, Apache-2.0), RBush (Daniel Newman & Vladimir Agafonkin, MIT), K4os.Compression.LZ4 (Milosz Krajewski & Yann Collet, MIT/BSD), YamlDotNet (Antoine Aubry & contributors, MIT), Ben.Demystifier (Ben Adams & contributors, Apache-2.0).\n\n" +
+        "Profiling, Addons & Language Kit: Tracy Profiler (Bartosz Taudul, BSD-3-Clause), Tracy-CSharp (clibequilibrium, MIT); Godot addons (Fennara, LimboAI, GodotSteam, Dialogue Manager, Ezcha Network, Lit); optional LanguageKit integrations (Rust, Luau, Nim, Odin, Kotlin, lua-gdextension, godot-sandbox, gdzig, graphics.gd, py4godot).\n\n" +
+        "Typography & Open World Data: Source Serif 4 (Frank Griesshammer / Adobe, OFL-1.1), ESA GlobCover 2009 (ESA & UCLouvain), NASA Earth Observatory Blue Marble, GEBCO (BODC), Natural Earth, and Wikimedia Commons flag illustrators.";
 
     /// <summary>
     /// The options, here rather than in the campaign.
@@ -905,7 +949,7 @@ public partial class MainMenuScene : Control
         if (_bootLogger is not null)
         {
             try { OS.RemoveLogger(_bootLogger); } catch { }
-            try { _bootLogger.Dispose(); } catch { }
+            // GameDiagnosticLogger inherits Godot.Logger (RefCounted); never manually Dispose().
             _bootLogger = null;
         }
     }
@@ -918,6 +962,12 @@ public partial class MainMenuScene : Control
     private void TryStartCompatShaderPrewarm()
     {
         if (_compatShaderPrewarmed) return;
+        // Skip OwnWorld3D SubViewport shader prewarm on mobile/Android to avoid GLES3 + RefCounted teardown crashes.
+        if (IsMobileOrTouchPlatform)
+        {
+            _compatShaderPrewarmed = true;
+            return;
+        }
         var args = OS.GetCmdlineUserArgs();
         if (Array.IndexOf(args, "--verify-build") >= 0 || Array.IndexOf(args, "--safe-map") >= 0)
             return;
@@ -948,10 +998,10 @@ public partial class MainMenuScene : Control
             var shader = new Shader { Code = builtSource };
             var material = new ShaderMaterial { Shader = shader };
 
-            using var rgbaImg = Image.CreateEmpty(2, 2, false, Image.Format.Rgba8);
+            var rgbaImg = Image.CreateEmpty(2, 2, false, Image.Format.Rgba8);
             rgbaImg.Fill(Colors.White);
-            using var rgImg = Image.CreateEmpty(2, 2, false, Image.Format.Rg8);
-            using var rImg = Image.CreateEmpty(2, 2, false, Image.Format.R8);
+            var rgImg = Image.CreateEmpty(2, 2, false, Image.Format.Rg8);
+            var rImg = Image.CreateEmpty(2, 2, false, Image.Format.R8);
             rImg.Fill(Colors.White);
 
             var lookups = BuildDummyTextureArray(rgbaImg, PackedMapShader.Lookups.Count);
@@ -1041,10 +1091,7 @@ public partial class MainMenuScene : Control
         var arr = new Texture2DArray();
         var err = arr.CreateFromImages(layers);
         if (err != Error.Ok)
-        {
-            arr.Dispose();
             throw new InvalidDataException("Shader prewarm texture array failed: " + err);
-        }
         return arr;
     }
 
@@ -1067,10 +1114,7 @@ public partial class MainMenuScene : Control
             _compatPrewarmViewport.QueueFree();
         _compatPrewarmViewport = null;
 
-        foreach (var resource in _compatPrewarmResources)
-        {
-            try { resource.Dispose(); } catch { }
-        }
+        // Clear C# references only; Godot RefCounted teardown releases native resources safely.
         _compatPrewarmResources.Clear();
     }
 
@@ -1146,12 +1190,18 @@ public partial class MainMenuScene : Control
             if (child is Button button && button.HasMeta(SourceMeta))
                 button.Text = Loc.Get((string)button.GetMeta(SourceMeta));
             else if (child is Label label && label.HasMeta(SourceMeta))
-                label.Text = Loc.Get((string)label.GetMeta(SourceMeta));
+            {
+                var key = (string)label.GetMeta(SourceMeta);
+                label.Text = label.HasMeta(FallbackMeta)
+                    ? Loc.GetOr(key, (string)label.GetMeta(FallbackMeta))
+                    : Loc.Get(key);
+            }
             Relabel(child);
         }
     }
 
     private const string SourceMeta = "loc_source";
+    private const string FallbackMeta = "loc_fallback";
 
     private static Label MenuCaption(string text, int size, Color colour, bool serif = false, bool bold = false)
     {
@@ -1170,6 +1220,20 @@ public partial class MainMenuScene : Control
     {
         var label = MenuCaption(text, size, colour, serif, bold);
         label.HorizontalAlignment = HorizontalAlignment.Left;
+        return label;
+    }
+
+    private static Label LeftCaptionWithFallback(string key, string fallback, int size, Color colour, bool serif = false, bool bold = false)
+    {
+        var label = new Label
+        {
+            Text = Loc.GetOr(key, fallback),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            AutowrapMode = TextServer.AutowrapMode.Off
+        };
+        label.SetMeta(SourceMeta, key);
+        label.SetMeta(FallbackMeta, fallback);
+        MenuChromeTheme.StyleExistingLabel(label, size, colour, serif: serif, bold: bold);
         return label;
     }
 
@@ -1229,8 +1293,8 @@ public partial class MainMenuScene : Control
 
         if (_creditsPanel is not null)
         {
-            var halfW = Mathf.Min(240f, (view.X - 48f) * 0.5f);
-            var halfH = Mathf.Min(215f, (view.Y - 48f) * 0.5f);
+            var halfW = Mathf.Min(340f, (view.X - 48f) * 0.5f);
+            var halfH = Mathf.Min(250f, (view.Y - 40f) * 0.5f);
             _creditsPanel.OffsetLeft = -halfW;
             _creditsPanel.OffsetRight = halfW;
             _creditsPanel.OffsetTop = -halfH;

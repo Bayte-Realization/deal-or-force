@@ -44,7 +44,10 @@ public static partial class AiStatecraft
                 BudgetCore.SetRate(nation, corporate, BudgetCore.RateOf(nation, corporate) + defines.AiTaxStep);
             else nation.TaxRate += defines.AiTaxStep;
         }
-        else if (reserves > defines.AiTreasuryComfort && nation.Stability < 0.6f && fiscal.WeeklyBalance >= 0)
+        else if (reserves > defines.AiTreasuryComfort * 1.25f &&
+                 nation.Stability < 0.55f &&
+                 nation.DebtCondition == DebtCondition.Current &&
+                 fiscal.WeeklyBalance > MathF.Max(0.01f, nation.WeeklyExpenses * 0.08f))
         {
             // Relief in the reverse order: the income tax above neutral, then the tax every
             // household feels in its shopping.

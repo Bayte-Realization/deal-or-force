@@ -221,7 +221,24 @@ public static class AllyRivalShift
             other = holder;
             return true;
         }
-        if (relation.Opinion <= campaign.Defines.AiRivalryThreshold)
+        var underlyingOpinion = relation.Opinion -
+            (OpinionSystem.Has(relation, "alliance")
+                ? (OpinionCatalog.Find("alliance")?.Opinion ?? 34f)
+                : 0f);
+        var ideologicalGap = PoliticsCore.IdeologicalDistance(first, second);
+        var courseClash = (first.NationalCourse.Dominant is "isolationism" or "armed_neutrality" &&
+                           second.NationalCourse.Dominant is "global_integration" or "interventionism") ||
+                          (second.NationalCourse.Dominant is "isolationism" or "armed_neutrality" &&
+                           first.NationalCourse.Dominant is "global_integration" or "interventionism");
+        var realignmentSour = campaign.ElapsedDays >= 730 &&
+                              GeopoliticalCycle.BilateralRealignmentBias(campaign, first, second) <= -0.40f;
+        var deepDivergence = (ideologicalGap >= 0.45f || courseClash) &&
+                             !OpinionSystem.Has(relation, "guaranteed_us") &&
+                             underlyingOpinion <= 0f;
+        if (relation.Opinion <= campaign.Defines.AiRivalryThreshold ||
+            underlyingOpinion <= campaign.Defines.AiRivalryThreshold ||
+            deepDivergence ||
+            (realignmentSour && underlyingOpinion < 15f && !OpinionSystem.Has(relation, "guaranteed_us")))
         {
             code = Opinion;
             actor = Math.Min(first.Id, second.Id);

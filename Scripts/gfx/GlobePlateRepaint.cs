@@ -41,6 +41,7 @@ public sealed partial class GlobePresentation
 
     /// <summary>A country changed colour since the plate on screen was painted.</summary>
     private bool _plateColoursStale;
+    private bool _plateWorkStartedStale;
     private bool _plateFailureReported;
     private Task<(Image Plate, Image Frontier)> _plateWork;
     private ImageTexture _frontierTexture;
@@ -55,11 +56,11 @@ public sealed partial class GlobePresentation
         _plateSource = source;
         _plateShownOwners = owners;
         _plateWorkOwners = null;
-        _pendingPlateUpload?.Dispose();
         _pendingPlateUpload = null;
         _pendingPlateOwners = null;
         // Painted from the palette this campaign was bound with, a moment ago.
         _plateColoursStale = false;
+        _plateWorkStartedStale = false;
     }
 
     private void RequestPlateRepaint(Simulation.ProvinceTopology topology)
@@ -84,6 +85,7 @@ public sealed partial class GlobePresentation
         if (_plateRequestedMsec > 0 && now - _plateRequestedMsec < cooldownMs) return;
         _plateRequestedMsec = now;
         _platePending = false;
+        _plateWorkStartedStale = _plateColoursStale;
         _plateColoursStale = false;
         var owners = (ushort[])topology.ProvinceToNation.Clone();
         _plateWorkOwners = owners;
@@ -139,12 +141,10 @@ public sealed partial class GlobePresentation
     /// <summary>Upload a frontier field and switch the far stroke onto it. Null leaves things as they are.</summary>
     private void ApplyFrontier(Image frontier)
     {
-        if (frontier is null || _globeMaterial is null) { frontier?.Dispose(); return; }
-        // Compatibility under the atlas look: the packed shader has no field, and a ready flag
-        // with nothing behind it made every country line fade out from the middle zoom.
+        if (frontier is null || _globeMaterial is null) return;
+        // Compatibility/Mobile packed shader has no frontier_field sampler; keep frontier_ready at 0.
         if (!FrontierFieldWanted())
         {
-            frontier.Dispose();
             _globeMaterial.SetShaderParameter("frontier_ready", 0f);
             return;
         }
@@ -157,7 +157,6 @@ public sealed partial class GlobePresentation
             _globeMaterial.SetShaderParameter("frontier_field", _frontierTexture);
         }
         _globeMaterial.SetShaderParameter("frontier_cap", Simulation.FrontierField.Cap);
-        frontier.Dispose();
         _globeMaterial.SetShaderParameter("frontier_ready", 1f);
     }
 
@@ -168,7 +167,6 @@ public sealed partial class GlobePresentation
         {
             _pendingPlateUpload = null;
             if (_plateTexture is not null) _plateTexture.Update(pendingPlate);
-            pendingPlate.Dispose();
             _plateShownOwners = _pendingPlateOwners;
             _pendingPlateOwners = null;
             // The plate has caught up: the stopgap table has nothing left to say about
@@ -182,6 +180,7 @@ public sealed partial class GlobePresentation
             var uploaded = false;
             if (done.IsCompletedSuccessfully && done.Result.Plate is { } image)
             {
+                _plateWorkStartedStale = false;
                 if (done.Result.Frontier is not null)
                 {
                     // Stagger FrontierField GPU upload (Frame N) and Plate GPU upload (Frame N+1) across
@@ -194,18 +193,23 @@ public sealed partial class GlobePresentation
                 else
                 {
                     if (_plateTexture is not null) _plateTexture.Update(image);
-                    image.Dispose();
                     _plateShownOwners = _plateWorkOwners;
                     UploadPlateCatchUp();
                     uploaded = true;
                 }
             }
-            else if (!_plateFailureReported)
+            else
             {
-                // The stopgap table keeps the colours right until a later repaint succeeds; the
-                // next change of the map asks again, because the picture still does not match.
-                _plateFailureReported = true;
-                GD.PushError($"[dof] far political plate repaint failed: {done.Exception?.GetBaseException().Message}");
+                // Preserve colour staleness if the background worker threw before committing.
+                _plateColoursStale |= _plateWorkStartedStale;
+                _plateWorkStartedStale = false;
+                if (!_plateFailureReported)
+                {
+                    // The stopgap table keeps the colours right until a later repaint succeeds; the
+                    // next change of the map asks again, because the picture still does not match.
+                    _plateFailureReported = true;
+                    GD.PushError($"[dof] far political plate repaint failed: {done.Exception?.GetBaseException().Message}");
+                }
             }
             _plateWorkOwners = null;
             return uploaded;

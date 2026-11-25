@@ -263,7 +263,7 @@ public static partial class ScriptedEffects
         {
             var afterCash = nation.Treasury - treasuryCost;
             lines.Add(Loc.Format("{0}: {1} → {2} ({3})",
-                Loc.Get("Treasury"), Fmt.Money(nation.Treasury), Fmt.Money(afterCash), Fmt.MoneyDelta(-treasuryCost)));
+                TreasuryLabel(), Fmt.Money(nation.Treasury), Fmt.Money(afterCash), Fmt.MoneyDelta(-treasuryCost)));
         }
         if (effect is null) return lines;
         lines.AddRange(SpiritLines(effect.Grants));
@@ -271,7 +271,7 @@ public static partial class ScriptedEffects
         {
             var weekly = Simulation.IncomePenalties.WeeklyBase(campaign, nation) * share;
             lines.Add(Loc.Format("Income: −{0}% for {1} days (about {2} a week)",
-                (share * 100f).ToString("0.#", CultureInfo.CurrentCulture), days, Fmt.Money(weekly)));
+                (share * 100f).ToString("0.#", Loc.Culture), days, Fmt.Money(weekly)));
         }
         lines.AddRange(effect.People.Select(person => person.Describe()));
         foreach (var id in effect.Revokes)
@@ -286,22 +286,22 @@ public static partial class ScriptedEffects
                 lines.Add(Loc.Format(entry.Value >= .5f ? "Enable mechanic: {0}" : "Disable mechanic: {0}", feature));
                 continue;
             }
-            if (IsIncomeShareKey(entry.Key))
+            if (TryTreasuryShareDelta(campaign, nation, entry, out var isIncomeShare, out var shareDelta))
             {
-                lines.Add(Loc.Format("Treasury: {0}% annual income",
-                    (entry.Value * 100f).ToString("+0.#;-0.#;0", CultureInfo.CurrentCulture)));
-                continue;
-            }
-            if (IsGdpShareKey(entry.Key))
-            {
-                lines.Add(Loc.Format("Treasury: {0}% GDP",
-                    (entry.Value * 100f).ToString("+0.#;-0.#;0", CultureInfo.CurrentCulture)));
+                var beforeCash = float.IsFinite(nation.Treasury) ? nation.Treasury : 0f;
+                var afterCash = Effect.PreviewCombine(beforeCash, shareDelta, Operation.Add, "treasury", float.NegativeInfinity, float.PositiveInfinity);
+                var pct = (entry.Value * 100f).ToString("+0.#;-0.#;0", Loc.Culture);
+                var template = isIncomeShare
+                    ? "{0}: {1} → {2} ({3}, {4}% annual income)"
+                    : "{0}: {1} → {2} ({3}, {4}% GDP)";
+                lines.Add(Loc.Format(template,
+                    TreasuryLabel(), Fmt.Money(beforeCash), Fmt.Money(afterCash), Fmt.MoneyDelta(shareDelta), pct));
                 continue;
             }
             if (IsGrandProjectProgressKey(entry.Key))
             {
                 lines.Add(Loc.Format("Grand project progress: {0} days",
-                    entry.Value.ToString("+0.#;-0.#;0", CultureInfo.CurrentCulture)));
+                    entry.Value.ToString("+0.#;-0.#;0", Loc.Culture)));
                 continue;
             }
             if (!Resolve(entry.Key, out var field, out var operation)) continue;
@@ -310,8 +310,8 @@ public static partial class ScriptedEffects
                 : field.Name.StartsWith("stockpile.", StringComparison.Ordinal)
                     ? Loc.Format("Stockpile ({0})", Loc.Get(field.Name[10..]))
                     : Loc.Get(Labels.GetValueOrDefault(field.Name, field.Name));
-            if (label.Length > 4 && label == label.ToUpper(CultureInfo.CurrentCulture))
-                label = label[..1] + label[1..].ToLower(CultureInfo.CurrentCulture);
+            if (label.Length > 4 && label == label.ToUpper(Loc.Culture))
+                label = CapitalizeFirst(label.ToLower(Loc.Culture));
 
             float before;
             if (field.GetNation is not null) before = field.GetNation(nation);
@@ -339,6 +339,250 @@ public static partial class ScriptedEffects
                 FormatPreviewDelta(field.Name, delta)));
         }
         return lines;
+    }
+
+    /// <summary>
+    /// Compact one-line summary for event choice buttons showing scaled income/GDP costs
+    /// plus the highest-signal non-monetary effects in the active locale.
+    /// </summary>
+    public static string InlineSummary(
+        Campaign campaign,
+        Nation nation,
+        Effect effect,
+        IEnumerable<(string Id, int Days)> extraModifiers = null,
+        int maxItems = 3)
+    {
+        if (maxItems <= 0 || (effect is null && extraModifiers is null)) return "";
+
+        var items = new List<string>(Math.Min(maxItems, 6));
+
+        if (effect is not null)
+        {
+            var penalties = effect.IncomePenalties;
+            for (var i = 0; i < penalties.Count && items.Count < maxItems; i++)
+            {
+                var (share, days, _) = penalties[i];
+                var pct = (share * 100f).ToString("0.#", Loc.Culture);
+                var weekly = campaign is not null && nation is not null
+                    ? Simulation.IncomePenalties.WeeklyBase(campaign, nation) * share
+                    : 0f;
+                items.Add(weekly >= 0.000001f
+                    ? Loc.Format("dyn.ui.inline_income_penalty_fmt", pct, days, Fmt.Money(weekly))
+                    : Loc.Format("dyn.ui.inline_income_penalty_nodollar_fmt", pct, days));
+            }
+
+            var entries = effect.Entries;
+            for (var i = 0; i < entries.Count && items.Count < maxItems; i++)
+            {
+                if (TryFormatCompactMoneyEntry(campaign, nation, entries[i], out var text))
+                    items.Add(text);
+            }
+
+            for (var i = 0; i < entries.Count && items.Count < maxItems; i++)
+            {
+                if (TryFormatCompactNonMoneyEntry(entries, entries[i], out var text))
+                    items.Add(text);
+            }
+
+            var grants = effect.Grants;
+            for (var i = 0; i < grants.Count && items.Count < maxItems; i++)
+            {
+                if (FormatInlineModifier(grants[i].Id, grants[i].Days) is { Length: > 0 } modText)
+                    items.Add(modText);
+            }
+        }
+
+        if (extraModifiers is not null && items.Count < maxItems)
+        {
+            foreach (var (id, days) in extraModifiers)
+            {
+                if (items.Count >= maxItems) break;
+                if (effect is not null && GrantsContains(effect.Grants, id)) continue;
+                if (FormatInlineModifier(id, days) is { Length: > 0 } modText)
+                    items.Add(modText);
+            }
+        }
+
+        return items.Count == 0 ? "" : string.Join(" · ", items);
+    }
+
+    private static bool GrantsContains(IReadOnlyList<(string Id, int Days)> grants, string id)
+    {
+        for (var i = 0; i < grants.Count; i++)
+            if (string.Equals(grants[i].Id, id, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static string TreasuryLabel()
+    {
+        var raw = Loc.Get("dyn.ui.label_treasury");
+        if (raw == "dyn.ui.label_treasury" || string.IsNullOrWhiteSpace(raw))
+            raw = Loc.Get("Treasury");
+        return CapitalizeFirst(raw);
+    }
+
+    private static string CapitalizeFirst(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return text ?? "";
+        return char.IsLower(text[0]) ? char.ToUpper(text[0], Loc.Culture) + text[1..] : text;
+    }
+
+    private static bool TryTreasuryShareDelta(Campaign campaign, Nation nation, Entry entry, out bool isIncomeShare, out float delta)
+    {
+        isIncomeShare = IsIncomeShareKey(entry.Key);
+        var isGdpShare = !isIncomeShare && IsGdpShareKey(entry.Key);
+        delta = 0f;
+        if (!isIncomeShare && !isGdpShare) return false;
+        if (nation is null) return true;
+        if (isIncomeShare)
+            delta = campaign is null ? 0f : Simulation.IncomePenalties.WeeklyBase(campaign, nation) * 52f * entry.Value;
+        else
+        {
+            var gdp = float.IsFinite(nation.Gdp) && nation.Gdp > 0f ? nation.Gdp : 0f;
+            delta = gdp * entry.Value;
+        }
+        return true;
+    }
+
+    private static bool TryFormatCompactMoneyEntry(Campaign campaign, Nation nation, Entry entry, out string text)
+    {
+        text = "";
+        if (TryTreasuryShareDelta(campaign, nation, entry, out var isIncomeShare, out var delta))
+        {
+            var pct = FormatSignedPct(entry.Value, fine: false);
+            if (nation is not null && (campaign is not null || !isIncomeShare) && MathF.Abs(delta) >= 0.005f)
+            {
+                text = Loc.Format(isIncomeShare ? "dyn.ui.inline_income_share_fmt" : "dyn.ui.inline_gdp_share_fmt",
+                    Fmt.MoneyDelta(delta), pct);
+            }
+            else
+            {
+                text = Loc.Format(isIncomeShare ? "dyn.ui.inline_income_share_nodollar_fmt" : "dyn.ui.inline_gdp_share_nodollar_fmt",
+                    TreasuryLabel(), pct);
+            }
+            return true;
+        }
+        if (!Resolve(entry.Key, out var field, out var operation)) return false;
+        if (field.Name is not ("treasury" or "gdp")) return false;
+        if (field.Name == "treasury")
+        {
+            var formatted = operation switch
+            {
+                Operation.Percent => FormatSignedPct(entry.Value, fine: false) + "%",
+                Operation.Mult => "×" + entry.Value.ToString("0.##", Loc.Culture),
+                Operation.Set => "= " + Fmt.Money(entry.Value),
+                _ => Fmt.MoneyDelta(entry.Value)
+            };
+            text = Loc.Format("dyn.ui.inline_field_fmt", TreasuryLabel(), formatted);
+            return true;
+        }
+
+        var gdpVal = FormatCompactFieldValue(field.Name, entry.Value, operation);
+        text = Loc.Format("dyn.ui.inline_field_fmt", Loc.Get("GDP"), gdpVal);
+        return true;
+    }
+
+    private static bool TryFormatCompactNonMoneyEntry(IReadOnlyList<Entry> allEntries, Entry entry, out string text)
+    {
+        text = "";
+        if (IsIncomeShareKey(entry.Key) || IsGdpShareKey(entry.Key)) return false;
+        if (FeatureEffect(entry.Key, out var feature))
+        {
+            text = Loc.Format(entry.Value >= .5f ? "Enable mechanic: {0}" : "Disable mechanic: {0}", feature);
+            return true;
+        }
+        if (IsGrandProjectProgressKey(entry.Key))
+        {
+            text = Loc.Format("Grand project progress: {0} days", entry.Value.ToString("+0.#;−0.#;0", Loc.Culture));
+            return true;
+        }
+        if (!Resolve(entry.Key, out var field, out var operation)) return false;
+        if (field.Name is "treasury" or "gdp") return false;
+        // Skip "state.X" when national "X" is already rendered so compact buttons don't repeat the same stat label.
+        if (field.Name.StartsWith("state.", StringComparison.Ordinal) && HasEntryKey(allEntries, field.Name[6..]))
+            return false;
+        var label = CompactFieldLabel(field.Name);
+        var val = FormatCompactFieldValue(field.Name, entry.Value, operation);
+        text = Loc.Format("dyn.ui.inline_field_fmt", label, val);
+        return true;
+    }
+
+    private static bool HasEntryKey(IReadOnlyList<Entry> entries, string baseName)
+    {
+        for (var i = 0; i < entries.Count; i++)
+            if (Resolve(entries[i].Key, out var f, out _) && string.Equals(f.Name, baseName, StringComparison.Ordinal))
+                return true;
+        return false;
+    }
+
+    private static string CompactFieldLabel(string fieldName)
+    {
+        var key = fieldName switch
+        {
+            "stability" or "state.stability" => "Stability",
+            "standard_of_living" or "state.standard_of_living" => "dyn.ui.label_sol",
+            "state.radicalism" => "Radicalism",
+            "literacy" or "state.literacy" => "Literacy",
+            "state.war_damage" or "worst_war_damage" => "War damage",
+            "state.urbanization" => "Urbanisation",
+            "state.population" or "population" => "Population",
+            "state.brain_drain" or "brain_drain" => "Brain drain",
+            "research" => "dyn.ui.label_research",
+            "political_points" => "dyn.ui.label_political_credit",
+            "notoriety" => "dyn.ui.label_notoriety",
+            "productivity" => "dyn.ui.label_prod",
+            "construction_capacity" => "dyn.ui.label_construction",
+            "credit_confidence" => "dyn.ui.label_credit_conf",
+            "war_support" => "War support",
+            "inflation" => "Inflation",
+            "market_access" => "Market access",
+            "prestige" => "Prestige",
+            "manpower" => "Manpower",
+            "public_debt" => "Public debt",
+            _ => Labels.GetValueOrDefault(fieldName, fieldName)
+        };
+        var localized = fieldName.StartsWith("reputation.", StringComparison.Ordinal)
+            ? Loc.Format("Public narrative: {0}", fieldName[11..])
+            : fieldName.StartsWith("stockpile.", StringComparison.Ordinal)
+                ? Loc.Format("Stockpile ({0})", Loc.Get(fieldName[10..]))
+                : Loc.Get(key);
+        if (localized.Length > 4 && localized == localized.ToUpper(Loc.Culture))
+            localized = localized.ToLower(Loc.Culture);
+        return CapitalizeFirst(localized);
+    }
+
+    private static string FormatSignedPct(float fraction, bool fine = true)
+    {
+        var pct = fraction * 100f;
+        var fmt = fine && MathF.Abs(pct) < 1f ? "+0.##;−0.##;0" : "+0.#;−0.#;0";
+        return pct.ToString(fmt, Loc.Culture);
+    }
+
+    private static string FormatCompactFieldValue(string fieldName, float rawValue, Operation operation)
+    {
+        var narrative = fieldName.StartsWith("reputation.", StringComparison.Ordinal);
+        var fraction = narrative || Fractions.Contains(fieldName) || fieldName.StartsWith("social.", StringComparison.Ordinal);
+        var culture = Loc.Culture;
+        if (operation is Operation.Percent || (operation == Operation.Add && fraction))
+            return FormatSignedPct(rawValue) + "%";
+        if (operation == Operation.Mult) return "×" + rawValue.ToString("0.##", culture);
+        if (operation == Operation.Set)
+            return "= " + (fraction ? (rawValue * 100f).ToString("0.#", culture) + "%" : rawValue.ToString("N0", culture));
+        if (fieldName is "manpower" or "population" or "state.population" or "movement.cadres")
+            return Fmt.PeopleDelta(Math.Round(rawValue));
+        return MathF.Abs(rawValue) >= 1000f
+            ? rawValue.ToString("+#,0;−#,0", culture)
+            : rawValue.ToString("+0.##;−0.##", culture);
+    }
+
+    private static string FormatInlineModifier(string id, int days)
+    {
+        var spirit = ModifierCatalog.Get(id);
+        if (spirit is null) return "";
+        var length = days > 0 ? days : spirit.Days;
+        return length > 0
+            ? Loc.Format("dyn.ui.inline_spirit_days_fmt", Loc.Get(spirit.Name), length)
+            : Loc.Format("dyn.ui.inline_spirit_fmt", Loc.Get(spirit.Name));
     }
 
     private static string FormatPreviewValue(string fieldName, float value)

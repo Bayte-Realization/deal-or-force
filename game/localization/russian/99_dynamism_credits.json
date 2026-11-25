@@ -1,0 +1,43 @@
+{
+  "credits.third_party_heading": "Сторонние фреймворки, библиотеки и открытые данные",
+  "credits.third_party_body": "Создано с благодарностью авторам свободного ПО и открытых геоданных:\n• Движок, физика и среды: Godot Engine 4.8 (Хуан Линецки, Ариэль Мансур и контрибьюторы — MIT); Jolt Physics / Godot Jolt (Йоррит Рауэ, Микаэль Херманссон и контрибьюторы — MIT); .NET 10, WPF, System.IO.Hashing, System.Numerics.Tensors и RecyclableMemoryStream (Microsoft и .NET Foundation — MIT); F# и FSharp.Core (Дон Сайм, Microsoft и F# Software Foundation — MIT).\n• Производительность, поиск и сжатие: ZLinq и SimdLinq (Ёсифуми Каваи / Cysharp — MIT); CommunityToolkit.HighPerformance (Серджо Педри и .NET Foundation — MIT); DotNext (Роман Сакно / .NET Foundation — MIT); BitFaster.Caching (Алекс Пек — MIT); ZeroAlloc.Collections (Марсел Розеекранс — MIT); Equativ.RoaringBitmaps (авторы Equativ и формат Roaring Даниэля Лемира — Apache-2.0); RBush (Дэниел Ньюман / viceroypenguin и Владимир Агафонкин — MIT); K4os.Compression.LZ4 (Милош Краевский и Янн Колле — MIT); YamlDotNet (Антуан Обри и контрибьюторы — MIT); Ben.Demystifier (Бен Адамс и контрибьюторы — Apache-2.0).\n• Профилирование, языковой комплект, плагины и шрифт: Tracy Profiler (Бартош Таудул — BSD-3-Clause) и Tracy-CSharp (clibequilibrium — MIT); опциональные интеграции LanguageKit (godot-rust/gdext, godot-luau-script, gdext-nim, odin-godot, godot-jvm, lua-gdextension, godot-sandbox, gdzig, graphics.gd, py4godot); аддоны Godot (Fennara, LimboAI, GodotSteam, Dialogue Manager, Ezcha Network, Lit); Source Serif 4 (Франк Грисхаммер / Adobe — OFL-1.1).\n• Открытые карты и флаги: ESA GlobCover 2009 (ESA и UCLouvain); NASA Earth Observatory Blue Marble (Джесси Аллен / NASA) и GEBCO (BODC); Natural Earth (общественное достояние); авторы флагов на Викискладе.",
+
+  "dyn.ui.global_era_label": "Мировая эпоха",
+  "dyn.ui.era.multipolar_concert": "Многополярный концерт",
+  "dyn.ui.era.revisionist_tide": "Ревизионистская волна",
+  "dyn.ui.era.armed_detente": "Вооружённая разрядка",
+  "dyn.ui.era.post_imperial_turbulence": "Постимперская турбулентность",
+  "dyn.ui.era_tip_fmt": "Текущий макроисторический режим ({0}). На протяжении десятилетий меняет мировую напряжённость, прочность блоков и курс держав.",
+
+  "dyn.ui.truce_active_fmt": "Перемирие: {0} дн.",
+  "dyn.ui.truce_tip_fmt": "Действующее перемирие запрещает объявлять войну ещё {0} дн. (истекает на {1}-й день кампании).",
+  "dyn.ui.truce_row_label": "Перемирие",
+  "dyn.ui.truce_days_remaining_fmt": "Осталось дней: {0}",
+
+  "dyn.ui.revanchism_title": "Претензии и утраченная родина",
+  "dyn.ui.revanchism_badge_ours_fmt": "Утраченная родина: {0} рег.",
+  "dyn.ui.revanchism_badge_theirs_fmt": "Их родина у нас: {0} рег.",
+  "dyn.ui.revanchism_we_claim_fmt": "Удерживают {0} нашей родины ({1})",
+  "dyn.ui.revanchism_they_claim_fmt": "Считают своей родиной {0} у нас ({1})",
+  "dyn.ui.revanchism_tip_ours_fmt": "Под их властью находится {0} рег. нашей утраченной родины ({1}). Это усиливает реваншизм, портит отношения и подталкивает к возвращению земель.",
+  "dyn.ui.revanchism_tip_theirs_fmt": "Под нашей властью находится {0} рег., которые они считают своей утраченной родиной ({1}). Это питает реваншизм и риск войны по окончании перемирия.",
+  "dyn.ui.revanchism_region_more_fmt": "{0} (+ещё {1})",
+
+  "dyn.ui.inline_income_penalty_fmt": "Доход: −{0}% / {1} дн. (~{2}/нед.)",
+  "dyn.ui.inline_income_penalty_nodollar_fmt": "Доход: −{0}% / {1} дн.",
+  "dyn.ui.inline_income_share_fmt": "{0} ({1}% дохода)",
+  "dyn.ui.inline_income_share_nodollar_fmt": "{0}: {1}% дохода",
+  "dyn.ui.inline_gdp_share_fmt": "{0} ({1}% ВВП)",
+  "dyn.ui.inline_gdp_share_nodollar_fmt": "{0}: {1}% ВВП",
+  "dyn.ui.inline_spirit_days_fmt": "«{0}» ({1} дн.)",
+  "dyn.ui.inline_spirit_fmt": "«{0}»",
+  "dyn.ui.inline_field_fmt": "{0} {1}",
+  "dyn.ui.label_treasury": "Казна",
+  "dyn.ui.label_notoriety": "Дурная слава",
+  "dyn.ui.label_sol": "Уровень жизни",
+  "dyn.ui.label_research": "Наука",
+  "dyn.ui.label_political_credit": "Полит. вес",
+  "dyn.ui.label_construction": "Строительство",
+  "dyn.ui.label_credit_conf": "Кредит. доверие",
+  "dyn.ui.label_prod": "Производит."
+}

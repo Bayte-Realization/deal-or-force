@@ -22,6 +22,7 @@ internal sealed class CampaignAccessGate
     private int _writeWaiters;
     private bool _readerRequested;
     private long _readerRequestedAt;
+    private int _readerMissStreak;
 
     [ThreadStatic] private static CampaignAccessGate t_primaryGate;
     [ThreadStatic] private static int t_primaryDepth;
@@ -33,6 +34,7 @@ internal sealed class CampaignAccessGate
     public bool HasWriteWaiter => Volatile.Read(ref _writeWaiters) > 0;
     public bool HasReaderRequest => Volatile.Read(ref _readerRequested);
     internal bool HasReaderRequested => Volatile.Read(ref _readerRequested);
+    internal bool IsReaderStarving => Volatile.Read(ref _readerMissStreak) >= 2;
 
     private static int GetDepth(CampaignAccessGate gate)
     {
@@ -84,6 +86,7 @@ internal sealed class CampaignAccessGate
             {
                 _readers++;
                 _readerRequested = false;
+                _readerMissStreak = 0;
                 IncrementDepth(this);
                 return true;
             }
@@ -104,6 +107,7 @@ internal sealed class CampaignAccessGate
             }
             _readers++;
             _readerRequested = false;
+            _readerMissStreak = 0;
             IncrementDepth(this);
             return true;
         }
@@ -111,9 +115,12 @@ internal sealed class CampaignAccessGate
 
     private void RequestReaderWindow()
     {
-        if (_readerRequested) return;
-        _readerRequestedAt = Stopwatch.GetTimestamp();
-        _readerRequested = true;
+        if (!_readerRequested)
+        {
+            _readerRequestedAt = Stopwatch.GetTimestamp();
+            _readerRequested = true;
+        }
+        _readerMissStreak++;
     }
 
     public void ExitRead()
@@ -199,10 +206,13 @@ internal sealed class CampaignAccessGate
             if (!hadUpgradedRead && yieldToRequestedReader && _readerRequested && _writeWaiters == 0 && readerWindowMs > 0)
             {
                 // A missed read can use the last published view. On mobile, let the
-                // worker do a little more before it idles for the next read window.
-                if (readerWorkAheadMs > 0 && Stopwatch.GetElapsedTime(_readerRequestedAt).TotalMilliseconds < readerWorkAheadMs)
+                // worker do a little more before it idles for the next read window,
+                // unless consecutive misses show a 30 FPS reader is starving across windows.
+                var starvingReader = Volatile.Read(ref _readerMissStreak) >= 2;
+                if (!starvingReader && readerWorkAheadMs > 0 && Stopwatch.GetElapsedTime(_readerRequestedAt).TotalMilliseconds < readerWorkAheadMs)
                     return;
 
+                var effectiveWindowMs = starvingReader ? Math.Max(readerWindowMs, 55) : readerWindowMs;
                 var start = Stopwatch.GetTimestamp();
                 var freqMs = Stopwatch.Frequency / 1000.0;
                 while (_readerRequested && _writeWaiters == 0)
@@ -213,7 +223,7 @@ internal sealed class CampaignAccessGate
                         break;
                     }
                     var elapsedMs = (Stopwatch.GetTimestamp() - start) / freqMs;
-                    var rem = (int)Math.Ceiling(readerWindowMs - elapsedMs);
+                    var rem = (int)Math.Ceiling(effectiveWindowMs - elapsedMs);
                     if (rem <= 0)
                     {
                         _readerRequested = false;
@@ -1091,6 +1101,28 @@ public sealed class BackgroundSimRunner : IDisposable
 
     public void RequestYield() => Volatile.Write(ref _yieldRequestedAtTicks, Stopwatch.GetTimestamp());
 
+    internal static int MobileAdaptiveStepHours(int speed) => speed switch
+    {
+        <= 1 => 1,
+        2 => 2,
+        3 => 4,
+        4 => 8,
+        _ => 24
+    };
+
+    internal static double MobileStepSecondsPerDay(Defines defines, int speed)
+    {
+        var baseSecondsPerDay = (double)(defines?.SecondsPerDay ?? 5f);
+        return speed switch
+        {
+            <= 1 => baseSecondsPerDay * 0.44,
+            2 => baseSecondsPerDay * 0.18,
+            3 => baseSecondsPerDay * 0.068,
+            4 => baseSecondsPerDay * 0.020,
+            _ => 0.0
+        };
+    }
+
     private bool IsYieldRequested()
     {
         var ticks = Volatile.Read(ref _yieldRequestedAtTicks);
@@ -1148,6 +1180,7 @@ public sealed class BackgroundSimRunner : IDisposable
         try
         {
             campaign.FinishStep();
+            campaign.RuntimeStepHoursOverride = 0;
             Volatile.Write(ref _publishedClock, new PublishedClock(campaign));
             PublishSnapshotLocked(campaign, force: true);
         }
@@ -1178,6 +1211,7 @@ public sealed class BackgroundSimRunner : IDisposable
         if (campaign is not null)
         {
             campaign.DeferMainThreadNotifications = false;
+            campaign.RuntimeStepHoursOverride = 0;
             _campaign = null;
         }
         Volatile.Write(ref _publishedClock, null);
@@ -1345,6 +1379,7 @@ public sealed class BackgroundSimRunner : IDisposable
 
                 if (_pausedDesired || _pendingException is not null || campaign.IsPaused || campaign.SimulationFault.Length > 0)
                 {
+                    if (!MobilePacing && !campaign.MidStep) campaign.RuntimeStepHoursOverride = 0;
                     accumulator = 0.0;
                     lastSpeed5DayTicks = 0;
                     emaSpeed5DayMs = 0.0;
@@ -1383,32 +1418,44 @@ public sealed class BackgroundSimRunner : IDisposable
                     emaSpeed5DayMs = 0.0;
                 }
 
+                var mobilePacing = MobilePacing;
                 var continuingStep = campaign.MidStep;
+                if (!continuingStep)
+                    campaign.RuntimeStepHoursOverride = mobilePacing ? MobileAdaptiveStepHours(speed) : 0;
                 var now = Stopwatch.GetTimestamp();
                 var dt = Stopwatch.GetElapsedTime(lastTickTime).TotalSeconds;
                 lastTickTime = now;
                 if (dt > 0.25) dt = 0.25;
 
                 var stepInterval = 0.0;
-                if (continuingStep || speed >= 5)
+                if (speed >= 5)
                 {
-                    if (speed >= 5) accumulator = 0.0;
+                    accumulator = 0.0;
                 }
                 else
                 {
-                    stepInterval = Math.Max(0.002, campaign.Defines.SecondsForSpeed(speed) * (campaign.TickHours / 24.0));
-                    accumulator = Math.Min(accumulator + dt, stepInterval * 1.25);
-                    if (accumulator < stepInterval)
+                    var effectiveTickHours = mobilePacing && campaign.Defines.HoursPerTick == 1
+                        ? MobileAdaptiveStepHours(speed)
+                        : campaign.TickHours;
+                    var secPerDay = mobilePacing
+                        ? MobileStepSecondsPerDay(campaign.Defines, speed)
+                        : campaign.Defines.SecondsForSpeed(speed);
+                    stepInterval = Math.Max(0.002, secPerDay * (effectiveTickHours / 24.0));
+                    accumulator = Math.Min(accumulator + dt, speed == 4 ? Math.Max(stepInterval * 3.0, 0.05) : stepInterval * 1.25);
+                    if (!continuingStep)
                     {
-                        var waitMs = Math.Clamp((int)((stepInterval - accumulator) * 1000.0), 1, 16);
-                        lock (_wakeLock)
+                        if (accumulator < stepInterval)
                         {
-                            if (!_stopRequested && !_pausedDesired && _speedDesired == speed)
-                                Monitor.Wait(_wakeLock, waitMs);
+                            var waitMs = Math.Clamp((int)((stepInterval - accumulator) * 1000.0), 1, 16);
+                            lock (_wakeLock)
+                            {
+                                if (!_stopRequested && !_pausedDesired && _speedDesired == speed)
+                                    Monitor.Wait(_wakeLock, waitMs);
+                            }
+                            continue;
                         }
-                        continue;
+                        accumulator -= stepInterval;
                     }
-                    accumulator -= stepInterval;
                 }
 
                 if (campaign.AccessGate.HasWriteWaiter)
@@ -1426,7 +1473,6 @@ public sealed class BackgroundSimRunner : IDisposable
                 var openedDay = false;
                 var awaitingPlayer = false;
                 Exception caught = null;
-                var mobilePacing = MobilePacing;
                 var measurePacing = MeasurePacing;
                 var stepWorkStarted = Stopwatch.GetTimestamp();
 
@@ -1438,22 +1484,28 @@ public sealed class BackgroundSimRunner : IDisposable
                     if (_stopRequested || _pausedDesired || campaign.IsPaused || campaign.SimulationFault.Length > 0)
                     {
                         if (campaign.MidStep) campaign.FinishStep();
+                        if (!mobilePacing) campaign.RuntimeStepHoursOverride = 0;
                         PublishSnapshotLocked(campaign, force: true);
                     }
                     else
                     {
                         campaign.Speed = speed;
-                        // Batch consecutive hours at Speed 5 inside one write lock until a new day
-                        // opens, a player modal arrives, a slice runs out mid-step, a reader/writer
-                        // waits, or the slice budget expires.
-                        var sliceMs = speed >= 5 ? (mobilePacing ? 5.5 : 9.0) : (mobilePacing ? 3.0 : 5.0);
+                        if (!campaign.MidStep)
+                            campaign.RuntimeStepHoursOverride = mobilePacing ? MobileAdaptiveStepHours(speed) : 0;
+                        // Batch consecutive steps at Speed 4/5 inside one write lock until a player
+                        // modal arrives, a slice runs out mid-step, a reader/writer waits, or the slice budget expires.
+                        var sliceMs = speed >= 5 ? (mobilePacing ? 14.0 : 10.0) : speed == 4 ? (mobilePacing ? 10.0 : 6.5) : 5.0;
                         var batchStarted = Stopwatch.GetTimestamp();
                         var anyStepDone = false;
                         var anyOpenedDay = false;
                         var anyAwaitingPlayer = false;
                         do
                         {
-                            if (!campaign.MidStep) _workerStepStartHours = campaign.ElapsedHours;
+                            if (!campaign.MidStep)
+                            {
+                                campaign.RuntimeStepHoursOverride = mobilePacing ? MobileAdaptiveStepHours(speed) : 0;
+                                _workerStepStartHours = campaign.ElapsedHours;
+                            }
                             var remainingMs = Math.Max(0.0, sliceMs - Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds);
                             var finished = campaign.StepFor(remainingMs);
                             if (!finished || campaign.MidStep) break;
@@ -1466,10 +1518,19 @@ public sealed class BackgroundSimRunner : IDisposable
                                 PublishCompletedDate(campaign);
                             }
 
-                            if (speed < 5 || anyOpenedDay || anyAwaitingPlayer) break;
+                            if (speed < 4 || anyAwaitingPlayer) break;
                             if (_stopRequested || _pausedDesired || campaign.IsPaused || campaign.SimulationFault.Length > 0) break;
-                            if (campaign.AccessGate.HasReaderRequested || campaign.AccessGate.HasWriteWaiter || IsYieldRequested()) break;
+                            if (campaign.AccessGate.HasWriteWaiter || IsYieldRequested()) break;
                             if (Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= sliceMs) break;
+                            if (campaign.AccessGate.HasReaderRequested &&
+                                (!mobilePacing || campaign.AccessGate.IsReaderStarving ||
+                                 Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= 8.0))
+                                break;
+                            if (speed == 4)
+                            {
+                                if (stepInterval <= 0.0 || accumulator < stepInterval) break;
+                                accumulator -= stepInterval;
+                            }
                         }
                         while (true);
 
@@ -1488,8 +1549,8 @@ public sealed class BackgroundSimRunner : IDisposable
                 {
                     var releasingAt = measurePacing ? Stopwatch.GetTimestamp() : 0;
                     if (measurePacing) Interlocked.Add(ref _workerWorkTicks, releasingAt - acquiredAt);
-                    campaign.AccessGate.ExitWrite(yieldToRequestedReader: true, readerWindowMs: mobilePacing ? 40 : 24,
-                        readerWorkAheadMs: mobilePacing ? 10 : 0);
+                    campaign.AccessGate.ExitWrite(yieldToRequestedReader: true, readerWindowMs: mobilePacing ? 10 : 24,
+                        readerWorkAheadMs: mobilePacing ? 18 : 0);
                     if (measurePacing) Interlocked.Add(ref _workerReleaseTicks, Stopwatch.GetTimestamp() - releasingAt);
                 }
 

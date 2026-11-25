@@ -122,10 +122,13 @@ public partial class StartupIntro : CanvasLayer
     private void BeginWarmup()
     {
         _warmupStarted = true;
-        var paths = new List<string> { "res://Scenes/Main.tscn" };
         var isMobile = Platform.PlatformProfile.Current?.IsMobile == true ||
                        OS.HasFeature("mobile") || OS.HasFeature("android") || OS.HasFeature("ios");
-        if (!isMobile && !SettingsCatalog.Flag("loading_without_ai_art"))
+        // Avoid background threaded scene/texture loading during startup on mobile;
+        // Godot's worker loader and GLES3 resource teardown race on Android (#124796).
+        if (isMobile) return;
+        var paths = new List<string> { "res://Scenes/Main.tscn" };
+        if (!SettingsCatalog.Flag("loading_without_ai_art"))
             paths.AddRange(new[] { "loading_war_room", "loading_negotiation_hall", "loading_port_dusk", "loading_winter_front" }
                 .Select(name => SpriteCatalog.TextureOf(name, "res://game/gfx/loading/" + name + ".jpg")));
         foreach (var path in paths.Distinct(StringComparer.Ordinal))

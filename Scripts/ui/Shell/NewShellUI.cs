@@ -149,6 +149,7 @@ public partial class DealOrForceGame
         ctx.MergeSelectedArmies = () => OpenScreen("Military");
         ctx.ClearArmySelection = ClearArmySelectionAndClose;
         ctx.ClearRegionSelection = ClearRegionSelection;
+        ctx.HighlightNation = mapIdx => _globe?.HighlightNation(mapIdx);
         ctx.RefreshAll = () => { Refresh(); RefreshNewShell(force: true); };
         ctx.OpenDealInbox = OpenDealInbox;
         ctx.GetIncomingDiplomaticCount = CountIncomingDiplomaticInbox;

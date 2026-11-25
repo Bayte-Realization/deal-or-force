@@ -275,4 +275,52 @@ public static class GeopoliticalCycle
 
     /// <summary>Whether the international system is currently in an era of heightened geopolitical friction.</summary>
     public static bool IsFrictionEra(Campaign campaign) => GlobalTensionOffset(campaign) > 2.0f;
+
+    /// <summary>
+    /// Deterministic zero-alloc macro-economic wave (-1 .. +1): ~9y Juglar business cycle blended
+    /// with ~45y Kondratiev secular wave. Zero before Year 1, ramping gently across Years 2-4 so
+    /// 2024 bookmark openings stay untouched while 10-100 year campaigns see recurring booms and slumps.
+    /// </summary>
+    public static float MacroEconomicWave(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null || campaign.ElapsedDays < DaysPerYear) return 0f;
+
+        var days = campaign.ElapsedDays;
+        var ramp = M.Clamp01((days - DaysPerYear) / (float)(3 * DaysPerYear));
+        var seed = campaign.Seed;
+
+        var globalJuglarShift = HashToUnit(Fnv1aMixInt(Fnv1aMixInt(Fnv1aInit(), seed), 0x391A)) * (2.0 * Math.PI);
+        var nationJuglarShift = HashToUnit(HashNationEpoch(seed, nation, 0, 0x391B)) * (0.9 * Math.PI);
+        var juglar = (float)Math.Sin(days * (2.0 * Math.PI / 3285.0) + globalJuglarShift + nationJuglarShift);
+
+        var kondratievShift = HashToUnit(Fnv1aMixInt(Fnv1aMixInt(Fnv1aInit(), seed), 0x4501)) * (2.0 * Math.PI);
+        var nationKondratievOffset = HashToUnit(HashNationEpoch(seed, nation, 0, 0x4502)) * (0.5 * Math.PI);
+        var kondratiev = (float)Math.Sin(days * (2.0 * Math.PI / 16425.0) + kondratievShift + nationKondratievOffset);
+
+        var raw = juglar * 0.62f + kondratiev * 0.38f;
+        return Math.Clamp(raw * ramp, -1f, 1f);
+    }
+
+    /// <summary>
+    /// Secular institutional sclerosis (0 .. 1) accumulating when a regime or leadership sits unchallenged
+    /// for 20-40+ years without institutional reform or peaceful alternation. Zero in Year 1.
+    /// </summary>
+    public static float InstitutionalSclerosis(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null || campaign.ElapsedDays < DaysPerYear) return 0f;
+
+        var days = campaign.ElapsedDays;
+        var ramp = M.Clamp01((days - DaysPerYear) / (float)(3 * DaysPerYear));
+        var regimeSince = Math.Max(0, nation.PoliticsChangedDay);
+        var rulerSince = Math.Max(0, Math.Max(nation.HeadOfStateSinceDay, nation.HeadOfGovernmentSinceDay));
+        var regimeYears = Math.Max(0f, (days - regimeSince) / (float)DaysPerYear);
+        var rulerYears = Math.Max(0f, (days - rulerSince) / (float)DaysPerYear);
+        var effectiveYears = regimeYears * 0.65f + rulerYears * 0.35f;
+        if (nation.Elections is { IncumbentTerms: >= 4 } elections)
+            effectiveYears += (elections.IncumbentTerms - 3) * 1.5f;
+
+        if (effectiveYears <= 8f) return 0f;
+        var buildup = M.Clamp01((effectiveYears - 8f) / 28f);
+        return Math.Clamp(buildup * ramp, 0f, 1f);
+    }
 }

@@ -151,8 +151,8 @@ public static class BootCrashDiagnostics
         _lastStage = stage;
 
         var line = string.IsNullOrEmpty(cleanDetail)
-            ? $"[{nowUtc:yyyy-MM-dd HH:mm:ss.fff}Z +{elapsedMs}ms t={threadId} gc={managedMb:0.1}MB nat={staticMb:0.1}MB] {stage}\n"
-            : $"[{nowUtc:yyyy-MM-dd HH:mm:ss.fff}Z +{elapsedMs}ms t={threadId} gc={managedMb:0.1}MB nat={staticMb:0.1}MB] {stage}: {cleanDetail}\n";
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"[{nowUtc:yyyy-MM-dd HH:mm:ss.fff}Z +{elapsedMs}ms t={threadId} gc={managedMb:0.0}MB nat={staticMb:0.0}MB] {stage}\n")
+            : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"[{nowUtc:yyyy-MM-dd HH:mm:ss.fff}Z +{elapsedMs}ms t={threadId} gc={managedMb:0.0}MB nat={staticMb:0.0}MB] {stage}: {cleanDetail}\n");
 
         lock (Sync)
         {
@@ -222,16 +222,22 @@ public static class BootCrashDiagnostics
         var collapsed = CollapseWhitespace(text);
         if (collapsed.Length > 900) collapsed = collapsed[..900] + "...";
         var managedMb = GC.GetTotalMemory(false) / (1024.0 * 1024.0);
-        var line = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}Z +{ProcessClock.ElapsedMilliseconds}ms t={System.Environment.CurrentManagedThreadId} gc={managedMb:0.1}MB] engine_error: {collapsed}\n";
+        var isEngineWarning = text.StartsWith("ENGINE_Warning", StringComparison.OrdinalIgnoreCase);
+        var tag = isEngineWarning ? "engine_warning" : "engine_error";
+        var line = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}Z +{ProcessClock.ElapsedMilliseconds}ms t={System.Environment.CurrentManagedThreadId} gc={managedMb:0.0}MB] {tag}: {collapsed}\n");
 
+        // Godot GLES3 emits ENGINE_Warning notices (e.g. RGBAFloat -> RGBAHalf fallback on ANGLE/Mali);
+        // keep them in boot_trace.txt without elevating harmless driver warnings to last_crash.txt.
         var isCritical =
-            text.Contains("ENGINE_Shader", StringComparison.OrdinalIgnoreCase) ||
-            text.Contains("shader", StringComparison.OrdinalIgnoreCase) ||
-            text.Contains("Vulkan", StringComparison.OrdinalIgnoreCase) ||
-            text.Contains("GLES", StringComparison.OrdinalIgnoreCase) ||
-            text.Contains("OpenGL", StringComparison.OrdinalIgnoreCase) ||
             text.Contains("OutOfMemory", StringComparison.OrdinalIgnoreCase) ||
-            text.Contains("Failed to load", StringComparison.OrdinalIgnoreCase);
+            (!isEngineWarning &&
+             (text.Contains("ENGINE_Shader", StringComparison.OrdinalIgnoreCase) ||
+              text.Contains("shader", StringComparison.OrdinalIgnoreCase) ||
+              text.Contains("Vulkan", StringComparison.OrdinalIgnoreCase) ||
+              text.Contains("GLES", StringComparison.OrdinalIgnoreCase) ||
+              text.Contains("OpenGL", StringComparison.OrdinalIgnoreCase) ||
+              text.Contains("Failed to load", StringComparison.OrdinalIgnoreCase)));
 
         lock (Sync)
         {
@@ -256,12 +262,12 @@ public static class BootCrashDiagnostics
 
         var sb = new StringBuilder(512);
         sb.AppendLine($"UtcNow: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}Z | UptimeMs: {ProcessClock.ElapsedMilliseconds}");
-        sb.AppendLine($"ManagedHeapMB: {GC.GetTotalMemory(false) / (1024.0 * 1024.0):0.2} | Gen0={GC.CollectionCount(0)} Gen1={GC.CollectionCount(1)} Gen2={GC.CollectionCount(2)}");
+        sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"ManagedHeapMB: {GC.GetTotalMemory(false) / (1024.0 * 1024.0):0.00} | Gen0={GC.CollectionCount(0)} Gen1={GC.CollectionCount(1)} Gen2={GC.CollectionCount(2)}");
 
         try
         {
             var gcInfo = GC.GetGCMemoryInfo();
-            sb.AppendLine($"GcMemoryLoadMB: {gcInfo.MemoryLoadBytes / (1024.0 * 1024.0):0.1} / HighMemThreshMB: {gcInfo.HighMemoryLoadThresholdBytes / (1024.0 * 1024.0):0.1} | TotalAvailMB: {gcInfo.TotalAvailableMemoryBytes / (1024.0 * 1024.0):0.1}");
+            sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"GcMemoryLoadMB: {gcInfo.MemoryLoadBytes / (1024.0 * 1024.0):0.0} / HighMemThreshMB: {gcInfo.HighMemoryLoadThresholdBytes / (1024.0 * 1024.0):0.0} | TotalAvailMB: {gcInfo.TotalAvailableMemoryBytes / (1024.0 * 1024.0):0.0}");
         }
         catch
         {
@@ -298,7 +304,7 @@ public static class BootCrashDiagnostics
         var env = new StringBuilder(384);
         env.AppendLine($"AppVersion: {version} | OS: {osName} {osVer} | Model: {model} | CPU: {cpu}");
         env.AppendLine($"Renderer: method={renderMethod} driver={renderDriver} | Adapter: {adapter} ({vendor}) API={apiVer}");
-        env.AppendLine($"MemoryMB: Static={staticMemMb:0.1} | OS Phys={physMb:0.1} Free={freeMb:0.1} Avail={availMb:0.1} | RenderVRAM={vramMb:0.1} TexMem={texMb:0.1}");
+        env.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"MemoryMB: Static={staticMemMb:0.0} | OS Phys={physMb:0.0} Free={freeMb:0.0} Avail={availMb:0.0} | RenderVRAM={vramMb:0.0} TexMem={texMb:0.0}");
         env.AppendLine($"AccessibleLogs: {_accessibleLogDirectory}");
         if (!string.IsNullOrEmpty(_internalLogDirectory) &&
             !string.Equals(_internalLogDirectory, _accessibleLogDirectory, StringComparison.OrdinalIgnoreCase))
@@ -676,16 +682,67 @@ public static class BootCrashDiagnostics
 
     private static (double physMb, double freeMb, double availMb) TryGetOsMemoryMb()
     {
+        double phys = 0.0, free = 0.0, avail = 0.0;
         try
         {
             var mem = OS.GetMemoryInfo();
-            double Mb(string key) => mem.TryGetValue(key, out var v) ? v.AsInt64() / (1024.0 * 1024.0) : 0.0;
-            return (Mb("physical"), Mb("free"), Mb("available"));
+            double PositiveMb(string key)
+            {
+                if (!mem.TryGetValue(key, out var v)) return 0.0;
+                var bytes = v.AsInt64();
+                return bytes > 0 ? bytes / (1024.0 * 1024.0) : 0.0;
+            }
+            phys = PositiveMb("physical");
+            free = PositiveMb("free");
+            avail = PositiveMb("available");
         }
         catch
         {
-            return (0.0, 0.0, 0.0);
         }
+
+        if ((phys <= 0.0 || avail <= 0.0) && (OperatingSystem.IsAndroid() || OperatingSystem.IsLinux()))
+        {
+            try
+            {
+                if (File.Exists("/proc/meminfo"))
+                {
+                    foreach (var line in File.ReadLines("/proc/meminfo"))
+                    {
+                        if (phys <= 0.0 && line.StartsWith("MemTotal:", StringComparison.Ordinal))
+                            phys = ParseMemInfoKb(line) / 1024.0;
+                        else if (free <= 0.0 && line.StartsWith("MemFree:", StringComparison.Ordinal))
+                            free = ParseMemInfoKb(line) / 1024.0;
+                        else if (avail <= 0.0 && line.StartsWith("MemAvailable:", StringComparison.Ordinal))
+                            avail = ParseMemInfoKb(line) / 1024.0;
+                        if (phys > 0.0 && free > 0.0 && avail > 0.0) break;
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+        return (phys, free, avail);
+    }
+
+    private static double ParseMemInfoKb(string line)
+    {
+        long value = 0;
+        var inDigits = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var ch = line[i];
+            if (ch is >= '0' and <= '9')
+            {
+                inDigits = true;
+                value = value * 10 + (ch - '0');
+            }
+            else if (inDigits)
+            {
+                break;
+            }
+        }
+        return inDigits ? value : 0.0;
     }
 
     private static (double vramMb, double texMb) TryGetRenderMemoryMb()

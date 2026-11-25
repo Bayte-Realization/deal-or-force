@@ -95,236 +95,266 @@ internal static class ShellCountryDossierView
         ShellContext ctx, VBoxContainer bodyRows, Campaign world, Nation nation,
         bool isOwn, Action<Nation> openCountry, Action openStaffTab = null)
     {
-        var root = CreatePaddedRoot(bodyRows, "ShellOverviewPaddedRoot");
-        var observing = ctx.IsObserverMode?.Invoke() ?? world.ObserverMode;
-        if (observing)
-            AddInfoBanner(ctx, root, "icon_shell_eye", Loc.Get("shell.obs.readonly_banner"), "shell.state.info");
-
-        PopulateRulerCard(ctx, root, world, nation);
-
-        // State Identity & Research Inlaid Card
-        var stateCard = MakeSectionCard(ctx, root, "ShellOverviewStateCard", "icon_research",
-            Loc.Get("shell.clarity.state_pulse"), null, "shell.state.info");
-        ShellCountryOutlookView.AddCapitalRow(ctx, stateCard, world, nation);
-        var identityBrief = StateIdentity.Brief(world, nation);
-        if (!string.IsNullOrWhiteSpace(identityBrief))
-            AddKvRow(ctx, stateCard, Loc.Get("shell.clarity.state_identity"), identityBrief, "shell.paper_muted");
-
-        if (isOwn || observing || CampaignIntel.PlayerCanInspect(world, nation.Id))
+        if (world is null || nation is null || !world.TryEnterRead(100, true)) return;
+        try
         {
-            ShellCountryOutlookView.AddOverviewStabilityDragRow(ctx, stateCard, world, nation, true);
-            var tech = !string.IsNullOrEmpty(nation.CurrentResearch) ? TechnologyCatalog.Of(nation.CurrentResearch) : null;
-            var techName = tech is not null ? Loc.Get(tech.Name) : Loc.Get("shell.clarity.no_research");
-            var progress = tech is not null ? nation.ResearchProgress.GetValueOrDefault(tech.Id) : 0f;
-            var frac = tech is not null ? Math.Clamp(progress / MathF.Max(1f, tech.Cost), 0f, 1f) : 0f;
-            AddKvRow(ctx, stateCard, Loc.Get("shell.clarity.active_research"),
-                tech is not null ? $"{techName} ({(int)MathF.Round(frac * 100f)}%)" : techName,
-                tech is not null ? "shell.state.info" : "shell.state.warning_text");
-            if (tech is not null)
-                AddProgressBar(stateCard, frac, "shell.state.info");
+            var root = CreatePaddedRoot(bodyRows, "ShellOverviewPaddedRoot");
+            var observing = ctx.IsObserverMode?.Invoke() ?? world.ObserverMode;
+            if (observing)
+                AddInfoBanner(ctx, root, "icon_shell_eye", Loc.Get("shell.obs.readonly_banner"), "shell.state.info");
+
+            PopulateRulerCard(ctx, root, world, nation);
+
+            // State Identity & Research Inlaid Card
+            var stateCard = MakeSectionCard(ctx, root, "ShellOverviewStateCard", "icon_research",
+                Loc.Get("shell.clarity.state_pulse"), null, "shell.state.info");
+            ShellCountryOutlookView.AddCapitalRow(ctx, stateCard, world, nation);
+            var identityBrief = StateIdentity.Brief(world, nation);
+            if (!string.IsNullOrWhiteSpace(identityBrief))
+                AddKvRow(ctx, stateCard, Loc.Get("shell.clarity.state_identity"), identityBrief, "shell.paper_muted");
+
+            if (isOwn || observing || CampaignIntel.PlayerCanInspect(world, nation.Id))
+            {
+                ShellCountryOutlookView.AddOverviewStabilityDragRow(ctx, stateCard, world, nation, true);
+                var tech = !string.IsNullOrEmpty(nation.CurrentResearch) ? TechnologyCatalog.Of(nation.CurrentResearch) : null;
+                var techName = tech is not null ? Loc.Get(tech.Name) : Loc.Get("shell.clarity.no_research");
+                var progress = tech is not null ? nation.ResearchProgress.GetValueOrDefault(tech.Id) : 0f;
+                var frac = tech is not null ? Math.Clamp(progress / MathF.Max(1f, tech.Cost), 0f, 1f) : 0f;
+                AddKvRow(ctx, stateCard, Loc.Get("shell.clarity.active_research"),
+                    tech is not null ? $"{techName} ({(int)MathF.Round(frac * 100f)}%)" : techName,
+                    tech is not null ? "shell.state.info" : "shell.state.warning_text");
+                if (tech is not null)
+                    AddProgressBar(stateCard, frac, "shell.state.info");
+            }
+
+            // At-a-Glance Diplomatic Pulse Strip (Wars, Allies, Subjects, Blocs)
+            var warCount = Warfare.OpenWars(world).Count(w => !w.Ended && w.Involves(nation.Id));
+            var allyCount = AllianceSystem.AlliesOf(world, nation).Count;
+            var subjCount = SubjectSystem.SubjectsOf(world, nation).Count;
+            var blocCount = world.FeatureEnabled("organizations") ? InternationalOrganizations.Memberships(world, nation.Id).Count() : 0;
+
+            var dipStrip = MakeSectionCard(ctx, root, "ShellOverviewDipPulse", "icon_diplomacy",
+                Loc.Get("shell.clarity.diplomatic_pulse"), null, warCount > 0 ? "shell.state.negative_text" : "shell.brass_hi");
+            var pulseGrid = new GridContainer { Columns = 4, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
+            pulseGrid.AddThemeConstantOverride("h_separation", 4);
+            dipStrip.AddChild(pulseGrid);
+            AddMiniKpi(ctx, pulseGrid, Loc.Get("Wars"), warCount.ToString(CultureInfo.InvariantCulture), warCount > 0 ? "shell.state.negative_text" : "shell.paper_muted");
+            AddMiniKpi(ctx, pulseGrid, Loc.Get("shell.dip.allies"), allyCount.ToString(CultureInfo.InvariantCulture), allyCount > 0 ? "shell.state.positive" : "shell.paper_muted");
+            AddMiniKpi(ctx, pulseGrid, Loc.Get("shell.dip.subjects"), subjCount.ToString(CultureInfo.InvariantCulture), subjCount > 0 ? "shell.brass_hi" : "shell.paper_muted");
+            AddMiniKpi(ctx, pulseGrid, Loc.Get("shell.dip.blocs"), blocCount.ToString(CultureInfo.InvariantCulture), blocCount > 0 ? "shell.state.info" : "shell.paper_muted");
+            DealOrForceGame.AddShellOverviewDynamismPills(ctx, dipStrip, world, nation, isOwn);
+
+            // Standing KPIs Card
+            var kpiCard = MakeSectionCard(ctx, root, "ShellOverviewKpis", "icon_economy",
+                Loc.Get("shell.standing_kpis"), null, "shell.brass_hi");
+            AddStandingGrid(ctx, kpiCard, world, nation, isOwn || observing || CampaignIntel.PlayerCanInspect(world, nation.Id));
+            ShellCountryTelemetryView.AddTerritoryIndustryCard(ctx, root, world, nation);
+
+            if (isOwn && !observing && openStaffTab is not null)
+                AddStaffQuickLink(ctx, root, nation, openStaffTab);
+
+            // Neighbours Card
+            var nbCard = MakeSectionCard(ctx, root, "ShellOverviewNeighbours", "icon_world",
+                Loc.Get("Neighbours"), Loc.Get("GDP"), "shell.paper_muted");
+            var neighbors = world.Nations
+                .Where(n => n.Population > 0 && n.Id != nation.Id)
+                .OrderByDescending(n => n.Region == nation.Region ? 1 : 0)
+                .ThenByDescending(n => n.Gdp)
+                .Take(6)
+                .ToArray();
+            foreach (var nb in neighbors)
+            {
+                var captured = nb;
+                var rel = (int)MathF.Round(CampaignDiplomacy.ReadOrNeutral(world, nation.Id, nb.Id).Opinion);
+                AddCountryComparisonRow(ctx, nbCard, nb, Fmt.Money(nb.Gdp), $"{rel:+#;-#;0}",
+                    rel < -15 ? "shell.state.negative_text" : (rel > 20 ? "shell.state.positive" : "shell.paper_muted"),
+                    () => openCountry(captured));
+            }
         }
-
-        // At-a-Glance Diplomatic Pulse Strip (Wars, Allies, Subjects, Blocs)
-        var warCount = Warfare.OpenWars(world).Count(w => !w.Ended && w.Involves(nation.Id));
-        var allyCount = AllianceSystem.AlliesOf(world, nation).Count;
-        var subjCount = SubjectSystem.SubjectsOf(world, nation).Count;
-        var blocCount = world.FeatureEnabled("organizations") ? InternationalOrganizations.Memberships(world, nation.Id).Count() : 0;
-
-        var dipStrip = MakeSectionCard(ctx, root, "ShellOverviewDipPulse", "icon_diplomacy",
-            Loc.Get("shell.clarity.diplomatic_pulse"), null, warCount > 0 ? "shell.state.negative_text" : "shell.brass_hi");
-        var pulseGrid = new GridContainer { Columns = 4, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
-        pulseGrid.AddThemeConstantOverride("h_separation", 4);
-        dipStrip.AddChild(pulseGrid);
-        AddMiniKpi(ctx, pulseGrid, Loc.Get("Wars"), warCount.ToString(CultureInfo.InvariantCulture), warCount > 0 ? "shell.state.negative_text" : "shell.paper_muted");
-        AddMiniKpi(ctx, pulseGrid, Loc.Get("shell.dip.allies"), allyCount.ToString(CultureInfo.InvariantCulture), allyCount > 0 ? "shell.state.positive" : "shell.paper_muted");
-        AddMiniKpi(ctx, pulseGrid, Loc.Get("shell.dip.subjects"), subjCount.ToString(CultureInfo.InvariantCulture), subjCount > 0 ? "shell.brass_hi" : "shell.paper_muted");
-        AddMiniKpi(ctx, pulseGrid, Loc.Get("shell.dip.blocs"), blocCount.ToString(CultureInfo.InvariantCulture), blocCount > 0 ? "shell.state.info" : "shell.paper_muted");
-
-        // Standing KPIs Card
-        var kpiCard = MakeSectionCard(ctx, root, "ShellOverviewKpis", "icon_economy",
-            Loc.Get("shell.standing_kpis"), null, "shell.brass_hi");
-        AddStandingGrid(ctx, kpiCard, world, nation, isOwn || observing || CampaignIntel.PlayerCanInspect(world, nation.Id));
-        ShellCountryTelemetryView.AddTerritoryIndustryCard(ctx, root, world, nation);
-
-        if (isOwn && !observing && openStaffTab is not null)
-            AddStaffQuickLink(ctx, root, nation, openStaffTab);
-
-        // Neighbours Card
-        var nbCard = MakeSectionCard(ctx, root, "ShellOverviewNeighbours", "icon_world",
-            Loc.Get("Neighbours"), Loc.Get("GDP"), "shell.paper_muted");
-        var neighbors = world.Nations
-            .Where(n => n.Population > 0 && n.Id != nation.Id)
-            .OrderByDescending(n => n.Region == nation.Region ? 1 : 0)
-            .ThenByDescending(n => n.Gdp)
-            .Take(6)
-            .ToArray();
-        foreach (var nb in neighbors)
+        finally
         {
-            var captured = nb;
-            var rel = (int)MathF.Round(CampaignDiplomacy.ReadOrNeutral(world, nation.Id, nb.Id).Opinion);
-            AddCountryComparisonRow(ctx, nbCard, nb, Fmt.Money(nb.Gdp), $"{rel:+#;-#;0}",
-                rel < -15 ? "shell.state.negative_text" : (rel > 20 ? "shell.state.positive" : "shell.paper_muted"),
-                () => openCountry(captured));
+            world.ExitRead();
         }
     }
 
     public static void PopulateSociety(
         ShellContext ctx, VBoxContainer bodyRows, Campaign world, Nation nation)
     {
-        var root = CreatePaddedRoot(bodyRows, "ShellSocietyPaddedRoot");
-        ShellCountryTelemetryView.AddSocietyDemographyCard(ctx, root, world, nation);
-        PopulateRulerCard(ctx, root, world, nation);
-
-        var states = world.StatesOf(nation);
-        var totalRad = 0f;
-        var stCount = 0;
-        foreach (var s in states) { totalRad += s.Radicalism; stCount++; }
-        var avgRadicalism = stCount > 0 ? totalRad / stCount : 0f;
-
-        var socCard = MakeSectionCard(ctx, root, "ShellSocietyMetersCard", "icon_stability",
-            Loc.Get("shell.society_profile"), null, "shell.brass_hi");
-        AddSocietyMeter(ctx, socCard, "icon_stability", Loc.Get("Stability"), nation.Stability, Fmt.Percent(nation.Stability), StabilityColor(nation.Stability));
-        AddSocietyMeter(ctx, socCard, "icon_living", Loc.Get("Standard of living"), nation.StandardOfLiving, Fmt.Percent(nation.StandardOfLiving), GoodHighColor(nation.StandardOfLiving));
-        AddSocietyMeter(ctx, socCard, "icon_urbanisation", Loc.Get("Urbanisation"), nation.Urbanisation, Fmt.Percent(nation.Urbanisation), Ui.Colour("shell.state.info"));
-        AddSocietyMeter(ctx, socCard, "icon_literacy", Loc.Get("Literacy"), nation.Literacy, Fmt.Percent(nation.Literacy), Ui.Colour("shell.brass_hi"));
-        AddSocietyMeter(ctx, socCard, "icon_unrest", Loc.Get("Radicalism"), avgRadicalism, Fmt.Percent(avgRadicalism), DangerHighColor(avgRadicalism));
-        AddSocietyMeter(ctx, socCard, "icon_welfare", Loc.Get("War support"), nation.WarSupport, Fmt.Percent(nation.WarSupport), GoodHighColor(nation.WarSupport));
-
-        ShellCountryOutlookView.AddStabilityOutlookCard(ctx, root, world, nation);
-
-        var cabCard = MakeSectionCard(ctx, root, "ShellSocietyCabinetCard", "icon_government",
-            Loc.Get("shell.leader_cabinet"), null, "shell.paper_muted");
-        var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
-        grid.AddThemeConstantOverride("h_separation", 6);
-        grid.AddThemeConstantOverride("v_separation", 4);
-        cabCard.AddChild(grid);
-
-        ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_government", Loc.Get("shell.government_form"), Loc.Get(PoliticsCore.GovernmentOf(nation).Name));
-        ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_laws", Loc.Get("shell.national_ideology"), Loc.Get(PoliticsCore.IdeologyOf(nation).Name));
-
-        var cultureId = DemographyCatalog.PrimaryCulture(nation.Tag);
-        var primaryCulture = !string.IsNullOrEmpty(cultureId) ? DemographyCatalog.CultureName(cultureId) : "—";
-        ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_nation", Loc.Get("shell.dominant_culture"), primaryCulture);
-
-        var faiths = !string.IsNullOrEmpty(cultureId) ? DemographyCatalog.FaithOf(cultureId) : null;
-        var faithId = faiths is { Count: > 0 } ? faiths[0].Religion : null;
-        var primaryFaith = !string.IsNullOrEmpty(faithId) ? DemographyCatalog.ReligionName(faithId) : "—";
-        ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_faith", Loc.Get("shell.dominant_faith"), primaryFaith);
-
-        // National demographic composition visual stacked bars (read-only)
-        var cultTotals = new Dictionary<string, long>(StringComparer.Ordinal);
-        var faithTotals = new Dictionary<string, long>(StringComparer.Ordinal);
-        var totalPop = 0L;
-        foreach (var s in states)
+        if (world is null || nation is null || !world.TryEnterRead(100, true)) return;
+        try
         {
-            if (s.Population <= 0) continue;
-            totalPop += s.Population;
-            foreach (var c in EconomySystem.Cultures(s))
-                cultTotals[c.Culture] = cultTotals.GetValueOrDefault(c.Culture) + c.Size;
-            foreach (var f in DemographyCatalog.DenominationsIn(s, s.NationId))
-                faithTotals[f.Denomination] = faithTotals.GetValueOrDefault(f.Denomination) + f.Size;
+            var root = CreatePaddedRoot(bodyRows, "ShellSocietyPaddedRoot");
+            ShellCountryTelemetryView.AddSocietyDemographyCard(ctx, root, world, nation);
+            PopulateRulerCard(ctx, root, world, nation);
+
+            var states = world.StatesOf(nation);
+            var totalRad = 0f;
+            var stCount = 0;
+            foreach (var s in states) { totalRad += s.Radicalism; stCount++; }
+            var avgRadicalism = stCount > 0 ? totalRad / stCount : 0f;
+
+            var socCard = MakeSectionCard(ctx, root, "ShellSocietyMetersCard", "icon_stability",
+                Loc.Get("shell.society_profile"), null, "shell.brass_hi");
+            AddSocietyMeter(ctx, socCard, "icon_stability", Loc.Get("Stability"), nation.Stability, Fmt.Percent(nation.Stability), StabilityColor(nation.Stability));
+            AddSocietyMeter(ctx, socCard, "icon_living", Loc.Get("Standard of living"), nation.StandardOfLiving, Fmt.Percent(nation.StandardOfLiving), GoodHighColor(nation.StandardOfLiving));
+            AddSocietyMeter(ctx, socCard, "icon_urbanisation", Loc.Get("Urbanisation"), nation.Urbanisation, Fmt.Percent(nation.Urbanisation), Ui.Colour("shell.state.info"));
+            AddSocietyMeter(ctx, socCard, "icon_literacy", Loc.Get("Literacy"), nation.Literacy, Fmt.Percent(nation.Literacy), Ui.Colour("shell.brass_hi"));
+            AddSocietyMeter(ctx, socCard, "icon_unrest", Loc.Get("Radicalism"), avgRadicalism, Fmt.Percent(avgRadicalism), DangerHighColor(avgRadicalism));
+            AddSocietyMeter(ctx, socCard, "icon_welfare", Loc.Get("War support"), nation.WarSupport, Fmt.Percent(nation.WarSupport), GoodHighColor(nation.WarSupport));
+
+            ShellCountryOutlookView.AddStabilityOutlookCard(ctx, root, world, nation);
+
+            var cabCard = MakeSectionCard(ctx, root, "ShellSocietyCabinetCard", "icon_government",
+                Loc.Get("shell.leader_cabinet"), null, "shell.paper_muted");
+            var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
+            grid.AddThemeConstantOverride("h_separation", 6);
+            grid.AddThemeConstantOverride("v_separation", 4);
+            cabCard.AddChild(grid);
+
+            ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_government", Loc.Get("shell.government_form"), Loc.Get(PoliticsCore.GovernmentOf(nation).Name));
+            ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_laws", Loc.Get("shell.national_ideology"), Loc.Get(PoliticsCore.IdeologyOf(nation).Name));
+
+            var cultureId = DemographyCatalog.PrimaryCulture(nation.Tag);
+            var primaryCulture = !string.IsNullOrEmpty(cultureId) ? DemographyCatalog.CultureName(cultureId) : "—";
+            ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_nation", Loc.Get("shell.dominant_culture"), primaryCulture);
+
+            var faiths = !string.IsNullOrEmpty(cultureId) ? DemographyCatalog.FaithOf(cultureId) : null;
+            var faithId = faiths is { Count: > 0 } ? faiths[0].Religion : null;
+            var primaryFaith = !string.IsNullOrEmpty(faithId) ? DemographyCatalog.ReligionName(faithId) : "—";
+            ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_faith", Loc.Get("shell.dominant_faith"), primaryFaith);
+
+            // National demographic composition visual stacked bars (read-only)
+            var cultTotals = new Dictionary<string, long>(StringComparer.Ordinal);
+            var faithTotals = new Dictionary<string, long>(StringComparer.Ordinal);
+            var totalPop = 0L;
+            foreach (var s in states)
+            {
+                if (s.Population <= 0) continue;
+                totalPop += s.Population;
+                foreach (var c in EconomySystem.Cultures(s))
+                    cultTotals[c.Culture] = cultTotals.GetValueOrDefault(c.Culture) + c.Size;
+                foreach (var f in DemographyCatalog.DenominationsIn(s, s.NationId))
+                    faithTotals[f.Denomination] = faithTotals.GetValueOrDefault(f.Denomination) + f.Size;
+            }
+            if (totalPop > 0 && cultTotals.Count > 0)
+            {
+                var cultCard = MakeSectionCard(ctx, root, "ShellSocietyCultureCard", "icon_nation",
+                    Loc.Get("shell.clarity.culture_breakdown"), cultTotals.Count.ToString(CultureInfo.InvariantCulture), "shell.brass_hi");
+                var topCult = cultTotals.OrderByDescending(x => x.Value).Take(5)
+                    .Select((kv, idx) => (Name: DemographyCatalog.CultureName(kv.Key), Share: (float)(kv.Value / (double)totalPop),
+                        Tok: SwatchPalette[idx % SwatchPalette.Length])).ToList();
+                AddCompositionVisual(ctx, cultCard, topCult);
+            }
+            if (totalPop > 0 && faithTotals.Count > 0)
+            {
+                var faithCard = MakeSectionCard(ctx, root, "ShellSocietyFaithCard", "icon_faith",
+                    Loc.Get("shell.clarity.faith_breakdown"), faithTotals.Count.ToString(CultureInfo.InvariantCulture), "shell.state.info");
+                var topFaith = faithTotals.OrderByDescending(x => x.Value).Take(5)
+                    .Select((kv, idx) => (Name: DemographyCatalog.ReligionName(kv.Key), Share: (float)(kv.Value / (double)totalPop),
+                        Tok: SwatchPalette[(idx + 1) % SwatchPalette.Length])).ToList();
+                AddCompositionVisual(ctx, faithCard, topFaith);
+            }
         }
-        if (totalPop > 0 && cultTotals.Count > 0)
-        {
-            var cultCard = MakeSectionCard(ctx, root, "ShellSocietyCultureCard", "icon_nation",
-                Loc.Get("shell.clarity.culture_breakdown"), cultTotals.Count.ToString(CultureInfo.InvariantCulture), "shell.brass_hi");
-            var topCult = cultTotals.OrderByDescending(x => x.Value).Take(5)
-                .Select((kv, idx) => (Name: DemographyCatalog.CultureName(kv.Key), Share: (float)(kv.Value / (double)totalPop),
-                    Tok: SwatchPalette[idx % SwatchPalette.Length])).ToList();
-            AddCompositionVisual(ctx, cultCard, topCult);
-        }
-        if (totalPop > 0 && faithTotals.Count > 0)
-        {
-            var faithCard = MakeSectionCard(ctx, root, "ShellSocietyFaithCard", "icon_faith",
-                Loc.Get("shell.clarity.faith_breakdown"), faithTotals.Count.ToString(CultureInfo.InvariantCulture), "shell.state.info");
-            var topFaith = faithTotals.OrderByDescending(x => x.Value).Take(5)
-                .Select((kv, idx) => (Name: DemographyCatalog.ReligionName(kv.Key), Share: (float)(kv.Value / (double)totalPop),
-                    Tok: SwatchPalette[(idx + 1) % SwatchPalette.Length])).ToList();
-            AddCompositionVisual(ctx, faithCard, topFaith);
-        }
+        finally { world.ExitRead(); }
     }
 
     public static void PopulateDecisions(
         ShellContext ctx, VBoxContainer bodyRows, Campaign world, Nation nation)
     {
-        var root = CreatePaddedRoot(bodyRows, "ShellDecisionsPaddedRoot");
-        var ppWeekly = world.Defines.PoliticalPointsPerWeek +
-            world.Defines.PoliticalPointsStabilityWeight * Math.Clamp(nation.Stability, 0f, 1f);
-        var ready = new List<DecisionDefinition>();
-        var all = DecisionCatalog.All;
-        for (var i = 0; i < all.Count; i++)
-            if (!DecisionCatalog.IsBlocked(world, nation, all[i])) ready.Add(all[i]);
-
-        var card = MakeSectionCard(ctx, root, "ShellDecisionsCard", "icon_decisions",
-            Loc.Get("Decisions"), Loc.Format("shell.clarity.decisions_ready_fmt", ready.Count),
-            ready.Count > 0 ? "shell.state.positive" : "shell.paper_muted");
-
-        AddKvRow(ctx, card, Loc.Get("Political capital"),
-            $"{nation.PoliticalPoints:0.0} (+{ppWeekly:0.0}/{Loc.Get("week")})", "shell.paper");
-
-        var cap = Math.Min(7, ready.Count);
-        for (var i = 0; i < cap; i++)
+        if (world is null || nation is null || !world.TryEnterRead(100, true)) return;
+        try
         {
-            var dec = ready[i];
-            var costTxt = dec.GdpCostShare > 0f
-                ? Fmt.Money(nation.Gdp * dec.GdpCostShare)
-                : (dec.ResourceCosts is { Count: > 0 } ? $"{dec.ResourceCosts[0].Amount:0.#}" : "—");
-            var rowPanel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
-            rowPanel.AddThemeStyleboxOverride("panel", ctx.BorderedBox("shell.well_bottom", "shell.engrave", 1, 2, 7, 4, 7, 4));
-            rowPanel.TooltipText = Ui.Tip($"{Loc.Get(dec.Name)}\n{Loc.Get(dec.Description)}");
-            card.AddChild(rowPanel);
+            var root = CreatePaddedRoot(bodyRows, "ShellDecisionsPaddedRoot");
+            var ppWeekly = world.Defines.PoliticalPointsPerWeek +
+                world.Defines.PoliticalPointsStabilityWeight * Math.Clamp(nation.Stability, 0f, 1f);
+            var ready = new List<DecisionDefinition>();
+            var all = DecisionCatalog.All;
+            for (var i = 0; i < all.Count; i++)
+                if (!DecisionCatalog.IsBlocked(world, nation, all[i])) ready.Add(all[i]);
 
-            var h = new HBoxContainer { ClipContents = true };
-            h.AddThemeConstantOverride("separation", 6);
-            rowPanel.AddChild(h);
-            if (ctx.Icon("icon_decision") is { } dIco)
+            var card = MakeSectionCard(ctx, root, "ShellDecisionsCard", "icon_decisions",
+                Loc.Get("Decisions"), Loc.Format("shell.clarity.decisions_ready_fmt", ready.Count),
+                ready.Count > 0 ? "shell.state.positive" : "shell.paper_muted");
+
+            AddKvRow(ctx, card, Loc.Get("Political capital"),
+                $"{nation.PoliticalPoints:0.0} (+{ppWeekly:0.0}/{Loc.Get("week")})", "shell.paper");
+
+            var cap = Math.Min(7, ready.Count);
+            for (var i = 0; i < cap; i++)
             {
-                h.AddChild(new TextureRect
+                var dec = ready[i];
+                var costTxt = dec.GdpCostShare > 0f
+                    ? Fmt.Money(nation.Gdp * dec.GdpCostShare)
+                    : (dec.ResourceCosts is { Count: > 0 } ? $"{dec.ResourceCosts[0].Amount:0.#}" : "—");
+                var rowPanel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
+                rowPanel.AddThemeStyleboxOverride("panel", ctx.BorderedBox("shell.well_bottom", "shell.engrave", 1, 2, 7, 4, 7, 4));
+                rowPanel.TooltipText = Ui.Tip($"{Loc.Get(dec.Name)}\n{Loc.Get(dec.Description)}");
+                card.AddChild(rowPanel);
+
+                var h = new HBoxContainer { ClipContents = true };
+                h.AddThemeConstantOverride("separation", 6);
+                rowPanel.AddChild(h);
+                if (ctx.Icon("icon_decision") is { } dIco)
                 {
-                    Texture = dIco, CustomMinimumSize = new Vector2(14, 14),
-                    ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                    StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                    SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
-                    Modulate = Ui.Colour("shell.brass_hi")
-                });
+                    h.AddChild(new TextureRect
+                    {
+                        Texture = dIco, CustomMinimumSize = new Vector2(14, 14),
+                        ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                        StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                        SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+                        Modulate = Ui.Colour("shell.brass_hi")
+                    });
+                }
+                h.AddChild(MakeLabel(ctx, Loc.Get(dec.Name), "shell.sans", 11, "shell.paper", clip: true, expand: true));
+                h.AddChild(MakeLabel(ctx, costTxt, "shell.sans", 11, "shell.state.warning_text", tabular: true));
             }
-            h.AddChild(MakeLabel(ctx, Loc.Get(dec.Name), "shell.sans", 11, "shell.paper", clip: true, expand: true));
-            h.AddChild(MakeLabel(ctx, costTxt, "shell.sans", 11, "shell.state.warning_text", tabular: true));
-        }
 
-        if (ready.Count == 0)
-        {
-            var note = MakeLabel(ctx, Loc.Get("shell.open_decisions_hint"), "shell.sans", 11, "shell.paper_muted");
-            note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            card.AddChild(note);
-        }
-
-        if (world.Player?.Id == nation.Id)
-        {
-            var openBtn = new Button
+            if (ready.Count == 0)
             {
-                Text = Loc.Get("shell.clarity.decisions_open_cta"),
-                CustomMinimumSize = new Vector2(0, 32),
-                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-                ClipText = true,
-                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-                MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-                FocusMode = Control.FocusModeEnum.None
-            };
-            openBtn.AddThemeStyleboxOverride("normal", ctx.NineSlice("button_brass_cta_9s", 10, 8, 4, 8, 4, "shell.plate_top", "shell.brass_hi", 3));
-            openBtn.AddThemeStyleboxOverride("hover", ctx.NineSlice("button_brass_cta_9s", 10, 8, 4, 8, 4, "shell.plate_hover", "shell.paper", 3));
-            openBtn.AddThemeFontOverride("font", ctx.Font("shell.serif_semibold"));
-            openBtn.AddThemeFontSizeOverride("font_size", 12);
-            openBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
-            openBtn.Pressed += () => { ctx.PlayCue?.Invoke("ui_select"); ctx.OpenScreen?.Invoke("Decisions"); };
-            root.AddChild(openBtn);
+                var note = MakeLabel(ctx, Loc.Get("shell.open_decisions_hint"), "shell.sans", 11, "shell.paper_muted");
+                note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                card.AddChild(note);
+            }
+
+            if (world.Player?.Id == nation.Id)
+            {
+                var openBtn = new Button
+                {
+                    Text = Loc.Get("shell.clarity.decisions_open_cta"),
+                    CustomMinimumSize = new Vector2(0, 32),
+                    SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+                    ClipText = true,
+                    TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+                    MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+                    FocusMode = Control.FocusModeEnum.None
+                };
+                openBtn.AddThemeStyleboxOverride("normal", ctx.NineSlice("button_brass_cta_9s", 10, 8, 4, 8, 4, "shell.plate_top", "shell.brass_hi", 3));
+                openBtn.AddThemeStyleboxOverride("hover", ctx.NineSlice("button_brass_cta_9s", 10, 8, 4, 8, 4, "shell.plate_hover", "shell.paper", 3));
+                openBtn.AddThemeFontOverride("font", ctx.Font("shell.serif_semibold"));
+                openBtn.AddThemeFontSizeOverride("font_size", 12);
+                openBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
+                openBtn.Pressed += () => { ctx.PlayCue?.Invoke("ui_select"); ctx.OpenScreen?.Invoke("Decisions"); };
+                root.AddChild(openBtn);
+            }
         }
+        finally { world.ExitRead(); }
     }
 
     public static void PopulateDiplomacy(
         ShellContext ctx, VBoxContainer bodyRows, Label feedbackLabel, Campaign world,
-        Nation nation, bool isOwn, Action<Nation> openCountry, Action onMutated) =>
-        ShellCountryDiplomacyView.Populate(ctx, bodyRows, feedbackLabel, world, nation, isOwn, openCountry, onMutated);
+        Nation nation, bool isOwn, Action<Nation> openCountry, Action onMutated)
+    {
+        if (world is null || nation is null || !world.TryEnterRead(100, true)) return;
+        try
+        {
+            ShellCountryDiplomacyView.Populate(ctx, bodyRows, feedbackLabel, world, nation, isOwn, openCountry, onMutated);
+            DealOrForceGame.AppendShellDiplomacyDynamismCard(ctx, bodyRows, world, nation, isOwn);
+        }
+        finally
+        {
+            world.ExitRead();
+        }
+    }
 
     public static void PopulateStaff(
         ShellContext ctx, VBoxContainer bodyRows, Campaign world, Nation nation, Action onChanged)

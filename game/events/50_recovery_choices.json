@@ -12,7 +12,7 @@
         "title": "Repair the junctions before expanding service",
         "consequence": "A costly repair programme clears a little of the physical damage and restores confidence.",
         "effects": {
-          "income_share": -0.025,
+          "income_penalty": { "share": 0.05, "days": 180 },
           "construction_capacity": 0.08,
           "state.war_damage": -0.025,
           "stability": 0.003
@@ -22,7 +22,7 @@
         "title": "Let local operators restore a limited service",
         "consequence": "Less public money buys a slower recovery; neglected settlements grow impatient.",
         "effects": {
-          "income_share": -0.009,
+          "income_penalty": { "share": 0.03, "days": 120 },
           "state.war_damage": -0.008,
           "state.radicalism": 0.003
         }
@@ -60,7 +60,7 @@
         "title": "Pass the cost into service charges",
         "consequence": "The accounts recover, but households have less to live on.",
         "effects": {
-          "treasury_percent": 0.008,
+          "income_share": 0.01,
           "state.standard_of_living": -0.004,
           "state.radicalism": 0.004
         }

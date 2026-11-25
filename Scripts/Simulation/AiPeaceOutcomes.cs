@@ -164,7 +164,7 @@ public static partial class AiStatecraft
         {
             if (maxCost.HasValue && PeaceConference.SubjugationCost(campaign, winner, loser, k.Id) > maxCost.Value)
                 continue;
-            if (!maxCost.HasValue && k.Id == preferredId) preferred = k;
+            if (k.Id == preferredId) preferred = k;
             if (fallback is null || k.DemandCost > fallback.DemandCost ||
                 (k.DemandCost == fallback.DemandCost && string.CompareOrdinal(k.Id, fallback.Id) < 0))
                 fallback = k;
@@ -172,10 +172,11 @@ public static partial class AiStatecraft
         return preferred ?? fallback;
     }
 
-    private static bool Partition(Campaign campaign, Nation winner, Nation loser, List<int> territory, PeaceDemand demand)
+    private static bool Partition(Campaign campaign, Nation winner, Nation loser, List<int> territory,
+        PeaceDemand demand, PeaceLedger ledger)
     {
         var threshold = campaign.Defines.AiPartitionKinShare;
-        if (threshold <= 0f || loser.IsSubject) return false;
+        if (threshold <= 0f || loser.IsSubject || loser.Movement is not null) return false;
         var map = campaign.ProvinceMap;
         long people = 0, ours = 0;
         var claimed = _partitionClaimedScratch ??= new HashSet<int>();
@@ -195,8 +196,6 @@ public static partial class AiStatecraft
             else ours += (long)(region.Population * kin);
         }
         if (people <= 0 || ours / (double)people >= threshold) return false;
-        var kind = PickSubjectKind(campaign, winner, loser);
-        if (kind is null) return false;
         demand.Provinces.Clear();
         for (var pi = 0; pi < territory.Count; pi++)
         {
@@ -204,8 +203,29 @@ public static partial class AiStatecraft
             if (claimed.Contains(map.ProvinceToState[province])) demand.Provinces.Add(province);
         }
         demand.Unconditional = false;
-        demand.Subjugate = kind.Id;
-        return true;
+        var preferred = PickSubjectKind(campaign, winner, loser);
+        if (preferred is not null)
+        {
+            demand.Subjugate = preferred.Id;
+            if (ledger.Cost(demand) <= ledger.Budget) return true;
+        }
+        SubjectType bestAffordable = null;
+        foreach (var k in SubjectCatalog.Imposable)
+        {
+            demand.Subjugate = k.Id;
+            if (ledger.Cost(demand) > ledger.Budget) continue;
+            if (bestAffordable is null || k.DemandCost > bestAffordable.DemandCost ||
+                (k.DemandCost == bestAffordable.DemandCost && string.CompareOrdinal(k.Id, bestAffordable.Id) < 0))
+                bestAffordable = k;
+        }
+        if (bestAffordable is not null)
+        {
+            demand.Subjugate = bestAffordable.Id;
+            return true;
+        }
+        demand.Subjugate = "";
+        demand.Provinces.Clear();
+        return false;
     }
 
     /// <summary>
@@ -344,6 +364,7 @@ public static partial class AiStatecraft
             var bar = MathF.Max(campaign.Defines.AiPeaceRepelledScore,
                 campaign.Defines.AiPeaceDecisiveScore - brink * 10f);
             if (score < bar) return false;
+            demand.Unconditional = false;
             for (var province = 1; province <= map.ProvinceCount; province++)
                 if (ptn[province] == winnerMap && !map.IsWater(province) &&
                     controllers[province] == loserMap)
@@ -364,6 +385,7 @@ public static partial class AiStatecraft
             score >= campaign.Defines.AiPeaceRepelledScore &&
             campaign.ElapsedDays - war.StartedDay >= campaign.Defines.AiPeaceDecisivePatienceDays / 2)
         {
+            demand.Unconditional = false;
             for (var province = 1; province <= map.ProvinceCount; province++)
                 if (ptn[province] == winnerMap && !map.IsWater(province) &&
                     controllers[province] == loserMap)
@@ -420,10 +442,16 @@ public static partial class AiStatecraft
         // the ground is already held or the enemy is overrun.
         for (var pi = 0; pi < territory.Count; pi++) demand.Provinces.Add(territory[pi]);
         // A war declared to take the country (annexation, conquest, hegemony, empire) ends as declared.
-        if (!absorbing && !annexationWar && Partition(campaign, winner, loser, territory, demand))
+        if (!absorbing && !annexationWar && Partition(campaign, winner, loser, territory, demand, ledger))
         {
             WriteTerms(campaign, winner, war, ledger, demand, ledger.Budget);
             return true;
+        }
+        demand.Subjugate = "";
+        if (demand.Provinces.Count != territory.Count)
+        {
+            demand.Provinces.Clear();
+            for (var pi = 0; pi < territory.Count; pi++) demand.Provinces.Add(territory[pi]);
         }
         if (fullConquest)
         {
@@ -438,11 +466,7 @@ public static partial class AiStatecraft
         }
         demand.Provinces.Clear();
 
-        // The whole country does not fit at list price. Ground the army is already standing
-        // on is not given back so a cheaper client can be written instead: that peace is
-        // the one WriteDemand draws from the occupation. A client remains the alternative
-        // only when the victory is not standing on their land.
-        if (held > 0)
+        if (loser.IsSubject || loser.Movement is not null)
             return false;
 
         // A war begun to restore a union ends by restoring one. The personal-union subject
@@ -457,7 +481,7 @@ public static partial class AiStatecraft
         }
 
         // Annexation can be too expensive. Leaving a dependent state intact is a genuine
-        // alternative, not a last-minute extra after reparations consumed its price.
+        // alternative even when forces hold enemy territory.
         var kind = PickSubjectKind(campaign, winner, loser, ledger.Budget);
         if (kind is null) return false;
         demand.Subjugate = kind.Id;

@@ -72,6 +72,7 @@ internal sealed class ShellContext
     public Action MergeSelectedArmies { get; set; }
     public Action ClearArmySelection { get; set; }
     public Action ClearRegionSelection { get; set; }
+    public Action<int> HighlightNation { get; set; }
     public Action RefreshAll { get; set; }
     public Action OpenDealInbox { get; set; }
     public Func<int> GetIncomingDiplomaticCount { get; set; }

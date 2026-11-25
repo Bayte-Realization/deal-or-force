@@ -270,12 +270,18 @@ public partial class DealOrForceGame
         _countryActionFeedback.Text = "";
         _pendingWarTarget = -1;
 
-        // Outlined on the map the way a right click outlines it: somebody else's country is
-        // the thing being asked about, and your own is the ground you are standing on.
-        var foreign = pick.Nation != _campaign.Player;
-        _globe?.HighlightNation(foreign ? pick.Nation.MapIndex : -1);
-        _mapSelectionHighlights = foreign;
-        if (IsNewShellActive) { _mapSelectionOpen = false; OpenNewShellMapSelection(pick); return; }
+        if (IsNewShellActive)
+        {
+            _mapSelectionOpen = false;
+            _mapSelectionHighlights = false;
+            OpenNewShellMapSelection(pick);
+            return;
+        }
+
+        // Highlight whichever country is inspected on the map - the player's own country as
+        // well as any foreign power - and drop it when the panel closes.
+        _globe?.HighlightNation(pick.Nation.MapIndex);
+        _mapSelectionHighlights = true;
 
         ShowMapSelectionContent();
     }

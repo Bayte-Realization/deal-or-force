@@ -6,9 +6,9 @@
     "options": [
       {
         "title": "Launch a modernisation programme",
-        "consequence": "Costs treasury; raises GDP, productivity and construction capacity.",
+        "consequence": "Reduces incoming revenue during modernisation; raises GDP, productivity and construction capacity.",
         "effects": {
-          "gdp_share": -0.005,
+          "income_penalty": { "share": 0.08, "days": 330 },
           "gdp_percent": 0.0035,
           "productivity": 0.008,
           "construction_capacity": 0.18
@@ -35,9 +35,9 @@
     "options": [
       {
         "title": "Fund public housing",
-        "consequence": "Costs treasury; improves living standards and reduces radicalism.",
+        "consequence": "Commits ongoing budget revenue to housing; improves living standards and reduces radicalism.",
         "effects": {
-          "income_share": -0.045,
+          "income_penalty": { "share": 0.06, "days": 270 },
           "standard_of_living": 0.012,
           "state.standard_of_living": 0.01,
           "state.radicalism": -0.018
@@ -59,9 +59,9 @@
     "options": [
       {
         "title": "Broker a national settlement",
-        "consequence": "Costs treasury; restores stability and living standards.",
+        "consequence": "Commits ongoing budget revenue to wages; restores stability and living standards.",
         "effects": {
-          "income_share": -0.035,
+          "income_penalty": { "share": 0.05, "days": 240 },
           "stability": 0.018,
           "standard_of_living": 0.006
         }
@@ -98,7 +98,7 @@
         "title": "Raise separation allowances for families",
         "consequence": "Expensive, but buys real patience.",
         "effects": {
-          "income_share": -0.05,
+          "income_penalty": { "share": 0.07, "days": 270 },
           "war_support": 0.09,
           "state.radicalism": -0.01
         },
@@ -212,9 +212,9 @@
     "options": [
       {
         "title": "Back the industry that made it",
-        "consequence": "Costs treasury; lasting productivity and prestige.",
+        "consequence": "Funds cultural backing from ongoing revenue; lasting productivity and prestige.",
         "effects": {
-          "income_share": -0.02,
+          "income_penalty": { "share": 0.04, "days": 180 },
           "productivity": 0.004,
           "literacy": 0.002,
           "prestige": 8.0
@@ -242,9 +242,9 @@
     "options": [
       {
         "title": "Fund the department properly at last",
-        "consequence": "Costs treasury; literacy and productivity rise.",
+        "consequence": "Dedicates ongoing revenue to university grants; literacy and productivity rise.",
         "effects": {
-          "income_share": -0.025,
+          "income_penalty": { "share": 0.04, "days": 240 },
           "literacy": 0.004,
           "productivity": 0.006,
           "prestige": 10.0

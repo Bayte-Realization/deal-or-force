@@ -36,7 +36,7 @@
         "title": "Appeal to the world for help",
         "consequence": "Help comes, and so do the people who count it.",
         "effects": {
-          "treasury_percent": 0.02,
+          "gdp_share": 0.002,
           "war_support": -0.006,
           "state.war_damage": -0.02
         }
@@ -57,7 +57,7 @@
         "title": "Housing first, whatever it costs",
         "consequence": "The state builds, and the state pays.",
         "effects": {
-          "gdp_share": -0.003,
+          "income_penalty": { "share": 0.06, "days": 270 },
           "stability": 0.006,
           "add_modifier": {
             "reconstruction_programme": 365

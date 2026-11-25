@@ -791,6 +791,41 @@ public static class Rulers
         AgeAtOffice(nation, AgeBand.Minister,
             StableHash(nation?.Tag ?? "DEF", StableHash(portfolioId ?? "", 3)));
 
+    private static string SuccessionDriftCreed(bool reform, int index) => (reform, ((index % 5) + 5) % 5) switch
+    {
+        (true, 0) => "liberalism",
+        (true, 1) => "conservatism",
+        (true, 2) => "social_democracy",
+        (true, 3) => "traditionalism",
+        (true, _) => "socialism",
+        (false, 0) => "nationalism",
+        (false, 1) => "socialism",
+        (false, 2) => "conservatism",
+        (false, 3) => "traditionalism",
+        (false, _) => "communism"
+    };
+
+    private static void TrySuccessionIdeologyDrift(Campaign campaign, Nation nation)
+    {
+        var sclerosis = GeopoliticalCycle.InstitutionalSclerosis(campaign, nation);
+        var macroWave = GeopoliticalCycle.MacroEconomicWave(campaign, nation);
+        var pivot = GeopoliticalCycle.GenerationalPivotBias(campaign, nation, 0x51);
+        if (sclerosis < 0.30f && nation.Stability >= 0.55f && MathF.Abs(pivot) < 0.45f) return;
+        if (Escalation.Roll(campaign.Seed, nation.Id, 0x5CC, campaign.ElapsedDays, nation.RulerGeneration) >= 0.42f) return;
+
+        var reform = nation.StandardOfLiving >= 0.55f && nation.Stability >= 0.56f && macroWave >= -0.15f;
+        var startIdx = Math.Abs(StableHash(nation.Tag ?? "DEF", nation.RulerGeneration * 29 + 7)) % 5;
+        for (var i = 0; i < 5; i++)
+        {
+            var next = SuccessionDriftCreed(reform, startIdx + i);
+            if (string.Equals(next, nation.Ideology, StringComparison.OrdinalIgnoreCase)) continue;
+            if (PoliticsCore.Refusal(campaign, nation, "", next).Length > 0) continue;
+            nation.Ideology = next;
+            nation.PoliticsChangedDay = campaign.ElapsedDays;
+            return;
+        }
+    }
+
     public static void ReplaceHeadOfState(Campaign campaign, Nation nation, string reason = "succession")
     {
         if (campaign is null || nation is null) return;
@@ -802,6 +837,12 @@ public static class Rulers
         var band = OfficeOf(nation).HereditaryState ? AgeBand.Hereditary : AgeBand.HeadOfState;
         nation.HeadOfStateBirthYear = year - AgeAtOffice(nation, band, StableHash(nation.Tag, nation.RulerGeneration * 13 + 7));
         nation.HeadOfStateSinceDay = campaign.ElapsedDays;
+        if (!nation.IsHuman && nation.Movement is null && campaign.ElapsedDays >= 730 &&
+            !ElectoralPolitics.Eligible(nation) &&
+            campaign.ElapsedDays - nation.PoliticsChangedDay >= PoliticsCore.ChangeCooldownDays)
+        {
+            TrySuccessionIdeologyDrift(campaign, nation);
+        }
         if (!OfficeOf(nation).Dual)
         {
             nation.HeadOfGovernmentName = "";

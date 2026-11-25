@@ -489,6 +489,14 @@ public static class PeaceNegotiation
                 var created = StatePartition.Annex(campaign, kept, winner);
                 war.AnnexedProvinces += kept.Count;
                 war.CreatedStates += created.Count;
+                var defeatedNation = campaign.NationById(war.EnemyLeaderOf(winnerId));
+                if (defeatedNation is not null && !war.CivilConflict)
+                {
+                    NationalCourses.Shock(campaign, defeatedNation, 0.55f, "course.shock.territorial_loss");
+                    var defeatedStates = campaign.StatesOf(defeatedNation);
+                    for (var si = 0; si < defeatedStates.Length; si++)
+                        defeatedStates[si].Radicalism = M.Clamp01(defeatedStates[si].Radicalism + 0.06f);
+                }
             }
             if (terms == PeaceTerms.Capitulate && !war.CivilConflict)
                 AiStatecraft.ImposeAfterCapitulation(campaign, winner, beaten);
@@ -573,17 +581,23 @@ public static class PeaceNegotiation
                 relation.LastActionDay = campaign.ElapsedDays;
                 relation.Opinion = Math.Min(relation.Opinion, -35f);
             }
-        var released = campaign.Armies.Where(army => army.AssignedWarId == war.Id).ToList();
-        foreach (var army in released)
+        var released = new List<Army>();
+        for (var i = 0; i < campaign.Armies.Count; i++)
         {
+            var army = campaign.Armies[i];
+            if (army.AssignedWarId != war.Id) continue;
+            released.Add(army);
             PostwarArmyOrders.Release(army);
         }
-        foreach (var battle in campaign.Battles.Where(battle => battle.WarId == war.Id && !battle.Ended))
+        for (var i = 0; i < campaign.Battles.Count; i++)
         {
-            Warfare.EndBattleWithoutVictory(campaign, battle, "Peace agreement");
+            var battle = campaign.Battles[i];
+            if (battle.WarId == war.Id && !battle.Ended)
+                Warfare.EndBattleWithoutVictory(campaign, battle, "Peace agreement");
         }
         // A division on the whole front goes back to holding it if another war still has one.
         BorderFronts.ReturnToWholeFronts(campaign, released);
+        released.Clear();
         campaign.MarkMapChanged();
     }
 }

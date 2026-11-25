@@ -70,23 +70,18 @@ public sealed partial class GlobePresentation
         _globeMaterial.SetShaderParameter("look_selection_width", style.SelectionWidth);
         if (_packedLookups is not null)
         {
-            _globeMaterial.SetShaderParameter("frontier_ready",
-                !_mapLookAtlas && _frontierTexture is not null ? 1f : 0f);
-            if (!_mapLookAtlas && _frontierTexture is null && _frontierAuthored is not null &&
-                _campaign?.ProvinceMap is { } topology)
-            {
-                _plateColoursStale = true;
-                RequestPlateRepaint(topology);
-            }
+            // PackedMapShader strips frontier_field on Compatibility/Mobile (12-sampler budget)
+            // and replaces texture(frontier_field, UV) with vec4(1.0); keep frontier_ready at 0.
+            _globeMaterial.SetShaderParameter("frontier_ready", 0f);
         }
         UpdatePaperMix();
     }
 
     /// <summary>
-    /// Whether the frontier field is worth building: everywhere but Compatibility under the
-    /// overhauled looks, where the packed 12-unit shader cannot bind a 13th sampler.
+    /// Whether the frontier field is worth building: only Forward+ where the un-packed shader binds
+    /// a dedicated frontier_field sampler; Compatibility/Mobile strips it in PackedMapShader.
     /// </summary>
-    private bool FrontierFieldWanted() => _packedLookups is null || !MapLook.Atlas();
+    private bool FrontierFieldWanted() => _packedLookups is null;
 
     /// <summary>Per frame from _Process: the paper share, sent only when it moves by more than 0.002.</summary>
     private void UpdatePaperMix()

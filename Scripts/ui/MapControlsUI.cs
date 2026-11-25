@@ -315,7 +315,7 @@ public partial class DealOrForceGame
     /// <summary>What a layer actually shows, for the tooltip under its mark.</summary>
     private static string MapModeHelp(StrategicMapMode mode) => mode switch
     {
-        StrategicMapMode.Political => "Countries, who controls what, and every occupied province.",
+        StrategicMapMode.Political => "Countries, who controls what, and every controlled province.",
         StrategicMapMode.Diplomatic => "Who is allied to whom, who guarantees whom, and who answers to whom.",
         StrategicMapMode.Wars => "Belligerents, the fronts between them and the ground that has changed hands.",
         StrategicMapMode.Population => "Total population by country, not population density. Brighter means more people; unknown countries stay neutral.",

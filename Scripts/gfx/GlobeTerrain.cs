@@ -405,9 +405,9 @@ public sealed partial class GlobePresentation
                 }
                 catch
                 {
-                    for (var i = 0; i < result.Tiles.Length; i++) result.Tiles[i]?.Dispose();
-                    result.Lake?.Dispose();
-                    result.River?.Dispose();
+                    Array.Clear(result.Tiles);
+                    result.Lake = null;
+                    result.River = null;
                     throw;
                 }
             }
@@ -506,35 +506,35 @@ public sealed partial class GlobePresentation
         try
         {
             var error = tiles.CreateFromImages(images);
-            if (error != Error.Ok) { tiles.Dispose(); throw new InvalidDataException($"Terrain texture array: {error}"); }
+            if (error != Error.Ok) throw new InvalidDataException($"Terrain texture array: {error}");
             _globeMaterial.SetShaderParameter("terrain_tiles", tiles);
         }
         finally
         {
             images.Clear();
-            for (var index = 0; index < prepared.Tiles.Length; index++) prepared.Tiles[index]?.Dispose();
+            Array.Clear(prepared.Tiles);
         }
         if (topology.TerrainSurfaceSlots is null || topology.TerrainSurfaceSlots.Length != topology.Width * topology.Height)
             topology.AttachTerrain();
         if (topology.TerrainSurfaceSlots is { Length: > 0 } slotsData && slotsData.Length == topology.Width * topology.Height)
         {
-            using var surfaceImg = Image.CreateFromData(topology.Width, topology.Height, false, Image.Format.R8, slotsData);
+            var surfaceImg = Image.CreateFromData(topology.Width, topology.Height, false, Image.Format.R8, slotsData);
             UpdateTerrainTexture(ref _terrainSurfaceTexture, "terrain_surface", surfaceImg);
         }
         else
         {
-            using var fallbackSurface = Image.CreateEmpty(2, 2, false, Image.Format.R8);
+            var fallbackSurface = Image.CreateEmpty(2, 2, false, Image.Format.R8);
             UpdateTerrainTexture(ref _terrainSurfaceTexture, "terrain_surface", fallbackSurface);
         }
         topology.TerrainSurfaceSlots = Array.Empty<byte>();
         var lookup = new byte[256 * 256];
         for (var province = 1; province <= topology.ProvinceCount; province++)
             lookup[province] = slots.TryGetValue(topology.TerrainAt(province).Id, out var slot) ? slot : (byte)0;
-        using (var lookupImg = Image.CreateFromData(256, 256, false, Image.Format.R8, lookup))
-            UploadMapImage("province_terrain", lookupImg);
+        var lookupImg = Image.CreateFromData(256, 256, false, Image.Format.R8, lookup);
+        UploadMapImage("province_terrain", lookupImg);
         if (!isTouchPrimary && prepared.Height is not null && !prepared.Height.IsEmpty())
         {
-            using var cpuHeight = (Image)prepared.Height.Duplicate();
+            var cpuHeight = (Image)prepared.Height.Duplicate();
             cpuHeight.ClearMipmaps();
             if (cpuHeight.GetFormat() != Image.Format.L8 && cpuHeight.GetFormat() != Image.Format.R8)
                 cpuHeight.Convert(Image.Format.L8);
@@ -555,13 +555,13 @@ public sealed partial class GlobePresentation
         var hasReliefHeight = !isTouchPrimary && prepared.Height is not null && prepared.Height.GetWidth() > 8;
         UpdateTerrainTexture(ref _reliefHeightTexture, "relief_height", prepared.Height);
         _globeMaterial.SetShaderParameter("relief_height_ready", hasReliefHeight ? 1f : 0f);
-        prepared.Height?.Dispose();
+        prepared.Height = null;
         UpdateTerrainTexture(ref _reliefColorTexture, "relief_color", prepared.Colour);
-        prepared.Colour?.Dispose();
+        prepared.Colour = null;
         // The sea floor: a map without it is a flat navy sheet, one without shelves or coasts.
         var hasFloor = !isTouchPrimary && File.Exists(TerrainCatalog.BathymetryPath);
         UpdateTerrainTexture(ref _oceanDepthTexture, "ocean_depth", prepared.Floor);
-        prepared.Floor?.Dispose();
+        prepared.Floor = null;
         _globeMaterial.SetShaderParameter("ocean_depth_ready", hasFloor ? 1f : 0f);
         _globeMaterial.SetShaderParameter("terrain_detail", TerrainCatalog.DetailStrength);
         _globeMaterial.SetShaderParameter("relief_shading", TerrainCatalog.ReliefShading);

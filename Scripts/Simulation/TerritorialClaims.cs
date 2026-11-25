@@ -119,33 +119,45 @@ public static class TerritorialClaims
                 list.Add(id);
             }
         }
-        foreach (var region in c.States.OrderBy(s => s.MapIndex))
+        var stateCount = c.States.Count;
+        var byMapIndex = System.Buffers.ArrayPool<ScenarioState>.Shared.Rent(stateCount);
+        try
         {
-            if (region.Unclaimed || region.Population <= 0) continue;
-            if (!byMap.TryGetValue(region.NationMapIndex, out var holder)) continue;
-            var seen = new HashSet<int>();
-            void Consider(Nation nation, TerritorialTitle title)
+            for (var i = 0; i < stateCount; i++) byMapIndex[i] = c.States[i];
+            Array.Sort(byMapIndex, 0, stateCount, Comparer<ScenarioState>.Create(static (left, right) => left.MapIndex.CompareTo(right.MapIndex)));
+            for (var i = 0; i < stateCount; i++)
             {
-                if (nation is null || title == TerritorialTitle.None || !seen.Add(nation.Id)) return;
-                if (nation.Id == holder.Id || nation.Movement is not null || nation.Population <= 0) return;
-                if (holder.AnswersTo(nation.Id) || nation.AnswersTo(holder.Id)) return;
-                if (nation.RenouncedTerritoryOrigins.Contains(Origin(region))) return;
-                rows.Add(new TerritorialDispute(region, nation, holder, title));
+                var region = byMapIndex[i];
+                if (region.Unclaimed || region.Population <= 0) continue;
+                if (!byMap.TryGetValue(region.NationMapIndex, out var holder)) continue;
+                var seen = new HashSet<int>();
+                void Consider(Nation nation, TerritorialTitle title)
+                {
+                    if (nation is null || title == TerritorialTitle.None || !seen.Add(nation.Id)) return;
+                    if (nation.Id == holder.Id || nation.Movement is not null || nation.Population <= 0) return;
+                    if (holder.AnswersTo(nation.Id) || nation.AnswersTo(holder.Id)) return;
+                    if (nation.RenouncedTerritoryOrigins.Contains(Origin(region))) return;
+                    rows.Add(new TerritorialDispute(region, nation, holder, title));
+                }
+                if (region.CoreTags is not null)
+                    foreach (var tag in region.CoreTags)
+                        if (byTag.TryGetValue(tag, out var nation)) Consider(nation, TerritorialTitle.Homeland);
+                void Homes(int id)
+                {
+                    if (!homeByRegion.TryGetValue(id, out var claimants)) return;
+                    foreach (var claimantId in claimants) Consider(c.NationById(claimantId), TerritorialTitle.Homeland);
+                }
+                Homes(region.MapIndex);
+                var origin = Origin(region);
+                if (origin != region.MapIndex) Homes(origin);
+                if (region.Claims is not null)
+                    foreach (var tag in region.Claims)
+                        if (byTag.TryGetValue(tag, out var nation)) Consider(nation, TerritorialTitle.Claim);
             }
-            if (region.CoreTags is not null)
-                foreach (var tag in region.CoreTags)
-                    if (byTag.TryGetValue(tag, out var nation)) Consider(nation, TerritorialTitle.Homeland);
-            void Homes(int id)
-            {
-                if (!homeByRegion.TryGetValue(id, out var claimants)) return;
-                foreach (var claimantId in claimants) Consider(c.NationById(claimantId), TerritorialTitle.Homeland);
-            }
-            Homes(region.MapIndex);
-            var origin = Origin(region);
-            if (origin != region.MapIndex) Homes(origin);
-            if (region.Claims is not null)
-                foreach (var tag in region.Claims)
-                    if (byTag.TryGetValue(tag, out var nation)) Consider(nation, TerritorialTitle.Claim);
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<ScenarioState>.Shared.Return(byMapIndex, clearArray: true);
         }
         return rows;
     }

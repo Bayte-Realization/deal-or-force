@@ -229,14 +229,22 @@ public static class Coups
         }
     }
 
-    /// <summary>What a country's wealth does to its coup risk: 1 for a poor one, a twentieth for the richest.</summary>
+    /// <summary>What a country's wealth does to its coup risk: low in settled wealth, never total immunity during systemic collapse.</summary>
     public static float WealthFactor(Campaign c, Nation nation)
     {
         var reference = c.Defines.CoupWealthReference;
         if (reference <= 0f || nation.Population <= 0) return 1f;
         var perHead = MathF.Max(0f, nation.Gdp) * 1e9f / nation.Population;
         var ratio = perHead / reference;
-        return float.IsFinite(ratio) ? 1f / (1f + ratio * ratio) : 1f;
+        var baseFactor = float.IsFinite(ratio) ? 1f / (1f + ratio * ratio) : 1f;
+        var crisisFloor = 0f;
+        if (nation.DebtCondition >= DebtCondition.Default || nation.PaymentArrears > 0f)
+            crisisFloor += 0.25f;
+        if (nation.Inflation > 0.12f)
+            crisisFloor += 0.15f;
+        if (nation.Stability < 0.35f)
+            crisisFloor += 0.20f;
+        return MathF.Max(baseFactor, MathF.Min(0.65f, crisisFloor));
     }
 
     /// <summary>The chance of a plot against this government in one review.</summary>

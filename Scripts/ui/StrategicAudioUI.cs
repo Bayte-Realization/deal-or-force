@@ -24,6 +24,9 @@ public partial class DealOrForceGame
     private int _audioKnownTechCount = -1;
     private long _audioNewsSeen = -1;
     private ulong _lastNewsStingAt;
+    private Campaign _cachedAudioCampaign;
+    private MusicReadout _cachedMusicReadout = new(MusicMood.Calm, "No campaign pressure recorded.");
+    private bool _cachedWorldCursed;
 
     /// <summary>
     /// Put the player's three volumes onto the players.
@@ -83,11 +86,57 @@ public partial class DealOrForceGame
         MusicDirector.Ensure(this).FollowScene(this, () => _hudLayer is { Visible: true }
             ? MusicCatalog.Moment.Campaign
             : MusicCatalog.Moment.Menu,
-            () => _hudLayer is { Visible: true }
-                ? MusicSituation.Read(_campaign, _campaign?.Player, _openScreen == "Region" ? _selectedState : null, _observerMode)
-                : new MusicReadout(MusicMood.Calm, "No campaign pressure recorded."),
+            () =>
+            {
+                if (_hudLayer is not { Visible: true })
+                    return new MusicReadout(MusicMood.Calm, "No campaign pressure recorded.");
+                var campaign = _campaign;
+                if (!ReferenceEquals(_cachedAudioCampaign, campaign))
+                {
+                    _cachedAudioCampaign = campaign;
+                    _cachedMusicReadout = new(MusicMood.Calm, "No campaign pressure recorded.");
+                    _cachedWorldCursed = false;
+                }
+                if (campaign is null)
+                    return _cachedMusicReadout;
+                if (campaign.TryEnterRead(0, requestWindowOnMiss: false))
+                {
+                    try
+                    {
+                        _cachedMusicReadout = MusicSituation.Read(campaign, campaign.Player, _openScreen == "Region" ? _selectedState : null, _observerMode);
+                    }
+                    finally
+                    {
+                        campaign.ExitRead();
+                    }
+                }
+                return _cachedMusicReadout;
+            },
             // A cursed world has no soundtrack, ever again (WorldCurses); the menu keeps its own.
-            () => _hudLayer is { Visible: true } && WorldCurses.Any(_campaign));
+            () =>
+            {
+                if (_hudLayer is not { Visible: true }) return false;
+                var campaign = _campaign;
+                if (!ReferenceEquals(_cachedAudioCampaign, campaign))
+                {
+                    _cachedAudioCampaign = campaign;
+                    _cachedMusicReadout = new(MusicMood.Calm, "No campaign pressure recorded.");
+                    _cachedWorldCursed = false;
+                }
+                if (campaign is null) return false;
+                if (campaign.TryEnterRead(0, requestWindowOnMiss: false))
+                {
+                    try
+                    {
+                        _cachedWorldCursed = WorldCurses.Any(campaign);
+                    }
+                    finally
+                    {
+                        campaign.ExitRead();
+                    }
+                }
+                return _cachedWorldCursed;
+            });
 
         // And under all of it, the sound of the map from where the camera is.
         _mapAmbience = new MapAmbience(() => _hudLayer is { Visible: true } ? _globe : null, () => _campaign);
@@ -206,6 +255,9 @@ public partial class DealOrForceGame
 
     private void ResetStrategicAudioState()
     {
+        _cachedAudioCampaign = _campaign;
+        _cachedMusicReadout = new(MusicMood.Calm, "No campaign pressure recorded.");
+        _cachedWorldCursed = false;
         _situationAttention.Reset();
         _situationNation = -1;
         _dealNoticeViewer = -1; _dealNoticeIds.Clear();

@@ -161,7 +161,7 @@ public static partial class DomesticCrises
         // On normal worlds (< 8192 states), updating inside the per-nation pass below avoids pool
         // dispatch, ArrayPool churn, and second scans over every region object.
         var awarenessPrecomputed = false;
-        if (awarenessEnabled && c.States.Count >= 256)
+        if (awarenessEnabled && c.States.Count >= 8192)
         {
             // Warm up thread-safe dense index snapshot before fanning out.
             _ = c.NationsByMapIndex();
@@ -238,7 +238,10 @@ public static partial class DomesticCrises
                             : Move(region.ResidentAwareness, target, awarenessStep);
                     }
                 }
-                PoliticalCohorts.Review(c, nation, days, alienation, tick - 1);
+                var cohortPlace = (uint)nation.Id < (uint)c.Nations.Count && ReferenceEquals(c.Nations[nation.Id], nation)
+                    ? nation.Id
+                    : c.Nations.IndexOf(nation);
+                PoliticalCohorts.Review(c, nation, days, alienation, cohortPlace);
                 if (crisesEnabled)
                 {
                     ReviewResponse(c, nation, days);

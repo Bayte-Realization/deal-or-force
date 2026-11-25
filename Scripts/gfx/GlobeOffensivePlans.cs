@@ -108,13 +108,15 @@ public sealed partial class GlobePresentation
         // 0 = deep charcoal outer keyline for mountain/snow contrast,
         // 1 = vivid saturated operational body,
         // 2 = crisp luminous center spine on offensive arrows.
+        var zoomScale = Math.Clamp(BattleArrowUnitsPerPixel() / 0.00065f, 0.36f, 1.08f);
         var passes = arrow ? 3 : 2;
         var spineColor = color.Lightened(0.36f);
         spineColor.A = color.A * 0.78f;
         for (var pass = 0; pass < passes; pass++)
         {
             var paint = pass == 0 ? new Color(.06f, .055f, .05f, .82f) : pass == 1 ? color : spineColor;
-            var w = width * (pass == 0 ? 1.48f : pass == 1 ? 1.0f : 0.34f);
+            var w = width * zoomScale * (pass == 0 ? 1.48f : pass == 1 ? 1.0f : 0.34f);
+            var headSpan = 0.030f * zoomScale;
             var prevPair = -1;
             for (var i = 0; i < _ribbonSamples.Count; i++)
             {
@@ -123,9 +125,8 @@ public sealed partial class GlobePresentation
                     _ribbonSamples[Math.Max(i - 1, 0)]).Normalized();
                 var normal = _flatMap ? Vector3.Forward : point.Normalized();
                 var remaining = point.DistanceTo(_ribbonSamples[^1]);
-                var headSpan = .032f;
                 var half = arrow && remaining < headSpan
-                    ? w * (pass == 2 ? 1.8f : 3.2f) * remaining / headSpan
+                    ? w * (pass == 2 ? 1.5f : 2.5f) * remaining / headSpan
                     : w;
                 var side = normal.Cross(direction).Normalized() * half;
                 var pairBase = _frontVerts.Count;

@@ -23,6 +23,8 @@ public static partial class AiStatecraft
         internal float Politics;
         internal float Identity;
         internal float Social;
+        internal float Claims;
+        internal float Geopolitics;
     }
 
     static readonly ConditionalWeakTable<Campaign, WeeklyScanMemory> WeeklyScans = new();
@@ -146,8 +148,8 @@ public static partial class AiStatecraft
         if (relation is null) return false;
         if (relation.Stance == DiplomaticStance.AtWar)
         {
-            WeeklyAdditives(campaign, relation, out var warPolitics, out var warIdentity, out var warSocial);
-            RememberWeeklyPair(memory, nation.Id, other.Id, borders, relation, warPolitics, warIdentity, warSocial);
+            WeeklyAdditives(campaign, relation, out var warPolitics, out var warIdentity, out var warSocial, out var warClaims, out var warGeopolitics);
+            RememberWeeklyPair(memory, nation.Id, other.Id, borders, relation, warPolitics, warIdentity, warSocial, warClaims, warGeopolitics);
             return true;
         }
 
@@ -180,8 +182,9 @@ public static partial class AiStatecraft
             OpinionSystem.Remember(campaign, relation, "fear_of_strength", fear, settle: false);
         else if (strength >= 0.95f || (!borders && !pre.Awake && fear < 0.25f))
             OpinionSystem.Forget(campaign, relation, "fear_of_strength", settle: false);
-        OpinionSystem.Settle(campaign, relation, out var politics, out var identity, out var social);
-        RememberWeeklyPair(memory, nation.Id, other.Id, borders, relation, politics, identity, social);
+        OpinionSystem.Settle(campaign, relation, out var politics, out var identity, out var social, out var claims, out var geopolitics);
+        CampaignDiplomacy.RefreshExpiredTruce(campaign, relation);
+        RememberWeeklyPair(memory, nation.Id, other.Id, borders, relation, politics, identity, social, claims, geopolitics);
         return true;
     }
 
@@ -193,7 +196,7 @@ public static partial class AiStatecraft
     }
 
     static void RememberWeeklyPair(WeeklyScanMemory memory, int a, int b, bool borders, DiplomaticRelation relation,
-        float politics, float identity, float social)
+        float politics, float identity, float social, float claims, float geopolitics)
     {
         memory.Stamps[WeeklyPairKey(a, b)] = new WeeklyStamp
         {
@@ -202,7 +205,9 @@ public static partial class AiStatecraft
             Stance = relation.Stance,
             Politics = politics,
             Identity = identity,
-            Social = social
+            Social = social,
+            Claims = claims,
+            Geopolitics = geopolitics
         };
         memory.Walks++;
     }
@@ -223,6 +228,8 @@ public static partial class AiStatecraft
         bool borders, float myStrength, bool identityOn, in WeeklyStamp stamp, ref WeeklyPairPrecheck pre)
     {
         if (relation.Stance == DiplomaticStance.AtWar) return false;
+        var today = campaign.ElapsedDays;
+        if (relation.Stance == DiplomaticStance.Truce && today >= relation.TruceUntil) return true;
         var allied = relation.Stance == DiplomaticStance.Allied;
         var faith = identityOn && StateIdentity.ShareDeclaredFaith(nation, other);
         var assessmentDue = WeeklyAssessmentDue(campaign, nation.Id, other);
@@ -230,7 +237,6 @@ public static partial class AiStatecraft
         // Single pass over relation.Reasons to locate all 4 standing reasons AND check expiry/decay.
         OpinionReason heldBorder = null, heldAlliance = null, heldFaith = null, heldFear = null;
         var reasons = relation.Reasons;
-        var today = campaign.ElapsedDays;
         var anyDecayOrExpiry = false;
         for (var i = 0; i < reasons.Count; i++)
         {
@@ -281,8 +287,9 @@ public static partial class AiStatecraft
 
         if (anyDecayOrExpiry) return true;
 
-        WeeklyAdditives(campaign, relation, out var politics, out var identity, out var social);
-        return stamp.Politics != politics || stamp.Identity != identity || stamp.Social != social;
+        WeeklyAdditives(campaign, relation, out var politics, out var identity, out var social, out var claims, out var geopolitics);
+        return stamp.Politics != politics || stamp.Identity != identity || stamp.Social != social ||
+               stamp.Claims != claims || stamp.Geopolitics != geopolitics;
     }
 
     static bool StandingReasonWouldWrite(string id, OpinionReason held, bool present, float scale)
@@ -301,13 +308,15 @@ public static partial class AiStatecraft
                campaign.ElapsedDays - target.AssessedDay >= every;
     }
 
-    static void WeeklyAdditives(Campaign campaign, DiplomaticRelation relation, out float politics, out float identity, out float social)
+    static void WeeklyAdditives(Campaign campaign, DiplomaticRelation relation,
+        out float politics, out float identity, out float social, out float claims, out float geopolitics)
     {
         var left = campaign.NationById(relation.A);
         var right = campaign.NationById(relation.B);
         politics = PoliticsCore.Affinity(campaign, left, right);
         identity = StateIdentity.Affinity(campaign, left, right);
         social = SocialMemory.OpinionEffect(campaign, left, right);
+        OpinionSystem.StandingClaimAndCycle(campaign, left, right, out claims, out geopolitics);
     }
 
     /// <summary>

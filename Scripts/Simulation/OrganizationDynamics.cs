@@ -13,14 +13,20 @@ public sealed partial class Nation
     public Dictionary<int, float> OrganizationBelongingAtStart = new();
 }
 
+public sealed partial class InternationalOrganization
+{
+    /// <summary>Highest member count observed so dissolution can detect hollowed-out charters.</summary>
+    public int PeakMembers;
+}
+
 public sealed partial class Defines
 {
     /// <summary>How fast where a membership stood on the first day stops protecting it, as a half-life in years.</summary>
-    public float OrganizationBaselineHalfLifeYears { get; set; } = 10f;
+    public float OrganizationBaselineHalfLifeYears { get; set; } = 5f;
     /// <summary>How fast an organisation's cohesion follows what its members are to one another, each week.</summary>
-    public float OrganizationCohesionPull { get; set; } = 0.08f;
+    public float OrganizationCohesionPull { get; set; } = 0.11f;
     /// <summary>Below this sense of belonging (0..1) a member starts to think about leaving.</summary>
-    public float OrganizationDepartureBelonging { get; set; } = 0.30f;
+    public float OrganizationDepartureBelonging { get; set; } = 0.33f;
     /// <summary>The weekly chance a member that has stopped belonging altogether walks out; less, the less estranged it is.</summary>
     public float OrganizationDepartureChance { get; set; } = 0.035f;
     /// <summary>A member never walks out of an organisation younger than this many days.</summary>
@@ -240,25 +246,53 @@ public static class OrganizationDynamics
         var distance = 0f;
         var rivals = 0;
         var fighting = 0;
+        var realignmentSum = 0d;
         var checkWar = warPairs is { Count: > 0 };
-        for (var i = 0; i < members.Count; i++)
+        var frictionFlags = System.Buffers.ArrayPool<bool>.Shared.Rent(members.Count);
+        Array.Clear(frictionFlags, 0, members.Count);
+        var frictionMembersCount = 0;
+        try
         {
-            var mi = members[i];
-            for (var j = i + 1; j < members.Count; j++)
+            for (var i = 0; i < members.Count; i++)
             {
-                var mj = members[j];
-                pairs++;
-                var relation = CampaignDiplomacy.Peek(c, mi.Id, mj.Id);
-                opinion += relation?.Opinion ?? 0f;
-                distance += PoliticsCore.IdeologicalDistance(mi, mj);
-                if (relation?.Stance == DiplomaticStance.Rival) rivals++;
-                if (checkWar && warPairs.Contains(PackPair(mi.Id, mj.Id))) fighting++;
+                var mi = members[i];
+                for (var j = i + 1; j < members.Count; j++)
+                {
+                    var mj = members[j];
+                    pairs++;
+                    var relation = CampaignDiplomacy.Peek(c, mi.Id, mj.Id);
+                    var relOpinion = relation?.Opinion ?? 0f;
+                    opinion += relOpinion;
+                    distance += PoliticsCore.IdeologicalDistance(mi, mj);
+                    if (relation?.Stance == DiplomaticStance.Rival) rivals++;
+                    if (checkWar && warPairs.Contains(PackPair(mi.Id, mj.Id))) fighting++;
+                    realignmentSum += GeopoliticalCycle.BilateralRealignmentBias(c, mi, mj);
+                    var embargo = relation is not null && (relation.EmbargoByA || relation.EmbargoByB);
+                    var hostRival = relation?.Stance == DiplomaticStance.Rival || embargo || relOpinion < -20f;
+                    if (!frictionFlags[i] && (hostRival || TerritorialClaims.HoldsOurHomeland(c, mi, mj) || LostLands.HasClaimedLand(c, mi, mj)))
+                    {
+                        frictionFlags[i] = true;
+                        frictionMembersCount++;
+                    }
+                    if (!frictionFlags[j] && (hostRival || TerritorialClaims.HoldsOurHomeland(c, mj, mi) || LostLands.HasClaimedLand(c, mj, mi)))
+                    {
+                        frictionFlags[j] = true;
+                        frictionMembersCount++;
+                    }
+                }
             }
         }
-        var target = 0.55f + opinion / pairs * 0.004f - distance / pairs * 0.25f - rivals / (float)pairs * 0.6f;
+        finally
+        {
+            System.Buffers.ArrayPool<bool>.Shared.Return(frictionFlags, clearArray: true);
+        }
+        var avgDistance = distance / pairs;
+        var avgRealignment = (float)(realignmentSum / pairs);
+        var frictionShare = frictionMembersCount / (float)members.Count;
+        var target = 0.55f + opinion / pairs * 0.004f - avgDistance * 0.25f - rivals / (float)pairs * 0.35f - frictionShare * 0.32f;
         // Members shooting at each other: as bad as the share of the organisation it involves.
         if (fighting > 0) target -= MathF.Min(0.35f, 0.12f + fighting * 4f / members.Count * 0.1f);
-        target += Institution(c, org);
+        target += Institution(c, org, avgDistance, avgRealignment);
         // Trade is the glue of every economic union: Germany sells half of what it sells to the
         // rest of the European Union, and leaving would cost it that before anything else.
         double tradeSum = 0d;
@@ -328,14 +362,22 @@ public static class OrganizationDynamics
             }
             if (trustByTarget.Count == 0) trustByTarget = null;
         }
-        double opinionSum = 0d, distanceSum = 0d, trustSum = 0d;
+        double opinionSum = 0d, distanceSum = 0d, trustSum = 0d, realignmentSum = 0d;
         var atWarWithOther = false;
+        var frictionOthers = 0;
         var checkWar = hasWarPairs ? warPairs is { Count: > 0 } : true;
         for (var i = 0; i < others.Count; i++)
         {
             var o = others[i];
-            opinionSum += CampaignDiplomacy.Peek(c, member.Id, o.Id)?.Opinion ?? 0f;
+            var rel = CampaignDiplomacy.Peek(c, member.Id, o.Id);
+            var relOp = rel?.Opinion ?? 0f;
+            opinionSum += relOp;
             distanceSum += PoliticsCore.IdeologicalDistance(member, o);
+            realignmentSum += GeopoliticalCycle.BilateralRealignmentBias(c, member, o);
+            var embargo = rel is not null && (rel.EmbargoByA || rel.EmbargoByB);
+            if (rel?.Stance == DiplomaticStance.Rival || embargo || relOp < -20f ||
+                TerritorialClaims.HoldsOurHomeland(c, member, o) || LostLands.HasClaimedLand(c, member, o))
+                frictionOthers++;
             if (trustByTarget is not null && trustByTarget.TryGetValue(o.Tag, out var rawTrust))
                 trustSum += Math.Clamp(rawTrust, -.3f, .3f);
             if (!atWarWithOther && checkWar)
@@ -348,9 +390,11 @@ public static class OrganizationDynamics
         trustByTarget?.Clear();
         var opinion = (float)(opinionSum / others.Count);
         var distance = (float)(distanceSum / others.Count);
+        var avgRealignment = (float)(realignmentSum / others.Count);
         var trust = (float)(trustSum / others.Count);
-        var belonging = 0.55f + opinion * 0.004f - distance * 0.3f + trust + Institution(c, org) * 0.6f +
+        var belonging = 0.55f + opinion * 0.004f - distance * 0.3f + trust + Institution(c, org, distance, avgRealignment) * 0.6f +
                         MathF.Min(0.25f, TradeWithMembers(member, others) * 0.4f);
+        belonging -= frictionOthers / (float)others.Count * 0.18f;
         if (atWarWithOther) belonging -= 0.4f;
         belonging -= MathF.Min(0.25f, org.UnpaidWeeks.GetValueOrDefault(member.Id) * 0.02f);
         if (org.Cohesion < 0.4f) belonging -= (0.4f - org.Cohesion) * 0.5f;
@@ -385,7 +429,11 @@ public static class OrganizationDynamics
         }
         var relation=CampaignDiplomacy.Peek(c,member.Id,leader.Id);
         if (relation is null) return 0;
+        var embargoOrClaim = (relation.EmbargoByA || relation.EmbargoByB ||
+                              TerritorialClaims.HoldsOurHomeland(c, member, leader) ||
+                              LostLands.HasClaimedLand(c, member, leader)) ? 0.45f : 0f;
         var hostility = relation.Stance==DiplomaticStance.Rival ? 1f : Math.Clamp((-relation.Opinion-15)/65f,0,1);
+        hostility = MathF.Max(hostility, embargoOrClaim);
         if (leader.NationalCourse.Dominant is "isolationism" or "armed_neutrality") hostility = MathF.Max(hostility, 0.40f);
         if (leader.DebtCondition >= DebtCondition.Insolvent || leader.Stability < 0.30f) hostility = MathF.Max(hostility, 0.35f);
         return hostility * Math.Clamp(c.Defines.OrganizationLeaderRiftPenalty,0,.5f);
@@ -442,8 +490,14 @@ public static class OrganizationDynamics
     /// old, has offices, treaties and a way of doing things that a council founded last spring
     /// does not.
     /// </summary>
-    private static float Institution(Campaign c, InternationalOrganization org) =>
-        org.FoundedDay <= 0 || c.ElapsedDays - org.FoundedDay >= 5 * 365 ? 0.1f : 0f;
+    private static float Institution(Campaign c, InternationalOrganization org, float avgDistance = 0f, float avgRealignment = 0f)
+    {
+        if (org.FoundedDay > 0 && c.ElapsedDays - org.FoundedDay < 5 * 365) return 0f;
+        var glue = 0.1f;
+        if (avgDistance > 0.35f) glue -= (avgDistance - 0.35f) * 0.28f;
+        if (avgRealignment < -0.05f) glue -= (-avgRealignment - 0.05f) * 0.16f;
+        return Math.Clamp(glue, 0f, 0.1f);
+    }
 
     private static bool Threatened(Campaign c, Nation nation)
     {
@@ -462,6 +516,7 @@ public static class OrganizationDynamics
     private static void Review(Campaign c, InternationalOrganization org)
     {
         var defines = c.Defines;
+        if (org.Members.Count > org.PeakMembers) org.PeakMembers = org.Members.Count;
         FindLeaderAndChallenger(c, org, out var leader, out var challenger);
         var memberSet = _orgMembersSetScratch ??= new HashSet<int>();
         memberSet.Clear();
@@ -526,10 +581,33 @@ public static class OrganizationDynamics
         for (var mi = 0; mi < org.Members.Count; mi++)
             if (c.NationById(org.Members[mi]) is { IsHuman: true }) { noHuman = false; break; }
 
+        var charterCollapse = false;
+        if (org.Cohesion < defines.OrganizationDissolveCohesion)
+        {
+            if (org.Cohesion < defines.OrganizationDissolveCohesion * 0.75f)
+            {
+                charterCollapse = true;
+            }
+            else
+            {
+                var nonEstranged = 0;
+                for (var mi = 0; mi < org.Members.Count; mi++)
+                {
+                    var m = c.NationById(org.Members[mi]);
+                    if (m is not null && Belonging(c, org, m, leader, warPairs, hasWarPairs: true) >= defines.OrganizationDepartureBelonging)
+                    {
+                        nonEstranged++;
+                        if (nonEstranged >= 2) break;
+                    }
+                }
+                if (nonEstranged < 2) charterCollapse = true;
+            }
+        }
+
         // A council nobody believes in is wound up; one with a single member left, a year on, too.
         var lonely = org.Members.Count < 2 && org.Invitations.Count == 0 && org.Motion is null &&
-                     c.ElapsedDays - org.FoundedDay > 365 && noHuman;
-        if (lonely || (org.Cohesion < defines.OrganizationDissolveCohesion && noHuman &&
+                     c.ElapsedDays - org.FoundedDay > 365;
+        if (lonely || (org.Cohesion < defines.OrganizationDissolveCohesion && (noHuman || charterCollapse) &&
                        MovementRules.Roll(c.Seed, 7000 + org.Id, c.ElapsedDays, 4603) < defines.OrganizationDissolveChance * Durability(c, org)))
         {
             memberSet.Clear();
@@ -605,11 +683,11 @@ public static class OrganizationDynamics
     public static float Durability(Campaign c, InternationalOrganization org)
     {
         if (!OrganizationDiscipline.Enabled(c)) return 1f;
-        // A body nobody believes in at all - every member at odds with every other - goes
-        // regardless of its age: half the dissolution line is a charter that has plainly died.
-        if (org.Cohesion < c.Defines.OrganizationDissolveCohesion * 0.5f) return 1f;
+        if (org.Cohesion < c.Defines.OrganizationDissolveCohesion * 0.7f) return 1f;
+        var peak = Math.Max(org.PeakMembers, org.Members.Count);
+        if (peak >= 2 && org.Members.Count < peak * 0.6f) return 1f;
         var old = org.FoundedDay <= 0 || c.ElapsedDays - org.FoundedDay >= 5 * 365;
-        var factor = old ? 0.12f : 1f;
+        var factor = old ? 0.35f : 1f;
         if (org.Members.Count >= 6) factor *= 0.5f;
         return factor;
     }

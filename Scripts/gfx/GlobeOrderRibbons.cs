@@ -70,6 +70,7 @@ public sealed partial class GlobePresentation
 
     private void CreateOrderMaterials()
     {
+        if (_routeMaterials[1] is not null) return;
         var shader = new Shader { Code = """
 shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never;
@@ -167,8 +168,18 @@ void fragment() {
     private bool DrawOrderRibbon(Simulation.Army army, bool attack) =>
         DrawRibbon(_routeBatch, army.SupportOnly ? 2 : attack ? 1 : 0, OrderProgress(army));
 
+    private bool DrawStraightRibbon(RibbonBatch batch, int slot, Vector3 start, Vector3 end,
+        float progress, float widthScale = 1f)
+    {
+        if (batch is null) return false;
+        _routePoints.Clear();
+        _routePoints.Add(start);
+        _routePoints.Add(end);
+        return DrawRibbon(batch, slot, progress, widthScale);
+    }
+
     /// <summary>One ribbon along _routePoints into a preallocated batch slot, filled to a progress.</summary>
-    private bool DrawRibbon(RibbonBatch batch, int slot, float progress)
+    private bool DrawRibbon(RibbonBatch batch, int slot, float progress, float widthScale = 1f)
     {
         if (batch is null || _routePoints.Count < 2) return false;
         _activeRibbonBatch = batch;
@@ -198,7 +209,7 @@ void fragment() {
         if (length < 0.0001f) return false;
         var headLength = MathF.Min(0.032f, length * 0.28f);
         var headStart = length - headLength;
-        var halfWidth = MathF.Min(_flatMap ? 0.0060f : 0.0054f, headLength * 0.26f);
+        var halfWidth = MathF.Min((_flatMap ? 0.0060f : 0.0054f) * widthScale, headLength * 0.26f);
         var headStarted = false;
         for (var i = 0; i < _ribbonSamples.Count; i++)
         {

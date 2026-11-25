@@ -30,6 +30,8 @@ public sealed partial class MapAmbience : Node
     private readonly AudioFocusEnvelope _cueFocus = new();
     private float _frontNear;
     private double _frontCheck;
+    private Campaign _cachedCampaign;
+    private string _cachedCurse = "";
     public bool AuditionSuppressed { get; set; }
 
     public void DuckForCue(double seconds, float decibels) =>
@@ -84,31 +86,58 @@ public sealed partial class MapAmbience : Node
         var globe = _globe();
         var campaign = _campaign();
         level *= _cueFocus.Gain;
-        // A cursed world (WorldCurses): under the ice only the wind over it, at every height;
-        // the static has its own sound, and the ground none.
-        if (campaign?.Curse is WorldCurses.Snowgrave or WorldCurses.Static)
+        if (!ReferenceEquals(_cachedCampaign, campaign))
         {
-            var hush = 1f - MathF.Exp(-(float)delta * 1.5f);
-            var wind = campaign.Curse == WorldCurses.Snowgrave && GodotObject.IsInstanceValid(globe) && globe.IsVisibleInTree();
-            Mix(_high, 0f, hush);
-            Mix(_front, 0f, hush);
-            foreach (var (name, player) in _beds)
-                Mix(player, wind && name == SoundCatalog.FrozenBed ? 0.6f * level : 0f, hush);
-            return;
+            _cachedCampaign = campaign;
+            _cachedCurse = "";
+            _frontNear = 0f;
+            _frontCheck = 0;
+            _ground.Clear();
         }
         var live = campaign is not null && GodotObject.IsInstanceValid(globe) && globe.IsVisibleInTree() && level > 0.0005f;
-
         var height = live ? globe.ViewHeight : 12f;
         // The wind belongs to the strategic camera, the country to the tactical one.
         var high = Mathf.SmoothStep(7.0f, 11.0f, height);
         var land = 1f - Mathf.SmoothStep(6.2f, 8.6f, height);
 
         _frontCheck -= delta;
-        if (live && _frontCheck <= 0)
+        var needFrontSurvey = live && _frontCheck <= 0;
+        if (campaign is not null)
         {
-            _frontCheck = 0.5;
-            _frontNear = FrontNear(campaign, globe, height);
-            if (land > 0.001f) Survey(campaign.ProvinceMap, globe, height);
+            if (campaign.TryEnterRead(0, requestWindowOnMiss: false))
+            {
+                try
+                {
+                    _cachedCurse = campaign.Curse ?? "";
+                    if (needFrontSurvey && _cachedCurse is not (WorldCurses.Snowgrave or WorldCurses.Static))
+                    {
+                        _frontCheck = 0.5;
+                        _frontNear = FrontNear(campaign, globe, height);
+                        if (land > 0.001f) Survey(campaign.ProvinceMap, globe, height);
+                    }
+                }
+                finally
+                {
+                    campaign.ExitRead();
+                }
+            }
+            else if (needFrontSurvey)
+            {
+                _frontCheck = 0.03;
+            }
+        }
+
+        // A cursed world (WorldCurses): under the ice only the wind over it, at every height;
+        // the static has its own sound, and the ground none.
+        if (campaign is not null && _cachedCurse is WorldCurses.Snowgrave or WorldCurses.Static)
+        {
+            var hush = 1f - MathF.Exp(-(float)delta * 1.5f);
+            var wind = _cachedCurse == WorldCurses.Snowgrave && GodotObject.IsInstanceValid(globe) && globe.IsVisibleInTree();
+            Mix(_high, 0f, hush);
+            Mix(_front, 0f, hush);
+            foreach (var (name, player) in _beds)
+                Mix(player, wind && name == SoundCatalog.FrozenBed ? 0.6f * level : 0f, hush);
+            return;
         }
 
         var step = 1f - MathF.Exp(-(float)delta * 1.5f);

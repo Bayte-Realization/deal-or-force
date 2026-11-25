@@ -36,7 +36,8 @@ public partial class DealOrForceGame
         // just asked for, or the month's autosave, and quitting is not a reason to lose it.
         WaitForPendingSave();
         _modLoader.StopCode();
-        if (_engineLog is not null) { OS.RemoveLogger(_engineLog); _engineLog.Dispose(); _engineLog = null; }
+        // GameDiagnosticLogger inherits Godot.Logger (RefCounted); never manually Dispose().
+        if (_engineLog is not null) { OS.RemoveLogger(_engineLog); _engineLog = null; }
         DiagnosticLogs.Stop();
     }
 

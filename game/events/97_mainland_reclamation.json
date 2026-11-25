@@ -10,7 +10,7 @@
         "title": "mr.ev.glory_council.opt1",
         "consequence": "mr.ev.glory_council.con1",
         "effects": {
-          "income_share": -0.04,
+          "income_penalty": { "share": 0.06, "days": 270 },
           "war_support": 0.08,
           "prestige": 6.0,
           "army_experience": 15.0,
@@ -25,7 +25,7 @@
         "title": "mr.ev.glory_council.opt2",
         "consequence": "mr.ev.glory_council.con2",
         "effects": {
-          "income_share": -0.02,
+          "income_penalty": { "share": 0.04, "days": 180 },
           "stability": 0.03,
           "fleet.readiness": 0.12,
           "prestige": 3.0
@@ -88,7 +88,7 @@
         "title": "mr.ev.coastal_ferment.opt2",
         "consequence": "mr.ev.coastal_ferment.con2",
         "effects": {
-          "income_share": -0.04,
+          "income_penalty": { "share": 0.06, "days": 240 },
           "war_support": -0.04,
           "stability": 0.01
         }

@@ -45,6 +45,7 @@ public static class ControlTally
     {
         internal int Day = int.MinValue;
         internal int Revision = int.MinValue;
+        internal int WarRevision = int.MinValue;
         // Kept per owner AND region, not by region alone. Nine of the world's regions are cut by
         // a border and hold provinces belonging to two countries; the per-country call counts only
         // its own, and a tally keyed by region alone would hand both owners the sum. That is three
@@ -81,13 +82,21 @@ public static class ControlTally
         // last campaign's: the second campaign of a session would have been dealt the first
         // one's occupations.
         if (campaign?.ProvinceMap is null || campaign.ProvinceController is null) return default;
-        var tally = campaign.ControlTallyTables ??= new TallyState();
-        Refresh(tally, campaign);
-        if (region < 0 || region >= tally.RegionOwner.Length) return default;
-        var owner = (ushort)ownerMapIndex;
-        if (tally.RegionOwner[region] == owner) return tally.ByRegion[region];
-        tally.SplitRegions.TryGetValue(Key(owner, region), out var split);
-        return split;
+        var tally = campaign.ControlTallyTables;
+        if (tally is null)
+        {
+            var created = new TallyState();
+            tally = System.Threading.Interlocked.CompareExchange(ref campaign.ControlTallyTables, created, null) ?? created;
+        }
+        lock (tally)
+        {
+            Refresh(tally, campaign);
+            if (region < 0 || region >= tally.RegionOwner.Length) return default;
+            var owner = (ushort)ownerMapIndex;
+            if (tally.RegionOwner[region] == owner) return tally.ByRegion[region];
+            tally.SplitRegions.TryGetValue(Key(owner, region), out var split);
+            return split;
+        }
     }
 
     /// <summary>Where this owner's count for this region is kept, made if it is not there yet.</summary>
@@ -109,11 +118,14 @@ public static class ControlTally
         var control = campaign?.ProvinceController;
         if (topology is null || control is null) return;
 
-        if (tally.Day == campaign.ElapsedDays && tally.Revision == campaign.MapRevision)
+        if (tally.Day == campaign.ElapsedDays &&
+            tally.Revision == campaign.MapRevision &&
+            tally.WarRevision == campaign.WarRevision)
             return;
 
         tally.Day = campaign.ElapsedDays;
         tally.Revision = campaign.MapRevision;
+        tally.WarRevision = campaign.WarRevision;
 
         // Who is at war with whom, by map flag, so the walk below can ask the question
         // about a province's owner without touching the war list again.

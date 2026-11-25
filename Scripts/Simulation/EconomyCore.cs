@@ -1228,11 +1228,14 @@ public static class EconomySystem
         var energySupply = nation.Market.GetValueOrDefault(Commodity.Energy)?.Satisfaction ?? 1f;
         var marketOutput = 0.65f + industrialSupply * 0.18f + energySupply * 0.17f;
 
+        var macroWave = GeopoliticalCycle.MacroEconomicWave(campaign, nation);
+        var sclerosis = GeopoliticalCycle.InstitutionalSclerosis(campaign, nation);
         var conditions = 0.006f + (nation.Stability - 0.5f) * 0.018f - (atWar ? 0.018f : 0f) -
                          nation.ShortageIndex * campaign.Defines.ShortageAnnualGrowthPenalty + budget.Growth +
                          GovernmentFocusRules.AnnualGrowth(nation.GovernmentFocus) +
                          government.Growth + ideology.Growth -
-                         (1f - marketOutput) * 0.020f;
+                         (1f - marketOutput) * 0.020f +
+                         macroWave * 0.024f - sclerosis * 0.010f;
         nation.Productivity = M.Clamp(nation.Productivity * (1f + conditions / 52f), 0.15f, 4f);
 
         SecularCycle.Week(campaign, nation, atWar);
@@ -1262,7 +1265,14 @@ public static class EconomySystem
     {
         nation.WeeklyTaxIncome = budget.Taxation;
         nation.WeeklyExpenses = budget.Expenses;
-        nation.WeeklyBalance = budget.Balance;
+        var macroWave = GeopoliticalCycle.MacroEconomicWave(campaign, nation);
+        var fiscalBalance = budget.Balance;
+        if (macroWave < -0.20f)
+        {
+            var contraction = (-macroWave - 0.20f) * MathF.Max(0f, budget.GrossRevenue) * 0.25f;
+            fiscalBalance -= contraction;
+        }
+        nation.WeeklyBalance = fiscalBalance;
         nation.WeeklyGrossIncome = budget.GrossRevenue;
         nation.WeeklyIncomePenalty = budget.IncomePenalty;
         MoneyLedger.BookPenalty(nation, budget.IncomePenalty);
@@ -1270,11 +1280,11 @@ public static class EconomySystem
         if (nation.IsHuman)
         {
             BudgetCore.Itemise(nation, weeklyOutput, atWar);
-            nation.Budget.Settle(nation.WeeklyBalance, Loc.Get("rounding"));
+            nation.Budget.Settle(fiscalBalance, Loc.Get("rounding"));
         }
 
         RegionalAutonomy.PayWeek(campaign, nation);
-        SovereignFinance.Settle(campaign, nation, nation.WeeklyBalance, interest);
+        SovereignFinance.Settle(campaign, nation, fiscalBalance, interest);
         if (!nation.IsHuman || Delegation.Holds(nation, Delegation.Budget))
             SovereignFinance.ManageLiquidity(campaign, nation);
         ProductionMethods.EvaluateAi(campaign, nation);
@@ -1282,6 +1292,10 @@ public static class EconomySystem
 
         var scarcity = MathF.Max(0f, nation.ShortageIndex - campaign.Defines.ScarcityTolerance);
         InflationCore.Tick(campaign, nation, weeklyOutput, atWar, scarcity);
+        if (macroWave > 0.45f)
+            nation.Inflation = M.Clamp(nation.Inflation + (macroWave - 0.45f) * 0.0028f, InflationCore.Weights.Floor, InflationCore.Weights.Ceiling);
+        else if (macroWave < -0.35f && nation.PublicDebt > nation.Gdp * 0.6f)
+            nation.Inflation = M.Clamp(nation.Inflation + (-macroWave - 0.35f) * 0.0032f, InflationCore.Weights.Floor, InflationCore.Weights.Ceiling);
     }
 
     private static void UpdateNationGdpFromProduction(Campaign campaign, Nation nation)
@@ -1367,9 +1381,11 @@ public static class EconomySystem
         if (states.Length > 0) nation.Population = totalPopulation;
 
         var focusSol = p.Cabinet.Living + p.Government.Living + p.Ideology.Living;
+        var cycleSol = GeopoliticalCycle.MacroEconomicWave(campaign, nation) * 0.0018f -
+                       GeopoliticalCycle.InstitutionalSclerosis(campaign, nation) * 0.0005f;
         nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + p.AnnualGrowth * 0.004f -
             MathF.Max(0f, nation.ShortageIndex - campaign.Defines.ScarcityTolerance) * campaign.Defines.ShortageSolWeeklyPenalty +
-            p.BudgetLiving + focusSol);
+            p.BudgetLiving + focusSol + cycleSol);
         var anchor = M.Clamp01(EconomicLiving(nation) + nation.LivingOffset);
         nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving +
             (anchor - nation.StandardOfLiving) * campaign.Defines.LivingReversionPerWeek);
@@ -1418,7 +1434,12 @@ public static class EconomySystem
             AdjustStatePopulation(state, (long)Math.Round(state.Population * weeklyGrowth));
         }
         state.StandardOfLiving = M.Lerp(state.StandardOfLiving, nation.StandardOfLiving, 0.04f);
-        state.Radicalism += RadicalismCore.WeeklyChange(campaign, nation, state, atWar, welfareRadicalism, focusRadicalism);
+        var macroWave = GeopoliticalCycle.MacroEconomicWave(campaign, nation);
+        var sclerosis = GeopoliticalCycle.InstitutionalSclerosis(campaign, nation);
+        var cycleRadicalism = (macroWave < -0.15f ? (-macroWave - 0.15f) * 0.0022f : 0f) + sclerosis * 0.0010f;
+        state.Radicalism = M.Clamp01(state.Radicalism +
+            RadicalismCore.WeeklyChange(campaign, nation, state, atWar, welfareRadicalism, focusRadicalism) +
+            cycleRadicalism);
         MinorityPressure(campaign, nation, state);
         MovementRules.MarkPeopleStateDirty(campaign, state);
     }

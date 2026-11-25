@@ -57,7 +57,7 @@ internal sealed class ShellWorkPanelView
     private string _lastTabSig = "";
     private (ProvinceTopology Map, int Rev, Dictionary<int, int> Counts) _stateProvinceCache;
     private readonly Dictionary<int, int> _rankByNationCache = new();
-    private (Campaign World, int Day, int Rev) _rankCacheStamp;
+    private (Campaign World, int Day, int Rev, int WarRev) _rankCacheStamp;
     private readonly List<(string Caption, bool Primary, Action OnClick)> _pendingFooterActions = new();
 
     public bool IsVisible => _panel is { Visible: true };
@@ -253,6 +253,8 @@ internal sealed class ShellWorkPanelView
         }
     }
 
+    public int TargetNationId => _targetNationId;
+
     public void OpenCountry(Nation nation)
     {
         if (nation is null) return;
@@ -260,6 +262,7 @@ internal sealed class ShellWorkPanelView
         _mode = DossierMode.Country;
         if (_targetNationId != nation.Id) _activeTab = 0;
         _targetNationId = nation.Id;
+        _ctx.HighlightNation?.Invoke(nation.MapIndex);
         _feedbackLabel.Visible = false;
         _lastBuildSig = "";
         _panel.Visible = true;
@@ -270,6 +273,7 @@ internal sealed class ShellWorkPanelView
     {
         if (state is null && owner is not null) { OpenCountry(owner); return; }
         if (state is null) return;
+        _ctx.HighlightNation?.Invoke(-1);
         _mode = DossierMode.Region;
         if (_targetStateMapIndex != state.MapIndex) _activeTab = 0;
         _targetNationId = owner?.Id ?? -1;
@@ -284,6 +288,7 @@ internal sealed class ShellWorkPanelView
     public void Close()
     {
         if (_mode == DossierMode.Region) _ctx.ClearRegionSelection?.Invoke();
+        if (_mode == DossierMode.Country) _ctx.HighlightNation?.Invoke(-1);
         _mode = DossierMode.None;
         _pinned = false;
         if (_panel is not null) _panel.Visible = false;
@@ -327,6 +332,19 @@ internal sealed class ShellWorkPanelView
     public void Refresh()
     {
         if (!IsVisible || _ctx.World is not { } world) return;
+        if (!world.TryEnterRead(50, true)) return;
+        try
+        {
+            RefreshLocked(world);
+        }
+        finally
+        {
+            world.ExitRead();
+        }
+    }
+
+    private void RefreshLocked(Campaign world)
+    {
         var canBack = _ctx.CanNavigateBack?.Invoke() ?? false;
         if (_backBtn.Disabled == canBack) _backBtn.Disabled = !canBack;
         UpdatePinButtonState();
@@ -483,11 +501,14 @@ internal sealed class ShellWorkPanelView
             return snapRanks.GetValueOrDefault(nationId, 0);
         }
 
-        if (!ReferenceEquals(_rankCacheStamp.World, world) || _rankCacheStamp.Day != world.ElapsedDays || _rankCacheStamp.Rev != world.MapRevision)
+        if (!ReferenceEquals(_rankCacheStamp.World, world) || _rankCacheStamp.Day != world.ElapsedDays ||
+            _rankCacheStamp.Rev != world.MapRevision || _rankCacheStamp.WarRev != world.WarRevision)
         {
             if (world.MidStep)
             {
-                if (world.RenderSnapshot is { Version: > 0 } fbSnap && fbSnap.NationRanksById is { Count: > 0 } fbRanks)
+                if (world.RenderSnapshot is { Version: > 0 } fbSnap &&
+                    fbSnap.RankWeek == week &&
+                    fbSnap.NationRanksById is { Count: > 0 } fbRanks)
                     return fbRanks.GetValueOrDefault(nationId, 0);
                 return _rankByNationCache.GetValueOrDefault(nationId, 1);
             }
@@ -497,7 +518,7 @@ internal sealed class ShellWorkPanelView
                 Ui.Metric("rankings.weight.prestige", 15));
             _rankByNationCache.Clear();
             foreach (var r in CountryRankings.Read(world, weights)) _rankByNationCache[r.NationId] = r.OverallRank;
-            _rankCacheStamp = (world, world.ElapsedDays, world.MapRevision);
+            _rankCacheStamp = (world, world.ElapsedDays, world.MapRevision, world.WarRevision);
         }
         return _rankByNationCache.GetValueOrDefault(nationId, 1);
     }

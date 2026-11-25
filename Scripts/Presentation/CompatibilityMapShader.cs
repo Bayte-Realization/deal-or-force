@@ -35,6 +35,7 @@ uniform float selected_region_id = -1.0;
 uniform float selected_province_id = -1.0;
 uniform float selected_region_live = 0.0;
 uniform float highlighted_nation = -1.0;
+uniform vec3 selection_ink : source_color = vec3(0.09, 0.075, 0.06);
 uniform float fog_viewer = -1.0;
 uniform float fog_tint = 1.0;
 uniform float fog_darkness = 0.74;
@@ -72,9 +73,11 @@ void fragment() {
     // A treaty is solid ownership; military control remains an occupation ribbon.
     land = mix(land, control_.rgb * 0.82, step(0.95, control_.a));
     float occupied = step(0.10, control_.a) * (1.0 - step(0.75, control_.a));
-    float phase = (UV.x * 2.0 + UV.y) * 260.0;
-    float ribbon = smoothstep(0.40, 0.48, abs(fract(phase) - 0.5));
-    land = mix(land, control_.rgb * 0.88, occupied * ribbon);
+    float axis = UV.x * 2.0 + UV.y;
+    float deriv = max(fwidth(axis), 0.000001);
+    float fine_mix = 1.0 - smoothstep(0.018, 0.055, deriv * 260.0);
+    float ribbon = smoothstep(0.42, 0.48, abs(fract(axis * mix(260.0, 1560.0, fine_mix)) - 0.5));
+    land = mix(land, control_.rgb * 0.88, occupied * ribbon * 0.52);
     float leased = step(0.76, control_.a) * (1.0 - step(0.92, control_.a));
     vec2 dots = fract(UV * vec2(520.0, 260.0)) - 0.5;
     land = mix(land, control_.rgb, leased * (1.0 - smoothstep(0.13, 0.20, length(dots))));
@@ -102,11 +105,19 @@ void fragment() {
     selected_region = mix(selected_region, texture(selected_region_members, entry).r, step(0.5, selected_region_live));
     float selected = max(selected_region, (1.0 - step(0.5, abs(province_ - selected_province_id))) * step(0.0, selected_province_id));
     land = mix(land, vec3(0.95, 0.78, 0.30), selected * 0.18);
-    float highlighted = (1.0 - step(0.5, abs(owner_id - highlighted_nation))) * step(0.0, highlighted_nation);
-    land = mix(land, vec3(0.96, 0.82, 0.44), highlighted * national * 0.65);
+    float highlighted = (1.0 - step(0.5, abs(owner_id - highlighted_nation))) * step(0.0, highlighted_nation) * paint.a;
+    // Measure UV derivatives before fract(UV.x) wrapping so the 180-deg antimeridian seam cannot spike highlight_step.
+    vec2 highlight_step = max(texel, min(fwidth(UV), texel * 12.0) * 1.5);
+    float highlight_edge = max(max(step(0.5, abs(owner_id - owner_at(vec2(fract(at.x + highlight_step.x), at.y)))),
+                                   step(0.5, abs(owner_id - owner_at(vec2(fract(at.x - highlight_step.x), at.y))))),
+                               max(step(0.5, abs(owner_id - owner_at(vec2(at.x, clamp(at.y + highlight_step.y, 0.0, 1.0))))),
+                                   step(0.5, abs(owner_id - owner_at(vec2(at.x, clamp(at.y - highlight_step.y, 0.0, 1.0)))))));
+    highlight_edge = max(national, highlight_edge) * highlighted;
+    land = mix(land, clamp(land * 1.10 + vec3(0.045, 0.042, 0.036), vec3(0.0), vec3(1.0)), highlighted * 0.55);
     float fog = step(0.0, fog_viewer) * (1.0 - step(0.5, texture(fog_visibility, entry).r)) * fog_tint;
     vec3 grey = vec3(dot(land, vec3(0.2126, 0.7152, 0.0722)));
     land = mix(land, mix(grey, land, fog_saturation) * fog_darkness, fog);
+    land = mix(land, selection_ink, highlight_edge);
     ALBEDO = mix(ocean_color, land, paint.a);
 }";
 }

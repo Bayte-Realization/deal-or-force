@@ -192,7 +192,7 @@ public static class StateFailure
         if (CapitalLost(c, nation)) count++;
         if (RisingsAgainst(c, nation) >= 2) count++;
         if (LosingWar(c, nation)) count++;
-        if (nation.PaymentArrears > 0f || nation.DebtCondition is DebtCondition.Default or DebtCondition.Insolvent ||
+        if (nation.PaymentArrears > 0f || nation.DebtCondition >= DebtCondition.Default ||
             nation.Treasury < 0f)
             count++;
         if (Radicalism(c, nation) >= 0.45f) count++;
@@ -211,7 +211,7 @@ public static class StateFailure
         var risings = RisingsAgainst(c, nation);
         if (risings >= 2) signs.Add("Several armed risings hold parts of the country.");
         if (LosingWar(c, nation)) signs.Add("A war is being lost.");
-        if (nation.PaymentArrears > 0f || nation.DebtCondition is DebtCondition.Default or DebtCondition.Insolvent ||
+        if (nation.PaymentArrears > 0f || nation.DebtCondition >= DebtCondition.Default ||
             nation.Treasury < 0f)
             signs.Add("The state cannot pay its soldiers.");
         if (Radicalism(c, nation) >= 0.45f) signs.Add("The people are radicalised through and through.");
@@ -822,7 +822,7 @@ public static class StateFailure
     public static float ArmyDisloyalty(Campaign c, Nation nation)
     {
         var value = M.Clamp01(nation.DomesticCrisis?.CoupPressure ?? 0f);
-        if (nation.PaymentArrears > 0f || nation.Treasury < 0f || nation.DebtCondition is DebtCondition.Default or DebtCondition.Insolvent)
+        if (nation.PaymentArrears > 0f || nation.Treasury < 0f || nation.DebtCondition >= DebtCondition.Default)
             value += 0.2f;
         if (LosingWar(c, nation)) value += 0.15f;
         return M.Clamp01(value);
@@ -845,7 +845,6 @@ public static class StateFailure
             nation.Population <= 0) return "Only an independent state has a government to overthrow.";
         if (nation.IsHuman && !d.CivilWarStrikesPlayers) return "Random outbreaks in player countries are disabled in campaign settings.";
         if (c.ElapsedDays - (long)nation.LastRevolutionDay < d.RevolutionCooldownDays) return "A revolution has only just happened.";
-        if (nation.DomesticCrisis?.CooldownUntilDay > c.ElapsedDays) return "The new rulers still hold the army.";
         if (!float.IsFinite(nation.Stability) || nation.Stability >= d.RevolutionStabilityThreshold) return "The state is too settled for a revolution.";
         var capital = Capital(c, nation);
         if (capital is null || !float.IsFinite(capital.Radicalism)) return "The government does not hold its capital.";

@@ -18,7 +18,10 @@ public static class RadicalismCore
     {
         var w = InflationCore.Weights;
         var excess = MathF.Max(0, nation.Inflation - w.Comfort);
-        return (w.Bite > 0 ? MathF.Min(excess, w.Bite) : excess) * w.Radicalism;
+        var effective = w.Bite > 0 && excess > w.Bite
+            ? w.Bite + (excess - w.Bite) * 0.5f
+            : excess;
+        return effective * w.Radicalism;
     }
 
     public static float WeeklyChange(Campaign c, Nation nation, ScenarioState state,
@@ -51,11 +54,10 @@ public static class RadicalismCore
         var rate = MathF.Max(0, d.RegionalRadicalismRecoveryPerWeek) +
                    M.Clamp01(state.StandardOfLiving) * MathF.Max(0, d.RegionalRadicalismLivingRecovery);
         if (atWar) rate *= M.Clamp01(d.RegionalRadicalismWarRecovery);
-        // A time of troubles exhausts itself: the longer a country has been at the bottom, the
-        // faster people tire of the radicals (Nation.TroublesDays). Without it a collapsed state
-        // stayed at the floor of its stability for twenty-five years, its regions at radicalism one.
-        if (nation is not null && nation.TroublesDays > 0)
-            rate *= 1f + M.Clamp(nation.TroublesDays / MathF.Max(1f, d.TroublesExhaustionDays), 0f, d.TroublesExhaustionCap);
+        // Prolonged crises eventually fatigue, but only after years and once collapse stabilizes,
+        // so active economic/political turmoil is not prematurely erased.
+        if (nation is not null && nation.TroublesDays > 730 && nation.Stability >= 0.30f)
+            rate *= 1f + M.Clamp((nation.TroublesDays - 730) / MathF.Max(1f, d.TroublesExhaustionDays), 0f, MathF.Min(0.75f, d.TroublesExhaustionCap));
         var recovery = -M.Clamp01(state.Radicalism) * M.Clamp01(rate);
         var raw = living + minority + occupation + inflation + overstretch + exhausted + budgetPressure + policyPressure + recovery;
         var actual = M.Clamp01(state.Radicalism + raw) - state.Radicalism;

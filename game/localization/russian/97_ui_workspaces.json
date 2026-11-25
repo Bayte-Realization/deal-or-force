@@ -6,7 +6,8 @@
   "shell.ws.reg.gdp_share_fmt": "{0}% от страны",
   "shell.ws.reg.growth_fmt": "{0} ест. прирост",
   "shell.ws.reg.unrest_fmt": "Волнения {0}",
-  "shell.ws.reg.occupied_by_fmt": "Оккупир.: {0}",
+  "shell.ws.reg.occupied_by_fmt": "Под контролем: {0}",
+  "shell.ws.reg.leased_by_fmt": "Аренда: {0}",
   "shell.ws.reg.full_control": "Полный контроль",
   "shell.ws.reg.garrison_divs_fmt": "{0} див. · {1} пров.",
   "shell.ws.reg.war_damage_fmt": "Военный ущерб {0}",
@@ -110,7 +111,7 @@
   "shell.ws.army.strip_more_tip": "Открыть экран Армии для просмотра всех фронтов и соединений.",
 
   "shell.ws.shell.inbox_pending_tip_fmt": "Входящих дипломатических предложений: {0}.",
-  "shell.ws.shell.map_tip_political": "Границы государств, столицы и оккупированные территории.",
+  "shell.ws.shell.map_tip_political": "Границы государств, столицы и контролируемые территории.",
   "shell.ws.shell.map_tip_diplomatic": "Союзники, соперники, пакты, перемирия и отношения.",
   "shell.ws.shell.map_tip_economy": "Плотность ВРП регионов, промышленные центры и торговля.",
   "shell.ws.shell.map_tip_resources": "Стратегические месторождения, энергетика и сельское хозяйство.",

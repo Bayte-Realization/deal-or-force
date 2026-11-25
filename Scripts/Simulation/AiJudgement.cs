@@ -153,8 +153,13 @@ public static partial class AiStatecraft
         var minimumAdvantage = MinimumAdvantageFor(campaign, nation, other, relation);
         if (advantage < minimumAdvantage) return 0f;
         var regionsHeld = refreshAssessment ? RegionsHeldBy(campaign, other.MapIndex) : campaign.StatesOf(other).Length;
+        var taken = AnnexationAmbition.TakenCount(campaign, nation, other);
+        var holdsHomeland = TerritorialClaims.HoldsOurHomeland(campaign, nation, other);
+        var unfinishedClaim = relation is not null && OpinionSystem.Has(relation, "unfinished_war_claim");
         var worth = M.Clamp(regionsHeld / M.Max(1f, defines.AiWorthRegions), defines.AiWorthFloor, 1f) *
                     M.Clamp(MathF.Sqrt(other.Population / M.Max(1f, defines.AiWorthFloorPopulation)), 0.05f, 1f);
+        if (taken > 0 || unfinishedClaim || holdsHomeland)
+            worth = MathF.Max(worth, 0.85f);
         parts?.Add(($"advantage {advantage:0.00} (ours {mine:0} vs theirs {theirs:0})", 0f));
         // Weakness makes a war possible; it does not make it wanted. A government with no
         // reason it could give - no lost ground, no countrymen across the border, no ally under
@@ -188,12 +193,12 @@ public static partial class AiStatecraft
         // creed's appetite, not a country's).
         // Ground taken in THIS campaign - a region that still remembers its old owner - not a
         // homeland from the history books: Italy does not covet the Papal States' Rome.
-        var taken = 0;
-        if (defines.AiRumpAppetite > 0f)
-            foreach (var region in campaign.StatesOf(nation))
-                if (region.RememberedOwner == other.MapIndex) taken++;
-        value += Part(parts, "finish the rump", M.Min(1f, taken / 3f) * defines.AiRumpAppetite *
-                                               (0.4f + M.Max(0f, PoliticsCore.IdeologyOf(nation).Authority)));
+        if (defines.AiRumpAppetite > 0f && taken > 0)
+        {
+            var rumpAppetite = MathF.Max(defines.AiRumpAppetite, 1.35f);
+            value += Part(parts, "finish the rump", M.Min(1f, taken / 2f) * rumpAppetite *
+                                                   (0.5f + M.Max(0f, PoliticsCore.IdeologyOf(nation).Authority)));
+        }
 
         // And a border nobody can live with: their land inside ours, ours cut off by theirs.
         value += Part(parts, "borders", BorderShape.Grievance(campaign, nation, other) * defines.AiBorderAppetite);
@@ -216,8 +221,9 @@ public static partial class AiStatecraft
             // eyeing a nervous neighbour is exactly the imperial appetite the game wants.
             value += Part(parts, "hostility", M.Clamp(-relation.Opinion / 100f, 0f, 1f) * defines.AiHostilityAppetite);
             if (relation.Stance == DiplomaticStance.Rival) value += Part(parts, "rivalry", defines.AiRivalryAppetite);
-            if (OpinionSystem.Has(relation, "unfinished_war_claim"))
-                value += Part(parts, "unfinished goals", defines.AiUnfinishedGoalAppetite * AiTemperament.OpportunismOf(campaign, nation));
+            if (unfinishedClaim)
+                value += Part(parts, "unfinished goals",
+                    MathF.Max(defines.AiUnfinishedGoalAppetite, 1.15f) * (0.5f + 0.5f * AiTemperament.OpportunismOf(campaign, nation)));
         }
 
         // Target vulnerability: a neighbour reeling from exhaustion (low war support or collapsed stability) is an inviting opening for opportunists.
@@ -237,12 +243,12 @@ public static partial class AiStatecraft
         var targetDistress = 0f;
         if (campaign.FeatureEnabled("public_debt"))
         {
-            if (other.DebtCondition >= DebtCondition.Insolvent)
+            if (other.DebtCondition == DebtCondition.Insolvent)
                 targetDistress += 1.0f;
             else if (other.DebtCondition == DebtCondition.Default)
                 targetDistress += 0.75f;
             else if (other.DebtCondition == DebtCondition.Restructuring)
-                targetDistress += 0.40f;
+                targetDistress += 0.55f;
             else if (other.DebtCondition == DebtCondition.Stressed)
                 targetDistress += 0.15f;
         }
@@ -327,7 +333,8 @@ public static partial class AiStatecraft
         // looking across the strait) may weigh an asymmetric reclamation strike when prepared or
         // when the rival is stretched/unstable, rather than waiting for 1:1 GDP parity.
         var minFloor = 1.00f;
-        if (TerritorialClaims.HoldsOurHomeland(campaign, nation, other) &&
+        var holdsHomeland = TerritorialClaims.HoldsOurHomeland(campaign, nation, other);
+        if (holdsHomeland &&
             AnnexationAmbition.IsReunification(campaign, nation, other) &&
             (AtWarWithAnybody(campaign, other) ||
              other.Stability < 0.62f ||
@@ -335,6 +342,17 @@ public static partial class AiStatecraft
         {
             discount += 0.45f;
             minFloor = 0.35f;
+        }
+        else if (holdsHomeland)
+        {
+            discount += 0.30f;
+            if (AtWarWithAnybody(campaign, other) ||
+                other.Stability < 0.50f ||
+                other.DebtCondition >= DebtCondition.Default)
+            {
+                discount += 0.25f;
+                minFloor = 0.72f;
+            }
         }
         return discount <= 0f ? floor : M.Clamp(floor - discount, minFloor, floor);
     }
@@ -561,7 +579,6 @@ public static partial class AiStatecraft
     /// <summary>How much of the target's population is our own people, as a share of ours.</summary>
     private static float Irredentism(Campaign campaign, Nation nation, Nation other)
     {
-        if (!CampaignIntel.CanInspect(nation.Id, other.Id)) return 0f;
         if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, other.MapIndex) &&
             !TerritorialClaims.HoldsOurHomeland(campaign, nation, other) &&
             !PeaceShape.Near(campaign, nation, other)) return 0f;
@@ -583,7 +600,6 @@ public static partial class AiStatecraft
     /// </summary>
     private static float Covets(Campaign campaign, Nation nation, Nation other)
     {
-        if (!CampaignIntel.CanInspect(nation.Id, other.Id)) return 0f;
         var hunger = 0f;
         foreach (var (commodity, quote) in nation.Market)
         {

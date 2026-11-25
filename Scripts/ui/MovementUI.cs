@@ -159,8 +159,17 @@ public partial class DealOrForceGame
     {
         if (_movementPanel is null) return;
         if (_movementPanel.Visible) { CloseMovementPanel(); return; }
-        var own = _campaign?.Player;
-        ShowMovement(own?.Movement is not null ? own : _movementShown ?? Movements.Of(_campaign).FirstOrDefault());
+        var campaign = _campaign;
+        if (campaign is null || !campaign.TryEnterRead(50, true)) return;
+        try
+        {
+            var own = campaign.Player;
+            ShowMovement(own?.Movement is not null ? own : _movementShown ?? Movements.Of(campaign).FirstOrDefault());
+        }
+        finally
+        {
+            campaign.ExitRead();
+        }
     }
 
     /// <summary>Everything the panel shows, as one string: when it has not moved, nothing is rebuilt.</summary>
@@ -179,7 +188,21 @@ public partial class DealOrForceGame
     private void RefreshMovementPanel()
     {
         var nation = _movementShown;
-        if (_movementRows is null || nation?.Movement is null || _campaign is null) return;
+        var campaign = _campaign;
+        if (_movementRows is null || nation?.Movement is null || campaign is null) return;
+        if (!campaign.TryEnterRead(0, true)) return;
+        try
+        {
+            RefreshMovementPanelCore(nation);
+        }
+        finally
+        {
+            campaign.ExitRead();
+        }
+    }
+
+    private void RefreshMovementPanelCore(Nation nation)
+    {
         RememberMovementViewport();
         var snapshot = MovementSnapshot(nation);
         if (snapshot == _movementBuiltFrom) return;
@@ -937,20 +960,30 @@ public partial class DealOrForceGame
 
         public override void _Process(double delta)
         {
-            if (_game?._campaign is null || _game._movementPanel is null) return;
-            var player = _game._campaign.Player;
-            if (player?.Movement is not null && _game._hudLayer.Visible &&
-                !ReferenceEquals(_game._movementOpenedFor, _game._campaign))
+            var campaign = _game?._campaign;
+            if (campaign is null || _game._movementPanel is null) return;
+            if (_game._movementPanel.Visible)
+                _game._movementRefresh += delta;
+            if (!campaign.TryEnterRead(0, requestWindowOnMiss: false)) return;
+            try
             {
-                _game._movementOpenedFor = _game._campaign;
-                _game.ShowMovement(player);
+                var player = campaign.Player;
+                if (player?.Movement is not null && _game._hudLayer.Visible &&
+                    !ReferenceEquals(_game._movementOpenedFor, campaign))
+                {
+                    _game._movementOpenedFor = campaign;
+                    _game.ShowMovement(player);
+                }
+                _game.KeepMovementPanelInItsPlace();
+                if (!_game._movementPanel.Visible) return;
+                if (_game._movementBuiltFrom.Length > 0 && _game._movementRefresh < 0.5) return;
+                _game._movementRefresh = 0;
+                _game.RefreshMovementPanel();
             }
-            _game.KeepMovementPanelInItsPlace();
-            if (!_game._movementPanel.Visible) return;
-            _game._movementRefresh += delta;
-            if (_game._movementRefresh < 0.5) return;
-            _game._movementRefresh = 0;
-            _game.RefreshMovementPanel();
+            finally
+            {
+                campaign.ExitRead();
+            }
         }
 
         public override void _UnhandledInput(InputEvent inputEvent)

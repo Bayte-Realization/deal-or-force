@@ -4,7 +4,7 @@
 // _mult multiplies; _set assigns; a state. prefix applies to every region the country
 // owns. Anything that takes an effect also takes "use", which folds these in:
 //
-//   "effects": { "use": [ "war_footing" ], "treasury_percent": -0.01 }
+//   "effects": { "use": [ "war_footing" ], "income_share": -0.01 }
 {
   // What putting a country on a war footing costs and buys, in one place, so a decision,
   // an event and a mod's own content all mean the same thing by it.
@@ -21,7 +21,7 @@
   },
 
   "austerity": {
-    "treasury_percent": 0.030,
+    "income_share": 0.035,
     "credit_confidence": 0.025,
     "inflation": -0.010,
     "standard_of_living": -0.010,

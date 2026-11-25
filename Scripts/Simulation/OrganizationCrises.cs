@@ -167,9 +167,11 @@ public static class OrganizationCrises
             if (n is not null) economy += MathF.Max(0f, n.Gdp);
         }
         var share = economy > 0f ? MathF.Max(0f, member.Gdp) / economy : 0f;
-        if (leader is { IsHuman: false } && leader.Id != member.Id && share >= d.AiConcessionValueShare &&
-            leader.Treasury >= ConcessionCost(c, member) * 3f &&
-            MovementRules.Roll(c.Seed, org.Id, c.ElapsedDays, 4700 + member.Id) < d.AiConcessionChance)
+        var daysOpen = c.ElapsedDays - org.CrisisSinceDay;
+        var firstConcessionCheck = daysOpen < 7 || (daysOpen == 7 && (org.CrisisSinceDay + org.Id * 3) % 7 == 0);
+        if (firstConcessionCheck && leader is { IsHuman: false } && leader.Id != member.Id &&
+            share >= d.AiConcessionValueShare && leader.Treasury >= ConcessionCost(c, member) * 3f &&
+            MovementRules.Roll(c.Seed, org.Id, org.CrisisSinceDay, 4700 + member.Id) < d.AiConcessionChance)
         {
             Concede(c, org, leader);
             return false;

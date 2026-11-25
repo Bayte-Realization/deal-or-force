@@ -80,10 +80,61 @@ public static class AnnexationAmbition
         return Math.Clamp(score, 0f, 1f);
     }
 
+    private static bool ContainsRegionId(List<int> list, int regionId)
+    {
+        for (var i = 0; i < list.Count; i++)
+            if (list[i] == regionId) return true;
+        return false;
+    }
+
+    /// <summary>How many regions <paramref name="us"/> currently holds that were previously held by <paramref name="them"/>.</summary>
+    public static int TakenCount(Campaign campaign, Nation us, Nation them)
+    {
+        if (campaign is null || us is null || them is null || us.Id == them.Id) return 0;
+        campaign.Homelands.TryGetValue(them.Id, out var theirHome);
+        var ownStates = campaign.StatesOf(us);
+        var taken = 0;
+        for (var i = 0; i < ownStates.Length; i++)
+        {
+            var s = ownStates[i];
+            if (s.RememberedOwner == them.MapIndex)
+            {
+                taken++;
+                continue;
+            }
+            if (theirHome is null || s.Unclaimed || s.Population <= 0) continue;
+            var origin = TerritorialClaims.Origin(s);
+            if (them.RenouncedTerritoryOrigins.Contains(origin)) continue;
+            if (ContainsRegionId(theirHome, s.MapIndex) || (origin != s.MapIndex && ContainsRegionId(theirHome, origin)))
+                taken++;
+        }
+        return taken;
+    }
+
+    /// <summary>True when us previously carved land from them and shares a reach to finish the rump.</summary>
+    public static bool IsConqueredRump(Campaign campaign, Nation us, Nation them)
+    {
+        if (campaign is null || us is null || them is null || us.Id == them.Id) return false;
+        if (them.Movement is not null || them.IsSubject || them.AnswersTo(us.Id) || us.AnswersTo(them.Id)) return false;
+        if (TakenCount(campaign, us, them) <= 0) return false;
+        return CampaignDiplomacy.SharesLandBorder(campaign, us.MapIndex, them.MapIndex) ||
+               campaign.StatesOf(them).Length <= 4;
+    }
+
     /// <summary>The reason a strong, unrestrained government can give for taking a small neighbour.</summary>
     public static bool HegemonyCause(Campaign campaign, Nation us, Nation them)
     {
         if (campaign is null || us is null || them is null) return false;
+        if (IsConqueredRump(campaign, us, them))
+        {
+            var rel = CampaignDiplomacy.Peek(campaign, us.Id, them.Id);
+            var stronger = AiStatecraft.CachedStrength(campaign, us) >= Math.Max(1f, AiStatecraft.CachedStrength(campaign, them)) * 1.10f ||
+                           us.Population >= Math.Max(1L, them.Population) * 1.25f;
+            if (rel is not { Stance: DiplomaticStance.Allied } &&
+                stronger &&
+                us.Notoriety < campaign.Defines.AiHegemonyNotorietyMax * 1.5f)
+                return true;
+        }
         if (Appetite(campaign, us, them) < .55f) return false;
         if (AiStatecraft.Restraint(campaign, us) > campaign.Defines.AiAnnexationRestraintMax) return false;
         return us.Notoriety < campaign.Defines.AiHegemonyNotorietyMax;
@@ -93,7 +144,8 @@ public static class AnnexationAmbition
     public static AnnexationAim? Aim(Campaign campaign, Nation us, Nation them)
     {
         if (campaign is null || us is null || them is null) return null;
-        if (Appetite(campaign, us, them) < .5f) return null;
+        var rump = IsConqueredRump(campaign, us, them);
+        if (!rump && Appetite(campaign, us, them) < .5f) return null;
         // Wanting a union is not the same as being able to impose one. A country that is
         // not at least somewhat stronger keeps the claim for a better year.
         var ours = Math.Max(1f, AiStatecraft.CachedStrength(campaign, us));
@@ -108,9 +160,9 @@ public static class AnnexationAmbition
             return new AnnexationAim("reunification", claimed, true);
 
         var cause = Statecraft.CasusBelli(campaign, us, them);
-        if (cause is "irredentism" or "reconquest" or "hegemony")
+        if (cause is "irredentism" or "reconquest" or "hegemony" or "unfinished_war_claim")
             return new AnnexationAim(cause, claimed, false);
-        return null;
+        return rump ? new AnnexationAim("hegemony", claimed, false) : null;
     }
 
     /// <summary>Whether the two countries are two halves of one people, not merely neighbours.</summary>

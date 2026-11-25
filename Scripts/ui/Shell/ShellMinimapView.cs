@@ -144,80 +144,96 @@ internal sealed class ShellMinimapView
             Time.GetTicksMsec() - _lastBuildMsec < (ulong)(_isMobileRuntime ? 1200 : 450))
             return;
 
-        _world = world;
-        _revision = curRev;
-        _lastBuildMsec = Time.GetTicksMsec();
-
-        var maxIdx = 1;
-        if (snap is not null)
+        var needsWorldRead = snap is null || snap.ProvinceController is null;
+        var readLocked = false;
+        if (needsWorldRead)
         {
-            var snapNations = snap.Nations;
-            for (var i = 0; i < snapNations.Length; i++)
-                if (snapNations[i].MapIndex > maxIdx) maxIdx = snapNations[i].MapIndex;
-        }
-        else
-        {
-            for (var i = 0; i < world.Nations.Count; i++)
-                if (world.Nations[i].MapIndex > maxIdx) maxIdx = world.Nations[i].MapIndex;
+            if (!world.TryEnterRead(0, false)) return;
+            readLocked = true;
+            curRev = snap?.MapRevision ?? world.MapRevision;
         }
 
-        var palLen = maxIdx + 1;
-        if (_palR.Length < palLen)
+        try
         {
-            _palR = new byte[palLen]; _palG = new byte[palLen];
-            _palB = new byte[palLen]; _palHas = new bool[palLen];
-        }
-        else Array.Clear(_palHas, 0, palLen);
+            _world = world;
+            _revision = curRev;
+            _lastBuildMsec = Time.GetTicksMsec();
 
-        var fallbackNeutral = Ui.Colour("shell.paper_ghost");
-        var muteTarget = Ui.Colour("shell.plate_bottom");
-        var playerMapIdx = snap?.PlayerMapIndex ?? (world.Player?.MapIndex ?? -1);
-        if (snap is not null)
-        {
-            var snapNations = snap.Nations;
-            for (var i = 0; i < snapNations.Length; i++)
+            var maxIdx = 1;
+            if (snap is not null)
             {
-                var n = snapNations[i];
-                if (n.MapIndex <= 0 || n.MapIndex > maxIdx) continue;
-                var col = Color.FromString(string.IsNullOrEmpty(n.Color) ? "#6e6c66" : n.Color, fallbackNeutral);
-                col = n.MapIndex == playerMapIdx ? col.Lightened(0.14f) : col.Lerp(muteTarget, 0.22f);
-                _palR[n.MapIndex] = (byte)Math.Clamp((int)(col.R * 255f), 0, 255);
-                _palG[n.MapIndex] = (byte)Math.Clamp((int)(col.G * 255f), 0, 255);
-                _palB[n.MapIndex] = (byte)Math.Clamp((int)(col.B * 255f), 0, 255);
-                _palHas[n.MapIndex] = true;
+                var snapNations = snap.Nations;
+                for (var i = 0; i < snapNations.Length; i++)
+                    if (snapNations[i].MapIndex > maxIdx) maxIdx = snapNations[i].MapIndex;
+            }
+            else
+            {
+                for (var i = 0; i < world.Nations.Count; i++)
+                    if (world.Nations[i].MapIndex > maxIdx) maxIdx = world.Nations[i].MapIndex;
+            }
+
+            var palLen = maxIdx + 1;
+            if (_palR.Length < palLen)
+            {
+                _palR = new byte[palLen]; _palG = new byte[palLen];
+                _palB = new byte[palLen]; _palHas = new bool[palLen];
+            }
+            else Array.Clear(_palHas, 0, palLen);
+
+            var fallbackNeutral = Ui.Colour("shell.paper_ghost");
+            var muteTarget = Ui.Colour("shell.plate_bottom");
+            var playerMapIdx = snap?.PlayerMapIndex ?? (world.Player?.MapIndex ?? -1);
+            if (snap is not null)
+            {
+                var snapNations = snap.Nations;
+                for (var i = 0; i < snapNations.Length; i++)
+                {
+                    var n = snapNations[i];
+                    if (n.MapIndex <= 0 || n.MapIndex > maxIdx) continue;
+                    var col = Color.FromString(string.IsNullOrEmpty(n.Color) ? "#6e6c66" : n.Color, fallbackNeutral);
+                    col = n.MapIndex == playerMapIdx ? col.Lightened(0.14f) : col.Lerp(muteTarget, 0.22f);
+                    _palR[n.MapIndex] = (byte)Math.Clamp((int)(col.R * 255f), 0, 255);
+                    _palG[n.MapIndex] = (byte)Math.Clamp((int)(col.G * 255f), 0, 255);
+                    _palB[n.MapIndex] = (byte)Math.Clamp((int)(col.B * 255f), 0, 255);
+                    _palHas[n.MapIndex] = true;
+                }
+            }
+            else
+            {
+                for (var i = 0; i < world.Nations.Count; i++)
+                {
+                    var n = world.Nations[i];
+                    if (n.MapIndex <= 0 || n.MapIndex > maxIdx) continue;
+                    var col = Color.FromString(string.IsNullOrEmpty(n.Color) ? "#6e6c66" : n.Color, fallbackNeutral);
+                    col = n.MapIndex == playerMapIdx ? col.Lightened(0.14f) : col.Lerp(muteTarget, 0.22f);
+                    _palR[n.MapIndex] = (byte)Math.Clamp((int)(col.R * 255f), 0, 255);
+                    _palG[n.MapIndex] = (byte)Math.Clamp((int)(col.G * 255f), 0, 255);
+                    _palB[n.MapIndex] = (byte)Math.Clamp((int)(col.B * 255f), 0, 255);
+                    _palHas[n.MapIndex] = true;
+                }
+            }
+
+            var cells = map.CellToProvince;
+            var controllers = snap?.ProvinceController ?? world.ProvinceController;
+            var owners = snap?.ProvinceOwner is { Length: > 0 } snapOwners ? snapOwners : map.ProvinceToNation;
+            for (var y = 0; y < MinimapH; y++)
+            {
+                var sy = Math.Clamp((int)((y + 0.5f) / MinimapH * map.Height), 0, map.Height - 1);
+                var rowOff = sy * map.Width;
+                for (var x = 0; x < MinimapW; x++)
+                {
+                    var sx = Math.Clamp((int)((x + 0.5f) / MinimapW * map.Width), 0, map.Width - 1);
+                    var prov = cells[rowOff + sx];
+                    if (prov <= 0 || prov > map.ProvinceCount || map.IsWater(prov)) { _ownerGrid[y * MinimapW + x] = 0; continue; }
+                    var ctrl = controllers is not null && prov < controllers.Length && controllers[prov] > 0
+                        ? controllers[prov] : (prov < owners.Length ? owners[prov] : 0);
+                    _ownerGrid[y * MinimapW + x] = ctrl > 0 && ctrl <= maxIdx ? ctrl : -1;
+                }
             }
         }
-        else
+        finally
         {
-            for (var i = 0; i < world.Nations.Count; i++)
-            {
-                var n = world.Nations[i];
-                if (n.MapIndex <= 0 || n.MapIndex > maxIdx) continue;
-                var col = Color.FromString(string.IsNullOrEmpty(n.Color) ? "#6e6c66" : n.Color, fallbackNeutral);
-                col = n.MapIndex == playerMapIdx ? col.Lightened(0.14f) : col.Lerp(muteTarget, 0.22f);
-                _palR[n.MapIndex] = (byte)Math.Clamp((int)(col.R * 255f), 0, 255);
-                _palG[n.MapIndex] = (byte)Math.Clamp((int)(col.G * 255f), 0, 255);
-                _palB[n.MapIndex] = (byte)Math.Clamp((int)(col.B * 255f), 0, 255);
-                _palHas[n.MapIndex] = true;
-            }
-        }
-
-        var cells = map.CellToProvince;
-        var controllers = snap?.ProvinceController ?? world.ProvinceController;
-        var owners = snap?.ProvinceOwner is { Length: > 0 } snapOwners ? snapOwners : map.ProvinceToNation;
-        for (var y = 0; y < MinimapH; y++)
-        {
-            var sy = Math.Clamp((int)((y + 0.5f) / MinimapH * map.Height), 0, map.Height - 1);
-            var rowOff = sy * map.Width;
-            for (var x = 0; x < MinimapW; x++)
-            {
-                var sx = Math.Clamp((int)((x + 0.5f) / MinimapW * map.Width), 0, map.Width - 1);
-                var prov = cells[rowOff + sx];
-                if (prov <= 0 || prov > map.ProvinceCount || map.IsWater(prov)) { _ownerGrid[y * MinimapW + x] = 0; continue; }
-                var ctrl = controllers is not null && prov < controllers.Length && controllers[prov] > 0
-                    ? controllers[prov] : (prov < owners.Length ? owners[prov] : 0);
-                _ownerGrid[y * MinimapW + x] = ctrl > 0 && ctrl <= maxIdx ? ctrl : -1;
-            }
+            if (readLocked) world.ExitRead();
         }
 
         for (var y = 0; y < MinimapH; y++)
@@ -242,7 +258,7 @@ internal sealed class ShellMinimapView
             }
         }
 
-        using var img = Image.CreateFromData(MinimapW, MinimapH, false, Image.Format.Rgba8, _bytes);
+        var img = Image.CreateFromData(MinimapW, MinimapH, false, Image.Format.Rgba8, _bytes);
         if (_texture is null) _texture = ImageTexture.CreateFromImage(img);
         else _texture.Update(img);
         _canvas?.QueueRedraw();

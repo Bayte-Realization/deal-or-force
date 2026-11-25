@@ -30,6 +30,7 @@ internal sealed class ShellOrchestrator
     private int _refreshDay = int.MinValue;
     private int _refreshRevision = int.MinValue;
     private int _refreshWarRevision = int.MinValue;
+    private int _refreshStrategicRevision = int.MinValue;
     private int _refreshPlayerId = int.MinValue;
     private int _refreshObservedId = int.MinValue;
     private bool _refreshObserverMode;
@@ -40,6 +41,7 @@ internal sealed class ShellOrchestrator
     private int _lastSpeed = -1;
     private bool _lastAlt;
     private bool _modalObscured;
+    private readonly Action _skinChangedHandler;
     private readonly bool _isMobileRuntime = OS.HasFeature("mobile") || OS.GetName() is "Android" or "iOS";
 
     [Flags]
@@ -72,7 +74,10 @@ internal sealed class ShellOrchestrator
     public ShellOrchestrator(ShellContext ctx)
     {
         Context = ctx;
-        InterfaceSkin.Changed += () => { Context.ClearCaches(); _cachedProfile = null; };
+        _skinChangedHandler = () => { Context.ClearCaches(); _cachedProfile = null; };
+        InterfaceSkin.Changed += _skinChangedHandler;
+        if (Context.Root is not null)
+            Context.Root.TreeExited += OnRootTreeExited;
         Messages = new ShellMessageModalView(ctx);
         Corner = new ShellCornerView(ctx);
         DatePlate = new ShellDatePlateView(ctx, () => Messages.Toggle());
@@ -84,6 +89,15 @@ internal sealed class ShellOrchestrator
         EconomyWorkspace = new ShellEconomyWorkspaceView(ctx);
         GrandProjects = new GrandProjectsView(ctx);
     }
+
+    public void Dispose()
+    {
+        InterfaceSkin.Changed -= _skinChangedHandler;
+        if (Context.Root is not null)
+            Context.Root.TreeExited -= OnRootTreeExited;
+    }
+
+    private void OnRootTreeExited() => Dispose();
 
     public void Build()
     {
@@ -104,6 +118,7 @@ internal sealed class ShellOrchestrator
         _refreshDay = int.MinValue;
         _refreshRevision = int.MinValue;
         _refreshWarRevision = int.MinValue;
+        _refreshStrategicRevision = int.MinValue;
         _refreshPlayerId = int.MinValue;
         _refreshObservedId = int.MinValue;
         _refreshObserverMode = false;
@@ -210,6 +225,7 @@ internal sealed class ShellOrchestrator
         var elapsedDays = hud?.ElapsedDays ?? world.ElapsedDays;
         var mapRev = hud?.MapRevision ?? world.MapRevision;
         var warRev = hud?.WarRevision ?? world.WarRevision;
+        var stratRev = world.StrategicRevision;
         var playerId = hud is not null && hud.PlayerId >= 0 ? hud.PlayerId : (world.Player?.Id ?? -1);
         var observerMode = Context.IsObserverMode?.Invoke() ?? (hud?.ObserverMode ?? world.ObserverMode);
         var observedId = Context.GetObservedNation?.Invoke()?.Id ?? -1;
@@ -219,7 +235,7 @@ internal sealed class ShellOrchestrator
         var hourChanged = _refreshHour != elapsedHours;
         var identityChanged = _refreshPlayerId != playerId || _refreshObserverMode != observerMode || _refreshObservedId != observedId;
         var dayOrRevChanged = _refreshDay != elapsedDays || _refreshRevision != mapRev ||
-            _refreshWarRevision != warRev;
+            _refreshWarRevision != warRev || _refreshStrategicRevision != stratRev;
         _lastPaused = isPaused;
         _lastSpeed = speed;
 
@@ -247,6 +263,7 @@ internal sealed class ShellOrchestrator
             _refreshDay = elapsedDays;
             _refreshRevision = mapRev;
             _refreshWarRevision = warRev;
+            _refreshStrategicRevision = stratRev;
             _refreshPlayerId = playerId;
             _refreshObserverMode = observerMode;
             _refreshObservedId = observedId;
@@ -269,7 +286,7 @@ internal sealed class ShellOrchestrator
         // Amortize heavy view updates within a 1.5ms budget (1.25ms mobile); remaining dirty views spill
         // cleanly into consecutive frames via Tick() so day boundaries never spike a single frame.
         var budgetMs = _isMobileRuntime ? 1.25 : 1.50;
-        if (DrainPendingHeavy(t0, budgetMs, allowMinOne: true, allowLiveReads: true))
+        if (DrainPendingHeavy(t0, budgetMs, allowMinOne: !fastForward, allowLiveReads: true))
             _heavyFrameStamp = Engine.GetProcessFrames();
 
         LastRefreshMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;

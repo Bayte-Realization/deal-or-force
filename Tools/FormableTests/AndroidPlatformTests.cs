@@ -43,6 +43,7 @@ static class AndroidPlatformTests
         RunRenderSnapshotReuseTests();
         RunRenderSnapshotNameTests();
         RunConcurrentCatalogReloadSafetyTests();
+        RunCombatAndMovementArrowTests();
     }
 
     private static void RunPlatformProfileTests()
@@ -127,8 +128,10 @@ static class AndroidPlatformTests
         Check(PlatformProfile.IsLowEndMobileAdapter("Adreno (TM) 506", "mobile"), "Adreno 5xx flagged low-end");
         Check(!PlatformProfile.IsLowEndMobileAdapter("Adreno (TM) 740", "mobile"), "Adreno 740 on mobile Vulkan is not low-end");
         Check(phone.ShouldUseCompactTextureBudget, "8GB AndroidPhone enables compact texture budget");
-        Check(PlatformProfile.IsLowEndMobileAdapter("Mali-G78", "mobile"), "Mali-G78 flagged low-end mobile adapter");
-        Check(PlatformProfile.IsLowEndMobileAdapter("ARM Mali-G78 MP14", "gl_compatibility"), "Exynos Mali-G78 on GLES3 flagged low-end");
+        Check(!PlatformProfile.IsLowEndMobileAdapter("Mali-G78", "mobile"), "Mali-G78 mobile adapter is not flagged low-end");
+        Check(!PlatformProfile.IsLowEndMobileAdapter("ARM Mali-G78 MP14", "gl_compatibility"), "Exynos Mali-G78 on GLES3 runs at MobileMedium");
+        Check(!PlatformProfile.IsLowEndMobileAdapter("ANGLE (Samsung Xclipse 920) on Vulkan 1.3.279", "gl_compatibility"),
+            "Samsung Xclipse 920 via ANGLE-on-Vulkan is not flagged low-end");
         var s21 = PlatformProfile.Evaluate(new PlatformSnapshot(
             OsName: "Android",
             HasMobileFeature: true,
@@ -140,8 +143,21 @@ static class AndroidPlatformTests
             SystemMemoryMb: 8192,
             IsLowEndGpu: PlatformProfile.IsLowEndMobileAdapter("Mali-G78", "gl_compatibility"),
             ViewportHeightLogical: 1080f));
-        Check(s21.GraphicsQualityTier == PlatformGraphicsTier.MobileLow && s21.ShouldUseCompactTextureBudget,
-            "8GB Galaxy S21 Mali-G78 evaluates to MobileLow + ShouldUseCompactTextureBudget");
+        Check(s21.GraphicsQualityTier == PlatformGraphicsTier.MobileMedium && s21.ShouldUseCompactTextureBudget,
+            "8GB Galaxy S21 Mali-G78 evaluates to MobileMedium + ShouldUseCompactTextureBudget");
+        var s22 = PlatformProfile.Evaluate(new PlatformSnapshot(
+            OsName: "Android",
+            HasMobileFeature: true,
+            HasTouchscreen: true,
+            ScreenWidthPx: 2340,
+            ScreenHeightPx: 1080,
+            ScreenDpi: 425f,
+            SafeAreaRawPx: SafeAreaInsets.Zero,
+            SystemMemoryMb: 8192,
+            IsLowEndGpu: PlatformProfile.IsLowEndMobileAdapter("ANGLE (Samsung Xclipse 920) on Vulkan 1.3.279", "gl_compatibility"),
+            ViewportHeightLogical: 1080f));
+        Check(s22.GraphicsQualityTier == PlatformGraphicsTier.MobileMedium && s22.ShouldUseCompactTextureBudget,
+            "8GB Galaxy S22 Xclipse 920 on Vulkan 1.3.279 evaluates to MobileMedium + ShouldUseCompactTextureBudget");
 
         // RecommendedCloseButtonPx scaling across Desktop, Phone, and Tablet
         Check(Approx(desktop.RecommendedCloseButtonPx, 32f), "Desktop RecommendedCloseButtonPx is 32f");
@@ -1133,8 +1149,10 @@ static class AndroidPlatformTests
         var cSync = Campaign.CreateBootstrap(91123);
         cSync.IsPaused = false;
         cSync.Speed = 5;
+        cSync.RuntimeStepHoursOverride = BackgroundSimRunner.MobileAdaptiveStepHours(5);
         while (cSync.ElapsedHours < cBg.ElapsedHours)
             cSync.Tick();
+        cSync.RuntimeStepHoursOverride = 0;
 
         Check(cSync.ElapsedHours == cBg.ElapsedHours &&
               CampaignFingerprint.Of(cBg) == CampaignFingerprint.Of(cSync),
@@ -1185,10 +1203,10 @@ static class AndroidPlatformTests
         Check(datePlate.Contains("_ctx.GetPresentationDate?.Invoke()", StringComparison.Ordinal),
             "ShellDatePlateView uses the same calendar source during ordinary and clock-only refreshes");
         Check(game.Contains("MobilePacing = _isMobileRuntime", StringComparison.Ordinal) &&
-              game.Contains("MinSpeed5DayIntervalMs = _isMobileRuntime ? 22.0 : 0.0", StringComparison.Ordinal) &&
-              game.Contains("TryEnterRead(0, requestWindowOnMiss: true)", StringComparison.Ordinal) &&
+              game.Contains("MinSpeed5DayIntervalMs = 0.0", StringComparison.Ordinal) &&
+              game.Contains("TryEnterRead(0, requestWindowOnMiss: urgentLive)", StringComparison.Ordinal) &&
               game.Contains("DatePlate.RefreshClock()", StringComparison.Ordinal),
-            "DealOrForceGame configures 22ms mobile Speed-5 pacing, records frame reads, and refreshes clock outside read gate");
+            "DealOrForceGame configures uncapped mobile Speed-5 pacing, urgent live frame reads, and refreshes clock outside read gate");
     }
 
     private static void RunCompletedDateTests()
@@ -1348,6 +1366,272 @@ static class AndroidPlatformTests
             SpriteCatalog.Changed -= onChanged;
             FontCatalog.Changed -= onChanged;
         }
+    }
+
+    private static void RunCombatAndMovementArrowTests()
+    {
+        var root = FindRepoRoot();
+
+        var badgeSource = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "SurfaceBattleBadge.cs"));
+        Check(!badgeSource.Contains("_plateMaterial?.Dispose()", StringComparison.Ordinal) &&
+              !badgeSource.Contains("_ownedTexture?.Dispose()", StringComparison.Ordinal),
+            "SurfaceBattleBadge._ExitTree avoids manual RefCounted Dispose() on _plateMaterial and _ownedTexture");
+        Check(badgeSource.Contains("_plateMaterial = null;", StringComparison.Ordinal) &&
+              badgeSource.Contains("_ownedTexture = null;", StringComparison.Ordinal),
+            "SurfaceBattleBadge._ExitTree clears _plateMaterial and _ownedTexture references cleanly");
+
+        var bordersSource = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobePresentation.BordersAndOverlays.cs"));
+        Check(bordersSource.Contains("FindActiveBattle", StringComparison.Ordinal) &&
+              bordersSource.Contains("_drawnRouteCorridors", StringComparison.Ordinal) &&
+              bordersSource.Contains("PostBattleWaypoints", StringComparison.Ordinal),
+            "GlobePresentation.BordersAndOverlays restores stylish selected attacker routes while deduplicating corridors");
+
+        var vfxSource = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeBattleVfx.cs"));
+        Check(vfxSource.Contains("_battleRibbonBatch", StringComparison.Ordinal) &&
+              vfxSource.Contains("_routeMaterials", StringComparison.Ordinal) &&
+              !vfxSource.Contains("BattleAssaultArrowShader", StringComparison.Ordinal) &&
+              !vfxSource.Contains("_battleClash", StringComparison.Ordinal) &&
+              vfxSource.Contains("CurrentBattleArrowZoomBucket()", StringComparison.Ordinal),
+            "GlobeBattleVfx uses _battleRibbonBatch and _routeMaterials with no BattleAssaultArrowShader or _battleClash");
+
+        var militarySource = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "MilitaryPresentation.cs"));
+        Check(militarySource.Contains("_battleOriginScratch", StringComparison.Ordinal) &&
+              militarySource.Contains("_selectedBattleOriginScratch", StringComparison.Ordinal) &&
+              militarySource.Contains("_selectedArmyIds", StringComparison.Ordinal) &&
+              militarySource.Contains("_lastBattleSelectedHash", StringComparison.Ordinal) &&
+              militarySource.Contains("RecordBattleAssaultArrow(", StringComparison.Ordinal),
+            "MilitaryPresentation skips selected player attacker provinces when feeding battle arrows");
+
+        RunCampaignIntelConcurrencyTests();
+        RunMobileAdaptiveStepHoursAndMidnightAlignmentTests();
+    }
+
+    private static void RunCampaignIntelConcurrencyTests()
+    {
+        var campaign = Campaign.CreateBootstrap(91130);
+        var nationA = campaign.Player ?? campaign.Nations[0];
+        var nationB = campaign.Nations.First(n => n.Id != nationA.Id && n.RetiredDay < 0);
+        var states = new ushort[128];
+        var owners = new ushort[128];
+        var regionA = campaign.States.First(s => s.NationMapIndex == nationA.MapIndex);
+        var regionB = campaign.States.FirstOrDefault(s => s.NationMapIndex == nationB.MapIndex) ?? regionA;
+        for (var i = 0; i < states.Length; i++)
+        {
+            var isA = i < 64;
+            states[i] = (ushort)(isA ? regionA.MapIndex : regionB.MapIndex);
+            owners[i] = (ushort)(isA ? nationA.MapIndex : nationB.MapIndex);
+        }
+        campaign.AttachProvinceTopology(ProvinceTopology.Build(states, owners, 16, 8, _ => false));
+        campaign.ObserverMode = true;
+        campaign.IsPaused = false;
+        campaign.Speed = 5;
+
+        var battle = new LandBattle
+        {
+            Id = ++campaign.NextBattleId,
+            WarId = 0,
+            ProvinceId = 10,
+            AttackerId = nationA.Id,
+            DefenderId = nationB.Id
+        };
+        campaign.Battles.Add(battle);
+
+        var viewerIds = campaign.Nations.Take(6).Select(n => n.Id).ToArray();
+        var mapIndices = campaign.Nations.Take(6).Select(n => n.MapIndex).ToArray();
+
+        // Direct multi-threaded burst on SyncGate (Vision, ProvincesHeldBy, Invalidate, InvalidateActors).
+        var burstFailures = new ConcurrentQueue<Exception>();
+        Parallel.For(0, 64, i =>
+        {
+            try
+            {
+                var controllers = campaign.ProvinceController ?? campaign.ProvinceMap.ProvinceToNation;
+                for (var iter = 0; iter < 8; iter++)
+                {
+                    var viewer = viewerIds[(i + iter) % viewerIds.Length];
+                    var mapIdx = mapIndices[(i + iter) % mapIndices.Length];
+                    _ = CampaignIntel.Vision(campaign, viewer);
+                    _ = CampaignIntel.ProvincesHeldBy(campaign, controllers, mapIdx).Length;
+                    if ((iter & 1) == 0) CampaignIntel.InvalidateActors(campaign);
+                    else CampaignIntel.Invalidate(campaign);
+                }
+            }
+            catch (Exception ex)
+            {
+                burstFailures.Enqueue(ex);
+            }
+        });
+        Check(burstFailures.IsEmpty,
+            $"Direct multi-threaded CampaignIntel burst completes with 0 exceptions (errors={burstFailures.Count})");
+
+        // Concurrent reader threads hammering CampaignIntel while BackgroundSimRunner steps 15+ days.
+        using var runner = new BackgroundSimRunner
+        {
+            MobilePacing = true,
+            MinSpeed5DayIntervalMs = 0.0
+        };
+        runner.Start(campaign);
+        runner.SyncClockState(paused: false, speed: 5);
+
+        var failures = new ConcurrentQueue<Exception>();
+        var totalReads = 0;
+        var stopReaders = 0;
+        var readers = Enumerable.Range(0, 4).Select(workerIdx => Task.Run(() =>
+        {
+            var step = 0;
+            while (Volatile.Read(ref stopReaders) == 0)
+            {
+                if (campaign.TryEnterRead(0, requestWindowOnMiss: (step & 3) == 0))
+                {
+                    try
+                    {
+                        var viewer = viewerIds[(workerIdx + step) % viewerIds.Length];
+                        var mapIdx = mapIndices[(workerIdx + step) % mapIndices.Length];
+                        var view = CampaignIntel.Vision(campaign, viewer);
+                        var controllers = campaign.ProvinceController ?? campaign.ProvinceMap?.ProvinceToNation;
+                        if (controllers is not null)
+                            _ = CampaignIntel.ProvincesHeldBy(campaign, controllers, mapIdx).Length;
+                        if (view is not null && (step & 3) == 0)
+                            CampaignIntel.InvalidateActors(campaign);
+                        Interlocked.Increment(ref totalReads);
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Enqueue(ex);
+                        break;
+                    }
+                    finally
+                    {
+                        campaign.ExitRead();
+                    }
+                }
+                step++;
+                Thread.Sleep(5);
+            }
+        })).ToArray();
+
+        var sw = Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < 15000)
+        {
+            if (campaign.TryEnterRead(5, requestWindowOnMiss: false))
+            {
+                var reached = campaign.ElapsedDays >= 15 && !campaign.MidStep;
+                campaign.ExitRead();
+                if (reached) break;
+            }
+            Thread.Sleep(15);
+        }
+
+        Interlocked.Exchange(ref stopReaders, 1);
+        Task.WaitAll(readers);
+
+        runner.RunWrite(c =>
+        {
+            c.IsPaused = true;
+            if (c.MidStep) c.FinishStep();
+        });
+        runner.Stop();
+
+        Check(campaign.ElapsedDays >= 15,
+            $"Live BackgroundSimRunner stepped >= 15 days during concurrent CampaignIntel stress ({campaign.ElapsedDays}d)");
+        Check(totalReads > 0 && failures.IsEmpty,
+            $"Concurrent CampaignIntel.Vision + ProvincesHeldBy stress completed with 0 exceptions (reads={totalReads}, errors={failures.Count})");
+    }
+
+    private static void RunMobileAdaptiveStepHoursAndMidnightAlignmentTests()
+    {
+        Check(BackgroundSimRunner.MobileAdaptiveStepHours(1) == 1 &&
+              BackgroundSimRunner.MobileAdaptiveStepHours(2) == 2 &&
+              BackgroundSimRunner.MobileAdaptiveStepHours(3) == 4 &&
+              BackgroundSimRunner.MobileAdaptiveStepHours(4) == 8 &&
+              BackgroundSimRunner.MobileAdaptiveStepHours(5) == 24,
+            "MobileAdaptiveStepHours maps Speed 1..5 to 1h/2h/4h/8h/24h");
+
+        var defines = new Defines { SecondsPerDay = 5f, HoursPerTick = 1 };
+        Check(Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 1) - 2.20) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 2) - 0.90) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 3) - 0.34) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 4) - 0.10) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 5) - 0.0) < 1e-9,
+            "MobileStepSecondsPerDay returns brisk AoH3-style day intervals (2.20, 0.90, 0.34, 0.10, 0.0)");
+
+        var campaign = Campaign.CreateBootstrap(91131);
+        var region = campaign.States.First(s => s.NationMapIndex == campaign.Player.MapIndex);
+        var states = Enumerable.Repeat((ushort)region.MapIndex, 128).ToArray();
+        var owners = Enumerable.Repeat((ushort)campaign.Player.MapIndex, states.Length).ToArray();
+        campaign.AttachProvinceTopology(ProvinceTopology.Build(states, owners, 16, 8, _ => false));
+        campaign.ObserverMode = true;
+        campaign.IsPaused = false;
+        campaign.Defines.HoursPerTick = 1;
+        for (var h = 0; h < 14; h++) campaign.Tick();
+        Check(campaign.ElapsedHours == 14 && campaign.Date.Hour == 14 && campaign.ElapsedDays == 0,
+            $"Campaign advances to 14:00 cleanly ({campaign.ElapsedHours}h, hour={campaign.Date.Hour})");
+
+        var fpBeforeOverride = CampaignFingerprint.Of(campaign);
+        campaign.RuntimeStepHoursOverride = BackgroundSimRunner.MobileAdaptiveStepHours(5);
+        var overrideField = typeof(Campaign).GetField("RuntimeStepHoursOverride",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var hasJsonIgnore = overrideField?.GetCustomAttributes(
+            typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), inherit: false).Length == 1;
+        Check(hasJsonIgnore && CampaignFingerprint.Of(campaign) == fpBeforeOverride &&
+              !SaveSystem.ExportScenarioJson(campaign, "runtime-override-check").Contains("RuntimeStepHoursOverride", StringComparison.Ordinal),
+            "RuntimeStepHoursOverride is transient ([JsonIgnore], excluded from CampaignFingerprint and JSON serialization)");
+        Check(campaign.TickHours == 10 && campaign.Defines.HoursPerTick == 1,
+            $"At 14:00 with Speed-5 override, TickHours aligns to 10h without mutating Defines.HoursPerTick (TickHours={campaign.TickHours})");
+
+        campaign.Tick();
+        Check(campaign.ElapsedHours == 24 && campaign.ElapsedDays == 1 && campaign.Date.Hour == 0,
+            $"First Speed-5 step from 14:00 advances 10h to 00:00 next day without skipping a day ({campaign.ElapsedHours}h, day={campaign.ElapsedDays}, hour={campaign.Date.Hour})");
+        Check(campaign.TickHours == 24,
+            $"At 00:00 with Speed-5 override, TickHours expands to 24h (TickHours={campaign.TickHours})");
+
+        campaign.Tick();
+        Check(campaign.ElapsedHours == 48 && campaign.ElapsedDays == 2 && campaign.Date.Hour == 0,
+            $"Subsequent Speed-5 step advances 24h cleanly ({campaign.ElapsedHours}h, day={campaign.ElapsedDays}, hour={campaign.Date.Hour})");
+
+        campaign.RuntimeStepHoursOverride = BackgroundSimRunner.MobileAdaptiveStepHours(1);
+        Check(campaign.TickHours == 1 && campaign.Defines.HoursPerTick == 1,
+            $"Switching back to Speed 1 restores 1h steps and keeps Defines.HoursPerTick=1 (TickHours={campaign.TickHours})");
+
+        campaign.Tick();
+        Check(campaign.ElapsedHours == 49 && campaign.Date.Hour == 1,
+            $"Speed 1 step after switching back advances 1h cleanly ({campaign.ElapsedHours}h, hour={campaign.Date.Hour})");
+
+        // Verify BackgroundSimRunner sets RuntimeStepHoursOverride on MobilePacing and resets it in Stop().
+        var bgCampaign = Campaign.CreateBootstrap(91132);
+        bgCampaign.ObserverMode = true;
+        bgCampaign.IsPaused = false;
+        bgCampaign.Defines.HoursPerTick = 1;
+        for (var h = 0; h < 14; h++) bgCampaign.Tick();
+
+        using var runner = new BackgroundSimRunner
+        {
+            MobilePacing = true,
+            MinSpeed5DayIntervalMs = 0.0
+        };
+        runner.Start(bgCampaign);
+        runner.SyncClockState(paused: false, speed: 5);
+        var waitSw = Stopwatch.StartNew();
+        while (waitSw.ElapsedMilliseconds < 5000)
+        {
+            if (bgCampaign.TryEnterRead(5, true))
+            {
+                var ok = bgCampaign.ElapsedHours >= 48 && !bgCampaign.MidStep;
+                bgCampaign.ExitRead();
+                if (ok) break;
+            }
+            Thread.Sleep(2);
+        }
+        runner.RunWrite(c =>
+        {
+            c.IsPaused = true;
+            if (c.MidStep) c.FinishStep();
+        });
+        runner.Stop();
+
+        Check(bgCampaign.ElapsedHours >= 48 && bgCampaign.ElapsedHours % 24 == 0 &&
+              bgCampaign.RuntimeStepHoursOverride == 0 && bgCampaign.Defines.HoursPerTick == 1,
+            $"MobilePacing BackgroundSimRunner aligns from 14:00 onto midnight steps and Stop() resets RuntimeStepHoursOverride ({bgCampaign.ElapsedHours}h)");
     }
 
     private static string FindRepoRoot()

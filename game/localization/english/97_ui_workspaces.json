@@ -6,7 +6,8 @@
   "shell.ws.reg.gdp_share_fmt": "{0}% of nation",
   "shell.ws.reg.growth_fmt": "{0} nat. growth",
   "shell.ws.reg.unrest_fmt": "Unrest {0}",
-  "shell.ws.reg.occupied_by_fmt": "Occupied: {0}",
+  "shell.ws.reg.occupied_by_fmt": "Controlled: {0}",
+  "shell.ws.reg.leased_by_fmt": "Leased: {0}",
   "shell.ws.reg.full_control": "Full control",
   "shell.ws.reg.garrison_divs_fmt": "{0} div · {1} prov.",
   "shell.ws.reg.war_damage_fmt": "War damage {0}",
@@ -110,7 +111,7 @@
   "shell.ws.army.strip_more_tip": "Open Military screen to view all fronts and armies.",
 
   "shell.ws.shell.inbox_pending_tip_fmt": "{0} incoming diplomatic proposals awaiting your decision.",
-  "shell.ws.shell.map_tip_political": "Sovereign borders, capitals, and occupied territories.",
+  "shell.ws.shell.map_tip_political": "Sovereign borders, capitals, and controlled territories.",
   "shell.ws.shell.map_tip_diplomatic": "Allies, rivals, pacts, truces, and bilateral standing.",
   "shell.ws.shell.map_tip_economy": "Regional GDP density, industrial hubs, and trade routes.",
   "shell.ws.shell.map_tip_resources": "Strategic deposits, energy basins, and agricultural output.",

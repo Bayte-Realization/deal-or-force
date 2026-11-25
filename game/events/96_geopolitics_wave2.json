@@ -21,7 +21,7 @@
         "title": "gp.ev.swf.opt2",
         "consequence": "gp.ev.swf.con2",
         "effects": {
-          "treasury_percent": 0.06,
+          "gdp_share": 0.004,
           "inflation": 0.012,
           "state.radicalism": 0.010
         }
@@ -48,7 +48,7 @@
         "title": "gp.ev.chokepoint.opt1",
         "consequence": "gp.ev.chokepoint.con1",
         "effects": {
-          "income_share": -0.06,
+          "income_penalty": { "share": 0.08, "days": 240 },
           "market_access": 0.04,
           "naval_experience": 4.0
         }
@@ -77,7 +77,7 @@
         "title": "gp.ev.sanctions.opt1",
         "consequence": "gp.ev.sanctions.con1",
         "effects": {
-          "income_share": -0.07,
+          "income_penalty": { "share": 0.09, "days": 270 },
           "productivity": 0.012
         },
         "modifiers": [
@@ -115,7 +115,7 @@
         "title": "gp.ev.energy.opt1",
         "consequence": "gp.ev.energy.con1",
         "effects": {
-          "treasury_percent": 0.05,
+          "income_share": 0.05,
           "construction_capacity": 0.16
         },
         "modifiers": [
@@ -144,7 +144,7 @@
         "title": "gp.ev.armsrace.opt1",
         "consequence": "gp.ev.armsrace.con1",
         "effects": {
-          "income_share": -0.05,
+          "income_penalty": { "share": 0.07, "days": 240 },
           "army_experience": 8.0,
           "air_experience": 6.0,
           "notoriety": 2.5
@@ -200,7 +200,7 @@
         "title": "gp.ev.breakthrough.opt1",
         "consequence": "gp.ev.breakthrough.con1",
         "effects": {
-          "gdp_share": -0.004,
+          "income_penalty": { "share": 0.07, "days": 270 },
           "construction_capacity": 0.20,
           "prestige": 8.0
         },
@@ -212,7 +212,7 @@
         "title": "gp.ev.breakthrough.opt2",
         "consequence": "gp.ev.breakthrough.con2",
         "effects": {
-          "treasury_percent": 0.04,
+          "income_share": 0.04,
           "gdp_percent": 0.003,
           "political_points": 6.0,
           "prestige": 4.0
@@ -231,7 +231,7 @@
         "title": "gp.ev.strike.opt1",
         "consequence": "gp.ev.strike.con1",
         "effects": {
-          "income_share": -0.04,
+          "income_penalty": { "share": 0.06, "days": 240 },
           "stability": 0.014,
           "state.radicalism": -0.015
         }
@@ -258,7 +258,7 @@
         "title": "gp.ev.cartel.opt1",
         "consequence": "gp.ev.cartel.con1",
         "effects": {
-          "income_share": -0.06,
+          "income_penalty": { "share": 0.08, "days": 270 },
           "productivity": 0.010,
           "market_access": 0.025
         }
@@ -284,7 +284,7 @@
         "title": "gp.ev.aishift.opt1",
         "consequence": "gp.ev.aishift.con1",
         "effects": {
-          "gdp_share": -0.004,
+          "income_penalty": { "share": 0.07, "days": 300 },
           "productivity": 0.018,
           "state.literacy": 0.008,
           "state.radicalism": -0.010

@@ -240,6 +240,16 @@ public sealed partial class GlobePresentation
     private Image _borderControllerImage;
 
     private bool _frontPreviewDeferred;
+    private int _frontPreviewZoomBucket = int.MinValue;
+
+    private void RefreshFrontPreviewZoomIfNeeded()
+    {
+        if (!IsInstanceValid(_frontPreview) || !_frontPreview.Visible || _frontPreviewDeferred) return;
+        var bucket = CurrentBattleArrowZoomBucket();
+        if (bucket == _frontPreviewZoomBucket) return;
+        _frontPreviewZoomBucket = bucket;
+        BuildFrontPreview();
+    }
 
     private void BuildFrontPreview()
     {
@@ -260,6 +270,7 @@ public sealed partial class GlobePresentation
     private void BuildFrontPreviewCore()
     {
         _frontPreviewDeferred = false;
+        _frontPreviewZoomBucket = CurrentBattleArrowZoomBucket();
         if (_campaign?.ProvinceMap is null || _globeMaterial is null) return;
         _frontMesh.ClearSurfaces();
         _frontVerts.Clear();
@@ -397,6 +408,7 @@ public sealed partial class GlobePresentation
     /// ribbon is now single-stroke geometry, while separate divisions keep separate routes.
     /// </summary>
     private readonly List<Simulation.Army> _routeSelectedScratch = new();
+    private readonly HashSet<(int StartProv, int FirstStep, int LastStep, int StepCount, int Slot)> _drawnRouteCorridors = new();
 
     private void UpdateRoutePreview()
     {
@@ -415,10 +427,15 @@ public sealed partial class GlobePresentation
                     candidate.PlanActive, candidate.SupportOnly,
                     candidate.OrderRouteSteps, candidate.OrderStepsCompleted,
                     Mathf.RoundToInt(candidate.MoveProgress * 20f));
+                fingerprint = HashCode.Combine(fingerprint,
+                    candidate.BattleId,
+                    candidate.PostBattleWaypoints.Count,
+                    candidate.PostBattleWaypoints.Count == 0 ? -1 : candidate.PostBattleWaypoints[^1]);
             }
         if (fingerprint == _routeFingerprint) return;
         _routeFingerprint = fingerprint;
         _routeBatch.Clear();
+        _drawnRouteCorridors.Clear();
 
         _routeSelectedScratch.Clear();
         var playerId = _campaign.Player?.Id;
@@ -438,39 +455,155 @@ public sealed partial class GlobePresentation
         _routePreview.Visible = drewAny;
     }
 
-    private static bool HasRouteIntent(Simulation.Army army) => army.Route.Count > 0 || army.PlannedRoute.Count > 0 ||
+    private static bool HasRouteIntent(Simulation.Army army) =>
+        army.Route.Count > 0 || army.PlannedRoute.Count > 0 || army.PostBattleWaypoints.Count > 0 ||
         (army.OrderProvinceId > 0 &&
          army.OrderKind is Simulation.ArmyOrder.AdvanceFront or Simulation.ArmyOrder.Spearhead);
 
-    private static bool IsAttackIntent(Simulation.Army army) => army.AssignedWarId >= 0 && army.PlanActive &&
-        army.OrderKind is Simulation.ArmyOrder.AdvanceFront or Simulation.ArmyOrder.Spearhead;
+    private Simulation.LandBattle FindActiveBattle(Simulation.Army army)
+    {
+        if (!army.InBattle || _campaign?.Battles is null) return null;
+        var battles = _campaign.Battles;
+        for (var i = 0; i < battles.Count; i++)
+        {
+            var candidate = battles[i];
+            if (candidate.Id == army.BattleId && !candidate.Ended)
+                return candidate;
+        }
+        return null;
+    }
 
-    /// <summary>Draws the complete current route of one selected division.</summary>
+    private bool IsAttackIntent(Simulation.Army army)
+    {
+        if (army.AssignedWarId >= 0 && army.PlanActive &&
+            army.OrderKind is Simulation.ArmyOrder.AdvanceFront or Simulation.ArmyOrder.Spearhead)
+            return true;
+
+        var activeBattle = FindActiveBattle(army);
+        if (activeBattle is not null && activeBattle.ProvinceId != army.ProvinceId &&
+            activeBattle.Attackers.Contains(army.Id))
+            return true;
+
+        if (_campaign is not null && army.AssignedWarId >= 0 && (army.DirectOrder || army.PlannedRoute.Count > 0))
+        {
+            Simulation.StrategicWar war = null;
+            var wars = _campaign.Wars;
+            for (var i = 0; i < wars.Count; i++)
+            {
+                if (!wars[i].Ended && wars[i].Id == army.AssignedWarId)
+                {
+                    war = wars[i];
+                    break;
+                }
+            }
+            if (war is not null)
+            {
+                var controllers = _campaign.ProvinceController ?? _campaign.ProvinceMap?.ProvinceToNation;
+                if (controllers is not null)
+                {
+                    if (army.OrderProvinceId > 0 && army.OrderProvinceId < controllers.Length &&
+                        Simulation.WarCoalition.HostileController(_campaign, war, army.NationId, controllers[army.OrderProvinceId]))
+                        return true;
+                    var firstStep = army.PlannedRoute.Count > 0 ? army.PlannedRoute[0]
+                        : (army.Route.Count > 0 ? army.Route[0] : -1);
+                    if (firstStep > 0 && firstStep < controllers.Length &&
+                        Simulation.WarCoalition.HostileController(_campaign, war, army.NationId, controllers[firstStep]))
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Draws the complete current route of one selected division, unifying active battle arrows.</summary>
     private bool AppendRouteArrow(Simulation.Army army)
     {
         if (army.NationId != _campaign?.Player?.Id) return false;
-        if (!army.PlanActive && army.Route.Count == 0 &&
+        if (!army.PlanActive && army.Route.Count == 0 && army.PostBattleWaypoints.Count == 0 &&
             Simulation.BattlePlanning.LineFor(_campaign, army) is { Kind: Simulation.FrontLineKind.Offensive, ObjectiveSequence.Count: > 0 }) return false;
-        var attack = IsAttackIntent(army);
-        var route = PresentationRoute(army, attack);
-        var directObjective = army.OrderProvinceId > 0;
+
+        var activeBattle = FindActiveBattle(army);
+        bool attack;
+        IReadOnlyList<int> route;
+        int startProv = army.ProvinceId;
+        int firstStep = -1;
+        int lastStep = -1;
+        int stepCount = 0;
 
         _routePoints.Clear();
-        _routePoints.Add(PresentationPoint(army.Latitude, army.Longitude, SurfaceLineRadius));
-        foreach (var province in route)
+        if (activeBattle is not null &&
+            (activeBattle.ProvinceId == army.ProvinceId || !activeBattle.Attackers.Contains(army.Id)))
         {
-            var center = _campaign.ProvinceMap.CenterOf(province);
-            AddRoutePoint(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
+            // Defending inside active battle: suppress automatic front-planner routes unless withdrawing or queued waypoints exist.
+            if (!army.DirectOrder && army.Route.Count == 0 && army.PostBattleWaypoints.Count == 0)
+                return false;
+            if (army.Route.Count == 0 && army.PostBattleWaypoints.Count == 0)
+                return false;
+            attack = false;
+            _routePoints.Add(PresentationPoint(army.Latitude, army.Longitude, SurfaceLineRadius));
+            for (var i = 0; i < army.Route.Count; i++)
+            {
+                var province = army.Route[i];
+                var center = _campaign.ProvinceMap.CenterOf(province);
+                AddRoutePoint(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
+                if (firstStep < 0) firstStep = province;
+                lastStep = province;
+                stepCount++;
+            }
+            for (var i = 0; i < army.PostBattleWaypoints.Count; i++)
+            {
+                var wp = army.PostBattleWaypoints[i];
+                if (wp <= 0 || wp == lastStep) continue;
+                var center = _campaign.ProvinceMap.CenterOf(wp);
+                AddRoutePoint(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
+                if (firstStep < 0) firstStep = wp;
+                lastStep = wp;
+                stepCount++;
+            }
         }
-        // A manual order may come from an old save which predates PlannedRoute. Offensive
-        // orders never receive a ruler-straight fallback: their corridor is reconstructed
-        // through the two belligerents' province graph below.
-        if (!attack && directObjective && (route.Count == 0 || route[^1] != army.OrderProvinceId))
+        else
         {
-            var objective = _campaign.ProvinceMap.CenterOf(army.OrderProvinceId);
-            AddRoutePoint(PresentationPoint(objective.Latitude, objective.Longitude, SurfaceLineRadius));
+            // Selected attacker in active battle or marching division: draw full signature GlobeOrderRibbons arrow.
+            attack = IsAttackIntent(army);
+            route = PresentationRoute(army, attack);
+            var directObjective = army.OrderProvinceId > 0;
+
+            _routePoints.Add(PresentationPoint(army.Latitude, army.Longitude, SurfaceLineRadius));
+            foreach (var province in route)
+            {
+                var center = _campaign.ProvinceMap.CenterOf(province);
+                AddRoutePoint(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
+                if (firstStep < 0) firstStep = province;
+                lastStep = province;
+                stepCount++;
+            }
+            // A manual order may come from an old save which predates PlannedRoute. Offensive
+            // orders never receive a ruler-straight fallback: their corridor is reconstructed
+            // through the two belligerents' province graph below.
+            if (!attack && directObjective && (route.Count == 0 || route[^1] != army.OrderProvinceId))
+            {
+                var objective = _campaign.ProvinceMap.CenterOf(army.OrderProvinceId);
+                AddRoutePoint(PresentationPoint(objective.Latitude, objective.Longitude, SurfaceLineRadius));
+                if (firstStep < 0) firstStep = army.OrderProvinceId;
+                lastStep = army.OrderProvinceId;
+                stepCount++;
+            }
+            for (var i = 0; i < army.PostBattleWaypoints.Count; i++)
+            {
+                var wp = army.PostBattleWaypoints[i];
+                if (wp <= 0 || wp == lastStep) continue;
+                var center = _campaign.ProvinceMap.CenterOf(wp);
+                AddRoutePoint(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
+                if (firstStep < 0) firstStep = wp;
+                lastStep = wp;
+                stepCount++;
+            }
         }
         if (_routePoints.Count < 2) return false;
+
+        var slot = army.SupportOnly ? 2 : attack ? 1 : 0;
+        if (!_drawnRouteCorridors.Add((startProv, firstStep, lastStep, stepCount, slot)))
+            return false;
 
         return DrawOrderRibbon(army, attack);
     }

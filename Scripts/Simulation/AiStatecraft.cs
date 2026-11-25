@@ -1281,7 +1281,7 @@ public static partial class AiStatecraft
                     nation.CachedSocialKey();
                     for (var ci = 0; ci < circleCount; ci++) circle[ci]?.CachedSocialKey();
                     var borderSet = neighbours as HashSet<int>;
-                    if (circleCount >= 16 && DeterministicParallel.Enabled(campaign))
+                    if (circleCount >= 96 && DeterministicParallel.Enabled(campaign))
                     {
                         DeterministicParallel.ForRange(campaign, 0, circleCount, (from, to) =>
                         {
@@ -1298,7 +1298,7 @@ public static partial class AiStatecraft
                                     : neighbours.Contains(partner.MapIndex);
                                 slots[i] = PrecheckWeeklyPair(campaign, scanMemory, nation, partner, borders, myStrength, identityOn);
                             }
-                        }, minItems: 16);
+                        }, minItems: 48);
                     }
                     else
                     {
@@ -1376,6 +1376,13 @@ public static partial class AiStatecraft
                     var byOpinion = right.Opinion.CompareTo(left.Opinion);
                     return byOpinion != 0 ? byOpinion : left.Friend.Id.CompareTo(right.Friend.Id);
                 });
+            var canConfrontRival = worstRival is not null &&
+                (worstOpinion <= defines.AiRivalryThreshold ||
+                 (CampaignDiplomacy.Peek(campaign, nation.Id, worstRival.Id) is not { Stance: DiplomaticStance.Allied } &&
+                  (TerritorialClaims.HoldsOurHomeland(campaign, nation, worstRival) ||
+                   LostLands.HasClaimedLand(campaign, nation, worstRival) ||
+                   BorderShape.Grievance(campaign, nation, worstRival) > 0.25f)));
+            var didFriendlyMove = false;
             var tables = TablesOf(campaign);
             var missionScan = tables.MissionScan;
             missionScan.Reset(campaign, nation.Id);
@@ -1401,8 +1408,32 @@ public static partial class AiStatecraft
                 {
                     mutatedNations?.Add(nation.Id);
                     mutatedNations?.Add(friend.Id);
-                    yield break;
+                    if (!canConfrontRival) yield break;
+                    didFriendlyMove = true;
+                    break;
                 }
+            }
+            if (didFriendlyMove)
+            {
+                var relation = CampaignDiplomacy.Get(campaign, nation.Id, worstRival.Id);
+                CampaignDiplomacy.RefreshExpiredTruce(campaign, relation);
+                if (relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Friendly)
+                {
+                    var lastAction = relation.LastActionDay;
+                    new DenounceCommand { IssuerId = nation.Id, TargetId = worstRival.Id }.Apply(campaign);
+                    if (relation.LastActionDay != lastAction)
+                    {
+                        Count("denounced");
+                        mutatedNations?.Add(nation.Id);
+                        mutatedNations?.Add(worstRival.Id);
+                    }
+                }
+                else if (relation.Stance != DiplomaticStance.Truce && ActShortOfWar(campaign, nation, worstRival))
+                {
+                    mutatedNations?.Add(nation.Id);
+                    mutatedNations?.Add(worstRival.Id);
+                }
+                yield break;
             }
         }
         }
@@ -1490,9 +1521,43 @@ public static partial class AiStatecraft
         // Left to drift alone, no two countries in the world would ever sign anything.
         using (SimProfiler.Measure("    dip:courting"))
         {
+        var rivalTrigger = worstRival is not null &&
+            (worstOpinion <= defines.AiRivalryThreshold ||
+             (CampaignDiplomacy.Peek(campaign, nation.Id, worstRival.Id) is not { Stance: DiplomaticStance.Allied } &&
+              (TerritorialClaims.HoldsOurHomeland(campaign, nation, worstRival) ||
+               LostLands.HasClaimedLand(campaign, nation, worstRival) ||
+               BorderShape.Grievance(campaign, nation, worstRival) > 0.25f)));
+        if (rivalTrigger)
+        {
+            var relation = CampaignDiplomacy.Get(campaign, nation.Id, worstRival.Id);
+            CampaignDiplomacy.RefreshExpiredTruce(campaign, relation);
+            if (relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Friendly)
+            {
+                // A denunciation is a visible, remembered diplomatic action, not an
+                // unexplained stance switch. It observes the same mission cooldown.
+                var lastAction = relation.LastActionDay;
+                new DenounceCommand { IssuerId = nation.Id, TargetId = worstRival.Id }.Apply(campaign);
+                if (relation.LastActionDay != lastAction)
+                {
+                    Count("denounced");
+                    mutatedNations?.Add(nation.Id);
+                    mutatedNations?.Add(worstRival.Id);
+                    yield break;
+                }
+            }
+
+            if (relation.Stance != DiplomaticStance.Truce && ActShortOfWar(campaign, nation, worstRival))
+            {
+                mutatedNations?.Add(nation.Id);
+                mutatedNations?.Add(worstRival.Id);
+                yield break;
+            }
+        }
+
         if (bestFriend is not null && (worstRival is null || bestOpinion > defines.AiRivalryThreshold))
         {
             var relation = CampaignDiplomacy.Get(campaign, nation.Id, bestFriend.Id);
+            CampaignDiplomacy.RefreshExpiredTruce(campaign, relation);
             if (relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Friendly)
             {
                 // Through the opinion system, not around it. This used to write the number
@@ -1505,30 +1570,6 @@ public static partial class AiStatecraft
                 mutatedNations?.Add(bestFriend.Id);
                 yield break;
             }
-        }
-
-        if (worstRival is not null && worstOpinion <= defines.AiRivalryThreshold)
-        {
-            var relation = CampaignDiplomacy.Get(campaign, nation.Id, worstRival.Id);
-            if (relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Friendly)
-            {
-                // A denunciation is a visible, remembered diplomatic action, not an
-                // unexplained stance switch. It observes the same mission cooldown.
-                var lastAction = relation.LastActionDay;
-                new DenounceCommand { IssuerId = nation.Id, TargetId = worstRival.Id }.Apply(campaign);
-                if (relation.LastActionDay != lastAction) Count("denounced");
-                mutatedNations?.Add(nation.Id);
-                mutatedNations?.Add(worstRival.Id);
-                yield break;
-            }
-
-            // Naming a rival used to be the end of the AI's imagination. There are things
-            // between a stiff note and an invasion, and now that trade is bilateral and a
-            // guarantee brings an army, they are worth doing: sanction a rival who needs us
-            // more than we need them, or shelter whoever is next on their list.
-            ActShortOfWar(campaign, nation, worstRival);
-            mutatedNations?.Add(nation.Id);
-            mutatedNations?.Add(worstRival.Id);
         }
         }
         }
@@ -1851,14 +1892,6 @@ public static partial class AiStatecraft
                     if (float.IsNaN(cachedJudgement)) continue;
                     if (float.IsNegativeInfinity(cachedJudgement)) { Count("blocked"); continue; }
                     judgement = cachedJudgement;
-                    if ((other.AssessedDay < 0 || campaign.ElapsedDays < other.AssessedDay ||
-                         campaign.ElapsedDays - other.AssessedDay >= assessEvery) &&
-                        !CampaignIntel.CanInspect(nation.Id, other.Id) &&
-                        IntelNetworks.Strength(campaign, nation.Id, other.Id) < inspectThreshold)
-                    {
-                        other.AssessedStrength = CachedStrength(campaign, other);
-                        other.AssessedDay = campaign.ElapsedDays;
-                    }
                 }
                 if (judgement > 0f) Count("wanted");
                 if (!TerritorialClaims.PreferTarget(campaign, nation, other, judgement, target, bestJudgement)) continue;
@@ -2004,8 +2037,12 @@ public static partial class AiStatecraft
         // A legitimate territorial demand may supply a cause if refused, but merely
         // preparing to threaten somebody still does not permit an unjustified declaration.
         if (Campaign.StageOverdue()) yield return 0;
+        var casusBelli = Statecraft.CasusBelli(campaign, nation, target);
+        var rumpTarget = AnnexationAmbition.IsConqueredRump(campaign, nation, target);
+        var targetRel = CampaignDiplomacy.Peek(campaign, nation.Id, target.Id);
+        var unfinishedClaim = targetRel is not null && OpinionSystem.Has(targetRel, "unfinished_war_claim");
         if (annexation is null && defines.AiNeedsCauseForWar &&
-            string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, target)))
+            string.IsNullOrEmpty(casusBelli) && !rumpTarget && !unfinishedClaim)
         {
             Count("no_cause");
             yield break;
@@ -2040,10 +2077,14 @@ public static partial class AiStatecraft
 
         if (Campaign.StageOverdue()) yield return 0;
         var recovery = TerritorialClaims.RecoveryGoal(campaign, nation, target);
-        var cause = string.IsNullOrEmpty(annexation?.Cause)
-            ? (recovery is null ? null : "reconquest")
-            : annexation.Value.Cause;
+        var cause = !string.IsNullOrEmpty(annexation?.Cause)
+            ? annexation.Value.Cause
+            : (recovery is not null ? "reconquest"
+                : (!string.IsNullOrEmpty(casusBelli) ? casusBelli
+                    : (rumpTarget ? "hegemony" : (unfinishedClaim ? "unfinished_war_claim" : null))));
         var claimed = recovery?.MapIndex ?? annexation?.ClaimedState ?? -1;
+        if (claimed <= 0 && (rumpTarget || unfinishedClaim))
+            claimed = AnnexationAmbition.ClaimedState(campaign, target);
         // A union is about the whole state, so its capital is the objective even when an
         // older recovery claim names one region. A border reconquest keeps its own goal.
         if (annexation is { Reunification: true } union) claimed = union.ClaimedState;

@@ -125,6 +125,30 @@ internal static class ConsoleWorldCommands
         return $"Player country changed to {nation.Name} ({nation.Tag}).";
     }
 
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, Action<Action<Campaign>>> WriteRunners = new();
+
+    internal static void BindWriteRunner(Campaign campaign, Action<Action<Campaign>> runner)
+    {
+        if (campaign is null || runner is null) return;
+        WriteRunners.AddOrUpdate(campaign, runner);
+    }
+
+    private static void RunCampaignWrite(Campaign campaign, Action<Campaign> action)
+    {
+        if (WriteRunners.TryGetValue(campaign, out var runner))
+        {
+            runner(action);
+            return;
+        }
+        campaign.AccessGate.EnterWrite();
+        try
+        {
+            campaign.FinishStep();
+            action(campaign);
+        }
+        finally { campaign.AccessGate.ExitWrite(); }
+    }
+
     public static string Advance(ConsoleContext ctx, string argument)
     {
         var campaign = ctx.Campaign;
@@ -135,15 +159,20 @@ internal static class ConsoleWorldCommands
             return "Usage: advance 7";
         days = Math.Clamp(days, 1, 3650);
 
-        var paused = campaign.IsPaused;
-        campaign.IsPaused = false;
-        var before = campaign.ElapsedDays;
-        ctx.SetSimulating(true);
-        try { for (var day = 0; day < days; day++) campaign.TickDay(); }
-        finally { ctx.SetSimulating(false); }
-        campaign.IsPaused = paused;
-        return $"Advanced {campaign.ElapsedDays - before:N0} day(s) to {campaign.Date}. The clock is " +
-               (paused ? "still stopped." : "still running.");
+        var result = "";
+        RunCampaignWrite(campaign, world =>
+        {
+            var paused = world.IsPaused;
+            world.IsPaused = false;
+            var before = world.ElapsedDays;
+            ctx.SetSimulating(true);
+            try { for (var day = 0; day < days; day++) world.TickDay(); }
+            finally { ctx.SetSimulating(false); }
+            world.IsPaused = paused;
+            result = $"Advanced {world.ElapsedDays - before:N0} day(s) to {world.Date}. The clock is " +
+                     (paused ? "still stopped." : "still running.");
+        });
+        return result;
     }
 
     private static string Pause(ConsoleContext ctx)
@@ -184,24 +213,30 @@ internal static class ConsoleWorldCommands
             return $"{days:N0} days is over ten years. The console stops at 3,650 so a slipped " +
                    "key cannot hang the game for a quarter of an hour.";
 
-        var paused = campaign.IsPaused;
-        campaign.IsPaused = false;
-        var from = campaign.ElapsedDays;
+        var ran = 0;
+        var endDate = "";
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        var steps = 0;
-        var ceiling = days * 24 + 64;
-        ctx.SetSimulating(true);
-        try { while (campaign.ElapsedDays - from < days && steps++ < ceiling) campaign.Tick(); }
-        finally { ctx.SetSimulating(false); }
-        clock.Stop();
-        campaign.IsPaused = paused;
+        RunCampaignWrite(campaign, world =>
+        {
+            var paused = world.IsPaused;
+            world.IsPaused = false;
+            var from = world.ElapsedDays;
+            var steps = 0;
+            var ceiling = days * 24 + 64;
+            ctx.SetSimulating(true);
+            try { while (world.ElapsedDays - from < days && steps++ < ceiling) world.Tick(); }
+            finally { ctx.SetSimulating(false); }
+            clock.Stop();
+            world.IsPaused = paused;
+            ran = world.ElapsedDays - from;
+            endDate = world.Date.Display(true);
+        });
         ctx.Refresh();
 
-        var ran = campaign.ElapsedDays - from;
         var stalled = ran < days ? " The clock stopped advancing before it got there." : "";
         return $"Ran {ran:N0} day(s) in {clock.ElapsedMilliseconds:N0} ms " +
                $"({(ran == 0 ? 0 : clock.ElapsedMilliseconds / (double)ran):0.0} ms a day). " +
-               $"Now {campaign.Date.Display(true)}.{stalled}";
+               $"Now {endDate}.{stalled}";
     }
 
     private static string Fingerprint(ConsoleContext ctx) => ctx.Campaign is null

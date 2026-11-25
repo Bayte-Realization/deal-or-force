@@ -99,9 +99,8 @@ void fragment() {
             Plate.MaterialOverride = null;
             Plate.Texture = null;
         }
-        _plateMaterial?.Dispose();
+        // ShaderMaterial and ViewportTexture are RefCounted; never manually Dispose() on teardown.
         _plateMaterial = null;
-        _ownedTexture?.Dispose();
         _ownedTexture = null;
         _symbol = null;
     }

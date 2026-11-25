@@ -304,6 +304,15 @@ public static partial class ElectoralPolitics
     /// leans away from whoever wrote the laws, so the pendulum swings back in its turn. No price in
     /// stability: this is what a democracy is for. The player's own country is left to the player.
     /// </summary>
+    private static string DemocraticFallbackCreed(int index) => (((index % 5) + 5) % 5) switch
+    {
+        0 => "liberalism",
+        1 => "conservatism",
+        2 => "social_democracy",
+        3 => "socialism",
+        _ => "nationalism"
+    };
+
     private static void Alternate(Campaign c, Nation n)
     {
         if (n.IsHuman || !Democracies.Contains(n.Government ?? "")) return;
@@ -315,6 +324,17 @@ public static partial class ElectoralPolitics
             if (IdeologyCatalog.Of(share.Ideology) is { } creed && creed.Authority > c.Defines.ElectionMaximumAuthority) continue;
             if (PoliticsCore.Refusal(c, n, "", share.Ideology).Length > 0) continue;
             n.Ideology = share.Ideology;
+            n.PoliticsChangedDay = c.ElapsedDays;
+            return;
+        }
+        var offset = Math.Abs((int)(Escalation.Roll(c.Seed, n.Id, 0xA17E, c.ElapsedDays, n.RulerGeneration) * 5)) % 5;
+        for (var i = 0; i < 5; i++)
+        {
+            var candidate = DemocraticFallbackCreed(offset + i);
+            if (string.Equals(candidate, n.Ideology, StringComparison.OrdinalIgnoreCase)) continue;
+            if (IdeologyCatalog.Of(candidate) is { } creed && creed.Authority > c.Defines.ElectionMaximumAuthority) continue;
+            if (PoliticsCore.Refusal(c, n, "", candidate).Length > 0) continue;
+            n.Ideology = candidate;
             n.PoliticsChangedDay = c.ElapsedDays;
             return;
         }

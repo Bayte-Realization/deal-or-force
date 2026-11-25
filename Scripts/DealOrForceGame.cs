@@ -80,12 +80,20 @@ public partial class DealOrForceGame : Control
         ApplyCustomCursors();
     }
 
+    private void OnGameTreeExiting()
+    {
+        Simulation.SpriteCatalog.Changed -= ForgetFlags;
+        Simulation.FlagDesignCatalog.Changed -= ForgetFlags;
+        _shell?.Dispose();
+        _simRunner.Dispose();
+    }
+
     public override async void _Ready()
     {
         var bootClock = System.Diagnostics.Stopwatch.StartNew();
         DealOrForce.Platform.GodotPlatformBridge.EnsureInitialized();
         ApplicationExit.Ensure(this);
-        TreeExiting += () => _simRunner.Dispose();
+        TreeExiting += OnGameTreeExiting;
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         Input.MouseMode = Input.MouseModeEnum.Visible;
         WrapGuard.Install(GetTree());
@@ -240,11 +248,13 @@ public partial class DealOrForceGame : Control
             var flushDue = _interfaceSinceRefresh + delta >= RunningInterfaceInterval || (hudSnap?.IsPaused ?? _campaign!.IsPaused);
             var needLive = !isNewShell || _bgHudRefreshDue || flushDue || AnyLegacyModalOrScreenVisible() ||
                            (_shell is not null && _shell.NeedsLiveCampaignRead(hudSnap));
-            var gotRead = needLive && ((_bgHudRefreshDue || AnyLegacyModalOrScreenVisible())
-                ? _campaign!.TryEnterRead(0, requestWindowOnMiss: true)
-                : _campaign!.TryEnterRead(0, requestWindowOnMiss: false));
+            var urgentLive = AnyLegacyModalOrScreenVisible() || (hudSnap?.PendingEventCount ?? 0) > 0 ||
+                             (hudSnap?.IsPaused ?? false) ||
+                             (Time.GetTicksMsec() - _lastBgLiveReadMsec >= (ulong)(_isMobileRuntime ? 180 : 110));
+            var gotRead = needLive && _campaign!.TryEnterRead(0, requestWindowOnMiss: urgentLive);
             if (gotRead)
             {
+                _lastBgLiveReadMsec = Time.GetTicksMsec();
                 try
                 {
                     MaintainArmyBar(delta);
@@ -366,6 +376,7 @@ public partial class DealOrForceGame : Control
 
     private Campaign _stepCompletionCampaign;
     private bool _bgHudRefreshDue;
+    private ulong _lastBgLiveReadMsec;
 
     private bool WantsBackgroundSimulation =>
         _campaign is not null &&
@@ -382,9 +393,9 @@ public partial class DealOrForceGame : Control
                 _simRunner.Stop();
             return;
         }
-        Campaign.StageSliceMilliseconds = _isMobileRuntime ? 1.5 : 2.5;
+        Campaign.StageSliceMilliseconds = _isMobileRuntime ? 4.5 : 3.5;
         _simRunner.MobilePacing = _isMobileRuntime;
-        _simRunner.MinSpeed5DayIntervalMs = _isMobileRuntime ? 22.0 : 0.0;
+        _simRunner.MinSpeed5DayIntervalMs = 0.0;
         if (!ReferenceEquals(_simRunner.Campaign, _campaign) || !_simRunner.IsActive)
             _simRunner.Start(_campaign!);
         _simRunner.SyncClockState(_campaign!.IsPaused, _speed);
@@ -496,6 +507,7 @@ public partial class DealOrForceGame : Control
 
     public override void _Input(InputEvent inputEvent)
     {
+
         ButtonFocusPresentation.Observe(GetViewport(), inputEvent);
         // Loading can yield before any covered panel exists. Gate BEFORE dispatching
         // to helpers or authoring dialogs, not half way through the input chain.
@@ -1132,9 +1144,12 @@ public partial class DealOrForceGame : Control
         // against the finished globe instead of twice back-to-back.
         if (_startupComplete) ApplyAllSettings();
         BindFlags(_campaign);
+        ConsoleWorldCommands.BindWriteRunner(_campaign, RunConsoleWrite);
+        Simulation.SpriteCatalog.Changed -= ForgetFlags;
         Simulation.SpriteCatalog.Changed += ForgetFlags;
         // A flag design saved in the editor, or a mod's designs re-read, changes which flag a
         // country flies exactly as a new picture would.
+        Simulation.FlagDesignCatalog.Changed -= ForgetFlags;
         Simulation.FlagDesignCatalog.Changed += ForgetFlags;
         _campaign.Changed += Refresh;
         _campaign.IsPaused = true;
@@ -1172,6 +1187,7 @@ public partial class DealOrForceGame : Control
         Built("globe", () =>
         {
             _globe = new GlobePresentation();
+
             _modLoader.SetCrossoverPresentation = enabled => _globe.SetCrossoverPresentation(enabled);
             _globe.CountryPicked += OnCountryPicked;
             _globe.UnclaimedPicked += OnUnclaimedPicked;
@@ -2011,6 +2027,40 @@ public partial class DealOrForceGame : Control
         if (!NewsPlace(line.ActorId, line.TargetId, line.Kind, out var latitude, out var longitude)) return;
         _globe.FocusOn(latitude, longitude, 5.5f);
         PlayStrategicCue("map_focus");
+    }
+
+    private bool FocusNationCapital(Nation nation, float? distanceOverride = null)
+    {
+        if (_campaign is null || _globe is null || nation is null) return false;
+        float lat = 0f, lon = 0f;
+        var hasCoords = false;
+        var states = 3;
+        var campaign = _campaign;
+        if (campaign.TryEnterRead(50, true))
+        {
+            try
+            {
+                if (CapitalCore.HasSeat(campaign, nation))
+                {
+                    lat = CapitalCore.EffectiveLatitude(campaign, nation);
+                    lon = CapitalCore.EffectiveLongitude(campaign, nation);
+                    hasCoords = true;
+                }
+                states = campaign.States.Count(s => s.NationMapIndex == nation.MapIndex);
+            }
+            finally { campaign.ExitRead(); }
+        }
+        if (!hasCoords && float.IsFinite(nation.CapitalLatitude) && float.IsFinite(nation.CapitalLongitude) &&
+            (MathF.Abs(nation.CapitalLatitude) > 0.001f || MathF.Abs(nation.CapitalLongitude) > 0.001f))
+        {
+            lat = nation.CapitalLatitude;
+            lon = nation.CapitalLongitude;
+            hasCoords = true;
+        }
+        if (!hasCoords) return false;
+        var dist = distanceOverride ?? (states <= 2 ? 6.5f : states <= 5 ? 7.3f : 8.4f);
+        _globe.FocusOn(lat, lon, dist);
+        return true;
     }
 
     private bool NewsPlace(int actorId, int targetId, string kind, out float latitude, out float longitude)

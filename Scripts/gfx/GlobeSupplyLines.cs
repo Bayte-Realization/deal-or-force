@@ -47,17 +47,14 @@ uniform float quality_tier = 0.0;
 void fragment() {
     float across = abs(UV.y * 2.0 - 1.0);
     float speed = quality_tier < 1.5 ? 0.95 : 0.45;
-    // Directional logistics chevron pointing from supply hub toward the division.
+    // Directional cartographic ink chevron pointing from supply hub toward the division.
     float chevron_u = UV.x * 1.45 + (quality_tier < 1.5 ? across * 0.32 : 0.0) + TIME * speed;
     float flow = fract(chevron_u);
     float dash = smoothstep(0.0, 0.10, flow) * (1.0 - smoothstep(0.56, 0.68, flow));
-    float tip = smoothstep(0.42, 0.56, flow) * (1.0 - smoothstep(0.56, 0.66, flow));
     float core = 1.0 - smoothstep(0.0, 0.64, across);
     float edge = smoothstep(0.64, 0.96, across) * (1.0 - smoothstep(0.96, 1.0, across));
-    vec3 bright = clamp(COLOR.rgb * (0.90 + 0.36 * dash) + vec3(0.14, 0.12, 0.08) * tip, vec3(0.0), vec3(1.0));
-    vec3 col = mix(bright, vec3(0.03, 0.045, 0.065), edge * 0.82);
-    ALBEDO = col;
-    ALPHA = COLOR.a * max(core * (0.48 + 0.52 * dash), edge * 0.72);
+    ALBEDO = mix(COLOR.rgb * 0.86, vec3(0.05, 0.06, 0.07), edge * 0.78);
+    ALPHA = COLOR.a * 0.68 * max(core * dash, edge * 0.55);
 }";
 
     private void ApplySupplyLineQualityTier(float tier) =>
@@ -92,15 +89,19 @@ void fragment() {
 
         var player = _campaign.Player;
         _supplyLineArmies.Clear();
+        var zoomBucket = CurrentBattleArrowZoomBucket();
         var fingerprint = HashCode.Combine(player?.Id ?? -1, _selectedArmyIds.Count,
-            _flatMap, _flatMap ? (int)(_flatX * 4f) : 0);
+            _flatMap, _flatMap ? (int)(_flatX * 4f) : 0, _mapMode, zoomBucket);
+        var economyMode = _mapMode == StrategicMapMode.Economy;
         foreach (var army in _campaign.Armies)
         {
             if (army.NationId != player?.Id || army.SupplySourceStateMapIndex <= 0) continue;
             var selected = _selectedArmyIds.Contains(army.Id);
-            // An unselected division earns its line only by being cut off; a selected one
-            // gets it whatever its state, because the player asked about that one.
-            if (!selected && !(army.CutOff && army.DaysCutOff > 0)) continue;
+            var eligible = economyMode
+                ? (selected || (army.CutOff && army.DaysCutOff > 0))
+                : ((army.CutOff && army.DaysCutOff > 0) ||
+                   (selected && (army.CutOff || army.SupplyCongestion < 0.92f || army.SupplyLevel < 0.85f)));
+            if (!eligible) continue;
             fingerprint = HashCode.Combine(fingerprint, army.Id, army.ProvinceId,
                 army.SupplySourceStateMapIndex, army.CutOff, army.DaysCutOff,
                 (int)(army.SupplyCongestion * 50f), selected);
@@ -172,7 +173,8 @@ void fragment() {
         }
 
         // Batch every army's strip into a single indexed Triangles surface (zero per-army draw calls).
-        const float halfWidth = 0.0028f;
+        var worldPx = Math.Clamp(BattleArrowUnitsPerPixel(), 0.00018f, 0.0016f);
+        var halfWidth = Math.Clamp(worldPx * 2.2f, 0.00055f, 0.0020f);
         CollectDateLineRuns(_supplyLinePoints);
         foreach (var run in _dateLineRuns)
         {
@@ -214,8 +216,8 @@ void fragment() {
         var up = _flatMap ? Vector3.Forward : end.Normalized();
         var across = up.Cross(Vector3.Up).LengthSquared() > 0.0001f ? up.Cross(Vector3.Up).Normalized() : Vector3.Right;
         var along = up.Cross(across).Normalized();
-        const float size = 0.0086f;
-        const float inner = 0.0042f;
+        var size = Math.Clamp(worldPx * 4.8f, 0.0012f, 0.0048f);
+        var inner = size * 0.48f;
         var pE = OnOrderSurface(end + across * size);
         var pN = OnOrderSurface(end + along * size);
         var pW = OnOrderSurface(end - across * size);

@@ -1,13 +1,13 @@
 {
   "compileErrors": 16,
   "godotInSimulationUses": 0,
-  "maxFileLines": 3160,
+  "maxFileLines": 3201,
   "maxMethodLines": 1328,
   "maxCyclomatic": 233,
   "simulationStaticMutable": 1355,
-  "deadCandidates": 161,
+  "deadCandidates": 165,
   "totalFiles": 995,
-  "totalLines": 334809,
+  "totalLines": 336988,
   "files": {
     "Scripts/AudioAssets.cs": {
       "lines": 46,
@@ -80,8 +80,8 @@
       "magicNumbers": 0
     },
     "Scripts/DealOrForceGame.cs": {
-      "lines": 2811,
-      "maxMethodLines": 346,
+      "lines": 2861,
+      "maxMethodLines": 347,
       "maxCyclomatic": 151,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -108,7 +108,7 @@
       "magicNumbers": 0
     },
     "Scripts/MainMenuScene.cs": {
-      "lines": 1490,
+      "lines": 1554,
       "maxMethodLines": 268,
       "maxCyclomatic": 29,
       "staticMutable": 5,
@@ -241,16 +241,16 @@
       "magicNumbers": 0
     },
     "Scripts/Platform/BootCrashDiagnostics.cs": {
-      "lines": 726,
+      "lines": 783,
       "maxMethodLines": 104,
       "maxCyclomatic": 26,
       "staticMutable": 10,
       "magicNumbers": 0
     },
     "Scripts/Platform/GodotPlatformBridge.cs": {
-      "lines": 137,
+      "lines": 179,
       "maxMethodLines": 49,
-      "maxCyclomatic": 10,
+      "maxCyclomatic": 12,
       "staticMutable": 1,
       "magicNumbers": 0
     },
@@ -262,7 +262,7 @@
       "magicNumbers": 0
     },
     "Scripts/Platform/PlatformProfile.cs": {
-      "lines": 404,
+      "lines": 432,
       "maxMethodLines": 108,
       "maxCyclomatic": 28,
       "staticMutable": 2,
@@ -304,7 +304,7 @@
       "magicNumbers": 0
     },
     "Scripts/Presentation/CompatibilityMapShader.cs": {
-      "lines": 113,
+      "lines": 124,
       "maxMethodLines": 0,
       "maxCyclomatic": 0,
       "staticMutable": 0,
@@ -430,11 +430,11 @@
       "magicNumbers": 39
     },
     "Scripts/Simulation/AiEconomicPolicy.cs": {
-      "lines": 217,
+      "lines": 220,
       "maxMethodLines": 88,
       "maxCyclomatic": 44,
       "staticMutable": 0,
-      "magicNumbers": 22
+      "magicNumbers": 25
     },
     "Scripts/Simulation/AiFiscalPolicy.cs": {
       "lines": 98,
@@ -444,16 +444,16 @@
       "magicNumbers": 7
     },
     "Scripts/Simulation/AiJudgement.cs": {
-      "lines": 890,
-      "maxMethodLines": 175,
-      "maxCyclomatic": 34,
+      "lines": 906,
+      "maxMethodLines": 181,
+      "maxCyclomatic": 37,
       "staticMutable": 4,
-      "magicNumbers": 87
+      "magicNumbers": 95
     },
     "Scripts/Simulation/AiPeaceOutcomes.cs": {
-      "lines": 468,
-      "maxMethodLines": 218,
-      "maxCyclomatic": 93,
+      "lines": 492,
+      "maxMethodLines": 222,
+      "maxCyclomatic": 96,
       "staticMutable": 4,
       "magicNumbers": 15
     },
@@ -472,11 +472,11 @@
       "magicNumbers": 1
     },
     "Scripts/Simulation/AiStatecraft.cs": {
-      "lines": 3160,
-      "maxMethodLines": 319,
-      "maxCyclomatic": 107,
+      "lines": 3201,
+      "maxMethodLines": 360,
+      "maxCyclomatic": 111,
       "staticMutable": 25,
-      "magicNumbers": 100
+      "magicNumbers": 102
     },
     "Scripts/Simulation/AiStrategyCore.cs": {
       "lines": 204,
@@ -549,18 +549,18 @@
       "magicNumbers": 0
     },
     "Scripts/Simulation/AllyRivalShift.cs": {
-      "lines": 423,
-      "maxMethodLines": 39,
-      "maxCyclomatic": 18,
+      "lines": 440,
+      "maxMethodLines": 56,
+      "maxCyclomatic": 25,
       "staticMutable": 0,
-      "magicNumbers": 4
+      "magicNumbers": 9
     },
     "Scripts/Simulation/AnnexationAmbition.cs": {
-      "lines": 172,
+      "lines": 224,
       "maxMethodLines": 32,
       "maxCyclomatic": 21,
       "staticMutable": 0,
-      "magicNumbers": 14
+      "magicNumbers": 18
     },
     "Scripts/Simulation/ArmsShipmentRequests.cs": {
       "lines": 385,
@@ -661,11 +661,11 @@
       "magicNumbers": 13
     },
     "Scripts/Simulation/BackgroundSimRunner.cs": {
-      "lines": 1555,
-      "maxMethodLines": 226,
-      "maxCyclomatic": 94,
+      "lines": 1616,
+      "maxMethodLines": 247,
+      "maxCyclomatic": 110,
       "staticMutable": 6,
-      "magicNumbers": 67
+      "magicNumbers": 86
     },
     "Scripts/Simulation/BattleAssignmentIntegrity.cs": {
       "lines": 55,
@@ -766,10 +766,10 @@
       "magicNumbers": 2
     },
     "Scripts/Simulation/BudgetCore.cs": {
-      "lines": 839,
+      "lines": 844,
       "maxMethodLines": 84,
       "maxCyclomatic": 26,
-      "staticMutable": 5,
+      "staticMutable": 4,
       "magicNumbers": 3
     },
     "Scripts/Simulation/Campaign.Indexes.cs": {
@@ -962,11 +962,11 @@
       "magicNumbers": 6
     },
     "Scripts/Simulation/CivilWarOutbreak.cs": {
-      "lines": 580,
+      "lines": 584,
       "maxMethodLines": 112,
       "maxCyclomatic": 39,
       "staticMutable": 8,
-      "magicNumbers": 32
+      "magicNumbers": 36
     },
     "Scripts/Simulation/CivilWarPersistence.cs": {
       "lines": 80,
@@ -1116,9 +1116,9 @@
       "magicNumbers": 14
     },
     "Scripts/Simulation/ControlTally.cs": {
-      "lines": 254,
-      "maxMethodLines": 110,
-      "maxCyclomatic": 35,
+      "lines": 266,
+      "maxMethodLines": 113,
+      "maxCyclomatic": 36,
       "staticMutable": 2,
       "magicNumbers": 3
     },
@@ -1207,11 +1207,11 @@
       "magicNumbers": 27
     },
     "Scripts/Simulation/Coups.cs": {
-      "lines": 359,
+      "lines": 367,
       "maxMethodLines": 44,
       "maxCyclomatic": 22,
       "staticMutable": 1,
-      "magicNumbers": 9
+      "magicNumbers": 15
     },
     "Scripts/Simulation/CovertOperations.cs": {
       "lines": 752,
@@ -1403,7 +1403,7 @@
       "magicNumbers": 23
     },
     "Scripts/Simulation/DiplomacyCore.cs": {
-      "lines": 872,
+      "lines": 896,
       "maxMethodLines": 69,
       "maxCyclomatic": 31,
       "staticMutable": 7,
@@ -1459,18 +1459,18 @@
       "magicNumbers": 1
     },
     "Scripts/Simulation/DomesticCrises.cs": {
-      "lines": 297,
-      "maxMethodLines": 126,
-      "maxCyclomatic": 41,
+      "lines": 300,
+      "maxMethodLines": 129,
+      "maxCyclomatic": 43,
       "staticMutable": 0,
       "magicNumbers": 9
     },
     "Scripts/Simulation/DomesticCrisisPressure.cs": {
-      "lines": 162,
-      "maxMethodLines": 50,
+      "lines": 179,
+      "maxMethodLines": 57,
       "maxCyclomatic": 20,
       "staticMutable": 0,
-      "magicNumbers": 7
+      "magicNumbers": 17
     },
     "Scripts/Simulation/DomesticCrisisResponse.cs": {
       "lines": 167,
@@ -1494,11 +1494,11 @@
       "magicNumbers": 24
     },
     "Scripts/Simulation/EconomyCore.cs": {
-      "lines": 2255,
+      "lines": 2276,
       "maxMethodLines": 78,
       "maxCyclomatic": 21,
       "staticMutable": 10,
-      "magicNumbers": 150
+      "magicNumbers": 168
     },
     "Scripts/Simulation/EconomyRulesHook.cs": {
       "lines": 275,
@@ -1508,11 +1508,11 @@
       "magicNumbers": 15
     },
     "Scripts/Simulation/ElectoralPolitics.cs": {
-      "lines": 334,
+      "lines": 354,
       "maxMethodLines": 49,
       "maxCyclomatic": 24,
       "staticMutable": 2,
-      "magicNumbers": 44
+      "magicNumbers": 52
     },
     "Scripts/Simulation/EmergencyFieldArmy.cs": {
       "lines": 47,
@@ -1536,11 +1536,11 @@
       "magicNumbers": 111
     },
     "Scripts/Simulation/EventCore.cs": {
-      "lines": 784,
-      "maxMethodLines": 162,
+      "lines": 792,
+      "maxMethodLines": 167,
       "maxCyclomatic": 71,
       "staticMutable": 2,
-      "magicNumbers": 63
+      "magicNumbers": 71
     },
     "Scripts/Simulation/EventPictures.cs": {
       "lines": 77,
@@ -1718,11 +1718,11 @@
       "magicNumbers": 25
     },
     "Scripts/Simulation/GeopoliticalCycle.cs": {
-      "lines": 279,
+      "lines": 327,
       "maxMethodLines": 36,
       "maxCyclomatic": 10,
       "staticMutable": 0,
-      "magicNumbers": 65
+      "magicNumbers": 85
     },
     "Scripts/Simulation/GlobeCounterMerge.cs": {
       "lines": 108,
@@ -1739,11 +1739,11 @@
       "magicNumbers": 5
     },
     "Scripts/Simulation/GovernanceEvents.cs": {
-      "lines": 383,
-      "maxMethodLines": 64,
+      "lines": 386,
+      "maxMethodLines": 67,
       "maxCyclomatic": 32,
       "staticMutable": 3,
-      "magicNumbers": 4
+      "magicNumbers": 8
     },
     "Scripts/Simulation/GovernmentPromises.cs": {
       "lines": 264,
@@ -2054,8 +2054,8 @@
       "magicNumbers": 38
     },
     "Scripts/Simulation/LostLands.cs": {
-      "lines": 227,
-      "maxMethodLines": 61,
+      "lines": 242,
+      "maxMethodLines": 68,
       "maxCyclomatic": 14,
       "staticMutable": 0,
       "magicNumbers": 11
@@ -2572,10 +2572,10 @@
       "magicNumbers": 76
     },
     "Scripts/Simulation/NumericIntegrity.cs": {
-      "lines": 671,
+      "lines": 652,
       "maxMethodLines": 91,
       "maxCyclomatic": 89,
-      "staticMutable": 12,
+      "staticMutable": 13,
       "magicNumbers": 11
     },
     "Scripts/Simulation/OccupationResistance.cs": {
@@ -2614,11 +2614,11 @@
       "magicNumbers": 0
     },
     "Scripts/Simulation/OpinionCore.cs": {
-      "lines": 480,
-      "maxMethodLines": 88,
-      "maxCyclomatic": 24,
+      "lines": 549,
+      "maxMethodLines": 101,
+      "maxCyclomatic": 29,
       "staticMutable": 2,
-      "magicNumbers": 10
+      "magicNumbers": 25
     },
     "Scripts/Simulation/OpinionWitnesses.cs": {
       "lines": 269,
@@ -2635,11 +2635,11 @@
       "magicNumbers": 4
     },
     "Scripts/Simulation/OrganizationCrises.cs": {
-      "lines": 193,
-      "maxMethodLines": 43,
-      "maxCyclomatic": 15,
+      "lines": 195,
+      "maxMethodLines": 45,
+      "maxCyclomatic": 18,
       "staticMutable": 0,
-      "magicNumbers": 5
+      "magicNumbers": 9
     },
     "Scripts/Simulation/OrganizationDiscipline.cs": {
       "lines": 495,
@@ -2649,11 +2649,11 @@
       "magicNumbers": 23
     },
     "Scripts/Simulation/OrganizationDynamics.cs": {
-      "lines": 1149,
-      "maxMethodLines": 134,
+      "lines": 1227,
+      "maxMethodLines": 158,
       "maxCyclomatic": 61,
       "staticMutable": 18,
-      "magicNumbers": 112
+      "magicNumbers": 126
     },
     "Scripts/Simulation/ParallelAdministration.cs": {
       "lines": 325,
@@ -2698,18 +2698,18 @@
       "magicNumbers": 1
     },
     "Scripts/Simulation/PeaceConference.cs": {
-      "lines": 1369,
-      "maxMethodLines": 192,
+      "lines": 1401,
+      "maxMethodLines": 224,
       "maxCyclomatic": 70,
       "staticMutable": 5,
-      "magicNumbers": 51
+      "magicNumbers": 53
     },
     "Scripts/Simulation/PeaceCore.cs": {
-      "lines": 603,
-      "maxMethodLines": 215,
-      "maxCyclomatic": 81,
+      "lines": 617,
+      "maxMethodLines": 229,
+      "maxCyclomatic": 87,
       "staticMutable": 2,
-      "magicNumbers": 34
+      "magicNumbers": 36
     },
     "Scripts/Simulation/PeaceOffers.cs": {
       "lines": 389,
@@ -2943,9 +2943,9 @@
       "magicNumbers": 87
     },
     "Scripts/Simulation/ProvinceVision.cs": {
-      "lines": 442,
-      "maxMethodLines": 122,
-      "maxCyclomatic": 45,
+      "lines": 467,
+      "maxMethodLines": 130,
+      "maxCyclomatic": 46,
       "staticMutable": 0,
       "magicNumbers": 17
     },
@@ -2964,11 +2964,11 @@
       "magicNumbers": 12
     },
     "Scripts/Simulation/RadicalismCore.cs": {
-      "lines": 111,
-      "maxMethodLines": 54,
-      "maxCyclomatic": 12,
+      "lines": 113,
+      "maxMethodLines": 53,
+      "maxCyclomatic": 13,
       "staticMutable": 0,
-      "magicNumbers": 4
+      "magicNumbers": 9
     },
     "Scripts/Simulation/RasterOverlayKernel.cs": {
       "lines": 192,
@@ -3118,11 +3118,11 @@
       "magicNumbers": 0
     },
     "Scripts/Simulation/Rulers.cs": {
-      "lines": 1177,
+      "lines": 1218,
       "maxMethodLines": 103,
       "maxCyclomatic": 233,
       "staticMutable": 8,
-      "magicNumbers": 124
+      "magicNumbers": 143
     },
     "Scripts/Simulation/SaveContainer.cs": {
       "lines": 491,
@@ -3216,14 +3216,14 @@
       "magicNumbers": 0
     },
     "Scripts/Simulation/ScriptedEffects.ParseAndDescribe.cs": {
-      "lines": 429,
+      "lines": 673,
       "maxMethodLines": 133,
       "maxCyclomatic": 53,
       "staticMutable": 2,
-      "magicNumbers": 22
+      "magicNumbers": 35
     },
     "Scripts/Simulation/ScriptedEffects.cs": {
-      "lines": 671,
+      "lines": 677,
       "maxMethodLines": 120,
       "maxCyclomatic": 53,
       "staticMutable": 3,
@@ -3258,18 +3258,18 @@
       "magicNumbers": 89
     },
     "Scripts/Simulation/SecessionCore.cs": {
-      "lines": 408,
+      "lines": 426,
       "maxMethodLines": 70,
       "maxCyclomatic": 31,
       "staticMutable": 1,
-      "magicNumbers": 35
+      "magicNumbers": 48
     },
     "Scripts/Simulation/SecessionEvents.cs": {
-      "lines": 1462,
+      "lines": 1470,
       "maxMethodLines": 256,
       "maxCyclomatic": 66,
       "staticMutable": 1,
-      "magicNumbers": 15
+      "magicNumbers": 20
     },
     "Scripts/Simulation/SecessionResearch.cs": {
       "lines": 107,
@@ -3370,11 +3370,11 @@
       "magicNumbers": 36
     },
     "Scripts/Simulation/SimulationCore.cs": {
-      "lines": 828,
+      "lines": 841,
       "maxMethodLines": 34,
       "maxCyclomatic": 9,
       "staticMutable": 2,
-      "magicNumbers": 25
+      "magicNumbers": 30
     },
     "Scripts/Simulation/SimulationFrameClock.cs": {
       "lines": 171,
@@ -3454,11 +3454,11 @@
       "magicNumbers": 6
     },
     "Scripts/Simulation/StabilityCore.cs": {
-      "lines": 379,
+      "lines": 385,
       "maxMethodLines": 73,
       "maxCyclomatic": 24,
       "staticMutable": 2,
-      "magicNumbers": 27
+      "magicNumbers": 34
     },
     "Scripts/Simulation/StabilityOutlook.cs": {
       "lines": 39,
@@ -3496,7 +3496,7 @@
       "magicNumbers": 0
     },
     "Scripts/Simulation/StateFailure.cs": {
-      "lines": 1130,
+      "lines": 1129,
       "maxMethodLines": 90,
       "maxCyclomatic": 28,
       "staticMutable": 13,
@@ -3699,9 +3699,9 @@
       "magicNumbers": 6
     },
     "Scripts/Simulation/TerritorialClaims.cs": {
-      "lines": 163,
-      "maxMethodLines": 54,
-      "maxCyclomatic": 22,
+      "lines": 175,
+      "maxMethodLines": 66,
+      "maxCyclomatic": 23,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -3951,9 +3951,9 @@
       "magicNumbers": 7
     },
     "Scripts/Simulation/WeeklyDiplomacyScan.cs": {
-      "lines": 364,
-      "maxMethodLines": 65,
-      "maxCyclomatic": 33,
+      "lines": 373,
+      "maxMethodLines": 67,
+      "maxCyclomatic": 35,
       "staticMutable": 0,
       "magicNumbers": 26
     },
@@ -4084,9 +4084,9 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobeBattleVfx.cs": {
-      "lines": 334,
-      "maxMethodLines": 78,
-      "maxCyclomatic": 15,
+      "lines": 167,
+      "maxMethodLines": 55,
+      "maxCyclomatic": 9,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -4175,9 +4175,9 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobeFogVisibility.cs": {
-      "lines": 39,
-      "maxMethodLines": 19,
-      "maxCyclomatic": 11,
+      "lines": 68,
+      "maxMethodLines": 43,
+      "maxCyclomatic": 21,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -4189,9 +4189,9 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobeMapLook.cs": {
-      "lines": 104,
-      "maxMethodLines": 60,
-      "maxCyclomatic": 16,
+      "lines": 99,
+      "maxMethodLines": 55,
+      "maxCyclomatic": 10,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -4210,9 +4210,9 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobeMovements.cs": {
-      "lines": 467,
+      "lines": 470,
       "maxMethodLines": 87,
-      "maxCyclomatic": 14,
+      "maxCyclomatic": 16,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -4224,22 +4224,22 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobeOffensivePlans.cs": {
-      "lines": 150,
-      "maxMethodLines": 61,
+      "lines": 151,
+      "maxMethodLines": 62,
       "maxCyclomatic": 19,
       "staticMutable": 0,
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobeOrderRibbons.cs": {
-      "lines": 259,
-      "maxMethodLines": 52,
+      "lines": 270,
+      "maxMethodLines": 53,
       "maxCyclomatic": 13,
       "staticMutable": 0,
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobePackedTextures.cs": {
-      "lines": 141,
-      "maxMethodLines": 50,
+      "lines": 137,
+      "maxMethodLines": 48,
       "maxCyclomatic": 17,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -4252,8 +4252,8 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobePlateRepaint.cs": {
-      "lines": 233,
-      "maxMethodLines": 52,
+      "lines": 237,
+      "maxMethodLines": 57,
       "maxCyclomatic": 12,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -4266,8 +4266,8 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobePresentation.BordersAndOverlays.cs": {
-      "lines": 705,
-      "maxMethodLines": 109,
+      "lines": 838,
+      "maxMethodLines": 110,
       "maxCyclomatic": 40,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -4294,8 +4294,8 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobePresentation.Labels.cs": {
-      "lines": 678,
-      "maxMethodLines": 270,
+      "lines": 711,
+      "maxMethodLines": 279,
       "maxCyclomatic": 87,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -4315,7 +4315,7 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobePresentation.cs": {
-      "lines": 1610,
+      "lines": 1630,
       "maxMethodLines": 473,
       "maxCyclomatic": 67,
       "staticMutable": 0,
@@ -4371,9 +4371,9 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobeSupplyLines.cs": {
-      "lines": 317,
-      "maxMethodLines": 82,
-      "maxCyclomatic": 23,
+      "lines": 319,
+      "maxMethodLines": 86,
+      "maxCyclomatic": 29,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -4394,7 +4394,7 @@
     "Scripts/gfx/GlobeTerrain.cs": {
       "lines": 594,
       "maxMethodLines": 95,
-      "maxCyclomatic": 24,
+      "maxCyclomatic": 23,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -4455,9 +4455,9 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/MilitaryPresentation.cs": {
-      "lines": 1114,
+      "lines": 1151,
       "maxMethodLines": 180,
-      "maxCyclomatic": 45,
+      "maxCyclomatic": 60,
       "staticMutable": 3,
       "magicNumbers": 0
     },
@@ -4476,7 +4476,7 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/SurfaceBattleBadge.cs": {
-      "lines": 270,
+      "lines": 269,
       "maxMethodLines": 75,
       "maxCyclomatic": 15,
       "staticMutable": 1,
@@ -4784,9 +4784,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/Console/ConsoleWorldCommands.cs": {
-      "lines": 740,
+      "lines": 775,
       "maxMethodLines": 99,
-      "maxCyclomatic": 15,
+      "maxCyclomatic": 13,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -4882,9 +4882,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/CountryRankingsUI.cs": {
-      "lines": 317,
-      "maxMethodLines": 73,
-      "maxCyclomatic": 20,
+      "lines": 474,
+      "maxMethodLines": 92,
+      "maxCyclomatic": 23,
       "staticMutable": 1,
       "magicNumbers": 0
     },
@@ -5015,14 +5015,14 @@
       "magicNumbers": 0
     },
     "Scripts/ui/DeveloperConsoleUI.cs": {
-      "lines": 88,
-      "maxMethodLines": 48,
-      "maxCyclomatic": 3,
+      "lines": 111,
+      "maxMethodLines": 53,
+      "maxCyclomatic": 6,
       "staticMutable": 0,
       "magicNumbers": 0
     },
     "Scripts/ui/DiagnosticsUI.cs": {
-      "lines": 96,
+      "lines": 97,
       "maxMethodLines": 36,
       "maxCyclomatic": 9,
       "staticMutable": 0,
@@ -5043,9 +5043,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/DiplomacyScreenUI.cs": {
-      "lines": 1612,
-      "maxMethodLines": 291,
-      "maxCyclomatic": 37,
+      "lines": 1910,
+      "maxMethodLines": 318,
+      "maxCyclomatic": 46,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -5106,8 +5106,8 @@
       "magicNumbers": 0
     },
     "Scripts/ui/DomesticCrisisUI.cs": {
-      "lines": 308,
-      "maxMethodLines": 176,
+      "lines": 323,
+      "maxMethodLines": 186,
       "maxCyclomatic": 46,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -5148,9 +5148,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/EventUI.cs": {
-      "lines": 221,
-      "maxMethodLines": 57,
-      "maxCyclomatic": 15,
+      "lines": 325,
+      "maxMethodLines": 76,
+      "maxCyclomatic": 20,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -5372,9 +5372,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/MapAmbience.cs": {
-      "lines": 190,
-      "maxMethodLines": 49,
-      "maxCyclomatic": 22,
+      "lines": 219,
+      "maxMethodLines": 76,
+      "maxCyclomatic": 29,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -5400,7 +5400,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/MapSelectionUI.cs": {
-      "lines": 920,
+      "lines": 926,
       "maxMethodLines": 195,
       "maxCyclomatic": 65,
       "staticMutable": 0,
@@ -5498,9 +5498,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/MovementUI.cs": {
-      "lines": 965,
-      "maxMethodLines": 234,
-      "maxCyclomatic": 65,
+      "lines": 998,
+      "maxMethodLines": 232,
+      "maxCyclomatic": 62,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -5771,7 +5771,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/RegionBuildListUI.cs": {
-      "lines": 414,
+      "lines": 422,
       "maxMethodLines": 157,
       "maxCyclomatic": 29,
       "staticMutable": 0,
@@ -5925,8 +5925,8 @@
       "magicNumbers": 0
     },
     "Scripts/ui/Shell/NewShellUI.cs": {
-      "lines": 632,
-      "maxMethodLines": 59,
+      "lines": 633,
+      "maxMethodLines": 60,
       "maxCyclomatic": 45,
       "staticMutable": 1,
       "magicNumbers": 0
@@ -5939,7 +5939,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/Shell/ShellContext.cs": {
-      "lines": 487,
+      "lines": 488,
       "maxMethodLines": 59,
       "maxCyclomatic": 13,
       "staticMutable": 0,
@@ -5981,9 +5981,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/Shell/ShellCountryDossierView.cs": {
-      "lines": 692,
-      "maxMethodLines": 84,
-      "maxCyclomatic": 28,
+      "lines": 722,
+      "maxMethodLines": 85,
+      "maxCyclomatic": 31,
       "staticMutable": 1,
       "magicNumbers": 0
     },
@@ -6051,9 +6051,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/Shell/ShellMinimapView.cs": {
-      "lines": 318,
-      "maxMethodLines": 120,
-      "maxCyclomatic": 61,
+      "lines": 334,
+      "maxMethodLines": 136,
+      "maxCyclomatic": 66,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -6065,9 +6065,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/Shell/ShellOrchestrator.cs": {
-      "lines": 486,
-      "maxMethodLines": 82,
-      "maxCyclomatic": 56,
+      "lines": 503,
+      "maxMethodLines": 84,
+      "maxCyclomatic": 57,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -6079,9 +6079,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/Shell/ShellRegionKpiCardsView.cs": {
-      "lines": 345,
-      "maxMethodLines": 101,
-      "maxCyclomatic": 18,
+      "lines": 365,
+      "maxMethodLines": 70,
+      "maxCyclomatic": 13,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -6107,9 +6107,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/Shell/ShellWorkPanelView.cs": {
-      "lines": 711,
+      "lines": 732,
       "maxMethodLines": 72,
-      "maxCyclomatic": 33,
+      "maxCyclomatic": 31,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -6191,8 +6191,8 @@
       "magicNumbers": 0
     },
     "Scripts/ui/StartupIntro.cs": {
-      "lines": 163,
-      "maxMethodLines": 19,
+      "lines": 166,
+      "maxMethodLines": 20,
       "maxCyclomatic": 10,
       "staticMutable": 2,
       "magicNumbers": 0
@@ -6205,8 +6205,8 @@
       "magicNumbers": 0
     },
     "Scripts/ui/StrategicAudioUI.cs": {
-      "lines": 389,
-      "maxMethodLines": 72,
+      "lines": 441,
+      "maxMethodLines": 88,
       "maxCyclomatic": 32,
       "staticMutable": 0,
       "magicNumbers": 0

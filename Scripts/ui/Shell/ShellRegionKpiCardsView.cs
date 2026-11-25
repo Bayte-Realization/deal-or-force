@@ -82,13 +82,30 @@ internal static class ShellRegionKpiCardsView
         stabCol.AddChild(BuildMiniProgressBar(ctx, state.Stability, ShellRegionVisualsView.StabilityColor(state.Stability)));
 
         // 4. Control & Garrison + Owner/Controller Flags
+        AddControlGarrisonCard(ctx, grid, world, owner, state, provCount);
+    }
+
+    private static void AddControlGarrisonCard(
+        ShellContext ctx,
+        GridContainer grid,
+        Campaign world,
+        Nation owner,
+        ScenarioState state,
+        int provCount)
+    {
         var (controller, occupiedProvs) = InspectRegionControl(world, owner, state);
+        var arrangement = controller is not null ? LandArrangementSystem.Covering(world, state.MapIndex, controller.Id) : null;
+        var leased = arrangement is { Kind: LandArrangementSystem.Lease };
         var visDivs = world.Armies
             .Where(a => a.StateMapIndex == state.MapIndex && CampaignIntel.PlayerCanSeeArmy(world, a))
             .Sum(a => a.Divisions);
         var ctrlTip = owner is not null ? Loc.Format("shell.ws.reg.owner_tip_fmt", owner.DisplayName) : "";
         if (controller is not null)
+        {
             ctrlTip += "\n" + Loc.Format("shell.ws.reg.controller_tip_fmt", controller.DisplayName);
+            if (arrangement is not null)
+                ctrlTip += "\n" + LandArrangementSystem.Describe(world, state);
+        }
 
         var ctrlCard = CreateKpiPlate(ctx, ctrlTip);
         grid.AddChild(ctrlCard);
@@ -102,14 +119,17 @@ internal static class ShellRegionKpiCardsView
         ctrlCol.AddChild(flagsRow);
         if (owner is not null)
             flagsRow.AddChild(BuildMiniFlagFrame(ctx, owner.Tag, "shell.border", Loc.Format("shell.ws.reg.owner_tip_fmt", owner.DisplayName)));
+        var controllerFrameColor = arrangement is not null ? "shell.state.warning" : "shell.state.negative";
         if (controller is not null)
-            flagsRow.AddChild(BuildMiniFlagFrame(ctx, controller.Tag, "shell.state.negative", Loc.Format("shell.ws.reg.controller_tip_fmt", controller.DisplayName)));
+            flagsRow.AddChild(BuildMiniFlagFrame(ctx, controller.Tag, controllerFrameColor, Loc.Format("shell.ws.reg.controller_tip_fmt", controller.DisplayName)));
 
         var ctrlStatus = controller is not null
-            ? Loc.Format("shell.ws.reg.occupied_by_fmt", controller.DisplayName)
+            ? Loc.Format(leased ? "shell.ws.reg.leased_by_fmt" : "shell.ws.reg.occupied_by_fmt", controller.DisplayName)
             : Loc.Get("shell.ws.reg.full_control");
-        flagsRow.AddChild(ShellRegionVisualsView.MakeLabel(ctx, ctrlStatus, "shell.sans", 11,
-            controller is not null ? "shell.state.negative_text" : "shell.state.positive", clip: true, expand: true));
+        var ctrlTextColor = controller is not null
+            ? (arrangement is not null ? "shell.state.warning_text" : "shell.state.negative_text")
+            : "shell.state.positive";
+        flagsRow.AddChild(ShellRegionVisualsView.MakeLabel(ctx, ctrlStatus, "shell.sans", 11, ctrlTextColor, clip: true, expand: true));
 
         var garSub = Loc.Format("shell.ws.reg.garrison_divs_fmt", $"{visDivs:0.#}", provCount.ToString(CultureInfo.InvariantCulture));
         if (occupiedProvs > 0) garSub = $"{occupiedProvs}/{provCount} · {garSub}";

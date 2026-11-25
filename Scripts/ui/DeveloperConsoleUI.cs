@@ -1,3 +1,4 @@
+using System;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -10,8 +11,29 @@ public partial class DealOrForceGame
     private bool _observerMode;
     private bool _freeCameraMode;
 
-    private ConsoleContext CreateConsoleContext() => new()
+    private void RunConsoleWrite(Action<Campaign> action)
     {
+        if (_campaign is null || action is null) return;
+        if (_simRunner.IsActive && ReferenceEquals(_simRunner.Campaign, _campaign) && !_campaign.AccessGate.IsWriterHeldByCurrentThread)
+        {
+            _simRunner.RunWrite(action, refreshSnapshot: true);
+            return;
+        }
+        _campaign.AccessGate.EnterWrite();
+        try
+        {
+            _campaign.FinishStep();
+            action(_campaign);
+        }
+        finally { _campaign.AccessGate.ExitWrite(); }
+    }
+
+    private ConsoleContext CreateConsoleContext()
+    {
+        if (_campaign is not null)
+            ConsoleWorldCommands.BindWriteRunner(_campaign, RunConsoleWrite);
+        return new()
+        {
         GetCampaign = () => _campaign,
         GetGlobe = () => _globe,
         GetSelectedNation = () => _selectedNation,
@@ -57,7 +79,8 @@ public partial class DealOrForceGame
         CastSnowgrave = ConsoleSnowgrave,
         CastWeirdRoute = ConsoleWeirdRoute,
         TouchGrass = ConsoleTouchGrass
-    };
+        };
+    }
 
     private DeveloperConsole EnsureDeveloperConsole() =>
         _developerConsole ??= new DeveloperConsole(CreateConsoleContext());

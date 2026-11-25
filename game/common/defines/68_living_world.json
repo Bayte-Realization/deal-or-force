@@ -4,14 +4,14 @@
 // here is the compiled default.
 {
   // How fast an organisation's cohesion follows what its members are to one another, a week.
-  "OrganizationCohesionPull": 0.08,
+  "OrganizationCohesionPull": 0.11,
   // Below this sense of belonging a member thinks of leaving; the weekly chance it walks out when
   // it no longer belongs at all; and no departures in an organisation's first days.
-  "OrganizationDepartureBelonging": 0.30,
+  "OrganizationDepartureBelonging": 0.33,
   "OrganizationDepartureChance": 0.035,
   "OrganizationGraceDays": 540,
   // How fast the first day's standing stops protecting a membership, as a half-life in years.
-  "OrganizationBaselineHalfLifeYears": 10,
+  "OrganizationBaselineHalfLifeYears": 5,
   // Below this cohesion an organisation can be wound up, at this weekly chance.
   "OrganizationDissolveCohesion": 0.24,
   "OrganizationDissolveChance": 0.05,

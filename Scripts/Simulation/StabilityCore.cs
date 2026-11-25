@@ -174,19 +174,25 @@ public static class StabilityCore
     public static float RegionStability(Campaign campaign, Nation owner, ScenarioState state)
     {
         return RegionStability(owner, state,
-            ControlTally.World(campaign, owner?.MapIndex ?? 0, state?.MapIndex ?? 0), campaign?.Defines);
+            ControlTally.World(campaign, owner?.MapIndex ?? 0, state?.MapIndex ?? 0), campaign?.Defines,
+            campaign?.ElapsedDays ?? 0);
     }
 
     /// <summary>The same, against a tally already taken. Used inside the weekly pass.</summary>
     private static float RegionStability(Nation owner, ScenarioState state,
-        RegionControl control, Defines defines)
+        RegionControl control, Defines defines, int elapsedDays = 0)
     {
         if (state is null || owner is null) return Weights.Base;
         var weights = Weights;
+        // As societies urbanize and educate over decades, expectations rise with them so high-SoL states
+        // still feel recessions after Year 2 instead of sitting behind a permanent +0.22 buffer.
+        var ramp = M.Clamp01((elapsedDays - 365f) / 1095f);
+        var adaptiveExpectation = M.Clamp(0.45f + 0.16f * M.Clamp01(state.Literacy) + 0.10f * M.Clamp01(state.Urbanization), 0.45f, 0.68f);
+        var livingExpectation = M.Lerp(weights.LivingTolerance, adaptiveExpectation, ramp);
         // The minority's cost eases as the region comes to accept its holder (ConquestAcceptance),
         // by at most half; at no acceptance the factor is exactly one.
         var value = weights.Base
-                    + (state.StandardOfLiving - weights.LivingTolerance) * weights.Living
+                    + (state.StandardOfLiving - livingExpectation) * weights.Living
                     - state.Radicalism * weights.Radicalism
                     - EconomySystem.ForeignShare(state, owner.Tag) * weights.Minority * ConquestAcceptance.MinorityFactor(defines, state, owner)
                     + (state.Literacy + owner.LiteracyOffset - 0.5f) * weights.Literacy
@@ -231,7 +237,7 @@ public static class StabilityCore
         {
             // One walk of the map a day for the whole world, shared with everything that asks.
             var settled = RegionStability(nation, state,
-                ControlTally.World(campaign, nation.MapIndex, state.MapIndex), campaign.Defines);
+                ControlTally.World(campaign, nation.MapIndex, state.MapIndex), campaign.Defines, campaign.ElapsedDays);
             if (updateState) state.Stability = settled;
             if (state.MapIndex == nation.CapitalStateMapIndex) capitalStability = settled;
             if (state.Population <= 0) continue;

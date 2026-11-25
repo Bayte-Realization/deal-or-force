@@ -153,9 +153,10 @@ public static class EventCatalog
                 new CampaignEventOption
                 {
                     Title = "Launch a modernisation programme",
-                    Consequence = "Costs treasury; raises GDP, productivity and construction capacity.",
-                    Effect = ScriptedEffects.From(("gdp_share", -0.005f), ("gdp_percent", 0.0035f),
+                    Consequence = "Reduces incoming revenue during modernisation; raises GDP, productivity and construction capacity.",
+                    Effect = ScriptedEffects.From(("gdp_percent", 0.0035f),
                         ("productivity", 0.008f), ("construction_capacity", 0.18f))
+                        .WithIncomePenalty(0.08f, 330, "Event 'industrial_bottlenecks'")
                 },
                 new CampaignEventOption
                 {
@@ -175,9 +176,10 @@ public static class EventCatalog
                 new CampaignEventOption
                 {
                     Title = "Fund public housing",
-                    Consequence = "Costs treasury; improves living standards and reduces radicalism.",
-                    Effect = ScriptedEffects.From(("income_share", -0.045f), ("standard_of_living", 0.012f),
+                    Consequence = "Commits ongoing budget revenue to housing; improves living standards and reduces radicalism.",
+                    Effect = ScriptedEffects.From(("standard_of_living", 0.012f),
                         ("state.standard_of_living", 0.010f), ("state.radicalism", -0.018f))
+                        .WithIncomePenalty(0.06f, 270, "Event 'housing_pressure'")
                 },
                 new CampaignEventOption
                 {
@@ -197,9 +199,10 @@ public static class EventCatalog
                 new CampaignEventOption
                 {
                     Title = "Broker a national settlement",
-                    Consequence = "Costs treasury; restores stability and living standards.",
-                    Effect = ScriptedEffects.From(("income_share", -0.035f), ("stability", 0.018f),
+                    Consequence = "Commits ongoing budget revenue to wages; restores stability and living standards.",
+                    Effect = ScriptedEffects.From(("stability", 0.018f),
                         ("standard_of_living", 0.006f))
+                        .WithIncomePenalty(0.05f, 240, "Event 'labour_dispute'")
                 },
                 new CampaignEventOption
                 {
@@ -268,9 +271,10 @@ public static class EventCatalog
                 new CampaignEventOption
                 {
                     Title = "Back the industry that made it",
-                    Consequence = "Costs treasury; lasting productivity and prestige.",
-                    Effect = ScriptedEffects.From(("income_share", -0.02f), ("productivity", 0.004f),
+                    Consequence = "Funds cultural backing from ongoing revenue; lasting productivity and prestige.",
+                    Effect = ScriptedEffects.From(("productivity", 0.004f),
                         ("literacy", 0.002f), ("prestige", 8f))
+                        .WithIncomePenalty(0.04f, 180, "Event 'cultural_export'")
                 },
                 new CampaignEventOption
                 {
@@ -290,9 +294,10 @@ public static class EventCatalog
                 new CampaignEventOption
                 {
                     Title = "Fund the department properly at last",
-                    Consequence = "Costs treasury; literacy and productivity rise.",
-                    Effect = ScriptedEffects.From(("income_share", -0.025f), ("literacy", 0.004f),
+                    Consequence = "Dedicates ongoing revenue to university grants; literacy and productivity rise.",
+                    Effect = ScriptedEffects.From(("literacy", 0.004f),
                         ("productivity", 0.006f), ("prestige", 10f))
+                        .WithIncomePenalty(0.04f, 240, "Event 'scientific_prize'")
                 },
                 new CampaignEventOption
                 {
@@ -326,14 +331,17 @@ public static class EventCatalog
     /// </summary>
     private static ScriptedEffects.Effect LegacyPreset(string name) => name?.Trim().ToLowerInvariant() switch
     {
-        "investindustry" => ScriptedEffects.From(("gdp_share", -0.005f), ("gdp_percent", 0.0035f),
-            ("productivity", 0.008f), ("construction_capacity", 0.18f)),
+        "investindustry" => ScriptedEffects.From(("gdp_percent", 0.0035f),
+            ("productivity", 0.008f), ("construction_capacity", 0.18f))
+            .WithIncomePenalty(0.08f, 330, "Event 'industrial_bottlenecks'"),
         "preservetreasury" => ScriptedEffects.From(("stability", -0.012f)),
-        "fundhousing" => ScriptedEffects.From(("income_share", -0.045f), ("standard_of_living", 0.012f),
-            ("state.standard_of_living", 0.010f), ("state.radicalism", -0.018f)),
+        "fundhousing" => ScriptedEffects.From(("standard_of_living", 0.012f),
+            ("state.standard_of_living", 0.010f), ("state.radicalism", -0.018f))
+            .WithIncomePenalty(0.06f, 270, "Event 'housing_pressure'"),
         "markethousing" => ScriptedEffects.From(("gdp_percent", 0.0015f), ("construction_capacity", 0.08f)),
-        "negotiatelabour" => ScriptedEffects.From(("income_share", -0.035f), ("stability", 0.018f),
-            ("standard_of_living", 0.006f)),
+        "negotiatelabour" => ScriptedEffects.From(("stability", 0.018f),
+            ("standard_of_living", 0.006f))
+            .WithIncomePenalty(0.05f, 240, "Event 'labour_dispute'"),
         "breakstrike" => ScriptedEffects.From(("stability", -0.020f), ("state.radicalism", 0.025f)),
         _ => null
     };

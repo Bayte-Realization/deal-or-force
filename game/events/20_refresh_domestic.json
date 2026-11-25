@@ -15,7 +15,7 @@
         "modifiers": [ { "id": "infrastructure_drive", "days": 180 } ] },
       { "title": "Blame the operator and take it over",
         "consequence": "A scalp for the evening news; the grid is still old.",
-        "effects": { "stability": 0.008, "state.radicalism": 0.004, "treasury_percent": 0.006 } }
+        "effects": { "stability": 0.008, "state.radicalism": 0.004, "income_share": 0.01 } }
     ]
   },
   "general_writes_book": {
@@ -33,7 +33,7 @@
         "modifiers": [ { "id": "national_mourning", "days": 90 } ] },
       { "title": "Let foreign attaches buy it",
         "consequence": "The ministry's failures become a foreign currency earner.",
-        "effects": { "treasury_percent": 0.012, "war_support": -0.012, "state.radicalism": 0.004 } }
+        "effects": { "income_share": 0.015, "war_support": -0.012, "state.radicalism": 0.004 } }
     ]
   },
   "drought_grain_belt": {

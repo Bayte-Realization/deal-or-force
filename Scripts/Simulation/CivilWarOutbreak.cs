@@ -18,7 +18,7 @@ public sealed partial class Defines
     /// <summary>The most civil wars the whole world begins in a year. A century-old campaign
     /// whose stability has drifted down everywhere began thirteen in one year - Japan and
     /// Spain among them - without it.</summary>
-    public int CivilWarWorldPerYear { get; set; } = 5;
+    public int CivilWarWorldPerYear { get; set; } = 7;
     /// <summary>
     /// The chance a coup splits the army instead of taking it: the officers who would not go
     /// along hold part of the country, and it is a civil war from that day (Spain 1936, Sudan
@@ -200,8 +200,12 @@ public static class CivilWarOutbreak
         if (c.ElapsedDays >= 730)
         {
             var epochRamp = M.Clamp01((c.ElapsedDays - 730f) / 365f);
+            var wave = GeopoliticalCycle.MacroEconomicWave(c, nation);
+            var downturn = wave < -0.15f ? 1f + (-wave - 0.15f) * 0.65f : 1f;
+            var sclerosis = 1f + GeopoliticalCycle.InstitutionalSclerosis(c, nation) * 0.40f;
             var epochScale = GeopoliticalCycle.SystemicFragmentationPressure(c, nation) *
                              FlashpointIntensityMultiplier(c, nation) *
+                             downturn * sclerosis *
                              (1f + (AiTemperament.Of(c, nation).Volatility - 0.5f) * 0.25f);
             chance *= M.Lerp(1f, epochScale, epochRamp);
         }

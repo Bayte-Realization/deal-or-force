@@ -20,6 +20,9 @@ public sealed partial class GlobePresentation
     private Node3D _countryLabelRoot = null!;
     private Dictionary<int, TerritoryLabelAnchor> _lastLabelAnchors;
     private readonly Dictionary<int, string> _lastLabelNames = new();
+    private string _lastLabelLanguage = "";
+    private int _lastLabelLocRevision = -1;
+    private IReadOnlyDictionary<string, string> _lastLabelVariants;
 
     /// <summary>
     /// Who owned what when the names were last placed, and the campaign revision that scan
@@ -58,12 +61,33 @@ public sealed partial class GlobePresentation
     public void RefreshCountryNames()
     {
         if (_lastLabelAnchors is null) return;
+        var snap = _campaign?.RenderSnapshot;
+        if (snap is { Version: > 0 } && snap.Nations.Length > 0 &&
+            _lastLabelLocRevision == Simulation.Loc.Revision &&
+            string.Equals(_lastLabelLanguage, Simulation.Loc.Language, StringComparison.Ordinal) &&
+            ReferenceEquals(_lastLabelVariants, Simulation.CountryNames.Variants))
+        {
+            var changed = false;
+            for (var i = 0; i < snap.Nations.Length; i++)
+            {
+                var n = snap.Nations[i];
+                if (_lastLabelNames.TryGetValue(n.MapIndex, out var oldName) && n.MapName != oldName)
+                {
+                    changed = true;
+                    break;
+                }
+            }
+            if (!changed) return;
+        }
         if (_campaign is not null && !TryBeginActionRead(out var campaign, 0)) return;
         try
         {
             foreach (var (id, name) in _lastLabelNames)
                 if (_nationByMapIndex.TryGetValue(id, out var nation) && nation.MapName != name)
                 { BuildCountryLabels(_lastLabelAnchors); return; }
+            _lastLabelLanguage = Simulation.Loc.Language;
+            _lastLabelLocRevision = Simulation.Loc.Revision;
+            _lastLabelVariants = Simulation.CountryNames.Variants;
         }
         finally { _campaign?.ExitRead(); }
     }
@@ -200,6 +224,15 @@ public sealed partial class GlobePresentation
         {
             _labelNationSnapshot.Clear();
             foreach (var entry in nations) _labelNationSnapshot[entry.MapIndex] = entry;
+            _lastLabelLanguage = "";
+            _lastLabelLocRevision = -1;
+            _lastLabelVariants = null;
+        }
+        else
+        {
+            _lastLabelLanguage = Simulation.Loc.Language;
+            _lastLabelLocRevision = Simulation.Loc.Revision;
+            _lastLabelVariants = Simulation.CountryNames.Variants;
         }
 
         var countryFont = PresentationFonts.For("map.countries");

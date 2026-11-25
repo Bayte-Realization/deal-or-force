@@ -32,6 +32,7 @@ public static partial class CampaignIntel
 {
     private sealed class Cache
     {
+        public readonly object SyncGate = new();
         public int Epoch;
         public int ManualEpoch;
         public readonly Dictionary<int, ProvinceVision> Viewers = new();
@@ -70,75 +71,78 @@ public static partial class CampaignIntel
     internal static ReadOnlySpan<int> ProvincesHeldBy(Campaign c, ushort[] controllers, int mapIndex)
     {
         var cache = Caches.GetOrCreateValue(c);
-        // Only check controller bytes when MapRevision changed, controllers reference changed,
-        // or a caller explicitly invoked CampaignIntel.Invalidate(c). Hourly actor-position
-        // refreshes (InvalidateActors) skip the 70 KB SequenceEqual completely.
-        if (cache.HeldManualEpoch != cache.ManualEpoch || cache.HeldRevision != c.MapRevision || !ReferenceEquals(cache.HeldSource, controllers))
+        lock (cache.SyncGate)
         {
-            if (controllers.AsSpan().SequenceEqual(cache.HeldCopy))
+            // Only check controller bytes when MapRevision changed, controllers reference changed,
+            // or a caller explicitly invoked CampaignIntel.Invalidate(c). Hourly actor-position
+            // refreshes (InvalidateActors) skip the 70 KB SequenceEqual completely.
+            if (cache.HeldManualEpoch != cache.ManualEpoch || cache.HeldRevision != c.MapRevision || !ReferenceEquals(cache.HeldSource, controllers))
             {
-                cache.HeldSource = controllers;
-                cache.HeldRevision = c.MapRevision;
-                cache.HeldManualEpoch = cache.ManualEpoch;
-            }
-            else
-            {
-                // Rebuilt every time a province changes hands, which in a world at war is hourly:
-                // the arrays are kept and refilled rather than allocated again.
-                var top = 0;
-                var prevCopy = cache.HeldCopy;
-                var sameLength = prevCopy.Length == controllers.Length;
-                for (var p = 1; p < controllers.Length; p++)
+                if (controllers.AsSpan().SequenceEqual(cache.HeldCopy))
                 {
-                    var cur = controllers[p];
-                    if (cur > top) top = cur;
-                    if (sameLength)
-                    {
-                        var old = prevCopy[p];
-                        if (old > top) top = old;
-                    }
-                }
-                if (cache.HeldStart.Length < top + 2) { cache.HeldStart = new int[top + 2]; cache.HeldNext = new int[top + 2]; }
-                if (cache.HeldProvinces.Length < controllers.Length) cache.HeldProvinces = new int[controllers.Length];
-                if (cache.ControllerVersion.Length < top + 2) Array.Resize(ref cache.ControllerVersion, top + 2);
-
-                if (!sameLength)
-                {
-                    cache.ControllerGeneration++;
+                    cache.HeldSource = controllers;
+                    cache.HeldRevision = c.MapRevision;
+                    cache.HeldManualEpoch = cache.ManualEpoch;
                 }
                 else
                 {
-                    var versions = cache.ControllerVersion;
+                    // Rebuilt every time a province changes hands, which in a world at war is hourly:
+                    // the arrays are kept and refilled rather than allocated again.
+                    var top = 0;
+                    var prevCopy = cache.HeldCopy;
+                    var sameLength = prevCopy.Length == controllers.Length;
                     for (var p = 1; p < controllers.Length; p++)
                     {
                         var cur = controllers[p];
-                        var old = prevCopy[p];
-                        if (cur != old)
+                        if (cur > top) top = cur;
+                        if (sameLength)
                         {
-                            versions[cur]++;
-                            versions[old]++;
+                            var old = prevCopy[p];
+                            if (old > top) top = old;
                         }
                     }
-                }
+                    if (cache.HeldStart.Length < top + 2) { cache.HeldStart = new int[top + 2]; cache.HeldNext = new int[top + 2]; }
+                    if (cache.HeldProvinces.Length < controllers.Length) cache.HeldProvinces = new int[controllers.Length];
+                    if (cache.ControllerVersion.Length < top + 2) Array.Resize(ref cache.ControllerVersion, top + 2);
 
-                var start = cache.HeldStart;
-                Array.Clear(start);
-                for (var p = 1; p < controllers.Length; p++) start[controllers[p] + 1]++;
-                for (var i = 1; i < start.Length; i++) start[i] += start[i - 1];
-                var next = cache.HeldNext;
-                Array.Copy(start, next, start.Length);
-                var provinces = cache.HeldProvinces;
-                for (var p = 1; p < controllers.Length; p++) provinces[next[controllers[p]]++] = p;
-                cache.HeldSource = controllers;
-                if (!sameLength) cache.HeldCopy = new ushort[controllers.Length];
-                Array.Copy(controllers, cache.HeldCopy, controllers.Length);
-                cache.HeldRevision = c.MapRevision;
-                cache.HeldManualEpoch = cache.ManualEpoch;
+                    if (!sameLength)
+                    {
+                        cache.ControllerGeneration++;
+                    }
+                    else
+                    {
+                        var versions = cache.ControllerVersion;
+                        for (var p = 1; p < controllers.Length; p++)
+                        {
+                            var cur = controllers[p];
+                            var old = prevCopy[p];
+                            if (cur != old)
+                            {
+                                versions[cur]++;
+                                versions[old]++;
+                            }
+                        }
+                    }
+
+                    var start = cache.HeldStart;
+                    Array.Clear(start);
+                    for (var p = 1; p < controllers.Length; p++) start[controllers[p] + 1]++;
+                    for (var i = 1; i < start.Length; i++) start[i] += start[i - 1];
+                    var next = cache.HeldNext;
+                    Array.Copy(start, next, start.Length);
+                    var provinces = cache.HeldProvinces;
+                    for (var p = 1; p < controllers.Length; p++) provinces[next[controllers[p]]++] = p;
+                    cache.HeldSource = controllers;
+                    if (!sameLength) cache.HeldCopy = new ushort[controllers.Length];
+                    Array.Copy(controllers, cache.HeldCopy, controllers.Length);
+                    cache.HeldRevision = c.MapRevision;
+                    cache.HeldManualEpoch = cache.ManualEpoch;
+                }
             }
+            if (mapIndex < 0 || mapIndex + 1 >= cache.HeldStart.Length) return ReadOnlySpan<int>.Empty;
+            var from = cache.HeldStart[mapIndex];
+            return cache.HeldProvinces.AsSpan(from, cache.HeldStart[mapIndex + 1] - from);
         }
-        if (mapIndex < 0 || mapIndex + 1 >= cache.HeldStart.Length) return ReadOnlySpan<int>.Empty;
-        var from = cache.HeldStart[mapIndex];
-        return cache.HeldProvinces.AsSpan(from, cache.HeldStart[mapIndex + 1] - from);
     }
     private static readonly ConditionalWeakTable<Campaign, Cache> Caches = new();
 
@@ -146,136 +150,149 @@ public static partial class CampaignIntel
     {
         if (c is not null && Caches.TryGetValue(c, out var cache))
         {
-            cache.Epoch++;
-            cache.ManualEpoch++;
+            lock (cache.SyncGate)
+            {
+                cache.Epoch++;
+                cache.ManualEpoch++;
+            }
         }
     }
 
     internal static void InvalidateActors(Campaign c)
     {
         if (c is not null && Caches.TryGetValue(c, out var cache))
-            cache.Epoch++;
+        {
+            lock (cache.SyncGate)
+            {
+                cache.Epoch++;
+            }
+        }
     }
 
     public static ProvinceVision Vision(Campaign c, int viewerId)
     {
         if (c is null) return null;
         var cache = Caches.GetOrCreateValue(c);
-        if (!cache.Viewers.TryGetValue(viewerId, out var view))
-            cache.Viewers[viewerId] = view = new ProvinceVision();
-        var map = c.ProvinceMap;
-        var stamp = HashCode.Combine(c.ElapsedDays, c.MapRevision, cache.Epoch, c.Armies.Count,
-            c.Battles.Count, c.Fleets.Count, map?.ProvinceCount ?? 0);
-        if (view.Revision > 0 && view.Stamp == stamp && ReferenceEquals(view.StampMap, map)) return view;
-        view.Stamp = stamp;
-        view.StampMap = map;
-        view.Revision++;
-        using var timer = SimProfiler.Measure("intel.visibility");
-        var nation = c.NationById(viewerId);
-        if (map is null || nation is null) { view.Reach = Array.Empty<byte>(); return view; }
-        if (view.Reach.Length != map.ProvinceCount + 1) view.Reach = new byte[map.ProvinceCount + 1];
-        view.Frontier.Clear();
-        view.CombatContacts.Clear();
-        var borderDepth = Math.Clamp(c.Defines.BorderVisionDepth, 0, 6);
-        var armyDepth = Math.Clamp(c.Defines.ArmyVisionDepth, 0, 6);
-        var controllers = c.ProvinceController ?? map.ProvinceToNation;
-
-        // Refresh the per-controller index once; nations whose own controlled provinces did not
-        // change reuse their cached TerritoryReach directly instead of re-flooding 35k provinces.
-        var owned = ProvincesHeldBy(c, controllers, nation.MapIndex);
-        var controllerVersion = (uint)nation.MapIndex < (uint)cache.ControllerVersion.Length
-            ? cache.ControllerVersion[nation.MapIndex] : 0;
-
-        if (view.TerritoryMapIndex == nation.MapIndex &&
-            view.TerritoryDepth == borderDepth &&
-            view.TerritoryGeneration == cache.ControllerGeneration &&
-            view.TerritoryControllerVersion == controllerVersion &&
-            ReferenceEquals(view.TerritoryMap, map) &&
-            view.TerritoryReach.Length == view.Reach.Length)
+        lock (cache.SyncGate)
         {
-            Array.Copy(view.TerritoryReach, view.Reach, view.Reach.Length);
-        }
-        else
-        {
-            var reach = view.Reach;
-            Array.Clear(reach);
-            var ownLevel = (byte)(borderDepth + 1);
-            var reachLen = reach.Length;
-            for (var i = 0; i < owned.Length; i++)
+            if (!cache.Viewers.TryGetValue(viewerId, out var view))
+                cache.Viewers[viewerId] = view = new ProvinceVision();
+            var map = c.ProvinceMap;
+            var stamp = HashCode.Combine(c.ElapsedDays, c.MapRevision, cache.Epoch, c.Armies.Count,
+                c.Battles.Count, c.Fleets.Count, map?.ProvinceCount ?? 0);
+            if (view.Revision > 0 && view.Stamp == stamp && ReferenceEquals(view.StampMap, map)) return view;
+            view.Stamp = stamp;
+            view.StampMap = map;
+            view.Revision++;
+            using var timer = SimProfiler.Measure("intel.visibility");
+            var nation = c.NationById(viewerId);
+            if (map is null || nation is null) { view.Reach = Array.Empty<byte>(); return view; }
+            if (view.Reach.Length != map.ProvinceCount + 1) view.Reach = new byte[map.ProvinceCount + 1];
+            view.Frontier.Clear();
+            view.CombatContacts.Clear();
+            var borderDepth = Math.Clamp(c.Defines.BorderVisionDepth, 0, 6);
+            var armyDepth = Math.Clamp(c.Defines.ArmyVisionDepth, 0, 6);
+            var controllers = c.ProvinceController ?? map.ProvinceToNation;
+
+            // Refresh the per-controller index once; nations whose own controlled provinces did not
+            // change reuse their cached TerritoryReach directly instead of re-flooding 35k provinces.
+            var owned = ProvincesHeldBy(c, controllers, nation.MapIndex);
+            var controllerVersion = (uint)nation.MapIndex < (uint)cache.ControllerVersion.Length
+                ? cache.ControllerVersion[nation.MapIndex] : 0;
+
+            if (view.TerritoryMapIndex == nation.MapIndex &&
+                view.TerritoryDepth == borderDepth &&
+                view.TerritoryGeneration == cache.ControllerGeneration &&
+                view.TerritoryControllerVersion == controllerVersion &&
+                ReferenceEquals(view.TerritoryMap, map) &&
+                view.TerritoryReach.Length == view.Reach.Length)
             {
-                var p = owned[i];
-                if (p > 0 && p < reachLen) reach[p] = ownLevel;
+                Array.Copy(view.TerritoryReach, view.Reach, view.Reach.Length);
             }
-            if (borderDepth > 0)
+            else
             {
-                // Only enqueue border provinces (those adjacent to at least one non-owned tile);
-                // interior tiles have all neighbors at ownLevel and would pop as no-ops in FloodVision.
-                var neighbors = map.Neighbors;
-                var frontier = view.Frontier;
+                var reach = view.Reach;
+                Array.Clear(reach);
+                var ownLevel = (byte)(borderDepth + 1);
+                var reachLen = reach.Length;
                 for (var i = 0; i < owned.Length; i++)
                 {
                     var p = owned[i];
-                    if (p <= 0 || p >= neighbors.Length) continue;
-                    var adj = neighbors[p];
-                    if (adj is null) continue;
-                    for (var j = 0; j < adj.Length; j++)
+                    if (p > 0 && p < reachLen) reach[p] = ownLevel;
+                }
+                if (borderDepth > 0)
+                {
+                    // Only enqueue border provinces (those adjacent to at least one non-owned tile);
+                    // interior tiles have all neighbors at ownLevel and would pop as no-ops in FloodVision.
+                    var neighbors = map.Neighbors;
+                    var frontier = view.Frontier;
+                    for (var i = 0; i < owned.Length; i++)
                     {
-                        var n = adj[j];
-                        if (n > 0 && n < reachLen && reach[n] < ownLevel)
+                        var p = owned[i];
+                        if (p <= 0 || p >= neighbors.Length) continue;
+                        var adj = neighbors[p];
+                        if (adj is null) continue;
+                        for (var j = 0; j < adj.Length; j++)
                         {
-                            frontier.Enqueue(p);
-                            break;
+                            var n = adj[j];
+                            if (n > 0 && n < reachLen && reach[n] < ownLevel)
+                            {
+                                frontier.Enqueue(p);
+                                break;
+                            }
                         }
                     }
+                    FloodVision(reach, frontier, map);
                 }
-                FloodVision(reach, frontier, map);
+                if (view.TerritoryReach.Length != reach.Length) view.TerritoryReach = new byte[reach.Length];
+                Array.Copy(reach, view.TerritoryReach, reach.Length);
+                view.TerritoryMapRevision = c.MapRevision;
+                view.TerritoryMapIndex = nation.MapIndex;
+                view.TerritoryDepth = borderDepth;
+                view.TerritoryGeneration = cache.ControllerGeneration;
+                view.TerritoryControllerVersion = controllerVersion;
+                view.TerritoryMap = map;
             }
-            if (view.TerritoryReach.Length != reach.Length) view.TerritoryReach = new byte[reach.Length];
-            Array.Copy(reach, view.TerritoryReach, reach.Length);
-            view.TerritoryMapRevision = c.MapRevision;
-            view.TerritoryMapIndex = nation.MapIndex;
-            view.TerritoryDepth = borderDepth;
-            view.TerritoryGeneration = cache.ControllerGeneration;
-            view.TerritoryControllerVersion = controllerVersion;
-            view.TerritoryMap = map;
-        }
-        var hasBattles = EnsureActorIndex(c, cache, stamp, map, Math.Clamp(c.Defines.LandingVisionRangeDegrees, .1f, 3f));
-        if ((uint)viewerId < (uint)cache.ArmiesByNationDense.Length && cache.ArmiesByNationDense[viewerId] is { Count: > 0 } myArmies)
-            for (var i = 0; i < myArmies.Count; i++) RevealProvince(view.Reach, view.Frontier, myArmies[i], armyDepth);
-        if (hasBattles && (uint)viewerId < (uint)cache.BattlesByNationDense.Length && cache.BattlesByNationDense[viewerId] is { Count: > 0 } myBattles)
-        {
-            for (var i = 0; i < myBattles.Count; i++)
+            var hasBattles = EnsureActorIndex(c, cache, stamp, map, Math.Clamp(c.Defines.LandingVisionRangeDegrees, .1f, 3f));
+            if ((uint)viewerId < (uint)cache.ArmiesByNationDense.Length && cache.ArmiesByNationDense[viewerId] is { Count: > 0 } myArmies)
+                for (var i = 0; i < myArmies.Count; i++) RevealProvince(view.Reach, view.Frontier, myArmies[i], armyDepth);
+            if (hasBattles && (uint)viewerId < (uint)cache.BattlesByNationDense.Length && cache.BattlesByNationDense[viewerId] is { Count: > 0 } myBattles)
             {
-                var battle = c.Battles[myBattles[i]];
-                RevealProvince(view.Reach, view.Frontier, battle.ProvinceId, armyDepth);
-                view.CombatContacts.UnionWith(battle.Attackers);
-                view.CombatContacts.UnionWith(battle.Defenders);
-            }
-        }
-        if (view.CombatContacts.Count > 0)
-        {
-            var denseProv = cache.ArmyProvinceByIdDense;
-            var denseStamp = cache.ArmyProvinceStampDense;
-            var curStamp = cache.ArmyProvinceStamp;
-            foreach (var contactId in view.CombatContacts)
-            {
-                if ((uint)contactId < (uint)denseProv.Length)
+                for (var i = 0; i < myBattles.Count; i++)
                 {
-                    if (denseStamp[contactId] == curStamp) RevealProvince(view.Reach, view.Frontier, denseProv[contactId], 0);
+                    var bi = myBattles[i];
+                    if ((uint)bi >= (uint)c.Battles.Count) continue;
+                    var battle = c.Battles[bi];
+                    RevealProvince(view.Reach, view.Frontier, battle.ProvinceId, armyDepth);
+                    view.CombatContacts.UnionWith(battle.Attackers);
+                    view.CombatContacts.UnionWith(battle.Defenders);
                 }
-                else if (cache.ArmyProvinceOverflow.TryGetValue(contactId, out var prov))
-                    RevealProvince(view.Reach, view.Frontier, prov, 0);
             }
+            if (view.CombatContacts.Count > 0)
+            {
+                var denseProv = cache.ArmyProvinceByIdDense;
+                var denseStamp = cache.ArmyProvinceStampDense;
+                var curStamp = cache.ArmyProvinceStamp;
+                foreach (var contactId in view.CombatContacts)
+                {
+                    if ((uint)contactId < (uint)denseProv.Length)
+                    {
+                        if (denseStamp[contactId] == curStamp) RevealProvince(view.Reach, view.Frontier, denseProv[contactId], 0);
+                    }
+                    else if (cache.ArmyProvinceOverflow.TryGetValue(contactId, out var prov))
+                        RevealProvince(view.Reach, view.Frontier, prov, 0);
+                }
+            }
+            // An invasion order alone is NOT reconnaissance across the world. The fleet
+            // must actually have approached its beach, or combat must already have begun.
+            if (cache.InvasionBeachesByNation.TryGetValue(viewerId, out var beaches))
+                for (var i = 0; i < beaches.Count; i++) RevealProvince(view.Reach, view.Frontier, beaches[i], armyDepth);
+            FloodVision(view.Reach, view.Frontier, map);
+            // What agents report and what reconnaissance flights photograph: seen, not seen past.
+            IntelNetworks.RevealInto(c, viewerId, view.Reach);
+            AirReconnaissance.RevealInto(c, viewerId, view.Reach);
+            return view;
         }
-        // An invasion order alone is NOT reconnaissance across the world. The fleet
-        // must actually have approached its beach, or combat must already have begun.
-        if (cache.InvasionBeachesByNation.TryGetValue(viewerId, out var beaches))
-            for (var i = 0; i < beaches.Count; i++) RevealProvince(view.Reach, view.Frontier, beaches[i], armyDepth);
-        FloodVision(view.Reach, view.Frontier, map);
-        // What agents report and what reconnaissance flights photograph: seen, not seen past.
-        IntelNetworks.RevealInto(c, viewerId, view.Reach);
-        AirReconnaissance.RevealInto(c, viewerId, view.Reach);
-        return view;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -307,10 +324,18 @@ public static partial class CampaignIntel
             return cache.HasActiveBattles;
 
         for (var i = 0; i < cache.ActiveArmyNations.Count; i++)
-            cache.ArmiesByNationDense[cache.ActiveArmyNations[i]].Clear();
+        {
+            var nid = cache.ActiveArmyNations[i];
+            if ((uint)nid < (uint)cache.ArmiesByNationDense.Length)
+                cache.ArmiesByNationDense[nid]?.Clear();
+        }
         cache.ActiveArmyNations.Clear();
         for (var i = 0; i < cache.ActiveBattleNations.Count; i++)
-            cache.BattlesByNationDense[cache.ActiveBattleNations[i]].Clear();
+        {
+            var nid = cache.ActiveBattleNations[i];
+            if ((uint)nid < (uint)cache.BattlesByNationDense.Length)
+                cache.BattlesByNationDense[nid]?.Clear();
+        }
         cache.ActiveBattleNations.Clear();
         cache.ArmyProvinceOverflow.Clear();
         foreach (var list in cache.InvasionBeachesByNation.Values) list.Clear();
