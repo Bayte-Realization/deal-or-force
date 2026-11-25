@@ -40,6 +40,30 @@ from Git does not change the licences of locally installed plugins. Godot is MIT
 The optional native Luau adapter has its own notices in `game/extensions/luau/LICENSE.txt`;
 release builds omit the experimental native adapter unless explicitly requested.
 
+### Shipped runtime libraries
+
+All managed .NET packages below are referenced by `Scripts/Simulation/StructuredData.Dependencies.props`
+and redistributed with the game (`DealOrForce.csproj`) on Windows and Android under permissive
+MIT and Apache-2.0 licences with zero GPL/LGPL transitive dependencies.
+
+| Package | Version | Licence | Copyright | Source | Where it is used |
+| --- | --- | --- | --- | --- | --- |
+| `YamlDotNet` | 18.1.0 | MIT | © Antoine Aubry and contributors | [nuget.org](https://www.nuget.org/packages/YamlDotNet/18.1.0), [GitHub](https://github.com/aaubry/YamlDotNet) | YAML mod overlay loading (`Scripts/Simulation/StructuredData.cs`) |
+| `CommunityToolkit.HighPerformance` | 8.4.2 | MIT | © .NET Foundation and Contributors | [nuget.org](https://www.nuget.org/packages/CommunityToolkit.HighPerformance/8.4.2), [GitHub](https://github.com/CommunityToolkit/dotnet) | `ArrayPoolBufferWriter<byte>`, `ReadOnlySpan2D<T>`, `StringPool` across `MapBootCache`, `SaveSystem`, `WorldMapSource` |
+| `System.Numerics.Tensors` | 11.0.0 | MIT | © .NET Foundation and Contributors | [nuget.org](https://www.nuget.org/packages/System.Numerics.Tensors/11.0.0), [GitHub](https://github.com/dotnet/runtime) | SIMD `TensorPrimitives` sums and array reductions (`Scripts/Simulation/EconomyCore.cs`) |
+| `K4os.Compression.LZ4` | 1.3.8 | MIT | © 2017 Milosz Krajewski | [nuget.org](https://www.nuget.org/packages/K4os.Compression.LZ4/1.3.8), [GitHub](https://github.com/MiloszKrajewski/K4os.Compression.LZ4) | Fast LZ4 block pickling in `MapBootCache` and `LakeRegions` |
+| `K4os.Compression.LZ4.Streams` | 1.3.8 | MIT | © 2017 Milosz Krajewski | [nuget.org](https://www.nuget.org/packages/K4os.Compression.LZ4.Streams/1.3.8), [GitHub](https://github.com/MiloszKrajewski/K4os.Compression.LZ4) | Framed LZ4 streams (`Scripts/Simulation/StructuredData.Dependencies.props`) |
+| `ZLinq` | 1.6.1 | MIT | © Cysharp, Inc. | [nuget.org](https://www.nuget.org/packages/ZLinq/1.6.1), [GitHub](https://github.com/Cysharp/ZLinq) | Zero-allocation struct `AsValueEnumerable()` LINQ queries (`SaveSystem`, `SupportReport`) |
+| `System.IO.Hashing` | 11.0.0 | MIT | © .NET Foundation and Contributors | [nuget.org](https://www.nuget.org/packages/System.IO.Hashing/11.0.0), [GitHub](https://github.com/dotnet/runtime) | Hardware-SIMD `XxHash3` hashing in `RecyclableStreams` and `MapBootCache` |
+| `BitFaster.Caching` | 2.6.1 | MIT | © 2020 Alex Peck | [nuget.org](https://www.nuget.org/packages/BitFaster.Caching/2.6.1), [GitHub](https://github.com/bitfaster/BitFaster.Caching) | Bounded lock-free/striped `ConcurrentLru` file hash memoization (`MapBootCache`) |
+| `Microsoft.IO.RecyclableMemoryStream` | 4.0.1 | MIT | © Microsoft Corporation | [nuget.org](https://www.nuget.org/packages/Microsoft.IO.RecyclableMemoryStream/4.0.1), [GitHub](https://github.com/microsoft/Microsoft.IO.RecyclableMemoryStream) | Pooled LOH-free memory streams (`RecyclableStreams`, `SaveSystem`, `SaveContainer`, `SupportReport`, `MapBootCache`) |
+| `RBush` | 4.0.0 | MIT | © 2017-2024 Turning Code, LLC (and others) | [nuget.org](https://www.nuget.org/packages/RBush/4.0.0), [GitHub](https://github.com/viceroypenguin/RBush) | Bulk-loaded R-tree spatial index for map presentation & simulation queries |
+| `ZeroAlloc.Collections` | 2.0.1 | MIT | © Marcel Roozekrans | [nuget.org](https://www.nuget.org/packages/ZeroAlloc.Collections/2.0.1), [GitHub](https://github.com/ZeroAlloc-Net/ZeroAlloc.Collections) | Zero-allocation pooled/span collections (`Scripts/Simulation/`, `Scripts/ui/`) |
+| `DotNext` | 6.13.0 | MIT | © .NET Foundation and Contributors | [nuget.org](https://www.nuget.org/packages/DotNext/6.13.0), [GitHub](https://github.com/dotnet/dotNext) | Pooled buffers and low-overhead concurrency/value helpers (`Scripts/Simulation/`, `Scripts/ui/`) |
+| `SimdLinq` | 1.3.2 | MIT | © Cysharp, Inc. | [nuget.org](https://www.nuget.org/packages/SimdLinq/1.3.2), [GitHub](https://github.com/Cysharp/SimdLinq) | SIMD-accelerated reductions (`Sum`, `Min`, `Max`, `Average`) across simulation hot loops |
+| `Equativ.RoaringBitmaps` | 0.1.6 | Apache-2.0 | © Equativ.RoaringBitmaps Contributors | [nuget.org](https://www.nuget.org/packages/Equativ.RoaringBitmaps/0.1.6), [GitHub](https://github.com/equativ/Equativ.RoaringBitmaps) | Compressed bitset indices (`RoaringBitmap`) for fast set operations |
+| `Ben.Demystifier` | 0.4.1 | Apache-2.0 | © Ben Adams | [nuget.org](https://www.nuget.org/packages/Ben.Demystifier/0.4.1), [GitHub](https://github.com/benaadams/Ben.Demystifier) | Demystified diagnostic exception stack traces (`SupportReport`, `GameDiagnosticLogger`) |
+
 ## Profiling tools (development builds only)
 
 None of these are in a release build. The Tracy binding is compiled in only when a build is

@@ -91,12 +91,11 @@ public partial class ExportVerification
                     game.Call("OpenScreen", "Nation"); await Wait(.1);
                 }
             }
+            // "Music" is built lazily inside the pause menu, so open the menu before locating it.
+            game.Call("ShowPauseMenu"); await Wait(.1);
             var musicButton = game.FindChild("OpenMediaLibrary", true, false) as Button;
             Check(musicButton?.TooltipText == Ui.Tip(Loc.Get("Soundtrack player: choose a recording, pause or skip. Music continues when this window closes.")) &&
                 musicButton.AccessibilityName == Loc.Get("Soundtrack player"), "music shortcut tooltip and accessibility follow live language switch");
-            // "Music" is in the pause menu since step 3 of the interface plan: open the menu first,
-            // as a player does, so the clicks below land on a button on screen.
-            game.Call("ShowPauseMenu"); await Wait(.1);
             var music = MusicDirector.Ensure(game);
             // Establish a user-owned recording/pause, rather than racing the first
             // menu-to-campaign automatic crossfade after BeginSession above.
@@ -108,12 +107,14 @@ public partial class ExportVerification
             ClickPausedDoctrine(musicButton, "open music from focused shortcut"); await Wait(.2);
             Check(game.FindChild("MediaLibrary", true, false) is Control { Visible: true }, "music shortcut opens the player");
             ClickPausedDoctrine(game.FindChild("CloseMediaLibrary", true, false) as Button, "close music player"); await Wait(.2);
-            Check(musicButton is not null && !musicButton.HasFocus() && !musicButton.ButtonPressed &&
+            Check(musicButton is not null && musicButton.HasFocus() &&
+                musicButton.GetThemeStylebox("focus") is StyleBoxEmpty && !musicButton.ButtonPressed &&
                 game.FindChild("MediaLibrary", true, false) is Control { Visible: false },
                 "closing music releases shortcut highlight: " + language + " " + size.X);
             musicButton?.GrabFocus(); ClickPausedDoctrine(musicButton, "reopen music for Escape"); await Wait(.2);
             game.VerificationMusicEscape(); await Wait(.2);
-            Check(musicButton is not null && !musicButton.HasFocus() && !musicButton.ButtonPressed &&
+            Check(musicButton is not null && musicButton.HasFocus() &&
+                musicButton.GetThemeStylebox("focus") is StyleBoxEmpty && !musicButton.ButtonPressed &&
                 game.FindChild("MediaLibrary", true, false) is Control { Visible: false },
                 "Escape releases music shortcut highlight");
             Check(music.CurrentTrackId == musicTrack && music.Paused == musicPaused && music.Manual,
@@ -306,6 +307,7 @@ public sealed partial class GlobePresentation
         _armyStacks.Add(key, marker);
         try
         {
+            _motionScanCount = -1;
             UpdateArmyMarkerMotion(1f / 60f);
             return MathF.Abs(marker.DisplayPosition.X - target.X) < .041f &&
                 node.Position == marker.DisplayPosition && army.Route.Count == 1;

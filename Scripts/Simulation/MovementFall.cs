@@ -268,10 +268,16 @@ public static class MovementFall
     /// <summary>Every country found with no ground this week has its fall decided, once.</summary>
     internal static void Decide(Campaign campaign)
     {
-        // Nothing in this walk founds or removes a nation, so a pinned-count index walk is
-        // the list walk without the copy of it.
+        foreach (var _ in DecideStages(campaign)) { }
+    }
+
+    internal static IEnumerable<int> DecideStages(Campaign campaign)
+    {
+        // Nothing in this walk founds or removes a nation. Each fall is settled before
+        // looking at the next country, including any new exile the next country may find.
         for (var id = 0; id < campaign.Nations.Count; id++)
         {
+            if (id > 0 && Campaign.StageOverdue()) yield return 0;
             var nation = campaign.Nations[id];
             if (nation.Movement is not null || campaign.Fallen.Contains(nation.Id)) continue;
             // A real country (people, a tag, a founding) holding no ground at the weekly
@@ -332,14 +338,26 @@ public static class MovementFall
     /// </summary>
     internal static Nation ExileOfTheSameState(Campaign campaign, Nation nation, bool governmentsOnly = false)
     {
-        var mine = new MovementState();
-        if (campaign.Homelands.TryGetValue(nation.Id, out var held))
-            foreach (var index in held)
-                if (campaign.StateByMapIndex(index) is { } region && !mine.Homeland.Contains(region.Id)) mine.Homeland.Add(region.Id);
+        HashSet<string> homeland = null;
         foreach (var other in campaign.Nations)
-            if (other.Id != nation.Id && other.Movement is { Exile: true, Landless: true, Dissolved: false } theirs &&
-                (!governmentsOnly || GovernmentInExile(theirs)) && SameState(nation, mine, other, theirs))
-                return other;
+        {
+            if (other.Id == nation.Id || other.Movement is not { Exile: true, Landless: true, Dissolved: false } theirs ||
+                (governmentsOnly && !GovernmentInExile(theirs))) continue;
+            if (SharesStateName(nation, other)) return other;
+            if (theirs.Homeland.Count == 0) continue;
+            if (homeland is null)
+            {
+                homeland = new HashSet<string>(StringComparer.Ordinal);
+                if (campaign.Homelands.TryGetValue(nation.Id, out var held))
+                    foreach (var index in held)
+                        if (campaign.StateByMapIndex(index) is { } region) homeland.Add(region.Id);
+            }
+            var needed = Math.Max(homeland.Count, theirs.Homeland.Count) / 2 + 1;
+            if (Math.Min(homeland.Count, theirs.Homeland.Count) < needed) continue;
+            var shared = 0;
+            foreach (var region in homeland)
+                if (theirs.Homeland.Contains(region) && ++shared >= needed) return other;
+        }
         return null;
     }
 
@@ -378,13 +396,20 @@ public static class MovementFall
     /// </summary>
     public static void EndLostWars(Campaign campaign)
     {
+        foreach (var _ in EndLostWarsStages(campaign, sliced: false)) { }
+    }
+
+    internal static IEnumerable<int> EndLostWarsStages(Campaign campaign, bool sliced = true)
+    {
         var openWars = Warfare.OpenWars(campaign);
         for (var index = 0; index < openWars.Count; index++)
         {
+            if (sliced && index > 0 && Campaign.StageOverdue()) yield return 0;
             var war = openWars[index];
             if (war.Ended) continue;
-            foreach (var attackers in new[] { true, false })
+            for (var side = 0; side < 2; side++)
             {
+                var attackers = side == 0;
                 var leader = campaign.NationById(attackers ? war.AttackerId : war.DefenderId);
                 var victor = campaign.NationById(attackers ? war.DefenderId : war.AttackerId);
                 if (leader is null || victor is null || campaign.StatesOf(leader).Length > 0) continue;
@@ -402,6 +427,11 @@ public static class MovementFall
                         break;
                     }
                 if (standing) continue;
+                if (sliced)
+                {
+                    Campaign.HeavyNext();
+                    yield return 0;
+                }
                 PeaceNegotiation.Resolve(campaign, war, leader.Id, PeaceTerms.Capitulate);
                 if (!war.Ended) continue;
                 campaign.Chronicle.Record(campaign, "peace_signed", victor.Id, leader.Id);
@@ -411,6 +441,7 @@ public static class MovementFall
                     Attrition.Destroy(campaign, army, "laid down its arms: its country holds no ground");
                 }
                 campaign.MarkStrategicChange();
+                if (sliced) yield return 0;
                 break;
             }
         }
@@ -877,14 +908,17 @@ public static class MovementFall
 
     private static bool SameState(Nation a, MovementState first, Nation b, MovementState second)
     {
-        if (a.FoundNameKind == "tag" && string.Equals(a.FoundNameId, b.Tag, StringComparison.OrdinalIgnoreCase)) return true;
-        if (b.FoundNameKind == "tag" && string.Equals(b.FoundNameId, a.Tag, StringComparison.OrdinalIgnoreCase)) return true;
+        if (SharesStateName(a, b)) return true;
         if (first.Homeland.Count == 0 || second.Homeland.Count == 0) return false;
         var shared = 0;
         foreach (var id in first.Homeland)
             if (second.Homeland.Contains(id)) shared++;
         return shared * 2 > first.Homeland.Count && shared * 2 > second.Homeland.Count;
     }
+
+    private static bool SharesStateName(Nation a, Nation b) =>
+        (a.FoundNameKind == "tag" && string.Equals(a.FoundNameId, b.Tag, StringComparison.OrdinalIgnoreCase)) ||
+        (b.FoundNameKind == "tag" && string.Equals(b.FoundNameId, a.Tag, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>A year since it was founded, or since the world began for one that was there already.</summary>
     private static bool Matured(Campaign campaign, MovementState state) =>

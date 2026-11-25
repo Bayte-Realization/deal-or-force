@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace DealOrForce.Simulation;
@@ -47,6 +48,7 @@ public static class CityCatalog
     private static List<CityDefinition> _all;
     private static Dictionary<string, int> _indexById;
     private static readonly object Gate = new();
+    private static readonly ConditionalWeakTable<IReadOnlyList<CityDefinition>, int[]> LatitudeOrders = new();
 
     /// <summary>Every city, in the order the files give them.</summary>
     public static IReadOnlyList<CityDefinition> All
@@ -89,6 +91,32 @@ public static class CityCatalog
     {
         var index = IndexOf(id);
         return index < 0 ? null : All[index];
+    }
+
+    /// <summary>City indices in a latitude band, from the same catalog snapshot the caller reads.</summary>
+    internal static ReadOnlySpan<int> InLatitudeBand(IReadOnlyList<CityDefinition> cities, float latitude, float band)
+    {
+        // Mods replace the list. Each new snapshot gets its own index, and the old one
+        // can be collected together with its list.
+        var ordered = LatitudeOrders.GetValue(cities, static source =>
+        {
+            var indices = new int[source.Count];
+            for (var i = 0; i < indices.Length; i++) indices[i] = i;
+            Array.Sort(indices, (a, b) => source[a].Latitude.CompareTo(source[b].Latitude));
+            return indices;
+        });
+        var first = 0;
+        var end = ordered.Length;
+        while (first < end)
+        {
+            var middle = first + (end - first) / 2;
+            if (latitude - cities[ordered[middle]].Latitude > band)
+                first = middle + 1;
+            else
+                end = middle;
+        }
+        while (end < ordered.Length && !(cities[ordered[end]].Latitude - latitude > band)) end++;
+        return ordered.AsSpan(first, end - first);
     }
 
     /// <summary>

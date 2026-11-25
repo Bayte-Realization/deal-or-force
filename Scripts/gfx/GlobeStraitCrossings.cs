@@ -19,7 +19,7 @@ namespace DealOrForce;
 /// </summary>
 public sealed partial class GlobePresentation
 {
-    private ImmediateMesh _straitCrossingMesh;
+    private ArrayMesh _straitCrossingMesh;
     private MeshInstance3D _straitCrossingPreview;
     private int _straitCrossingFingerprint = int.MinValue;
     private int _straitCrossingDay = int.MinValue;
@@ -30,6 +30,7 @@ public sealed partial class GlobePresentation
     private readonly List<Vector3> _straitCrossingVertices = new();
     private readonly List<Vector2> _straitCrossingUvs = new();
     private readonly List<Color> _straitCrossingColours = new();
+    private readonly Godot.Collections.Array _straitCrossingArrays = new();
 
     // Still dashes, not flowing ones: a supply line moves because supply does, and a bridge
     // stands where it is.
@@ -56,7 +57,8 @@ void fragment() {
         if (_straitCrossingPreview is null || !IsInstanceValid(_straitCrossingPreview))
         {
             if (_routePreview.GetParent() is not Node3D world) return;
-            _straitCrossingMesh = new ImmediateMesh();
+            _straitCrossingMesh = new ArrayMesh();
+            _straitCrossingArrays.Resize((int)Mesh.ArrayType.Max);
             _straitCrossingPreview = new MeshInstance3D
             {
                 Name = "StraitCrossings",
@@ -89,9 +91,7 @@ void fragment() {
         if (fingerprint != _straitCrossingFingerprint)
         {
             _straitCrossingFingerprint = fingerprint;
-            // Every link goes into one surface. A mesh holds 256 surfaces at most, and a surface
-            // each was one draw call each as well - a mod's archipelago map would have run out of
-            // the first and paid for the second.
+            // Every link goes into one ArrayMesh surface, avoiding ImmediateMesh rebuilds and draw-call fanout.
             _straitCrossingMesh.ClearSurfaces();
             _straitCrossingVertices.Clear();
             _straitCrossingUvs.Clear();
@@ -99,14 +99,13 @@ void fragment() {
             foreach (var link in _straitCrossingLinks) AppendStraitCrossing(link);
             if (_straitCrossingVertices.Count > 0)
             {
-                _straitCrossingMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles);
-                for (var index = 0; index < _straitCrossingVertices.Count; index++)
-                {
-                    _straitCrossingMesh.SurfaceSetColor(_straitCrossingColours[index]);
-                    _straitCrossingMesh.SurfaceSetUV(_straitCrossingUvs[index]);
-                    _straitCrossingMesh.SurfaceAddVertex(_straitCrossingVertices[index]);
-                }
-                _straitCrossingMesh.SurfaceEnd();
+                _straitCrossingArrays[(int)Mesh.ArrayType.Vertex] = _straitCrossingVertices.ToArray();
+                _straitCrossingArrays[(int)Mesh.ArrayType.TexUV] = _straitCrossingUvs.ToArray();
+                _straitCrossingArrays[(int)Mesh.ArrayType.Color] = _straitCrossingColours.ToArray();
+                _straitCrossingMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, _straitCrossingArrays);
+                _straitCrossingArrays[(int)Mesh.ArrayType.Vertex] = default;
+                _straitCrossingArrays[(int)Mesh.ArrayType.TexUV] = default;
+                _straitCrossingArrays[(int)Mesh.ArrayType.Color] = default;
             }
         }
         _straitCrossingPreview.Visible = MilitaryMarkersEnabled && _straitCrossingMesh.GetSurfaceCount() > 0;

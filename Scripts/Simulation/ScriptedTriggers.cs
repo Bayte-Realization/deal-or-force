@@ -36,6 +36,8 @@ public sealed class ScriptedTrigger
     private bool? _atWar;
     private bool? _isMovement;
 
+    internal bool HasTagFilter => _tags.Count != 0;
+
     public bool IsEmpty =>
         _bounds.Count == 0 && _atWar is null && _isMovement is null && _tags.Count == 0 &&
         _people.Count == 0 && _requiredFeatures.Count == 0 && _forbiddenFeatures.Count == 0 &&
@@ -451,6 +453,7 @@ public static class ScriptedValues
             case "naval_experience": value = nation.NavalExperience; return true;
             case "political_points": value = nation.PoliticalPoints; return true;
             case "notoriety": value = nation.Notoriety; return true;
+            case "prestige": value = nation.Prestige; return true;
             case "union_cohesion": value = nation.UnionCohesion; return true;
             case "imperial_overstretch": value = nation.ImperialOverstretch; return true;
             case "available_air_formations": value = AvailableAirFormations(campaign, nation); return true;

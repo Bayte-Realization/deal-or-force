@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using ZeroAlloc.Collections;
 
 namespace DealOrForce.Simulation;
 
@@ -275,37 +276,122 @@ public static class DemographicCycle
     /// and then be relabelled as its largest minority, so the refugees of South Sudan and Congo
     /// became Ganda in Uganda and Ganda appeared all over Tanzania - five points a year.
     /// </summary>
+    [ThreadStatic] private static Dictionary<string, int> _coalesceCulturesScratch;
+    [ThreadStatic] private static Dictionary<string, int> _coalesceFaithsScratch;
+    [ThreadStatic] private static Dictionary<string, int> _coalesceTradesScratch;
+
+    private static void MergeGroupWeighted(PopulationGroup host, PopulationGroup gone)
+    {
+        var total = host.Size + gone.Size;
+        if (total > 0)
+        {
+            var share = gone.Size / (double)total;
+            host.Employment = (float)(host.Employment + (gone.Employment - host.Employment) * share);
+            host.Wealth = (float)(host.Wealth + (gone.Wealth - host.Wealth) * share);
+            host.StandardOfLiving = (float)(host.StandardOfLiving + (gone.StandardOfLiving - host.StandardOfLiving) * share);
+            host.Radicalism = (float)(host.Radicalism + (gone.Radicalism - host.Radicalism) * share);
+        }
+        host.Size = total;
+        gone.Size = 0;
+    }
+
     private static void MoveCultures(Campaign campaign, ScenarioState state, PopulationFolding.Shield shield)
     {
         var groups = state.PopulationGroups;
         if (groups.Count == 0 || state.Population <= 0) return;
         Assimilate(campaign, state, groups);
-        // Merge tiny profession/class splinters into the largest group of the exact same
-        // culture and religion in this region, so centuries of migration and assimilation
-        // never bloat PopulationGroups without changing anyone's people or faith.
-        if (groups.Count > 16)
+
+        // First coalesce exact-key duplicate cohorts ((Class, Sector, Culture, Religion, Profession))
+        // and, when Count > 16, fold tiny (<= 250) profession/class splinters into the largest
+        // group of the exact same (Culture, Religion) in O(N) while preserving exact population
+        // and population-weighted metrics (Employment, Wealth, StandardOfLiving, Radicalism).
+        var count = groups.Count;
+        if (count > 1)
         {
-            for (var i = 0; i < groups.Count; i++)
+            var cultureIds = _coalesceCulturesScratch ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var faithIds = _coalesceFaithsScratch ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var tradeIds = _coalesceTradesScratch ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            cultureIds.Clear();
+            faithIds.Clear();
+            tradeIds.Clear();
+
+            using var exactHosts = new HeapSpanDictionary<long, int>(count);
+            using var pairBest = new HeapSpanDictionary<long, int>(count > 16 ? Math.Min(count, 64) : 1);
+            using var groupPairs = new HeapPooledList<long>(count);
+
+            string lastCulture = null, lastFaith = null, lastTrade = null;
+            int cultureId = -1, faithId = -1, tradeId = -1;
+            var checkMicro = count > 16;
+
+            for (var i = 0; i < count; i++)
             {
-                var tiny = groups[i];
-                if (tiny.Size <= 0 || tiny.Size > 250) continue;
-                PopulationGroup host = null;
-                for (var j = 0; j < groups.Count; j++)
+                var g = groups[i];
+                if (g.Size <= 0)
                 {
-                    if (j == i) continue;
-                    var candidate = groups[j];
-                    if (candidate.Size <= tiny.Size) continue;
-                    if (!string.Equals(candidate.Culture, tiny.Culture, StringComparison.OrdinalIgnoreCase) ||
-                        !string.Equals(candidate.Religion, tiny.Religion, StringComparison.OrdinalIgnoreCase)) continue;
-                    if (host is null || candidate.Size > host.Size) host = candidate;
+                    if (checkMicro) groupPairs.Add(-1L);
+                    continue;
                 }
-                if (host is not null)
+
+                var cName = g.Culture ?? "";
+                if (cultureId < 0 || !ReferenceEquals(cName, lastCulture))
                 {
-                    host.Size += tiny.Size;
-                    tiny.Size = 0;
+                    lastCulture = cName;
+                    if (!cultureIds.TryGetValue(cName, out cultureId))
+                        cultureIds[cName] = cultureId = cultureIds.Count;
+                }
+                var rName = g.Religion ?? "";
+                if (faithId < 0 || !ReferenceEquals(rName, lastFaith))
+                {
+                    lastFaith = rName;
+                    if (!faithIds.TryGetValue(rName, out faithId))
+                        faithIds[rName] = faithId = faithIds.Count;
+                }
+                var pName = g.Profession ?? "";
+                if (tradeId < 0 || !ReferenceEquals(pName, lastTrade))
+                {
+                    lastTrade = pName;
+                    if (!tradeIds.TryGetValue(pName, out tradeId))
+                        tradeIds[pName] = tradeId = tradeIds.Count;
+                }
+
+                // Pack full 5-tuple cohort identity when indices fit cleanly (always true per state).
+                if (cultureId < 65535 && faithId < 65535 && tradeId < 65535)
+                {
+                    var exactKey = ((long)cultureId << 40) | ((long)faithId << 24) | ((long)tradeId << 8) |
+                                   (((long)(int)g.Class & 0xF) << 4) | ((long)(int)g.Sector & 0xF);
+                    if (exactHosts.TryGetValue(exactKey, out var hostIdx))
+                    {
+                        MergeGroupWeighted(groups[hostIdx], g);
+                        if (checkMicro) groupPairs.Add(-1L);
+                        continue;
+                    }
+                    exactHosts[exactKey] = i;
+                }
+
+                if (checkMicro)
+                {
+                    var pairKey = ((long)cultureId << 20) | (uint)faithId;
+                    groupPairs.Add(pairKey);
+                    if (!pairBest.TryGetValue(pairKey, out var bestIdx) || g.Size > groups[bestIdx].Size)
+                        pairBest[pairKey] = i;
+                }
+            }
+
+            if (checkMicro)
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    var tiny = groups[i];
+                    if (tiny.Size <= 0 || tiny.Size > 250) continue;
+                    var pairKey = groupPairs[i];
+                    if (pairKey < 0 || !pairBest.TryGetValue(pairKey, out var hostIdx) || hostIdx == i) continue;
+                    var host = groups[hostIdx];
+                    if (host.Size <= tiny.Size) continue;
+                    MergeGroupWeighted(host, tiny);
                 }
             }
         }
+
         // And the slivers a century of migration leaves, into their nearest kin (PopulationFolding).
         if (shield is not null) PopulationFolding.FoldRegion(campaign, state, shield, PopulationFolding.PeoplesTurn(campaign, state));
         // A group everybody has left or assimilated out of is nobody. Kept, they piled up -

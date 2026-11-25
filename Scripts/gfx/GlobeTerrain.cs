@@ -386,20 +386,30 @@ public sealed partial class GlobePresentation
                 using var ms = new MemoryStream(raw, writable: false);
                 using var pr = new BinaryReader(ms);
                 var result = new TerrainImages { Key = key, Tiles = new Image[defCount] };
-                for (var i = 0; i < total; i++)
+                try
                 {
-                    var side = pr.ReadInt32();
-                    var len = pr.ReadInt32();
-                    if (side <= 0 || len != side * side * 4) throw new InvalidDataException("corrupt mobile tile");
-                    var pixels = pr.ReadBytes(len);
-                    var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, pixels);
-                    img.GenerateMipmaps();
-                    if (i < defCount) result.Tiles[i] = img;
-                    else if (i == defCount) result.Lake = img;
-                    else result.River = img;
+                    for (var i = 0; i < total; i++)
+                    {
+                        var side = pr.ReadInt32();
+                        var len = pr.ReadInt32();
+                        if (side <= 0 || len != side * side * 4) throw new InvalidDataException("corrupt mobile tile");
+                        var pixels = pr.ReadBytes(len);
+                        var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, pixels);
+                        img.GenerateMipmaps();
+                        if (i < defCount) result.Tiles[i] = img;
+                        else if (i == defCount) result.Lake = img;
+                        else result.River = img;
+                    }
+                    prepared = result;
+                    return true;
                 }
-                prepared = result;
-                return true;
+                catch
+                {
+                    for (var i = 0; i < result.Tiles.Length; i++) result.Tiles[i]?.Dispose();
+                    result.Lake?.Dispose();
+                    result.River?.Dispose();
+                    throw;
+                }
             }
             catch { /* Fall back cleanly to source PNGs if cache invalid */ }
         }
@@ -447,6 +457,27 @@ public sealed partial class GlobePresentation
         catch { /* Non-fatal cache write error */ }
     }
 
+    private ImageTexture _terrainSurfaceTexture;
+    private ImageTexture _reliefColorTexture;
+    private ImageTexture _oceanDepthTexture;
+
+    private void UpdateTerrainTexture(ref ImageTexture texture, string uniform, Image image)
+    {
+        if (texture is not null && IsInstanceValid(texture) &&
+            texture.GetWidth() == image.GetWidth() &&
+            texture.GetHeight() == image.GetHeight() &&
+            texture.GetFormat() == image.GetFormat() &&
+            texture.HasMipmaps() == image.HasMipmaps())
+        {
+            texture.Update(image);
+        }
+        else
+        {
+            texture = ImageTexture.CreateFromImage(image);
+            _globeMaterial.SetShaderParameter(uniform, texture);
+        }
+    }
+
     // All allocations happen once when the map loads, not once per province per frame.
     // Texture arrays isolate each tile's mip chain: neighbouring atlas slots cannot bleed.
     private void ApplyTerrainPresentation(ProvinceTopology topology)
@@ -472,17 +503,33 @@ public sealed partial class GlobePresentation
             images.Add(prepared.Tiles[index]);
         }
         var tiles = new Texture2DArray();
-        var error = tiles.CreateFromImages(images);
-        if (error != Error.Ok) throw new InvalidDataException($"Terrain texture array: {error}");
-        _globeMaterial.SetShaderParameter("terrain_tiles", tiles);
-        images.Clear();
-        for (var index = 0; index < prepared.Tiles.Length; index++) prepared.Tiles[index]?.Dispose();
-        using (var surfaceImg = Image.CreateFromData(topology.Width, topology.Height, false, Image.Format.R8, topology.TerrainSurfaceSlots))
-            _globeMaterial.SetShaderParameter("terrain_surface", ImageTexture.CreateFromImage(surfaceImg));
+        try
+        {
+            var error = tiles.CreateFromImages(images);
+            if (error != Error.Ok) { tiles.Dispose(); throw new InvalidDataException($"Terrain texture array: {error}"); }
+            _globeMaterial.SetShaderParameter("terrain_tiles", tiles);
+        }
+        finally
+        {
+            images.Clear();
+            for (var index = 0; index < prepared.Tiles.Length; index++) prepared.Tiles[index]?.Dispose();
+        }
+        if (topology.TerrainSurfaceSlots is null || topology.TerrainSurfaceSlots.Length != topology.Width * topology.Height)
+            topology.AttachTerrain();
+        if (topology.TerrainSurfaceSlots is { Length: > 0 } slotsData && slotsData.Length == topology.Width * topology.Height)
+        {
+            using var surfaceImg = Image.CreateFromData(topology.Width, topology.Height, false, Image.Format.R8, slotsData);
+            UpdateTerrainTexture(ref _terrainSurfaceTexture, "terrain_surface", surfaceImg);
+        }
+        else
+        {
+            using var fallbackSurface = Image.CreateEmpty(2, 2, false, Image.Format.R8);
+            UpdateTerrainTexture(ref _terrainSurfaceTexture, "terrain_surface", fallbackSurface);
+        }
         topology.TerrainSurfaceSlots = Array.Empty<byte>();
         var lookup = new byte[256 * 256];
         for (var province = 1; province <= topology.ProvinceCount; province++)
-            lookup[province] = slots[topology.TerrainAt(province).Id];
+            lookup[province] = slots.TryGetValue(topology.TerrainAt(province).Id, out var slot) ? slot : (byte)0;
         using (var lookupImg = Image.CreateFromData(256, 256, false, Image.Format.R8, lookup))
             UploadMapImage("province_terrain", lookupImg);
         if (!isTouchPrimary && prepared.Height is not null && !prepared.Height.IsEmpty())
@@ -505,14 +552,15 @@ public sealed partial class GlobePresentation
             _reliefHeightWidth = 0;
             _reliefHeightHeight = 0;
         }
-        _reliefHeightTexture = ImageTexture.CreateFromImage(prepared.Height);
-        _globeMaterial.SetShaderParameter("relief_height", _reliefHeightTexture);
+        var hasReliefHeight = !isTouchPrimary && prepared.Height is not null && prepared.Height.GetWidth() > 8;
+        UpdateTerrainTexture(ref _reliefHeightTexture, "relief_height", prepared.Height);
+        _globeMaterial.SetShaderParameter("relief_height_ready", hasReliefHeight ? 1f : 0f);
         prepared.Height?.Dispose();
-        _globeMaterial.SetShaderParameter("relief_color", ImageTexture.CreateFromImage(prepared.Colour));
+        UpdateTerrainTexture(ref _reliefColorTexture, "relief_color", prepared.Colour);
         prepared.Colour?.Dispose();
         // The sea floor: a map without it is a flat navy sheet, one without shelves or coasts.
         var hasFloor = !isTouchPrimary && File.Exists(TerrainCatalog.BathymetryPath);
-        _globeMaterial.SetShaderParameter("ocean_depth", ImageTexture.CreateFromImage(prepared.Floor));
+        UpdateTerrainTexture(ref _oceanDepthTexture, "ocean_depth", prepared.Floor);
         prepared.Floor?.Dispose();
         _globeMaterial.SetShaderParameter("ocean_depth_ready", hasFloor ? 1f : 0f);
         _globeMaterial.SetShaderParameter("terrain_detail", TerrainCatalog.DetailStrength);

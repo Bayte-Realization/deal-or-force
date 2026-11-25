@@ -20,11 +20,22 @@ public partial class DealOrForceGame
     private readonly System.Collections.Generic.List<(Control Node, bool ClassicDefaultVisible)> _classicChromeCache = new();
     private bool _classicChromeCached;
     private bool? _classicChromeLastVisible;
+    private ulong _uiShellCacheFrame = ulong.MaxValue;
+    private bool _uiShellCacheValue;
+    private ulong _lastModalSyncFrame = ulong.MaxValue;
 
     [ToolHook] internal double LastRefreshNewShellMs => _shell?.LastRefreshMs ?? 0.0;
 
-    internal bool IsNewShellActive =>
-        string.Equals(SettingsCatalog.Chosen("ui_shell"), "new", StringComparison.OrdinalIgnoreCase);
+    internal bool IsNewShellActive
+    {
+        get
+        {
+            var frame = Engine.GetProcessFrames();
+            if (frame == _uiShellCacheFrame) return _uiShellCacheValue;
+            _uiShellCacheFrame = frame;
+            return _uiShellCacheValue = string.Equals(SettingsCatalog.Chosen("ui_shell"), "new", StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     internal bool IsNewShellEconomyOpen => _shell?.EconomyWorkspace.IsVisible ?? false;
     internal bool IsNewShellGrandProjectsOpen => _shell?.GrandProjects.IsVisible ?? false;
@@ -37,7 +48,7 @@ public partial class DealOrForceGame
     {
         "CampaignTopBar", "CampaignFlagMount", "HudResourceDrawer", "CampaignNavigation", "DatePlate",
         "AlertList", "CampaignAlertPopup", "Outliner", "StrategicOutliner", "SituationDesk", "SituationDeskTab",
-        "MapControls", "MapModeDrawer", "ArmyBar", "TeletypeBand", "HeadlinePopups"
+        "MapControls", "MapLayerDrawer", "ArmyBar", "TeletypeBand", "HeadlinePopups"
     };
 
     private void BuildNewShell()
@@ -78,6 +89,8 @@ public partial class DealOrForceGame
         {
             Root = root,
             GetCampaign = () => _campaign,
+            GetHudSnapshot = () => _simRunner.ReadHudSnapshot(_campaign),
+            GetPresentationDate = () => _simRunner.ReadPresentationDate(_campaign),
             GetViewportSize = () => _hudLayer?.Size is { X: >= 320f, Y: >= 240f } sz ? sz : GetViewportRect().Size,
             IsPaused = () => _campaign?.IsPaused ?? true,
             GetSpeed = () => _speed,
@@ -88,6 +101,7 @@ public partial class DealOrForceGame
             GetOpenScreen = () => IsNewShellEconomyOpen ? "Economy" : _openScreen,
             GetMapMode = () => _activeMapMode,
             IsFlatMap = () => _globe is not null && _globe.IsFlatMap,
+            IsShowcasePan = () => _globe?.ShowcasePan ?? false,
             GetViewDistance = () => _globe?.ShellViewDistance ?? 6.5f,
             GetFlatZoom = () => _globe?.ShellFlatZoom ?? 4f,
             GetCameraMinimapView = () => _globe?.CameraMinimapView ?? (20f, 0f, 60f),
@@ -109,6 +123,7 @@ public partial class DealOrForceGame
         ctx.ToggleScreen = ToggleCampaignScreen;
         ctx.SetMapMode = mode => { _globe?.SetMapMode(mode); RefreshNewShell(force: true); };
         ctx.ToggleProjection = () => { ToggleProjection(); RefreshNewShell(force: true); };
+        ctx.ToggleShowcasePan = () => { ToggleShowcasePan(); _shell?.MapBar.Refresh(); };
         ctx.TogglePause = () => { TogglePause(); _shell?.DatePlate.Refresh(); };
         ctx.SetSpeed = s => { SetSpeed(s, resume: false); _shell?.DatePlate.Refresh(); };
         ctx.ShowPauseMenu = ShowPauseMenu;
@@ -375,7 +390,7 @@ public partial class DealOrForceGame
         foreach (var name in ClassicChromeNodeNames)
         {
             if (_hudLayer.FindChild(name, true, false) is Control node && IsInstanceValid(node) && seen.Add(node))
-                _classicChromeCache.Add((node, name is not ("MapModeDrawer" or "HudResourceDrawer" or "SituationDesk")));
+                _classicChromeCache.Add((node, name is not ("MapLayerDrawer" or "HudResourceDrawer" or "SituationDesk")));
         }
         AddClassicNode(_headlineStack);
         AddClassicNode(_alertListPanel);
@@ -384,17 +399,20 @@ public partial class DealOrForceGame
         AddClassicNode(_hudFlagMount);
         AddClassicNode(_hudDatePlate);
         AddClassicNode(_mapControlsPanel);
+        AddClassicNode(_mapModeDrawerLayer, showWhenClassic: false);
         AddClassicNode(_armyBar);
-        void AddClassicNode(Control c)
+        void AddClassicNode(Control c, bool showWhenClassic = true)
         {
             if (c is not null && IsInstanceValid(c) && seen.Add(c))
-                _classicChromeCache.Add((c, true));
+                _classicChromeCache.Add((c, showWhenClassic));
         }
     }
 
     private void ApplyUiShellSetting()
     {
         if (_hudLayer is null) return;
+        _uiShellCacheFrame = ulong.MaxValue;
+        _lastModalSyncFrame = ulong.MaxValue;
         if (!_newShellBuilt) BuildNewShell();
         var isNew = IsNewShellActive;
         if (!isNew) _classicChromeCached = false;
@@ -405,7 +423,7 @@ public partial class DealOrForceGame
             _newShellRoot.ProcessMode = isNew ? ProcessModeEnum.Inherit : ProcessModeEnum.Disabled;
         }
         if (_globe is not null && !isNew) _globe.NewShellVisibleArmyIds = null;
-        if (isNew) { _shell?.ResetCadence(); LayoutNewShell(); RefreshNewShell(force: true); }
+        if (isNew) { CloseMapLayerDrawer(); _shell?.ResetCadence(); LayoutNewShell(); RefreshNewShell(force: true); }
         else { CloseShellTransientPopovers(); _shell?.WorkPanel.Close(); CloseNewShellEconomyWorkspace(); CloseNewShellGrandProjects(); LayoutCampaignShell(); Refresh(); }
     }
 
@@ -423,8 +441,11 @@ public partial class DealOrForceGame
             if (node.Visible != targetVis) node.Visible = targetVis;
             if (node.ProcessMode != mode) node.ProcessMode = mode;
         }
-        if (!visible && _mapModeDrawerLayer is { Visible: true } && IsInstanceValid(_mapModeDrawerLayer))
-            _mapModeDrawerLayer.Visible = false;
+        if (!visible && _mapModeDrawerLayer is not null && IsInstanceValid(_mapModeDrawerLayer))
+        {
+            if (_mapModeDrawerLayer.Visible) _mapModeDrawerLayer.Visible = false;
+            if (_mapModeDrawerLayer.ProcessMode != mode) _mapModeDrawerLayer.ProcessMode = mode;
+        }
     }
 
     private void LayoutNewShell()
@@ -438,41 +459,54 @@ public partial class DealOrForceGame
     {
         if (!_newShellBuilt || !IsNewShellActive || _campaign is null || _hudLayer is not { Visible: true }) return;
         if (_classicChromeLastVisible != false) SetClassicChromeVisible(false);
-        SyncNewShellModalState();
+        SyncNewShellModalState(verifiedActive: true);
         _shell?.Refresh(_campaign, _speed, force);
         if (force) SyncNewShellLeftAndBottomDock();
     }
 
-    private void TickNewShell(double delta)
+    private void TickNewShell(double delta, bool allowLiveReads = true)
     {
         if (!_newShellBuilt || !IsNewShellActive || _campaign is null || _hudLayer is not { Visible: true } || _shell is null) return;
-        SyncNewShellModalState();
-        var anyLeft = (_armyPanel is { Visible: true }) || (_sidePanel is { Visible: true }) ||
-                      (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) || _shell.WorkPanel.IsVisible;
-        var profile = _shell.CurrentProfile();
-        var compactRightCap = profile.Compact ? Math.Min(profile.NewsCard.X, profile.AlertColumn.X) - 10f : float.PositiveInfinity;
-        var leftDrifted = LeftPanelDrifted(_armyPanel, profile.LeftPanel.X, profile.Compact, compactRightCap) ||
+        if (_lastModalSyncFrame != Engine.GetProcessFrames())
+            SyncNewShellModalState(verifiedActive: true);
+        var anyLegacyLeft = (_armyPanel is { Visible: true }) || (_sidePanel is { Visible: true }) ||
+                            (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true });
+        var anyLeft = anyLegacyLeft || _shell.WorkPanel.IsVisible;
+        var leftDrifted = false;
+        if (anyLegacyLeft)
+        {
+            var profile = _shell.CurrentProfile();
+            var compactRightCap = profile.Compact ? Math.Min(profile.NewsCard.X, profile.AlertColumn.X) - 10f : float.PositiveInfinity;
+            leftDrifted = LeftPanelDrifted(_armyPanel, profile.LeftPanel.X, profile.Compact, compactRightCap) ||
                           LeftPanelDrifted(_sidePanel, profile.LeftPanel.X, profile.Compact, compactRightCap) ||
                           LeftPanelDrifted(_fleetPanel, profile.LeftPanel.X, profile.Compact, compactRightCap) ||
                           LeftPanelDrifted(_countryCard, profile.LeftPanel.X, profile.Compact, compactRightCap);
+        }
         if (anyLeft != _newShellLastLeftVisible || leftDrifted)
         {
             _newShellLastLeftVisible = anyLeft;
             SyncNewShellLeftAndBottomDock();
         }
-        _shell.Tick(delta);
+        _shell.Tick(delta, allowLiveReads);
     }
 
-    private void SyncNewShellModalState()
+    private ulong _cachedModalOpenFrame = ulong.MaxValue;
+    private bool _cachedModalOpenValue;
+
+    private void SyncNewShellModalState(bool verifiedActive = false)
     {
-        if (!_newShellBuilt || !IsNewShellActive || _shell is null) return;
+        if (!_newShellBuilt || (!verifiedActive && !IsNewShellActive) || _shell is null) return;
+        var frame = Engine.GetProcessFrames();
+        _lastModalSyncFrame = frame;
         var fullCover = IsFullCoverModalOpen();
         if (_newShellRoot is not null && IsInstanceValid(_newShellRoot))
         {
             var wantRoot = !fullCover && _hudLayer is { Visible: true };
             if (_newShellRoot.Visible != wantRoot) _newShellRoot.Visible = wantRoot;
         }
-        var modalOpen = IsAnyShellModalOpen();
+        var modalOpen = EvaluateAnyShellModalOpen();
+        _cachedModalOpenFrame = frame;
+        _cachedModalOpenValue = modalOpen;
         if (modalOpen != _newShellModalWasOpen)
         {
             _newShellModalWasOpen = modalOpen;
@@ -508,7 +542,17 @@ public partial class DealOrForceGame
 
     internal void CloseShellTransientPopovers(bool includeNews = true) => _shell?.CloseTransientPopovers(includeNews);
 
-    private bool IsAnyShellModalOpen() =>
+    private bool IsAnyShellModalOpen()
+    {
+        var frame = Engine.GetProcessFrames();
+        if (frame == _cachedModalOpenFrame) return _cachedModalOpenValue;
+        var open = EvaluateAnyShellModalOpen();
+        _cachedModalOpenFrame = frame;
+        _cachedModalOpenValue = open;
+        return open;
+    }
+
+    private bool EvaluateAnyShellModalOpen() =>
         IsNewShellEconomyOpen || IsNewShellGrandProjectsOpen || _handbookLayer is { Visible: true } || _peaceLayer is { Visible: true } ||
         _peaceOfferLayer is { Visible: true } || _defconLayer is { Visible: true } || _pauseMenuLayer is { Visible: true } ||
         _settingsLayer is { Visible: true } || _saveLoadLayer is { Visible: true } || _pickerLayer is { Visible: true } ||

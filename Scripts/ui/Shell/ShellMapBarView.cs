@@ -20,11 +20,13 @@ internal sealed class ShellMapBarView
     private PanelContainer _bar;
     private HBoxContainer _medallionRow;
     private readonly Dictionary<StrategicMapMode, MedallionNodes> _quickButtons = new();
+    private MedallionNodes _showcasePanMedallion;
     private MedallionNodes _moreMedallion;
 
     private PanelContainer _popover;
     private Button _modesTabBtn;
     private Button _layersTabBtn;
+    private Button _popoverCloseBtn;
     private VBoxContainer _modesPage;
     private VBoxContainer _layersPage;
     private bool _showLayers;
@@ -34,10 +36,12 @@ internal sealed class ShellMapBarView
     private readonly Dictionary<string, Button> _fillButtons = new(StringComparer.Ordinal);
     private readonly List<LayerRowNodes> _layerRows = new();
     private Button _projectionBtn;
+    private Button _showcasePanMoreBtn;
 
     private StyleBox _medNormalBox;
     private StyleBoxFlat _medHoverBox;
     private StyleBox _medActiveBox;
+    private StyleBoxFlat _medActiveHoverBox;
     private StyleBoxFlat _chipHoverBox;
     private StyleBoxFlat _tabHoverBox;
     private StyleBoxEmpty _layerEmpty;
@@ -46,8 +50,10 @@ internal sealed class ShellMapBarView
     private ShellLayoutProfile _profile;
     private bool _modalObscured;
     private StrategicMapMode? _lastMedallionMode;
-    private bool? _lastMoreOn, _lastAltVisible, _lastShowMini;
+    private bool? _lastMoreOn, _lastAltVisible, _lastShowMini, _lastShowcasePan, _lastBarCompact, _lastBarTouch;
     private string _lastLang = "";
+    private int _lastPopoverSig;
+    private bool _hasPopoverSig;
 
     private sealed class MedallionNodes
     {
@@ -89,8 +95,9 @@ internal sealed class ShellMapBarView
     public void Build()
     {
         _medNormalBox = _ctx.NineSlice("round_bezel", 0, 0, 0, 0, 0, "shell.plate_top", "shell.engrave", 24);
-        _medHoverBox = Ui.ChromeBox("shell.plate_hover", 0.94f, "shell.brass_hi", 0.90f, cornerRadius: 24, borderWidth: 1);
+        _medHoverBox = Ui.ChromeBox("shell.plate_hover", 0.94f, "shell.brass_hi", 0.92f, cornerRadius: 24, borderWidth: 1);
         _medActiveBox = _ctx.NineSlice("round_bezel_active", 0, 0, 0, 0, 0, "shell.well_top", "shell.brass_hi", 24);
+        _medActiveHoverBox = Ui.ChromeBox("shell.plate_hover", 0.96f, "shell.highlight", 0.95f, cornerRadius: 24, borderWidth: 2);
         _chipHoverBox = Ui.ChromeBox("shell.plate_hover", 0.90f, "shell.brass_hi", 0.82f, cornerRadius: 3, borderWidth: 1, padX: 8, padY: 3);
         _tabHoverBox = Ui.ChromeBox("shell.plate_hover", 0.86f, "shell.brass_hi", 0.78f, cornerRadius: 3, borderWidth: 1, padX: 8, padY: 4);
 
@@ -124,6 +131,11 @@ internal sealed class ShellMapBarView
             _medallionRow.AddChild(med.Button);
             _quickButtons[mode] = med;
         }
+
+        _showcasePanMedallion = CreateMedallion("ShellShowcasePanBtn", "icon_world", "F6",
+            "shell.showcase_spin_short", "shell.showcase_spin_tip",
+            () => { _ctx.ToggleShowcasePan?.Invoke(); Refresh(); });
+        _medallionRow.AddChild(_showcasePanMedallion.Button);
 
         _moreMedallion = CreateMedallion("ShellMap_More", "icon_shell_more", "M",
             "More map modes and layers", "shell.ws.shell.map_tip_more",
@@ -224,20 +236,24 @@ internal sealed class ShellMapBarView
         tabs.AddChild(_modesTabBtn);
         tabs.AddChild(_layersTabBtn);
 
+        var touchInit = _ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true);
         var closeBtn = new Button
         {
             Name = "CloseShellMapPopover",
             Text = "×",
-            CustomMinimumSize = new Vector2(30, 30),
+            CustomMinimumSize = touchInit ? new Vector2(42, 42) : new Vector2(32, 32),
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None,
             TooltipText = Ui.Tip(Loc.Get("Close"))
         };
+        closeBtn.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
+        closeBtn.AddThemeFontSizeOverride("font_size", touchInit ? 20 : 17);
         closeBtn.AddThemeStyleboxOverride("normal", _ctx.NineSlice("button_umber_9s", 8, 4, 2, 4, 2));
         closeBtn.AddThemeStyleboxOverride("hover", _chipHoverBox);
         closeBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         closeBtn.Pressed += ClosePopover;
         tabs.AddChild(closeBtn);
+        _popoverCloseBtn = closeBtn;
 
         // Bounded ScrollContainer with >= 14px right scrollbar clearance for 1280x720 EN/RU safety
         var scroll = new ScrollContainer
@@ -281,19 +297,37 @@ internal sealed class ShellMapBarView
                 Refresh();
             });
             b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            b.CustomMinimumSize = new Vector2(124, 28);
+            b.CustomMinimumSize = new Vector2(118, touchInit ? 38 : 29);
             modeGrid.AddChild(b);
             _allModeButtons[mode] = b;
         }
 
-        var f2Suffix = (_ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true)) ? "" : " (F2)";
+        var chipH = touchInit ? 42 : 30;
+        var viewRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        viewRow.AddThemeConstantOverride("separation", 5);
+        _modesPage.AddChild(viewRow);
+
+        var f2Suffix = touchInit ? "" : " (F2)";
         _projectionBtn = CreateChipButton(Loc.Get("shell.proj_3d_globe") + f2Suffix, () =>
         {
             _ctx.ToggleProjection?.Invoke();
             Refresh();
         });
-        _projectionBtn.CustomMinimumSize = new Vector2(0, 28);
-        _modesPage.AddChild(_projectionBtn);
+        _projectionBtn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _projectionBtn.CustomMinimumSize = new Vector2(0, chipH);
+        viewRow.AddChild(_projectionBtn);
+
+        var f6Suffix = touchInit ? "" : " (F6)";
+        _showcasePanMoreBtn = CreateChipButton(Loc.Get("shell.showcase_spin_more") + f6Suffix, () =>
+        {
+            _ctx.ToggleShowcasePan?.Invoke();
+            Refresh();
+        });
+        _showcasePanMoreBtn.Name = "ShellShowcasePanMoreBtn";
+        _showcasePanMoreBtn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _showcasePanMoreBtn.CustomMinimumSize = new Vector2(0, chipH);
+        _showcasePanMoreBtn.TooltipText = Ui.Tip(Loc.Get("shell.showcase_spin_tip"), 52);
+        viewRow.AddChild(_showcasePanMoreBtn);
 
         _layersPage = new VBoxContainer { Name = "ShellMoreLayersPage", Visible = false, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
         _layersPage.AddThemeConstantOverride("separation", 3);
@@ -387,9 +421,10 @@ internal sealed class ShellMapBarView
 
     private void AddLayerToggleRow(VBoxContainer parent, string setting, string labelKey, string badge)
     {
+        var touchRow = _ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true);
         var btn = new Button
         {
-            CustomMinimumSize = new Vector2(0, 29),
+            CustomMinimumSize = new Vector2(0, touchRow ? 40 : 30),
             ClipContents = true,
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
@@ -416,10 +451,10 @@ internal sealed class ShellMapBarView
             Refresh();
         };
 
-        var row = new HBoxContainer { ClipContents = true, MouseFilter = Control.MouseFilterEnum.Ignore };
+        var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true, MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddThemeConstantOverride("separation", 8);
         row.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        row.OffsetLeft = 4; row.OffsetRight = -4;
+        row.OffsetLeft = 6; row.OffsetRight = -6;
         btn.AddChild(row);
 
         var pill = new Control
@@ -539,36 +574,62 @@ internal sealed class ShellMapBarView
     {
         _profile = profile;
         var compact = profile.Compact;
+        var touch = profile.TouchMode || (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true);
+        var padX = compact || touch ? 6 : 8;
+        if (_lastBarCompact != compact || _lastBarTouch != touch)
+        {
+            _lastBarCompact = compact;
+            _lastBarTouch = touch;
+            var padTop = compact || touch ? 5 : 6;
+            var padBot = compact || touch ? 5 : 8;
+            _bar.AddThemeStyleboxOverride("panel",
+                _ctx.NineSlice("plate_umber_9s", 14, padX, padTop, padX, padBot, "shell.plate_bottom", "shell.border", 3));
+        }
         ShellContext.PlaceRect(_bar, profile.MapBar);
+        if (_popoverCloseBtn is not null)
+        {
+            _popoverCloseBtn.CustomMinimumSize = touch ? new Vector2(42, 42) : new Vector2(32, 32);
+            _popoverCloseBtn.AddThemeFontSizeOverride("font_size", touch ? 20 : 17);
+        }
 
-        var medSz = profile.MapButtonSize;
-        _medallionRow.AddThemeConstantOverride("separation", compact ? 4 : 8);
-        foreach (var (_, med) in _quickButtons) LayoutSingleMedallion(med, medSz, compact);
-        LayoutSingleMedallion(_moreMedallion, medSz, compact);
+        var sep = touch || compact ? 3 : 5;
+        var baseMed = touch ? 42f : (compact ? 26f : 38f);
+        var availW = MathF.Max(140f, profile.MapBar.W - padX * 2f);
+        var medW = MathF.Min(baseMed, MathF.Floor((availW - 6f * sep) / 7f));
+        var medH = touch ? MathF.Max(44f, medW) : medW;
+        _medallionRow.AddThemeConstantOverride("separation", sep);
+        foreach (var (_, med) in _quickButtons) LayoutSingleMedallion(med, medW, medH, compact);
+        LayoutSingleMedallion(_showcasePanMedallion, medW, medH, compact);
+        LayoutSingleMedallion(_moreMedallion, medW, medH, compact);
+        if (_projectionBtn is not null) _projectionBtn.CustomMinimumSize = new Vector2(0, touch ? 42 : 30);
+        if (_showcasePanMoreBtn is not null) _showcasePanMoreBtn.CustomMinimumSize = new Vector2(0, touch ? 42 : 30);
 
         _minimap.Layout(profile);
 
-        var popW = compact ? 316f : 400f;
-        var popH = compact ? 336f : 426f;
+        var popW = compact ? 344f : 412f;
+        var popH = compact ? 344f : 428f;
         ShellContext.PlaceRect(_popover, new ShellRect(Math.Max(12f, profile.MapBar.Right - popW), Math.Max(70f, profile.MapBar.Y - popH - 8f), popW, popH));
     }
 
-    private static void LayoutSingleMedallion(MedallionNodes med, float sz, bool compact)
+    private static void LayoutSingleMedallion(MedallionNodes med, float w, float h, bool compact)
     {
-        med.Button.CustomMinimumSize = new Vector2(sz, sz);
-        var pad = compact ? 7f : 9f;
+        if (med is null) return;
+        med.Button.CustomMinimumSize = new Vector2(w, h);
+        var pad = compact && w < 36f ? 5f : (w >= 40f ? 9f : 8f);
         med.Icon.OffsetLeft = pad; med.Icon.OffsetRight = -pad;
         med.Icon.OffsetTop = pad; med.Icon.OffsetBottom = -pad;
-        med.ActiveUnderline.Position = new Vector2(sz * 0.24f, sz + 1f);
-        med.ActiveUnderline.Size = new Vector2(sz * 0.52f, 2f);
-        med.Keycap.Position = new Vector2(sz - 14f, sz - 14f);
+        med.ActiveUnderline.Position = new Vector2(w * 0.22f, h + 1f);
+        med.ActiveUnderline.Size = new Vector2(w * 0.56f, 2.5f);
+        med.Keycap.Position = new Vector2(MathF.Max(0f, w - (med.Hotkey.Length > 1 ? 19f : 15f)), MathF.Max(0f, h - 14f));
     }
 
     public void Refresh()
     {
         var activeMode = _ctx.GetMapMode?.Invoke() ?? StrategicMapMode.Political;
         var moreOn = IsPopoverOpen;
-        var altVis = _ctx.AltKeycapsVisible;
+        var spinOn = _ctx.IsShowcasePan?.Invoke() ?? false;
+        var touch = _profile?.TouchMode ?? (_ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true));
+        var altVis = _ctx.AltKeycapsVisible && !touch;
         var obscured = _modalObscured || (_ctx.IsAnyModalOpen?.Invoke() ?? false);
         if (obscured && _popover is { Visible: true }) { _popover.Visible = false; moreOn = false; }
         var showMini = !obscured && SettingsCatalog.Flag("ui_shell_minimap");
@@ -583,38 +644,78 @@ internal sealed class ShellMapBarView
             _modesTabBtn.Text = Loc.Get("Map modes");
             _layersTabBtn.Text = Loc.Get("shell.map_layers");
             foreach (var lr in _layerRows) lr.RowLabel.Text = Loc.Get(lr.LabelKey);
+            UpdateShowcasePanTooltip(spinOn);
+        }
+        else if (_lastShowcasePan != spinOn)
+        {
+            UpdateShowcasePanTooltip(spinOn);
         }
 
-        if (_lastMedallionMode != activeMode || _lastMoreOn != moreOn || _lastAltVisible != altVis || _lastShowMini != showMini)
+        if (_lastMedallionMode != activeMode || _lastMoreOn != moreOn || _lastAltVisible != altVis ||
+            _lastShowMini != showMini || _lastShowcasePan != spinOn)
         {
             _lastMedallionMode = activeMode;
             _lastMoreOn = moreOn;
             _lastAltVisible = altVis;
             _lastShowMini = showMini;
+            _lastShowcasePan = spinOn;
 
             foreach (var (mode, med) in _quickButtons)
-            {
-                var on = mode == activeMode;
-                med.Button.AddThemeStyleboxOverride("normal", on ? _medActiveBox : _medNormalBox);
-                med.Button.AddThemeStyleboxOverride("hover", on ? _medActiveBox : _medHoverBox);
-                med.ActiveUnderline.Visible = on;
-                med.Keycap.Visible = altVis;
-                ShellContext.ApplyIconRelief(med.Icon, Ui.Colour(on ? "shell.highlight" : "shell.icon"), on ? 0.85f : 0.6f);
-            }
-            _moreMedallion.Button.AddThemeStyleboxOverride("normal", moreOn ? _medActiveBox : _medNormalBox);
-            _moreMedallion.Button.AddThemeStyleboxOverride("hover", moreOn ? _medActiveBox : _medHoverBox);
-            _moreMedallion.ActiveUnderline.Visible = moreOn;
-            _moreMedallion.Keycap.Visible = altVis;
-            ShellContext.ApplyIconRelief(_moreMedallion.Icon, Ui.Colour(moreOn ? "shell.highlight" : "shell.icon"), moreOn ? 0.85f : 0.6f);
+                StyleMedallion(med, mode == activeMode, altVis);
+            StyleMedallion(_showcasePanMedallion, spinOn, altVis, "shell.state.positive");
+            StyleMedallion(_moreMedallion, moreOn, altVis);
             _minimap.SetVisible(showMini);
         }
         if (!obscured && moreOn) RefreshPopover();
     }
 
+    private void StyleMedallion(MedallionNodes med, bool on, bool altVis, string activeIconToken = "shell.highlight")
+    {
+        if (med is null) return;
+        med.Button.AddThemeStyleboxOverride("normal", on ? _medActiveBox : _medNormalBox);
+        med.Button.AddThemeStyleboxOverride("hover", on ? _medActiveHoverBox : _medHoverBox);
+        med.ActiveUnderline.Visible = on;
+        med.ActiveUnderline.Color = Ui.Colour(on && activeIconToken != "shell.highlight" ? activeIconToken : "shell.brass_hi");
+        med.Keycap.Visible = altVis;
+        ShellContext.ApplyIconRelief(med.Icon, Ui.Colour(on ? activeIconToken : "shell.icon"), on ? 0.94f : 0.62f);
+    }
+
+    private void UpdateShowcasePanTooltip(bool spinOn)
+    {
+        if (_showcasePanMedallion?.Button is null) return;
+        _showcasePanMedallion.Button.TooltipText = Ui.Tip(
+            $"{Loc.Get(spinOn ? "shell.showcase_spin_stop" : "shell.showcase_spin_short")} (F6)\n" +
+            $"{Loc.Get(spinOn ? "shell.showcase_spin_active_tip" : "shell.showcase_spin_tip")}", 52);
+    }
+
     private void RefreshPopover()
     {
-        _modesPage.Visible = !_showLayers;
-        _layersPage.Visible = _showLayers;
+        var curMode = _ctx.GetMapMode?.Invoke() ?? StrategicMapMode.Political;
+        var curLook = PlayerSettings.Text("map_look", SettingsCatalog.Chosen("map_look"));
+        var curFill = SettingsCatalog.Of("map_political_fill") is not null
+            ? SettingsCatalog.Chosen("map_political_fill")
+            : PlayerSettings.Text("map_political_fill", "translucent");
+        var isFlat = _ctx.IsFlatMap?.Invoke() ?? false;
+        var touch = _profile?.TouchMode ?? (_ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true));
+        var spinOn = _ctx.IsShowcasePan?.Invoke() ?? false;
+        var hc = new HashCode();
+        hc.Add(_showLayers);
+        hc.Add((int)curMode);
+        hc.Add(curLook, StringComparer.OrdinalIgnoreCase);
+        hc.Add(curFill, StringComparer.OrdinalIgnoreCase);
+        hc.Add(isFlat);
+        hc.Add(touch);
+        hc.Add(spinOn);
+        hc.Add(Loc.Language, StringComparer.Ordinal);
+        for (var i = 0; i < _layerRows.Count; i++)
+            hc.Add(IsLayerSettingOn(_layerRows[i].Setting));
+        var sig = hc.ToHashCode();
+        if (_hasPopoverSig && _lastPopoverSig == sig) return;
+        _hasPopoverSig = true;
+        _lastPopoverSig = sig;
+
+        if (_modesPage.Visible == _showLayers) _modesPage.Visible = !_showLayers;
+        if (_layersPage.Visible != _showLayers) _layersPage.Visible = _showLayers;
 
         var tabOn = _ctx.NineSlice("tab_folder_9s", 10, 8, 4, 8, 4);
         var tabOff = _ctx.PressedWellStyle(padX: 8, padY: 4);
@@ -628,7 +729,6 @@ internal sealed class ShellMapBarView
         var chipNormal = _ctx.NineSlice("button_umber_9s", 8, 8, 3, 8, 3);
         var chipActive = Ui.ChromeBox("shell.well_top", 0.96f, "shell.brass_hi", 0.92f, cornerRadius: 3, borderWidth: 1, padX: 8, padY: 3, leftBorderWidth: 3);
 
-        var curMode = _ctx.GetMapMode?.Invoke() ?? StrategicMapMode.Political;
         foreach (var (m, btn) in _allModeButtons)
         {
             var on = m == curMode;
@@ -637,7 +737,6 @@ internal sealed class ShellMapBarView
             btn.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_muted"));
         }
 
-        var curLook = PlayerSettings.Text("map_look", SettingsCatalog.Chosen("map_look"));
         foreach (var (val, btn) in _lookButtons)
         {
             var on = string.Equals(curLook, val, StringComparison.OrdinalIgnoreCase);
@@ -646,9 +745,6 @@ internal sealed class ShellMapBarView
             btn.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_muted"));
         }
 
-        var curFill = SettingsCatalog.Of("map_political_fill") is not null
-            ? SettingsCatalog.Chosen("map_political_fill")
-            : PlayerSettings.Text("map_political_fill", "translucent");
         foreach (var (val, btn) in _fillButtons)
         {
             var on = string.Equals(curFill, val, StringComparison.OrdinalIgnoreCase);
@@ -657,14 +753,26 @@ internal sealed class ShellMapBarView
             btn.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_muted"));
         }
 
-        var isFlat = _ctx.IsFlatMap?.Invoke() ?? false;
-        var f2 = _profile?.TouchMode == true ? "" : " (F2)";
-        _projectionBtn.Text = $"{Loc.Get(isFlat ? "shell.proj_3d_globe" : "shell.proj_2d_map")}{f2}";
+        var f2 = touch ? "" : " (F2)";
+        var projText = $"{Loc.Get(isFlat ? "shell.proj_3d_globe" : "shell.proj_2d_map")}{f2}";
+        if (_projectionBtn.Text != projText) _projectionBtn.Text = projText;
         _projectionBtn.AddThemeStyleboxOverride("normal", chipNormal);
         _projectionBtn.AddThemeStyleboxOverride("hover", _chipHoverBox);
         _projectionBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
+
+        if (_showcasePanMoreBtn is not null)
+        {
+            var f6 = touch ? "" : " (F6)";
+            var panText = $"{Loc.Get(spinOn ? "shell.showcase_spin_more_on" : "shell.showcase_spin_more")}{f6}";
+            if (_showcasePanMoreBtn.Text != panText) _showcasePanMoreBtn.Text = panText;
+            var panTip = Ui.Tip(Loc.Get(spinOn ? "shell.showcase_spin_active_tip" : "shell.showcase_spin_tip"), 52);
+            if (_showcasePanMoreBtn.TooltipText != panTip) _showcasePanMoreBtn.TooltipText = panTip;
+            _showcasePanMoreBtn.AddThemeStyleboxOverride("normal", spinOn ? chipActive : chipNormal);
+            _showcasePanMoreBtn.AddThemeStyleboxOverride("hover", spinOn ? chipActive : _chipHoverBox);
+            _showcasePanMoreBtn.AddThemeColorOverride("font_color", Ui.Colour(spinOn ? "shell.brass_hi" : "shell.paper"));
+        }
         foreach (var lr in _layerRows) lr.TogglePill.QueueRedraw();
     }
 
-    public void TickMinimap() => _minimap.Tick();
+    public void TickMinimap(bool allowTextureRebuild = true) => _minimap.Tick(allowTextureRebuild);
 }

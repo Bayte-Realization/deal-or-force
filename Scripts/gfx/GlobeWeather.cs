@@ -266,7 +266,8 @@ public sealed partial class GlobePresentation
         var realisticCumulus = _mapLookRealistic && _packedLookups is null && QualityWeather;
         if (realisticCumulus)
         {
-            cloudClear = System.MathF.Min(cloudClear, 6.6f);
+            // Gone below the strategic distance (7): close in, the map is always readable.
+            cloudClear = System.MathF.Min(cloudClear, 7.0f);
             cloudFull = System.MathF.Min(cloudFull, 9.6f);
         }
         var allowed = Simulation.WeatherReadability.LayersAllowed(_campaign);
@@ -460,16 +461,19 @@ float field(vec3 n) {
         return fbm(p * 1.5, 2);
     }
     float evolve = wind * 0.0011;
+    if (shade_pass > 0.5) {
+        vec3 warp_s = vec3(fbm(p + vec3(0.0, 0.0, evolve), 1), 0.5, 0.5) - 0.5;
+        return fbm(p * 1.5 + warp_s * 0.58, 2);
+    }
     if (quality_tier > 0.5) {
         vec3 warp_m = vec3(fbm(p + vec3(0.0, 0.0, evolve), 1),
                            fbm(p + vec3(5.2, 1.3, 2.8 - evolve), 1), 0.5) - 0.5;
         return fbm(p * 1.5 + warp_m * 0.55, 2);
     }
     vec3 warp = vec3(fbm(p + vec3(0.0, 0.0, evolve), 1),
-                     fbm(p + vec3(5.2, 1.3, 2.8 - evolve), 1),
-                     fbm(p + vec3(1.7 + evolve, 9.2, 4.4), 1)) - 0.5;
+                     fbm(p + vec3(5.2, 1.3, 2.8 - evolve), 1), 0.5) - 0.5;
     vec3 q = p * 1.5 + warp * 0.58;
-    float body = fbm(q, 4);
+    float body = fbm(q, 3);
     float detail = detail_strength > 0.005 ? fbm(q * 2.2 + vec3(11.0, 4.0, 7.0), 1) : body;
     return mix(body, detail, detail_strength);
 }
@@ -642,8 +646,9 @@ void fragment() {
     float billow = smoothstep(0.30, 0.80, slow * 0.75 + fast * 0.25);
     float wisps = 0.20 + 0.80 * billow;
     float density = smoothstep(0.05, 0.95, hidden) * land * wisps;
-    // The tops of the banks catch the light; the hollows between them are grey.
-    ALBEDO = mix(vec3(0.56, 0.61, 0.68), vec3(0.80, 0.84, 0.89), billow);
+    // A grey veil, not a white cloud bank: the light tops (0.80-0.89) read as weather over
+    // the closest zoom, where the map has to stay readable.
+    ALBEDO = mix(vec3(0.42, 0.45, 0.49), vec3(0.58, 0.61, 0.65), billow);
     ALPHA = density * opacity * presence;
 }";
 }

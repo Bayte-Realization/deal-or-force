@@ -142,9 +142,9 @@ public sealed partial class GlobePresentation
         // A country owning a province and an army occupying it are not the same thing.
         // Picking the controller here also suppressed the tooltip's occupation line, since
         // it then compared that controller to itself and called the occupier the owner.
-        var nationMapIndex = provinceId > 0 && _campaign?.ProvinceMap is { } map
-            ? map.ProvinceToNation[provinceId]
-            : SourceEarthData.Control[cell];
+        var nationMapIndex = _campaign?.ProvinceMap is { } map
+            ? (provinceId > 0 && provinceId < map.ProvinceToNation.Length ? map.ProvinceToNation[provinceId] : 0)
+            : (provinceId > 0 ? 0 : (SourceEarthData.PeekControlIfLoaded() is { } ctrl ? ctrl[cell] : SourceEarthData.Control[cell]));
         if (nationMapIndex == 0 || !_nationByMapIndex.TryGetValue(nationMapIndex, out var nation))
             return false;
         return FinishPick(nation, latitude, longitude, cell, provinceId, updateSelection, out pick);
@@ -219,17 +219,16 @@ public sealed partial class GlobePresentation
         // has cut it in two, so reading the panel off it answers about a region the player
         // is not standing in - which is how clicking on ground Russia holds produced
         // Ukraine's fog of war.
-        var regionMapIndex = provinceId > 0 && _campaign?.ProvinceMap is { } liveRegions &&
-                             provinceId < liveRegions.ProvinceToState.Length
-            ? liveRegions.ProvinceToState[provinceId]
-            : SourceEarthData.States[cell];
+        var regionMapIndex = _campaign?.ProvinceMap is { } liveRegions
+            ? (provinceId > 0 && provinceId < liveRegions.ProvinceToState.Length ? liveRegions.ProvinceToState[provinceId] : 0)
+            : (SourceEarthData.PeekStatesIfLoaded() is { } loadedStates ? loadedStates[cell] : SourceEarthData.States[cell]);
         EnsureStateIndex();
         _stateByMapIndex.TryGetValue(regionMapIndex, out var state);
         if (updateSelection)
         {
-            var rawRegion = _provinceTopology is not null && provinceId > 0 && provinceId < _provinceTopology.ProvinceToState.Length
-                ? _provinceTopology.ProvinceToState[provinceId]
-                : SourceEarthData.States[cell];
+            var rawRegion = _provinceTopology is not null
+                ? (provinceId > 0 && provinceId < _provinceTopology.ProvinceToState.Length ? _provinceTopology.ProvinceToState[provinceId] : 0)
+                : (SourceEarthData.PeekStatesIfLoaded() is { } loadedRawStates ? loadedRawStates[cell] : SourceEarthData.States[cell]);
             _globeMaterial.SetShaderParameter("selected_region_id", (float)rawRegion);
             _globeMaterial.SetShaderParameter("selected_province_id", (float)provinceId);
             _globeMaterial.SetShaderParameter("selection_active", 1f);
@@ -639,18 +638,27 @@ public sealed partial class GlobePresentation
         _globeMaterial.SetShaderParameter("selected_region_live", 1f);
     }
 
+    private Vector2 _lastHoverTooltipPos = new(float.NaN, float.NaN);
+    private ulong _lastHoverTooltipMsec;
+
     public override string _GetTooltip(Vector2 atPosition)
     {
-        if (LoadingInputBlocked || MediaLibraryInputBlocked || MapLayerDrawerInputBlocked || InterfaceHidden)
-        {
-            _cachedHoverTooltip = "";
-            return "";
-        }
-        if (_touchAdapter is { IsTouchActive: true } ||
+        if (LoadingInputBlocked || MediaLibraryInputBlocked || MapLayerDrawerInputBlocked || InterfaceHidden ||
+            Platform.PlatformProfile.Current?.IsMobile == true ||
+            _dragging || _gesture.IsPressed || GlobeViewInMotion || FlatViewInMotion ||
+            _touchAdapter is { IsTouchActive: true } ||
             (_lastTouchInputUsec > 0 && (Time.GetTicksUsec() - _lastTouchInputUsec) < 350_000UL))
         {
             _cachedHoverTooltip = "";
+            _lastHoverTooltipPos = new Vector2(float.NaN, float.NaN);
             return "";
+        }
+        var nowMs = Time.GetTicksMsec();
+        if (float.IsFinite(_lastHoverTooltipPos.X) &&
+            atPosition.DistanceSquaredTo(_lastHoverTooltipPos) < 9f &&
+            nowMs - _lastHoverTooltipMsec < 60UL)
+        {
+            return _cachedHoverTooltip;
         }
         var campaign = _campaign;
         if (campaign is not null && !campaign.TryEnterRead(0, true))
@@ -658,6 +666,8 @@ public sealed partial class GlobePresentation
         try
         {
             _cachedHoverTooltip = BuildHoverTooltip(atPosition);
+            _lastHoverTooltipPos = atPosition;
+            _lastHoverTooltipMsec = nowMs;
             return _cachedHoverTooltip;
         }
         finally { campaign?.ExitRead(); }

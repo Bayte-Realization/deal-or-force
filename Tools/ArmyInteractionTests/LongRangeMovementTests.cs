@@ -667,6 +667,9 @@ static class LongRangeMovementTests
     static void Computer(ProvinceTopology map)
     {
         var c = World(map, "ISL");
+        // Exercise mission assignment and relocation together on the fixture's opening day.
+        // With the default staggered cycle, the countries can have different review days.
+        c.Defines.AiLongRangeRepositionDays = 1;
         var rus = c.NationByTag("RUS"); var ukr = c.NationByTag("UKR"); var blr = c.NationByTag("BLR");
         var war = EnsureWar(c, rus, ukr);
         if (blr is not null && !war.Involves(blr.Id)) war.Join(blr.Id, war.IsAttacking(rus.Id));
@@ -676,7 +679,7 @@ static class LongRangeMovementTests
         SupportFormation ally = null;
         if (blr is not null) ally = Put(c, blr, "artillery_brigade", CapitalCore.SupplyOriginProvinceId(c, blr));
         var orders = LongRangeMovement.AiOrders;
-        SupportCore.Tick(c); // day 0: the monthly missions and the fortnightly review both fall due
+        SupportCore.Tick(c);
         Check(LongRangeMovement.AiOrders > orders && deep.Route.Count > 0 && deep.BaseProvinceId == -1,
             "the computer sends a battery that reaches no battle toward the front, by the relocation order");
         Check(deep.Route.All(p => Controls(c)[p] == rus.MapIndex || MilitaryAccess.CanEnter(c, rus.Id, Controls(c)[p])),
@@ -685,6 +688,7 @@ static class LongRangeMovementTests
             Check(ally.Mission != SupportCore.MissionStandby, "a coalition ally's formations fly missions - not standby for the whole war");
 
         var peace = World(map, "ISL", 20261118);
+        peace.Defines.AiLongRangeRepositionDays = 1;
         foreach (var w in peace.Wars) w.Ended = true;
         peace.SupportFormations.Clear();
         var calm = Put(peace, peace.NationByTag("RUS"), "artillery_brigade", CapitalCore.SupplyOriginProvinceId(peace, peace.NationByTag("RUS")));

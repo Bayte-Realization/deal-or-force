@@ -21,6 +21,7 @@ internal sealed class CampaignAccessGate
     private int _upgradedReadDepth;
     private int _writeWaiters;
     private bool _readerRequested;
+    private long _readerRequestedAt;
 
     [ThreadStatic] private static CampaignAccessGate t_primaryGate;
     [ThreadStatic] private static int t_primaryDepth;
@@ -31,6 +32,7 @@ internal sealed class CampaignAccessGate
     public bool IsHeldByCurrentThread => IsWriterHeldByCurrentThread || GetDepth(this) > 0;
     public bool HasWriteWaiter => Volatile.Read(ref _writeWaiters) > 0;
     public bool HasReaderRequest => Volatile.Read(ref _readerRequested);
+    internal bool HasReaderRequested => Volatile.Read(ref _readerRequested);
 
     private static int GetDepth(CampaignAccessGate gate)
     {
@@ -87,10 +89,10 @@ internal sealed class CampaignAccessGate
             }
             if (timeoutMs <= 0)
             {
-                if (requestWindowOnMiss) _readerRequested = true;
+                if (requestWindowOnMiss) RequestReaderWindow();
                 return false;
             }
-            if (requestWindowOnMiss) _readerRequested = true;
+            if (requestWindowOnMiss) RequestReaderWindow();
             var start = Stopwatch.GetTimestamp();
             var freqMs = Stopwatch.Frequency / 1000.0;
             while (_writerActive)
@@ -105,6 +107,13 @@ internal sealed class CampaignAccessGate
             IncrementDepth(this);
             return true;
         }
+    }
+
+    private void RequestReaderWindow()
+    {
+        if (_readerRequested) return;
+        _readerRequestedAt = Stopwatch.GetTimestamp();
+        _readerRequested = true;
     }
 
     public void ExitRead()
@@ -165,7 +174,7 @@ internal sealed class CampaignAccessGate
         }
     }
 
-    public void ExitWrite(bool yieldToRequestedReader = false, int readerWindowMs = 24)
+    public void ExitWrite(bool yieldToRequestedReader = false, int readerWindowMs = 24, int readerWorkAheadMs = 0)
     {
         lock (_sync)
         {
@@ -189,7 +198,11 @@ internal sealed class CampaignAccessGate
 
             if (!hadUpgradedRead && yieldToRequestedReader && _readerRequested && _writeWaiters == 0 && readerWindowMs > 0)
             {
-                // Give the 60 Hz UI/render thread one frame boundary to run TryEnterRead(0) if it missed.
+                // A missed read can use the last published view. On mobile, let the
+                // worker do a little more before it idles for the next read window.
+                if (readerWorkAheadMs > 0 && Stopwatch.GetElapsedTime(_readerRequestedAt).TotalMilliseconds < readerWorkAheadMs)
+                    return;
+
                 var start = Stopwatch.GetTimestamp();
                 var freqMs = Stopwatch.Frequency / 1000.0;
                 while (_readerRequested && _writeWaiters == 0)
@@ -236,6 +249,8 @@ public readonly record struct NationSnapshot(
 /// </summary>
 public sealed class CampaignRenderSnapshot
 {
+    [ThreadStatic] private static HashSet<int> t_atWarIds;
+
     public static readonly CampaignRenderSnapshot Empty = new(
         version: 0,
         elapsedDays: 0,
@@ -271,10 +286,7 @@ public sealed class CampaignRenderSnapshot
         rankMapRev: -1,
         rankWarRev: -1,
         rankPlayerId: -1,
-        nationRanksById: new Dictionary<int, int>(0),
-        playerAvailableDecisionsCount: 0,
-        decisionsWeek: -1,
-        decisionsPpFloor: int.MinValue);
+        nationRanksById: new Dictionary<int, int>(0));
 
     public readonly long Version;
     public readonly int ElapsedDays;
@@ -307,14 +319,11 @@ public sealed class CampaignRenderSnapshot
     public readonly int PlayerOverallRank;
     public readonly double PlayerOverallScore;
     public readonly IReadOnlyDictionary<int, int> NationRanksById;
-    public readonly int PlayerAvailableDecisionsCount;
 
     internal readonly int RankWeek;
     internal readonly int RankMapRev;
     internal readonly int RankWarRev;
     internal readonly int RankPlayerId;
-    internal readonly int DecisionsWeek;
-    internal readonly int DecisionsPpFloor;
 
     private CampaignRenderSnapshot(
         long version, int elapsedDays, long elapsedHours, int dayOfYear, GameDate date,
@@ -328,8 +337,7 @@ public sealed class CampaignRenderSnapshot
         NationSnapshot[] nations, int[] slotById, int[] slotByMapIndex,
         int playerOverallRank, double playerOverallScore,
         int rankWeek, int rankMapRev, int rankWarRev, int rankPlayerId,
-        IReadOnlyDictionary<int, int> nationRanksById,
-        int playerAvailableDecisionsCount, int decisionsWeek, int decisionsPpFloor)
+        IReadOnlyDictionary<int, int> nationRanksById)
     {
         Version = version;
         ElapsedDays = elapsedDays;
@@ -366,9 +374,6 @@ public sealed class CampaignRenderSnapshot
         RankWarRev = rankWarRev;
         RankPlayerId = rankPlayerId;
         NationRanksById = nationRanksById;
-        PlayerAvailableDecisionsCount = playerAvailableDecisionsCount;
-        DecisionsWeek = decisionsWeek;
-        DecisionsPpFloor = decisionsPpFloor;
     }
 
     public bool TryGetNation(int nationId, out NationSnapshot summary)
@@ -417,16 +422,10 @@ public sealed class CampaignRenderSnapshot
             provinceController = Array.Empty<ushort>();
             controllerRev = -1;
         }
-        else if (previous.ControllerMapRevision == campaign.MapRevision &&
-                 previous.ProvinceController.Length == srcController.Length)
-        {
-            provinceController = previous.ProvinceController;
-            controllerRev = previous.ControllerMapRevision;
-        }
         else
         {
-            provinceController = (ushort[])srcController.Clone();
             controllerRev = campaign.MapRevision;
+            provinceController = ReuseProvinceRow(previous.ProvinceController, previous.ControllerMapRevision, srcController, controllerRev);
         }
 
         ushort[] provinceOwner;
@@ -437,30 +436,47 @@ public sealed class CampaignRenderSnapshot
             provinceOwner = Array.Empty<ushort>();
             ownerRev = -1;
         }
-        else if (previous.OwnerRevision == campaign.OwnershipRevision &&
-                 previous.ProvinceOwner.Length == srcOwner.Length)
-        {
-            provinceOwner = previous.ProvinceOwner;
-            ownerRev = previous.OwnerRevision;
-        }
         else
         {
-            provinceOwner = (ushort[])srcOwner.Clone();
             ownerRev = campaign.OwnershipRevision;
+            provinceOwner = ReuseProvinceRow(previous.ProvinceOwner, previous.OwnerRevision, srcOwner, ownerRev);
         }
 
         var rawNations = campaign.Nations;
         var count = rawNations.Count;
-        var maxId = 0;
-        var maxMap = 0;
-        for (var i = 0; i < count; i++)
+        var sameSlots = previous.Nations.Length == count;
+        for (var i = 0; sameSlots && i < count; i++)
         {
             var n = rawNations[i];
-            if (n.Id > maxId) maxId = n.Id;
-            if (n.MapIndex > maxMap) maxMap = n.MapIndex;
+            sameSlots = previous.Nations[i].Id == n.Id && previous.Nations[i].MapIndex == n.MapIndex;
         }
 
-        var atWarIds = new HashSet<int>();
+        var slotById = previous._slotById;
+        var slotByMap = previous._slotByMapIndex;
+        if (!sameSlots)
+        {
+            var maxId = 0;
+            var maxMap = 0;
+            for (var i = 0; i < count; i++)
+            {
+                var n = rawNations[i];
+                if (n.Id > maxId) maxId = n.Id;
+                if (n.MapIndex > maxMap) maxMap = n.MapIndex;
+            }
+            slotById = new int[maxId + 1];
+            slotByMap = new int[maxMap + 1];
+            Array.Fill(slotById, -1);
+            Array.Fill(slotByMap, -1);
+            for (var i = 0; i < count; i++)
+            {
+                var n = rawNations[i];
+                if ((uint)n.Id < (uint)slotById.Length) slotById[n.Id] = i;
+                if ((uint)n.MapIndex < (uint)slotByMap.Length) slotByMap[n.MapIndex] = i;
+            }
+        }
+
+        var atWarIds = t_atWarIds ??= new HashSet<int>();
+        atWarIds.Clear();
         var liveWars = Warfare.LiveWars(campaign);
         for (var w = 0; w < liveWars.Count; w++)
         {
@@ -471,21 +487,24 @@ public sealed class CampaignRenderSnapshot
             foreach (var ally in war.DefenderAllies) atWarIds.Add(ally);
         }
 
-        var summaries = new NationSnapshot[count];
-        var slotById = new int[maxId + 1];
-        Array.Fill(slotById, -1);
-        var slotByMap = new int[maxMap + 1];
-        Array.Fill(slotByMap, -1);
+        // Readers may hold the previous snapshot across frames. Share its country rows while
+        // they match, then copy the matching prefix into a fresh array on the first change.
+        var reuseSummaries = sameSlots;
+        var summaries = reuseSummaries ? previous.Nations : new NationSnapshot[count];
         var playerId = campaign.Player?.Id ?? -1;
+        var names = campaign.Caches.SnapshotNames;
+        names.Prepare(count);
         for (var i = 0; i < count; i++)
         {
             var n = rawNations[i];
-            summaries[i] = new NationSnapshot(
+            // Nation.MapName uses the same display name.
+            var name = names.Get(n, i);
+            var summary = new NationSnapshot(
                 n.Id,
                 n.MapIndex,
                 n.Tag,
-                n.DisplayName,
-                n.MapName,
+                name,
+                name,
                 n.Color,
                 IsAlive: n.RetiredDay < 0,
                 IsPlayer: n.Id == playerId,
@@ -495,8 +514,14 @@ public sealed class CampaignRenderSnapshot
                 n.Gdp,
                 n.Treasury,
                 n.Stability);
-            if ((uint)n.Id < (uint)slotById.Length) slotById[n.Id] = i;
-            if ((uint)n.MapIndex < (uint)slotByMap.Length) slotByMap[n.MapIndex] = i;
+            if (reuseSummaries)
+            {
+                if (summary.Equals(summaries[i])) continue;
+                summaries = new NationSnapshot[count];
+                Array.Copy(previous.Nations, summaries, i);
+                reuseSummaries = false;
+            }
+            summaries[i] = summary;
         }
 
         var week = campaign.ElapsedDays / 7;
@@ -509,10 +534,9 @@ public sealed class CampaignRenderSnapshot
         var rankWarRev = previous.RankWarRev;
         if (previous.Version == 0 ||
             rankWeek != week ||
-            rankMapRev != campaign.MapRevision ||
-            rankWarRev != campaign.WarRevision ||
             previous.RankPlayerId != rankPlayerId ||
-            ranksById.Count == 0)
+            ranksById.Count == 0 ||
+            (campaign.IsPaused && (rankMapRev != campaign.MapRevision || rankWarRev != campaign.WarRevision)))
         {
             var rows = CountryRankings.Read(campaign, rankWeights);
             var map = new Dictionary<int, int>(rows.Count);
@@ -532,30 +556,6 @@ public sealed class CampaignRenderSnapshot
             rankWeek = week;
             rankMapRev = campaign.MapRevision;
             rankWarRev = campaign.WarRevision;
-        }
-
-        var player = campaign.Player;
-        var ppFloor = player is not null ? (int)MathF.Floor(player.PoliticalPoints) : int.MinValue;
-        var decisionsCount = previous.PlayerAvailableDecisionsCount;
-        var decisionsWeek = previous.DecisionsWeek;
-        if (player is null)
-        {
-            decisionsCount = 0;
-            decisionsWeek = week;
-        }
-        else if (previous.Version == 0 ||
-                 decisionsWeek != week ||
-                 previous.RankMapRev != campaign.MapRevision ||
-                 previous.RankWarRev != campaign.WarRevision ||
-                 previous.RankPlayerId != player.Id ||
-                 previous.DecisionsPpFloor != ppFloor)
-        {
-            var c = 0;
-            var all = DecisionCatalog.All;
-            for (var i = 0; i < all.Count; i++)
-                if (!DecisionCatalog.IsBlocked(campaign, player, all[i])) c++;
-            decisionsCount = c;
-            decisionsWeek = week;
         }
 
         return new CampaignRenderSnapshot(
@@ -593,10 +593,433 @@ public sealed class CampaignRenderSnapshot
             rankMapRev,
             rankWarRev,
             rankPlayerId,
-            ranksById,
-            decisionsCount,
-            decisionsWeek,
-            ppFloor);
+            ranksById);
+    }
+
+    private static ushort[] ReuseProvinceRow(ushort[] previous, int previousRevision, ushort[] source, int revision)
+    {
+        // Other map data can invalidate the revision without changing any flag in this row.
+        if (previous.Length == source.Length && (previousRevision == revision || previous.AsSpan().SequenceEqual(source)))
+            return previous;
+        return (ushort[])source.Clone();
+    }
+}
+
+/// <summary>
+/// Compact immutable summary of a player war for lock-free HUD rendering.
+/// </summary>
+public readonly record struct HudWarSummary(
+    int Id,
+    int EnemyId,
+    string EnemyTag,
+    string EnemyName,
+    bool IsAttacking,
+    float WarScore,
+    int StartedDay);
+
+/// <summary>
+/// Atomic immutable HUD telemetry snapshot published at step boundaries alongside
+/// <see cref="CampaignRenderSnapshot"/> so main-thread UI refreshes read consistent numbers
+/// without acquiring <see cref="CampaignAccessGate"/> or blocking <c>DoF-Sim</c>.
+/// </summary>
+public sealed class CampaignHudSnapshot
+{
+    [ThreadStatic] private static HashSet<int> t_atWarIds;
+    [ThreadStatic] private static List<HudWarSummary> t_playerWars;
+
+    public static readonly CampaignHudSnapshot Empty = new(
+        version: 0,
+        elapsedDays: 0,
+        elapsedHours: 0,
+        speed: 1,
+        isPaused: true,
+        observerMode: true,
+        hasSimulationFault: false,
+        mapRevision: -1,
+        warRevision: -1,
+        ownershipRevision: -1,
+        playerId: -1,
+        playerTag: "",
+        playerResearchEmpty: true,
+        supportScreenEnabled: false,
+        treasury: 0f,
+        weeklyBalance: 0f,
+        gdp: 0f,
+        population: 0L,
+        reviewNetPop: 0L,
+        regionCount: 0,
+        publicDebt: 0f,
+        debtArrears: 0f,
+        paymentArrears: 0f,
+        manpowerReserve: 0f,
+        reinforcementCapacity: 0f,
+        inflation: 0f,
+        stability: 0f,
+        politicalPoints: 0f,
+        ppWeekly: 0f,
+        prestige: 0f,
+        warSupport: 0f,
+        armyExperience: 0f,
+        airExperience: 0f,
+        navalExperience: 0f,
+        defconLevel: 5,
+        worldTension: 0f,
+        playerEngagedArmies: 0,
+        playerDrillingArmies: 0,
+        playerFlyingAir: 0,
+        playerAtSeaFleets: 0,
+        playerIdleArmies: 0,
+        playerIdleSupport: 0,
+        playerTotalDivisions: 0,
+        pendingEventCount: 0,
+        incomingDiplomaticCount: 0,
+        chronicleLatestSeq: 0L,
+        openPlayerWars: Array.Empty<HudWarSummary>(),
+        atWarNationIds: Array.Empty<int>());
+
+    public readonly long Version;
+    public readonly int ElapsedDays;
+    public readonly long ElapsedHours;
+    public readonly int Speed;
+    public readonly bool IsPaused;
+    public readonly bool ObserverMode;
+    public readonly bool HasSimulationFault;
+    public readonly int MapRevision;
+    public readonly int WarRevision;
+    public readonly int OwnershipRevision;
+    public readonly int PlayerId;
+    public readonly string PlayerTag;
+    public readonly bool PlayerResearchEmpty;
+    public readonly bool SupportScreenEnabled;
+    public readonly float Treasury;
+    public readonly float WeeklyBalance;
+    public readonly float Gdp;
+    public readonly long Population;
+    public readonly long ReviewNetPop;
+    public readonly int RegionCount;
+    public readonly float PublicDebt;
+    public readonly float DebtArrears;
+    public readonly float PaymentArrears;
+    public readonly float ManpowerReserve;
+    public readonly float ReinforcementCapacity;
+    public readonly float Inflation;
+    public readonly float Stability;
+    public readonly float PoliticalPoints;
+    public readonly float PpWeekly;
+    public readonly float Prestige;
+    public readonly float WarSupport;
+    public readonly float ArmyExperience;
+    public readonly float AirExperience;
+    public readonly float NavalExperience;
+    public readonly int DefconLevel;
+    public readonly float WorldTension;
+    public readonly int PlayerEngagedArmies;
+    public readonly int PlayerDrillingArmies;
+    public readonly int PlayerFlyingAir;
+    public readonly int PlayerAtSeaFleets;
+    public readonly int PlayerIdleArmies;
+    public readonly int PlayerIdleSupport;
+    public readonly int PlayerTotalDivisions;
+    public readonly int PendingEventCount;
+    public readonly int IncomingDiplomaticCount;
+    public readonly long ChronicleLatestSeq;
+    public readonly HudWarSummary[] OpenPlayerWars;
+    public readonly int[] AtWarNationIds;
+
+    private CampaignHudSnapshot(
+        long version, int elapsedDays, long elapsedHours, int speed, bool isPaused,
+        bool observerMode, bool hasSimulationFault, int mapRevision, int warRevision,
+        int ownershipRevision, int playerId, string playerTag, bool playerResearchEmpty,
+        bool supportScreenEnabled, float treasury, float weeklyBalance, float gdp,
+        long population, long reviewNetPop, int regionCount, float publicDebt,
+        float debtArrears, float paymentArrears, float manpowerReserve,
+        float reinforcementCapacity, float inflation, float stability,
+        float politicalPoints, float ppWeekly, float prestige, float warSupport,
+        float armyExperience, float airExperience, float navalExperience,
+        int defconLevel, float worldTension, int playerEngagedArmies,
+        int playerDrillingArmies, int playerFlyingAir, int playerAtSeaFleets,
+        int playerIdleArmies, int playerIdleSupport, int playerTotalDivisions,
+        int pendingEventCount, int incomingDiplomaticCount, long chronicleLatestSeq,
+        HudWarSummary[] openPlayerWars, int[] atWarNationIds)
+    {
+        Version = version;
+        ElapsedDays = elapsedDays;
+        ElapsedHours = elapsedHours;
+        Speed = speed;
+        IsPaused = isPaused;
+        ObserverMode = observerMode;
+        HasSimulationFault = hasSimulationFault;
+        MapRevision = mapRevision;
+        WarRevision = warRevision;
+        OwnershipRevision = ownershipRevision;
+        PlayerId = playerId;
+        PlayerTag = playerTag;
+        PlayerResearchEmpty = playerResearchEmpty;
+        SupportScreenEnabled = supportScreenEnabled;
+        Treasury = treasury;
+        WeeklyBalance = weeklyBalance;
+        Gdp = gdp;
+        Population = population;
+        ReviewNetPop = reviewNetPop;
+        RegionCount = regionCount;
+        PublicDebt = publicDebt;
+        DebtArrears = debtArrears;
+        PaymentArrears = paymentArrears;
+        ManpowerReserve = manpowerReserve;
+        ReinforcementCapacity = reinforcementCapacity;
+        Inflation = inflation;
+        Stability = stability;
+        PoliticalPoints = politicalPoints;
+        PpWeekly = ppWeekly;
+        Prestige = prestige;
+        WarSupport = warSupport;
+        ArmyExperience = armyExperience;
+        AirExperience = airExperience;
+        NavalExperience = navalExperience;
+        DefconLevel = defconLevel;
+        WorldTension = worldTension;
+        PlayerEngagedArmies = playerEngagedArmies;
+        PlayerDrillingArmies = playerDrillingArmies;
+        PlayerFlyingAir = playerFlyingAir;
+        PlayerAtSeaFleets = playerAtSeaFleets;
+        PlayerIdleArmies = playerIdleArmies;
+        PlayerIdleSupport = playerIdleSupport;
+        PlayerTotalDivisions = playerTotalDivisions;
+        PendingEventCount = pendingEventCount;
+        IncomingDiplomaticCount = incomingDiplomaticCount;
+        ChronicleLatestSeq = chronicleLatestSeq;
+        OpenPlayerWars = openPlayerWars;
+        AtWarNationIds = atWarNationIds;
+    }
+
+    public bool IsNationAtWar(int nationId) =>
+        AtWarNationIds.Length > 0 && Array.BinarySearch(AtWarNationIds, nationId) >= 0;
+
+    public static CampaignHudSnapshot Capture(Campaign campaign, long version, CampaignHudSnapshot previous = null)
+    {
+        if (campaign is null) return Empty;
+        var prev = previous ?? Empty;
+        var player = campaign.Player;
+        var pid = player?.Id ?? -1;
+        var obs = campaign.ObserverMode;
+
+        var openWars = Warfare.OpenWars(campaign);
+        int[] atWarIds;
+        if (prev.Version > 0 && prev.WarRevision == campaign.WarRevision && prev.AtWarNationIds is not null)
+        {
+            atWarIds = prev.AtWarNationIds;
+        }
+        else if (openWars.Count == 0)
+        {
+            atWarIds = Array.Empty<int>();
+        }
+        else
+        {
+            var set = t_atWarIds ??= new HashSet<int>();
+            set.Clear();
+            for (var i = 0; i < openWars.Count; i++)
+            {
+                var w = openWars[i];
+                if (w.Ended) continue;
+                set.Add(w.AttackerId);
+                set.Add(w.DefenderId);
+                foreach (var a in w.AttackerAllies) set.Add(a);
+                foreach (var d in w.DefenderAllies) set.Add(d);
+            }
+            if (set.Count == 0)
+            {
+                atWarIds = Array.Empty<int>();
+            }
+            else
+            {
+                atWarIds = new int[set.Count];
+                set.CopyTo(atWarIds);
+                Array.Sort(atWarIds);
+            }
+        }
+
+        HudWarSummary[] playerWars;
+        if (pid < 0 || openWars.Count == 0)
+        {
+            playerWars = Array.Empty<HudWarSummary>();
+        }
+        else
+        {
+            var list = t_playerWars ??= new List<HudWarSummary>(4);
+            list.Clear();
+            for (var i = 0; i < openWars.Count; i++)
+            {
+                var w = openWars[i];
+                if (w.Ended || !w.Involves(pid)) continue;
+                var isAtk = w.IsAttacking(pid);
+                var enemyId = isAtk ? w.DefenderId : w.AttackerId;
+                var enemy = campaign.NationById(enemyId);
+                list.Add(new HudWarSummary(
+                    w.Id,
+                    enemyId,
+                    enemy?.Tag ?? "",
+                    enemy?.DisplayName ?? "",
+                    isAtk,
+                    w.WarScore,
+                    w.StartedDay));
+            }
+            if (list.Count == 0)
+            {
+                playerWars = Array.Empty<HudWarSummary>();
+            }
+            else if (prev.OpenPlayerWars.Length == list.Count && prev.WarRevision == campaign.WarRevision && prev.PlayerId == pid)
+            {
+                var same = true;
+                for (var i = 0; i < list.Count; i++)
+                {
+                    if (!list[i].Equals(prev.OpenPlayerWars[i])) { same = false; break; }
+                }
+                playerWars = same ? prev.OpenPlayerWars : list.ToArray();
+            }
+            else
+            {
+                playerWars = list.ToArray();
+            }
+        }
+
+        var engaged = 0;
+        var drilling = 0;
+        var idleArmies = 0;
+        var totalDivisions = 0;
+        if (pid >= 0)
+        {
+            var armies = campaign.Armies;
+            for (var i = 0; i < armies.Count; i++)
+            {
+                var a = armies[i];
+                if (a.NationId != pid) continue;
+                totalDivisions += (int)MathF.Ceiling(a.Divisions);
+                if (a.InBattle) engaged++;
+                else if (a.Training) drilling++;
+                if (playerWars.Length > 0 && a.FrontLineId < 0 && a.AssignedWarId < 0 && !a.DirectOrder && !a.Training && !a.InBattle)
+                    idleArmies++;
+            }
+        }
+
+        var flying = 0;
+        var idleSupport = 0;
+        if (pid >= 0)
+        {
+            var formations = campaign.SupportFormations;
+            for (var i = 0; i < formations.Count; i++)
+            {
+                var f = formations[i];
+                if (f.NationId != pid) continue;
+                if (f.Strength > 0.05f && !string.IsNullOrEmpty(f.Mission) &&
+                    !string.Equals(f.Mission, SupportCore.MissionStandby, StringComparison.Ordinal))
+                    flying++;
+                if (playerWars.Length > 0 && !f.CutOff && f.Route.Count == 0 &&
+                    string.Equals(f.Mission, SupportCore.MissionStandby, StringComparison.Ordinal))
+                    idleSupport++;
+            }
+        }
+
+        var atSea = 0;
+        if (pid >= 0)
+        {
+            var fleets = campaign.Fleets;
+            for (var i = 0; i < fleets.Count; i++)
+            {
+                var fl = fleets[i];
+                if (fl.NationId == pid && fl.Hulls > 0 && (fl.InAction || fl.Mission != FleetMission.Anchored))
+                    atSea++;
+            }
+        }
+
+        var pendingEvents = 0;
+        if (pid >= 0)
+        {
+            var events = campaign.PendingEvents;
+            for (var i = 0; i < events.Count; i++)
+                if (events[i].NationId == pid) pendingEvents++;
+        }
+
+        var incomingDeals = 0;
+        if (player is not null && !obs)
+        {
+            incomingDeals = DealNegotiations.Incoming(campaign, pid)
+                + ForeignAssistance.Incoming(campaign, pid)
+                + ArmsShipmentRequests.Incoming(campaign, pid)
+                + Ultimatum.Incoming(campaign, pid)
+                + MilitaryAccess.Incoming(campaign, pid)
+                + DiplomaticActs.Incoming(campaign, pid)
+                + AllyRivalShift.Incoming(campaign, pid);
+            var leases = campaign.LeaseOffers;
+            for (var i = 0; i < leases.Count; i++)
+            {
+                var o = leases[i];
+                if (o.ToId == pid && o.ExpiresDay > campaign.ElapsedDays && string.Equals(o.State, "pending", StringComparison.Ordinal))
+                    incomingDeals++;
+            }
+            foreach (var rel in campaign.Relations.Values)
+            {
+                if (rel.A != pid && rel.B != pid) continue;
+                var propId = rel.AgreementOfferedBy;
+                if (propId < 0 || propId == pid) continue;
+                if (!AgreementSystem.OfferPending(campaign, rel)) continue;
+                if (campaign.NationById(propId) is not null) incomingDeals++;
+            }
+        }
+
+        var chronicleEntries = campaign.Chronicle.Entries;
+        var chronicleSeq = chronicleEntries.Count > 0 ? chronicleEntries[^1].Sequence : 0L;
+        var ppWeekly = player is null ? 0f :
+            campaign.Defines.PoliticalPointsPerWeek + campaign.Defines.PoliticalPointsStabilityWeight * Math.Clamp(player.Stability, 0f, 1f);
+
+        return new CampaignHudSnapshot(
+            version: version,
+            elapsedDays: campaign.ElapsedDays,
+            elapsedHours: campaign.ElapsedHours,
+            speed: campaign.Speed,
+            isPaused: campaign.IsPaused,
+            observerMode: obs,
+            hasSimulationFault: campaign.SimulationFault is { Length: > 0 },
+            mapRevision: campaign.MapRevision,
+            warRevision: campaign.WarRevision,
+            ownershipRevision: campaign.OwnershipRevision,
+            playerId: pid,
+            playerTag: player?.Tag ?? "",
+            playerResearchEmpty: player is null || string.IsNullOrEmpty(player.CurrentResearch),
+            supportScreenEnabled: MechanicFeatures.ScreenEnabled(campaign, "Support"),
+            treasury: player?.Treasury ?? 0f,
+            weeklyBalance: player?.WeeklyBalance ?? 0f,
+            gdp: player?.Gdp ?? 0f,
+            population: player?.Population ?? 0L,
+            reviewNetPop: player is null ? 0L : (player.ReviewBirths - player.ReviewDeaths + player.ReviewNetMigration),
+            regionCount: player is null ? 0 : campaign.StatesOf(player).Length,
+            publicDebt: player is null ? 0f : SovereignFinance.Outstanding(player),
+            debtArrears: player?.DebtArrears ?? 0f,
+            paymentArrears: player?.PaymentArrears ?? 0f,
+            manpowerReserve: player?.ManpowerReserve ?? 0f,
+            reinforcementCapacity: player?.ReinforcementCapacity ?? 0f,
+            inflation: player?.Inflation ?? 0f,
+            stability: player?.Stability ?? 0f,
+            politicalPoints: player?.PoliticalPoints ?? 0f,
+            ppWeekly: ppWeekly,
+            prestige: player?.Prestige ?? 0f,
+            warSupport: player?.WarSupport ?? 0f,
+            armyExperience: player?.ArmyExperience ?? 0f,
+            airExperience: player?.AirExperience ?? 0f,
+            navalExperience: player?.NavalExperience ?? 0f,
+            defconLevel: Math.Clamp(DefconSystem.CurrentLevel(campaign), 1, 5),
+            worldTension: Math.Clamp(WorldWar.Tension(campaign) / 100f, 0f, 1f),
+            playerEngagedArmies: engaged,
+            playerDrillingArmies: drilling,
+            playerFlyingAir: flying,
+            playerAtSeaFleets: atSea,
+            playerIdleArmies: idleArmies,
+            playerIdleSupport: idleSupport,
+            playerTotalDivisions: totalDivisions,
+            pendingEventCount: pendingEvents,
+            incomingDiplomaticCount: incomingDeals,
+            chronicleLatestSeq: chronicleSeq,
+            openPlayerWars: playerWars,
+            atWarNationIds: atWarIds);
     }
 }
 
@@ -616,6 +1039,33 @@ public sealed class BackgroundSimRunner : IDisposable
     private volatile bool _pausedDesired = true;
     private volatile int _speedDesired = 1;
     private long _snapshotVersion;
+    private sealed class PublishedClock
+    {
+        public readonly Campaign Campaign;
+        private long _calendar;
+
+        public PublishedClock(Campaign campaign)
+        {
+            Campaign = campaign;
+            Publish(campaign.Date);
+        }
+
+        // One atomic value retains the full signed year and the three bounded calendar fields.
+        public void Publish(GameDate date) => Volatile.Write(ref _calendar,
+            ((long)date.Year << 32) | ((long)(ushort)date.Month << 16) | ((long)(byte)date.Day << 8) | (byte)date.Hour);
+
+        public GameDate Read()
+        {
+            var value = Volatile.Read(ref _calendar);
+            return new GameDate((int)(value >> 32), (int)((value >> 16) & 0xffff), (int)((value >> 8) & 0xff))
+            {
+                Hour = (int)(value & 0xff)
+            };
+        }
+    }
+
+    private PublishedClock _publishedClock;
+    private CampaignHudSnapshot _hudSnapshot = CampaignHudSnapshot.Empty;
     private long _lastSnapshotPublishedTicks;
     private int _lastSnapshotMapRev = int.MinValue;
     private int _lastSnapshotOwnerRev = int.MinValue;
@@ -626,13 +1076,53 @@ public sealed class BackgroundSimRunner : IDisposable
     private Exception _pendingException;
     private bool _sawPendingPlayerEvent;
     private long _workerStepStartHours = -1;
+    private long _workerAcquireTicks;
+    private long _workerWorkTicks;
+    private long _workerReleaseTicks;
+    private long _snapshotTicks;
+    private long _snapshotBytes;
+    private long _snapshotCount;
+    private long _yieldRequestedAtTicks;
 
     public CountryRankings.Weights RankingWeights { get; set; } = CountryRankings.Weights.Default;
     public bool MobilePacing { get; set; }
     public double MinSpeed5DayIntervalMs { get; set; }
+    internal bool MeasurePacing { get; set; }
+
+    public void RequestYield() => Volatile.Write(ref _yieldRequestedAtTicks, Stopwatch.GetTimestamp());
+
+    private bool IsYieldRequested()
+    {
+        var ticks = Volatile.Read(ref _yieldRequestedAtTicks);
+        return ticks != 0 && Stopwatch.GetElapsedTime(ticks).TotalMilliseconds < 25.0;
+    }
+
+    internal (double AcquireMs, double WorkMs, double ReleaseMs) ReadPacingTimings() => (
+        Stopwatch.GetElapsedTime(0, Interlocked.Read(ref _workerAcquireTicks)).TotalMilliseconds,
+        Stopwatch.GetElapsedTime(0, Interlocked.Read(ref _workerWorkTicks)).TotalMilliseconds,
+        Stopwatch.GetElapsedTime(0, Interlocked.Read(ref _workerReleaseTicks)).TotalMilliseconds);
+
+    internal (double Milliseconds, long Bytes, long Count) ReadSnapshotTimings() => (
+        Stopwatch.GetElapsedTime(0, Interlocked.Read(ref _snapshotTicks)).TotalMilliseconds,
+        Interlocked.Read(ref _snapshotBytes), Interlocked.Read(ref _snapshotCount));
 
     public Campaign Campaign => _campaign;
     public bool IsActive => _workerRunning && _thread is { IsAlive: true };
+
+    internal GameDate ReadPresentationDate(Campaign campaign)
+    {
+        var published = Volatile.Read(ref _publishedClock);
+        return campaign is not null && ReferenceEquals(_campaign, campaign) &&
+               published is not null && ReferenceEquals(published.Campaign, campaign)
+            ? published.Read()
+            : campaign?.Date ?? default;
+    }
+
+    internal CampaignHudSnapshot ReadHudSnapshot(Campaign campaign)
+    {
+        if (campaign is null || !ReferenceEquals(_campaign, campaign)) return null;
+        return Volatile.Read(ref _hudSnapshot) ?? CampaignHudSnapshot.Empty;
+    }
 
     public void Start(Campaign campaign)
     {
@@ -649,6 +1139,8 @@ public sealed class BackgroundSimRunner : IDisposable
         _pendingAutosave = false;
         _pendingException = null;
         _workerStepStartHours = -1;
+        _workerAcquireTicks = _workerWorkTicks = _workerReleaseTicks = 0;
+        _snapshotTicks = _snapshotBytes = _snapshotCount = 0;
         _sawPendingPlayerEvent = campaign.HasPendingPlayerEvent();
         campaign.DeferMainThreadNotifications = true;
 
@@ -656,6 +1148,7 @@ public sealed class BackgroundSimRunner : IDisposable
         try
         {
             campaign.FinishStep();
+            Volatile.Write(ref _publishedClock, new PublishedClock(campaign));
             PublishSnapshotLocked(campaign, force: true);
         }
         finally
@@ -687,6 +1180,8 @@ public sealed class BackgroundSimRunner : IDisposable
             campaign.DeferMainThreadNotifications = false;
             _campaign = null;
         }
+        Volatile.Write(ref _publishedClock, null);
+        Volatile.Write(ref _hudSnapshot, CampaignHudSnapshot.Empty);
     }
 
     public void SyncClockState(bool paused, int speed)
@@ -713,6 +1208,7 @@ public sealed class BackgroundSimRunner : IDisposable
             if (campaign.MidStep) campaign.FinishStep();
             action(campaign);
             if (refreshSnapshot) PublishSnapshotLocked(campaign, force: true);
+            else if (!campaign.MidStep) PublishCompletedDate(campaign);
         }
         finally
         {
@@ -739,6 +1235,7 @@ public sealed class BackgroundSimRunner : IDisposable
             if (campaign.MidStep) campaign.FinishStep();
             var result = action(campaign);
             if (refreshSnapshot) PublishSnapshotLocked(campaign, force: true);
+            else if (!campaign.MidStep) PublishCompletedDate(campaign);
             return result;
         }
         finally
@@ -787,8 +1284,17 @@ public sealed class BackgroundSimRunner : IDisposable
         return stepCompleted || pendingAutosave || fault is not null;
     }
 
+    private void PublishCompletedDate(Campaign campaign)
+    {
+        // The calendar advances inside the staged step. Publish it only at the
+        // completed boundary, even when the larger render snapshot is throttled.
+        var clock = Volatile.Read(ref _publishedClock);
+        if (clock is not null && ReferenceEquals(clock.Campaign, campaign)) clock.Publish(campaign.Date);
+    }
+
     private void PublishSnapshotLocked(Campaign campaign, bool force)
     {
+        PublishCompletedDate(campaign);
         var now = Stopwatch.GetTimestamp();
         var mapRev = campaign.MapRevision;
         var ownerRev = campaign.OwnershipRevision;
@@ -802,7 +1308,20 @@ public sealed class BackgroundSimRunner : IDisposable
             return;
 
         var nextVer = Interlocked.Increment(ref _snapshotVersion);
-        var snap = CampaignRenderSnapshot.Capture(campaign, campaign.RenderSnapshot, RankingWeights, nextVer);
+        var measurePacing = MeasurePacing;
+        var captureStarted = measurePacing ? Stopwatch.GetTimestamp() : 0;
+        var allocated = measurePacing ? GC.GetAllocatedBytesForCurrentThread() : 0;
+        var prevRender = campaign.RenderSnapshot;
+        var prevHud = Volatile.Read(ref _hudSnapshot);
+        var snap = CampaignRenderSnapshot.Capture(campaign, prevRender, RankingWeights, nextVer);
+        var hudSnap = CampaignHudSnapshot.Capture(campaign, nextVer, prevHud);
+        if (measurePacing)
+        {
+            Interlocked.Add(ref _snapshotTicks, Stopwatch.GetTimestamp() - captureStarted);
+            Interlocked.Add(ref _snapshotBytes, GC.GetAllocatedBytesForCurrentThread() - allocated);
+            Interlocked.Increment(ref _snapshotCount);
+        }
+        Volatile.Write(ref _hudSnapshot, hudSnap);
         campaign.PublishRenderSnapshot(snap);
         _lastSnapshotPublishedTicks = now;
         _lastSnapshotMapRev = mapRev;
@@ -816,6 +1335,7 @@ public sealed class BackgroundSimRunner : IDisposable
         var accumulator = 0.0;
         var lastSpeed = -1;
         long lastSpeed5DayTicks = 0;
+        var emaSpeed5DayMs = 0.0;
         try
         {
             while (!_stopRequested)
@@ -827,6 +1347,7 @@ public sealed class BackgroundSimRunner : IDisposable
                 {
                     accumulator = 0.0;
                     lastSpeed5DayTicks = 0;
+                    emaSpeed5DayMs = 0.0;
                     lastTickTime = Stopwatch.GetTimestamp();
                     lock (_wakeLock)
                     {
@@ -843,6 +1364,7 @@ public sealed class BackgroundSimRunner : IDisposable
                 {
                     accumulator = 0.0;
                     lastSpeed5DayTicks = 0;
+                    emaSpeed5DayMs = 0.0;
                     lock (_wakeLock)
                     {
                         if (!_stopRequested && !_pausedDesired) Monitor.Wait(_wakeLock, 20);
@@ -858,6 +1380,7 @@ public sealed class BackgroundSimRunner : IDisposable
                     lastSpeed = speed;
                     accumulator = 0.0;
                     lastSpeed5DayTicks = 0;
+                    emaSpeed5DayMs = 0.0;
                 }
 
                 var continuingStep = campaign.MidStep;
@@ -893,15 +1416,23 @@ public sealed class BackgroundSimRunner : IDisposable
                     Thread.Yield();
                     continue;
                 }
+                if (IsYieldRequested())
+                {
+                    Thread.Sleep(1);
+                    continue;
+                }
 
                 var stepDone = false;
                 var openedDay = false;
                 var awaitingPlayer = false;
                 Exception caught = null;
                 var mobilePacing = MobilePacing;
+                var measurePacing = MeasurePacing;
                 var stepWorkStarted = Stopwatch.GetTimestamp();
 
                 campaign.AccessGate.EnterWrite(asBackgroundWorker: true);
+                var acquiredAt = measurePacing ? Stopwatch.GetTimestamp() : 0;
+                if (measurePacing) Interlocked.Add(ref _workerAcquireTicks, acquiredAt - stepWorkStarted);
                 try
                 {
                     if (_stopRequested || _pausedDesired || campaign.IsPaused || campaign.SimulationFault.Length > 0)
@@ -912,21 +1443,41 @@ public sealed class BackgroundSimRunner : IDisposable
                     else
                     {
                         campaign.Speed = speed;
-                        if (!campaign.MidStep) _workerStepStartHours = campaign.ElapsedHours;
-                        // Run in bounded slices so ExitWrite yields promptly whenever the
-                        // render/UI thread requests a read window or command lock during heavy ticks.
-                        var sliceMs = speed >= 5 ? (mobilePacing ? 4.5 : 8.0) : (mobilePacing ? 3.0 : 5.0);
-                        var finished = campaign.StepFor(sliceMs);
-                        if (finished && !campaign.MidStep)
+                        // Batch consecutive hours at Speed 5 inside one write lock until a new day
+                        // opens, a player modal arrives, a slice runs out mid-step, a reader/writer
+                        // waits, or the slice budget expires.
+                        var sliceMs = speed >= 5 ? (mobilePacing ? 5.5 : 9.0) : (mobilePacing ? 3.0 : 5.0);
+                        var batchStarted = Stopwatch.GetTimestamp();
+                        var anyStepDone = false;
+                        var anyOpenedDay = false;
+                        var anyAwaitingPlayer = false;
+                        do
                         {
+                            if (!campaign.MidStep) _workerStepStartHours = campaign.ElapsedHours;
+                            var remainingMs = Math.Max(0.0, sliceMs - Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds);
+                            var finished = campaign.StepFor(remainingMs);
+                            if (!finished || campaign.MidStep) break;
+
                             if (_workerStepStartHours >= 0 && campaign.ElapsedHours != _workerStepStartHours)
                             {
-                                stepDone = true;
-                                openedDay = campaign.StepOpensNewDay;
-                                awaitingPlayer = campaign.HasPendingPlayerEvent();
+                                anyStepDone = true;
+                                if (campaign.StepOpensNewDay) anyOpenedDay = true;
+                                if (campaign.HasPendingPlayerEvent()) anyAwaitingPlayer = true;
+                                PublishCompletedDate(campaign);
                             }
-                            PublishSnapshotLocked(campaign, force: campaign.IsPaused || awaitingPlayer || openedDay);
+
+                            if (speed < 5 || anyOpenedDay || anyAwaitingPlayer) break;
+                            if (_stopRequested || _pausedDesired || campaign.IsPaused || campaign.SimulationFault.Length > 0) break;
+                            if (campaign.AccessGate.HasReaderRequested || campaign.AccessGate.HasWriteWaiter || IsYieldRequested()) break;
+                            if (Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= sliceMs) break;
                         }
+                        while (true);
+
+                        stepDone = anyStepDone;
+                        openedDay = anyOpenedDay;
+                        awaitingPlayer = anyAwaitingPlayer;
+                        if (!campaign.MidStep)
+                            PublishSnapshotLocked(campaign, force: campaign.IsPaused || anyAwaitingPlayer || anyOpenedDay);
                     }
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException && ex is not AccessViolationException)
@@ -935,7 +1486,11 @@ public sealed class BackgroundSimRunner : IDisposable
                 }
                 finally
                 {
-                    campaign.AccessGate.ExitWrite(yieldToRequestedReader: true, readerWindowMs: mobilePacing ? 40 : 24);
+                    var releasingAt = measurePacing ? Stopwatch.GetTimestamp() : 0;
+                    if (measurePacing) Interlocked.Add(ref _workerWorkTicks, releasingAt - acquiredAt);
+                    campaign.AccessGate.ExitWrite(yieldToRequestedReader: true, readerWindowMs: mobilePacing ? 40 : 24,
+                        readerWorkAheadMs: mobilePacing ? 10 : 0);
+                    if (measurePacing) Interlocked.Add(ref _workerReleaseTicks, Stopwatch.GetTimestamp() - releasingAt);
                 }
 
                 if (stepDone && speed < 5 && (continuingStep || (stepInterval > 0.0 && Stopwatch.GetElapsedTime(stepWorkStarted).TotalSeconds > stepInterval)))
@@ -962,10 +1517,14 @@ public sealed class BackgroundSimRunner : IDisposable
                 {
                     if (lastSpeed5DayTicks != 0)
                     {
+                        var overshootMs = emaSpeed5DayMs > minDayMs
+                            ? Math.Min(minDayMs * 0.5, emaSpeed5DayMs - minDayMs)
+                            : 0.0;
+                        var targetDayMs = Math.Max(minDayMs * 0.5, minDayMs - overshootMs);
                         while (!_stopRequested && !_pausedDesired && _speedDesired >= 5)
                         {
                             var elapsedDayMs = Stopwatch.GetElapsedTime(lastSpeed5DayTicks).TotalMilliseconds;
-                            var remMs = (int)Math.Ceiling(minDayMs - elapsedDayMs);
+                            var remMs = (int)Math.Ceiling(targetDayMs - elapsedDayMs);
                             if (remMs <= 0) break;
                             lock (_wakeLock)
                             {
@@ -973,6 +1532,12 @@ public sealed class BackgroundSimRunner : IDisposable
                                     Monitor.Wait(_wakeLock, Math.Min(remMs, 16));
                             }
                         }
+                        var actualDayMs = Math.Min(
+                            Stopwatch.GetElapsedTime(lastSpeed5DayTicks).TotalMilliseconds,
+                            minDayMs * 4.0);
+                        emaSpeed5DayMs = emaSpeed5DayMs <= 0.0
+                            ? actualDayMs
+                            : emaSpeed5DayMs * 0.65 + actualDayMs * 0.35;
                     }
                     lastSpeed5DayTicks = Stopwatch.GetTimestamp();
                     lastTickTime = lastSpeed5DayTicks;

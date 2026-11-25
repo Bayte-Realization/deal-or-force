@@ -3,8 +3,9 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Godot;
+using DealOrForce.Platform;
 using DealOrForce.Simulation;
+using Godot;
 
 namespace DealOrForce;
 
@@ -44,7 +45,10 @@ public partial class ScenarioMapEditor : Control
     };
     private static Button ActionButton(string id, string text, Action action)
     {
-        var button = new Button { Name = id, Text = Loc.Get(text), CustomMinimumSize = new Vector2(0, 34) };
+        var minH = PlatformProfile.Current.IsTouchPrimary
+            ? MathF.Max(42f, PlatformProfile.Current.RecommendedCloseButtonPx)
+            : 34f;
+        var button = new Button { Name = id, Text = Loc.Get(text), CustomMinimumSize = new Vector2(0, minH) };
         DealOrForceGame.StyleButton(button, false);
         button.Pressed += action; return button;
     }
@@ -71,6 +75,18 @@ public partial class ScenarioMapEditor : Control
         toolbar.AddChild(ActionButton("MapFocus", "Focus target country", () => _map.FocusCountry(_owner)));
         toolbar.AddChild(ActionButton("MapSettings", "Scenario settings…", EditSettings));
         toolbar.AddChild(ActionButton("MapHelp", "Controls & scope", ShowHelp));
+        var closeBtn = new Button
+        {
+            Name = "MapClose",
+            Text = "×",
+            TooltipText = Ui.Tip(Loc.Get("Close")),
+            CustomMinimumSize = PlatformProfile.Current.IsTouchPrimary
+                ? new Vector2(MathF.Max(44f, PlatformProfile.Current.RecommendedCloseButtonPx), MathF.Max(42f, PlatformProfile.Current.RecommendedCloseButtonPx))
+                : new Vector2(36, 34)
+        };
+        DealOrForceGame.StyleButton(closeBtn, false);
+        closeBtn.Pressed += RequestClose;
+        toolbar.AddChild(closeBtn);
 
         // Zero-confusion mode banner + live cursor hover readout
         _modeBanner = new PanelContainer { Name = "MapModeBanner", ClipContents = true };
@@ -110,8 +126,8 @@ public partial class ScenarioMapEditor : Control
         sidebar.AddChild(Caption("PAINT TARGET"));
         sidebar.AddChild(Caption("Choose where painted provinces will belong."));
         var search = _search = new LineEdit { Name = "MapCountrySearch", PlaceholderText = Loc.Get("Find country…"), ClearButtonEnabled = true };
-        Ui.FocusInputIfDesktop(search);
         sidebar.AddChild(search);
+        Ui.FocusInputIfDesktop(search);
         _countries = new ItemList { Name = "MapCountries", CustomMinimumSize = new Vector2(200,
             (float)Math.Clamp(InterfaceSkin.Metric("map_editor.country_list_height", 150), 90, 320)) }; sidebar.AddChild(_countries);
         search.TextChanged += FilterCountries;

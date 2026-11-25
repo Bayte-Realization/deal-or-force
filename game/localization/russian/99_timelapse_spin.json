@@ -1,0 +1,9 @@
+{
+  "shell.showcase_spin_short": "Автовращение Земли",
+  "shell.showcase_spin_stop": "Остановить вращение",
+  "shell.showcase_spin_stop_short": "СТОП",
+  "shell.showcase_spin_more": "Автовращение",
+  "shell.showcase_spin_more_on": "Стоп: вращ.",
+  "shell.showcase_spin_tip": "Плавное автовращение Земли для обзора и таймлапсов. Нажмите ещё раз, чтобы остановить.",
+  "shell.showcase_spin_active_tip": "Автовращение Земли активно. Нажмите, чтобы остановить."
+}

@@ -62,6 +62,15 @@ public sealed partial class GlobePresentation
     // Stage completion, not a time estimate. Never pretend to measure the worker's bytes.
     public double MapLoadingProgress => _mapApplied ? 100
         : _pendingMapResult is null ? _mapWorkerProgress : 55 + _mapApplyStage * 6;
+    private static bool HasBootTopologyMarkers(ushort[] states, int width, int height)
+    {
+        var vatIdx = Math.Clamp((int)((90f - 41.9029f) / 180f * height), 0, height - 1) * width +
+                     Math.Clamp((int)((12.4534f + 180f) / 360f * width), 0, width - 1);
+        var gibIdx = Math.Clamp((int)((90f - 36.1408f) / 180f * height), 0, height - 1) * width +
+                     Math.Clamp((int)((-5.3536f + 180f) / 360f * width), 0, width - 1);
+        return states[vatIdx] == 1717 && states[gibIdx] == 1719;
+    }
+
     public void BindCampaign(Simulation.Campaign campaign)
     {
         _campaign = campaign;
@@ -72,17 +81,24 @@ public sealed partial class GlobePresentation
         _mapModeSubjectId = -1;
         var topologyAlreadyApplied = false;
         if (campaign.ScenarioId == "2024" && _mapTask is null &&
-            SourceEarthData.States is { Length: > 0 } sourceStates &&
-            SourceEarthData.Width > 0 && SourceEarthData.Height > 0 &&
             campaign.States.Count >= Simulation.WorldMapTables.StateRows.Length + Simulation.TerritorialTopology.RegionRuleCount)
         {
-            var w = SourceEarthData.Width;
-            var h = SourceEarthData.Height;
-            var vatIdx = Math.Clamp((int)((90f - 41.9029f) / 180f * h), 0, h - 1) * w +
-                         Math.Clamp((int)((12.4534f + 180f) / 360f * w), 0, w - 1);
-            var gibIdx = Math.Clamp((int)((90f - 36.1408f) / 180f * h), 0, h - 1) * w +
-                         Math.Clamp((int)((-5.3536f + 180f) / 360f * w), 0, w - 1);
-            topologyAlreadyApplied = sourceStates[vatIdx] == 1717 && sourceStates[gibIdx] == 1719;
+            if (SourceEarthData.PeekStatesIfLoaded() is { Length: > 0 } loadedStates &&
+                SourceEarthData.Width > 0 && SourceEarthData.Height > 0)
+            {
+                topologyAlreadyApplied = HasBootTopologyMarkers(loadedStates, SourceEarthData.Width, SourceEarthData.Height);
+            }
+            else if (Simulation.TerritorialTopology.TryPeekBootCacheRegionFingerprint(
+                         SourceEarthData.Width, SourceEarthData.Height, out _) &&
+                     Simulation.LakeRegions.CreatedCount > 0)
+            {
+                topologyAlreadyApplied = true;
+            }
+            else if (SourceEarthData.States is { Length: > 0 } sourceStates &&
+                     SourceEarthData.Width > 0 && SourceEarthData.Height > 0)
+            {
+                topologyAlreadyApplied = HasBootTopologyMarkers(sourceStates, SourceEarthData.Width, SourceEarthData.Height);
+            }
         }
         var repairs = (campaign.ScenarioId != "2024" || _mapTask is not null || topologyAlreadyApplied)
             ? Array.Empty<Simulation.TerritorialTopology.RepairSummary>()
@@ -168,6 +184,7 @@ public sealed partial class GlobePresentation
         _controlRevision = -1;
         _frontRevision = -1;
         RefreshProvinceControllers();
+        SourceEarthData.ReleaseDecodedGrids();
     }
 
     /// <summary>
@@ -405,23 +422,41 @@ public sealed partial class GlobePresentation
         var sunShadows = _quality.SunShadows && !isTouchPrimary;
         if (IsInstanceValid(_daySun))
         {
-            _daySun.ShadowEnabled = sunShadows;
-            _daySun.DirectionalShadowMode = _quality.RenderScale >= 0.99f
+            if (_daySun.ShadowEnabled != sunShadows) _daySun.ShadowEnabled = sunShadows;
+            var targetShadowMode = _quality.RenderScale >= 0.99f
                 ? DirectionalLight3D.ShadowMode.Parallel4Splits
                 : DirectionalLight3D.ShadowMode.Parallel2Splits;
+            if (_daySun.DirectionalShadowMode != targetShadowMode)
+                _daySun.DirectionalShadowMode = targetShadowMode;
         }
         // Release the directional shadow atlas entirely when sun shadows are off; holding a 512
         // buffer still kept a shadow render target allocated for a disabled pass.
-        RenderingServer.DirectionalShadowAtlasSetSize(
-            sunShadows
-                ? Math.Clamp((int)MathF.Round(2048f * _quality.RenderScale), 512, 2048)
-                : 0, true);
+        var targetShadowAtlas = sunShadows
+            ? Math.Clamp((int)MathF.Round(2048f * _quality.RenderScale), 512, 2048)
+            : 0;
+        if (_lastShadowAtlasSize != targetShadowAtlas)
+        {
+            _lastShadowAtlasSize = targetShadowAtlas;
+            RenderingServer.DirectionalShadowAtlasSetSize(targetShadowAtlas, true);
+        }
         if (IsInstanceValid(_viewport))
         {
-            _viewport.Msaa3D = isTouchPrimary ? MobileAntialiasing() : MapAntialiasing(_quality);
+            var targetMsaa = isTouchPrimary ? MobileAntialiasing() : MapAntialiasing(_quality);
+            if (_viewport.Msaa3D != targetMsaa) _viewport.Msaa3D = targetMsaa;
             ConfigureViewportCrispness(isTouchPrimary);
         }
         ApplyShaderQualityTier();
+        if (isTouchPrimary) ResizeViewport();
+    }
+
+    private int _lastShadowAtlasSize = -1;
+
+    public void SetViewportRenderingPaused(bool paused)
+    {
+        if (!IsInstanceValid(_viewport)) return;
+        var target = paused ? SubViewport.UpdateMode.Disabled : SubViewport.UpdateMode.Always;
+        if (_viewport.RenderTargetUpdateMode != target)
+            _viewport.RenderTargetUpdateMode = target;
     }
 
 
@@ -488,11 +523,16 @@ public sealed partial class GlobePresentation
     private void ConfigureViewportCrispness(bool isTouchPrimary)
     {
         if (!IsInstanceValid(_viewport)) return;
-        _viewport.AnisotropicFilteringLevel = isTouchPrimary
+        var targetAniso = isTouchPrimary
             ? Viewport.AnisotropicFiltering.Anisotropy4X
             : Viewport.AnisotropicFiltering.Anisotropy8X;
-        _viewport.TextureMipmapBias = isTouchPrimary ? -0.35f : -0.20f;
-        _viewport.ScreenSpaceAA = Viewport.ScreenSpaceAAEnum.Disabled;
+        if (_viewport.AnisotropicFilteringLevel != targetAniso)
+            _viewport.AnisotropicFilteringLevel = targetAniso;
+        var targetBias = isTouchPrimary ? -0.35f : -0.20f;
+        if (!Mathf.IsEqualApprox(_viewport.TextureMipmapBias, targetBias))
+            _viewport.TextureMipmapBias = targetBias;
+        if (_viewport.ScreenSpaceAA != Viewport.ScreenSpaceAAEnum.Disabled)
+            _viewport.ScreenSpaceAA = Viewport.ScreenSpaceAAEnum.Disabled;
     }
 
     private Viewport.Msaa MobileAntialiasing()
@@ -517,9 +557,10 @@ public sealed partial class GlobePresentation
 
     private float MobileEffectiveRenderScale(float requestedScale)
     {
-        // Keep sharp 1.0 native scale at smooth FPS (0.90f ceiling on MobileLow), while allowing
-        // FrameRateGovernor and player render_scale settings to step down toward 0.65f under load.
-        var ceiling = CurrentShaderQualityTier() >= 1.5f ? 0.90f : 1.0f;
+        // Cap MobileLow at 0.82f and MobileMedium at 0.95f to cut mobile fillrate pressure
+        // while allowing FrameRateGovernor and player render_scale settings to step down toward 0.65f.
+        var tier = CurrentShaderQualityTier();
+        var ceiling = tier >= 1.5f ? 0.82f : (tier >= 0.5f ? 0.95f : 1.0f);
         return Math.Clamp(requestedScale, 0.65f, ceiling);
     }
 
@@ -529,21 +570,27 @@ public sealed partial class GlobePresentation
         set
         {
             if (!IsInstanceValid(_viewport)) return;
-            var scale = Mathf.Clamp(value, 0.25f, 2f);
-            _viewport.Scaling3DScale = scale;
+            var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+            var scale = isTouchPrimary
+                ? MobileEffectiveRenderScale(value)
+                : Mathf.Clamp(value, 0.25f, 2f);
+            if (MathF.Abs(_viewport.Scaling3DScale - scale) > 0.0005f)
+                _viewport.Scaling3DScale = scale;
             // Mobile Vulkan uses Bilinear filtering only (FSR1/FSR2 are Forward+ desktop); desktop Vulkan allows FSR1/FSR2.
             var isCompat = RenderingServer.GetCurrentRenderingMethod() == "gl_compatibility";
-            var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
             var mode = (Simulation.SettingsCatalog.Chosen("map_upscaling_mode") ?? "auto").ToLowerInvariant();
-            if (isTouchPrimary || isCompat || mode == "bilinear" || scale > 1.001f || (mode == "auto" && scale >= 0.999f))
-                _viewport.Scaling3DMode = Viewport.Scaling3DModeEnum.Bilinear;
-            else if (mode == "fsr2")
-                _viewport.Scaling3DMode = Viewport.Scaling3DModeEnum.Fsr2;
-            else
-                _viewport.Scaling3DMode = Viewport.Scaling3DModeEnum.Fsr;
-            _viewport.FsrSharpness = Simulation.SettingsCatalog.Of("map_fsr_sharpness") is null
+            var targetMode = isTouchPrimary || isCompat || mode == "bilinear" || scale > 1.001f || (mode == "auto" && scale >= 0.999f)
+                ? Viewport.Scaling3DModeEnum.Bilinear
+                : mode == "fsr2"
+                    ? Viewport.Scaling3DModeEnum.Fsr2
+                    : Viewport.Scaling3DModeEnum.Fsr;
+            if (_viewport.Scaling3DMode != targetMode)
+                _viewport.Scaling3DMode = targetMode;
+            var targetSharpness = Simulation.SettingsCatalog.Of("map_fsr_sharpness") is null
                 ? 0.2f
                 : Math.Clamp(Simulation.SettingsCatalog.Number("map_fsr_sharpness"), 0f, 2f);
+            if (MathF.Abs(_viewport.FsrSharpness - targetSharpness) > 0.0005f)
+                _viewport.FsrSharpness = targetSharpness;
         }
     }
 
@@ -562,20 +609,28 @@ public sealed partial class GlobePresentation
             Math.Max(1, (int)MathF.Round(logical.Y * MathF.Abs(toScreen.Y))));
         if (Platform.PlatformProfile.Current?.IsTouchPrimary == true)
         {
-            // Cap long edge at 2048 on phones and BlueStacks so 1920x1080 runs 1:1 native
-            // and 2400x1080 scales cleanly to 2048x922 instead of blurry 720p.
+            // Cap long edge at 1600 on MobileLow (emulators/budget GPUs) and 2048 on MobileMedium/High.
             var longEdge = Math.Max(pixels.X, pixels.Y);
-            if (longEdge > 2048)
+            if (CurrentShaderQualityTier() >= 1.5f)
             {
-                var ratio = 2048f / Math.Max(1, longEdge);
-                pixels = new Vector2I(
-                    Math.Max(1, (int)MathF.Round(pixels.X * ratio)),
-                    Math.Max(1, (int)MathF.Round(pixels.Y * ratio)));
+                if (longEdge > 1600) pixels = ScaleViewportToLongEdge(pixels, longEdge, 1600);
+            }
+            else if (longEdge > 2048)
+            {
+                pixels = ScaleViewportToLongEdge(pixels, longEdge, 2048);
             }
         }
         var units = new Vector2I(Math.Max(1, (int)MathF.Round(logical.X)), Math.Max(1, (int)MathF.Round(logical.Y)));
         if (_viewport.Size != pixels) _viewport.Size = pixels;
         if (_viewport.Size2DOverride != units) _viewport.Size2DOverride = units;
+    }
+
+    private static Vector2I ScaleViewportToLongEdge(Vector2I pixels, int longEdge, int maxEdge)
+    {
+        var ratio = maxEdge / (float)Math.Max(1, longEdge);
+        return new Vector2I(
+            Math.Max(1, (int)MathF.Round(pixels.X * ratio)),
+            Math.Max(1, (int)MathF.Round(pixels.Y * ratio)));
     }
 
     /// <summary>

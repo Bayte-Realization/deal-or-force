@@ -70,6 +70,7 @@ internal static class SaveRoundTripReport
             var file = Path.Combine(outFolder, "roundtrip.bdfsave");
             size = new FileInfo(file).Length;
             magic = Magic(file);
+            var prepareMs = prepare.Ms;
             prepare = default;
             // Each round reads a world as large as the one it wrote; collect the last one first so
             // a round measures the format and not the heap the previous round left behind.
@@ -87,12 +88,12 @@ internal static class SaveRoundTripReport
             var againHistory = HistoryHash(back.Campaign);
             var same = again == fingerprint && againHistory == history;
             if (!same) failures++;
-            prepares.Add(prepare.Ms);
+            prepares.Add(prepareMs);
             commits.Add(commit.Ms);
             loads.Add(load.Ms);
             commitPeaks.Add(commit.PeakMb);
             loadPeaks.Add(load.PeakMb);
-            Console.WriteLine($"ROUNDTRIP round {round}: prepare {prepare.Ms:N0} ms, commit {commit.Ms:N0} ms (peak +{commit.PeakMb:N0} MB), " +
+            Console.WriteLine($"ROUNDTRIP round {round}: prepare {prepareMs:N0} ms, commit {commit.Ms:N0} ms (peak +{commit.PeakMb:N0} MB), " +
                               $"load {load.Ms:N0} ms (peak +{load.PeakMb:N0} MB), {size:N0} bytes {magic}, " +
                               $"fingerprint {again:X16} history {againHistory} {(same ? "SAME" : "DIFFERENT")}");
             back = default;

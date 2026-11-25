@@ -1,6 +1,9 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Threading;
+using Equativ.RoaringBitmaps;
+using ZeroAlloc.Collections;
 
 namespace DealOrForce.Simulation;
 
@@ -40,7 +43,10 @@ internal sealed class CampaignCaches
     private SupportEnabledMemoCache _supportEnabledMemo;
     private SupportStepCache _supportStep;
     private SupportPassCache _supportPass;
+    private RelationDormancy.SweepScratch _relationSweep;
     private ProtectorIndex _protectors;
+    private CountryNames.DisplayNameCache _snapshotNames;
+    private OwnedProvincesBitmapCache _ownedProvinceBitmaps;
 
     public AiStrategyPostureCache AiStrategyPosture => LazyInitializer.EnsureInitialized(ref _aiStrategyPosture)!;
     public AiTemperamentCache AiTemperament => LazyInitializer.EnsureInitialized(ref _aiTemperament)!;
@@ -62,7 +68,43 @@ internal sealed class CampaignCaches
     public SupportEnabledMemoCache SupportEnabledMemo => LazyInitializer.EnsureInitialized(ref _supportEnabledMemo)!;
     public SupportStepCache SupportStep => LazyInitializer.EnsureInitialized(ref _supportStep)!;
     public SupportPassCache SupportPass => LazyInitializer.EnsureInitialized(ref _supportPass)!;
+    public RelationDormancy.SweepScratch RelationSweep => LazyInitializer.EnsureInitialized(ref _relationSweep)!;
     public ProtectorIndex Protectors => LazyInitializer.EnsureInitialized(ref _protectors)!;
+    public CountryNames.DisplayNameCache SnapshotNames => LazyInitializer.EnsureInitialized(ref _snapshotNames)!;
+    public OwnedProvincesBitmapCache OwnedProvinceBitmaps => LazyInitializer.EnsureInitialized(ref _ownedProvinceBitmaps)!;
+
+    internal sealed class OwnedProvincesBitmapCache
+    {
+        private readonly object _gate = new();
+        private ProvinceTopology _map;
+        private int _ownershipRevision = int.MinValue;
+        private readonly Dictionary<int, RoaringBitmap> _byOwner = new();
+
+        public RoaringBitmap ForOwner(Campaign campaign, int nationMapIndex)
+        {
+            var map = campaign?.ProvinceMap;
+            if (map is null || nationMapIndex <= 0) return RoaringBitmap.Create(Array.Empty<int>());
+            lock (_gate)
+            {
+                if (!ReferenceEquals(_map, map) || _ownershipRevision != campaign.OwnershipRevision)
+                {
+                    _map = map;
+                    _ownershipRevision = campaign.OwnershipRevision;
+                    _byOwner.Clear();
+                }
+                if (_byOwner.TryGetValue(nationMapIndex, out var cached)) return cached;
+                using var provinces = new HeapPooledList<int>(64);
+                var ptn = map.ProvinceToNation;
+                for (var p = 1; p <= map.ProvinceCount; p++)
+                    if (ptn[p] == nationMapIndex) provinces.Add(p);
+                var built = provinces.Count == 0
+                    ? RoaringBitmap.Create(Array.Empty<int>())
+                    : RoaringBitmap.Create(provinces.ToArray());
+                _byOwner[nationMapIndex] = built;
+                return built;
+            }
+        }
+    }
     public LongRangeMovement.RepositionScratch RepositionScratch { get; } = new();
     public int NextKinScanRunId;
 

@@ -15,20 +15,38 @@ namespace DealOrForce;
 /// </summary>
 public sealed partial class GlobePresentation
 {
-    private ImmediateMesh _battleArrowMesh;
+    private ArrayMesh _battleArrowMesh;
     private MeshInstance3D _battleArrowNode;
     private ShaderMaterial _battleArrowMaterial;
 
-    private ImmediateMesh _battleClashMesh;
+    private ArrayMesh _battleClashMesh;
     private MeshInstance3D _battleClashNode;
     private ShaderMaterial _battleClashMaterial;
 
     private readonly List<(Vector3 Origin, Vector3 Target, float Intensity)> _battleArrowSpecs = new();
     private readonly List<(Vector3 Point, Vector3 Normal, float Intensity, bool Pocket)> _battleClashSpecs = new();
+    private readonly List<Vector3> _battleArrowVerts = new();
+    private readonly List<Vector2> _battleArrowUvs = new();
+    private readonly List<Color> _battleArrowColors = new();
+    private readonly List<Vector3> _battleClashVerts = new();
+    private readonly List<Vector2> _battleClashUvs = new();
+    private readonly List<Color> _battleClashColors = new();
+    private readonly Godot.Collections.Array _battleSurfaceArrays = CreateSurfaceArrays();
+    private int _battleArrowFingerprint = int.MinValue;
+    private int _battleClashFingerprint = int.MinValue;
+    private bool _battleArrowHasSurface;
+    private bool _battleClashHasSurface;
+
+    private static Godot.Collections.Array CreateSurfaceArrays()
+    {
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        return arrays;
+    }
 
     private void CreateBattleVfx(Node3D world)
     {
-        _battleArrowMesh = new ImmediateMesh();
+        _battleArrowMesh = new ArrayMesh();
         _battleArrowMaterial = new ShaderMaterial
         {
             Shader = new Shader { Code = BattleAssaultArrowShader },
@@ -46,7 +64,7 @@ public sealed partial class GlobePresentation
         };
         world.AddChild(_battleArrowNode);
 
-        _battleClashMesh = new ImmediateMesh();
+        _battleClashMesh = new ArrayMesh();
         _battleClashMaterial = new ShaderMaterial
         {
             Shader = new Shader { Code = BattleClashPulseShader },
@@ -108,27 +126,80 @@ public sealed partial class GlobePresentation
     private void CommitBattleVfxMeshes()
     {
         if (_battleArrowMesh is null || _battleClashMesh is null) return;
-        _battleArrowMesh.ClearSurfaces();
-        _battleClashMesh.ClearSurfaces();
 
-        if (_battleArrowSpecs.Count > 0)
+        var arrowHash = HashCode.Combine(_flatMap, _battleArrowSpecs.Count);
+        for (var i = 0; i < _battleArrowSpecs.Count; i++)
         {
-            _battleArrowMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles, _battleArrowMaterial);
-            for (var i = 0; i < _battleArrowSpecs.Count; i++)
-                EmitBattleAssaultArrow(_battleArrowSpecs[i].Origin, _battleArrowSpecs[i].Target, _battleArrowSpecs[i].Intensity);
-            _battleArrowMesh.SurfaceEnd();
+            var spec = _battleArrowSpecs[i];
+            arrowHash = HashCode.Combine(arrowHash,
+                BitConverter.SingleToInt32Bits(spec.Origin.X),
+                BitConverter.SingleToInt32Bits(spec.Origin.Y),
+                BitConverter.SingleToInt32Bits(spec.Origin.Z),
+                BitConverter.SingleToInt32Bits(spec.Target.X),
+                BitConverter.SingleToInt32Bits(spec.Target.Y),
+                BitConverter.SingleToInt32Bits(spec.Target.Z),
+                BitConverter.SingleToInt32Bits(spec.Intensity));
         }
-
-        if (_battleClashSpecs.Count > 0)
+        if (arrowHash != _battleArrowFingerprint)
         {
-            _battleClashMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles, _battleClashMaterial);
-            for (var i = 0; i < _battleClashSpecs.Count; i++)
+            _battleArrowFingerprint = arrowHash;
+            if (_battleArrowHasSurface) { _battleArrowMesh.ClearSurfaces(); _battleArrowHasSurface = false; }
+            if (_battleArrowSpecs.Count > 0)
             {
-                var spec = _battleClashSpecs[i];
-                EmitBattleClashQuad(spec.Point, spec.Normal, spec.Intensity, spec.Pocket);
+                _battleArrowVerts.Clear();
+                _battleArrowUvs.Clear();
+                _battleArrowColors.Clear();
+                for (var i = 0; i < _battleArrowSpecs.Count; i++)
+                    EmitBattleAssaultArrow(_battleArrowSpecs[i].Origin, _battleArrowSpecs[i].Target, _battleArrowSpecs[i].Intensity);
+                if (_battleArrowVerts.Count > 0)
+                {
+                    _battleSurfaceArrays[(int)Mesh.ArrayType.Vertex] = _battleArrowVerts.ToArray();
+                    _battleSurfaceArrays[(int)Mesh.ArrayType.TexUV] = _battleArrowUvs.ToArray();
+                    _battleSurfaceArrays[(int)Mesh.ArrayType.Color] = _battleArrowColors.ToArray();
+                    _battleArrowMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, _battleSurfaceArrays);
+                    _battleArrowHasSurface = true;
+                }
             }
-            _battleClashMesh.SurfaceEnd();
         }
+
+        var clashHash = HashCode.Combine(_flatMap, _battleClashSpecs.Count);
+        for (var i = 0; i < _battleClashSpecs.Count; i++)
+        {
+            var spec = _battleClashSpecs[i];
+            clashHash = HashCode.Combine(clashHash,
+                BitConverter.SingleToInt32Bits(spec.Point.X),
+                BitConverter.SingleToInt32Bits(spec.Point.Y),
+                BitConverter.SingleToInt32Bits(spec.Point.Z),
+                BitConverter.SingleToInt32Bits(spec.Intensity),
+                spec.Pocket);
+        }
+        if (clashHash != _battleClashFingerprint)
+        {
+            _battleClashFingerprint = clashHash;
+            if (_battleClashHasSurface) { _battleClashMesh.ClearSurfaces(); _battleClashHasSurface = false; }
+            if (_battleClashSpecs.Count > 0)
+            {
+                _battleClashVerts.Clear();
+                _battleClashUvs.Clear();
+                _battleClashColors.Clear();
+                for (var i = 0; i < _battleClashSpecs.Count; i++)
+                {
+                    var spec = _battleClashSpecs[i];
+                    EmitBattleClashQuad(spec.Point, spec.Normal, spec.Intensity, spec.Pocket);
+                }
+                if (_battleClashVerts.Count > 0)
+                {
+                    _battleSurfaceArrays[(int)Mesh.ArrayType.Vertex] = _battleClashVerts.ToArray();
+                    _battleSurfaceArrays[(int)Mesh.ArrayType.TexUV] = _battleClashUvs.ToArray();
+                    _battleSurfaceArrays[(int)Mesh.ArrayType.Color] = _battleClashColors.ToArray();
+                    _battleClashMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, _battleSurfaceArrays);
+                    _battleClashHasSurface = true;
+                }
+            }
+        }
+        _battleSurfaceArrays[(int)Mesh.ArrayType.Vertex] = default;
+        _battleSurfaceArrays[(int)Mesh.ArrayType.TexUV] = default;
+        _battleSurfaceArrays[(int)Mesh.ArrayType.Color] = default;
     }
 
     private void FinishBattleVfxVisibility()
@@ -136,9 +207,9 @@ public sealed partial class GlobePresentation
         var show = MilitaryMarkersEnabled && ViewDistance <= 14f;
         var tier = CurrentShaderQualityTier();
         if (IsInstanceValid(_battleArrowNode))
-            _battleArrowNode.Visible = show && _battleArrowSpecs.Count > 0;
+            _battleArrowNode.Visible = show && _battleArrowHasSurface;
         if (IsInstanceValid(_battleClashNode))
-            _battleClashNode.Visible = show && _battleClashSpecs.Count > 0 && tier < 1.5f;
+            _battleClashNode.Visible = show && _battleClashHasSurface && tier < 1.5f;
     }
 
     private void EmitBattleAssaultArrow(Vector3 origin, Vector3 target, float intensity)
@@ -182,15 +253,15 @@ public sealed partial class GlobePresentation
 
     private void EmitArrowTri(Vector3 a, Vector3 b, Vector3 c, Vector2 uvA, Vector2 uvB, Vector2 uvC, Color col)
     {
-        _battleArrowMesh.SurfaceSetColor(col);
-        _battleArrowMesh.SurfaceSetUV(uvA);
-        _battleArrowMesh.SurfaceAddVertex(a);
-        _battleArrowMesh.SurfaceSetColor(col);
-        _battleArrowMesh.SurfaceSetUV(uvB);
-        _battleArrowMesh.SurfaceAddVertex(b);
-        _battleArrowMesh.SurfaceSetColor(col);
-        _battleArrowMesh.SurfaceSetUV(uvC);
-        _battleArrowMesh.SurfaceAddVertex(c);
+        _battleArrowVerts.Add(a);
+        _battleArrowUvs.Add(uvA);
+        _battleArrowColors.Add(col);
+        _battleArrowVerts.Add(b);
+        _battleArrowUvs.Add(uvB);
+        _battleArrowColors.Add(col);
+        _battleArrowVerts.Add(c);
+        _battleArrowUvs.Add(uvC);
+        _battleArrowColors.Add(col);
     }
 
     private void EmitBattleClashQuad(Vector3 center, Vector3 normal, float intensity, bool pocket)
@@ -216,13 +287,13 @@ public sealed partial class GlobePresentation
         // The shader reads a red channel above 0.4 as an encirclement and draws a second ring.
         var col = pocket ? new Color(0.56f, 0.07f, 0.05f, intensity) : new Color(0.26f, 0.06f, 0.05f, intensity);
 
-        _battleClashMesh.SurfaceSetColor(col); _battleClashMesh.SurfaceSetUV(new Vector2(0f, 0f)); _battleClashMesh.SurfaceAddVertex(p00);
-        _battleClashMesh.SurfaceSetColor(col); _battleClashMesh.SurfaceSetUV(new Vector2(1f, 0f)); _battleClashMesh.SurfaceAddVertex(p10);
-        _battleClashMesh.SurfaceSetColor(col); _battleClashMesh.SurfaceSetUV(new Vector2(0f, 1f)); _battleClashMesh.SurfaceAddVertex(p01);
+        _battleClashVerts.Add(p00); _battleClashUvs.Add(new Vector2(0f, 0f)); _battleClashColors.Add(col);
+        _battleClashVerts.Add(p10); _battleClashUvs.Add(new Vector2(1f, 0f)); _battleClashColors.Add(col);
+        _battleClashVerts.Add(p01); _battleClashUvs.Add(new Vector2(0f, 1f)); _battleClashColors.Add(col);
 
-        _battleClashMesh.SurfaceSetColor(col); _battleClashMesh.SurfaceSetUV(new Vector2(1f, 0f)); _battleClashMesh.SurfaceAddVertex(p10);
-        _battleClashMesh.SurfaceSetColor(col); _battleClashMesh.SurfaceSetUV(new Vector2(1f, 1f)); _battleClashMesh.SurfaceAddVertex(p11);
-        _battleClashMesh.SurfaceSetColor(col); _battleClashMesh.SurfaceSetUV(new Vector2(0f, 1f)); _battleClashMesh.SurfaceAddVertex(p01);
+        _battleClashVerts.Add(p10); _battleClashUvs.Add(new Vector2(1f, 0f)); _battleClashColors.Add(col);
+        _battleClashVerts.Add(p11); _battleClashUvs.Add(new Vector2(1f, 1f)); _battleClashColors.Add(col);
+        _battleClashVerts.Add(p01); _battleClashUvs.Add(new Vector2(0f, 1f)); _battleClashColors.Add(col);
     }
 
     private const string BattleAssaultArrowShader = """

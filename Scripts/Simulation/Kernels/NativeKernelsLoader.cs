@@ -101,50 +101,31 @@ public static partial class NativeKernelsLoader
 
             try
             {
+                var isMobileRuntime = OperatingSystem.IsAndroid() || OperatingSystem.IsIOS();
                 foreach (var candidate in CandidateLibraryPaths())
                 {
                     if (string.IsNullOrWhiteSpace(candidate) || !File.Exists(candidate)) continue;
                     if (!NativeLibrary.TryLoad(candidate, out var handle)) continue;
 
-                    _libraryHandle = handle;
-                    var abi = dof_kernels_abi_version();
-                    if (abi != ExpectedAbiVersion)
-                    {
-                        NativeLibrary.Free(handle);
-                        _libraryHandle = IntPtr.Zero;
-                        _abiVersion = abi;
-                        _available = false;
-                        _diagnostic = $"abi mismatch (got {abi}, expected {ExpectedAbiVersion}) at {candidate}";
-                        Volatile.Write(ref _initialized, 1);
+                    if (TryActivateLibraryHandle(handle, candidate))
                         return;
-                    }
+                    return;
+                }
 
-                    _abiVersion = abi;
-                    _simdLevel = dof_kernels_simd_level();
-                    _loadedPath = candidate;
-                    _available = true;
-                    _diagnostic = $"loaded abi={abi} simd={_simdLevel} path={candidate}";
+                if (isMobileRuntime && !ReadEnvFlag("DOF_KERNELS_ALLOW_MOBILE", defaultValue: false))
+                {
+                    _available = false;
+                    _diagnostic = "disabled by default on mobile (using pure C# fallback)";
                     Volatile.Write(ref _initialized, 1);
                     return;
                 }
 
                 // Final attempt via default OS library search paths.
-                if (NativeLibrary.TryLoad(PlatformLibraryFileName(), typeof(NativeKernelsLoader).Assembly, null, out var sysHandle))
+                var sysLibName = PlatformLibraryFileName();
+                if (NativeLibrary.TryLoad(sysLibName, typeof(NativeKernelsLoader).Assembly, null, out var sysHandle))
                 {
-                    _libraryHandle = sysHandle;
-                    var abi = dof_kernels_abi_version();
-                    if (abi == ExpectedAbiVersion)
-                    {
-                        _abiVersion = abi;
-                        _simdLevel = dof_kernels_simd_level();
-                        _loadedPath = PlatformLibraryFileName();
-                        _available = true;
-                        _diagnostic = $"loaded abi={abi} simd={_simdLevel} via OS search";
-                        Volatile.Write(ref _initialized, 1);
+                    if (TryActivateLibraryHandle(sysHandle, sysLibName, viaOsSearch: true))
                         return;
-                    }
-                    NativeLibrary.Free(sysHandle);
-                    _libraryHandle = IntPtr.Zero;
                 }
 
                 _available = false;
@@ -161,6 +142,42 @@ public static partial class NativeKernelsLoader
         }
     }
 
+    private static bool TryActivateLibraryHandle(IntPtr handle, string sourceLabel, bool viaOsSearch = false)
+    {
+        if (handle == IntPtr.Zero) return false;
+        _libraryHandle = handle;
+        try
+        {
+            var abi = dof_kernels_abi_version();
+            if (abi != ExpectedAbiVersion)
+            {
+                NativeLibrary.Free(handle);
+                _libraryHandle = IntPtr.Zero;
+                _abiVersion = abi;
+                _available = false;
+                _diagnostic = $"abi mismatch (got {abi}, expected {ExpectedAbiVersion}) at {sourceLabel}";
+                Volatile.Write(ref _initialized, 1);
+                return false;
+            }
+
+            _abiVersion = abi;
+            _simdLevel = dof_kernels_simd_level();
+            _loadedPath = sourceLabel;
+            _available = true;
+            _diagnostic = viaOsSearch
+                ? $"loaded abi={abi} simd={_simdLevel} via OS search"
+                : $"loaded abi={abi} simd={_simdLevel} path={sourceLabel}";
+            Volatile.Write(ref _initialized, 1);
+            return true;
+        }
+        catch
+        {
+            _libraryHandle = IntPtr.Zero;
+            try { NativeLibrary.Free(handle); } catch { }
+            throw;
+        }
+    }
+
     private static void RegisterResolverOnce()
     {
         if (Interlocked.Exchange(ref _resolverRegistered, 1) != 0) return;
@@ -168,9 +185,9 @@ public static partial class NativeKernelsLoader
         {
             NativeLibrary.SetDllImportResolver(typeof(NativeKernelsLoader).Assembly, ResolveDllImport);
         }
-        catch (InvalidOperationException)
+        catch (Exception)
         {
-            // Another resolver is already registered for this assembly in a host harness.
+            // Another resolver is already registered or mobile AOT runtime forbids custom resolvers.
         }
     }
 
@@ -192,8 +209,16 @@ public static partial class NativeKernelsLoader
         var file = PlatformLibraryFileName();
         var explicitPath = Environment.GetEnvironmentVariable("DOF_KERNELS_PATH");
         var explicitDir = Environment.GetEnvironmentVariable("DOF_KERNELS_DIR");
-        var asmLocation = typeof(NativeKernelsLoader).Assembly.Location;
-        var asmDir = string.IsNullOrEmpty(asmLocation) ? null : Path.GetDirectoryName(asmLocation);
+        string? asmDir = null;
+        try
+        {
+            var asmLocation = typeof(NativeKernelsLoader).Assembly.Location;
+            asmDir = string.IsNullOrEmpty(asmLocation) ? null : Path.GetDirectoryName(asmLocation);
+        }
+        catch (Exception)
+        {
+            asmDir = null;
+        }
         var baseDir = AppContext.BaseDirectory;
 
         return new[]

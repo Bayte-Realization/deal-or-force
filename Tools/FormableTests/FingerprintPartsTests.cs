@@ -35,8 +35,8 @@ public static class FingerprintPartsTests
 
         var baseline = CampaignFingerprint.Of(c);
         Check(baseline != noMapBaseline, "attached province controllers alter fingerprint");
-        Check(noMapBaseline == 12469569132513435663UL, $"unmapped day-0 seed 42 matches baseline ({noMapBaseline})");
-        Check(baseline == 4280074882266413759UL, $"mapped day-0 seed 42 matches baseline ({baseline})");
+        Check(noMapBaseline == 783285672869976683UL, $"unmapped day-0 seed 42 matches baseline ({noMapBaseline})");
+        Check(baseline == 2943056504474909493UL, $"mapped day-0 seed 42 matches baseline ({baseline})");
 
         var nation = c.NationByTag("RUS");
         var state = c.StatesOf(nation).First();
@@ -91,6 +91,8 @@ public static class FingerprintPartsTests
         AssertMutatedChanges("Diplomacy.NextOrganizationId", () => c.NextOrganizationId = prevOrgId + 1, () => c.NextOrganizationId = prevOrgId);
         var prevEsteem = nation.DomesticImage.Esteem;
         AssertMutatedChanges("Diplomacy.DomesticImage", () => nation.DomesticImage.Esteem = prevEsteem + 0.25f, () => nation.DomesticImage.Esteem = prevEsteem);
+        var prevPrestige = nation.Prestige;
+        AssertMutatedChanges("Diplomacy.Prestige", () => nation.Prestige = prevPrestige + 25f, () => nation.Prestige = prevPrestige);
 
         // 4. Military partial
         var prevPersonnel = army.Personnel;
@@ -146,6 +148,6 @@ public static class FingerprintPartsTests
         s1.IsPaused = false;
         for (var d = 0; d < 30; d++) s1.TickDay();
         var s1Day30 = CampaignFingerprint.Of(s1);
-        Check(s1Day30 == 7309418854756694254UL, $"seed 1 day 30 matches pre-refactor baseline ({s1Day30})");
+        Check(s1Day30 == 17410192510816920124UL, $"seed 1 day 30 matches current baseline ({s1Day30})");
     }
 }

@@ -6,9 +6,67 @@ namespace DealOrForce;
 
 public sealed partial class GlobePresentation
 {
+    private sealed class RibbonBatch
+    {
+        public readonly List<Vector3>[] Verts = { new(), new(), new() };
+        public readonly List<Vector2>[] Uvs = { new(), new(), new() };
+        public readonly List<Vector2>[] Uv2s = { new(), new(), new() };
+        public readonly List<Color>[] Colors = { new(), new(), new() };
+        public readonly List<int>[] Indices = { new(), new(), new() };
+        public readonly Godot.Collections.Array SurfaceArrays = CreateArrays();
+
+        private static Godot.Collections.Array CreateArrays()
+        {
+            var arrays = new Godot.Collections.Array();
+            arrays.Resize((int)Mesh.ArrayType.Max);
+            return arrays;
+        }
+
+        public void Clear()
+        {
+            for (var i = 0; i < Verts.Length; i++)
+            {
+                Verts[i].Clear();
+                Uvs[i].Clear();
+                Uv2s[i].Clear();
+                Colors[i].Clear();
+                Indices[i].Clear();
+            }
+        }
+
+        public bool Commit(ArrayMesh mesh, Material m0, Material m1 = null, Material m2 = null)
+        {
+            mesh.ClearSurfaces();
+            Material[] mats = { m0, m1, m2 };
+            var surfaceIdx = 0;
+            for (var i = 0; i < Verts.Length; i++)
+            {
+                if (Indices[i].Count == 0 || mats[i] is null) continue;
+                SurfaceArrays[(int)Mesh.ArrayType.Vertex] = Verts[i].ToArray();
+                SurfaceArrays[(int)Mesh.ArrayType.TexUV] = Uvs[i].ToArray();
+                SurfaceArrays[(int)Mesh.ArrayType.TexUV2] = Uv2s[i].ToArray();
+                SurfaceArrays[(int)Mesh.ArrayType.Color] = Colors[i].ToArray();
+                SurfaceArrays[(int)Mesh.ArrayType.Index] = Indices[i].ToArray();
+                mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, SurfaceArrays);
+                mesh.SurfaceSetMaterial(surfaceIdx++, mats[i]);
+            }
+            SurfaceArrays[(int)Mesh.ArrayType.Vertex] = default;
+            SurfaceArrays[(int)Mesh.ArrayType.TexUV] = default;
+            SurfaceArrays[(int)Mesh.ArrayType.TexUV2] = default;
+            SurfaceArrays[(int)Mesh.ArrayType.Color] = default;
+            SurfaceArrays[(int)Mesh.ArrayType.Index] = default;
+            return surfaceIdx > 0;
+        }
+    }
+
     private readonly List<Vector3> _ribbonSamples = new();
-    // The mesh the ribbon being drawn goes into: the selected orders', or the sea lifts'.
-    private ImmediateMesh _ribbonMesh;
+    private readonly List<float> _ribbonDistances = new();
+    private readonly RibbonBatch _routeBatch = new();
+    private readonly RibbonBatch _seaLiftBatch = new();
+    private RibbonBatch _activeRibbonBatch;
+    private int _activeRibbonSlot;
+    private int _activeRibbonPrevPair = -1;
+    private static readonly Color RibbonWhite = Colors.White;
 
     private void CreateOrderMaterials()
     {
@@ -107,13 +165,15 @@ void fragment() {
     }
 
     private bool DrawOrderRibbon(Simulation.Army army, bool attack) =>
-        DrawRibbon(_routeMesh, _routeMaterials[army.SupportOnly ? 2 : attack ? 1 : 0], OrderProgress(army));
+        DrawRibbon(_routeBatch, army.SupportOnly ? 2 : attack ? 1 : 0, OrderProgress(army));
 
-    /// <summary>One ribbon along _routePoints into a mesh, in an ink, filled to a progress.</summary>
-    private bool DrawRibbon(ImmediateMesh mesh, Material material, float progress)
+    /// <summary>One ribbon along _routePoints into a preallocated batch slot, filled to a progress.</summary>
+    private bool DrawRibbon(RibbonBatch batch, int slot, float progress)
     {
-        if (mesh is null || material is null || _routePoints.Count < 2) return false;
-        _ribbonMesh = mesh;
+        if (batch is null || _routePoints.Count < 2) return false;
+        _activeRibbonBatch = batch;
+        _activeRibbonSlot = slot;
+        _activeRibbonPrevPair = -1;
         _ribbonSamples.Clear();
         SampleRibbonTo(_routePoints[0]);
         // Round only the immediate corner; the route still visits its province corridor.
@@ -130,35 +190,34 @@ void fragment() {
             }
         }
         SampleRibbonTo(_routePoints[^1]);
-        var distances = new float[_ribbonSamples.Count];
-        for (var i = 1; i < distances.Length; i++)
-            distances[i] = distances[i - 1] + _ribbonSamples[i - 1].DistanceTo(_ribbonSamples[i]);
-        var length = distances[^1];
+        _ribbonDistances.Clear();
+        _ribbonDistances.Add(0f);
+        for (var i = 1; i < _ribbonSamples.Count; i++)
+            _ribbonDistances.Add(_ribbonDistances[i - 1] + _ribbonSamples[i - 1].DistanceTo(_ribbonSamples[i]));
+        var length = _ribbonDistances[^1];
         if (length < 0.0001f) return false;
         var headLength = MathF.Min(0.032f, length * 0.28f);
         var headStart = length - headLength;
         var halfWidth = MathF.Min(_flatMap ? 0.0060f : 0.0054f, headLength * 0.26f);
         var headStarted = false;
-        _ribbonMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip, material);
         for (var i = 0; i < _ribbonSamples.Count; i++)
         {
             var point = _ribbonSamples[i];
             var before = _ribbonSamples[Math.Max(0, i - 1)];
             var after = _ribbonSamples[Math.Min(_ribbonSamples.Count - 1, i + 1)];
             var tangent = (after - before).Normalized();
-            if (!headStarted && distances[i] >= headStart && i > 0)
+            if (!headStarted && _ribbonDistances[i] >= headStart && i > 0)
             {
-                var t = (headStart - distances[i - 1]) / MathF.Max(0.00001f, distances[i] - distances[i - 1]);
+                var t = (headStart - _ribbonDistances[i - 1]) / MathF.Max(0.00001f, _ribbonDistances[i] - _ribbonDistances[i - 1]);
                 var shoulder = OnOrderSurface(before.Lerp(point, t));
                 EmitRibbonPair(shoulder, tangent, halfWidth, headStart, length, progress, false);
                 // Same center, wider shoulder: one head, no shaft sticking out of its tip.
                 EmitRibbonPair(shoulder, tangent, halfWidth * 2.4f, headStart, length, progress, true);
                 headStarted = true;
             }
-            var width = headStarted ? halfWidth * 2.4f * MathF.Max(0f, (length - distances[i]) / headLength) : halfWidth;
-            EmitRibbonPair(point, tangent, width, distances[i], length, progress, headStarted);
+            var width = headStarted ? halfWidth * 2.4f * MathF.Max(0f, (length - _ribbonDistances[i]) / headLength) : halfWidth;
+            EmitRibbonPair(point, tangent, width, _ribbonDistances[i], length, progress, headStarted);
         }
-        _ribbonMesh.SurfaceEnd();
         return true;
     }
 
@@ -167,12 +226,33 @@ void fragment() {
     {
         var normal = _flatMap ? Vector3.Forward : point.Normalized();
         var side = normal.Cross(tangent).Normalized() * halfWidth;
+        var batch = _activeRibbonBatch;
+        var slot = _activeRibbonSlot;
+        var verts = batch.Verts[slot];
+        var uvs = batch.Uvs[slot];
+        var uv2s = batch.Uv2s[slot];
+        var colors = batch.Colors[slot];
+        var indices = batch.Indices[slot];
+        var pairBase = verts.Count;
+        var color = RibbonWhite with { A = progress };
+        var uvX = distance / 0.07f;
+        var uv2 = new Vector2(distance / length, head ? 1f : 0f);
         for (var edge = 0; edge < 2; edge++)
         {
-            _ribbonMesh.SurfaceSetColor(new Color(1f, 1f, 1f, progress));
-            _ribbonMesh.SurfaceSetUV(new Vector2(distance / 0.07f, edge));
-            _ribbonMesh.SurfaceSetUV2(new Vector2(distance / length, head ? 1f : 0f));
-            _ribbonMesh.SurfaceAddVertex(OnOrderSurface(point + (edge == 0 ? side : -side)));
+            verts.Add(OnOrderSurface(point + (edge == 0 ? side : -side)));
+            uvs.Add(new Vector2(uvX, edge));
+            uv2s.Add(uv2);
+            colors.Add(color);
         }
+        if (_activeRibbonPrevPair >= 0)
+        {
+            indices.Add(_activeRibbonPrevPair);
+            indices.Add(_activeRibbonPrevPair + 1);
+            indices.Add(pairBase);
+            indices.Add(_activeRibbonPrevPair + 1);
+            indices.Add(pairBase + 1);
+            indices.Add(pairBase);
+        }
+        _activeRibbonPrevPair = pairBase;
     }
 }

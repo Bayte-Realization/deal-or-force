@@ -7,13 +7,13 @@
     "options": [
       { "title": "Underwrite it as the state",
         "consequence": "Trade continues on the public balance sheet.",
-        "effects": { "treasury_percent": -0.03, "credit_confidence": 0.02, "market_access": 0.02 } },
+        "effects": { "income_share": -0.03, "credit_confidence": 0.02, "market_access": 0.02 } },
       { "title": "Let the market price the risk",
         "consequence": "Freight gets expensive, and some of it stops.",
         "effects": { "gdp_percent": -0.006, "inflation": 0.004, "market_access": -0.03 } },
       { "title": "Build a national marine insurer",
         "consequence": "A decade to be trusted, a season to be founded.",
-        "effects": { "treasury_percent": -0.02, "credit_confidence": 0.01, "market_access": 0.01 },
+        "effects": { "income_share": -0.02, "credit_confidence": 0.01, "market_access": 0.01 },
         "modifiers": [ { "id": "industrial_renewal", "days": 270 } ] }
     ]
   },
@@ -28,7 +28,7 @@
         "modifiers": [ { "id": "border_commission", "days": 365 } ] },
       { "title": "Reinforce the sector",
         "consequence": "The line is held; the bill is permanent.",
-        "effects": { "treasury_percent": -0.02, "war_support": 0.012, "army_experience": 2 } },
+        "effects": { "income_share": -0.02, "war_support": 0.012, "army_experience": 2 } },
       { "title": "Demand an answer by Friday",
         "consequence": "A deadline nobody can meet, which is the point.",
         "effects": { "war_support": 0.02, "stability": -0.008, "army_experience": 1 } }
@@ -42,13 +42,13 @@
     "options": [
       { "title": "Guarantee every deposit",
         "consequence": "The queue goes; the state is now a bank.",
-        "effects": { "treasury_percent": -0.05, "credit_confidence": 0.12, "stability": 0.012 } },
+        "effects": { "gdp_share": -0.005, "credit_confidence": 0.12, "stability": 0.012 } },
       { "title": "Let it fail on Monday",
         "consequence": "Moral hazard is a theory until the savers arrive.",
         "effects": { "credit_confidence": -0.10, "state.radicalism": 0.02, "gdp_percent": -0.008 } },
       { "title": "Nationalise it over the weekend",
         "consequence": "Deposits safe, shareholders gone, the state in retail banking.",
-        "effects": { "treasury_percent": -0.035, "productivity": 0.0015, "political_points": -8, "credit_confidence": 0.05 } }
+        "effects": { "gdp_share": -0.0035, "productivity": 0.0015, "political_points": -8, "credit_confidence": 0.05 } }
     ]
   }
 }

@@ -190,6 +190,57 @@ static class CoupCivilWarTests
             "a split army is a civil war from that day, above the stability line too");
         Check(c.Chronicle.Entries.Any(e => e.Kind == "coup_civil_war" && e.ActorId == nation.Id), "and the world hears the army has split");
         Check(CivilWarOutbreak.FromCoup(c, nation, 1f, 1) is null, "one civil war at a time");
+        var staged = Fixture();
+        SecessionReport sliced = null;
+        var slices = CivilWarOutbreak.FromCoupStages(staged, staged.Nations[0], 1f, 1, r => sliced = r).Count();
+        Check(slices > 1 && sliced?.Seceded is not null &&
+              CampaignFingerprint.Of(staged) == CampaignFingerprint.Of(c),
+            "a coup outbreak can yield between secession stages and finishes with the same world");
+        CatalogLayers(c);
+    }
+
+    static void CatalogLayers(Campaign world)
+    {
+        using var baseScope = ModOverlayPolicy.PushScope(Array.Empty<ModLayerSpec>(), out _);
+        using var mod = System.Text.Json.JsonDocument.Parse("""
+            {"government_risk":{"federation":0.99},"installs":{"government":"technocracy"}}
+            """);
+        var federation = new Nation { Government = "federation" };
+        var junta = new Nation { Government = "military_junta" };
+        try
+        {
+            Coups.ResetCatalog();
+            Coups.Merge(mod.RootElement, null);
+            Check(Coups.GovernmentRisk(federation) == .99f && Coups.GovernmentRisk(junta) == 1.6f,
+                "a mod loaded before the first review inherits base risk for untouched governments");
+
+            var country = world.Nations[0];
+            Coups.Seize(world, country);
+            Check(country.Government == "technocracy", "a coup uses the installed government from the active mod");
+
+            using (ModOverlayPolicy.PushScope(new[]
+                   {
+                       new ModLayerSpec("coup_fixture", false, Array.Empty<string>(), new[] { "common/coups/00_coups.json" })
+                   }, out var scopeErrors))
+            {
+                Check(scopeErrors.Count == 0, "a mod can exclude the base coup file");
+                Coups.ResetCatalog();
+                Coups.PreloadCatalog();
+                Coups.Merge(mod.RootElement, null);
+                Check(Coups.GovernmentRisk(federation) == .99f && Coups.GovernmentRisk(junta) == 1f,
+                    "preloading respects an excluded base file");
+            }
+
+            Coups.ResetCatalog();
+            Coups.PreloadCatalog();
+            Coups.Seize(world, country);
+            Check(Coups.GovernmentRisk(federation) == .5f && country.Government == "military_junta",
+                "reset restores base risks and the government installed after a coup");
+        }
+        finally
+        {
+            Coups.ResetCatalog();
+        }
     }
 }
 

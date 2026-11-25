@@ -167,14 +167,15 @@ internal sealed class ShellInboxBarView
         var wasHidden = !_container.Visible;
         if (wasHidden) _container.Visible = true;
 
-        var count = Math.Max(0, _ctx.GetIncomingDiplomaticCount?.Invoke() ?? 0);
+        var hs = _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId >= 0 ? snap : null;
+        var count = Math.Max(0, hs is not null ? hs.IncomingDiplomaticCount : (_ctx.GetIncomingDiplomaticCount?.Invoke() ?? 0));
         var lang = Loc.Language;
         var changed = wasHidden || _lastCount != count || _lastLang != lang;
         if (!changed) return false;
 
         _lastCount = count;
         _lastLang = lang;
-        _titleLabel.Text = Loc.Get("Diplomatic inbox");
+        if (_titleLabel.Text != Loc.Get("Diplomatic inbox")) _titleLabel.Text = Loc.Get("Diplomatic inbox");
 
         var hasMail = count > 0;
         _button.TooltipText = Ui.Tip(hasMail

@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -141,7 +142,11 @@ public sealed class CampaignHistory
                 copy.AddRange(src);
                 _samples[entry.Key] = copy;
             }
-        _lastCapturedDay = _samples.Values.SelectMany(values => values).Select(sample => sample.Day).DefaultIfEmpty(-1).Max();
+        var lastCapturedDay = -1;
+        foreach (var values in _samples.Values)
+            for (var i = 0; i < values.Count; i++)
+                if (values[i].Day > lastCapturedDay) lastCapturedDay = values[i].Day;
+        _lastCapturedDay = lastCapturedDay;
         // A save from before the thinning keeps all fifteen years of every week; thinned on
         // load, so the file it is saved back into is the smaller one. Against the same yearly
         // mark the campaign last thinned at, so a save made since loads exactly as it was.
@@ -152,104 +157,110 @@ public sealed class CampaignHistory
         }
     }
 
-    private float[] _militaryPowerScratch = Array.Empty<float>();
-    private float[] _warSupportScratch = Array.Empty<float>();
-
     public void Capture(Campaign campaign, bool force = false)
     {
         if (campaign is null || (!force && campaign.ElapsedDays % 7 != 0) || _lastCapturedDay == campaign.ElapsedDays)
             return;
 
         var nationCount = campaign.Nations.Count;
-        if (_militaryPowerScratch.Length < nationCount) _militaryPowerScratch = new float[nationCount];
-        else Array.Clear(_militaryPowerScratch, 0, nationCount);
-        var militaryPower = _militaryPowerScratch;
-        foreach (var army in campaign.Armies)
-            if (army.NationId >= 0 && army.NationId < nationCount)
-                militaryPower[army.NationId] += army.Power;
-        foreach (var fleet in campaign.Fleets)
-            if (fleet.NationId >= 0 && fleet.NationId < nationCount)
-                militaryPower[fleet.NationId] += fleet.Hulls * 0.32f;
-
-        if (_warSupportScratch.Length < nationCount) _warSupportScratch = new float[nationCount];
-        var warSupport = _warSupportScratch;
-        for (var i = 0; i < nationCount; i++) warSupport[i] = campaign.Nations[i].WarSupport;
-        // Once a week, with the sample itself. This is a country's ledger, not a chart of
-        // finished wars, so the war-support line reads wars still going. The six days
-        // between samples do not walk the record at all.
-        var live = Warfare.LiveWars(campaign);
-        for (var index = 0; index < live.Count; index++)
+        var militaryPower = nationCount > 0 ? ArrayPool<float>.Shared.Rent(nationCount) : Array.Empty<float>();
+        var warSupport = nationCount > 0 ? ArrayPool<float>.Shared.Rent(nationCount) : Array.Empty<float>();
+        try
         {
-            var war = live[index];
-            if (war is null || war.Ended) continue;
-            if (war.AttackerId >= 0 && war.AttackerId < nationCount)
-                warSupport[war.AttackerId] = MathF.Min(warSupport[war.AttackerId], war.AttackerWarSupport);
-            if (war.DefenderId >= 0 && war.DefenderId < nationCount)
-                warSupport[war.DefenderId] = MathF.Min(warSupport[war.DefenderId], war.DefenderWarSupport);
-        }
+            if (nationCount > 0) Array.Clear(militaryPower, 0, nationCount);
+            foreach (var army in campaign.Armies)
+                if ((uint)army.NationId < (uint)nationCount)
+                    militaryPower[army.NationId] += army.Power;
+            foreach (var fleet in campaign.Fleets)
+                if ((uint)fleet.NationId < (uint)nationCount)
+                    militaryPower[fleet.NationId] += fleet.Hulls * 0.32f;
 
-        // A country without ground has no economy to chart: a movement's ledger is its cadres
-        // and its purse, and a point every four weeks draws the same line as one every week. In
-        // a save 107 years long the landless movements' weekly rows were 117,000 of 395,000.
-        var landlessEvery = Math.Max(7, campaign.Defines.HistoryLandlessSampleDays / 7 * 7);
-        var landlessDue = campaign.ElapsedDays % landlessEvery == 0;
-        var active = campaign.ActiveNations;
-        for (var ai = 0; ai < active.Count; ai++)
-        {
-            var nation = active[ai];
-            // A retired country (LongCampaign) has no ledger at all and is not given one.
-            if (campaign.IsRetired(nation)) continue;
-            // A country that is no more has no week to record. Its history ends where it
-            // did, which is what its chart should show - and sixty dead countries writing a
-            // row of zeros every week was a fifth of the table. A movement that has dissolved
-            // is the same: it was sampled every week for as long as the campaign ran.
-            var landless = campaign.ProvinceMap is not null && !campaign.HasOwnedLand(nation);
-            if (landless && (nation.Movement is null || nation.Movement.Dissolved) && _samples.ContainsKey(nation.Id))
-                continue;
-            if (landless && !force && !landlessDue && _samples.ContainsKey(nation.Id)) continue;
-            if (!_samples.TryGetValue(nation.Id, out var values))
+            for (var i = 0; i < nationCount; i++) warSupport[i] = campaign.Nations[i].WarSupport;
+            // Once a week, with the sample itself. This is a country's ledger, not a chart of
+            // finished wars, so the war-support line reads wars still going. The six days
+            // between samples do not walk the record at all.
+            var live = Warfare.LiveWars(campaign);
+            for (var index = 0; index < live.Count; index++)
             {
-                // Room for a year, not for forty: a list grows as it is filled, and a movement
-                // born yesterday was handed 32 kB for a ledger it may never write a line of.
-                values = new List<NationHistorySample>(64);
-                _samples[nation.Id] = values;
+                var war = live[index];
+                if (war is null || war.Ended) continue;
+                if ((uint)war.AttackerId < (uint)nationCount)
+                    warSupport[war.AttackerId] = MathF.Min(warSupport[war.AttackerId], war.AttackerWarSupport);
+                if ((uint)war.DefenderId < (uint)nationCount)
+                    warSupport[war.DefenderId] = MathF.Min(warSupport[war.DefenderId], war.DefenderWarSupport);
             }
 
-            // At the precision a chart can show: four significant figures. Nine digits of a
-            // GDP read by nothing but a line two hundred pixels tall were half of every row.
-            values.Add(new NationHistorySample(
-                campaign.ElapsedDays,
-                Chart(nation.Gdp),
-                Chart(nation.Treasury),
-                Chart(nation.Population / 1_000_000f),
-                Chart(nation.WeeklyTaxIncome + nation.WeeklyTariffIncome),
-                Chart(nation.WeeklyExpenses),
-                Chart(nation.WeeklyBalance),
-                Chart(nation.Productivity),
-                Chart(nation.StandardOfLiving),
-                Chart(nation.Literacy),
-                Chart(nation.Stability),
-                Chart(nation.MarketAccess),
-                Chart(nation.ShortageIndex),
-                Chart(nation.WeeklyTradeBalance),
-                Chart(militaryPower[nation.Id]),
-                Chart(nation.ManpowerReserve / 1_000_000f),
-                Chart(warSupport[nation.Id]),
-                Chart(PriceIndex(nation, Commodity.Food)),
-                Chart(PriceIndex(nation, Commodity.ConsumerGoods)),
-                Chart(PriceIndex(nation, Commodity.IndustrialMaterials)),
-                Chart(PriceIndex(nation, Commodity.Energy)),
-                Chart(PriceIndex(nation, Commodity.Arms))));
+            // A country without ground has no economy to chart: a movement's ledger is its cadres
+            // and its purse, and a point every four weeks draws the same line as one every week. In
+            // a save 107 years long the landless movements' weekly rows were 117,000 of 395,000.
+            var landlessEvery = Math.Max(7, campaign.Defines.HistoryLandlessSampleDays / 7 * 7);
+            var landlessDue = campaign.ElapsedDays % landlessEvery == 0;
+            var active = campaign.ActiveNations;
+            for (var ai = 0; ai < active.Count; ai++)
+            {
+                var nation = active[ai];
+                // A retired country (LongCampaign) has no ledger at all and is not given one.
+                if (campaign.IsRetired(nation)) continue;
+                // A country that is no more has no week to record. Its history ends where it
+                // did, which is what its chart should show - and sixty dead countries writing a
+                // row of zeros every week was a fifth of the table. A movement that has dissolved
+                // is the same: it was sampled every week for as long as the campaign ran.
+                var landless = campaign.ProvinceMap is not null && !campaign.HasOwnedLand(nation);
+                if (landless && (nation.Movement is null || nation.Movement.Dissolved) && _samples.ContainsKey(nation.Id))
+                    continue;
+                if (landless && !force && !landlessDue && _samples.ContainsKey(nation.Id)) continue;
+                if (!_samples.TryGetValue(nation.Id, out var values))
+                {
+                    // Room for a year, not for forty: a list grows as it is filled, and a movement
+                    // born yesterday was handed 32 kB for a ledger it may never write a line of.
+                    values = new List<NationHistorySample>(64);
+                    _samples[nation.Id] = values;
+                }
+
+                // At the precision a chart can show: four significant figures. Nine digits of a
+                // GDP read by nothing but a line two hundred pixels tall were half of every row.
+                values.Add(new NationHistorySample(
+                    campaign.ElapsedDays,
+                    Chart(nation.Gdp),
+                    Chart(nation.Treasury),
+                    Chart(nation.Population / 1_000_000f),
+                    Chart(nation.WeeklyTaxIncome + nation.WeeklyTariffIncome),
+                    Chart(nation.WeeklyExpenses),
+                    Chart(nation.WeeklyBalance),
+                    Chart(nation.Productivity),
+                    Chart(nation.StandardOfLiving),
+                    Chart(nation.Literacy),
+                    Chart(nation.Stability),
+                    Chart(nation.MarketAccess),
+                    Chart(nation.ShortageIndex),
+                    Chart(nation.WeeklyTradeBalance),
+                    Chart(militaryPower[nation.Id]),
+                    Chart(nation.ManpowerReserve / 1_000_000f),
+                    Chart(warSupport[nation.Id]),
+                    Chart(PriceIndex(nation, Commodity.Food)),
+                    Chart(PriceIndex(nation, Commodity.ConsumerGoods)),
+                    Chart(PriceIndex(nation, Commodity.IndustrialMaterials)),
+                    Chart(PriceIndex(nation, Commodity.Energy)),
+                    Chart(PriceIndex(nation, Commodity.Arms))));
+            }
+
+            // Thinned once a year rather than every week: the cost is a pass over each list. Every
+            // list, not only those that took a sample today: a country that had stopped being
+            // sampled was never thinned again and never aged out, so the dead kept the ledger of
+            // their last three years at one point a week for the rest of the campaign - 148,600 of
+            // 395,000 samples in a save 107 years long.
+            if (campaign.ElapsedDays % 364 == 0) ThinAll(campaign);
+
+            _lastCapturedDay = campaign.ElapsedDays;
         }
-
-        // Thinned once a year rather than every week: the cost is a pass over each list. Every
-        // list, not only those that took a sample today: a country that had stopped being
-        // sampled was never thinned again and never aged out, so the dead kept the ledger of
-        // their last three years at one point a week for the rest of the campaign - 148,600 of
-        // 395,000 samples in a save 107 years long.
-        if (campaign.ElapsedDays % 364 == 0) ThinAll(campaign);
-
-        _lastCapturedDay = campaign.ElapsedDays;
+        finally
+        {
+            if (nationCount > 0)
+            {
+                ArrayPool<float>.Shared.Return(militaryPower);
+                ArrayPool<float>.Shared.Return(warSupport);
+            }
+        }
     }
 
     /// <summary>Four significant figures - what a chart, a tooltip or a ledger line can show.</summary>
@@ -311,7 +322,11 @@ public sealed class CampaignHistory
         // sampled ends inside the weekly stretch, so this never adds a point to it.
         else if (values[kept - 1].Day != values[^1].Day && today - values[^1].Day <= bands.Kept)
             values[kept++] = values[^1];
-        if (kept < values.Count) values.RemoveRange(kept, values.Count - kept);
+        if (kept < values.Count)
+        {
+            values.RemoveRange(kept, values.Count - kept);
+            if (values.Capacity > Math.Max(64, kept * 2)) values.TrimExcess();
+        }
     }
 
     /// <summary>

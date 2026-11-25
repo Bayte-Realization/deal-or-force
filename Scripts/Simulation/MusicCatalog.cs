@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 
 namespace DealOrForce.Simulation;
 
@@ -52,23 +53,72 @@ public static class MusicCatalog
         public bool Loop { get; }
     }
 
-    private static readonly Dictionary<string, Track> Tracks = new(StringComparer.OrdinalIgnoreCase);
-    private static bool _baseLoaded;
-    private static bool _dirtyFromOverlay;
-    private static string _loadedKey = "";
+    private sealed class Snapshot
+    {
+        public static readonly Snapshot Empty = new(
+            new Dictionary<string, Track>(StringComparer.OrdinalIgnoreCase),
+            new MusicPolicy(),
+            revision: 0,
+            baseLoaded: false,
+            dirtyFromOverlay: false,
+            loadedKey: "");
+
+        public readonly Dictionary<string, Track> Tracks;
+        public readonly MusicPolicy Director;
+        public readonly int Revision;
+        public readonly bool BaseLoaded;
+        public readonly bool DirtyFromOverlay;
+        public readonly string LoadedKey;
+
+        public Snapshot(
+            Dictionary<string, Track> tracks,
+            MusicPolicy director,
+            int revision,
+            bool baseLoaded,
+            bool dirtyFromOverlay,
+            string loadedKey)
+        {
+            Tracks = tracks;
+            Director = director;
+            Revision = revision;
+            BaseLoaded = baseLoaded;
+            DirtyFromOverlay = dirtyFromOverlay;
+            LoadedKey = loadedKey;
+        }
+
+        public MutableState ToMutable() => new()
+        {
+            Tracks = new Dictionary<string, Track>(Tracks, StringComparer.OrdinalIgnoreCase),
+            Director = Director.Clone(),
+            Revision = Revision
+        };
+    }
+
+    private sealed class MutableState
+    {
+        public Dictionary<string, Track> Tracks = new(StringComparer.OrdinalIgnoreCase);
+        public MusicPolicy Director = new();
+        public int Revision;
+
+        public Snapshot Freeze(bool baseLoaded, bool dirtyFromOverlay, string loadedKey) =>
+            new(Tracks, Director, Revision, baseLoaded, dirtyFromOverlay, loadedKey);
+    }
+
+    private static readonly object SyncLock = new();
+    private static Snapshot _state = Snapshot.Empty;
 
     /// <summary>Raised whenever the list is rebuilt, so a player can requeue.</summary>
     public static event Action Changed;
-    public static MusicPolicy Director { get; private set; } = new();
-    public static int Revision { get; private set; }
+    public static MusicPolicy Director => Volatile.Read(ref _state).Director;
+    public static int Revision => Volatile.Read(ref _state).Revision;
 
-    public static int Count => Tracks.Count;
+    public static int Count => Volatile.Read(ref _state).Tracks.Count;
 
-    public static IEnumerable<Track> All => Tracks.Values;
+    public static IEnumerable<Track> All => Volatile.Read(ref _state).Tracks.Values;
 
     /// <summary>The tracks that belong to a moment, in declaration-name order.</summary>
     public static IReadOnlyList<Track> For(Moment moment) =>
-        Tracks.Values
+        Volatile.Read(ref _state).Tracks.Values
             .Where(track => track.When == Moment.Any || track.When == moment)
             .OrderBy(track => track.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -96,43 +146,60 @@ public static class MusicCatalog
         : name.Trim().ToLowerInvariant().Replace(' ', '_').Replace('-', '_');
 
     /// <summary>Read the base game's own `music/` tree, replacing whatever was loaded.</summary>
-    public static void Load() => Load(force: false);
+    public static void Load() => Load(force: false, notify: true);
 
-    public static void Load(bool force)
+    public static void Load(bool force) => Load(force, notify: true);
+
+    public static void Load(bool force, bool notify)
     {
         var root = GameDataLoader.DataFolder("music");
         var cacheKey = $"{ModOverlayPolicy.IsActive}|{root ?? ""}";
-        if (!force && _baseLoaded && !_dirtyFromOverlay && string.Equals(_loadedKey, cacheKey, StringComparison.Ordinal))
-            return;
+        lock (SyncLock)
+        {
+            var current = Volatile.Read(ref _state);
+            if (!force && current.BaseLoaded && !current.DirtyFromOverlay &&
+                string.Equals(current.LoadedKey, cacheKey, StringComparison.Ordinal))
+                return;
 
-        Tracks.Clear();
-        Director = new(); Revision++;
-        if (root is not null)
-            DataCatalogLoader.LoadTree("music", root, null, (json, origin) => MergeInternal(json, "res://game/music", origin, null), null);
-        _baseLoaded = true;
-        _dirtyFromOverlay = false;
-        _loadedKey = cacheKey;
-        Changed?.Invoke();
+            var draft = new MutableState { Revision = current.Revision + 1 };
+            if (root is not null)
+                DataCatalogLoader.LoadTree("music", root, null,
+                    (json, origin) => MergeInto(draft, json, "res://game/music", origin, null), null);
+            Volatile.Write(ref _state, draft.Freeze(baseLoaded: true, dirtyFromOverlay: false, loadedKey: cacheKey));
+        }
+        if (notify) Changed?.Invoke();
     }
 
     /// <summary>Layer one package's `music/` tree over what is already loaded.</summary>
     public static void LoadTree(string directory, string assetRoot, List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
-        _dirtyFromOverlay = true;
-        DataCatalogLoader.LoadTree("music", directory, errors,
-            (json, origin) => MergeInternal(json, assetRoot, origin, errors),
-            () => Changed?.Invoke());
+        var loadedAny = false;
+        lock (SyncLock)
+        {
+            var current = Volatile.Read(ref _state);
+            var draft = current.ToMutable();
+            DataCatalogLoader.LoadTree("music", directory, errors,
+                (json, origin) => MergeInto(draft, json, assetRoot, origin, errors),
+                () => loadedAny = true);
+            Volatile.Write(ref _state, draft.Freeze(current.BaseLoaded, dirtyFromOverlay: true, current.LoadedKey));
+        }
+        if (loadedAny) Changed?.Invoke();
     }
 
     /// <summary>Merge one track list. A bare path is a track that plays anywhere, once as often as any other.</summary>
     public static void Merge(string json, string assetRoot, string origin, List<string> errors)
     {
-        _dirtyFromOverlay = true;
-        MergeInternal(json, assetRoot, origin, errors);
+        lock (SyncLock)
+        {
+            var current = Volatile.Read(ref _state);
+            var draft = current.ToMutable();
+            MergeInto(draft, json, assetRoot, origin, errors);
+            Volatile.Write(ref _state, draft.Freeze(current.BaseLoaded, dirtyFromOverlay: true, current.LoadedKey));
+        }
     }
 
-    private static void MergeInternal(string json, string assetRoot, string origin, List<string> errors)
+    private static void MergeInto(MutableState draft, string json, string assetRoot, string origin, List<string> errors)
     {
         using var document = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
         var root = document.RootElement;
@@ -141,8 +208,8 @@ public static class MusicCatalog
             errors?.Add($"{origin}: expected an object");
             return;
         }
-        if (root.TryGetProperty("director", out var director)) Director.Merge(director, errors, origin);
-        Revision++;
+        if (root.TryGetProperty("director", out var director)) draft.Director.Merge(director, errors, origin);
+        draft.Revision++;
 
         var body = root;
         if (root.TryGetProperty("tracks", out var listed) && listed.ValueKind == JsonValueKind.Object)
@@ -156,8 +223,8 @@ public static class MusicCatalog
 
             if (value.ValueKind == JsonValueKind.String)
             {
-                var previous = Tracks.GetValueOrDefault(name);
-                Tracks[name] = new Track(name,
+                var previous = draft.Tracks.GetValueOrDefault(name);
+                draft.Tracks[name] = new Track(name,
                     GameDataLoader.ResolveAssetPath(value.GetString(), assetRoot), previous.When, previous.Weight,
                     previous.Moods, previous.VolumeDb, previous.Label ?? "", previous.Regions, previous.Loop);
                 continue;
@@ -169,7 +236,7 @@ public static class MusicCatalog
                 continue;
             }
             if (GameDataLoader.IsRemoved(value, $"{origin}:{name}"))
-            { Tracks.Remove(name); continue; }
+            { draft.Tracks.Remove(name); continue; }
 
             if (!value.TryGetProperty("file", out var declared) || declared.ValueKind != JsonValueKind.String)
             {
@@ -207,7 +274,7 @@ public static class MusicCatalog
                     .Where(x => x.Length > 0).Distinct().Take(32).ToArray() : Array.Empty<string>();
             var loop = value.TryGetProperty("loop", out var repeat) && repeat.ValueKind == JsonValueKind.True;
 
-            Tracks[name] = new Track(name,
+            draft.Tracks[name] = new Track(name,
                 GameDataLoader.ResolveAssetPath(declared.GetString(), assetRoot), when, weight, moods.Distinct().ToArray(), volume, label, regions, loop);
         }
     }

@@ -267,6 +267,7 @@ public static class HistoryDataLoader
             SetFloat(value, "standard_of_living", number => { nation.StandardOfLiving = M.Clamp01(number); nation.StatedFigures.Add("standard_of_living"); });
             SetFloat(value, "stability", number => { nation.Stability = M.Clamp01(number); nation.StatedFigures.Add("stability"); });
             SetFloat(value, "war_support", number => nation.WarSupport = M.Clamp01(number));
+            SetFloat(value, "prestige", number => { nation.Prestige = M.Clamp(number, PrestigeSystem.MinPrestige, PrestigeSystem.MaxPrestige); nation.StatedFigures.Add("prestige"); });
             SetFloat(value, "manpower", number => nation.ManpowerReserve = Math.Max(0f, number));
             if (value.TryGetProperty("trade_policy", out var policy) && policy.ValueKind == JsonValueKind.String &&
                 Enum.TryParse<TradePolicy>(policy.GetString(), true, out var parsed)) nation.TradePolicy = parsed;

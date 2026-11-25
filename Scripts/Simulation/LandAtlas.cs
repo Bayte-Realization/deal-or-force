@@ -61,7 +61,11 @@ public static class LandAtlas
     private static List<LandDefinition> Lands => _lands ??= Load();
 
     /// <summary>Read the catalogue again after a mod changed it.</summary>
-    public static void ResetCatalog() => _lands = null;
+    public static void ResetCatalog()
+    {
+        _lands = null;
+        CountryNames.InvalidateDisplayNames();
+    }
 
     public static LandDefinition Find(string id) =>
         string.IsNullOrWhiteSpace(id)
@@ -381,6 +385,7 @@ public static class LandAtlas
         Merge(entries, lands, byId);
         lands.Sort((a, b) => a.Order != b.Order ? a.Order.CompareTo(b.Order)
             : string.CompareOrdinal(a.Id, b.Id));
+        CountryNames.InvalidateDisplayNames();
     }
 
     private static void Merge(JsonElement entries, List<LandDefinition> lands,

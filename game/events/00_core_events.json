@@ -8,7 +8,7 @@
         "title": "Launch a modernisation programme",
         "consequence": "Costs treasury; raises GDP, productivity and construction capacity.",
         "effects": {
-          "treasury_percent": -0.06,
+          "gdp_share": -0.005,
           "gdp_percent": 0.0035,
           "productivity": 0.008,
           "construction_capacity": 0.18
@@ -37,7 +37,7 @@
         "title": "Fund public housing",
         "consequence": "Costs treasury; improves living standards and reduces radicalism.",
         "effects": {
-          "treasury_percent": -0.04,
+          "income_share": -0.045,
           "standard_of_living": 0.012,
           "state.standard_of_living": 0.01,
           "state.radicalism": -0.018
@@ -61,7 +61,7 @@
         "title": "Broker a national settlement",
         "consequence": "Costs treasury; restores stability and living standards.",
         "effects": {
-          "treasury_percent": -0.03,
+          "income_share": -0.035,
           "stability": 0.018,
           "standard_of_living": 0.006
         }
@@ -98,7 +98,7 @@
         "title": "Raise separation allowances for families",
         "consequence": "Expensive, but buys real patience.",
         "effects": {
-          "treasury_percent": -0.05,
+          "income_share": -0.05,
           "war_support": 0.09,
           "state.radicalism": -0.01
         },
@@ -167,9 +167,10 @@
         "title": "Open the public purse",
         "consequence": "A modest cost; the mood is worth it.",
         "effects": {
-          "treasury_percent": -0.01,
+          "income_share": -0.012,
           "standard_of_living": 0.008,
-          "state.radicalism": -0.014
+          "state.radicalism": -0.014,
+          "prestige": 2.0
         }
       },
       {
@@ -189,16 +190,18 @@
         "title": "Throw them a parade",
         "consequence": "A small cost; a real lift in the national mood.",
         "effects": {
-          "treasury_percent": -0.012,
+          "income_share": -0.015,
           "stability": 0.01,
-          "state.radicalism": -0.02
+          "state.radicalism": -0.02,
+          "prestige": 6.0
         }
       },
       {
         "title": "Let the win speak for itself",
         "consequence": "Free, and almost as good.",
         "effects": {
-          "stability": 0.004
+          "stability": 0.004,
+          "prestige": 3.0
         }
       }
     ]
@@ -211,9 +214,10 @@
         "title": "Back the industry that made it",
         "consequence": "Costs treasury; lasting productivity and prestige.",
         "effects": {
-          "treasury_percent": -0.018,
+          "income_share": -0.02,
           "productivity": 0.004,
-          "literacy": 0.002
+          "literacy": 0.002,
+          "prestige": 8.0
         },
         "modifiers": [
           "cultural_moment"
@@ -223,7 +227,8 @@
         "title": "Let the moment be its own reward",
         "consequence": "No cost; a brief lift.",
         "effects": {
-          "stability": 0.004
+          "stability": 0.004,
+          "prestige": 3.0
         }
       }
     ]
@@ -239,16 +244,18 @@
         "title": "Fund the department properly at last",
         "consequence": "Costs treasury; literacy and productivity rise.",
         "effects": {
-          "treasury_percent": -0.02,
+          "income_share": -0.025,
           "literacy": 0.004,
-          "productivity": 0.006
+          "productivity": 0.006,
+          "prestige": 10.0
         }
       },
       {
         "title": "A medal and a photograph",
         "consequence": "Free; a small national lift.",
         "effects": {
-          "stability": 0.006
+          "stability": 0.006,
+          "prestige": 4.0
         }
       }
     ]

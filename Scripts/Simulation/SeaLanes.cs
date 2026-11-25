@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -322,6 +323,7 @@ public static class SeaLanes
     {
         public int[] Province = Array.Empty<int>();
         public float[] Latitude = Array.Empty<float>(), Longitude = Array.Empty<float>();
+        internal int[] Basin = Array.Empty<int>();
     }
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<int[], HarbourTable> HarbourTables = new();
@@ -343,10 +345,16 @@ public static class SeaLanes
             {
                 Province = provinces.ToArray(),
                 Latitude = new float[provinces.Count],
-                Longitude = new float[provinces.Count]
+                Longitude = new float[provinces.Count],
+                Basin = new int[provinces.Count]
             };
             for (var index = 0; index < provinces.Count; index++)
-                (table.Latitude[index], table.Longitude[index]) = PixelCentre(_harbourPixel[provinces[index]]);
+            {
+                var province = provinces[index];
+                (table.Latitude[index], table.Longitude[index]) = PixelCentre(_harbourPixel[province]);
+                var node = _harbourNode[province];
+                table.Basin[index] = node >= 0 ? _nodeBasin[node] : -1;
+            }
             HarbourTables.Add(_harbourPixel, table);
             return table;
         }
@@ -585,6 +593,8 @@ public static class SeaLanes
     }
 
     private static readonly List<(float Latitude, float Longitude)> Refined = new();
+    private static readonly Queue<int> RefineQueue = new();
+    private static readonly List<(float Latitude, float Longitude)> RefinePath = new();
 
     /// <summary>
     /// A leg that does not clear the land in a straight line, found on the raster itself: a
@@ -619,70 +629,79 @@ public static class SeaLanes
             return;
         }
 
-        var came = new int[w * h];
-        Array.Fill(came, -2);
-        var queue = new Queue<int>();
-        var origin = (sy - y0) * w + (sx - x0);
-        var target = (gy - y0) * w + (gx - x0);
-        came[origin] = -1;
-        queue.Enqueue(origin);
-        var found = false;
-        while (queue.Count > 0)
+        // PlanLocked holds Gate. Only the used part of the pooled raster needs resetting.
+        var came = ArrayPool<int>.Shared.Rent(w * h);
+        Array.Fill(came, -2, 0, w * h);
+        var queue = RefineQueue;
+        var path = RefinePath;
+        try
         {
-            var at = queue.Dequeue();
-            if (at == target)
+            var origin = (sy - y0) * w + (sx - x0);
+            var target = (gy - y0) * w + (gx - x0);
+            came[origin] = -1;
+            queue.Enqueue(origin);
+            var found = false;
+            while (queue.Count > 0)
             {
-                found = true;
-                break;
-            }
-            var ax = at % w + x0;
-            var ay = at / w + y0;
-            for (var dy = -1; dy <= 1; dy++)
-            for (var dx = -1; dx <= 1; dx++)
-            {
-                if (dx == 0 && dy == 0) continue;
-                var nx = ax + dx;
-                var ny = ay + dy;
-                if (nx < x0 || nx > x1 || ny < y0 || ny > y1) continue;
-                var local = (ny - y0) * w + (nx - x0);
-                if (came[local] != -2) continue;
-                if (local != target && !Passable(ny * _rasterWidth + nx, closed)) continue;
-                // Not diagonally between two pixels of land: that is a corner, not a channel.
-                if (dx != 0 && dy != 0 && !Passable(ay * _rasterWidth + nx, closed) &&
-                    !Passable(ny * _rasterWidth + ax, closed)) continue;
-                came[local] = at;
-                queue.Enqueue(local);
-            }
-        }
-        if (!found)
-        {
-            into.Add(to);
-            return;
-        }
-
-        var path = new List<(float Latitude, float Longitude)>();
-        for (var at = came[target]; at >= 0 && came[at] != -1; at = came[at])
-            path.Add(PixelCentre((at / w + y0) * _rasterWidth + at % w + x0));
-        path.Reverse();
-        path.Insert(0, from);
-        path.Add(to);
-
-        var anchor = 0;
-        while (anchor < path.Count - 1)
-        {
-            var next = anchor + 1;
-            var misses = 0;
-            for (var ahead = anchor + 2; ahead < path.Count && misses < 24; ahead++)
-            {
-                if (Clear(path[anchor], path[ahead], false, closed))
+                var at = queue.Dequeue();
+                if (at == target)
                 {
-                    next = ahead;
-                    misses = 0;
+                    found = true;
+                    break;
                 }
-                else misses++;
+                var ax = at % w + x0;
+                var ay = at / w + y0;
+                for (var dy = -1; dy <= 1; dy++)
+                for (var dx = -1; dx <= 1; dx++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+                    var nx = ax + dx;
+                    var ny = ay + dy;
+                    if (nx < x0 || nx > x1 || ny < y0 || ny > y1) continue;
+                    var local = (ny - y0) * w + (nx - x0);
+                    if (came[local] != -2) continue;
+                    if (local != target && !PassableAt(nx, ny, closed)) continue;
+                    // Not diagonally between two pixels of land: that is a corner, not a channel.
+                    if (dx != 0 && dy != 0 && !PassableAt(nx, ay, closed) && !PassableAt(ax, ny, closed)) continue;
+                    came[local] = at;
+                    queue.Enqueue(local);
+                }
             }
-            into.Add(path[next]);
-            anchor = next;
+            if (!found)
+            {
+                into.Add(to);
+                return;
+            }
+
+            path.Add(to);
+            for (var at = came[target]; at >= 0 && came[at] != -1; at = came[at])
+                path.Add(PixelCentre((at / w + y0) * _rasterWidth + at % w + x0));
+            path.Add(from);
+            path.Reverse();
+
+            var anchor = 0;
+            while (anchor < path.Count - 1)
+            {
+                var next = anchor + 1;
+                var misses = 0;
+                for (var ahead = anchor + 2; ahead < path.Count && misses < 24; ahead++)
+                {
+                    if (Clear(path[anchor], path[ahead], false, closed))
+                    {
+                        next = ahead;
+                        misses = 0;
+                    }
+                    else misses++;
+                }
+                into.Add(path[next]);
+                anchor = next;
+            }
+        }
+        finally
+        {
+            queue.Clear();
+            path.Clear();
+            ArrayPool<int>.Shared.Return(came);
         }
     }
 
@@ -1077,8 +1096,13 @@ public static class SeaLanes
     private static byte Class(int pixel)
     {
         var y = pixel / _rasterWidth;
+        return Class(pixel, pixel - y * _rasterWidth, y);
+    }
+
+    private static byte Class(int pixel, int x, int y)
+    {
         if (y < _iceTop || y >= _iceBottom) return Land;
-        if (Overridden[_rowOf[y] * Columns + _columnOf[pixel - y * _rasterWidth]])
+        if (Overridden[_rowOf[y] * Columns + _columnOf[x]])
         {
             if (PassagePixels.TryGetValue(pixel, out var passage)) return passage;
             if (ShutPixels.Contains(pixel)) return Land;
@@ -1230,13 +1254,19 @@ public static class SeaLanes
 
     // --- finding one's way ---------------------------------------------------------------
 
-    private static int PixelAt(float latitude, float longitude)
+    private static int PixelAt(float latitude, float longitude) =>
+        PixelY(latitude) * _rasterWidth + PixelX(longitude);
+
+    private static int PixelX(float longitude)
     {
         var x = (int)MathF.Floor((longitude + 180f) / 360f * _rasterWidth);
-        x = ((x % _rasterWidth) + _rasterWidth) % _rasterWidth;
-        var y = Math.Clamp((int)MathF.Floor((90f - latitude) / 180f * _rasterHeight), 0, _rasterHeight - 1);
-        return y * _rasterWidth + x;
+        if ((uint)x < (uint)_rasterWidth) return x;
+        x %= _rasterWidth;
+        return x < 0 ? x + _rasterWidth : x;
     }
+
+    private static int PixelY(float latitude) =>
+        Math.Clamp((int)MathF.Floor((90f - latitude) / 180f * _rasterHeight), 0, _rasterHeight - 1);
 
     private static (float Latitude, float Longitude) PixelCentre(int pixel)
     {
@@ -1327,9 +1357,13 @@ public static class SeaLanes
         return false;
     }
 
-    private static bool Passable(int pixel, bool[] closed)
+    private static bool Passable(int pixel, bool[] closed) => PassableClass(Class(pixel), closed);
+
+    private static bool PassableAt(int x, int y, bool[] closed) =>
+        PassableClass(Class(y * _rasterWidth + x, x, y), closed);
+
+    private static bool PassableClass(byte kind, bool[] closed)
     {
-        var kind = Class(pixel);
         if (kind == Land) return false;
         return kind == Sea || closed is null || kind - 2 >= closed.Length || !closed[kind - 2];
     }
@@ -1481,8 +1515,9 @@ public static class SeaLanes
         for (var sample = 0; sample <= samples; sample++)
         {
             var t = sample / (float)samples;
-            var pixel = PixelAt(from.Latitude + deltaLatitude * t, Wrap(from.Longitude + deltaLongitude * t));
-            if (Passable(pixel, closed)) { ashore = 0; continue; }
+            var x = PixelX(Wrap(from.Longitude + deltaLongitude * t));
+            var y = PixelY(from.Latitude + deltaLatitude * t);
+            if (PassableAt(x, y, closed)) { ashore = 0; continue; }
             if (ashore-- > 0 && sample < 16) continue;
             return false;
         }

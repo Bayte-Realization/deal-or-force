@@ -3,7 +3,9 @@
 The common portrait UI resolves `leader_<name>` through the existing sprite catalogue.
 For `Vladimir Putin`, use `leader_vladimir_putin.jpg` in this directory (or a mod's
 `gfx/leaders/`). Lowercase letters and digits remain; punctuation and spaces become `_`.
-No photo means one neutral white silhouette on grey, never an invented face.
+No photo means one neutral dark-grey silhouette on the panel colour, never an invented face.
+Since 23 November 2026 it is drawn at low contrast (figure #686560 on #201f1d): the white bust
+on slate blue was the brightest thing in the country card and read as a web placeholder.
 
 The shipped fallback `leader_anonymous.png` was generated through Creative Claw.
 Its provenance is in `anonymous_portrait.source.json`. Override the same sprite in

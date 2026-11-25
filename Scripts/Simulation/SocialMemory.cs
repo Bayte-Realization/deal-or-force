@@ -668,7 +668,9 @@ public static class SocialMemory
             }
             if (!alive)
             {
-                if (image.LastReviewDay < 0 || c.ElapsedDays - image.LastReviewDay >= 365)
+                if (image.LastReviewDay < 0 || c.ElapsedDays - image.LastReviewDay >= 365 ||
+                    (MathF.Abs(image.Esteem) < 0.05f && MathF.Abs(image.Incident) < 0.02f &&
+                     (image.LastIncidentDay < 0 || c.ElapsedDays - image.LastIncidentDay > 90)))
                     forgotten.Add(key);
                 continue;
             }
@@ -772,8 +774,10 @@ public static class SocialMemory
             target.DomesticImage ??= new PublicImage();
             AddIncident(target.DomesticImage, rule.Target * 0.25f, rule.Name, c.ElapsedDays);
         }
-        foreach (var audience in c.Nations)
+        var active = c.ActiveNations;
+        for (var ai = 0; ai < active.Count; ai++)
         {
+            var audience = active[ai];
             if (audience.Population <= 0 && audience.Movement is not { Dissolved: false } && !c.HasOwnedLand(audience))
                 continue;
             var tie = CampaignDiplomacy.Peek(c, audience.Id, actorId);

@@ -63,8 +63,10 @@ public static class FormableNations
     {
         Definitions.Clear();
         _visible = null;
+        System.Threading.Interlocked.Increment(ref _identityCatalogRevision);
         foreach (var doc in GameDataLoader.DataDocuments("common", "formable_nations"))
             using (doc) Merge(doc.RootElement, null);
+        CountryNames.InvalidateDisplayNames();
     }
     public static FormableNation Find(string id) => id is not null ? Definitions.GetValueOrDefault(id) : null;
 
@@ -160,7 +162,9 @@ public static class FormableNations
     public static void Merge(JsonElement root, List<string> errors)
     {
         _visible = null;
+        System.Threading.Interlocked.Increment(ref _identityCatalogRevision);
         MergeInto(root, errors, Definitions);
+        CountryNames.InvalidateDisplayNames();
     }
 
     /// <summary>The declared faiths/groups form one union: no resident is counted twice.
@@ -317,14 +321,77 @@ public static class FormableNations
         return People(campaign, formable) < People(campaign, identity);
     }
 
+    private sealed class CountryIdentityBoard
+    {
+        public readonly object Gate = new();
+        public ProvinceTopology Map;
+        public int OwnershipRevision = int.MinValue;
+        public int MapRevision = int.MinValue;
+        public int StateCount = -1;
+        public int CatalogRevision = int.MinValue;
+        public ulong SmallMapHash;
+        public readonly Dictionary<(int NationId, int MapIndex, string Tag, string FormedId, string Project, string ExcludeId), HashSet<int>> Entries = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, CountryIdentityBoard> IdentityBoards = new();
+    private static int _identityCatalogRevision;
+
+    private static ulong ComputeSmallMapHash(ushort[] owners, ushort[] controllers, int provinceCount)
+    {
+        var hash = 14695981039346656037UL;
+        var limit = Math.Min(provinceCount, Math.Min(owners.Length - 1, controllers.Length - 1));
+        for (var p = 1; p <= limit; p++)
+        {
+            hash ^= owners[p];
+            hash *= 1099511628211UL;
+            hash ^= controllers[p];
+            hash *= 1099511628211UL;
+        }
+        return hash;
+    }
+
     internal static HashSet<int> CountryIdentity(Campaign campaign, Nation nation, string excludeDefinitionId = null)
     {
+        if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || nation is null)
+            return new HashSet<int>();
+        var map = campaign.ProvinceMap;
+        var board = IdentityBoards.GetOrCreateValue(campaign);
+        var excludeKey = !string.IsNullOrEmpty(nation.FormedNationId) &&
+                         !string.IsNullOrEmpty(excludeDefinitionId) &&
+                         string.Equals(nation.FormedNationId, excludeDefinitionId, StringComparison.OrdinalIgnoreCase)
+            ? nation.FormedNationId
+            : "";
+        var key = (nation.Id, nation.MapIndex, nation.Tag ?? "", nation.FormedNationId ?? "",
+            nation.ConsolidationProject ?? "", excludeKey);
+        var smallHash = map.ProvinceCount <= 256
+            ? ComputeSmallMapHash(map.ProvinceToNation, campaign.ProvinceController, map.ProvinceCount)
+            : 0UL;
+        var catalogRev = System.Threading.Volatile.Read(ref _identityCatalogRevision);
+
+        lock (board.Gate)
+        {
+            if (!ReferenceEquals(board.Map, map) ||
+                board.OwnershipRevision != campaign.OwnershipRevision ||
+                board.MapRevision != campaign.MapRevision ||
+                board.StateCount != campaign.States.Count ||
+                board.CatalogRevision != catalogRev ||
+                (map.ProvinceCount <= 256 && board.SmallMapHash != smallHash))
+            {
+                board.Entries.Clear();
+                board.Map = map;
+                board.OwnershipRevision = campaign.OwnershipRevision;
+                board.MapRevision = campaign.MapRevision;
+                board.StateCount = campaign.States.Count;
+                board.CatalogRevision = catalogRev;
+                board.SmallMapHash = smallHash;
+            }
+            if (board.Entries.TryGetValue(key, out var cached))
+                return cached;
+        }
+
         var identity = new HashSet<int>();
-        if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || nation is null) return identity;
         AddHeld(campaign, nation, FormableRestorations.Authored(campaign, nation.Tag), identity);
-        if (!string.IsNullOrEmpty(nation.FormedNationId) &&
-            (string.IsNullOrEmpty(excludeDefinitionId) ||
-             !string.Equals(nation.FormedNationId, excludeDefinitionId, StringComparison.OrdinalIgnoreCase)))
+        if (!string.IsNullOrEmpty(nation.FormedNationId) && excludeKey.Length == 0)
         {
             if (Find(campaign, nation.FormedNationId) is { } formed)
                 AddHeld(campaign, nation, PeacefulFormation.Territory(campaign, formed), identity);
@@ -344,11 +411,28 @@ public static class FormableNations
             // must not turn the whole successor state into that one annexed strip.
             // ProvinceSetOf(Campaign, ...) returns region map indices, not province ids.
             // The comparison below is in provinces and must also exclude occupied ground.
-            var map = campaign.ProvinceMap;
             var controllers = campaign.ProvinceController;
             for (var province = 1; province <= map.ProvinceCount && province < controllers.Length; province++)
                 if (!map.WaterByProvince[province] && map.ProvinceToNation[province] == nation.MapIndex &&
                     controllers[province] == nation.MapIndex) identity.Add(province);
+        }
+
+        lock (board.Gate)
+        {
+            if (ReferenceEquals(board.Map, map) &&
+                board.OwnershipRevision == campaign.OwnershipRevision &&
+                board.MapRevision == campaign.MapRevision &&
+                board.StateCount == campaign.States.Count &&
+                board.CatalogRevision == catalogRev &&
+                (map.ProvinceCount > 256 || board.SmallMapHash == smallHash))
+            {
+                if (!board.Entries.TryGetValue(key, out var existing))
+                {
+                    board.Entries[key] = identity;
+                    return identity;
+                }
+                return existing;
+            }
         }
         return identity;
     }

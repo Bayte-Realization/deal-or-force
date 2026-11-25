@@ -624,6 +624,7 @@ public static class Statecraft
             }
             OpinionSystem.Remember(campaign, bond, "abandoned_us");
             friend.Stability = M.Clamp01(friend.Stability - campaign.Defines.BrokenPromiseStabilityCost);
+            PrestigeSystem.Adjust(friend, -12f);
         }
 
         // And the attacker's own, dragged along. Not a call and not a choice: the kind they

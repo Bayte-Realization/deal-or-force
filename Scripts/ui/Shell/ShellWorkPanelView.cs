@@ -29,6 +29,7 @@ internal sealed class ShellWorkPanelView
     private TextureRect _roundEmblemIcon;
     private Label _titleLabel;
     private Label _subtitleLabel;
+    private HBoxContainer _headerActions;
     private Button _backBtn;
     private Button _pinBtn;
     private Button _closeBtn;
@@ -188,22 +189,25 @@ internal sealed class ShellWorkPanelView
         _subtitleLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
         titles.AddChild(_subtitleLabel);
 
-        var actions = new HBoxContainer { SizeFlagsVertical = Control.SizeFlags.ShrinkBegin };
-        actions.AddThemeConstantOverride("separation", 2);
-        head.AddChild(actions);
+        var touchInit = _ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true);
+        _headerActions = new HBoxContainer { SizeFlagsVertical = Control.SizeFlags.ShrinkBegin };
+        _headerActions.AddThemeConstantOverride("separation", touchInit ? 6 : 4);
+        head.AddChild(_headerActions);
 
-        _backBtn = CreateHeaderIconButton("icon_shell_back", Loc.Get("Back"), () => _ctx.NavigateBack?.Invoke());
-        _pinBtn = CreateHeaderIconButton("icon_shell_pin", Loc.Get("Pin or unpin headline"), () => { _pinned = !_pinned; UpdatePinButtonState(); });
-        _closeBtn = CreateHeaderIconButton("icon_shell_close", Loc.Get("Close"), Close);
+        _backBtn = CreateHeaderIconButton("icon_shell_back", Loc.Get("Back"), () => _ctx.NavigateBack?.Invoke(), touchInit);
+        _pinBtn = CreateHeaderIconButton("icon_shell_pin", Loc.Get("Pin or unpin headline"), () => { _pinned = !_pinned; UpdatePinButtonState(); }, touchInit);
+        _closeBtn = CreateHeaderIconButton("icon_shell_close", Loc.Get("Close"), Close, touchInit);
         _closeBtn.Name = "CloseShellWorkPanel";
-        actions.AddChild(_backBtn);
-        actions.AddChild(_pinBtn);
-        actions.AddChild(_closeBtn);
+        _headerActions.AddChild(_backBtn);
+        _headerActions.AddChild(_pinBtn);
+        _headerActions.AddChild(_closeBtn);
     }
 
-    private Button CreateHeaderIconButton(string iconName, string tip, Action onClick)
+    private Button CreateHeaderIconButton(string iconName, string tip, Action onClick, bool touch)
     {
-        var btn = new Button { CustomMinimumSize = new Vector2(28, 28), SizeFlagsVertical = Control.SizeFlags.ShrinkBegin, MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None, TooltipText = Ui.Tip(tip) };
+        var sz = touch ? 42f : 32f;
+        var inset = touch ? 9f : 7f;
+        var btn = new Button { CustomMinimumSize = new Vector2(sz, sz), SizeFlagsVertical = Control.SizeFlags.ShrinkBegin, MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None, TooltipText = Ui.Tip(tip) };
         btn.AddThemeStyleboxOverride("normal", _ctx.BorderedBox("shell.well", "shell.engrave", 1, 2, 0, 0, 0, 0));
         btn.AddThemeStyleboxOverride("hover", _ctx.BorderedBox("shell.plate_hover", "shell.brass_hi", 1, 2, 0, 0, 0, 0));
         btn.AddThemeStyleboxOverride("pressed", _ctx.PressedWellStyle());
@@ -211,7 +215,7 @@ internal sealed class ShellWorkPanelView
 
         var tex = new TextureRect { Texture = _ctx.Icon(iconName), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, Modulate = Ui.Colour("shell.paper_muted"), MouseFilter = Control.MouseFilterEnum.Ignore };
         tex.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        tex.OffsetLeft = 6; tex.OffsetRight = -6; tex.OffsetTop = 6; tex.OffsetBottom = -6;
+        tex.OffsetLeft = inset; tex.OffsetRight = -inset; tex.OffsetTop = inset; tex.OffsetBottom = -inset;
         btn.AddChild(tex);
         return btn;
     }
@@ -288,30 +292,43 @@ internal sealed class ShellWorkPanelView
 
     public void ApplyDock(ShellLayoutProfile profile, ShellDockGeometry dock)
     {
-        var compactChanged = _profile is null || _profile.Compact != profile.Compact;
+        var compactChanged = _profile is null || _profile.Compact != profile.Compact || _profile.TouchMode != profile.TouchMode;
         _profile = profile;
         if (_panel is null) return;
         _panel.CustomMinimumSize = Vector2.Zero;
         ShellContext.PlaceRect(_panel, dock.LeftPanel);
 
         var compact = profile.Compact;
+        var touch = profile.TouchMode || (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true);
         _titleLabel.AddThemeFontSizeOverride("font_size", compact ? 17 : 21);
         _figMainLabels[0].AddThemeFontSizeOverride("font_size", compact ? 14 : 16);
         _figMainLabels[1].AddThemeFontSizeOverride("font_size", compact ? 13 : 14);
         _figMainLabels[2].AddThemeFontSizeOverride("font_size", compact ? 13 : 14);
 
-        var btnSize = compact ? new Vector2(24, 24) : new Vector2(28, 28);
-        _backBtn.CustomMinimumSize = btnSize;
-        _pinBtn.CustomMinimumSize = btnSize;
-        _closeBtn.CustomMinimumSize = btnSize;
+        var btnSize = touch ? new Vector2(42, 42) : new Vector2(32, 32);
+        var inset = touch ? 9f : 7f;
+        _headerActions?.AddThemeConstantOverride("separation", touch ? 6 : 4);
+        foreach (var hb in new[] { _backBtn, _pinBtn, _closeBtn })
+        {
+            if (hb is null) continue;
+            hb.CustomMinimumSize = btnSize;
+            if (hb.GetChildCount() > 0 && hb.GetChild(0) is TextureRect tex)
+            {
+                tex.OffsetLeft = inset; tex.OffsetRight = -inset;
+                tex.OffsetTop = inset; tex.OffsetBottom = -inset;
+            }
+        }
         _emblemHost.CustomMinimumSize = compact ? new Vector2(46, 38) : new Vector2(54, 44);
         if (compactChanged) { _lastTabSig = ""; _lastBuildSig = ""; }
     }
 
+    private int _lastBuildHash;
+
     public void Refresh()
     {
         if (!IsVisible || _ctx.World is not { } world) return;
-        _backBtn.Disabled = !(_ctx.CanNavigateBack?.Invoke() ?? false);
+        var canBack = _ctx.CanNavigateBack?.Invoke() ?? false;
+        if (_backBtn.Disabled == canBack) _backBtn.Disabled = !canBack;
         UpdatePinButtonState();
 
         var staffMask = 0;
@@ -319,13 +336,22 @@ internal sealed class ShellWorkPanelView
             for (var i = 0; i < DealOrForceGame.StaffPortfolios.Length; i++)
                 if (Delegation.Holds(world.Player, DealOrForceGame.StaffPortfolios[i].Portfolio))
                     staffMask |= 1 << i;
+        var hs = _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId >= 0 ? snap : null;
         var inboxCount = _mode == DossierMode.Country && world.Player?.Id == _targetNationId
-            ? (_ctx.GetIncomingDiplomaticCount?.Invoke() ?? 0) : 0;
+            ? (hs is not null ? hs.IncomingDiplomaticCount : (_ctx.GetIncomingDiplomaticCount?.Invoke() ?? 0)) : 0;
         var observerMode = _ctx.IsObserverMode?.Invoke() ?? world.ObserverMode;
         var compactFlag = _profile?.Compact == true ? 1 : 0;
-        var sig = $"{_mode}|{_targetNationId}|{world.Player?.Id ?? -1}|{observerMode}|{_targetStateMapIndex}|{_targetProvinceId}|{_activeTab}|{staffMask}|{inboxCount}|{compactFlag}|{world.ElapsedDays}|{world.MapRevision}|{world.WarRevision}|{Loc.Language}";
-        if (_lastBuildSig == sig) return;
-        _lastBuildSig = sig;
+        var prestigeSig = _mode == DossierMode.Country ? (int)MathF.Round((world.NationById(_targetNationId) ?? world.Player)?.Prestige ?? 0f) : 0;
+        var hc = new HashCode();
+        hc.Add((int)_mode); hc.Add(_targetNationId); hc.Add(world.Player?.Id ?? -1); hc.Add(observerMode);
+        hc.Add(_targetStateMapIndex); hc.Add(_targetProvinceId); hc.Add(_activeTab); hc.Add(staffMask);
+        hc.Add(inboxCount); hc.Add(compactFlag); hc.Add(prestigeSig);
+        hc.Add(world.ElapsedDays); hc.Add(world.MapRevision); hc.Add(world.WarRevision);
+        hc.Add(Loc.Language, StringComparer.Ordinal);
+        var buildHash = hc.ToHashCode();
+        if (_lastBuildSig == "ok" && _lastBuildHash == buildHash) return;
+        _lastBuildSig = "ok";
+        _lastBuildHash = buildHash;
 
         if (_mode == DossierMode.Country)
         {
@@ -337,7 +363,10 @@ internal sealed class ShellWorkPanelView
             var state = world.StateByMapIndex(_targetStateMapIndex);
             var owner = _targetNationId >= 0 ? world.NationById(_targetNationId) : null;
             if (owner is null && state is not null)
-                owner = world.Nations.FirstOrDefault(n => n.MapIndex == state.NationMapIndex);
+            {
+                for (var i = 0; i < world.Nations.Count; i++)
+                    if (world.Nations[i].MapIndex == state.NationMapIndex) { owner = world.Nations[i]; break; }
+            }
             if (state is not null) PopulateRegion(world, owner, state);
         }
     }
@@ -348,15 +377,20 @@ internal sealed class ShellWorkPanelView
         ShowFlagEmblem(nation.Tag);
         _titleLabel.Text = nation.DisplayName;
         var ruler = Rulers.HeadOfState(world, nation);
-        _subtitleLabel.Text = $"{Loc.Get(PoliticsCore.GovernmentOf(nation).Name)} · {Loc.Get(ruler.Title)} {ruler.Name}";
-
         var overallRank = ResolveOverallRank(world, nation.Id);
-        var armyDivs = (int)MathF.Ceiling(world.Armies.Where(a => a.NationId == nation.Id).Sum(a => a.Divisions));
+        var rankText = overallRank > 0 ? $"№ {overallRank}" : "№ —";
+        _subtitleLabel.Text = $"{rankText} · {Loc.Get(PoliticsCore.GovernmentOf(nation).Name)} · {Loc.Get(ruler.Title)} {ruler.Name}";
+
+        var rawDivs = 0f;
+        for (var i = 0; i < world.Armies.Count; i++)
+            if (world.Armies[i].NationId == nation.Id) rawDivs += world.Armies[i].Divisions;
+        var armyDivs = (int)MathF.Ceiling(rawDivs);
+        var stabPct = (int)MathF.Round(nation.Stability * 100f);
+        var stabTok = nation.Stability < 0.35f ? "shell.state.negative_text" : nation.Stability < 0.55f ? "shell.state.warning_text" : "shell.state.positive";
         SetFigures(
-            ($"№ {overallRank}", Loc.Get("shell.overall_rank"), "shell.paper"),
-            ($"{(int)MathF.Round(nation.Stability * 100f)}%", Loc.Get("Stability"),
-                nation.Stability < 0.35f ? "shell.state.negative_text" : nation.Stability < 0.55f ? "shell.state.warning_text" : "shell.state.positive"),
-            ($"{armyDivs} {Loc.Get("shell.div_short")}", Loc.Get("Army"), "shell.paper"));
+            (Fmt.People(nation.Population), Loc.Get("Population"), "shell.paper"),
+            (Fmt.Money(nation.Gdp), Loc.Get("GDP"), "shell.brass_hi"),
+            ($"{stabPct}% · {armyDivs} {Loc.Get("shell.div_short")}", $"{Loc.Get("Stability")} · {Loc.Get("Army")}", stabTok));
 
         SetFolderTabs(isOwn
             ? new[] { "Overview", "Society", "shell.tab_staff", "Diplomacy" }
@@ -439,12 +473,28 @@ internal sealed class ShellWorkPanelView
 
     private int ResolveOverallRank(Campaign world, int nationId)
     {
+        var week = world.ElapsedDays / 7;
+        if (world.RenderSnapshot is { Version: > 0 } snap &&
+            snap.RankWeek == week &&
+            snap.RankMapRev == world.MapRevision &&
+            snap.RankWarRev == world.WarRevision &&
+            snap.NationRanksById is { Count: > 0 } snapRanks)
+        {
+            return snapRanks.GetValueOrDefault(nationId, 0);
+        }
+
         if (!ReferenceEquals(_rankCacheStamp.World, world) || _rankCacheStamp.Day != world.ElapsedDays || _rankCacheStamp.Rev != world.MapRevision)
         {
-            if (world.MidStep) return _rankByNationCache.GetValueOrDefault(nationId, 1);
+            if (world.MidStep)
+            {
+                if (world.RenderSnapshot is { Version: > 0 } fbSnap && fbSnap.NationRanksById is { Count: > 0 } fbRanks)
+                    return fbRanks.GetValueOrDefault(nationId, 0);
+                return _rankByNationCache.GetValueOrDefault(nationId, 1);
+            }
             var weights = new CountryRankings.Weights(
-                Ui.Metric("rankings.weight.economy", 40), Ui.Metric("rankings.weight.population", 15),
-                Ui.Metric("rankings.weight.field_power", 30), Ui.Metric("rankings.weight.technology", 15));
+                Ui.Metric("rankings.weight.economy", 42), Ui.Metric("rankings.weight.population", 14),
+                Ui.Metric("rankings.weight.field_power", 12), Ui.Metric("rankings.weight.technology", 17),
+                Ui.Metric("rankings.weight.prestige", 15));
             _rankByNationCache.Clear();
             foreach (var r in CountryRankings.Read(world, weights)) _rankByNationCache[r.NationId] = r.OverallRank;
             _rankCacheStamp = (world, world.ElapsedDays, world.MapRevision);
@@ -506,7 +556,8 @@ internal sealed class ShellWorkPanelView
     private void SetFolderTabs(string[] tabKeys)
     {
         if (_activeTab >= tabKeys.Length) _activeTab = 0;
-        var tabSig = string.Join("|", tabKeys) + $"|{_activeTab}|{_profile?.Compact ?? false}|{Loc.Language}";
+        var touch = _profile?.TouchMode == true || (_ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true));
+        var tabSig = string.Join("|", tabKeys) + $"|{_activeTab}|{_profile?.Compact ?? false}|{touch}|{Loc.Language}";
         if (_lastTabSig == tabSig && _tabButtons.Count == tabKeys.Length) return;
         _lastTabSig = tabSig;
 
@@ -525,7 +576,7 @@ internal sealed class ShellWorkPanelView
             var text = Loc.Get(tabKeys[i]);
             var b = new Button
             {
-                Text = text, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, compact ? 28 : 32),
+                Text = text, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, touch ? 38 : (compact ? 28 : 32)),
                 ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, TooltipText = Ui.Tip(text),
                 MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None
             };
@@ -626,9 +677,11 @@ internal sealed class ShellWorkPanelView
     private Button CreateFooterButton(string caption, bool primary, Action onClick)
     {
         var compact = _profile?.Compact == true;
+        var touch = _profile?.TouchMode == true || (_ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true));
+        var btnH = touch ? (primary ? 44 : 40) : (primary ? (compact ? 32 : 36) : (compact ? 28 : 31));
         var btn = new Button
         {
-            Text = caption, CustomMinimumSize = new Vector2(0, primary ? (compact ? 32 : 36) : (compact ? 28 : 31)),
+            Text = caption, CustomMinimumSize = new Vector2(0, btnH),
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipText = true,
             TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, TooltipText = Ui.Tip(caption),
             MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None

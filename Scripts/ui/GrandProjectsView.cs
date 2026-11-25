@@ -322,16 +322,32 @@ internal sealed class GrandProjectsView
         return world.Player ?? _ctx.GetSelectedNation?.Invoke();
     }
 
+    private int _lastSigHash;
+
     private string BuildSignature(Campaign world, Nation viewer, bool observer)
     {
-        var projHash = 17;
+        var hc = new HashCode();
+        hc.Add(world.ElapsedDays);
+        hc.Add(world.TradeRoutesDay);
+        hc.Add(world.MapRevision);
+        hc.Add(Loc.Language, StringComparer.Ordinal);
+        hc.Add((int)_activeTab);
+        hc.Add(_selectedStateMapIndex);
+        hc.Add(viewer?.Id ?? -1);
+        hc.Add(observer);
+        hc.Add(GrandProjects.IsEnabled(world));
         for (var i = 0; i < world.GrandProjects.Count; i++)
         {
             var p = world.GrandProjects[i];
-            projHash = HashCode.Combine(projHash, p.Id, p.HostNationId, p.Stage, (int)p.ProgressDays,
-                (int)p.Status, p.PartnerNationId, p.PartnerActive);
+            hc.Add(p.Id); hc.Add(p.HostNationId); hc.Add(p.Stage);
+            hc.Add((int)p.ProgressDays); hc.Add((int)p.Status);
+            hc.Add(p.PartnerNationId); hc.Add(p.PartnerActive);
         }
-        return $"{world.ElapsedDays}|{world.TradeRoutesDay}|{world.MapRevision}|{Loc.Language}|{(int)_activeTab}|{_selectedStateMapIndex}|{viewer?.Id ?? -1}|{observer}|{GrandProjects.IsEnabled(world)}|{projHash}";
+        var hash = hc.ToHashCode();
+        if (ReferenceEquals(_lastWorld, world) && !string.IsNullOrEmpty(_lastSignature) && _lastSigHash == hash)
+            return _lastSignature;
+        _lastSigHash = hash;
+        return _lastSignature == "a" ? "b" : "a";
     }
 
     private void BuildOursTab(Campaign world, Nation nation, bool observer)

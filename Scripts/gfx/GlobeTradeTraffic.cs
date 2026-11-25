@@ -36,13 +36,19 @@ public sealed partial class GlobePresentation
     private const float ShipDisplayLength = 0.03f;
     private const float LorryDisplayLength = 0.013f;
     private const float LaneHalfWidth = 0.0022f;
-    private const int TradeLinesDrawn = 18;
+    /// <summary>
+    /// The lines of the busiest lanes of the world in the Economy mode: eight, not eighteen. A
+    /// dozen dashed lanes sharing the Sea of Japan read as rain (23 November 2026, round 2).
+    /// </summary>
+    private const int TradeLinesDrawn = 8;
 
     private sealed class TradeLane
     {
         public int A, B;
         public bool Sea;
         public int Movers;
+        /// <summary>This pair's trade against the world's largest pair, 0..1: the line's weight.</summary>
+        public float Share;
         public readonly List<Vector2> Points = new(); // (latitude, longitude), half a degree or less apart
         public readonly List<float> Along = new();     // cumulative length in degrees
         public float Length;
@@ -72,8 +78,13 @@ public sealed partial class GlobePresentation
     private float _tradeLanesTop = 1f;
     private double _tradeClock;
     private MeshInstance3D _tradeLaneLines;
-    private ImmediateMesh _tradeLaneMesh;
+    private ArrayMesh _tradeLaneMesh;
     private readonly List<Vector3> _tradeDrawPoints = new();
+    private readonly List<Vector3> _tradeLaneVerts = new();
+    private readonly List<Vector2> _tradeLaneUvs = new();
+    private readonly List<Color> _tradeLaneColors = new();
+    private readonly List<int> _tradeLaneIndices = new();
+    private readonly Godot.Collections.Array _tradeLaneArrays = new();
     private ShaderMaterial _tradeLaneMaterial;
     private int _tradeLaneFingerprint = int.MinValue;
     /// <summary>The country picked on the map: its own lanes are drawn in every map mode. -1 when none.</summary>
@@ -98,19 +109,15 @@ public sealed partial class GlobePresentation
     private const string TradeLaneShader = @"
 shader_type spatial;
 render_mode unshaded, blend_mix, cull_disabled, depth_draw_never, shadows_disabled;
-uniform float period = 1.5;
-uniform float duty = 0.48;
-uniform float phase = 0.0;
 uniform float quality_tier = 0.0;
 void fragment() {
-    float d = fract(UV.x / period - phase);
-    float dash = smoothstep(0.0, 0.08, d) * (1.0 - smoothstep(duty - 0.08, duty, d));
-    float head = smoothstep(duty - 0.16, duty - 0.04, d) * (1.0 - smoothstep(duty - 0.04, duty, d));
+    // One solid, thin, faint line: no dashes marching along it (parallel dashes over a sea read
+    // as rain), no shimmer, no bright head. The weight of the trade is the line's width and alpha.
     float across = 1.0 - abs(UV.y * 2.0 - 1.0);
-    float core = smoothstep(0.0, 0.58, across);
-    // Ink, not light: no shimmer between the dashes (the owner's no-glow rule).
-    ALBEDO = COLOR.rgb * (0.92 + 0.36 * head);
-    ALPHA = COLOR.a * dash * core;
+    float aa = max(fwidth(across), 0.001);
+    float core = smoothstep(0.0, aa * 1.5, across);
+    ALBEDO = COLOR.rgb;
+    ALPHA = COLOR.a * core;
 }";
 
     private int _shipModelWeightTotal;
@@ -157,7 +164,8 @@ void fragment() {
             _tradeModels.Add(model);
         }
         RefreshTradeModelWeightTotals();
-        _tradeLaneMesh = new ImmediateMesh();
+        _tradeLaneMesh = new ArrayMesh();
+        _tradeLaneArrays.Resize((int)Mesh.ArrayType.Max);
         _tradeLaneMaterial = new ShaderMaterial { Shader = new Shader { Code = TradeLaneShader } };
         _tradeQualityTier = CurrentShaderQualityTier();
         _tradeLaneMaterial.SetShaderParameter("quality_tier", _tradeQualityTier);
@@ -339,11 +347,21 @@ void fragment() {
         var counts = _tradeModelCounts;
         if (moverCapPerRoute > 0)
         {
+            var flatHalfSpan = _flatMap && IsInstanceValid(_camera) && Size.Y > 1f
+                ? _flatZoom * (Size.X / Size.Y) + 1.5f
+                : FlatMapWidth * 0.6f;
             for (var li = 0; li < _tradeLanes.Count; li++)
             {
                 var lane = _tradeLanes[li];
                 if (lane.Length <= 0.01f) continue;
-                if (!_flatMap && !TradeLaneNearFrontHemisphere(lane, localCamNormal)) continue;
+                if (!_flatMap)
+                {
+                    if (!TradeLaneNearFrontHemisphere(lane, localCamNormal)) continue;
+                }
+                else if (!TradeLaneNearFlatView(lane, _flatX, flatHalfSpan))
+                {
+                    continue;
+                }
                 var speed = lane.Sea ? ShipDegreesPerSecond : LorryDegreesPerSecond;
                 var moverCount = Math.Min(lane.Movers, moverCapPerRoute);
                 for (var mover = 0; mover < moverCount; mover++)
@@ -369,7 +387,6 @@ void fragment() {
             }
         }
         for (var i = 0; i < _tradeModels.Count; i++) _tradeModels[i].Layer.Multimesh.VisibleInstanceCount = counts[i];
-        _tradeLaneMaterial.SetShaderParameter("phase", (float)(_tradeClock * 0.22));
         DrawTradeLanes(zoom);
     }
 
@@ -389,6 +406,21 @@ void fragment() {
     }
 
     private Vector3 _lastTradeCamNormal;
+
+    private static bool TradeLaneNearFlatView(TradeLane lane, float flatX, float halfSpan)
+    {
+        var n = lane.Points.Count;
+        if (n == 0) return false;
+        for (var k = 0; k <= 4; k++)
+        {
+            var pt = lane.Points[(n - 1) * k / 4];
+            var baseX = pt.Y / 360f * FlatMapWidth;
+            var nearX = DateLineSeam.NearestCopy(baseX, flatX, FlatMapWidth);
+            if (MathF.Abs(nearX - flatX) <= halfSpan) return true;
+            if (n == 1) break;
+        }
+        return false;
+    }
 
     private static bool TradeLaneNearFrontHemisphere(TradeLane lane, Vector3 camNormal)
     {
@@ -430,28 +462,34 @@ void fragment() {
     }
 
     /// <summary>
-    /// The lanes, faint and dashed, the dashes running from the first partner to the second: in
-    /// the Economy mode the busiest of the world, otherwise only the picked country's own.
+    /// The lanes, each one thin solid line as heavy as its trade: in the Economy mode the busiest
+    /// of the world, otherwise only the picked country's own.
     /// </summary>
     private void DrawTradeLanes(float zoom)
     {
         var economy = _mapMode == StrategicMapMode.Economy;
         var focus = economy ? -1 : _tradeFocusNationId;
-        var fingerprint = HashCode.Combine(_tradeLanes.Count, _tradeLanesMonth, _flatMap, _flatMap ? (int)(_flatX * 4f) : 0, (int)(zoom * 8f), economy, focus);
+        var fingerprint = HashCode.Combine(_tradeLanes.Count, _tradeLanesMonth, _flatMap, _flatMap ? (int)MathF.Floor(_flatX) : 0, (int)(zoom * 6f), economy, focus);
         if (fingerprint == _tradeLaneFingerprint) return;
         _tradeLaneFingerprint = fingerprint;
         _tradeLaneMesh.ClearSurfaces();
         if (!economy && focus < 0) return;
-        var halfWidth = LaneHalfWidth * zoom;
-        // The lines of the busiest lanes only: where a dozen lanes share the Mediterranean, a dozen
-        // lines read as rain. The ships on the rest say where they go.
+        // The lines of the busiest lanes only, batched into one indexed Triangles surface
+        // so all trade arcs render in a single draw call instead of dozens of TriangleStrip passes.
+        _tradeLaneVerts.Clear();
+        _tradeLaneUvs.Clear();
+        _tradeLaneColors.Clear();
+        _tradeLaneIndices.Clear();
         var drawn = 0;
         for (var li = 0; li < _tradeLanes.Count && drawn < TradeLinesDrawn; li++)
         {
             var lane = _tradeLanes[li];
             if (!economy && lane.A != focus && lane.B != focus) continue;
             drawn++;
-            var colour = lane.Sea ? new Color(0.84f, 0.88f, 0.74f, 0.30f) : new Color(0.94f, 0.76f, 0.44f, 0.34f);
+            var weight = Math.Clamp(lane.Share, 0f, 1f);
+            var halfWidth = LaneHalfWidth * zoom * (0.50f + 0.40f * weight);
+            var alpha = 0.16f + 0.24f * weight;
+            var colour = lane.Sea ? Ui.Colour("text.accent", alpha) : Ui.Colour("production.focus", alpha);
             _tradeDrawPoints.Clear();
             for (var i = 0; i < lane.Points.Count; i++)
             {
@@ -461,11 +499,11 @@ void fragment() {
                     : LocalSurfacePoint(point.X, point.Y, GlobeRadius * 1.0013f));
             }
             // A lane across the date line breaks at the sheet edge. One point on a
-            // side is not a triangle strip, so that side is not begun.
+            // side cannot open a ribbon, so it is skipped.
             CollectDateLineRuns(_tradeDrawPoints);
             foreach (var run in _dateLineRuns)
             {
-                _tradeLaneMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip);
+                var baseVert = _tradeLaneVerts.Count;
                 var endIndex = run.Start + run.Count - 1;
                 for (var i = run.Start; i <= endIndex; i++)
                 {
@@ -478,16 +516,38 @@ void fragment() {
                     var side = normal.Cross(tangent).Normalized() * halfWidth;
                     // The ends fade in and out, so a lane begins at a port rather than at a full stop.
                     var fade = Math.Clamp(MathF.Min(lane.Along[i], lane.Length - lane.Along[i]) / 1.5f, 0f, 1f);
-                    var shade = new Color(colour.R, colour.G, colour.B, colour.A * fade);
-                    _tradeLaneMesh.SurfaceSetColor(shade);
-                    _tradeLaneMesh.SurfaceSetUV(new Vector2(lane.Along[i], 0f));
-                    _tradeLaneMesh.SurfaceAddVertex(here + side);
-                    _tradeLaneMesh.SurfaceSetColor(shade);
-                    _tradeLaneMesh.SurfaceSetUV(new Vector2(lane.Along[i], 1f));
-                    _tradeLaneMesh.SurfaceAddVertex(here - side);
+                    var shade = colour with { A = colour.A * fade };
+                    _tradeLaneVerts.Add(here + side);
+                    _tradeLaneUvs.Add(new Vector2(lane.Along[i], 0f));
+                    _tradeLaneColors.Add(shade);
+                    _tradeLaneVerts.Add(here - side);
+                    _tradeLaneUvs.Add(new Vector2(lane.Along[i], 1f));
+                    _tradeLaneColors.Add(shade);
+                    if (i > run.Start)
+                    {
+                        var prev = baseVert + (i - run.Start - 1) * 2;
+                        var curr = prev + 2;
+                        _tradeLaneIndices.Add(prev);
+                        _tradeLaneIndices.Add(prev + 1);
+                        _tradeLaneIndices.Add(curr);
+                        _tradeLaneIndices.Add(prev + 1);
+                        _tradeLaneIndices.Add(curr + 1);
+                        _tradeLaneIndices.Add(curr);
+                    }
                 }
-                _tradeLaneMesh.SurfaceEnd();
             }
+        }
+        if (_tradeLaneIndices.Count > 0)
+        {
+            _tradeLaneArrays[(int)Mesh.ArrayType.Vertex] = _tradeLaneVerts.ToArray();
+            _tradeLaneArrays[(int)Mesh.ArrayType.TexUV] = _tradeLaneUvs.ToArray();
+            _tradeLaneArrays[(int)Mesh.ArrayType.Color] = _tradeLaneColors.ToArray();
+            _tradeLaneArrays[(int)Mesh.ArrayType.Index] = _tradeLaneIndices.ToArray();
+            _tradeLaneMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, _tradeLaneArrays);
+            _tradeLaneArrays[(int)Mesh.ArrayType.Vertex] = default;
+            _tradeLaneArrays[(int)Mesh.ArrayType.TexUV] = default;
+            _tradeLaneArrays[(int)Mesh.ArrayType.Color] = default;
+            _tradeLaneArrays[(int)Mesh.ArrayType.Index] = default;
         }
     }
 
@@ -574,6 +634,7 @@ void fragment() {
     /// </summary>
     private static TradeLane Crew(TradeLane lane, float share)
     {
+        lane.Share = share;
         var spacing = lane.Sea ? 9f - 5f * share : 5f - 2.5f * share;
         lane.Movers = Math.Clamp((int)MathF.Ceiling(lane.Length / spacing), 1, TradeMoversPerRoute);
         return lane;

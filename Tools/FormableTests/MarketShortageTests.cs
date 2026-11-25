@@ -39,6 +39,7 @@ static class MarketShortageTests
 
     public static void Run()
     {
+        CommittedRegionalEconomies();
         var (shortNow, soughtNow) = FirstWeek(0.50f);
         var (shortOld, soughtOld) = FirstWeek(1.0f);
         Check(shortNow > 0 && shortOld > 0, "the 2024 world has importers in its first week");
@@ -63,5 +64,32 @@ static class MarketShortageTests
         }
         var japanOil = world.Nations.First(n => n.Tag == "JPN").Market[Commodity.Oil].Satisfaction;
         Check(japanOil >= 0.95f, $"Japan, which imports its oil, gets it a month in ({japanOil:P0})");
+    }
+
+    private static void CommittedRegionalEconomies()
+    {
+        var c = new Campaign(2042);
+        c.Defines.HeldRegionsWorkForHolder = true;
+        c.Defines.HeldRegionSettleDays = 14;
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours))!.SetValue(c, 20L * 24);
+        var holder = c.AddNation(new Nation { Tag = "HLD", MapIndex = 1 });
+        var owner = c.AddNation(new Nation { Tag = "OWN", MapIndex = 2 });
+        var firstHeld = new ScenarioState { MapIndex = 70, NationMapIndex = 2, HeldById = holder.Id };
+        var home = new ScenarioState { MapIndex = 40, NationMapIndex = 1 };
+        var recent = new ScenarioState { MapIndex = 20, NationMapIndex = 2, HeldById = holder.Id, HeldSinceDay = 16 };
+        var secondHeld = new ScenarioState { MapIndex = 30, NationMapIndex = 2, HeldById = holder.Id };
+        c.States.AddRange(new[] { firstHeld, home, recent, secondHeld });
+
+        var administrations = HeldRegions.CommittedAdministrations(c);
+        var actual = HeldRegions.FillEconomyOf(c, holder, new List<ScenarioState>(), refresh: false, administrations: administrations);
+        Check(actual.SequenceEqual(new[] { home, firstHeld, secondHeld }) &&
+              actual.SequenceEqual(HeldRegions.EconomyOf(c, holder, refresh: false)),
+            "the market counts owned regions first and keeps original order for settled administrations");
+        actual = HeldRegions.FillEconomyOf(c, owner, actual, refresh: false, administrations: administrations);
+        Check(actual.SequenceEqual(new[] { recent }), "newly held regions stay in their owner's economy until administration settles");
+        c.Defines.HeldRegionsWorkForHolder = false;
+        administrations = HeldRegions.CommittedAdministrations(c);
+        actual = HeldRegions.FillEconomyOf(c, owner, actual, refresh: false, administrations: administrations);
+        Check(actual.SequenceEqual(new[] { firstHeld, recent, secondHeld }), "disabling occupation economics leaves all regions with their owner");
     }
 }

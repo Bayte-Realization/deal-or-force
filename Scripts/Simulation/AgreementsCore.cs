@@ -221,6 +221,12 @@ public static class AgreementSystem
             willingness -= name;
             why?.Add("Our notoriety", -name);
         }
+        var prestige = PrestigeSystem.DiplomaticBonus(asking);
+        if (prestige > 0.0001f)
+        {
+            willingness += prestige;
+            why?.Add("Diplomatic prestige", prestige);
+        }
 
         if (kind == AgreementKind.TradeAgreement)
         {
@@ -342,7 +348,11 @@ public static class AgreementSystem
         {
             var cost = ExitCost(campaign, relation, issuerId);
             if (!cost.Free && cost.Opinion.Length > 0) OpinionSystem.Remember(campaign, relation, cost.Opinion, cost.Scale);
-            if (cost.Notoriety > 0f && campaign.NationById(issuerId) is { } issuer) issuer.Notoriety += cost.Notoriety;
+            if (campaign.NationById(issuerId) is { } issuer)
+            {
+                if (cost.Notoriety > 0f) issuer.Notoriety += cost.Notoriety;
+                if (!cost.Free) PrestigeSystem.Adjust(issuer, -12f);
+            }
             DealTally.Count(cost.Free ? "trade_terms.exit.free" : "trade_terms.exit.paid");
         }
         else DealTally.Count("trade_terms.end." + reason.ToString().ToLowerInvariant());
@@ -678,6 +688,7 @@ public sealed class CancelAgreementCommand : ICampaignCommand
             OpinionSystem.Forget(campaign, relation, "non_aggression_pact");
             OpinionSystem.Remember(campaign, relation, "broke_non_aggression_pact");
             issuer.Notoriety += campaign.Defines.NonAggressionPactBreakNotoriety;
+            PrestigeSystem.Adjust(issuer, -12f);
         }
         relation.LastActionDay = campaign.ElapsedDays;
         Cancelled = true;

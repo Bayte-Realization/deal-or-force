@@ -28,6 +28,8 @@ internal sealed class ShellTouchModeBarView
     private bool? _lastSticky;
     private string _lastLang = "";
 
+    public bool IsVisible => _panel is { Visible: true };
+
     public ShellTouchModeBarView(ShellContext ctx)
     {
         _ctx = ctx;
@@ -38,9 +40,9 @@ internal sealed class ShellTouchModeBarView
         var touch = _ctx.IsTouchMode?.Invoke() ?? (PlatformProfile.Current?.IsTouchPrimary == true);
         if (!touch) return;
 
-        _normalStyle = _ctx.NineSlice("button_umber_9s", 8, 5, 3, 5, 3);
-        _hoverStyle = Ui.ChromeBox("shell.plate_hover", 0.90f, "shell.brass_hi", 0.85f, cornerRadius: 3, borderWidth: 1, padX: 5, padY: 3);
-        _activeStyle = Ui.ChromeBox("shell.well_top", 0.96f, "shell.brass_hi", 0.95f, cornerRadius: 3, borderWidth: 1, padX: 5, padY: 3, leftBorderWidth: 3);
+        _normalStyle = _ctx.NineSlice("button_umber_9s", 8, 2, 3, 2, 3);
+        _hoverStyle = Ui.ChromeBox("shell.plate_hover", 0.90f, "shell.brass_hi", 0.85f, cornerRadius: 3, borderWidth: 1, padX: 2, padY: 3);
+        _activeStyle = Ui.ChromeBox("shell.well_top", 0.96f, "shell.brass_hi", 0.95f, cornerRadius: 3, borderWidth: 1, padX: 2, padY: 3, leftBorderWidth: 3);
 
         _panel = new PanelContainer
         {
@@ -82,7 +84,8 @@ internal sealed class ShellTouchModeBarView
             {
                 Name = name,
                 Text = CaptionFor(captured, stickyOrder: false),
-                CustomMinimumSize = new Vector2(72, 42),
+                TooltipText = TooltipFor(captured, stickyOrder: false),
+                CustomMinimumSize = new Vector2(66, 42),
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                 SizeFlagsVertical = Control.SizeFlags.ExpandFill,
                 ClipText = true,
@@ -91,7 +94,7 @@ internal sealed class ShellTouchModeBarView
                 MouseDefaultCursorShape = Control.CursorShape.PointingHand
             };
             btn.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
-            btn.AddThemeFontSizeOverride("font_size", 12);
+            btn.AddThemeFontSizeOverride("font_size", 11);
             btn.Pressed += () =>
             {
                 _ctx.PlayCue?.Invoke("ui_select");
@@ -147,6 +150,7 @@ internal sealed class ShellTouchModeBarView
         {
             var on = mode == curMode;
             btn.Text = CaptionFor(mode, sticky);
+            btn.TooltipText = TooltipFor(mode, sticky);
             btn.AddThemeStyleboxOverride("normal", on ? _activeStyle : _normalStyle);
             btn.AddThemeStyleboxOverride("hover", on ? _activeStyle : _hoverStyle);
             btn.AddThemeStyleboxOverride("pressed", _activeStyle);
@@ -155,9 +159,14 @@ internal sealed class ShellTouchModeBarView
         }
     }
 
+    private static string L(string key, string fallback)
+    {
+        var v = Loc.Get(key);
+        return v == key ? fallback : v;
+    }
+
     private static string CaptionFor(TouchTapMode mode, bool stickyOrder)
     {
-        static string L(string key, string fallback) { var v = Loc.Get(key); return v == key ? fallback : v; }
         return mode switch
         {
             TouchTapMode.Select => L("mobile.tap.select_short", "Select"),
@@ -167,6 +176,25 @@ internal sealed class ShellTouchModeBarView
             TouchTapMode.BoxSelect => L("mobile.tap.box_short", "Box"),
             TouchTapMode.Pan => L("mobile.tap.pan_short", "Pan"),
             _ => "Select"
+        };
+    }
+
+    private static string TooltipFor(TouchTapMode mode, bool stickyOrder)
+    {
+        return mode switch
+        {
+            TouchTapMode.Select => L("mobile.tap.select_tip",
+                "Select — tap to pick a country, region, or army.\nDrag to pan · Hold a province to issue a quick order."),
+            TouchTapMode.Order => stickyOrder
+                ? L("mobile.tap.order_lock_tip",
+                    "Order Lock — every tap issues a march or context order\nwithout returning to Select.\nTap again or pick Select to exit.")
+                : L("mobile.tap.order_once_tip",
+                    "Order 1× — next tap issues 1 march or context order\n(like Right-Click) and returns to Select.\nTap again while active to lock multi-order mode."),
+            TouchTapMode.BoxSelect => L("mobile.tap.box_tip",
+                "Box — drag one finger to draw a selection box over armies.\nDrag with two fingers to pan or zoom the map."),
+            TouchTapMode.Pan => L("mobile.tap.pan_tip",
+                "Pan — move and zoom the map safely.\nTaps never select units or issue orders."),
+            _ => ""
         };
     }
 }

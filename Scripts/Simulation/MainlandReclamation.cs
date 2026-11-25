@@ -23,46 +23,46 @@ public sealed partial class Defines
     public bool MainlandReclamationEnabled { get; set; } = true;
 
     /// <summary>Volunteer divisions rallying immediately when a reunification contender establishes a mainland bridgehead.</summary>
-    public int MainlandBridgeheadRallyDivisions { get; set; } = 6;
+    public int MainlandBridgeheadRallyDivisions { get; set; } = 2;
 
     /// <summary>Baseline volunteer divisions rallying when a kindred mainland region is liberated.</summary>
-    public int MainlandRegionRallyDivisions { get; set; } = 3;
+    public int MainlandRegionRallyDivisions { get; set; } = 1;
 
     /// <summary>Maximum total mainland volunteer divisions a single contender may rally in one war.</summary>
-    public int MainlandRallyMaxDivisionsPerWar { get; set; } = 56;
+    public int MainlandRallyMaxDivisionsPerWar { get; set; } = 18;
 
     /// <summary>Rival war-support loss when a mainland region is liberated by a reunification contender.</summary>
-    public float MainlandLiberationWarSupportHit { get; set; } = 0.065f;
+    public float MainlandLiberationWarSupportHit { get; set; } = 0.018f;
 
     /// <summary>Rival stability loss when a mainland region is liberated by a reunification contender.</summary>
-    public float MainlandLiberationStabilityHit { get; set; } = 0.040f;
+    public float MainlandLiberationStabilityHit { get; set; } = 0.010f;
 
     /// <summary>Rival domestic coup-pressure bump when a mainland region is liberated.</summary>
-    public float MainlandLiberationCoupPressure { get; set; } = 0.085f;
+    public float MainlandLiberationCoupPressure { get; set; } = 0.020f;
 
-    /// <summary>Radicalism surge across the rival's remaining regions when a mainland bridgehead or region falls.</summary>
-    public float MainlandLiberationRadicalismSurge { get; set; } = 0.08f;
+    /// <summary>Radicalism surge across contested rival regions when a mainland bridgehead or region falls.</summary>
+    public float MainlandLiberationRadicalismSurge { get; set; } = 0.015f;
 
     /// <summary>Base monthly frontline defection chance for rival garrisons in a reunification liberation war.</summary>
-    public float MainlandDefectionChanceBonus { get; set; } = 0.16f;
+    public float MainlandDefectionChanceBonus { get; set; } = 0.06f;
 
     /// <summary>Sea distance in degrees treated as a narrow strait for amphibious crossing odds.</summary>
     public float AiNarrowStraitInvasionDegrees { get; set; } = 7.5f;
 
     /// <summary>Allowed local enemy naval odds across a narrow strait before the AI refuses to embark.</summary>
-    public float AiNarrowStraitInvasionOdds { get; set; } = 2.4f;
+    public float AiNarrowStraitInvasionOdds { get; set; } = 1.35f;
 
     /// <summary>Earliest campaign day an AI maritime reunification contender considers launching a mainland return.</summary>
-    public int AiMainlandReturnEarliestDay { get; set; } = 240;
+    public int AiMainlandReturnEarliestDay { get; set; } = 540;
 
     /// <summary>Days between AI mainland-return readiness reviews.</summary>
     public int AiMainlandReturnReviewDays { get; set; } = 21;
 
     /// <summary>Base per-review chance an AI maritime contender launches its prepared mainland return when a window opens.</summary>
-    public float AiMainlandReturnChance { get; set; } = 0.28f;
+    public float AiMainlandReturnChance { get; set; } = 0.12f;
 
     /// <summary>Minimum ready field divisions required before an AI launches an overseas mainland reclamation war.</summary>
-    public int AiMainlandReturnMinimumDivisions { get; set; } = 14;
+    public int AiMainlandReturnMinimumDivisions { get; set; } = 22;
 
     /// <summary>Minimum naval hulls required before an AI launches an overseas mainland reclamation war.</summary>
     public int AiMainlandReturnMinimumHulls { get; set; } = 45;
@@ -171,6 +171,8 @@ public static class MainlandReclamation
     private static readonly ConditionalWeakTable<Campaign, CampaignReclamationScratch> Scratches = new();
     [ThreadStatic] private static SideScratch _sideScratch;
     [ThreadStatic] private static HashSet<string> _pendingCultures;
+    [ThreadStatic] private static HashSet<string> _pairCultures;
+    [ThreadStatic] private static HashSet<string> _liberatorCultures;
     private static readonly string[] BridgeheadKeys = BuildPrefixKeys(BridgeheadPrefix, 256);
 
     private static string[] BuildPrefixKeys(string prefix, int count)
@@ -190,7 +192,7 @@ public static class MainlandReclamation
     private static readonly Comparison<ScenarioState> CompareStateByMapIndex = static (a, b) => a.MapIndex.CompareTo(b.MapIndex);
     private static readonly Comparison<ScenarioState> CompareStateForDefection = static (a, b) =>
     {
-        var cmp = b.Population.CompareTo(a.Population);
+        var cmp = a.Population.CompareTo(b.Population);
         return cmp != 0 ? cmp : a.MapIndex.CompareTo(b.MapIndex);
     };
 
@@ -255,33 +257,88 @@ public static class MainlandReclamation
         liberator is not null && liberator.DecisionAvailableDay.Count > 0 &&
         liberator.DecisionAvailableDay.ContainsKey(BridgeheadKey(warId));
 
+    private static bool HasAnySpirit(Nation nation, string genericA, string genericB, string legacyId) =>
+        ModifierSystem.Has(nation, genericA) ||
+        ModifierSystem.Has(nation, genericB) ||
+        ModifierSystem.Has(nation, legacyId);
+
+    private static bool HasGlorySpirit(Nation nation) =>
+        HasAnySpirit(nation, "reclamation_glory_spirit", "reclamation_national_glory_spirit", "twn_project_national_glory_spirit");
+
+    private static bool HasArmadaSpirit(Nation nation) =>
+        HasAnySpirit(nation, "reclamation_armada_spirit", "reclamation_strait_armada_spirit", "twn_strait_armada_spirit");
+
+    private static bool HasUndergroundSpirit(Nation nation) =>
+        HasAnySpirit(nation, "reclamation_underground_spirit", "reclamation_mainland_underground_spirit", "twn_mainland_underground_spirit");
+
+    private static bool IsDividedRivalCore(Campaign campaign, Nation contender, Nation holder, int contenderStatesCount, HashSet<string> contenderCultures)
+    {
+        if (contender is null || holder is null || contender.Id == holder.Id) return false;
+        if (contender.Population <= 0 || holder.Population <= 0 || contender.Population >= holder.Population) return false;
+        if (contender.IsSubject || contender.Landless || contender.Movement is not null || WarAims.IsRebel(contender)) return false;
+        if (holder.IsSubject || holder.Landless || holder.Movement is not null || WarAims.IsRebel(holder)) return false;
+        if (contenderStatesCount <= 0) return false;
+        var holderStates = campaign.StatesOf(holder).Length;
+        if (holderStates < 4 || holderStates <= contenderStatesCount) return false;
+        if (PeacefulFormation.CulturalAffinity(contender, holder) < 0.75f) return false;
+        if (!SharesCultureWith(contenderCultures, holder)) return false;
+        return HasAnyHomeland(campaign, contender, holder);
+    }
+
+    /// <summary>
+    /// Allocation-free check identifying whether <paramref name="a"/> and <paramref name="b"/> form
+    /// an asymmetric divided-homeland pair, outputting the smaller <paramref name="contender"/>
+    /// and the larger homeland <paramref name="holder"/>.
+    /// </summary>
+    public static bool TryGetDividedRivalPair(Campaign campaign, Nation a, Nation b, out Nation contender, out Nation holder)
+    {
+        contender = null;
+        holder = null;
+        if (campaign is null || a is null || b is null || a.Id == b.Id) return false;
+        var cultures = _pairCultures ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (a.Population > 0 && b.Population > a.Population)
+        {
+            FillCultures(a, cultures);
+            if (cultures.Count > 0 && IsDividedRivalCore(campaign, a, b, campaign.StatesOf(a).Length, cultures))
+            {
+                contender = a;
+                holder = b;
+                return true;
+            }
+        }
+        if (b.Population > 0 && a.Population > b.Population)
+        {
+            FillCultures(b, cultures);
+            if (cultures.Count > 0 && IsDividedRivalCore(campaign, b, a, campaign.StatesOf(b).Length, cultures))
+            {
+                contender = b;
+                holder = a;
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>
     /// Whether <paramref name="nation"/> still has an unreclaimed larger reunification rival
-    /// holding its homeland cores (false once Mainland China has been reclaimed or reunified).
+    /// holding its homeland cores.
     /// </summary>
     public static bool HasPendingReclamation(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null || nation.Population <= 0 || nation.IsSubject ||
-            nation.Landless || nation.Movement is not null) return false;
-        if (string.Equals(nation.FormedNationId, "china_reunified", StringComparison.OrdinalIgnoreCase))
+            nation.Landless || nation.Movement is not null || WarAims.IsRebel(nation))
             return false;
         var ownStates = campaign.StatesOf(nation).Length;
+        if (ownStates <= 0) return false;
         var ourCultures = _pendingCultures ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         FillCultures(nation, ourCultures);
         if (ourCultures.Count == 0) return false;
         var nations = campaign.Nations;
         for (var i = 0; i < nations.Count; i++)
         {
-            var candidate = nations[i];
-            if (candidate.Id == nation.Id || candidate.Population <= nation.Population ||
-                candidate.IsSubject || candidate.Movement is not null || WarAims.IsRebel(candidate))
-                continue;
-            var candStates = campaign.StatesOf(candidate).Length;
-            if (candStates < 4 || candStates <= ownStates) continue;
-            if (PeacefulFormation.CulturalAffinity(nation, candidate) < .75f) continue;
-            if (!SharesCultureWith(ourCultures, candidate)) continue;
-            if (!HasAnyHomeland(campaign, nation, candidate)) continue;
-            return true;
+            if (IsDividedRivalCore(campaign, nation, nations[i], ownStates, ourCultures))
+                return true;
         }
         return false;
     }
@@ -313,9 +370,9 @@ public static class MainlandReclamation
     }
 
     /// <summary>
-    /// Whether <paramref name="liberator"/> is conducting an asymmetric cross-strait / overseas
-    /// reunification liberation onto <paramref name="rival"/>'s larger mainland territory in <paramref name="war"/>.
-    /// Deliberately excludes ordinary land-border quarrels, internal civil wars, and wars where
+    /// Whether <paramref name="liberator"/> is conducting an asymmetric divided-homeland
+    /// reunification war onto <paramref name="rival"/>'s larger territory in <paramref name="war"/>
+    /// (both across sea and across divided land borders). Excludes civil conflicts and wars where
     /// the liberator has already grown larger than its rival.
     /// </summary>
     public static bool IsMainlandLiberator(Campaign campaign, StrategicWar war, Nation liberator, Nation rival)
@@ -324,25 +381,24 @@ public static class MainlandReclamation
             return false;
         if (liberator.Id == rival.Id || liberator.Population <= 0 || rival.Population <= 0) return false;
         if (liberator.Population >= rival.Population) return false;
-        if (liberator.Movement is not null || liberator.IsSubject || WarAims.IsRebel(liberator)) return false;
-        if (rival.Movement is not null || rival.IsSubject || WarAims.IsRebel(rival)) return false;
+        if (liberator.Movement is not null || liberator.Landless || liberator.IsSubject || WarAims.IsRebel(liberator)) return false;
+        if (rival.Movement is not null || rival.Landless || rival.IsSubject || WarAims.IsRebel(rival)) return false;
         if (!war.Opposes(liberator.Id, rival.Id)) return false;
 
         var rivalStates = campaign.StatesOf(rival);
         if (rivalStates.Length < 4) return false;
         var liberatorStates = campaign.StatesOf(liberator);
         // Always require genuine underdog asymmetry: once the returning republic owns more states
-        // or population than its rival, it is already the dominant mainland power.
-        if (rivalStates.Length <= liberatorStates.Length) return false;
+        // or population than its rival, it is already the dominant homeland power.
+        if (liberatorStates.Length <= 0 || rivalStates.Length <= liberatorStates.Length) return false;
+        if (PeacefulFormation.CulturalAffinity(liberator, rival) < 0.75f) return false;
 
-        // Must be a genuine homeland reclamation across water (Taipei vs Mainland despite kinmen_ferry),
-        // an already-established bridgehead in this war, or a Project National Glory follow-up from
-        // a small coastal foothold while the larger rival still holds our homeland.
+        var cultures = _liberatorCultures ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        FillCultures(liberator, cultures);
+        if (!SharesCultureWith(cultures, rival)) return false;
+
         var hasBridgehead = HasBridgehead(liberator, war.Id);
         if (!hasBridgehead && !HasAnyHomeland(campaign, liberator, rival)) return false;
-        if (!hasBridgehead && !ModifierSystem.Has(liberator, "twn_project_national_glory_spirit") &&
-            !IsSeparatedBySea(campaign, liberator, rival))
-            return false;
         return Reintegration.IsReunificationTarget(campaign, war, liberator, rival);
     }
 
@@ -474,7 +530,7 @@ public static class MainlandReclamation
             rival.Stability = M.Clamp(rival.Stability - defines.MainlandLiberationStabilityHit * 1.25f, 0.10f, 0.98f);
             if (rival.DomesticCrisis is not null)
                 rival.DomesticCrisis.CoupPressure = M.Clamp01(rival.DomesticCrisis.CoupPressure + defines.MainlandLiberationCoupPressure);
-            SurgeRivalRadicalism(campaign, rival, defines.MainlandLiberationRadicalismSurge);
+            SurgeRivalRadicalism(campaign, rival, heldByState, defines.MainlandLiberationRadicalismSurge);
 
             // Rally initial local liberation volunteers at the beachhead so it can hold and expand.
             var spawnProv = PickSpawnProvince(campaign, firstSafeState > 0 ? firstSafeState : firstHeldState,
@@ -482,7 +538,7 @@ public static class MainlandReclamation
             var spawnState = spawnProv > 0 ? map.ProvinceToState[spawnProv] : firstHeldState;
             var already = RalliedInWar(liberator, war.Id);
             var want = Math.Min(Math.Max(0, defines.MainlandBridgeheadRallyDivisions), Math.Max(0, maxRally - already));
-            if (ModifierSystem.Has(liberator, "twn_mainland_underground_spirit"))
+            if (HasUndergroundSpirit(liberator))
                 want = Math.Min(want + 1, Math.Max(0, maxRally - already));
             SpawnVolunteerDivisions(campaign, war, liberator, spawnProv, spawnState, want, already);
 
@@ -510,9 +566,9 @@ public static class MainlandReclamation
             var state = sortedStates[i];
             if (!heldByState.TryGetValue(state.MapIndex, out var held) || held <= 0) continue;
             if (!totalByState.TryGetValue(state.MapIndex, out var total) || total <= 0) continue;
-            // Liberating at least 20% of a mainland region (or 2+ provinces in a major province)
+            // Liberating a clear majority (>= 60%) of a mainland region
             // sparks a local popular rally to help break out of the coastal bridgehead.
-            if (held / (float)total < 0.20f && held < 2) continue;
+            if (held / (float)total < 0.60f) continue;
 
             var regKey = RegionPrefix + war.Id + "/" + state.MapIndex;
             if (liberator.DecisionAvailableDay.ContainsKey(regKey)) continue;
@@ -530,7 +586,7 @@ public static class MainlandReclamation
             var remaining = Math.Max(0, maxRally - already);
             var baseCount = Math.Max(1, defines.MainlandRegionRallyDivisions);
             var popBonus = state.Population >= 55_000_000 ? 2 : state.Population >= 25_000_000 ? 1 : 0;
-            var undergroundBonus = ModifierSystem.Has(liberator, "twn_mainland_underground_spirit") && state.Population >= 25_000_000 ? 1 : 0;
+            var undergroundBonus = HasUndergroundSpirit(liberator) && state.Population >= 25_000_000 ? 1 : 0;
             var toSpawn = Math.Clamp(baseCount + popBonus + undergroundBonus, 1, 5);
             toSpawn = Math.Min(toSpawn, remaining);
 
@@ -552,7 +608,7 @@ public static class MainlandReclamation
             rival.Stability = M.Clamp(rival.Stability - defines.MainlandLiberationStabilityHit * weight, 0.10f, 0.98f);
             if (rival.DomesticCrisis is not null)
                 rival.DomesticCrisis.CoupPressure = M.Clamp01(rival.DomesticCrisis.CoupPressure + defines.MainlandLiberationCoupPressure * weight);
-            SurgeRivalRadicalism(campaign, rival, defines.MainlandLiberationRadicalismSurge * 0.70f);
+            SurgeRivalRadicalism(campaign, rival, heldByState, defines.MainlandLiberationRadicalismSurge * 0.70f);
 
             campaign.Chronicle.Record(campaign, "mainland_rally", liberator.Id, rival.Id, subject: state.Name);
             Count("region_rallied");
@@ -562,8 +618,9 @@ public static class MainlandReclamation
         // 3. Sustained bridgehead momentum: every 30 days while holding a real mainland foothold
         // (>= 3 provinces, never a single isolated pixel), refresh regime shock and rally a modest
         // trickle of underground volunteers if under cap. When the rival regime's stability collapses
-        // below 0.28 while a significant mainland foothold (>= 5 provinces) stands, adjacent kindred
-        // provinces can rise up and declare for the returning republic (at most once per state/war).
+        // (<= 0.18, or <= 0.22 in AsymmetricCrisis) while a broad mainland foothold (>= 8 provinces
+        // across >= 6 states) stands, an adjacent smaller kindred region can rise up and declare for
+        // the returning republic (at most once per state/war).
         if (campaign.ElapsedDays % 30 == 15)
         {
             if (totalHeld >= 3)
@@ -581,9 +638,9 @@ public static class MainlandReclamation
                 }
             }
             var defectionCeiling = EvaluateStraitPosture(campaign, liberator, rival) == CrossStraitPosture.AsymmetricCrisis
-                ? 0.34f
-                : 0.28f;
-            if (totalHeld >= 5 && rival.Stability <= defectionCeiling)
+                ? 0.22f
+                : 0.18f;
+            if (totalHeld >= 8 && heldByState.Count >= 6 && rival.Stability <= defectionCeiling)
             {
                 if (TriggerProvincialDefection(campaign, scratch, war, liberator, rival, map, control, liberatorCultures, heldByState, activeBattleProvinces))
                     changed = true;
@@ -665,8 +722,9 @@ public static class MainlandReclamation
     }
 
     /// <summary>
-    /// When a rival regime's domestic stability has collapsed (&lt;= 0.28) while the returning
-    /// republic holds a substantial mainland foothold, one adjacent kindred province/region
+    /// When a rival regime's domestic stability has collapsed (&lt;= 0.18, or &lt;= 0.22 in
+    /// AsymmetricCrisis) while the returning republic holds a broad mainland foothold
+    /// (&gt;= 8 provinces across &gt;= 6 states), one adjacent smaller kindred province/region
     /// rises up — wavering garrisons may defect, and provinces with no active battle and no
     /// remaining loyal defenders flip to the liberator. Fires at most once per state per war.
     /// </summary>
@@ -674,6 +732,8 @@ public static class MainlandReclamation
         ProvinceTopology map, ushort[] control, HashSet<string> liberatorCultures, Dictionary<int, int> heldByState,
         HashSet<int> activeBattleProvinces)
     {
+        var heldStateCount = heldByState.Count;
+        if (heldStateCount < 6) return false;
         var libMap = (ushort)liberator.MapIndex;
         var rivalMap = (ushort)rival.MapIndex;
         // Find rival states directly bordering provinces already held by the liberator.
@@ -692,7 +752,6 @@ public static class MainlandReclamation
         }
         if (adjacentStates.Count == 0) return false;
 
-        var heldStateCount = heldByState.Count;
         var defectionStates = scratch.DefectionStates;
         defectionStates.Clear();
         defectionStates.AddRange(campaign.StatesOf(rival));
@@ -718,7 +777,7 @@ public static class MainlandReclamation
         // Deterministic probability scales with how deeply the rival's stability has collapsed.
         var collapseDepth = M.Clamp01((0.30f - rival.Stability) / 0.20f);
         var chance = 0.28f + collapseDepth * 0.42f;
-        if (ModifierSystem.Has(liberator, "twn_mainland_underground_spirit")) chance += 0.12f;
+        if (HasUndergroundSpirit(liberator)) chance += 0.12f;
         var posture = EvaluateStraitPosture(campaign, liberator, rival);
         if (posture == CrossStraitPosture.AsymmetricCrisis || posture == CrossStraitPosture.AmphibiousReclamation)
             chance += 0.08f;
@@ -793,18 +852,22 @@ public static class MainlandReclamation
         return true;
     }
 
-    private static void SurgeRivalRadicalism(Campaign campaign, Nation rival, float delta)
+    private static void SurgeRivalRadicalism(Campaign campaign, Nation rival, Dictionary<int, int> heldByState, float delta)
     {
         if (delta <= 0f) return;
         var states = campaign.StatesOf(rival);
         for (var i = 0; i < states.Length; i++)
-            states[i].Radicalism = M.Clamp01(states[i].Radicalism + delta);
+        {
+            var state = states[i];
+            var scale = heldByState is not null && heldByState.ContainsKey(state.MapIndex) ? 1f : 0.20f;
+            state.Radicalism = M.Clamp01(state.Radicalism + delta * scale);
+        }
     }
 
     /// <summary>
-    /// AI strategic orchestration for maritime reunification contenders (e.g. Taiwan):
-    /// waits until amphibious capability is ready and a strategic window opens, then
-    /// launches the Return to the Mainland campaign through standard diplomacy rules.
+    /// AI strategic orchestration for smaller divided-homeland contenders (across sea or divided land
+    /// borders): waits until readiness is sufficient and a strategic crisis window opens, then
+    /// launches the homeland reclamation campaign through standard diplomacy rules.
     /// </summary>
     private static IEnumerable<int> ReviewAiMainlandReturn(Campaign campaign)
     {
@@ -826,7 +889,8 @@ public static class MainlandReclamation
         {
             if (++ticked % 16 == 0 || Campaign.StageOverdue()) yield return 0;
             var nation = outer[i];
-            if (nation.IsHuman || nation.Population <= 0 || nation.IsSubject || nation.Landless || nation.Movement is not null)
+            if (nation.IsHuman || nation.Population <= 0 || nation.IsSubject || nation.Landless ||
+                nation.Movement is not null || WarAims.IsRebel(nation))
                 continue;
             if ((campaign.ElapsedDays + nation.Id * 5) % cadence != 0) continue;
             if (nation.DecisionAvailableDay.GetValueOrDefault(AiReviewKey) > campaign.ElapsedDays) continue;
@@ -842,22 +906,24 @@ public static class MainlandReclamation
                 candidatesPrepared = true;
             }
 
-            // Find an overseas kindred rival holding our homeland cores (e.g. TWN -> CHN).
+            // Find any larger kindred rival holding our homeland cores (sea-separated or land-bordered).
             var ownStateCount = campaign.StatesOf(nation).Length;
+            if (ownStateCount <= 0) continue;
             Nation rival = null;
             ScenarioState recovery = null;
             for (var j = 0; j < candidateNations.Count; j++)
             {
                 var candidate = candidateNations[j];
-                if (candidate.Id == nation.Id || candidate.Population <= 0 || candidate.IsSubject || candidate.Movement is not null)
+                if (candidate.Id == nation.Id || candidate.Population <= nation.Population ||
+                    candidate.IsSubject || candidate.Landless || candidate.Movement is not null || WarAims.IsRebel(candidate))
                     continue;
                 if (candidate.IsHuman && !defines.AiMayAttackPlayer) continue;
-                if (campaign.StatesOf(candidate).Length <= ownStateCount) continue;
-                if (PeacefulFormation.CulturalAffinity(nation, candidate) < .75f) continue;
+                var candStatesCount = campaign.StatesOf(candidate).Length;
+                if (candStatesCount < 4 || candStatesCount <= ownStateCount) continue;
+                if (PeacefulFormation.CulturalAffinity(nation, candidate) < 0.75f) continue;
                 if (!SharesCultureWith(ourCultures, candidate)) continue;
                 var goal = BestHomelandGoal(campaign, nation, candidate);
                 if (goal is null) continue;
-                if (!IsSeparatedBySea(campaign, nation, candidate)) continue;
                 if (!CampaignDiplomacy.CanDeclareWarQuiet(campaign, nation.Id, candidate.Id)) continue;
                 rival = candidate;
                 recovery = goal;
@@ -867,15 +933,18 @@ public static class MainlandReclamation
 
             nation.DecisionAvailableDay[AiReviewKey] = campaign.ElapsedDays + cadence;
 
-            // Check real amphibious readiness (field divisions + naval hulls + sea lane staging).
-            var hulls = 0;
-            var fleets = campaign.Fleets;
-            for (var f = 0; f < fleets.Count; f++)
+            var separatedBySea = IsSeparatedBySea(campaign, nation, rival);
+            if (separatedBySea)
             {
-                var fleet = fleets[f];
-                if (fleet.NationId == nation.Id && fleet.Hulls > 0) hulls += fleet.Hulls;
+                var hulls = 0;
+                var fleets = campaign.Fleets;
+                for (var f = 0; f < fleets.Count; f++)
+                {
+                    var fleet = fleets[f];
+                    if (fleet.NationId == nation.Id && fleet.Hulls > 0) hulls += fleet.Hulls;
+                }
+                if (hulls < Math.Max(20, defines.AiMainlandReturnMinimumHulls)) continue;
             }
-            if (hulls < Math.Max(20, defines.AiMainlandReturnMinimumHulls)) continue;
 
             var readyDivisions = 0;
             var armies = campaign.Armies;
@@ -890,15 +959,16 @@ public static class MainlandReclamation
             if (!AiStatecraft.CanStageWar(campaign, nation, rival)) continue;
 
             // Evaluate posture and strategic window without allocating: seeded FNV-1a archetype
-            // branches across four divergent Cross-Strait doctrines while answering live strain.
+            // branches across four divergent postures while answering live strain.
             var chance = AiLaunchChance(campaign, nation, rival, out var posture);
             var rivalAtWar = AiStatecraft.InAnyWar(campaign, rival.Id);
             var rivalStrained = IsRivalStrained(campaign, rival);
             var relation = CampaignDiplomacy.Peek(campaign, nation.Id, rival.Id);
-            var preparedDoctrine = ModifierSystem.Has(nation, "twn_project_national_glory_spirit");
+            var preparedDoctrine = HasGlorySpirit(nation);
 
-            if (posture == CrossStraitPosture.FortifiedContainment &&
-                !ModifierSystem.Has(nation, "twn_strait_armada_spirit") &&
+            if (separatedBySea &&
+                posture == CrossStraitPosture.FortifiedContainment &&
+                !HasArmadaSpirit(nation) &&
                 DecisionCatalog.Find("twn_strait_armada") is { } armadaDecision &&
                 !DecisionCatalog.IsBlocked(campaign, nation, armadaDecision))
             {
@@ -906,7 +976,7 @@ public static class MainlandReclamation
             }
             else if (posture == CrossStraitPosture.AsymmetricCrisis)
             {
-                if (!ModifierSystem.Has(nation, "twn_mainland_underground_spirit") &&
+                if (!HasUndergroundSpirit(nation) &&
                     DecisionCatalog.Find("twn_mainland_underground") is { } underDecision &&
                     !DecisionCatalog.IsBlocked(campaign, nation, underDecision))
                 {
@@ -925,7 +995,7 @@ public static class MainlandReclamation
 
             if (Roll(campaign.Seed, nation.Id, rival.Id, campaign.ElapsedDays) >= chance) continue;
 
-            // Take Project National Glory through the normal paid decision command if available.
+            // Take reclamation doctrine through the normal paid decision command if available.
             if (!preparedDoctrine && DecisionCatalog.Find("twn_project_national_glory") is { } gloryDecision &&
                 !DecisionCatalog.IsBlocked(campaign, nation, gloryDecision))
             {
@@ -1001,10 +1071,18 @@ public static class MainlandReclamation
         if (AiStatecraft.InAnyWar(campaign, nation.Id)) return "in_war";
         if (nation.Stability < 0.50f) return $"low_stab({nation.Stability:0.00})";
         if (nation.WarSupport < 0.55f) return $"low_ws({nation.WarSupport:0.00})";
-        if (!IsSeparatedBySea(campaign, nation, rival)) return "shares_land_border";
+        if (nation.Population <= 0 || rival.Population <= 0 || nation.Population >= rival.Population) return "not_smaller";
+        var ownStates = campaign.StatesOf(nation).Length;
+        var rivalStates = campaign.StatesOf(rival).Length;
+        if (ownStates <= 0 || rivalStates < 4 || rivalStates <= ownStates) return "rival_too_small";
+        if (PeacefulFormation.CulturalAffinity(nation, rival) < 0.75f) return "low_affinity";
+        var cultures = _pairCultures ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        FillCultures(nation, cultures);
+        if (!SharesCultureWith(cultures, rival)) return "no_shared_culture";
         if (!HasAnyHomeland(campaign, nation, rival)) return "no_homeland";
         if (!AnnexationAmbition.IsReunification(campaign, nation, rival)) return "not_reunification";
         if (!CampaignDiplomacy.CanDeclareWar(campaign, nation.Id, rival.Id, out var why)) return $"cant_declare({why})";
+        var separatedBySea = IsSeparatedBySea(campaign, nation, rival);
         var hulls = 0;
         var fleets = campaign.Fleets;
         for (var i = 0; i < fleets.Count; i++)
@@ -1012,7 +1090,7 @@ public static class MainlandReclamation
             var f = fleets[i];
             if (f.NationId == nation.Id && f.Hulls > 0) hulls += f.Hulls;
         }
-        if (hulls < Math.Max(20, defines.AiMainlandReturnMinimumHulls)) return $"few_hulls({hulls})";
+        if (separatedBySea && hulls < Math.Max(20, defines.AiMainlandReturnMinimumHulls)) return $"few_hulls({hulls})";
         var divs = 0;
         var armies = campaign.Armies;
         for (var i = 0; i < armies.Count; i++)
@@ -1028,16 +1106,16 @@ public static class MainlandReclamation
         var rivalStrained = IsRivalStrained(campaign, rival);
         var rel = CampaignDiplomacy.Peek(campaign, nation.Id, rival.Id);
         var straitCrisis = rel is not null && (rel.Tension >= 70f || Escalation.StageOf(rel) >= TensionStage.Crisis);
-        var glory = ModifierSystem.Has(nation, "twn_project_national_glory_spirit");
+        var glory = HasGlorySpirit(nation);
         var pacific = HasFriendlyPacificPartner(campaign, nation, rival);
         var launch = AiLaunchChance(campaign, nation, rival, out var posture);
-        return $"READY(posture={posture},launch={launch:0.00},rivalWar={rivalAtWar},strain={rivalStrained},crisis={straitCrisis},tension={rel?.Tension ?? 0f:0.0},glory={glory},pacific={pacific},divs={divs},hulls={hulls})";
+        return $"READY(posture={posture},launch={launch:0.00},sea={separatedBySea},rivalWar={rivalAtWar},strain={rivalStrained},crisis={straitCrisis},tension={rel?.Tension ?? 0f:0.0},glory={glory},pacific={pacific},divs={divs},hulls={hulls})";
     }
 
     private static bool IsRivalStrained(Campaign campaign, Nation rival) =>
-        rival.Stability < 0.65f || rival.WarSupport < 0.60f ||
-        (rival.DomesticCrisis?.CoupPressure ?? 0f) > 0.25f ||
-        (campaign.FeatureEnabled("public_debt") && rival.DebtCondition >= DebtCondition.Stressed);
+        rival.Stability < 0.38f || rival.WarSupport < 0.38f ||
+        (rival.DomesticCrisis?.CoupPressure ?? 0f) > 0.55f ||
+        (campaign.FeatureEnabled("public_debt") && rival.DebtCondition >= DebtCondition.Default);
 
     /// <summary>
     /// Classifies the current Cross-Strait trajectory across four seeded and reactive paths
@@ -1118,19 +1196,19 @@ public static class MainlandReclamation
         var straitCrisis = relation is not null &&
                            (relation.Tension >= 70f || Escalation.StageOf(relation) >= TensionStage.Crisis);
         var clashesReached = relation is not null && Escalation.StageOf(relation) >= TensionStage.Clashes;
-        var preparedDoctrine = ModifierSystem.Has(nation, "twn_project_national_glory_spirit");
-        var hasPacificBacking = HasFriendlyPacificPartner(campaign, nation, rival);
+        var preparedDoctrine = HasGlorySpirit(nation);
 
         var windowOpen = posture switch
         {
             CrossStraitPosture.AmphibiousReclamation =>
-                rivalAtWar || rivalStrained || straitCrisis || preparedDoctrine || hasPacificBacking,
+                rivalStrained || (rivalAtWar && rival.Stability < 0.48f) || (straitCrisis && rival.Stability < 0.45f),
             CrossStraitPosture.FortifiedContainment =>
-                rivalAtWar || rivalStrained,
+                rivalStrained || (rivalAtWar && rival.Stability < 0.48f),
             CrossStraitPosture.DiplomaticDetente =>
-                rivalAtWar || (rivalStrained && clashesReached),
+                (rivalAtWar && rival.Stability < 0.48f) || (rivalStrained && clashesReached),
             CrossStraitPosture.AsymmetricCrisis =>
-                rivalAtWar || rivalStrained || straitCrisis || (nation.DomesticCrisis?.CoupPressure ?? 0f) > 0.28f,
+                rivalStrained || (rivalAtWar && rival.Stability < 0.48f) || (straitCrisis && rival.Stability < 0.45f) ||
+                ((nation.DomesticCrisis?.CoupPressure ?? 0f) > 0.28f && rival.Stability < 0.45f),
             _ => false
         };
         if (!windowOpen) return 0f;
@@ -1139,7 +1217,7 @@ public static class MainlandReclamation
         if (rivalAtWar) chance += 0.28f;
         if (rivalStrained) chance += 0.22f;
         if (preparedDoctrine) chance += 0.16f;
-        if (ModifierSystem.Has(nation, "twn_mainland_underground_spirit")) chance += 0.10f;
+        if (HasUndergroundSpirit(nation)) chance += 0.10f;
         if (straitCrisis) chance += 0.10f;
 
         chance += posture switch

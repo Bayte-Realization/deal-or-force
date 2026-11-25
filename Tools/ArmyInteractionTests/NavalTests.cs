@@ -13,6 +13,36 @@ static class NavalTests
 {
     static void Check(bool ok, string label) { if (!ok) throw new Exception("FAIL: " + label); Console.WriteLine("PASS: " + label); }
 
+    static void RehomeWithChangedControl(Campaign campaign, Nation nation, Fleet home, Fleet foreign)
+    {
+        var map = campaign.ProvinceMap;
+        var harbours = SeaLanes.Harbours(map);
+        var controllers = campaign.ProvinceController;
+        var own = harbours.Province.Where(port => controllers[port] == nation.MapIndex).ToArray();
+        var foreignPort = foreign.HomeProvinceId;
+        var formerHolder = controllers[foreignPort];
+        Check(SeaLanes.TryHarbourPoint(map, foreignPort, out var latitude, out var longitude),
+            "the foreign port has a geographical anchor");
+        var fleet = new Fleet { HomeProvinceId = home.HomeProvinceId, Latitude = home.Latitude, Longitude = home.Longitude };
+        Check(NavalOperations.Rehome(campaign, fleet, nation) && fleet.HomeProvinceId == home.HomeProvinceId,
+            "a fleet selects its nearest held port on the same sea");
+        try
+        {
+            foreach (var port in own) controllers[port] = formerHolder;
+            Check(!NavalOperations.Rehome(campaign, fleet, nation) && fleet.HomeProvinceId == home.HomeProvinceId,
+                "a fleet which lost every port keeps its old home while no other port is held");
+            controllers[foreignPort] = (ushort)nation.MapIndex;
+            Check(NavalOperations.Rehome(campaign, fleet, nation) && fleet.HomeProvinceId == foreignPort &&
+                  fleet.HomeLatitude == latitude && fleet.HomeLongitude == longitude,
+                "a port acquired after the last search is available immediately, with its original anchor");
+        }
+        finally
+        {
+            foreach (var port in own) controllers[port] = (ushort)nation.MapIndex;
+            controllers[foreignPort] = formerHolder;
+        }
+    }
+
     public static void Run(ProvinceTopology map)
     {
         var c = Campaign.CreateBootstrap(20260928);
@@ -28,6 +58,7 @@ static class NavalTests
         Check(c.Fleets.All(fleet => SeaLanes.HarbourOf(map, fleet.HomeProvinceId) >= 0),
             "every fleet of 2024 has a home port with a harbour");
         Check(c.Fleets.All(fleet => fleet.InPort), "and every one of them opens the campaign lying in it");
+        RehomeWithChangedControl(c, gbr, home, atlantic);
 
         // --- B: a course round the land, and one that cannot be sailed -------------------------
         var west = new SetFleetOrderCommand

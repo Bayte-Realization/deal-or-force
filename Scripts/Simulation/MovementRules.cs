@@ -131,16 +131,27 @@ public static partial class MovementRules
                 yield return 0;
             }
         }
-        using (SimProfiler.Measure("movements"))
-        using (SimProfiler.Measure("  mov:rules"))
+        // Keep the weekly review in order, yielding between falls and whole settlements.
+        if (campaign.ElapsedDays % week == 0)
         {
-            // What the world decides about who has fallen happens on the week, as it did.
-            if (campaign.ElapsedDays % week == 0)
+            using (SimProfiler.Measure("movements"))
+            using (SimProfiler.Measure("  mov:rules"))
+            using (SimProfiler.Measure("    mov:homelands"))
             {
                 Owners(campaign, rebuild: true);
-                using (SimProfiler.Measure("    mov:homelands")) MovementFall.RememberHomelands(campaign);
-                using (SimProfiler.Measure("    mov:fall")) MovementFall.Decide(campaign);
-                using (SimProfiler.Measure("    mov:fall")) MovementFall.EndLostWars(campaign);
+                MovementFall.RememberHomelands(campaign);
+            }
+            yield return 0;
+            using var review = WeeklyFallStages(campaign).GetEnumerator();
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("movements"))
+                using (SimProfiler.Measure("  mov:rules"))
+                using (SimProfiler.Measure("    mov:fall"))
+                    more = review.MoveNext();
+                if (!more) break;
+                yield return 0;
             }
         }
         yield return 0;
@@ -186,6 +197,15 @@ public static partial class MovementRules
                 MovementFall.Endure(campaign, nation);
             yield return 0;
         }
+    }
+
+    private static IEnumerable<int> WeeklyFallStages(Campaign campaign)
+    {
+        foreach (var _ in MovementFall.DecideStages(campaign))
+            yield return 0;
+        yield return 0;
+        foreach (var _ in MovementFall.EndLostWarsStages(campaign))
+            yield return 0;
     }
 
     /// <summary>Whether today is this one's day in a cycle of so many days.</summary>

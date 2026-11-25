@@ -23,6 +23,16 @@ internal sealed class EconomyFiscalRibbonNodes
     public Control InflRest;
 }
 
+internal sealed class EconomyBaseStripNodes
+{
+    public GridContainer Root;
+    public PanelContainer GdpCard, PopCard, GdpPcCard, BuildCard;
+    public Label GdpVal, GdpSub;
+    public Label PopVal, PopSub;
+    public Label GdpPcVal, GdpPcSub;
+    public Label BuildVal, BuildSub;
+}
+
 internal sealed class EconomyTaxEfficiencyNodes
 {
     public PanelContainer Root;
@@ -95,6 +105,102 @@ internal static class ShellEconomyCharts
         r.InflSub.Text = Loc.Get(inflPct > 9f ? "shell.ws.eco.inflation_hot" : inflPct > 4.5f ? "shell.ws.eco.inflation_warm" : "shell.ws.eco.inflation_cool");
         UpdateMiniGauge(r.InflFill, r.InflRest, inflPct / 15f,
             Ui.Colour(inflPct > 9f ? "shell.state.negative" : inflPct > 4.5f ? "shell.state.warning" : "shell.state.positive"));
+    }
+
+    public static EconomyBaseStripNodes BuildBaseMetricsStrip(ShellContext ctx, VBoxContainer parent)
+    {
+        var nodes = new EconomyBaseStripNodes();
+        var grid = new GridContainer { Name = "ShellEconomyBaseStrip", Columns = 4, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
+        grid.AddThemeConstantOverride("h_separation", 8);
+        grid.AddThemeConstantOverride("v_separation", 6);
+        parent.AddChild(grid);
+        nodes.Root = grid;
+
+        nodes.GdpCard = CreateBaseCard(ctx, grid, "icon_gdp", Loc.Get("shell.aaa.eco_base_gdp"), out nodes.GdpVal, out nodes.GdpSub);
+        nodes.PopCard = CreateBaseCard(ctx, grid, "icon_population", Loc.Get("shell.aaa.eco_base_pop"), out nodes.PopVal, out nodes.PopSub);
+        nodes.GdpPcCard = CreateBaseCard(ctx, grid, "icon_economy", Loc.Get("shell.aaa.eco_base_gdp_pc"), out nodes.GdpPcVal, out nodes.GdpPcSub);
+        nodes.BuildCard = CreateBaseCard(ctx, grid, "icon_shell_crane", Loc.Get("shell.aaa.eco_base_build"), out nodes.BuildVal, out nodes.BuildSub);
+        return nodes;
+    }
+
+    public static void RefreshBaseMetricsStrip(EconomyBaseStripNodes s, Campaign world, Nation n)
+    {
+        if (s is null || world is null || n is null) return;
+        var states = world.StatesOf(n);
+        var running = 0;
+        for (var i = 0; i < world.Construction.Count; i++)
+            if (world.Construction[i].NationId == n.Id) running++;
+        var slots = ConstructionCost.Limit(world, n, world.Defines.MaxConstructionProjects);
+        var working = ConstructionCost.WorkingSites(world, n);
+        var pace = ConstructionCost.Pace(world, n);
+        var gdpPc = ShellCornerTelemetry.FormatGdpPerCapita(n.Gdp, n.Population);
+
+        s.GdpVal.Text = Fmt.Money(n.Gdp);
+        s.GdpSub.Text = Loc.Format("shell.aaa.eco_base_weekly_fmt", Fmt.Money(n.Gdp / 52f));
+        s.GdpCard.TooltipText = Ui.Tip($"{Loc.Get("GDP")}: {Fmt.MoneyExact(n.Gdp)}\n{Loc.Format("shell.aaa.tip_weekly_output_fmt", Fmt.Money(n.Gdp / 52f))}");
+
+        s.PopVal.Text = Fmt.People(n.Population);
+        s.PopSub.Text = Loc.Format("shell.aaa.regions_count_fmt", states.Length);
+        s.PopCard.TooltipText = Ui.Tip($"{Loc.Get("Population")}: {Fmt.PeopleExact(n.Population)}\n{Loc.Format("shell.aaa.regions_count_fmt", states.Length)}");
+
+        s.GdpPcVal.Text = gdpPc;
+        s.GdpPcSub.Text = $"{Loc.Get("Standard of living")}: {Fmt.Percent(n.StandardOfLiving)}";
+        s.GdpPcCard.TooltipText = Ui.Tip($"{Loc.Get("GDP per head")}: {gdpPc}\n{Loc.Get("Standard of living")}: {Fmt.Percent(n.StandardOfLiving)}");
+
+        s.BuildVal.Text = $"{running}/{slots}";
+        s.BuildVal.AddThemeColorOverride("font_color", Ui.Colour(running > 0 ? "shell.state.info" : "shell.paper"));
+        s.BuildSub.Text = Loc.Format("shell.aaa.eco_base_build_slots_fmt", running, slots);
+        s.BuildCard.TooltipText = Ui.Tip(Loc.Format("shell.aaa.eco_base_build_tip_fmt", running, slots, working, Fmt.Number(pace)));
+    }
+
+    private static PanelContainer CreateBaseCard(
+        ShellContext ctx, GridContainer parent, string iconName, string caption, out Label valueLbl, out Label subLbl)
+    {
+        var card = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
+        card.AddThemeStyleboxOverride("panel", ctx.BorderedBox("shell.well", "shell.engrave", 1, 3, 9, 4, 9, 4));
+        parent.AddChild(card);
+
+        var row = new HBoxContainer { ClipContents = true };
+        row.AddThemeConstantOverride("separation", 6);
+        card.AddChild(row);
+
+        if (ctx.Icon(iconName) is { } ico)
+        {
+            var tr = new TextureRect
+            {
+                Texture = ico, CustomMinimumSize = new Vector2(16, 16),
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+                MouseFilter = Control.MouseFilterEnum.Ignore
+            };
+            ShellContext.ApplyIconRelief(tr, Ui.Colour("shell.brass_hi"), 0.55f);
+            row.AddChild(tr);
+        }
+
+        var capLbl = new Label
+        {
+            Text = caption, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            VerticalAlignment = VerticalAlignment.Center, ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+        };
+        capLbl.AddThemeFontOverride("font", ctx.Font("shell.sans"));
+        capLbl.AddThemeFontSizeOverride("font_size", 10);
+        capLbl.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
+        row.AddChild(capLbl);
+
+        valueLbl = new Label { Text = "—", VerticalAlignment = VerticalAlignment.Center };
+        valueLbl.AddThemeFontOverride("font", ctx.Font("shell.sans", tabular: true));
+        valueLbl.AddThemeFontSizeOverride("font_size", 13);
+        valueLbl.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
+        row.AddChild(valueLbl);
+
+        subLbl = new Label { Text = "", VerticalAlignment = VerticalAlignment.Center };
+        subLbl.AddThemeFontOverride("font", ctx.Font("shell.sans", tabular: true));
+        subLbl.AddThemeFontSizeOverride("font_size", 10);
+        subLbl.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
+        row.AddChild(subLbl);
+        return card;
     }
 
     public static Label BuildGrandProjectsCtaCard(ShellContext ctx, VBoxContainer rightCol)

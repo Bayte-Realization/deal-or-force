@@ -15,10 +15,14 @@ namespace DealOrForce;
 /// </summary>
 public sealed partial class GlobePresentation
 {
-    private ImmediateMesh _fleetRouteMesh;
+    private ArrayMesh _fleetRouteMesh;
     private MeshInstance3D _fleetRoute;
     private int _fleetRouteFingerprint = int.MinValue;
     private readonly List<Vector3> _fleetRoutePoints = new();
+    private readonly List<Vector3> _fleetRouteVerts = new();
+    private readonly List<Color> _fleetRouteColors = new();
+    private readonly List<int> _fleetRouteIndices = new();
+    private readonly Godot.Collections.Array _fleetRouteArrays = new();
 
     /// <summary>Draw this fleet's course, or clear it when handed nothing.</summary>
     public void ShowFleetRoute(Simulation.Fleet fleet)
@@ -27,7 +31,8 @@ public sealed partial class GlobePresentation
         if (_fleetRoute is null || !IsInstanceValid(_fleetRoute))
         {
             if (_routePreview.GetParent() is not Node3D world) return;
-            _fleetRouteMesh = new ImmediateMesh();
+            _fleetRouteMesh = new ArrayMesh();
+            _fleetRouteArrays.Resize((int)Mesh.ArrayType.Max);
             _fleetRoute = new MeshInstance3D
             {
                 Name = "SelectedFleetRoute",
@@ -85,13 +90,16 @@ public sealed partial class GlobePresentation
             ? new Color(0.95f, 0.62f, 0.38f, 0.9f)
             : new Color(0.78f, 0.9f, 1f, 0.85f);
         // On the flat map a course over the date line comes out at the other edge; the
-        // line breaks there instead of streaking across the whole map. A one-point
-        // piece is not a strip.
+        // line breaks there instead of streaking across the whole map. Build every run plus
+        // destination diamond into one static cached ArrayMesh surface.
         const float halfWidth = 0.0032f;
+        _fleetRouteVerts.Clear();
+        _fleetRouteColors.Clear();
+        _fleetRouteIndices.Clear();
         CollectDateLineRuns(_fleetRoutePoints);
         foreach (var run in _dateLineRuns)
         {
-            _fleetRouteMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip);
+            var baseVert = _fleetRouteVerts.Count;
             var endIndex = run.Start + run.Count - 1;
             for (var index = run.Start; index <= endIndex; index++)
             {
@@ -102,12 +110,22 @@ public sealed partial class GlobePresentation
                 if (tangent == Vector3.Zero) tangent = Vector3.Right;
                 var normal = _flatMap ? Vector3.Forward : point.Normalized();
                 var side = normal.Cross(tangent).Normalized() * halfWidth;
-                _fleetRouteMesh.SurfaceSetColor(colour);
-                _fleetRouteMesh.SurfaceAddVertex(OnOrderSurface(point + side));
-                _fleetRouteMesh.SurfaceSetColor(colour);
-                _fleetRouteMesh.SurfaceAddVertex(OnOrderSurface(point - side));
+                _fleetRouteVerts.Add(OnOrderSurface(point + side));
+                _fleetRouteColors.Add(colour);
+                _fleetRouteVerts.Add(OnOrderSurface(point - side));
+                _fleetRouteColors.Add(colour);
+                if (index > run.Start)
+                {
+                    var prev = baseVert + (index - run.Start - 1) * 2;
+                    var curr = prev + 2;
+                    _fleetRouteIndices.Add(prev);
+                    _fleetRouteIndices.Add(prev + 1);
+                    _fleetRouteIndices.Add(curr);
+                    _fleetRouteIndices.Add(prev + 1);
+                    _fleetRouteIndices.Add(curr + 1);
+                    _fleetRouteIndices.Add(curr);
+                }
             }
-            _fleetRouteMesh.SurfaceEnd();
         }
 
         // Where it stops: a small diamond, so the end of a long course is findable.
@@ -116,16 +134,29 @@ public sealed partial class GlobePresentation
         var across = up.Cross(Vector3.Up).LengthSquared() > 0.0001f ? up.Cross(Vector3.Up).Normalized() : Vector3.Right;
         var along = up.Cross(across).Normalized();
         const float size = 0.009f;
-        _fleetRouteMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles);
-        foreach (var (a, b) in new[] { (across, along), (along, -across), (-across, -along), (-along, across) })
+        var centerIdx = _fleetRouteVerts.Count;
+        var center = OnOrderSurface(end);
+        _fleetRouteVerts.Add(center); _fleetRouteColors.Add(colour);
+        _fleetRouteVerts.Add(OnOrderSurface(end + across * size)); _fleetRouteColors.Add(colour);
+        _fleetRouteVerts.Add(OnOrderSurface(end + along * size)); _fleetRouteColors.Add(colour);
+        _fleetRouteVerts.Add(OnOrderSurface(end - across * size)); _fleetRouteColors.Add(colour);
+        _fleetRouteVerts.Add(OnOrderSurface(end - along * size)); _fleetRouteColors.Add(colour);
+        for (var q = 0; q < 4; q++)
         {
-            _fleetRouteMesh.SurfaceSetColor(colour);
-            _fleetRouteMesh.SurfaceAddVertex(OnOrderSurface(end));
-            _fleetRouteMesh.SurfaceSetColor(colour);
-            _fleetRouteMesh.SurfaceAddVertex(OnOrderSurface(end + a * size));
-            _fleetRouteMesh.SurfaceSetColor(colour);
-            _fleetRouteMesh.SurfaceAddVertex(OnOrderSurface(end + b * size));
+            _fleetRouteIndices.Add(centerIdx);
+            _fleetRouteIndices.Add(centerIdx + 1 + q);
+            _fleetRouteIndices.Add(centerIdx + 1 + ((q + 1) & 3));
         }
-        _fleetRouteMesh.SurfaceEnd();
+
+        if (_fleetRouteIndices.Count > 0)
+        {
+            _fleetRouteArrays[(int)Mesh.ArrayType.Vertex] = _fleetRouteVerts.ToArray();
+            _fleetRouteArrays[(int)Mesh.ArrayType.Color] = _fleetRouteColors.ToArray();
+            _fleetRouteArrays[(int)Mesh.ArrayType.Index] = _fleetRouteIndices.ToArray();
+            _fleetRouteMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, _fleetRouteArrays);
+            _fleetRouteArrays[(int)Mesh.ArrayType.Vertex] = default;
+            _fleetRouteArrays[(int)Mesh.ArrayType.Color] = default;
+            _fleetRouteArrays[(int)Mesh.ArrayType.Index] = default;
+        }
     }
 }

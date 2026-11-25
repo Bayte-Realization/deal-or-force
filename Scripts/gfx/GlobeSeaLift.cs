@@ -13,7 +13,7 @@ namespace DealOrForce;
 /// </summary>
 public sealed partial class GlobePresentation
 {
-    private ImmediateMesh _seaLiftMesh;
+    private ArrayMesh _seaLiftMesh;
     private MeshInstance3D _seaLiftPreview;
     private ShaderMaterial _seaLiftMaterial;
     private int _seaLiftFingerprint;
@@ -22,7 +22,7 @@ public sealed partial class GlobePresentation
 
     private void CreateSeaLiftPreview(Node3D world)
     {
-        _seaLiftMesh = new ImmediateMesh();
+        _seaLiftMesh = new ArrayMesh();
         _seaLiftPreview = new MeshInstance3D
         {
             Name = "SeaLiftRoutes",
@@ -92,20 +92,23 @@ public sealed partial class GlobePresentation
         _seaLiftHasActiveBadges = any;
         if (!dirty) return;
         _seaLiftFingerprint = fingerprint;
-        _seaLiftMesh.ClearSurfaces();
+        _seaLiftBatch.Clear();
         var drew = false;
         if (any && SeaLiftMaterial() is { } sea)
+        {
             foreach (var lift in _campaign.SeaLifts)
-                if (lift.NationId == player.Id) drew |= DrawSeaLift(lift, sea);
+                if (lift.NationId == player.Id) drew |= DrawSeaLift(lift);
+            drew &= _seaLiftBatch.Commit(_seaLiftMesh, _routeMaterials[0], sea);
+        }
+        else _seaLiftMesh.ClearSurfaces();
         _seaLiftPreview.Visible = drew;
     }
 
-    private bool DrawSeaLift(SeaLiftOrder lift, ShaderMaterial sea)
+    private bool DrawSeaLift(SeaLiftOrder lift)
     {
         var map = _campaign.ProvinceMap;
         var fleet = FindFleetById(_campaign.Fleets, lift.FleetId);
         var drew = false;
-        var move = _routeMaterials[0];
 
         // On foot to the quay: each formation still marching, along the road it is taking.
         if (lift.Stage == 0)
@@ -126,7 +129,7 @@ public sealed partial class GlobePresentation
                     var port = map.CenterOf(lift.PortProvinceId);
                     AddRoutePoint(PresentationPoint(port.Latitude, port.Longitude, SurfaceLineRadius));
                 }
-                if (_routePoints.Count >= 2) drew |= DrawRibbon(_seaLiftMesh, move, 0f);
+                if (_routePoints.Count >= 2) drew |= DrawRibbon(_seaLiftBatch, 0, 0f);
             }
 
         // The passage: from the quay while they gather, from the fleet itself once it sails.
@@ -142,7 +145,7 @@ public sealed partial class GlobePresentation
                 AddRoutePoint(PresentationPoint(_seaLiftCourse[i], _seaLiftCourse[i + 1], SurfaceLineRadius));
             var beach = map.CenterOf(lift.LandingProvinceId);
             AddRoutePoint(PresentationPoint(beach.Latitude, beach.Longitude, SurfaceLineRadius));
-            if (_routePoints.Count >= 2) drew |= DrawRibbon(_seaLiftMesh, sea, 0f);
+            if (_routePoints.Count >= 2) drew |= DrawRibbon(_seaLiftBatch, 1, 0f);
         }
 
         // And on from the beach to where they were sent.
@@ -153,7 +156,7 @@ public sealed partial class GlobePresentation
             _routePoints.Clear();
             _routePoints.Add(PresentationPoint(beach.Latitude, beach.Longitude, SurfaceLineRadius));
             AddRoutePoint(PresentationPoint(target.Latitude, target.Longitude, SurfaceLineRadius));
-            if (_routePoints.Count >= 2) drew |= DrawRibbon(_seaLiftMesh, move, 0f);
+            if (_routePoints.Count >= 2) drew |= DrawRibbon(_seaLiftBatch, 0, 0f);
         }
         return drew;
     }

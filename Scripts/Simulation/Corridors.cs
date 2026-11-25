@@ -67,12 +67,14 @@ public static partial class Corridors
         if (nations.Count == 0) yield break;
         try
         {
+            foreach (var _ in EnsurePoresStages(c)) yield return 0;
+            if (Campaign.StageOverdue()) yield return 0;
             for (var i = 0; i < nations.Count; i++)
             {
-                if (i > 0 && (i % 8 == 0 || Campaign.StageOverdue())) yield return 0;
+                if (i > 0 && Campaign.StageOverdue()) yield return 0;
                 var nation = nations[i];
                 foreach (var _ in EnsurePoresStages(c)) yield return 0;
-                yield return 0;
+                if (Campaign.StageOverdue()) yield return 0;
                 foreach (var _ in ReviewStages(c, nation)) yield return 0;
             }
         }
@@ -82,20 +84,21 @@ public static partial class Corridors
         }
     }
 
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, List<HashSet<int>>> _reviewPieces = new();
-
     private static IEnumerable<int> ReviewStages(Campaign c, Nation nation)
     {
-        if (TryExchange(c, nation)) yield break;
-        yield return 0;
-        var parts = _reviewPieces.GetOrCreateValue(c);
-        FillPieces(c, nation, parts);
+        var exchangeState = new ExchangeStageResult();
+        foreach (var _ in TryExchangeStages(c, nation, exchangeState)) yield return 0;
+        if (exchangeState.Submitted) yield break;
+        if (Campaign.StageOverdue()) yield return 0;
+        var parts = GetOrderedPieces(c, nation);
         if (parts.Count >= 2)
         {
             var authored = ProvinceOwnership.ProvinceSetOf(nation.Tag);
             var main = parts[0];
+            var joinState = new JoinStageResult();
             for (var i = 1; i < parts.Count; i++)
             {
+                if (i > 1 && Campaign.StageOverdue()) yield return 0;
                 var piece = parts[i];
                 if (Authored(piece, authored)) continue;
                 var tidy = Math.Max(1, c.Defines.BorderTidyMaxProvinces);
@@ -103,17 +106,18 @@ public static partial class Corridors
                 {
                     if (piece.Count <= tidy)
                     {
-                        var sold = TrySell(c, nation, piece);
-                        if (sold) yield break;
-                        yield return 0;
+                        joinState.Reset();
+                        foreach (var _ in TrySellStages(c, nation, piece, joinState)) yield return 0;
+                        if (joinState.Submitted) yield break;
                     }
                     continue;
                 }
-                var joined = TryJoin(c, nation, piece, main);
-                if (joined) yield break;
-                yield return 0;
+                joinState.Reset();
+                foreach (var _ in TryJoinStages(c, nation, piece, main, joinState)) yield return 0;
+                if (joinState.Submitted) yield break;
             }
         }
+        if (Campaign.StageOverdue()) yield return 0;
         TryBuyPores(c, nation);
     }
 
@@ -141,7 +145,6 @@ public static partial class Corridors
     }
 
     [ThreadStatic] private static List<(HashSet<int> Piece, bool HasCapital)> _piecesScratch;
-    [ThreadStatic] private static List<HashSet<int>> _openingPiecesScratch;
     [ThreadStatic] private static Dictionary<int, int> _describeByHolderScratch;
     [ThreadStatic] private static int[] _corrStampArray;
     [ThreadStatic] private static int[] _corrCost;
@@ -160,30 +163,48 @@ public static partial class Corridors
     [ThreadStatic] private static Dictionary<int, int> _wholeGroundCounts;
     [ThreadStatic] private static List<int> _wholeResult;
 
-    /// <summary>
-    /// The country's land in pieces joined by land, the piece with its capital first (or the
-    /// largest, for a country without one on the map).
-    /// </summary>
-    public static List<HashSet<int>> Pieces(Campaign c, Nation nation)
+    private sealed class PiecesMemoCache
     {
-        var pieces = new List<HashSet<int>>();
-        FillPieces(c, nation, pieces);
-        return pieces;
+        public readonly object Gate = new();
+        public ProvinceTopology Map;
+        public readonly Dictionary<int, (int Capital, List<HashSet<int>> Raw, List<HashSet<int>> Ordered)> ByMap = new();
     }
 
-    private static void FillPieces(Campaign c, Nation nation, List<HashSet<int>> pieces)
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, PiecesMemoCache> _piecesMemo = new();
+    private static readonly IReadOnlyList<HashSet<int>> EmptyPiecesList = Array.Empty<HashSet<int>>();
+
+    /// <summary>
+    /// Returns cached capital-first / size-sorted land components for <paramref name="nation"/>.
+    /// Keyed on map reference, raw component list instance from <see cref="CampaignCaches.CorridorPoreCache"/>,
+    /// and the nation's capital region index so callers inside a single tick never re-sort repeatedly.
+    /// </summary>
+    internal static IReadOnlyList<HashSet<int>> GetOrderedPieces(Campaign c, Nation nation)
     {
-        pieces.Clear();
-        var map = c.ProvinceMap;
-        if (map is null || nation is null) return;
+        var map = c?.ProvinceMap;
+        if (map is null || nation is null) return EmptyPiecesList;
         EnsurePores(c);
-        if (!c.Caches.CorridorPores.Components.TryGetValue(nation.MapIndex, out var cached) || cached.Count == 0) return;
+        var poreCache = c.Caches.CorridorPores;
+        if (!poreCache.Components.TryGetValue(nation.MapIndex, out var raw) || raw.Count == 0)
+            return EmptyPiecesList;
+        var memo = _piecesMemo.GetOrCreateValue(c);
         var capital = nation.CapitalStateMapIndex;
-        var scratch = _piecesScratch ??= new List<(HashSet<int> Piece, bool HasCapital)>(cached.Count);
-        scratch.Clear();
-        for (var i = 0; i < cached.Count; i++)
+        lock (memo.Gate)
         {
-            var piece = cached[i];
+            if (!ReferenceEquals(memo.Map, map))
+            {
+                memo.ByMap.Clear();
+                memo.Map = map;
+            }
+            if (memo.ByMap.TryGetValue(nation.MapIndex, out var entry) &&
+                entry.Capital == capital && ReferenceEquals(entry.Raw, raw))
+                return entry.Ordered;
+        }
+
+        var scratch = _piecesScratch ??= new List<(HashSet<int> Piece, bool HasCapital)>(raw.Count);
+        scratch.Clear();
+        for (var i = 0; i < raw.Count; i++)
+        {
+            var piece = raw[i];
             var hasCapital = false;
             foreach (var p in piece)
                 if (map.ProvinceToState[p] == capital) { hasCapital = true; break; }
@@ -194,10 +215,60 @@ public static partial class Corridors
             if (a.HasCapital != b.HasCapital) return a.HasCapital ? -1 : 1;
             return b.Piece.Count.CompareTo(a.Piece.Count);
         });
-        for (var i = 0; i < scratch.Count; i++)
-            pieces.Add(scratch[i].Piece);
+        var ordered = new List<HashSet<int>>(scratch.Count);
+        for (var i = 0; i < scratch.Count; i++) ordered.Add(scratch[i].Piece);
         scratch.Clear();
+        lock (memo.Gate)
+        {
+            if (!ReferenceEquals(memo.Map, map))
+            {
+                memo.ByMap.Clear();
+                memo.Map = map;
+            }
+            memo.ByMap[nation.MapIndex] = (capital, raw, ordered);
+        }
+        return ordered;
     }
+
+    /// <summary>
+    /// The country's land in pieces joined by land, the piece with its capital first (or the
+    /// largest, for a country without one on the map).
+    /// </summary>
+    public static List<HashSet<int>> Pieces(Campaign c, Nation nation)
+    {
+        var ordered = GetOrderedPieces(c, nation);
+        var copy = new List<HashSet<int>>(ordered.Count);
+        for (var i = 0; i < ordered.Count; i++) copy.Add(ordered[i]);
+        return copy;
+    }
+
+    private static void FillPieces(Campaign c, Nation nation, List<HashSet<int>> pieces)
+    {
+        pieces.Clear();
+        var ordered = GetOrderedPieces(c, nation);
+        for (var i = 0; i < ordered.Count; i++) pieces.Add(ordered[i]);
+    }
+
+    internal sealed class JoinStageResult
+    {
+        public bool Submitted;
+        public void Reset() => Submitted = false;
+    }
+
+    private sealed class CorridorBfsState
+    {
+        public int[] StampArray;
+        public int[] Cost;
+        public int[] From;
+        public int[] Deque;
+        public int Stamp;
+        public bool Reached;
+        public readonly List<int> Path = new();
+        public readonly List<(int HolderIndex, int[] Regions)> JoinOrders = new();
+        public readonly List<int> SellBuyers = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, CorridorBfsState> _stageBfsScratches = new();
 
     /// <summary>
     /// The foreign provinces on the shortest way over land from a piece to the rest of the
@@ -209,26 +280,49 @@ public static partial class Corridors
 
     private static List<int> FillCorridor(Campaign c, Nation nation, HashSet<int> piece, HashSet<int> main, List<int> buffer)
     {
+        var path = buffer ?? new List<int>();
+        var state = new CorridorBfsState
+        {
+            StampArray = _corrStampArray,
+            Cost = _corrCost,
+            From = _corrFrom,
+            Deque = _corrDeque,
+            Stamp = _corrStamp
+        };
+        foreach (var _ in FillCorridorStages(c, nation, piece, main, state, path, yieldable: false)) { }
+        _corrStampArray = state.StampArray;
+        _corrCost = state.Cost;
+        _corrFrom = state.From;
+        _corrDeque = state.Deque;
+        _corrStamp = state.Stamp;
+        return state.Reached ? path : null;
+    }
+
+    private static IEnumerable<int> FillCorridorStages(Campaign c, Nation nation, HashSet<int> piece, HashSet<int> main,
+        CorridorBfsState state, List<int> path, bool yieldable)
+    {
+        path.Clear();
+        state.Reached = false;
         var map = c.ProvinceMap;
         var limit = Math.Max(1, c.Defines.CorridorMaxProvinces);
         var required = map.ProvinceCount + 1;
-        if (_corrStampArray is null || _corrStampArray.Length < required)
+        if (state.StampArray is null || state.StampArray.Length < required)
         {
-            _corrStampArray = new int[required];
-            _corrCost = new int[required];
-            _corrFrom = new int[required];
+            state.StampArray = new int[required];
+            state.Cost = new int[required];
+            state.From = new int[required];
         }
-        var stamps = _corrStampArray;
-        var cost = _corrCost;
-        var from = _corrFrom;
-        if (++_corrStamp <= 0)
+        var stamps = state.StampArray;
+        var cost = state.Cost;
+        var from = state.From;
+        if (++state.Stamp <= 0)
         {
             Array.Clear(stamps, 0, stamps.Length);
-            _corrStamp = 1;
+            state.Stamp = 1;
         }
-        var stamp = _corrStamp;
+        var stamp = state.Stamp;
 
-        var deque = _corrDeque ??= new int[4096];
+        var deque = state.Deque ??= new int[4096];
         var cap = deque.Length;
         var mask = cap - 1;
         var head = 0;
@@ -244,7 +338,7 @@ public static partial class Corridors
             if (count == cap)
             {
                 GrowDeque(ref deque, ref cap, ref mask, ref head, ref tail, count);
-                _corrDeque = deque;
+                state.Deque = deque;
             }
             deque[tail] = p;
             tail = (tail + 1) & mask;
@@ -252,6 +346,7 @@ public static partial class Corridors
         }
 
         var reached = -1;
+        var popped = 0;
         while (count > 0)
         {
             var p = deque[head];
@@ -277,7 +372,7 @@ public static partial class Corridors
                 if (count == cap)
                 {
                     GrowDeque(ref deque, ref cap, ref mask, ref head, ref tail, count);
-                    _corrDeque = deque;
+                    state.Deque = deque;
                 }
                 if (step == 0)
                 {
@@ -291,13 +386,12 @@ public static partial class Corridors
                 }
                 count++;
             }
+            if (yieldable && (++popped & 511) == 511 && Campaign.StageOverdue()) yield return 0;
         }
-        if (reached < 0) return null;
-        var path = buffer ?? new List<int>();
-        path.Clear();
+        if (reached < 0) yield break;
+        state.Reached = true;
         for (var p = reached; p > 0 && from[p] > 0; p = from[p])
             if (map.ProvinceToNation[p] != nation.MapIndex) path.Add(p);
-        return path;
     }
 
     private static void GrowDeque(ref int[] deque, ref int cap, ref int mask, ref int head, ref int tail, int count)
@@ -342,15 +436,22 @@ public static partial class Corridors
         byHolder.Clear();
     }
 
-    private static bool TryJoin(Campaign c, Nation nation, HashSet<int> piece, HashSet<int> main)
+    private static IEnumerable<int> TryJoinStages(Campaign c, Nation nation, HashSet<int> piece, HashSet<int> main, JoinStageResult result)
     {
         var map = c.ProvinceMap;
-        var path = FillCorridor(c, nation, piece, main, _corridorPathScratch ??= new List<int>());
-        // Regions, not provinces, change hands: the regions the corridor runs through, by holder.
-        var byHolder = _joinByHolder ??= new Dictionary<int, HashSet<int>>();
-        ReturnHolderSets(byHolder);
-        if (path is not null)
+        var bfs = _stageBfsScratches.GetOrCreateValue(c);
+        var path = bfs.Path;
+        foreach (var _ in FillCorridorStages(c, nation, piece, main, bfs, path, yieldable: true))
+            yield return 0;
+        var reached = bfs.Reached;
+
+        var joinOrders = bfs.JoinOrders;
+        joinOrders.Clear();
+        if (reached && path.Count > 0)
         {
+            // Regions, not provinces, change hands: the regions the corridor runs through, by holder.
+            var byHolder = _joinByHolder ??= new Dictionary<int, HashSet<int>>();
+            ReturnHolderSets(byHolder);
             for (var i = 0; i < path.Count; i++)
             {
                 var province = path[i];
@@ -359,41 +460,49 @@ public static partial class Corridors
                 if (!byHolder.TryGetValue(holder, out var regions)) byHolder[holder] = regions = RentJoinSet();
                 regions.Add(map.ProvinceToState[province]);
             }
+            var order = _joinOrder ??= new List<(int Holder, HashSet<int> Regions, int Order)>();
+            order.Clear();
+            var seq = 0;
+            foreach (var entry in byHolder)
+                order.Add((entry.Key, entry.Value, seq++));
+            order.Sort(static (a, b) =>
+            {
+                var cmp = b.Regions.Count.CompareTo(a.Regions.Count);
+                return cmp != 0 ? cmp : a.Order.CompareTo(b.Order);
+            });
+            for (var i = 0; i < order.Count; i++)
+                joinOrders.Add((order[i].Holder, order[i].Regions.ToArray()));
+            order.Clear();
+            ReturnHolderSets(byHolder);
         }
-        var order = _joinOrder ??= new List<(int Holder, HashSet<int> Regions, int Order)>();
-        order.Clear();
-        var seq = 0;
-        foreach (var entry in byHolder)
-            order.Add((entry.Key, entry.Value, seq++));
-        order.Sort(static (a, b) =>
-        {
-            var cmp = b.Regions.Count.CompareTo(a.Regions.Count);
-            return cmp != 0 ? cmp : a.Order.CompareTo(b.Order);
-        });
+        if (Campaign.StageOverdue()) yield return 0;
+
         try
         {
             // One holder at a time - the one with the most of the way.
-            for (var i = 0; i < order.Count; i++)
+            for (var i = 0; i < joinOrders.Count; i++)
             {
-                var (holderIndex, regions, _) = order[i];
+                if (i > 0 && Campaign.StageOverdue()) yield return 0;
+                var (holderIndex, regionArr) = joinOrders[i];
                 var holder = c.NationByMapIndex(holderIndex);
                 if (holder is null || holder.Movement is not null || !Approachable(c, nation, holder)) continue;
-                var deal = new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { Regions = regions.ToArray() });
+                var deal = new Ultimatum.Deal(new Ultimatum.Side(), new Ultimatum.Side { Regions = regionArr });
                 var price = Ultimatum.CashToBalance(c, nation, holder, deal);
                 if (!float.IsFinite(price) || price < 0f) continue;
                 if (price > nation.Treasury * M.Clamp01(c.Defines.CorridorTreasuryShare)) continue;
                 deal = deal with { From = deal.From with { Cash = MathF.Max(0.01f, price * 1.05f) } };
                 Remember(c, nation, holder);
                 DealNegotiations.Submit(c, nation, holder, deal);
-                return true;
+                result.Submitted = true;
+                yield break;
             }
         }
         finally
         {
-            order.Clear();
-            ReturnHolderSets(byHolder);
+            joinOrders.Clear();
         }
-        return TrySell(c, nation, piece);
+        if (Campaign.StageOverdue()) yield return 0;
+        foreach (var _ in TrySellStages(c, nation, piece, result)) yield return 0;
     }
 
     /// <summary>
@@ -401,9 +510,21 @@ public static partial class Corridors
     /// the piece holds every province of it still owned here: a deal cannot hand over half
     /// a region without handing over the rest.
     /// </summary>
-    private static bool TrySell(Campaign c, Nation nation, HashSet<int> piece)
+    private static IEnumerable<int> TrySellStages(Campaign c, Nation nation, HashSet<int> piece, JoinStageResult result)
     {
         var map = c.ProvinceMap;
+        var bfs = _stageBfsScratches.GetOrCreateValue(c);
+        var buyers = bfs.SellBuyers;
+        buyers.Clear();
+        var regions = WholeRegions(c, nation, piece);
+        if (regions.Length == 0) yield break;
+        for (var i = 0; i < regions.Length; i++)
+        {
+            var id = regions[i];
+            if (id == nation.CapitalStateMapIndex ||
+                (c.StateByMapIndex(id) is { } state && TerritorialClaims.TitleOf(c, nation, state) == TerritorialTitle.Homeland))
+                yield break;
+        }
         var around = _sellAround ??= new Dictionary<int, int>();
         around.Clear();
         foreach (var province in piece)
@@ -416,44 +537,47 @@ public static partial class Corridors
                 if (owner != 0 && owner != nation.MapIndex) around[owner] = around.GetValueOrDefault(owner) + 1;
             }
         }
-        var regions = WholeRegions(c, nation, piece);
-        if (regions.Length == 0) return false;
-        for (var i = 0; i < regions.Length; i++)
-        {
-            var id = regions[i];
-            if (id == nation.CapitalStateMapIndex ||
-                (c.StateByMapIndex(id) is { } state && TerritorialClaims.TitleOf(c, nation, state) == TerritorialTitle.Homeland))
-                return false;
-        }
         var order = _sellOrder ??= new List<(int Buyer, int Count, int Order)>();
         order.Clear();
         var seq = 0;
         foreach (var entry in around)
             order.Add((entry.Key, entry.Value, seq++));
+        around.Clear();
         order.Sort(static (a, b) =>
         {
             var cmp = b.Count.CompareTo(a.Count);
             return cmp != 0 ? cmp : a.Order.CompareTo(b.Order);
         });
-        for (var oi = 0; oi < order.Count; oi++)
+        for (var oi = 0; oi < order.Count; oi++) buyers.Add(order[oi].Buyer);
+        order.Clear();
+
+        try
         {
-            var buyerIndex = order[oi].Buyer;
-            var buyer = c.NationByMapIndex(buyerIndex);
-            if (buyer is null || buyer.Movement is not null || !Approachable(c, nation, buyer)) continue;
-            var sale = new Ultimatum.Deal(new Ultimatum.Side { Regions = regions }, new Ultimatum.Side());
-            var worth = 0f;
-            for (var i = 0; i < regions.Length; i++)
-                if (c.StateByMapIndex(regions[i]) is { } st)
-                    worth += Ultimatum.RegionWorth(c, buyer, st);
-            var asking = MathF.Max(0.01f, worth * 0.5f / MathF.Max(0.01f, Ultimatum.CashWeight(buyer)));
-            if (asking > buyer.Treasury * 0.5f) asking = buyer.Treasury * 0.5f;
-            if (asking <= 0.01f) continue;
-            sale = sale with { To = sale.To with { Cash = asking } };
-            Remember(c, nation, buyer);
-            DealNegotiations.Submit(c, nation, buyer, sale);
-            return true;
+            for (var oi = 0; oi < buyers.Count; oi++)
+            {
+                if (oi > 0 && Campaign.StageOverdue()) yield return 0;
+                var buyerIndex = buyers[oi];
+                var buyer = c.NationByMapIndex(buyerIndex);
+                if (buyer is null || buyer.Movement is not null || !Approachable(c, nation, buyer)) continue;
+                var sale = new Ultimatum.Deal(new Ultimatum.Side { Regions = regions }, new Ultimatum.Side());
+                var worth = 0f;
+                for (var i = 0; i < regions.Length; i++)
+                    if (c.StateByMapIndex(regions[i]) is { } st)
+                        worth += Ultimatum.RegionWorth(c, buyer, st);
+                var asking = MathF.Max(0.01f, worth * 0.5f / MathF.Max(0.01f, Ultimatum.CashWeight(buyer)));
+                if (asking > buyer.Treasury * 0.5f) asking = buyer.Treasury * 0.5f;
+                if (asking <= 0.01f) continue;
+                sale = sale with { To = sale.To with { Cash = asking } };
+                Remember(c, nation, buyer);
+                DealNegotiations.Submit(c, nation, buyer, sale);
+                result.Submitted = true;
+                yield break;
+            }
         }
-        return false;
+        finally
+        {
+            buyers.Clear();
+        }
     }
 
     /// <summary>Regions whose every province still owned by this country sits inside <paramref name="ground"/>.</summary>
@@ -594,6 +718,9 @@ public static partial class Corridors
         }
         cache.Ready = false;
         cache.Revision = -1;
+        if (_piecesMemo.TryGetValue(c, out var memo))
+            lock (memo.Gate)
+                memo.ByMap.Clear();
         var targetRevision = c.MapRevision;
         cache.Map = map;
         cache.Limit = limit;
@@ -612,9 +739,11 @@ public static partial class Corridors
         var queue = cache.Queue;
         var rim = cache.Rim;
         queue.Clear();
+        if (Campaign.StageOverdue()) yield return 0;
         var workSinceYield = 0;
         for (var start = 1; start <= map.ProvinceCount; start++)
         {
+            if ((++workSinceYield & 127) == 0 && Campaign.StageOverdue()) yield return 0;
             if (seen[start] || map.IsWater(start)) continue;
             var owner = cache.Owners[start];
             if (owner == 0) { seen[start] = true; continue; }
@@ -650,7 +779,7 @@ public static partial class Corridors
                     if (who == 0) { open = true; continue; }
                     rim.Add(who);
                 }
-                if (++workSinceYield >= 2500) { workSinceYield = 0; yield return 0; }
+                if ((++workSinceYield & 127) == 0 && Campaign.StageOverdue()) yield return 0;
             }
             if (!cache.Components.TryGetValue(owner, out var list))
                 cache.Components[owner] = list = new List<HashSet<int>>();
@@ -745,8 +874,7 @@ public static partial class Corridors
         piece = null;
         main = null;
         if (c?.ProvinceMap is null || nation is null || nation.Population <= 0) return false;
-        var parts = _openingPiecesScratch ??= new List<HashSet<int>>();
-        FillPieces(c, nation, parts);
+        var parts = GetOrderedPieces(c, nation);
         if (parts.Count < 2) return false;
         main = parts[0];
         var authored = ProvinceOwnership.ProvinceSetOf(nation.Tag);

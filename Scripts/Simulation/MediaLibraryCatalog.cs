@@ -13,11 +13,34 @@ public sealed record LibraryMedia(string Id, string Name, string Purpose, Librar
 /// <summary>Presentation-only inventory. Loading or browsing never touches campaign state.</summary>
 public static class MediaLibraryCatalog
 {
+    private static readonly object SyncLock = new();
     private static readonly Dictionary<string, LibraryMedia> Items = new(StringComparer.OrdinalIgnoreCase);
-    public static IEnumerable<LibraryMedia> All => Items.Values.OrderBy(x => x.Kind).ThenBy(x => x.Id, StringComparer.Ordinal);
-    public static LibraryMedia Find(string id) => id is not null ? Items.GetValueOrDefault(id) : null;
+    public static IEnumerable<LibraryMedia> All
+    {
+        get
+        {
+            lock (SyncLock)
+            {
+                if (Revision == 0) LoadCore();
+                return Items.Values.OrderBy(x => x.Kind).ThenBy(x => x.Id, StringComparer.Ordinal).ToArray();
+            }
+        }
+    }
+    public static LibraryMedia Find(string id)
+    {
+        if (id is null) return null;
+        lock (SyncLock)
+        {
+            if (Revision == 0) LoadCore();
+            return Items.GetValueOrDefault(id);
+        }
+    }
     public static int Revision { get; private set; }
     public static void Load()
+    {
+        lock (SyncLock) LoadCore();
+    }
+    private static void LoadCore()
     {
         Items.Clear(); Revision++;
         var root = GameDataLoader.DataFolder("presentation");

@@ -135,7 +135,23 @@ public static class HeldRegions
     public static List<ScenarioState> EconomyOf(Campaign c, Nation nation, bool refresh = true) =>
         FillEconomyOf(c, nation, _scratch ??= new List<ScenarioState>(), refresh);
 
-    internal static List<ScenarioState> FillEconomyOf(Campaign c, Nation nation, List<ScenarioState> into, bool refresh = true)
+    /// <summary>Index the committed administrations once for a whole market pass, in region order.</summary>
+    internal static Dictionary<int, List<ScenarioState>> CommittedAdministrations(Campaign c)
+    {
+        var heldByNation = new Dictionary<int, List<ScenarioState>>();
+        if (!c.Defines.HeldRegionsWorkForHolder) return heldByNation;
+        foreach (var state in c.States)
+        {
+            if (!Administered(c, state)) continue;
+            if (!heldByNation.TryGetValue(state.HeldById, out var held))
+                heldByNation[state.HeldById] = held = new List<ScenarioState>();
+            held.Add(state);
+        }
+        return heldByNation;
+    }
+
+    internal static List<ScenarioState> FillEconomyOf(Campaign c, Nation nation, List<ScenarioState> into,
+        bool refresh = true, IReadOnlyDictionary<int, List<ScenarioState>> administrations = null)
     {
         into.Clear();
         if (refresh) Refresh(c);
@@ -149,8 +165,18 @@ public static class HeldRegions
             foreach (var state in held)
                 if (Administered(c, state)) into.Add(state);
         if (working && !refresh)
-            foreach (var state in c.States)
-                if (state.HeldById == nation.Id && state.NationMapIndex != nation.MapIndex && Administered(c, state)) into.Add(state);
+        {
+            if (administrations is null)
+            {
+                foreach (var state in c.States)
+                    if (state.HeldById == nation.Id && state.NationMapIndex != nation.MapIndex && Administered(c, state)) into.Add(state);
+            }
+            else if (administrations.TryGetValue(nation.Id, out var committed))
+            {
+                foreach (var state in committed)
+                    if (state.NationMapIndex != nation.MapIndex) into.Add(state);
+            }
+        }
         return into;
     }
 

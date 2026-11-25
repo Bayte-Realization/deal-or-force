@@ -99,18 +99,43 @@ void fragment() {
     /// are its permanent axes; only a projection change replaces that frame with flat axes.
     /// Attaches one thin ink ring, identical on the globe and the flat atlas.
     /// </summary>
+    private Vector3 CapitalMarkerPosition(float latitude, float longitude)
+    {
+        var reliefActive = _reliefDisplacement > 0.0001f;
+        var reliefBias = reliefActive ? 0.004f : 0f;
+        var footprint = reliefActive ? 0.045f : 0f;
+        return _flatMap
+            ? LocalFlatLabelPoint(latitude, longitude, FlatMarkerZ + reliefBias, footprint)
+            : LocalSurfaceLabelPoint(latitude, longitude, SurfaceMarkerRadius + reliefBias, footprint);
+    }
+
     private void PlaceCapitalMarker(Node3D node, Vector3 normal)
     {
         var geographic = GeographicFromNormal(normal);
-        node.Position = _flatMap
-            ? LocalFlatPoint(geographic.Latitude, geographic.Longitude, FlatMarkerZ)
-            : LocalSurfacePoint(geographic.Latitude, geographic.Longitude, SurfaceMarkerRadius);
+        node.Position = CapitalMarkerPosition(geographic.Latitude, geographic.Longitude);
         OrientSurfaceCounter(node, normal);
         if (node is Sprite3D star)
         {
             EnsureCapitalHaloChild(star);
             SizeCapitalMarker(star);
         }
+    }
+
+    /// <summary>The halo quad's size against the star, and the ring's outer edge in the quad (0.80 + half the stroke).</summary>
+    private const float CapitalHaloScale = 1.85f;
+    private const float CapitalRingOuter = 0.86f;
+
+    /// <summary>
+    /// How wide the capital's ink ring is on the screen, at the star's size cap: what a name beside
+    /// the star has to clear. Far out the star is drawn smaller than the cap and the name stands a
+    /// few pixels wider than it needs to, never on the ring.
+    /// </summary>
+    private float CapitalRingAcrossPixels()
+    {
+        var starPixels = _flatMap
+            ? Math.Clamp(Ui.Metric("map.flat_capital_pixels", 14f), 8f, 24f)
+            : Math.Clamp(Ui.Metric("map.globe_capital_pixels", 18f), 8f, 30f);
+        return starPixels * CapitalHaloScale * CapitalRingOuter;
     }
 
     private static void EnsureCapitalHaloChild(Sprite3D star)
@@ -122,7 +147,7 @@ void fragment() {
             Mesh = _capitalHaloQuad ??= new QuadMesh { Size = Vector2.One },
             MaterialOverride = EnsureCapitalHaloMaterial(),
             Position = new Vector3(0f, 0f, -0.0004f),
-            Scale = Vector3.One * 1.85f,
+            Scale = Vector3.One * CapitalHaloScale,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             GIMode = GeometryInstance3D.GIModeEnum.Disabled
         };

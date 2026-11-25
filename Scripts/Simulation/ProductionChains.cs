@@ -622,7 +622,12 @@ public static class ProductionChains
     /// </summary>
     private static void FillRegion(float[] slots, Nation nation, ScenarioState state, float outputFactor, BuildingKind? plusOne)
     {
-        Array.Clear(slots, 0, SlotCount);
+        // National inputs in the shared buffer must not carry into regional recipes.
+        // Every building and deposit a live recipe reads is written below, including zeros.
+        // Conversion and production lines can also use these two unlisted building inputs.
+        Array.Clear(slots, 0, FixedSlots);
+        slots[StaffedSlot(BuildingKind.CivilianIndustry)] = 0f;
+        slots[StaffedSlot(BuildingKind.ArmsIndustry)] = 0f;
         int Count(BuildingKind kind) =>
             state.Buildings.GetValueOrDefault(kind) + (plusOne == kind ? 1 : 0);
 

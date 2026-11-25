@@ -64,7 +64,7 @@ public partial class DealOrForceGame
         return added;
     }
 
-    private void RefreshNegotiationNotifications()
+    private void RefreshNegotiationNotifications(bool allowShellRefresh = true)
     {
         var count = CountIncomingDiplomaticInbox();
         var playerId = _campaign.Player.Id;
@@ -118,10 +118,14 @@ public partial class DealOrForceGame
         if (IsNewShellActive && _dealInboxLastShellCount != count)
         {
             _dealInboxLastShellCount = count;
-            RefreshNewShell(force: true);
+            if (allowShellRefresh) RefreshNewShell();
+            else _shell?.MarkInboxAndAlertsDirty();
         }
         if (IsInstanceValid(_diplomacyInboxButton))
-            _diplomacyInboxButton.Text = count > 0 ? Loc.Format("Diplomatic inbox ({0})", count) : Tr("Diplomatic inbox");
+        {
+            var label = count > 0 ? Loc.Format("Diplomatic inbox ({0})", count) : Tr("Diplomatic inbox");
+            if (_diplomacyInboxButton.Text != label) _diplomacyInboxButton.Text = label;
+        }
         if (_dealInboxVisible && IsInstanceValid(_dealComposer)) RefreshDealInbox();
     }
 

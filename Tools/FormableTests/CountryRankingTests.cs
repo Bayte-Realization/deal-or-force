@@ -57,12 +57,13 @@ static class CountryRankingTests
         var rows = CountryRankings.Read(c, Weights.Default);
         Check(Ids(rows) == "0,1,2" && rows.Select(r => r.OverallRank).SequenceEqual(new[] { 1, 2, 3 }),
             "overall order and global ordinal positions follow the default composite");
-        Check(Near(Of(rows, 0).Overall, 58.75) && Near(Of(rows, 1).Overall, 53.75) && Near(Of(rows, 2).Overall, 52.5),
-            "default composite exposes the 40/15/30/15 max-normalized calculation");
+        Check(Near(Of(rows, 0).Overall, 57.0) && Near(Of(rows, 1).Overall, 45.25) && Near(Of(rows, 2).Overall, 36.0),
+            "default composite exposes the 42/14/12/17/15 max-normalized calculation");
         var first = Of(rows, 0);
         Check(first.Tag == c.Nations[0].Tag && first.Name == c.Nations[0].DisplayName &&
             first.Economy == 300 && first.Population == 1000 && first.FieldPower == c.Armies[0].Power &&
-            first.Technology == 2 && Near(first.LivingStandards, .3), "row values are existing national facts and actual ground army power");
+            first.Technology == 2 && Near(first.LivingStandards, .3) && Near(first.Prestige, 0),
+            "row values are existing national facts and actual ground army power");
 
         var orders = new Dictionary<Metric, string> {
             [Metric.Overall] = "0,1,2", [Metric.Economy] = "0,1,2", [Metric.Population] = "1,2,0",
@@ -83,6 +84,17 @@ static class CountryRankingTests
             "unmatched search returns an empty view");
         Check(Ids(rows) == "0,1,2" && first == Of(rows, 0), "queries leave the original snapshot untouched");
         Check(rows is IList<CountryRankings.Row> list && list.IsReadOnly, "the returned collection rejects in-place mutation");
+
+        var pw = World();
+        pw.Nations[0].Prestige = 120f;
+        pw.Nations[1].Prestige = 300f;
+        pw.Nations[2].Prestige = 60f;
+        var pRows = CountryRankings.Read(pw, Weights.Default);
+        Check(Ids(CountryRankings.Query(pRows, Metric.Prestige, true)) == "1,0,2" &&
+            Ids(CountryRankings.Query(pRows, Metric.Prestige, false)) == "2,0,1" &&
+            Near(Of(pRows, 0).Overall, 57.0 + 15.0 * (120.0 / 300.0)) &&
+            Near(Of(pRows, 1).Overall, 45.25 + 15.0),
+            "Prestige column sorts both directions and contributes its 15% weight to Overall");
     }
 
     static void WeightSafety()
@@ -92,6 +104,7 @@ static class CountryRankingTests
         Check(new Weights() == Weights.Default && default(Weights).Normalize() == Weights.Default,
             "both constructor and zero-valued struct safely resolve the default mix");
         Check(defaults.SequenceEqual(CountryRankings.Read(c, new Weights(0, 0, 0, 0))), "zero mix falls back to defaults");
+        Check(defaults.SequenceEqual(CountryRankings.Read(c, new Weights(0, 0, 0, 0, 0))), "five-weight zero mix falls back to defaults");
         Check(defaults.SequenceEqual(CountryRankings.Read(c, new Weights(double.NaN, double.PositiveInfinity, -1, double.NegativeInfinity))),
             "an entirely invalid mix falls back to defaults");
         var cases = new[] {
@@ -103,11 +116,19 @@ static class CountryRankingTests
             Check(rows[0].NationId == winner && Near(rows[0].Overall, 100) && Near(Of(rows, runner).Overall, value),
                 "a single weighted component determines the result: " + weights);
         }
+        var cp = World();
+        cp.Nations[0].Prestige = 150f; cp.Nations[1].Prestige = 300f; cp.Nations[2].Prestige = 50f;
+        var pOnly = CountryRankings.Read(cp, new Weights(0, 0, 0, 0, 8));
+        Check(pOnly[0].NationId == 1 && Near(pOnly[0].Overall, 100) && Near(Of(pOnly, 0).Overall, 50d),
+            "single prestige weight determines Overall");
         Check(new Weights(double.NaN, 8, -1, double.PositiveInfinity).Normalize() == new Weights(0, 100, 0, 0),
             "invalid individual weights become zero while valid weights remain effective");
-        var huge = new Weights(double.MaxValue, double.MaxValue, double.MaxValue, double.MaxValue).Normalize();
-        Check(huge == new Weights(25, 25, 25, 25) && CountryRankings.Read(c, huge).All(r => double.IsFinite(r.Overall)),
-            "malicious huge weights cannot overflow the total");
+        var huge4 = new Weights(double.MaxValue, double.MaxValue, double.MaxValue, double.MaxValue).Normalize();
+        Check(huge4 == new Weights(25, 25, 25, 25) && CountryRankings.Read(c, huge4).All(r => double.IsFinite(r.Overall)),
+            "4-param compatibility constructor and huge weights normalize cleanly without overflow");
+        var huge5 = new Weights(double.MaxValue, double.MaxValue, double.MaxValue, double.MaxValue, double.MaxValue).Normalize();
+        Check(huge5 == new Weights(20, 20, 20, 20, 20) && CountryRankings.Read(c, huge5).All(r => double.IsFinite(r.Overall)),
+            "malicious huge 5-weight inputs cannot overflow the total");
         Check(new Weights(double.Epsilon, 0, 0, 0).Normalize() == new Weights(100, 0, 0, 0),
             "tiny positive weights normalize without underflowing to an empty mix");
         c.Nations[0].StandardOfLiving = 100;
@@ -130,6 +151,7 @@ static class CountryRankingTests
         var baseline = CountryRankings.Read(c, Weights.Default);
         var hidden = Add(c, 9, "RANK_HIDDEN", long.MaxValue, float.MaxValue);
         for (var i = 0; i < 100; i++) hidden.Technologies.Add("rank_hidden_" + i);
+        hidden.Prestige = float.MaxValue;
         c.Armies.Add(new Army { Id = 9, NationId = 9, Divisions = float.MaxValue });
         Check(baseline.SequenceEqual(CountryRankings.Read(c, Weights.Default, n => n.Id != 9)),
             "an invisible maximum cannot change visible rows, scores or ranks");
@@ -138,7 +160,7 @@ static class CountryRankingTests
             CountryRankings.Read(null, Weights.Default).Count == 0, "empty and absent campaigns have empty snapshots");
         var one = new Campaign(18, new Defines()); Add(one, 0, "RANK_ONLY", gdp: 1);
         var only = CountryRankings.Read(one, Weights.Default).Single();
-        Check(only.OverallRank == 1 && Near(only.Overall, 55), "one country receives only components that have a positive maximum");
+        Check(only.OverallRank == 1 && Near(only.Overall, 56), "one country receives only components that have a positive maximum");
         one.States[0].Population = 0;
         Check(CountryRankings.Read(one, Weights.Default).Count == 1, "owned non-water ground need not itself have residents");
     }
@@ -209,13 +231,15 @@ static class CountryRankingTests
         {
             var n = Add(c, i, "RANK_BAD_" + i, gdp: invalid[i]);
             n.StandardOfLiving = invalid[i];
+            n.Prestige = invalid[i];
             c.Armies.Add(new Army { Id = i, NationId = i, Divisions = invalid[i] });
         }
         c.Armies.Add(new Army { Id = 10, NationId = 0, Divisions = 2 });
         c.Armies.Add(new Army { Id = 11, NationId = 9999, Divisions = float.MaxValue });
         var rows = CountryRankings.Read(c, Weights.Default);
-        Check(rows.All(r => r.Economy == 0 && r.LivingStandards == 0 && double.IsFinite(r.Overall) && r.Overall is >= 0 and <= 100),
-            "negative, NaN and infinite economic/display values sanitize to zero");
+        Check(rows.All(r => r.Economy == 0 && r.LivingStandards == 0 && r.Prestige == 0 &&
+            double.IsFinite(r.Overall) && r.Overall is >= 0 and <= 100),
+            "negative, NaN and infinite economic/display/prestige values sanitize to zero");
         Check(Near(Of(rows, 0).FieldPower, c.Armies[4].Power) && rows.Where(r => r.NationId != 0).All(r => r.FieldPower == 0),
             "invalid army powers are zero individually without erasing a valid army or counting an absent owner");
         Check(float.IsNaN(c.Nations[0].Gdp) && float.IsPositiveInfinity(c.Nations[2].Gdp),

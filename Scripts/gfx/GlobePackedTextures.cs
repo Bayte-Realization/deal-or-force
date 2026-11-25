@@ -7,15 +7,17 @@ namespace DealOrForce;
 public sealed partial class GlobePresentation
 {
     // Safe mode is an explicit escape hatch, not an automatic visual downgrade on
-    // every integrated GPU. The normal Compatibility path retains the full material.
+    // every integrated GPU. The normal Compatibility and Mobile paths retain the full material.
     private static bool ReducedMap => Array.IndexOf(OS.GetCmdlineUserArgs(), "--safe-map") >= 0;
+    internal static bool UsePackedMapShader =>
+        !ReducedMap && RenderingServer.GetCurrentRenderingMethod() is "gl_compatibility" or "mobile";
     private Texture2DArray _packedLookups, _packedIds, _packedWater;
     private Image _packedLookupRgbaScratch;
     private byte[] _packedLookupRgbaBytes;
 
     private void InitializePackedTextures()
     {
-        if (ReducedMap || RenderingServer.GetCurrentRenderingMethod() != "gl_compatibility") return;
+        if (!UsePackedMapShader) return;
         using var lookup = Image.CreateEmpty(256, 256, false, Image.Format.Rgba8);
         _packedLookups = CreateArray(lookup, PackedMapShader.Lookups.Count);
         _globeMaterial.SetShaderParameter("packed_lookups", _packedLookups);
@@ -41,7 +43,8 @@ public sealed partial class GlobePresentation
                 for (int s = 0, d = 0; s < src.Length && d + 3 < dst.Length; s++, d += 4)
                 {
                     var v = src[s];
-                    dst[d] = v; dst[d + 1] = v; dst[d + 2] = v; dst[d + 3] = 255;
+                    // Match Godot's Image.Convert(R8 -> Rgba8) layout (R=v, G=0, B=0, A=255).
+                    dst[d] = v; dst[d + 1] = 0; dst[d + 2] = 0; dst[d + 3] = 255;
                 }
                 if (_packedLookupRgbaScratch is null)
                     _packedLookupRgbaScratch = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, dst);
@@ -109,12 +112,18 @@ public sealed partial class GlobePresentation
     private void UpdateMapImage(string uniform, Image image, ref ImageTexture texture)
     {
         if (UploadPacked(uniform, image)) return;
-        if (texture is null)
+        if (texture is not null && IsInstanceValid(texture) &&
+            texture.GetWidth() == image.GetWidth() &&
+            texture.GetHeight() == image.GetHeight() &&
+            texture.GetFormat() == image.GetFormat())
+        {
+            texture.Update(image);
+        }
+        else
         {
             texture = ImageTexture.CreateFromImage(image);
             _globeMaterial.SetShaderParameter(uniform, texture);
         }
-        else texture.Update(image);
     }
 
     private static Texture2DArray CreateArray(Image image, int count)

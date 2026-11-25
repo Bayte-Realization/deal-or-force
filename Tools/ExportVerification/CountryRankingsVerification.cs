@@ -18,6 +18,7 @@ public partial class ExportVerification
         CountryRankings.Metric.Population => Fmt.People(row.Population >= long.MaxValue ? long.MaxValue : (long)row.Population),
         CountryRankings.Metric.FieldPower => row.FieldPower.ToString("0.0"),
         CountryRankings.Metric.Technology => row.Technology.ToString("0"),
+        CountryRankings.Metric.Prestige => row.Prestige.ToString("0"),
         CountryRankings.Metric.LivingStandards => row.LivingStandards.ToString("0.0"),
         _ => row.Overall.ToString("0.0")
     };
@@ -64,7 +65,7 @@ public partial class ExportVerification
             var labels = actual[i].FindChildren("*", "Label", true, false).OfType<Label>().Select(label => label.Text).ToArray();
             var values = Enum.GetValues<CountryRankings.Metric>().Select(id => RankingExpectedValue(wanted[i], id));
             Check(labels.Contains(wanted[i].Name, StringComparer.Ordinal) && labels.Skip(2).SequenceEqual(values),
-                "rendered ranking row identifies the country and shows all six pure metric values: " + caption + " " + i);
+                "rendered ranking row identifies the country and shows all seven pure metric values: " + caption + " " + i);
         }
     }
 
@@ -127,7 +128,7 @@ public partial class ExportVerification
 
             var search = game.FindChild("CountryRankingSearch", true, false) as LineEdit;
             var metric = game.FindChild("CountryRankingMetric", true, false) as OptionButton;
-            Check(search is not null && metric?.ItemCount == 6, "ranking search and all six metrics exist: " + caption);
+            Check(search is not null && metric?.ItemCount == 7, "ranking search and all seven metrics exist: " + caption);
             if (search is null || metric is null) continue;
             foreach (var id in Enum.GetValues<CountryRankings.Metric>())
             {

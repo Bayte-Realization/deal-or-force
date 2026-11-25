@@ -26,11 +26,31 @@ public sealed partial class GlobePresentation
     private bool _globeZoomAnchorActive;
     private (double X, double Y, double Z) _globeZoomAnchorWorld;
     private Vector2 _globeZoomAnchorPixel;
+    private bool _cameraTransformDirty = true;
+    private float _lastAppliedYaw = float.NaN;
+    private float _lastAppliedPitch = float.NaN;
+    private float _lastAppliedDistance = float.NaN;
+    private float _lastAppliedFlatX = float.NaN;
+    private float _lastAppliedFlatY = float.NaN;
+    private float _lastAppliedFlatZoom = float.NaN;
+    private bool _lastAppliedFlatMap;
+    private float _motionFrameYaw = float.NaN;
+    private float _motionFramePitch = float.NaN;
+    private float _motionFrameDistance = float.NaN;
+    private float _motionFrameFlatX = float.NaN;
+    private float _motionFrameFlatY = float.NaN;
+    private float _motionFrameFlatZoom = float.NaN;
+    private bool _motionFrameFlatMap;
+    private bool _isActivelyPanning;
+
+    internal bool IsActivelyPanning => _isActivelyPanning;
+
     /// <summary>Frames a geographic point exactly as the source globe's country focus does.</summary>
     public void FocusOn(float latitude, float longitude, float distance = 8f)
     {
         _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero;
         _flatZoomAnchorActive = false;
+        _cameraTransformDirty = true;
         if (_flatMap)
         {
             _targetFlatX = longitude / 18f;
@@ -148,16 +168,27 @@ public sealed partial class GlobePresentation
     /// <summary>The ordinary camera: an orbit rig the player turns, tilts and zooms.</summary>
     private void UpdateOrbitCamera(double delta)
     {
+        var dt = (float)delta;
+        const float showcaseRadPerSec = 0.07f;
+        var showcaseFlatDelta = 0f;
+        var showcaseYawDelta = 0f;
         if (_showcasePan)
         {
             // A complete, level orbit takes roughly 90 seconds in either projection.
             // This moves the camera's target, never the world's geographic coordinates;
             // country labels, unit counters and borders continue to agree with the map.
-            const float radiansPerSecond = 0.07f;
-            if (_flatMap) _targetFlatX += FlatMapWidth * radiansPerSecond / Mathf.Tau * (float)delta;
-            else _targetYaw += radiansPerSecond * (float)delta;
+            if (_flatMap)
+            {
+                showcaseFlatDelta = FlatMapWidth * showcaseRadPerSec / Mathf.Tau * dt;
+                _targetFlatX += showcaseFlatDelta;
+            }
+            else
+            {
+                showcaseYawDelta = showcaseRadPerSec * dt;
+                _targetYaw += showcaseYawDelta;
+            }
         }
-        var weight = 1f - Mathf.Pow(0.0008f, (float)delta);
+        var weight = 1f - Mathf.Pow(0.0008f, dt);
         _yaw = Mathf.LerpAngle(_yaw, _targetYaw, weight);
         _pitch = Mathf.Lerp(_pitch, _targetPitch, weight);
         _distance = Mathf.Lerp(_distance, _targetDistance, weight);
@@ -166,31 +197,54 @@ public sealed partial class GlobePresentation
         _flatZoom = Mathf.Lerp(_flatZoom, _targetFlatZoom, weight);
         UpdateFlatZoomAnchor();
         UpdateGlobeZoomAnchor();
-        if (_flatMap) UpdateFlatGlide((float)delta);
-        else UpdateOrbitGlide((float)delta);
+        if (_flatMap) UpdateFlatGlide(dt);
+        else UpdateOrbitGlide(dt);
 
+        var keyOrEdgeMoved = ApplyKeyboardAndEdgePan(dt);
+        SnapCameraLerpTails();
+        ApplyCamera();
+        UpdateCameraMotionState(keyOrEdgeMoved, showcaseFlatDelta, showcaseYawDelta);
+    }
+
+    private bool ApplyKeyboardAndEdgePan(float delta)
+    {
+        var moved = false;
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
         var cameraKeysBlocked = typing || DealOrForceGame.CameraKeyboardBlocked;
         if (_flatMap && !cameraKeysBlocked)
         {
-            if (DealOrForceGame.Held(Key.W) || DealOrForceGame.Held(Key.S) ||
-                DealOrForceGame.Held(Key.A) || DealOrForceGame.Held(Key.D)) _flatZoomAnchorActive = false;
-            var flatSpeed = _flatZoom * 0.62f * (float)delta;
-            if (DealOrForceGame.Held(Key.W)) _targetFlatY += flatSpeed;
-            if (DealOrForceGame.Held(Key.S)) _targetFlatY -= flatSpeed;
-            if (DealOrForceGame.Held(Key.A)) _targetFlatX -= flatSpeed;
-            if (DealOrForceGame.Held(Key.D)) _targetFlatX += flatSpeed;
-            ClampFlatCamera();
+            var up = DealOrForceGame.Held(Key.W);
+            var down = DealOrForceGame.Held(Key.S);
+            var left = DealOrForceGame.Held(Key.A);
+            var right = DealOrForceGame.Held(Key.D);
+            if (up || down || left || right)
+            {
+                _flatZoomAnchorActive = false;
+                var flatSpeed = _flatZoom * 0.62f * delta;
+                if (up) _targetFlatY += flatSpeed;
+                if (down) _targetFlatY -= flatSpeed;
+                if (left) _targetFlatX -= flatSpeed;
+                if (right) _targetFlatX += flatSpeed;
+                ClampFlatCamera();
+                moved = true;
+            }
         }
         else if (!_flatMap && !cameraKeysBlocked)
         {
             // The keys move the camera, not the globe.
-            if (DealOrForceGame.Held(Key.W) || DealOrForceGame.Held(Key.S) ||
-                DealOrForceGame.Held(Key.A) || DealOrForceGame.Held(Key.D)) _globeZoomAnchorActive = false;
-            if (DealOrForceGame.Held(Key.W)) _targetPitch = Mathf.Clamp(_targetPitch - (float)delta * 0.7f, -MaxPitch, MaxPitch);
-            if (DealOrForceGame.Held(Key.S)) _targetPitch = Mathf.Clamp(_targetPitch + (float)delta * 0.7f, -MaxPitch, MaxPitch);
-            if (DealOrForceGame.Held(Key.A)) _targetYaw -= (float)delta * 0.7f;
-            if (DealOrForceGame.Held(Key.D)) _targetYaw += (float)delta * 0.7f;
+            var up = DealOrForceGame.Held(Key.W);
+            var down = DealOrForceGame.Held(Key.S);
+            var left = DealOrForceGame.Held(Key.A);
+            var right = DealOrForceGame.Held(Key.D);
+            if (up || down || left || right)
+            {
+                _globeZoomAnchorActive = false;
+                if (up) _targetPitch = Mathf.Clamp(_targetPitch - delta * 0.7f, -MaxPitch, MaxPitch);
+                if (down) _targetPitch = Mathf.Clamp(_targetPitch + delta * 0.7f, -MaxPitch, MaxPitch);
+                if (left) _targetYaw -= delta * 0.7f;
+                if (right) _targetYaw += delta * 0.7f;
+                moved = true;
+            }
         }
 
         if (!LoadingInputBlocked && !_dragging && !_boxSelecting && !cameraKeysBlocked &&
@@ -201,7 +255,7 @@ public sealed partial class GlobePresentation
             if (localMouse.X >= 0f && localMouse.Y >= 0f && localMouse.X <= vp.X && localMouse.Y <= vp.Y)
             {
                 var (edx, edy) = Simulation.Controls.ControlSchemeRules.ComputeEdgePanDelta(
-                    localMouse.X, localMouse.Y, vp.X, vp.Y, deltaSec: (float)delta);
+                    localMouse.X, localMouse.Y, vp.X, vp.Y, deltaSec: delta);
                 if (edx != 0f || edy != 0f)
                 {
                     _flatZoomAnchorActive = false;
@@ -220,11 +274,77 @@ public sealed partial class GlobePresentation
                         _targetYaw -= edx * rad / lonScale;
                         _targetPitch = Mathf.Clamp(_targetPitch - edy * rad, -MaxPitch, MaxPitch);
                     }
+                    moved = true;
                 }
             }
         }
+        return moved;
+    }
 
-        ApplyCamera();
+    private void SnapCameraLerpTails()
+    {
+        if (_flatMap)
+        {
+            if (!_flatZoomAnchorActive)
+            {
+                if (MathF.Abs(_targetFlatZoom - _flatZoom) <= 1e-6f) _flatZoom = _targetFlatZoom;
+                if (!_showcasePan && MathF.Abs(_targetFlatX - _flatX) <= 1e-6f) _flatX = _targetFlatX;
+                if (MathF.Abs(_targetFlatY - _flatY) <= 1e-6f) _flatY = _targetFlatY;
+            }
+            return;
+        }
+        if (!_globeZoomAnchorActive)
+        {
+            if (MathF.Abs(_targetDistance - _distance) <= 1e-6f) _distance = _targetDistance;
+            if (MathF.Abs(_targetPitch - _pitch) <= 1e-6f) _pitch = _targetPitch;
+            if (!_showcasePan && MathF.Abs(Mathf.AngleDifference(_yaw, _targetYaw)) <= 1e-6f) _yaw = _targetYaw;
+        }
+    }
+
+    private void UpdateCameraMotionState(bool keyOrEdgeMoved, float showcaseFlatDelta, float showcaseYawDelta)
+    {
+        var touchActiveMotion = _touchAdapter is
+        {
+            IsTouchActive: true,
+            CurrentState: Platform.TouchGestureState.Panning or Platform.TouchGestureState.Pinching or Platform.TouchGestureState.PostPinchLockout
+        };
+        var glideActive = _flatMap
+            ? _flatGlide.LengthSquared() > _flatZoom * _flatZoom * 1e-6f
+            : _orbitGlide.LengthSquared() > 1e-9f;
+        var anchorActive = _flatMap ? _flatZoomAnchorActive : _globeZoomAnchorActive;
+
+        var cameraMovedMeaningfully = false;
+        if (_motionFrameFlatMap == _flatMap)
+        {
+            if (_flatMap && float.IsFinite(_motionFrameFlatX))
+            {
+                var dX = MathF.Abs(_flatX - _motionFrameFlatX);
+                if (dX > FlatMapWidth * 0.5f) dX = MathF.Abs(dX - FlatMapWidth);
+                var dY = MathF.Abs(_flatY - _motionFrameFlatY);
+                var dZoom = MathF.Abs(_flatZoom - _motionFrameFlatZoom);
+                var nonShowcaseDx = _showcasePan ? MathF.Max(0f, dX - MathF.Abs(showcaseFlatDelta) - 1e-4f) : dX;
+                var panFloor = MathF.Max(1e-4f, _flatZoom * 0.00025f);
+                cameraMovedMeaningfully = nonShowcaseDx > panFloor || dY > panFloor || dZoom > panFloor;
+            }
+            else if (!_flatMap && float.IsFinite(_motionFrameYaw))
+            {
+                var dYaw = MathF.Abs(Mathf.AngleDifference(_motionFrameYaw, _yaw));
+                var dPitch = MathF.Abs(_pitch - _motionFramePitch);
+                var dDist = MathF.Abs(_distance - _motionFrameDistance);
+                var nonShowcaseYaw = _showcasePan ? MathF.Max(0f, dYaw - MathF.Abs(showcaseYawDelta) - 1e-4f) : dYaw;
+                cameraMovedMeaningfully = nonShowcaseYaw > 0.00025f || dPitch > 0.00025f || dDist > 0.002f;
+            }
+        }
+
+        _motionFrameFlatMap = _flatMap;
+        _motionFrameYaw = _yaw;
+        _motionFramePitch = _pitch;
+        _motionFrameDistance = _distance;
+        _motionFrameFlatX = _flatX;
+        _motionFrameFlatY = _flatY;
+        _motionFrameFlatZoom = _flatZoom;
+
+        _isActivelyPanning = _dragging || touchActiveMotion || glideActive || anchorActive || keyOrEdgeMoved || cameraMovedMeaningfully;
     }
 
     // ---- Free camera -----------------------------------------------------------------
@@ -308,6 +428,7 @@ public sealed partial class GlobePresentation
             _freeAutoOrbit = 0f;
             _camera.TopLevel = true;
             Input.MouseMode = Input.MouseModeEnum.Captured;
+            _isActivelyPanning = false;
             SnapFreeCamera();
         }
         else
@@ -332,6 +453,7 @@ public sealed partial class GlobePresentation
             _camera.Fov = RigFieldOfView;
             _freeOrbiting = false;
             _freeAutoOrbit = 0f;
+            _cameraTransformDirty = true;
             ApplyCamera();
         }
     }
@@ -566,11 +688,34 @@ public sealed partial class GlobePresentation
     private void ApplyCamera()
     {
         if (!IsInstanceValid(_orbit) || !IsInstanceValid(_camera)) return;
+        if (_flatMap) RebaseFlatCamera();
+        var dirty = _cameraTransformDirty || _lastAppliedFlatMap != _flatMap;
+        if (!dirty)
+        {
+            dirty = _flatMap
+                ? !float.IsFinite(_lastAppliedFlatX) ||
+                  MathF.Abs(_flatX - _lastAppliedFlatX) > 1e-6f ||
+                  MathF.Abs(_flatY - _lastAppliedFlatY) > 1e-6f ||
+                  MathF.Abs(_flatZoom - _lastAppliedFlatZoom) > 1e-6f
+                : !float.IsFinite(_lastAppliedYaw) ||
+                  MathF.Abs(_yaw - _lastAppliedYaw) > 1e-6f ||
+                  MathF.Abs(_pitch - _lastAppliedPitch) > 1e-6f ||
+                  MathF.Abs(_distance - _lastAppliedDistance) > 1e-6f;
+        }
+        if (!dirty) return;
+        _cameraTransformDirty = false;
+        _lastAppliedFlatMap = _flatMap;
         if (_flatMap)
         {
+            _lastAppliedFlatX = _flatX;
+            _lastAppliedFlatY = _flatY;
+            _lastAppliedFlatZoom = _flatZoom;
             ApplyFlatCamera();
             return;
         }
+        _lastAppliedYaw = _yaw;
+        _lastAppliedPitch = _pitch;
+        _lastAppliedDistance = _distance;
         _camera.Projection = Camera3D.ProjectionType.Perspective;
         _orbit.Rotation = new Vector3(_pitch, _yaw, 0f);
         _camera.Position = new Vector3(0f, 0f, _distance);

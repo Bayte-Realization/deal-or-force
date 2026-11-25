@@ -1,6 +1,8 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
+using RBush;
 
 namespace DealOrForce.Simulation;
 
@@ -86,6 +88,10 @@ public static partial class AiStatecraft
         internal readonly List<Nation> LiveNationsSorted = new();
         internal int LiveNationsDay = int.MinValue;
         internal int LiveNationsCount = -1;
+        internal RBush<NationSpatialEntry> NationSpatialTree;
+        internal int NationSpatialDay = int.MinValue;
+        internal int NationSpatialCount = -1;
+        internal readonly object SpatialGate = new();
         internal readonly List<StrategicWar> WarmakingOpenScratch = new();
         internal bool InStatecraftTick;
         internal List<(Nation Nation, float Spare)>[] ExportersByGood;
@@ -239,6 +245,9 @@ public static partial class AiStatecraft
     private static DailyTables TablesOf(Campaign campaign) =>
         campaign.AiStatecraftTables ??= new DailyTables();
 
+    internal static AllianceSystem.OfferScan AllianceScanFor(Campaign campaign) =>
+        TablesOf(campaign).AllianceScan ??= new AllianceSystem.OfferScan(campaign);
+
     /// <summary>
     /// The countries everybody has an opinion about, and who has already signed what, are
     /// part of <see cref="DailyTables"/> - questions about the whole world that are free
@@ -375,7 +384,6 @@ public static partial class AiStatecraft
         // if the frame budget yields between slices.
         tables.Day = int.MinValue;
         tables.Built = false;
-        tables.AllianceScan?.Invalidate();
         tables.Overseas.Clear();
         tables.OverseasNationCount = -1;
 
@@ -499,8 +507,121 @@ public static partial class AiStatecraft
             tables.SignedWithTreatyVersion = DiplomaticRelation.TreatyMutationVersion;
             tables.SignedWithRelationCount = campaign.Relations.Count;
         }
+        EnsureNationSpatialTree(tables, active, campaign.ElapsedDays);
         tables.Day = campaign.ElapsedDays;
         tables.Built = true;
+    }
+
+    internal sealed class NationSpatialEntry : ISpatialData
+    {
+        public readonly Nation Nation;
+        private readonly Envelope _envelope;
+
+        public NationSpatialEntry(Nation nation, float normalizedLon, float lat)
+        {
+            Nation = nation;
+            _envelope = new Envelope(normalizedLon, lat, normalizedLon, lat);
+        }
+
+        public ref readonly Envelope Envelope => ref _envelope;
+    }
+
+    private static float WrapLongitudeDegrees(float lon)
+    {
+        if (!float.IsFinite(lon)) return 0f;
+        var wrapped = lon;
+        while (wrapped > 180f) wrapped -= 360f;
+        while (wrapped < -180f) wrapped += 360f;
+        return wrapped;
+    }
+
+    internal static RBush<NationSpatialEntry> EnsureNationSpatialTree(DailyTables dailyTables,
+        IReadOnlyList<Nation> active, int elapsedDays)
+    {
+        var count = active.Count;
+        var tree = System.Threading.Volatile.Read(ref dailyTables.NationSpatialTree);
+        if (tree is not null && dailyTables.NationSpatialDay == elapsedDays && dailyTables.NationSpatialCount == count)
+            return tree;
+        lock (dailyTables.SpatialGate)
+        {
+            tree = dailyTables.NationSpatialTree;
+            if (tree is not null && dailyTables.NationSpatialDay == elapsedDays && dailyTables.NationSpatialCount == count)
+                return tree;
+            var entries = new List<NationSpatialEntry>(count);
+            for (var i = 0; i < count; i++)
+            {
+                var n = active[i];
+                if (n is null || n.Population <= 0 || !float.IsFinite(n.CapitalLatitude) || !float.IsFinite(n.CapitalLongitude))
+                    continue;
+                entries.Add(new NationSpatialEntry(n, WrapLongitudeDegrees(n.CapitalLongitude), n.CapitalLatitude));
+            }
+            var built = new RBush<NationSpatialEntry>();
+            if (entries.Count > 0) built.BulkLoad(entries);
+            dailyTables.NationSpatialCount = count;
+            dailyTables.NationSpatialDay = elapsedDays;
+            System.Threading.Volatile.Write(ref dailyTables.NationSpatialTree, built);
+            return built;
+        }
+    }
+
+    internal static void CollectOverseasCandidatesRBush(RBush<NationSpatialEntry> tree, int selfId,
+        float fromLat, float fromLon, float reach, List<int> targets, Dictionary<int, float> distByMapIndex)
+    {
+        if (tree is null || tree.Count == 0 || !float.IsFinite(fromLat) || !float.IsFinite(fromLon) || reach < 0f)
+            return;
+
+        var clampedLat = Math.Clamp(fromLat, -90f, 90f);
+        var normLon = WrapLongitudeDegrees(fromLon);
+        var minLat = (double)clampedLat - reach - 0.05;
+        var maxLat = (double)clampedLat + reach + 0.05;
+        var maxAbsMidLat = Math.Min(89.9, Math.Abs((double)clampedLat) + reach * 0.5 + 0.05);
+        var cosMin = Math.Cos(maxAbsMidLat * Math.PI / 180.0);
+        var lonSpan = cosMin > 1e-4 ? (reach / cosMin) + 0.05 : 181.0;
+
+        if (lonSpan >= 180.0)
+        {
+            ScanSpatialEnvelope(tree, new Envelope(-180.1, minLat, 180.1, maxLat),
+                selfId, fromLat, fromLon, reach, targets, distByMapIndex);
+            return;
+        }
+
+        var lo = (double)normLon - lonSpan;
+        var hi = (double)normLon + lonSpan;
+        if (lo < -180.0)
+        {
+            // Antimeridian split boxes are strictly disjoint because lonSpan < 180.
+            ScanSpatialEnvelope(tree, new Envelope(lo + 360.0, minLat, 180.1, maxLat),
+                selfId, fromLat, fromLon, reach, targets, distByMapIndex);
+            ScanSpatialEnvelope(tree, new Envelope(-180.1, minLat, hi, maxLat),
+                selfId, fromLat, fromLon, reach, targets, distByMapIndex);
+        }
+        else if (hi > 180.0)
+        {
+            ScanSpatialEnvelope(tree, new Envelope(lo, minLat, 180.1, maxLat),
+                selfId, fromLat, fromLon, reach, targets, distByMapIndex);
+            ScanSpatialEnvelope(tree, new Envelope(-180.1, minLat, hi - 360.0, maxLat),
+                selfId, fromLat, fromLon, reach, targets, distByMapIndex);
+        }
+        else
+        {
+            ScanSpatialEnvelope(tree, new Envelope(lo, minLat, hi, maxLat),
+                selfId, fromLat, fromLon, reach, targets, distByMapIndex);
+        }
+    }
+
+    private static void ScanSpatialEnvelope(RBush<NationSpatialEntry> tree, in Envelope env, int selfId,
+        float fromLat, float fromLon, float reach, List<int> targets, Dictionary<int, float> distByMapIndex)
+    {
+        var hits = tree.Search(env);
+        for (var i = 0; i < hits.Count; i++)
+        {
+            var other = hits[i].Nation;
+            if (other.Id == selfId || other.Population <= 0) continue;
+            var distance = NavalOperations.Distance(fromLat, fromLon, other.CapitalLatitude, other.CapitalLongitude);
+            if (distance > reach) continue;
+            if (distByMapIndex.TryAdd(other.MapIndex, distance))
+                targets.Add(other.MapIndex);
+        }
     }
 
     /// <summary>
@@ -823,16 +944,8 @@ public static partial class AiStatecraft
                             {
                                 var ov = cachedOv.Targets is not null ? new List<int>(cachedOv.Targets.Count) : new List<int>();
                                 var dist = slot.OverseasDistance;
-                                for (var ai = 0; ai < active.Count; ai++)
-                                {
-                                    var other = active[ai];
-                                    if (other.Id == nation.Id || other.Population <= 0) continue;
-                                    var distance = NavalOperations.Distance(naval.Lat, naval.Lon,
-                                        other.CapitalLatitude, other.CapitalLongitude);
-                                    if (distance > reach) continue;
-                                    ov.Add(other.MapIndex);
-                                    dist[other.MapIndex] = distance;
-                                }
+                                var tree = tables.NationSpatialTree ?? EnsureNationSpatialTree(tables, active, elapsed);
+                                CollectOverseasCandidatesRBush(tree, nation.Id, naval.Lat, naval.Lon, reach, ov, dist);
                                 ov.Sort((left, right) =>
                                 {
                                     var order = dist.GetValueOrDefault(left, float.MaxValue)
@@ -1080,16 +1193,8 @@ public static partial class AiStatecraft
             targets.Clear();
             var reach = campaign.Defines.AiInvasionSearchDegrees;
             var wanted = Math.Max(1, campaign.Defines.AiOverseasTargetsConsidered);
-            for (var i = 0; i < active.Count; i++)
-            {
-                var other = active[i];
-                if (other.Id == nation.Id || other.Population <= 0) continue;
-                var distance = NavalOperations.Distance(fromLatitude, fromLongitude,
-                    other.CapitalLatitude, other.CapitalLongitude);
-                if (distance > reach) continue;
-                targets.Add(other.MapIndex);
-                OverseasDistance[other.MapIndex] = distance;
-            }
+            var tree = tables.NationSpatialTree ?? EnsureNationSpatialTree(tables, active, campaign.ElapsedDays);
+            CollectOverseasCandidatesRBush(tree, nation.Id, fromLatitude, fromLongitude, reach, targets, OverseasDistance);
             targets.Sort((left, right) =>
             {
                 var order = OverseasDistance.GetValueOrDefault(left, float.MaxValue)
@@ -1274,7 +1379,7 @@ public static partial class AiStatecraft
             var tables = TablesOf(campaign);
             var missionScan = tables.MissionScan;
             missionScan.Reset(campaign, nation.Id);
-            var allianceScan = tables.AllianceScan ??= new AllianceSystem.OfferScan(campaign);
+            var allianceScan = AllianceScanFor(campaign);
             var friendBorders = neighbours as HashSet<int>;
             var limit = Math.Min(8, pairs.Count);
             for (var fi = 0; fi < limit; fi++)
@@ -1825,6 +1930,7 @@ public static partial class AiStatecraft
         // A country that can swallow this neighbour outright does not ask for one region
         // first. The aim is the whole state, and the peace writer is told so by the same
         // word the declaration carries.
+        if (Campaign.StageOverdue()) yield return 0;
         var annexation = AnnexationAmbition.Aim(campaign, nation, target);
 
         // Worth having, but not yet worth having now. A government that reaches this point
@@ -1850,9 +1956,11 @@ public static partial class AiStatecraft
             yield break;
         }
         Count("targeted");
+        if (Campaign.StageOverdue()) yield return 0;
         bool prepared;
         using (SimProfiler.Measure("    war:prepared")) prepared = PreparationComplete(campaign, nation, target);
         if (!prepared) { Count("preparing"); yield break; }
+        if (Campaign.StageOverdue()) yield return 0;
 
         // Even a country that wants a war does not start one on a particular Tuesday.
         // The die keeps the map from lurching every time a balance of power tips.
@@ -1886,6 +1994,7 @@ public static partial class AiStatecraft
         bool asked = false;
         if (annexation is null)
             using (SimProfiler.Measure("    war:ultimatum")) asked = TryUltimatumFirst(campaign, nation, target);
+        if (Campaign.StageOverdue()) yield return 0;
         if (asked)
         {
             Count("asked_before_war");
@@ -1894,6 +2003,7 @@ public static partial class AiStatecraft
 
         // A legitimate territorial demand may supply a cause if refused, but merely
         // preparing to threaten somebody still does not permit an unjustified declaration.
+        if (Campaign.StageOverdue()) yield return 0;
         if (annexation is null && defines.AiNeedsCauseForWar &&
             string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, target)))
         {
@@ -1928,6 +2038,7 @@ public static partial class AiStatecraft
             if (!CampaignDiplomacy.CanDeclareWar(campaign, nation.Id, target.Id, out _)) { Count("blocked"); yield break; }
         }
 
+        if (Campaign.StageOverdue()) yield return 0;
         var recovery = TerritorialClaims.RecoveryGoal(campaign, nation, target);
         var cause = string.IsNullOrEmpty(annexation?.Cause)
             ? (recovery is null ? null : "reconquest")
@@ -2184,6 +2295,7 @@ public static partial class AiStatecraft
             PeaceOffers.Put(campaign, war, nation, government, PeaceTerms.Capitulate);
             yield break;
         }
+        if (Campaign.StageOverdue()) yield return 0;
         // A decided war is negotiated whatever the scenario's opening lock says: the lock keeps the
         // wars on the map from ending in their first weeks, not a beaten country from surrendering.
         if (CivilWarPersistence.NegotiationLocked(campaign, war)) yield break;
@@ -2222,9 +2334,8 @@ public static partial class AiStatecraft
         }
         if (Campaign.StageOverdue()) yield return 0;
 
-        var ledger = new PeaceLedger(campaign, war, nation.Id);
-        if (Campaign.StageOverdue()) yield return 0;
-        if (ledger.Budget < WarAims.PeaceFloor(campaign, nation))
+        var budget = PeaceConference.Budget(campaign, war, nation.Id);
+        if (budget < WarAims.PeaceFloor(campaign, nation))
         {
             // A state that is ahead against its own breakaway does not offer to stop: the
             // ground is its own, and a white peace would hand back what it has retaken.
@@ -2274,6 +2385,8 @@ public static partial class AiStatecraft
         }
 
         // Winning. Write the peace a country would actually write.
+        var ledger = new PeaceLedger(campaign, war, nation.Id);
+        if (Campaign.StageOverdue()) yield return 0;
         var demand = new PeaceDemand { WarId = war.Id, ProposerId = nation.Id };
         var decisive = WriteDecisiveSettlement(campaign, nation, war, ledger, demand);
         if (Campaign.StageOverdue()) yield return 0;
@@ -2285,7 +2398,8 @@ public static partial class AiStatecraft
         {
             var treatyBudget = war.Justification is "irredentism" or "reconquest" or "hegemony" or "annexation" or "reunification" or "conquest" or "imperialism"
                 ? ledger.Budget : ledger.Budget * defines.AiPeaceBudgetShare;
-            WriteDemand(campaign, nation, war, ledger, demand, treatyBudget);
+            foreach (var _ in WriteDemandStages(campaign, nation, war, ledger, demand, treatyBudget))
+                yield return 0;
             if (Campaign.StageOverdue()) yield return 0;
             ConsiderSubjugation(campaign, nation, war, ledger, demand, treatyBudget);
             if (Campaign.StageOverdue()) yield return 0;
@@ -2320,7 +2434,12 @@ public static partial class AiStatecraft
         // that has not moved for a year and a half is not a plan, it is a war nobody is fighting:
         // the line is the answer, whatever the local balance says.
         var frozenFront = war.Stalled && campaign.ElapsedDays - war.StartedDay >= defines.AiStalemateDays;
-        if (!decisive && !frozenFront && ShouldPressWarAim(campaign, nation, war, demand)) yield break;
+        if (!decisive && !frozenFront)
+        {
+            if (Campaign.StageOverdue()) yield return 0;
+            if (ShouldPressWarAim(campaign, nation, war, demand)) yield break;
+        }
+        if (Campaign.StageOverdue()) yield return 0;
         PeaceOffers.Put(campaign, war, nation, opponent, demand);
     }
 
@@ -2379,13 +2498,16 @@ public static partial class AiStatecraft
 
         var topology = campaign.ProvinceMap;
         if (topology is null) return;
-        var claimable = 0;
-        foreach (var province in PeaceConference.Claimable(campaign, war, nation.Id))
-            if (topology.ProvinceToNation[province] == loser.MapIndex) claimable++;
+        var claimable = loser.MapIndex > 0
+            ? (int)campaign.Caches.OwnedProvinceBitmaps.ForOwner(campaign, loser.MapIndex).Cardinality
+            : 0;
+        if (claimable == 0) return;
         var takenFromSubject = 0;
+        var ptn = topology.ProvinceToNation;
+        var loserMap = (ushort)loser.MapIndex;
         foreach (var province in demand.Provinces)
-            if (topology.ProvinceToNation[province] == loser.MapIndex) takenFromSubject++;
-        if (claimable == 0 || takenFromSubject * 2 >= claimable) return;
+            if (ptn[province] == loserMap) takenFromSubject++;
+        if (takenFromSubject * 2 >= claimable) return;
 
         var left = budget - ledger.Cost(demand);
         SubjectType best = null;
@@ -2428,16 +2550,46 @@ public static partial class AiStatecraft
     /// And only then value for money - people per point of war score - which is what the
     /// old rule used alone.
     /// </summary>
+    [ThreadStatic] private static HashSet<ushort> _demandLosersScratch;
+
+    private static bool HasOccupiedClaimable(Campaign campaign, StrategicWar war, Nation nation,
+        ProvinceTopology topology, ushort[] controllers)
+    {
+        var losers = _demandLosersScratch ??= new HashSet<ushort>();
+        losers.Clear();
+        foreach (var enemyId in war.EnemiesOf(nation.Id))
+            if (campaign.NationById(enemyId) is { MapIndex: > 0 } enemy)
+                losers.Add((ushort)enemy.MapIndex);
+        if (losers.Count == 0) return false;
+        var nationMap = (ushort)nation.MapIndex;
+        var ptn = topology.ProvinceToNation;
+        var limit = Math.Min(topology.ProvinceCount, controllers.Length - 1);
+        for (var province = 1; province <= limit; province++)
+        {
+            if (controllers[province] == nationMap && losers.Contains(ptn[province]))
+            {
+                losers.Clear();
+                return true;
+            }
+        }
+        losers.Clear();
+        return false;
+    }
+
     internal static void WriteDemand(Campaign campaign, Nation nation, StrategicWar war,
+        PeaceLedger ledger, PeaceDemand demand, float budget)
+    {
+        foreach (var _ in WriteDemandStages(campaign, nation, war, ledger, demand, budget)) { }
+    }
+
+    private static IEnumerable<int> WriteDemandStages(Campaign campaign, Nation nation, StrategicWar war,
         PeaceLedger ledger, PeaceDemand demand, float budget)
     {
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
-        if (topology is null || controllers is null || budget <= 0f) return;
+        if (topology is null || controllers is null || budget <= 0f) yield break;
 
-        var anyCandidate = false;
-        foreach (var province in PeaceConference.Claimable(campaign, war, nation.Id))
-            if (controllers[province] == (ushort)nation.MapIndex) { anyCandidate = true; break; }
+        var anyCandidate = HasOccupiedClaimable(campaign, war, nation, topology, controllers);
         if (!anyCandidate)
         {
             // There is no enemy ground to take - the winner may be standing on ten provinces
@@ -2448,14 +2600,16 @@ public static partial class AiStatecraft
             // Returning here without writing them was how a country that won a defensive war
             // signed a piece of paper with nothing on it.
             WriteTerms(campaign, nation, war, ledger, demand, budget);
-            return;
+            yield break;
         }
+        if (Campaign.StageOverdue()) yield return 0;
 
         // Region by region, from the border outwards, and settled so neither side is left in
         // pieces (PeaceShape). The province-by-province greedy that stood here wrote treaties out
         // of wherever the front had stopped, then rounded them into whole regions - no cuts
         // inside a region, and a patchwork of regions dropped anywhere in the loser's country.
         PeaceShape.Write(campaign, nation, war, ledger, demand, budget);
+        if (Campaign.StageOverdue()) yield return 0;
 
         WriteTerms(campaign, nation, war, ledger, demand, budget);
     }
@@ -2534,7 +2688,7 @@ public static partial class AiStatecraft
     /// <summary>One formation's share of a country's strength. Shared by the daily table and
     /// the cold-cache fallback on purpose: the two answers must be the same number, or a
     /// client whose tables are cold reads a different army than the host whose are warm.</summary>
-    private static float ArmyStrengthTerm(Army army) =>
+    internal static float ArmyStrengthTerm(Army army) =>
         army.Divisions * army.Strength * M.Max(.15f, army.Organisation) *
         // A warehouse war is a war: the same divisions count for less when the
         // depot is empty, and the staff pricing a neighbour reads that too.

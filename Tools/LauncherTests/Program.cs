@@ -1,4 +1,8 @@
+using System;
+using System.IO;
 using System.Text.Json;
+using System.Windows.Documents;
+using System.Windows.Media;
 using DealOrForce.Modding;
 using DealOrForce.Launcher;
 
@@ -153,6 +157,74 @@ try
     File.WriteAllText(Path.Combine(notes, "docs", "CHANGELOG_9.9_EN.md"), "docs");
     Check(Changelog.Find(notes, false, "9.9") == Path.Combine(notes, "docs", "CHANGELOG_9.9_EN.md"), "The project's notes for this version come first");
     Check(Changelog.Find(Path.Combine(temporary, "nowhere"), false, "9.9") is null, "No notes anywhere: nothing is invented");
+
+    // Real 0.8.5.3 RU & EN changelogs + LauncherNotes FlowDocument rendering on STA thread.
+    static string? FindRepoRoot(string? start)
+    {
+        var dir = start;
+        while (!string.IsNullOrEmpty(dir))
+        {
+            if (File.Exists(Path.Combine(dir, "DealOrForce.csproj"))) return dir;
+            dir = Path.GetDirectoryName(dir);
+        }
+        return null;
+    }
+    var repoRoot = FindRepoRoot(Directory.GetCurrentDirectory()) ?? FindRepoRoot(AppContext.BaseDirectory);
+    Check(repoRoot is not null, "LauncherTests locates repository root for real changelog verification");
+    var version = DealOrForce.Simulation.GameBuildInfo.Version;
+    var ruChangelogPath = Changelog.Find(repoRoot!, russian: true, version);
+    var enChangelogPath = Changelog.Find(repoRoot!, russian: false, version);
+    Check(ruChangelogPath is not null && ruChangelogPath.EndsWith($"CHANGELOG_{version}_RU.md", StringComparison.OrdinalIgnoreCase),
+        $"Changelog.Find resolves real Russian changelog for {version}");
+    Check(enChangelogPath is not null && enChangelogPath.EndsWith($"CHANGELOG_{version}_EN.md", StringComparison.OrdinalIgnoreCase),
+        $"Changelog.Find resolves real English changelog for {version}");
+    var ruMarkdown = File.ReadAllText(ruChangelogPath!);
+    var enMarkdown = File.ReadAllText(enChangelogPath!);
+    Check(ruMarkdown.Contains("24 ноября 2026", StringComparison.Ordinal) &&
+          enMarkdown.Contains("24 November 2026", StringComparison.Ordinal) &&
+          ruMarkdown.Contains("RBush", StringComparison.Ordinal) &&
+          enMarkdown.Contains("RBush", StringComparison.Ordinal) &&
+          ruMarkdown.Contains("gl_compatibility", StringComparison.Ordinal) &&
+          enMarkdown.Contains("gl_compatibility", StringComparison.Ordinal),
+        "Both 0.8.5.3 changelogs carry the 24 November 2026 release date and 0.8.5.3 technical sections");
+
+    Exception? staFailure = null;
+    var staThread = new Thread(() =>
+    {
+        try
+        {
+            var ruDoc = LauncherNotes.Render(ruMarkdown, Brushes.AntiqueWhite, Brushes.WhiteSmoke, Brushes.LightGray, Brushes.SkyBlue);
+            var enDoc = LauncherNotes.Render(enMarkdown, Brushes.AntiqueWhite, Brushes.WhiteSmoke, Brushes.LightGray, Brushes.SkyBlue);
+            Check(ruDoc.Blocks.Count >= 12 && ruDoc.Blocks.OfType<List>().Any(),
+                "LauncherNotes.Render builds multi-block FlowDocument for real RU changelog");
+            Check(enDoc.Blocks.Count >= 12 && enDoc.Blocks.OfType<List>().Any(),
+                "LauncherNotes.Render builds multi-block FlowDocument for real EN changelog");
+
+            const string syntaxProbe = "# Title\n\nDate line\n\n---\n\n> Quoted summary\n\n1. First **nested `Code` bold** item\n2. Second item\n\n- Bullet item\n";
+            var probeDoc = LauncherNotes.Render(syntaxProbe, Brushes.AntiqueWhite, Brushes.WhiteSmoke, Brushes.LightGray, Brushes.SkyBlue);
+            var lists = probeDoc.Blocks.OfType<List>().ToList();
+            Check(lists.Count == 2 &&
+                  lists[0].MarkerStyle == System.Windows.TextMarkerStyle.Decimal &&
+                  lists[1].MarkerStyle == System.Windows.TextMarkerStyle.Disc,
+                "LauncherNotes.Render distinguishes ordered lists, bullet lists, dividers, and blockquotes");
+            static bool HasLiteralBacktick(Block b) => b switch
+            {
+                Paragraph p => p.Inlines.Any(i => i is Run r && r.Text.Contains('`') || i is Span s && s.Inlines.OfType<Run>().Any(r => r.Text.Contains('`'))),
+                List l => l.ListItems.Any(li => li.Blocks.Any(HasLiteralBacktick)),
+                _ => false
+            };
+            Check(!ruDoc.Blocks.Any(HasLiteralBacktick) && !enDoc.Blocks.Any(HasLiteralBacktick) && !probeDoc.Blocks.Any(HasLiteralBacktick),
+                "LauncherNotes.Render resolves inline code inside bold spans with zero raw backticks");
+        }
+        catch (Exception ex)
+        {
+            staFailure = ex;
+        }
+    });
+    staThread.SetApartmentState(ApartmentState.STA);
+    staThread.Start();
+    staThread.Join();
+    if (staFailure is not null) throw new Exception("LauncherNotes STA render check failed", staFailure);
 
     // Two enabled mods that edit the same data file.
     var mods = Path.Combine(temporary, "conflicts");

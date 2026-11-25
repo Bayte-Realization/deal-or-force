@@ -457,46 +457,44 @@ public static class NavalOperations
             fleet.BerthProvinceId = FindBerth(campaign, fleet);
     }
 
-    [ThreadStatic] private static List<int> _ownHarbours;
-
     public static bool Rehome(Campaign campaign, Fleet fleet, Nation nation)
     {
         var map = campaign.ProvinceMap;
-        if (map is null) return false;
+        if (map is null || nation is null || NationAt(campaign, nation.MapIndex)?.Id != nation.Id) return false;
+        var harbours = SeaLanes.Harbours(map);
+        var controllers = campaign.ProvinceController;
+        var owners = map.ProvinceToNation;
         var basin = SeaLanes.BasinAt(map, fleet.Latitude, fleet.Longitude);
-        var best = -1;
-        var bestDistance = float.MaxValue;
-        // Whose the port is, before which sea it is on. Both are plain questions and a
-        // port must pass both, so the order changes nothing but the price: the holder
-        // is one array read, the basin a lookup under the sea table's lock. A fleet of
-        // a country that has lost its coast asks this every morning about every harbour
-        // in the world - 0.39 ms a fleet a day on a save from 2050, a third of the whole
-        // naval pass - and nearly every harbour fails on the holder. Asked once: the
-        // country's own harbours are listed, in the coast's order, and both readings
-        // (this sea, then any sea) are of that list. It used to be the whole coast twice
-        // for exactly the fleets that had nowhere left to go.
-        var own = _ownHarbours ??= new List<int>();
-        own.Clear();
-        foreach (var province in SeaLanes.CoastalProvinces(map))
+        var nearest = -1;
+        var nearestOnSameSea = -1;
+        var nearestDistance = float.MaxValue;
+        var sameSeaDistance = float.MaxValue;
+        // Harbour geography is stable. Control must be read live, including a port
+        // taken by a landing earlier in this pass. Port order still breaks ties.
+        for (var index = 0; index < harbours.Province.Length; index++)
         {
-            var holder = HolderOf(campaign, province);
-            if (holder is not null && holder.Id == nation.Id) own.Add(province);
+            var province = harbours.Province[index];
+            var holder = controllers is not null && province < controllers.Length ? controllers[province] : owners[province];
+            if (holder != nation.MapIndex) continue;
+            var distance = Distance(fleet.Latitude, fleet.Longitude, harbours.Latitude[index], harbours.Longitude[index]);
+            if (!(distance >= nearestDistance))
+            {
+                nearestDistance = distance;
+                nearest = index;
+            }
+            if (basin >= 0 && harbours.Basin[index] == basin && !(distance >= sameSeaDistance))
+            {
+                sameSeaDistance = distance;
+                nearestOnSameSea = index;
+            }
         }
-        for (var anySea = 0; anySea < 2 && best <= 0; anySea++)
-        foreach (var province in own)
-        {
-            if (anySea == 0 && basin >= 0 && SeaLanes.HarbourBasin(map, province) != basin) continue;
-            if (!SeaLanes.TryHarbourPoint(map, province, out var latitude, out var longitude)) continue;
-            var distance = Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
-            if (distance >= bestDistance) continue;
-            bestDistance = distance;
-            best = province;
-        }
-        if (best <= 0) return false;
+        var best = nearestOnSameSea >= 0 ? nearestOnSameSea : nearest;
+        if (best < 0) return false;
 
         var wasHome = fleet.InPort && fleet.BerthProvinceId == fleet.HomeProvinceId;
-        fleet.HomeProvinceId = best;
-        SeaLanes.TryHarbourPoint(map, best, out fleet.HomeLatitude, out fleet.HomeLongitude);
+        fleet.HomeProvinceId = harbours.Province[best];
+        fleet.HomeLatitude = harbours.Latitude[best];
+        fleet.HomeLongitude = harbours.Longitude[best];
         if (wasHome || (fleet.Mission == FleetMission.Anchored && fleet.HasOrder)) SendHome(campaign, fleet);
         return true;
     }

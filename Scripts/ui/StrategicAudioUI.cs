@@ -15,9 +15,12 @@ public partial class DealOrForceGame
     private readonly Dictionary<string, ulong> _lastCueAt = new();
     private readonly Dictionary<string, float> _channelCueTrim = new();
     private int _audioObservedNation = -1;
-    private string _audioPolitics = "", _audioFormation = "";
+    private string _audioGov = "", _audioIdeology = "", _audioFormation = "";
     private readonly Dictionary<int, (int State, BuildingKind Building, int Count)> _audioConstruction = new();
     private readonly HashSet<int> _audioSupportFormations = new();
+    private readonly List<int> _audioConstructionRemovals = new();
+    private readonly HashSet<int> _audioSupportScratch = new();
+    private StrategicCueQueue.ChannelState[] _audioChannelScratch = System.Array.Empty<StrategicCueQueue.ChannelState>();
     private int _audioKnownTechCount = -1;
     private long _audioNewsSeen = -1;
     private ulong _lastNewsStingAt;
@@ -180,12 +183,15 @@ public partial class DealOrForceGame
     private void PlayNextStrategicCue()
     {
         if (_strategicAudioQueue.Count == 0) return;
-        var channels = _audioChannels.Select(pair =>
+        if (_audioChannelScratch.Length != _audioChannels.Count)
+            _audioChannelScratch = new StrategicCueQueue.ChannelState[_audioChannels.Count];
+        var idx = 0;
+        foreach (var pair in _audioChannels)
         {
             var channel = SoundCatalog.GetChannel(pair.Key);
-            return new StrategicCueQueue.ChannelState(pair.Key, channel.Priority, channel.Independent, pair.Value.Playing);
-        }).ToArray();
-        _strategicAudioQueue.TryDispatch(name => _strategicCues.ContainsKey(name) ? SoundCatalog.Get(name) : null, channels, cue =>
+            _audioChannelScratch[idx++] = new StrategicCueQueue.ChannelState(pair.Key, channel.Priority, channel.Independent, pair.Value.Playing);
+        }
+        _strategicAudioQueue.TryDispatch(name => _strategicCues.ContainsKey(name) ? SoundCatalog.Get(name) : null, _audioChannelScratch, cue =>
         {
             foreach (var (other, speaking) in _audioChannels)
             {
@@ -210,13 +216,23 @@ public partial class DealOrForceGame
         _lastCueAt.Clear();
         _knownEndedBattles.Clear();
         _audioObservedNation = -1;
+        _audioGov = "";
+        _audioIdeology = "";
+        _audioFormation = "";
         _audioConstruction.Clear();
         _audioSupportFormations.Clear();
         _audioKnownTechCount = -1;
+        _audioLastBattleCount = -1;
+        _audioLastBattleHours = -1;
+        _audioLastBattleWarRev = -1;
+        _audioLastBattlePlayerId = -1;
         // A loaded campaign's old news is not news: only what happens from here sounds.
         _audioNewsSeen = _campaign.Chronicle.Entries.Count > 0 ? _campaign.Chronicle.Entries[^1].Sequence : 0;
-        foreach (var battle in _campaign.Battles.Where(battle => battle.Ended))
-            _knownEndedBattles.Add(battle.Id);
+        for (var i = 0; i < _campaign.Battles.Count; i++)
+        {
+            var battle = _campaign.Battles[i];
+            if (battle.Ended) _knownEndedBattles.Add(battle.Id);
+        }
     }
 
     private int _audioLastBattleCount = -1;
@@ -289,50 +305,79 @@ public partial class DealOrForceGame
         PlayStrategicCue(NewsFeed.Sting(best.Kind));
     }
 
+    private ScenarioState FindStateByMapIndex(int mapIndex)
+    {
+        var states = _campaign.States;
+        for (var i = 0; i < states.Count; i++)
+            if (states[i].MapIndex == mapIndex) return states[i];
+        return null;
+    }
+
     private void RefreshDomesticAudio()
     {
         var nation = _campaign.Player;
         var initial = _audioObservedNation != nation.Id;
-        var politics = nation.Government + ":" + nation.Ideology;
+        var politicsChanged = !string.Equals(_audioGov, nation.Government, System.StringComparison.Ordinal) ||
+                              !string.Equals(_audioIdeology, nation.Ideology, System.StringComparison.Ordinal);
         if (!initial)
         {
             if (_audioFormation != nation.FormedNationId) PlayStrategicCue("nation_formed");
-            else if (_audioPolitics != politics) PlayStrategicCue("policy_changed");
+            else if (politicsChanged) PlayStrategicCue("policy_changed");
         }
         else _audioConstruction.Clear();
         _audioObservedNation = nation.Id;
-        _audioPolitics = politics;
+        _audioGov = nation.Government;
+        _audioIdeology = nation.Ideology;
         _audioFormation = nation.FormedNationId;
-        var projects = _campaign.Construction.Where(p => p.NationId == nation.Id).ToArray();
+
+        var constructions = _campaign.Construction;
         var queued = false;
         var finished = false;
-        foreach (var (id, previous) in _audioConstruction.ToArray())
+        if (_audioConstruction.Count > 0)
         {
-            if (projects.Any(p => p.Id == id)) continue;
-            var state = _campaign.States.FirstOrDefault(s => s.MapIndex == previous.State);
-            // A cancellation or lost state is not a finished building.
-            if (state?.NationMapIndex == nation.MapIndex && state.Buildings.GetValueOrDefault(previous.Building) > previous.Count)
-                finished = true;
-            _audioConstruction.Remove(id);
+            _audioConstructionRemovals.Clear();
+            foreach (var (id, previous) in _audioConstruction)
+            {
+                var stillPresent = false;
+                for (var i = 0; i < constructions.Count; i++)
+                {
+                    var p = constructions[i];
+                    if (p.Id == id && p.NationId == nation.Id) { stillPresent = true; break; }
+                }
+                if (stillPresent) continue;
+                var state = FindStateByMapIndex(previous.State);
+                // A cancellation or lost state is not a finished building.
+                if (state?.NationMapIndex == nation.MapIndex && state.Buildings.GetValueOrDefault(previous.Building) > previous.Count)
+                    finished = true;
+                _audioConstructionRemovals.Add(id);
+            }
+            for (var i = 0; i < _audioConstructionRemovals.Count; i++)
+                _audioConstruction.Remove(_audioConstructionRemovals[i]);
         }
-        foreach (var p in projects)
+        for (var i = 0; i < constructions.Count; i++)
         {
-            if (_audioConstruction.ContainsKey(p.Id)) continue;
-            var state = _campaign.States.FirstOrDefault(s => s.MapIndex == p.StateMapIndex);
+            var p = constructions[i];
+            if (p.NationId != nation.Id || _audioConstruction.ContainsKey(p.Id)) continue;
+            var state = FindStateByMapIndex(p.StateMapIndex);
             _audioConstruction[p.Id] = (p.StateMapIndex, p.Building, state?.Buildings.GetValueOrDefault(p.Building) ?? 0);
             queued = true;
         }
         if (!initial && finished) PlayStrategicCue("construction_complete");
         else if (!initial && queued) PlayStrategicCue("construction_queued");
+
         var supportReady = false;
-        var supportNow = _campaign.SupportFormations
-            .Where(formation => formation.NationId == nation.Id)
-            .Select(formation => formation.Id)
-            .ToHashSet();
-        if (!initial)
-            supportReady = supportNow.Any(id => !_audioSupportFormations.Contains(id));
+        _audioSupportScratch.Clear();
+        var formations = _campaign.SupportFormations;
+        for (var i = 0; i < formations.Count; i++)
+        {
+            var f = formations[i];
+            if (f.NationId != nation.Id) continue;
+            _audioSupportScratch.Add(f.Id);
+            if (!initial && !supportReady && !_audioSupportFormations.Contains(f.Id))
+                supportReady = true;
+        }
         _audioSupportFormations.Clear();
-        _audioSupportFormations.UnionWith(supportNow);
+        foreach (var id in _audioSupportScratch) _audioSupportFormations.Add(id);
         if (supportReady) PlayStrategicCue("support_ready");
 
         var techCount = nation.Technologies.Count;

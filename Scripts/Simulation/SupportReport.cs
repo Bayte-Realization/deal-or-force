@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
 using System.Text;
+using ZLinq;
 
 namespace DealOrForce.Simulation;
 
@@ -12,9 +13,9 @@ namespace DealOrForce.Simulation;
 /// have to ask for in four messages - which build, which machine, what the log said, what the
 /// settings were, and the save that shows the problem.
 ///
-/// Nothing here touches Godot, so the same code can be exercised from the test stand, and a
-/// failure to write a report never becomes a second bug: every step is caught and the reason is
-/// returned in <see cref="LastFailure"/>.
+/// Nothing here touches engine scene types, so the same code can be exercised from the test stand,
+/// and a failure to write a report never becomes a second bug: every step is caught and the reason
+/// is returned in <see cref="LastFailure"/>.
 /// </summary>
 public static class SupportReport
 {
@@ -44,6 +45,8 @@ public static class SupportReport
     /// <summary>The largest save copied whole; a bigger one is named but not taken.</summary>
     public const long SaveLimitBytes = 32L * 1024 * 1024;
 
+    private const int IoCopyBufferBytes = 64 * 1024;
+
     /// <summary>
     /// Writes `reports/DealOrForce-report-YYYYMMDD-HHMMSS.zip` and returns its path, or an empty
     /// string when nothing could be written.
@@ -55,26 +58,28 @@ public static class SupportReport
         if (string.IsNullOrWhiteSpace(facts.ReportsFolder)) { LastFailure = "no reports folder"; return ""; }
 
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-        var stage = Path.Combine(Path.GetTempPath(), "dof-report-" + stamp);
         var zip = Path.Combine(facts.ReportsFolder, "DealOrForce-report-" + stamp + ".zip");
         try
         {
             Directory.CreateDirectory(facts.ReportsFolder);
-            Directory.CreateDirectory(stage);
-            WriteText(Path.Combine(stage, "report.txt"), Describe(facts));
-            CopyLogs(facts.LogsFolder, Path.Combine(stage, "logs"));
-            CopySettings(facts.SettingsFile, stage);
-            CopyNewestSave(facts.SavesFolder, stage, facts.Notes);
-            ZipFile.CreateFromDirectory(stage, zip, CompressionLevel.Optimal, includeBaseDirectory: false);
+            using var archiveStream = RecyclableStreams.Get("SupportReport.Zip");
+            using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                AddTextEntry(archive, "report.txt", Describe(facts));
+                AddLogs(archive, facts.LogsFolder);
+                AddSettings(archive, facts.SettingsFile);
+                AddNewestSave(archive, facts.SavesFolder, facts.Notes);
+            }
+
+            archiveStream.Position = 0;
+            using var output = new FileStream(zip, FileMode.Create, FileAccess.Write, FileShare.None, IoCopyBufferBytes);
+            archiveStream.CopyTo(output);
+            output.Flush();
         }
         catch (Exception exception)
         {
             LastFailure = exception.Message;
             return "";
-        }
-        finally
-        {
-            try { if (Directory.Exists(stage)) Directory.Delete(stage, true); } catch { }
         }
 
         if (!File.Exists(zip)) { LastFailure = "the archive was not written"; return ""; }
@@ -120,43 +125,105 @@ public static class SupportReport
         return text.ToString();
     }
 
-    private static void WriteText(string path, string content)
+    private static void AddTextEntry(ZipArchive archive, string entryName, string content)
     {
-        File.WriteAllText(path, content, new UTF8Encoding(true));
+        var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+        using var stream = entry.Open();
+        using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        writer.Write(content);
     }
 
-    /// <summary>The last three logs: enough to show the minutes before a crash, not a history.</summary>
-    private static void CopyLogs(string logsFolder, string destination)
+    private static void TryAddFileEntry(ZipArchive archive, string sourcePath, string entryName)
     {
-        if (string.IsNullOrWhiteSpace(logsFolder) || !Directory.Exists(logsFolder)) return;
-        Directory.CreateDirectory(destination);
-        foreach (var file in new DirectoryInfo(logsFolder).GetFiles("*.*")
-                     .OrderByDescending(f => f.LastWriteTimeUtc).Take(3))
+        using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
+            IoCopyBufferBytes, FileOptions.SequentialScan);
+        var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+        using var target = entry.Open();
+        source.CopyTo(target);
+    }
+
+    /// <summary>Formats an exception using Ben.Demystifier with safe fallback for stripped builds.</summary>
+    public static string FormatExceptionDemystified(Exception exception)
+    {
+        if (exception is null) return "(null)";
+        try
         {
-            try { file.CopyTo(Path.Combine(destination, file.Name), overwrite: true); }
-            catch { /* a log being written is not worth failing the report over */ }
+            return exception.ToStringDemystified();
+        }
+        catch
+        {
+            try { return exception.ToString(); }
+            catch { return exception.GetType().FullName ?? "Exception"; }
         }
     }
 
-    private static void CopySettings(string settingsFile, string destination)
+    /// <summary>Captures the current stack trace using Ben.Demystifier with safe fallback.</summary>
+    public static string CaptureStackDemystified()
+    {
+        try
+        {
+            return EnhancedStackTrace.Current().ToString();
+        }
+        catch
+        {
+            try { return Environment.StackTrace; }
+            catch { return ""; }
+        }
+    }
+
+    /// <summary>The last three logs plus any boot/crash diagnostics so support gets the whole picture.</summary>
+    private static void AddLogs(ZipArchive archive, string logsFolder)
+    {
+        if (string.IsNullOrWhiteSpace(logsFolder) || !Directory.Exists(logsFolder)) return;
+        var attached = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in new DirectoryInfo(logsFolder).GetFiles("*.*")
+                     .AsValueEnumerable()
+                     .OrderByDescending(static f => f.LastWriteTimeUtc)
+                     .Take(3))
+        {
+            try
+            {
+                TryAddFileEntry(archive, file.FullName, "logs/" + file.Name);
+                attached.Add(file.Name);
+            }
+            catch { /* a log being written is not worth failing the report over */ }
+        }
+
+        foreach (var diagName in new[] { "last_crash.txt", "boot_trace.txt", "boot_trace.prev.txt", "android_fatal.log", "crash_envelope_latest.json" })
+        {
+            if (attached.Contains(diagName)) continue;
+            var fullPath = Path.Combine(logsFolder, diagName);
+            if (!File.Exists(fullPath)) continue;
+            try
+            {
+                TryAddFileEntry(archive, fullPath, "logs/" + diagName);
+                attached.Add(diagName);
+            }
+            catch { /* ignore locked/unreadable diagnostic file */ }
+        }
+    }
+
+    private static void AddSettings(ZipArchive archive, string settingsFile)
     {
         if (string.IsNullOrWhiteSpace(settingsFile) || !File.Exists(settingsFile)) return;
-        try { File.Copy(settingsFile, Path.Combine(destination, "settings.json"), overwrite: true); }
+        try { TryAddFileEntry(archive, settingsFile, "settings.json"); }
         catch { }
     }
 
-    private static void CopyNewestSave(string savesFolder, string destination, List<string> notes)
+    private static void AddNewestSave(ZipArchive archive, string savesFolder, List<string> notes)
     {
         if (string.IsNullOrWhiteSpace(savesFolder) || !Directory.Exists(savesFolder)) return;
         var files = new DirectoryInfo(savesFolder).GetFiles("*.*");
-        var newest = files.OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
+        var newest = files.AsValueEnumerable()
+            .OrderByDescending(static f => f.LastWriteTimeUtc)
+            .FirstOrDefault();
         if (newest is null) return;
         if (newest.Length > SaveLimitBytes)
         {
             notes?.Add($"save {newest.Name} ({newest.Length / (1024 * 1024)} MB) is too large to attach");
             return;
         }
-        try { newest.CopyTo(Path.Combine(destination, newest.Name), overwrite: true); }
+        try { TryAddFileEntry(archive, newest.FullName, newest.Name); }
         catch { }
     }
 }

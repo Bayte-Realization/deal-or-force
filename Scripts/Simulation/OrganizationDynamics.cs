@@ -105,32 +105,156 @@ public static class OrganizationDynamics
         }
     }
 
+    [ThreadStatic] private static HashSet<int> _orgMembersSetScratch;
+    [ThreadStatic] private static HashSet<long> _orgWarPairsScratch;
+    [ThreadStatic] private static Dictionary<int, float> _memberArmyWeightsScratch;
+    [ThreadStatic] private static Dictionary<string, float> _foreignTrustScratch;
+
+    private static long PackPair(int a, int b) =>
+        a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
+
+    private static void FindLeaderAndChallenger(Campaign c, InternationalOrganization o,
+        out Nation leader, out Nation challenger)
+    {
+        leader = null;
+        challenger = null;
+        if (c is null || o is null || o.Dissolved || o.Members.Count == 0) return;
+        var weights = _memberArmyWeightsScratch ??= new Dictionary<int, float>(o.Members.Count);
+        weights.Clear();
+        var members = o.Members;
+        for (var i = 0; i < members.Count; i++) weights[members[i]] = 0f;
+        var armies = c.Armies;
+        for (var i = 0; i < armies.Count; i++)
+        {
+            var a = armies[i];
+            if (weights.TryGetValue(a.NationId, out var sum))
+                weights[a.NationId] = sum + a.Divisions * a.Strength * Math.Max(0.15f, a.Organisation);
+        }
+        var leadScore = float.NegativeInfinity;
+        var secondScore = float.NegativeInfinity;
+        Nation second = null;
+        var economicWeight = c.Defines.AiEconomicWeight;
+        for (var i = 0; i < members.Count; i++)
+        {
+            var n = c.NationById(members[i]);
+            if (n is null || n.Population <= 0) continue;
+            var army = weights.GetValueOrDefault(n.Id);
+            var infl = Math.Max(0f, n.Gdp) * economicWeight + army;
+            if (n.IsSubject) infl *= 0.5f;
+            var unpaid = o.UnpaidWeeks.GetValueOrDefault(n.Id);
+            if (unpaid > 0) infl *= MathF.Max(0.25f, 1f - unpaid * 0.08f);
+            if (leader is null || infl > leadScore || (infl == leadScore && n.Id < leader.Id))
+            {
+                second = leader;
+                secondScore = leadScore;
+                leader = n;
+                leadScore = infl;
+            }
+            else if (second is null || infl > secondScore || (infl == secondScore && n.Id < second.Id))
+            {
+                second = n;
+                secondScore = infl;
+            }
+        }
+        weights.Clear();
+        if (leader is not null && leadScore > 0.001f && second is not null && secondScore >= leadScore * 0.55f)
+            challenger = second;
+    }
+
+    private static HashSet<long> CollectOrgWarFacts(Campaign c, InternationalOrganization org, HashSet<int> memberSet,
+        int mainLeaderId, out bool attackedByOutsider, out bool mainLeaderCivilWar)
+    {
+        attackedByOutsider = false;
+        mainLeaderCivilWar = false;
+        var pairs = _orgWarPairsScratch ??= new HashSet<long>();
+        pairs.Clear();
+        var liveWars = Warfare.LiveWars(c);
+        var checkDefenceOutsider = InternationalOrganizations.Charter(org.CharterId)?.Defence == true;
+        for (var wi = 0; wi < liveWars.Count; wi++)
+        {
+            var w = liveWars[wi];
+            if (w.Ended) continue;
+            if (w.CivilConflict)
+            {
+                if (!mainLeaderCivilWar && mainLeaderId >= 0 &&
+                    (w.AttackerId == mainLeaderId || w.DefenderId == mainLeaderId))
+                    mainLeaderCivilWar = true;
+            }
+            var hasOrgDef = false;
+            var hasOrgAtt = false;
+            foreach (var dId in w.Side(false))
+            {
+                if (!memberSet.Contains(dId)) continue;
+                if (!w.CivilConflict && !hasOrgDef && c.NationById(dId) is not null) hasOrgDef = true;
+                foreach (var aId in w.Side(true))
+                {
+                    if (!memberSet.Contains(aId)) continue;
+                    hasOrgAtt = true;
+                    pairs.Add(PackPair(dId, aId));
+                }
+            }
+            if (checkDefenceOutsider && !attackedByOutsider && !w.CivilConflict && hasOrgDef && !hasOrgAtt)
+            {
+                // Double check attackers also have no org member even if none of def were on Attacker side above.
+                var anyOrgAtt = false;
+                foreach (var aId in w.Side(true))
+                    if (memberSet.Contains(aId)) { anyOrgAtt = true; break; }
+                if (!anyOrgAtt) attackedByOutsider = true;
+            }
+        }
+        return pairs;
+    }
+
     /// <summary>What the members are to one another, 0 to 1: the cohesion an organisation drifts towards.</summary>
     public static float Target(Campaign c, InternationalOrganization org)
     {
+        FindLeaderAndChallenger(c, org, out var mainLeader, out var challenger);
+        return TargetCore(c, org, mainLeader, challenger, null);
+    }
+
+    private static float TargetCore(Campaign c, InternationalOrganization org, Nation mainLeader, Nation challenger,
+        HashSet<long> precomputedWarPairs, bool precomputedKnown = false,
+        bool precomputedAttackedByOutsider = false, bool precomputedLeaderCivilWar = false)
+    {
         var members = _membersScratch ??= new List<Nation>();
         members.Clear();
+        var memberSet = _orgMembersSetScratch ??= new HashSet<int>();
+        memberSet.Clear();
         for (var i = 0; i < org.Members.Count; i++)
         {
-            var n = c.NationById(org.Members[i]);
+            var id = org.Members[i];
+            memberSet.Add(id);
+            var n = c.NationById(id);
             if (n is not null) members.Add(n);
         }
-        if (members.Count < 2) return 0.3f;
+        if (members.Count < 2)
+        {
+            memberSet.Clear();
+            return 0.3f;
+        }
+        var warPairs = precomputedKnown
+            ? precomputedWarPairs
+            : CollectOrgWarFacts(c, org, memberSet, mainLeader?.Id ?? -1, out precomputedAttackedByOutsider, out precomputedLeaderCivilWar);
         var pairs = 0;
         var opinion = 0f;
         var distance = 0f;
         var rivals = 0;
         var fighting = 0;
+        var checkWar = warPairs is { Count: > 0 };
         for (var i = 0; i < members.Count; i++)
+        {
+            var mi = members[i];
             for (var j = i + 1; j < members.Count; j++)
             {
+                var mj = members[j];
                 pairs++;
-                var relation = CampaignDiplomacy.Peek(c, members[i].Id, members[j].Id);
+                var relation = CampaignDiplomacy.Peek(c, mi.Id, mj.Id);
                 opinion += relation?.Opinion ?? 0f;
-                distance += PoliticsCore.IdeologicalDistance(members[i], members[j]);
+                distance += PoliticsCore.IdeologicalDistance(mi, mj);
                 if (relation?.Stance == DiplomaticStance.Rival) rivals++;
-                if (CampaignDiplomacy.AtWar(c, members[i].Id, members[j].Id)) fighting++;
+                if (checkWar && warPairs.Contains(PackPair(mi.Id, mj.Id))) fighting++;
             }
+        }
         var target = 0.55f + opinion / pairs * 0.004f - distance / pairs * 0.25f - rivals / (float)pairs * 0.6f;
         // Members shooting at each other: as bad as the share of the organisation it involves.
         if (fighting > 0) target -= MathF.Min(0.35f, 0.12f + fighting * 4f / members.Count * 0.1f);
@@ -141,28 +265,9 @@ public static class OrganizationDynamics
         for (var i = 0; i < members.Count; i++) tradeSum += TradeWithMembers(members[i], members);
         target += (float)(tradeSum / members.Count) * 0.2f;
         // A danger in common: a member at war with an outsider, for a pact that exists to answer it.
-        var liveWars = Warfare.LiveWars(c);
-        if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true && liveWars.Count > 0)
-        {
-            var attackedByOutsider = false;
-            for (var mi = 0; mi < members.Count && !attackedByOutsider; mi++)
-            {
-                var mId = members[mi].Id;
-                for (var wi = 0; wi < liveWars.Count; wi++)
-                {
-                    var w = liveWars[wi];
-                    if (w.Ended || w.CivilConflict || !w.IsDefending(mId)) continue;
-                    var allOutside = true;
-                    foreach (var e in w.EnemiesOf(mId))
-                        if (org.Members.Contains(e)) { allOutside = false; break; }
-                    if (allOutside) { attackedByOutsider = true; break; }
-                }
-            }
-            if (attackedByOutsider) target += 0.12f;
-        }
+        if (precomputedAttackedByOutsider) target += 0.12f;
         // Hegemonic rivalry inside the same council erodes unity when the top two members are rivals or far apart.
-        var mainLeader = InternationalOrganizations.Leader(c, org);
-        if (mainLeader is not null && InternationalOrganizations.Challenger(c, org) is { } challenger)
+        if (mainLeader is not null && challenger is not null)
         {
             var rel = CampaignDiplomacy.Peek(c, mainLeader.Id, challenger.Id);
             if (rel?.Stance == DiplomaticStance.Rival) target -= 0.08f;
@@ -182,22 +287,23 @@ public static class OrganizationDynamics
                 if (mainLeader.NationalCourse.Dominant is "isolationism" or "armed_neutrality") target -= 0.14f * weight;
                 if (mainLeader.DebtCondition >= DebtCondition.Insolvent) target -= 0.12f * weight;
                 if (mainLeader.Stability < 0.35f) target -= 0.10f * weight;
-                for (var wi = 0; wi < liveWars.Count; wi++)
-                {
-                    var w = liveWars[wi];
-                    if (!w.Ended && w.CivilConflict && (w.AttackerId == mainLeader.Id || w.DefenderId == mainLeader.Id))
-                    { target -= 0.18f * weight; break; }
-                }
+                if (precomputedLeaderCivilWar) target -= 0.18f * weight;
             }
+        }
+        if (!precomputedKnown)
+        {
+            memberSet.Clear();
+            warPairs?.Clear();
         }
         return M.Clamp(target, 0.05f, 0.95f);
     }
 
     /// <summary>How much a member still belongs, 0 to 1.</summary>
     public static float Belonging(Campaign c, InternationalOrganization org, Nation member)
-        => Belonging(c,org,member,InternationalOrganizations.Leader(c,org));
+        => Belonging(c, org, member, InternationalOrganizations.Leader(c, org), warPairs: null, hasWarPairs: false);
 
-    private static float Belonging(Campaign c, InternationalOrganization org, Nation member, Nation leader)
+    private static float Belonging(Campaign c, InternationalOrganization org, Nation member, Nation leader,
+        HashSet<long> warPairs = null, bool hasWarPairs = false)
     {
         var others = _othersScratch ??= new List<Nation>();
         others.Clear();
@@ -209,16 +315,37 @@ public static class OrganizationDynamics
             if (n is not null) others.Add(n);
         }
         if (others.Count == 0) return 1f;
+        Dictionary<string, float> trustByTarget = null;
+        if (c.FeatureEnabled("laws") && member.Laws.Count > 0)
+        {
+            trustByTarget = _foreignTrustScratch ??= new Dictionary<string, float>(StringComparer.Ordinal);
+            trustByTarget.Clear();
+            foreach (var law in member.Laws.Values)
+            {
+                if (string.IsNullOrEmpty(law.TargetTag)) continue;
+                if (PoliticalPolicyCatalog.Find(law.Id) is { Scope: "foreign" } def)
+                    trustByTarget[law.TargetTag] = trustByTarget.GetValueOrDefault(law.TargetTag) + def.ForeignTrust;
+            }
+            if (trustByTarget.Count == 0) trustByTarget = null;
+        }
         double opinionSum = 0d, distanceSum = 0d, trustSum = 0d;
         var atWarWithOther = false;
+        var checkWar = hasWarPairs ? warPairs is { Count: > 0 } : true;
         for (var i = 0; i < others.Count; i++)
         {
             var o = others[i];
             opinionSum += CampaignDiplomacy.Peek(c, member.Id, o.Id)?.Opinion ?? 0f;
             distanceSum += PoliticsCore.IdeologicalDistance(member, o);
-            trustSum += PoliticalPolicies.ForeignTrust(c, member, o);
-            if (!atWarWithOther && CampaignDiplomacy.AtWar(c, member.Id, o.Id)) atWarWithOther = true;
+            if (trustByTarget is not null && trustByTarget.TryGetValue(o.Tag, out var rawTrust))
+                trustSum += Math.Clamp(rawTrust, -.3f, .3f);
+            if (!atWarWithOther && checkWar)
+            {
+                atWarWithOther = hasWarPairs
+                    ? warPairs!.Contains(PackPair(member.Id, o.Id))
+                    : CampaignDiplomacy.AtWar(c, member.Id, o.Id);
+            }
         }
+        trustByTarget?.Clear();
         var opinion = (float)(opinionSum / others.Count);
         var distance = (float)(distanceSum / others.Count);
         var trust = (float)(trustSum / others.Count);
@@ -299,6 +426,8 @@ public static class OrganizationDynamics
     /// <summary>The share of a member's trade that is with the others, 0 to 1.</summary>
     private static float TradeWithMembers(Nation member, List<Nation> others)
     {
+        var total = member.ImportValue + member.ExportValue;
+        if (total <= 0.0001f || member.TradePartners.Count == 0) return 0f;
         var share = 0f;
         for (var i = 0; i < others.Count; i++)
         {
@@ -333,9 +462,18 @@ public static class OrganizationDynamics
     private static void Review(Campaign c, InternationalOrganization org)
     {
         var defines = c.Defines;
-        var leader = InternationalOrganizations.Leader(c,org);
+        FindLeaderAndChallenger(c, org, out var leader, out var challenger);
+        var memberSet = _orgMembersSetScratch ??= new HashSet<int>();
+        memberSet.Clear();
+        for (var i = 0; i < org.Members.Count; i++) memberSet.Add(org.Members[i]);
+        var warPairs = CollectOrgWarFacts(c, org, memberSet, leader?.Id ?? -1,
+            out var attackedByOutsider, out var leaderCivilWar);
+
         var wasCohesion = org.Cohesion;
-        org.Cohesion = M.Clamp01(org.Cohesion + (Target(c, org) - org.Cohesion) * M.Clamp01(defines.OrganizationCohesionPull));
+        org.Cohesion = M.Clamp01(org.Cohesion +
+            (TargetCore(c, org, leader, challenger, warPairs, precomputedKnown: true,
+                precomputedAttackedByOutsider: attackedByOutsider, precomputedLeaderCivilWar: leaderCivilWar) - org.Cohesion) *
+            M.Clamp01(defines.OrganizationCohesionPull));
         // An organisation sliding into open crisis is news: members at war with each other, at
         // odds over their politics, or fallen out with their leader. Read from the crossing alone,
         // so nothing has to be remembered to say it once.
@@ -346,8 +484,19 @@ public static class OrganizationDynamics
         if (OrganizationDiscipline.Enabled(c))
         {
             // Suspension, readmission and expulsion of single members (OrganizationDiscipline).
-            if (OrganizationDiscipline.Week(c, org)) return;
-            leader = InternationalOrganizations.Leader(c, org);
+            var countBefore = org.Members.Count;
+            if (OrganizationDiscipline.Week(c, org))
+            {
+                memberSet.Clear();
+                warPairs.Clear();
+                return;
+            }
+            if (org.Members.Count != countBefore)
+            {
+                FindLeaderAndChallenger(c, org, out leader, out _);
+                memberSet.Clear();
+                for (var i = 0; i < org.Members.Count; i++) memberSet.Add(org.Members[i]);
+            }
         }
         else
         {
@@ -357,13 +506,19 @@ public static class OrganizationDynamics
             {
                 var war = liveWars[wi];
                 if (war.Ended || war.CivilConflict) continue;
-                if (!org.Members.Contains(war.AttackerId)) continue;
+                if (!memberSet.Contains(war.AttackerId)) continue;
                 var hitMember = false;
                 foreach (var e in war.Side(false))
-                    if (org.Members.Contains(e)) { hitMember = true; break; }
+                    if (memberSet.Contains(e)) { hitMember = true; break; }
                 if (!hitMember) continue;
                 ExpelForAggression(c, org, c.NationById(war.AttackerId), war.DefenderId);
-                if (org.Dissolved) return;
+                if (org.Dissolved)
+                {
+                    memberSet.Clear();
+                    warPairs.Clear();
+                    return;
+                }
+                memberSet.Remove(war.AttackerId);
             }
         }
 
@@ -377,6 +532,8 @@ public static class OrganizationDynamics
         if (lonely || (org.Cohesion < defines.OrganizationDissolveCohesion && noHuman &&
                        MovementRules.Roll(c.Seed, 7000 + org.Id, c.ElapsedDays, 4603) < defines.OrganizationDissolveChance * Durability(c, org)))
         {
+            memberSet.Clear();
+            warPairs.Clear();
             Dissolve(c, org);
             return;
         }
@@ -384,10 +541,20 @@ public static class OrganizationDynamics
         // Where each member stood the first time it was weighed, from the first week on.
         for (var mi = 0; mi < org.Members.Count; mi++)
             if (c.NationById(org.Members[mi]) is { } weighed && !weighed.OrganizationBelongingAtStart.ContainsKey(org.Id))
-                weighed.OrganizationBelongingAtStart[org.Id] = Belonging(c, org, weighed, leader);
-        if (c.ElapsedDays - org.FoundedDay < defines.OrganizationGraceDays) return;
+                weighed.OrganizationBelongingAtStart[org.Id] = Belonging(c, org, weighed, leader, warPairs, hasWarPairs: true);
+        if (c.ElapsedDays - org.FoundedDay < defines.OrganizationGraceDays)
+        {
+            memberSet.Clear();
+            warPairs.Clear();
+            return;
+        }
         // A member bargaining for better terms: bought back, still bargaining, or gone by its vote.
-        if (OrganizationCrises.Week(c, org, m => Belonging(c, org, m, leader), m => Leave(c, org, m))) return;
+        if (OrganizationCrises.Week(c, org, m => Belonging(c, org, m, leader, warPairs, hasWarPairs: true), m => Leave(c, org, m)))
+        {
+            memberSet.Clear();
+            warPairs.Clear();
+            return;
+        }
         var memCopy = _reviewMembersCopyScratch ??= new List<int>();
         memCopy.Clear();
         for (var mi = 0; mi < org.Members.Count; mi++) memCopy.Add(org.Members[mi]);
@@ -395,8 +562,8 @@ public static class OrganizationDynamics
         {
             var id = memCopy[mi];
             var member = c.NationById(id);
-            if (member is null || member.IsHuman || !org.Members.Contains(id)) continue;
-            var belonging = Belonging(c, org, member, leader);
+            if (member is null || member.IsHuman || !memberSet.Contains(id)) continue;
+            var belonging = Belonging(c, org, member, leader, warPairs, hasWarPairs: true);
             var floor = defines.OrganizationDepartureBelonging;
             // A member that was already half out on the first day - most of the African Union's
             // quarrels are older than 2024 - is not estranged by them: what counts is how far it
@@ -414,8 +581,17 @@ public static class OrganizationDynamics
             // It bargains first, when crises are on; it walks out when one is already under way.
             if (OrganizationCrises.Open(c, org, member)) continue;
             Leave(c, org, member);
-            if (org.Dissolved) return;
+            if (org.Dissolved)
+            {
+                memberSet.Clear();
+                warPairs.Clear();
+                return;
+            }
+            memberSet.Clear();
+            for (var rmi = 0; rmi < org.Members.Count; rmi++) memberSet.Add(org.Members[rmi]);
         }
+        memberSet.Clear();
+        warPairs.Clear();
     }
 
     /// <summary>
@@ -478,6 +654,7 @@ public static class OrganizationDynamics
         var bestOpinion = float.NegativeInfinity;
         var minBelonging = c.Defines.OrganizationDepartureBelonging;
         var schismOpinion = c.Defines.OrganizationSchismOpinion;
+        var orgLeader = InternationalOrganizations.Leader(c, org);
         for (var i = 0; i < org.Members.Count; i++)
         {
             var id = org.Members[i];
@@ -486,7 +663,7 @@ public static class OrganizationDynamics
             if (n is not { IsHuman: false, IsSubject: false }) continue;
             var op = CampaignDiplomacy.Peek(c, member.Id, n.Id)?.Opinion ?? 0f;
             if (op < schismOpinion) continue;
-            if (Belonging(c, org, n) >= minBelonging) continue;
+            if (Belonging(c, org, n, orgLeader) >= minBelonging) continue;
             if (companion is null || op > bestOpinion || (op == bestOpinion && n.Id < companion.Id))
             {
                 companion = n;

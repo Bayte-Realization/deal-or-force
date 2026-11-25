@@ -545,12 +545,39 @@ public sealed partial class Campaign
     public readonly List<Fleet> Fleets = new();
     public readonly List<StrategicWar> Wars = new();
 
-    /// <summary>Bumped whenever a war is added, ended or reshaped. The live war list
-    /// (<see cref="Warfare.LiveWars"/>) rebuilds from this stamp, not on a quiet day.</summary>
+    /// <summary>Bumped whenever a war is added, ended or reshaped. <see cref="Campaign.ActiveWars"/>
+    /// and <see cref="Warfare.LiveWars"/> rebuild from this stamp, not on a quiet day.</summary>
     public int WarRevision { get; private set; }
 
     /// <summary>Call at every war-list or war-state change a war-cache reader must see.</summary>
     public void MarkWarsChanged() => WarRevision++;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal object _liveWarBoard;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal int _repatriatedWarPrefix;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal int _repatriatedWarCount = -1;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal StrategicWar _repatriatedWarHead;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal StrategicWar _repatriatedWarTail;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal int _trimmedWarPrefix;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal int _trimmedWarCount = -1;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal StrategicWar _trimmedWarHead;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal StrategicWar _trimmedWarTail;
 
     /// <summary>Lines the player has brushed onto the map, and who is on them.</summary>
     public readonly List<DrawnFrontLine> FrontLines = new();
@@ -725,6 +752,7 @@ public sealed partial class Campaign
 
     public bool TryEnterRead(int timeoutMs = 0, bool requestWindowOnMiss = true) =>
         AccessGate.TryEnterRead(timeoutMs, requestWindowOnMiss);
+
 
     public void ExitRead() => AccessGate.ExitRead();
 

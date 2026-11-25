@@ -115,7 +115,7 @@ public sealed partial class GlobePresentation
         {
             var paint = pass == 0 ? new Color(.06f, .055f, .05f, .82f) : pass == 1 ? color : spineColor;
             var w = width * (pass == 0 ? 1.48f : pass == 1 ? 1.0f : 0.34f);
-            _frontMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip);
+            var prevPair = -1;
             for (var i = 0; i < _ribbonSamples.Count; i++)
             {
                 var point = _ribbonSamples[i];
@@ -128,12 +128,22 @@ public sealed partial class GlobePresentation
                     ? w * (pass == 2 ? 1.8f : 3.2f) * remaining / headSpan
                     : w;
                 var side = normal.Cross(direction).Normalized() * half;
-                _frontMesh.SurfaceSetColor(paint);
-                _frontMesh.SurfaceAddVertex(OnOrderSurface(point + side));
-                _frontMesh.SurfaceSetColor(paint);
-                _frontMesh.SurfaceAddVertex(OnOrderSurface(point - side));
+                var pairBase = _frontVerts.Count;
+                _frontVerts.Add(OnOrderSurface(point + side));
+                _frontColors.Add(paint);
+                _frontVerts.Add(OnOrderSurface(point - side));
+                _frontColors.Add(paint);
+                if (prevPair >= 0)
+                {
+                    _frontIndices.Add(prevPair);
+                    _frontIndices.Add(prevPair + 1);
+                    _frontIndices.Add(pairBase);
+                    _frontIndices.Add(prevPair + 1);
+                    _frontIndices.Add(pairBase + 1);
+                    _frontIndices.Add(pairBase);
+                }
+                prevPair = pairBase;
             }
-            _frontMesh.SurfaceEnd();
         }
     }
 }

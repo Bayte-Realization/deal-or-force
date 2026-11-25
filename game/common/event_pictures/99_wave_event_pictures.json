@@ -1,0 +1,38 @@
+{
+  "events": {
+    "gp_sovereign_wealth_rebalance": "finance",
+    "gp_chokepoint_insurance_spike": "sea_lanes",
+    "gp_tech_sanctions_backfire": "industry",
+    "gp_energy_corridor_windfall": "energy",
+    "gp_regional_arms_race": "battlefield",
+    "gp_peace_broker_summit": "diplomacy",
+    "gp_megaproject_breakthrough": "industry",
+    "gp_megaproject_contractor_strike": "protest",
+    "gp_rare_earth_cartel_squeeze": "industry",
+    "gp_sovereign_ai_labor_shift": "digital",
+
+    "mr_twn_national_glory_council": "politics",
+    "mr_twn_strait_window_briefing": "naval",
+    "mr_chn_coastal_ferment": "protest",
+
+    "w5_regional_fiscal_revolt": "protest",
+    "w5_industrial_reform_standoff": "industry",
+    "w5_security_establishment_memorandum": "home_front",
+    "w5_arms_control_verification_dispute": "diplomacy",
+    "w5_doctrine_white_paper_leak": "espionage",
+    "w5_megaproject_consortium_overrun": "industry",
+    "w5_chokepoint_transit_summit": "sea_lanes",
+    "w5_postwar_reconstruction_tenders": "city",
+    "w5_emergency_grain_and_energy_corridor": "energy",
+
+    "w5h_confederal_charter_congress": "politics",
+    "w5h_regional_language_charter": "protest",
+    "w5h_cross_border_customs_union": "diplomacy",
+    "w5h_provincial_devolution_referendum": "election",
+    "w5h_shared_currency_corridor": "finance",
+    "w5h_pan_regional_rail_gauge": "industry",
+    "w5h_diaspora_investment_summit": "city",
+    "w5h_heraldic_identity_convention": "empire",
+    "w5h_maritime_archipelago_compact": "sea_lanes"
+  }
+}

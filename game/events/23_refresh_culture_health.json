@@ -7,14 +7,14 @@
     "options": [
       { "title": "Bid for the games",
         "consequence": "A decade of construction and a fortnight of television.",
-        "effects": { "treasury_percent": -0.07, "construction_capacity": 0.10, "stability": 0.014, "state.standard_of_living": 0.001 },
+        "effects": { "gdp_share": -0.006, "construction_capacity": 0.10, "stability": 0.014, "state.standard_of_living": 0.001, "prestige": 14 },
         "modifiers": [ { "id": "cultural_moment", "days": 270 } ] },
       { "title": "Decline politely",
         "consequence": "The money stays in the budget, which nobody photographs.",
         "effects": { "treasury_percent": 0.008, "stability": -0.002 } },
       { "title": "Bid for a smaller championship instead",
         "consequence": "Half the glory, a fifth of the bill.",
-        "effects": { "treasury_percent": -0.02, "stability": 0.006, "market_access": 0.01 } }
+        "effects": { "income_share": -0.02, "stability": 0.006, "market_access": 0.01, "prestige": 6 } }
     ]
   },
   "museum_disputed_artefact": {
@@ -24,7 +24,7 @@
     "options": [
       { "title": "Return it with a ceremony",
         "consequence": "Goodwill abroad, and a column of complaint at home.",
-        "effects": { "stability": -0.006, "war_support": -0.008, "market_access": 0.02, "political_points": 4 } },
+        "effects": { "stability": -0.006, "war_support": -0.008, "market_access": 0.02, "political_points": 4, "prestige": 3 } },
       { "title": "Refuse, and say why",
         "consequence": "A patriotic answer that closes a door.",
         "effects": { "war_support": 0.012, "stability": 0.004, "market_access": -0.015 } },
@@ -43,7 +43,7 @@
         "effects": { "gdp_percent": -0.006, "state.standard_of_living": -0.002, "stability": -0.004, "market_access": -0.02 } },
       { "title": "Emergency hospitals, no closure",
         "consequence": "Expensive, and the port keeps working.",
-        "effects": { "treasury_percent": -0.045, "stability": 0.008, "state.standard_of_living": 0.001 } },
+        "effects": { "income_share": -0.045, "stability": 0.008, "state.standard_of_living": 0.001 } },
       { "title": "Say the risk is low",
         "consequence": "It probably is. Probably.",
         "effects": { "state.radicalism": 0.012, "state.standard_of_living": -0.003, "market_access": 0.005 } }
@@ -60,7 +60,7 @@
         "effects": { "inflation": -0.01, "productivity": -0.002, "credit_confidence": 0.06 } },
       { "title": "Spend the reserves",
         "consequence": "A defence that works until it doesn't.",
-        "effects": { "treasury_percent": -0.05, "credit_confidence": 0.03, "inflation": 0.004 } },
+        "effects": { "gdp_share": -0.005, "credit_confidence": 0.03, "inflation": 0.004 } },
       { "title": "Close the capital account",
         "consequence": "The raid ends and so does the investment.",
         "effects": { "credit_confidence": -0.06, "stability": 0.01, "market_access": -0.03 } }

@@ -36,7 +36,7 @@ public sealed partial class GlobePresentation
 
     private Node3D _supportMarkerRoot = null!;
     private MeshInstance3D _supportRangeNode = null!;
-    private ImmediateMesh _supportRangeMesh = null!;
+    private ArrayMesh _supportRangeMesh = null!;
     private const int SupportPlateCap = 256;
     private readonly Dictionary<string, (Texture2D Texture, LinkedListNode<string> Node)> _supportPlates = new();
     private readonly LinkedList<string> _supportPlatesLru = new();
@@ -52,10 +52,17 @@ public sealed partial class GlobePresentation
     private double _supportPresentationDelay;
     private float _supportRangeFlatX = float.NaN;
     private float _supportRangeFlatZoom = float.NaN;
+    private float _supportRangeViewDistance = float.NaN;
+    private Vector3 _supportRangeCamNormal;
     private bool _supportRangeProjection;
-    private Transform3D _supportRangeView;
     private Vector2 _supportRangeViewport;
     private ulong _nextSupportRangeRefreshMs;
+    private readonly List<(SupportFormation Formation, SupportTypeDefinition Type, bool Selected)> _supportRingsScratch = new();
+    private readonly List<(SupportFormation Formation, bool Selected)> _supportPathsScratch = new();
+    private readonly HashSet<(int Base, string Type, string Mission, bool Selected)> _supportDedupScratch = new();
+    private readonly List<Vector3> _supportRangeVerts = new();
+    private readonly List<Color> _supportRangeColors = new();
+    private readonly Godot.Collections.Array _supportRangeArrays = new();
 
     public int SelectedSupportId => _selectedSupportId;
     public IReadOnlyCollection<int> SelectedSupportIds => _selectedSupportIds;
@@ -114,7 +121,8 @@ public sealed partial class GlobePresentation
     {
         _supportMarkerRoot = new Node3D { Name = "LongRangeBases" };
         world.AddChild(_supportMarkerRoot);
-        _supportRangeMesh = new ImmediateMesh();
+        _supportRangeMesh = new ArrayMesh();
+        _supportRangeArrays.Resize((int)Mesh.ArrayType.Max);
         _supportRangeNode = new MeshInstance3D
         {
             Name = "SelectedLongRangeReach",
@@ -183,12 +191,18 @@ public sealed partial class GlobePresentation
         foreach (var marker in _supportMapMarkers.Values)
             if (!_flatMap) marker.Node.Visible = marker.Node.Position.Normalized().Dot(viewNormal) > horizon;
         if (_flatMap) UpdateMarkerVisibility(_supportMarkerRoot, _supportVisibility, true);
-        // Screen-width ribbons must follow perspective zoom too. Rebuild only while
-        // the view actually changes, at most twenty times a second; no roster rebuild.
-        if (_supportRangeNode.Visible && Time.GetTicksMsec() >= _nextSupportRangeRefreshMs &&
-            (_supportRangeView != _camera.GlobalTransform || _supportRangeViewport != Size ||
-             _supportRangeFlatZoom != _flatZoom ||
-             float.IsNaN(_supportRangeFlatX))) BuildSupportRange();
+        // Screen-width ribbons only need rebuilding when projection/viewport/zoom changes or camera moves past a wrap/horizon angle.
+        if (_supportRangeNode.Visible && Time.GetTicksMsec() >= _nextSupportRangeRefreshMs)
+        {
+            var camNormal = _flatMap ? Vector3.Back : _camera.GlobalPosition.Normalized();
+            var dirtyView = _supportRangeProjection != _flatMap ||
+                _supportRangeViewport != Size ||
+                MathF.Abs(_supportRangeFlatZoom - _flatZoom) > 0.025f ||
+                MathF.Abs(_supportRangeViewDistance - ViewDistance) > 0.12f ||
+                float.IsNaN(_supportRangeFlatX) ||
+                (_flatMap ? MathF.Abs(_supportRangeFlatX - _flatX) >= 1.5f : _supportRangeCamNormal.Dot(camNormal) < 0.9985f);
+            if (dirtyView) BuildSupportRange();
+        }
     }
 
     private readonly List<SupportFormation> _supportOwnedScratch = new();
@@ -558,9 +572,12 @@ public sealed partial class GlobePresentation
         if (!IsInstanceValid(_supportRangeNode) || _campaign?.ProvinceMap is null) return;
         _supportRangeMesh.ClearSurfaces();
         var player = _campaign.Player;
-        var rings = new List<(SupportFormation Formation, SupportTypeDefinition Type, bool Selected)>();
-        var paths = new List<(SupportFormation Formation, bool Selected)>();
-        var deduplicate = new HashSet<(int Base, string Type, string Mission, bool Selected)>();
+        var rings = _supportRingsScratch;
+        var paths = _supportPathsScratch;
+        var deduplicate = _supportDedupScratch;
+        rings.Clear();
+        paths.Clear();
+        deduplicate.Clear();
         foreach (var candidate in _campaign.SupportFormations)
         {
             if (!SupportCore.Enabled(_campaign, candidate.TypeId)) continue;
@@ -577,7 +594,8 @@ public sealed partial class GlobePresentation
         _supportRangeProjection = _flatMap;
         _supportRangeFlatX = _flatX;
         _supportRangeFlatZoom = _flatZoom;
-        _supportRangeView = _camera.GlobalTransform;
+        _supportRangeViewDistance = ViewDistance;
+        _supportRangeCamNormal = _flatMap ? Vector3.Back : _camera.GlobalPosition.Normalized();
         _supportRangeViewport = Size;
         _nextSupportRangeRefreshMs = Time.GetTicksMsec() + 50;
         if (rings.Count == 0 && paths.Count == 0)
@@ -588,11 +606,12 @@ public sealed partial class GlobePresentation
         const int steps = 120;
         const int bands = 6;
         float latitude = 0f, longitude = 0f, angularReach = 0f;
+        _supportRangeVerts.Clear();
+        _supportRangeColors.Clear();
 
         // What the selected formations touch, filled faintly so it reads as ground rather than
         // as a line. Bands from the base outwards along great circles, so the fill follows the
         // globe instead of cutting under it the way a flat fan would for a bomber's reach.
-        var surfaceOpen = false;
         foreach (var (formation, type, selected) in rings)
         {
             // Reserve/recovery needs an outline to show reach, not a blanket that washes
@@ -616,7 +635,6 @@ public sealed partial class GlobePresentation
                 }
             }
         }
-        if (surfaceOpen) { _supportRangeMesh.SurfaceEnd(); surfaceOpen = false; }
         foreach (var (formation, type, selected) in rings)
         {
             Aim(formation, type);
@@ -686,8 +704,15 @@ public sealed partial class GlobePresentation
                 }
             }
         }
-        if (surfaceOpen) _supportRangeMesh.SurfaceEnd();
-        _supportRangeNode.Visible = MilitaryMarkersEnabled && (_flatMap || ViewDistance <=
+        if (_supportRangeVerts.Count > 0)
+        {
+            _supportRangeArrays[(int)Mesh.ArrayType.Vertex] = _supportRangeVerts.ToArray();
+            _supportRangeArrays[(int)Mesh.ArrayType.Color] = _supportRangeColors.ToArray();
+            _supportRangeMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, _supportRangeArrays);
+            _supportRangeArrays[(int)Mesh.ArrayType.Vertex] = default;
+            _supportRangeArrays[(int)Mesh.ArrayType.Color] = default;
+        }
+        _supportRangeNode.Visible = _supportRangeMesh.GetSurfaceCount() > 0 && MilitaryMarkersEnabled && (_flatMap || ViewDistance <=
             Ui.Metric(_supportOverlay ? "support.overlay_distance" : "support.marker_distance", _supportOverlay ? 17f : 10.8f));
 
         static float LegKm((float Latitude, float Longitude) a, (float Latitude, float Longitude) b)
@@ -742,15 +767,12 @@ public sealed partial class GlobePresentation
 
         void Triangle(Vector3 p, Vector3 q, Vector3 r, Color colour)
         {
-            // Horizon/seam clipping may discard every segment during a projection change.
-            // ImmediateMesh rejects empty surfaces, so open only on the first real triangle.
-            if (!surfaceOpen) { _supportRangeMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles); surfaceOpen = true; }
-            _supportRangeMesh.SurfaceSetColor(colour);
-            _supportRangeMesh.SurfaceAddVertex(p);
-            _supportRangeMesh.SurfaceSetColor(colour);
-            _supportRangeMesh.SurfaceAddVertex(q);
-            _supportRangeMesh.SurfaceSetColor(colour);
-            _supportRangeMesh.SurfaceAddVertex(r);
+            _supportRangeVerts.Add(p);
+            _supportRangeColors.Add(colour);
+            _supportRangeVerts.Add(q);
+            _supportRangeColors.Add(colour);
+            _supportRangeVerts.Add(r);
+            _supportRangeColors.Add(colour);
         }
 
         static bool Wraps(Vector3 p, Vector3 q) => MathF.Abs(p.X - q.X) > FlatMapWidth * .5f;

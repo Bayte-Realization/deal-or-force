@@ -476,24 +476,23 @@ uniform float zoom_scale = 1.0;
 uniform float flat_map = 0.0;
 uniform vec3 sun_direction = vec3(0.35, 0.55, 0.75);
 varying float window_mask;
-varying vec3 world_norm;
 void vertex() {
     float xy_fade = sqrt(clamp(zoom_scale, 0.0, 1.0));
     VERTEX.xy *= xy_fade;
     VERTEX.z *= clamp(zoom_scale, 0.0, 1.0);
     window_mask = COLOR.a;
-    world_norm = normalize((MODEL_MATRIX * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
 }
 void fragment() {
+    // The map's ink, not white card (23 November 2026, round 2): seen from above at the tactical
+    // zoom, light stone (0.87) and terracotta made Seoul and Pyongyang white squares with pink
+    // corners, the brightest things on the map. Every material is now a shade of the same warm
+    // ink, light stone the palest of it; windows are darker still and no longer glow at night.
     float is_window = clamp(window_mask, 0.0, 1.0);
-    vec3 stone = COLOR.rgb * 0.84;
-    ALBEDO = mix(stone, vec3(0.14, 0.17, 0.21), is_window * 0.72);
-    ROUGHNESS = mix(0.84, 0.38, is_window);
+    float shade = clamp(dot(COLOR.rgb, vec3(0.3333)), 0.0, 1.0);
+    vec3 stone = mix(vec3(0.045, 0.042, 0.038), vec3(0.15, 0.14, 0.125), shade);
+    ALBEDO = mix(stone, vec3(0.035, 0.035, 0.04), is_window * 0.72);
+    ROUGHNESS = 0.90;
     METALLIC = 0.0;
-    SPECULAR = mix(0.16, 0.34, is_window);
-    float sun_dot = dot(normalize(world_norm), normalize(sun_direction));
-    float night = flat_map > 0.5 ? 0.08 : (1.0 - smoothstep(-0.32, 0.14, sun_dot));
-    float warm_accent = mix(0.08, 0.30, night);
-    EMISSION = vec3(0.98, 0.82, 0.54) * is_window * warm_accent;
+    SPECULAR = 0.10;
 }";
 }

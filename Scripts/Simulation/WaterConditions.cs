@@ -43,10 +43,13 @@ public static class WaterConditions
     /// The words follow the same calendar as the roads: January is deep winter in Warsaw
     /// and high summer in Buenos Aires, and the equator gets a wet season rather than a frost.
     /// </summary>
-    public static string SeasonCaption(Campaign campaign, float latitude)
+    public static string SeasonCaption(Campaign campaign, float latitude) =>
+        SeasonCaption(campaign, latitude, campaign?.Date ?? default);
+
+    internal static string SeasonCaption(Campaign campaign, float latitude, GameDate date)
     {
         if (campaign is null || !campaign.FeatureEnabled("seasons") || !float.IsFinite(latitude)) return "";
-        var phase = MonthPhase(campaign.Date, latitude < 0f ? 7f : 1f);
+        var phase = MonthPhase(date, latitude < 0f ? 7f : 1f);
         var winter = MathF.Max(0f, MathF.Cos(phase));
         if (MathF.Abs(latitude) < 16f) return winter >= 0.35f ? "The wet season" : "The dry season";
         if (winter >= 0.60f) return MathF.Abs(latitude) >= 48f ? "Deep winter" : "Winter";

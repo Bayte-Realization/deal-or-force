@@ -9,7 +9,7 @@ namespace DealOrForce;
 public partial class DealOrForceGame
 {
     private const int CountryRankingPageSize = 32;
-    private static readonly float[] RankingColumnWidths = { 100, 160, 140, 116, 80, 100 };
+    private static readonly float[] RankingColumnWidths = { 96, 108, 100, 98, 62, 74, 80 };
     private IReadOnlyList<CountryRankings.Row> _countryRankingSnapshot = Array.Empty<CountryRankings.Row>();
     private IReadOnlyList<CountryRankings.Row> _countryRankingQuery = Array.Empty<CountryRankings.Row>();
     private Campaign _countryRankingCampaign;
@@ -31,8 +31,9 @@ public partial class DealOrForceGame
     private readonly List<(Button Button, Control Flag, Label[] Labels)> _countryRankingSlots = new();
 
     private static CountryRankings.Weights RankingWeights => new(
-        Ui.Metric("rankings.weight.economy", 40), Ui.Metric("rankings.weight.population", 15),
-        Ui.Metric("rankings.weight.field_power", 30), Ui.Metric("rankings.weight.technology", 15));
+        Ui.Metric("rankings.weight.economy", 42), Ui.Metric("rankings.weight.population", 14),
+        Ui.Metric("rankings.weight.field_power", 12), Ui.Metric("rankings.weight.technology", 17),
+        Ui.Metric("rankings.weight.prestige", 15));
 
     // One detached projection is shared by all badges. No per-badge world/army scans.
     // Force a fresh read when opening; while a sliced tick is incomplete retain the last
@@ -107,7 +108,9 @@ public partial class DealOrForceGame
         _countryRankingsPanel = TexturedPanel(_countryRankingsLayer);
         _countryRankingsPanel.Name = "CountryRankingsPanel"; Ui.Place(_countryRankingsPanel, "modal.rankings");
         var rows = PanelRows(_countryRankingsPanel, 20, 14, 8);
-        var close = ActionButton("×", CloseCountryRankings, 44, 34); close.Name = "CloseCountryRankings";
+        var isTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var close = ActionButton("×", CloseCountryRankings, isTouch ? 42 : 44, isTouch ? 40 : 34); close.Name = "CloseCountryRankings";
+        close.AddThemeFontSizeOverride("font_size", isTouch ? 20 : 18);
         ScreenHeader(rows, "Country rankings", "Compare all territorial countries. National ranking statistics are public; unit positions and orders remain hidden.", false, close);
         var tools = new HBoxContainer(); tools.AddThemeConstantOverride("separation", 8); rows.AddChild(tools);
         _countryRankingSearch = Placeholder(new LineEdit { Name = "CountryRankingSearch", ClearButtonEnabled = true,
@@ -125,9 +128,9 @@ public partial class DealOrForceGame
         var refresh = ActionButton("Refresh rankings", () => { ReadCountryRankings(true); RefreshCountryRankBadges(); RefreshCountryRankingPage(); }, 0, 34);
         refresh.Name = "RefreshCountryRankings"; tools.AddChild(refresh);
         var heading = new HBoxContainer { Name = "CountryRankingColumns" }; heading.AddThemeConstantOverride("separation", 8);
-        AddRankingCell(heading, "#", 60); AddRankingCell(heading, "", 42);
-        AddRankingCell(heading, "Country", 240, true);
-        var titles = new[] { "Ranking index", "GDP", "Population", "Ground power", "Tech.", "Living std." };
+        AddRankingCell(heading, "#", 50); AddRankingCell(heading, "", 42);
+        AddRankingCell(heading, "Country", 185, true);
+        var titles = new[] { "Ranking index", "GDP", "Population", "Ground power", "Tech.", "Prestige", "Living std." };
         for (var i = 0; i < titles.Length; i++)
         {
             var label = AddRankingCell(heading, titles[i], RankingColumnWidths[i]);
@@ -199,7 +202,9 @@ public partial class DealOrForceGame
 
     private void LocateRankingSelection()
     {
-        var metric = (CountryRankings.Metric)(_countryRankingMetric?.Selected ?? 0);
+        var metric = _countryRankingMetric is not null
+            ? (CountryRankings.Metric)_countryRankingMetric.GetSelectedId()
+            : CountryRankings.Metric.Overall;
         var query = CountryRankings.Query(_countryRankingSnapshot, metric, _countryRankingDescending, _countryRankingSearch?.Text);
         var index = query.ToList().FindIndex(r => r.NationId == _countryRankingSelected);
         _countryRankingPage = Math.Max(0, index) / CountryRankingPageSize;
@@ -209,8 +214,9 @@ public partial class DealOrForceGame
     {
         if (_countryRankingRows is null) return;
         _countryRankingRenderedRevision = _countryRankingSnapshotRevision;
+        var selectedMetric = (CountryRankings.Metric)_countryRankingMetric.GetSelectedId();
         _countryRankingQuery = CountryRankings.Query(_countryRankingSnapshot,
-            (CountryRankings.Metric)_countryRankingMetric.Selected, _countryRankingDescending, _countryRankingSearch.Text);
+            selectedMetric, _countryRankingDescending, _countryRankingSearch.Text);
         var pages = Math.Max(1, (_countryRankingQuery.Count + CountryRankingPageSize - 1) / CountryRankingPageSize);
         _countryRankingPage = Math.Clamp(_countryRankingPage, 0, pages - 1);
         // A fixed row pool preserves the controls, keyboard focus and scrollbar while
@@ -229,12 +235,12 @@ public partial class DealOrForceGame
             var cells = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
             cells.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); cells.OffsetLeft = 8; cells.OffsetRight = -8;
             cells.AddThemeConstantOverride("separation", 8); button.AddChild(cells);
-            var labels = new List<Label> { AddRankingCell(cells, "", 60) };
+            var labels = new List<Label> { AddRankingCell(cells, "", 50) };
             var flag = FlagBadge("", 24); flag.CustomMinimumSize = new(42, 24); cells.AddChild(flag);
             flag.MouseFilter = MouseFilterEnum.Ignore;
             foreach (var child in flag.FindChildren("*", "Control", true, false).OfType<Control>()) child.MouseFilter = MouseFilterEnum.Ignore;
-            labels.Add(AddRankingCell(cells, "", 240, true));
-            for (var i = 0; i < 6; i++)
+            labels.Add(AddRankingCell(cells, "", 185, true));
+            for (var i = 0; i < RankingColumnWidths.Length; i++)
             {
                 var value = AddRankingCell(cells, "", RankingColumnWidths[i]);
                 value.AddThemeFontOverride("font", Ui.NumberFont); value.HorizontalAlignment = HorizontalAlignment.Right;
@@ -255,20 +261,21 @@ public partial class DealOrForceGame
             labels[2].Text = row.Overall.ToString("0.0"); labels[3].Text = Fmt.Money((float)row.Economy);
             labels[4].Text = Fmt.People(row.Population >= long.MaxValue ? long.MaxValue : (long)row.Population);
             labels[5].Text = row.FieldPower.ToString("0.0"); labels[6].Text = row.Technology.ToString("0");
-            labels[7].Text = row.LivingStandards.ToString("0.0");
+            labels[7].Text = row.Prestige.ToString("0"); labels[8].Text = row.LivingStandards.ToString("0.0");
         }
         _countryRankingPrevious.Disabled = _countryRankingPage == 0; _countryRankingNext.Disabled = _countryRankingPage >= pages - 1;
         _countryRankingOrder.Text = Tr(_countryRankingDescending ? "Descending" : "Ascending");
         for (var i = 0; i < _countryRankingMetric.ItemCount; i++)
-            _countryRankingMetric.SetItemText(i, Tr(RankingMetricName((CountryRankings.Metric)i)));
+            _countryRankingMetric.SetItemText(i, Tr(RankingMetricName((CountryRankings.Metric)_countryRankingMetric.GetItemId(i))));
         _countryRankingCount.Text = Loc.Format("{0} countries · page {1}/{2}", _countryRankingQuery.Count, _countryRankingPage + 1, pages);
         var selected = _countryRankingSnapshot.FirstOrDefault(r => r.NationId == _countryRankingSelected);
         _countryRankingDetails.Text = selected is null ? Tr("Select a country to inspect its position.")
             : selected.Name + " · " + Loc.Format("Overall rank #{0} · index {1}/100", selected.OverallRank, selected.Overall.ToString("0.0"));
         var weights = RankingWeights.Normalize();
-        _countryRankingFormula.Text = Loc.Format("Index: GDP {0}% · population {1}% · ground power {2}% · technology {3}%.",
-            weights.Economy.ToString("0.#"), weights.Population.ToString("0.#"), weights.FieldPower.ToString("0.#"), weights.Technology.ToString("0.#"));
-        _countryRankingFormula.TooltipText = Tr("Each component is divided by the largest world value. Ground power is a public national aggregate, not a report of unit locations. Fleets and aircraft are not included. Living standards are a separate comparison. Landless countries are excluded. Weights are moddable in game/interface.");
+        _countryRankingFormula.Text = Loc.Format("ui.prestige.ranking_formula_fmt",
+            weights.Economy.ToString("0.#"), weights.Population.ToString("0.#"),
+            weights.FieldPower.ToString("0.#"), weights.Technology.ToString("0.#"), weights.Prestige.ToString("0.#"));
+        _countryRankingFormula.TooltipText = Tr("ui.prestige.ranking_formula_tip");
         _countryRankingLayout?.Refit();
     }
 
@@ -276,6 +283,7 @@ public partial class DealOrForceGame
     {
         CountryRankings.Metric.Economy => "GDP", CountryRankings.Metric.Population => "Population",
         CountryRankings.Metric.FieldPower => "Ground power", CountryRankings.Metric.Technology => "Technology",
+        CountryRankings.Metric.Prestige => "Prestige",
         CountryRankings.Metric.LivingStandards => "Living standards", _ => "Overall index"
     };
 

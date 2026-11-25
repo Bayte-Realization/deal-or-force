@@ -42,6 +42,22 @@ internal sealed class ShellOrchestrator
     private bool _modalObscured;
     private readonly bool _isMobileRuntime = OS.HasFeature("mobile") || OS.GetName() is "Android" or "iOS";
 
+    [Flags]
+    private enum PendingView
+    {
+        None = 0,
+        Corner = 1 << 0,
+        Alerts = 1 << 1,
+        Strip = 1 << 2,
+        WorkPanel = 1 << 3,
+        Economy = 1 << 4,
+        GrandProjects = 1 << 5,
+        AllHeavy = Corner | Alerts | Strip | WorkPanel | Economy | GrandProjects
+    }
+
+    private PendingView _pendingHeavy;
+    private ulong _heavyFrameStamp = ulong.MaxValue;
+
     private float _cachedProfileW = -1f;
     private float _cachedProfileH = -1f;
     private float _cachedSafeL, _cachedSafeT, _cachedSafeR, _cachedSafeB;
@@ -94,6 +110,24 @@ internal sealed class ShellOrchestrator
         _lastHeavyRefreshMsec = 0;
         _lastResourceRefreshMsec = 0;
         _cachedProfile = null;
+        _pendingHeavy = PendingView.None;
+    }
+
+    public void MarkInboxAndAlertsDirty() => _pendingHeavy |= PendingView.Corner | PendingView.Alerts;
+
+    public bool NeedsLiveCampaignRead(CampaignHudSnapshot hud)
+    {
+        if (hud is null || hud.Version <= 0) return true;
+        if (Alerts.NeedsNewsRead(hud.ChronicleLatestSeq, Context.World)) return true;
+        if ((_pendingHeavy & (PendingView.Alerts | PendingView.WorkPanel | PendingView.Economy | PendingView.GrandProjects)) != 0)
+        {
+            if (((_pendingHeavy & PendingView.Alerts) != 0 && !_modalObscured) ||
+                ((_pendingHeavy & PendingView.WorkPanel) != 0 && WorkPanel.IsVisible) ||
+                ((_pendingHeavy & PendingView.Economy) != 0 && EconomyWorkspace.IsVisible) ||
+                ((_pendingHeavy & PendingView.GrandProjects) != 0 && GrandProjects.IsVisible))
+                return true;
+        }
+        return false;
     }
 
     public void SetModalObscured(bool obscured)
@@ -106,8 +140,10 @@ internal sealed class ShellOrchestrator
         if (obscured) Messages.Close();
     }
 
-    private static bool IsPlayerAtWar(Campaign world)
+    private bool IsPlayerAtWar(Campaign world)
     {
+        if (Context.HudSnapshot is { Version: > 0 } hs)
+            return hs.OpenPlayerWars.Length > 0;
         if (world?.Player is not { } player) return false;
         var open = Warfare.OpenWars(world);
         for (var i = 0; i < open.Count; i++)
@@ -168,16 +204,23 @@ internal sealed class ShellOrchestrator
             ResetCadence();
         }
 
-        var pausedChanged = _lastPaused != world.IsPaused;
-        var speedChanged = _lastSpeed != speed;
-        var hourChanged = _refreshHour != world.ElapsedHours;
-        var playerId = world.Player?.Id ?? -1;
-        var observerMode = Context.IsObserverMode?.Invoke() ?? world.ObserverMode;
+        var hud = Context.HudSnapshot is { Version: > 0 } hs ? hs : null;
+        var isPaused = hud?.IsPaused ?? world.IsPaused;
+        var elapsedHours = hud?.ElapsedHours ?? world.ElapsedHours;
+        var elapsedDays = hud?.ElapsedDays ?? world.ElapsedDays;
+        var mapRev = hud?.MapRevision ?? world.MapRevision;
+        var warRev = hud?.WarRevision ?? world.WarRevision;
+        var playerId = hud is not null && hud.PlayerId >= 0 ? hud.PlayerId : (world.Player?.Id ?? -1);
+        var observerMode = Context.IsObserverMode?.Invoke() ?? (hud?.ObserverMode ?? world.ObserverMode);
         var observedId = Context.GetObservedNation?.Invoke()?.Id ?? -1;
+
+        var pausedChanged = _lastPaused != isPaused;
+        var speedChanged = _lastSpeed != speed;
+        var hourChanged = _refreshHour != elapsedHours;
         var identityChanged = _refreshPlayerId != playerId || _refreshObserverMode != observerMode || _refreshObservedId != observedId;
-        var dayOrRevChanged = _refreshDay != world.ElapsedDays || _refreshRevision != world.MapRevision ||
-            _refreshWarRevision != world.WarRevision;
-        _lastPaused = world.IsPaused;
+        var dayOrRevChanged = _refreshDay != elapsedDays || _refreshRevision != mapRev ||
+            _refreshWarRevision != warRev;
+        _lastPaused = isPaused;
         _lastSpeed = speed;
 
         var obscured = Context.IsAnyModalOpen?.Invoke() ?? false;
@@ -185,14 +228,14 @@ internal sealed class ShellOrchestrator
             SetModalObscured(obscured);
 
         var nowMsec = Time.GetTicksMsec();
-        var fastForward = !world.IsPaused && speed >= 4;
+        var fastForward = !isPaused && speed >= 4;
         var minIntervalMsec = (ulong)(_isMobileRuntime ? 350 : fastForward ? 150 : 220);
         var heavyDue = force || worldChanged || identityChanged ||
-            (dayOrRevChanged && (world.IsPaused || pausedChanged || nowMsec - _lastHeavyRefreshMsec >= minIntervalMsec));
+            (dayOrRevChanged && (isPaused || pausedChanged || nowMsec - _lastHeavyRefreshMsec >= minIntervalMsec));
 
         // Orders can charge the treasury and reserve without advancing the clock or changing the map.
         // At Speed 4/5, throttle resource-label repaints to ~125ms so DatePlate stays silk-smooth every frame.
-        var resourceDue = force || worldChanged || identityChanged || world.IsPaused || pausedChanged ||
+        var resourceDue = force || worldChanged || identityChanged || isPaused || pausedChanged ||
             !fastForward || nowMsec - _lastResourceRefreshMsec >= 125;
         if (resourceDue)
         {
@@ -201,37 +244,40 @@ internal sealed class ShellOrchestrator
         }
         if (heavyDue)
         {
-            _refreshDay = world.ElapsedDays;
-            _refreshRevision = world.MapRevision;
-            _refreshWarRevision = world.WarRevision;
+            _refreshDay = elapsedDays;
+            _refreshRevision = mapRev;
+            _refreshWarRevision = warRev;
             _refreshPlayerId = playerId;
             _refreshObserverMode = observerMode;
             _refreshObservedId = observedId;
             if (identityChanged) _cachedProfile = null;
             _lastHeavyRefreshMsec = nowMsec;
-            Corner.Refresh();
-            Alerts.Refresh();
-            Strip.Refresh();
-            WorkPanel.Refresh();
-            EconomyWorkspace.Refresh();
-            GrandProjects.Refresh();
+            _pendingHeavy |= PendingView.AllHeavy;
         }
         if (force || worldChanged || identityChanged || hourChanged || pausedChanged || speedChanged)
         {
-            _refreshHour = world.ElapsedHours;
+            _refreshHour = elapsedHours;
             DatePlate.Refresh();
         }
         if (force || worldChanged || identityChanged || pausedChanged)
         {
             MapBar.Refresh();
-            TouchModeBar.Refresh();
+            if (_isMobileRuntime || _cachedProfile?.TouchMode == true || TouchModeBar.IsVisible || (Context.IsTouchMode?.Invoke() ?? false))
+                TouchModeBar.Refresh();
         }
+
+        // Amortize heavy view updates within a 1.5ms budget (1.25ms mobile); remaining dirty views spill
+        // cleanly into consecutive frames via Tick() so day boundaries never spike a single frame.
+        var budgetMs = _isMobileRuntime ? 1.25 : 1.50;
+        if (DrainPendingHeavy(t0, budgetMs, allowMinOne: true, allowLiveReads: true))
+            _heavyFrameStamp = Engine.GetProcessFrames();
 
         LastRefreshMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
     }
 
-    public void Tick(double delta)
+    public void Tick(double delta, bool allowLiveReads = true)
     {
+        var tickT0 = Stopwatch.GetTimestamp();
         if (!_isMobileRuntime)
         {
             var altNow = Input.IsKeyPressed(Key.Alt);
@@ -241,14 +287,81 @@ internal sealed class ShellOrchestrator
                 Context.AltKeycapsVisible = altNow;
                 Corner.SyncKeycapVisibility();
                 DatePlate.Refresh();
-                Alerts.Refresh();
+                if (allowLiveReads) Alerts.Refresh();
+                else _pendingHeavy |= PendingView.Alerts;
                 MapBar.Refresh();
             }
         }
-        Alerts.TickNews(delta);
-        MapBar.TickMinimap();
-        TouchModeBar.Refresh();
-        Strip.TickDivisionVisibility(delta);
+        var didHeavyInTick = false;
+        if (_pendingHeavy != PendingView.None)
+        {
+            var budgetMs = _isMobileRuntime ? 1.25 : 1.50;
+            didHeavyInTick = DrainPendingHeavy(tickT0, budgetMs, allowMinOne: true, allowLiveReads);
+            if (didHeavyInTick) _heavyFrameStamp = Engine.GetProcessFrames();
+        }
+        if (allowLiveReads)
+            Alerts.TickNews(delta);
+        else
+            Alerts.TickNewsCardOnly(delta);
+        MapBar.TickMinimap(allowTextureRebuild: !didHeavyInTick && Engine.GetProcessFrames() != _heavyFrameStamp);
+        if (_isMobileRuntime || _cachedProfile?.TouchMode == true || TouchModeBar.IsVisible || (Context.IsTouchMode?.Invoke() ?? false))
+            TouchModeBar.Refresh();
+        Strip.TickDivisionVisibility(delta, allowLiveReads);
+    }
+
+    private bool DrainPendingHeavy(long startTicks, double budgetMs, bool allowMinOne, bool allowLiveReads)
+    {
+        var didAny = false;
+        var deferredLive = PendingView.None;
+        while ((_pendingHeavy & ~deferredLive) != PendingView.None)
+        {
+            var elapsedMs = Stopwatch.GetElapsedTime(startTicks).TotalMilliseconds;
+            if ((didAny || !allowMinOne) && elapsedMs >= budgetMs)
+                break;
+
+            var ready = _pendingHeavy & ~deferredLive;
+            if ((ready & PendingView.Corner) != 0)
+            {
+                _pendingHeavy &= ~PendingView.Corner;
+                Corner.Refresh();
+                didAny = true;
+            }
+            else if ((ready & PendingView.Strip) != 0)
+            {
+                _pendingHeavy &= ~PendingView.Strip;
+                Strip.Refresh();
+                didAny = true;
+            }
+            else if ((ready & PendingView.Alerts) != 0)
+            {
+                if (!allowLiveReads && !_modalObscured) { deferredLive |= PendingView.Alerts; continue; }
+                _pendingHeavy &= ~PendingView.Alerts;
+                if (!_modalObscured) { Alerts.Refresh(); didAny = true; }
+            }
+            else if ((ready & PendingView.WorkPanel) != 0)
+            {
+                if (!allowLiveReads && WorkPanel.IsVisible) { deferredLive |= PendingView.WorkPanel; continue; }
+                _pendingHeavy &= ~PendingView.WorkPanel;
+                if (WorkPanel.IsVisible) { WorkPanel.Refresh(); didAny = true; }
+            }
+            else if ((ready & PendingView.Economy) != 0)
+            {
+                if (!allowLiveReads && EconomyWorkspace.IsVisible) { deferredLive |= PendingView.Economy; continue; }
+                _pendingHeavy &= ~PendingView.Economy;
+                if (EconomyWorkspace.IsVisible) { EconomyWorkspace.Refresh(); didAny = true; }
+            }
+            else if ((ready & PendingView.GrandProjects) != 0)
+            {
+                if (!allowLiveReads && GrandProjects.IsVisible) { deferredLive |= PendingView.GrandProjects; continue; }
+                _pendingHeavy &= ~PendingView.GrandProjects;
+                if (GrandProjects.IsVisible) { GrandProjects.Refresh(); didAny = true; }
+            }
+            else
+            {
+                break;
+            }
+        }
+        return didAny;
     }
 
     public void CloseTransientPopovers(bool includeNews = true)

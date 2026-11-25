@@ -109,12 +109,14 @@ public static class CivilWarOutbreak
                 chance = Math.Clamp(chance * FlashpointIntensityMultiplier(campaign, nation), 0f, 1f);
             if (!float.IsFinite(chance) || chance <= 0f) continue;
             if (Escalation.Roll(campaign.Seed, nation.Id, 0xC1C, campaign.ElapsedDays, 0x3) >= chance) continue;
-            // Splitting a country is one piece of twenty to forty milliseconds - a new state, its
-            // army, its war - and it is decided now, so it starts a frame of its own.
+            // Start the transfer in a fresh slice. The transfer itself uses the ordinary
+            // secession stages for the new state, its forces and the war.
             Campaign.HeavyNext();
             yield return 0;
             var prevCount = campaign.Nations.Count;
-            if (Break(campaign, nation) is not null)
+            SecessionReport outbreak = null;
+            foreach (var _ in BreakStages(campaign, nation, r => outbreak = r)) yield return 0;
+            if (outbreak is not null)
             {
                 thisYear++;
                 // Break appends the rebel nation at the end of campaign.Nations, which doesn't shift indices <= i.
@@ -131,13 +133,24 @@ public static class CivilWarOutbreak
     /// </summary>
     public static SecessionReport FromCoup(Campaign c, Nation nation, float chance, int salt)
     {
-        if (c?.ProvinceMap is null || nation is null || chance <= 0f || !c.Defines.CivilWarOutbreaks) return null;
-        if (StartsInLastYear(c) >= c.Defines.CivilWarWorldPerYear) return null;
-        if (EligibilityReason(c, nation, ignoreStability: true).Length > 0) return null;
-        if (Escalation.Roll(c.Seed, nation.Id, 0xC0C, c.ElapsedDays, salt) >= chance) return null;
-        var report = Break(c, nation, ignoreStability: true);
-        if (report is not null) c.Chronicle.Record(c, "coup_civil_war", nation.Id, report.Seceded.Id);
+        SecessionReport report = null;
+        foreach (var _ in FromCoupStages(c, nation, chance, salt, r => report = r)) { }
         return report;
+    }
+
+    internal static IEnumerable<int> FromCoupStages(Campaign c, Nation nation, float chance, int salt,
+        Action<SecessionReport> onDone = null)
+    {
+        if (c?.ProvinceMap is null || nation is null || chance <= 0f || !c.Defines.CivilWarOutbreaks) yield break;
+        if (StartsInLastYear(c) >= c.Defines.CivilWarWorldPerYear) yield break;
+        if (EligibilityReason(c, nation, ignoreStability: true).Length > 0) yield break;
+        if (Escalation.Roll(c.Seed, nation.Id, 0xC0C, c.ElapsedDays, salt) >= chance) yield break;
+        foreach (var _ in BreakStages(c, nation, report =>
+                 {
+                     c.Chronicle.Record(c, "coup_civil_war", nation.Id, report.Seceded.Id);
+                     onDone?.Invoke(report);
+                 }, ignoreStability: true))
+            yield return 0;
     }
 
     /// <summary>The same gates for the simulation and its explanation; no hidden UI approximation.</summary>
@@ -268,9 +281,17 @@ public static class CivilWarOutbreak
     /// <summary>Who rises, where, under what name - and the war.</summary>
     internal static SecessionReport Break(Campaign c, Nation nation, bool ignoreStability = false)
     {
-        if (EligibilityReason(c, nation, ignoreStability).Length > 0) return null;
+        SecessionReport report = null;
+        foreach (var _ in BreakStages(c, nation, r => report = r, ignoreStability)) { }
+        return report;
+    }
+
+    private static IEnumerable<int> BreakStages(Campaign c, Nation nation, Action<SecessionReport> onDone,
+        bool ignoreStability = false)
+    {
+        if (EligibilityReason(c, nation, ignoreStability).Length > 0) yield break;
         var regions = RebelGround(c, nation);
-        if (regions.Count == 0) return null;
+        if (regions.Count == 0) yield break;
         var oppositionSalt = unchecked((int)GeopoliticalCycle.HashNationEpoch(
             c.Seed, nation, GeopoliticalCycle.DecadeIndex(c.ElapsedDays), 0x0902));
         var ideology = OppositionTo(nation.Ideology, oppositionSalt);
@@ -283,21 +304,22 @@ public static class CivilWarOutbreak
         var parentTag = nation.Tag;
         var parentName = nation.Name;
         var rebelFaith = BeliefDynamics.RebelFaith(c, nation, regions);
-        var report = SecessionEvents.Uprising(c, nation, regions, born =>
+        SecessionReport report = null;
+        foreach (var _ in SecessionEvents.UprisingStages(c, nation, regions, r => report = r, born =>
         {
             born.Name = $"rising:{template}:{parentTag}:{parentName}";
             born.Ideology = ideology;
             born.Government = "provisional_government";
             born.LastCivilWarDay = c.ElapsedDays;
             if (rebelFaith.Length > 0) born.DeclaredReligion = rebelFaith;
-        });
-        if (report?.Seceded is null) return null;
+        })) yield return 0;
+        if (report?.Seceded is null) yield break;
         nation.LastCivilWarDay = c.ElapsedDays;
         Recent.Add($"{nation.Tag}->{report.Seceded.Tag} day {c.ElapsedDays} regions {regions.Count} people {report.Population}");
         if (DiagnosticLogs.Enabled)
             DiagnosticLogs.Write("simulation", $"CIVIL_WAR state={nation.Tag} rebels={report.Seceded.Tag} " +
                 $"regions={regions.Count} people={report.Population} stability={nation.Stability:0.00} ideology={ideology}");
-        return report;
+        onDone?.Invoke(report);
     }
 
     [ThreadStatic] private static List<ScenarioState> _rebelOwnedScratch;

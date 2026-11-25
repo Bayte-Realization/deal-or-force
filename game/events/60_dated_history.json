@@ -32,7 +32,7 @@
     "date": "1815-06-09",
     "window_days": 30,
     "trigger": { "tags": ["AUT", "RUS", "GBR", "FRA"] },
-    "effects": { "stability": 0.018, "political_points": 8 }
+    "effects": { "stability": 0.018, "political_points": 8, "prestige": 8 }
   },
   "springtime_of_nations_1848": {
     "title": "The springtime of nations",
@@ -71,7 +71,7 @@
     "date": "1945-10-24",
     "window_days": 60,
     "trigger": { "tags": ["USA", "GBR", "RUS", "FRA", "CHN"] },
-    "effects": { "stability": 0.012, "political_points": 6 }
+    "effects": { "stability": 0.012, "political_points": 6, "prestige": 10 }
   },
   "year_of_africa_1960": {
     "title": "The Year of Africa",

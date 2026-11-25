@@ -94,6 +94,10 @@ public partial class DealOrForceGame : Control
         TooltipKeeper.Install(GetTree());
         ControlSkin.Apply();
         ApplyDesktopCustomCursors();
+        LayoutAudit.SetWatchSuppressed(() =>
+            (_globe?.IsActivelyPanning ?? false) ||
+            (_globe?.ShowcasePan ?? false) ||
+            (_campaign is { IsPaused: false } && _speed >= 4));
         // A campaign's own options are read from whichever campaign is on screen now - asked
         // each time, so a loaded save or a new scenario is never answered for by the last one.
         Simulation.SettingsCatalog.CurrentCampaign = () => _campaign;
@@ -109,12 +113,14 @@ public partial class DealOrForceGame : Control
             await LoadingPhase("Loading interface and content catalogs", 10);
             // Resolve/migrate old saves only after the first loading frame is visible.
             GD.Print($"[dof] saves: {SaveRoot}");
+            InitializeModding();
             var catalogClock = System.Diagnostics.Stopwatch.StartNew();
             await System.Threading.Tasks.Task.WhenAll(
-                System.Threading.Tasks.Task.Run(Simulation.SpriteCatalog.Load),
-                System.Threading.Tasks.Task.Run(Simulation.SoundCatalog.Load),
-                System.Threading.Tasks.Task.Run(Simulation.MusicCatalog.Load),
-                System.Threading.Tasks.Task.Run(Simulation.FontCatalog.Load),
+                System.Threading.Tasks.Task.Run(() => Simulation.SpriteCatalog.Load(force: false, notify: false)),
+                System.Threading.Tasks.Task.Run(() => Simulation.SoundCatalog.Load(force: false, notify: false)),
+                System.Threading.Tasks.Task.Run(() => Simulation.MusicCatalog.Load(force: false, notify: false)),
+                System.Threading.Tasks.Task.Run(() => { if (Simulation.MediaLibraryCatalog.Revision == 0) Simulation.MediaLibraryCatalog.Load(); }),
+                System.Threading.Tasks.Task.Run(() => Simulation.FontCatalog.Load(force: false, notify: false)),
                 System.Threading.Tasks.Task.Run(() =>
                 {
                     foreach (var _ in Simulation.EventCatalog.All) break;
@@ -129,13 +135,6 @@ public partial class DealOrForceGame : Control
             ApplyDesktopCustomCursors();
             var catalogsMs = catalogClock.Elapsed.TotalMilliseconds;
 
-            await LoadingPhase("Preparing the interface", 20);
-            var uiClock = System.Diagnostics.Stopwatch.StartNew();
-            BuildInterface();
-            _globe.LoadingInputBlocked = true;
-            _globe.PreloadMapAsync();
-            var uiMs = uiClock.Elapsed.TotalMilliseconds;
-
             // Schema discovery runs in the background so it never blocks campaign creation or map load.
             _saveWarmupTask = System.Threading.Tasks.Task.Run(() =>
             {
@@ -143,7 +142,15 @@ public partial class DealOrForceGame : Control
                 catch { /* Non-fatal warmup; SaveSystem initializes lazily if needed. */ }
             });
 
-            await LoadingPhase("Creating countries and regions", 30);
+            await LoadingPhase("Preparing the interface", 20, fast: true);
+            var uiClock = System.Diagnostics.Stopwatch.StartNew();
+            BuildInterface();
+            _globe.LoadingInputBlocked = true;
+            _globe.SetViewportRenderingPaused(true);
+            _globe.PreloadMapAsync();
+            var uiMs = uiClock.Elapsed.TotalMilliseconds;
+
+            await LoadingPhase("Creating countries and regions", 30, fast: true);
             if (!IsInstanceValid(this) || !IsInsideTree()) return;
             var campaignClock = System.Diagnostics.Stopwatch.StartNew();
             await StartCampaignAsync();
@@ -163,6 +170,11 @@ public partial class DealOrForceGame : Control
             // the projection is the visible one, because SetFlatMap gives up if the camera
             // is not there yet and says nothing about having done so.
             ApplyAllSettings();
+            if (MainMenuScene.Wanted == MenuIntent.NewCampaign)
+            {
+                await LoadingPhase("Preparing country selection", 92, fast: true);
+                EnsureScreen("picker", BuildCountryPicker);
+            }
             if (_isMobileRuntime && Campaign.StageSliceMilliseconds > 1.25)
                 Campaign.StageSliceMilliseconds = 1.25;
             _startupComplete = true;
@@ -186,6 +198,7 @@ public partial class DealOrForceGame : Control
         // screen still shows up as frames. Compiled away in every build without DOF_TRACY.
         TracyBridge.InterfaceFrame();
         if (_isLoading || !_startupComplete) return;
+        _globe?.SetViewportRenderingPaused(IsGlobeObscuredByFullCoverModal());
         var processWorkStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         // Before anything else in the frame: a machine that cannot hold thirty frames a second
         // has to be allowed to spend less on this frame, not the one after a settings screen.
@@ -203,39 +216,58 @@ public partial class DealOrForceGame : Control
         if (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary != true)
             LayoutAudit.Watch(this, delta);
         MaintainControlsErgonomics();
+        SyncCountryFactsHeight();
+        TickNuclearAlert(delta);
         var bgActive = _campaign is not null && _simRunner.IsActive && ReferenceEquals(_simRunner.Campaign, _campaign);
-        var readLockHeld = false;
-        if (!bgActive || _campaign!.TryEnterRead(0, requestWindowOnMiss: true))
+        if (!bgActive)
         {
-            readLockHeld = bgActive;
-            try
+            if (_campaign is not null)
             {
-                // The country card's facts panel is sized to its own contents, and that height is only
-                // knowable after the layout pass rather than when the card is built. See the method.
-                SyncCountryFactsHeight();
-                TickNuclearAlert(delta);
                 MaintainArmyBar(delta);
-                // Everything that happened since the interface last drew, drawn once - for a network
-                // client as well, whose world arrives by the host's steps rather than its own.
-                if (_campaign is not null)
+                FlushInterfaceIfDue(delta);
+                if (_bgHudRefreshDue && _campaign.SimulationFault.Length == 0)
                 {
+                    _bgHudRefreshDue = false;
+                    Refresh();
+                }
+                TickNewShell(delta);
+            }
+        }
+        else
+        {
+            var isNewShell = IsNewShellActive;
+            var hudSnap = _simRunner.ReadHudSnapshot(_campaign);
+            var flushDue = _interfaceSinceRefresh + delta >= RunningInterfaceInterval || (hudSnap?.IsPaused ?? _campaign!.IsPaused);
+            var needLive = !isNewShell || _bgHudRefreshDue || flushDue || AnyLegacyModalOrScreenVisible() ||
+                           (_shell is not null && _shell.NeedsLiveCampaignRead(hudSnap));
+            var gotRead = needLive && ((_bgHudRefreshDue || AnyLegacyModalOrScreenVisible())
+                ? _campaign!.TryEnterRead(0, requestWindowOnMiss: true)
+                : _campaign!.TryEnterRead(0, requestWindowOnMiss: false));
+            if (gotRead)
+            {
+                try
+                {
+                    MaintainArmyBar(delta);
                     FlushInterfaceIfDue(delta);
                     if (_bgHudRefreshDue && _campaign.SimulationFault.Length == 0)
                     {
                         _bgHudRefreshDue = false;
                         Refresh();
                     }
-                    TickNewShell(delta);
+                    TickNewShell(delta, allowLiveReads: true);
+                }
+                finally
+                {
+                    _campaign.ExitRead();
                 }
             }
-            finally
+            else if (isNewShell)
             {
-                if (readLockHeld && _campaign is not null) _campaign.ExitRead();
+                _interfaceSinceRefresh = Math.Min(RunningInterfaceInterval, _interfaceSinceRefresh + delta);
+                TickNewShell(delta, allowLiveReads: false);
             }
-        }
-        else if (bgActive && IsNewShellActive && _shell is not null && _campaign!.RenderSnapshot is { } snap)
-        {
-            _shell.DatePlate.RefreshFromSnapshot(snap);
+            if (isNewShell)
+                _shell?.DatePlate.RefreshClock();
         }
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible)
             // Nobody's eyes: an observer of the whole world sees the whole world. Watching one country, he sees what it sees.
@@ -253,7 +285,7 @@ public partial class DealOrForceGame : Control
             _modLoader.CaptureCrossoverHydrology ??= () => _globe?.CaptureCrossoverHydrology();
             _modLoader.PresentCrossoverVoxels ??= blocks => _globe?.PresentCrossoverVoxels(blocks);
             _modLoader.PresentCrossoverWorks ??= works => _globe?.PresentCrossoverWorks(works);
-            if (_modLoader.Packages.Count > 0) _modLoader.OnFrame(_campaign, delta);
+            if (_modLoader.HasRuntimeCode) _modLoader.OnFrame(_campaign, delta);
         }
         if (!string.IsNullOrEmpty(_campaign?.Curse))
             EnsureScreen("world_curse", BuildWorldCurseLayer);
@@ -325,7 +357,7 @@ public partial class DealOrForceGame : Control
             _frameClock.Reset();
             _campaign.BlockSimulation(exception.Message, exception);
             DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + exception);
-            var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, _campaign, exception.Message);
+            var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, _campaign, exception.Message, exception);
             ShowCampaignFault(Simulation.Loc.Format(
                 "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.", _campaign.Date.Display()),
                 path, exception.Message);
@@ -339,7 +371,7 @@ public partial class DealOrForceGame : Control
         _campaign is not null &&
         !IsNetworkClient &&
         !_networkConnected &&
-        _modLoader.Packages.Count == 0 &&
+        !_modLoader.HasRuntimeCode &&
         _campaign.ProvinceMap is not null;
 
     private void EnsureBackgroundSimSynced()
@@ -352,7 +384,7 @@ public partial class DealOrForceGame : Control
         }
         Campaign.StageSliceMilliseconds = _isMobileRuntime ? 1.5 : 2.5;
         _simRunner.MobilePacing = _isMobileRuntime;
-        _simRunner.MinSpeed5DayIntervalMs = _isMobileRuntime ? 80.0 : 0.0;
+        _simRunner.MinSpeed5DayIntervalMs = _isMobileRuntime ? 22.0 : 0.0;
         if (!ReferenceEquals(_simRunner.Campaign, _campaign) || !_simRunner.IsActive)
             _simRunner.Start(_campaign!);
         _simRunner.SyncClockState(_campaign!.IsPaused, _speed);
@@ -372,7 +404,7 @@ public partial class DealOrForceGame : Control
                 _frameClock.Reset();
                 campaign.BlockSimulation(fault.Message, fault);
                 DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + fault);
-                var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, campaign, fault.Message);
+                var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, campaign, fault.Message, fault);
                 ShowCampaignFault(Simulation.Loc.Format(
                     "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.",
                     campaign.Date.Display()),
@@ -386,7 +418,7 @@ public partial class DealOrForceGame : Control
             // Normal single-player SP runs without mods/MP have no CampaignStepCompleted side effects,
             // so we avoid blocking the Godot main thread with RunWrite on every midnight tick and let
             // the non-blocking _Process read window refresh the HUD smoothly without micro-freezes.
-            if (_modLoader.Packages.Count > 0 || _networkConnected || IsNetworkClient)
+            if (_modLoader.HasRuntimeCode || _networkConnected || IsNetworkClient)
             {
                 _simRunner.RunWrite(campaign =>
                 {
@@ -433,7 +465,7 @@ public partial class DealOrForceGame : Control
             _frameClock.Reset();
             campaign.BlockSimulation(exception.Message, exception);
             DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + exception);
-            var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, campaign, exception.Message);
+            var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, campaign, exception.Message, exception);
             ShowCampaignFault(Simulation.Loc.Format(
                 "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.", campaign.Date.Display()),
                 path, exception.Message);
@@ -472,6 +504,15 @@ public partial class DealOrForceGame : Control
             if (inputEvent is InputEventKey loadingKey &&
                 !(IsInstanceValid(_loadingScreen) && _loadingScreen.CanDismiss && loadingKey.Keycode is Key.Enter or Key.Space))
                 GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (IsInstanceValid(_campaignFaultCanvas))
+        {
+            if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+            {
+                DismissCampaignFault();
+                GetViewport().SetInputAsHandled();
+            }
             return;
         }
         if (IsInstanceValid(_nuclearStrikeComposer))
@@ -800,6 +841,13 @@ public partial class DealOrForceGame : Control
         GetViewport().SetInputAsHandled();
     }
 
+    private bool IsGlobeObscuredByFullCoverModal() =>
+        _handoverLayer is { Visible: true } ||
+        _pauseMenuLayer is { Visible: true } ||
+        _settingsLayer is { Visible: true } ||
+        _saveLoadLayer is { Visible: true } ||
+        _mediaLibraryLayer is { Visible: true };
+
     private bool IsSystemModalBlockingCampaignInput() =>
         _pauseMenuLayer is { Visible: true } || _settingsLayer is { Visible: true } ||
         _saveLoadLayer is { Visible: true } || _networkLayer is { Visible: true } ||
@@ -824,6 +872,7 @@ public partial class DealOrForceGame : Control
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
+        if (IsInstanceValid(_campaignFaultCanvas)) { GetViewport().SetInputAsHandled(); return; }
         if (IsInstanceValid(_nuclearStrikeComposer) || IsInstanceValid(_warDeclaration)) { GetViewport().SetInputAsHandled(); return; }
         if (_mediaLibraryLayer is { Visible: true }) { GetViewport().SetInputAsHandled(); return; }
         if (_mapModeDrawerLayer is { Visible: true }) { GetViewport().SetInputAsHandled(); return; }
@@ -1029,7 +1078,7 @@ public partial class DealOrForceGame : Control
         if (_pickerSeed is not null) _pickerSeed.Text = _campaignSeed.ToString();
         _pickerScenarioEntry = null;
         var seed = _campaignSeed;
-        var roots = ScenarioRoots;
+        var roots = ScenarioRoots.ToArray();
         var built = await System.Threading.Tasks.Task.Run(() => Campaign.CreateBootstrap(seed, roots));
         if (!IsInstanceValid(this) || !IsInsideTree()) return;
         FinishStartCampaign(built);
@@ -1079,7 +1128,9 @@ public partial class DealOrForceGame : Control
         // compiled defaults however the player had set the game up. The step length was the
         // visible half of that: choosing six hours changed nothing at all, because the
         // campaign that was about to be created had not been told.
-        ApplyAllSettings();
+        // Wait for WaitForMapPresentation() during initial boot so ApplyAllSettings() runs once
+        // against the finished globe instead of twice back-to-back.
+        if (_startupComplete) ApplyAllSettings();
         BindFlags(_campaign);
         Simulation.SpriteCatalog.Changed += ForgetFlags;
         // A flag design saved in the editor, or a mod's designs re-read, changes which flag a
@@ -1109,7 +1160,7 @@ public partial class DealOrForceGame : Control
                 $"INTERFACE_PART part={name} ms={interfaceClock.Elapsed.TotalMilliseconds:F1}");
         }
 
-        Built("modding", InitializeModding);
+        if (_modApi is null) Built("modding", InitializeModding);
         var background = new ColorRect
         {
             Color = Ui.Colour("surface.background"),
@@ -1817,6 +1868,26 @@ public partial class DealOrForceGame : Control
 
     private ulong _lastFastHudRefreshMsec;
 
+    private int _classicFastStagger;
+    private int _lastNamesDay = int.MinValue;
+    private int _lastNamesMapRev = int.MinValue;
+    private int _lastNamesOwnerRev = int.MinValue;
+    private string _lastNamesLang = "";
+
+    private bool AnyLegacyModalOrScreenVisible() =>
+        (!IsNewShellActive) ||
+        (_eventLayer is { Visible: true }) || (_peaceOfferLayer is { Visible: true }) ||
+        (_situationLayer is { Visible: true }) || (_ledgerLayer is { Visible: true }) ||
+        (_stateAffairsLayer is { Visible: true }) || (_sovereignFinanceLayer is { Visible: true }) ||
+        (_warLedgerLayer is { Visible: true }) || (_diplomacyLayer is { Visible: true }) ||
+        (_policyLayer is { Visible: true }) || (_doctrineLayer is { Visible: true }) ||
+        (_conflictsLayer is { Visible: true }) || (_tradeScreenLayer is { Visible: true }) ||
+        (_productionLayer is { Visible: true }) || (_supportLayer is { Visible: true }) ||
+        (_formationBar is { Visible: true }) || (_researchLayer is { Visible: true }) ||
+        (_armyPanel is { Visible: true }) || (_sidePanel is { Visible: true }) ||
+        (_fleetPanel is { Visible: true }) || (_recruitmentLayer is { Visible: true }) ||
+        (_countryCard is { Visible: true }) || (_dealInboxVisible && IsInstanceValid(_dealComposer));
+
     private void Refresh()
     {
         if (_campaign?.Player is null) return;
@@ -1863,14 +1934,46 @@ public partial class DealOrForceGame : Control
             _lastFastHudRefreshMsec = 0;
         }
 
-        _globe?.RefreshCountryNames();
-        if (!IsNewShellActive) RefreshWorldStrip();
-        RefreshTopBar(player);
+        var lang = Loc.Language;
+        if (_lastNamesDay != _campaign.ElapsedDays || _lastNamesMapRev != _campaign.MapRevision ||
+            _lastNamesOwnerRev != _campaign.OwnershipRevision || !string.Equals(_lastNamesLang, lang, StringComparison.Ordinal))
+        {
+            _lastNamesDay = _campaign.ElapsedDays;
+            _lastNamesMapRev = _campaign.MapRevision;
+            _lastNamesOwnerRev = _campaign.OwnershipRevision;
+            _lastNamesLang = lang;
+            _globe?.RefreshCountryNames();
+        }
         RefreshStrategicAudio();
-        RefreshNegotiationNotifications();
-        RefreshSituationRoom();
-        RefreshSituationDesk();
-        RefreshStrategicHud();
+        RefreshNegotiationNotifications(allowShellRefresh: false);
+        if (IsNewShellActive)
+        {
+            RefreshNuclearAlert();
+            if (_situationLayer is { Visible: true }) RefreshSituationRoom();
+        }
+        else
+        {
+            RefreshWorldStrip();
+            RefreshTopBar(player);
+            if (fastForward)
+            {
+                // Amortize heavy classic panels across refresh cycles at Speed 4/5 so one day boundary
+                // never piles SituationRoom + SituationDesk + StrategicHud into the same frame.
+                switch (_classicFastStagger++ & 3)
+                {
+                    case 0: RefreshSituationRoom(); break;
+                    case 1: RefreshSituationDesk(); break;
+                    case 2: RefreshStrategicHud(); break;
+                    default: RefreshSituationRoom(); RefreshStrategicHud(); break;
+                }
+            }
+            else
+            {
+                RefreshSituationRoom();
+                RefreshSituationDesk();
+                RefreshStrategicHud();
+            }
+        }
         RefreshBattleDossier();
         if (_ledgerLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_ledgerLayer)) RefreshLedger();
         RefreshRecruitment();

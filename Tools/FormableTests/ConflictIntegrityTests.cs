@@ -19,6 +19,7 @@ static class ConflictIntegrityTests
         ArmylessRepublic();
         Mediation();
         UndergroundGeography();
+        HumanitarianPermission();
         LivingNames();
     }
 
@@ -135,5 +136,33 @@ static class ConflictIntegrityTests
         Check(CampaignFingerprint.Of(c) == before, "checking a surviving actor's name is read-only");
         exile.Movement.Dissolved = true;
         Check(!NationNaming.NameAlreadyTaken(c, "Donbas"), "a dissolved actor with no land does not reserve a name forever");
+    }
+
+    static void HumanitarianPermission()
+    {
+        var c = LandArrangementTests.Fixture();
+        var host = c.Nations[0];
+        var region = c.States.First(s => s.NationMapIndex == host.MapIndex);
+        var movement = new Nation { Tag = "AID", Name = "Relief mission", MapIndex = 900,
+            Movement = new MovementState { HeadquartersStateMapIndex = -1, HeadquartersLatitude = -89f } };
+        c.AddNation(movement);
+        var definition = new MovementDefinition { OutreachKm = 0f };
+        definition.Traits.Add("humanitarian");
+        Check(!MovementReach.CanOperate(c, movement, region, definition, host), "distant relief needs permission");
+        movement.Movement.RecognisedBy.Add(host.Id);
+        Check(MovementReach.CanOperate(c, movement, region, definition, host), "recognition opens a distant relief mission");
+
+        var war = new StrategicWar { AttackerId = host.Id, DefenderId = movement.Id };
+        c.Wars.Add(war);
+        definition.OutreachKm = 40_000f;
+        Check(!MovementReach.CanOperate(c, movement, region, definition, host), "war closes foreign relief regardless of distance");
+        definition.Homeland.Add(region.Id);
+        Check(MovementReach.CanOperate(c, movement, region, definition, host), "the relief movement may still operate in its own homeland");
+
+        definition.Homeland.Clear();
+        definition.Traits.Clear();
+        Check(MovementReach.CanOperate(c, movement, region, definition, host), "an ordinary movement may organise within reach during war");
+        Check(MovementReach.SupportCeiling(c, movement, region, definition, 0, 1000, host) == .04f,
+            "the religious audience retains its capped support");
     }
 }

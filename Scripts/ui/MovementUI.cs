@@ -232,7 +232,11 @@ public partial class DealOrForceGame
             seat.AddChild(Ellipsed(Simulation.Loc.Format("{0} region(s) since day {1}",
                 _campaign.StatesOf(nation).Length, state.StatehoodDay), 12, "text.muted", true));
         }
-        var close = ActionButton("×", CloseMovementPanel, 30, 28);
+        var isTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var close = ActionButton("×", CloseMovementPanel, isTouch ? 42 : 32, isTouch ? 42 : 32);
+        close.Name = "CloseMovementPanel";
+        close.AddThemeFontSizeOverride("font_size", isTouch ? 20 : 16);
+        close.TooltipText = Ui.Tip(Tr("Close"));
         close.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
         header.AddChild(close);
 
@@ -293,10 +297,13 @@ public partial class DealOrForceGame
             : state.Support.Count(pair => pair.Value >= defines.MovementUprisingSupport);
         figures.AddChild(MovementFigure("treasury", Fmt.Money(nation.Treasury), Tr("treasury"),
             Tr("Cash on hand: what every action is paid from.")));
-        figures.AddChild(MovementFigure("income", Fmt.Money(state.IncomeWeekly * 52f), Tr("income a year"),
-            Simulation.Loc.Format("{0} a year from donations and {1} from sponsors and contracts.",
-                Fmt.Money(state.DonationsWeekly * 52f), Fmt.Money(state.SponsorsWeekly * 52f)),
-            state.IncomeWeekly > 0f ? "state.positive" : "text.bright"));
+        if (!state.Landless)
+        {
+            figures.AddChild(MovementFigure("income", Fmt.Money(state.IncomeWeekly * 52f), Tr("income a year"),
+                Simulation.Loc.Format("{0} a year from donations and {1} from sponsors and contracts.",
+                    Fmt.Money(state.DonationsWeekly * 52f), Fmt.Money(state.SponsorsWeekly * 52f)),
+                state.IncomeWeekly > 0f ? "state.positive" : "text.bright"));
+        }
         figures.AddChild(MovementFigure("movement_cadres", Fmt.People(state.Cadres), Tr("cadres"),
             civic ? Tr("Organisers and volunteers for a civic campaign, not insurgent militia.") :
                 Simulation.Loc.Format("Organisers and volunteers. An uprising takes {0} of them, and every {1} is a militia division.",
@@ -369,8 +376,11 @@ public partial class DealOrForceGame
 
         // ---- its money ------------------------------------------------------------------
         // Every income and expense of the movement's last week (MoneyLedgerView).
-        _movementRows.AddChild(MovementHeading("MONEY IN AND OUT"));
-        AddMoneyLedgerRows(_movementRows, MoneyLedgerView.ForNation(_campaign, nation));
+        if (!state.Landless)
+        {
+            _movementRows.AddChild(MovementHeading("MONEY IN AND OUT"));
+            AddMoneyLedgerRows(_movementRows, MoneyLedgerView.ForNation(_campaign, nation));
+        }
 
         // ---- what it can do -----------------------------------------------------------
         if (!mine)

@@ -1,5 +1,7 @@
 {
   "configProperties": {
-    "System.GC.HeapHardLimit": "0x100000000"
+    "System.GC.HeapHardLimit": "0x100000000",
+    "System.GC.Server": true,
+    "System.GC.Concurrent": true
   }
 }

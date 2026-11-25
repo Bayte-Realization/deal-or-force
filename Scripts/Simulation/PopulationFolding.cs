@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
@@ -254,16 +255,41 @@ public static class PopulationFolding
         public int[] CultureBest, FaithBest;
         public bool[] CultureKept;
 
-        /// <summary>There are never more pairs, peoples or faiths than groups, so one length serves all.</summary>
-        public void Room(int groups)
+        /// <summary>Rent pooled scratch buffers for one FoldRegion pass so large modded regions never pin &gt;8 KB arrays.</summary>
+        public void Rent(int groups)
         {
-            if (Size is not null && Size.Length >= groups) return;
-            var size = Math.Max(256, Math.Max(groups, (Size?.Length ?? 0) * 2));
-            Size = new long[size]; Pair = new int[size]; Next = new int[size];
-            PairCulture = new int[size]; PairFaith = new int[size]; PairFirst = new int[size];
-            PairLast = new int[size]; PairBest = new int[size]; PairTotal = new long[size];
-            CultureTotal = new long[size]; CultureBest = new int[size]; FaithBest = new int[size];
-            CultureKept = new bool[size];
+            var size = Math.Max(256, groups);
+            Size = ArrayPool<long>.Shared.Rent(size);
+            Pair = ArrayPool<int>.Shared.Rent(size);
+            Next = ArrayPool<int>.Shared.Rent(size);
+            PairCulture = ArrayPool<int>.Shared.Rent(size);
+            PairFaith = ArrayPool<int>.Shared.Rent(size);
+            PairFirst = ArrayPool<int>.Shared.Rent(size);
+            PairLast = ArrayPool<int>.Shared.Rent(size);
+            PairBest = ArrayPool<int>.Shared.Rent(size);
+            PairTotal = ArrayPool<long>.Shared.Rent(size);
+            CultureTotal = ArrayPool<long>.Shared.Rent(size);
+            CultureBest = ArrayPool<int>.Shared.Rent(size);
+            FaithBest = ArrayPool<int>.Shared.Rent(size);
+            CultureKept = ArrayPool<bool>.Shared.Rent(size);
+        }
+
+        public void Return()
+        {
+            if (Size is null) return;
+            ArrayPool<long>.Shared.Return(Size); Size = null;
+            ArrayPool<int>.Shared.Return(Pair); Pair = null;
+            ArrayPool<int>.Shared.Return(Next); Next = null;
+            ArrayPool<int>.Shared.Return(PairCulture); PairCulture = null;
+            ArrayPool<int>.Shared.Return(PairFaith); PairFaith = null;
+            ArrayPool<int>.Shared.Return(PairFirst); PairFirst = null;
+            ArrayPool<int>.Shared.Return(PairLast); PairLast = null;
+            ArrayPool<int>.Shared.Return(PairBest); PairBest = null;
+            ArrayPool<long>.Shared.Return(PairTotal); PairTotal = null;
+            ArrayPool<long>.Shared.Return(CultureTotal); CultureTotal = null;
+            ArrayPool<int>.Shared.Return(CultureBest); CultureBest = null;
+            ArrayPool<int>.Shared.Return(FaithBest); FaithBest = null;
+            ArrayPool<bool>.Shared.Return(CultureKept); CultureKept = null;
         }
     }
 
@@ -329,193 +355,200 @@ public static class PopulationFolding
         if (smallest > tradeLimit && smallest > peopleLimit) return false;
 
         var s = _scratch ??= new Scratch();
-        s.Room(count);
-        s.Cultures.Clear(); s.Faiths.Clear(); s.Pairs.Clear(); s.CultureNames.Clear();
-        var pairs = 0;
-        string lastCulture = null, lastFaith = null;
-        int cultureId = -1, faithId = -1;
-        for (var i = 0; i < count; i++)
+        s.Rent(count);
+        try
         {
-            var group = groups[i];
-            s.Size[i] = group.Size;
-            s.Next[i] = -1;
-            if (group.Size <= 0) { s.Pair[i] = -1; continue; }
-            if (cultureId < 0 || !ReferenceEquals(group.Culture, lastCulture))
-            {
-                lastCulture = group.Culture;
-                var name = lastCulture ?? "";
-                if (!s.Cultures.TryGetValue(name, out cultureId))
-                {
-                    s.Cultures[name] = cultureId = s.Cultures.Count;
-                    s.CultureNames.Add(name);
-                    s.CultureTotal[cultureId] = 0;
-                    s.CultureBest[cultureId] = -1;
-                }
-            }
-            if (faithId < 0 || !ReferenceEquals(group.Religion, lastFaith))
-            {
-                lastFaith = group.Religion;
-                var name = lastFaith ?? "";
-                if (!s.Faiths.TryGetValue(name, out faithId)) s.Faiths[name] = faithId = s.Faiths.Count;
-            }
-            var key = ((long)cultureId << 20) | (uint)faithId;
-            if (!s.Pairs.TryGetValue(key, out var pair))
-            {
-                s.Pairs[key] = pair = pairs++;
-                s.PairCulture[pair] = cultureId;
-                s.PairFaith[pair] = faithId;
-                s.PairFirst[pair] = i;
-                s.PairBest[pair] = i;
-                s.PairTotal[pair] = 0;
-            }
-            else s.Next[s.PairLast[pair]] = i;
-            s.PairLast[pair] = i;
-            s.Pair[i] = pair;
-            s.PairTotal[pair] += group.Size;
-            // The largest of the pair; of two the same size, the one that stands first.
-            if (group.Size > s.Size[s.PairBest[pair]]) s.PairBest[pair] = i;
-            s.CultureTotal[cultureId] += group.Size;
-        }
-
-        var folded = 0;
-        long tradePeople = 0, faithPeople = 0, culturePeople = 0;
-
-        // 1. Trades. Judged by the sizes the region came in with, so the answer does not depend
-        // on which sliver was met first; the largest of a pair never goes.
-        if (tradeLimit > 0 && smallest <= tradeLimit)
-        {
+            s.Cultures.Clear(); s.Faiths.Clear(); s.Pairs.Clear(); s.CultureNames.Clear();
+            var pairs = 0;
+            string lastCulture = null, lastFaith = null;
+            int cultureId = -1, faithId = -1;
             for (var i = 0; i < count; i++)
             {
-                var size = s.Size[i];
-                if (size <= 0 || size > tradeLimit) continue;
-                var pair = s.Pair[i];
-                var best = s.PairBest[pair];
-                if (best == i) continue;
-                var mine = groups[i];
-                // Among those that are no sliver themselves: the largest of the same class in the
-                // same sector, failing that of the same class, failing that the largest of all.
-                // Ties go to the group that stands first.
-                var host = -1;
-                var sameSector = -1;
-                for (var j = s.PairFirst[pair]; j >= 0; j = s.Next[j])
+                var group = groups[i];
+                s.Size[i] = group.Size;
+                s.Next[i] = -1;
+                if (group.Size <= 0) { s.Pair[i] = -1; continue; }
+                if (cultureId < 0 || !ReferenceEquals(group.Culture, lastCulture))
                 {
-                    if (j == i || s.Size[j] <= tradeLimit || groups[j].Class != mine.Class) continue;
-                    if (host < 0 || s.Size[j] > s.Size[host]) host = j;
-                    if (groups[j].Sector == mine.Sector && (sameSector < 0 || s.Size[j] > s.Size[sameSector])) sameSector = j;
-                }
-                if (sameSector >= 0) host = sameSector;
-                if (host < 0) host = best;
-                Merge(groups[host], mine);
-                tradePeople += size;
-                folded++;
-            }
-        }
-
-        // 2 and 3. A faith's last sliver of a people here, then a people's.
-        if (peopleLimit > 0)
-        {
-            var any = false;
-            for (var pair = 0; pair < pairs && !any; pair++) any = s.PairTotal[pair] <= peopleLimit;
-            if (any)
-            {
-                // The largest pair of each people: where its faith-slivers go.
-                for (var pair = 0; pair < pairs; pair++)
-                {
-                    var culture = s.PairCulture[pair];
-                    var best = s.CultureBest[culture];
-                    if (best < 0 || s.PairTotal[pair] > s.PairTotal[best]) s.CultureBest[culture] = pair;
-                }
-                for (var pair = 0; pair < pairs; pair++)
-                {
-                    if (s.PairTotal[pair] > peopleLimit) continue;
-                    var into = s.CultureBest[s.PairCulture[pair]];
-                    if (into == pair) continue;
-                    var moved = s.PairTotal[pair];
-                    folded += Pour(groups, s, pair, into);
-                    s.PairTotal[into] += moved;
-                    s.PairTotal[pair] = 0;
-                    faithPeople += moved;
-                }
-
-                // Which peoples stay: the large, and those somebody here is for.
-                var owner = campaign.NationsByMapIndex().GetValueOrDefault(state.NationMapIndex);
-                shield.Movements.TryGetValue(state.MapIndex, out var movements);
-                shield.Homes.TryGetValue(state.MapIndex, out var homes);
-                var keep = Math.Max(0, defines.FoldKeepCulturePeople);
-                var ofPeople = Math.Clamp(defines.FoldPeopleSliverOfPeople, 0f, 1f);
-                var cultures = s.CultureNames.Count;
-                var leaving = false;
-                for (var culture = 0; culture < cultures; culture++)
-                {
-                    var kept = s.CultureTotal[culture] > peopleLimit;
-                    if (!kept)
+                    lastCulture = group.Culture;
+                    var name = lastCulture ?? "";
+                    if (!s.Cultures.TryGetValue(name, out cultureId))
                     {
-                        var name = s.CultureNames[culture];
-                        kept = name.Length == 0 || Own(owner, name) ||
-                               !shield.World.TryGetValue(name, out var world) || world.People < keep ||
-                               world.Anchor == state.MapIndex || world.Anchor < 0 ||
-                               s.CultureTotal[culture] > (long)(world.People * (double)ofPeople);
-                        if (!kept && movements is not null)
-                            for (var m = 0; m < movements.Count && !kept; m++) kept = movements[m].HasPeople(name);
-                        if (!kept && homes is not null)
-                            for (var h = 0; h < homes.Count && !kept; h++) kept = Own(homes[h], name);
+                        s.Cultures[name] = cultureId = s.Cultures.Count;
+                        s.CultureNames.Add(name);
+                        s.CultureTotal[cultureId] = 0;
+                        s.CultureBest[cultureId] = -1;
                     }
-                    s.CultureKept[culture] = kept;
-                    if (!kept) leaving = true;
                 }
-                if (leaving)
+                if (faithId < 0 || !ReferenceEquals(group.Religion, lastFaith))
                 {
-                    // Where a people that leaves goes: the largest pair of its faith among those
-                    // that stay, or the largest pair of all. Chosen before anyone is poured, so
-                    // the order of the pouring cannot change it.
-                    var faiths = s.Faiths.Count;
-                    for (var faith = 0; faith < faiths; faith++) s.FaithBest[faith] = -1;
-                    var largest = -1;
+                    lastFaith = group.Religion;
+                    var name = lastFaith ?? "";
+                    if (!s.Faiths.TryGetValue(name, out faithId)) s.Faiths[name] = faithId = s.Faiths.Count;
+                }
+                var key = ((long)cultureId << 20) | (uint)faithId;
+                if (!s.Pairs.TryGetValue(key, out var pair))
+                {
+                    s.Pairs[key] = pair = pairs++;
+                    s.PairCulture[pair] = cultureId;
+                    s.PairFaith[pair] = faithId;
+                    s.PairFirst[pair] = i;
+                    s.PairBest[pair] = i;
+                    s.PairTotal[pair] = 0;
+                }
+                else s.Next[s.PairLast[pair]] = i;
+                s.PairLast[pair] = i;
+                s.Pair[i] = pair;
+                s.PairTotal[pair] += group.Size;
+                // The largest of the pair; of two the same size, the one that stands first.
+                if (group.Size > s.Size[s.PairBest[pair]]) s.PairBest[pair] = i;
+                s.CultureTotal[cultureId] += group.Size;
+            }
+
+            var folded = 0;
+            long tradePeople = 0, faithPeople = 0, culturePeople = 0;
+
+            // 1. Trades. Judged by the sizes the region came in with, so the answer does not depend
+            // on which sliver was met first; the largest of a pair never goes.
+            if (tradeLimit > 0 && smallest <= tradeLimit)
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    var size = s.Size[i];
+                    if (size <= 0 || size > tradeLimit) continue;
+                    var pair = s.Pair[i];
+                    var best = s.PairBest[pair];
+                    if (best == i) continue;
+                    var mine = groups[i];
+                    // Among those that are no sliver themselves: the largest of the same class in the
+                    // same sector, failing that of the same class, failing that the largest of all.
+                    // Ties go to the group that stands first.
+                    var host = -1;
+                    var sameSector = -1;
+                    for (var j = s.PairFirst[pair]; j >= 0; j = s.Next[j])
+                    {
+                        if (j == i || s.Size[j] <= tradeLimit || groups[j].Class != mine.Class) continue;
+                        if (host < 0 || s.Size[j] > s.Size[host]) host = j;
+                        if (groups[j].Sector == mine.Sector && (sameSector < 0 || s.Size[j] > s.Size[sameSector])) sameSector = j;
+                    }
+                    if (sameSector >= 0) host = sameSector;
+                    if (host < 0) host = best;
+                    Merge(groups[host], mine);
+                    tradePeople += size;
+                    folded++;
+                }
+            }
+
+            // 2 and 3. A faith's last sliver of a people here, then a people's.
+            if (peopleLimit > 0)
+            {
+                var any = false;
+                for (var pair = 0; pair < pairs && !any; pair++) any = s.PairTotal[pair] <= peopleLimit;
+                if (any)
+                {
+                    // The largest pair of each people: where its faith-slivers go.
                     for (var pair = 0; pair < pairs; pair++)
                     {
-                        if (s.PairTotal[pair] <= 0 || !s.CultureKept[s.PairCulture[pair]]) continue;
-                        var faith = s.PairFaith[pair];
-                        if (s.FaithBest[faith] < 0 || s.PairTotal[pair] > s.PairTotal[s.FaithBest[faith]]) s.FaithBest[faith] = pair;
-                        if (largest < 0 || s.PairTotal[pair] > s.PairTotal[largest]) largest = pair;
+                        var culture = s.PairCulture[pair];
+                        var best = s.CultureBest[culture];
+                        if (best < 0 || s.PairTotal[pair] > s.PairTotal[best]) s.CultureBest[culture] = pair;
                     }
-                    if (largest >= 0)
+                    for (var pair = 0; pair < pairs; pair++)
                     {
-                        for (var culture = 0; culture < cultures; culture++)
+                        if (s.PairTotal[pair] > peopleLimit) continue;
+                        var into = s.CultureBest[s.PairCulture[pair]];
+                        if (into == pair) continue;
+                        var moved = s.PairTotal[pair];
+                        folded += Pour(groups, s, pair, into);
+                        s.PairTotal[into] += moved;
+                        s.PairTotal[pair] = 0;
+                        faithPeople += moved;
+                    }
+
+                    // Which peoples stay: the large, and those somebody here is for.
+                    var owner = campaign.NationsByMapIndex().GetValueOrDefault(state.NationMapIndex);
+                    shield.Movements.TryGetValue(state.MapIndex, out var movements);
+                    shield.Homes.TryGetValue(state.MapIndex, out var homes);
+                    var keep = Math.Max(0, defines.FoldKeepCulturePeople);
+                    var ofPeople = Math.Clamp(defines.FoldPeopleSliverOfPeople, 0f, 1f);
+                    var cultures = s.CultureNames.Count;
+                    var leaving = false;
+                    for (var culture = 0; culture < cultures; culture++)
+                    {
+                        var kept = s.CultureTotal[culture] > peopleLimit;
+                        if (!kept)
                         {
-                            if (s.CultureKept[culture]) continue;
-                            // After step 2 the whole of it stands in its largest pair.
-                            var pair = s.CultureBest[culture];
-                            if (pair < 0 || s.PairTotal[pair] <= 0) continue;
-                            var into = s.FaithBest[s.PairFaith[pair]];
-                            if (into < 0) into = largest;
-                            var moved = s.PairTotal[pair];
-                            folded += Pour(groups, s, pair, into);
-                            culturePeople += moved;
+                            var name = s.CultureNames[culture];
+                            kept = name.Length == 0 || Own(owner, name) ||
+                                   !shield.World.TryGetValue(name, out var world) || world.People < keep ||
+                                   world.Anchor == state.MapIndex || world.Anchor < 0 ||
+                                   s.CultureTotal[culture] > (long)(world.People * (double)ofPeople);
+                            if (!kept && movements is not null)
+                                for (var m = 0; m < movements.Count && !kept; m++) kept = movements[m].HasPeople(name);
+                            if (!kept && homes is not null)
+                                for (var h = 0; h < homes.Count && !kept; h++) kept = Own(homes[h], name);
+                        }
+                        s.CultureKept[culture] = kept;
+                        if (!kept) leaving = true;
+                    }
+                    if (leaving)
+                    {
+                        // Where a people that leaves goes: the largest pair of its faith among those
+                        // that stay, or the largest pair of all. Chosen before anyone is poured, so
+                        // the order of the pouring cannot change it.
+                        var faiths = s.Faiths.Count;
+                        for (var faith = 0; faith < faiths; faith++) s.FaithBest[faith] = -1;
+                        var largest = -1;
+                        for (var pair = 0; pair < pairs; pair++)
+                        {
+                            if (s.PairTotal[pair] <= 0 || !s.CultureKept[s.PairCulture[pair]]) continue;
+                            var faith = s.PairFaith[pair];
+                            if (s.FaithBest[faith] < 0 || s.PairTotal[pair] > s.PairTotal[s.FaithBest[faith]]) s.FaithBest[faith] = pair;
+                            if (largest < 0 || s.PairTotal[pair] > s.PairTotal[largest]) largest = pair;
+                        }
+                        if (largest >= 0)
+                        {
+                            for (var culture = 0; culture < cultures; culture++)
+                            {
+                                if (s.CultureKept[culture]) continue;
+                                // After step 2 the whole of it stands in its largest pair.
+                                var pair = s.CultureBest[culture];
+                                if (pair < 0 || s.PairTotal[pair] <= 0) continue;
+                                var into = s.FaithBest[s.PairFaith[pair]];
+                                if (into < 0) into = largest;
+                                var moved = s.PairTotal[pair];
+                                folded += Pour(groups, s, pair, into);
+                                culturePeople += moved;
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // Asymptotic cap per region (128 groups): compact any surviving long-tail trade,
-        // faith, or non-immune secondary groups in O(n log n) while preserving normal diversity,
-        // headcount conservation, and anchor/movement immunity.
-        const int MaxRegionPopulationGroups = 128;
-        if (groups.Count > MaxRegionPopulationGroups &&
-            defines.FoldSliverGroups &&
-            (defines.FoldTradeSliverPeople > 0 || defines.FoldPeopleSliverPeople > 0))
+            // Asymptotic cap per region (128 groups): compact any surviving long-tail trade,
+            // faith, or non-immune secondary groups in O(n log n) while preserving normal diversity,
+            // headcount conservation, and anchor/movement immunity.
+            const int MaxRegionPopulationGroups = 128;
+            if (groups.Count > MaxRegionPopulationGroups &&
+                defines.FoldSliverGroups &&
+                (defines.FoldTradeSliverPeople > 0 || defines.FoldPeopleSliverPeople > 0))
+            {
+                folded += CapRegionPopulationGroups(campaign, state, shield, groups, MaxRegionPopulationGroups,
+                    ref tradePeople, ref faithPeople, ref culturePeople);
+            }
+
+            if (folded == 0) return false;
+            MovementRules.MarkPeopleStateDirty(campaign, state);
+            System.Threading.Interlocked.Add(ref campaign.FoldedGroups, folded);
+            System.Threading.Interlocked.Add(ref campaign.FoldedTradePeople, tradePeople);
+            System.Threading.Interlocked.Add(ref campaign.FoldedFaithPeople, faithPeople);
+            System.Threading.Interlocked.Add(ref campaign.FoldedCulturePeople, culturePeople);
+            return true;
+        }
+        finally
         {
-            folded += CapRegionPopulationGroups(campaign, state, shield, groups, MaxRegionPopulationGroups,
-                ref tradePeople, ref faithPeople, ref culturePeople);
+            s.Return();
         }
-
-        if (folded == 0) return false;
-        MovementRules.MarkPeopleStateDirty(campaign, state);
-        System.Threading.Interlocked.Add(ref campaign.FoldedGroups, folded);
-        System.Threading.Interlocked.Add(ref campaign.FoldedTradePeople, tradePeople);
-        System.Threading.Interlocked.Add(ref campaign.FoldedFaithPeople, faithPeople);
-        System.Threading.Interlocked.Add(ref campaign.FoldedCulturePeople, culturePeople);
-        return true;
     }
 
     private sealed class PairIgnoreCaseComparer : IEqualityComparer<(string Culture, string Religion)>

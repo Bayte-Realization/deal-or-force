@@ -59,7 +59,19 @@ internal sealed class ShellAlertColumnView
 
     private ShellLayoutProfile _profile;
     private int _lastSnapHash;
+    private int _lastPreSnapHash;
+    private bool _hasPreSnapHash;
+    private int _localMutationRev;
     private bool _hasSnapHash;
+
+    public bool NeedsNewsRead(long chronicleLatestSeq, Campaign world) =>
+        !ReferenceEquals(_newsWorld, world) || chronicleLatestSeq > _newsSeenSeq;
+
+    public void TickNewsCardOnly(double delta)
+    {
+        _newsClock += double.IsFinite(delta) && delta > 0.0 ? delta : 0.0;
+        StepNewsCardVisuals(delta);
+    }
 
     public ShellAlertColumnView(ShellContext ctx, ShellMessageModalView messages)
     {
@@ -245,9 +257,10 @@ internal sealed class ShellAlertColumnView
         _newsPinText.Visible = false;
         kickRow.AddChild(_newsPinText);
 
+        var touchInit = _ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true);
         var closeBtn = new Button
         {
-            Name = "ShellNewsCloseButton", CustomMinimumSize = new Vector2(20, 20), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+            Name = "ShellNewsCloseButton", CustomMinimumSize = touchInit ? new Vector2(34, 34) : new Vector2(26, 26), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
             MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None,
             TooltipText = Ui.Tip(Loc.Get("shell.news_close_tip"))
         };
@@ -263,7 +276,8 @@ internal sealed class ShellAlertColumnView
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, Modulate = Ui.Colour("shell.ink"), MouseFilter = Control.MouseFilterEnum.Ignore
         };
         closeIco.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        closeIco.OffsetLeft = 4; closeIco.OffsetRight = -4; closeIco.OffsetTop = 4; closeIco.OffsetBottom = -4;
+        var inset = touchInit ? 7f : 5f;
+        closeIco.OffsetLeft = inset; closeIco.OffsetRight = -inset; closeIco.OffsetTop = inset; closeIco.OffsetBottom = -inset;
         closeBtn.AddChild(closeIco);
         kickRow.AddChild(closeBtn);
         _newsCloseBtn = closeBtn;
@@ -362,7 +376,15 @@ internal sealed class ShellAlertColumnView
         var touch = profile.TouchMode;
         _newsHeadlineLabel.AddThemeFontSizeOverride("font_size", compact ? 14 : 16);
         _newsLeadLabel.AddThemeFontSizeOverride("font_size", compact ? 11 : 12);
-        if (_newsCloseBtn is not null) _newsCloseBtn.CustomMinimumSize = touch ? new Vector2(32, 32) : new Vector2(20, 20);
+        if (_newsCloseBtn is not null)
+        {
+            _newsCloseBtn.CustomMinimumSize = touch ? new Vector2(34, 34) : new Vector2(26, 26);
+            if (_newsCloseBtn.GetChildCount() > 0 && _newsCloseBtn.GetChild(0) is TextureRect ico)
+            {
+                var inset = touch ? 7f : 5f;
+                ico.OffsetLeft = inset; ico.OffsetRight = -inset; ico.OffsetTop = inset; ico.OffsetBottom = -inset;
+            }
+        }
         if (_newsQueueLabel is not null) _newsQueueLabel.AddThemeFontSizeOverride("font_size", touch ? 13 : 11);
         if (_newsPinIcon is not null) _newsPinIcon.CustomMinimumSize = touch ? new Vector2(16, 16) : new Vector2(13, 13);
         _newsCard.ResetSize();
@@ -387,18 +409,27 @@ internal sealed class ShellAlertColumnView
     public void Refresh()
     {
         var obscured = _modalObscured || (_ctx.IsAnyModalOpen?.Invoke() ?? false);
-        if (_sheet is not null) _sheet.Visible = !obscured;
+        if (_sheet is not null && _sheet.Visible == obscured) _sheet.Visible = !obscured;
         if (obscured) return;
 
         var world = _ctx.World;
         if (world?.Player is not { } player) return;
 
-        _outlinerKbd.Visible = _ctx.AltKeycapsVisible && _profile?.TouchMode != true;
+        var kbdVis = _ctx.AltKeycapsVisible && _profile?.TouchMode != true;
+        if (_outlinerKbd.Visible != kbdVis) _outlinerKbd.Visible = kbdVis;
         var inboxChanged = _inboxBar.Refresh();
 
         var isObs = _ctx.IsObserverMode?.Invoke() ?? world.ObserverMode;
+        var nextHints = SettingsCatalog.Flag("ui_shell_next_hints");
+        var preHash = HashCode.Combine(
+            HashCode.Combine(player.Id, isObs, _outlinerOpen, nextHints, Loc.Language, _profile?.Compact ?? false, _profile?.TouchMode ?? false, _inboxBar.LastCount),
+            HashCode.Combine(world.ElapsedDays, world.MapRevision, world.WarRevision, world.PendingEvents.Count, world.Armies.Count, world.Construction.Count, _viewedAlerts.Count, _localMutationRev));
+        if (!inboxChanged && _hasPreSnapHash && _lastPreSnapHash == preHash) return;
+        _hasPreSnapHash = true;
+        _lastPreSnapHash = preHash;
+
         var snap = ShellAlerts.BuildSnapshot(
-            world, player, _outlinerOpen, SettingsCatalog.Flag("ui_shell_next_hints"),
+            world, player, _outlinerOpen, nextHints,
             isObs, _viewedAlerts, _snoozes, _watchedGoods, _profile?.TouchMode == true);
 
         var hc = new HashCode();
@@ -456,6 +487,7 @@ internal sealed class ShellAlertColumnView
             btn.Pressed += () =>
             {
                 _viewedAlerts.Add(captured.TopicKey);
+                _localMutationRev++;
                 _ctx.PlayCue?.Invoke("ui_select");
                 RouteTopic(RouteOfEntry(captured.Route), captured.TargetId);
                 Refresh();
@@ -465,6 +497,7 @@ internal sealed class ShellAlertColumnView
                 if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } && !captured.IsNextHint)
                 {
                     _snoozes.Hide(new CampaignAlert(captured.Id, CampaignAlertGroup.Should, captured.Title, captured.Summary, captured.Route, captured.TargetId), world.ElapsedDays, 7);
+                    _localMutationRev++;
                     Refresh();
                     btn.AcceptEvent();
                 }
@@ -619,56 +652,38 @@ internal sealed class ShellAlertColumnView
         if (entries.Count > 0 && entries[^1].Sequence > _newsSeenSeq)
         {
             _newsBatchBuffer.Clear();
-            foreach (var line in NewsFeed.Lines(world, _newsSeenSeq, 12))
-                _newsBatchBuffer.Add(line);
+            foreach (var line in NewsFeed.Lines(world, _newsSeenSeq, 12)) _newsBatchBuffer.Add(line);
             for (var i = _newsBatchBuffer.Count - 1; i >= 0; i--)
             {
                 var line = _newsBatchBuffer[i];
                 if (line.Sequence > _newsSeenSeq) _newsSeenSeq = line.Sequence;
-                _messages.RecordLine(line);
-
+                _messages.RecordLine(line, refresh: i == 0);
                 var involvesPlayer = HeadlinePopups.TieOf(world, line) != HeadlineTie.World;
-                var evt = ShellMessageModalView.ClassifyNewsKind(line.Kind);
-                var delivery = _messages.Resolve(evt, involvesPlayer);
-
-                if (delivery.PauseClock && !(_ctx.IsPaused?.Invoke() ?? true))
-                    _ctx.TogglePause?.Invoke();
-
+                var delivery = _messages.Resolve(ShellMessageModalView.ClassifyNewsKind(line.Kind), involvesPlayer);
+                if (delivery.PauseClock && !(_ctx.IsPaused?.Invoke() ?? true)) _ctx.TogglePause?.Invoke();
                 if (delivery.ShowNewspaperCard)
                 {
                     var urgent = delivery.PauseClock || delivery.Speed5SafetyPause || ShellNewsPacer.IsUrgentKind(line.Kind);
-                    var prio = ShellNewsPacer.ClassifyPriority(line, urgent, involvesPlayer, NewsFeed.Importance(line.Kind));
-                    _newsPacer.Offer(line, delivery.PauseClock ? "Urgent dispatch" : "Dispatch", prio, urgent);
+                    _newsPacer.Offer(line, delivery.PauseClock ? "Urgent dispatch" : "Dispatch",
+                        ShellNewsPacer.ClassifyPriority(line, urgent, involvesPlayer, NewsFeed.Importance(line.Kind)), urgent);
                 }
             }
         }
+        StepNewsCardVisuals(delta);
+    }
 
+    private void StepNewsCardVisuals(double delta)
+    {
         var obscured = _modalObscured || (_ctx.IsAnyModalOpen?.Invoke() ?? false);
-        if (obscured)
-        {
-            if (_newsCard is { Visible: true }) _newsCard.Visible = false;
-            return;
-        }
-
-        var hovered = _profile?.TouchMode != true &&
-                      _newsCard is { Visible: true } &&
-                      _newsCard.GetViewport() is { } vp &&
-                      _newsCard.GetGlobalRect().HasPoint(vp.GetMousePosition());
-        var paused = _ctx.IsPaused?.Invoke() ?? true;
-        var step = _newsPacer.Tick(delta, hovered, paused);
-
-        if (step.Current is null)
-        {
-            if (_newsCard is { Visible: true }) _newsCard.Visible = false;
-            _newsDisplayedSeq = -1;
-            return;
-        }
-
+        if (obscured) { if (_newsCard is { Visible: true }) _newsCard.Visible = false; return; }
+        var hovered = _profile?.TouchMode != true && _newsCard is { Visible: true } &&
+                      _newsCard.GetViewport() is { } vp && _newsCard.GetGlobalRect().HasPoint(vp.GetMousePosition());
+        var step = _newsPacer.Tick(delta, hovered, _ctx.IsPaused?.Invoke() ?? true);
+        if (step.Current is null) { if (_newsCard is { Visible: true }) _newsCard.Visible = false; _newsDisplayedSeq = -1; return; }
         if (step.Changed || !_newsCard.Visible || _newsDisplayedSeq != step.Current.Sequence)
             PresentActiveNews(step.Current, playAudioCue: step.Changed);
         else
             SyncQueueLabel(step.QueuedCount);
-
         if (!step.Frozen)
         {
             _newsRuleClock += double.IsFinite(delta) && delta > 0.0 ? delta : 0.0;

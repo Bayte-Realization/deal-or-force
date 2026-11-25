@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
@@ -236,6 +237,8 @@ public static class LongCampaign
         "DomesticCrisis", "Elections", "Parliament", "Agenda", "Promises", "PolicyRates", "PolicyReadyOnDay",
         "DecisionAvailableDay", "EventMemory", "Modifiers", "MilitiaReadiness", "MilitiaQuietSince",
         "DomesticImage", "PublicImages",
+        // Non-historical cabinet & portrait allocations for dead states that will no longer serve.
+        "Cabinet", "CabinetPeople", "PersonPortraits",
         // What it remembered of its seats; an expulsion forgets the same two (OrganizationDiscipline).
         "OrganizationBelongingAtStart", "OrganizationConcessions"
     };
@@ -315,7 +318,6 @@ public static class LongCampaign
     [ThreadStatic] private static bool[] _busy;
     [ThreadStatic] private static bool[] _candidate;
     [ThreadStatic] private static bool[] _retiredNow;
-    [ThreadStatic] private static bool[] _holdsProvince;
     [ThreadStatic] private static List<Nation> _retiring;
     [ThreadStatic] private static HashSet<string> _imageKeys;
     [ThreadStatic] private static List<KeyValuePair<long, DiplomaticRelation>> _kept;
@@ -473,12 +475,18 @@ public static class LongCampaign
         }
         if (c.ProvinceController is { } control)
         {
-            var holds = _holdsProvince;
-            if (holds is null || holds.Length < ushort.MaxValue + 1) holds = _holdsProvince = new bool[ushort.MaxValue + 1];
-            else Array.Clear(holds);
-            for (var p = 1; p < control.Length; p++) holds[control[p]] = true;
-            for (var id = 0; id < c.Nations.Count; id++)
-                if (candidate[id] && c.Nations[id].MapIndex is > 0 and <= ushort.MaxValue && holds[c.Nations[id].MapIndex]) busy[id] = true;
+            var holds = ArrayPool<bool>.Shared.Rent(ushort.MaxValue + 1);
+            try
+            {
+                Array.Clear(holds, 0, ushort.MaxValue + 1);
+                for (var p = 1; p < control.Length; p++) holds[control[p]] = true;
+                for (var id = 0; id < c.Nations.Count; id++)
+                    if (candidate[id] && c.Nations[id].MapIndex is > 0 and <= ushort.MaxValue && holds[c.Nations[id].MapIndex]) busy[id] = true;
+            }
+            finally
+            {
+                ArrayPool<bool>.Shared.Return(holds);
+            }
         }
         foreach (var relation in c.Relations.Values)
         {
@@ -643,6 +651,8 @@ public static class LongCampaign
                 allied |= r.Stance == DiplomaticStance.Allied;
                 continue;
             }
+            if (r.Reasons.Count > 0)
+                OpinionSystem.PruneInertReasons(c, r);
             if (prune && !c.HasOwnedLand(a) && !c.HasOwnedLand(b) && CarriesNothing(r))
             {
                 report.EmptyRelationsDropped++;
@@ -750,12 +760,49 @@ public static class LongCampaign
     {
         var after = c.Defines.EndedWarDetailDays;
         if (after <= 0) return;
-        foreach (var war in c.Wars)
+        var wars = c.Wars;
+        var count = wars.Count;
+        var head = count > 0 ? wars[0] : null;
+        var tail = count > 0 ? wars[count - 1] : null;
+        if (count < c._trimmedWarPrefix ||
+            !ReferenceEquals(c._trimmedWarHead, head) ||
+            (c._trimmedWarCount > 0 && count == c._trimmedWarCount &&
+             !ReferenceEquals(c._trimmedWarTail, tail)))
+            c._trimmedWarPrefix = 0;
+
+        var prefix = c._trimmedWarPrefix;
+        var advancing = true;
+        for (var i = prefix; i < count; i++)
         {
-            if (!war.Ended || war.OriginalController.Count == 0 || c.ElapsedDays - war.EndedDay < after) continue;
+            var war = wars[i];
+            if (war is null)
+            {
+                if (advancing) prefix = i + 1;
+                continue;
+            }
+            if (!war.Ended)
+            {
+                advancing = false;
+                continue;
+            }
+            if (war.OriginalController.Count == 0)
+            {
+                if (advancing) prefix = i + 1;
+                continue;
+            }
+            if (c.ElapsedDays - war.EndedDay < after)
+            {
+                advancing = false;
+                continue;
+            }
             war.OriginalController.Clear();
             war.OriginalController.TrimExcess();
             report.WarsTrimmed++;
+            if (advancing) prefix = i + 1;
         }
+        c._trimmedWarPrefix = prefix;
+        c._trimmedWarCount = count;
+        c._trimmedWarHead = head;
+        c._trimmedWarTail = tail;
     }
 }

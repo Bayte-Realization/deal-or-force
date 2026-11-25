@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using DealOrForce.Simulation;
 
 /// <summary>
@@ -119,6 +120,23 @@ static class WarScoreIsolationTests
               secondSides.ContainsKey(3) && secondSides.ContainsKey(4) &&
               CampaignFingerprint.Of(untouched) == untouchedPrint,
             "rebuilding the first campaign's index does not empty the second campaign's lists");
+
+        var beforeParallelFirst = CampaignFingerprint.Of(first);
+        var beforeParallelSecond = CampaignFingerprint.Of(second);
+        Parallel.Invoke(
+            () => ScoreRepeatedly(first, firstWar),
+            () => ScoreRepeatedly(second, secondWar));
+        Check(CampaignFingerprint.Of(first) == beforeParallelFirst &&
+              CampaignFingerprint.Of(second) == beforeParallelSecond &&
+              WarScoring.ScoreSides(first).Keys.Order().SequenceEqual(new ushort[] { 1, 2 }) &&
+              WarScoring.ScoreSides(second).Keys.Order().SequenceEqual(new ushort[] { 3, 4 }),
+            "parallel score calculations keep both campaigns' scores and owners separate");
+    }
+
+    static void ScoreRepeatedly(Campaign campaign, StrategicWar war)
+    {
+        for (var pass = 0; pass < 500; pass++)
+            WarScoring.Update(campaign, war);
     }
 
     static bool Near(float value, float expected) => MathF.Abs(value - expected) < 0.05f;

@@ -63,7 +63,32 @@ public partial class ExportVerification
         await Capture("map-legacy-projected-shadows");
         SettingsCatalog.Reset("map_consistent_lighting");
         game.VerificationApplyAtlasStyle();
+        await VerifyCentralEuropeMotionClarity(game);
+        await VerifyFramePacing(game);
         await VerifyMapStyleOptions(game);
+    }
+
+    private async Task VerifyCentralEuropeMotionClarity(DealOrForceGame game)
+    {
+        var previousRenderWeather = game.VerificationRenderWeather;
+        try
+        {
+            game.VerificationRenderWeather = false;
+            game.VerificationCentralEuropeView();
+            await Wait(.6);
+            Check(!game.VerificationIsActivelyPanning, "Central Europe stationary baseline has settled camera");
+            await Capture("central-europe-stationary");
+
+            game.VerificationSetCentralEuropePan(true);
+            await Wait(.06);
+            Check(game.VerificationIsActivelyPanning, "Central Europe motion frame captured while camera is actively panning");
+            await Capture("central-europe-panning");
+        }
+        finally
+        {
+            game.VerificationSetCentralEuropePan(false);
+            game.VerificationRenderWeather = previousRenderWeather;
+        }
     }
 
     private async Task VerifyMapStyleOptions(DealOrForceGame game)
@@ -182,10 +207,56 @@ public sealed partial class DealOrForceGame
         _globe.SetFlatMap(flat);
         _globe.FocusOn(flat ? 48 : 32, flat ? 26 : 65, flat ? 7f : 13.5f);
     }
+    internal bool VerificationIsActivelyPanning => _globe.IsActivelyPanning;
+    internal void VerificationCentralEuropeView() => _globe.VerificationSnapFlat(51.3f, 13.2f, 5.45f);
+    internal void VerificationSetCentralEuropePan(bool active) => _globe.VerificationSetPanState(active);
+    internal void VerificationAdvancePanStep(int frame) => _globe.VerificationAdvancePanStep(frame);
 }
 
 public sealed partial class GlobePresentation
 {
+    internal void VerificationSnapFlat(float latitude, float longitude, float distance)
+    {
+        SetFlatMap(true);
+        _showcasePan = false;
+        _dragging = false;
+        FocusOn(latitude, longitude, distance);
+        _flatX = _targetFlatX;
+        _flatY = _targetFlatY;
+        _flatZoom = _targetFlatZoom;
+        _flatGlide = Vector2.Zero;
+        _flatZoomAnchorActive = false;
+        ApplyFlatCamera();
+        UpdateFlatWorldPositions();
+        SnapArmyMarkerPositions();
+    }
+
+    internal void VerificationSetPanState(bool active)
+    {
+        _dragging = active;
+        if (active) _targetFlatX = _flatX + 0.08f;
+    }
+
+    internal void VerificationAdvancePanStep(int frame)
+    {
+        _dragging = true;
+        if (frame == 60)
+        {
+            SetFlatMap(false);
+            FocusOn(48f, 12f, 8.2f);
+            _yaw = _targetYaw;
+            _pitch = _targetPitch;
+            _distance = _targetDistance;
+        }
+        if (_flatMap)
+        {
+            _targetFlatX += 0.04f;
+        }
+        else
+        {
+            _targetYaw += 0.025f;
+        }
+    }
     internal double? VerificationWeatherTime;
     internal string VerificationAtlasShader { get => _globeMaterial.Shader.Code; set => _globeMaterial.Shader.Code = value; }
     internal bool VerificationAtlasGrading { get => _skyEnvironment.Environment.AdjustmentEnabled; set => _skyEnvironment.Environment.AdjustmentEnabled = value; }
@@ -197,5 +268,66 @@ public sealed partial class GlobePresentation
         return _globeNode.Layers == AtlasSurfaceLayer && !_atlasSun.ShadowEnabled &&
             (legacy ? !_atlasSun.Visible && (_daySun.LightCullMask & AtlasSurfaceLayer) != 0 :
                 _atlasSun.Visible && (_daySun.LightCullMask & AtlasSurfaceLayer) == 0 && _atlasSun.LightCullMask == AtlasSurfaceLayer);
+    }
+}
+
+public partial class ExportVerification
+{
+    internal async Task VerifyFramePacing(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        if (world is null) return;
+        var previousRenderWeather = game.VerificationRenderWeather;
+        var wasPaused = world.IsPaused;
+        var setSpeed = typeof(DealOrForceGame).GetMethod("SetSpeed",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        try
+        {
+            game.VerificationRenderWeather = true;
+            game.VerificationCentralEuropeView();
+            setSpeed?.Invoke(game, new object[] { 5, true });
+            var tree = GetTree();
+            for (var warmup = 0; warmup < 4; warmup++)
+                await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+
+            const int sampleCount = 120;
+            var frameDeltasMs = new System.Collections.Generic.List<double>(sampleCount);
+            var prevTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+            var ticksToMs = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            for (var frame = 0; frame < sampleCount; frame++)
+            {
+                game.VerificationAdvancePanStep(frame);
+                await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+                var nowTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+                frameDeltasMs.Add((nowTicks - prevTicks) * ticksToMs);
+                prevTicks = nowTicks;
+            }
+            frameDeltasMs.Sort();
+            var p50 = PercentileMs(frameDeltasMs, 0.50);
+            var p95 = PercentileMs(frameDeltasMs, 0.95);
+            var p99 = PercentileMs(frameDeltasMs, 0.99);
+            var max = frameDeltasMs[^1];
+            GD.Print($"FRAME_PACING p50={p50:0.00} p95={p95:0.00} p99={p99:0.00} max={max:0.00}");
+            Check(frameDeltasMs.Count == sampleCount && double.IsFinite(p50) && double.IsFinite(p95) &&
+                  double.IsFinite(p99) && max > 0.0,
+                $"frame-pacing probe recorded {sampleCount} active pan + Speed-5 frames (p50={p50:0.0}ms p95={p95:0.0}ms p99={p99:0.0}ms max={max:0.0}ms)");
+        }
+        finally
+        {
+            game.VerificationSetCentralEuropePan(false);
+            game.VerificationCentralEuropeView();
+            game.VerificationRenderWeather = previousRenderWeather;
+            setSpeed?.Invoke(game, new object[] { 1, false });
+            if (wasPaused && !world.IsPaused)
+                typeof(DealOrForceGame).GetMethod("TogglePause",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(game, null);
+        }
+    }
+
+    private static double PercentileMs(System.Collections.Generic.List<double> sorted, double q)
+    {
+        if (sorted.Count == 0) return 0.0;
+        var idx = Math.Clamp((int)Math.Ceiling(q * sorted.Count) - 1, 0, sorted.Count - 1);
+        return sorted[idx];
     }
 }

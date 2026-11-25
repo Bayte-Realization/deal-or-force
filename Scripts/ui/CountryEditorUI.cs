@@ -71,6 +71,7 @@ public partial class DealOrForceGame
         LineEdit Field(VBoxContainer column, string caption, string value, float width = 0)
         {
             var edit = new LineEdit { Text = value ?? "", SizeFlagsHorizontal = width > 0 ? SizeFlags.ShrinkBegin : SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(width, 32) };
+            Ui.FocusInputIfDesktop(edit);
             Row(column, caption).AddChild(edit);
             edit.TextChanged += _ => _authorDirty = true;
             return edit;
@@ -156,6 +157,22 @@ public partial class DealOrForceGame
         var cultures = Field(right, "Primary cultures", string.Join(", ", document.PrimaryCultures));
         cultures.TooltipText = Ui.Tip(Tr("Culture ids from common/cultures, separated by commas."));
         var treasury = Field(right, "Starting treasury (billions)", document.Treasury?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", 160);
+        treasury.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        var prestige = Field(right, Loc.Get("country_editor.starting_prestige"), document.Prestige?.ToString("0.#", CultureInfo.InvariantCulture) ?? "", 160);
+        prestige.Name = "CountryStartingPrestige";
+        prestige.PlaceholderText = Tr("unchanged");
+        prestige.TooltipText = Ui.Tip(Loc.Get("country_editor.starting_prestige_tip"));
+        prestige.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        var stability = Field(right, Loc.Get("country_editor.starting_stability"), document.Stability?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", 160);
+        stability.Name = "CountryStartingStability";
+        stability.PlaceholderText = Tr("unchanged");
+        stability.TooltipText = Ui.Tip(Loc.Get("country_editor.starting_stability_tip"));
+        stability.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        var warSupport = Field(right, Loc.Get("country_editor.starting_war_support"), document.WarSupport?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", 160);
+        warSupport.Name = "CountryStartingWarSupport";
+        warSupport.PlaceholderText = Tr("unchanged");
+        warSupport.TooltipText = Ui.Tip(Loc.Get("country_editor.starting_war_support_tip"));
+        warSupport.AddThemeFontOverride("font", PresentationFonts.Tabular());
 
         // ---- Flag ----
         right.AddChild(Title("Flag", 13, Ui.Colour("text.accent"), true));
@@ -244,6 +261,9 @@ public partial class DealOrForceGame
                 edited.HeadOfGovernmentPortrait = governmentPortrait.GetSelectedMetadata().AsString();
                 edited.PrimaryCultures = cultures.Text.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries).Select(c => c.Trim()).ToList();
                 edited.Treasury = Optional(treasury.Text, "Starting treasury");
+                edited.Prestige = Optional(prestige.Text, Loc.Get("country_editor.starting_prestige"));
+                edited.Stability = Optional(stability.Text, Loc.Get("country_editor.starting_stability"));
+                edited.WarSupport = Optional(warSupport.Text, Loc.Get("country_editor.starting_war_support"));
                 var recipient = releaseTo.Text.Trim().ToUpperInvariant();
                 var released = owned.Where(s => !chosen.Contains(s)).ToList();
                 if (released.Count > 0 && _campaign.NationByTag(recipient) is null)
@@ -291,6 +311,9 @@ public partial class DealOrForceGame
         }
         if (saved.PrimaryCultures.Count > 0) into.PrimaryCultures = saved.PrimaryCultures;
         into.Treasury = saved.Treasury ?? into.Treasury;
+        into.Prestige = saved.Prestige ?? into.Prestige;
+        into.Stability = saved.Stability ?? into.Stability;
+        into.WarSupport = saved.WarSupport ?? into.WarSupport;
         foreach (var (language, value) in saved.Names) into.Names[language] = value;
     }
 }

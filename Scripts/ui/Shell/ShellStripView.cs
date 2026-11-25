@@ -517,10 +517,11 @@ internal sealed class ShellStripView
         }
     }
 
-    public void TickDivisionVisibility(double delta)
+    public void TickDivisionVisibility(double delta, bool allowLiveReads = true)
     {
         _mergeClock += delta;
         if (_mergeClock < (_isMobileRuntime ? 0.50 : 0.25)) return;
+        if (!allowLiveReads) { _mergeClock = _isMobileRuntime ? 0.50 : 0.25; return; }
         _mergeClock = 0;
 
         var world = _ctx.World;
@@ -554,13 +555,30 @@ internal sealed class ShellStripView
             return;
         }
 
+        var hud = _ctx.HudSnapshot is { Version: > 0 } hs && hs.WarRevision == world.WarRevision ? hs : null;
+        if (hud is not null)
+        {
+            _visibleArmyIds.Clear();
+            for (var i = 0; i < world.Armies.Count; i++)
+            {
+                var a = world.Armies[i];
+                if (a.NationId == player.Id || a.InBattle || a.AssignedWarId >= 0 || hud.IsNationAtWar(a.NationId))
+                    _visibleArmyIds.Add(a.Id);
+            }
+            _ctx.SetMergedVisibleArmies?.Invoke(_visibleArmyIds);
+            return;
+        }
+
         var openWars = Warfare.OpenWars(world);
         _warNationIds.Clear();
-        for (var ni = 0; ni < world.Nations.Count; ni++)
+        for (var wi = 0; wi < openWars.Count; wi++)
         {
-            var nid = world.Nations[ni].Id;
-            for (var wi = 0; wi < openWars.Count; wi++)
-                if (!openWars[wi].Ended && openWars[wi].Involves(nid)) { _warNationIds.Add(nid); break; }
+            var w = openWars[wi];
+            if (w.Ended) continue;
+            _warNationIds.Add(w.AttackerId);
+            _warNationIds.Add(w.DefenderId);
+            foreach (var ally in w.AttackerAllies) _warNationIds.Add(ally);
+            foreach (var ally in w.DefenderAllies) _warNationIds.Add(ally);
         }
 
         _visibleArmyIds.Clear();

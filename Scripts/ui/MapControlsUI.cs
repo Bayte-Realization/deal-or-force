@@ -38,7 +38,7 @@ public partial class DealOrForceGame
         row.AddThemeConstantOverride("v_separation", (int)Ui.Metric("map.controls_flow_v_gap", 4)); margin.AddChild(row);
         row.MinimumSizeChanged += QueueMapControlsLayout;
         panel.Resized += QueueMapControlsLayout;
-        panel.VisibilityChanged += () => { if (!panel.IsVisibleInTree()) CloseMapLayerDrawer(); else RefreshMapVisualToggles(); };
+        panel.VisibilityChanged += OnMapControlsVisibilityChanged;
 
         _projectionButton = ActionButton("3D GLOBE", ToggleProjection, 104, 34, true);
         _projectionButton.Name = "MapProjection"; _projectionButton.ClipText = true;
@@ -64,10 +64,9 @@ public partial class DealOrForceGame
         _showcasePanButton = ActionButton("PAN", ToggleShowcasePan, ToggleWidth, 34);
         _showcasePanButton.SetMeta("atlas_tab_button", true);
         _showcasePanButton.ToggleMode = true;
-        StyleButton(_showcasePanButton, false);
         _showcasePanButton.Name = "ShowcasePan";
         _showcasePanButton.ClipText = true;
-        _showcasePanButton.TooltipText = Ui.Tip(Tr("Automatic horizontal camera pan for showcases and time-lapses (F6). Press again to stop."));
+        SyncShowcasePanButton();
         row.AddChild(_showcasePanButton);
         BuildMapLayerDrawer();
 
@@ -78,15 +77,24 @@ public partial class DealOrForceGame
             if (mode == StrategicMapMode.Resources) ShowResourceAtlas();
             else if (_resourceAtlasPanel is not null) _resourceAtlasPanel.Visible = false;
         };
-        _globe.MapModeSubjectChanged += _ => { UpdateMapModeTooltips(); ExplainMapLayer(_explainedMapMode); };
+        _globe.MapModeSubjectChanged += _ => { if (IsNewShellActive) return; UpdateMapModeTooltips(); ExplainMapLayer(_explainedMapMode); };
         UpdateMapModeButtons(StrategicMapMode.Political);
         RefreshProjectionControls(_globe.FlatProjection);
+    }
+
+    private void OnMapControlsVisibilityChanged()
+    {
+        if (_mapControlsPanel is null || !_mapControlsPanel.IsVisibleInTree()) { CloseMapLayerDrawer(); return; }
+        RefreshProjectionControls(_globe?.FlatProjection ?? false);
+        UpdateMapModeButtons(_activeMapMode);
+        RefreshMapVisualToggles();
+        SyncShowcasePanButton();
     }
 
     private void RefreshProjectionControls(bool flat)
     {
         var choice = _globe is not null && _globe.BothProjections;
-        if (_projectionButton is not null)
+        if (!IsNewShellActive && _projectionButton is not null)
         {
             var source = flat ? "2D MAP" : "3D GLOBE";
             _projectionButton.Visible = choice; _projectionButton.Text = Tr(source);
@@ -176,14 +184,14 @@ public partial class DealOrForceGame
 
     private void QueueMapControlsLayout()
     {
-        if (_mapControlsLayoutQueued) return;
+        if (_mapControlsLayoutQueued || IsNewShellActive) return;
         _mapControlsLayoutQueued = true;
         Callable.From(() => { _mapControlsLayoutQueued = false; LayoutMapControls(); }).CallDeferred();
     }
 
     private void LayoutMapControls()
     {
-        if (_mapControlsPanel is null || _mapControlsFlow is null) return;
+        if (IsNewShellActive || _mapControlsPanel is null || _mapControlsFlow is null) return;
         var rect = InterfaceSkin.Layout("hud.map_controls");
         var left = rect.AnchorLeft * Size.X + rect.OffsetLeft;
         var right = rect.AnchorRight * Size.X + rect.OffsetRight;
@@ -245,6 +253,7 @@ public partial class DealOrForceGame
 
     private void RefreshMapVisualToggles()
     {
+        if (IsNewShellActive) return;
         _mapVisualToggleButtons.RemoveAll(entry => !IsInstanceValid(entry.Button));
         foreach (var (setting, button) in _mapVisualToggleButtons)
         {
@@ -267,6 +276,7 @@ public partial class DealOrForceGame
     /// </summary>
     private void UpdateMapModeTooltips()
     {
+        if (IsNewShellActive) return;
         var subject = _globe.MapModeSubject;
         foreach (var pair in _mapModeButtons)
         {
@@ -345,6 +355,7 @@ public partial class DealOrForceGame
     private void UpdateMapModeButtons(StrategicMapMode active)
     {
         _activeMapMode = active;
+        if (IsNewShellActive) return;
         foreach (var pair in _mapModeButtons)
         {
             var selected = pair.Key == active;
@@ -374,10 +385,23 @@ public partial class DealOrForceGame
     {
         if (_globe is null) return;
         _globe.SetShowcasePan(!_globe.ShowcasePan);
-        if (_showcasePanButton is null) return;
-        _showcasePanButton.SetPressedNoSignal(_globe.ShowcasePan);
-        StyleButton(_showcasePanButton, _globe.ShowcasePan);
-        _showcasePanButton.Text = _globe.ShowcasePan ? "STOP" : "PAN";
+        SyncShowcasePanButton();
+        if (IsNewShellActive) _shell?.MapBar.Refresh();
+    }
+
+    private void SyncShowcasePanButton()
+    {
+        if (_showcasePanButton is null || !IsInstanceValid(_showcasePanButton)) return;
+        var active = _globe?.ShowcasePan ?? false;
+        var key = active ? "shell.showcase_spin_stop_short" : "PAN";
+        _showcasePanButton.SetPressedNoSignal(active);
+        StyleButton(_showcasePanButton, active);
+        _showcasePanButton.Text = Loc.Get(key);
+        _showcasePanButton.SetMeta(LocSourceMeta, key);
+        _showcasePanButton.SetMeta(LocAppliedMeta, _showcasePanButton.Text);
+        _showcasePanButton.TooltipText = Ui.Tip(Loc.Get(active
+            ? "shell.showcase_spin_active_tip"
+            : "Automatic horizontal camera pan for showcases and time-lapses (F6). Press again to stop."));
     }
 
     private void HandleProjectionHotkey(InputEvent inputEvent)

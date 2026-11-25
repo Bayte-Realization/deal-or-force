@@ -161,8 +161,8 @@ public sealed partial class GlobePresentation
         _globeMaterial.SetShaderParameter("frontier_ready", 1f);
     }
 
-    /// <summary>Called every frame: swaps a finished plate in, and starts a waiting one.</summary>
-    private void PollPlateRepaint()
+    /// <summary>Called every frame: swaps a finished plate in, and starts a waiting one. Returns true when a large map texture uploaded this frame.</summary>
+    private bool PollPlateRepaint()
     {
         if (_pendingPlateUpload is { } pendingPlate)
         {
@@ -174,11 +174,12 @@ public sealed partial class GlobePresentation
             // The plate has caught up: the stopgap table has nothing left to say about
             // the provinces this repaint covered.
             UploadPlateCatchUp();
-            return;
+            return true;
         }
         if (_plateWork is { IsCompleted: true } done)
         {
             _plateWork = null;
+            var uploaded = false;
             if (done.IsCompletedSuccessfully && done.Result.Plate is { } image)
             {
                 if (done.Result.Frontier is not null)
@@ -188,6 +189,7 @@ public sealed partial class GlobePresentation
                     _pendingPlateUpload = image;
                     _pendingPlateOwners = _plateWorkOwners;
                     ApplyFrontier(done.Result.Frontier);
+                    uploaded = true;
                 }
                 else
                 {
@@ -195,6 +197,7 @@ public sealed partial class GlobePresentation
                     image.Dispose();
                     _plateShownOwners = _plateWorkOwners;
                     UploadPlateCatchUp();
+                    uploaded = true;
                 }
             }
             else if (!_plateFailureReported)
@@ -205,9 +208,11 @@ public sealed partial class GlobePresentation
                 GD.PushError($"[dof] far political plate repaint failed: {done.Exception?.GetBaseException().Message}");
             }
             _plateWorkOwners = null;
+            return uploaded;
         }
         if (_platePending && _pendingPlateUpload is null && _campaign?.ProvinceMap is { } topology)
             TryStartPlateRepaint(topology);
+        return false;
     }
 
     /// <summary>

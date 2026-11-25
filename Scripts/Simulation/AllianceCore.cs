@@ -64,31 +64,30 @@ public sealed partial class Defines
 /// </summary>
 public static class AllianceSystem
 {
-    /// <summary>Read-only candidate assessment within ONE AI move. No day cache:
-    /// a successful move ends the scan, and the signature still uses the public live score.</summary>
+    /// <summary>Reuses the campaign's ally lists for candidate assessments while their membership is stable.
+    /// Scores still use live opinion, wars and armed strength.</summary>
     internal sealed class OfferScan
     {
         private static readonly List<Nation> EmptyAllies = new();
         private readonly Campaign _campaign;
         private readonly Dictionary<int, List<Nation>> _allies = new();
         private readonly Stack<List<Nation>> _pool = new();
-        private int _day = int.MinValue;
         private int _revision = int.MinValue;
+        private int _stanceVersion = int.MinValue;
 
         internal OfferScan(Campaign campaign) { _campaign = campaign; }
-
-        internal void Invalidate() => _revision = int.MinValue;
 
         internal List<Nation> Allies(Campaign campaign, Nation nation)
         {
             if (campaign is null || nation is null) return EmptyAllies;
             if (!ReferenceEquals(campaign, _campaign)) return AlliesOf(campaign, nation);
-            if (_day != campaign.ElapsedDays || _revision != campaign.AllianceRevision)
-                Rebuild(campaign);
+            var stanceVersion = DiplomaticRelation.AllianceStanceVersion;
+            if (_revision != campaign.AllianceRevision || _stanceVersion != stanceVersion)
+                Rebuild(campaign, stanceVersion);
             return _allies.TryGetValue(nation.Id, out var allies) ? allies : EmptyAllies;
         }
 
-        private void Rebuild(Campaign campaign)
+        private void Rebuild(Campaign campaign, int stanceVersion)
         {
             foreach (var list in _allies.Values)
             {
@@ -96,12 +95,12 @@ public static class AllianceSystem
                 _pool.Push(list);
             }
             _allies.Clear();
-            _day = campaign.ElapsedDays;
-            _revision = campaign.AllianceRevision;
             AddTable(campaign, campaign.Relations);
             AddTable(campaign, campaign.DormantRelations);
             foreach (var list in _allies.Values)
                 if (list.Count > 1) list.Sort(static (left, right) => left.Id.CompareTo(right.Id));
+            _revision = campaign.AllianceRevision;
+            _stanceVersion = stanceVersion;
         }
 
         private void AddTable(Campaign campaign, Dictionary<long, DiplomaticRelation> table)
@@ -307,6 +306,12 @@ public static class AllianceSystem
             willingness += cost;
             why?.Add("Their reputation", cost);
         }
+        var prestigeBonus = PrestigeSystem.DiplomaticBonus(asking);
+        if (prestigeBonus > 0.0001f)
+        {
+            willingness += prestigeBonus;
+            why?.Add("Diplomatic prestige", prestigeBonus);
+        }
 
         // And the reason most alliances were ever signed: the same country frightens both. A
         // country that frightens is a great power or one at the door - with two hundred and
@@ -417,6 +422,8 @@ public static class AllianceSystem
     {
         internal int Day = int.MinValue;
         internal readonly HashSet<int> Powers = new();
+        internal readonly Dictionary<int, int> RankSlotByNation = new();
+        internal readonly List<(float Strength, int Id)> Ranked = new();
     }
     private static readonly ConditionalWeakTable<Campaign, PowerFrame> PowerFrames = new();
     [ThreadStatic] private static HashSet<int> _sharedRivalCandidates;
@@ -447,10 +454,28 @@ public static class AllianceSystem
         if (frame.Day == campaign.ElapsedDays) return Powers;
         frame.Day = campaign.ElapsedDays;
         Powers.Clear();
-        var ranked = new List<(float Strength, int Id)>();
+        var ranked = frame.Ranked;
+        var rankSlots = frame.RankSlotByNation;
+        ranked.Clear();
+        rankSlots.Clear();
+        var economicWeight = campaign.Defines.AiEconomicWeight;
         foreach (var nation in campaign.Nations)
-            if (nation.Population > 0) ranked.Add((AiStatecraft.StrengthOf(campaign, nation), nation.Id));
-        ranked.Sort((left, right) => right.Strength != left.Strength
+        {
+            if (nation.Population <= 0) continue;
+            rankSlots.Add(nation.Id, ranked.Count);
+            ranked.Add((nation.Gdp * economicWeight, nation.Id));
+        }
+
+        // The live snapshot can differ from the AI's start-of-day tables. Start each
+        // total with GDP and add formations in campaign order, as StrengthOf does.
+        foreach (var army in campaign.Armies)
+        {
+            if (!rankSlots.TryGetValue(army.NationId, out var slot)) continue;
+            var entry = ranked[slot];
+            ranked[slot] = (entry.Strength + AiStatecraft.ArmyStrengthTerm(army), entry.Id);
+        }
+
+        ranked.Sort(static (left, right) => right.Strength != left.Strength
             ? right.Strength.CompareTo(left.Strength)
             : left.Id.CompareTo(right.Id));
         for (var index = 0; index < ranked.Count && index < campaign.Defines.AiGreatPowers; index++)
@@ -584,6 +609,7 @@ public static class AllianceSystem
         relation.LastActionDay = campaign.ElapsedDays;
         OpinionSystem.Forget(campaign, relation, "alliance");
         OpinionSystem.Remember(campaign, relation, "broke_our_alliance");
+        PrestigeSystem.Adjust(nation, -12f);
         campaign.MarkStrategicChange();
         // One public fact for every caller. A cohesion rupture used to announce it
         // afterwards, and the diplomacy button, an ultimatum and the console left

@@ -13,6 +13,13 @@ namespace DealOrForce;
 public sealed partial class GlobePresentation
 {
     private readonly List<(Node3D Node, Vector3 Normal)> _capitalMarkers = new();
+    private RBush.RBush<SpatialGeoItem<(Node3D Node, Vector3 Normal)>> _capitalRTree;
+    private int _capitalRTreeVersion;
+    private readonly List<SpatialGeoItem<(Node3D Node, Vector3 Normal)>> _capitalBuildScratch = new();
+    private readonly List<(Node3D Node, Vector3 Normal)> _capitalQueryScratch = new();
+    private readonly List<(Node3D Node, Vector3 Normal)> _capitalFrustumVisible = new();
+    private readonly HashSet<Node3D> _capitalPrevVisible = new();
+    private (bool Flat, int LatBucket, int LonBucket, int SpanBucket, int TreeVersion) _capitalBucketKey;
     private readonly List<(Node3D Node, Vector3 Normal)> _fleetMarkers = new();
     private readonly Dictionary<Node3D, Simulation.Fleet> _fleetByMarker = new();
     private readonly Dictionary<int, (Node3D Node, Label3D Count, Sprite3D Plate)> _fleetNodes = new();
@@ -312,6 +319,9 @@ public sealed partial class GlobePresentation
             child.QueueFree();
         }
         _capitalMarkers.Clear();
+        _capitalBuildScratch.Clear();
+        _capitalPrevVisible.Clear();
+        _capitalFrustumVisible.Clear();
 
         foreach (var nation in campaign.Nations)
         {
@@ -343,9 +353,18 @@ public sealed partial class GlobePresentation
             OrientSurfaceCounter(marker, marker.Position.Normalized());
             _capitalRoot.AddChild(marker);
             var normal = marker.Position.Normalized();
-            _capitalMarkers.Add((marker, normal));
+            var entry = (marker, normal);
+            _capitalMarkers.Add(entry);
+            _capitalPrevVisible.Add(marker);
+            _capitalBuildScratch.Add(new SpatialGeoItem<(Node3D Node, Vector3 Normal)>(entry, latitude, longitude));
             PlaceCapitalMarker(marker, normal);
         }
+        _capitalRTree = new RBush.RBush<SpatialGeoItem<(Node3D Node, Vector3 Normal)>>();
+        if (_capitalBuildScratch.Count > 0)
+            _capitalRTree.BulkLoad(_capitalBuildScratch);
+        _capitalBuildScratch.Clear();
+        _capitalRTreeVersion++;
+        _capitalBucketKey = default;
         // Which cities carry the capital's mark and colour is decided when the cities are placed,
         // and with the camera at rest they are not placed again: the star moved to Yekaterinburg
         // and Moscow kept a golden name with no dot under it.
@@ -364,6 +383,51 @@ public sealed partial class GlobePresentation
         if (!IsInstanceValid(root) || !IsInstanceValid(_camera)) return;
         root.Visible = withinLod;
         if (!withinLod) return;
+
+        if (ReferenceEquals(markers, _capitalMarkers) && _capitalRTree is { Count: > 0 })
+        {
+            var vpSize = ViewportSize();
+            ComputeGeoFrustumBounds(vpSize, root.GlobalTransform.Basis, 5f,
+                out var minLat, out var maxLat, out var minLon, out var maxLon, out var fullLon,
+                out var latB, out var lonB, out var spanB);
+            var capKey = (_flatMap, latB, lonB, spanB, _capitalRTreeVersion);
+            if (capKey != _capitalBucketKey)
+            {
+                _capitalBucketKey = capKey;
+                SearchGeoRTree(_capitalRTree, _capitalQueryScratch, minLat, maxLat, minLon, maxLon, fullLon);
+                _capitalFrustumVisible.Clear();
+                _capitalFrustumVisible.AddRange(_capitalQueryScratch);
+            }
+            for (var i = 0; i < _capitalMarkers.Count && _capitalPrevVisible.Count > 0; i++)
+            {
+                var node = _capitalMarkers[i].Node;
+                if (IsInstanceValid(node) && node.Visible && _capitalPrevVisible.Contains(node))
+                    node.Visible = false;
+            }
+            _capitalPrevVisible.Clear();
+            var capHalfH = _camera.Size * .5f;
+            var capVpSize = _camera.GetViewport().GetVisibleRect().Size;
+            var capHalfW = capHalfH * capVpSize.X / MathF.Max(1f, capVpSize.Y);
+            var capViewNormal = _camera.GlobalPosition.Normalized();
+            for (var i = 0; i < _capitalFrustumVisible.Count; i++)
+            {
+                var marker = _capitalFrustumVisible[i];
+                if (!IsInstanceValid(marker.Node)) continue;
+                bool vis;
+                if (_flatMap)
+                {
+                    var off = marker.Node.Position - _camera.Position;
+                    vis = MathF.Abs(off.X) < capHalfW + .1f && MathF.Abs(off.Y) < capHalfH + .1f;
+                }
+                else
+                {
+                    vis = marker.Normal.Dot(capViewNormal) > horizon && !_coveredCounters.Contains(marker.Node);
+                }
+                if (marker.Node.Visible != vis) marker.Node.Visible = vis;
+                if (vis) _capitalPrevVisible.Add(marker.Node);
+            }
+            return;
+        }
 
         // A billboard can protrude around the limb even while its centre is on
         // the hidden hemisphere. Cull by the true surface normal so counters

@@ -11,7 +11,7 @@
         "title": "w5.ev.fiscal_revolt.opt1",
         "consequence": "w5.ev.fiscal_revolt.con1",
         "effects": {
-          "treasury_percent": -0.05,
+          "income_share": -0.05,
           "stability": 0.025,
           "state.radicalism": -0.025
         },
@@ -52,7 +52,7 @@
         "consequence": "w5.ev.industrial_standoff.con1",
         "effects": {
           "productivity": 0.015,
-          "treasury_percent": -0.04,
+          "income_share": -0.04,
           "state.radicalism": 0.012
         },
         "modifiers": [
@@ -65,7 +65,7 @@
         "effects": {
           "stability": 0.020,
           "state.standard_of_living": 0.012,
-          "treasury_percent": -0.03
+          "income_share": -0.03
         },
         "modifiers": [
           { "id": "w5_civic_consensus", "days": 210 }
@@ -86,7 +86,7 @@
         "effects": {
           "army_experience": 10.0,
           "war_support": 0.035,
-          "treasury_percent": -0.05,
+          "income_share": -0.05,
           "stability": -0.012
         }
       },
@@ -180,7 +180,7 @@
         "title": "w5.ev.consortium_overrun.opt1",
         "consequence": "w5.ev.consortium_overrun.con1",
         "effects": {
-          "treasury_percent": -0.06,
+          "gdp_share": -0.005,
           "construction_capacity": 0.25,
           "credit_confidence": 0.03
         }
@@ -207,9 +207,10 @@
         "title": "w5.ev.chokepoint_summit.opt1",
         "consequence": "w5.ev.chokepoint_summit.con1",
         "effects": {
-          "treasury_percent": -0.04,
+          "income_share": -0.04,
           "market_access": 0.04,
-          "notoriety": -2.5
+          "notoriety": -2.5,
+          "prestige": 5.0
         },
         "modifiers": [
           { "id": "w5_crisis_summit_accord", "days": 240 }
@@ -221,7 +222,7 @@
         "effects": {
           "naval_experience": 8.0,
           "notoriety": 2.5,
-          "treasury_percent": -0.03
+          "income_share": -0.03
         }
       }
     ]
@@ -237,7 +238,7 @@
         "title": "w5.ev.reconstruction_tenders.opt1",
         "consequence": "w5.ev.reconstruction_tenders.con1",
         "effects": {
-          "treasury_percent": -0.05,
+          "gdp_share": -0.004,
           "state.standard_of_living": 0.018,
           "stability": 0.020
         },
@@ -270,7 +271,7 @@
         "title": "w5.ev.grain_energy_corridor.opt1",
         "consequence": "w5.ev.grain_energy_corridor.con1",
         "effects": {
-          "treasury_percent": -0.05,
+          "income_share": -0.05,
           "inflation": -0.016,
           "state.standard_of_living": 0.015,
           "notoriety": -2.0

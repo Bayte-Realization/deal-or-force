@@ -578,22 +578,25 @@ static class MapBootCacheTests
             "GlobePlatformHooks exposes TouchAdapter and wires touch BoxSelect marquee + DispatchBoxUnitSelection");
 
         var setupSrc = File.ReadAllText(Path.Combine(scriptsDir, "gfx", "GlobePresentation.Setup.cs"));
-        Check(setupSrc.Contains("longEdge > 2048", StringComparison.Ordinal) &&
+        Check(setupSrc.Contains("longEdge > 1600", StringComparison.Ordinal) &&
+              setupSrc.Contains("longEdge > 2048", StringComparison.Ordinal) &&
               !setupSrc.Contains("longEdge > 1280 || shortEdge > 720", StringComparison.Ordinal) &&
               setupSrc.Contains("MobileAntialiasing()", StringComparison.Ordinal) &&
               setupSrc.Contains("Viewport.Msaa.Msaa2X", StringComparison.Ordinal) &&
               setupSrc.Contains("Viewport.Msaa.Disabled", StringComparison.Ordinal) &&
               setupSrc.Contains("MobileEffectiveRenderScale(", StringComparison.Ordinal) &&
-              setupSrc.Contains("0.90f", StringComparison.Ordinal) &&
+              setupSrc.Contains("0.82f", StringComparison.Ordinal) &&
+              setupSrc.Contains("0.95f", StringComparison.Ordinal) &&
+              setupSrc.Contains("0.65f", StringComparison.Ordinal) &&
               !setupSrc.Contains("0.68f", StringComparison.Ordinal) &&
               !setupSrc.Contains("0.78f", StringComparison.Ordinal),
-            "GlobePresentation.Setup caps mobile SubViewport long edge at 2048, uses Msaa2X on High/Med and 0.90f floor on Low");
+            "GlobePresentation.Setup caps mobile SubViewport long edge at 1600/2048, uses Msaa2X on High and 0.82f/0.95f/0.65f MobileEffectiveRenderScale bounds");
 
         var globeSrc = File.ReadAllText(Path.Combine(scriptsDir, "gfx", "GlobePresentation.cs"));
         Check(globeSrc.Contains("TryReadHydrology(", StringComparison.Ordinal) &&
               globeSrc.Contains("TryWriteHydrology(", StringComparison.Ordinal) &&
-              globeSrc.Contains("CurrentShaderQualityTier() < 1.5f", StringComparison.Ordinal),
-            "GlobePresentation wires hydrology_v2.bin read/write and skips 3D settlement models on MobileLow");
+              globeSrc.Contains("CurrentShaderQualityTier() < 0.5f", StringComparison.Ordinal),
+            "GlobePresentation wires hydrology_v2.bin read/write and restricts 3D settlement models to DesktopHigh");
 
         var weatherSrc = File.ReadAllText(Path.Combine(scriptsDir, "gfx", "GlobeWeather.cs"));
         var tradeSrc = File.ReadAllText(Path.Combine(scriptsDir, "gfx", "GlobeTradeTraffic.cs"));

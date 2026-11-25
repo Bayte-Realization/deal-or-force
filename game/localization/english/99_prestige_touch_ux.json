@@ -1,0 +1,23 @@
+{
+  "Prestige": "Prestige",
+  "Unclaimed": "Unclaimed",
+  "ui.compact_prov.touch_hint": "Armies remain selected. Tap Order 1× (or hold a province) to march, or tap ocean to deselect.",
+  "ui.compact_prov.terrain_stats_fmt": "Sup {0} · Def {1}",
+  "ui.compact_prov.pop_fmt": "Pop: {0}",
+  "ui.compact_prov.stab_fmt": "Stab: {0}",
+  "mobile.tap.select_short": "Select",
+  "mobile.tap.order_once_short": "Order 1×",
+  "mobile.tap.order_lock_short": "Order Lock",
+  "mobile.tap.box_short": "Box",
+  "mobile.tap.pan_short": "Pan",
+  "mobile.tap.select_tip": "Select — tap to pick a country, region, or army.\nDrag to pan · Hold a province to issue a quick order.",
+  "mobile.tap.order_once_tip": "Order 1× — next tap issues 1 march or context order\n(like Right-Click) and returns to Select.\nTap again while active to lock multi-order mode.",
+  "mobile.tap.order_lock_tip": "Order Lock — every tap issues a march or context order\nwithout returning to Select.\nTap again or pick Select to exit.",
+  "mobile.tap.box_tip": "Box — drag one finger to draw a selection box over armies.\nDrag with two fingers to pan or zoom the map.",
+  "mobile.tap.pan_tip": "Pan — move and zoom the map safely.\nTaps never select units or issue orders.",
+  "ui.prestige.flag_tip_fmt": "Prestige: {0} / 1,000",
+  "ui.prestige.eq_short_fmt": "eq. {0}",
+  "ui.prestige.dossier_tip_fmt": "Prestige: {0} / 1,000 (equilibrium {1})\nGrows with economy, living standards, technology, grand projects, allies, subjects, and deterrence; falls with notoriety, instability, and broken treaties.",
+  "ui.prestige.ranking_formula_fmt": "Index: GDP {0}% · population {1}% · ground power {2}% · technology {3}% · prestige {4}%.",
+  "ui.prestige.ranking_formula_tip": "Each component is divided by the largest visible value. Ground power is a public national aggregate, not a report of unit locations. Fleets and aircraft are not included. Prestige reflects diplomacy, GDP, tech, and standing. Living standards are a separate comparison. Landless countries are excluded. Weights are moddable in game/interface."
+}

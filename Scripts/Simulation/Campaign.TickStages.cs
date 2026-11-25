@@ -200,6 +200,7 @@ public sealed partial class Campaign
         catch (Exception ex)
         {
             finished = true;
+            ex.Demystify();
             CrashEnvelope.Dump(this, ex);
             throw;
         }
@@ -1386,6 +1387,17 @@ public sealed partial class Campaign
             yield return 0;
             using (SimProfiler.Measure("grand projects")) global::DealOrForce.Simulation.GrandProjects.Tick(this);
             yield return 0;
+            using (var prestige = PrestigeSystem.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("prestige")) more = prestige.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            yield return 0;
             using (SimProfiler.Measure("world situations")) global::DealOrForce.Simulation.WorldSituations.Tick(this);
             yield return 0;
             using (var healthDisasters = global::DealOrForce.Simulation.DiseasesAndDisasters.TickStages(this).GetEnumerator())
@@ -1493,7 +1505,16 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("reunion")) StatePartition.Reunify(this);
             yield return 0;
             // The relations of countries with nobody left go to sleep; a restored country's wake.
-            using (SimProfiler.Measure("relation dormancy")) RelationDormancy.Sweep(this);
+            using (var relations = RelationDormancy.SweepStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("relation dormancy")) more = relations.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
             // And every fourth week the long dead are retired and what they left behind is struck (LongCampaign).
             using (SimProfiler.Measure("long campaign")) LongCampaign.Sweep(this);
@@ -1519,7 +1540,7 @@ public sealed partial class Campaign
         }
         CampaignIntel.InvalidateActors(this);
         if (DiagnosticLogs.Enabled)
-            DiagnosticLogs.Write("simulation", $"DAY_END date={Date} player={Player?.Tag} divisions={Armies.Count} fleets={Fleets.Count} wars={Wars.Count(w => !w.Ended)} battles={Battles.Count(b => !b.Ended)} training={Recruitment.Count} construction={Construction.Count} treasury={DiagnosticLogs.N(Player?.Treasury ?? 0)} gdp={DiagnosticLogs.N(Player?.Gdp ?? 0)} map_revision={MapRevision}");
+            DiagnosticLogs.Write("simulation", $"DAY_END date={Date} player={Player?.Tag} divisions={Armies.Count} fleets={Fleets.Count} wars={ActiveWars.Count} battles={Battles.Count(b => !b.Ended)} training={Recruitment.Count} construction={Construction.Count} treasury={DiagnosticLogs.N(Player?.Treasury ?? 0)} gdp={DiagnosticLogs.N(Player?.Gdp ?? 0)} map_revision={MapRevision}");
 
         // The interface redraws what changed when it next draws (FlushInterfaceChanges), not
         // once a step. At the hourly step a frame at top speed runs several steps, and every

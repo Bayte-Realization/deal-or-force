@@ -42,31 +42,20 @@ public sealed partial class Defines
 /// </summary>
 public static class RelationDormancy
 {
-    [ThreadStatic] private static List<long> _movingScratch;
-    [ThreadStatic] private static List<KeyValuePair<long, DiplomaticRelation>> _keptScratch;
-    [ThreadStatic] private static bool[] _gone;
-    [ThreadStatic] private static bool[] _landlessMovement;
-
-    private static List<long> Moving => _movingScratch ??= new();
-
-    /// <summary>Whether this side of a relation is gone: no country, or no people and no living movement.</summary>
-    private static bool Gone(Campaign c, int id) =>
-        c.NationById(id) is not { } n || n.Population <= 0 && n.Movement is not { Dissolved: false };
-
-    private static bool LandlessMovement(Campaign c, int id) =>
-        c.NationById(id) is { Population: <= 0, Movement: { Dissolved: false, Landless: true } };
-
-    private static bool GoneNow(int id)
+    internal sealed class SweepScratch
     {
-        var gone = _gone;
-        return gone is null || id < 0 || id >= gone.Length || gone[id];
+        internal int NationCount;
+        internal bool[] Gone = Array.Empty<bool>();
+        internal bool[] Landless = Array.Empty<bool>();
+        internal readonly List<(long Key, bool Drop)> Moving = new();
+        internal readonly List<long> Waking = new();
+        internal readonly List<KeyValuePair<long, DiplomaticRelation>> Entries = new();
+
+        internal bool IsGone(int id) => (uint)id >= (uint)NationCount || Gone[id];
+        internal bool IsLandless(int id) => (uint)id < (uint)NationCount && Landless[id];
     }
 
-    private static bool LandlessMovementNow(int id)
-    {
-        var landless = _landlessMovement;
-        return landless is not null && (uint)id < (uint)landless.Length && landless[id];
-    }
+    private const int RelationsPerBudgetCheck = 256;
 
     private static bool Keep(DiplomaticRelation r) => r.Stance == DiplomaticStance.AtWar || r.LoanOutstanding > 0f;
 
@@ -269,25 +258,31 @@ public static class RelationDormancy
     private static bool IsInertForMovement(Campaign c, DiplomaticRelation r) =>
         CarriesNothingExceptOpinion(c, r, allowAgedActivityDays: false) && HasDerivedOrZeroOpinion(c, r, allowAgedActivityDays: false);
 
-    private static bool IsInertNeutralRow(Campaign c, DiplomaticRelation r) =>
+    private static bool IsInertNeutralRow(Campaign c, DiplomaticRelation r, bool eitherGone) =>
         CarriesNothingExceptOpinion(c, r, allowAgedActivityDays: true) &&
-        (GoneNow(r.A) || GoneNow(r.B) || HasDerivedOrZeroOpinion(c, r, allowAgedActivityDays: true));
-
-    [ThreadStatic] private static List<(long Key, bool Drop)> _movingPairsScratch;
+        (eitherGone || HasDerivedOrZeroOpinion(c, r, allowAgedActivityDays: true));
 
     /// <summary>Once a week, at the day's start: the dead go to sleep and the restored wake.</summary>
     public static void Sweep(Campaign c)
     {
+        foreach (var _ in SweepStages(c, allowYield: false)) { }
+    }
+
+    internal static IEnumerable<int> SweepStages(Campaign c, bool allowYield = true)
+    {
         // Weekly: the flag is saved, so a load restores exactly what the running game had; and
         // anything that writes to a sleeping relation wakes it at once (CampaignDiplomacy.Get).
-        if (c?.Defines is not { RelationDormancyEnabled: true } || c.ElapsedDays % 7 != 0) return;
+        if (c?.Defines is not { RelationDormancyEnabled: true } || c.ElapsedDays % 7 != 0) yield break;
         if (c.ElapsedDays % 364 == 0) ForgetSpentCooldowns(c);
+        var checkBudget = allowYield && !Campaign.IsUnboundedStep;
+        var scratch = c.Caches.RelationSweep;
         var nations = c.Nations;
         var nationCount = nations.Count;
-        var gone = _gone;
-        var landless = _landlessMovement;
-        if (gone is null || gone.Length < nationCount) _gone = gone = new bool[nationCount + 64];
-        if (landless is null || landless.Length < nationCount) _landlessMovement = landless = new bool[nationCount + 64];
+        scratch.NationCount = nationCount;
+        if (scratch.Gone.Length < nationCount) scratch.Gone = new bool[nationCount + 64];
+        if (scratch.Landless.Length < nationCount) scratch.Landless = new bool[nationCount + 64];
+        var gone = scratch.Gone;
+        var landless = scratch.Landless;
         Array.Clear(gone, 0, nationCount);
         Array.Clear(landless, 0, nationCount);
         for (var i = 0; i < nationCount; i++)
@@ -300,29 +295,36 @@ public static class RelationDormancy
             landless[id] = n.Population <= 0 && n.Movement is { Dissolved: false, Landless: true };
         }
         var monthlyPrune = c.ElapsedDays > 0 && c.ElapsedDays % 28 == 0;
-        var movingPairs = _movingPairsScratch ??= new List<(long Key, bool Drop)>();
+        var movingPairs = scratch.Moving;
         movingPairs.Clear();
-        foreach (var (key, relation) in c.Relations)
+        // Keep the scan in dictionary order, without carrying a live enumerator across
+        // frame boundaries. A screen can wake a relation between two slices.
+        var entries = scratch.Entries;
+        entries.Clear();
+        entries.AddRange(c.Relations);
+        var visited = 0;
+        foreach (var (key, relation) in entries)
         {
-            var eitherGone = GoneNow(relation.A) || GoneNow(relation.B);
+            if (checkBudget && ++visited % RelationsPerBudgetCheck == 0 && Campaign.StageOverdue()) yield return 0;
+            var eitherGone = scratch.IsGone(relation.A) || scratch.IsGone(relation.B);
             if (eitherGone && !Keep(relation))
             {
-                movingPairs.Add((key, IsInertNeutralRow(c, relation)));
+                movingPairs.Add((key, IsInertNeutralRow(c, relation, eitherGone: true)));
             }
-            else if ((LandlessMovementNow(relation.A) || LandlessMovementNow(relation.B)) && IsInertForMovement(c, relation))
+            else if ((scratch.IsLandless(relation.A) || scratch.IsLandless(relation.B)) && IsInertForMovement(c, relation))
             {
                 movingPairs.Add((key, false));
             }
-            else if (monthlyPrune && IsInertNeutralRow(c, relation))
+            else if (monthlyPrune && IsInertNeutralRow(c, relation, eitherGone))
             {
                 movingPairs.Add((key, true));
             }
         }
         for (var i = 0; i < movingPairs.Count; i++)
         {
+            if (checkBudget && i % RelationsPerBudgetCheck == 0 && Campaign.StageOverdue()) yield return 0;
             var (key, drop) = movingPairs[i];
-            var relation = c.Relations[key];
-            c.Relations.Remove(key);
+            if (!c.Relations.Remove(key, out var relation)) continue;
             DiplomaticOutreach.NoteMissionTable(c, relation, -1);
             if (relation.Stance == DiplomaticStance.Allied || relation.GuaranteeByA || relation.GuaranteeByB) c.NoteAllianceChange();
             // Drop completely inert neutral rows instead of archiving empty defaults forever.
@@ -331,39 +333,49 @@ public static class RelationDormancy
             c.DormantRelations[key] = relation;
         }
         movingPairs.Clear();
-        if (c.DormantRelations.Count == 0) return;
-        var moving = Moving;
+        entries.Clear();
+        if (c.DormantRelations.Count == 0) yield break;
+        var moving = scratch.Waking;
         moving.Clear();
-        foreach (var (key, relation) in c.DormantRelations)
-            if (!GoneNow(relation.A) && !GoneNow(relation.B) &&
-                (!(LandlessMovementNow(relation.A) || LandlessMovementNow(relation.B)) || !IsInertForMovement(c, relation)))
+        entries.AddRange(c.DormantRelations);
+        foreach (var (key, relation) in entries)
+        {
+            if (checkBudget && ++visited % RelationsPerBudgetCheck == 0 && Campaign.StageOverdue()) yield return 0;
+            if (!scratch.IsGone(relation.A) && !scratch.IsGone(relation.B) &&
+                (!(scratch.IsLandless(relation.A) || scratch.IsLandless(relation.B)) || !IsInertForMovement(c, relation)))
                 moving.Add(key);
-        for (var i = 0; i < moving.Count; i++) Wake(c, moving[i]);
+        }
+        for (var i = 0; i < moving.Count; i++)
+        {
+            if (checkBudget && i % RelationsPerBudgetCheck == 0 && Campaign.StageOverdue()) yield return 0;
+            Wake(c, moving[i]);
+        }
         moving.Clear();
+        entries.Clear();
         if (monthlyPrune && c.DormantRelations.Count > 0)
         {
-            var kept = _keptScratch ??= new List<KeyValuePair<long, DiplomaticRelation>>();
-            kept.Clear();
-            var prunedAny = false;
-            foreach (var entry in c.DormantRelations)
+            entries.AddRange(c.DormantRelations);
+            foreach (var (key, relation) in entries)
             {
-                var relation = entry.Value;
-                if ((GoneNow(relation.A) || GoneNow(relation.B)) && IsInertNeutralRow(c, relation))
-                {
-                    prunedAny = true;
-                    continue;
-                }
-                kept.Add(entry);
+                if (checkBudget && ++visited % RelationsPerBudgetCheck == 0 && Campaign.StageOverdue()) yield return 0;
+                if ((scratch.IsGone(relation.A) || scratch.IsGone(relation.B)) && IsInertNeutralRow(c, relation, eitherGone: true))
+                    moving.Add(key);
             }
-            if (prunedAny)
+            entries.Clear();
+            if (moving.Count > 0)
             {
-                // Empty and refill in original order so host and loaded guest keep identical bucket layout.
+                if (checkBudget && Campaign.StageOverdue()) yield return 0;
+                for (var i = 0; i < moving.Count; i++) c.DormantRelations.Remove(moving[i]);
+                moving.Clear();
+                // Compact the live table in original order so a saved and a running world
+                // insert future relations the same way. The table is never yielded empty.
+                entries.AddRange(c.DormantRelations);
                 c.DormantRelations.Clear();
-                for (var i = 0; i < kept.Count; i++)
-                    c.DormantRelations.Add(kept[i].Key, kept[i].Value);
+                for (var i = 0; i < entries.Count; i++)
+                    c.DormantRelations.Add(entries[i].Key, entries[i].Value);
+                entries.Clear();
                 MovementAi.ForgetRelationIndex(c);
             }
-            kept.Clear();
         }
     }
 

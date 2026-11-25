@@ -23,7 +23,7 @@ public static partial class MovementRules
         public readonly Dictionary<string, List<PopulationGroupAt>> ByCulture = new(StringComparer.OrdinalIgnoreCase);
         public readonly Dictionary<string, List<PopulationGroupAt>> ByReligion = new(StringComparer.OrdinalIgnoreCase);
         public readonly Dictionary<string, Dictionary<ScenarioState, long>> CultureTotals = new(StringComparer.OrdinalIgnoreCase);
-        internal readonly Dictionary<MovementDefinition, Dictionary<ScenarioState, (long Own, long Faithful)>> PeoplePoolByDef = new();
+        internal readonly Stack<Dictionary<ScenarioState, (long Own, long Faithful)>> PeoplePool = new();
         internal readonly Stack<Dictionary<ScenarioState, long>> CultureTotalsPool = new();
         internal readonly Dictionary<string, List<CultureRegionBucket>> ByCultureRegions = new(StringComparer.OrdinalIgnoreCase);
         internal readonly Dictionary<string, List<ReligionCultureBucket>> ByReligionBuckets = new(StringComparer.OrdinalIgnoreCase);
@@ -178,10 +178,10 @@ public static partial class MovementRules
     {
         if (cache.PeopleToday.Count > 0)
         {
-            foreach (var kv in cache.PeopleToday)
+            foreach (var regions in cache.PeopleToday.Values)
             {
-                kv.Value.Clear();
-                cache.PeoplePoolByDef[kv.Key] = kv.Value;
+                regions.Clear();
+                cache.PeoplePool.Push(regions);
             }
             cache.PeopleToday.Clear();
         }
@@ -645,15 +645,10 @@ public static partial class MovementRules
         if (!cache.Indexed)
             foreach (var _ in EnsurePeopleIndexedStages(campaign, insideMovRules: false)) { }
         using var countScope = SimProfiler.Measure("        mov:people:count");
-        if (cache.PeoplePoolByDef.TryGetValue(definition, out var pooled))
-        {
-            cache.PeoplePoolByDef.Remove(definition);
-        }
-        else
-        {
-            pooled = new Dictionary<ScenarioState, (long Own, long Faithful)>();
-        }
-        var counted = pooled;
+        // A finished census no longer belongs to a movement. Reuse its capacity even
+        // if that movement dissolves or changes its definition before the next census.
+        if (!cache.PeoplePool.TryPop(out var counted))
+            counted = new Dictionary<ScenarioState, (long Own, long Faithful)>();
         var peoples = definition.DistinctPeoples;
         for (var pi = 0; pi < peoples.Length; pi++)
             if (cache.ByCultureRegions.TryGetValue(peoples[pi], out var regions))

@@ -35,6 +35,7 @@ internal static class JitWarmup
         (typeof(Warfare), "ResolveAdvancesStages"), (typeof(AiStatecraft), "ThinkTodayStages"),
         (typeof(AiStatecraft), "DiplomacyStages"), (typeof(SocialMemory), nameof(SocialMemory.TickStages)),
         (typeof(Shipbuilding), nameof(Shipbuilding.TickStages)), (typeof(DefconSystem), nameof(DefconSystem.TickStages)),
+        (typeof(Coups), nameof(Coups.TickStages)), (typeof(Coups), nameof(Coups.Chance)),
         (typeof(BrainDrain), nameof(BrainDrain.Stages)), (typeof(Consolidation), nameof(Consolidation.TickStages)),
         (typeof(AssaultRules), nameof(AssaultRules.Assess)), (typeof(WarRhythmRules), nameof(WarRhythmRules.OffensivePulse)),
         (typeof(WarRhythmRules), nameof(WarRhythmRules.BattleFortune)),

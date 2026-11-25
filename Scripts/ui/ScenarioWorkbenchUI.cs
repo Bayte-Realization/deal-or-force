@@ -71,17 +71,25 @@ public partial class DealOrForceGame
         // Navigation is explicit, not inherited from the window being replaced.
         // Otherwise a child of the library inherits "main menu" as its Close action,
         // while the same editor opened from a campaign only hides its canvas.
+        var touch = DealOrForce.Platform.PlatformProfile.Current.IsTouchPrimary;
+        var navHeight = touch ? MathF.Max(42f, DealOrForce.Platform.PlatformProfile.Current.RecommendedCloseButtonPx) : 36f;
+        var closeSide = touch ? MathF.Max(44f, DealOrForce.Platform.PlatformProfile.Current.RecommendedCloseButtonPx) : 36f;
+        var closeHeight = touch ? MathF.Max(42f, DealOrForce.Platform.PlatformProfile.Current.RecommendedCloseButtonPx) : 36f;
         _authorExit = onClose ?? OpenScenarioLibrary;
         if (!scenarioLibrary && onClose is not null && closeLabel == "Back")
         {
-            var previous = ActionButton("Back to previous editor", () => ConfirmAuthorExit(onClose), 200, 36);
+            var previous = ActionButton("Back to previous editor", () => ConfirmAuthorExit(onClose), touch ? 220f : 200f, navHeight);
             previous.Name = "WorkshopPreviousEditor";
             header.AddChild(previous);
         }
         Action scenariosExit = !scenarioLibrary && closeLabel != "Back to scenarios" ? OpenScenarioLibrary : _authorExit;
-        var navigation = ActionButton(scenarioLibrary ? closeLabel : "Back to scenarios", () => ConfirmAuthorExit(scenariosExit), 220, 36);
+        var navigation = ActionButton(scenarioLibrary ? closeLabel : "Back to scenarios", () => ConfirmAuthorExit(scenariosExit), touch ? 236f : 220f, navHeight);
         navigation.Name = scenarioLibrary ? "WorkshopMainMenu" : "WorkshopScenarios";
         header.AddChild(navigation);
+        var closeBtn = ActionButton("×", () => ConfirmAuthorExit(_authorExit), closeSide, closeHeight);
+        closeBtn.Name = "WorkshopCloseButton";
+        closeBtn.TooltipText = Ui.Tip(Loc.Get("Close"));
+        header.AddChild(closeBtn);
         AddAuthorPackageBar(rows, reopen ?? OpenScenarioLibrary);
         if (readable)
             panel.CallDeferred(Node.MethodName.AddChild, new DecisionDialogLayout { Name = "WorkshopReadability", Panel = panel, LayoutKey = "workshop.panel" });

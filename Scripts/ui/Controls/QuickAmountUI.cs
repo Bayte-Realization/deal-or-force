@@ -139,7 +139,10 @@ public sealed partial class QuickAmountWidget : PanelContainer
         _valueLabel.AddThemeColorOverride("font_color", Ui.Colour("text.bright"));
         head.AddChild(_valueLabel);
 
-        _closeButton = CreateStyledButton("×", () => RequestClose(), 28, 24);
+        var isTouch = DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        _closeButton = CreateStyledButton("×", () => RequestClose(), isTouch ? 42 : 32, isTouch ? 42 : 30);
+        _closeButton.Name = "CloseQuickAmount";
+        _closeButton.AddThemeFontSizeOverride("font_size", isTouch ? 20 : 16);
         _closeButton.TooltipText = Ui.Tip(Loc.Get("Close"));
         _closeButton.Visible = showCloseButton;
         head.AddChild(_closeButton);
@@ -500,7 +503,7 @@ public sealed partial class QuickAmountWidget : PanelContainer
             ContentMarginRight = 10,
             ContentMarginTop = 8,
             ContentMarginBottom = 8,
-            ShadowColor = new Color(0, 0, 0, focused ? 0.36f : 0.24f),
+            ShadowColor = Ui.Colour("shell.border", focused ? 0.36f : 0.24f),
             ShadowSize = focused ? 6 : 4
         };
         box.SetBorderWidthAll(focused ? 2 : 1);

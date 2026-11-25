@@ -1,6 +1,9 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using DotNext.Buffers;
+using SimdLinq;
 
 namespace DealOrForce.Simulation;
 
@@ -89,8 +92,7 @@ public static class WarScoring
     // Score scratch and the province index, reused across the wars of ONE campaign.
     // These tables used to be one set for the process: the next campaign's score cleared
     // the side, worth and occupation dictionaries and replaced the province index, so the
-    // first campaign's lists were gone. Each campaign now keeps its own. Active only names
-    // the board of the score now being written. The live tick stays single-threaded.
+    // first campaign's lists were gone. Each score now uses its own campaign's board.
     //
     // Each war used to scan all thirty-five thousand provinces three or four times: who owns
     // them, what the capitals are, and whether the war goal is held. Twenty wars on the same
@@ -115,36 +117,10 @@ public static class WarScoring
     }
 
     private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
-    private static Scratch Active;
-
-    private static Dictionary<int, float> ValuePerProvince => Active.ValuePerProvince;
-    private static Dictionary<int, int> ProvincesOf => Active.ProvincesOf;
-    private static Dictionary<ushort, int> SideOf => Active.SideOf;
-    private static Dictionary<ushort, float> Occupied => Active.Occupied;
-    private static Dictionary<ushort, float> Worth => Active.Worth;
-    private static int[] _stateStart
-    {
-        get => Active.StateStart;
-        set => Active.StateStart = value;
-    }
-    private static int[] _stateCount
-    {
-        get => Active.StateCount;
-        set => Active.StateCount = value;
-    }
-    private static int[] _stateProvinces
-    {
-        get => Active.StateProvinces;
-        set => Active.StateProvinces = value;
-    }
-    private static Dictionary<int, int[]> _byOwner
-    {
-        get => Active.ByOwner;
-        set => Active.ByOwner = value;
-    }
 
     /// <summary>How many times the province lists have been rebuilt. The rule test reads it.</summary>
-    internal static int StateIndexBuilds { get; private set; }
+    private static int _stateIndexBuilds;
+    internal static int StateIndexBuilds => System.Threading.Volatile.Read(ref _stateIndexBuilds);
 
     private static Scratch Board(Campaign campaign) =>
         campaign is not null && Boards.TryGetValue(campaign, out var board) ? board : null;
@@ -179,54 +155,85 @@ public static class WarScoring
     /// <summary>How many of a region's provinces belong to the belligerents on that score.</summary>
     internal static Dictionary<int, int> ScoreProvinceCounts(Campaign campaign) => Board(campaign)?.ProvincesOf;
 
-    private static void EnsureProvinceIndex(Campaign campaign)
+    private static Scratch EnsureProvinceIndex(Campaign campaign, ProvinceTopology map)
     {
-        var map = campaign.ProvinceMap;
-        if (map is null) return;
-        Active = Boards.GetOrCreateValue(campaign);
-        if (ReferenceEquals(Active.IndexMap, map) && Active.IndexRevision == campaign.OwnershipRevision) return;
-        Active.IndexMap = map;
-        Active.IndexRevision = campaign.OwnershipRevision;
-        StateIndexBuilds++;
+        var board = Boards.GetOrCreateValue(campaign);
+        if (ReferenceEquals(board.IndexMap, map) && board.IndexRevision == campaign.OwnershipRevision)
+            return board;
+        var pCount = map.ProvinceCount;
+        var pts = map.ProvinceToState;
+        var ptn = map.ProvinceToNation;
         var maxState = 0;
-        for (var province = 1; province <= map.ProvinceCount; province++)
-            if (map.ProvinceToState[province] > maxState) maxState = map.ProvinceToState[province];
-        var counts = new int[maxState + 1];
-        for (var province = 1; province <= map.ProvinceCount; province++)
-            counts[map.ProvinceToState[province]]++;
-        var start = new int[maxState + 1];
+        var maxOwner = 0;
+        for (var province = 1; province <= pCount; province++)
+        {
+            var st = pts[province];
+            if (st > maxState) maxState = st;
+            var owner = ptn[province];
+            if (owner > maxOwner) maxOwner = owner;
+        }
+        var stateSlots = maxState + 1;
+        var counts = new int[stateSlots];
+        var start = new int[stateSlots];
+
+        var ownerSlots = maxOwner + 1;
+        using var ownerCounts = new MemoryOwner<int>(ArrayPool<int>.Shared, ownerSlots);
+        using var ownerWrite = new MemoryOwner<int>(ArrayPool<int>.Shared, ownerSlots);
+        using var fill = new MemoryOwner<int>(ArrayPool<int>.Shared, stateSlots);
+        ownerCounts.Span.Clear();
+        ownerWrite.Span.Clear();
+        fill.Span.Clear();
+        var ocSpan = ownerCounts.Span;
+        var owSpan = ownerWrite.Span;
+        var fSpan = fill.Span;
+        for (var province = 1; province <= pCount; province++)
+        {
+            counts[pts[province]]++;
+            ocSpan[ptn[province]]++;
+        }
+        var totalStateProvinces = counts.AsSpan(0, stateSlots).Sum();
         var cursor = 0;
-        for (var state = 0; state <= maxState; state++)
+        for (var state = 0; state < stateSlots; state++)
         {
             start[state] = cursor;
             cursor += counts[state];
         }
+        System.Diagnostics.Debug.Assert(cursor == totalStateProvinces);
         var provinces = new int[cursor];
-        var fill = new int[maxState + 1];
-        var owners = new Dictionary<int, List<int>>();
-        for (var province = 1; province <= map.ProvinceCount; province++)
+        var ownerBuckets = 0;
+        for (var owner = 0; owner < ownerSlots; owner++)
+            if (ocSpan[owner] > 0) ownerBuckets++;
+        var byOwner = new Dictionary<int, int[]>(ownerBuckets);
+        for (var owner = 0; owner < ownerSlots; owner++)
         {
-            var state = map.ProvinceToState[province];
-            provinces[start[state] + fill[state]++] = province;
-            var owner = (int)map.ProvinceToNation[province];
-            if (!owners.TryGetValue(owner, out var list)) owners[owner] = list = new List<int>();
-            list.Add(province);
+            var oc = ocSpan[owner];
+            if (oc > 0) byOwner[owner] = new int[oc];
         }
-        _stateStart = start;
-        _stateCount = counts;
-        _stateProvinces = provinces;
-        _byOwner = new Dictionary<int, int[]>(owners.Count);
-        foreach (var (owner, list) in owners) _byOwner[owner] = list.ToArray();
+        for (var province = 1; province <= pCount; province++)
+        {
+            var state = pts[province];
+            provinces[start[state] + fSpan[state]++] = province;
+            var owner = (int)ptn[province];
+            byOwner[owner][owSpan[owner]++] = province;
+        }
+        board.ByOwner = byOwner;
+        board.StateStart = start;
+        board.StateCount = counts;
+        board.StateProvinces = provinces;
+        board.IndexMap = map;
+        board.IndexRevision = campaign.OwnershipRevision;
+        System.Threading.Interlocked.Increment(ref _stateIndexBuilds);
+        return board;
     }
 
-    private static bool StateProvinces(int state, out int start, out int count)
+    private static bool StateProvinces(Scratch board, int state, out int start, out int count)
     {
         start = 0;
         count = 0;
-        if ((uint)state >= (uint)_stateStart.Length) return false;
-        count = _stateCount[state];
+        if ((uint)state >= (uint)board.StateStart.Length) return false;
+        count = board.StateCount[state];
         if (count <= 0) return false;
-        start = _stateStart[state];
+        start = board.StateStart[state];
         return true;
     }
 
@@ -238,29 +245,32 @@ public static class WarScoring
         var defender = campaign.NationById(war.DefenderId);
         if (topology is null || controllers is null || attacker is null || defender is null) return;
         var defines = campaign.Defines;
-        EnsureProvinceIndex(campaign);
+        var board = EnsureProvinceIndex(campaign, topology);
+        var sides = board.SideOf;
+        var provincesOf = board.ProvincesOf;
+        var valuePerProvince = board.ValuePerProvince;
+        var regions = topology.ProvinceToState;
 
         // ---- occupation, by worth ------------------------------------------------------
-        SideOf.Clear();
-        foreach (var id in war.Side(true)) if (campaign.NationById(id) is { } n) SideOf[(ushort)n.MapIndex] = 1;
-        foreach (var id in war.Side(false)) if (campaign.NationById(id) is { } n) SideOf[(ushort)n.MapIndex] = -1;
+        sides.Clear();
+        foreach (var id in war.Side(true)) if (campaign.NationById(id) is { } n) sides[(ushort)n.MapIndex] = 1;
+        foreach (var id in war.Side(false)) if (campaign.NationById(id) is { } n) sides[(ushort)n.MapIndex] = -1;
 
         // What each member's regions are worth to it, per province.
         // Only the provinces those flags own: a neutral province inside a split region
         // is not part of the denominator, which is what the full scan used to skip.
-        ProvincesOf.Clear();
-        foreach (var (owner, _) in SideOf)
+        provincesOf.Clear();
+        foreach (var (owner, _) in sides)
         {
-            if (!_byOwner.TryGetValue(owner, out var owned)) continue;
+            if (!board.ByOwner.TryGetValue(owner, out var owned)) continue;
             foreach (var province in owned)
             {
-                if (province >= controllers.Length) continue;
-                var region = topology.ProvinceToState[province];
-                ProvincesOf[region] = ProvincesOf.GetValueOrDefault(region) + 1;
+                if (province >= controllers.Length) break;
+                System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(provincesOf, regions[province], out _)++;
             }
         }
-        ValuePerProvince.Clear();
-        foreach (var (map, _) in SideOf)
+        valuePerProvince.Clear();
+        foreach (var (map, _) in sides)
         {
             var member = campaign.NationByMapIndex(map);
             if (member is null) continue;
@@ -275,37 +285,53 @@ public static class WarScoring
             var peopleWeight = industry > 0 ? M.Clamp01(defines.WarScorePeopleWeight) : 1f;
             foreach (var state in states)
             {
-                var provinces = ProvincesOf.GetValueOrDefault(state.MapIndex);
+                var provinces = provincesOf.GetValueOrDefault(state.MapIndex);
                 if (provinces <= 0) continue;
                 var built = 0;
                 foreach (var count in state.Buildings.Values) built += Math.Max(0, count);
                 var worth = (people > 0 ? peopleWeight * state.Population / (float)people : 0f) +
                             (industry > 0 ? (1f - peopleWeight) * built / (float)industry : 0f);
-                ValuePerProvince[state.MapIndex] = worth / provinces;
+                valuePerProvince[state.MapIndex] = worth / provinces;
             }
         }
 
-        Occupied.Clear();
-        Worth.Clear();
-        foreach (var (owner, side) in SideOf)
+        board.Occupied.Clear();
+        board.Worth.Clear();
+        foreach (var (owner, side) in sides)
         {
-            if (!_byOwner.TryGetValue(owner, out var owned)) continue;
+            if (!board.ByOwner.TryGetValue(owner, out var owned) || owned.Length == 0 || owned[0] >= controllers.Length) continue;
+            var ownerWorth = 0f;
+            var occupiedWorth = 0f;
+            var occupied = false;
+            var previousRegion = -1;
+            var value = 0f;
             foreach (var province in owned)
             {
-                if (province >= controllers.Length) continue;
-                var value = ValuePerProvince.GetValueOrDefault(topology.ProvinceToState[province]);
-                Worth[owner] = Worth.GetValueOrDefault(owner) + value;
+                if (province >= controllers.Length) break;
+                var region = regions[province];
+                if (region != previousRegion)
+                {
+                    previousRegion = region;
+                    value = valuePerProvince.GetValueOrDefault(region);
+                }
+                // Add each province in its existing order to preserve the score's rounding.
+                ownerWorth += value;
                 var holder = controllers[province];
-                if (holder != owner && SideOf.TryGetValue(holder, out var holderSide) && holderSide != side)
-                    Occupied[owner] = Occupied.GetValueOrDefault(owner) + value;
+                if (holder != owner && sides.TryGetValue(holder, out var holderSide) && holderSide != side)
+                {
+                    occupiedWorth += value;
+                    occupied = true;
+                }
             }
+            board.Worth[owner] = ownerWorth;
+            if (occupied) board.Occupied[owner] = occupiedWorth;
         }
-        war.DefenderOccupiedValue = SideShare(campaign, war.Side(false));
-        war.AttackerOccupiedValue = SideShare(campaign, war.Side(true));
+        war.DefenderOccupiedValue = SideShare(campaign, war.Side(false), board);
+        war.AttackerOccupiedValue = SideShare(campaign, war.Side(true), board);
         war.OccupationScore = (war.DefenderOccupiedValue - war.AttackerOccupiedValue) * defines.WarScoreOccupation;
 
         // ---- the capitals ---------------------------------------------------------------
-        war.CapitalScore = (CapitalHeld(campaign, defender, SideOf, 1) - CapitalHeld(campaign, attacker, SideOf, -1)) *
+        war.CapitalScore = (CapitalHeld(campaign, defender, board, 1) - CapitalHeld(campaign, attacker, board, -1)) *
                            defines.WarScoreCapital;
 
         // ---- the armies -----------------------------------------------------------------
@@ -325,16 +351,16 @@ public static class WarScoring
         // ---- the war goal and the momentum -----------------------------------------------
         war.ObjectiveScore = 0f;
         var goalHeld = -1f;
-        if (war.ClaimedStateMapIndex >= 0 && StateProvinces(war.ClaimedStateMapIndex, out var goalStart, out var goalCount))
+        if (war.ClaimedStateMapIndex >= 0 && StateProvinces(board, war.ClaimedStateMapIndex, out var goalStart, out var goalCount))
         {
             var total = 0;
             var held = 0;
             for (var index = 0; index < goalCount; index++)
             {
-                var province = _stateProvinces[goalStart + index];
+                var province = board.StateProvinces[goalStart + index];
                 if (province >= controllers.Length) continue;
                 total++;
-                if (SideOf.TryGetValue(controllers[province], out var side) && side > 0) held++;
+                if (sides.TryGetValue(controllers[province], out var side) && side > 0) held++;
             }
             if (total > 0)
             {
@@ -421,7 +447,7 @@ public static class WarScoring
         (occupied >= defines.WarScoreCollapseOccupationBroken && strengthLeft <= defines.WarScoreCollapseArmy);
 
     /// <summary>The share of a side's worth under the other side's flag, each member weighted by its GDP.</summary>
-    private static float SideShare(Campaign campaign, IEnumerable<int> side)
+    private static float SideShare(Campaign campaign, IEnumerable<int> side, Scratch board)
     {
         var weight = 0f;
         var taken = 0f;
@@ -429,29 +455,29 @@ public static class WarScoring
         {
             if (campaign.NationById(id) is not { } member) continue;
             var map = (ushort)member.MapIndex;
-            var worth = Worth.GetValueOrDefault(map);
+            var worth = board.Worth.GetValueOrDefault(map);
             if (worth <= 0f) continue;
             var gdp = MathF.Max(0.01f, member.Gdp);
             weight += gdp;
-            taken += gdp * M.Clamp01(Occupied.GetValueOrDefault(map) / worth);
+            taken += gdp * M.Clamp01(board.Occupied.GetValueOrDefault(map) / worth);
         }
         return weight <= 0f ? 0f : taken / weight;
     }
 
     /// <summary>How much of this leader's capital region the side opposite to it holds.</summary>
-    private static float CapitalHeld(Campaign campaign, Nation leader, Dictionary<ushort, int> sides, int enemySide)
+    private static float CapitalHeld(Campaign campaign, Nation leader, Scratch board, int enemySide)
     {
         if (leader is null || leader.CapitalStateMapIndex <= 0) return 0f;
         var controllers = campaign.ProvinceController;
-        if (controllers is null || !StateProvinces(leader.CapitalStateMapIndex, out var start, out var count)) return 0f;
+        if (controllers is null || !StateProvinces(board, leader.CapitalStateMapIndex, out var start, out var count)) return 0f;
         var total = 0;
         var held = 0;
         for (var index = 0; index < count; index++)
         {
-            var province = _stateProvinces[start + index];
+            var province = board.StateProvinces[start + index];
             if (province >= controllers.Length) continue;
             total++;
-            if (sides.TryGetValue(controllers[province], out var side) && side == enemySide) held++;
+            if (board.SideOf.TryGetValue(controllers[province], out var side) && side == enemySide) held++;
         }
         return total == 0 ? 0f : held / (float)total;
     }

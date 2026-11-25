@@ -265,6 +265,7 @@ public sealed partial class GlobePresentation
         _spaceNode.Visible = !enabled;
         _flatRoot.Visible = enabled;
         _routeFingerprint = int.MinValue;
+        _cameraTransformDirty = true;
         ReprojectWorldDecorations();
         ReprojectSupportMarkers(true);
         BuildFrontPreview();
@@ -399,110 +400,315 @@ public sealed partial class GlobePresentation
     private int _lastFlatCapRev = int.MinValue;
     private int _lastFlatDestroyedCount = int.MinValue;
     private int _lastFlatCapCount = -1;
-    private readonly List<(float Lat, float Lon)> _flatCapitalCoords = new();
+    private float _lastFlatCapRelief = -1f;
+    private byte[] _lastFlatCapReliefGrid;
+    private readonly List<Vector3> _flatCapitalBasePos = new();
+    private readonly List<float> _flatCapitalAppliedX = new();
     private float _lastFlatGlyphX = float.NaN;
+    private float _lastFlatGlyphRelief = -1f;
+    private byte[] _lastFlatGlyphReliefGrid;
     private object _lastFlatGlyphsRef;
     private int _lastFlatGlyphsCount = -1;
+    private readonly List<Vector3> _flatGlyphBasePos = new();
+    private readonly List<float> _flatGlyphAppliedX = new();
     private float _lastFlatMobileX = float.NaN;
     private float _lastFlatMobileCamSize = float.NaN;
     private int _lastFlatMobileMapRev = int.MinValue;
+    private long _lastFlatMobileHours = long.MinValue;
+    private int _lastFlatMobileArmyCount = -1;
     private int _lastFlatMobileFleetCount = -1;
     private int _lastFlatMobileBattleCount = -1;
     private int _lastFlatMobileSupportCount = -1;
+    private readonly List<(Node3D Node, float BaseX, float WrappedX)> _flatFleetWrapCache = new();
+    private readonly List<(SupportMapMarker Marker, float BaseX, float WrappedX)> _flatSupportWrapCache = new();
+    private readonly List<(Node3D Node, Vector3 Normal, float BaseX, float WrappedX)> _flatBattleWrapCache = new();
+    private readonly List<(ArmyStackMarker Marker, float BaseX, float WrappedX)> _flatArmyWrapCache = new();
     private ulong _lastFlatPausedArmyMsec;
+    private ulong _nextFlatLeaderRedrawMsec;
+    private bool _flatLeaderRedrawPending;
 
     private void UpdateFlatWorldPositions()
     {
         var force = _forceFlatReproject;
         _forceFlatReproject = false;
+        var flatInMotion = FlatViewInMotion;
+        UpdateFlatCapitals(force);
+        UpdateFlatMobileMarkers(force);
+        UpdateFlatCountryGlyphs(force);
+        UpdateFlatLeaderRedraw(flatInMotion, Time.GetTicksMsec());
+    }
 
+    private void UpdateFlatCapitals(bool force)
+    {
         var destroyedCount = _campaign?.DestroyedProvinces.Count ?? -1;
-        if (force || MathF.Abs(_flatX - _lastFlatCapX) > 0.0001f ||
-            _lastFlatCapRev != _capitalRevision || _lastFlatDestroyedCount != destroyedCount ||
-            _lastFlatCapCount != _capitalMarkers.Count)
+        var cacheInvalid = _lastFlatCapRev != _capitalRevision ||
+            _lastFlatDestroyedCount != destroyedCount ||
+            _lastFlatCapCount != _capitalMarkers.Count ||
+            _flatCapitalBasePos.Count != _capitalMarkers.Count ||
+            _flatCapitalAppliedX.Count != _capitalMarkers.Count ||
+            !Mathf.IsEqualApprox(_lastFlatCapRelief, _reliefDisplacement) ||
+            !ReferenceEquals(_lastFlatCapReliefGrid, _reliefHeightGrid);
+
+        if (!force && !cacheInvalid && float.IsFinite(_lastFlatCapX) && MathF.Abs(_flatX - _lastFlatCapX) <= 1e-5f)
+            return;
+
+        if (cacheInvalid)
         {
-            if (_lastFlatCapRev != _capitalRevision || _lastFlatDestroyedCount != destroyedCount ||
-                _lastFlatCapCount != _capitalMarkers.Count || _flatCapitalCoords.Count != _capitalMarkers.Count)
+            var reliefActive = _reliefDisplacement > 0.0001f;
+            var reliefBias = reliefActive ? 0.004f : 0f;
+            var footprint = reliefActive ? 0.045f : 0f;
+            _flatCapitalBasePos.Clear();
+            _flatCapitalAppliedX.Clear();
+            _flatCapitalBasePos.Capacity = Math.Max(_flatCapitalBasePos.Capacity, _capitalMarkers.Count);
+            _flatCapitalAppliedX.Capacity = Math.Max(_flatCapitalAppliedX.Capacity, _capitalMarkers.Count);
+            for (var i = 0; i < _capitalMarkers.Count; i++)
             {
-                _flatCapitalCoords.Clear();
-                for (var i = 0; i < _capitalMarkers.Count; i++)
-                    _flatCapitalCoords.Add(GeographicFromNormal(_capitalMarkers[i].Normal));
+                var geo = GeographicFromNormal(_capitalMarkers[i].Normal);
+                var z = FlatMarkerZ + reliefBias + MaxReliefLiftAround(geo.Latitude, geo.Longitude, footprint, flat: true);
+                _flatCapitalBasePos.Add(new Vector3(geo.Longitude / 360f * FlatMapWidth, geo.Latitude / 180f * FlatMapHeight, z));
+                _flatCapitalAppliedX.Add(float.NaN);
             }
-            _lastFlatCapX = _flatX;
             _lastFlatCapRev = _capitalRevision;
             _lastFlatDestroyedCount = destroyedCount;
             _lastFlatCapCount = _capitalMarkers.Count;
-            for (var i = 0; i < _capitalMarkers.Count; i++)
-            {
-                var node = _capitalMarkers[i].Node;
-                if (!IsInstanceValid(node)) continue;
-                var geo = _flatCapitalCoords[i];
-                var position = LocalFlatPoint(geo.Lat, geo.Lon, FlatMarkerZ);
-                if (node.Position != position) node.Position = position;
-                if (node.Quaternion != Quaternion.Identity) node.Quaternion = Quaternion.Identity;
-            }
+            _lastFlatCapRelief = _reliefDisplacement;
+            _lastFlatCapReliefGrid = _reliefHeightGrid;
+        }
+        else if (force)
+        {
+            for (var i = 0; i < _flatCapitalAppliedX.Count; i++)
+                _flatCapitalAppliedX[i] = float.NaN;
         }
 
+        _lastFlatCapX = _flatX;
+        for (var i = 0; i < _capitalMarkers.Count; i++)
+        {
+            var basePos = _flatCapitalBasePos[i];
+            var wrappedX = DateLineSeam.NearestCopy(basePos.X, _flatX, FlatMapWidth);
+            if (!force && !cacheInvalid && wrappedX == _flatCapitalAppliedX[i]) continue;
+            var node = _capitalMarkers[i].Node;
+            if (!IsInstanceValid(node)) continue;
+            _flatCapitalAppliedX[i] = wrappedX;
+            var position = new Vector3(wrappedX, basePos.Y, basePos.Z);
+            if (node.Position != position) node.Position = position;
+            if ((force || cacheInvalid) && node.Quaternion != Quaternion.Identity) node.Quaternion = Quaternion.Identity;
+        }
+    }
+
+    private void UpdateFlatMobileMarkers(bool force)
+    {
         var mapRev = _campaign?.MapRevision ?? -1;
-        var camSize = IsInstanceValid(_camera) ? _camera.Size : 0f;
+        var hours = _campaign?.ElapsedHours ?? -1;
         var unpaused = _campaign is { IsPaused: false };
-        var flatInMotion = FlatViewInMotion;
-        var mobileWorldDirty = force || unpaused || flatInMotion ||
-            MathF.Abs(_flatX - _lastFlatMobileX) > 0.0001f ||
-            MathF.Abs(camSize - _lastFlatMobileCamSize) > 0.0001f ||
+        var camSize = _flatZoom;
+        var simOrCountDirty = force ||
             _lastFlatMobileMapRev != mapRev ||
+            (unpaused && hours != _lastFlatMobileHours) ||
+            _lastFlatMobileArmyCount != _armyStacks.Count ||
             _lastFlatMobileFleetCount != _fleetMarkers.Count ||
             _lastFlatMobileBattleCount != _battleMarkers.Count ||
             _lastFlatMobileSupportCount != _supportMapMarkers.Count;
-        if (mobileWorldDirty)
+        var zoomChanged = !float.IsFinite(_lastFlatMobileCamSize) ||
+            MathF.Abs(camSize - _lastFlatMobileCamSize) > MathF.Max(0.0002f, camSize * 0.001f);
+        var xChanged = !float.IsFinite(_lastFlatMobileX) || MathF.Abs(_flatX - _lastFlatMobileX) > 1e-5f;
+        var nowMsec = Time.GetTicksMsec();
+        var unpausedArmyTick = unpaused && nowMsec - _lastFlatPausedArmyMsec >= 120UL;
+
+        if (!simOrCountDirty && !zoomChanged && !xChanged && !unpausedArmyTick)
+            return;
+
+        if (simOrCountDirty || zoomChanged)
         {
             _lastFlatMobileX = _flatX;
             _lastFlatMobileCamSize = camSize;
             _lastFlatMobileMapRev = mapRev;
+            _lastFlatMobileHours = hours;
+            _lastFlatMobileArmyCount = _armyStacks.Count;
             _lastFlatMobileFleetCount = _fleetMarkers.Count;
             _lastFlatMobileBattleCount = _battleMarkers.Count;
             _lastFlatMobileSupportCount = _supportMapMarkers.Count;
+
+            _flatFleetWrapCache.Clear();
+            _flatFleetWrapCache.Capacity = Math.Max(_flatFleetWrapCache.Capacity, _fleetMarkers.Count);
             foreach (var (node, normal) in _fleetMarkers)
             {
                 if (!IsInstanceValid(node)) continue;
                 var geo = GeographicFromNormal(normal);
+                var baseX = geo.Longitude / 360f * FlatMapWidth;
                 var position = _fleetByMarker.TryGetValue(node, out var fleet)
                     ? FlatFleetPosition(fleet.Id, geo.Latitude, geo.Longitude)
                     : LocalFlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
                 if (node.Position != position) node.Position = position;
+                _flatFleetWrapCache.Add((node, baseX, DateLineSeam.NearestCopy(baseX, _flatX, FlatMapWidth)));
             }
+
             ReprojectSupportMarkers();
+            _flatSupportWrapCache.Clear();
+            _flatSupportWrapCache.Capacity = Math.Max(_flatSupportWrapCache.Capacity, _supportMapMarkers.Count);
+            foreach (var marker in _supportMapMarkers.Values)
+            {
+                if (!IsInstanceValid(marker.Node)) continue;
+                var baseX = marker.Longitude / 360f * FlatMapWidth;
+                _flatSupportWrapCache.Add((marker, baseX, DateLineSeam.NearestCopy(baseX, _flatX, FlatMapWidth)));
+            }
+
             ReprojectBattleMarkers();
+            _flatBattleWrapCache.Clear();
+            _flatBattleWrapCache.Capacity = Math.Max(_flatBattleWrapCache.Capacity, _battleMarkers.Count);
+            foreach (var marker in _battleMarkers.Values)
+            {
+                if (!IsInstanceValid(marker.Node)) continue;
+                var geo = GeographicFromNormal(marker.Normal);
+                var baseX = geo.Longitude / 360f * FlatMapWidth;
+                _flatBattleWrapCache.Add((marker.Node, marker.Normal, baseX, DateLineSeam.NearestCopy(baseX, _flatX, FlatMapWidth)));
+            }
+        }
+        else if (xChanged)
+        {
+            _lastFlatMobileX = _flatX;
+
+            for (var i = 0; i < _flatFleetWrapCache.Count; i++)
+            {
+                var entry = _flatFleetWrapCache[i];
+                var wrappedX = DateLineSeam.NearestCopy(entry.BaseX, _flatX, FlatMapWidth);
+                if (wrappedX == entry.WrappedX) continue;
+                _flatFleetWrapCache[i] = (entry.Node, entry.BaseX, wrappedX);
+                if (!IsInstanceValid(entry.Node)) continue;
+                var pos = entry.Node.Position;
+                var shifted = new Vector3(pos.X + (wrappedX - entry.WrappedX), pos.Y, pos.Z);
+                if (entry.Node.Position != shifted) entry.Node.Position = shifted;
+            }
+
+            for (var i = 0; i < _flatSupportWrapCache.Count; i++)
+            {
+                var entry = _flatSupportWrapCache[i];
+                var wrappedX = DateLineSeam.NearestCopy(entry.BaseX, _flatX, FlatMapWidth);
+                if (wrappedX == entry.WrappedX) continue;
+                _flatSupportWrapCache[i] = (entry.Marker, entry.BaseX, wrappedX);
+                if (!IsInstanceValid(entry.Marker.Node)) continue;
+                var pos = entry.Marker.Node.Position;
+                var shifted = new Vector3(pos.X + (wrappedX - entry.WrappedX), pos.Y, pos.Z);
+                if (entry.Marker.Node.Position != shifted) entry.Marker.Node.Position = shifted;
+            }
+
+            var anyBattleWrapped = false;
+            for (var i = 0; i < _flatBattleWrapCache.Count; i++)
+            {
+                var entry = _flatBattleWrapCache[i];
+                var wrappedX = DateLineSeam.NearestCopy(entry.BaseX, _flatX, FlatMapWidth);
+                if (wrappedX == entry.WrappedX) continue;
+                _flatBattleWrapCache[i] = (entry.Node, entry.Normal, entry.BaseX, wrappedX);
+                if (!IsInstanceValid(entry.Node)) continue;
+                PositionBattleMarker(entry.Node, entry.Normal);
+                anyBattleWrapped = true;
+            }
+            if (anyBattleWrapped) _battleMarkerDay = -1;
         }
 
-        var nowMsec = Time.GetTicksMsec();
-        if (mobileWorldDirty || nowMsec - _lastFlatPausedArmyMsec >= 120UL)
+        if (simOrCountDirty || zoomChanged || unpausedArmyTick)
         {
             _lastFlatPausedArmyMsec = nowMsec;
+            _flatArmyWrapCache.Clear();
+            _flatArmyWrapCache.Capacity = Math.Max(_flatArmyWrapCache.Capacity, _armyStacks.Count);
             foreach (var marker in _armyStacks.Values)
-                if (IsInstanceValid(marker.Node))
-                {
-                    // Per-frame flat updates only write the target; the projection switch snaps
-                    // both values through SnapArmyMarkerPositions before this method is used.
-                    marker.TargetPosition = ArmyMarkerPosition(marker);
-                }
+            {
+                if (!IsInstanceValid(marker.Node)) continue;
+                // Per-frame flat updates only write the target; the projection switch snaps
+                // both values through SnapArmyMarkerPositions before this method is used.
+                var targetPos = ArmyMarkerPosition(marker);
+                marker.TargetPosition = targetPos;
+                var loc = ArmyPresentationLocation(marker.Stack);
+                var baseX = loc.Longitude / 360f * FlatMapWidth;
+                _flatArmyWrapCache.Add((marker, baseX, DateLineSeam.NearestCopy(baseX, _flatX, FlatMapWidth)));
+            }
         }
-        if (flatInMotion) QueueRedraw();
-
-        var glyphBias = _reliefDisplacement > 0.0001f ? 0.002f : 0f;
-        if (force || MathF.Abs(_flatX - _lastFlatGlyphX) > 0.0001f ||
-            !ReferenceEquals(_lastFlatGlyphsRef, _lastLabelAnchors) ||
-            _lastFlatGlyphsCount != _countryGlyphs.Count)
+        else if (xChanged)
         {
-            _lastFlatGlyphX = _flatX;
+            for (var i = 0; i < _flatArmyWrapCache.Count; i++)
+            {
+                var entry = _flatArmyWrapCache[i];
+                var wrappedX = DateLineSeam.NearestCopy(entry.BaseX, _flatX, FlatMapWidth);
+                if (wrappedX == entry.WrappedX) continue;
+                _flatArmyWrapCache[i] = (entry.Marker, entry.BaseX, wrappedX);
+                if (!IsInstanceValid(entry.Marker.Node)) continue;
+                entry.Marker.TargetPosition = ArmyMarkerPosition(entry.Marker);
+            }
+        }
+    }
+
+    private void UpdateFlatLeaderRedraw(bool flatInMotion, ulong nowMsec)
+    {
+        if (flatInMotion && _auxiliaryCounters.Count > 0 && MilitaryMarkersEnabled)
+        {
+            if (nowMsec >= _nextFlatLeaderRedrawMsec)
+            {
+                _nextFlatLeaderRedrawMsec = nowMsec + (Platform.PlatformProfile.Current?.IsTouchPrimary == true ? 66UL : 50UL);
+                _flatLeaderRedrawPending = false;
+                QueueRedraw();
+            }
+            else
+            {
+                _flatLeaderRedrawPending = true;
+            }
+        }
+        else if (!flatInMotion && _flatLeaderRedrawPending)
+        {
+            _flatLeaderRedrawPending = false;
+            QueueRedraw();
+        }
+    }
+
+    private void UpdateFlatCountryGlyphs(bool force)
+    {
+        var cacheInvalid = !ReferenceEquals(_lastFlatGlyphsRef, _lastLabelAnchors) ||
+            _lastFlatGlyphsCount != _countryGlyphs.Count ||
+            _flatGlyphBasePos.Count != _countryGlyphs.Count ||
+            _flatGlyphAppliedX.Count != _countryGlyphs.Count ||
+            !Mathf.IsEqualApprox(_lastFlatGlyphRelief, _reliefDisplacement) ||
+            !ReferenceEquals(_lastFlatGlyphReliefGrid, _reliefHeightGrid);
+
+        if (!force && !cacheInvalid && float.IsFinite(_lastFlatGlyphX) && MathF.Abs(_flatX - _lastFlatGlyphX) <= 1e-5f)
+            return;
+
+        if (cacheInvalid)
+        {
+            var glyphBias = _reliefDisplacement > 0.0001f ? 0.008f : 0f;
+            _flatGlyphBasePos.Clear();
+            _flatGlyphAppliedX.Clear();
+            _flatGlyphBasePos.Capacity = Math.Max(_flatGlyphBasePos.Capacity, _countryGlyphs.Count);
+            _flatGlyphAppliedX.Capacity = Math.Max(_flatGlyphAppliedX.Capacity, _countryGlyphs.Count);
+            for (var i = 0; i < _countryGlyphs.Count; i++)
+            {
+                var glyph = _countryGlyphs[i];
+                var z = FlatTextZ + glyphBias + MaxReliefLiftAround(glyph.Latitude, glyph.Longitude, glyph.FootprintRadius, flat: true);
+                _flatGlyphBasePos.Add(new Vector3(glyph.Longitude / 360f * FlatMapWidth, glyph.Latitude / 180f * FlatMapHeight, z));
+                _flatGlyphAppliedX.Add(float.NaN);
+            }
             _lastFlatGlyphsRef = _lastLabelAnchors;
             _lastFlatGlyphsCount = _countryGlyphs.Count;
-            foreach (var glyph in _countryGlyphs)
+            _lastFlatGlyphRelief = _reliefDisplacement;
+            _lastFlatGlyphReliefGrid = _reliefHeightGrid;
+        }
+        else if (force)
+        {
+            for (var i = 0; i < _flatGlyphAppliedX.Count; i++)
+                _flatGlyphAppliedX[i] = float.NaN;
+        }
+
+        _lastFlatGlyphX = _flatX;
+        for (var i = 0; i < _countryGlyphs.Count; i++)
+        {
+            var basePos = _flatGlyphBasePos[i];
+            var wrappedX = DateLineSeam.NearestCopy(basePos.X, _flatX, FlatMapWidth);
+            if (!force && !cacheInvalid && wrappedX == _flatGlyphAppliedX[i]) continue;
+            var glyph = _countryGlyphs[i];
+            if (!IsInstanceValid(glyph.Node)) continue;
+            _flatGlyphAppliedX[i] = wrappedX;
+            var position = new Vector3(wrappedX, basePos.Y, basePos.Z);
+            if (glyph.Node.Position != position) glyph.Node.Position = position;
+            if (cacheInvalid || force)
             {
-                if (!IsInstanceValid(glyph.Node)) continue;
-                var position = LocalFlatPoint(glyph.Latitude, glyph.Longitude, FlatTextZ + glyphBias);
                 var rotation = new Vector3(0f, 0f, glyph.FlatRotation);
-                if (glyph.Node.Position != position) glyph.Node.Position = position;
                 if (glyph.Node.Rotation != rotation) glyph.Node.Rotation = rotation;
             }
         }
@@ -518,7 +724,7 @@ public sealed partial class GlobePresentation
             return;
         }
 
-        var glyphBias = _reliefDisplacement > 0.0001f ? 0.002f : 0f;
+        var glyphBias = _reliefDisplacement > 0.0001f ? 0.006f : 0f;
         foreach (var (node, normal) in _capitalMarkers)
             if (IsInstanceValid(node)) PlaceCapitalMarker(node, normal);
         foreach (var (node, normal) in _fleetMarkers)
@@ -528,7 +734,7 @@ public sealed partial class GlobePresentation
         foreach (var glyph in _countryGlyphs)
         {
             if (!IsInstanceValid(glyph.Node)) continue;
-            glyph.Node.Position = LocalSurfacePoint(glyph.Latitude, glyph.Longitude, SurfaceTextRadius + glyphBias);
+            glyph.Node.Position = LocalSurfaceLabelPoint(glyph.Latitude, glyph.Longitude, SurfaceTextRadius + glyphBias, glyph.FootprintRadius);
             glyph.Node.Basis = glyph.SurfaceBasis;
         }
         // The basis carries the scale: the letters are full size on the globe again.

@@ -141,21 +141,12 @@ public static partial class MovementRules
         return stamp;
     }
 
-    private static int[] UpdateIntArray(int[] existing, List<int> source, out int count)
+    private static int[] StorePeopleIds(int[] existing, ReadOnlySpan<int> ids, out int count)
     {
-        count = source.Count;
+        count = ids.Length;
         if (count == 0) return existing ?? Array.Empty<int>();
         var arr = existing is not null && existing.Length >= count ? existing : new int[Math.Max(8, count)];
-        CollectionsMarshal.AsSpan(source).CopyTo(arr);
-        return arr;
-    }
-
-    private static int[] CopyIntPrefix(int[] existing, int[] source, int count, out int outCount)
-    {
-        outCount = count;
-        if (count == 0) return existing ?? Array.Empty<int>();
-        var arr = existing is not null && existing.Length >= count ? existing : new int[Math.Max(8, count)];
-        source.AsSpan(0, count).CopyTo(arr);
+        ids.CopyTo(arr);
         return arr;
     }
 
@@ -248,8 +239,8 @@ public static partial class MovementRules
                 var item = slot.RelCults[ri];
                 cache.ReligionBucketsById[item.RelId].Add(new ReligionCultureBucket(region, item.RawCulture, item.Size));
             }
-            cache.StateCultIds[idx] = CopyIntPrefix(cache.StateCultIds[idx], slot.CultIds, slot.CultCount, out cache.StateCultCounts[idx]);
-            cache.StateRelIds[idx] = CopyIntPrefix(cache.StateRelIds[idx], slot.NewRelIds, slot.NewRelCount, out cache.StateRelCounts[idx]);
+            cache.StateCultIds[idx] = StorePeopleIds(cache.StateCultIds[idx], slot.CultIds.AsSpan(0, slot.CultCount), out cache.StateCultCounts[idx]);
+            cache.StateRelIds[idx] = StorePeopleIds(cache.StateRelIds[idx], slot.NewRelIds.AsSpan(0, slot.NewRelCount), out cache.StateRelCounts[idx]);
         }
     }
 
@@ -431,8 +422,8 @@ public static partial class MovementRules
                 cache.ReligionBucketsById[item.RelId].Add(new ReligionCultureBucket(region, item.RawCulture, item.Size));
             }
 
-            cache.StateCultIds[idx] = UpdateIntArray(cache.StateCultIds[idx], cache.TouchedCultures, out cache.StateCultCounts[idx]);
-            cache.StateRelIds[idx] = UpdateIntArray(cache.StateRelIds[idx], cache.ScratchNewRelIds, out cache.StateRelCounts[idx]);
+            cache.StateCultIds[idx] = StorePeopleIds(cache.StateCultIds[idx], touched, out cache.StateCultCounts[idx]);
+            cache.StateRelIds[idx] = StorePeopleIds(cache.StateRelIds[idx], CollectionsMarshal.AsSpan(cache.ScratchNewRelIds), out cache.StateRelCounts[idx]);
         }
     }
 
@@ -516,8 +507,8 @@ public static partial class MovementRules
                 }
             }
 
-            cache.StateCultIds[slot] = UpdateIntArray(cache.StateCultIds[slot], cache.TouchedCultures, out cache.StateCultCounts[slot]);
-            cache.StateRelIds[slot] = UpdateIntArray(cache.StateRelIds[slot], cache.ScratchNewRelIds, out cache.StateRelCounts[slot]);
+            cache.StateCultIds[slot] = StorePeopleIds(cache.StateCultIds[slot], touched, out cache.StateCultCounts[slot]);
+            cache.StateRelIds[slot] = StorePeopleIds(cache.StateRelIds[slot], CollectionsMarshal.AsSpan(cache.ScratchNewRelIds), out cache.StateRelCounts[slot]);
             cache.StateDemographySigs[slot] = StateDemographySignature(cache, region);
             if (slot < cache.StateHeaderPop.Length)
             {

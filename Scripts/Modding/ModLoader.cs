@@ -107,6 +107,7 @@ public sealed class ModLoader
     public DlcLoader Dlc { get; } = new();
 
     public IReadOnlyList<ModPackage> Packages => _packages;
+    public bool HasRuntimeCode => _csharp.Count > 0 || _workers.Count > 0 || (_scriptRuntime is not null && _scriptRuntime.HasActiveScripts);
     public IReadOnlyList<ModFrontendActionDescriptor> FrontendActions() => _frontendActions.Actions;
     public bool TryRunFrontendAction(string fullActionId, out string note) => _frontendActions.TryRun(fullActionId, out note);
     public IReadOnlyList<ModPackage> AvailableMods => _availableMods;

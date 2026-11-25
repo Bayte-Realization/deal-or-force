@@ -81,10 +81,9 @@ public static partial class NationNaming
         string culture, string convention, bool rising = false)
     {
         var region = LargestRegion(campaign, regions);
-        var historic = Predecessor(campaign, regions, culture);
         switch (convention)
         {
-            case "historic" when historic is not null: return IdentitySource(historic);
+            case "historic" when Predecessor(campaign, regions, culture) is { } predecessor: return IdentitySource(predecessor);
             case "land" when LandAtlas.BestFor(campaign, regions, parent?.Tag) is { } chosenLand: return ("land", chosenLand.Id);
             case "region" when region is not null: return ("region", region.Id);
             case "people" when !string.IsNullOrWhiteSpace(culture) && HasOwnCountryName(culture): return ("culture", culture);
@@ -95,8 +94,8 @@ public static partial class NationNaming
         // That name is a nation being restored or born, and it is sharper than the land's
         // adjective. A name an existing country already wears is not founded twice.
         if (!string.IsNullOrWhiteSpace(culture) && HasOwnCountryName(culture) &&
-            !CountryNameTaken(campaign, culture) &&
-            IsPeoplesGround(campaign, regions, culture) && !SamePeople(culture, parent))
+            !SamePeople(culture, parent) && IsPeoplesGround(campaign, regions, culture) &&
+            !CountryNameTaken(campaign, culture))
             return ("culture", culture);
 
         // 2. The land the ground actually is. Donbas and Crimea are named for themselves even
@@ -105,9 +104,12 @@ public static partial class NationNaming
         //    part of it - Scotland's box contains the Highlands without Scotland declaring
         //    them, and a state founded on the Highlands is Highland, not a second Scotland.
         var land = LandAtlas.BestFor(campaign, regions, parent?.Tag);
-        if (land is { Macro: false } && DeclaresGround(land, campaign, regions) &&
-            !NameAlreadyTaken(campaign, LandAtlas.Name(land)))
-            return ("land", land.Id);
+        var landNameTaken = false;
+        if (land is { Macro: false } && DeclaresGround(land, campaign, regions))
+        {
+            if (!NameAlreadyTaken(campaign, LandAtlas.Name(land))) return ("land", land.Id);
+            landNameTaken = true;
+        }
 
         // 2. Foreign core / homeland tag: if ground has homeland cores of a distinct country
         // (e.g. Ukraine, Belarus, Poland, Georgia, Kazakhstan) not belonging to the parent.
@@ -145,18 +147,14 @@ public static partial class NationNaming
             return PeopleBase(campaign, groundPeople);
 
         // 5. A historic predecessor that once held this ground.
-        if (historic is not null) return IdentitySource(historic);
+        if (convention != "historic" && Predecessor(campaign, regions, culture) is { } historic)
+            return IdentitySource(historic);
 
         // 6. A land the catalogue declares or recognises (Siberia, Urals, Far East, Donbas, Texas, etc.).
-        if (land is not null && !NameAlreadyTaken(campaign, LandAtlas.Name(land)))
+        if (land is not null && !landNameTaken && !NameAlreadyTaken(campaign, LandAtlas.Name(land)))
             return ("land", land.Id);
 
-        // 7. A macro or regional land that covers this ground (same BestFor result as step 6).
-        //    Already checked via `land` above when not Macro/DeclaresGround.
-        if (land is not null && !NameAlreadyTaken(campaign, LandAtlas.Name(land)))
-            return ("land", land.Id);
-
-        // 8. The region's own seat/city name (Rostov, Samara, Novosibirsk, Odesa, Lyon, Hamburg, etc.)
+        // 7. The region's own seat/city name (Rostov, Samara, Novosibirsk, Odesa, Lyon, Hamburg, etc.)
         //    - one nobody already wears: Nigeria's Niger State does not found a second Niger, it
         //    looks to the next region of the rising, as four Nigerian risings in one bench run
         //    each called themselves the Republic of Niger beside the real one.
@@ -199,7 +197,7 @@ public static partial class NationNaming
             candidates.Clear();
         }
 
-        // 9. Region fallback: authentic regional identity rather than an occupier's compass direction -
+        // 8. Region fallback: authentic regional identity rather than an occupier's compass direction -
         //    unless a country already wears the region's name, when the people who live there name
         //    it instead (Nigeria's Niger State was founding a second Niger beside the real one).
         if (region is not null)
@@ -488,20 +486,20 @@ public static partial class NationNaming
     {
         if (campaign?.ProvinceMap is null || regions is null || regions.Length == 0) return null;
         var wanted = new HashSet<int>(regions);
-        var provinces = new HashSet<int>();
-        for (var province = 1; province <= campaign.ProvinceMap.ProvinceCount; province++)
-            if (wanted.Contains(campaign.ProvinceMap.ProvinceToState[province])) provinces.Add(province);
+        var provinceToState = campaign.ProvinceMap.ProvinceToState;
 
         var group = DemographyCatalog.Culture(culture)?.Group ?? "";
         Nation best = null;
         var bestOverlap = 0;
         foreach (var old in campaign.Nations)
         {
-            if (old.Movement is not null || !FormableRestorations.Vanished(campaign, old)) continue;
+            if (old.Movement is not null || string.IsNullOrEmpty(old.Tag) || campaign.HasOwnedLand(old)) continue;
             var authored = FormableRestorations.Authored(campaign, old.Tag);
-            if (authored is null || authored.Length == 0) continue;
+            if (authored is null || authored.Length <= bestOverlap) continue;
             var overlap = 0;
-            foreach (var province in authored) if (provinces.Contains(province)) overlap++;
+            foreach (var province in authored)
+                if (province > 0 && province < provinceToState.Length && wanted.Contains(provinceToState[province]))
+                    overlap++;
             if (overlap <= bestOverlap) continue;
             var kindred = string.IsNullOrWhiteSpace(culture);
             foreach (var people in DemographyCatalog.PrimaryCultures(old.Tag))
@@ -511,7 +509,9 @@ public static partial class NationNaming
                         StringComparison.OrdinalIgnoreCase)))
                 { kindred = true; break; }
             }
-            if (!kindred) continue;
+            // A surviving country or exile can veto this name. Check the world's
+            // successors only when this footprint could win on ground and people.
+            if (!kindred || !FormableRestorations.Vanished(campaign, old)) continue;
             best = old;
             bestOverlap = overlap;
         }

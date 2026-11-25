@@ -12,7 +12,7 @@
         "title": "w6g.ev.twn_crossroads.opt1",
         "consequence": "w6g.ev.twn_crossroads.con1",
         "effects": {
-          "treasury_percent": -0.05,
+          "income_share": -0.05,
           "naval_experience": 6.0,
           "war_support": 0.035,
           "political_points": 6.0
@@ -61,7 +61,7 @@
         "title": "w6g.ev.chn_strait.opt1",
         "consequence": "w6g.ev.chn_strait.con1",
         "effects": {
-          "treasury_percent": -0.04,
+          "income_share": -0.04,
           "naval_experience": 5.0,
           "war_support": 0.030,
           "notoriety": 3.0
@@ -118,7 +118,7 @@
         "title": "w6g.ev.era_inflection.opt2",
         "consequence": "w6g.ev.era_inflection.con2",
         "effects": {
-          "treasury_percent": -0.04,
+          "income_share": -0.04,
           "army_experience": 4.0,
           "war_support": 0.025,
           "imperial_overstretch": 0.02
@@ -133,7 +133,7 @@
         "effects": {
           "stability": 0.025,
           "productivity": 0.012,
-          "treasury_percent": -0.03
+          "income_share": -0.03
         },
         "modifiers": [
           { "id": "industrial_renewal", "days": 240 }
@@ -156,7 +156,7 @@
           "stability": 0.030,
           "state.radicalism": -0.030,
           "political_points": -8.0,
-          "treasury_percent": -0.04
+          "income_share": -0.04
         },
         "modifiers": [
           { "id": "civic_mediation_programme", "days": 240 }
@@ -181,7 +181,7 @@
         "effects": {
           "state.standard_of_living": 0.020,
           "state.war_damage": -0.04,
-          "treasury_percent": -0.05
+          "gdp_share": -0.004
         },
         "modifiers": [
           { "id": "reconstruction_programme", "days": 270 }
@@ -203,7 +203,7 @@
         "effects": {
           "stability": 0.025,
           "state.radicalism": -0.035,
-          "treasury_percent": -0.05
+          "income_share": -0.05
         },
         "modifiers": [
           { "id": "minority_government_compact", "days": 240 }
@@ -342,7 +342,7 @@
         "effects": {
           "state.standard_of_living": 0.018,
           "stability": 0.020,
-          "treasury_percent": -0.04
+          "income_share": -0.04
         },
         "modifiers": [
           { "id": "frontline_relief_programme", "days": 240 }
@@ -364,7 +364,7 @@
         "effects": {
           "stability": 0.028,
           "state.radicalism": -0.030,
-          "treasury_percent": -0.05
+          "income_share": -0.05
         },
         "modifiers": [
           { "id": "w5_civic_consensus", "days": 240 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 
 namespace DealOrForce.Simulation;
 
@@ -63,22 +64,45 @@ public static class SpriteCatalog
     public const string SpriteIndexFileName = "sprite_index_v1.json";
     public const int SpriteIndexVersion = 1;
 
-    private static readonly Dictionary<string, Sprite> Sprites = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, string> Shaders = new(StringComparer.OrdinalIgnoreCase);
-    private static bool _baseLoaded;
-    private static bool _dirtyFromOverlay;
-    private static string _loadedKey = "";
+    private sealed class Snapshot
+    {
+        public static readonly Snapshot Empty = new(
+            new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            baseLoaded: false, dirtyFromOverlay: false, loadedKey: "");
+
+        public readonly Dictionary<string, Sprite> Sprites;
+        public readonly Dictionary<string, string> Shaders;
+        public readonly bool BaseLoaded;
+        public readonly bool DirtyFromOverlay;
+        public readonly string LoadedKey;
+
+        public Snapshot(
+            Dictionary<string, Sprite> sprites,
+            Dictionary<string, string> shaders,
+            bool baseLoaded, bool dirtyFromOverlay, string loadedKey)
+        {
+            Sprites = sprites;
+            Shaders = shaders;
+            BaseLoaded = baseLoaded;
+            DirtyFromOverlay = dirtyFromOverlay;
+            LoadedKey = loadedKey;
+        }
+    }
+
+    private static readonly object SyncLock = new();
+    private static Snapshot _state = Snapshot.Empty;
 
     /// <summary>Typed shader assets never enter the texture warm-up or picture pickers.</summary>
     public static string ShaderOf(string name, string fallback = "") =>
-        name is not null && Shaders.TryGetValue(name, out var path) ? path : fallback;
+        name is not null && Volatile.Read(ref _state).Shaders.TryGetValue(name, out var path) ? path : fallback;
 
     /// <summary>Raised whenever the table is rebuilt, so cached textures can be dropped.</summary>
     public static event Action Changed;
 
-    public static int Count => Sprites.Count;
+    public static int Count => Volatile.Read(ref _state).Sprites.Count;
 
-    public static IEnumerable<string> Names => Sprites.Keys;
+    public static IEnumerable<string> Names => Volatile.Read(ref _state).Sprites.Keys;
 
     /// <summary>
     /// Whether a picture by this name exists - a file, a declaration, or a flag described in
@@ -87,7 +111,8 @@ public static class SpriteCatalog
     /// it was never a file.
     /// </summary>
     public static bool Has(string name) =>
-        !string.IsNullOrEmpty(name) && (Sprites.ContainsKey(name) || FlagDesignCatalog.Has(name));
+        !string.IsNullOrEmpty(name) &&
+        (Volatile.Read(ref _state).Sprites.ContainsKey(name) || FlagDesignCatalog.Has(name));
 
     /// <summary>
     /// A design outranks a picture of the same name: it was written on purpose, usually by a
@@ -96,7 +121,7 @@ public static class SpriteCatalog
     /// </summary>
     public static Sprite Get(string name) =>
         FlagDesignCatalog.Has(name) ? new Sprite(FlagDesignCatalog.TexturePrefix + name, "", 1)
-        : !string.IsNullOrEmpty(name) && Sprites.TryGetValue(name, out var sprite)
+        : !string.IsNullOrEmpty(name) && Volatile.Read(ref _state).Sprites.TryGetValue(name, out var sprite)
             ? sprite
             : default;
 
@@ -112,7 +137,7 @@ public static class SpriteCatalog
     }
 
     /// <summary>Read the base game's own `gfx/` tree (or pre-baked `cache/sprite_index_v1.json`), replacing whatever was loaded.</summary>
-    public static void Load() => Load(force: false);
+    public static void Load() => Load(force: false, notify: true);
 
     /// <summary>
     /// Reloads base sprites/shaders. Idempotent when the same data root &amp; overlay policy are
@@ -120,26 +145,32 @@ public static class SpriteCatalog
     /// MainMenuScene -&gt; DealOrForceGame. Uses pre-baked <c>cache/sprite_index_v1.json</c> when
     /// present and no total-conversion/replace_paths overlay is active (~3-5 ms, zero crawl).
     /// </summary>
-    public static void Load(bool force)
+    public static void Load(bool force) => Load(force, notify: true);
+
+    public static void Load(bool force, bool notify)
     {
         var policyActive = ModOverlayPolicy.IsActive;
         var prebakedPath = policyActive ? null : GameDataLoader.FindDataFile("cache", SpriteIndexFileName);
         var gfxRoot = GameDataLoader.DataFolder("gfx");
         var cacheKey = $"{policyActive}|{prebakedPath ?? ""}|{gfxRoot ?? ""}";
-        if (!force && _baseLoaded && !_dirtyFromOverlay && string.Equals(_loadedKey, cacheKey, StringComparison.Ordinal))
-            return;
+        lock (SyncLock)
+        {
+            var current = Volatile.Read(ref _state);
+            if (!force && current.BaseLoaded && !current.DirtyFromOverlay &&
+                string.Equals(current.LoadedKey, cacheKey, StringComparison.Ordinal))
+                return;
 
-        Sprites.Clear();
-        Shaders.Clear();
-        var loadedFromPrebaked = prebakedPath is not null &&
-            TryLoadPrebakedIndexInto(prebakedPath, Sprites, Shaders, out _, out _);
-        if (!loadedFromPrebaked && gfxRoot is not null)
-            LoadTreeInto(gfxRoot, "res://game/gfx", Sprites, Shaders, null);
+            var sprites = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+            var shaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var loadedFromPrebaked = prebakedPath is not null &&
+                TryLoadPrebakedIndexInto(prebakedPath, sprites, shaders, out _, out _);
+            if (!loadedFromPrebaked && gfxRoot is not null)
+                LoadTreeInto(gfxRoot, "res://game/gfx", sprites, shaders, null);
 
-        _baseLoaded = true;
-        _dirtyFromOverlay = false;
-        _loadedKey = cacheKey;
-        Changed?.Invoke();
+            Volatile.Write(ref _state, new Snapshot(
+                sprites, shaders, baseLoaded: true, dirtyFromOverlay: false, loadedKey: cacheKey));
+        }
+        if (notify) Changed?.Invoke();
     }
 
     /// <summary>What the engine will load a picture as, from a file name.</summary>
@@ -292,8 +323,15 @@ public static class SpriteCatalog
     public static void LoadTree(string directory, string virtualDirectory, List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
-        _dirtyFromOverlay = true;
-        LoadTreeInto(directory, virtualDirectory, Sprites, Shaders, errors);
+        lock (SyncLock)
+        {
+            var current = Volatile.Read(ref _state);
+            var sprites = new Dictionary<string, Sprite>(current.Sprites, StringComparer.OrdinalIgnoreCase);
+            var shaders = new Dictionary<string, string>(current.Shaders, StringComparer.OrdinalIgnoreCase);
+            LoadTreeInto(directory, virtualDirectory, sprites, shaders, errors);
+            Volatile.Write(ref _state, new Snapshot(
+                sprites, shaders, current.BaseLoaded, dirtyFromOverlay: true, current.LoadedKey));
+        }
         Changed?.Invoke();
     }
 
@@ -361,8 +399,15 @@ public static class SpriteCatalog
     /// </summary>
     public static void Merge(string json, string assetRoot, string origin, List<string> errors)
     {
-        _dirtyFromOverlay = true;
-        MergeInto(json, assetRoot, origin, Sprites, Shaders, errors);
+        lock (SyncLock)
+        {
+            var current = Volatile.Read(ref _state);
+            var sprites = new Dictionary<string, Sprite>(current.Sprites, StringComparer.OrdinalIgnoreCase);
+            var shaders = new Dictionary<string, string>(current.Shaders, StringComparer.OrdinalIgnoreCase);
+            MergeInto(json, assetRoot, origin, sprites, shaders, errors);
+            Volatile.Write(ref _state, new Snapshot(
+                sprites, shaders, current.BaseLoaded, dirtyFromOverlay: true, current.LoadedKey));
+        }
     }
 
     private static void MergeInto(

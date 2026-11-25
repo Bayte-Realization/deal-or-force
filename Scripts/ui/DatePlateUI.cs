@@ -215,8 +215,9 @@ public partial class DealOrForceGame
     {
         if (_date is null || _campaign is null) return;
         // Always show campaign hours (HH:00) alongside the date so hourly and sub-day progression is legible at a glance.
-        var season = Simulation.WaterConditions.SeasonCaption(_campaign, player.CapitalLatitude);
-        var date = _campaign.Date.Display(withTime: true);
+        var currentDate = _simRunner.ReadPresentationDate(_campaign);
+        var season = Simulation.WaterConditions.SeasonCaption(_campaign, player.CapitalLatitude, currentDate);
+        var date = currentDate.Display(withTime: true);
         _dateShort = date;
         _dateFull = season.Length == 0 ? date : date + " · " + Tr(season);
         _date.TooltipText = Ui.Tip((season.Length == 0

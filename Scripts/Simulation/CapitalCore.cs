@@ -251,9 +251,8 @@ public static class CapitalCore
             // A degree of latitude is 111 km, so most cities are dismissed at a glance.
             var near = new List<(bool Other, float Distance, int Index)>();
             var band = CityAgreesKm / 110f;
-            for (var index = 0; index < cities.Count; index++)
+            foreach (var index in CityCatalog.InLatitudeBand(cities, nation.CapitalLatitude, band))
             {
-                if (MathF.Abs(cities[index].Latitude - nation.CapitalLatitude) > band) continue;
                 var distance = Apart(index);
                 if (distance > CityAgreesKm) continue;
                 near.Add((!Bears(index), distance, index));

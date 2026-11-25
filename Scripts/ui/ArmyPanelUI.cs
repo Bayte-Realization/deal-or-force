@@ -92,16 +92,21 @@ public partial class DealOrForceGame
         _armyPanelCount.CustomMinimumSize = new Vector2(74, 0);
         header.AddChild(_armyPanelCount);
 
-        _armyMergeHqButton = ActionButton(Tr("shell.ws.army.merge_hq_btn"), CreateGroupFromSelection, 46, 28);
+        var isTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        _armyMergeHqButton = ActionButton(Tr("shell.ws.army.merge_hq_btn"), CreateGroupFromSelection, 46, isTouch ? 36 : 28);
         _armyMergeHqButton.Name = "ArmyQuickMergeHq";
         _armyMergeHqButton.TooltipText = Ui.Tip(Tr("shell.ws.army.merge_hq_tip"));
         header.AddChild(_armyMergeHqButton);
 
-        var halve = ActionButton("½", SplitSelectionInHalf, 30, 28);
+        var halve = ActionButton("½", SplitSelectionInHalf, isTouch ? 38 : 30, isTouch ? 36 : 28);
         halve.TooltipText = Ui.Tip(Tr("Split in half (Ctrl+X): of several formations half stay selected for the next order and the rest stay where they stand; one formation of two or more divisions is cut in two."));
         header.AddChild(halve);
         header.AddChild(HandbookButton("orders"));
-        header.AddChild(ActionButton("×", ClearArmySelectionAndClose, 30, 28));
+        var armyClose = ActionButton("×", ClearArmySelectionAndClose, isTouch ? 42 : 32, isTouch ? 42 : 32);
+        armyClose.Name = "CloseArmyPanel";
+        armyClose.AddThemeFontSizeOverride("font_size", isTouch ? 20 : 16);
+        armyClose.TooltipText = Ui.Tip(Tr("Close"));
+        header.AddChild(armyClose);
 
         _armyPanelSubtitle = Title("", (int)Ui.Metric("ui.font.body", 12), Ui.Colour("text.muted"));
         _armyPanelSubtitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;

@@ -242,13 +242,34 @@ public static class OpinionSystem
     {
         politics = identity = social = 0f;
         if (relation is null) return;
-        for (var index = relation.Reasons.Count - 1; index >= 0; index--)
-        {
-            var reason = relation.Reasons[index];
-            if (reason.ExpiresDay > 0 && reason.ExpiresDay <= campaign.ElapsedDays)
-                relation.Reasons.RemoveAt(index);
-        }
+        PruneInertReasons(campaign, relation);
         Explain(campaign, relation, true, out politics, out identity, out social, explain);
+    }
+
+    internal static void PruneInertReasons(Campaign campaign, DiplomaticRelation relation)
+    {
+        var reasons = relation.Reasons;
+        var today = campaign.ElapsedDays;
+        for (var index = reasons.Count - 1; index >= 0; index--)
+        {
+            var reason = reasons[index];
+            if (reason.ExpiresDay > 0 && reason.ExpiresDay <= today)
+            {
+                reasons.RemoveAt(index);
+                continue;
+            }
+            var definition = OpinionCatalog.Find(reason.Id);
+            if (definition is null || !float.IsFinite(reason.Scale))
+            {
+                reasons.RemoveAt(index);
+                continue;
+            }
+            var item = definition.Value;
+            if (item.Opinion == 0f ||
+                (item.Decays && item.Days > 0 && reason.ExpiresDay > 0 &&
+                 Math.Abs(WeightOf(campaign, reason, item)) < 0.05f))
+                reasons.RemoveAt(index);
+        }
     }
 
     public static void Explain(Campaign campaign, DiplomaticRelation relation, bool updateOpinion = false) =>
@@ -340,7 +361,7 @@ public static class OpinionSystem
             if (explain) relation.OpinionDrivers.Add(Loc.Get("Accumulated public reputation"), memory);
         }
         if (updateOpinion) relation.Opinion = M.Clamp(total, -100f, 100f);
-        if (explain) relation.OpinionDrivers.Settle(relation.Opinion, "clamped");
+        if (explain) relation.OpinionDrivers.Settle(relation.Opinion, Loc.Get("aaa.ui.opinion_clamped"));
     }
 
     /// <summary>

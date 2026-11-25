@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -15,7 +16,7 @@ public static class MovementReach
         public ushort[] RegionOfProvince = Array.Empty<ushort>();
     }
 
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, ReachCache> ReachCaches = new();
+    private static readonly ConditionalWeakTable<Campaign, ReachCache> ReachCaches = new();
     [ThreadStatic] private static Dictionary<int, (double Latitude, double X, double Y, int Count)> _centreSums;
 
     private static (float Latitude, float Longitude) Centre(Campaign campaign, ScenarioState region)
@@ -67,29 +68,35 @@ public static class MovementReach
     {
         if (campaign is null || nation?.Movement is not { } movement || region is null || definition is null) return false;
         owner ??= MovementRules.OwnerOf(campaign, region);
-        var hostile = false;
-        if (owner is not null && !(hostile = movement.DesignatedBy.Contains(owner.Id)))
-        {
-            if (atWarWith is null) hostile = CampaignDiplomacy.AtWar(campaign, nation.Id, owner.Id);
-            else if (!atWarWith.TryGetValue(owner.Id, out hostile))
-                atWarWith[owner.Id] = hostile = CampaignDiplomacy.AtWar(campaign, nation.Id, owner.Id);
-        }
         // A movement that already governs ground can organise anywhere on its own soil;
         // checking its distance from a homeland it has already won is a question with no
         // possible answer but no.
         if (owner is not null && owner.Id == nation.Id) return true;
         if (MovementDefinition.Listed(definition.Homeland, region.Id) || region.MapIndex == movement.HeadquartersStateMapIndex)
             return true;
-        // A humanitarian mission needs permission, not simply believers of the same faith.
-        var invited = owner is not null && !hostile && (movement.InvitedBy.Contains(owner.Id) ||
-            movement.SponsoredBy.ContainsKey(owner.Id) || definition.Sponsors.ContainsKey(owner.Tag));
-        if (invited) return true;
-        if (definition.Has("humanitarian") && owner is not null && !hostile && movement.RecognisedBy.Contains(owner.Id)) return true;
+
+        var humanitarian = definition.Has("humanitarian");
+        // Permission can open a distant region. A hostile host closes geographic access for relief too.
+        var permitted = owner is not null && (movement.InvitedBy.Contains(owner.Id) ||
+            movement.SponsoredBy.ContainsKey(owner.Id) || definition.Sponsors.ContainsKey(owner.Tag) ||
+            (humanitarian && movement.RecognisedBy.Contains(owner.Id)));
+        if (owner is not null && (permitted || humanitarian))
+        {
+            var hostile = movement.DesignatedBy.Contains(owner.Id);
+            if (!hostile)
+            {
+                if (atWarWith is null) hostile = CampaignDiplomacy.AtWar(campaign, nation.Id, owner.Id);
+                else if (!atWarWith.TryGetValue(owner.Id, out hostile))
+                    atWarWith[owner.Id] = hostile = CampaignDiplomacy.AtWar(campaign, nation.Id, owner.Id);
+            }
+            if (hostile && humanitarian) return false;
+            if (!hostile && permitted) return true;
+        }
+
         var reach = definition.Has("diaspora_lobby") ? definition.DiasporaReachKm : definition.OutreachKm;
         var point = Centre(campaign, region);
-        var open = !definition.Has("humanitarian") || !hostile;
         if (Distance(movement.HeadquartersLatitude, movement.HeadquartersLongitude, point.Latitude, point.Longitude) <= reach)
-            return open;
+            return true;
         // The homeland's place on the map does not move when a region's people do.
         // Resolving each homeland id, for every region asked, was the walk.
         var homes = HomelandCentresOf(campaign, definition);
@@ -97,7 +104,7 @@ public static class MovementReach
         {
             var home = homes.Points[i];
             if (Distance(home.Latitude, home.Longitude, point.Latitude, point.Longitude) <= reach)
-                return open;
+                return true;
         }
         return false;
     }
@@ -110,13 +117,12 @@ public static class MovementReach
         public (float Latitude, float Longitude)[] Points = Array.Empty<(float, float)>();
     }
 
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, Dictionary<MovementDefinition, HomelandCentres>> HomelandCentreCaches = new();
+    // A changed trait can replace the runtime definition. Its old geography should not keep it alive.
+    static readonly ConditionalWeakTable<Campaign, ConditionalWeakTable<MovementDefinition, HomelandCentres>> HomelandCentreCaches = new();
 
     static HomelandCentres HomelandCentresOf(Campaign campaign, MovementDefinition definition)
     {
-        var table = HomelandCentreCaches.GetValue(campaign, static _ => new Dictionary<MovementDefinition, HomelandCentres>());
-        if (!table.TryGetValue(definition, out var cached))
-            table[definition] = cached = new HomelandCentres();
+        var cached = HomelandCentreCaches.GetOrCreateValue(campaign).GetOrCreateValue(definition);
         var generation = Movements.RegionListGeneration(campaign);
         if (cached.Built && cached.Generation == generation) return cached;
         var homeland = definition.Homeland;
@@ -143,18 +149,18 @@ public static class MovementReach
     internal static float SupportCeiling(Campaign campaign, Nation nation, ScenarioState region,
         MovementDefinition definition, long own, long faithful, Nation owner, Dictionary<int, bool> atWarWith)
     {
-        if (!CanOperate(campaign, nation, region, definition, owner, atWarWith)) return 0f;
+        if (campaign is null || nation?.Movement is not { } movement || region is null || definition is null ||
+            (own <= 0 && faithful <= 0)) return 0f;
         // A defeated regional insurgency is not a worldwide movement of its culture.
         // Diaspora offices may be hosted abroad, but do not create a territorial following there.
-        if (nation.Movement.Id.StartsWith(MovementCatalog.UndergroundPrefix, StringComparison.Ordinal) &&
-            !IsHomeland(campaign, definition, region)) return 0f;
         // A campaign for one region's charter is a campaign in that region: the Silesian
         // autonomists had a following among the Poles of Grodno and Kaliningrad, and the
         // Texan nationalists would have had one in California.
-        if (definition.Has("civic_independence") && !IsHomeland(campaign, definition, region)) return 0f;
-        if (own > 0) return MovementRules.MaxSupport;
+        if ((movement.Id?.StartsWith(MovementCatalog.UndergroundPrefix, StringComparison.Ordinal) == true ||
+             definition.Has("civic_independence")) && !IsHomeland(campaign, definition, region)) return 0f;
+        if (!CanOperate(campaign, nation, region, definition, owner, atWarWith)) return 0f;
         // The shared faith supplies a small sympathetic audience, not a territorial mandate.
-        return faithful > 0 ? .04f : 0f;
+        return own > 0 ? MovementRules.MaxSupport : .04f;
     }
 
     /// <summary>Permission to lobby, host an office or provide aid is never permission to found a state.</summary>
@@ -172,7 +178,7 @@ public static class MovementReach
             return TerritorialClaims.TitleOf(c, nation, region) == TerritorialTitle.Homeland;
         if (IsHomeland(c, definition, region)) return true;
         if (definition.Homeland.Count == 0 && !definition.Has("territorial_ambition")) return false;
-        var own = MovementRules.PeopleOf(c, region, definition, out _);
+        var own = MovementRules.PeopleOf(region, definition, out _);
         if (own / (double)region.Population < c.Defines.MovementTerritorialResidentShare) return false;
         // Expansion of a territorial movement requires an actual common frontier; neither
         // worldwide minority presence, sponsoring nor headquarters relocation is an anchor.
@@ -193,8 +199,12 @@ public static class MovementReach
     {
         var definition = Movements.DefinitionOf(nation);
         if (definition is null || nation.Movement is null || region.Population <= 0) return 0f;
-        var own = MovementRules.PeopleOf(campaign, region, definition, out var faithful);
-        var following = MathF.Min(nation.Movement.Support.GetValueOrDefault(region.MapIndex),
+        var recordedSupport = nation.Movement.Support.GetValueOrDefault(region.MapIndex);
+        if (recordedSupport <= 0f) return 0f;
+        // A region card can open between slices of the simulation's people index.
+        // Count only this region so the preview cannot restart its suspended build.
+        var own = MovementRules.PeopleOf(region, definition, out var faithful);
+        var following = MathF.Min(recordedSupport,
             SupportCeiling(campaign, nation, region, definition, own, faithful));
         return M.Clamp01(following * (own + faithful * campaign.Defines.MovementFaithShare) / region.Population);
     }

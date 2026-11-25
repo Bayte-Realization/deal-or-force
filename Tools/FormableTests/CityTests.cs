@@ -53,6 +53,19 @@ static class CityTests
         Check(CityCatalog.IndexOf(all[^1].Id) == all.Count - 1 && CityCatalog.Find("no_such_city") is null && CityCatalog.IndexOf(null) == -1,
             "a city is found by its key, and a key nobody has finds nothing");
         Check(CityCatalog.LeadingCount == (all.Count + 2) / 3, "the leading cities - where a base or an office goes - are the first third of the list");
+        CheckLatitudeBands(all);
+    }
+
+    static void CheckLatitudeBands(IReadOnlyList<CityDefinition> cities)
+    {
+        const float band = 60f / 110f;
+        foreach (var latitude in new[] { -90f, -33.9f, 0f, 54.9f, 90f, cities[0].Latitude + band })
+        {
+            var expected = Enumerable.Range(0, cities.Count)
+                .Where(index => MathF.Abs(cities[index].Latitude - latitude) <= band);
+            Check(CityCatalog.InLatitudeBand(cities, latitude, band).ToArray().OrderBy(index => index).SequenceEqual(expected),
+                $"the latitude index contains every city within the exact band around {latitude}");
+        }
     }
 
     /// <summary>A mod written for the older shape still loads; what it said about size and rank is not read.</summary>
@@ -562,6 +575,7 @@ static class CityTests
         Check(!ReferenceEquals(modHeld.List, CityCatalog.All) && modHeld.List.Count == modHeld.Count && modHeld.Gdansk != "Danzig" &&
               CityCatalog.All.Count == modHeld.Count,
             "the catalogue is a new list - whoever held the old one holds it as it was, and knows by that to look again");
+        CheckLatitudeBands(CityCatalog.All);
         Check(ltu.CapitalCityId == "modtown_ltu" && CountryNames.Capital(ltu, legacy) == "Mod Town" &&
               legacy.ProvinceMap.ProvinceToNation[ltu.CapitalProvinceId] == ltu.MapIndex &&
               ltu.CapitalProvinceId == CityCatalog.ProvincesOf(legacy.ProvinceMap)[CityCatalog.IndexOf("modtown_ltu")] &&

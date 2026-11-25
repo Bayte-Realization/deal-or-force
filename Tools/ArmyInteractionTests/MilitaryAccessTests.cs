@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using DealOrForce.Simulation;
@@ -43,6 +44,7 @@ static class MilitaryAccessTests
 
     public static void Run()
     {
+        RouteRelationsParity();
         var c = World(); var army = c.Armies.Single();
         var before = CampaignFingerprint.Of(c); var rng = c.Random.State; var time = c.ElapsedHours;
         for (var i = 0; i < 3; i++)
@@ -146,5 +148,44 @@ static class MilitaryAccessTests
         ICampaignCommand encoded = new MilitaryAccessCommand { IssuerId = 1, TargetId = 0, Action = MilitaryAccessAction.Grant };
         Check(NetworkCommandCodec.TryEncode(encoded, out var name, out var json) && NetworkCommandCodec.TryDecode(name, json, out var decoded) &&
             decoded is MilitaryAccessCommand { IssuerId: 1, TargetId: 0, Action: MilitaryAccessAction.Grant }, "authoritative command survives the existing network codec");
+    }
+
+    static void RouteRelationsParity()
+    {
+        var campaign = World();
+        var sleeping = new DiplomaticRelation { A = 0, B = 1, MilitaryAccessByB = true };
+        campaign.DormantRelations.Add(1L, sleeping);
+        CampaignDiplomacy.Get(campaign, 0, 2).Stance = DiplomaticStance.AtWar;
+        campaign.Nations[3].OverlordId = 0;
+        campaign.Nations[3].SubjectType = "vassal";
+
+        var filtered = new MilitaryAccess.RouteRelations();
+        filtered.Rebuild(campaign);
+        var allowed = new HashSet<ushort>();
+        var enemies = new HashSet<ushort>();
+        MilitaryAccess.FillControllers(campaign, 0, allowed, enemies, filtered);
+        Check(allowed.SequenceEqual(new ushort[] { 500, 501, 503 }) && enemies.SetEquals(new ushort[] { 502 }),
+            "support route snapshot keeps a sleeping grant, subject access and hostility in map order");
+
+        Act(campaign, 1, 0, MilitaryAccessAction.Revoke);
+        allowed.Clear();
+        enemies.Clear();
+        MilitaryAccess.FillControllers(campaign, 0, allowed, enemies, filtered);
+        Check(allowed.SequenceEqual(new ushort[] { 500, 503 }) && enemies.SetEquals(new ushort[] { 502 }),
+            "support route snapshot falls back to the live diplomacy table after revocation");
+
+        var relation = CampaignDiplomacy.Get(campaign, 0, 1);
+        filtered.Rebuild(campaign);
+        relation.MilitaryAccessByB = true;
+        allowed.Clear();
+        MilitaryAccess.FillControllers(campaign, 0, allowed, enemies, filtered);
+        Check(allowed.Contains(501), "a new grant on an existing relation invalidates the snapshot");
+
+        filtered.Rebuild(campaign);
+        relation.Stance = DiplomaticStance.AtWar;
+        allowed.Clear();
+        MilitaryAccess.FillControllers(campaign, 0, allowed, enemies, filtered);
+        Check(!allowed.Contains(501) && enemies.Contains(501),
+            "hostility on an existing relation supersedes its grant");
     }
 }

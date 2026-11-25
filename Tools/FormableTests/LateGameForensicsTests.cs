@@ -31,6 +31,64 @@ static class LateGameForensicsTests
         TestCoverRefusesDoesNotDeadlockFront();
         TestDebtRestructuringProgressAndRecovery();
         TestLateGameBloatPruningAndDeterminism();
+        TestRelationSweepAcrossSlices();
+    }
+
+    static void TestRelationSweepAcrossSlices()
+    {
+        Campaign MakeWorld(bool allAlive)
+        {
+            var campaign = new Campaign(66005);
+            typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(campaign, 28L * 24);
+            for (var id = 0; id < 36; id++)
+                campaign.AddNation(new Nation
+                {
+                    Tag = $"T{id:00}", MapIndex = id + 1,
+                    Population = allAlive || id % 3 != 0 ? 1_000 : 0,
+                });
+            for (var a = 0; a < campaign.Nations.Count; a++)
+                for (var b = a + 1; b < campaign.Nations.Count; b++)
+                {
+                    var relation = CampaignDiplomacy.Get(campaign, a, b);
+                    if (b % 5 == 0) relation.TradeAgreement = true;
+                    if (a % 5 == 0)
+                    {
+                        var key = ((long)a << 32) | (uint)b;
+                        campaign.Relations.Remove(key);
+                        relation.Dormant = true;
+                        campaign.DormantRelations.Add(key, relation);
+                    }
+                }
+            return campaign;
+        }
+
+        var whole = MakeWorld(allAlive: false);
+        var staged = MakeWorld(allAlive: false);
+        var other = MakeWorld(allAlive: true);
+        var viewed = MakeWorld(allAlive: true);
+        RelationDormancy.Sweep(whole);
+        var previousSlice = Campaign.StageSliceMilliseconds;
+        try
+        {
+            Campaign.StageSliceMilliseconds = 0;
+            using var sweep = RelationDormancy.SweepStages(staged).GetEnumerator();
+            Check(sweep.MoveNext(), "a large weekly relation sweep yields before processing the whole table");
+            RelationDormancy.Sweep(other);
+            while (sweep.MoveNext()) { }
+
+            using var viewedSweep = RelationDormancy.SweepStages(viewed).GetEnumerator();
+            Check(viewedSweep.MoveNext(), "a relation sweep can be suspended for the interface");
+            var opened = CampaignDiplomacy.Get(viewed, 5, 10);
+            while (viewedSweep.MoveNext()) { }
+            Check(ReferenceEquals(CampaignDiplomacy.Peek(viewed, 5, 10), opened) && !opened.Dormant,
+                "opening a pending relation between slices preserves the woken record");
+        }
+        finally { Campaign.StageSliceMilliseconds = previousSlice; }
+
+        Check(staged.Relations.Keys.SequenceEqual(whole.Relations.Keys) &&
+              staged.DormantRelations.Keys.SequenceEqual(whole.DormantRelations.Keys) &&
+              CampaignFingerprint.Of(staged) == CampaignFingerprint.Of(whole),
+            "interleaving another world preserves the staged sweep's result and relation order");
     }
 
     static void TestObserverModeAiControl()

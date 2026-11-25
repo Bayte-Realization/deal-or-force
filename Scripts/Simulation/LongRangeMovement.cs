@@ -222,7 +222,8 @@ public static partial class LongRangeMovement
     internal static Ground GroundOf(Campaign c, int nationId, Dictionary<int, Ground> cache = null, BattleSet battles = null, bool[] activeControllers = null)
         => GroundOf(c, nationId, cache, battles, pool: null);
 
-    internal static Ground GroundOf(Campaign c, int nationId, Dictionary<int, Ground> cache, BattleSet battles, SupportStepCache pool)
+    internal static Ground GroundOf(Campaign c, int nationId, Dictionary<int, Ground> cache, BattleSet battles, SupportStepCache pool,
+        MilitaryAccess.RouteRelations routeRelations = null)
     {
         if (cache is not null && cache.TryGetValue(nationId, out var known)) return known;
         var nation = c.NationById(nationId);
@@ -234,25 +235,7 @@ public static partial class LongRangeMovement
         ground.Map = map;
         ground.Controls = c.ProvinceController ?? map.ProvinceToNation;
         ground.Battles = battles ?? BattleProvinces(c);
-        MilitaryAccess.FillControllers(c, nationId, ground.Passable);
-        // The same enemies MilitaryAccess.Hostile names - everybody across a live war, and anybody
-        // the relation says we are at war with - gathered once rather than asked pair by pair.
-        var liveWars = Warfare.LiveWars(c);
-        for (var wi = 0; wi < liveWars.Count; wi++)
-        {
-            var war = liveWars[wi];
-            if (war.Ended || !war.Involves(nationId)) continue;
-            foreach (var enemy in war.EnemiesOf(nationId))
-                if (c.NationById(enemy) is { MapIndex: > 0 } foe) ground.Hostile.Add((ushort)foe.MapIndex);
-        }
-        var nations = c.ActiveNations;
-        for (var ni = 0; ni < nations.Count; ni++)
-        {
-            var other = nations[ni];
-            if (other.Id != nationId && other.MapIndex > 0 &&
-                CampaignDiplomacy.Peek(c, nationId, other.Id)?.Stance == DiplomaticStance.AtWar)
-                ground.Hostile.Add((ushort)other.MapIndex);
-        }
+        MilitaryAccess.FillControllers(c, nationId, ground.Passable, ground.Hostile, routeRelations);
         // Hostile ground is never passable, whatever an access grant once said.
         ground.Passable.ExceptWith(ground.Hostile);
         if (ground.Passable.Count > 0)
@@ -1335,8 +1318,10 @@ public static partial class LongRangeMovement
         var pool = c.Caches.SupportStep;
         Dictionary<int, Ground> grounds = null;
         BattleSet battles = null;
+        MilitaryAccess.RouteRelations routeRelations = null;
         try
         {
+            var ops = 0;
             for (var i = 0; i < formations.Count; i++)
             {
                 var f = formations[i];
@@ -1347,7 +1332,15 @@ public static partial class LongRangeMovement
                 if (!SupportTypeCatalog.TryGet(f.TypeId, out var type) || !SupportCore.Enabled(c, type)) continue;
                 grounds ??= pool.WithdrawGrounds;
                 battles ??= BattleProvincesPooled(c, pool);
-                var g = GroundOf(c, f.NationId, grounds, battles, pool);
+                // A handful of routes is cheaper to read directly. Large passes make
+                // many repeated reads against the same diplomatic tables.
+                if (routeRelations is null && grounds.Count >= 4 && !grounds.ContainsKey(f.NationId))
+                {
+                    routeRelations = pool.AdvanceRelations;
+                    routeRelations.Rebuild(c);
+                    if (Campaign.StageOverdue()) yield return 0;
+                }
+                var g = GroundOf(c, f.NationId, grounds, battles, pool, routeRelations);
                 if (g is null) continue;
                 var at = At(f);
                 if (!g.Valid(at)) continue;
@@ -1384,12 +1377,13 @@ public static partial class LongRangeMovement
                     // the road by a lost destination. It works from where it stands.
                     f.BaseProvinceId = at;
                 }
-                if ((i & 15) == 15 && i + 1 < formations.Count && Campaign.StageOverdue()) yield return 0;
+                if ((++ops & 7) == 7 && i + 1 < formations.Count && Campaign.StageOverdue()) yield return 0;
             }
         }
         finally
         {
             formations.Clear();
+            routeRelations?.Clear();
             if (grounds is not null) pool.ReturnGrounds(grounds);
         }
     }
@@ -1457,6 +1451,9 @@ public static partial class LongRangeMovement
         c.MarkStrategicChange();
     }
 
+    [ThreadStatic] private static List<int> _replanOnwardScratch;
+    [ThreadStatic] private static List<int> _replanOnwardModesScratch;
+
     private static void Replan(Campaign c, Ground g, SupportFormation f, SupportTypeDefinition type, int at)
     {
         var goal = f.Route[^1];
@@ -1478,11 +1475,16 @@ public static partial class LongRangeMovement
             f.MoveProgress = back;
             if (goal != at && g.Enterable(goal))
             {
-                var onward = new List<int>(); var onwardModes = new List<int>();
+                var onward = _replanOnwardScratch ??= new List<int>(16);
+                var onwardModes = _replanOnwardModesScratch ??= new List<int>(16);
+                onward.Clear();
+                onwardModes.Clear();
                 if (Plan(g, type, at, goal, onward, onwardModes, out _, corridor: f.Overrun).Length == 0)
                 {
                     f.Route.AddRange(onward); f.RouteModes.AddRange(onwardModes);
                 }
+                onward.Clear();
+                onwardModes.Clear();
             }
             DiagnosticLogs.Write("orders", $"SUPPORT_TURN_BACK formation={f.Id} nation={g.Nation.Tag} toward={at} goal={goal}");
             return;
@@ -2074,6 +2076,11 @@ public static partial class LongRangeMovement
     {
         public int LastRoadChosen;
         public int LastDriveOrdered;
+        public int LastSeaChosen;
+        public int LastAirOrdered;
+        public int LastAirNearest;
+        public readonly int[] SeaTopProvs = new int[4];
+        public readonly float[] SeaTopKm = new float[4];
         public float[] Near = Array.Empty<float>();
         public readonly List<int> Within = new();
         public float[] RoadDays = Array.Empty<float>();
@@ -2100,6 +2107,8 @@ public static partial class LongRangeMovement
         public readonly Dictionary<int, int> CoverAnchors = new();
         public readonly RelocatePreview PreviewScratch = new();
         public readonly Dictionary<(int Comp, float Standoff, bool MayTouch), bool> CompSuitMemo = new();
+        public readonly Dictionary<(float Standoff, bool MayTouch), (int Count, int FirstProv)> SuitSummaryMemo = new();
+        public readonly List<int> AirHopsScratch = new();
     }
 
 

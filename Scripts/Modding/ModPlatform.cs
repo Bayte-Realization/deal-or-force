@@ -7,6 +7,7 @@ namespace DealOrForce.Modding;
 
 internal interface IModScriptRuntime : IDisposable
 {
+    bool HasActiveScripts { get; }
     void Start(IReadOnlyList<ModPackage> packages, object api, Campaign campaign, Action<string, Action> guard, Action<string> log);
     void OnDayAdvanced(Action<string, Action> guard);
     void Stop();

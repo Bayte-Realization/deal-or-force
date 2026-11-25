@@ -479,7 +479,13 @@ public static partial class Warfare
         public bool TailWasEnded;
     }
 
-    static readonly ConditionalWeakTable<Campaign, LiveBoard> LiveBoards = new();
+    private static LiveBoard LiveBoardFor(Campaign campaign)
+    {
+        if (campaign._liveWarBoard is LiveBoard existing) return existing;
+        var created = new LiveBoard();
+        var raced = System.Threading.Interlocked.CompareExchange(ref campaign._liveWarBoard, created, null);
+        return (LiveBoard)(raced ?? created);
+    }
 
     /// <summary>How many times a campaign's live list was rebuilt from the full war record.</summary>
     internal static int LiveWarPasses { get; private set; }
@@ -495,12 +501,20 @@ public static partial class Warfare
     public static IReadOnlyList<StrategicWar> LiveWars(Campaign campaign)
     {
         if (campaign is null) return Array.Empty<StrategicWar>();
-        var board = LiveBoards.GetValue(campaign, static _ => new LiveBoard());
-        if (board.Revision != campaign.WarRevision || board.Count != campaign.Wars.Count || EndedIn(board.Wars) ||
+        var board = LiveBoardFor(campaign);
+        if (board.Revision != campaign.WarRevision || board.Count != campaign.Wars.Count ||
+            HasEndedIn(board.Wars) ||
             !ReferenceEquals(board.Tail, campaign.Wars.Count > 0 ? campaign.Wars[^1] : null) ||
             board.TailWasEnded != (board.Tail?.Ended ?? false))
             RefreshLive(campaign, board);
         return board.Wars;
+    }
+
+    private static bool HasEndedIn(List<StrategicWar> wars)
+    {
+        for (var index = 0; index < wars.Count; index++)
+            if (wars[index] is null || wars[index].Ended) return true;
+        return false;
     }
 
     /// <summary>
@@ -510,7 +524,7 @@ public static partial class Warfare
     /// </summary>
     internal static List<StrategicWar> AdvanceWars(Campaign campaign)
     {
-        var board = LiveBoards.GetValue(campaign, static _ => new LiveBoard());
+        var board = LiveBoardFor(campaign);
         var live = LiveWars(campaign);
         board.Advance.Clear();
         for (var index = 0; index < live.Count; index++)
@@ -521,115 +535,21 @@ public static partial class Warfare
         return board.Advance;
     }
 
-    /// <summary>One reading of the war record: the wars not over, in the record's order. Never written again once made.</summary>
-    sealed class OpenReading
-    {
-        public readonly List<StrategicWar> Wars = new();
-        /// <summary>Every war of the record by its number, the first of a number as a walk would meet it; made when first asked for.</summary>
-        public Dictionary<int, StrategicWar> ById;
-        public int Revision = int.MinValue;
-        public int Count = -1;
-        public StrategicWar Tail;
-        public bool TailWasEnded;
-    }
-
-    sealed class OpenBoard { public volatile OpenReading Reading = new(); }
-
-    static readonly ConditionalWeakTable<Campaign, OpenBoard> OpenBoards = new();
     static readonly List<StrategicWar> NoWars = new(0);
 
     /// <summary>
     /// The wars not over, in the record's own order: what "is anybody at war with X" is asked of.
-    ///
-    /// The record only grows. A save 107 years long held 2,476 wars, 26 of them still being
-    /// fought, and every such question was put to the record itself - all 2,476, to skip 2,450
-    /// at the first test - by a fleet asking whether a port was friendly, a movement asking
-    /// whether it was outranked, a cabinet asking whether it was losing. A campaign paid for its
-    /// whole history each time, and paid more every year.
-    ///
-    /// Kept apart from <see cref="LiveWars"/> on purpose: that list is refreshed in place and
-    /// clears a finished war's fronts as it does so, which is the war pass's business and happens
-    /// when the war pass asks. This one changes nothing in the world and is never written after
-    /// it is made - a refresh makes another - so a loop half way down it keeps the list it
-    /// started with, and a pass worked on several threads may ask (the rebuild is under a lock).
-    /// A war that ends while a caller is still walking an older reading is still in that reading:
-    /// test <c>Ended</c> as a walk of the record would. Handed out as the list itself so that a
-    /// foreach over it makes no garbage (through an interface it boxes an enumerator a call);
-    /// nobody but this function writes to it.
+    /// Delegated directly to <see cref="Campaign.ActiveWarsList"/> so hot callers never touch
+    /// ended historical wars or secondary lookup tables.
     /// </summary>
-    public static List<StrategicWar> OpenWars(Campaign campaign)
-    {
-        if (campaign is null) return NoWars;
-        var board = OpenBoards.GetValue(campaign, static _ => new OpenBoard());
-        var reading = board.Reading;
-        if (OpenStale(campaign, reading))
-            lock (board)
-            {
-                reading = board.Reading;
-                if (OpenStale(campaign, reading))
-                {
-                    var now = new OpenReading();
-                    var wars = campaign.Wars;
-                    for (var index = 0; index < wars.Count; index++)
-                    {
-                        var war = wars[index];
-                        if (war is null || war.Ended) continue;
-                        now.Wars.Add(war);
-                    }
-                    now.Revision = campaign.WarRevision;
-                    now.Count = wars.Count;
-                    now.Tail = wars.Count > 0 ? wars[^1] : null;
-                    now.TailWasEnded = now.Tail?.Ended ?? false;
-                    board.Reading = reading = now;
-                }
-            }
-        return reading.Wars;
-    }
+    public static List<StrategicWar> OpenWars(Campaign campaign) =>
+        campaign is null ? NoWars : campaign.ActiveWarsList;
 
     /// <summary>
-    /// The war with this number, over or not; null when the record holds none. The record was
-    /// walked for it - by every sponsor's paper, every request for arms - and the record is the
-    /// one list here that nothing ever shortens. Read off the same reading as
-    /// <see cref="OpenWars"/>, so it is made again whenever a war is declared or ends.
+    /// The war with this number, over or not; null when the record holds none.
+    /// Delegated directly to <see cref="Campaign.WarById"/>.
     /// </summary>
-    public static StrategicWar WarById(Campaign campaign, int id)
-    {
-        if (campaign is null) return null;
-        OpenWars(campaign);
-        var board = OpenBoards.GetValue(campaign, static _ => new OpenBoard());
-        var reading = board.Reading;
-        // Read and written as volatile: a worker may ask while another thread is making it, and
-        // must see the table whole or not at all on every processor the game runs on.
-        var byId = System.Threading.Volatile.Read(ref reading.ById);
-        if (byId is null)
-            lock (board)
-            {
-                byId = reading.ById;
-                if (byId is null)
-                {
-                    var wars = campaign.Wars;
-                    var made = new Dictionary<int, StrategicWar>(wars.Count);
-                    for (var index = 0; index < wars.Count; index++)
-                        if (wars[index] is { } war) made.TryAdd(war.Id, war);
-                    System.Threading.Volatile.Write(ref reading.ById, byId = made);
-                }
-            }
-        return byId.GetValueOrDefault(id);
-    }
-
-    static bool OpenStale(Campaign campaign, OpenReading reading) =>
-        reading.Revision != campaign.WarRevision || reading.Count != campaign.Wars.Count || EndedIn(reading.Wars) ||
-        !ReferenceEquals(reading.Tail, campaign.Wars.Count > 0 ? campaign.Wars[^1] : null) ||
-        // Direct status edits can reopen the newest war without changing the list or revision.
-        // Remember its observed state; an empty active reading cannot detect this with EndedIn.
-        reading.TailWasEnded != (reading.Tail?.Ended ?? false);
-
-    static bool EndedIn(List<StrategicWar> wars)
-    {
-        for (var index = 0; index < wars.Count; index++)
-            if (wars[index] is null || wars[index].Ended) return true;
-        return false;
-    }
+    public static StrategicWar WarById(Campaign campaign, int id) => campaign?.WarById(id);
 
     static void RefreshLive(Campaign campaign, LiveBoard board)
     {
@@ -712,6 +632,11 @@ public static partial class FrontPlanner
 
     public static void RefreshAssignments(Campaign campaign, StrategicWar war)
     {
+        foreach (var _ in RefreshAssignmentStages(campaign, war, sliced: false)) { }
+    }
+
+    internal static IEnumerable<int> RefreshAssignmentStages(Campaign campaign, StrategicWar war, bool sliced = true)
+    {
         foreach (var army in campaign.Armies)
         {
             if (army.AssignedWarId != war.Id || army.OrderKind == ArmyOrder.Manual || army.InBattle)
@@ -745,6 +670,7 @@ public static partial class FrontPlanner
                 Order = army.OrderKind,
                 ObjectiveStateMapIndex = army.ObjectiveStateMapIndex
             }.Apply(campaign);
+            if (sliced && Campaign.StageOverdue()) yield return 0;
         }
     }
 
@@ -767,19 +693,29 @@ public static partial class FrontPlanner
 
     public static void AssignAi(Campaign campaign)
     {
-        foreach (var war in campaign.Wars)
-        {
-            if (war.Ended) continue;
-            foreach (var nationId in war.Side(true)) AssignSide(campaign, war, nationId, true);
-            foreach (var nationId in war.Side(false)) AssignSide(campaign, war, nationId, false);
-        }
+        var active = campaign.ActiveWarsList;
+        for (var i = 0; i < active.Count; i++)
+            ReassignAi(campaign, active[i]);
     }
 
     public static void ReassignAi(Campaign campaign, StrategicWar war)
     {
-        if (war.Ended) return;
-        foreach (var nationId in war.Side(true)) AssignSide(campaign, war, nationId, true);
-        foreach (var nationId in war.Side(false)) AssignSide(campaign, war, nationId, false);
+        foreach (var _ in ReassignAiStages(campaign, war, sliced: false)) { }
+    }
+
+    internal static IEnumerable<int> ReassignAiStages(Campaign campaign, StrategicWar war, bool sliced = true)
+    {
+        if (war.Ended) yield break;
+        for (var side = 0; side < 2; side++)
+        {
+            var attacking = side == 0;
+            foreach (var nationId in war.Side(attacking))
+            {
+                foreach (var _ in AssignSideStages(campaign, war, nationId, attacking, sliced))
+                    yield return 0;
+                if (sliced && Campaign.StageOverdue()) yield return 0;
+            }
+        }
     }
 
     public static void UpdateAiExecution(Campaign campaign, StrategicWar war) =>
@@ -982,8 +918,20 @@ public static partial class FrontPlanner
     internal static void GiveIdleRole(Campaign c, Army army)
     {
         StrategicWar war = null;
-        foreach (var candidate in c.Wars)
-            if (!candidate.Ended && candidate.Id == army.AssignedWarId) { war = candidate; break; }
+        if (army.AssignedWarId >= 0)
+        {
+            var byId = Warfare.WarById(c, army.AssignedWarId);
+            if (byId is { Ended: false })
+            {
+                war = byId;
+            }
+            else if (byId is not null)
+            {
+                var active = c.ActiveWarsList;
+                for (var wi = 0; wi < active.Count; wi++)
+                    if (active[wi].Id == army.AssignedWarId) { war = active[wi]; break; }
+            }
+        }
         var nation = c.NationById(army.NationId);
         if (war is null || nation is null) return;
         if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command)) return;
@@ -1029,11 +977,11 @@ public static partial class FrontPlanner
     private static List<Army> ArmiesFor(Campaign campaign, StrategicWar war, int nationId)
     {
         var armies = FieldArmy(campaign, nationId);
-        var scratch = UseSplitScratch();
+        var scratch = SplitBoards.GetOrCreateValue(campaign);
         var splitWars = scratch.SplitWars;
         splitWars.Clear();
         var stamp = armies.Count;
-        foreach (var candidate in campaign.Wars)
+        foreach (var candidate in Warfare.OpenWars(campaign))
             if (!candidate.Ended && candidate.Involves(nationId))
             {
                 splitWars.Add(candidate);
@@ -1045,9 +993,8 @@ public static partial class FrontPlanner
         // A day-long derived cache survives hourly movement and cannot be reproduced
         // by a cold client loading a snapshot halfway through that day.
         if (!scratch.Splits.TryGetValue(nationId, out var split)) scratch.Splits[nationId] = split = new ArmySplit();
-        if (!ReferenceEquals(split.Campaign, campaign) || split.Hour != campaign.ElapsedHours || split.Stamp != stamp)
+        if (split.Hour != campaign.ElapsedHours || split.Stamp != stamp)
         {
-            split.Campaign = campaign;
             split.Hour = campaign.ElapsedHours;
             split.Stamp = stamp;
             Split(campaign, nationId, splitWars, armies, split.ByWar, scratch);
@@ -1057,7 +1004,6 @@ public static partial class FrontPlanner
 
     private sealed class ArmySplit
     {
-        public Campaign Campaign;
         public long Hour = -1;
         public int Stamp;
         public readonly Dictionary<int, List<Army>> ByWar = new();
@@ -1074,6 +1020,7 @@ public static partial class FrontPlanner
         public int[] Quota = Array.Empty<int>();
         public int[] Taken = Array.Empty<int>();
         public float[] Distance = Array.Empty<float>();
+        public readonly Dictionary<int, int> FirstDistanceRow = new();
         public int[] Serving = Array.Empty<int>();
         public float[] SortKeys = Array.Empty<float>();
         public readonly List<int> Order = new();
@@ -1095,8 +1042,8 @@ public static partial class FrontPlanner
         }
     }
 
-    [ThreadStatic] private static SplitScratch _splitScratch;
-    private static SplitScratch UseSplitScratch() => _splitScratch ??= new SplitScratch();
+    // A bounded front review can resume on a different thread when paused or saved.
+    private static readonly ConditionalWeakTable<Campaign, SplitScratch> SplitBoards = new();
 
     private static void Split(Campaign campaign, int nationId, List<StrategicWar> wars, List<Army> armies,
         Dictionary<int, List<Army>> byWar, SplitScratch scratch)
@@ -1196,11 +1143,21 @@ public static partial class FrontPlanner
         var distLen = armies.Count * count;
         if (scratch.Distance.Length < distLen) scratch.Distance = new float[distLen];
         var distance = scratch.Distance;
+        var firstDistanceRow = scratch.FirstDistanceRow;
+        firstDistanceRow.Clear();
         for (var i = 0; i < armies.Count; i++)
         {
-            var (latitude, longitude) = map.CenterOf(armies[i].ProvinceId);
+            var origin = armies[i].ProvinceId;
+            var row = i * count;
+            if (firstDistanceRow.TryGetValue(origin, out var existingRow))
+            {
+                Array.Copy(distance, existingRow, distance, row, count);
+                continue;
+            }
+            firstDistanceRow.Add(origin, row);
+            var (latitude, longitude) = map.CenterOf(origin);
             for (var w = 0; w < count; w++)
-                distance[i * count + w] = SetArmyOrderCommand.FrontDistance(map, scratch.SplitFrontPool[w], latitude, longitude);
+                distance[row + w] = SetArmyOrderCommand.FrontDistance(map, scratch.SplitFrontPool[w], latitude, longitude);
         }
 
         if (scratch.Serving.Length < armies.Count)
@@ -1269,7 +1226,7 @@ public static partial class FrontPlanner
         for (var i = 0; i < armies.Count; i++) byWar[wars[serving[i]].Id].Add(armies[i]);
     }
 
-    private static void AssignSide(Campaign campaign, StrategicWar war, int nationId, bool attacking)
+    private static IEnumerable<int> AssignSideStages(Campaign campaign, StrategicWar war, int nationId, bool attacking, bool sliced)
     {
         var nation = campaign.NationById(nationId);
         // A country the computer runs takes its orders here. A player's does not - unless
@@ -1277,7 +1234,7 @@ public static partial class FrontPlanner
         // its divisions are assigned and executed by exactly the same planner. Before this
         // check the delegation moved a player's free reserve into posts but never gave it a
         // role in a war, so an army handed to the staff stood on the front and did nothing.
-        if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) return;
+        if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) yield break;
         var profile = AiStrategyCatalog.Resolve(campaign, war, nation);
         // Territorial defence is not part of the field army's order of battle. Militia holds
         // the region it stood up in; sweeping it into the front shares distorted them badly -
@@ -1285,7 +1242,7 @@ public static partial class FrontPlanner
         // militia pushed real divisions out of defending and into attacking, and Ukraine lost
         // two thirds of its ground to a mechanic written to help it hold.
         var armies = ArmiesFor(campaign, war, nationId);
-        if (armies.Count == 0) return;
+        if (armies.Count == 0) yield break;
         var participantObjective = ObjectiveFor(campaign, war, nation);
         // Strongest first.
         //
@@ -1310,6 +1267,7 @@ public static partial class FrontPlanner
         var defend = (int)MathF.Round(armies.Count * profile.DefendShare);
         for (var index = 0; index < armies.Count; index++)
         {
+            if (sliced && Campaign.StageOverdue()) yield return 0;
             var army = armies[index];
             // A division on a march it was sent on directly - railed somewhere, called to a port
             // for the admiralty's landing - finishes it first. Handing it a role mid-journey

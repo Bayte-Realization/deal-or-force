@@ -13,7 +13,7 @@
         "title": "Grant provincial charters and fiscal autonomy",
         "consequence": "Costs immediate revenue, relieves overstretch and calms the periphery.",
         "effects": {
-          "treasury_percent": -0.05,
+          "income_share": -0.05,
           "imperial_overstretch": -0.08,
           "state.radicalism": -0.02,
           "stability": 0.015
@@ -23,7 +23,7 @@
         "title": "Fortify the approaches and rule from the centre",
         "consequence": "Order holds on the surface; peripheral anger and foreign suspicion deepen.",
         "effects": {
-          "treasury_percent": -0.025,
+          "income_share": -0.025,
           "add_modifier": { "border_reserve_programme": 180 },
           "stability": 0.008,
           "state.radicalism": 0.024,
@@ -134,7 +134,7 @@
         "title": "Fund a national pronatalist drive",
         "consequence": "Costly family grants lift birth rates and support young households.",
         "effects": {
-          "treasury_percent": -0.05,
+          "gdp_share": -0.004,
           "standard_of_living": 0.006
         },
         "modifiers": [
@@ -182,7 +182,7 @@
         "title": "Expand schools and maternity clinics",
         "consequence": "Turns the birth wave into a lasting demographic boom.",
         "effects": {
-          "treasury_percent": -0.04,
+          "gdp_share": -0.003,
           "literacy": 0.004
         },
         "modifiers": [

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using DealOrForce.Simulation;
 using DealOrForce.Simulation.Shell;
 using Godot;
@@ -32,7 +31,7 @@ internal sealed class ShellCornerView
     private StyleBox _flagPocketNormal;
     private StyleBoxFlat _flagPocketHover;
     private StyleBoxFlat _flagPocketActive;
-    private StyleBoxEmpty _rankNormalStyle;
+    private StyleBoxFlat _rankNormalStyle;
     private StyleBoxFlat _rankHoverStyle;
     private PanelContainer _rankHost;
 
@@ -42,7 +41,8 @@ internal sealed class ShellCornerView
     private bool? _lastCountryOpen;
     private (Campaign World, int Week, int Rev, int WarRev, int PlayerId, string Lang, int Rank, double Score) _rankCache;
     private (Campaign World, int NationId, int SampleDay, float SampleGdp, float GrowthPct) _gdpSample;
-    private (int PlayerId, float Treasury, float Balance, float Manpower, bool Observer, string Language, string Screen)? _resourceReadout;
+    private (int PlayerId, float Treasury, float Balance, float Manpower, int Day, int ArmiesCount, bool Observer, string Language, string Screen)? _resourceReadout;
+    private (int PlayerId, int Rank, int Prestige, int Day, string Lang) _flagTipStamp;
     private StyleBoxEmpty _emptyStyle;
     private StyleBoxFlat _cellHoverStyle;
     private readonly List<StrategicWar> _openWarsBuf = new(8);
@@ -69,6 +69,8 @@ internal sealed class ShellCornerView
         public string LastDeltaColor = "";
         public string LastTooltip = "";
         public bool LastActive;
+        public int LastDataSig;
+        public bool HasDataSig;
     }
 
     public ShellCornerView(ShellContext ctx)
@@ -159,8 +161,8 @@ internal sealed class ShellCornerView
         _flagKbd = _ctx.CreateKeycapBadge("Q");
         _ctx.Root.AddChild(_flagKbd);
 
-        _rankNormalStyle = new StyleBoxEmpty();
-        _rankHoverStyle = Ui.ChromeBox("shell.plate_hover", 0.72f, "shell.brass_hi", 0.70f, cornerRadius: 2, borderWidth: 1);
+        _rankNormalStyle = Ui.ChromeBox("shell.well", 0.72f, "shell.engrave", 0.78f, cornerRadius: 2, borderWidth: 1);
+        _rankHoverStyle = Ui.ChromeBox("shell.plate_hover", 0.84f, "shell.brass_hi", 0.86f, cornerRadius: 2, borderWidth: 1);
         _rankHost = new PanelContainer
         {
             Name = "ShellRankPlate",
@@ -206,7 +208,7 @@ internal sealed class ShellCornerView
         };
         _rankSubLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
         _rankSubLabel.AddThemeFontSizeOverride("font_size", 11);
-        _rankSubLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
+        _rankSubLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
         rankRow.AddChild(_rankSubLabel);
 
         _rankActiveUnderline = new ColorRect { Color = Ui.Colour("shell.brass_hi"), Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -226,6 +228,7 @@ internal sealed class ShellCornerView
 
         AddStatCell(row, "Treasury", "Economy", "icon_treasury", "Treasury", () => _ctx.ToggleScreen?.Invoke("Economy"));
         AddStatCell(row, "GDP", "Ledger", "icon_gdp", "GDP", () => _ctx.ToggleScreen?.Invoke("Ledger"));
+        AddStatCell(row, "Population", "Nation", "icon_population", "shell.aaa.cap_population", () => _ctx.ToggleScreen?.Invoke("Nation"));
         AddStatCell(row, "Debt", "SovereignFinance", "icon_coins", "shell.cap_debt", () => _ctx.OpenSovereignFinance?.Invoke());
         AddStatCell(row, "Inflation", "State Affairs", "icon_inflation", "Inflation", () => _ctx.ToggleScreen?.Invoke("Economy"));
         AddStatCell(row, "Stability", "Laws", "icon_stability", "Stability", () => _ctx.ToggleScreen?.Invoke("Laws"));
@@ -248,8 +251,17 @@ internal sealed class ShellCornerView
         box.AddThemeStyleboxOverride("panel", _emptyStyle);
 
         var cell = new StatCellNodes { Id = id, ScreenMatch = screenMatch, Box = box };
-        box.MouseEntered += () => { if (!cell.LastActive) box.AddThemeStyleboxOverride("panel", _cellHoverStyle); };
-        box.MouseExited += () => { box.AddThemeStyleboxOverride("panel", cell.LastActive ? _ctx.PressedWellStyle(underlineBottom: true) : _emptyStyle); };
+        box.MouseEntered += () =>
+        {
+            if (cell.LastActive) return;
+            box.AddThemeStyleboxOverride("panel", _cellHoverStyle);
+            ShellContext.ApplyIconRelief(cell.Icon, Ui.Colour("shell.highlight"), 0.84f);
+        };
+        box.MouseExited += () =>
+        {
+            box.AddThemeStyleboxOverride("panel", cell.LastActive ? _ctx.PressedWellStyle(underlineBottom: true) : _emptyStyle);
+            ShellContext.ApplyIconRelief(cell.Icon, Ui.Colour(cell.LastActive ? "shell.highlight" : "shell.icon"), cell.LastActive ? 0.88f : 0.62f);
+        };
         box.GuiInput += ev =>
         {
             if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
@@ -320,7 +332,7 @@ internal sealed class ShellCornerView
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         cap.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
-        cap.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_faint"));
+        cap.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
         cap.SetMeta("shell_cap_key", capKey);
         botLine.AddChild(cap);
         cell.Caption = cap;
@@ -381,7 +393,7 @@ internal sealed class ShellCornerView
         _flagKbd.Position = new Vector2(flagRect.Right - 18f, flagRect.Bottom - 16f);
 
         var cellX0 = ox + (compact ? 82f : 120f);
-        var cellCount = atWar ? 8 : 7;
+        var cellCount = atWar ? 9 : 8;
         var cellW = profile.StatCellWidth;
         var bedY = oy + (compact ? 4f : 6f);
         var bedH = profile.StatCellHeight;
@@ -392,10 +404,10 @@ internal sealed class ShellCornerView
         var ix = tight ? 3f : (narrow ? 4f : (compact ? 6f : 9f));
         var iy = tight ? 5f : (narrow ? 4f : (compact ? 5f : 6f));
         var vx = tight ? 17f : (narrow ? 20f : (compact ? 28f : 38f));
-        var vy = compact ? 1f : 4f;
-        var cy = compact ? 22f : 31f;
+        var vy = compact ? 2f : 4f;
+        var cy = compact ? 21f : 31f;
 
-        var visibleOrder = new[] { "Treasury", "GDP", "Debt", "Inflation", "Stability", "Manpower", "Capital", "War" };
+        var visibleOrder = new[] { "Treasury", "GDP", "Population", "Debt", "Inflation", "Stability", "Manpower", "Capital", "War" };
         for (var i = 0; i < visibleOrder.Length; i++)
         {
             var c = _cells[visibleOrder[i]];
@@ -406,9 +418,9 @@ internal sealed class ShellCornerView
             c.Icon.Size = new Vector2(iconSz, iconSz);
 
             c.TopLine.Position = new Vector2(vx, vy);
-            c.TopLine.Size = new Vector2(MathF.Max(16f, cellW - vx - (narrow ? 2f : 4f)), compact ? 21f : 26f);
+            c.TopLine.Size = new Vector2(MathF.Max(16f, cellW - vx - (narrow ? 2f : 4f)), compact ? 20f : 26f);
             c.TopLine.AddThemeConstantOverride("separation", tight ? 1 : (narrow ? 2 : 3));
-            c.Figure.AddThemeFontSizeOverride("font_size", tight ? 11 : (narrow ? 12 : (compact ? 14 : 19)));
+            c.Figure.AddThemeFontSizeOverride("font_size", tight ? 11 : (narrow ? 13 : (compact ? 15 : 19)));
             c.Unit.AddThemeFontSizeOverride("font_size", tight ? 8 : (narrow ? 9 : (compact ? 10 : 12)));
 
             c.BotLine.Position = new Vector2(ix, cy);
@@ -423,7 +435,7 @@ internal sealed class ShellCornerView
             c.SepGroove.Position = new Vector2(cellW - 2f, 0f);
             c.SepGroove.Size = new Vector2(2f, bedH);
             c.SepGroove.QueueRedraw();
-            c.StatusRule.Position = new Vector2(6f, bedH - 3f);
+            c.StatusRule.Position = new Vector2(6f, bedH - 2.5f);
             c.StatusRule.Size = new Vector2(MathF.Max(8f, cellW - 14f), 2f);
         }
 
@@ -439,32 +451,38 @@ internal sealed class ShellCornerView
     {
         var world = _ctx.World;
         if (world?.Player is not { } player) return;
+        var hs = _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId == player.Id ? snap : null;
 
-        _openWarsBuf.Clear();
-        var allOpenWars = Warfare.OpenWars(world);
-        for (var i = 0; i < allOpenWars.Count; i++)
+        bool atWar;
+        if (hs is not null && hs.OpenPlayerWars.Length == 0)
         {
-            var w = allOpenWars[i];
-            if (!w.Ended && w.Involves(player.Id)) _openWarsBuf.Add(w);
+            _openWarsBuf.Clear();
+            atWar = false;
         }
-        var atWar = _openWarsBuf.Count > 0;
+        else
+        {
+            _openWarsBuf.Clear();
+            var allOpenWars = Warfare.OpenWars(world);
+            for (var i = 0; i < allOpenWars.Count; i++)
+            {
+                var w = allOpenWars[i];
+                if (!w.Ended && w.Involves(player.Id)) _openWarsBuf.Add(w);
+            }
+            atWar = _openWarsBuf.Count > 0;
+        }
         if (atWar != _atWar)
-        {
             Layout(_ctx.ResolveViewportProfile(atWar), atWar);
-        }
 
         if (_lastTag != player.Tag)
         {
             _lastTag = player.Tag;
             FitNaturalFlag(player.Tag);
         }
-        _flagButton.TooltipText = Ui.Tip(Loc.Format("shell.clarity.flag_tip_fmt",
-            player.DisplayName, player.Tag, Loc.Get(PoliticsCore.GovernmentOf(player).Name)));
 
         var openScreen = _ctx.GetOpenScreen?.Invoke() ?? "";
         var countryOpen = string.Equals(openScreen, "Nation", StringComparison.Ordinal);
-        _rankActiveUnderline.Visible = countryOpen;
-        _flagButton.ButtonPressed = countryOpen;
+        if (_rankActiveUnderline.Visible != countryOpen) _rankActiveUnderline.Visible = countryOpen;
+        if (_flagButton.ButtonPressed != countryOpen) _flagButton.ButtonPressed = countryOpen;
         if (_lastCountryOpen != countryOpen)
         {
             _lastCountryOpen = countryOpen;
@@ -474,118 +492,147 @@ internal sealed class ShellCornerView
         var (rank, score, rankChanged) = ResolveOverallRank(world, player);
         var rankStr = rank > 0 ? $"№ {rank}" : "№ —";
         if (_rankNumLabel.Text != rankStr) _rankNumLabel.Text = rankStr;
-        if (rankChanged)
+        var prestigeVal = hs?.Prestige ?? player.Prestige;
+        var dayVal = hs?.ElapsedDays ?? world.ElapsedDays;
+        var tipStamp = (player.Id, rank, (int)MathF.Round(prestigeVal), dayVal, Loc.Language);
+        if (rankChanged || !_flagTipStamp.Equals(tipStamp))
         {
+            _flagTipStamp = tipStamp;
+            _flagButton.TooltipText = Ui.Tip(ShellCornerTelemetry.BuildFlagTooltip(world, player, rank));
+            var prestigeTip = Loc.Format("aaa.ui.shell_rank_tip_prestige_fmt", MathF.Round(prestigeVal).ToString("N0", Loc.Culture));
             _rankHost.TooltipText = Ui.Tip(rank > 0
-                ? $"{Loc.Format("Overall rank #{0} · index {1}/100", rank, score.ToString("0.0"))}\n{Loc.Get("World power rank — click to open Country Rankings.")}"
-                : $"{Loc.Get("Country rankings · no visible territorial statistics")}\n{Loc.Get("World power rank — click to open Country Rankings.")}");
+                ? $"{Loc.Format("Overall rank #{0} · index {1}/100", rank, score.ToString("0.0"))}\n{prestigeTip}\n{Loc.Get("World power rank — click to open Country Rankings.")}"
+                : $"{Loc.Get("Country rankings · no visible territorial statistics")}\n{prestigeTip}\n{Loc.Get("World power rank — click to open Country Rankings.")}");
         }
 
-        RefreshCells(world, player, _openWarsBuf, openScreen);
+        RefreshCells(world, player, hs, _openWarsBuf, openScreen);
         _xpStrip.Refresh(world, player);
         _rail.Refresh(world, player, _openWarsBuf, openScreen);
         SyncKeycapVisibility();
     }
 
+    private bool CellDirty(string id, int sig)
+    {
+        if (!_cells.TryGetValue(id, out var c) || (c.HasDataSig && c.LastDataSig == sig)) return false;
+        c.HasDataSig = true; c.LastDataSig = sig;
+        return true;
+    }
+
     public void RefreshResources(Nation player)
     {
         if (player is null) return;
+        var world = _ctx.World;
+        var hs = _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId == player.Id ? snap : null;
         var openScreen = _ctx.GetOpenScreen?.Invoke() ?? "";
-        var observer = _ctx.IsObserverMode?.Invoke() ?? (_ctx.World?.ObserverMode ?? false);
-        var readout = (player.Id, player.Treasury, player.WeeklyBalance, player.ManpowerReserve, observer, Loc.Language, openScreen);
+        var observer = _ctx.IsObserverMode?.Invoke() ?? (hs?.ObserverMode ?? (world?.ObserverMode ?? false));
+        var trVal = hs?.Treasury ?? player.Treasury;
+        var balVal = hs?.WeeklyBalance ?? player.WeeklyBalance;
+        var manVal = hs?.ManpowerReserve ?? player.ManpowerReserve;
+        var dayVal = hs?.ElapsedDays ?? (world?.ElapsedDays ?? -1);
+        var armyCnt = hs?.PlayerTotalDivisions ?? (world?.Armies.Count ?? 0);
+        var lang = Loc.Language;
+        var readout = (player.Id, trVal, balVal, manVal, dayVal, armyCnt, observer, lang, openScreen);
         if (_resourceReadout is { } previous && previous.Equals(readout)) return;
         _resourceReadout = readout;
 
-        var (trFig, trUnit) = SplitMoney(player.Treasury);
-        var (balDelta, _) = SplitMoney(MathF.Abs(player.WeeklyBalance));
-        var trDeltaTxt = MathF.Abs(player.WeeklyBalance) >= 0.0005f ? (player.WeeklyBalance >= 0 ? "▲ " : "▼ ") + balDelta : "";
-        UpdateCell("Treasury", trFig, trUnit,
-            player.Treasury < 0.05f ? "shell.state.negative_text" : "shell.paper",
-            trDeltaTxt, player.WeeklyBalance >= 0 ? "shell.state.positive" : "shell.state.negative",
-            $"{Loc.Get("Treasury")}: {Fmt.MoneyExact(player.Treasury)}\n{Loc.Get("Balance")}: {Fmt.MoneyDelta(player.WeeklyBalance)}/{Loc.Get("week")}",
-            openScreen == "Economy");
-
-        var (manFig, manUnit) = SplitPeople((long)Math.Max(0, player.ManpowerReserve));
-        var reinfLine = player.ReinforcementCapacity > 0
-            ? $"\n{Loc.Format("shell.clarity.reinf_rate_fmt", Fmt.People(player.ReinforcementCapacity))}"
-            : "";
-        UpdateCell("Manpower", manFig, manUnit, "shell.paper", "", "shell.state.positive",
-            $"{Loc.Get("Manpower")}: {Fmt.PeopleExact(player.ManpowerReserve)}{reinfLine}", openScreen == "Military");
-        if (_ctx.World is { } w) _xpStrip.Refresh(w, player);
+        if (CellDirty("Treasury", HashCode.Combine(trVal, balVal, openScreen == "Economy", lang)))
+        {
+            var (trFig, trUnit) = ShellCornerTelemetry.SplitMoney(trVal);
+            var (balDelta, _) = ShellCornerTelemetry.SplitMoney(MathF.Abs(balVal));
+            var trDeltaTxt = MathF.Abs(balVal) >= 0.0005f ? (balVal >= 0 ? "▲ " : "▼ ") + balDelta : "";
+            UpdateCell("Treasury", trFig, trUnit, trVal < 0.05f ? "shell.state.negative_text" : "shell.paper",
+                trDeltaTxt, balVal >= 0 ? "shell.state.positive" : "shell.state.negative",
+                $"{Loc.Get("Treasury")}: {Fmt.MoneyExact(trVal)}\n{Loc.Get("Balance")}: {Fmt.MoneyDelta(balVal)}/{Loc.Get("week")}", openScreen == "Economy");
+        }
+        if (CellDirty("Manpower", HashCode.Combine(manVal, hs?.ReinforcementCapacity ?? player.ReinforcementCapacity, armyCnt, dayVal, openScreen == "Military", lang)))
+        {
+            var (manFig, manUnit) = ShellCornerTelemetry.SplitPeople((long)Math.Max(0, manVal));
+            UpdateCell("Manpower", manFig, manUnit, "shell.paper", "", "shell.state.positive",
+                ShellCornerTelemetry.BuildManpowerTooltip(world, player), openScreen == "Military");
+        }
+        if (world is not null) _xpStrip.Refresh(world, player);
     }
 
-    private void RefreshCells(Campaign world, Nation player, IReadOnlyList<StrategicWar> openWars, string openScreen)
+    private void RefreshCells(Campaign world, Nation player, CampaignHudSnapshot hs, IReadOnlyList<StrategicWar> openWars, string openScreen)
     {
-        var debt = SovereignFinance.Outstanding(player);
-        var debtRatio = debt / MathF.Max(0.01f, player.Gdp);
-        var overdue = player.DebtArrears + player.PaymentArrears;
-
-        var (gdpFig, gdpUnit) = SplitMoney(player.Gdp);
-        var growthPct = SampleGdpDeltaPct(world, player);
-        var gdpDelta = MathF.Abs(growthPct) >= 0.05f ? $"{(growthPct >= 0 ? "▲" : "▼")} {MathF.Abs(growthPct):0.0}%" : "";
-        UpdateCell("GDP", gdpFig, gdpUnit, "shell.paper",
-            gdpDelta, growthPct >= 0 ? "shell.state.positive" : "shell.state.negative",
-            $"{Loc.Get("GDP")}: {Fmt.MoneyExact(player.Gdp)}", openScreen == "Ledger");
-
-        UpdateCell("Debt", $"{(debtRatio * 100f):0.0}%", "",
-            overdue > 0.0001f ? "shell.state.negative_text" : (debtRatio > 0.85f ? "shell.state.warning_text" : "shell.paper"),
-            overdue > 0.0001f ? "●" : "", "shell.state.negative",
-            $"{Loc.Get("Public debt")}: {Fmt.MoneyExact(debt)} ({Fmt.Percent(debtRatio)} {Loc.Get("of GDP")})", false);
-
+        var debt = hs?.PublicDebt ?? SovereignFinance.Outstanding(player);
+        var gdp = hs?.Gdp ?? player.Gdp;
+        var debtRatio = debt / MathF.Max(0.01f, gdp);
+        var overdue = hs is not null ? (hs.DebtArrears + hs.PaymentArrears) : (player.DebtArrears + player.PaymentArrears);
         var touch = _profile?.TouchMode == true || DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true;
-        var infDrivers = touch ? "" : FormatTopDrivers(player.InflationDrivers, asPercent: true);
-        UpdateCell("Inflation", $"{(player.Inflation * 100f):0.0}%", "",
-            player.Inflation > 0.12f ? "shell.state.negative_text" : (player.Inflation > 0.06f ? "shell.state.warning_text" : "shell.paper"),
-            player.Inflation > 0.05f ? "▲" : "", "shell.state.warning",
-            touch ? "" : $"{Loc.Get("Inflation")}: {Fmt.Percent(player.Inflation)}{infDrivers}", false);
+        var lang = Loc.Language;
 
-        var stabDrivers = touch ? "" : FormatTopDrivers(player.StabilityDrivers, asPercent: true);
-        UpdateCell("Stability", $"{(int)MathF.Round(player.Stability * 100f)}%", "",
-            player.Stability < 0.35f ? "shell.state.negative_text" : (player.Stability < 0.50f ? "shell.state.warning_text" : "shell.paper"),
-            player.Stability < 0.50f ? "▼" : "", "shell.state.negative",
-            touch ? "" : $"{Loc.Get("Stability")}: {Fmt.Percent(player.Stability)}{stabDrivers}", openScreen == "Laws");
+        var growthPct = ShellCornerTelemetry.SampleGdpDeltaPct(ref _gdpSample, world, player);
+        if (CellDirty("GDP", HashCode.Combine(gdp, player.Population, growthPct, touch, openScreen == "Ledger", lang)))
+        {
+            var (gdpFig, gdpUnit) = ShellCornerTelemetry.SplitMoney(gdp);
+            var gdpDelta = MathF.Abs(growthPct) >= 0.05f ? $"{(growthPct >= 0 ? "▲" : "▼")} {MathF.Abs(growthPct):0.0}%" : "";
+            UpdateCell("GDP", gdpFig, gdpUnit, "shell.paper", gdpDelta, growthPct >= 0 ? "shell.state.positive" : "shell.state.negative",
+                touch ? "" : ShellCornerTelemetry.BuildGdpTooltip(player, growthPct), openScreen == "Ledger");
+        }
 
-        var ppWeekly = world.Defines.PoliticalPointsPerWeek + world.Defines.PoliticalPointsStabilityWeight * Math.Clamp(player.Stability, 0f, 1f);
-        var ppDeltaTxt = ppWeekly >= 0.05f ? $"+{ppWeekly.ToString("0.0", CultureInfo.InvariantCulture)}" : "";
-        UpdateCell("Capital", ((int)MathF.Round(player.PoliticalPoints)).ToString(CultureInfo.InvariantCulture), "",
-            "shell.paper", ppDeltaTxt, "shell.state.positive",
-            $"{Loc.Get("Political capital")}: {player.PoliticalPoints:0.0}\n{Loc.Format("shell.xp.pol_rate_fmt", ppWeekly.ToString("0.0", CultureInfo.InvariantCulture))}\n{Loc.Get("shell.xp.pol_unlocks")}",
-            openScreen == "State Affairs");
+        var pop = hs?.Population ?? player.Population;
+        var netPop = hs?.ReviewNetPop ?? (player.ReviewBirths - player.ReviewDeaths + player.ReviewNetMigration);
+        var regionCount = hs?.RegionCount ?? world.StatesOf(player).Length;
+        if (CellDirty("Population", HashCode.Combine(pop, netPop >= 100 ? 1 : (netPop <= -100 ? -1 : 0), regionCount, gdp, player.Literacy, player.StandardOfLiving, touch, HashCode.Combine(openScreen == "Nation", lang))))
+        {
+            var (popFig, popUnit) = ShellCornerTelemetry.SplitPeople(pop);
+            var popDelta = Math.Abs(netPop) >= 100 ? (netPop > 0 ? "▲" : "▼") : "";
+            UpdateCell("Population", popFig, popUnit, "shell.paper", popDelta, netPop >= 0 ? "shell.state.positive" : "shell.state.warning",
+                touch ? "" : ShellCornerTelemetry.BuildPopulationTooltip(world, player, regionCount), openScreen == "Nation");
+        }
+
+        if (CellDirty("Debt", HashCode.Combine((int)MathF.Round(debtRatio * 1000f), overdue > 0.0001f, (int)MathF.Round(debt * 10f), lang)))
+            UpdateCell("Debt", $"{(debtRatio * 100f):0.0}%", "",
+                overdue > 0.0001f ? "shell.state.negative_text" : (debtRatio > 0.85f ? "shell.state.warning_text" : "shell.paper"),
+                overdue > 0.0001f ? "●" : "", "shell.state.negative",
+                $"{Loc.Get("Public debt")}: {Fmt.MoneyExact(debt)} ({Fmt.Percent(debtRatio)} {Loc.Get("of GDP")})", false);
+
+        var inf = hs?.Inflation ?? player.Inflation;
+        if (CellDirty("Inflation", HashCode.Combine((int)MathF.Round(inf * 1000f), touch ? 0 : ShellCornerTelemetry.BreakdownHash(player.InflationDrivers), touch, lang)))
+        {
+            var infDrivers = touch ? "" : ShellCornerTelemetry.FormatTopDrivers(player.InflationDrivers, asPercent: true);
+            UpdateCell("Inflation", $"{(inf * 100f):0.0}%", "",
+                inf > 0.12f ? "shell.state.negative_text" : (inf > 0.06f ? "shell.state.warning_text" : "shell.paper"),
+                inf > 0.05f ? "▲" : "", "shell.state.warning", touch ? "" : $"{Loc.Get("Inflation")}: {Fmt.Percent(inf)}{infDrivers}", false);
+        }
+
+        var stab = hs?.Stability ?? player.Stability;
+        if (CellDirty("Stability", HashCode.Combine((int)MathF.Round(stab * 1000f), touch ? 0 : ShellCornerTelemetry.BreakdownHash(player.StabilityDrivers), touch, openScreen == "Laws", lang)))
+        {
+            var stabDrivers = touch ? "" : ShellCornerTelemetry.FormatTopDrivers(player.StabilityDrivers, asPercent: true);
+            UpdateCell("Stability", $"{(int)MathF.Round(stab * 100f)}%", "",
+                stab < 0.35f ? "shell.state.negative_text" : (stab < 0.50f ? "shell.state.warning_text" : "shell.paper"),
+                stab < 0.50f ? "▼" : "", "shell.state.negative", touch ? "" : $"{Loc.Get("Stability")}: {Fmt.Percent(stab)}{stabDrivers}", openScreen == "Laws");
+        }
+
+        var pp = hs?.PoliticalPoints ?? player.PoliticalPoints;
+        var ppWeekly = hs?.PpWeekly ?? (world.Defines.PoliticalPointsPerWeek + world.Defines.PoliticalPointsStabilityWeight * Math.Clamp(stab, 0f, 1f));
+        if (CellDirty("Capital", HashCode.Combine((int)MathF.Round(pp * 10f), (int)MathF.Round(ppWeekly * 10f), openScreen == "State Affairs", lang)))
+        {
+            var ppDeltaTxt = ppWeekly >= 0.05f ? $"+{ppWeekly.ToString("0.0", CultureInfo.InvariantCulture)}" : "";
+            UpdateCell("Capital", ((int)MathF.Round(pp)).ToString(CultureInfo.InvariantCulture), "", "shell.paper", ppDeltaTxt, "shell.state.positive",
+                $"{Loc.Get("Political capital")}: {pp:0.0}\n{Loc.Format("shell.xp.pol_rate_fmt", ppWeekly.ToString("0.0", CultureInfo.InvariantCulture))}\n{Loc.Get("shell.xp.pol_unlocks")}",
+                openScreen == "State Affairs");
+        }
 
         if (openWars.Count > 0)
         {
             var lead = openWars[0];
             var score = (int)MathF.Round(lead.IsAttacking(player.Id) ? lead.WarScore : -lead.WarScore);
-            var wsPct = (int)MathF.Round(player.WarSupport * 100f);
-            if (_cells.TryGetValue("War", out var warCell) && warCell.Caption is not null)
-                warCell.Caption.Text = Loc.Format("shell.cap_wars_count", openWars.Count);
-            UpdateCell("War", $"{wsPct}%", "",
-                wsPct < 40 ? "shell.state.negative_text" : "shell.state.warning_text",
-                $"{score:+#;-#;0}%", score >= 0 ? "shell.state.positive" : "shell.state.negative",
-                $"{Loc.Get("Wars")}: {openWars.Count} · {Loc.Get("War score")}: {score:+#;-#;0}% · {Loc.Get("War support")}: {wsPct}%", openScreen == "Wars");
+            var wsPct = (int)MathF.Round((hs?.WarSupport ?? player.WarSupport) * 100f);
+            if (CellDirty("War", HashCode.Combine(openWars.Count, score, wsPct, openScreen == "Wars", lang)))
+            {
+                if (_cells.TryGetValue("War", out var warCell) && warCell.Caption is not null)
+                {
+                    var capTxt = Loc.Format("shell.cap_wars_count", openWars.Count);
+                    if (warCell.Caption.Text != capTxt) warCell.Caption.Text = capTxt;
+                }
+                UpdateCell("War", $"{wsPct}%", "", wsPct < 40 ? "shell.state.negative_text" : "shell.state.warning_text",
+                    $"{score:+#;-#;0}%", score >= 0 ? "shell.state.positive" : "shell.state.negative",
+                    $"{Loc.Get("Wars")}: {openWars.Count} · {Loc.Get("War score")}: {score:+#;-#;0}% · {Loc.Get("War support")}: {wsPct}%", openScreen == "Wars");
+            }
         }
-    }
-
-    private static string FormatTopDrivers(Breakdown breakdown, bool asPercent)
-    {
-        if (breakdown is null || !breakdown.HasEntries) return "";
-        var top = breakdown.Entries
-            .Where(e => MathF.Abs(e.Value) >= 0.0005f)
-            .OrderByDescending(e => MathF.Abs(e.Value))
-            .Take(4)
-            .ToArray();
-        if (top.Length == 0) return "";
-        var sb = new System.Text.StringBuilder();
-        sb.Append('\n').Append(Loc.Get("shell.clarity.drivers_header"));
-        for (var i = 0; i < top.Length; i++)
-        {
-            var e = top[i];
-            var valStr = asPercent
-                ? $"{(e.Value * 100f):+0.0;-0.0;0.0}%"
-                : e.Value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture);
-            sb.Append("\n  ").Append(valStr).Append("  ").Append(Loc.Get(e.Source));
-        }
-        return sb.ToString();
     }
 
     private void UpdateCell(string id, string fig, string unit, string figColorTok, string delta, string deltaColorTok, string tip, bool active)
@@ -620,6 +667,7 @@ internal sealed class ShellCornerView
             c.LastActive = active;
             _emptyStyle ??= new StyleBoxEmpty();
             c.Box.AddThemeStyleboxOverride("panel", active ? _ctx.PressedWellStyle(underlineBottom: true) : _emptyStyle);
+            ShellContext.ApplyIconRelief(c.Icon, Ui.Colour(active ? "shell.highlight" : "shell.icon"), active ? 0.88f : 0.62f);
         }
     }
 
@@ -645,22 +693,6 @@ internal sealed class ShellCornerView
         _flagEdgeOverlay.QueueRedraw();
     }
 
-    private float SampleGdpDeltaPct(Campaign world, Nation player)
-    {
-        if (!ReferenceEquals(_gdpSample.World, world) || _gdpSample.NationId != player.Id)
-        {
-            _gdpSample = (world, player.Id, world.ElapsedDays, player.Gdp, 0f);
-            return 0f;
-        }
-        var days = world.ElapsedDays - _gdpSample.SampleDay;
-        if (days >= 7 && _gdpSample.SampleGdp > 0.01f)
-        {
-            var annualized = ((player.Gdp - _gdpSample.SampleGdp) / _gdpSample.SampleGdp) * (365f / days) * 100f;
-            _gdpSample = (world, player.Id, world.ElapsedDays, player.Gdp, annualized);
-        }
-        return _gdpSample.GrowthPct;
-    }
-
     private (int Rank, double Score, bool Changed) ResolveOverallRank(Campaign world, Nation player)
     {
         var lang = Loc.Language;
@@ -675,18 +707,35 @@ internal sealed class ShellCornerView
             return (_rankCache.Rank, _rankCache.Score, langChanged);
         }
 
+        if (world.RenderSnapshot is { Version: > 0 } snap &&
+            snap.RankWeek == week &&
+            snap.RankMapRev == world.MapRevision &&
+            snap.RankWarRev == world.WarRevision &&
+            snap.RankPlayerId == player.Id &&
+            snap.NationRanksById.Count > 0)
+        {
+            _rankCache = (world, week, world.MapRevision, world.WarRevision, player.Id, lang,
+                snap.PlayerOverallRank, snap.PlayerOverallScore);
+            return (snap.PlayerOverallRank, snap.PlayerOverallScore, true);
+        }
+
         if (world.MidStep)
         {
+            if (world.RenderSnapshot is { Version: > 0 } fallbackSnap &&
+                fallbackSnap.RankPlayerId == player.Id &&
+                fallbackSnap.PlayerOverallRank > 0)
+                return (fallbackSnap.PlayerOverallRank, fallbackSnap.PlayerOverallScore, false);
             if (ReferenceEquals(_rankCache.World, world) && _rankCache.PlayerId == player.Id && _rankCache.Rank >= 0)
                 return (_rankCache.Rank, _rankCache.Score, false);
             return (0, 0.0, false);
         }
 
         var weights = new CountryRankings.Weights(
-            Ui.Metric("rankings.weight.economy", 40),
-            Ui.Metric("rankings.weight.population", 15),
-            Ui.Metric("rankings.weight.field_power", 30),
-            Ui.Metric("rankings.weight.technology", 15));
+            Ui.Metric("rankings.weight.economy", 42),
+            Ui.Metric("rankings.weight.population", 14),
+            Ui.Metric("rankings.weight.field_power", 12),
+            Ui.Metric("rankings.weight.technology", 17),
+            Ui.Metric("rankings.weight.prestige", 15));
         var rows = CountryRankings.Read(world, weights);
         var rank = 0;
         var score = 0.0;
@@ -703,89 +752,5 @@ internal sealed class ShellCornerView
         return (rank, score, true);
     }
 
-    private static (string Fig, string Unit) SplitMoney(float billions)
-    {
-        var abs = MathF.Abs(billions);
-        var sign = billions < -0.0001f ? "−" : "";
-        if (abs >= 1000f) return ($"{sign}${(abs / 1000f):0.0}", Loc.Get("shell.unit_trillion"));
-        if (abs >= 1f) return ($"{sign}${abs:0.00}", Loc.Get("shell.unit_billion"));
-        return ($"{sign}${(abs * 1000f):0}", Loc.Get("shell.unit_million"));
-    }
-
-    private static (string Fig, string Unit) SplitPeople(long count)
-    {
-        if (count >= 1_000_000) return ($"{(count / 1_000_000.0):0.0}", Loc.Get("shell.unit_million"));
-        if (count >= 1_000) return ($"{(count / 1_000.0):0.#}", Loc.Get("shell.unit_thousand"));
-        return (count.ToString(CultureInfo.InvariantCulture), "");
-    }
-
-    private void DrawSeamlessLCorner()
-    {
-        var p = _profile;
-        if (p.ViewportWidth <= 0f) return;
-        var compact = p.Compact;
-        var ox = p.TopPlate.X;
-        var oy = p.TopPlate.Y;
-        var w = p.TopPlate.Right;
-        var h = p.TopPlate.Bottom;
-        var rw = p.LeftRail.Right;
-        var b = p.LeftRail.Bottom;
-        var s = p.CornerNode.Right;
-        var n = p.CornerNode.Bottom;
-        var ch = compact ? 8f : 12f;
-        var nc = compact ? 6f : 8f;
-
-        Vector2[] poly =
-        {
-            new(ox, oy), new(w, oy), new(w, h - ch), new(w - ch, h), new(s, h),
-            new(s, n - nc), new(s - nc, n), new(rw, n), new(rw, b - ch), new(rw - ch, b), new(ox, b)
-        };
-
-        var shadowPoly = new Vector2[poly.Length];
-        for (var i = 0; i < poly.Length; i++) shadowPoly[i] = poly[i] + new Vector2(1.5f, 4f);
-        _backdrop.DrawColoredPolygon(shadowPoly, Ui.Colour("shell.border", 0.52f));
-
-        var topCol = Ui.Colour("shell.plate_top");
-        var botCol = Ui.Colour("shell.plate_bottom");
-        var colors = new Color[poly.Length];
-        for (var i = 0; i < poly.Length; i++)
-            colors[i] = topCol.Lerp(botCol, Math.Clamp(poly[i].Y / Math.Max(1f, b), 0f, 1f));
-        _backdrop.DrawPolygon(poly, colors);
-
-        _backdrop.DrawPolyline(CloseRing(poly), Ui.Colour("shell.border"), 1.2f, antialiased: true);
-        _backdrop.DrawPolyline(CloseRing(InsetPolygon(poly, compact ? 1.8f : 2.2f)), Ui.Colour("shell.brass_hi"), compact ? 2.0f : 2.6f, antialiased: true);
-        _backdrop.DrawPolyline(CloseRing(InsetPolygon(poly, compact ? 3.5f : 4.2f)), Ui.Colour("shell.paper", 0.14f), 1.0f, antialiased: true);
-    }
-
-    private static Vector2[] CloseRing(Vector2[] pts)
-    {
-        var res = new Vector2[pts.Length + 1];
-        Array.Copy(pts, res, pts.Length);
-        res[^1] = pts[0];
-        return res;
-    }
-
-    private static Vector2[] InsetPolygon(Vector2[] pts, float dist)
-    {
-        var len = pts.Length;
-        var res = new Vector2[len];
-        for (var i = 0; i < len; i++)
-        {
-            var prev = pts[(i - 1 + len) % len];
-            var cur = pts[i];
-            var next = pts[(i + 1) % len];
-            var e1 = (cur - prev).Normalized();
-            var e2 = (next - cur).Normalized();
-            var n1 = new Vector2(-e1.Y, e1.X);
-            var n2 = new Vector2(-e2.Y, e2.X);
-            var bis = n1 + n2;
-            if (bis.LengthSquared() < 1e-4f) res[i] = cur + n1 * dist;
-            else
-            {
-                bis = bis.Normalized();
-                res[i] = cur + bis * (dist / Math.Max(0.35f, bis.Dot(n1)));
-            }
-        }
-        return res;
-    }
+    private void DrawSeamlessLCorner() => ShellCornerTelemetry.DrawSeamlessLCorner(_backdrop, _profile);
 }

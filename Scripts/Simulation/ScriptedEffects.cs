@@ -170,6 +170,8 @@ public static partial class ScriptedEffects
             "Imperial overstretch of a state governing distant or divergent territories, 0-1.");
         NationField("notoriety", n => n.Notoriety, (n, v) => n.Notoriety = v, 0f, 100f,
             "International notoriety from conquests and broken treaties, 0-100.");
+        NationField("prestige", n => n.Prestige, (n, v) => n.Prestige = v, 0f, 1000f,
+            "International diplomatic prestige and standing, 0-1000.");
         NationField("union_cohesion", n => n.UnionCohesion, (n, v) => n.UnionCohesion = v, 0f, 1f,
             "Cohesion of a proclaimed union or restored state, 0-1.");
         NationField("population", n => n.Population, (n, v) => n.Population = (long)MathF.Max(0f, v),
@@ -233,6 +235,8 @@ public static partial class ScriptedEffects
         Fields.Values.OrderBy(entry => entry.Name, StringComparer.Ordinal).Select(entry => (entry.Name, entry.Help))
             .Concat(new[]
             {
+                ("income_share", "Add or deduct treasury scaled by one year of baseline gross national revenue (WeeklyBase * 52 * value; e.g. -0.04 costs 4% of annual income)."),
+                ("gdp_share", "Add or deduct treasury scaled by national GDP (e.g. -0.005 costs 0.5% of GDP)."),
                 ("grand_project_progress", "Advance (or delay) construction progress days on the nation's active Grand Projects."),
                 ("stockpile.GOOD", "Adjust strategic depot reserve for a tracked commodity (e.g. stockpile.ammunition, stockpile.oil, stockpile.arms); suffixes work as usual."),
                 ("unlock_feature", "String or array of feature ids/aliases to enable globally (e.g. \"aviation\", \"nukes\")."),
@@ -249,6 +253,12 @@ public static partial class ScriptedEffects
         id = key[8..^4].ToLowerInvariant();
         return MechanicFeatures.ValidId(id);
     }
+
+    internal static bool IsIncomeShareKey(string key) =>
+        key is not null && key.Trim().Replace('-', '_').Equals("income_share", StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsGdpShareKey(string key) =>
+        key is not null && key.Trim().Replace('-', '_').Equals("gdp_share", StringComparison.OrdinalIgnoreCase);
 
     internal static bool IsGrandProjectProgressKey(string key) =>
         key is not null && key.Trim().Replace('-', '_').Equals("grand_project_progress", StringComparison.OrdinalIgnoreCase);
@@ -277,7 +287,7 @@ public static partial class ScriptedEffects
     }
 
     public static bool IsKnown(string key) =>
-        FeatureEffect(key, out _) || IsGrandProjectProgressKey(key) || Resolve(key, out _, out _);
+        FeatureEffect(key, out _) || IsIncomeShareKey(key) || IsGdpShareKey(key) || IsGrandProjectProgressKey(key) || Resolve(key, out _, out _);
 
     /// <summary>Find the closest valid key for an unknown effect or trigger key so modders get an immediate typo suggestion.</summary>
     public static string SuggestClosestKey(string unknownKey, IEnumerable<string> candidates)
@@ -429,6 +439,31 @@ public static partial class ScriptedEffects
                     campaign.SetFeature(feature, entry.Value >= .5f);
                     continue;
                 }
+                if (IsIncomeShareKey(entry.Key))
+                {
+                    var delta = campaign is null ? 0f : Simulation.IncomePenalties.WeeklyBase(campaign, nation) * 52f * entry.Value;
+                    if (float.IsFinite(delta))
+                    {
+                        var beforeCash = float.IsFinite(nation.Treasury) ? nation.Treasury : 0f;
+                        var afterCash = Combine(beforeCash, delta, Operation.Add, TreasuryField);
+                        nation.Treasury = afterCash;
+                        MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, afterCash - beforeCash);
+                    }
+                    continue;
+                }
+                if (IsGdpShareKey(entry.Key))
+                {
+                    var gdp = float.IsFinite(nation.Gdp) && nation.Gdp > 0f ? nation.Gdp : 0f;
+                    var delta = gdp * entry.Value;
+                    if (float.IsFinite(delta))
+                    {
+                        var beforeCash = float.IsFinite(nation.Treasury) ? nation.Treasury : 0f;
+                        var afterCash = Combine(beforeCash, delta, Operation.Add, TreasuryField);
+                        nation.Treasury = afterCash;
+                        MoneyLedger.Book(nation, MoneyFlow.EventsAndDecisions, afterCash - beforeCash);
+                    }
+                    continue;
+                }
                 if (IsGrandProjectProgressKey(entry.Key))
                 {
                     if (campaign is not null && GrandProjects.IsEnabled(campaign))
@@ -532,6 +567,10 @@ public static partial class ScriptedEffects
             if (IsEmpty) return "No effect.";
             return string.Join(", ", _entries.Select(entry =>
             {
+                if (IsIncomeShareKey(entry.Key))
+                    return $"treasury {(entry.Value * 100f).ToString("+0.#;-0.#;0", CultureInfo.InvariantCulture)}% annual income";
+                if (IsGdpShareKey(entry.Key))
+                    return $"treasury {(entry.Value * 100f).ToString("+0.#;-0.#;0", CultureInfo.InvariantCulture)}% GDP";
                 var sign = entry.Value >= 0f ? "+" : "";
                 return $"{entry.Key} {sign}{entry.Value.ToString("0.###", CultureInfo.InvariantCulture)}";
             }).Concat(ScriptedEffects.IncomePenaltyLines(this)).Concat(ScriptedEffects.SpiritLines(_grants))

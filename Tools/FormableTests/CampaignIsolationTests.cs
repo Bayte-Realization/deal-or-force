@@ -82,6 +82,60 @@ static class CampaignIsolationTests
         while (paused.MoveNext()) { }
         Check(Routes(resumed) == expectedA,
             "a whole second market between frames cannot overwrite the paused world's prepared reach");
+
+        BuyerSlotsFollowDemand();
+        ReturningBuyerSeesNewSupplier();
+    }
+
+    static void BuyerSlotsFollowDemand()
+    {
+        var campaign = World(false, Commodity.Food);
+        var seller = campaign.Nations[0];
+        var firstBuyer = campaign.Nations[1];
+        for (var i = 0; i < 12; i++)
+            campaign.AddNation(new Nation { Tag = $"ISO_P{i}", MapIndex = 503 + i, Population = 100_000 });
+        var secondBuyer = campaign.AddNation(new Nation { Tag = "ISO_LATE", MapIndex = 515, Population = 1_000_000 });
+        CampaignDiplomacy.Get(campaign, seller.Id, firstBuyer.Id).EmbargoByA = true;
+        TradeNetwork.Route(campaign);
+        Check(campaign.TradeRoutes.Count == 0, "an embargo blocks the original buyer's market row");
+
+        firstBuyer.Market[Commodity.Food].Demand = 0;
+        secondBuyer.Market[Commodity.Food] = new MarketQuote { Commodity = Commodity.Food, Demand = 10, Price = 1 };
+        TradeNetwork.Route(campaign);
+        Check(campaign.TradeRoutes.Count == 1 && campaign.TradeRoutes[0].BuyerId == secondBuyer.Id,
+            "the new buyer reuses a market row without inheriting the old buyer's embargo");
+
+        firstBuyer.Market[Commodity.Food].Demand = 10;
+        TradeNetwork.Route(campaign);
+        Check(campaign.TradeRoutes.Count == 1 && campaign.TradeRoutes[0].BuyerId == secondBuyer.Id,
+            "two buyers with distant IDs keep their own embargo and access");
+    }
+
+    static void ReturningBuyerSeesNewSupplier()
+    {
+        var campaign = World(false, Commodity.Food);
+        var originalSeller = campaign.Nations[0];
+        var buyer = campaign.Nations[1];
+        originalSeller.CapitalLongitude = 45f;
+        TradeNetwork.Route(campaign);
+        Check(campaign.TradeRoutes.Single().SellerId == originalSeller.Id, "the only exporter supplies the buyer");
+
+        var quote = buyer.Market[Commodity.Food];
+        buyer.Market.Clear();
+        var closerSeller = campaign.AddNation(new Nation
+        {
+            Tag = "ISO_NEAR", MapIndex = 503, Population = 1_000_000, CapitalLongitude = 1f
+        });
+        campaign.States.Add(new ScenarioState { Id = "iso_near", MapIndex = 3003, NationMapIndex = closerSeller.MapIndex, Population = 1_000_000 });
+        campaign.InvalidateStateIndex();
+        closerSeller.Market[Commodity.Food] = new MarketQuote { Commodity = Commodity.Food, Production = 20, Demand = 1, Price = 1 };
+        TradeNetwork.Route(campaign);
+        Check(campaign.TradeRoutes.Count == 0, "the buyer is absent during the new exporter's first market");
+
+        buyer.Market[Commodity.Food] = quote;
+        TradeNetwork.Route(campaign);
+        Check(campaign.TradeRoutes.Single().SellerId == closerSeller.Id,
+            "the returning buyer uses real distances to exporters who appeared in its absence");
     }
 
     static string Routes(Campaign c) => string.Join(";",c.TradeRoutes.Select(r =>

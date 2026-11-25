@@ -87,7 +87,61 @@ static class PeopleIndexReuseTests
               ReferenceEquals(secondList, second.MovementPeople.CultureBucketsById[0]),
             "a population change in one campaign leaves the other index in place");
 
+        RegionPreviewDuringIndexBuild();
+        CountsReuseStorageAcrossDefinitions();
         Console.WriteLine($"PEOPLE_INDEX_REUSE {_passed} PASS");
+    }
+
+    static void CountsReuseStorageAcrossDefinitions()
+    {
+        var campaign = World(15, "kurd", 4_000);
+        var region = campaign.States[0];
+        var former = Definition();
+        var oldCounts = MovementRules.PeopleIn(campaign, former);
+        Check(oldCounts[region].Own == 4_000, "the first definition stores its regional count");
+
+        region.Population += 10;
+        region.PopulationGroups[0].Size += 10;
+        Advance(campaign);
+        var next = new MovementDefinition { Id = "new_faith_movement" };
+        next.Faiths.Add("catholic");
+        var counts = MovementRules.PeopleIn(campaign, next);
+        Check(ReferenceEquals(oldCounts, counts), "a new definition can reuse the old census storage");
+        Check(counts[region] == (0L, 4_010L), "reused storage carries only the new movement's following");
+    }
+
+    static void RegionPreviewDuringIndexBuild()
+    {
+        var campaign = World(14, "kurd", 4_000);
+        var region = campaign.States[0];
+        var movement = campaign.Nations[1];
+        movement.Movement = new MovementState { Exile = true, Landless = true, HeadquartersStateMapIndex = region.MapIndex };
+        movement.Movement.Peoples.Add("kurd");
+        movement.Movement.Support[region.MapIndex] = .5f;
+        for (var index = 1; index <= 128; index++)
+        {
+            var extra = new ScenarioState { MapIndex = region.MapIndex + index, Id = $"region_{index}", Population = 250 };
+            extra.PopulationGroups.Add(new PopulationGroup { Culture = "kurd", Religion = "catholic", Size = 250 });
+            campaign.States.Add(extra);
+        }
+
+        var priorBudget = Campaign.StageSliceMilliseconds;
+        Campaign.StageSliceMilliseconds = 0;
+        try
+        {
+            using var stages = MovementRules.EnsurePeopleIndexedStages(campaign, false).GetEnumerator();
+            Check(stages.MoveNext() && !campaign.MovementPeople.Indexed,
+                "the index build yields before it has published all regions");
+            Check(MovementReach.ResidentSupport(campaign, movement, region) == .5f &&
+                  !campaign.MovementPeople.Indexed && MovementRules.PeopleIndexBuilds(campaign) == 1,
+                "a regional preview during the read window leaves the suspended build alone");
+            while (stages.MoveNext()) { }
+            var counted = MovementRules.PeopleIn(campaign, Movements.DefinitionOf(movement));
+            Check(campaign.MovementPeople.Indexed && counted.Count == 129 &&
+                  counted[region].Own == 4_000 && counted[campaign.States[^1]].Own == 250,
+                "the resumed index publishes every region once");
+        }
+        finally { Campaign.StageSliceMilliseconds = priorBudget; }
     }
 
     static Campaign World(int seed, string culture, long size)

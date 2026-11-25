@@ -219,12 +219,22 @@ static class DealNegotiationTests
         var active = Offer(c, a, b); c.Defines.DealHistoryLimit = 0; DealNegotiations.Tick(c);
         Check(c.DealOffers.Count == 1 && c.DealOffers[0].Id == active && c.DealOffers[0].Pending, "history trimming keeps answerable paper");
         var valid = DealNegotiations.Copy(c.DealOffers[0]);
+        valid.From.Regions = new[] { 3002, 3001, 3002 };
+        valid.FromProvinces = new[] { 41, 42 };
         var nan = DealNegotiations.Copy(valid); nan.Id = 21; nan.From.Cash = float.NaN;
         var badEnum = DealNegotiations.Copy(valid); badEnum.Id = 22; badEnum.State = (DealOfferState)80;
         var self = DealNegotiations.Copy(valid); self.Id = 23; self.ToId = self.FromId;
         var badClock = DealNegotiations.Copy(valid); badClock.Id = 24; badClock.ExpiresDay = 0;
         DealNegotiations.Restore(c, new[] { valid, valid, nan, badEnum, self, badClock, null }, 1);
-        Check(c.DealOffers.Count == 1 && c.NextDealOfferId > valid.Id && !ReferenceEquals(valid.From.Regions, c.DealOffers[0].From.Regions), "restore filters duplicate IDs and malformed papers, copying arrays");
+        valid.From.Regions[0] = 9999;
+        valid.FromProvinces[0] = 8888;
+        Check(c.DealOffers.Count == 1 && c.NextDealOfferId > valid.Id &&
+            !ReferenceEquals(valid.From.Regions, c.DealOffers[0].From.Regions) &&
+            !ReferenceEquals(valid.FromProvinces, c.DealOffers[0].FromProvinces) &&
+            c.DealOffers[0].From.Regions.SequenceEqual(new[] { 3001, 3002 }) &&
+            c.DealOffers[0].FromProvinces.SequenceEqual(new[] { 41, 42 }) &&
+            c.DealOffers[0].To.Regions.Length == 0 && c.DealOffers[0].ToProvinces.Length == 0,
+            "restore filters duplicate IDs and malformed papers, copying and canonicalizing arrays");
         c.NextDealOfferId = int.MaxValue; Answer(c, b.Id, valid.Id, DealReply.Decline);
         var exhausted = new ProposeDealCommand { IssuerId = a.Id, ToId = b.Id, FromCash = 2 }; exhausted.Apply(c);
         Check(exhausted.Outcome.PendingOfferId == 0 && c.NextDealOfferId == int.MaxValue, "exhausted numbering refuses instead of overflowing");

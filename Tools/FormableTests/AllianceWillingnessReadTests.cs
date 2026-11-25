@@ -17,6 +17,7 @@ static class AllianceWillingnessReadTests
     {
         ProbeDoesNotCreate();
         ExistingRelationKeepsItsAnswer();
+        WarmScanFollowsAllianceChanges();
         DecisionOpensOnce();
     }
 
@@ -107,5 +108,35 @@ static class AllianceWillingnessReadTests
         Check(campaign.Relations.Count == 1 && opened.Stance == DiplomaticStance.Allied,
             "a later probe does not open a second relation or drop the stance");
         Check(campaign.Chronicle.Entries.Count == chronicle, "opening the alliance does not invent a chronicle line");
+    }
+
+    static void WarmScanFollowsAllianceChanges()
+    {
+        var campaign = World();
+        var asked = campaign.Nations[0];
+        var asking = campaign.Nations[1];
+        var ally = new Nation { Tag = "ALY", MapIndex = 13, Population = 3_000_000 };
+        campaign.AddNation(ally);
+        var bond = CampaignDiplomacy.Get(campaign, asking.Id, ally.Id);
+        var key = ((long)asking.Id << 32) | (uint)ally.Id;
+        campaign.Relations.Remove(key);
+        bond.Dormant = true;
+        campaign.DormantRelations.Add(key, bond);
+
+        var scan = new AllianceSystem.OfferScan(campaign);
+        var baseline = AllianceSystem.Willingness(campaign, asked, asking, null, false, scan);
+        Check(scan.Allies(campaign, asking).Count == 0, "a neutral archived relation is not an ally");
+
+        bond.Stance = DiplomaticStance.Allied;
+        CampaignDiplomacy.Get(campaign, asked.Id, ally.Id).Opinion = -100f;
+        var withAlly = AllianceSystem.Willingness(campaign, asked, asking, null, false, scan);
+        Check(withAlly < baseline && withAlly == AllianceSystem.Willingness(campaign, asked, asking, refreshAssessment: false),
+            "the warm scan counts an archived ally as soon as the stance changes");
+        Check(bond.Dormant && campaign.DormantRelations.ContainsKey(key), "the scan does not wake an archived ally");
+
+        CampaignDiplomacy.Get(campaign, asking.Id, ally.Id).Stance = DiplomaticStance.Neutral;
+        Check(scan.Allies(campaign, asking).Count == 0, "the warm scan sees the alliance end after the relation wakes");
+        Check(AllianceSystem.Willingness(campaign, asked, asking, null, false, scan) == baseline,
+            "the score recovers when the alliance ends");
     }
 }

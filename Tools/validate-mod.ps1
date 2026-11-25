@@ -25,7 +25,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $testProj = Join-Path $repoRoot 'Tools\FormableTests\FormableTests.csproj'
-$prebuiltDll = Join-Path $repoRoot 'Tools\FormableTests\bin\Debug\net8.0\FormableTests.dll'
+$prebuiltDll = Join-Path $repoRoot 'Tools\FormableTests\bin\Debug\net10.0\FormableTests.dll'
 
 if (-not (Test-Path -LiteralPath $testProj)) {
     Write-Error "Could not locate FormableTests.csproj at '$testProj'."

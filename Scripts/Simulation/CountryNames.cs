@@ -37,6 +37,7 @@ public static class CountryNames
     public const string VariantPrefix = "country_name_";
 
     private static Dictionary<string, string> _variants;
+    private static int _catalogVersion;
 
     /// <summary>The spelling chosen for each country that offers a choice, by tag.</summary>
     public static IReadOnlyDictionary<string, string> Variants => _variants ??= Build();
@@ -46,7 +47,67 @@ public static class CountryNames
     /// catalogue is rebuilt, so the map redraws under the new spelling immediately rather
     /// than at the next start.
     /// </summary>
-    public static void Refresh() => _variants = Build();
+    public static void Refresh()
+    {
+        _variants = Build();
+        InvalidateDisplayNames();
+    }
+
+    internal static void InvalidateDisplayNames() => System.Threading.Interlocked.Increment(ref _catalogVersion);
+
+    /// <summary>Reuses resolved names between render snapshots of the same campaign.</summary>
+    internal sealed class DisplayNameCache
+    {
+        // Resolve(nation, false) reads these mutable fields. Catalog edits and language changes
+        // clear the entries separately, including rules reached through a founded name recipe.
+        private readonly record struct NameInputs(
+            string Tag, string Name, string CustomName, string FormableId,
+            string FoundKind, string FoundId, string FoundForm, string FoundBase,
+            string Government, string Ideology, string StartGovernment, string StartIdeology,
+            string Religion, string Culture, bool HasMovement);
+
+        private readonly record struct Entry(NameInputs Inputs, string Name);
+
+        private Entry[] _entries = Array.Empty<Entry>();
+        private int _count;
+        private int _localizationVersion = -1;
+        private int _nameCatalogVersion = -1;
+        private Func<string, string, string> _textAdapter;
+
+        public void Prepare(int count)
+        {
+            var localizationVersion = Loc.Revision;
+            var nameCatalogVersion = System.Threading.Volatile.Read(ref _catalogVersion);
+            var textAdapter = Loc.TextAdapter;
+            if (localizationVersion != _localizationVersion || nameCatalogVersion != _nameCatalogVersion ||
+                !ReferenceEquals(textAdapter, _textAdapter))
+            {
+                Array.Clear(_entries, 0, _count);
+                _localizationVersion = localizationVersion;
+                _nameCatalogVersion = nameCatalogVersion;
+                _textAdapter = textAdapter;
+            }
+            else if (count < _count)
+            {
+                Array.Clear(_entries, count, _count - count);
+            }
+            if (count > _entries.Length) Array.Resize(ref _entries, Math.Max(count, _entries.Length * 2));
+            _count = count;
+        }
+
+        public string Get(Nation nation, int row)
+        {
+            var inputs = new NameInputs(nation.Tag, nation.Name, nation.CustomName, nation.FormedNationId,
+                nation.FoundNameKind, nation.FoundNameId, nation.FoundNameForm, nation.FoundNameBase,
+                nation.Government, nation.Ideology, nation.StartGovernment, nation.StartIdeology,
+                nation.DeclaredReligion, nation.DeclaredCulture, nation.Movement is not null);
+            ref var entry = ref _entries[row];
+            if (entry.Name is not null && entry.Inputs.Equals(inputs)) return entry.Name;
+            var name = Resolve(nation, map: false);
+            entry = new Entry(inputs, name);
+            return name;
+        }
+    }
 
     private static Dictionary<string, string> Build()
     {

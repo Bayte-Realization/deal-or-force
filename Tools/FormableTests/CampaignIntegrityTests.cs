@@ -130,6 +130,19 @@ static class CampaignIntegrityTests
         Check(SaveSystem.List(folder).Count == 1, "diagnostics never appear as playable campaign slots");
         var second = SaveSystem.WriteDiagnosticSnapshot(folder, c, "repeat test");
         Check(second != diagnostic && File.Exists(second) && File.Exists(diagnostic), "separate failures cannot overwrite each other's evidence");
+        try { TriggerBufferFailure(); }
+        catch (ArgumentException error)
+        {
+            var failed = SaveSystem.WriteDiagnosticSnapshot(folder, c, error.Message, error);
+            using var report = JsonDocument.Parse(File.ReadAllBytes(failed));
+            var root = report.RootElement;
+            Check(root.GetProperty("ExceptionType").GetString() == typeof(ArgumentException).FullName &&
+                  root.GetProperty("StackTrace").GetString().Contains(nameof(TriggerBufferFailure), StringComparison.Ordinal) &&
+                  root.GetProperty("ExceptionDetails").GetString().Contains("destination", StringComparison.Ordinal),
+                "a shared diagnostic includes the exception type, original call site and details");
+            Check(SaveSystem.ReadDiagnosticSnapshot(failed) is not null && SaveSystem.List(folder).Count == 1,
+                "reports with a stack still replay as diagnostics and stay out of the save list");
+        }
         c.Player.Gdp = 1;
         c.History.Restore(new() { [c.Player.Id] = new() { new NationHistorySample(7, float.NaN, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) } });
         try { SaveSystem.Save(folder, SaveSystem.AutoSlot, c, "tests"); throw new Exception("saved broken history"); }
@@ -145,6 +158,14 @@ static class CampaignIntegrityTests
         c.TickDay();
         Check(c.ElapsedDays == before, "unpausing cannot resume a partially failed simulation step");
         Console.WriteLine("Integrity fixtures retained: " + folder);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    static void TriggerBufferFailure()
+    {
+        Span<int> source = stackalloc int[2];
+        Span<int> destination = stackalloc int[1];
+        source.CopyTo(destination);
     }
 
     static void CivilWarRules()

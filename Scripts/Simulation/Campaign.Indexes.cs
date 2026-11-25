@@ -1,12 +1,115 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
+using ZeroAlloc.Collections;
 
 namespace DealOrForce.Simulation;
 
 public sealed partial class Campaign
 {
     private const int DenseIndexLimit = 65536;
+
+    private sealed class ActiveWarsSnapshot
+    {
+        public readonly List<StrategicWar> Active;
+        public Dictionary<int, StrategicWar> ById;
+        public readonly int Revision;
+        public readonly int Count;
+        public readonly StrategicWar Head;
+        public readonly StrategicWar Tail;
+        public readonly bool TailWasEnded;
+
+        public ActiveWarsSnapshot(List<StrategicWar> active, int revision, int count, StrategicWar head,
+            StrategicWar tail, bool tailWasEnded)
+        {
+            Active = active;
+            Revision = revision;
+            Count = count;
+            Head = head;
+            Tail = tail;
+            TailWasEnded = tailWasEnded;
+        }
+    }
+
+    private readonly object _warSnapshotLock = new();
+    private volatile ActiveWarsSnapshot _warSnapshot;
+
+    /// <summary>
+    /// All active (non-ended) wars in record order, cached on this campaign and automatically
+    /// invalidated when <see cref="WarRevision"/> changes, wars are added/replaced, or an active
+    /// war ends directly. Hot paths read this instead of walking historical ended wars.
+    /// </summary>
+    public IReadOnlyList<StrategicWar> ActiveWars => EnsureActiveWarsSnapshot().Active;
+
+    /// <summary>Internal list view of <see cref="ActiveWars"/> for zero-allocation foreach/indexed iteration.</summary>
+    internal List<StrategicWar> ActiveWarsList => EnsureActiveWarsSnapshot().Active;
+
+    /// <summary>Look up any war (active or ended) by id using an invalidated per-campaign index.</summary>
+    internal StrategicWar WarById(int id)
+    {
+        var snap = EnsureActiveWarsSnapshot();
+        var byId = System.Threading.Volatile.Read(ref snap.ById);
+        if (byId is null)
+        {
+            lock (_warSnapshotLock)
+            {
+                snap = EnsureActiveWarsSnapshotLocked();
+                byId = snap.ById;
+                if (byId is null)
+                {
+                    var wars = Wars;
+                    var made = new Dictionary<int, StrategicWar>(wars.Count);
+                    for (var index = 0; index < wars.Count; index++)
+                        if (wars[index] is { } war) made.TryAdd(war.Id, war);
+                    System.Threading.Volatile.Write(ref snap.ById, byId = made);
+                }
+            }
+        }
+        return byId.GetValueOrDefault(id);
+    }
+
+    private ActiveWarsSnapshot EnsureActiveWarsSnapshot()
+    {
+        var snap = _warSnapshot;
+        if (snap is not null && !IsWarSnapshotStale(snap)) return snap;
+        lock (_warSnapshotLock) return EnsureActiveWarsSnapshotLocked();
+    }
+
+    private ActiveWarsSnapshot EnsureActiveWarsSnapshotLocked()
+    {
+        var snap = _warSnapshot;
+        if (snap is not null && !IsWarSnapshotStale(snap)) return snap;
+        var wars = Wars;
+        var count = wars.Count;
+        var active = new List<StrategicWar>();
+        for (var i = 0; i < count; i++)
+        {
+            var war = wars[i];
+            if (war is { Ended: false }) active.Add(war);
+        }
+        var head = count > 0 ? wars[0] : null;
+        var tail = count > 0 ? wars[count - 1] : null;
+        var built = new ActiveWarsSnapshot(active, WarRevision, count, head, tail, tail?.Ended ?? false);
+        _warSnapshot = built;
+        return built;
+    }
+
+    private bool IsWarSnapshotStale(ActiveWarsSnapshot snap)
+    {
+        var wars = Wars;
+        var count = wars.Count;
+        var head = count > 0 ? wars[0] : null;
+        var tail = count > 0 ? wars[count - 1] : null;
+        if (snap.Revision != WarRevision || snap.Count != count ||
+            !ReferenceEquals(snap.Head, head) || !ReferenceEquals(snap.Tail, tail) ||
+            snap.TailWasEnded != (tail?.Ended ?? false))
+            return true;
+        var active = snap.Active;
+        for (var i = 0; i < active.Count; i++)
+            if (active[i] is null || active[i].Ended) return true;
+        return false;
+    }
 
     private sealed class StatesByNationSnapshot
     {
@@ -102,48 +205,72 @@ public sealed partial class Campaign
         }
 
         var denseLength = maxDense + 1;
-        var denseCounts = denseLength > 0 ? new int[denseLength] : Array.Empty<int>();
-        for (var i = 0; i < count; i++)
+        var denseCounts = denseLength > 0 ? ArrayPool<int>.Shared.Rent(denseLength) : Array.Empty<int>();
+        var denseOffsets = denseLength > 0 ? ArrayPool<int>.Shared.Rent(denseLength) : Array.Empty<int>();
+        try
         {
-            var key = list[i].NationMapIndex;
-            if ((uint)key < (uint)denseLength) denseCounts[key]++;
-        }
-
-        var dense = denseLength > 0 ? new ScenarioState[denseLength][] : Array.Empty<ScenarioState[]>();
-        for (var k = 0; k < denseLength; k++)
-            if (denseCounts[k] > 0) dense[k] = new ScenarioState[denseCounts[k]];
-
-        Dictionary<int, ScenarioState[]> overflow = null;
-        Dictionary<int, int> overflowOffsets = null;
-        if (overflowCounts is not null)
-        {
-            overflow = new Dictionary<int, ScenarioState[]>(overflowCounts.Count);
-            overflowOffsets = new Dictionary<int, int>(overflowCounts.Count);
-            foreach (var kv in overflowCounts)
+            if (denseLength > 0)
             {
-                overflow[kv.Key] = new ScenarioState[kv.Value];
-                overflowOffsets[kv.Key] = 0;
+                Array.Clear(denseCounts, 0, denseLength);
+                Array.Clear(denseOffsets, 0, denseLength);
+            }
+            for (var i = 0; i < count; i++)
+            {
+                var key = list[i].NationMapIndex;
+                if ((uint)key < (uint)denseLength) denseCounts[key]++;
+            }
+
+            var dense = denseLength > 0 ? new ScenarioState[denseLength][] : Array.Empty<ScenarioState[]>();
+            for (var k = 0; k < denseLength; k++)
+                if (denseCounts[k] > 0) dense[k] = new ScenarioState[denseCounts[k]];
+
+            Dictionary<int, ScenarioState[]> overflow = null;
+            Dictionary<int, int> overflowOffsets = null;
+            if (overflowCounts is not null)
+            {
+                overflow = new Dictionary<int, ScenarioState[]>(overflowCounts.Count);
+                overflowOffsets = new Dictionary<int, int>(overflowCounts.Count);
+                foreach (var kv in overflowCounts)
+                {
+                    overflow[kv.Key] = new ScenarioState[kv.Value];
+                    overflowOffsets[kv.Key] = 0;
+                }
+            }
+
+            for (var i = 0; i < count; i++)
+            {
+                var state = list[i];
+                var key = state.NationMapIndex;
+                if ((uint)key < (uint)denseLength)
+                    dense[key][denseOffsets[key]++] = state;
+                else if (overflow is not null)
+                    overflow[key][overflowOffsets[key]++] = state;
+            }
+
+            var built = new StatesByNationSnapshot(dense, overflow);
+            _statesByNation = built;
+            return built;
+        }
+        finally
+        {
+            if (denseLength > 0)
+            {
+                ArrayPool<int>.Shared.Return(denseCounts);
+                ArrayPool<int>.Shared.Return(denseOffsets);
             }
         }
-
-        var denseOffsets = denseLength > 0 ? new int[denseLength] : Array.Empty<int>();
-        for (var i = 0; i < count; i++)
-        {
-            var state = list[i];
-            var key = state.NationMapIndex;
-            if ((uint)key < (uint)denseLength)
-                dense[key][denseOffsets[key]++] = state;
-            else if (overflow is not null)
-                overflow[key][overflowOffsets[key]++] = state;
-        }
-
-        var built = new StatesByNationSnapshot(dense, overflow);
-        _statesByNation = built;
-        return built;
     }
 
-    private ScenarioState[] StatesOfByScan(int nationMapIndex) =>
-        States.Where(state => state.NationMapIndex == nationMapIndex).ToArray();
+    private ScenarioState[] StatesOfByScan(int nationMapIndex)
+    {
+        using var matches = new HeapPooledList<ScenarioState>(16);
+        for (var i = 0; i < States.Count; i++)
+        {
+            var s = States[i];
+            if (s.NationMapIndex == nationMapIndex) matches.Add(s);
+        }
+        return matches.Count == 0 ? NoStates : matches.ToArray();
+    }
 
     /// <summary>Drop the ownership index. Call after replacing or re-owning states.</summary>
     public void InvalidateStateIndex()
@@ -401,6 +528,8 @@ public sealed partial class Campaign
             foreach (var nation in Nations) NationalCourses.Initialize(this, nation);
         // Who leads: a person per chair, rolled once at the world's first morning.
         Rulers.Found(this);
+        if (FeatureEnabled("politics") && MechanicFeatures.SystemEnabled(this, nameof(Coups)))
+            Coups.PreloadCatalog();
 
         // The first weekly day of a session otherwise compiles every weekly pass inside one
         // player-visible frame. The load thread is already spending seconds nobody plays in;
@@ -475,65 +604,116 @@ public sealed partial class Campaign
             }
         }
 
-        var byNation = new Dictionary<ushort, List<int>>();
-        for (var province = 1; province <= topology.ProvinceCount; province++)
+        var maxOwner = 0;
+        var pCount = topology.ProvinceCount;
+        var ptn = topology.ProvinceToNation;
+        for (var province = 1; province <= pCount; province++)
         {
-            var owner = topology.ProvinceToNation[province];
-            if (owner == 0) continue;
-            if (neededOwners is not null && !neededOwners.Contains(owner)) continue;
-            if (!byNation.TryGetValue(owner, out var list)) byNation[owner] = list = new List<int>();
-            list.Add(province);
+            var owner = ptn[province];
+            if (owner != 0 && (neededOwners is null || neededOwners.Contains(owner)) && owner > maxOwner)
+                maxOwner = owner;
         }
-
-        foreach (var nation in Nations)
+        var ownerSlots = maxOwner + 1;
+        var ownerCounts = ArrayPool<int>.Shared.Rent(ownerSlots);
+        var ownerCursor = ArrayPool<int>.Shared.Rent(ownerSlots + 1);
+        var provincesCsr = pCount > 0 ? ArrayPool<int>.Shared.Rent(pCount) : Array.Empty<int>();
+        try
         {
-            // A loaded capital is a real saved place, even if ceded or occupied. Rebinding
-            // it to the nearest remaining province kept the old city's name forever.
-            // Emergency/permanent relocation belongs to CapitalCore, not map attachment
-            // (a network snapshot must remain identical until its next authoritative tick).
-            if (preserveExisting && nation.CapitalProvinceId > 0 && nation.CapitalProvinceId <= topology.ProvinceCount)
+            Array.Clear(ownerCounts, 0, ownerSlots);
+            var totalOwned = 0;
+            for (var province = 1; province <= pCount; province++)
             {
-                nation.CapitalStateMapIndex = topology.ProvinceToState[nation.CapitalProvinceId];
-                continue;
+                var owner = ptn[province];
+                if (owner == 0) continue;
+                if (neededOwners is not null && !neededOwners.Contains(owner)) continue;
+                ownerCounts[owner]++;
+                totalOwned++;
             }
-            if (neededOwners is not null && !neededOwners.Contains((ushort)nation.MapIndex))
-                continue;
-            nation.CapitalStateMapIndex = 0;
-            nation.CapitalProvinceId = 0;
-            if (!byNation.TryGetValue((ushort)nation.MapIndex, out var provinces) || provinces.Count == 0)
-                continue;
-            var best = provinces[0];
-            var bestDistance = float.MaxValue;
-            var longitudeScale = MathF.Max(0.12f, MathF.Cos(nation.CapitalLatitude * M.Pi / 180f));
-            foreach (var province in provinces)
+            var sum = 0;
+            for (var o = 0; o < ownerSlots; o++)
             {
-                var centre = topology.CenterOf(province);
-                var dx = MathF.Abs(centre.Longitude - nation.CapitalLongitude);
-                dx = MathF.Min(dx, 360f - dx) * longitudeScale;
-                var dy = centre.Latitude - nation.CapitalLatitude;
-                var distance = dx * dx + dy * dy;
-                if (distance >= bestDistance) continue;
-                bestDistance = distance;
-                best = province;
+                ownerCursor[o] = sum;
+                sum += ownerCounts[o];
             }
-            // Into its city, which then decides the province, the point and the name.
-            if (CapitalCore.BindAtPoint(this, nation, best)) continue;
-            // No city of its own there: the nearest province, under the name it was given.
-            nation.CapitalCityId = "";
-            nation.CapitalStateMapIndex = topology.ProvinceToState[best];
-            nation.CapitalProvinceId = best;
-            var state = StateByMapIndex(nation.CapitalStateMapIndex);
-            if (state is not null && !string.IsNullOrWhiteSpace(state.Name) && string.IsNullOrWhiteSpace(nation.CapitalName))
+            ownerCursor[ownerSlots] = sum;
+            // Temporarily store write cursors in ownerCounts (reuse without a 3rd array) by computing starts back or using ownerCursor + offset.
+            var writeOffset = ArrayPool<int>.Shared.Rent(ownerSlots);
+            try
             {
-                nation.CapitalName = state.Name;
+                Array.Copy(ownerCursor, writeOffset, ownerSlots);
+                for (var province = 1; province <= pCount; province++)
+                {
+                    var owner = ptn[province];
+                    if (owner == 0) continue;
+                    if (neededOwners is not null && !neededOwners.Contains(owner)) continue;
+                    provincesCsr[writeOffset[owner]++] = province;
+                }
             }
-            else if (state is not null && !string.IsNullOrWhiteSpace(state.Name) && CapitalCore.SeatNameLost(this, nation))
+            finally
             {
-                nation.CapitalName = state.Name;
-                var centre = topology.CenterOf(best);
-                nation.CapitalLatitude = centre.Latitude;
-                nation.CapitalLongitude = centre.Longitude;
+                ArrayPool<int>.Shared.Return(writeOffset);
             }
+
+            foreach (var nation in Nations)
+            {
+                // A loaded capital is a real saved place, even if ceded or occupied. Rebinding
+                // it to the nearest remaining province kept the old city's name forever.
+                // Emergency/permanent relocation belongs to CapitalCore, not map attachment
+                // (a network snapshot must remain identical until its next authoritative tick).
+                if (preserveExisting && nation.CapitalProvinceId > 0 && nation.CapitalProvinceId <= pCount)
+                {
+                    nation.CapitalStateMapIndex = topology.ProvinceToState[nation.CapitalProvinceId];
+                    continue;
+                }
+                if (neededOwners is not null && !neededOwners.Contains((ushort)nation.MapIndex))
+                    continue;
+                nation.CapitalStateMapIndex = 0;
+                nation.CapitalProvinceId = 0;
+                var mapIdx = nation.MapIndex;
+                if ((uint)mapIdx >= (uint)ownerSlots) continue;
+                var start = ownerCursor[mapIdx];
+                var count = ownerCounts[mapIdx];
+                if (count == 0) continue;
+                var best = provincesCsr[start];
+                var bestDistance = float.MaxValue;
+                var longitudeScale = MathF.Max(0.12f, MathF.Cos(nation.CapitalLatitude * M.Pi / 180f));
+                for (var idx = start; idx < start + count; idx++)
+                {
+                    var province = provincesCsr[idx];
+                    var centre = topology.CenterOf(province);
+                    var dx = MathF.Abs(centre.Longitude - nation.CapitalLongitude);
+                    dx = MathF.Min(dx, 360f - dx) * longitudeScale;
+                    var dy = centre.Latitude - nation.CapitalLatitude;
+                    var distance = dx * dx + dy * dy;
+                    if (distance >= bestDistance) continue;
+                    bestDistance = distance;
+                    best = province;
+                }
+                // Into its city, which then decides the province, the point and the name.
+                if (CapitalCore.BindAtPoint(this, nation, best)) continue;
+                // No city of its own there: the nearest province, under the name it was given.
+                nation.CapitalCityId = "";
+                nation.CapitalStateMapIndex = topology.ProvinceToState[best];
+                nation.CapitalProvinceId = best;
+                var state = StateByMapIndex(nation.CapitalStateMapIndex);
+                if (state is not null && !string.IsNullOrWhiteSpace(state.Name) && string.IsNullOrWhiteSpace(nation.CapitalName))
+                {
+                    nation.CapitalName = state.Name;
+                }
+                else if (state is not null && !string.IsNullOrWhiteSpace(state.Name) && CapitalCore.SeatNameLost(this, nation))
+                {
+                    nation.CapitalName = state.Name;
+                    var centre = topology.CenterOf(best);
+                    nation.CapitalLatitude = centre.Latitude;
+                    nation.CapitalLongitude = centre.Longitude;
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(ownerCounts);
+            ArrayPool<int>.Shared.Return(ownerCursor);
+            if (pCount > 0) ArrayPool<int>.Shared.Return(provincesCsr);
         }
         // A landless headquarters stands at its host's capital or its region's main city
         // (Movements.Place), so it moves when they do.

@@ -8,7 +8,7 @@
     "options": [
       { "title": "Buy power abroad at any price",
         "consequence": "The lights come back this week; the bill arrives next quarter.",
-        "effects": { "treasury_percent": -0.045, "stability": 0.012, "standard_of_living": 0.001 } },
+        "effects": { "income_share": -0.045, "stability": 0.012, "standard_of_living": 0.001 } },
       { "title": "Ration and repair in order",
         "consequence": "Honest, unpopular, and slower than the newspapers.",
         "effects": { "productivity": -0.002, "stability": -0.01, "state.radicalism": 0.006 },
@@ -43,7 +43,7 @@
     "options": [
       { "title": "Import grain on the state's account",
         "consequence": "Bread stays cheap; the budget does not.",
-        "effects": { "treasury_percent": -0.06, "state.standard_of_living": 0.001, "stability": 0.006 } },
+        "effects": { "gdp_share": -0.004, "state.standard_of_living": 0.001, "stability": 0.006 } },
       { "title": "Cap the price of bread",
         "consequence": "Cheap this month, missing from the shelves next.",
         "effects": { "state.standard_of_living": -0.002, "state.radicalism": 0.012, "productivity": -0.0015 } },

@@ -1,10 +1,12 @@
 using System;
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.IO;
 
 namespace DealOrForce.Simulation;
 
@@ -224,11 +226,19 @@ internal static class SaveContainer
     private static byte[] Checksum(byte[] header, byte[] bodyDigest)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var copy = (byte[])header.Clone();
-        Array.Clear(copy, ChecksumOffset, 32);
-        hash.AppendData(copy);
-        hash.AppendData(bodyDigest);
-        return hash.GetHashAndReset();
+        var copy = ArrayPool<byte>.Shared.Rent(header.Length);
+        try
+        {
+            header.AsSpan().CopyTo(copy);
+            copy.AsSpan(ChecksumOffset, 32).Clear();
+            hash.AppendData(copy.AsSpan(0, header.Length));
+            hash.AppendData(bodyDigest);
+            return hash.GetHashAndReset();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(copy);
+        }
     }
 
     /// <summary>
@@ -242,6 +252,29 @@ internal static class SaveContainer
         file.Position = graph.Offset;
         var bounded = new CountingStream(file, null, writable: false, limit: graph.StoredLength, ownsInner: !leaveOpen);
         return CodecFor(graph.Codec).Decompress(bounded);
+    }
+
+    /// <summary>
+    /// Decompresses the graph section into a pooled <see cref="RecyclableMemoryStream"/>
+    /// backed by 64 KB blocks, avoiding Large Object Heap allocations during snapshot reads.
+    /// </summary>
+    internal static RecyclableMemoryStream OpenGraphBuffered(Stream file, Header header, bool leaveOpen)
+    {
+        var graph = header.Find(GraphSection);
+        var hint = graph is { RawLength: > 0 } ? graph.Value.RawLength : 64 * 1024;
+        var pooled = RecyclableStreams.Get("SaveContainer.OpenGraphBuffered", hint);
+        try
+        {
+            using var source = OpenGraph(file, header, leaveOpen);
+            source.CopyTo(pooled);
+            pooled.Position = 0;
+            return pooled;
+        }
+        catch
+        {
+            pooled.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -428,8 +461,15 @@ internal static class SaveContainer
         /// <summary>Read to the limit (or the end), hashing what is left.</summary>
         public void Drain()
         {
-            var scratch = new byte[64 * 1024];
-            while (Read(scratch, 0, scratch.Length) > 0) { }
+            var scratch = ArrayPool<byte>.Shared.Rent(64 * 1024);
+            try
+            {
+                while (Read(scratch, 0, scratch.Length) > 0) { }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(scratch);
+            }
         }
 
         public override bool CanRead => !_writable;

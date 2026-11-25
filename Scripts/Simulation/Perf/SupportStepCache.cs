@@ -32,13 +32,7 @@ internal sealed class SupportStepCache
     public int PreparedBattleCount = -1;
     public ProvinceTopology PreparedMap;
 
-    // Reusable per-step AtWar lookup built lazily only when GroundOf runs during Withdraw/Advance.
-    public long AtWarBuiltHour = long.MinValue;
-    public int AtWarBuiltRevision = int.MinValue;
-    public int AtWarBuiltAllianceRevision = int.MinValue;
-    public int AtWarBuiltRelationCount = -1;
-    public readonly Dictionary<int, List<ushort>> AtWarMapIndicesByNation = new();
-    public readonly Stack<List<ushort>> UshortListPool = new();
+    public readonly MilitaryAccess.RouteRelations AdvanceRelations = new();
 
     // Reusable containers for LongRangeMovement.RepositionStages.
     public readonly Dictionary<int, List<SupportFormation>> RepositionByNation = new();

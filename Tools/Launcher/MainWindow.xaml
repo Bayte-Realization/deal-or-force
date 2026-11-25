@@ -203,8 +203,17 @@
     <Grid>
      <!-- What's new -->
      <Grid x:Name="NewsView">
-      <FlowDocumentScrollViewer x:Name="Notes" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" IsToolBarVisible="False" Focusable="False"/>
-      <TextBlock x:Name="NotesMissing" Style="{StaticResource Note}" Visibility="Collapsed"
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Border x:Name="NewsHeader" BorderBrush="{StaticResource SurfaceLineFaint}" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
+       <DockPanel>
+        <Border DockPanel.Dock="Left" Background="{StaticResource SurfaceRaised}" BorderBrush="{StaticResource PrimaryBorder}" BorderThickness="1" CornerRadius="2" Padding="8,2">
+         <TextBlock x:Name="NewsReleaseChip" Foreground="{StaticResource TextAccent}" FontSize="11.5" FontWeight="SemiBold"/>
+        </Border>
+        <TextBlock x:Name="NewsLanguageNote" Foreground="{StaticResource TextCaption}" FontSize="11.5" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+       </DockPanel>
+      </Border>
+      <FlowDocumentScrollViewer x:Name="Notes" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" IsToolBarVisible="False" Focusable="False"/>
+      <TextBlock x:Name="NotesMissing" Grid.Row="1" Style="{StaticResource Note}" Visibility="Collapsed"
                  Text="The list of changes was not found beside the game. It is published with every release on the game's page."/>
      </Grid>
 

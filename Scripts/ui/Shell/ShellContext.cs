@@ -20,6 +20,8 @@ internal sealed class ShellContext
 
     public Control Root { get; set; }
     public Func<Campaign> GetCampaign { get; set; }
+    public Func<CampaignHudSnapshot> GetHudSnapshot { get; set; }
+    public Func<GameDate> GetPresentationDate { get; set; }
     public Func<Vector2> GetViewportSize { get; set; }
     public Func<bool> IsPaused { get; set; }
     public Func<int> GetSpeed { get; set; }
@@ -30,6 +32,7 @@ internal sealed class ShellContext
     public Func<string> GetOpenScreen { get; set; }
     public Func<StrategicMapMode> GetMapMode { get; set; }
     public Func<bool> IsFlatMap { get; set; }
+    public Func<bool> IsShowcasePan { get; set; }
     public Func<float> GetViewDistance { get; set; }
     public Func<float> GetFlatZoom { get; set; }
     public Func<(float Latitude, float Longitude, float SpanDegrees)> GetCameraMinimapView { get; set; }
@@ -43,6 +46,7 @@ internal sealed class ShellContext
     public Action<string> ToggleScreen { get; set; }
     public Action<StrategicMapMode> SetMapMode { get; set; }
     public Action ToggleProjection { get; set; }
+    public Action ToggleShowcasePan { get; set; }
     public Action TogglePause { get; set; }
     public Action<int> SetSpeed { get; set; }
     public Action ShowPauseMenu { get; set; }
@@ -97,6 +101,7 @@ internal sealed class ShellContext
     public HashSet<int> CollapsedStabilityBreakdownNations { get; } = new();
 
     public Campaign World => GetCampaign?.Invoke();
+    public CampaignHudSnapshot HudSnapshot => GetHudSnapshot?.Invoke();
 
     /// <summary>Compute the active viewport layout profile, preserving SafeArea on touch devices.</summary>
     public ShellLayoutProfile ResolveViewportProfile(bool atWar)

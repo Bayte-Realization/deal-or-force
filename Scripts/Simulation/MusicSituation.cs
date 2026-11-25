@@ -19,6 +19,8 @@ public sealed class MusicPolicy
     public int SystemicBelligerents = 10;
     public string EmergencyFeature = "world_order_emergency";
 
+    internal MusicPolicy Clone() => (MusicPolicy)MemberwiseClone();
+
     internal void Merge(JsonElement e, List<string> errors, string origin)
     {
         if (e.ValueKind != JsonValueKind.Object) { errors?.Add(origin + ": director must be an object"); return; }

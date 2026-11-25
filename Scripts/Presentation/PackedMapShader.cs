@@ -62,11 +62,21 @@ public static class PackedMapShader
         const string helpers = @"
 uniform sampler2DArray packed_ids : filter_nearest, repeat_enable;
 // Store raw bytes because these layers mix colours and identifiers. Colour-only
-// fetches are decoded by atlas_color_sample; data layers/alpha remain untouched.
+// fetches (layers 0, 1, 3, 5, 6) are decoded by atlas_color_sample (sRGB backends)
+// or packed_decode_srgb (linear Mobile/Forward+ backends); data layers stay untouched.
 uniform sampler2DArray packed_lookups : filter_nearest, repeat_disable;
 uniform sampler2DArray packed_water_tiles : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+vec3 packed_decode_srgb(vec3 value) {
+    return mix(value / 12.92, pow((max(value, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)),
+        step(vec3(0.04045), value));
+}
 vec4 packed_id(float layer, vec2 uv) { return texture(packed_ids, vec3(uv, layer)); }
-vec4 packed_lookup(float layer, vec2 uv) { return texture(packed_lookups, vec3(uv, layer)); }
+vec4 packed_lookup(float layer, vec2 uv) {
+    vec4 value = texture(packed_lookups, vec3(uv, layer));
+    if (!OUTPUT_IS_SRGB && (layer < 1.5 || abs(layer - 3.0) < 0.5 || abs(layer - 5.0) < 0.5 || abs(layer - 6.0) < 0.5))
+        value.rgb = packed_decode_srgb(value.rgb);
+    return value;
+}
 vec4 packed_water(float layer, vec2 uv) { return texture(packed_water_tiles, vec3(uv, layer)); }
 ";
         source = source.Replace("float map_id(", helpers + "\nfloat map_id(", StringComparison.Ordinal);

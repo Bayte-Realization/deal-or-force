@@ -122,7 +122,7 @@ public static class ShellLayout
         float width, float height, bool atWar = false, bool touchMode = false,
         float safeLeft = 0f, float safeTop = 0f, float safeRight = 0f, float safeBottom = 0f)
     {
-        const int warCells = 8, peaceCells = 7;
+        const int warCells = 9, peaceCells = 8;
         const float compactPad = 10f, fullPad = 14f, compactMargin = 6f;
         var fullW = float.IsFinite(width) && width > MinVpW ? width : DefWidth;
         var fullH = float.IsFinite(height) && height > MinVpH ? height : DefHeight;

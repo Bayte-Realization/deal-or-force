@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -38,6 +39,10 @@ static class AndroidPlatformTests
         RunBackgroundSimReadToWriteUpgradeTests();
         RunBackgroundSimStagedDeterminismTests();
         RunBackgroundSimMobilePacingTests();
+        RunCompletedDateTests();
+        RunRenderSnapshotReuseTests();
+        RunRenderSnapshotNameTests();
+        RunConcurrentCatalogReloadSafetyTests();
     }
 
     private static void RunPlatformProfileTests()
@@ -121,6 +126,64 @@ static class AndroidPlatformTests
             "Mobile recommends 30 FPS idle / 60 FPS active caps");
         Check(PlatformProfile.IsLowEndMobileAdapter("Adreno (TM) 506", "mobile"), "Adreno 5xx flagged low-end");
         Check(!PlatformProfile.IsLowEndMobileAdapter("Adreno (TM) 740", "mobile"), "Adreno 740 on mobile Vulkan is not low-end");
+        Check(phone.ShouldUseCompactTextureBudget, "8GB AndroidPhone enables compact texture budget");
+        Check(PlatformProfile.IsLowEndMobileAdapter("Mali-G78", "mobile"), "Mali-G78 flagged low-end mobile adapter");
+        Check(PlatformProfile.IsLowEndMobileAdapter("ARM Mali-G78 MP14", "gl_compatibility"), "Exynos Mali-G78 on GLES3 flagged low-end");
+        var s21 = PlatformProfile.Evaluate(new PlatformSnapshot(
+            OsName: "Android",
+            HasMobileFeature: true,
+            HasTouchscreen: true,
+            ScreenWidthPx: 2400,
+            ScreenHeightPx: 1080,
+            ScreenDpi: 421f,
+            SafeAreaRawPx: SafeAreaInsets.Zero,
+            SystemMemoryMb: 8192,
+            IsLowEndGpu: PlatformProfile.IsLowEndMobileAdapter("Mali-G78", "gl_compatibility"),
+            ViewportHeightLogical: 1080f));
+        Check(s21.GraphicsQualityTier == PlatformGraphicsTier.MobileLow && s21.ShouldUseCompactTextureBudget,
+            "8GB Galaxy S21 Mali-G78 evaluates to MobileLow + ShouldUseCompactTextureBudget");
+
+        // RecommendedCloseButtonPx scaling across Desktop, Phone, and Tablet
+        Check(Approx(desktop.RecommendedCloseButtonPx, 32f), "Desktop RecommendedCloseButtonPx is 32f");
+        Check(phone.RecommendedCloseButtonPx >= 42f && phone.RecommendedCloseButtonPx <= 52f &&
+              Approx(phone.RecommendedCloseButtonPx, Math.Clamp(phone.MinimumTouchTargetPx * 0.92f, 42f, 52f)),
+            "AndroidPhone RecommendedCloseButtonPx scales cleanly within [42, 52]");
+        Check(tablet.RecommendedCloseButtonPx >= 42f && tablet.RecommendedCloseButtonPx <= 52f &&
+              Approx(tablet.RecommendedCloseButtonPx, Math.Clamp(tablet.MinimumTouchTargetPx * 0.92f, 42f, 52f)),
+            "AndroidTablet RecommendedCloseButtonPx scales cleanly within [42, 52]");
+
+        // Emulator (BlueStacks / Android SDK / VM) adapter detection -> MobileLow + ShouldUseCompactTextureBudget
+        foreach (var emuAdapter in new[]
+                 {
+                     "BlueStacks OpenGL Renderer",
+                     "BST OpenGL",
+                     "Android Emulator OpenGL ES Translator",
+                     "Android SDK built for x86_64",
+                     "Mesa Virtio-GPU",
+                     "Goldfish GPU",
+                     "Ranchu Emulator",
+                     "ANGLE (NVIDIA, Direct3D11)",
+                     "VBoxSVGA",
+                     "VMware SVGA 3D"
+                 })
+        {
+            var flagged = PlatformProfile.IsLowEndMobileAdapter(emuAdapter, "mobile");
+            Check(flagged, $"Emulator/VM adapter '{emuAdapter}' flagged low-end");
+            var emuProfile = PlatformProfile.Evaluate(new PlatformSnapshot(
+                OsName: "Android",
+                HasMobileFeature: true,
+                HasTouchscreen: true,
+                ScreenWidthPx: 1920,
+                ScreenHeightPx: 1080,
+                ScreenDpi: 320f,
+                SafeAreaRawPx: SafeAreaInsets.Zero,
+                SystemMemoryMb: 8192,
+                IsLowEndGpu: flagged,
+                ViewportHeightLogical: 1080f));
+            Check(emuProfile.GraphicsQualityTier == PlatformGraphicsTier.MobileLow &&
+                  emuProfile.ShouldUseCompactTextureBudget,
+                $"Emulator adapter '{emuAdapter}' evaluates to MobileLow + ShouldUseCompactTextureBudget");
+        }
     }
 
     private static void RunSafeAreaTests()
@@ -780,6 +843,117 @@ static class AndroidPlatformTests
         Check(!runner.IsActive && !campaign.AccessGate.IsWriterActive, "BackgroundSimRunner stops cleanly with lock free");
     }
 
+    private static void RunRenderSnapshotReuseTests()
+    {
+        var campaign = new Campaign(39);
+        var first = new Nation { Tag = "AAA", MapIndex = 7, CustomName = "First", Treasury = 10 };
+        var second = new Nation { Tag = "BBB", MapIndex = 9, CustomName = "Second", Treasury = 20 };
+        campaign.AddNation(first);
+        campaign.AddNation(second);
+        var weights = CountryRankings.Weights.Default;
+        var before = CampaignRenderSnapshot.Capture(campaign, CampaignRenderSnapshot.Empty, weights, 1);
+        var nextHour = CampaignRenderSnapshot.Capture(campaign, before, weights, 2);
+        Check(ReferenceEquals(before.Nations, nextHour.Nations), "unchanged country rows share the previous snapshot array");
+
+        second.CustomName = "Renamed";
+        second.Treasury = 25;
+        var edited = CampaignRenderSnapshot.Capture(campaign, nextHour, weights, 3);
+        Check(!ReferenceEquals(nextHour.Nations, edited.Nations) && edited.Nations[0].Equals(before.Nations[0]) &&
+              edited.TryGetNation(second.Id, out var renamed) && renamed.DisplayName == "Renamed" && renamed.MapName == "Renamed" && renamed.Treasury == 25 &&
+              before.TryGetNation(second.Id, out var old) && old.DisplayName == "Second" && old.Treasury == 20,
+              "changing a late country row keeps earlier rows and leaves the last published snapshot untouched");
+
+        second.MapIndex = 13;
+        var reindexed = CampaignRenderSnapshot.Capture(campaign, edited, weights, 4);
+        Check(reindexed.TryGetNationByMapIndex(13, out var moved) && moved.Id == second.Id &&
+              !reindexed.TryGetNationByMapIndex(9, out _) && edited.TryGetNationByMapIndex(9, out _),
+              "a map code change refreshes only the new snapshot's lookup even when the country count is unchanged");
+
+        var founded = new Nation { Tag = "CCC", MapIndex = 21, CustomName = "Third" };
+        campaign.AddNation(founded);
+        var expanded = CampaignRenderSnapshot.Capture(campaign, reindexed, weights, 5);
+        Check(expanded.Nations.Length == 3 && expanded.TryGetNation(founded.Id, out var added) && added.MapIndex == 21 &&
+              expanded.TryGetNationByMapIndex(21, out _) && !reindexed.TryGetNation(founded.Id, out _),
+              "new countries are indexed by id and map code as soon as the new snapshot is published");
+
+        campaign.States.Add(new ScenarioState { Id = "snapshot_region", MapIndex = 3001, NationMapIndex = first.MapIndex, NationId = first.Tag });
+        var regions = Enumerable.Repeat((ushort)3001, 128).ToArray();
+        var owners = Enumerable.Repeat((ushort)first.MapIndex, regions.Length).ToArray();
+        campaign.AttachProvinceTopology(ProvinceTopology.Build(regions, owners, 16, 8, _ => false));
+        var map = CampaignRenderSnapshot.Capture(campaign, expanded, weights, 6);
+
+        campaign.MarkMapChanged();
+        campaign.InvalidateStateIndex();
+        var revised = CampaignRenderSnapshot.Capture(campaign, map, weights, 7);
+        Check(ReferenceEquals(map.ProvinceController, revised.ProvinceController) && ReferenceEquals(map.ProvinceOwner, revised.ProvinceOwner) &&
+              revised.ControllerMapRevision == campaign.MapRevision && revised.OwnerRevision == campaign.OwnershipRevision,
+              "an invalidated but unchanged map shares both rows and carries the new revisions");
+
+        Check(campaign.SetProvinceController(1, (ushort)second.MapIndex), "the map fixture changes controller");
+        var occupied = CampaignRenderSnapshot.Capture(campaign, revised, weights, 8);
+        Check(!ReferenceEquals(revised.ProvinceController, occupied.ProvinceController) && ReferenceEquals(revised.ProvinceOwner, occupied.ProvinceOwner) &&
+              revised.ProvinceController[1] == first.MapIndex && occupied.ProvinceController[1] == second.MapIndex,
+              "a provincial occupation replaces the controller row and leaves the previous publication intact");
+    }
+
+    private static void RunRenderSnapshotNameTests()
+    {
+        var locale = Loc.Language;
+        var adapter = Loc.TextAdapter;
+        var c = new Campaign(40);
+        var japan = new Nation { Tag = "JPN", CustomName = "country.JPN.name", MapIndex = 71 };
+        var founded = new Nation { Tag = "LOCAL", MapIndex = 73, FoundNameKind = "land",
+            FoundNameId = "snapshot_test_coast", FoundNameBase = "Old Coast", FoundNameForm = "republic" };
+        c.AddNation(japan);
+        c.AddNation(founded);
+        var snapshot = CampaignRenderSnapshot.Empty;
+        CampaignRenderSnapshot Capture() => snapshot = CampaignRenderSnapshot.Capture(
+            c, snapshot, CountryRankings.Weights.Default, snapshot.Version + 1);
+
+        try
+        {
+            Loc.TextAdapter = null;
+            Loc.Language = "english";
+            var english = Capture();
+            Loc.Language = "russian";
+            var russian = Capture();
+            Check(russian.Nations[0].DisplayName == japan.DisplayName && english.Nations[0].DisplayName != japan.DisplayName,
+                "cached country names switch language on the next snapshot");
+
+            Loc.TextAdapter = (key, text) => key == japan.CustomName ? text + " · mobile" : text;
+            var adapted = Capture();
+            Check(adapted.Nations[0].DisplayName == russian.Nations[0].DisplayName + " · mobile",
+                "changing the mobile text adapter invalidates cached country names");
+
+            Loc.TextAdapter = null;
+            japan.CustomName = "";
+            japan.Government = "presidential_republic";
+            var republic = Capture();
+            japan.Government = "absolute_monarchy";
+            var monarchy = Capture();
+            Check(monarchy.Nations[0].DisplayName == japan.DisplayName &&
+                  monarchy.Nations[0].DisplayName != republic.Nations[0].DisplayName,
+                "a change of government updates a country's cached political name");
+
+            Loc.Language = "english";
+            var beforeMod = Capture();
+            using var naming = JsonDocument.Parse("""{"lands":{"snapshot_test_coast":{"name":"New Coast"}}}""");
+            LandAtlas.Merge(naming.RootElement);
+            var afterMod = Capture();
+            Check(afterMod.Nations[1].DisplayName == founded.DisplayName &&
+                  afterMod.Nations[1].DisplayName.Contains("New Coast", StringComparison.Ordinal) &&
+                  beforeMod.Nations[1].DisplayName.Contains("Old Coast", StringComparison.Ordinal),
+                "a naming catalogue merge changes the snapshot without changing the country's recipe");
+        }
+        finally
+        {
+            using var remove = JsonDocument.Parse("""{"lands":{"snapshot_test_coast":{"remove":true}}}""");
+            LandAtlas.Merge(remove.RootElement);
+            Loc.TextAdapter = adapter;
+            Loc.Language = locale;
+        }
+    }
+
     private static void RunBackgroundSimStagedDeterminismTests()
     {
         var cBg = Campaign.CreateBootstrap(91122);
@@ -830,19 +1004,89 @@ static class AndroidPlatformTests
 
     private static void RunBackgroundSimMobilePacingTests()
     {
+        // 1. Deterministic HasReaderRequested responsiveness & read-window handoff on CampaignAccessGate.
+        var gateWorld = Campaign.CreateBootstrap(91124);
+        gateWorld.AccessGate.EnterWrite();
+        try
+        {
+            Check(!gateWorld.AccessGate.HasReaderRequested, "HasReaderRequested starts false before missed read");
+            var missed = Task.Run(() => gateWorld.TryEnterRead(0, requestWindowOnMiss: true)).GetAwaiter().GetResult();
+            Check(!missed && gateWorld.AccessGate.HasReaderRequested,
+                "Missed TryEnterRead sets CampaignAccessGate.HasReaderRequested immediately");
+        }
+        finally
+        {
+            gateWorld.AccessGate.ExitWrite(yieldToRequestedReader: false);
+        }
+        Check(gateWorld.TryEnterRead(0, requestWindowOnMiss: true), "Subsequent TryEnterRead succeeds cleanly once writer exits");
+        gateWorld.ExitRead();
+        Check(!gateWorld.AccessGate.HasReaderRequested, "Entering read clears HasReaderRequested");
+
+        // 2. Wartime CountryRankings throttle inside CampaignRenderSnapshot.Capture.
+        gateWorld.IsPaused = false;
+        var snap1 = CampaignRenderSnapshot.Capture(gateWorld, CampaignRenderSnapshot.Empty, CountryRankings.Weights.Default, 1);
+        gateWorld.MarkMapChanged();
+        gateWorld.MarkWarsChanged();
+        var snap2 = CampaignRenderSnapshot.Capture(gateWorld, snap1, CountryRankings.Weights.Default, 2);
+        Check(ReferenceEquals(snap1.NationRanksById, snap2.NationRanksById),
+            "Wartime unpaused Capture reuses CountryRankings within the same week across Map/War revisions");
+        gateWorld.IsPaused = true;
+        var snap3 = CampaignRenderSnapshot.Capture(gateWorld, snap2, CountryRankings.Weights.Default, 3);
+        Check(!ReferenceEquals(snap2.NationRanksById, snap3.NationRanksById) && snap3.NationRanksById.Count > 0,
+            "Paused Capture refreshes CountryRankings when Map/War revisions differ");
+        gateWorld.IsPaused = false;
+        gateWorld.Defines.HoursPerTick = 24;
+        for (var d = 0; d < 7; d++) gateWorld.Tick();
+        gateWorld.IsPaused = false;
+        var snap4 = CampaignRenderSnapshot.Capture(gateWorld, snap3, CountryRankings.Weights.Default, 4);
+        Check(!ReferenceEquals(snap3.NationRanksById, snap4.NationRanksById) && snap4.RankWeek == gateWorld.ElapsedDays / 7,
+            "Weekly boundary unpaused Capture recomputes CountryRankings cleanly");
+
+        // 3. Batched Speed-5 mobile pacing (22 ms/day target) with 30 FPS reader non-starvation.
+        // Pre-warm weekly passes and BackgroundSimRunner pacing path before timing so cold JIT
+        // compilation never causes a false maxConsecutiveMisses spike.
+        JitWarmup.PrepareWeeklyPasses();
+        var warmupWorld = Campaign.CreateBootstrap(91120);
+        warmupWorld.IsPaused = false;
+        warmupWorld.Speed = 5;
+        using (var warmupRunner = new BackgroundSimRunner { MobilePacing = true, MinSpeed5DayIntervalMs = 22.0 })
+        {
+            warmupRunner.Start(warmupWorld);
+            warmupRunner.SyncClockState(paused: false, speed: 5);
+            var warmSw = Stopwatch.StartNew();
+            while (warmSw.ElapsedMilliseconds < 2500)
+            {
+                if (warmupWorld.TryEnterRead(5, true))
+                {
+                    var warmed = warmupWorld.ElapsedDays >= 1 && !warmupWorld.MidStep;
+                    warmupWorld.ExitRead();
+                    if (warmed) break;
+                }
+                Thread.Sleep(5);
+            }
+            warmupRunner.RunWrite(c =>
+            {
+                c.IsPaused = true;
+                if (c.MidStep) c.FinishStep();
+            });
+            warmupRunner.Stop();
+        }
+
         var cBg = Campaign.CreateBootstrap(91123);
         cBg.IsPaused = false;
         cBg.Speed = 5;
         using var runner = new BackgroundSimRunner
         {
             MobilePacing = true,
-            MinSpeed5DayIntervalMs = 25.0
+            MinSpeed5DayIntervalMs = 22.0
         };
         runner.Start(cBg);
         runner.SyncClockState(paused: false, speed: 5);
 
         var sw = Stopwatch.StartNew();
         var readSuccesses = 0;
+        var consecutiveMisses = 0;
+        var maxConsecutiveMisses = 0;
         var days = 0;
         long hrs = 0;
         var mid = false;
@@ -853,14 +1097,20 @@ static class AndroidPlatformTests
                 try
                 {
                     readSuccesses++;
+                    consecutiveMisses = 0;
                     days = cBg.ElapsedDays;
                     hrs = cBg.ElapsedHours;
                     mid = cBg.MidStep;
                 }
                 finally { cBg.ExitRead(); }
             }
-            if (days >= 3 && hrs >= 72 && !mid) break;
-            Thread.Sleep(25);
+            else
+            {
+                consecutiveMisses++;
+                if (consecutiveMisses > maxConsecutiveMisses) maxConsecutiveMisses = consecutiveMisses;
+            }
+            if (days >= 4 && hrs >= 96 && !mid) break;
+            Thread.Sleep(33);
         }
         var pacingElapsedMs = sw.ElapsedMilliseconds;
 
@@ -871,12 +1121,14 @@ static class AndroidPlatformTests
         });
         runner.Stop();
 
-        Check(cBg.ElapsedDays >= 3 && cBg.ElapsedHours >= 72 && !cBg.MidStep,
-            $"MobilePacing BackgroundSimRunner completed >= 3 days cleanly ({cBg.ElapsedDays}d / {cBg.ElapsedHours}h in {pacingElapsedMs} ms)");
-        Check(readSuccesses >= 2,
-            $"Mobile 30 FPS reader acquires read windows without starvation (reads={readSuccesses})");
-        Check(pacingElapsedMs >= 40,
-            $"MobilePacing enforces steady Speed-5 day pacing ({pacingElapsedMs} ms >= 40 ms for {cBg.ElapsedDays} days)");
+        Check(cBg.ElapsedDays >= 4 && cBg.ElapsedHours >= 96 && !cBg.MidStep,
+            $"Batched MobilePacing BackgroundSimRunner completed >= 4 days cleanly ({cBg.ElapsedDays}d / {cBg.ElapsedHours}h in {pacingElapsedMs} ms)");
+        Check(cBg.RenderSnapshot.ElapsedDays >= 4 && cBg.RenderSnapshot.NationRanksById.Count > 0,
+            "CampaignRenderSnapshot tracks batched Speed-5 progress and cached rankings");
+        Check(readSuccesses >= 2 && maxConsecutiveMisses <= 2,
+            $"Mobile 30 FPS reader acquires read windows without starvation (reads={readSuccesses}, maxConsecutiveMisses={maxConsecutiveMisses})");
+        Check(pacingElapsedMs >= 50,
+            $"MobilePacing enforces steady ~22ms/day EMA Speed-5 pacing ({pacingElapsedMs} ms >= 50 ms for {cBg.ElapsedDays} days)");
 
         var cSync = Campaign.CreateBootstrap(91123);
         cSync.IsPaused = false;
@@ -886,17 +1138,216 @@ static class AndroidPlatformTests
 
         Check(cSync.ElapsedHours == cBg.ElapsedHours &&
               CampaignFingerprint.Of(cBg) == CampaignFingerprint.Of(cSync),
-            $"MobilePacing BackgroundSimRunner matches synchronous Campaign.Tick fingerprint at {cBg.ElapsedHours}h");
+            $"Batched MobilePacing BackgroundSimRunner matches synchronous Campaign.Tick fingerprint at {cBg.ElapsedHours}h");
+
+        // 4. Uncapped desktop batched Speed-5 determinism (MinSpeed5DayIntervalMs = 0).
+        var cDesk = Campaign.CreateBootstrap(91127);
+        cDesk.IsPaused = false;
+        cDesk.Speed = 5;
+        using var deskRunner = new BackgroundSimRunner
+        {
+            MobilePacing = false,
+            MinSpeed5DayIntervalMs = 0.0
+        };
+        deskRunner.Start(cDesk);
+        deskRunner.SyncClockState(paused: false, speed: 5);
+        var deskSw = Stopwatch.StartNew();
+        while (deskSw.ElapsedMilliseconds < 5000)
+        {
+            if (cDesk.TryEnterRead(5, true))
+            {
+                try
+                {
+                    if (cDesk.ElapsedDays >= 3 && cDesk.ElapsedHours >= 72 && !cDesk.MidStep) break;
+                }
+                finally { cDesk.ExitRead(); }
+            }
+            Thread.Sleep(2);
+        }
+        deskRunner.RunWrite(c =>
+        {
+            c.IsPaused = true;
+            if (c.MidStep) c.FinishStep();
+        });
+        deskRunner.Stop();
+        var cDeskSync = Campaign.CreateBootstrap(91127);
+        cDeskSync.IsPaused = false;
+        cDeskSync.Speed = 5;
+        while (cDeskSync.ElapsedHours < cDesk.ElapsedHours)
+            cDeskSync.Tick();
+        Check(cDesk.ElapsedHours >= 72 && cDeskSync.ElapsedHours == cDesk.ElapsedHours &&
+              CampaignFingerprint.Of(cDesk) == CampaignFingerprint.Of(cDeskSync),
+            $"Uncapped desktop batched Speed-5 matches synchronous Campaign.Tick fingerprint at {cDesk.ElapsedHours}h");
 
         var root = FindRepoRoot();
         var datePlate = File.ReadAllText(Path.Combine(root, "Scripts", "ui", "Shell", "ShellDatePlateView.cs"));
         var game = File.ReadAllText(Path.Combine(root, "Scripts", "DealOrForceGame.cs"));
-        Check(datePlate.Contains("RefreshFromSnapshot(CampaignRenderSnapshot", StringComparison.Ordinal),
-            "ShellDatePlateView exposes lock-free RefreshFromSnapshot(CampaignRenderSnapshot)");
+        Check(datePlate.Contains("_ctx.GetPresentationDate?.Invoke()", StringComparison.Ordinal),
+            "ShellDatePlateView uses the same calendar source during ordinary and clock-only refreshes");
         Check(game.Contains("MobilePacing = _isMobileRuntime", StringComparison.Ordinal) &&
-              game.Contains("MinSpeed5DayIntervalMs", StringComparison.Ordinal) &&
-              game.Contains("RefreshFromSnapshot(", StringComparison.Ordinal),
-            "DealOrForceGame wires MobilePacing, MinSpeed5DayIntervalMs, and lock-free DatePlate snapshot refresh");
+              game.Contains("MinSpeed5DayIntervalMs = _isMobileRuntime ? 22.0 : 0.0", StringComparison.Ordinal) &&
+              game.Contains("TryEnterRead(0, requestWindowOnMiss: true)", StringComparison.Ordinal) &&
+              game.Contains("DatePlate.RefreshClock()", StringComparison.Ordinal),
+            "DealOrForceGame configures 22ms mobile Speed-5 pacing, records frame reads, and refreshes clock outside read gate");
+    }
+
+    private static void RunCompletedDateTests()
+    {
+        var campaign = Campaign.CreateBootstrap(91125);
+        campaign.Date = new GameDate(2024, 1, 31) { Hour = 23 };
+        campaign.Defines.HoursPerTick = 1;
+        campaign.IsPaused = true;
+        using var runner = new BackgroundSimRunner();
+        runner.Start(campaign);
+
+        // Hold at the exact point that used to make the displayed date oscillate.
+        // The worker is paused, so bounded slices can put the world there deterministically.
+        campaign.AccessGate.EnterWrite();
+        try
+        {
+            campaign.IsPaused = false;
+            for (var slice = 0; slice < 64 && campaign.Date.Day == 31; slice++)
+                campaign.StepFor(0.0);
+            Check(campaign.MidStep && campaign.Date.Month == 2 && campaign.Date.Day == 1,
+                "the live staged world reaches midnight before completing the step");
+            var shown = runner.ReadPresentationDate(campaign);
+            Check(shown.Month == 1 && shown.Day == 31 && shown.Hour == 23,
+                "a staged midnight cannot leak its unfinished date to the display");
+        }
+        finally { campaign.AccessGate.ExitWrite(); }
+
+        var readable = campaign.TryEnterRead(0, requestWindowOnMiss: false);
+        Check(readable, "the UI can read between slices while midnight is in progress");
+        try
+        {
+            Check(runner.ReadPresentationDate(campaign).Day == 31,
+                "acquiring a read between slices gives the same displayed date as the lock-free path");
+        }
+        finally { if (readable) campaign.ExitRead(); }
+
+        var previousSnapshot = campaign.RenderSnapshot;
+        runner.RunWrite(c => c.IsPaused = true, refreshSnapshot: false);
+        var committed = runner.ReadPresentationDate(campaign);
+        Check(!campaign.MidStep && committed.Month == 2 && committed.Day == 1 && committed.Hour == 0 &&
+              ReferenceEquals(previousSnapshot, campaign.RenderSnapshot),
+            "finishing the step publishes midnight without rebuilding the snapshot");
+
+        var year = runner.RunWrite(c =>
+        {
+            c.Date = new GameDate(-299, 12, 31) { Hour = 22 };
+            return c.Date.Year;
+        }, refreshSnapshot: false);
+        var ancient = runner.ReadPresentationDate(campaign);
+        Check(year == -299 && ancient.Year == year && ancient.Month == 12 && ancient.Day == 31 && ancient.Hour == 22,
+            "the atomic clock preserves a signed year and the complete calendar after a generic write");
+
+        var another = Campaign.CreateBootstrap(91126);
+        another.Date = new GameDate(1337, 4, 1);
+        another.IsPaused = true;
+        runner.Start(another);
+        Check(runner.ReadPresentationDate(another).Year == 1337,
+            "a new campaign never inherits the previous campaign's displayed date");
+    }
+
+    private static void RunConcurrentCatalogReloadSafetyTests()
+    {
+        SoundCatalog.Load(force: false, notify: false);
+        MusicCatalog.Load(force: false, notify: false);
+        SpriteCatalog.Load(force: false, notify: false);
+        FontCatalog.Load(force: false, notify: false);
+
+        var unexpectedNotifications = 0;
+        Action onChanged = () => Interlocked.Increment(ref unexpectedNotifications);
+        SoundCatalog.Changed += onChanged;
+        MusicCatalog.Changed += onChanged;
+        SpriteCatalog.Changed += onChanged;
+        FontCatalog.Changed += onChanged;
+
+        try
+        {
+            var failures = new ConcurrentQueue<Exception>();
+            using var startGate = new ManualResetEventSlim(false);
+            var writersRemaining = 2;
+
+            var readers = Enumerable.Range(0, 4).Select(readerIndex => Task.Run(() =>
+            {
+                startGate.Wait();
+                while (Volatile.Read(ref writersRemaining) > 0)
+                {
+                    try
+                    {
+                        var ch = SoundCatalog.GetChannel("music");
+                        _ = ch.VolumeDb;
+                        _ = SoundCatalog.Count;
+                        _ = SoundCatalog.Has("click");
+                        _ = SoundCatalog.Get("click");
+                        foreach (var bed in SoundCatalog.AmbienceBeds) break;
+
+                        var menu = MusicCatalog.For(MusicCatalog.Moment.Menu);
+                        var campaign = MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Calm);
+                        _ = menu.Count + campaign.Count;
+                        _ = MusicCatalog.Director.FadeSeconds;
+                        _ = MusicCatalog.Revision;
+
+                        _ = SpriteCatalog.Count;
+                        _ = SpriteCatalog.Has("panel_dossier");
+                        _ = SpriteCatalog.TextureOf("panel_dossier");
+                        _ = SpriteCatalog.ShaderOf("globe");
+                        foreach (var spriteName in SpriteCatalog.Names) break;
+
+                        _ = FontCatalog.Count;
+                        _ = FontCatalog.FileOf("ui.default");
+                        _ = FontCatalog.FamiliesOf("ui.default");
+                        foreach (var font in FontCatalog.All) break;
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Enqueue(ex);
+                        break;
+                    }
+                }
+            })).ToArray();
+
+            var writers = Enumerable.Range(0, 2).Select(writerIndex => Task.Run(() =>
+            {
+                startGate.Wait();
+                try
+                {
+                    for (var i = 0; i < 25; i++)
+                    {
+                        SoundCatalog.Load(force: true, notify: false);
+                        MusicCatalog.Load(force: true, notify: false);
+                        SpriteCatalog.Load(force: true, notify: false);
+                        FontCatalog.Load(force: true, notify: false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failures.Enqueue(ex);
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref writersRemaining);
+                }
+            })).ToArray();
+
+            startGate.Set();
+            Task.WaitAll(writers.Concat(readers).ToArray());
+
+            Check(failures.IsEmpty,
+                $"Concurrent 60Hz catalog reads survive 50 forced reloads with 0 exceptions (errors={failures.Count})");
+            Check(unexpectedNotifications == 0,
+                $"notify:false suppresses Changed events across 50 forced reloads (events={unexpectedNotifications})");
+            Check(SoundCatalog.Count > 0 && MusicCatalog.Count > 0 && SpriteCatalog.Count >= 500 && FontCatalog.Count >= 0,
+                $"All 4 catalogs remain coherent after concurrent reload stress (sound={SoundCatalog.Count}, music={MusicCatalog.Count}, sprite={SpriteCatalog.Count}, font={FontCatalog.Count})");
+        }
+        finally
+        {
+            SoundCatalog.Changed -= onChanged;
+            MusicCatalog.Changed -= onChanged;
+            SpriteCatalog.Changed -= onChanged;
+            FontCatalog.Changed -= onChanged;
+        }
     }
 
     private static string FindRepoRoot()

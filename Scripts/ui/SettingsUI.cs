@@ -29,6 +29,7 @@ public partial class DealOrForceGame
     private string _settingsCategory = "";
     private readonly Dictionary<string, Button> _settingsTabs = new(StringComparer.OrdinalIgnoreCase);
     private bool _settingsNeedRestart;
+    private bool _settingsLanguageHooked;
 
     private void BuildSettingsInterface()
     {
@@ -50,6 +51,7 @@ public partial class DealOrForceGame
         frame.AddThemeConstantOverride("separation", 10);
         panel.AddChild(frame);
 
+        var touch = DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true;
         var head = new MarginContainer();
         head.AddThemeConstantOverride("margin_left", 28);
         head.AddThemeConstantOverride("margin_right", 28);
@@ -58,7 +60,9 @@ public partial class DealOrForceGame
         var headRows = new VBoxContainer();
         headRows.AddThemeConstantOverride("separation", 10);
         head.AddChild(headRows);
-        var closeSettings = ActionButton("×", HideSettings, 38, 32);
+        var closeSettings = ActionButton("×", HideSettings, touch ? 44 : 38, touch ? 42 : 32);
+        closeSettings.Name = "CloseSettings";
+        closeSettings.TooltipText = Ui.Tip(Tr("Close"));
         MenuChromeTheme.StyleWellButton(closeSettings, false, 15);
         ScreenHeader(headRows, "SETTINGS",
             "Interface scale, video quality, strategic audio and campaign preferences.",
@@ -101,17 +105,19 @@ public partial class DealOrForceGame
         _settingsRestartNotice.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         footRows.AddChild(_settingsRestartNotice);
 
+        var actionH = touch ? 46 : 40;
+        var utilH = touch ? 42 : 36;
         var actions = new HBoxContainer();
         actions.AddThemeConstantOverride("separation", 8);
         footRows.AddChild(actions);
-        var back = ActionButton("Back", HideSettings, 180, 40, true);
+        var back = ActionButton("Back", HideSettings, 180, actionH, true);
         MenuChromeTheme.StylePrimaryCta(back, 14, serif: false);
         actions.AddChild(back);
-        var reset = ActionButton("Reset this page", ResetSettingsCategory, 200, 40);
+        var reset = ActionButton("Reset this page", ResetSettingsCategory, 200, actionH);
         MenuChromeTheme.StyleWellButton(reset, false, 13);
         reset.TooltipText = Ui.Tip(Tr("Put every option on this page back to what the game ships with."));
         actions.AddChild(reset);
-        var media = ActionButton("Sound and artwork", OpenMediaLibrary, 190, 40);
+        var media = ActionButton("Sound and artwork", OpenMediaLibrary, 190, actionH);
         media.Name = "OpenMediaLibrarySettings";
         MenuChromeTheme.StyleWellButton(media, false, 13);
         actions.AddChild(media);
@@ -122,7 +128,7 @@ public partial class DealOrForceGame
         var folderRow = new HBoxContainer();
         folderRow.AddThemeConstantOverride("separation", 10);
         footRows.AddChild(folderRow);
-        var folderButton = ActionButton("Game folder", OpenGameFolder, 160, 36);
+        var folderButton = ActionButton("Game folder", OpenGameFolder, 160, utilH);
         folderButton.Name = "OpenGameFolderSettings";
         MenuChromeTheme.StyleWellButton(folderButton, false, 13);
         folderButton.TooltipText = Ui.Tip(Tr("Open the folder that holds saves, settings, logs and mods."));
@@ -138,7 +144,7 @@ public partial class DealOrForceGame
             reportButton.Text = Tr(made ? "Report saved" : "Report failed");
             reportButton.TooltipText = Ui.Tip(made ? path : SupportReport.LastFailure);
             if (made) OS.ShellOpen(GamePaths.Reports);
-        }, 190, 36);
+        }, 190, utilH);
         reportButton.Name = "ReportProblemSettings";
         MenuChromeTheme.StyleWellButton(reportButton, false, 13);
         reportButton.TooltipText = Ui.Tip(Tr("Write a zip with the build, the logs, the settings and the save, so a problem can be looked at."));
@@ -150,6 +156,22 @@ public partial class DealOrForceGame
         folderLine.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         folderLine.TooltipText = Ui.Tip(GamePaths.Root);
         folderRow.AddChild(folderLine);
+
+        if (!_settingsLanguageHooked)
+        {
+            _settingsLanguageHooked = true;
+            Simulation.Loc.LanguageChanged += OnSettingsLanguageChanged;
+        }
+    }
+
+    private void OnSettingsLanguageChanged()
+    {
+        if (!IsInstanceValid(_settingsLayer) || !_settingsLayer.Visible) return;
+        Callable.From(() =>
+        {
+            if (IsInstanceValid(_settingsLayer) && _settingsLayer.Visible)
+                ShowSettingsCategory(_settingsCategory);
+        }).CallDeferred();
     }
 
     /// <summary>Open the one game folder in the system's file browser.</summary>
@@ -193,15 +215,83 @@ public partial class DealOrForceGame
         foreach (var (id, button) in _settingsTabs)
             MenuChromeTheme.StyleTabButton(button, string.Equals(id, category, StringComparison.OrdinalIgnoreCase), 13);
 
-        foreach (var child in _settingsRows.GetChildren()) child.QueueFree();
+        foreach (var child in _settingsRows.GetChildren())
+        {
+            _settingsRows.RemoveChild(child);
+            child.QueueFree();
+        }
         if (category == "editor_mods" && DealOrForce.Modding.LauncherSelection.IsEditorRun)
         {
             EditorModRows.Build(_settingsRows, true, () => { _settingsNeedRestart = true; RefreshRestartNotice(); });
             return;
         }
+        BuildSettingsCategoryGuide(category);
         foreach (var definition in SettingsCatalog.In(category))
             SettingsRows.Build(definition, _settingsRows, ApplySetting);
         RefreshRestartNotice();
+    }
+
+    private void BuildSettingsCategoryGuide(string category)
+    {
+        if (string.Equals(category, "video", StringComparison.OrdinalIgnoreCase))
+        {
+            var card = new PanelContainer
+            {
+                Name = "SettingsVideoGuide",
+                SizeFlagsHorizontal = SizeFlags.ExpandFill
+            };
+            card.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(12, 8, highlighted: true));
+            var stack = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            stack.AddThemeConstantOverride("separation", 5);
+            card.AddChild(stack);
+
+            var adapter = RenderingServer.GetVideoAdapterName();
+            if (string.IsNullOrWhiteSpace(adapter)) adapter = "—";
+            var method = RenderingServer.GetCurrentRenderingMethod();
+            if (string.IsNullOrWhiteSpace(method))
+                method = ProjectSettings.GetSetting("rendering/renderer/rendering_method").AsString();
+            var methodLabel = method switch
+            {
+                "forward_plus" => Tr("aaa.ui.renderer_forward_plus"),
+                "mobile" => Tr("aaa.ui.renderer_mobile"),
+                "gl_compatibility" => Tr("aaa.ui.renderer_gl_compat"),
+                _ => string.IsNullOrWhiteSpace(method) ? "—" : method
+            };
+
+            var hw = RowLabel(Simulation.Loc.Format("aaa.ui.settings_active_gpu_fmt", adapter, methodLabel),
+                12, MenuChromeTheme.BrassHi);
+            MenuChromeTheme.StyleExistingLabel(hw, 12, MenuChromeTheme.BrassHi, tabular: true);
+            hw.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            stack.AddChild(hw);
+
+            foreach (var (key, tone) in new[]
+                     {
+                         ("aaa.ui.settings_video_renderer_note", MenuChromeTheme.PaperDim),
+                         ("aaa.ui.settings_video_smooth_note", MenuChromeTheme.PaperDim),
+                         ("aaa.ui.settings_video_mobile_note", MenuChromeTheme.PaperFaint)
+                     })
+            {
+                var line = RowLabel(Tr(key), 12, tone);
+                line.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                stack.AddChild(line);
+            }
+            _settingsRows.AddChild(card);
+            return;
+        }
+
+        if (string.Equals(category, "interface", StringComparison.OrdinalIgnoreCase))
+        {
+            var card = new PanelContainer
+            {
+                Name = "SettingsInterfaceGuide",
+                SizeFlagsHorizontal = SizeFlags.ExpandFill
+            };
+            card.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(12, 8, highlighted: true));
+            var line = RowLabel(Tr("aaa.ui.settings_interface_smooth_note"), 12, MenuChromeTheme.PaperDim);
+            line.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            card.AddChild(line);
+            _settingsRows.AddChild(card);
+        }
     }
 
     private void ResetSettingsCategory()

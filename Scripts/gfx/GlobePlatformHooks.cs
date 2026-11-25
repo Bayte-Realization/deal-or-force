@@ -47,9 +47,11 @@ public sealed partial class GlobePresentation
     private void ApplyShaderQualityTier(bool force = false)
     {
         var tier = CurrentShaderQualityTier();
+        var compat = RenderingServer.GetCurrentRenderingMethod() == "gl_compatibility" ? 1f : 0f;
         if (!force && Mathf.IsEqualApprox(tier, _cachedShaderQualityTier)) return;
         _cachedShaderQualityTier = tier;
         _globeMaterial?.SetShaderParameter("quality_tier", tier);
+        _globeMaterial?.SetShaderParameter("compat_renderer", compat);
         if (IsInstanceValid(_atmosphereLayer) && _atmosphereLayer.MaterialOverride is ShaderMaterial atmo)
             atmo.SetShaderParameter("quality_tier", tier);
         ApplyWeatherQualityTier(tier);

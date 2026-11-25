@@ -143,7 +143,8 @@ internal static class ShellCountryDossierView
         // Standing KPIs Card
         var kpiCard = MakeSectionCard(ctx, root, "ShellOverviewKpis", "icon_economy",
             Loc.Get("shell.standing_kpis"), null, "shell.brass_hi");
-        AddStandingGrid(ctx, kpiCard, world, nation, isOwn || observing);
+        AddStandingGrid(ctx, kpiCard, world, nation, isOwn || observing || CampaignIntel.PlayerCanInspect(world, nation.Id));
+        ShellCountryTelemetryView.AddTerritoryIndustryCard(ctx, root, world, nation);
 
         if (isOwn && !observing && openStaffTab is not null)
             AddStaffQuickLink(ctx, root, nation, openStaffTab);
@@ -171,6 +172,7 @@ internal static class ShellCountryDossierView
         ShellContext ctx, VBoxContainer bodyRows, Campaign world, Nation nation)
     {
         var root = CreatePaddedRoot(bodyRows, "ShellSocietyPaddedRoot");
+        ShellCountryTelemetryView.AddSocietyDemographyCard(ctx, root, world, nation);
         PopulateRulerCard(ctx, root, world, nation);
 
         var states = world.StatesOf(nation);
@@ -197,17 +199,17 @@ internal static class ShellCountryDossierView
         grid.AddThemeConstantOverride("v_separation", 4);
         cabCard.AddChild(grid);
 
-        AddPillCard(ctx, grid, "icon_government", Loc.Get("shell.government_form"), Loc.Get(PoliticsCore.GovernmentOf(nation).Name));
-        AddPillCard(ctx, grid, "icon_laws", Loc.Get("shell.national_ideology"), Loc.Get(PoliticsCore.IdeologyOf(nation).Name));
+        ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_government", Loc.Get("shell.government_form"), Loc.Get(PoliticsCore.GovernmentOf(nation).Name));
+        ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_laws", Loc.Get("shell.national_ideology"), Loc.Get(PoliticsCore.IdeologyOf(nation).Name));
 
         var cultureId = DemographyCatalog.PrimaryCulture(nation.Tag);
         var primaryCulture = !string.IsNullOrEmpty(cultureId) ? DemographyCatalog.CultureName(cultureId) : "—";
-        AddPillCard(ctx, grid, "icon_nation", Loc.Get("shell.dominant_culture"), primaryCulture);
+        ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_nation", Loc.Get("shell.dominant_culture"), primaryCulture);
 
         var faiths = !string.IsNullOrEmpty(cultureId) ? DemographyCatalog.FaithOf(cultureId) : null;
         var faithId = faiths is { Count: > 0 } ? faiths[0].Religion : null;
         var primaryFaith = !string.IsNullOrEmpty(faithId) ? DemographyCatalog.ReligionName(faithId) : "—";
-        AddPillCard(ctx, grid, "icon_faith", Loc.Get("shell.dominant_faith"), primaryFaith);
+        ShellCountryTelemetryView.AddPillCard(ctx, grid, "icon_faith", Loc.Get("shell.dominant_faith"), primaryFaith);
 
         // National demographic composition visual stacked bars (read-only)
         var cultTotals = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -606,54 +608,12 @@ internal static class ShellCountryDossierView
             "shell.serif_semibold", 11, "shell.state.warning_text"));
     }
 
-    private static void AddStandingGrid(ShellContext ctx, VBoxContainer parent, Campaign world, Nation nation, bool showTreasury)
-    {
-        var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
-        grid.AddThemeConstantOverride("h_separation", 6);
-        grid.AddThemeConstantOverride("v_separation", 4);
-        parent.AddChild(grid);
-
-        AddPillCard(ctx, grid, "icon_gdp", Loc.Get("GDP"), Fmt.Money(nation.Gdp));
-        AddPillCard(ctx, grid, "icon_treasury", Loc.Get("Treasury"), showTreasury ? Fmt.Money(nation.Treasury) : "—");
-        AddPillCard(ctx, grid, "icon_inflation", Loc.Get("Inflation"), Fmt.Percent(nation.Inflation),
-            nation.Inflation > 0.12f ? "shell.state.negative_text" : (nation.Inflation > 0.06f ? "shell.state.warning_text" : "shell.paper"));
-        AddPillCard(ctx, grid, "icon_population", Loc.Get("Manpower"), Fmt.People(nation.ManpowerReserve));
-    }
+    private static void AddStandingGrid(ShellContext ctx, VBoxContainer parent, Campaign world, Nation nation, bool showTreasury) =>
+        ShellCountryTelemetryView.AddStandingGrid(ctx, parent, world, nation, showTreasury);
 
     private static void AddSocietyMeter(
         ShellContext ctx, VBoxContainer parent, string iconName, string label, float fraction01, string valueText, Color fillColor) =>
         ShellRegionVisualsView.AddMeterRow(ctx, parent, iconName, label, fraction01, valueText, fillColor, label);
-
-    private static void AddPillCard(
-        ShellContext ctx, GridContainer parent, string iconName, string label, string value, string valTok = "shell.paper")
-    {
-        var pill = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
-        pill.AddThemeStyleboxOverride("panel", ctx.BorderedBox("shell.well_bottom", "shell.engrave", 1, 2, 6, 4, 6, 4));
-        parent.AddChild(pill);
-
-        var row = new HBoxContainer { ClipContents = true };
-        row.AddThemeConstantOverride("separation", 6);
-        pill.AddChild(row);
-
-        if (ctx.Icon(iconName) is { } tex)
-        {
-            var ico = new TextureRect
-            {
-                Texture = tex, CustomMinimumSize = new Vector2(16, 16),
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
-            };
-            ShellContext.ApplyIconRelief(ico, Ui.Colour("shell.icon"), 0.60f);
-            row.AddChild(ico);
-        }
-
-        var col = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipContents = true };
-        col.AddThemeConstantOverride("separation", 1);
-        row.AddChild(col);
-        col.AddChild(MakeLabel(ctx, label, "shell.sans", 10, "shell.paper_faint", clip: true));
-        col.AddChild(MakeLabel(ctx, value, "shell.sans", 11, valTok, clip: true, tabular: true));
-    }
 
     private static void AddCountryComparisonRow(
         ShellContext ctx, VBoxContainer parent, Nation target, string gdpText, string relText, string relColorTok, Action onClick)
@@ -697,7 +657,7 @@ internal static class ShellCountryDossierView
         row.AddChild(MakeLabel(ctx, relText, "shell.sans", 11, relColorTok, tabular: true));
     }
 
-    private static void AddKvRow(ShellContext ctx, VBoxContainer bodyRows, string key, string value, string valueTok)
+    internal static void AddKvRow(ShellContext ctx, VBoxContainer bodyRows, string key, string value, string valueTok)
     {
         var row = new HBoxContainer { CustomMinimumSize = new Vector2(0, 20), ClipContents = true };
         row.AddThemeConstantOverride("separation", 6);

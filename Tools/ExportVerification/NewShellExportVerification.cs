@@ -46,6 +46,24 @@ public partial class ExportVerification
             "new campaign shell activates cleanly in shipped release");
         Check((game.FindChild("ShellMinimap", true, false) as Control)?.Visible == true,
             "new shell live minimap is visible in shipped release");
+        var panBtn = game.FindChild("ShellShowcasePanBtn", true, false) as Button;
+        var panMoreBtn = game.FindChild("ShellShowcasePanMoreBtn", true, false) as Button;
+        Check(panBtn is { Visible: true } && panMoreBtn is not null,
+            "new shell exposes ShellShowcasePanBtn and ShellShowcasePanMoreBtn");
+        if (panBtn is not null && panMoreBtn is not null)
+        {
+            var wasPan = game.VerificationShowcasePan;
+            try
+            {
+                panBtn.EmitSignal(BaseButton.SignalName.Pressed);
+                await Wait(.1);
+                Check(game.VerificationShowcasePan == !wasPan, "ShellShowcasePanBtn toggles ShowcasePan live");
+                panMoreBtn.EmitSignal(BaseButton.SignalName.Pressed);
+                await Wait(.1);
+                Check(game.VerificationShowcasePan == wasPan, "ShellShowcasePanMoreBtn toggles ShowcasePan back cleanly");
+            }
+            finally { game.VerificationShowcasePan = wasPan; }
+        }
         await Capture("new-shell-rest");
 
         var inboxBtn = game.FindChild("ShellDiplomaticInboxButton", true, false) as Button;
@@ -395,6 +413,7 @@ public partial class DealOrForceGame
     internal void VerificationCloseDealInbox() => CloseDealComposer();
     internal void VerificationToggleScreen(string screen) => ToggleCampaignScreen(screen);
     internal void VerificationWatchCountry(Nation nation) => WatchCountry(nation);
+    internal bool VerificationShowcasePan { get => _globe.ShowcasePan; set => _globe.SetShowcasePan(value); }
 }
 
 public sealed partial class GlobePresentation

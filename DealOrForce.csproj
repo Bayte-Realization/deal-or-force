@@ -46,9 +46,8 @@
     stack trace actually needs; what is lost is the guarantee that every local survives to
     be inspected in a step-through, and that is a fair price.
   -->
-  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+  <PropertyGroup>
     <Optimize>true</Optimize>
-    <DebugType>portable</DebugType>
     <TieredPGO>true</TieredPGO>
     <!--
       The garbage collector is a frame cost here, not a footnote. A late campaign holds a
@@ -67,8 +66,11 @@
       GCHeapHardLimit to bound it from above or put this back to false - one line, no other
       change. See docs/LANGUAGES_AND_PARALLELISM_2026_11_11_RU.md.
     -->
-    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ServerGarbageCollection Condition="!$(TargetFramework.Contains('android'))">true</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <DebugType>portable</DebugType>
     <!--
       The safety net for the setting above. Server collection with a large gen0 budget spends
       memory instead of pausing, so the heap is bounded from above by runtimeconfig.template.json

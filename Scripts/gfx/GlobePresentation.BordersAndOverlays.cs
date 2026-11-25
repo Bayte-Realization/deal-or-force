@@ -12,10 +12,10 @@ namespace DealOrForce;
 
 public sealed partial class GlobePresentation
 {
-    private ImmediateMesh _routeMesh = null!;
+    private ArrayMesh _routeMesh = null!;
     private MeshInstance3D _routePreview = null!;
     private readonly ShaderMaterial[] _routeMaterials = new ShaderMaterial[3];
-    private ImmediateMesh _frontMesh = null!;
+    private ArrayMesh _frontMesh = null!;
     private MeshInstance3D _frontPreview = null!;
     private ImageTexture _controllerTexture;
     private ImageTexture _frontTexture;
@@ -172,9 +172,35 @@ public sealed partial class GlobePresentation
         DrawRect(rect, new Color(0.96f, 0.82f, 0.38f, 0.92f), false, 2f);
     }
 
+    private readonly List<Vector3> _frontVerts = new();
+    private readonly List<Color> _frontColors = new();
+    private readonly List<int> _frontIndices = new();
+    private readonly Godot.Collections.Array _frontSurfaceArrays = CreateFrontSurfaceArrays();
+
+    private static Godot.Collections.Array CreateFrontSurfaceArrays()
+    {
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        return arrays;
+    }
+
+    private void CommitFrontMesh()
+    {
+        if (_frontMesh is null) return;
+        _frontMesh.ClearSurfaces();
+        if (_frontIndices.Count == 0) return;
+        _frontSurfaceArrays[(int)Mesh.ArrayType.Vertex] = _frontVerts.ToArray();
+        _frontSurfaceArrays[(int)Mesh.ArrayType.Color] = _frontColors.ToArray();
+        _frontSurfaceArrays[(int)Mesh.ArrayType.Index] = _frontIndices.ToArray();
+        _frontMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, _frontSurfaceArrays);
+        _frontSurfaceArrays[(int)Mesh.ArrayType.Vertex] = default;
+        _frontSurfaceArrays[(int)Mesh.ArrayType.Color] = default;
+        _frontSurfaceArrays[(int)Mesh.ArrayType.Index] = default;
+    }
+
     private void CreateRoutePreview(Node3D world)
     {
-        _routeMesh = new ImmediateMesh();
+        _routeMesh = new ArrayMesh();
         CreateOrderMaterials();
         _routePreview = new MeshInstance3D
         {
@@ -188,7 +214,7 @@ public sealed partial class GlobePresentation
 
     private void CreateFrontPreview(Node3D world)
     {
-        _frontMesh = new ImmediateMesh();
+        _frontMesh = new ArrayMesh();
         var material = new StandardMaterial3D
         {
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
@@ -236,6 +262,9 @@ public sealed partial class GlobePresentation
         _frontPreviewDeferred = false;
         if (_campaign?.ProvinceMap is null || _globeMaterial is null) return;
         _frontMesh.ClearSurfaces();
+        _frontVerts.Clear();
+        _frontColors.Clear();
+        _frontIndices.Clear();
         _planHitSegments.Clear();
         _drawingPlanId = -1;
         _frontPreview.Visible = false;
@@ -329,6 +358,7 @@ public sealed partial class GlobePresentation
         foreach (var province in _campaign.DestroyedProvinces)
             if (province > 0 && province < 256 * 256) pixels[province * 4 + 3] = 255;
         UpdateBorderTexture(ref _borderPlanTexture, ref _borderPlanImage, borderTargets, Image.Format.Rgba8, "border_plan_targets");
+        CommitFrontMesh();
         _frontPreview.Visible = _frontMesh.GetSurfaceCount() > 0;
         UpdateBorderTexture(ref _borderControllerTexture, ref _borderControllerImage, controllers, Image.Format.Rg8, "border_controller_ids");
 
@@ -366,6 +396,8 @@ public sealed partial class GlobePresentation
     /// strokes inside every arrow and made even one order look like a bundle of routes. The
     /// ribbon is now single-stroke geometry, while separate divisions keep separate routes.
     /// </summary>
+    private readonly List<Simulation.Army> _routeSelectedScratch = new();
+
     private void UpdateRoutePreview()
     {
         if (_campaign?.ProvinceMap is null || !IsInstanceValid(_routePreview)) return;
@@ -386,16 +418,23 @@ public sealed partial class GlobePresentation
             }
         if (fingerprint == _routeFingerprint) return;
         _routeFingerprint = fingerprint;
-        _routeMesh.ClearSurfaces();
+        _routeBatch.Clear();
 
-        var selected = _campaign.Armies
-            .Where(candidate => candidate.NationId == _campaign.Player?.Id &&
-                                _selectedArmyIds.Contains(candidate.Id) && HasRouteIntent(candidate))
-            .OrderBy(candidate => candidate.Id)
-            .ToArray();
+        _routeSelectedScratch.Clear();
+        var playerId = _campaign.Player?.Id;
+        foreach (var candidate in _campaign.Armies)
+        {
+            if (candidate.NationId == playerId && _selectedArmyIds.Contains(candidate.Id) && HasRouteIntent(candidate))
+                _routeSelectedScratch.Add(candidate);
+        }
+        _routeSelectedScratch.Sort(static (a, b) => a.Id.CompareTo(b.Id));
         var drewAny = false;
-        foreach (var army in selected)
-            drewAny |= AppendRouteArrow(army);
+        for (var i = 0; i < _routeSelectedScratch.Count; i++)
+            drewAny |= AppendRouteArrow(_routeSelectedScratch[i]);
+        if (drewAny)
+            drewAny = _routeBatch.Commit(_routeMesh, _routeMaterials[0], _routeMaterials[1], _routeMaterials[2]);
+        else
+            _routeMesh.ClearSurfaces();
         _routePreview.Visible = drewAny;
     }
 
@@ -578,7 +617,7 @@ public sealed partial class GlobePresentation
             army.ProvinceId = province;
             army.StateMapIndex = province > 0 && province < _provinceTopology.ProvinceToState.Length
                 ? _provinceTopology.ProvinceToState[province]
-                : SourceEarthData.States[cell];
+                : (SourceEarthData.PeekStatesIfLoaded() is { } loadedStates ? loadedStates[cell] : (ushort)0);
         }
         _campaign.AttachProvinceTopology(_provinceTopology);
         RefreshMapModePalette();

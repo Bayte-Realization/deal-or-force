@@ -21,7 +21,7 @@
     "date": "1868-01-03",
     "window_days": 60,
     "trigger": { "tags": ["JPN"] },
-    "effects": { "productivity": 0.04, "literacy": 0.03, "state.radicalism": 0.03, "political_points": 10 }
+    "effects": { "productivity": 0.04, "literacy": 0.03, "state.radicalism": 0.03, "political_points": 10, "prestige": 8 }
   },
   "berlin_conference_1884": {
     "title": "The Berlin Conference",
@@ -45,7 +45,7 @@
     "date": "1944-07-22",
     "window_days": 60,
     "trigger": { "tags": ["USA", "GBR", "FRA", "CAN"] },
-    "effects": { "credit_confidence": 0.08, "gdp_percent": 0.03, "stability": 0.02 }
+    "effects": { "credit_confidence": 0.08, "gdp_percent": 0.03, "stability": 0.02, "prestige": 8 }
   },
   "bandung_conference_1955": {
     "title": "The Bandung Conference",
@@ -53,7 +53,7 @@
     "date": "1955-04-18",
     "window_days": 45,
     "trigger": { "tags": ["IDN", "IND", "EGY", "CHN", "YUG"] },
-    "effects": { "political_points": 12, "stability": 0.02 }
+    "effects": { "political_points": 12, "stability": 0.02, "prestige": 6 }
   },
   "cuban_missile_crisis_1962": {
     "title": "The Brink of Annihilation",

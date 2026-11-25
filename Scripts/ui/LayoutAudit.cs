@@ -156,9 +156,34 @@ public static class LayoutAudit
 
     /// <summary>Seconds between sweeps. Slow enough to be free, quick enough to blame the
     /// panel you just opened rather than one from a minute ago.</summary>
-    private const double WatchInterval = 2.5;
+    private const double WatchInterval = 6.0;
+    private static readonly bool EnvAuditEnabled =
+        string.Equals(System.Environment.GetEnvironmentVariable("DOF_LAYOUT_AUDIT"), "1", StringComparison.Ordinal);
+    private static readonly bool VerifyAuditArg =
+        Array.Exists(OS.GetCmdlineArgs(), static arg =>
+            string.Equals(arg, "--verify-build", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(arg, "--layout-audit", StringComparison.OrdinalIgnoreCase));
 
     private static double _sinceLastSweep;
+    private static Func<bool> _suppressWatch;
+    private static readonly HashSet<string> Seen = new(StringComparer.Ordinal);
+    private static readonly List<string> WatchWarnings = new();
+
+    /// <summary>
+    /// Optional predicate that returns true while the player is actively panning, spinning,
+    /// or fast-forwarding so debug layout walks only run when the screen has settled.
+    /// </summary>
+    public static void SetWatchSuppressed(Func<bool> suppressPredicate) => _suppressWatch = suppressPredicate;
+
+    /// <summary>Findings recorded during live debug play so diagnostic reports stay crisp.</summary>
+    public static IReadOnlyList<string> Findings => WatchWarnings;
+
+    public static void ResetWatch()
+    {
+        Seen.Clear();
+        WatchWarnings.Clear();
+        _sinceLastSweep = 0d;
+    }
 
     /// <summary>
     /// Findings already announced, keyed by the caption's own text.
@@ -172,11 +197,14 @@ public static class LayoutAudit
 
     /// <summary>
     /// Watch the interface while the game runs. Call once per frame from a scene root; does
-    /// nothing at all outside a debug build.
+    /// nothing at all outside a debug build or while the camera/simulation is busy unless
+    /// explicitly opted in via DOF_LAYOUT_AUDIT=1 / --verify-build.
     /// </summary>
     public static void Watch(Node root, double delta)
     {
         if (!OS.IsDebugBuild() || root is null) return;
+        if (!EnvAuditEnabled && !VerifyAuditArg && _suppressWatch is not null && _suppressWatch())
+            return;
         _sinceLastSweep += delta;
         if (_sinceLastSweep < WatchInterval) return;
         _sinceLastSweep = 0d;

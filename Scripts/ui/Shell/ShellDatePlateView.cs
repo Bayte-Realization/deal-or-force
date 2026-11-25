@@ -50,8 +50,8 @@ internal sealed class ShellDatePlateView
 
     private ShellLayoutProfile _profile;
     private HBoxContainer _dateRow;
-    private long _lastDateHour = long.MinValue;
-    private int _lastWeekdayDay = int.MinValue;
+    private (int Year, int Month, int Day, int Hour)? _lastDate;
+    private (int Year, int Month, int Day, string Language)? _lastWeekday;
     private string _lastDateLang = "";
     private bool? _lastPaused;
     private bool? _lastObserverMode;
@@ -522,16 +522,17 @@ internal sealed class ShellDatePlateView
         if (touch) { _pauseKbd.Visible = false; _menuKbd.Visible = false; }
     }
 
-    public void RefreshFromSnapshot(CampaignRenderSnapshot snap)
+    public void RefreshClock()
     {
-        if (snap is null) return;
+        var world = _ctx.World;
+        if (world is null) return;
+        var hud = _ctx.HudSnapshot is { Version: > 0 } hs ? hs : null;
+
         ApplyDateAndClockState(
-            snap.Date,
-            snap.ElapsedHours,
-            snap.ElapsedDays,
-            _ctx.IsPaused?.Invoke() ?? snap.IsPaused,
-            Math.Clamp(_ctx.GetSpeed?.Invoke() ?? snap.Speed, 1, 5),
-            _ctx.IsObserverMode?.Invoke() ?? snap.ObserverMode);
+            _ctx.GetPresentationDate?.Invoke() ?? world.Date,
+            hud?.IsPaused ?? (_ctx.IsPaused?.Invoke() ?? true),
+            Math.Clamp(_ctx.GetSpeed?.Invoke() ?? (hud?.Speed ?? 1), 1, 5),
+            _ctx.IsObserverMode?.Invoke() ?? (hud?.ObserverMode ?? world.ObserverMode));
     }
 
     public void Refresh()
@@ -539,33 +540,44 @@ internal sealed class ShellDatePlateView
         var world = _ctx.World;
         if (world is null) return;
 
-        ApplyDateAndClockState(
-            world.Date,
-            world.ElapsedHours,
-            world.ElapsedDays,
-            _ctx.IsPaused?.Invoke() ?? true,
-            Math.Clamp(_ctx.GetSpeed?.Invoke() ?? 1, 1, 5),
-            _ctx.IsObserverMode?.Invoke() ?? world.ObserverMode);
+        RefreshClock();
 
-        if (_lastWorldDay != world.ElapsedDays || _lastWorldWarRev != world.WarRevision || _lastDefcon < 0)
+        var hud = _ctx.HudSnapshot is { Version: > 0 } hs ? hs : null;
+        var day = hud?.ElapsedDays ?? world.ElapsedDays;
+        var warRev = hud?.WarRevision ?? world.WarRevision;
+        if (_lastWorldDay != day || _lastWorldWarRev != warRev || _lastDefcon < 0)
         {
-            _lastWorldDay = world.ElapsedDays;
-            _lastWorldWarRev = world.WarRevision;
-            var defcon = Math.Clamp(DefconSystem.CurrentLevel(world), 1, 5);
-            var tension = Math.Clamp(WorldWar.Tension(world) / 100f, 0f, 1f);
+            _lastWorldDay = day;
+            _lastWorldWarRev = warRev;
+            var defcon = hud is not null ? hud.DefconLevel : Math.Clamp(DefconSystem.CurrentLevel(world), 1, 5);
+            var tension = hud is not null ? hud.WorldTension : Math.Clamp(WorldWar.Tension(world) / 100f, 0f, 1f);
             if (_lastDefcon != defcon || MathF.Abs(_lastTension - tension) > 0.004f)
             {
+                var defconTierChanged = _lastDefcon < 0 ||
+                    (_lastDefcon <= 2 ? 0 : _lastDefcon <= 3 ? 1 : 2) != (defcon <= 2 ? 0 : defcon <= 3 ? 1 : 2);
+                var prevTenInt = (int)MathF.Round(_lastTension * 100f);
+                var tenInt = (int)MathF.Round(tension * 100f);
+                var tenTierChanged = _lastDefcon < 0 ||
+                    (prevTenInt >= 85 ? 0 : prevTenInt >= 75 ? 1 : 2) != (tenInt >= 85 ? 0 : tenInt >= 75 ? 1 : 2);
+                var defconChanged = _lastDefcon != defcon;
                 _lastDefcon = defcon;
                 _lastTension = tension;
-                _defconNumLabel.Text = defcon.ToString(CultureInfo.InvariantCulture);
-                _defconNumLabel.AddThemeColorOverride("font_color",
-                    Ui.Colour(defcon <= 2 ? "shell.state.negative_text" : defcon <= 3 ? "shell.state.warning" : "shell.paper"));
-                foreach (var l in _defconLamps) l.QueueRedraw();
 
-                var tenInt = (int)MathF.Round(tension * 100f);
-                _tensionNumLabel.Text = tenInt.ToString(CultureInfo.InvariantCulture);
-                _tensionNumLabel.AddThemeColorOverride("font_color",
-                    Ui.Colour(tenInt >= 85 ? "shell.state.negative_text" : tenInt >= 75 ? "shell.state.warning" : "shell.paper"));
+                if (defconChanged)
+                {
+                    var dStr = defcon.ToString(CultureInfo.InvariantCulture);
+                    if (_defconNumLabel.Text != dStr) _defconNumLabel.Text = dStr;
+                    if (defconTierChanged)
+                        _defconNumLabel.AddThemeColorOverride("font_color",
+                            Ui.Colour(defcon <= 2 ? "shell.state.negative_text" : defcon <= 3 ? "shell.state.warning" : "shell.paper"));
+                    foreach (var l in _defconLamps) l.QueueRedraw();
+                }
+
+                var tStr = tenInt.ToString(CultureInfo.InvariantCulture);
+                if (_tensionNumLabel.Text != tStr) _tensionNumLabel.Text = tStr;
+                if (tenTierChanged)
+                    _tensionNumLabel.AddThemeColorOverride("font_color",
+                        Ui.Colour(tenInt >= 85 ? "shell.state.negative_text" : tenInt >= 75 ? "shell.state.warning" : "shell.paper"));
                 _tensionBar.QueueRedraw();
             }
         }
@@ -576,20 +588,21 @@ internal sealed class ShellDatePlateView
     }
 
     private void ApplyDateAndClockState(
-        GameDate date, long elapsedHours, int elapsedDays, bool paused, int speed, bool observing)
+        GameDate date, bool paused, int speed, bool observing)
     {
         var lang = Loc.Language;
-        if (_lastDateHour != elapsedHours || !string.Equals(_lastDateLang, lang, StringComparison.Ordinal))
+        var dateKey = (date.Year, date.Month, date.Day, date.Hour);
+        if (_lastDate != dateKey || _lastDateLang != lang)
         {
-            var langChanged = !string.Equals(_lastDateLang, lang, StringComparison.Ordinal);
-            _lastDateHour = elapsedHours;
+            _lastDate = dateKey;
             _lastDateLang = lang;
             _dateLabel.Text = date.Display(withTime: true);
-            if (_weekdayLabel.Visible && (_lastWeekdayDay != elapsedDays || langChanged))
-            {
-                _lastWeekdayDay = elapsedDays;
-                _weekdayLabel.Text = FormatWeekday(date);
-            }
+        }
+        var weekdayKey = (date.Year, date.Month, date.Day, lang);
+        if (_weekdayLabel.Visible && _lastWeekday != weekdayKey)
+        {
+            _lastWeekday = weekdayKey;
+            _weekdayLabel.Text = FormatWeekday(date);
         }
 
         if (_lastPaused != paused || _lastSpeed != speed || _lastObserverMode != observing || _lastStateLang != lang)

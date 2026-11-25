@@ -22,7 +22,7 @@ namespace DealOrForce;
 /// </summary>
 public sealed partial class GlobePresentation
 {
-    private ImmediateMesh _supplyLineMesh;
+    private ArrayMesh _supplyLineMesh;
     private MeshInstance3D _supplyLinePreview;
     private ShaderMaterial _supplyLineMaterial;
     private int _supplyLineFingerprint = int.MinValue;
@@ -31,6 +31,14 @@ public sealed partial class GlobePresentation
     private readonly List<DateLineSeam.Run> _dateLineRuns = new();
     private readonly List<Simulation.Army> _supplyLineArmies = new();
     private readonly Dictionary<int, (float Latitude, float Longitude)> _supplyHubByState = new();
+    private readonly List<Vector3> _supplyRibbonVerts = new();
+    private readonly List<Vector2> _supplyRibbonUvs = new();
+    private readonly List<Color> _supplyRibbonColors = new();
+    private readonly List<int> _supplyRibbonIndices = new();
+    private readonly List<Vector3> _supplyMarkerVerts = new();
+    private readonly List<Vector2> _supplyMarkerUvs = new();
+    private readonly List<Color> _supplyMarkerColors = new();
+    private readonly Godot.Collections.Array _supplySurfaceArrays = new();
 
     private const string SupplyLineShader = @"
 shader_type spatial;
@@ -67,7 +75,8 @@ void fragment() {
         if (_supplyLinePreview is null || !IsInstanceValid(_supplyLinePreview))
         {
             if (_routePreview.GetParent() is not Node3D world) return;
-            _supplyLineMesh = new ImmediateMesh();
+            _supplyLineMesh = new ArrayMesh();
+            _supplySurfaceArrays.Resize((int)Mesh.ArrayType.Max);
             _supplyLineMaterial = new ShaderMaterial { Shader = new Shader { Code = SupplyLineShader } };
             _supplyLineMaterial.SetShaderParameter("quality_tier", CurrentShaderQualityTier());
             _supplyLinePreview = new MeshInstance3D
@@ -104,10 +113,37 @@ void fragment() {
         if (_supplyLineArmies.Count == 0) return;
 
         _supplyHubByState.Clear();
+        _supplyRibbonVerts.Clear();
+        _supplyRibbonUvs.Clear();
+        _supplyRibbonColors.Clear();
+        _supplyRibbonIndices.Clear();
+        _supplyMarkerVerts.Clear();
+        _supplyMarkerUvs.Clear();
+        _supplyMarkerColors.Clear();
         var drewAny = false;
         foreach (var army in _supplyLineArmies)
             drewAny |= AppendSupplyLine(army);
-        _supplyLinePreview.Visible = drewAny;
+        if (_supplyRibbonIndices.Count > 0)
+        {
+            _supplySurfaceArrays[(int)Mesh.ArrayType.Vertex] = _supplyRibbonVerts.ToArray();
+            _supplySurfaceArrays[(int)Mesh.ArrayType.TexUV] = _supplyRibbonUvs.ToArray();
+            _supplySurfaceArrays[(int)Mesh.ArrayType.Color] = _supplyRibbonColors.ToArray();
+            _supplySurfaceArrays[(int)Mesh.ArrayType.Index] = _supplyRibbonIndices.ToArray();
+            _supplyLineMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, _supplySurfaceArrays);
+            _supplySurfaceArrays[(int)Mesh.ArrayType.Index] = default;
+        }
+        if (_supplyMarkerVerts.Count > 0)
+        {
+            _supplySurfaceArrays[(int)Mesh.ArrayType.Vertex] = _supplyMarkerVerts.ToArray();
+            _supplySurfaceArrays[(int)Mesh.ArrayType.TexUV] = _supplyMarkerUvs.ToArray();
+            _supplySurfaceArrays[(int)Mesh.ArrayType.Color] = _supplyMarkerColors.ToArray();
+            _supplyLineMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Lines, _supplySurfaceArrays);
+        }
+        _supplySurfaceArrays[(int)Mesh.ArrayType.Vertex] = default;
+        _supplySurfaceArrays[(int)Mesh.ArrayType.TexUV] = default;
+        _supplySurfaceArrays[(int)Mesh.ArrayType.Color] = default;
+        _supplySurfaceArrays[(int)Mesh.ArrayType.Index] = default;
+        _supplyLinePreview.Visible = drewAny && _supplyLineMesh.GetSurfaceCount() > 0;
     }
 
     private bool AppendSupplyLine(Simulation.Army army)
@@ -135,15 +171,12 @@ void fragment() {
                 longitude + deltaLongitude * t, SurfaceLineRadius));
         }
 
-        // The ribbon, a strip the width of half a supply line. On the flat map a course
-        // over the date line comes out at the other edge; the line breaks there instead
-        // of streaking across the whole map, as a fleet's course does. A piece of one
-        // point is two vertices, which a triangle strip cannot be, so it is left out.
+        // Batch every army's strip into a single indexed Triangles surface (zero per-army draw calls).
         const float halfWidth = 0.0028f;
         CollectDateLineRuns(_supplyLinePoints);
         foreach (var run in _dateLineRuns)
         {
-            _supplyLineMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip);
+            var baseVert = _supplyRibbonVerts.Count;
             var cumulative = 0f;
             var endIndex = run.Start + run.Count - 1;
             for (var index = run.Start; index <= endIndex; index++)
@@ -156,18 +189,27 @@ void fragment() {
                 if (tangent == Vector3.Zero) tangent = Vector3.Right;
                 var normal = _flatMap ? Vector3.Forward : point.Normalized();
                 var side = normal.Cross(tangent).Normalized() * halfWidth;
-                _supplyLineMesh.SurfaceSetColor(colour);
-                _supplyLineMesh.SurfaceSetUV(new Vector2(cumulative, 0f));
-                _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(point + side));
-                _supplyLineMesh.SurfaceSetColor(colour);
-                _supplyLineMesh.SurfaceSetUV(new Vector2(cumulative, 1f));
-                _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(point - side));
+                _supplyRibbonVerts.Add(OnOrderSurface(point + side));
+                _supplyRibbonUvs.Add(new Vector2(cumulative, 0f));
+                _supplyRibbonColors.Add(colour);
+                _supplyRibbonVerts.Add(OnOrderSurface(point - side));
+                _supplyRibbonUvs.Add(new Vector2(cumulative, 1f));
+                _supplyRibbonColors.Add(colour);
+                if (index > run.Start)
+                {
+                    var prev = baseVert + (index - run.Start - 1) * 2;
+                    var curr = prev + 2;
+                    _supplyRibbonIndices.Add(prev);
+                    _supplyRibbonIndices.Add(prev + 1);
+                    _supplyRibbonIndices.Add(curr);
+                    _supplyRibbonIndices.Add(prev + 1);
+                    _supplyRibbonIndices.Add(curr + 1);
+                    _supplyRibbonIndices.Add(curr);
+                }
             }
-            _supplyLineMesh.SurfaceEnd();
         }
 
-        // The hub end gets a crisp diamond + inner cross depot beacon (zero-alloc) so the supply source
-        // reads unmistakably as a logistics hub rather than a cut-off line.
+        // The hub end gets a crisp diamond + inner cross depot beacon batched into the Lines surface.
         var end = _supplyLinePoints[^1];
         var up = _flatMap ? Vector3.Forward : end.Normalized();
         var across = up.Cross(Vector3.Up).LengthSquared() > 0.0001f ? up.Cross(Vector3.Up).Normalized() : Vector3.Right;
@@ -178,20 +220,24 @@ void fragment() {
         var pN = OnOrderSurface(end + along * size);
         var pW = OnOrderSurface(end - across * size);
         var pS = OnOrderSurface(end - along * size);
-        _supplyLineMesh.SurfaceBegin(Mesh.PrimitiveType.LineStrip);
-        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(pE);
-        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(pN);
-        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(pW);
-        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(pS);
-        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(pE);
-        _supplyLineMesh.SurfaceEnd();
-        _supplyLineMesh.SurfaceBegin(Mesh.PrimitiveType.Lines);
-        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(end - across * inner));
-        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(end + across * inner));
-        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(end - along * inner));
-        _supplyLineMesh.SurfaceSetColor(colour); _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(end + along * inner));
-        _supplyLineMesh.SurfaceEnd();
+        AddSupplyLineSegment(pE, pN, colour);
+        AddSupplyLineSegment(pN, pW, colour);
+        AddSupplyLineSegment(pW, pS, colour);
+        AddSupplyLineSegment(pS, pE, colour);
+        AddSupplyLineSegment(OnOrderSurface(end - across * inner), OnOrderSurface(end + across * inner), colour);
+        AddSupplyLineSegment(OnOrderSurface(end - along * inner), OnOrderSurface(end + along * inner), colour);
         return true;
+    }
+
+    private void AddSupplyLineSegment(Vector3 a, Vector3 b, Color colour)
+    {
+        var uv = new Vector2(0f, 0.5f);
+        _supplyMarkerVerts.Add(a);
+        _supplyMarkerUvs.Add(uv);
+        _supplyMarkerColors.Add(colour);
+        _supplyMarkerVerts.Add(b);
+        _supplyMarkerUvs.Add(uv);
+        _supplyMarkerColors.Add(colour);
     }
 
     /// <summary>

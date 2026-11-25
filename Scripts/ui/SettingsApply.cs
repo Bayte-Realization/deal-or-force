@@ -281,7 +281,7 @@ public partial class DealOrForceGame
 
             case "window_mode":
             case "window_size":
-                ApplyWindowMode(SettingsCatalog.Chosen("window_mode"));
+                if (!IsMobilePlatform) ApplyWindowMode(SettingsCatalog.Chosen("window_mode"));
                 break;
 
             case "graphics_quality":
@@ -298,19 +298,20 @@ public partial class DealOrForceGame
                 break;
 
             case "vsync":
-                DisplayServer.WindowSetVsyncMode(SettingsCatalog.Flag("vsync")
-                    ? DisplayServer.VSyncMode.Enabled
-                    : DisplayServer.VSyncMode.Disabled);
+                if (!IsMobilePlatform)
+                    DisplayServer.WindowSetVsyncMode(SettingsCatalog.Flag("vsync")
+                        ? DisplayServer.VSyncMode.Enabled
+                        : DisplayServer.VSyncMode.Disabled);
                 break;
 
             // Only when the player changes it: the start-up sweep would put "automatic" back
             // over a renderer the start-up guard stepped down to on its own.
             case "renderer":
-                if (!_applyingEverySetting) GraphicsRenderer.Choose(this, SettingsCatalog.Chosen("renderer"));
+                if (!_applyingEverySetting && !IsMobilePlatform) GraphicsRenderer.Choose(this, SettingsCatalog.Chosen("renderer"));
                 break;
 
             case "max_fps":
-                Engine.MaxFps = Math.Max(0, Whole("max_fps"));
+                Engine.MaxFps = ResolveEffectiveMaxFps(Whole("max_fps"));
                 break;
 
             case "background_fps":
@@ -385,12 +386,26 @@ public partial class DealOrForceGame
     /// which has no campaign behind it, applies it through the same code rather than a
     /// second copy that drifts.
     /// </summary>
+    private static bool IsMobilePlatform =>
+        Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
+        OS.HasFeature("mobile") || OS.HasFeature("android") || OS.HasFeature("ios") ||
+        OS.GetName() is "Android" or "iOS";
+
+    internal static int ResolveEffectiveMaxFps(int configuredMaxFps)
+    {
+        var clamped = Math.Max(0, configuredMaxFps);
+        if (!IsMobilePlatform) return clamped;
+        // Respect AndroidBootEntry's 60 FPS thermal cap unless a lower explicit mobile cap is chosen.
+        return clamped <= 0 || clamped > 60 ? 60 : clamped;
+    }
+
     /// <summary>
     /// The windowed size, "2560x1440", kept inside the screen the window is on and centred
     /// there. A size bigger than the screen is the screen's usable area.
     /// </summary>
     internal static void ApplyWindowSize(string size)
     {
+        if (IsMobilePlatform) return;
         var parts = (size ?? "").ToLowerInvariant().Split('x');
         if (parts.Length != 2 ||
             !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var width) ||
@@ -406,6 +421,7 @@ public partial class DealOrForceGame
 
     internal static void ApplyWindowMode(string mode)
     {
+        if (IsMobilePlatform) return;
         switch (mode.ToLowerInvariant())
         {
             case "fullscreen":

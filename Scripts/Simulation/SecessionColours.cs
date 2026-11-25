@@ -71,33 +71,32 @@ public static class SecessionColours
     public static string Choose(Campaign c, Nation parent, string tag, IEnumerable<int> regions, string preferred = "")
     {
         var near = CollectNearbyColours(c, parent, tag, regions, excludeParent: false);
-        float Separation(int colour) => near.Length == 0 ? 1f : near.Min(other => VisualSeparation(colour, other));
+        var nearbyHsv = new (float H, float S, float V)[near.Length];
+        for (var i = 0; i < near.Length; i++) nearbyHsv[i] = RgbToHsv(near[i]);
+        float Separation(int colour)
+        {
+            if (near.Length == 0) return 1f;
+            var hsv = RgbToHsv(colour);
+            var closest = float.PositiveInfinity;
+            for (var i = 0; i < near.Length; i++)
+            {
+                var separation = VisualSeparation(colour, near[i], hsv, nearbyHsv[i]);
+                if (separation == 0f) return 0f;
+                if (separation < closest) closest = separation;
+            }
+            return closest;
+        }
         if (Parse(preferred) is { } own && !IsNeutralFallback(own) && Separation(own) >= 0.18f)
             return $"#{own:X6}";
         var palette = (c.Defines.SecessionColourPalette ?? Array.Empty<string>()).Select(Parse)
             .Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToArray();
         uint hash = unchecked((uint)c.Seed ^ 2166136261u);
         foreach (var ch in (parent?.Tag ?? "") + "/" + (tag ?? "")) hash = unchecked((hash ^ ch) * 16777619u);
-        if (palette.Length > 0)
-        {
-            var bestConfigured = palette.Max(Separation);
-            if (bestConfigured >= 0.14f)
-            {
-                var floor = MathF.Max(0.14f, bestConfigured * 0.72f);
-                var viable = palette.Where(x => Separation(x) >= floor).ToArray();
-                if (viable.Length > 0) return $"#{viable[hash % (uint)viable.Length]:X6}";
-            }
-        }
+        if (TryPalette(palette, out var configuredColour)) return $"#{configuredColour:X6}";
         // Merge the full 36-colour built-in palette whenever the supplied list is empty/malformed
         // or all of its shades are already saturated by neighboring/sibling states.
         var merged = palette.Length >= DefaultPaletteInts.Length ? palette : MergedPalette(c.Defines.SecessionColourPalette);
-        var bestMerged = merged.Max(Separation);
-        if (bestMerged >= 0.14f)
-        {
-            var floor = MathF.Max(0.14f, bestMerged * 0.72f);
-            var viable = merged.Where(x => Separation(x) >= floor).ToArray();
-            if (viable.Length > 0) return $"#{viable[hash % (uint)viable.Length]:X6}";
-        }
+        if (!ReferenceEquals(merged, palette) && TryPalette(merged, out var mergedColour)) return $"#{mergedColour:X6}";
         // Deterministic golden-angle hue-rotation fallback when palette shades are saturated by many splinters.
         var bestColour = merged[0];
         var bestSep = Separation(bestColour);
@@ -113,6 +112,36 @@ public static class SecessionColours
             if (sep >= 0.22f) return $"#{candidate:X6}";
         }
         return $"#{bestColour:X6}";
+
+        bool TryPalette(int[] colours, out int colour)
+        {
+            colour = 0;
+            Span<float> separation = colours.Length <= 128 ? stackalloc float[colours.Length] : new float[colours.Length];
+            var best = 0f;
+            for (var i = 0; i < colours.Length; i++)
+            {
+                separation[i] = Separation(colours[i]);
+                if (separation[i] > best) best = separation[i];
+            }
+            if (best < 0.14f) return false;
+            var floor = MathF.Max(0.14f, best * 0.72f);
+            // Count first so the seed still picks the same shade in palette order.
+            var eligible = 0;
+            for (var i = 0; i < separation.Length; i++)
+                if (separation[i] >= floor) eligible++;
+            var chosen = hash % (uint)eligible;
+            for (var i = 0; i < separation.Length; i++)
+            {
+                if (separation[i] < floor) continue;
+                if (chosen == 0)
+                {
+                    colour = colours[i];
+                    return true;
+                }
+                chosen--;
+            }
+            return false;
+        }
     }
 
     internal static bool ClashesWithNeighbors(Campaign c, Nation nation, IEnumerable<int> regions = null)
@@ -214,11 +243,13 @@ public static class SecessionColours
         return nearList.ToArray();
     }
 
-    internal static float VisualSeparation(int a, int b)
+    internal static float VisualSeparation(int a, int b) => VisualSeparation(a, b, RgbToHsv(a), RgbToHsv(b));
+
+    private static float VisualSeparation(int a, int b, (float H, float S, float V) first, (float H, float S, float V) second)
     {
         var dist = MathF.Sqrt(MathF.Max(0f, Distance(a, b)));
-        var (h1, s1, v1) = RgbToHsv(a);
-        var (h2, s2, v2) = RgbToHsv(b);
+        var (h1, s1, v1) = first;
+        var (h2, s2, v2) = second;
         var dv = MathF.Abs(v1 - v2);
         if (MathF.Max(s1, s2) >= 0.18f && MathF.Min(s1, s2) >= 0.18f)
         {

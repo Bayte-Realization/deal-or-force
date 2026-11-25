@@ -54,6 +54,10 @@ public sealed partial class AltHotkeyOverlay : Control
         _badgeStyle.SetCornerRadiusAll(3);
     }
 
+    private ulong _lastRefreshMsec;
+    private readonly Dictionary<string, Rect2> _lastRects = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _lastCombos = new(StringComparer.Ordinal);
+
     public void SetShowing(bool show)
     {
         if (!show)
@@ -62,26 +66,49 @@ public sealed partial class AltHotkeyOverlay : Control
             _showing = false;
             Visible = false;
             foreach (var item in _pool.Values)
-                item.Card.Visible = false;
+                if (item.Card.Visible) item.Card.Visible = false;
             return;
         }
 
-        _showing = true;
-        Visible = true;
-        MoveToFront();
-
-        foreach (var item in _pool.Values)
-            item.Card.Visible = false;
+        var firstShow = !_showing;
+        if (!firstShow)
+        {
+            var nowMsec = Time.GetTicksMsec();
+            if (nowMsec - _lastRefreshMsec < 180) return;
+            _lastRefreshMsec = nowMsec;
+        }
+        else
+        {
+            _lastRefreshMsec = Time.GetTicksMsec();
+            _showing = true;
+            Visible = true;
+            MoveToFront();
+        }
 
         foreach (var entry in HotkeyCatalog.All)
         {
-            if (string.IsNullOrEmpty(entry.HudTarget) || !entry.HasVisibleButton) continue;
-            if (!_targets.TryGetValue(entry.HudTarget, out var getter)) continue;
+            if (string.IsNullOrEmpty(entry.HudTarget) || !entry.HasVisibleButton ||
+                !_targets.TryGetValue(entry.HudTarget, out var getter))
+            {
+                if (_pool.TryGetValue(entry.Id, out var hiddenBadge) && hiddenBadge.Card.Visible)
+                    hiddenBadge.Card.Visible = false;
+                continue;
+            }
             var target = getter?.Invoke();
-            if (target is null || !GodotObject.IsInstanceValid(target) || !target.IsVisibleInTree()) continue;
+            if (target is null || !GodotObject.IsInstanceValid(target) || !target.IsVisibleInTree())
+            {
+                if (_pool.TryGetValue(entry.Id, out var hiddenBadge) && hiddenBadge.Card.Visible)
+                    hiddenBadge.Card.Visible = false;
+                continue;
+            }
 
             var rect = target.GetGlobalRect();
-            if (rect.Size.X < 8f || rect.Size.Y < 8f) continue;
+            if (rect.Size.X < 8f || rect.Size.Y < 8f)
+            {
+                if (_pool.TryGetValue(entry.Id, out var hiddenBadge) && hiddenBadge.Card.Visible)
+                    hiddenBadge.Card.Visible = false;
+                continue;
+            }
 
             if (!_pool.TryGetValue(entry.Id, out var badge))
             {
@@ -105,12 +132,21 @@ public sealed partial class AltHotkeyOverlay : Control
                 _pool[entry.Id] = badge;
             }
 
-            badge.Label.Text = entry.DisplayCombo;
-            badge.Card.Visible = true;
-            var size = badge.Card.GetCombinedMinimumSize();
-            badge.Card.Position = new Vector2(
-                MathF.Round(rect.End.X - size.X - 2f),
-                MathF.Round(rect.Position.Y + 2f));
+            if (!_lastCombos.TryGetValue(entry.Id, out var prevCombo) || !string.Equals(prevCombo, entry.DisplayCombo, StringComparison.Ordinal))
+            {
+                _lastCombos[entry.Id] = entry.DisplayCombo;
+                badge.Label.Text = entry.DisplayCombo;
+            }
+            if (!badge.Card.Visible) badge.Card.Visible = true;
+            if (firstShow || !_lastRects.TryGetValue(entry.Id, out var prevRect) || prevRect != rect)
+            {
+                _lastRects[entry.Id] = rect;
+                var size = badge.Card.GetCombinedMinimumSize();
+                var targetPos = new Vector2(
+                    MathF.Round(rect.End.X - size.X - 2f),
+                    MathF.Round(rect.Position.Y + 2f));
+                if (badge.Card.Position != targetPos) badge.Card.Position = targetPos;
+            }
         }
     }
 }

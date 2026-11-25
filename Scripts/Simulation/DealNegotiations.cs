@@ -56,7 +56,7 @@ public static class DealNegotiations
 
     public static Ultimatum.Side Copy(Ultimatum.Side side) => new()
     {
-        Regions = (side?.Regions ?? Array.Empty<int>()).Distinct().OrderBy(id => id).ToArray(),
+        Regions = side?.Regions is { Length: > 0 } regions ? regions.Distinct().OrderBy(id => id).ToArray() : Array.Empty<int>(),
         Cash = side?.Cash ?? 0, ReleaseRegions = side?.ReleaseRegions ?? false,
         LiftEmbargo = side?.LiftEmbargo ?? false, NonAggression = side?.NonAggression ?? false,
         TradeAgreement = side?.TradeAgreement ?? false,
@@ -75,8 +75,8 @@ public static class DealNegotiations
         Trade = TradeTerms.Copy(offer.Trade),
         ChokepointTransit = offer.ChokepointTransit,
         CeasefireMediation = offer.CeasefireMediation,
-        FromProvinces = (offer.FromProvinces ?? Array.Empty<int>()).ToArray(),
-        ToProvinces = (offer.ToProvinces ?? Array.Empty<int>()).ToArray()
+        FromProvinces = offer.FromProvinces is { Length: > 0 } fromProvinces ? fromProvinces.ToArray() : Array.Empty<int>(),
+        ToProvinces = offer.ToProvinces is { Length: > 0 } toProvinces ? toProvinces.ToArray() : Array.Empty<int>()
     };
 
     public static Ultimatum.DealOutcome Submit(Campaign c, Nation from, Nation to,

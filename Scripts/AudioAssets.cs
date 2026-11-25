@@ -8,9 +8,21 @@ namespace DealOrForce;
 /// A modder does not need the Godot editor just to add an MP3, Ogg or WAV file.</summary>
 internal static class AudioAssets
 {
-    private static string Loose(string path) => string.IsNullOrWhiteSpace(path) ? "" :
-        path.StartsWith("res://", StringComparison.Ordinal) || path.StartsWith("user://", StringComparison.Ordinal)
-            ? ProjectSettings.GlobalizePath(path) : path;
+    private static string Loose(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return "";
+        if (!path.StartsWith("res://", StringComparison.Ordinal) && !path.StartsWith("user://", StringComparison.Ordinal))
+            return path;
+        var globalized = ProjectSettings.GlobalizePath(path);
+        if (File.Exists(globalized)) return globalized;
+        // Outside the editor, `res://` resolves inside the pack while loose package audio sits under `game/`.
+        if (path.StartsWith("res://game/", StringComparison.Ordinal))
+        {
+            var dataFile = Simulation.GameDataLoader.FindDataFile(path["res://game/".Length..].Split('/', StringSplitOptions.RemoveEmptyEntries));
+            if (!string.IsNullOrEmpty(dataFile)) return dataFile;
+        }
+        return globalized;
+    }
 
     internal static bool Exists(string path) => !string.IsNullOrWhiteSpace(path) &&
         (File.Exists(Loose(path)) || ResourceLoader.Exists(path));

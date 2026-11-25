@@ -77,5 +77,24 @@ static class DynamicAllianceTests
             Check((CampaignDiplomacy.Peek(c, player.Id, partner.Id)?.Opinion ?? 0f) <= worstOpinion + 0.0001f,
                 "it opens on the neighbour the player is on worst terms with");
         }
+
+        c.Defines.AiGreatPowers = 1;
+        c.Armies.Clear();
+        a.Gdp = b.Gdp = 1_000_000f;
+        var firstById = a.Id < b.Id ? a : b;
+        var other = a.Id < b.Id ? b : a;
+        c.Armies.Add(new Army { NationId = firstById.Id, Divisions = 20f });
+        c.Armies.Add(new Army { NationId = other.Id, Divisions = 20f });
+        Day(320);
+        Check(AllianceSystem.GreatPowers(c).SetEquals(new[] { firstById.Id }),
+            "equal live strength uses country id to resolve a tie at the ranking cutoff");
+        c.Armies.Add(new Army { NationId = other.Id, Divisions = 30f });
+        Check(AllianceSystem.GreatPowers(c).SetEquals(new[] { firstById.Id }),
+            "the first great-power ranking of the day remains the one other systems read");
+        Day(321);
+        var expected = c.Nations.Where(n => n.Population > 0)
+            .OrderByDescending(n => AiStatecraft.StrengthOf(c, n)).ThenBy(n => n.Id).First();
+        Check(expected.Id == other.Id && AllianceSystem.GreatPowers(c).SetEquals(new[] { expected.Id }),
+            "the next day's ranking uses the same strength as the live per-country calculation");
     }
 }

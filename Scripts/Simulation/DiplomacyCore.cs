@@ -16,10 +16,14 @@ public enum DiplomaticStance
 
 public sealed partial class DiplomaticRelation
 {
+    private static int _allianceStanceVersion;
     private static int _protectorMutationVersion;
     private static int _treatyMutationVersion;
+    private static int _routeAccessMutationVersion;
+    internal static int AllianceStanceVersion => System.Threading.Volatile.Read(ref _allianceStanceVersion);
     internal static int ProtectorMutationVersion => System.Threading.Volatile.Read(ref _protectorMutationVersion);
     internal static int TreatyMutationVersion => System.Threading.Volatile.Read(ref _treatyMutationVersion);
+    internal static int RouteAccessMutationVersion => System.Threading.Volatile.Read(ref _routeAccessMutationVersion);
 
     private DiplomaticStance _stance;
     private bool _tradeAgreement;
@@ -37,9 +41,12 @@ public sealed partial class DiplomaticRelation
         {
             if (value == _stance) return;
             var changedAlliance = value == DiplomaticStance.Allied || _stance == DiplomaticStance.Allied;
+            var changedHostility = value == DiplomaticStance.AtWar || _stance == DiplomaticStance.AtWar;
             _stance = value;
+            if (changedHostility) System.Threading.Interlocked.Increment(ref _routeAccessMutationVersion);
             if (changedAlliance)
             {
+                System.Threading.Interlocked.Increment(ref _allianceStanceVersion);
                 System.Threading.Interlocked.Increment(ref _protectorMutationVersion);
                 System.Threading.Interlocked.Increment(ref _treatyMutationVersion);
             }

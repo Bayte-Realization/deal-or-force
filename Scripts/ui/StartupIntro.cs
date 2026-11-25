@@ -123,7 +123,9 @@ public partial class StartupIntro : CanvasLayer
     {
         _warmupStarted = true;
         var paths = new List<string> { "res://Scenes/Main.tscn" };
-        if (!SettingsCatalog.Flag("loading_without_ai_art"))
+        var isMobile = Platform.PlatformProfile.Current?.IsMobile == true ||
+                       OS.HasFeature("mobile") || OS.HasFeature("android") || OS.HasFeature("ios");
+        if (!isMobile && !SettingsCatalog.Flag("loading_without_ai_art"))
             paths.AddRange(new[] { "loading_war_room", "loading_negotiation_hall", "loading_port_dusk", "loading_winter_front" }
                 .Select(name => SpriteCatalog.TextureOf(name, "res://game/gfx/loading/" + name + ".jpg")));
         foreach (var path in paths.Distinct(StringComparer.Ordinal))
@@ -134,6 +136,9 @@ public partial class StartupIntro : CanvasLayer
             else GD.PushWarning("Optional startup warmup was not started: " + path + " (" + result + ")");
         }
     }
+
+    /// <summary>Clears preloaded intro textures/scenes once the main menu tears down.</summary>
+    public static void ReleaseWarmResources() => WarmResources.Clear();
 
     private void PollWarmup(double delta)
     {

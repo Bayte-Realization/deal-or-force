@@ -135,7 +135,7 @@ public static partial class ScriptedEffects
             if (!IsKnown(property.Name))
             {
                 var suggestion = SuggestClosestKey(property.Name,
-                    Fields.Keys.Concat(new[] { "grand_project_progress", "unlock_feature", "restrict_feature", "add_modifier", "remove_modifier", "income_penalty" }));
+                    Fields.Keys.Concat(new[] { "income_share", "gdp_share", "grand_project_progress", "unlock_feature", "restrict_feature", "add_modifier", "remove_modifier", "income_penalty" }));
                 var hint = string.IsNullOrEmpty(suggestion) ? "" : $" Did you mean '{suggestion}'?";
                 errors?.Add($"{context}: unknown effect key '{property.Name}'.{hint} Known keys: " +
                             string.Join(", ", Vocabulary.Select(item => item.Key)));
@@ -165,6 +165,18 @@ public static partial class ScriptedEffects
             if (FeatureEffect(entry.Key, out var feature))
             {
                 lines.Add(Loc.Format(entry.Value >= .5f ? "Enable mechanic: {0}" : "Disable mechanic: {0}", feature));
+                continue;
+            }
+            if (IsIncomeShareKey(entry.Key))
+            {
+                lines.Add(Loc.Format("Treasury: {0}% annual income",
+                    (entry.Value * 100f).ToString("+0.#;-0.#;0", CultureInfo.CurrentCulture)));
+                continue;
+            }
+            if (IsGdpShareKey(entry.Key))
+            {
+                lines.Add(Loc.Format("Treasury: {0}% GDP",
+                    (entry.Value * 100f).ToString("+0.#;-0.#;0", CultureInfo.CurrentCulture)));
                 continue;
             }
             if (IsGrandProjectProgressKey(entry.Key))
@@ -274,6 +286,18 @@ public static partial class ScriptedEffects
                 lines.Add(Loc.Format(entry.Value >= .5f ? "Enable mechanic: {0}" : "Disable mechanic: {0}", feature));
                 continue;
             }
+            if (IsIncomeShareKey(entry.Key))
+            {
+                lines.Add(Loc.Format("Treasury: {0}% annual income",
+                    (entry.Value * 100f).ToString("+0.#;-0.#;0", CultureInfo.CurrentCulture)));
+                continue;
+            }
+            if (IsGdpShareKey(entry.Key))
+            {
+                lines.Add(Loc.Format("Treasury: {0}% GDP",
+                    (entry.Value * 100f).ToString("+0.#;-0.#;0", CultureInfo.CurrentCulture)));
+                continue;
+            }
             if (IsGrandProjectProgressKey(entry.Key))
             {
                 lines.Add(Loc.Format("Grand project progress: {0} days",
@@ -368,7 +392,7 @@ public static partial class ScriptedEffects
         ["tax_rate"] = "Tax rate", ["military_spending"] = "Military spending",
         ["welfare_spending"] = "Welfare spending", ["education_spending"] = "Education spending",
         ["market_access"] = "Market access", ["population"] = "Population",
-        ["notoriety"] = "Notoriety", ["union_cohesion"] = "Union cohesion",
+        ["notoriety"] = "Notoriety", ["prestige"] = "Prestige", ["union_cohesion"] = "Union cohesion",
         ["imperial_overstretch"] = "Imperial overstretch",
         ["nuclear_posture"] = "Nuclear posture",
         ["state.standard_of_living"] = "Standard of living in every region",

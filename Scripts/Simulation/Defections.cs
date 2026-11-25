@@ -93,9 +93,8 @@ public static class Defections
             // or a reunification war, only near the enemy, and only while the challenger is ahead
             // or the regime is strained.
             var hollow = !exhausted && nation.Stability < campaign.Defines.HollowArmyStability;
-            var strainedForReunification = !exhausted && !hollow &&
-                (nation.Stability < 0.62f || nation.WarSupport < 0.58f ||
-                 ModifierSystem.Has(nation, "mainland_regime_shock"));
+            var strainedForReunification = !exhausted && !army.InBattle &&
+                nation.Stability < 0.30f && nation.WarSupport < 0.35f && army.Cohesion < 0.55f;
             if (!exhausted && !hollow && !strainedForReunification) continue;
 
             StrategicWar chosen = null;
@@ -124,7 +123,11 @@ public static class Defections
                 if (chosen is not null) break;
             }
             if (chosen is null || enemy is null) continue;
-            if (strainedForReunification && !reunification) continue;
+            if (!exhausted)
+            {
+                if (civil && !hollow) continue;
+                if (reunification && !strainedForReunification) continue;
+            }
 
             var ownGround = topology.ProvinceToNation[army.ProvinceId] == nation.MapIndex;
             var enemyGround = topology.ProvinceToNation[army.ProvinceId] == enemy.MapIndex;
@@ -161,20 +164,20 @@ public static class Defections
                 }
                 else
                 {
-                    // Reunification frontline defection: requires the liberator to have actually
-                    // established a mainland bridgehead in this war first.
+                    // Reunification frontline defection: requires a mainland bridgehead and a
+                    // deeply destabilized rival whose war effort and unit cohesion are crumbling.
                     var shocked = ModifierSystem.Has(nation, "mainland_regime_shock");
                     if (!MainlandReclamation.HasBridgehead(enemy, chosen.Id) && !shocked) continue;
-                    if (rebelScore < -10f && !shocked) continue;
+                    if (rebelScore < 10f) continue;
                     var underground = ModifierSystem.Has(enemy, "twn_mainland_underground_spirit") ? 1.35f : 1f;
                     var momentum = ModifierSystem.Has(enemy, "mainland_return_momentum") ? 1.25f : 1f;
                     var strain = M.Clamp(
-                        (shocked ? 0.40f : 0.15f) +
-                        M.Clamp01((0.65f - nation.Stability) / 0.45f) * 0.45f +
-                        M.Clamp01((0.60f - nation.WarSupport) / 0.45f) * 0.35f +
-                        M.Clamp01((rebelScore + 10f) / 40f) * 0.30f,
+                        (shocked ? 0.25f : 0.15f) +
+                        M.Clamp01((0.35f - nation.Stability) / 0.25f) * 0.45f +
+                        M.Clamp01((0.40f - nation.WarSupport) / 0.25f) * 0.35f +
+                        M.Clamp01((rebelScore - 10f) / 40f) * 0.30f,
                         0.15f, 1.35f);
-                    odds = MathF.Min(0.26f, odds * strain * underground * momentum);
+                    odds = MathF.Min(0.08f, odds * strain * underground * momentum);
                     if (nation.IsHuman) odds *= 0.50f;
                 }
             }

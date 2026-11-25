@@ -1,10 +1,11 @@
 {
   // Presentation only, not AI strength or battle balance. Nonnegative weights are
-  // normalized to 100%; an empty mix falls back to 40/15/30/15.
+  // normalized to 100%; an empty mix falls back to 42/14/12/17/15.
   "metrics": {
-    "rankings.weight.economy": 40,
-    "rankings.weight.population": 15,
-    "rankings.weight.field_power": 30,
-    "rankings.weight.technology": 15
+    "rankings.weight.economy": 42,
+    "rankings.weight.population": 14,
+    "rankings.weight.field_power": 12,
+    "rankings.weight.technology": 17,
+    "rankings.weight.prestige": 15
   }
 }

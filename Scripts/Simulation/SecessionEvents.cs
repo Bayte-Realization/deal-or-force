@@ -652,7 +652,15 @@ public static class SecessionEvents
     internal static SecessionReport Uprising(Campaign campaign, Nation parent, IReadOnlyList<ScenarioState> regions,
         Action<Nation> shape, bool countsAsOutbreak = true)
     {
-        if (campaign?.ProvinceMap is null || parent is null || regions is null || regions.Count == 0) return null;
+        SecessionReport report = null;
+        foreach (var _ in UprisingStages(campaign, parent, regions, r => report = r, shape, countsAsOutbreak)) { }
+        return report;
+    }
+
+    internal static IEnumerable<int> UprisingStages(Campaign campaign, Nation parent, IReadOnlyList<ScenarioState> regions,
+        Action<SecessionReport> onDone, Action<Nation> shape, bool countsAsOutbreak = true)
+    {
+        if (campaign?.ProvinceMap is null || parent is null || regions is null || regions.Count == 0) yield break;
         var leaving = new List<SecessionPiece>(regions.Count);
         long people = 0;
         for (var i = 0; i < regions.Count; i++)
@@ -664,10 +672,12 @@ public static class SecessionEvents
             });
             people += state.Population;
         }
-        var report = Secede(campaign, parent, leaving, "", people, shape, fight: true,
-            countsAsOutbreak: countsAsOutbreak);
-        if (report is not null) Recent.Add(report);
-        return report;
+        foreach (var _ in SecedeStages(campaign, parent, leaving, "", people, report =>
+                 {
+                     Recent.Add(report);
+                     onDone?.Invoke(report);
+                 }, shape, fight: true, countsAsOutbreak: countsAsOutbreak))
+            yield return 0;
     }
 
     /// <summary>

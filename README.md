@@ -17,12 +17,12 @@ are being closed one at a time, peace first. Version **0.8.5.3** (EntertAlpha).
 
 | | |
 |---|---|
-| ![The campaign map from afar](docs/screenshots/0.8.3.2/map-globe.jpg) | ![The country picker](docs/screenshots/0.8.3.2/country-picker.jpg) |
-| ![The flat map](docs/screenshots/0.8.3.2/map-flat.jpg) | ![Country dossier with ruler portrait and news dispatch](docs/screenshots/0.8.3.2/campaign.jpg) |
-| ![Visual region dossier with terrain and telemetry gauges](docs/screenshots/0.8.3.2/region-dossier.jpg) | ![Regional demographics, employment and stacked identity bars](docs/screenshots/0.8.3.2/region-population.jpg) |
-| ![Global War Ledger with frontlines and casualties](docs/screenshots/0.8.3.2/war-ledger.jpg) | ![Live campaign Pause Desk with ornate ruler portrait](docs/screenshots/0.8.3.2/pause-desk.jpg) |
-
-![Long-Range Forces panel opened directly from the left navigation rail](docs/screenshots/0.8.3.2/long-range-forces.jpg)
+| ![The 0.8.5.3 campaign globe with relief and NewShell](docs/screenshots/0.8.5.3/map-globe.jpg) | ![The country picker](docs/screenshots/0.8.5.3/country-picker.jpg) |
+| ![The flat map over Europe in 0.8.5.3](docs/screenshots/0.8.5.3/map-flat.jpg) | ![Ukraine and Crimea close-up with relief, borders and coastal water](docs/screenshots/0.8.5.3/frontlines-relief.jpg) |
+| ![Relief map style across Eurasia](docs/screenshots/0.8.5.3/map-globe-relief.jpg) | ![Tactical zoom with occupation stripes and naval patrols](docs/screenshots/0.8.5.3/tactical-zoom.jpg) |
+| ![Country rankings ledger with Prestige weight](docs/screenshots/0.8.5.3/country-rankings.jpg) | ![Visual region dossier with terrain and telemetry gauges](docs/screenshots/0.8.3.2/region-dossier.jpg) |
+| ![Regional demographics, employment and stacked identity bars](docs/screenshots/0.8.3.2/region-population.jpg) | ![Global War Ledger with frontlines and casualties](docs/screenshots/0.8.3.2/war-ledger.jpg) |
+| ![Live campaign Pause Desk with ornate ruler portrait](docs/screenshots/0.8.3.2/pause-desk.jpg) | ![Long-Range Forces panel opened directly from the left navigation rail](docs/screenshots/0.8.3.2/long-range-forces.jpg) |
 
 ## Play it
 
@@ -43,19 +43,47 @@ Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 Built on **Godot 4.8 Beta 3 .NET** and **.NET 10**. The full history of the 0.8 series is in
 [CHANGELOG 0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md).
 
-- **The day is calculated on its own thread.** Without mods and without multiplayer, the map and
-  panels keep drawing while the next day is worked out.
-- **An early Android build.** The same simulation with touch controls for the camera and orders.
-  It is a technical preview that you install by hand; the interface is not yet scaled for phones.
-- **Terrain relief on PC.** Armies, cities, front lines, battles and labels sit at the height of
-  the ground under them.
-- **Clearer dossiers.** The country dossier has a Capital row that moves the camera there and a
-  domestic stability outlook that opens into its factors. The economy workspace warns when stacked
-  taxes push collection down. Splinter states and civil-war sides are drawn from 36 distinct colours.
-- **New mechanics, not yet balanced by measurement.** Megaprojects that allies can co-fund, world
-  situations, national ambitions and cabinet directives, switchable production methods, diseases
-  and disasters, more doctrines, a reunification mechanic for divided nations across the Taiwan
-  Strait, and the Mod Content Studio for building mod content through forms.
+- **The day is calculated on its own thread & Release Server GC.** Without runtime-code mods and
+  without multiplayer, the map and panels keep drawing from a lock-free `CampaignHudSnapshot` while
+  the next day is worked out, draining heavy HUD views within a `1.5 ms` frame budget (`1.25 ms` on
+  mobile). Exported PC builds enable `System.GC.Server`, `System.GC.Concurrent`, `Optimize`, and
+  `TieredPGO` in Release too, saves prepare and commit off the main thread (`RequestYield`), and
+  pure-data mods no longer disable background simulation.
+- **Zero-stutter map & zero-degradation smooth panning.** Moving the camera keeps full shader
+  resolution and 3D terrain relief without dropping detail mid-motion. Dynamic map overlays
+  (trade lanes, battle arrows, fleet routes, front/order ribbons, supply lines, strait crossings)
+  moved from per-frame `ImmediateMesh` rebuilds to dirty-versioned indexed `ArrayMesh` surfaces,
+  `RBush` R-tree spatial culling handles 7,000+ cities, rivers and labels, `CloudShader` cuts
+  fragment octaves from 16 to 9 per pixel, GPU textures update in place across staggered frames,
+  and **Spin** (`F6`) returns to the map bar.
+- **Multi-decade & late-game scaling on .NET 10.** An active-wars index skips finished wars,
+  tiny/duplicate population cohorts coalesce deterministically, expired opinions/memories/history
+  prune over decades, late-game organization life, identity caching, corridors, and long-range
+  repositioning shed O(M³) scans and allocations, and pure-managed MIT/Apache-2.0 packages
+  (`RBush`, `DotNext`, `ZeroAlloc.Collections`, `SimdLinq`, `Equativ.RoaringBitmaps`,
+  `Ben.Demystifier`, `ZLinq`, `System.IO.Hashing`, `BitFaster.Caching`, `RecyclableMemoryStream`,
+  `CommunityToolkit.HighPerformance`, `System.Numerics.Tensors`, `K4os.Compression.LZ4`) cut
+  allocations. In the 10-year `SimBench` run (seed 42), Year-10 step time dropped from **97.3 to
+  78.8 ms/day**, worst Year-10 spike from **331 to 156 ms**, Year-10 Gen0 collections by **61.5%**
+  (13 → 5), and Day-365 allocation by **35.1%** (4145 → 2690 kB/day); on a real Day 13,358 save,
+  `organization life` fell from **5.2% to 1.7–1.8%** (`185 → 59 ms` pre-throttle) and daily
+  allocations fell from **5,810 to 5,375 kB/day**.
+- **Android build (Galaxy S21 / Mali-G78 fix & diagnostics).** The same simulation with touch
+  controls and scaled close targets (`gl_compatibility` GLES3 default avoiding Mali-G78 Vulkan
+  crashes, `HeapHardLimitPercent=40`, compact texture caps with largest `.ctex` at `2.55 MB`,
+  loading-texture release on menu exit, bounded extraction under Mono SGen's 8 KB LOS threshold,
+  zero-PNG 3-tier LZ4 fast boot cache, and synchronous `boot_trace.txt` / `last_crash.txt` logs in
+  `Android/data/com.bayterealization.dealorforce/files/logs/`). Still a technical preview you
+  install by hand; phone-specific UI scaling remains partial.
+- **Terrain relief, Country Picker & clearer dossiers.** Armies, cities, front lines, battles and
+  labels sit at ground height. The Country Picker adds a 16/24-row scrollable list and an
+  unclipped 6-stat dossier with Prestige; Display settings show the live GPU/renderer and
+  troubleshooting guidance. The country dossier has a clickable Capital row and domestic
+  stability outlook, Economy warns on tax efficiency, and splinter states draw from 36 colours.
+- **New mechanics, not yet balanced by measurement.** Prestige (0–1000) in rankings and
+  diplomacy, GDP-scaled event costs, systemic divided-nation reunification, megaprojects that
+  allies can co-fund, world situations, national ambitions and cabinet directives, switchable
+  production methods, diseases and disasters, more doctrines, and the Mod Content Studio.
 - **AI staff and diplomatic inbox (0.8.3.5).** Hand any of 11 areas of government to your own staff
   from the AI Staff tab of your country dossier (`Q`) or from State Affairs (`E`). Incoming letters
   from all 9 diplomatic channels wait in a bar under the date at the top right.
@@ -175,7 +203,7 @@ ordinary data-mod authors do not need six toolchains.
 **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) is the full account**, written for
 somebody who has never opened this project. The short version:
 
-You need **Godot 4.8 in its .NET build** (4.8 dev7 or later) — the plain download will open
+You need **Godot 4.8 Beta 3 in its .NET build** (`Godot.NET.Sdk/4.8.0-beta.3`) — the plain download will open
 the project and find no scripts — and the **.NET SDK 10**.
 
 ```bash
@@ -218,7 +246,10 @@ black.
   Delete it to go back to automatic, or pick a renderer in *Settings → Display → Graphics
   renderer*.
 - To start on one directly: `"Deal or Force.exe" --rendering-method gl_compatibility`.
-- The log is `%APPDATA%\Godot\app_userdata\Deal or Force\logs\godot.log`.
+- The log is `%APPDATA%\Godot\app_userdata\Deal or Force\logs\godot.log`; step-by-step boot and
+  demystified crash traces (`boot_trace.txt`, `last_crash.txt`) are written to
+  `Documents\Bayte Realization\Deal or Force\logs\` on PC and
+  `Android/data/com.bayterealization.dealorforce/files/logs/` on Android.
 - `"Deal or Force.exe" -- --boot-guard-pretend-black` walks the whole chain on a machine whose
   drivers all work, for testing.
 

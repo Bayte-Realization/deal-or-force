@@ -57,7 +57,7 @@
         "title": "Housing first, whatever it costs",
         "consequence": "The state builds, and the state pays.",
         "effects": {
-          "treasury_percent": -0.03,
+          "gdp_share": -0.003,
           "stability": 0.006,
           "add_modifier": {
             "reconstruction_programme": 365

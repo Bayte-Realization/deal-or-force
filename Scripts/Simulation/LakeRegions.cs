@@ -77,6 +77,14 @@ public static class LakeRegions
     public static bool IsWaterState(ScenarioState state) => state is not null &&
         (string.Equals(state.Kind, "Lake", StringComparison.OrdinalIgnoreCase) || IsLakeRegion(state.MapIndex));
 
+    internal static void RestoreBootLakes(ReadOnlySpan<CachedBootLake> lakes)
+    {
+        LakeStateIndices.Clear();
+        for (var i = 0; i < lakes.Length; i++)
+            if (lakes[i].MapIndex > 0) LakeStateIndices.Add(lakes[i].MapIndex);
+        CreatedCount = LakeStateIndices.Count;
+    }
+
     public static void ResetCatalog()
     {
         MinimumCells = 40;
@@ -235,6 +243,48 @@ public static class LakeRegions
         }
     }
 
+    internal static bool TryReadPrebakedBootLakeNames(int width, int height, out string[] names)
+    {
+        names = null;
+        if (ModOverlayPolicy.IsActive || width <= 0 || height <= 0 || (long)width * height > int.MaxValue)
+            return false;
+
+        var key = (ResolveBootCacheFingerprint(), width, height, MinimumCells, MinimumWidthCells);
+        lock (BootCacheGate)
+        {
+            var bodies = TryResolveBootBodiesWithoutBuildLocked(key);
+            if (bodies is null || bodies.Length == 0) return false;
+            names = new string[bodies.Length];
+            for (var i = 0; i < bodies.Length; i++) names[i] = bodies[i].Name ?? "Lake";
+            return true;
+        }
+    }
+
+    private static CachedLakeBody[] TryResolveBootBodiesWithoutBuildLocked(
+        (ulong Fingerprint, int Width, int Height, int MinCells, int MinWidth) key)
+    {
+        if (_cachedBodies is not null && _cachedBodiesKey == key) return _cachedBodies;
+        var writableDir = DefaultWritableCacheDirectory();
+        if (!string.IsNullOrWhiteSpace(writableDir) &&
+            TryReadBootCacheFile(Path.Combine(writableDir, BootCacheFileName), key.Fingerprint, key.Width, key.Height,
+                key.MinCells, key.MinWidth, out var fromWritable))
+        {
+            _cachedBodies = fromWritable;
+            _cachedBodiesKey = key;
+            return fromWritable;
+        }
+        var shippedPath = GameDataLoader.FindDataFile("cache", BootCacheFileName);
+        if (!string.IsNullOrWhiteSpace(shippedPath) &&
+            TryReadBootCacheFile(shippedPath, key.Fingerprint, key.Width, key.Height,
+                key.MinCells, key.MinWidth, out var fromShipped))
+        {
+            _cachedBodies = fromShipped;
+            _cachedBodiesKey = key;
+            return fromShipped;
+        }
+        return null;
+    }
+
     /// <summary>
     /// Pre-bake or persist <c>lakes_boot_v1.bin</c> under <paramref name="cacheDirectory"/>.
     /// Bypassed cleanly whenever <see cref="ModOverlayPolicy.IsActive"/> is true.
@@ -298,6 +348,12 @@ public static class LakeRegions
                     var verifyFolders = GameFolders.For(verifyDocs);
                     if (verifyFolders is not null) return Path.Combine(verifyFolders.Root, "cache");
                 }
+            }
+
+            if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS())
+            {
+                var baseDir = AppContext.BaseDirectory;
+                if (!string.IsNullOrWhiteSpace(baseDir)) return Path.Combine(baseDir, "cache");
             }
 
             var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);

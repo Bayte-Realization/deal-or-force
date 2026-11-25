@@ -90,6 +90,8 @@ public partial class MainWindow : Window
 
     private void ShowNotes()
     {
+        NewsReleaseChip.Text = L.F("Release {0}", GameBuildInfo.Version);
+        NewsLanguageNote.Text = L.T("Release notes · English");
         var path = Changelog.Find(_catalog.Root, L.IsRussian, GameBuildInfo.Version);
         string? text = null;
         try { if (path is not null) text = File.ReadAllText(path); }

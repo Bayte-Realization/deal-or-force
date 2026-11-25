@@ -38,7 +38,7 @@
         "title": "w5h.ev.language_charter.opt1",
         "consequence": "w5h.ev.language_charter.con1",
         "effects": {
-          "treasury_percent": -0.03,
+          "income_share": -0.03,
           "stability": 0.022,
           "state.radicalism": -0.025
         }
@@ -67,7 +67,7 @@
         "effects": {
           "market_access": 0.045,
           "productivity": 0.010,
-          "treasury_percent": -0.03
+          "income_share": -0.03
         }
       },
       {
@@ -146,7 +146,7 @@
         "title": "w5h.ev.rail_gauge.opt1",
         "consequence": "w5h.ev.rail_gauge.con1",
         "effects": {
-          "treasury_percent": -0.05,
+          "gdp_share": -0.004,
           "construction_capacity": 0.20,
           "market_access": 0.03
         }
@@ -155,7 +155,7 @@
         "title": "w5h.ev.rail_gauge.opt2",
         "consequence": "w5h.ev.rail_gauge.con2",
         "effects": {
-          "treasury_percent": -0.015,
+          "income_share": -0.015,
           "productivity": 0.006
         }
       }
@@ -200,7 +200,8 @@
         "effects": {
           "stability": 0.020,
           "political_points": 6.0,
-          "treasury_percent": -0.02
+          "income_share": -0.02,
+          "prestige": 4.0
         }
       },
       {
@@ -226,7 +227,8 @@
         "effects": {
           "market_access": 0.035,
           "naval_experience": 6.0,
-          "treasury_percent": -0.03
+          "income_share": -0.03,
+          "prestige": 4.0
         }
       },
       {

@@ -1,8 +1,10 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace DealOrForce.Simulation;
 
@@ -140,25 +142,16 @@ public static class ScenarioCatalog
 
     /// <summary>
     /// Build the base world, taking the seat the player opens on from the scenario's manifest.
-    ///
-    /// Which country a scenario starts you as is a scenario-shaped fact, not a world-shaped one,
-    /// so it lives in game/scenarios/2024/scenario.json beside the name and the description
-    /// rather than in this method. Nothing else in the world depends on the answer: the country
-    /// picker overrides it the moment a player chooses, and a run that never chooses anybody
-    /// gets the manifest's seat - which is what it used to get from the literal this replaces.
     /// </summary>
     public static Campaign CreateBaseCampaign(int seed, string manifestPath = "")
     {
         if (WorldMapTables.CountryRows.Length == 0 || WorldMapTables.StateRows.Length == 0)
             WorldMapTables.ResetCatalog();
+
         var campaign = new Campaign(seed);
         var playerTag = ScenarioPlayerTag(manifestPath);
         if (playerTag.Length == 0) playerTag = DefaultPlayerTag;
-        var countryIdByMapIndex = new Dictionary<int, string>();
-        var usedIds = new HashSet<string>(StringComparer.Ordinal);
 
-        // Phase timings, taken only when something asked for them. Restarting the clock on every
-        // call is why each entry is the cost of that phase rather than of everything before it.
         var timings = BuildTimings;
         var clock = System.Diagnostics.Stopwatch.StartNew();
         void Phase(string name)
@@ -168,13 +161,37 @@ public static class ScenarioCatalog
             clock.Restart();
         }
 
-        // Entries of the country table that are not countries (common/country_merges): a glacier,
-        // a reef, a buffer zone, a base area. This is the one place the table is applied to who
-        // exists: such a row is read past, so nothing later - the economy, diplomacy, the AI, a
-        // list on a screen, a save - ever meets a country called the Siachen Glacier. What it
-        // maps to is the country holding its ground, which is whose regions its regions are below.
         var mergedGround = CountryMerges.GroundByMapIndex();
-        var readPast = 0;
+        var countryIdByMapIndex = SeedScenarioCountries(campaign, playerTag, mergedGround, out var readPast);
+        Phase("nations");
+
+        SeedScenarioRegions(campaign, mergedGround, countryIdByMapIndex);
+        Phase("regions");
+
+        ApplyScenarioTopology(campaign, readPast, Phase);
+        campaign.InvalidateStateIndex();
+
+        SeedHistoryAndMilitary(campaign, playerTag, Phase);
+        CalibrateAndCaptureEconomy(campaign, Phase);
+        return campaign;
+    }
+
+    internal static void PopulateBaseTerritoryShell(Campaign campaign)
+    {
+        var mergedGround = CountryMerges.GroundByMapIndex();
+        var countryIdByMapIndex = SeedScenarioCountries(campaign, playerTag: "", mergedGround, out _);
+        SeedScenarioRegions(campaign, mergedGround, countryIdByMapIndex);
+    }
+
+    private static Dictionary<int, string> SeedScenarioCountries(
+        Campaign campaign,
+        string playerTag,
+        IReadOnlyDictionary<int, int> mergedGround,
+        out int readPast)
+    {
+        var countryIdByMapIndex = new Dictionary<int, string>();
+        var usedIds = new HashSet<string>(StringComparer.Ordinal);
+        readPast = 0;
 
         foreach (var row in WorldMapTables.CountryRows)
         {
@@ -196,36 +213,12 @@ public static class ScenarioCatalog
             var variant = palette.Length <= 1 ? 0 : (int)(StableHash(id) % (uint)palette.Length);
             CapitalCatalog.TryGet(iso, out var capital);
 
-            // This opening balance preserves the source unit convention (billions in this shell).
-            // The ported Economy pass will replace it with the source's full initial calibration,
-            // rather than locking in a second economy model.
-            // Source table stores GDP in USD millions; campaign/UI use billions.
-            //
-            // -99 is the source table's "no figure published" sentinel, not an amount: the
-            // Vatican, Antarctica and two dozen dependencies carry it. Importing it literally
-            // handed those entries a NEGATIVE economy, which then produced negative treasuries
-            // and nonsense ledger lines. A microstate with no published GDP gets a plausible one
-            // derived from its population instead - wrong in detail, but the right order of
-            // magnitude and never negative. How much per head is Defines.MicrostateGdpPerHead,
-            // because it is the one number in that derivation that is a judgement rather than a
-            // figure.
             var reportedGdp = ParseFloatSpan(parts[6]);
             var population = ParseLongSpan(parts[5]);
             var gdp = reportedGdp > 0f
                 ? reportedGdp / 1000f
-                // The parentheses are load-bearing, and so is the divisor being 1e9 rather than
-                // the figure written as 0.000000015. `population * perHead / 1e9` rounds twice -
-                // once for the multiply and once for the divide - and lands a few units in the
-                // last place away from `population * 0.000000015f`, which rounds once. Countries
-                // with no published income would have moved by a fraction of a pound, which is
-                // nothing in a ledger and everything in a fingerprint, and the fingerprint guard
-                // exists to notice exactly that. Fifteen divided by a billion is the same float
-                // as the literal it replaces, so with this default every figure in the shipped
-                // world is unchanged to the bit.
+                // Keep divisor inside parenthesised constant expression to preserve exact single float rounding.
                 : MathF.Max(0.01f, population * (campaign.Defines.MicrostateGdpPerHead / 1_000_000_000f));
-            // The opening balance is a fallback too: a country that states one in history/countries
-            // keeps it, and the base game's Korea states one - which is where its particular
-            // figure lives now, rather than in an if here.
             var treasury = gdp * campaign.Defines.BaseTreasuryGdpShare;
 
             var nation = campaign.AddNation(new Nation
@@ -233,8 +226,8 @@ public static class ScenarioCatalog
                 Tag = iso,
                 Iso = iso,
                 Name = parts[2],
-                Continent = parts[3],
-                Region = parts[4],
+                Continent = StringPool.Shared.GetOrAdd(parts[3]),
+                Region = StringPool.Shared.GetOrAdd(parts[4]),
                 Population = population,
                 Gdp = gdp,
                 Treasury = treasury,
@@ -247,8 +240,14 @@ public static class ScenarioCatalog
 
             countryIdByMapIndex[mapIndex] = nation.Tag;
         }
-        Phase("nations");
+        return countryIdByMapIndex;
+    }
 
+    private static void SeedScenarioRegions(
+        Campaign campaign,
+        IReadOnlyDictionary<int, int> mergedGround,
+        Dictionary<int, string> countryIdByMapIndex)
+    {
         var usedStateIds = new HashSet<string>(WorldMapTables.StateRows.Length, StringComparer.Ordinal);
         foreach (var row in WorldMapTables.StateRows)
         {
@@ -274,9 +273,6 @@ public static class ScenarioCatalog
 
             var mapIndex = ParseIntSpan(s0);
             var nationMapIndex = ParseIntSpan(s2);
-            // A region of an entry that is not a country is a region of whoever holds its
-            // ground, from this line on; of nobody, when nobody does (Antarctica), and then it
-            // is unclaimed land like any other history says belongs to no one.
             var nobodys = false;
             if (mergedGround.TryGetValue(nationMapIndex, out var holder))
             {
@@ -304,112 +300,95 @@ public static class ScenarioCatalog
                 Id = id,
                 Name = name,
                 Iso = iso,
-                Kind = s4.ToString(),
+                Kind = StringPool.Shared.GetOrAdd(s4),
                 Unclaimed = nobodys
             });
         }
-        Phase("regions");
+    }
 
-        // Apply authoritative political/state corrections before economy, armies,
-        // markets and UI consume the scenario. This makes breakaway states such as
-        // Abkhazia, Transnistria and Vatican City real simulation entities from tick zero.
+    private static void ApplyScenarioTopology(Campaign campaign, int readPast, Action<string> phase)
+    {
         var importedStates = campaign.States.Count;
-        // Hoisted out of the call so that reading the rasters and applying them can be timed
-        // apart: they are two different jobs - decoding sixteen million pixels twice, and then
-        // doing geometry over them - and only one of them is the interesting one.
-        var controlRaster = WorldMapSource.Control;
-        var stateRaster = WorldMapSource.States;
-        Phase("rasters read");
-        TerritorialTopology.Apply(campaign, controlRaster, stateRaster,
-            WorldMapSource.Width, WorldMapSource.Height);
-        Phase("topology applied");
+        if (TerritorialTopology.TryApplyPrebakedBoot(campaign, WorldMapSource.Width, WorldMapSource.Height))
+        {
+            phase("rasters read");
+            phase("topology applied");
+        }
+        else
+        {
+            var controlRaster = WorldMapSource.Control;
+            var stateRaster = WorldMapSource.States;
+            phase("rasters read");
+            TerritorialTopology.Apply(campaign, controlRaster, stateRaster, WorldMapSource.Width, WorldMapSource.Height);
+            phase("topology applied");
+        }
 
-        // The guard is arithmetic rather than a remembered total: the source table must
-        // still import whole, and every region correction must still have produced exactly
-        // one state. Adding a correction is then an ordinary edit, while losing half the
-        // source table is still caught before anything consumes the scenario.
         var correctedStates = campaign.States.Count - importedStates;
-        // The countries are the table's rows less the ones read past above - still arithmetic,
-        // so a row lost for any other reason is still caught.
-        if (campaign.Nations.Count != WorldMapTables.CountryRows.Length - readPast || importedStates != WorldMapTables.StateRows.Length ||
+        if (campaign.Nations.Count != WorldMapTables.CountryRows.Length - readPast ||
+            importedStates != WorldMapTables.StateRows.Length ||
             correctedStates != TerritorialTopology.RegionRuleCount)
+        {
             throw new InvalidOperationException(
                 $"Base scenario import drifted: {campaign.Nations.Count} nations " +
                 $"(expected {WorldMapTables.CountryRows.Length - readPast}), " +
                 $"{importedStates} imported states (expected {WorldMapTables.StateRows.Length}), " +
                 $"{correctedStates} region corrections (expected {TerritorialTopology.RegionRuleCount}).");
+        }
+    }
 
-        // Data-specific unit checks belong in fixtures, not runtime guards: a valid
-        // map package may change Korea's GDP or replace the countries altogether.
-
-        campaign.InvalidateStateIndex();
-        // Names, then the country's own figures, then the deal, then the corrections to it.
+    private static void SeedHistoryAndMilitary(Campaign campaign, string playerTag, Action<string> phase)
+    {
         CountryDefinitions.Apply(campaign);
         StateDefinitions.Apply(campaign);
-        Phase("definitions");
-        // Every country has a government and an ideology before history is read, so
-        // the scenario only has to name the ones that are not the ordinary case.
+        phase("definitions");
+
         foreach (var nation in campaign.Nations)
         {
             if (string.IsNullOrEmpty(nation.Government)) nation.Government = GovernmentCatalog.Default;
             if (string.IsNullOrEmpty(nation.Ideology)) nation.Ideology = IdeologyCatalog.Default;
         }
-        Phase("governments");
+        phase("governments");
+
         HistoryDataLoader.ApplyBaseCountries(campaign);
-        Phase("history figures");
+        phase("history figures");
         SovereignFinance.NormalizeAccounts(campaign);
-        Phase("finance");
+        phase("finance");
         EconomySystem.Seed(campaign);
-        Phase("economy seed");
+        phase("economy seed");
         HistoryDataLoader.ApplyBaseStates(campaign);
-        Phase("region facts");
-        // Last of the history, because an alliance is between countries and they all have to
-        // exist first.
+        phase("region facts");
         HistoryDataLoader.ApplyBaseDiplomacy(campaign);
-        Phase("diplomacy");
+        phase("diplomacy");
         campaign.SetPlayer((campaign.NationByTag(playerTag) ?? campaign.NationByTag(DefaultPlayerTag) ??
             campaign.Nations[0]).Id);
-        Phase("seat");
+        phase("seat");
         MilitaryBootstrap.Seed(campaign);
         NavalBootstrap.Seed(campaign);
         WarBootstrap.Seed(campaign);
-        Phase("military");
-        // The tensions and the backers the world opens with, once its wars exist.
+        phase("military");
         ConflictHistory.Apply(campaign);
-        Phase("conflicts");
-        MarketSystem.Seed(campaign);
-        Phase("market");
-
-        // Last, because it needs states, buildings, pops and armies to already exist: it
-        // prices one settled market pass and records what turns that output into each
-        // nation's authored 2024 GDP. Everything the player sees afterwards is emergent.
-        EconomySystem.CalibrateOutput(campaign);
-        Phase("calibrate output");
-
-        // The world is finished, so its books can be written. The weekly tick that normally
-        // writes them explicitly skips day zero, which left a new campaign's budget screen
-        // reading nothing at all until its first Sunday.
-        EconomySystem.Explain(campaign);
-        Phase("explain");
-
-        campaign.History.Capture(campaign, true);
-        Phase("history capture");
-        return campaign;
+        phase("conflicts");
     }
 
-    /// <summary>
-    /// The tag a row of the country table is known by: its ISO code where it has one, the map
-    /// source's own three letters where it does not (Kosovo, Northern Cyprus, the Siachen
-    /// Glacier), and the name itself as a last resort. One rule, here, because the merge table
-    /// has to name the same rows by the same tags before any of them is a country.
-    /// </summary>
+    private static void CalibrateAndCaptureEconomy(Campaign campaign, Action<string> phase)
+    {
+        MarketSystem.Seed(campaign);
+        phase("market");
+        EconomySystem.CalibrateOutput(campaign);
+        phase("calibrate output");
+        EconomySystem.Explain(campaign);
+        phase("explain");
+        PrestigeSystem.SeedInitial(campaign);
+        campaign.History.Capture(campaign, true);
+        phase("history capture");
+    }
+
+    /// <summary>The canonical tag for a row of the country table.</summary>
     internal static string CountryTag(string[] parts) =>
         IsCode(parts[1]) ? parts[1] : IsCode(parts[9]) ? parts[9] : Slug(parts[2]).ToUpperInvariant();
 
     private static bool IsCode(string value) =>
         value is { Length: 3 } && !value.StartsWith("-", StringComparison.Ordinal) && char.IsLetter(value[0]);
-
-    [ThreadStatic] private static System.Text.StringBuilder _slugBuilder;
 
     private static int ParseIntSpan(ReadOnlySpan<char> value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : 0;
@@ -429,17 +408,28 @@ public static class ScenarioCatalog
 
     private static string Slug(string value)
     {
-        var builder = _slugBuilder ??= new System.Text.StringBuilder(32);
-        builder.Clear();
-        foreach (var character in value)
+        if (string.IsNullOrEmpty(value)) return "";
+        char[] rented = null;
+        var buf = value.Length <= 256
+            ? stackalloc char[256]
+            : (rented = ArrayPool<char>.Shared.Rent(value.Length));
+        try
         {
-            if (char.IsLetterOrDigit(character)) builder.Append(char.ToLowerInvariant(character));
-            else if (builder.Length > 0 && builder[^1] != '_') builder.Append('_');
+            var len = 0;
+            for (var i = 0; i < value.Length; i++)
+            {
+                var ch = value[i];
+                if (char.IsLetterOrDigit(ch)) buf[len++] = char.ToLowerInvariant(ch);
+                else if (len > 0 && buf[len - 1] != '_') buf[len++] = '_';
+            }
+            var start = 0;
+            while (start < len && buf[start] == '_') start++;
+            while (len > start && buf[len - 1] == '_') len--;
+            return len <= start ? "" : StringPool.Shared.GetOrAdd(buf.Slice(start, len - start));
         }
-        var start = 0;
-        var len = builder.Length;
-        while (start < len && builder[start] == '_') start++;
-        while (len > start && builder[len - 1] == '_') len--;
-        return len <= start ? "" : start == 0 && len == builder.Length ? builder.ToString() : builder.ToString(start, len - start);
+        finally
+        {
+            if (rented is not null) ArrayPool<char>.Shared.Return(rented);
+        }
     }
 }

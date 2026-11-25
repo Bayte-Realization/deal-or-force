@@ -487,9 +487,13 @@ public static class Factions
         // and one such piece of Donetsk would make all of Ukraine Russia's.
         var shared = 0;
         foreach (var index in home)
-            if (campaign.States.Find(s => s.MapIndex == index) is { } region &&
-                TerritorialClaims.TitleOf(campaign, parent, region) == TerritorialTitle.Homeland) shared++;
-        return shared * 2 > home.Count;
+        {
+            var region = index > 0 ? campaign.StateByMapIndex(index)
+                : campaign.States.Find(state => state.MapIndex == index);
+            if (region is not null && TerritorialClaims.TitleOf(campaign, parent, region) == TerritorialTitle.Homeland &&
+                ++shared > home.Count / 2) return true;
+        }
+        return false;
     }
 
     private static void InheritOrSeparateParentColor(Campaign campaign, Nation successor, Nation parent)

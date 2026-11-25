@@ -79,13 +79,18 @@ public partial class DealOrForceGame
         _countryCardCaption = Title("", 12, Ui.Colour("text.caption"));
         _countryCardCaption.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         names.AddChild(_countryCardCaption);
+        var isTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
         // Campaign identity is saved with this world, never silently written into a mod.
-        _countryCardFlagEdit = ActionButton("Appearance…", OpenCampaignCountryIdentity, 0, 32);
+        _countryCardFlagEdit = ActionButton("Appearance…", OpenCampaignCountryIdentity, 0, isTouch ? 38 : 32);
         _countryCardFlagEdit.Name = "CountryCardAppearance";
         _countryCardFlagEdit.TooltipText = Ui.Tip(Tr("Change your country's name, map colour and campaign flag"));
         _countryCardFlagEdit.Visible = false;
         header.AddChild(_countryCardFlagEdit);
-        header.AddChild(ActionButton("×", CloseMapSelection, 34, 32));
+        var countryClose = ActionButton("×", CloseMapSelection, isTouch ? 42 : 34, isTouch ? 42 : 32);
+        countryClose.Name = "CloseCountryCard";
+        countryClose.AddThemeFontSizeOverride("font_size", isTouch ? 20 : 16);
+        countryClose.TooltipText = Ui.Tip(Tr("Close"));
+        header.AddChild(countryClose);
 
         _countryCardStanding = Title("", 14, Ui.Colour("text.accent"));
         _countryCardStanding.MouseFilter = Control.MouseFilterEnum.Stop;
@@ -182,8 +187,13 @@ public partial class DealOrForceGame
         _regionCardCaption.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _regionCardCaption.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         regionHeader.AddChild(_regionCardCaption);
-        regionHeader.AddChild(ActionButton("Details", OpenSelectedRegionDossier, 0, 28));
-        regionHeader.AddChild(ActionButton("×", CloseRegionCard, 32, 28));
+        var regionDetailsBtn = ActionButton("Details", OpenSelectedRegionDossier, 0, isTouch ? 36 : 28);
+        regionHeader.AddChild(regionDetailsBtn);
+        var regionClose = ActionButton("×", CloseRegionCard, isTouch ? 42 : 32, isTouch ? 42 : 32);
+        regionClose.Name = "CloseRegionCard";
+        regionClose.AddThemeFontSizeOverride("font_size", isTouch ? 20 : 16);
+        regionClose.TooltipText = Ui.Tip(Tr("Close"));
+        regionHeader.AddChild(regionClose);
 
         var columns = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         columns.AddThemeConstantOverride("separation", 16);

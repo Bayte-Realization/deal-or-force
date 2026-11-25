@@ -24,7 +24,20 @@ static class LargeProductionCatalogTests
                 Check(CommodityCatalog.Override("era_good_" + i, "Era good " + i, "", 1, 0, "Mod good"), "declare good " + i);
             }
             var errors = new List<string>();
-            ProductionChains.Merge("""{"large_catalog_test":{"good":"era_good_199","output":{"era_building_199":2,"raw:era_building_199":3,"deposit:era_good_199":4},"demand":{"population":1}}} """, errors);
+            ProductionChains.Merge("""
+                {
+                  "large_catalog_test": {
+                    "good": "era_good_199",
+                    "output": { "era_building_199": 2, "raw:era_building_199": 3, "deposit:era_good_199": 4, "projects": 99 },
+                    "demand": { "population": 1 }
+                  },
+                  "large_catalog_nation_test": {
+                    "scope": "nation",
+                    "good": "era_good_198",
+                    "output": { "projects": 2, "population": 80, "deposit:era_good_199": 90 }
+                  }
+                }
+                """, errors);
             Check(errors.Count == 0, "recipes accept both buildings and goods beyond the former 64 spare slots");
             BuildingCatalog.TryParse("era_building_199", out var building); CommodityCatalog.TryParse("era_good_199", out var good199);
             s.Buildings[building] = 2; s.ResourceDeposits[good199] = 3;
@@ -37,6 +50,17 @@ static class LargeProductionCatalogTests
             var makes = new List<(Commodity Good, float Amount)>(); var uses = new List<(Commodity Good, float Amount)>(); var needs = new List<Commodity>();
             ProductionChains.Marginal(n, s, building, 1, makes, uses, needs);
             Check(makes.Any(p => p.Good == good199 && p.Amount == 5), "build preview measures the same large-mod recipe as the running market");
+
+            CommodityCatalog.TryParse("era_good_198", out var nationalGood);
+            n.Market[nationalGood] = new MarketQuote { Commodity = nationalGood, Price = 1 };
+            ProductionChains.RunNation(n, 5, 0, 0, false);
+            Check(n.Market[nationalGood].Production == 10, "a national recipe does not inherit the preceding region's population or deposits");
+            n.Market[good199].Production = 0;
+            ProductionChains.RunRegion(n, s, 1);
+            Check(n.Market[good199].Production == 22, "a regional recipe does not inherit national inputs on the same worker");
+            n.Market[good199].Production = 0;
+            ProductionChains.RunRegion(n, new ScenarioState(), 1);
+            Check(n.Market[good199].Production == 0, "a region with no buildings or deposits overwrites the last region's used slots with zeros");
         }
         finally { BuildingCatalog.ResetCatalog(); CommodityCatalog.ResetCatalog(); ProductionChains.ResetCatalog(); }
     }

@@ -68,6 +68,8 @@ public sealed partial class GlobePresentation
     private double _badgeStill;
     private double _badgeDataAge;
     private double _badgeMovingClock;
+    private double _badgeRedrawClock;
+    private bool _badgePendingRedraw;
     private bool _badgeLayoutDue = true;
     private StrategicMapMode _badgeMode;
 
@@ -110,6 +112,7 @@ public sealed partial class GlobePresentation
         _badgeStill = moved ? 0 : _badgeStill + delta;
         _badgeDataAge += delta;
 
+        var isTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
         if (wanted)
         {
             // A new decision once the view has rested a moment, after a long zoom, a new layer,
@@ -126,17 +129,18 @@ public sealed partial class GlobePresentation
             }
             else if (moved)
             {
-                // While the view moves, a lighter pass four times a second: the badges already
-                // shown stay exactly where they are, and regions coming into view get theirs at
-                // once rather than when the drag ends - which made the icons look as if the right
-                // button switched them on.
+                // On touch/emulators, defer badge layout entirely until the camera settles;
+                // on desktop, run the light moving pass four times a second.
                 _badgeLayoutDue = true;
-                _badgeMovingClock += delta;
-                if (_badgeMovingClock >= 0.25)
+                if (!isTouch)
                 {
-                    _badgeMovingClock = 0;
-                    LayOutRegionBadges(moving: true);
-                    _badgeLayoutDistance = distance;
+                    _badgeMovingClock += delta;
+                    if (_badgeMovingClock >= 0.25)
+                    {
+                        _badgeMovingClock = 0;
+                        LayOutRegionBadges(moving: true);
+                        _badgeLayoutDistance = distance;
+                    }
                 }
             }
         }
@@ -150,7 +154,36 @@ public sealed partial class GlobePresentation
             badge.Alpha = Mathf.MoveToward(badge.Alpha, target, (float)delta * (target > badge.Alpha ? 5f : 7f));
             animating = true;
         }
-        if (animating || moved && wanted) QueueRedraw();
+        var inMotion = _flatMap ? FlatViewInMotion : GlobeViewInMotion;
+        if (animating || (moved && wanted))
+        {
+            if (isTouch && (moved || inMotion))
+            {
+                _badgeRedrawClock += delta;
+                if (_badgeRedrawClock >= 0.066)
+                {
+                    _badgeRedrawClock = 0;
+                    _badgePendingRedraw = false;
+                    QueueRedraw();
+                }
+                else
+                {
+                    _badgePendingRedraw = true;
+                }
+            }
+            else
+            {
+                _badgeRedrawClock = 0;
+                _badgePendingRedraw = false;
+                QueueRedraw();
+            }
+        }
+        else if (_badgePendingRedraw && !moved && !inMotion)
+        {
+            _badgeRedrawClock = 0;
+            _badgePendingRedraw = false;
+            QueueRedraw();
+        }
     }
 
     private Texture2D RegionIcon(string name)

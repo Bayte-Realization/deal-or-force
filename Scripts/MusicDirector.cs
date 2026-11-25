@@ -31,6 +31,7 @@ public partial class MusicDirector : Node
     private string _region = "", _subRegion = "", _country = "";
     private bool _auditionSuppressed;
     private bool _shuttingDown;
+    private bool _processFaultWarned;
 
     public void SuppressForAudition(bool suppressed)
     { _auditionSuppressed = suppressed; RefreshVolume(); }
@@ -84,17 +85,28 @@ public partial class MusicDirector : Node
     public override void _Process(double delta)
     {
         if (_shuttingDown) return;
-        _cueFocus.Advance(delta);
-        var completed = Paused ? MusicTransitionCompletion.None : _transition.Advance(delta);
-        if (completed == MusicTransitionCompletion.Track) _decks[1 - _transition.ActiveDeck].Stop();
-        else if (completed == MusicTransitionCompletion.Silence)
-            foreach (var deck in _decks) deck.Stop();
-        if (!_transition.IsChanging && _silencePending)
-        { _silencePending = false; if (Silenced) FadeToSilence(1.5); }
-        DrainSelection();
-        // Recompute gains even during a crossfade: muting never waits for it to finish.
-        RefreshVolume();
-        _clock += delta; if (_clock < 2) return; _clock = 0; Follow();
+        try
+        {
+            _cueFocus.Advance(delta);
+            var completed = Paused ? MusicTransitionCompletion.None : _transition.Advance(delta);
+            if (completed == MusicTransitionCompletion.Track) _decks[1 - _transition.ActiveDeck].Stop();
+            else if (completed == MusicTransitionCompletion.Silence)
+                foreach (var deck in _decks) deck.Stop();
+            if (!_transition.IsChanging && _silencePending)
+            { _silencePending = false; if (Silenced) FadeToSilence(1.5); }
+            DrainSelection();
+            // Recompute gains even during a crossfade: muting never waits for it to finish.
+            RefreshVolume();
+            _clock += delta; if (_clock < 2) return; _clock = 0; Follow();
+        }
+        catch (Exception ex)
+        {
+            if (!_processFaultWarned)
+            {
+                _processFaultWarned = true;
+                GD.PushWarning($"[music] MusicDirector._Process recovered from error: {ex.Message}");
+            }
+        }
     }
 
     public override void _ExitTree()

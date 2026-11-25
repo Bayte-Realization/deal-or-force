@@ -406,12 +406,12 @@ static class AlertListTests
         var lead = HudResourceTests.MemberText(ui, "bool RefreshAlertNext(AlertLine next)");
         Check(lead.Contains("_alertListRows.MoveChild(_alertNext, 0);") && lead.Contains("Loc.Format(\"Next: {0} →\", next.Caption)"),
             "\"Next: …\" is the list's first row");
-        Check(lead.Contains("StyleAlertRow(_alertNext, \"button.primary_border\", lead: true"), "and the one accented row, in the ink-blue accent");
+        Check(lead.Contains("StyleAlertRow(_alertNext, \"button.primary_border\", lead: true"), "and the one accented row, using button.primary_border");
         var rows = HudResourceTests.MemberText(ui, "void RefreshAlertListRows(AlertLine[] rows)");
         Check(rows.Contains("var index = 1;") && rows.Contains("_alertListRows.MoveChild(button, index++);"), "the other rows follow it, worst first");
         Check(ui.Contains("_alertListRows.MoveChild(_alertMore, _alertListRows.GetChildCount() - 1);"), "\"+N more\" closes the list");
         Check(lead.Contains("Tr(\"Nothing is waiting for you. Let time run [Space]\")"), "with nothing waiting on a paused game, it offers to let time run");
-        Check(Regex.IsMatch(Source("game/interface/00_skin.json"), "\"button.primary_border\":\\s*\"#6da7e6\""), "the accent is the ink blue #6da7e6");
+        Check(Regex.IsMatch(Source("game/interface/00_skin.json"), "\"button.primary_border\":\\s*\"#9B958C\"", RegexOptions.IgnoreCase), "the accent is the brushed titanium #9B958C");
     }
 
     private static void WhatWent()

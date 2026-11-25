@@ -688,17 +688,43 @@ public static partial class Warfare
             yield return 0;
             using (SimProfiler.Measure("    fr:census")) MeasureOccupation(campaign);
             yield return 0;
-            using (SimProfiler.Measure("    fr:metrics"))
-                foreach (var war in stale) UpdateWarMetrics(campaign, war);
+            foreach (var war in stale)
+            {
+                using (SimProfiler.Measure("    fr:metrics")) UpdateWarMetrics(campaign, war);
+                if (Campaign.StageOverdue()) yield return 0;
+            }
             yield return 0;
-            using (SimProfiler.Measure("    fr:refresh"))
-                foreach (var war in stale)
-                    FrontPlanner.RefreshAssignments(campaign, war);
+            foreach (var war in stale)
+            {
+                using var refresh = FrontPlanner.RefreshAssignmentStages(campaign, war).GetEnumerator();
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("    fr:refresh")) more = refresh.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+                if (Campaign.StageOverdue()) yield return 0;
+            }
             yield return 0;
-            using (SimProfiler.Measure("    fr:reassign"))
-                foreach (var war in stale)
-                    if (moved.Contains(war.Id) || FrontPlanner.NeedsEmergencyStaff(campaign, war))
-                        FrontPlanner.ReassignAi(campaign, war);
+            foreach (var war in stale)
+            {
+                bool needsStaff;
+                using (SimProfiler.Measure("    fr:reassign"))
+                    needsStaff = moved.Contains(war.Id) || FrontPlanner.NeedsEmergencyStaff(campaign, war);
+                if (needsStaff)
+                {
+                    using var assign = FrontPlanner.ReassignAiStages(campaign, war).GetEnumerator();
+                    while (true)
+                    {
+                        bool more;
+                        using (SimProfiler.Measure("    fr:reassign")) more = assign.MoveNext();
+                        if (!more) break;
+                        yield return 0;
+                    }
+                }
+                if (Campaign.StageOverdue()) yield return 0;
+            }
         }
         yield return 0;
 

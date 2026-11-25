@@ -743,7 +743,7 @@ public partial class DealOrForceGame
             _networkCatchUp.Clear();
             world.BlockSimulation(exception.Message, exception);
             DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + exception);
-            var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, world, exception.Message);
+            var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, world, exception.Message, exception);
             ShowCampaignFault(Simulation.Loc.Format(
                 "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.", world.Date.Display()),
                 path, exception.Message);

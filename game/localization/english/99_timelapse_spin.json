@@ -1,0 +1,9 @@
+{
+  "shell.showcase_spin_short": "Earth Auto-Rotate",
+  "shell.showcase_spin_stop": "Stop Auto-Rotate",
+  "shell.showcase_spin_stop_short": "STOP",
+  "shell.showcase_spin_more": "Auto-Rotate",
+  "shell.showcase_spin_more_on": "Stop Spin",
+  "shell.showcase_spin_tip": "Automatic slow Earth rotation for showcases and timelapses. Tap again to stop.",
+  "shell.showcase_spin_active_tip": "Earth auto-rotation is active. Click or tap to stop spinning."
+}

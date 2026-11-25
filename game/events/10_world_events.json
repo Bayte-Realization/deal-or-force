@@ -25,7 +25,7 @@
         "title": "Develop it with state money",
         "consequence": "Expensive now; the output is the country's own.",
         "effects": {
-          "treasury_percent": -0.07,
+          "gdp_share": -0.004,
           "gdp_percent": 0.005,
           "construction_capacity": 0.22
         },
@@ -66,7 +66,7 @@
         "title": "Buy power abroad at whatever it costs",
         "consequence": "The lights stay on and the bill is enormous.",
         "effects": {
-          "treasury_percent": -0.08,
+          "income_share": -0.08,
           "market_access": 0.03,
           "state.standard_of_living": 0.004
         }
@@ -102,7 +102,7 @@
         "title": "Defend the rate",
         "consequence": "Costly, and it holds - for now.",
         "effects": {
-          "treasury_percent": -0.11,
+          "gdp_share": -0.006,
           "stability": 0.012
         }
       },
@@ -179,7 +179,7 @@
         "title": "Import at any price",
         "consequence": "Nobody goes hungry and the treasury notices.",
         "effects": {
-          "treasury_percent": -0.09,
+          "gdp_share": -0.005,
           "state.standard_of_living": -0.003
         }
       },
@@ -214,7 +214,7 @@
         "title": "Pay them to stay",
         "consequence": "Expensive, and it works on the ones who wanted to stay anyway.",
         "effects": {
-          "treasury_percent": -0.05,
+          "income_share": -0.05,
           "productivity": 0.009,
           "literacy": 0.004
         }
@@ -223,7 +223,7 @@
         "title": "Build somewhere worth staying for",
         "consequence": "Slow, and it is the only thing that has ever worked.",
         "effects": {
-          "treasury_percent": -0.04,
+          "income_share": -0.04,
           "add_modifier": { "research_retention_programme": 365 },
           "state.standard_of_living": 0.006
         }
@@ -257,7 +257,7 @@
         "title": "Pay for the long way round",
         "consequence": "Trade continues at a price.",
         "effects": {
-          "treasury_percent": -0.05,
+          "income_share": -0.05,
           "market_access": 0.02
         }
       },
@@ -289,7 +289,7 @@
         "title": "Fund a national programme",
         "consequence": "The expensive answer, and the one that stops it happening again.",
         "effects": {
-          "treasury_percent": -0.06,
+          "gdp_share": -0.004,
           "construction_capacity": 0.25,
           "stability": 0.01
         },
@@ -304,7 +304,7 @@
         "title": "Repair this one",
         "consequence": "Cheap, and the list is still eleven years long.",
         "effects": {
-          "treasury_percent": -0.01,
+          "income_share": -0.01,
           "state.radicalism": 0.008
         }
       }
@@ -322,9 +322,10 @@
         "title": "Put it into industry at once",
         "consequence": "Costly, and the advantage is real.",
         "effects": {
-          "treasury_percent": -0.04,
+          "income_share": -0.04,
           "productivity": 0.018,
-          "gdp_percent": 0.004
+          "gdp_percent": 0.004,
+          "prestige": 5
         },
         "modifiers": [
           {
@@ -337,7 +338,7 @@
         "title": "Keep it to ourselves",
         "consequence": "A military advantage, and a narrower one.",
         "effects": {
-          "treasury_percent": -0.02,
+          "income_share": -0.02,
           "add_modifier": { "classified_research_programme": 270 },
           "war_support": 0.03,
           "productivity": 0.005
@@ -348,7 +349,8 @@
         "consequence": "The world gains. So does the country's name in it.",
         "effects": {
           "literacy": 0.006,
-          "stability": 0.01
+          "stability": 0.01,
+          "prestige": 10
         },
         "modifiers": [
           {
@@ -382,7 +384,7 @@
         "consequence": "Slower, and they come back alive more often.",
         "effects": {
           "manpower_percent": 0.07,
-          "treasury_percent": -0.03,
+          "income_share": -0.03,
           "war_support": 0.05
         }
       },
@@ -412,7 +414,7 @@
         "effects": {
           "war_support": 0.04,
           "stability": 0.008,
-          "treasury_percent": -0.012,
+          "income_share": -0.012,
           "add_modifier": { "frontline_relief_programme": 90 }
         }
       },
@@ -540,7 +542,7 @@
         "title": "Buy them back",
         "consequence": "Portfolios and money. It holds for a year or two.",
         "effects": {
-          "treasury_percent": -0.04,
+          "income_share": -0.04,
           "stability": 0.02,
           "state.radicalism": 0.006
         }
@@ -557,7 +559,7 @@
         "title": "Go to the country",
         "consequence": "A campaign costs money and settles the question.",
         "effects": {
-          "treasury_percent": -0.03,
+          "income_share": -0.03,
           "stability": 0.026,
           "state.radicalism": -0.01
         }
@@ -624,7 +626,7 @@
         "title": "Concede on the original grievance",
         "consequence": "Costs money and takes the heat out of it.",
         "effects": {
-          "treasury_percent": -0.05,
+          "income_share": -0.05,
           "state.standard_of_living": 0.008,
           "state.radicalism": -0.02,
           "stability": 0.012
@@ -696,7 +698,7 @@
         "title": "Protect the vulnerable and keep working",
         "consequence": "A middle path, with the usual cost of middle paths.",
         "effects": {
-          "treasury_percent": -0.03,
+          "income_share": -0.03,
           "productivity": -0.006,
           "population_percent": -0.0012
         }
@@ -727,7 +729,7 @@
         "title": "Rebuild better than it was",
         "consequence": "The expensive answer, and the valley floods less next time.",
         "effects": {
-          "treasury_percent": -0.09,
+          "gdp_share": -0.006,
           "construction_capacity": 0.2,
           "state.standard_of_living": 0.006,
           "stability": 0.012
@@ -773,7 +775,7 @@
         "title": "Take them in properly",
         "consequence": "Costly, and in ten years they are taxpayers.",
         "effects": {
-          "treasury_percent": -0.06,
+          "gdp_share": -0.004,
           "population_percent": 0.004,
           "state.radicalism": 0.01,
           "productivity": 0.004
@@ -783,7 +785,7 @@
         "title": "Camps at the border",
         "consequence": "Cheaper, and it solves nothing for anybody.",
         "effects": {
-          "treasury_percent": -0.02,
+          "income_share": -0.02,
           "state.radicalism": 0.016,
           "market_access": -0.02
         }
@@ -811,10 +813,11 @@
         "title": "Fund the next stage",
         "consequence": "More of the same, which is the point.",
         "effects": {
-          "treasury_percent": -0.035,
+          "income_share": -0.035,
           "add_modifier": { "research_retention_programme": 365 },
           "literacy": 0.006,
-          "productivity": 0.006
+          "productivity": 0.006,
+          "prestige": 4
         }
       },
       {
@@ -837,9 +840,10 @@
         "title": "A state funeral",
         "consequence": "Costs something and is worth more than it costs.",
         "effects": {
-          "treasury_percent": -0.015,
+          "income_share": -0.015,
           "stability": 0.014,
-          "state.radicalism": -0.012
+          "state.radicalism": -0.012,
+          "prestige": 3
         },
         "modifiers": [
           {
@@ -893,7 +897,7 @@
         "consequence": "Expensive, quiet, and understood by everybody who matters.",
         "effects": {
           "add_modifier": { "border_reserve_programme": 180 },
-          "treasury_percent": -0.02,
+          "income_share": -0.02,
           "war_support": 0.02
         }
       }
@@ -943,7 +947,8 @@
         "effects": {
           "market_access": 0.06,
           "add_modifier": { "market_access_commitments": 270 },
-          "stability": 0.006
+          "stability": 0.006,
+          "prestige": 5
         }
       },
       {

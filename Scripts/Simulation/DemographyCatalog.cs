@@ -303,6 +303,7 @@ public static class DemographyCatalog
         PrimaryByCountry[countryTag] = list;
         PrimarySetByCountry[countryTag] = new HashSet<string>(list, StringComparer.OrdinalIgnoreCase);
         FirstPrimaryByCountry[countryTag] = list[0];
+        CountryNames.InvalidateDisplayNames();
     }
 
     static DemographyCatalog() => ResetCatalog();
@@ -341,6 +342,7 @@ public static class DemographyCatalog
         // before it moved; the later file wins either way.
         foreach (var document in GameDataLoader.DataDocuments("history", "countries", "2024"))
             using (document) MergePrimaries(document.RootElement);
+        CountryNames.InvalidateDisplayNames();
     }
 
     private static void MergePrimaries(JsonElement root)
@@ -359,9 +361,17 @@ public static class DemographyCatalog
     // ------------------------------------------------------------------ reading the data
 
     public static void LoadReligions(string json, List<string> errors) => Read(json, errors, MergeReligions);
-    public static void LoadCultures(string json, List<string> errors) => Read(json, errors, MergeCultures);
+    public static void LoadCultures(string json, List<string> errors)
+    {
+        Read(json, errors, MergeCultures);
+        CountryNames.InvalidateDisplayNames();
+    }
     public static void LoadProfessions(string json, List<string> errors) => Read(json, errors, MergeProfessions);
-    public static void LoadPops(string json, List<string> errors) => Read(json, errors, MergePops);
+    public static void LoadPops(string json, List<string> errors)
+    {
+        Read(json, errors, MergePops);
+        CountryNames.InvalidateDisplayNames();
+    }
 
     private static void Read(string json, List<string> errors, Action<JsonElement, List<string>> merge)
     {

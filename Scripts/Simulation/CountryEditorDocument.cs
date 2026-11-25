@@ -48,6 +48,15 @@ public sealed class CountryEditorDocument
     /// <summary>Starting treasury, in billions like every money figure in the game; null leaves the base value.</summary>
     public float? Treasury;
 
+    /// <summary>Starting diplomatic prestige (0–1000); null leaves the base value.</summary>
+    public float? Prestige;
+
+    /// <summary>Starting domestic stability (0–1); null leaves the base value.</summary>
+    public float? Stability;
+
+    /// <summary>Starting war support (0–1); null leaves the base value.</summary>
+    public float? WarSupport;
+
     /// <summary>
     /// Provinces whose owner this document sets on the bookmark: the country's added regions
     /// (owner = Tag) and any it gives up (owner = whoever receives them). Empty leaves the map alone.
@@ -70,7 +79,10 @@ public sealed class CountryEditorDocument
             HeadOfState = nation.HeadOfStateName ?? "",
             HeadOfGovernment = nation.HeadOfGovernmentName ?? "",
             PrimaryCultures = DemographyCatalog.PrimaryCultures(nation.Tag).ToList(),
-            Treasury = nation.Treasury
+            Treasury = nation.Treasury,
+            Prestige = nation.Prestige,
+            Stability = nation.Stability,
+            WarSupport = nation.WarSupport
         };
         foreach (var language in languages)
         {
@@ -96,6 +108,9 @@ public sealed class CountryEditorDocument
         foreach (var culture in PrimaryCultures)
             if (!DemographyCatalog.Cultures.ContainsKey(culture)) problems.Add($"There is no culture called '{culture}'.");
         if (Treasury is { } money && !float.IsFinite(money)) problems.Add("The treasury is not a number.");
+        if (Prestige is { } prestige && (!float.IsFinite(prestige) || prestige < 0f || prestige > 1000f)) problems.Add("Prestige must be 0 to 1000.");
+        if (Stability is { } stability && (!float.IsFinite(stability) || stability < 0f || stability > 1f)) problems.Add("Stability must be 0 to 1.");
+        if (WarSupport is { } warSupport && (!float.IsFinite(warSupport) || warSupport < 0f || warSupport > 1f)) problems.Add("War support must be 0 to 1.");
         if (CapitalLatitude is { } lat && (!float.IsFinite(lat) || MathF.Abs(lat) > 90)) problems.Add("Capital latitude must be -90 to 90.");
         if (CapitalLongitude is { } lon && (!float.IsFinite(lon) || MathF.Abs(lon) > 180)) problems.Add("Capital longitude must be -180 to 180.");
         if (Ownership.Any(o => o.Province <= 0 || string.IsNullOrWhiteSpace(o.Owner))) problems.Add("A region change names no province or no owner.");
@@ -133,6 +148,9 @@ public sealed class CountryEditorDocument
                 if (Government.Length > 0) writer.WriteString("government", Government);
                 if (Ideology.Length > 0) writer.WriteString("ideology", Ideology);
                 if (Treasury is { } money) writer.WriteNumber("treasury", money);
+                if (Prestige is { } prestige) writer.WriteNumber("prestige", prestige);
+                if (Stability is { } stability) writer.WriteNumber("stability", stability);
+                if (WarSupport is { } warSupport) writer.WriteNumber("war_support", warSupport);
                 if (HeadOfState.Trim().Length > 0) writer.WriteString("head_of_state", HeadOfState.Trim());
                 if (HeadOfGovernment.Trim().Length > 0) writer.WriteString("head_of_government", HeadOfGovernment.Trim());
                 if (PrimaryCultures.Count > 0)
@@ -243,6 +261,9 @@ public sealed class CountryEditorDocument
             document.Government = Text(had, "government");
             document.Ideology = Text(had, "ideology");
             document.Treasury = Number(had, "treasury");
+            document.Prestige = Number(had, "prestige");
+            document.Stability = Number(had, "stability");
+            document.WarSupport = Number(had, "war_support");
             document.HeadOfState = Text(had, "head_of_state");
             document.HeadOfGovernment = Text(had, "head_of_government");
             if (had.TryGetProperty("primary_cultures", out var cultures) && cultures.ValueKind == JsonValueKind.Array)

@@ -39,6 +39,9 @@ public partial class DealOrForceGame
     private PanelContainer _compactProvincePopover;
     private VBoxContainer _compactProvinceRows;
     private Label _compactProvinceTitle;
+    private Label _compactProvinceHint;
+    private Button _compactProvinceCloseBtn;
+    private Button _compactProvinceOpenBtn;
     private GlobePick _compactProvincePick;
 
     private Control _quickRecruitLayer;
@@ -108,6 +111,8 @@ public partial class DealOrForceGame
             _undoToast.Visible = false;
     }
 
+    private Button _cachedOutlinerToggle;
+
     private void MaintainControlsErgonomics()
     {
         if (_hudLayer is not { Visible: true })
@@ -119,6 +124,14 @@ public partial class DealOrForceGame
         if (IsInstanceValid(_undoToast) && _undoToast.Visible)
             _undoToast.UpdateAnchorPosition();
 
+        // In NewShell, keycaps live natively on ShellCorner/ShellNavRail/ShellDatePlate.
+        // Fast-path before calling GetViewport().GuiGetFocusOwner() every frame when Alt isn't held!
+        if (IsNewShellActive || _freeCameraMode || !Input.IsKeyPressed(Key.Alt))
+        {
+            _altHotkeyOverlay?.SetShowing(false);
+            return;
+        }
+
         var modalBlocked = (_pauseMenuLayer is { Visible: true }) ||
                            (_settingsLayer is { Visible: true }) ||
                            (_saveLoadLayer is { Visible: true }) ||
@@ -127,8 +140,7 @@ public partial class DealOrForceGame
                            (_developerConsoleLayer is { Visible: true }) ||
                            (GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit);
 
-        var showAlt = !modalBlocked && Input.IsKeyPressed(Key.Alt) && !_freeCameraMode;
-        _altHotkeyOverlay?.SetShowing(showAlt);
+        _altHotkeyOverlay?.SetShowing(!modalBlocked);
     }
 
     private void RegisterAltOverlayTargets()
@@ -161,7 +173,13 @@ public partial class DealOrForceGame
             _altHotkeyOverlay.RegisterTarget(target, () => _screenButtons.GetValueOrDefault(captured));
         }
 
-        _altHotkeyOverlay.RegisterTarget("outliner_toggle", () => _outliner?.FindChild("OutlinerToggle", true, false) as Button);
+        _altHotkeyOverlay.RegisterTarget("outliner_toggle", () =>
+        {
+            if (_cachedOutlinerToggle is not null && IsInstanceValid(_cachedOutlinerToggle))
+                return _cachedOutlinerToggle;
+            _cachedOutlinerToggle = _outliner?.FindChild("OutlinerToggle", true, false) as Button;
+            return _cachedOutlinerToggle;
+        });
 
         var modeToTarget = new (StrategicMapMode Mode, string Target)[]
         {
@@ -277,48 +295,87 @@ public partial class DealOrForceGame
 
     private void BuildCompactProvincePopover()
     {
+        var isTouch = DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var cardW = isTouch ? 368f : 336f;
+
         _compactProvincePopover = TexturedPanel(_hudLayer, PanelSurface.Command);
         _compactProvincePopover.Name = "CompactProvinceInfo";
         _compactProvincePopover.Visible = false;
         _compactProvincePopover.MouseFilter = MouseFilterEnum.Stop;
-        _compactProvincePopover.CustomMinimumSize = new Vector2(300, 0);
+        _compactProvincePopover.ClipContents = true;
+        _compactProvincePopover.SetAnchorsPreset(LayoutPreset.TopLeft);
+        _compactProvincePopover.CustomMinimumSize = new Vector2(cardW, 0f);
+        _compactProvincePopover.Size = new Vector2(cardW, 0f);
+        _compactProvincePopover.AddThemeStyleboxOverride("panel",
+            Ui.ChromeBox("shell.plate_bottom", 0.96f, "shell.brass_hi", 0.90f, cornerRadius: 4, borderWidth: 1));
 
         var rows = PanelRows(_compactProvincePopover, 12, 10, 6);
-        var head = new HBoxContainer();
+        rows.ClipContents = true;
+        rows.CustomMinimumSize = new Vector2(cardW - 24f, 0f);
+
+        var head = new HBoxContainer { ClipContents = true };
         head.AddThemeConstantOverride("separation", 6);
         rows.AddChild(head);
 
-        _compactProvinceTitle = Title("", 16, Ui.Colour("text.bright"));
+        _compactProvinceTitle = Fixed(Title("", 16, Ui.Colour("text.bright")));
         _compactProvinceTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _compactProvinceTitle.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         head.AddChild(_compactProvinceTitle);
 
-        var closeBtn = ActionButton("×", CloseCompactProvincePopover, 28, 24);
-        closeBtn.TooltipText = Ui.Tip(Tr("Close"));
-        head.AddChild(closeBtn);
+        _compactProvinceCloseBtn = ActionButton("×", CloseCompactProvincePopover, isTouch ? 42 : 32, isTouch ? 42 : 30);
+        _compactProvinceCloseBtn.Name = "CloseCompactProvinceInfo";
+        _compactProvinceCloseBtn.AddThemeFontSizeOverride("font_size", isTouch ? 20 : 16);
+        _compactProvinceCloseBtn.TooltipText = Ui.Tip(Tr("Close"));
+        head.AddChild(_compactProvinceCloseBtn);
 
-        _compactProvinceRows = new VBoxContainer();
-        _compactProvinceRows.AddThemeConstantOverride("separation", 3);
+        rows.AddChild(new ColorRect
+        {
+            CustomMinimumSize = new Vector2(0f, 1f),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            Color = Ui.Colour("shell.brass_dim"),
+            MouseFilter = MouseFilterEnum.Ignore
+        });
+
+        _compactProvinceRows = new VBoxContainer { ClipContents = true, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _compactProvinceRows.AddThemeConstantOverride("separation", 4);
         rows.AddChild(_compactProvinceRows);
 
-        var hint = Title(Tr("Armies remain selected. Right-click to march, or Esc / click ocean to deselect."),
+        _compactProvinceHint = Title(
+            isTouch
+                ? Tr("ui.compact_prov.touch_hint")
+                : Tr("Armies remain selected. Right-click to march, or Esc / click ocean to deselect."),
             11, Ui.Colour("text.caption"));
-        hint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        rows.AddChild(hint);
+        _compactProvinceHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _compactProvinceHint.CustomMinimumSize = new Vector2(cardW - 28f, 0f);
+        _compactProvinceHint.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
+        _compactProvinceHint.MaxLinesVisible = 3;
+        _compactProvinceHint.ClipText = true;
+        _compactProvinceHint.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        rows.AddChild(_compactProvinceHint);
 
-        var openBtn = ActionButton(Tr("Open full region card"), () =>
+        _compactProvinceOpenBtn = ActionButton(Tr("Open full region card"), () =>
         {
             var pick = _compactProvincePick;
             CloseCompactProvincePopover();
-            if (pick.Nation is not null)
-            {
-                _selectedArmies.Clear();
-                _selectedArmy = null;
-                _globe?.SelectArmy(-1);
-                SetArmyPanelVisible(false);
-                OnCountryPicked(pick);
-            }
-        }, 0, 28);
-        rows.AddChild(openBtn);
+            if (pick.Nation is null && pick.State is null) return;
+            var owner = pick.Nation ?? (pick.State is not null
+                ? _campaign?.Nations.Find(n => n.MapIndex == pick.State.NationMapIndex)
+                : null);
+            var resolvedPick = pick.Nation is not null
+                ? pick
+                : new GlobePick(owner, pick.State, pick.ProvinceId, pick.Latitude, pick.Longitude);
+            _selectedArmies.Clear();
+            _selectedArmy = null;
+            _globe?.SelectArmy(-1);
+            SetArmyPanelVisible(false);
+            if (IsNewShellActive)
+                OpenNewShellMapSelection(resolvedPick);
+            else if (resolvedPick.Nation is not null)
+                OnCountryPicked(resolvedPick);
+        }, 0, isTouch ? 42 : 30, primary: true);
+        _compactProvinceOpenBtn.Name = "OpenFullRegionCardBtn";
+        _compactProvinceOpenBtn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        rows.AddChild(_compactProvinceOpenBtn);
     }
 
     private void CloseCompactProvincePopover()
@@ -329,36 +386,134 @@ public partial class DealOrForceGame
 
     private void ShowCompactProvinceInfoPopover(GlobePick pick)
     {
-        if (_compactProvincePopover is null || !IsInstanceValid(_compactProvincePopover)) return;
+        if (_compactProvincePopover is null || !IsInstanceValid(_compactProvincePopover) || _campaign is null) return;
         _compactProvincePick = pick;
         ClearRuntimeChildren(_compactProvinceRows);
+
+        var isTouch = DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var cardW = isTouch ? 368f : 336f;
 
         var state = pick.State;
         var owner = pick.Nation ?? (state is not null ? _campaign.Nations.Find(n => n.MapIndex == state.NationMapIndex) : null);
         _compactProvinceTitle.Text = state?.DisplayName ?? owner?.DisplayName ?? Tr("Select province for details");
 
-        if (owner is not null)
-            _compactProvinceRows.AddChild(Title(Loc.Format("{0}", owner.DisplayName), 12, Ui.Colour("text.accent")));
-        if (state is not null)
+        if (_compactProvinceHint is not null)
         {
-            _compactProvinceRows.AddChild(Title(Loc.Format("Population: {0} · Stability: {1}",
-                Fmt.People(state.Population), Fmt.Percent(state.Stability)), 12, Ui.Colour("text.body_soft")));
-            var divsHere = _campaign.Armies.Count(a => a.ProvinceId == pick.ProvinceId && CampaignIntel.PlayerCanSeeArmy(_campaign, a));
-            if (divsHere > 0)
-                _compactProvinceRows.AddChild(Title(Loc.Format("Divisions here: {0}", divsHere), 12, Ui.Colour("text.bright")));
+            _compactProvinceHint.Text = isTouch
+                ? Tr("ui.compact_prov.touch_hint")
+                : Tr("Armies remain selected. Right-click to march, or Esc / click ocean to deselect.");
+            _compactProvinceHint.CustomMinimumSize = new Vector2(cardW - 28f, 0f);
+        }
+        if (_compactProvinceOpenBtn is not null)
+        {
+            _compactProvinceOpenBtn.Text = Tr("Open full region card");
+            _compactProvinceOpenBtn.CustomMinimumSize = new Vector2(0f, isTouch ? 42f : 30f);
+        }
+        if (_compactProvinceCloseBtn is not null)
+        {
+            _compactProvinceCloseBtn.CustomMinimumSize = isTouch ? new Vector2(42, 42) : new Vector2(32, 30);
+            _compactProvinceCloseBtn.AddThemeFontSizeOverride("font_size", isTouch ? 20 : 16);
         }
 
+        // Row 1: Owner Flag + Name
+        var ownerRow = new HBoxContainer { ClipContents = true, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        ownerRow.AddThemeConstantOverride("separation", 6);
+        if (owner is not null)
+        {
+            ownerRow.AddChild(FlagBadge(owner.Tag, 18, owner.DisplayName));
+            var ownerLbl = Fixed(Title(owner.DisplayName, 13, Ui.Colour("shell.brass_hi")));
+            ownerLbl.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            ownerLbl.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            ownerRow.AddChild(ownerLbl);
+        }
+        else
+        {
+            var unLbl = Fixed(Title(Tr("Unclaimed"), 13, Ui.Colour("text.muted")));
+            unLbl.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            unLbl.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            ownerRow.AddChild(unLbl);
+        }
+        _compactProvinceRows.AddChild(ownerRow);
+
+        // Row 2: Terrain + Supply/Defense
+        if (state is not null || pick.ProvinceId > 0)
+        {
+            var terrain = _campaign.ProvinceMap is not null && pick.ProvinceId > 0 && pick.ProvinceId <= _campaign.ProvinceMap.ProvinceCount
+                ? _campaign.ProvinceMap.TerrainAt(pick.ProvinceId)
+                : TerrainCatalog.Get("plains");
+            var terrainRow = new HBoxContainer { ClipContents = true, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            terrainRow.AddThemeConstantOverride("separation", 6);
+            var terrainName = string.IsNullOrWhiteSpace(terrain.Name) ? terrain.Id : Tr(terrain.Name);
+            var tLbl = Fixed(Title(terrainName, 12, Ui.Colour("text.bright")));
+            tLbl.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            tLbl.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            terrainRow.AddChild(tLbl);
+
+            var supDef = Fixed(Title(Loc.Format("ui.compact_prov.terrain_stats_fmt",
+                terrain.Supply.ToString("0.00"), terrain.Defense.ToString("0.00")), 11, Ui.Colour("text.body_soft")));
+            supDef.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            supDef.HorizontalAlignment = HorizontalAlignment.Right;
+            terrainRow.AddChild(supDef);
+            _compactProvinceRows.AddChild(terrainRow);
+        }
+
+        // Row 3: Population + Stability
+        if (state is not null)
+        {
+            var popRow = new HBoxContainer { ClipContents = true, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            popRow.AddThemeConstantOverride("separation", 6);
+            var popLbl = Fixed(Title(Loc.Format("ui.compact_prov.pop_fmt", Fmt.People(state.Population)), 12, Ui.Colour("text.body_soft")));
+            popLbl.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            popLbl.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            popLbl.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            popRow.AddChild(popLbl);
+
+            var stabTok = state.Stability < 0.35f ? "state.negative" : state.Stability < 0.55f ? "state.warning" : "text.bright";
+            var stabLbl = Fixed(Title(Loc.Format("ui.compact_prov.stab_fmt", Fmt.Percent(state.Stability)), 12, Ui.Colour(stabTok)));
+            stabLbl.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            stabLbl.HorizontalAlignment = HorizontalAlignment.Right;
+            popRow.AddChild(stabLbl);
+            _compactProvinceRows.AddChild(popRow);
+        }
+
+        // Row 4: Visible Divisions
+        var divsHere = 0f;
+        for (var i = 0; i < _campaign.Armies.Count; i++)
+        {
+            var a = _campaign.Armies[i];
+            if (!CampaignIntel.PlayerCanSeeArmy(_campaign, a)) continue;
+            if (pick.ProvinceId > 0 ? a.ProvinceId == pick.ProvinceId : (state is not null && a.StateMapIndex == state.MapIndex))
+                divsHere += MathF.Max(0f, a.Divisions);
+        }
+        var divCount = (int)MathF.Ceiling(divsHere);
+        if (divCount > 0)
+        {
+            var divLbl = Fixed(Title(Loc.Format("Divisions here: {0}", divCount), 12, Ui.Colour("text.bright")));
+            divLbl.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            divLbl.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            _compactProvinceRows.AddChild(divLbl);
+        }
+
+        _compactProvincePopover.CustomMinimumSize = new Vector2(cardW, 0f);
+        _compactProvincePopover.Size = new Vector2(cardW, 0f);
         _compactProvincePopover.Visible = true;
         _compactProvincePopover.MoveToFront();
+        _compactProvincePopover.ResetSize();
+
         var vp = GetViewport().GetVisibleRect().Size;
-        var w = MathF.Max(300f, _compactProvincePopover.GetCombinedMinimumSize().X);
-        var h = MathF.Max(140f, _compactProvincePopover.GetCombinedMinimumSize().Y);
+        const float minH = 150f;
+        var maxH = MathF.Max(minH, vp.Y - 160f);
+        var h = Math.Clamp(_compactProvincePopover.GetCombinedMinimumSize().Y, minH, maxH);
+        _compactProvincePopover.Size = new Vector2(cardW, h);
+
         var leftEdge = _armyPanel is { Visible: true }
             ? _armyPanel.GetGlobalRect().End.X + 12f
-            : 28f;
+            : (IsNewShellActive ? 76f : 28f);
+        var maxX = MathF.Max(16f, vp.X - cardW - 16f);
+        var maxY = MathF.Max(80f, vp.Y - h - 16f);
         _compactProvincePopover.Position = new Vector2(
-            Math.Clamp(leftEdge, 16f, MathF.Max(16f, vp.X - w - 16f)),
-            MathF.Max(80f, vp.Y - h - 116f));
+            Math.Clamp(leftEdge, 16f, maxX),
+            Math.Clamp(vp.Y - h - 116f, 80f, maxY));
     }
 
     // --------------------------------------------------------- Alt+RMB Split-Move (AoH #8)

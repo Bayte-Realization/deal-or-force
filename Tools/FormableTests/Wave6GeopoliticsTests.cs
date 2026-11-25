@@ -55,6 +55,42 @@ static class Wave6GeopoliticsTests
         VerifyBitExactRepeatability(map);
         VerifyFlashpointMovementsAndEvents();
         VerifyOwnedCodeHealth(map);
+        VerifyOrganicPrestigeAndEventScaling(map);
+        VerifyPrestigeNetworkCounts();
+    }
+
+    private static void VerifyPrestigeNetworkCounts()
+    {
+        var campaign = new Campaign(1951);
+        var country = new Nation { Tag = "HOM", Population = 1000, Stability = 1f, StandardOfLiving = 0f, Literacy = 0f };
+        var liveAlly = new Nation { Tag = "ALY", Population = 1000 };
+        var subject = new Nation { Tag = "SUB", Population = 1000 };
+        var retired = new Nation { Tag = "OLD", RetiredDay = 1 };
+        foreach (var nation in new[] { country, liveAlly, subject, retired }) campaign.AddNation(nation);
+        campaign.Fallen.Add(retired.Id);
+        SetElapsedDays(campaign, 7);
+        var unconnected = PrestigeSystem.ComputeEquilibrium(campaign, country);
+        var alliance = CampaignDiplomacy.Get(campaign, country.Id, liveAlly.Id);
+        alliance.Stance = DiplomaticStance.Allied;
+        var key = ((long)country.Id << 32) | (uint)liveAlly.Id;
+        campaign.Relations.Remove(key);
+        alliance.Dormant = true;
+        campaign.DormantRelations.Add(key, alliance);
+        CampaignDiplomacy.Get(campaign, country.Id, retired.Id).Stance = DiplomaticStance.Allied;
+        subject.OverlordId = retired.OverlordId = country.Id;
+        subject.SubjectType = retired.SubjectType = "satellite";
+
+        campaign.Defines.PrestigeWeeklyDriftRate = 1f;
+        foreach (var _ in PrestigeSystem.TickStages(campaign)) { }
+        Check(country.Prestige == unconnected + 21f && country.Prestige == PrestigeSystem.ComputeEquilibrium(campaign, country) &&
+              campaign.DormantRelations.ContainsKey(key),
+            "weekly prestige counts an archived ally and a live subject while excluding retired actors");
+
+        alliance.Stance = DiplomaticStance.Neutral;
+        subject.SubjectType = "";
+        SetElapsedDays(campaign, 14);
+        foreach (var _ in PrestigeSystem.TickStages(campaign)) { }
+        Check(country.Prestige == unconnected, "a later prestige pass sees the end of the alliance and dependency");
     }
 
     private static void VerifyCrossStraitSeededBranching(ProvinceTopology map)
@@ -84,10 +120,23 @@ static class Wave6GeopoliticsTests
                 var chance = MainlandReclamation.AiLaunchChance(c, twn!, chn!, out var posture);
                 Check(chance is >= 0f and <= 0.90f && float.IsFinite(chance),
                     $"bounded Cross-Strait launch chance at seed={seed} day={day} ({chance:F3})");
+                Check(chance == 0f,
+                    $"stable peaceful PRC keeps Cross-Strait AI launch chance at 0 (seed={seed}, day={day}, chance={chance:F3})");
                 seenPostures.Add(posture);
                 horizonPostures[day].Add(posture);
                 if (day == 3650)
-                    distinctLaunchOdds.Add($"{posture}:{chance:F2}");
+                {
+                    var savedStab = chn!.Stability;
+                    var savedWs = chn.WarSupport;
+                    chn.Stability = 0.30f;
+                    chn.WarSupport = 0.30f;
+                    var crisisChance = MainlandReclamation.AiLaunchChance(c, twn!, chn, out var crisisPosture);
+                    chn.Stability = savedStab;
+                    chn.WarSupport = savedWs;
+                    Check(crisisChance > 0f && crisisChance <= 0.90f,
+                        $"strained PRC opens bounded Cross-Strait launch chance at seed={seed} day=3650 ({crisisChance:F3})");
+                    distinctLaunchOdds.Add($"{crisisPosture}:{crisisChance:F2}");
+                }
             }
         }
 
@@ -361,7 +410,8 @@ static class Wave6GeopoliticsTests
         {
             "AiTemperament.cs", "AiTemperSettings.cs", "GeopoliticalCycle.cs",
             "MainlandReclamation.cs", "Escalation.cs", "AiDiplomacy.cs",
-            "CivilWarOutbreak.cs", "CivilIndependence.cs", "StateFailure.cs"
+            "CivilWarOutbreak.cs", "CivilIndependence.cs", "StateFailure.cs",
+            "PrestigeSystem.cs", "CountryRankings.cs"
         };
 
         foreach (var name in ownedSimFiles)
@@ -403,5 +453,106 @@ static class Wave6GeopoliticsTests
             Check(distinct.Count == 3,
                 $"flashpoint state {tag} outbreak/failure pressure diverges cleanly across seeds ({distinct.Count}/3)");
         }
+    }
+
+    private static void VerifyOrganicPrestigeAndEventScaling(ProvinceTopology map)
+    {
+        var a = Campaign.CreateBootstrap(2026);
+        a.AttachProvinceTopology(map.CloneForOverrides());
+        var b = Campaign.CreateBootstrap(2026);
+        b.AttachProvinceTopology(map.CloneForOverrides());
+
+        var usaA = a.NationByTag("USA")!;
+        var usaB = b.NationByTag("USA")!;
+        var chnA = a.NationByTag("CHN")!;
+        var canA = a.NationByTag("CAN")!;
+        Check(usaA.Prestige > 50f && chnA.Prestige > 50f && usaA.Prestige == usaB.Prestige && float.IsFinite(usaA.Prestige),
+            $"initial campaign seeds deterministic non-zero prestige (USA={usaA.Prestige:F1}, CHN={chnA.Prestige:F1})");
+
+        var eqBase = PrestigeSystem.ComputeEquilibrium(a, usaA);
+        var savedNotoriety = usaA.Notoriety;
+        var savedDebtCond = usaA.DebtCondition;
+        usaA.Notoriety = 40f;
+        var eqNotorious = PrestigeSystem.ComputeEquilibrium(a, usaA);
+        usaA.DebtCondition = DebtCondition.Default;
+        var eqDefault = PrestigeSystem.ComputeEquilibrium(a, usaA);
+        Check(eqNotorious < eqBase && MathF.Abs((eqNotorious - eqDefault) - 55f) < 0.05f,
+            "notoriety and sovereign default reduce equilibrium prestige as weighted");
+        usaA.Notoriety = savedNotoriety;
+        usaA.DebtCondition = savedDebtCond;
+
+        var landless = a.Nations.FirstOrDefault(n => n.Landless);
+        if (landless is not null)
+        {
+            landless.Movement!.Legitimacy = 0.5f;
+            var movEq = PrestigeSystem.ComputeEquilibrium(a, landless);
+            Check(MathF.Abs(movEq - 20f) < 0.01f, $"landless movement equilibrium follows Legitimacy*40 ({movEq:F2})");
+        }
+
+        usaA.Prestige = 0f;
+        var expectedFirstDrift = eqBase * a.Defines.PrestigeWeeklyDriftRate;
+        PrestigeSystem.Tick(a);
+        Check(MathF.Abs(usaA.Prestige - expectedFirstDrift) < 0.05f,
+            $"weekly PrestigeSystem.Tick drifts toward equilibrium at configured rate ({usaA.Prestige:F2} vs {expectedFirstDrift:F2})");
+
+        usaA.Prestige = 0f;
+        var allyBase = AllianceSystem.Willingness(a, canA, usaA, null, false);
+        var dealBase = AgreementSystem.Willingness(a, canA, usaA, AgreementKind.TradeAgreement, null, true);
+        usaA.Prestige = 400f;
+        var allyHigh = AllianceSystem.Willingness(a, canA, usaA, null, false);
+        var dealHigh = AgreementSystem.Willingness(a, canA, usaA, AgreementKind.TradeAgreement, null, true);
+        Check(allyHigh > allyBase + 0.03f && dealHigh > dealBase + 0.03f,
+            "high prestige improves alliance and agreement diplomatic willingness");
+
+        usaA.Prestige = 100f;
+        var rel = CampaignDiplomacy.Get(a, usaA.Id, canA.Id);
+        rel.Stance = DiplomaticStance.Allied;
+        a.NoteAllianceChange();
+        Check(AllianceSystem.Break(a, usaA, canA, out _) && MathF.Abs(usaA.Prestige - 88f) < 0.01f,
+            "breaking an alliance deducts 12 prestige");
+        AgreementSystem.Sign(a, rel, AgreementKind.NonAggressionPact);
+        new CancelAgreementCommand { IssuerId = usaA.Id, TargetId = canA.Id, Kind = AgreementKind.NonAggressionPact }.Apply(a);
+        Check(MathF.Abs(usaA.Prestige - 76f) < 0.01f,
+            "cancelling a non-aggression pact deducts 12 prestige");
+
+        var errors = new List<string>();
+        using (var doc = System.Text.Json.JsonDocument.Parse("{\"income_share\": -0.05, \"gdp_share\": -0.002, \"prestige\": 5}"))
+        {
+            var eff = ScriptedEffects.Parse(doc.RootElement, "prestige_scaling_test", errors);
+            Check(errors.Count == 0, "income_share, gdp_share, and prestige parse with zero errors: " + string.Join("; ", errors));
+            Check(ScriptedEffects.Lines(eff).Count == 3 && ScriptedEffects.PreviewForNation(a, usaA, eff).Count == 3,
+                "income_share, gdp_share, and prestige render readable lines and previews");
+        }
+
+        var expectedIncomeCost = IncomePenalties.WeeklyBase(a, usaA) * 52f * 0.05f;
+        usaA.Treasury = 1_000_000f;
+        ScriptedEffects.From(("income_share", -0.05f)).Apply(a, usaA);
+        var actualIncomeCost = 1_000_000f - usaA.Treasury;
+        Check(expectedIncomeCost > 0f && MathF.Abs(actualIncomeCost - expectedIncomeCost) < 0.5f,
+            $"income_share scales by annual revenue regardless of treasury hoard ({actualIncomeCost:F2} vs {expectedIncomeCost:F2})");
+
+        var expectedGdpCost = usaA.Gdp * 0.004f;
+        var beforeGdpTreasury = usaA.Treasury;
+        ScriptedEffects.From(("gdp_share", -0.004f)).Apply(a, usaA);
+        var actualGdpCost = beforeGdpTreasury - usaA.Treasury;
+        Check(expectedGdpCost > 0f && MathF.Abs(actualGdpCost - expectedGdpCost) < 0.5f,
+            $"gdp_share scales cleanly by national GDP ({actualGdpCost:F2} vs {expectedGdpCost:F2})");
+
+        ScriptedEffects.From(("prestige", 10f)).Apply(a, usaA);
+        Check(ScriptedValues.TryRead(a, usaA, "prestige", out var readPrestige) && MathF.Abs(readPrestige - usaA.Prestige) < 0.001f &&
+              MathF.Abs(usaA.Prestige - 86f) < 0.01f,
+            "scripted prestige effect and trigger stay aligned");
+
+        usaA.Prestige = 123.5f;
+        chnA.Prestige = 0f;
+        var fpBefore = CampaignFingerprint.Of(a);
+        var blob = SaveSystem.ExportNetworkSnapshot(a, "prestige_test");
+        var loaded = SaveSystem.ImportNetworkSnapshot(blob, "prestige_test");
+        Check(loaded.Success && loaded.Campaign is not null, "prestige campaign snapshot round-trips cleanly");
+        loaded.Campaign!.AttachProvinceTopology(map.CloneForOverrides());
+        Check(MathF.Abs(loaded.Campaign.NationByTag("USA")!.Prestige - 123.5f) < 0.001f &&
+              loaded.Campaign.NationByTag("CHN")!.Prestige == 0f &&
+              CampaignFingerprint.Of(loaded.Campaign) == fpBefore,
+            "save/load preserves exact Prestige values (including zero) and CampaignFingerprint");
     }
 }

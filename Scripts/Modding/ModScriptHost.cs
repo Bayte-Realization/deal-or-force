@@ -18,6 +18,8 @@ internal sealed class ModScriptHost : IModScriptRuntime
     private readonly List<(RefCounted Instance, string ModId, Godot.Collections.Dictionary Api)> _engineScripts = new();
     private ModApi _api;
 
+    public bool HasActiveScripts => _gdscript.Count > 0 || _engineScripts.Count > 0;
+
     public void Start(IReadOnlyList<ModPackage> packages, object api, Campaign campaign, Action<string, Action> guard, Action<string> log)
     {
         Stop();

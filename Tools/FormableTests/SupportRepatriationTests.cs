@@ -37,8 +37,45 @@ static class SupportRepatriationTests
             if (c.ProvinceMap.ProvinceToState[p] == state)
             { c.ProvinceMap.ProvinceToNation[p] = 502; c.SetProvinceController(p, 502); }
     }
+
+    static void PassageAndHostileControllers()
+    {
+        var c = Fixture();
+        c.AddNation(new Nation { Tag = "CCC", MapIndex = 502, Population = 1000 });
+        c.AddNation(new Nation { Tag = "DDD", MapIndex = 503, RetiredDay = 0 });
+        c.Fallen.Add(3);
+        CampaignDiplomacy.Get(c, 0, 1).MilitaryAccessByB = true;
+        var aliasRelation = CampaignDiplomacy.Get(c, 0, 2);
+        var retiredRelation = CampaignDiplomacy.Get(c, 0, 3);
+        retiredRelation.Stance = DiplomaticStance.AtWar;
+
+        var ground = LongRangeMovement.GroundOf(c, 0);
+        Check(ground.IsPassable(501) && ground.IsPassable(502) && !ground.IsHostile(503),
+            "home and directional access are passable while an archived country is excluded from relation-only enemies");
+
+        aliasRelation.Stance = DiplomaticStance.AtWar;
+        ground = LongRangeMovement.GroundOf(c, 0);
+        Check(ground.IsHostile(502) && !ground.IsPassable(502) && MilitaryAccess.Controllers(c, 0).Contains(502),
+            "a hostile alias blocks support movement while ordinary access still uses the indexed owner");
+
+        aliasRelation.Stance = DiplomaticStance.Neutral;
+        var war = new StrategicWar { Id = 2, AttackerId = 0, DefenderId = 3 };
+        war.AttackerAllies.Add(1);
+        c.Wars.Add(war);
+        CampaignDiplomacy.Get(c, 0, 1).MilitaryAccessByB = false;
+        ground = LongRangeMovement.GroundOf(c, 0);
+        Check(ground.IsPassable(502) && ground.IsHostile(503),
+            "a cobelligerent admits support formations and a live enemy is hostile even when retired");
+
+        CampaignDiplomacy.Get(c, 0, 1).Stance = DiplomaticStance.AtWar;
+        ground = LongRangeMovement.GroundOf(c, 0);
+        Check(ground.IsHostile(502) && !ground.IsPassable(502),
+            "a direct at-war relation overrides shared coalition access");
+    }
+
     public static void Run()
     {
+        PassageAndHostileControllers();
         var stockWorld = Fixture(); var stockOwner = stockWorld.Nations[0];
         stockOwner.Stockpiles.Clear(); stockOwner.StockpilesSeeded = false;
         var stamp = CampaignFingerprint.Of(stockWorld); var stockRng = stockWorld.Random.State;

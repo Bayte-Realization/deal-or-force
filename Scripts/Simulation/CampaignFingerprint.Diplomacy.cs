@@ -267,6 +267,10 @@ public static partial class CampaignFingerprint
             MixText(ref hash, "consolidation"); MixText(ref hash, nation.ConsolidationProject);
             Mix(ref hash, nation.ConsolidationFocusId); MixFloat(ref hash, nation.ConsolidationAmbition);
         }
+        if (nation.Prestige != 0f)
+        {
+            MixText(ref hash, "prestige_v1"); MixFloat(ref hash, nation.Prestige);
+        }
     }
 
     private static void MixNationSubjectState(Nation nation, ref ulong hash)

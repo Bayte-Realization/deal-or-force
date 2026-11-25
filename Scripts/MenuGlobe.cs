@@ -1,5 +1,6 @@
 using System;
 using Godot;
+using DealOrForce.Platform;
 using DealOrForce.Simulation;
 
 namespace DealOrForce;
@@ -76,105 +77,134 @@ public partial class MenuGlobe : Control
         MouseFilter = MouseFilterEnum.Stop;
         MouseDefaultCursorShape = CursorShape.Arrow;
 
-        var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
-        var aaChoice = (SettingsCatalog.Chosen("map_antialiasing") ?? "").Trim().ToLowerInvariant();
-        Viewport.Msaa menuMsaa;
-        if (aaChoice is "off" or "0" or "none")
-            menuMsaa = Viewport.Msaa.Disabled;
-        else if (aaChoice is "4x" or "4")
-            menuMsaa = Viewport.Msaa.Msaa4X;
-        else if (aaChoice is "2x" or "2")
-            menuMsaa = Viewport.Msaa.Msaa2X;
-        else if (isTouchPrimary)
-            menuMsaa = Viewport.Msaa.Disabled;
-        else
-            menuMsaa = Viewport.Msaa.Msaa2X;
-
-        _viewport = new SubViewport
+        BootCrashDiagnostics.Step("menu_globe_ready_start");
+        try
         {
-            Name = "MenuGlobeView",
-            OwnWorld3D = true,
-            TransparentBg = false,
-            PhysicsObjectPicking = false,
-            HandleInputLocally = false,
-            ScreenSpaceAA = Viewport.ScreenSpaceAAEnum.Disabled,
-            AnisotropicFilteringLevel = isTouchPrimary
-                ? Viewport.AnisotropicFiltering.Anisotropy4X
-                : Viewport.AnisotropicFiltering.Anisotropy8X,
-            TextureMipmapBias = isTouchPrimary ? -0.35f : -0.20f,
-            Msaa3D = menuMsaa,
-            RenderTargetUpdateMode = SubViewport.UpdateMode.Always
-        };
-        AddChild(_viewport);
+            var isTouchPrimary = PlatformProfile.Current?.IsTouchPrimary == true;
+            var isMobile = isTouchPrimary ||
+                           PlatformProfile.Current?.IsMobile == true ||
+                           OS.HasFeature("mobile") || OS.HasFeature("android") || OS.HasFeature("ios") ||
+                           OS.GetName() is "Android" or "iOS";
+            var renderMethod = RenderingServer.GetCurrentRenderingMethod() ?? "";
+            var isCompat = string.Equals(renderMethod, "gl_compatibility", StringComparison.OrdinalIgnoreCase);
+            var lowTier = isMobile || PlatformProfile.Current?.ShouldUseCompactTextureBudget == true;
 
-        var sun = new Vector3(-0.76f, 0.32f, 0.42f).Normalized();
-        var ground = MenuChromeTheme.BackdropColor.Darkened(0.45f);
-        var twilight = new Color(0.32f, 0.50f, 0.76f);
-        var lampTone = new Color(0.95f, 0.89f, 0.80f);
-        var starTone = MenuChromeTheme.Paper;
+            var aaChoice = (SettingsCatalog.Chosen("map_antialiasing") ?? "").Trim().ToLowerInvariant();
+            Viewport.Msaa menuMsaa;
+            if (isMobile || isCompat)
+                // Keep 3D MSAA disabled on mobile and GLES3 Compatibility (godot#124258 / Mali-G78 tile memory).
+                menuMsaa = Viewport.Msaa.Disabled;
+            else if (aaChoice is "off" or "0" or "none")
+                menuMsaa = Viewport.Msaa.Disabled;
+            else if (aaChoice is "4x" or "4")
+                menuMsaa = Viewport.Msaa.Msaa4X;
+            else if (aaChoice is "2x" or "2")
+                menuMsaa = Viewport.Msaa.Msaa2X;
+            else
+                menuMsaa = Viewport.Msaa.Msaa2X;
 
-        _viewport.AddChild(new WorldEnvironment
-        {
-            Environment = new Godot.Environment
+            _viewport = new SubViewport
             {
-                BackgroundMode = Godot.Environment.BGMode.Color,
-                BackgroundColor = ground,
-                AmbientLightSource = Godot.Environment.AmbientSource.Disabled
+                Name = "MenuGlobeView",
+                OwnWorld3D = true,
+                TransparentBg = false,
+                PhysicsObjectPicking = false,
+                HandleInputLocally = false,
+                ScreenSpaceAA = Viewport.ScreenSpaceAAEnum.Disabled,
+                AnisotropicFilteringLevel = lowTier
+                    ? Viewport.AnisotropicFiltering.Anisotropy2X
+                    : Viewport.AnisotropicFiltering.Anisotropy8X,
+                TextureMipmapBias = lowTier ? -0.25f : -0.20f,
+                Msaa3D = menuMsaa,
+                RenderTargetUpdateMode = SubViewport.UpdateMode.Always
+            };
+            AddChild(_viewport);
+
+            var sun = new Vector3(-0.76f, 0.32f, 0.42f).Normalized();
+            var ground = MenuChromeTheme.BackdropColor.Darkened(0.45f);
+            var twilight = new Color(0.32f, 0.50f, 0.76f);
+            var lampTone = new Color(0.95f, 0.89f, 0.80f);
+            var starTone = MenuChromeTheme.Paper;
+
+            _viewport.AddChild(new WorldEnvironment
+            {
+                Environment = new Godot.Environment
+                {
+                    BackgroundMode = Godot.Environment.BGMode.Color,
+                    BackgroundColor = ground,
+                    AmbientLightSource = Godot.Environment.AmbientSource.Disabled
+                }
+            });
+
+            _camera = new Camera3D { Name = "Eye", Fov = FieldOfView, Near = 0.5f, Far = 160f, Current = true };
+            _viewport.AddChild(_camera);
+
+            var sky = Shell("Sky", 90f, lowTier ? 32 : 48, lowTier ? 16 : 24, "menu_globe_sky");
+            if (sky.MaterialOverride is ShaderMaterial skyMaterial)
+            {
+                skyMaterial.SetShaderParameter("ground_colour", ground);
+                skyMaterial.SetShaderParameter("star_colour", starTone);
+                skyMaterial.SetShaderParameter("star_strength", 0.78f);
             }
-        });
+            _viewport.AddChild(sky);
 
-        _camera = new Camera3D { Name = "Eye", Fov = FieldOfView, Near = 0.5f, Far = 160f, Current = true };
-        _viewport.AddChild(_camera);
+            _planet = new Node3D { Name = "Planet" };
+            _viewport.AddChild(_planet);
+            var ball = Shell("World", Radius, lowTier ? 64 : 128, lowTier ? 32 : 64, "menu_globe");
+            if (ball.MaterialOverride is ShaderMaterial worldMaterial)
+            {
+                worldMaterial.SetShaderParameter("world_map", Picture("menu_globe", ShippedWorld));
+                worldMaterial.SetShaderParameter("night_lights", Picture("menu_globe_lights", ShippedLights));
+                worldMaterial.SetShaderParameter("sun_direction", sun);
+                worldMaterial.SetShaderParameter("air_colour", twilight);
+                worldMaterial.SetShaderParameter("lamp_colour", lampTone);
+                worldMaterial.SetShaderParameter("brightness", InterfaceSkin.Metric("menu.globe_brightness", 1f));
+            }
+            _planet.AddChild(ball);
 
-        var sky = Shell("Sky", 90f, 48, 24, "menu_globe_sky");
-        if (sky.MaterialOverride is ShaderMaterial skyMaterial)
-        {
-            skyMaterial.SetShaderParameter("ground_colour", ground);
-            skyMaterial.SetShaderParameter("star_colour", starTone);
-            skyMaterial.SetShaderParameter("star_strength", 0.78f);
+            var air = Shell("Air", Radius * 1.032f, lowTier ? 48 : 96, lowTier ? 24 : 48, "menu_globe_air");
+            if (air.MaterialOverride is ShaderMaterial airMaterial)
+            {
+                airMaterial.SetShaderParameter("sun_direction", sun);
+                airMaterial.SetShaderParameter("air_colour", twilight);
+                airMaterial.SetShaderParameter("planet_radius", Radius);
+                airMaterial.SetShaderParameter("thickness", 0.11f);
+                airMaterial.SetShaderParameter("strength", 0.14f);
+            }
+            _viewport.AddChild(air);
+
+            _picture = new TextureRect
+            {
+                Name = "MenuGlobePicture",
+                Texture = _viewport.GetTexture(),
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.Scale,
+                MouseFilter = MouseFilterEnum.Ignore
+            };
+            _picture.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+            AddChild(_picture);
+
+            Resized += Fit;
+            if (GetWindow() is { } window) window.SizeChanged += Fit;
+            Fit();
+            Place();
+            BootCrashDiagnostics.Step("menu_globe_ready_done", $"renderer={renderMethod} msaa={menuMsaa} low_tier={lowTier}");
         }
-        _viewport.AddChild(sky);
-
-        _planet = new Node3D { Name = "Planet" };
-        _viewport.AddChild(_planet);
-        var ball = Shell("World", Radius, 128, 64, "menu_globe");
-        if (ball.MaterialOverride is ShaderMaterial worldMaterial)
+        catch (Exception ex)
         {
-            worldMaterial.SetShaderParameter("world_map", Picture("menu_globe", ShippedWorld));
-            worldMaterial.SetShaderParameter("night_lights", Picture("menu_globe_lights", ShippedLights));
-            worldMaterial.SetShaderParameter("sun_direction", sun);
-            worldMaterial.SetShaderParameter("air_colour", twilight);
-            worldMaterial.SetShaderParameter("lamp_colour", lampTone);
-            worldMaterial.SetShaderParameter("brightness", InterfaceSkin.Metric("menu.globe_brightness", 1f));
+            BootCrashDiagnostics.RecordException("MenuGlobe._Ready", ex, "MenuGlobe fallback to 2D backdrop", fatal: false);
+            GD.PushWarning($"[menu-globe] Falling back safely after GPU setup error: {ex.GetType().Name}: {ex.Message}");
+            if (_viewport is not null && IsInstanceValid(_viewport))
+            {
+                _viewport.QueueFree();
+                _viewport = null;
+            }
+            if (_picture is not null && IsInstanceValid(_picture))
+            {
+                _picture.QueueFree();
+                _picture = null;
+            }
         }
-        _planet.AddChild(ball);
-
-        var air = Shell("Air", Radius * 1.032f, 96, 48, "menu_globe_air");
-        if (air.MaterialOverride is ShaderMaterial airMaterial)
-        {
-            airMaterial.SetShaderParameter("sun_direction", sun);
-            airMaterial.SetShaderParameter("air_colour", twilight);
-            airMaterial.SetShaderParameter("planet_radius", Radius);
-            airMaterial.SetShaderParameter("thickness", 0.11f);
-            airMaterial.SetShaderParameter("strength", 0.14f);
-        }
-        _viewport.AddChild(air);
-
-        _picture = new TextureRect
-        {
-            Name = "MenuGlobePicture",
-            Texture = _viewport.GetTexture(),
-            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = TextureRect.StretchModeEnum.Scale,
-            MouseFilter = MouseFilterEnum.Ignore
-        };
-        _picture.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        AddChild(_picture);
-
-        Resized += Fit;
-        if (GetWindow() is { } window) window.SizeChanged += Fit;
-        Fit();
-        Place();
     }
 
     public override void _ExitTree()
@@ -296,7 +326,10 @@ public partial class MenuGlobe : Control
         if (texture is null) return null;
         // Skip main-thread GPU->CPU GetImage() readbacks + Decompress() + CPU GenerateMipmaps() on
         // touch/mobile devices and on assets already imported with mipmaps (menu_globe.jpg).
-        if (Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
+        if (PlatformProfile.Current?.IsTouchPrimary == true ||
+            PlatformProfile.Current?.IsMobile == true ||
+            OS.HasFeature("mobile") || OS.HasFeature("android") || OS.HasFeature("ios") ||
+            OS.GetName() is "Android" or "iOS" ||
             string.Equals(sprite, "menu_globe", StringComparison.Ordinal))
             return texture;
         using var image = texture.GetImage();

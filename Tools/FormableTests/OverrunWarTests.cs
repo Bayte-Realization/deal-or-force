@@ -48,8 +48,13 @@ static class OverrunWarTests
         Check(!coalition.Wars.Single().Ended, "a side whose ally still holds ground fights on");
 
         var twin = Fixture(withAlly: false);
-        MovementFall.EndLostWars(twin);
-        Check(CampaignFingerprint.Of(c) == CampaignFingerprint.Of(twin), "the surrender is deterministic");
+        using var staged = MovementFall.EndLostWarsStages(twin).GetEnumerator();
+        Check(staged.MoveNext() && !twin.Wars.Single().Ended && twin.Armies.Count == 1,
+            "the weekly review can pause before a surrender");
+        Check(staged.MoveNext() && twin.Wars.Single().Ended && twin.Armies.Count == 0,
+            "a resumed surrender settles the war and disbands the losers within one slice");
+        Check(!staged.MoveNext() && CampaignFingerprint.Of(c) == CampaignFingerprint.Of(twin),
+            "the staged and immediate surrenders produce the same campaign");
 
         Underground();
         ForcedPeaceOnTotalOccupationAndFullScore();

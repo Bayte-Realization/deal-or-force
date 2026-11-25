@@ -73,7 +73,7 @@ public static class NumericIntegrity
         nameof(Nation.SubjectIntegrationProgress), nameof(Nation.SubjectLibertyModifier),
         nameof(Nation.ArmyExperience), nameof(Nation.AirExperience), nameof(Nation.NavalExperience),
         nameof(Nation.PoliticalPoints), nameof(Nation.ImportValue), nameof(Nation.ExportValue),
-        nameof(Nation.RecessionDepth), nameof(Nation.UnionCohesion)
+        nameof(Nation.RecessionDepth), nameof(Nation.UnionCohesion), nameof(Nation.Prestige)
     });
 
     private static readonly FieldInfo[] MovementUnknownFields = UnknownScalarFieldsFor(typeof(MovementState), new HashSet<string>(StringComparer.Ordinal)
@@ -248,6 +248,7 @@ public static class NumericIntegrity
         if (!float.IsFinite(n.ExportValue)) return Bad("country ", n.Tag, nameof(n.ExportValue), n.ExportValue);
         if (!float.IsFinite(n.RecessionDepth)) return Bad("country ", n.Tag, nameof(n.RecessionDepth), n.RecessionDepth);
         if (!float.IsFinite(n.UnionCohesion)) return Bad("country ", n.Tag, nameof(n.UnionCohesion), n.UnionCohesion);
+        if (!float.IsFinite(n.Prestige)) return Bad("country ", n.Tag, nameof(n.Prestige), n.Prestige);
         return NationUnknownFields.Length == 0 ? null : CheckFallbackFields(n, "country ", n.Tag, NationUnknownFields);
     }
 

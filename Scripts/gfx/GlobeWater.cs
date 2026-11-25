@@ -7,6 +7,9 @@ namespace DealOrForce;
 
 public sealed partial class GlobePresentation
 {
+    private ImageTexture _lakeSurfaceTexture;
+    private ImageTexture _riverSurfaceTexture;
+
     private void ApplyWaterPresentation(TerrainImages prepared = null)
     {
         var water = TerrainCatalog.Water;
@@ -26,8 +29,8 @@ public sealed partial class GlobePresentation
         }
         else
         {
-            _globeMaterial.SetShaderParameter("lake_surface", ImageTexture.CreateFromImage(lake));
-            _globeMaterial.SetShaderParameter("river_surface", ImageTexture.CreateFromImage(river));
+            UpdateWaterTileTexture(ref _lakeSurfaceTexture, "lake_surface", lake);
+            UpdateWaterTileTexture(ref _riverSurfaceTexture, "river_surface", river);
         }
         _globeMaterial.SetShaderParameter("river_inset", water.RiverInset);
         _globeMaterial.SetShaderParameter("river_curve_filter",
@@ -73,5 +76,22 @@ public sealed partial class GlobePresentation
             image.Resize(side, side, interp);
         image.GenerateMipmaps();
         return image;
+    }
+
+    private void UpdateWaterTileTexture(ref ImageTexture texture, string uniform, Image image)
+    {
+        if (texture is not null && IsInstanceValid(texture) &&
+            texture.GetWidth() == image.GetWidth() &&
+            texture.GetHeight() == image.GetHeight() &&
+            texture.GetFormat() == image.GetFormat() &&
+            texture.HasMipmaps() == image.HasMipmaps())
+        {
+            texture.Update(image);
+        }
+        else
+        {
+            texture = ImageTexture.CreateFromImage(image);
+            _globeMaterial.SetShaderParameter(uniform, texture);
+        }
     }
 }

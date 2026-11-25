@@ -158,8 +158,9 @@ public static class PeacefulFormation
         !campaign.NobodyPlays && (nation.IsHuman || nation.IsPlayer || campaign.HumanSeats.Contains(nation.Id));
 
     public static bool Consented(Campaign campaign, Nation founder, Nation partner, FormableNation definition) =>
-        definition.PeacefulAccession && partner.DecisionAvailableDay.TryGetValue(ConsentKey(founder.Id, definition.Id), out var until)
-        && until > campaign.ElapsedDays;
+        definition.PeacefulAccession && partner.DecisionAvailableDay.Count > 0 &&
+        partner.DecisionAvailableDay.TryGetValue(ConsentKey(founder.Id, definition.Id), out var until) &&
+        until > campaign.ElapsedDays;
 
     public static bool Participates(Campaign campaign, Nation founder, Nation partner, FormableNation definition)
     {
@@ -246,7 +247,8 @@ public static class PeacefulFormation
                     return "The partner is considering the invitation.";
             }
         }
-        if (partner.DecisionAvailableDay.GetValueOrDefault(OfferKey(founder.Id, definition.Id)) > campaign.ElapsedDays)
+        if (partner.DecisionAvailableDay.Count > 0 &&
+            partner.DecisionAvailableDay.GetValueOrDefault(OfferKey(founder.Id, definition.Id)) > campaign.ElapsedDays)
             return "This partner was approached recently.";
         if ((CampaignDiplomacy.Peek(campaign, founder.Id, partner.Id)?.Opinion ?? 0f) < campaign.Defines.UnionMinimumOpinion)
             return Loc.Format("Relations must reach +{0:0} before accession talks.", campaign.Defines.UnionMinimumOpinion);

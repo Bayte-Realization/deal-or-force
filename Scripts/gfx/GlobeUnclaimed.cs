@@ -62,7 +62,7 @@ public sealed partial class GlobePresentation
         {
             var regionMapIndex = provinceId > 0 && provinceId < map.ProvinceToState.Length
                 ? map.ProvinceToState[provinceId]
-                : SourceEarthData.States[cell];
+                : (SourceEarthData.PeekStatesIfLoaded() is { } loadedStates ? loadedStates[cell] : (ushort)0);
             _globeMaterial.SetShaderParameter("selected_region_id", (float)regionMapIndex);
             _globeMaterial.SetShaderParameter("selected_province_id", (float)provinceId);
             _globeMaterial.SetShaderParameter("selection_active", 1f);

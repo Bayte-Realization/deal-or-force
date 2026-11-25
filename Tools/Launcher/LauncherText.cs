@@ -114,6 +114,8 @@ public static partial class L
 
         // The 0.6.6 window: tabs, start options, help
         ["What's new"] = "Что нового",
+        ["Release {0}"] = "Выпуск {0}",
+        ["Release notes · English"] = "Список изменений · Русский",
         ["Start options"] = "Запуск",
         ["Help"] = "Помощь",
         ["Play"] = "Играть",

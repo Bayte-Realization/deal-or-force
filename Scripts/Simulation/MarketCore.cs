@@ -560,6 +560,7 @@ public static class MarketSystem
         // Warm read-only lookup tables before parallel market passes read them concurrently.
         ControlTally.World(campaign, 0, 0);
         HeldRegions.Refresh(campaign);
+        var administrations = HeldRegions.CommittedAdministrations(campaign);
         campaign.NationsByMapIndex();
         campaign.StatesOf(0);
         campaign.StateByMapIndex(1);
@@ -576,7 +577,7 @@ public static class MarketSystem
             using (SimProfiler.Measure("    mkt:balance"))
             {
                 DeterministicParallel.For(campaign, start, end, index =>
-                    CalculateNationalBalance(campaign, active[index], tallies.Get(active[index].Id)), minItems: 8);
+                    CalculateNationalBalance(campaign, active[index], tallies.Get(active[index].Id), administrations), minItems: 8);
             }
             if (end < activeCount && Campaign.StageOverdue()) yield return 0;
         }
@@ -955,7 +956,8 @@ public static class MarketSystem
         return new TallyTable(dense, overflow);
     }
 
-    private static void CalculateNationalBalance(Campaign campaign, Nation nation, NationTally tallies)
+    private static void CalculateNationalBalance(Campaign campaign, Nation nation, NationTally tallies,
+        IReadOnlyDictionary<int, List<ScenarioState>> administrations)
     {
         // Every good the catalog knows, not only when the market is empty.
         //
@@ -979,7 +981,8 @@ public static class MarketSystem
 
         // The regions whose economy answers to it: its own, less those another country holds,
         // and those it holds of others (HeldRegions) - held ground is ground.
-        var states = HeldRegions.FillEconomyOf(campaign, nation, _stateScratch ??= new List<ScenarioState>(), refresh: false);
+        var states = HeldRegions.FillEconomyOf(campaign, nation, _stateScratch ??= new List<ScenarioState>(),
+            refresh: false, administrations: administrations);
         var defines = campaign.Defines;
 
         // How much of the labour its buildings ask for the nation can actually staff.

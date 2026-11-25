@@ -116,6 +116,16 @@ public sealed partial class GlobePresentation : SubViewportContainer
         return (top + (bot - top) * ty) / 255f;
     }
 
+    private float ReliefLiftFromHeight(float h, float v, bool flat)
+    {
+        var hLand = MathF.Max(0f, h - 0.015f) / 0.985f;
+        if (hLand <= 0f) return 0f;
+        var vClamped = Math.Clamp(v, 0f, 1f);
+        var poleFade = flat ? 1f : SmoothStepGlsl(0.495f, 0.435f, MathF.Abs(vClamped - 0.5f));
+        var projScale = flat ? 1.95f : 1.0f;
+        return MathF.Pow(hLand, 0.85f) * _reliefDisplacement * poleFade * projScale;
+    }
+
     private float LocalReliefLift(float latitude, float longitude, bool flat)
     {
         if (_reliefDisplacement <= 0.0001f || _reliefHeightGrid is null || _reliefHeightWidth <= 0 || _reliefHeightHeight <= 0)
@@ -131,12 +141,52 @@ public sealed partial class GlobePresentation : SubViewportContainer
             MathF.Max(SampleReliefRaw(u + du, v), SampleReliefRaw(u - du, v)),
             MathF.Max(SampleReliefRaw(u, v + dv), SampleReliefRaw(u, v - dv)));
         var h = MathF.Max(hCenter, hCenter + (hNb - hCenter) * 0.45f);
-        var hLand = MathF.Max(0f, h - 0.015f) / 0.985f;
-        if (hLand <= 0f) return 0f;
-        var vClamped = Math.Clamp(v, 0f, 1f);
-        var poleFade = flat ? 1f : SmoothStepGlsl(0.495f, 0.435f, MathF.Abs(vClamped - 0.5f));
-        var projScale = flat ? 1.95f : 1.0f;
-        return MathF.Pow(hLand, 0.85f) * _reliefDisplacement * poleFade * projScale;
+        return ReliefLiftFromHeight(h, v, flat);
+    }
+
+    /// <summary>
+    /// Peak terrain relief across a label's physical footprint on the globe or flat map,
+    /// plus spherical tangent-quad sagitta compensation so multi-letter glyphs and offset
+    /// labels clear mountain ridges instead of clipping into adjacent peaks.
+    /// </summary>
+    private float MaxReliefLiftAround(float latitude, float longitude, float radiusWorldUnits, bool flat)
+    {
+        if (_reliefDisplacement <= 0.0001f || _reliefHeightGrid is null || _reliefHeightWidth <= 0 || _reliefHeightHeight <= 0)
+            return 0f;
+        if (radiusWorldUnits <= 0f)
+            return LocalReliefLift(latitude, longitude, flat);
+
+        var dLatDeg = Math.Clamp(radiusWorldUnits / GlobeRadius * (180f / MathF.PI), 0.12f, 4.5f);
+        var cosLat = MathF.Max(0.22f, MathF.Cos(Mathf.DegToRad(latitude)));
+        var dLonDeg = Math.Clamp(dLatDeg / cosLat, 0.12f, 8.0f);
+
+        var uniformPoleFade = flat || MathF.Abs(latitude) + dLatDeg <= 78.3f;
+        var maxH = 0f;
+        var maxLift = 0f;
+        for (var iy = -2; iy <= 2; iy++)
+        {
+            var sLat = Math.Clamp(latitude + iy * 0.5f * dLatDeg, -89.5f, 89.5f);
+            var v = (90f - sLat) / 180f;
+            for (var ix = -2; ix <= 2; ix++)
+            {
+                var sLon = longitude + ix * 0.5f * dLonDeg;
+                var sample = SampleReliefRaw((sLon + 180f) / 360f, v);
+                if (uniformPoleFade)
+                {
+                    if (sample > maxH) maxH = sample;
+                }
+                else
+                {
+                    var lift = ReliefLiftFromHeight(sample, v, flat);
+                    if (lift > maxLift) maxLift = lift;
+                }
+            }
+        }
+        if (uniformPoleFade)
+            maxLift = ReliefLiftFromHeight(maxH, (90f - latitude) / 180f, flat);
+
+        var sagitta = flat ? 0f : (radiusWorldUnits * radiusWorldUnits) / (2f * GlobeRadius);
+        return maxLift + sagitta;
     }
 
     private float LocalGlobeRadius(float latitude, float longitude, float baseRadius) =>
@@ -150,6 +200,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     private Vector3 LocalFlatPoint(float latitude, float longitude, float baseZ) =>
         FlatPoint(latitude, longitude, LocalFlatZ(latitude, longitude, baseZ));
+
+    private Vector3 LocalSurfaceLabelPoint(float latitude, float longitude, float baseRadius, float footprintRadius) =>
+        SurfacePoint(latitude, longitude, baseRadius + MaxReliefLiftAround(latitude, longitude, footprintRadius, flat: false));
+
+    private Vector3 LocalFlatLabelPoint(float latitude, float longitude, float baseZ, float footprintRadius) =>
+        FlatPoint(latitude, longitude, baseZ + MaxReliefLiftAround(latitude, longitude, footprintRadius, flat: true));
 
     private Vector3 LocalSurfacePointFromNormal(Vector3 normal, float baseRadius)
     {
@@ -245,7 +301,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private double _militaryVisualAccumulator;
     private double _routeVisualAccumulator;
     private double _visualClock;
+    private int _visualPhase;
+    private readonly double[] _visualPhaseAccum = new double[4];
     private Simulation.ProvinceTopology _provinceTopology;
+
+    internal bool GlobeViewInMotion =>
+        _dragging ||
+        _orbitGlide.LengthSquared() > 0.0025f ||
+        MathF.Abs(_distance - _targetDistance) > 0.04f ||
+        (_touchAdapter?.IsTouchActive == true);
 
     /// <summary>The provinces of the map this globe has built, or 0 before it has one.</summary>
     public int ProvinceCount => _provinceTopology?.ProvinceCount ?? 0;
@@ -302,15 +366,74 @@ public sealed partial class GlobePresentation : SubViewportContainer
         UpdateCrossoverProjection();
         var inputBlocked = LoadingInputBlocked || MediaLibraryInputBlocked || MapLayerDrawerInputBlocked;
         TickTouchCamera(delta, inputBlocked);
-        if (!inputBlocked)
+        if (!inputBlocked && !_freeCamera)
         {
-            if (_freeCamera) UpdateFreeCamera(delta);
-            else UpdateOrbitCamera(delta);
+            UpdateOrbitCamera(delta);
+        }
+        else
+        {
+            if (!inputBlocked) UpdateFreeCamera(delta);
+            _isActivelyPanning = false;
         }
         // Picking, density and city layout must see the same projected positions that
         // will be rendered this frame, including wrapping at the date line.
         if (_flatMap) UpdateFlatWorldPositions();
 
+        UpdateShaderZoomAndSurfaceState(delta);
+
+        // Counters glide every frame, on the visual cadence nothing else about them runs at.
+        // This is the one thing in the frame loop that has to be continuous for the map to
+        // read as a place rather than a flipbook.
+        if (MilitaryMarkersEnabled && _mapApplied)
+            using (Simulation.SimProfiler.Measure("f:army motion")) UpdateArmyMarkerMotion((float)delta);
+
+        // Accumulate wall time outside the read fence so frames skipped while DoF-Sim is mid-tick
+        // catch up cleanly on the very next step-boundary read window without stalling 60 FPS.
+        _pendingWorldDelta += delta;
+        _visualClock += delta;
+        for (var p = 0; p < 4; p++) _visualPhaseAccum[p] += delta;
+        _militaryVisualAccumulator += delta;
+        _routeVisualAccumulator += delta;
+        _controllerUploadTimer += delta;
+
+        if (TryBeginFrameRead(out var fencedCampaign))
+        {
+            try
+            {
+                SyncFencedWorldVisuals(snap, fencedCampaign, fastSim);
+            }
+            finally
+            {
+                if (fencedCampaign is not null) fencedCampaign.ExitRead();
+            }
+        }
+
+        if (!_mapApplied && _pendingMapResult is null && _mapTask is { IsCompletedSuccessfully: true })
+        {
+            _pendingMapResult = _mapTask.Result;
+            _mapApplyStage = 0;
+        }
+        else if (!_mapApplied && !_mapFailureReported && _mapTask is { IsFaulted: true })
+        {
+            _mapFailureReported = true;
+            var reason = _mapTask.Exception?.GetBaseException().Message ?? "unknown map-data error";
+            MapLoadingError = reason;
+            GD.PushError($"[dof] authored province map is required: {reason}");
+        }
+        if (!_mapApplied && !_mapFailureReported && _pendingMapResult is not null)
+        {
+            try { ApplyPoliticalMapStage(); }
+            catch (Exception exception)
+            {
+                _mapFailureReported = true;
+                MapLoadingError = exception.Message;
+                GD.PushError($"[dof] map upload failed: {exception}");
+            }
+        }
+    }
+
+    private void UpdateShaderZoomAndSurfaceState(double delta)
+    {
         // Keep the authored political raster legible at strategic distance. The old
         // quarter-resolution layer supplied almost forty percent of the default globe,
         // which made country silhouettes and coastlines look out of focus. A small
@@ -346,167 +469,172 @@ public sealed partial class GlobePresentation : SubViewportContainer
             ApplyMapBorderStyle();
         }
         UpdateIce(delta);
+    }
 
-        // Counters glide every frame, on the visual cadence nothing else about them runs at.
-        // This is the one thing in the frame loop that has to be continuous for the map to
-        // read as a place rather than a flipbook.
-        if (MilitaryMarkersEnabled && _mapApplied)
-            using (Simulation.SimProfiler.Measure("f:army motion")) UpdateArmyMarkerMotion((float)delta);
+    private bool AnyRegionBadgeActive()
+    {
+        if (_regionBadges.Count == 0) return false;
+        foreach (var badge in _regionBadges.Values)
+            if (badge.Alpha > 0f) return true;
+        return false;
+    }
 
-        // Accumulate wall time outside the read fence so frames skipped while DoF-Sim is mid-tick
-        // catch up cleanly on the very next step-boundary read window without stalling 60 FPS.
-        _pendingWorldDelta += delta;
-        _visualClock += delta;
-        _militaryVisualAccumulator += delta;
-        _routeVisualAccumulator += delta;
-        _controllerUploadTimer += delta;
-
-        if (TryBeginFrameRead(out var fencedCampaign))
+    private void SyncFencedWorldVisuals(Simulation.CampaignRenderSnapshot snap, Simulation.Campaign fencedCampaign, bool fastSim)
+    {
+        var heavyGpuUploadedThisFrame = PollPlateRepaint();
+        var fogViewer = FogOfWarActive && fencedCampaign?.Player is { IsHuman: true } ? fencedCampaign.Player.Id : -1;
+        if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; }
+        var fogViewerParam = FogOfWarActive && fencedCampaign?.Player is { IsHuman: true } ? fencedCampaign.Player.MapIndex : -1;
+        if (_cachedFogViewerParam != fogViewerParam)
         {
-            try
-            {
-                PollPlateRepaint();
-                var fogViewer = FogOfWarActive && fencedCampaign?.Player is { IsHuman: true } ? fencedCampaign.Player.Id : -1;
-                if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; }
-                var fogViewerParam = FogOfWarActive && fencedCampaign?.Player is { IsHuman: true } ? fencedCampaign.Player.MapIndex : -1;
-                if (_cachedFogViewerParam != fogViewerParam)
-                {
-                    _cachedFogViewerParam = fogViewerParam;
-                    _globeMaterial?.SetShaderParameter("fog_viewer", fogViewerParam);
-                }
-                UpdateFogTint();
-                UpdateFogVisibility();
-                var syncDelta = Math.Min(_pendingWorldDelta, 0.25);
-                _pendingWorldDelta = 0.0;
-                UpdateWeather(syncDelta);
-                // A frozen world's ships stand where the ice caught them, and its news does not pulse.
-                var worldDelta = Simulation.WorldCurses.Frozen(fencedCampaign) ? 0.0 : syncDelta;
-                UpdateTradeTraffic(worldDelta);
-                UpdateEventPulses(worldDelta);
-                UpdateNuclearBlasts();
-                KeepAllowedProjection();
-                // A capital that moved - by choice, or because its region was ceded - moves its marker.
-                if (_mapApplied && fencedCampaign is not null && (_capitalRevision != fencedCampaign.CapitalRevision ||
-                    _capitalDestroyedCount != fencedCampaign.DestroyedProvinces.Count))
-                    BuildCapitalMarkers(fencedCampaign);
-                // The stars go as far round as the capitals' names do (GlobeCities): past that they stood
-                // in a nameless row along the limb, where the ground is seen edge-on.
-                // LOD is not motion: labels and counters are re-evaluated ten times a second while the
-                // camera keeps moving every frame. At sixty times a second this was two milliseconds
-                // of every frame spent hiding markers that were already hidden.
-                var visualStep = _visualClock;
-                var visualInterval = fastSim ? 0.125 : 0.1;
-                var visualDue = _visualClock >= visualInterval;
-                if (visualDue) _visualClock = 0;
-                if (visualDue)
-                    UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f && Simulation.WorldLayers.On("capitals"), CityHorizon());
-                var armySyncInterval = snap is { Version: > 0 }
-                    ? (!snap.IsPaused && snap.Speed >= 5 ? 0.15 : fastSim ? 0.12 : 0.10)
-                    : (fencedCampaign is { IsPaused: false, Speed: >= 5 } ? 0.15 : fastSim ? 0.12 : 0.10);
-                if (MilitaryMarkersEnabled && _mapApplied && fencedCampaign is not null && _militaryVisualAccumulator >= armySyncInterval)
-                {
-                    _militaryVisualAccumulator = 0;
-                    using (Simulation.SimProfiler.Measure("f:army sync")) SyncArmyMarkers();
-                    using (Simulation.SimProfiler.Measure("f:army look")) UpdateMilitaryPresentation();
-                }
-                if (visualDue)
-                    using (Simulation.SimProfiler.Measure("f:army vis"))
-                    {
-                        RefreshArmyMarkerVisibility();
-                        UpdateCounterScale();
-                    }
-                if (MilitaryMarkersEnabled && visualDue)
+            _cachedFogViewerParam = fogViewerParam;
+            _globeMaterial?.SetShaderParameter("fog_viewer", fogViewerParam);
+        }
+        UpdateFogTint();
+        if (FogOfWarActive && _mapApplied && fencedCampaign?.Player is { IsHuman: true } && fencedCampaign.ProvinceMap is not null &&
+            (!heavyGpuUploadedThisFrame || _uploadedVisionRevision < 0))
+            UpdateFogVisibility();
+        var syncDelta = Math.Min(_pendingWorldDelta, 0.25);
+        _pendingWorldDelta = 0.0;
+        UpdateWeather(syncDelta);
+        // A frozen world's ships stand where the ice caught them, and its news does not pulse.
+        var worldDelta = Simulation.WorldCurses.Frozen(fencedCampaign) ? 0.0 : syncDelta;
+        UpdateTradeTraffic(worldDelta);
+        UpdateEventPulses(worldDelta);
+        UpdateNuclearBlasts();
+        KeepAllowedProjection();
+        // A capital that moved - by choice, or because its region was ceded - moves its marker.
+        if (_mapApplied && fencedCampaign is not null && (_capitalRevision != fencedCampaign.CapitalRevision ||
+            _capitalDestroyedCount != fencedCampaign.DestroyedProvinces.Count))
+            BuildCapitalMarkers(fencedCampaign);
+
+        // Stagger heavy visual passes across 4 rotating sub-phases so capitals/fleets,
+        // army density, cities/settlements, and country/region labels never spike one frame.
+        var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var phaseInterval = isTouchPrimary ? 0.045 : 0.030;
+        if (_visualClock >= phaseInterval)
+        {
+            _visualClock = 0;
+            var phase = _visualPhase;
+            _visualPhase = (_visualPhase + 1) & 3;
+            var visualStep = Math.Min(_visualPhaseAccum[phase], 0.25);
+            _visualPhaseAccum[phase] = 0.0;
+            StepStaggeredVisualPhase(phase, visualStep);
+        }
+
+        var armySyncInterval = snap is { Version: > 0 }
+            ? (!snap.IsPaused && snap.Speed >= 5 ? 0.15 : fastSim ? 0.12 : 0.10)
+            : (fencedCampaign is { IsPaused: false, Speed: >= 5 } ? 0.15 : fastSim ? 0.12 : 0.10);
+        if (MilitaryMarkersEnabled && _mapApplied && fencedCampaign is not null && _militaryVisualAccumulator >= armySyncInterval)
+        {
+            _militaryVisualAccumulator = 0;
+            using (Simulation.SimProfiler.Measure("f:army sync")) SyncArmyMarkers();
+            using (Simulation.SimProfiler.Measure("f:army look")) UpdateMilitaryPresentation();
+        }
+        if (IsInstanceValid(_battleRoot) && _battleRoot.Visible != MilitaryMarkersEnabled)
+            _battleRoot.Visible = MilitaryMarkersEnabled;
+        var routeSelectionDirty = _routeFingerprint == int.MinValue;
+        var routeInterval = isTouchPrimary ? 0.22 : 0.125;
+        var routeDue = routeSelectionDirty || _routeVisualAccumulator >= routeInterval;
+        if (routeDue)
+        {
+            _routeVisualAccumulator = 0;
+            using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
+            using (Simulation.SimProfiler.Measure("f:sealift")) UpdateSeaLiftPreview();
+            using (Simulation.SimProfiler.Measure("f:supply lines")) UpdateSupplyLines();
+            using (Simulation.SimProfiler.Measure("f:strait crossings")) UpdateStraitCrossings();
+        }
+        var controllerUploadedThisFrame = false;
+        var uploadInterval = isTouchPrimary ? 0.20 : (fastSim ? 0.14 : 0.0);
+        var uploadDue = _controlRevision < 0 || (!heavyGpuUploadedThisFrame && (uploadInterval <= 0.0 || _controllerUploadTimer >= uploadInterval));
+        if (_mapApplied && fencedCampaign is not null && _controlRevision != fencedCampaign.MapRevision && uploadDue)
+        {
+            _controllerUploadTimer = 0;
+            controllerUploadedThisFrame = true;
+            using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
+        }
+        if (_mapApplied && fencedCampaign is not null &&
+            (_labelTask is not null || (!controllerUploadedThisFrame && !heavyGpuUploadedThisFrame && _labelRevision != fencedCampaign.MapRevision && uploadDue)))
+            using (Simulation.SimProfiler.Measure("f:label place")) RefreshCountryLabelPlacement();
+        if (_frontPreviewDeferred && !controllerUploadedThisFrame && !heavyGpuUploadedThisFrame && _mapApplied && fencedCampaign is not null)
+        {
+            _frontPreviewDeferred = false;
+            using (Simulation.SimProfiler.Measure("f:front preview")) BuildFrontPreview();
+            _frontRevision = fencedCampaign.MapRevision;
+        }
+        if (IsInstanceValid(_frontPreview))
+        {
+            var showFront = MilitaryMarkersEnabled && _frontMesh.GetSurfaceCount() > 0;
+            if (_frontPreview.Visible != showFront) _frontPreview.Visible = showFront;
+        }
+        if (RegionIconsWanted || _badgePendingRedraw || AnyRegionBadgeActive())
+            KeepRegionIcons(syncDelta);
+        if (fencedCampaign is not null && _mapMode is not (StrategicMapMode.Political or StrategicMapMode.Terrain or StrategicMapMode.Relief) &&
+            (!controllerUploadedThisFrame && !heavyGpuUploadedThisFrame || _lastMapModeDay <= -100))
+            UpdateMapModePaletteIfNeeded();
+    }
+
+    private void StepStaggeredVisualPhase(int phase, double visualStep)
+    {
+        switch (phase)
+        {
+            case 0:
+                UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f && Simulation.WorldLayers.On("capitals"), CityHorizon());
+                if (MilitaryMarkersEnabled)
                     using (Simulation.SimProfiler.Measure("f:fleets")) UpdateFleetMarkers();
-                if (visualDue)
-                    UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, MilitaryMarkersEnabled && (_flatMap || ViewDistance <= 13.5f),
-                        _flatMap ? 0f : GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length()) + .002f);
-                if (visualDue) UpdateSupportPresentation(visualStep);
-                if (visualDue && _flatMap && MilitaryMarkersEnabled)
-                    using (Simulation.SimProfiler.Measure("f:counter layout")) UpdateFlatCounterDensity();
-                else if (visualDue && MilitaryMarkersEnabled)
-                    using (Simulation.SimProfiler.Measure("f:surface layout")) UpdateSurfaceCounterDensity();
-                if (visualDue && MilitaryMarkersEnabled) LayoutSupportCounters();
-                if (IsInstanceValid(_battleRoot)) _battleRoot.Visible = MilitaryMarkersEnabled;
-                var routeSelectionDirty = _routeFingerprint == int.MinValue;
-                var routeDue = !fastSim || routeSelectionDirty || _routeVisualAccumulator >= 0.125;
-                if (routeDue)
+                UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, MilitaryMarkersEnabled && (_flatMap || ViewDistance <= 13.5f),
+                    _flatMap ? 0f : GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length()) + .002f);
+                UpdateSupportPresentation(visualStep);
+                break;
+            case 1:
+                using (Simulation.SimProfiler.Measure("f:army vis"))
                 {
-                    _routeVisualAccumulator = 0;
-                    using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
-                    using (Simulation.SimProfiler.Measure("f:sealift")) UpdateSeaLiftPreview();
-                    using (Simulation.SimProfiler.Measure("f:supply lines")) UpdateSupplyLines();
-                    using (Simulation.SimProfiler.Measure("f:strait crossings")) UpdateStraitCrossings();
+                    RefreshArmyMarkerVisibility();
+                    UpdateCounterScale();
                 }
-                var controllerUploadedThisFrame = false;
-                var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
-                var uploadInterval = isTouchPrimary ? 0.20 : (fastSim ? 0.14 : 0.0);
-                var uploadDue = _controlRevision < 0 || uploadInterval <= 0.0 || _controllerUploadTimer >= uploadInterval;
-                if (_mapApplied && fencedCampaign is not null && _controlRevision != fencedCampaign.MapRevision && uploadDue)
+                if (MilitaryMarkersEnabled)
                 {
-                    _controllerUploadTimer = 0;
-                    controllerUploadedThisFrame = true;
-                    using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
+                    if (_flatMap)
+                        using (Simulation.SimProfiler.Measure("f:counter layout")) UpdateFlatCounterDensity();
+                    else
+                        using (Simulation.SimProfiler.Measure("f:surface layout")) UpdateSurfaceCounterDensity();
+                    LayoutSupportCounters();
                 }
-                if (_mapApplied && fencedCampaign is not null &&
-                    (_labelTask is not null || (!controllerUploadedThisFrame && _labelRevision != fencedCampaign.MapRevision && uploadDue)))
-                    using (Simulation.SimProfiler.Measure("f:label place")) RefreshCountryLabelPlacement();
-                if (_frontPreviewDeferred && !controllerUploadedThisFrame && _mapApplied && fencedCampaign is not null)
+                break;
+            case 2:
+                UpdateCityLabels(visualStep);
+                if (CurrentShaderQualityTier() < 0.5f)
+                    UpdateSettlementModels(visualStep);
+                break;
+            case 3:
+                using (Simulation.SimProfiler.Measure("f:labels"))
                 {
-                    _frontPreviewDeferred = false;
-                    using (Simulation.SimProfiler.Measure("f:front preview")) BuildFrontPreview();
-                    _frontRevision = fencedCampaign.MapRevision;
+                    UpdateCountryLabelVisibility(visualStep);
+                    UpdateRegionLabels(visualStep);
                 }
-                if (IsInstanceValid(_frontPreview)) _frontPreview.Visible = MilitaryMarkersEnabled && _frontMesh.GetSurfaceCount() > 0;
-                if (visualDue)
-                {
-                    UpdateCityLabels(visualStep);
-                    if (CurrentShaderQualityTier() < 1.5f)
-                        UpdateSettlementModels(visualStep);
-                    using (Simulation.SimProfiler.Measure("f:labels"))
-                    {
-                        UpdateCountryLabelVisibility(visualStep);
-                        UpdateRegionLabels(visualStep);
-                    }
-                }
-                KeepRegionIcons(syncDelta);
-                UpdateMapModePaletteIfNeeded();
-            }
-            finally
-            {
-                if (fencedCampaign is not null) fencedCampaign.ExitRead();
-            }
-        }
-
-        if (!_mapApplied && _pendingMapResult is null && _mapTask is { IsCompletedSuccessfully: true })
-        {
-            _pendingMapResult = _mapTask.Result;
-            _mapApplyStage = 0;
-        }
-        else if (!_mapApplied && !_mapFailureReported && _mapTask is { IsFaulted: true })
-        {
-            _mapFailureReported = true;
-            var reason = _mapTask.Exception?.GetBaseException().Message ?? "unknown map-data error";
-            MapLoadingError = reason;
-            GD.PushError($"[dof] authored province map is required: {reason}");
-        }
-        if (!_mapApplied && !_mapFailureReported && _pendingMapResult is not null)
-        {
-            try { ApplyPoliticalMapStage(); }
-            catch (Exception exception)
-            {
-                _mapFailureReported = true;
-                MapLoadingError = exception.Message;
-                GD.PushError($"[dof] map upload failed: {exception}");
-            }
+                break;
         }
     }
 
     /// <summary>
-    /// GPU uploads are deliberately split across frames. Uploading the political,
-    /// region, province, nation and hydrology rasters in one frame used to make the
-    /// window look hung for several seconds even though the data worker had finished.
+    /// GPU uploads are deliberately split across frames during live play, and batched up to a
+    /// 12 ms per-frame budget while the loading screen covers the map so boot finishes in 1-2 frames.
     /// </summary>
     private void ApplyPoliticalMapStage()
+    {
+        var budgetWatch = LoadingInputBlocked ? System.Diagnostics.Stopwatch.StartNew() : null;
+        while (!_mapApplied && !_mapFailureReported && _pendingMapResult is not null)
+        {
+            var stage = _mapApplyStage;
+            ApplySinglePoliticalMapStage();
+            if (!LoadingInputBlocked || _mapApplied || _pendingMapResult is null || stage >= 5)
+                break;
+            if (budgetWatch is not null && budgetWatch.Elapsed.TotalMilliseconds >= 12.0)
+                break;
+        }
+    }
+
+    private void ApplySinglePoliticalMapStage()
     {
         var result = _pendingMapResult;
         if (_mapApplyStage == 0) _mapUploadStartTicks = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -674,7 +802,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 }
                 else
                 {
-                    GC.Collect();
+                    GC.Collect(1, GCCollectionMode.Optimized, blocking: false);
                 }
                 gcWatch.Stop();
                 var uploadMs = _mapUploadStartTicks > 0
@@ -714,7 +842,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         else
         {
             shader.Code = MapColorSpaceShader.Build(shader.Code);
-            if (RenderingServer.GetCurrentRenderingMethod() == "gl_compatibility")
+            if (UsePackedMapShader)
                 shader.Code = PackedMapShader.Build(shader.Code);
         }
         _globeMaterial = new ShaderMaterial { Shader = shader };
@@ -740,16 +868,16 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(dryWater));
         if (_packedLookups is null)
         {
-        _globeMaterial.SetShaderParameter("province_owner_colors", placeholder);
-        _globeMaterial.SetShaderParameter("province_owner_ids",
-            ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8)));
-        _globeMaterial.SetShaderParameter("province_control_colors",
-            ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8)));
-        _globeMaterial.SetShaderParameter("front_membership",
-            ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rg8)));
-        _globeMaterial.SetShaderParameter("map_mode_colors",
-            ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8)));
-        _globeMaterial.SetShaderParameter("resource_colors", placeholder);
+            _ownerIdTexture = ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8));
+            _globeMaterial.SetShaderParameter("province_owner_ids", _ownerIdTexture);
+            _controllerTexture = ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8));
+            _globeMaterial.SetShaderParameter("province_control_colors", _controllerTexture);
+            _frontTexture = ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8));
+            _globeMaterial.SetShaderParameter("front_membership", _frontTexture);
+            _mapModeTexture = ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8));
+            _globeMaterial.SetShaderParameter("map_mode_colors", _mapModeTexture);
+            _globeMaterial.SetShaderParameter("province_owner_colors", placeholder);
+            _globeMaterial.SetShaderParameter("resource_colors", placeholder);
         }
         mesh.Material = _globeMaterial;
 
@@ -869,10 +997,20 @@ public sealed partial class GlobePresentation : SubViewportContainer
         double cacheIoMs = 0, topoMs = 0, hydroMs = 0, anchorMs = 0, pixelMs = 0, plateMs = 0;
 
         ushort[] control = null;
-        var states = SourceEarthData.States;
+        var states = SourceEarthData.PeekStatesIfLoaded();
         var sourceWidth = SourceEarthData.Width;
         var sourceHeight = SourceEarthData.Height;
-        var regionFingerprint = Simulation.MapRasterCatalog.RegionFingerprint(states);
+        ulong regionFingerprint;
+        if (states is { Length: > 0 })
+        {
+            regionFingerprint = Simulation.MapRasterCatalog.RegionFingerprint(states);
+        }
+        else if (!Simulation.TerritorialTopology.TryPeekBootCacheRegionFingerprint(
+                     sourceWidth, sourceHeight, out regionFingerprint))
+        {
+            states = SourceEarthData.States;
+            regionFingerprint = Simulation.MapRasterCatalog.RegionFingerprint(states);
+        }
 
         Simulation.ProvinceTopology provinces;
         string provinceSource;
@@ -952,6 +1090,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             cacheHit = false;
             cacheIoMs += stageWatch.Elapsed.TotalMilliseconds;
+            states ??= SourceEarthData.States;
             control = SourceEarthData.Control;
 
             if (lowMemoryMobile)
@@ -1115,6 +1254,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         }
         else
         {
+            states ??= SourceEarthData.States;
             control ??= SourceEarthData.Control;
             frontierAuthored = control;
         }

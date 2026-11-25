@@ -803,12 +803,10 @@ public static class Escalation
         var bilateralCycle = GeopoliticalCycle.BilateralRealignmentBias(c, a, b) * -5.5f * factor;
         var straitDrift = 0f;
         if (c.ElapsedDays > 0 &&
-            ((string.Equals(a.Tag, "TWN", StringComparison.OrdinalIgnoreCase) && string.Equals(b.Tag, "CHN", StringComparison.OrdinalIgnoreCase)) ||
-             (string.Equals(a.Tag, "CHN", StringComparison.OrdinalIgnoreCase) && string.Equals(b.Tag, "TWN", StringComparison.OrdinalIgnoreCase))))
+            c.Defines.MainlandReclamationEnabled &&
+            MainlandReclamation.TryGetDividedRivalPair(c, a, b, out var contender, out var holder))
         {
-            var twn = string.Equals(a.Tag, "TWN", StringComparison.OrdinalIgnoreCase) ? a : b;
-            var chn = twn.Id == a.Id ? b : a;
-            straitDrift = MainlandReclamation.EvaluateStraitPosture(c, twn, chn) switch
+            straitDrift = MainlandReclamation.EvaluateStraitPosture(c, contender, holder) switch
             {
                 CrossStraitPosture.DiplomaticDetente => -6.0f,
                 CrossStraitPosture.AsymmetricCrisis => 7.0f,

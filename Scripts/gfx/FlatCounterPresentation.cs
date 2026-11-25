@@ -20,6 +20,12 @@ public sealed partial class GlobePresentation
     private readonly List<(ArmyStackMarker Marker, Rect2 Room)> _strategicHosts = new();
     private readonly Dictionary<ArmyStackMarker, List<ArmyStackMarker>> _strategicMerges = new();
     private readonly List<List<ArmyStackMarker>> _provinceStackPool = new();
+    private readonly List<ArmyStackMarker> _motionActiveStacks = new();
+    private int _motionScanFp = int.MinValue, _motionScanCount = -1;
+    private long _motionScanHours = long.MinValue;
+    private bool _motionScanFlat;
+    private float _motionScanFlatX = float.NaN;
+    private ulong _nextMotionScanMs;
 
     // Geography is authoritative. Collision avoidance must never move a division
     // counter away from its province or merge it with a neighbouring province.
@@ -60,74 +66,88 @@ public sealed partial class GlobePresentation
     /// the drawn node toward it. A counter that is already there costs one comparison, and one
     /// that has just been created snaps rather than flying in from wherever it was spawned.
     /// </summary>
+    private static bool HasMovingArmy(ArmyStackMarker marker)
+    {
+        for (var i = 0; i < marker.Stack.Count; i++)
+            if (marker.Stack[i].IsMoving && marker.Stack[i].Route.Count > 0) return true;
+        return false;
+    }
+
+    private void StepArmyMarkerMotion(ArmyStackMarker marker, float blend, bool isMoving)
+    {
+        var node = marker.Node;
+        if (!marker.MotionSettled)
+        {
+            // A brand-new counter appears where it belongs. Nothing flies in from nowhere.
+            marker.DisplayPosition = marker.TargetPosition;
+            marker.MotionSettled = true;
+            node.Position = marker.DisplayPosition;
+            return;
+        }
+        if (isMoving) marker.TargetPosition = ArmyMarkerPosition(marker);
+        if (_flatMap)
+        {
+            // Horizontal panning changes the nearest repeated sheet, including when
+            // the camera rebases at 180 degrees. Do not ease that whole-world offset
+            // as though the division were marching across every intervening country.
+            var rebasedX = DateLineSeam.NearestCopy(marker.DisplayPosition.X, marker.TargetPosition.X, FlatMapWidth);
+            if (rebasedX != marker.DisplayPosition.X)
+                node.Position = marker.DisplayPosition = new Vector3(rebasedX, marker.DisplayPosition.Y, marker.DisplayPosition.Z);
+        }
+        var remaining = marker.TargetPosition - marker.DisplayPosition;
+        if (remaining.LengthSquared() < 1e-10f) return;
+        // A camera pan or zoom moves the target of a stationary counter every frame. That
+        // is not the formation marching, and easing it would make the whole map swim.
+        if (!isMoving)
+            node.Position = marker.DisplayPosition = marker.TargetPosition;
+        else
+        {
+            marker.DisplayPosition += remaining * blend;
+            // On the globe the card lies on the surface, so the eased point is pushed back out
+            // to the local terrain surface rather than cutting the chord through the planet.
+            if (!_flatMap) marker.DisplayPosition = LocalSurfacePointFromNormal(marker.DisplayPosition, SurfaceMarkerRadius);
+            node.Position = marker.DisplayPosition;
+        }
+        // Orientation follows the ground under the card, so it has to be recomputed as the
+        // card slides rather than left at the bearing it was created with.
+        OrientSurfaceArmyCard(marker);
+        if (!_flatMap) SizeSurfaceArmyCounter(marker);
+    }
+
     private void UpdateArmyMarkerMotion(float delta)
     {
         if (!IsInstanceValid(_armyRoot) || _armyStacks.Count == 0) return;
         // Frame-rate independent ease: the same glide at 30fps and at 144fps. The constant is
         // how much of the remaining distance is covered per 60th of a second.
-        var blend = 1f - MathF.Exp(-delta * 6.5f);
-        blend = Mathf.Clamp(blend, 0f, 1f);
-        foreach (var marker in _armyStacks.Values)
+        var blend = Mathf.Clamp(1f - MathF.Exp(-delta * 6.5f), 0f, 1f);
+        var now = Time.GetTicksMsec();
+        var hours = _campaign?.ElapsedHours ?? -1;
+        var flatWrapDue = _flatMap && (!float.IsFinite(_motionScanFlatX) ||
+            MathF.Abs(_flatX - _motionScanFlatX) >= (_isActivelyPanning ? 0.25f : 0.001f));
+        if (_armyStacks.Count != _motionScanCount || _armyStructureFingerprint != _motionScanFp ||
+            _motionScanFlat != _flatMap || hours != _motionScanHours || flatWrapDue || now >= _nextMotionScanMs)
         {
-            var node = marker.Node;
-            if (node is null || !IsInstanceValid(node) || !node.Visible) continue;
-            if (!marker.MotionSettled)
+            _motionScanCount = _armyStacks.Count; _motionScanFp = _armyStructureFingerprint;
+            _motionScanFlat = _flatMap; _motionScanHours = hours; _motionScanFlatX = _flatX;
+            _nextMotionScanMs = now + (_isActivelyPanning ? 250UL : 160UL);
+            _motionActiveStacks.Clear();
+            foreach (var marker in _armyStacks.Values)
             {
-                // A brand-new counter appears where it belongs. Nothing flies in from nowhere.
-                marker.DisplayPosition = marker.TargetPosition;
-                marker.MotionSettled = true;
-                node.Position = marker.DisplayPosition;
-                continue;
+                var node = marker.Node;
+                if (node is null || !IsInstanceValid(node) || !node.Visible) continue;
+                var moving = HasMovingArmy(marker);
+                var unsettled = !marker.MotionSettled || (marker.TargetPosition - marker.DisplayPosition).LengthSquared() >= 1e-10f;
+                if (!moving && !unsettled && !_flatMap) continue;
+                if (moving || unsettled) _motionActiveStacks.Add(marker);
+                StepArmyMarkerMotion(marker, blend, moving);
             }
-            var isMoving = false;
-            for (var i = 0; i < marker.Stack.Count; i++)
-            {
-                var army = marker.Stack[i];
-                if (army.IsMoving && army.Route.Count > 0)
-                {
-                    isMoving = true;
-                    break;
-                }
-            }
-            if (isMoving)
-            {
-                marker.TargetPosition = ArmyMarkerPosition(marker);
-            }
-            if (_flatMap)
-            {
-                // Horizontal panning changes the nearest repeated sheet, including when
-                // the camera rebases at 180 degrees. Do not ease that whole-world offset
-                // as though the division were marching across every intervening country.
-                var rebasedX = DateLineSeam.NearestCopy(marker.DisplayPosition.X,
-                    marker.TargetPosition.X, FlatMapWidth);
-                if (rebasedX != marker.DisplayPosition.X)
-                {
-                    marker.DisplayPosition = new Vector3(rebasedX, marker.DisplayPosition.Y, marker.DisplayPosition.Z);
-                    node.Position = marker.DisplayPosition;
-                }
-            }
-            var remaining = marker.TargetPosition - marker.DisplayPosition;
-            if (remaining.LengthSquared() < 1e-10f) continue;
-            // A camera pan or zoom moves the target of a stationary counter every frame. That
-            // is not the formation marching, and easing it would make the whole map swim.
-            if (!isMoving)
-            {
-                marker.DisplayPosition = marker.TargetPosition;
-                node.Position = marker.DisplayPosition;
-                OrientSurfaceArmyCard(marker);
-                if (!_flatMap) SizeSurfaceArmyCounter(marker);
-                continue;
-            }
-            marker.DisplayPosition += remaining * blend;
-            // On the globe the card lies on the surface, so the eased point is pushed back out
-            // to the local terrain surface rather than cutting the chord through the planet.
-            if (!_flatMap)
-                marker.DisplayPosition = LocalSurfacePointFromNormal(marker.DisplayPosition, SurfaceMarkerRadius);
-            node.Position = marker.DisplayPosition;
-            // Orientation follows the ground under the card, so it has to be recomputed as the
-            // card slides rather than left at the bearing it was created with.
-            OrientSurfaceArmyCard(marker);
-            if (!_flatMap) SizeSurfaceArmyCounter(marker);
+            return;
+        }
+        for (var i = 0; i < _motionActiveStacks.Count; i++)
+        {
+            var marker = _motionActiveStacks[i];
+            if (marker.Node is null || !IsInstanceValid(marker.Node) || !marker.Node.Visible) continue;
+            StepArmyMarkerMotion(marker, blend, HasMovingArmy(marker));
         }
     }
 
@@ -135,6 +155,8 @@ public sealed partial class GlobePresentation
     /// is eased by <see cref="UpdateArmyMarkerMotion"/>.</summary>
     private void SnapArmyMarkerPositions()
     {
+        _motionActiveStacks.Clear();
+        _motionScanFp = int.MinValue;
         foreach (var marker in _armyStacks.Values)
         {
             if (marker.Node is null || !IsInstanceValid(marker.Node)) continue;
@@ -168,17 +190,9 @@ public sealed partial class GlobePresentation
             var provinceId = marker.Stack[0].ProvinceId;
             if (!_provinceStackScratch.TryGetValue(provinceId, out var list))
             {
-                if (poolIndex < _provinceStackPool.Count)
-                {
-                    list = _provinceStackPool[poolIndex++];
-                    list.Clear();
-                }
-                else
-                {
-                    list = new List<ArmyStackMarker>(4);
-                    _provinceStackPool.Add(list);
-                    poolIndex++;
-                }
+                list = poolIndex < _provinceStackPool.Count ? _provinceStackPool[poolIndex++] : null;
+                if (list is not null) list.Clear();
+                else { list = new List<ArmyStackMarker>(4); _provinceStackPool.Add(list); poolIndex++; }
                 _provinceStackScratch[provinceId] = list;
             }
             list.Add(marker);
@@ -194,8 +208,7 @@ public sealed partial class GlobePresentation
             });
             var columns = markers.Count <= 2 ? markers.Count : 2;
             var rows = (markers.Count + columns - 1) / columns;
-            var width = 64f;
-            var height = 40f;
+            var (width, height) = (64f, 40f);
             if (markers[0].Plate?.Texture is { } texture)
             {
                 width = texture.GetWidth() * markers[0].Plate.PixelSize * _counterFlatFar;
@@ -203,13 +216,9 @@ public sealed partial class GlobePresentation
             }
             var gap = Math.Clamp(Ui.Metric("map.flat_counter_gap", 4f), 0f, 16f);
             for (var index = 0; index < markers.Count; index++)
-            {
-                var column = index % columns;
-                var row = index / columns;
                 markers[index].LayoutOffset = new Vector2(
-                    (column - (columns - 1) * .5f) * (width + gap),
-                    (row - (rows - 1) * .5f) * (height + gap));
-            }
+                    (index % columns - (columns - 1) * .5f) * (width + gap),
+                    (index / columns - (rows - 1) * .5f) * (height + gap));
         }
     }
 
@@ -248,10 +257,12 @@ public sealed partial class GlobePresentation
         var unitsPerPixel = _flatZoom / Math.Max(1f, Size.Y);
         var moved = Mathf.Abs(_flatX - _densityView.X) + Mathf.Abs(_flatY - _densityView.Y);
         var zoomed = Mathf.Abs(_flatZoom - _densityView.Z);
+        var panBucket = _isActivelyPanning ? 12f : 3f;
+        var zoomBucket = _isActivelyPanning ? 0.008f : 0.0015f;
         if (!_counterDensityDirty && _densityViewport == Size &&
-            moved < unitsPerPixel * 3f && zoomed < _flatZoom * 0.0015f) return;
+            moved < unitsPerPixel * panBucket && zoomed < _flatZoom * zoomBucket) return;
         if (now < _nextCounterDensityMs) return;
-        _nextCounterDensityMs = now + 50;
+        _nextCounterDensityMs = now + (_isActivelyPanning ? 140UL : 50UL);
         _counterDensityDirty = false;
         _densityViewport = Size;
         _densityView = new Vector3(_flatX, _flatY, _flatZoom);
@@ -307,6 +318,13 @@ public sealed partial class GlobePresentation
         }
         // The hosts show everything they took in; the counters taken in show nothing, and a click
         // on one selects the whole merged group.
+        ApplyStrategicFlatCounterHosts();
+        LayoutFlatAuxiliaryCounters();
+        QueueRedraw();
+    }
+
+    private void ApplyStrategicFlatCounterHosts()
+    {
         foreach (var (host, room) in _strategicHosts)
         {
             _strategicMerges.TryGetValue(host, out var merged);
@@ -316,15 +334,11 @@ public sealed partial class GlobePresentation
             var ids = host.Node.GetMeta("display_army_ids");
             foreach (var taken in merged)
             {
-                taken.Plate.Visible = false;
-                taken.Count.Visible = false;
+                taken.Plate.Visible = false; taken.Count.Visible = false;
                 if (taken.ConditionBars is not null) taken.ConditionBars.Visible = false;
-                taken.DisplayFingerprint = 0;
-                taken.Node.SetMeta("display_army_ids", ids);
+                taken.DisplayFingerprint = 0; taken.Node.SetMeta("display_army_ids", ids);
             }
         }
-        LayoutFlatAuxiliaryCounters();
-        QueueRedraw();
     }
 
     private void RefreshProvinceCounterDisplay(ArmyStackMarker marker, bool compact, List<ArmyStackMarker> merged = null)
@@ -338,8 +352,7 @@ public sealed partial class GlobePresentation
         marker.Plate.Visible = true;
         marker.Plate.Scale = Vector3.One;
         marker.Count.Visible = true;
-        var divisions = 0f;
-        var personnel = 0f;
+        float divisions = 0f, personnel = 0f;
         var fingerprint = new HashCode();
         foreach (var army in marker.DisplayStack)
         {
@@ -349,17 +362,10 @@ public sealed partial class GlobePresentation
         }
         var divCount = Mathf.CeilToInt(divisions);
         var menTenths = (int)MathF.Round(personnel / 100f);
-        var textChanged = marker.ShownDivisions != divCount ||
-                          (!compact && marker.ShownMenTenths != menTenths) ||
-                          marker.ShownCompact != compact;
-        if (textChanged)
+        if (marker.ShownDivisions != divCount || (!compact && marker.ShownMenTenths != menTenths) || marker.ShownCompact != compact)
         {
-            marker.ShownDivisions = divCount;
-            marker.ShownMenTenths = menTenths;
-            marker.ShownCompact = compact;
-            var text = compact
-                ? divCount.ToString()
-                : $"{divCount}\n{menTenths / 10f:0.#}k";
+            marker.ShownDivisions = divCount; marker.ShownMenTenths = menTenths; marker.ShownCompact = compact;
+            var text = compact ? divCount.ToString() : $"{divCount}\n{menTenths / 10f:0.#}k";
             marker.CountText = text;
             if (marker.Count.Text != text) marker.Count.Text = text;
         }
@@ -401,10 +407,8 @@ public sealed partial class GlobePresentation
             {
                 if (Math.Max(Math.Abs(x), Math.Abs(y)) != ring) continue;
                 var offset = new Vector2(x * (room.Size.X + 1f), y * (room.Size.Y + 1f));
-                if (offset.LengthSquared() > limit * limit) continue;
-                if (offset.LengthSquared() >= bestDistance) continue;
-                var test = new Rect2(room.Position + offset, room.Size);
-                if (CounterRoomOccupied(test)) continue;
+                if (offset.LengthSquared() > limit * limit || offset.LengthSquared() >= bestDistance) continue;
+                if (CounterRoomOccupied(new Rect2(room.Position + offset, room.Size))) continue;
                 if (allowed is not null && !allowed(offset)) continue;
                 best = offset;
                 bestDistance = offset.LengthSquared();
@@ -469,8 +473,7 @@ public sealed partial class GlobePresentation
             counter.Node.Position = counter.Anchor + new Vector3(offset.X, -offset.Y, 0f) * (_camera.Size / Math.Max(1f, Size.Y));
             // A crowded auxiliary card recedes instead of masking a division: it draws
             // behind the line already, and the fade keeps even that behind-line legible.
-            var plate = counter.Plate;
-            plate.Modulate = new Color(1f, 1f, 1f, crowded ? 0.45f : 1f);
+            counter.Plate.Modulate = Colors.White with { A = crowded ? 0.45f : 1f };
             if (counter.Support is { } supportMarker) supportMarker.DisplayFaded = crowded;
         }
     }
@@ -480,9 +483,8 @@ public sealed partial class GlobePresentation
         for (var y = Mathf.FloorToInt(room.Position.Y / 64); y <= Mathf.FloorToInt(room.End.Y / 64); y++)
         for (var x = Mathf.FloorToInt(room.Position.X / 64); x <= Mathf.FloorToInt(room.End.X / 64); x++)
         {
-            var cell = new Vector2I(x, y);
-            if (!_occupiedCounterCells.TryGetValue(cell, out var entries))
-                _occupiedCounterCells[cell] = entries = new();
+            if (!_occupiedCounterCells.TryGetValue(new Vector2I(x, y), out var entries))
+                _occupiedCounterCells[new Vector2I(x, y)] = entries = new();
             entries.Add(room);
         }
     }

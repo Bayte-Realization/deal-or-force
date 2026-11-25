@@ -377,23 +377,44 @@ public partial class DealOrForceGame
         if (!IsInstanceValid(this) || !IsInsideTree() || _campaign?.Player is null) return;
 
         var targetCampaign = _campaign;
-        SaveSystem.PreparedSave prepared;
-        try
-        {
-            prepared = SaveSystem.Prepare(SaveRoot, slot, targetCampaign, ModFingerprint,
-                string.IsNullOrWhiteSpace(displayName)
-                    ? $"{targetCampaign.Player.DisplayName} · {targetCampaign.Date.Display()}"
-                    : displayName,
-                autosave);
-        }
-        catch (Exception exception)
-        {
-            ReportSaveFailure(exception, targetCampaign);
-            return;
-        }
+        var saveRoot = SaveRoot;
+        var modFp = ModFingerprint;
+        var currentDate = _simRunner.IsActive && ReferenceEquals(_simRunner.Campaign, targetCampaign)
+            ? _simRunner.ReadPresentationDate(targetCampaign)
+            : targetCampaign.Date;
+        var effectiveName = string.IsNullOrWhiteSpace(displayName)
+            ? $"{targetCampaign.Player.DisplayName} · {currentDate.Display()}"
+            : displayName;
 
-        if (IsInstanceValid(_saveStatus)) _saveStatus.Text = Tr("Saving…");
-        var write = System.Threading.Tasks.Task.Run(prepared.Commit);
+        System.Threading.Tasks.Task<SaveMetadata> write;
+        if (WantsBackgroundSimulation &&
+            _simRunner.IsActive &&
+            ReferenceEquals(_simRunner.Campaign, targetCampaign) &&
+            targetCampaign.DeferMainThreadNotifications)
+        {
+            if (IsInstanceValid(_saveStatus)) _saveStatus.Text = Tr("Saving…");
+            write = System.Threading.Tasks.Task.Run(() =>
+            {
+                _simRunner.RequestYield();
+                return SaveSystem.Prepare(saveRoot, slot, targetCampaign, modFp, effectiveName, autosave).Commit();
+            });
+        }
+        else
+        {
+            SaveSystem.PreparedSave prepared;
+            try
+            {
+                prepared = SaveSystem.Prepare(saveRoot, slot, targetCampaign, modFp, effectiveName, autosave);
+            }
+            catch (Exception exception)
+            {
+                ReportSaveFailure(exception, targetCampaign);
+                return;
+            }
+
+            if (IsInstanceValid(_saveStatus)) _saveStatus.Text = Tr("Saving…");
+            write = System.Threading.Tasks.Task.Run(prepared.Commit);
+        }
         _pendingSave = write;
         try
         {
@@ -425,18 +446,26 @@ public partial class DealOrForceGame
         GD.PushError(message);
     }
 
-    private Control _campaignFaultDialog;
+    private CanvasLayer _campaignFaultCanvas;
+
+    private void DismissCampaignFault()
+    {
+        if (IsInstanceValid(_campaignFaultCanvas)) _campaignFaultCanvas.QueueFree();
+    }
 
     private void ShowCampaignFault(string message, string diagnosticPath, string detail)
     {
-        if (IsInstanceValid(_campaignFaultDialog)) return;
+        if (IsInstanceValid(_campaignFaultCanvas)) return;
         var diagnostic = string.IsNullOrEmpty(diagnosticPath)
             ? Tr("A diagnostic snapshot could not be written; see the error log.")
             : Simulation.Loc.Format("Diagnostic snapshot (not a playable save): {0}", diagnosticPath);
         var layer = FullLayer("CampaignFaultModal");
         layer.MouseFilter = MouseFilterEnum.Stop;
-        AddChild(layer);
-        _campaignFaultDialog = layer;
+        // The newspaper and touch HUD have their own draw order. Keep the fault above
+        // those and the campaign workspaces, below the loading screen on layer 100.
+        _campaignFaultCanvas = new CanvasLayer { Name = "CampaignFaultCanvas", Layer = 90 };
+        AddChild(_campaignFaultCanvas);
+        _campaignFaultCanvas.AddChild(layer);
         var veil = new ColorRect { Color = MenuChromeTheme.VeilColor, MouseFilter = MouseFilterEnum.Stop };
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         layer.AddChild(veil);
@@ -445,8 +474,7 @@ public partial class DealOrForceGame
         MenuChromeTheme.StyleArchitecturalPlate(panel, brassCorners: true);
         Ui.Place(panel, "modal.peace_offer");
         var rows = PanelRows(panel, 28, 22, 12);
-        void Dismiss() { if (IsInstanceValid(layer)) layer.QueueFree(); }
-        var dismissX = ActionButton("×", Dismiss, 38, 32);
+        var dismissX = ActionButton("×", DismissCampaignFault, 38, 32);
         MenuChromeTheme.StyleWellButton(dismissX, false, 15);
         ScreenHeader(rows, "Campaign integrity",
             message,
@@ -475,11 +503,11 @@ public partial class DealOrForceGame
             MenuChromeTheme.StyleWellButton(copyBtn, false, 13);
             actions.AddChild(copyBtn);
         }
-        var closeBtn = ActionButton("Close", Dismiss, 120, 36, true);
+        var closeBtn = ActionButton("Close", DismissCampaignFault, 120, 36, true);
         MenuChromeTheme.StylePrimaryCta(closeBtn, 14, serif: false);
         actions.AddChild(closeBtn);
-        layer.MoveToFront();
-        _campaign.MarkStrategicChange();
+        GetViewport().GuiGetFocusOwner()?.ReleaseFocus();
+        _campaign?.MarkStrategicChange();
     }
 
     /// <summary>

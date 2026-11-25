@@ -271,8 +271,13 @@ public static class PeaceConference
     /// in English whatever the table was set to - the one line on the screen that says what to
     /// do next.
     /// </summary>
-    public static string BlockReason(Campaign campaign, StrategicWar war, PeaceDemand demand)
+    public static string BlockReason(Campaign campaign, StrategicWar war, PeaceDemand demand) =>
+        BlockReason(campaign, war, demand, out _);
+
+    internal static string BlockReason(Campaign campaign, StrategicWar war, PeaceDemand demand,
+        out PeaceDemand approved)
     {
+        approved = null;
         if (war is null || war.Ended) return Loc.Get("There is no war to end");
         if (demand is null || demand.IsEmpty) return Loc.Get("The demand is empty; offer a white peace instead");
         if (!war.Involves(demand.ProposerId)) return Loc.Get("You are not a belligerent in this war");
@@ -398,22 +403,15 @@ public static class PeaceConference
             }
         }
 
-        var ledger = new PeaceLedger(campaign, war, demand.ProposerId, demand.BeneficiaryId);
-        var budget = ledger.Budget;
-
-        // Priced as it will be SIGNED, not as it was drawn.
-        //
-        // `Resolve` rounds a demand to whole regions before it applies it, and rounding up
-        // adds ground. Pricing the unrounded version here meant the conference could quote a
-        // number, say they would sign, and then refuse - because the thing actually put in
-        // front of them was bigger than the thing that was priced. One rounding, used by
-        // both.
-        var netBalance = ledger.NetBalance(rounded);
-        if (!demand.Unconditional && netBalance < 0f && !forcePeace)
+        // The signed border is the priced border. An unconditional or forced peace
+        // already passed the territorial checks and has no warscore bill to validate.
+        if (!demand.Unconditional && !forcePeace)
         {
-            var cost = ledger.Cost(rounded);
-            return Loc.Format("They will not sign: the demand is worth {0:0} and the war is worth {1:0}", cost, budget);
+            var ledger = new PeaceLedger(campaign, war, demand.ProposerId, demand.BeneficiaryId);
+            if (ledger.NetBalance(rounded, out var cost) < 0f)
+                return Loc.Format("They will not sign: the demand is worth {0:0} and the war is worth {1:0}", cost, ledger.Budget);
         }
+        approved = rounded;
         return "";
     }
 
@@ -523,7 +521,7 @@ public static class PeaceConference
         // A forged or stale recipient must not change even negotiation metadata, let alone a border.
         if (BeneficiaryBlock(campaign, war, demand).Length > 0) return false;
         // Validate before indexing provinces in Round, and leave a refused draft intact.
-        var block = BlockReason(campaign, war, demand);
+        var block = BlockReason(campaign, war, demand, out var whole);
         if (war is null) return false;
         war.LastPeaceProposalDay = campaign.ElapsedDays;
         war.LastNegotiation = block.Length == 0 ? "Agreement reached" : block;
@@ -531,7 +529,6 @@ public static class PeaceConference
 
         if (demand is not null && demand.Provinces.Count > 0)
         {
-            var whole = Round(campaign, war, demand);
             demand.Provinces.Clear();
             foreach (var province in whole.Provinces) demand.Provinces.Add(province);
         }
@@ -915,6 +912,9 @@ public static class PeaceConference
 /// </summary>
 public sealed class PeaceLedger
 {
+    private enum LandDiscount { None, Breakaway, CivilHomeland, Homeland, Reunification }
+    private readonly record struct LandPriceTerms(LandDiscount Discount, bool Detached);
+
     private readonly Campaign _campaign;
     private readonly StrategicWar _war;
     private readonly Nation _proposer;
@@ -924,6 +924,7 @@ public sealed class PeaceLedger
     private readonly Dictionary<int, long> _statePopulation = new();
     private readonly Dictionary<int, Nation> _enemies = new();
     private readonly HashSet<int> _capitalStates = new();
+    private Dictionary<(int Region, int Holder), LandPriceTerms> _demandLandTerms;
     private bool _surveyed;
     private float _resistance = -1f;
     [ThreadStatic] private static Dictionary<int, (int Province, float Distance)> _surveyCapitalsScratch;
@@ -1008,13 +1009,14 @@ public sealed class PeaceLedger
 
     public PeaceConference.ProvinceCost Price(int province) => Price(province, _beneficiary);
 
-    private PeaceConference.ProvinceCost Price(int province, Nation beneficiary)
+    private PeaceConference.ProvinceCost Price(int province, Nation beneficiary,
+        Dictionary<(int Region, int Holder), LandPriceTerms> landTerms = null, bool explain = true)
     {
         var topology = _campaign.ProvinceMap;
         if (topology is null || _proposer is null || beneficiary is null || _loser is null ||
             province <= 0 || province > topology.ProvinceCount)
             return new PeaceConference.ProvinceCost(province, 0f, "not a province");
-        if (!_enemies.ContainsKey(topology.ProvinceToNation[province]))
+        if (!_enemies.TryGetValue(topology.ProvinceToNation[province], out var holder))
             return new PeaceConference.ProvinceCost(province, 0f, "not theirs to give");
 
         var defines = _campaign.Defines;
@@ -1025,46 +1027,44 @@ public sealed class PeaceLedger
                    _campaign.ProvinceController[province] == (ushort)_proposer.MapIndex;
         var secured = _campaign.ProvinceOccupation is not null &&
                       _campaign.ProvinceOccupation[province] >= defines.OccupationSecureThreshold;
-        if (held && secured) { cost *= defines.PeaceCostSecuredFactor; reason = "occupied and secure"; }
-        else if (held) { cost *= defines.PeaceCostHeldFactor; reason = "occupied but not secure"; }
+        if (held && secured) { cost *= defines.PeaceCostSecuredFactor; reason = explain ? "occupied and secure" : ""; }
+        else if (held) { cost *= defines.PeaceCostHeldFactor; reason = explain ? "occupied but not secure" : ""; }
         else
         {
             var resistance = Resistance;
             cost *= defines.PeaceCostUnheldFactor * (1f + M.Max(0f, defines.PeaceResistanceUnheld) * resistance);
-            reason = resistance >= 0.5f ? "never taken, and they can still fight for it" : "never taken";
-        }
-
-        // Its own ground, held by a breakaway or by the rival government in a civil war:
-        // the state is reuniting itself, and a peace that writes it back is cheap.
-        if (_enemies.TryGetValue(topology.ProvinceToNation[province], out var holder) &&
-            Reintegration.ClaimsStateInCivilWar(_campaign, _war, beneficiary, holder))
-        {
-            cost *= defines.PeaceCostReclaimFactor;
-            reason += Reintegration.IsBreakawayOf(holder, beneficiary)
-                ? ", our own land held by a breakaway"
-                : ", national territory in a civil war";
+            reason = !explain ? "" : resistance >= 0.5f ? "never taken, and they can still fight for it" : "never taken";
         }
 
         var stateMapIndex = topology.ProvinceToState[province];
-        if (holder is not null && !Reintegration.ClaimsStateInCivilWar(_campaign, _war, beneficiary, holder) &&
-            _campaign.States.Find(s => s.MapIndex == stateMapIndex) is { } titleRegion)
+        var key = ((int)stateMapIndex, holder.Id);
+        if (landTerms is null || !landTerms.TryGetValue(key, out var terms))
         {
-            if (TerritorialClaims.TitleOf(_campaign, beneficiary, titleRegion) == TerritorialTitle.Homeland)
-            {
+            var discount = DiscountFor(beneficiary, holder, stateMapIndex);
+            terms = new LandPriceTerms(discount, DetachedFromBeneficiary(_campaign, _war, beneficiary, province));
+            if (landTerms is not null) landTerms.Add(key, terms);
+        }
+        switch (terms.Discount)
+        {
+            case LandDiscount.Breakaway:
+            case LandDiscount.CivilHomeland:
+                cost *= defines.PeaceCostReclaimFactor;
+                if (explain) reason += terms.Discount == LandDiscount.Breakaway
+                    ? ", our own land held by a breakaway" : ", national territory in a civil war";
+                break;
+            case LandDiscount.Homeland:
                 cost *= Math.Clamp(defines.PeaceCostHomelandFactor, .1f, 1f);
-                reason += ", remembered homeland";
-            }
-            else if (Reintegration.IsKindredRegion(_campaign, beneficiary, titleRegion) ||
-                     Reintegration.IsReunificationTarget(_campaign, _war, beneficiary, holder))
-            {
+                if (explain) reason += ", remembered homeland";
+                break;
+            case LandDiscount.Reunification:
                 cost *= Math.Clamp(defines.PeaceCostReunificationFactor, .1f, 1f);
-                reason += ", national reunification";
-            }
+                if (explain) reason += ", national reunification";
+                break;
         }
         if (_war.ClaimedStateMapIndex >= 0 && stateMapIndex == _war.ClaimedStateMapIndex)
         {
             cost *= defines.PeaceCostWarGoalFactor;
-            reason += ", inside the declared war goal";
+            if (explain) reason += ", inside the declared war goal";
         }
 
         EnsureSurveyed();
@@ -1078,7 +1078,7 @@ public sealed class PeaceLedger
         if (_capitalStates.Contains(stateMapIndex))
         {
             cost *= defines.PeaceCostCapitalFactor;
-            reason += ", the seat of government";
+            if (explain) reason += ", the seat of government";
         }
 
         // A province the beneficiary cannot walk to from its own ground is an enclave: the confetti
@@ -1086,13 +1086,28 @@ public sealed class PeaceLedger
         // (TerritorialCoherence.Penalty); peace demands did not, so a winner could spend its whole
         // war score on islands of somebody else's land and call it a victory. Priced, not banned,
         // and never charged to a state writing back its own territory in a civil war.
-        if (DetachedFromBeneficiary(_campaign, _war, beneficiary, province))
+        if (terms.Detached)
         {
             cost *= Math.Max(1f, defines.PeaceCostDetachedFactor);
-            reason += ", detached from our own ground";
+            if (explain) reason += ", detached from our own ground";
         }
 
         return new PeaceConference.ProvinceCost(province, cost, reason);
+    }
+
+    private LandDiscount DiscountFor(Nation beneficiary, Nation holder, int regionId)
+    {
+        if (Reintegration.ClaimsStateInCivilWar(_campaign, _war, beneficiary, holder))
+            return Reintegration.IsBreakawayOf(holder, beneficiary) ? LandDiscount.Breakaway : LandDiscount.CivilHomeland;
+
+        var region = regionId > 0 ? _campaign.StateByMapIndex(regionId)
+            : _campaign.States.Find(state => state.MapIndex == regionId);
+        if (region is null) return LandDiscount.None;
+        if (TerritorialClaims.TitleOf(_campaign, beneficiary, region) == TerritorialTitle.Homeland)
+            return LandDiscount.Homeland;
+        return Reintegration.IsKindredRegion(_campaign, beneficiary, region) ||
+               Reintegration.IsReunificationTarget(_campaign, _war, beneficiary, holder)
+            ? LandDiscount.Reunification : LandDiscount.None;
     }
 
     /// <summary>
@@ -1118,9 +1133,13 @@ public sealed class PeaceLedger
         var heldBill = 0f;
         var otherBill = 0f;
         var heldConquest = ContiguousHeld(demand);
+        // Region-level price terms are shared within this bill. The same ledger can be
+        // reused after a new draft, beneficiary, or change on the map.
+        var landTerms = demand.Provinces.Count > 1 ? _demandLandTerms ??= new() : null;
+        landTerms?.Clear();
         foreach (var province in demand.Provinces)
         {
-            var price = Price(province, beneficiary).Cost;
+            var price = Price(province, beneficiary, landTerms, explain: false).Cost;
             if (heldConquest.Contains(province)) heldBill += price;
             else otherBill += price;
         }
@@ -1197,12 +1216,15 @@ public sealed class PeaceLedger
     public float Cost(PeaceDemand demand) => DemandCost(demand) - OfferCredit(demand);
 
     /// <summary>Net balance (&gt;= 0 means acceptable): war budget minus net treaty cost and any enemy advantage floor.</summary>
-    public float NetBalance(PeaceDemand demand)
+    public float NetBalance(PeaceDemand demand) => NetBalance(demand, out _);
+
+    internal float NetBalance(PeaceDemand demand, out float cost)
     {
         var score = _war is null || _proposer is null ? 0f
             : _war.IsAttacking(_proposer.Id) ? _war.WarScore : -_war.WarScore;
         var enemyAdvantageFloor = demand is { HasOffers: true } && score < 0f ? -score * 0.65f : 0f;
-        return Budget - Cost(demand) - enemyAdvantageFloor;
+        cost = Cost(demand);
+        return Budget - cost - enemyAdvantageFloor;
     }
 
     /// <summary>The share of the losing side's people the demand would take, by region population.</summary>

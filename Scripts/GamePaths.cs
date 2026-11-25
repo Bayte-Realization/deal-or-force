@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using DealOrForce.Platform;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -23,6 +24,10 @@ public static class GamePaths
     private static bool _resolved;
     private static bool _prepared;
 
+    private static bool IsMobilePlatform =>
+        OS.HasFeature("mobile") || OS.HasFeature("android") || OS.HasFeature("ios") ||
+        OS.GetName() is "Android" or "iOS";
+
     /// <summary>Opt-in only for the built-in test runner, never ordinary launches.</summary>
     private static string VerificationDocuments
     {
@@ -37,10 +42,23 @@ public static class GamePaths
     /// <summary>The engine's own folder, which is where the game lived before this file existed.</summary>
     public static string EngineRoot => ProjectSettings.GlobalizePath("user://");
 
+    private static string ResolveSandboxRoot()
+    {
+        var root = IsMobilePlatform ? GodotPlatformBridge.ResolveWritableDataRoot() : EngineRoot;
+        if (string.IsNullOrWhiteSpace(root)) root = EngineRoot;
+        if (string.IsNullOrWhiteSpace(root)) root = OS.GetUserDataDir();
+        if (string.IsNullOrWhiteSpace(root)) return ".";
+        try { return Path.GetFullPath(root); }
+        catch { return root; }
+    }
+
+    private static string FallbackRoot => IsMobilePlatform ? ResolveSandboxRoot() : EngineRoot;
+
     /// <summary>
     /// The one root the player is told about: `Documents/Bayte Realization/Deal or Force`. When
-    /// the system will not name a documents folder the engine folder stands in, because a game
-    /// that cannot save is worse dressed than a game saved in a folder nobody finds.
+    /// the system will not name a documents folder (or on mobile Scoped Storage) the sandboxed
+    /// writable root stands in, because a game that cannot save is worse dressed than a game
+    /// saved in a folder nobody finds.
     /// </summary>
     public static GameFolders Folders
     {
@@ -48,25 +66,32 @@ public static class GamePaths
         {
             if (_resolved) return _folders;
             _resolved = true;
-            var documents = VerificationDocuments ?? OS.GetSystemDir(OS.SystemDir.Documents);
+            var verificationDocuments = VerificationDocuments;
+            if (verificationDocuments is null && IsMobilePlatform)
+            {
+                // Android/iOS always stay inside app-private writable sandbox storage (user://).
+                _folders = null;
+                return null;
+            }
+            var documents = verificationDocuments ?? OS.GetSystemDir(OS.SystemDir.Documents);
             _folders = GameFolders.For(documents);
             return _folders;
         }
     }
 
-    public static string Root => Folders?.Root ?? EngineRoot;
+    public static string Root => Folders?.Root ?? FallbackRoot;
 
     /// <summary>Whether the one root is a real folder under Documents rather than the engine fallback.</summary>
     public static bool Located => Folders is not null;
 
-    public static string Saves => Folders?.Saves ?? Path.Combine(EngineRoot, "save_games");
-    public static string Settings => Folders?.Settings ?? EngineRoot;
-    public static string SettingsFile => Folders?.SettingsFile ?? Path.Combine(EngineRoot, "settings.json");
-    public static string Logs => Folders?.Logs ?? Path.Combine(EngineRoot, "logs");
-    public static string Screenshots => Folders?.Screenshots ?? Path.Combine(EngineRoot, "screenshots");
-    public static string Mods => Folders?.Mods ?? Path.Combine(EngineRoot, "mods");
-    public static string Dlc => Folders?.Dlc ?? Path.Combine(EngineRoot, "dlc");
-    public static string Reports => Folders?.Reports ?? Path.Combine(EngineRoot, "reports");
+    public static string Saves => Folders?.Saves ?? Path.Combine(FallbackRoot, "save_games");
+    public static string Settings => Folders?.Settings ?? FallbackRoot;
+    public static string SettingsFile => Folders?.SettingsFile ?? Path.Combine(FallbackRoot, "settings.json");
+    public static string Logs => Folders?.Logs ?? Path.Combine(FallbackRoot, "logs");
+    public static string Screenshots => Folders?.Screenshots ?? Path.Combine(FallbackRoot, "screenshots");
+    public static string Mods => Folders?.Mods ?? Path.Combine(FallbackRoot, "mods");
+    public static string Dlc => Folders?.Dlc ?? Path.Combine(FallbackRoot, "dlc");
+    public static string Reports => Folders?.Reports ?? Path.Combine(FallbackRoot, "reports");
 
     /// <summary>
     /// Create the folders and take in whatever an older install left in the two old places.
@@ -81,6 +106,17 @@ public static class GamePaths
         var folders = Folders;
         if (folders is null)
         {
+            if (IsMobilePlatform)
+            {
+                var root = ResolveSandboxRoot();
+                foreach (var dir in new[] { root, Saves, Settings, Logs, Screenshots, Mods, Dlc, Reports, Path.Combine(root, "cache") })
+                {
+                    try { Directory.CreateDirectory(dir); }
+                    catch (Exception ex) { GD.PushWarning($"[folders] mkdir failed '{dir}': {ex.Message}"); }
+                }
+                GD.Print($"[folders] root={root} mobile_sandbox=true logs={Logs}");
+                return;
+            }
             GD.PushWarning("No documents folder; the game will keep its files in " + EngineRoot);
             return;
         }

@@ -13,7 +13,7 @@ internal sealed class CountryPickerDossier
 {
     private const float FlagMaxWidth = 82f;
     private const float FlagMaxHeight = 52f;
-    private const int MaxChips = 6;
+    private const int MaxChips = 8;
 
     private readonly List<StatChip> _chips = new(MaxChips);
 
@@ -21,6 +21,7 @@ internal sealed class CountryPickerDossier
     internal PanelContainer FlagPocket { get; }
     internal Label NameLabel { get; }
     internal Label TierLabel { get; }
+    internal Label PrestigeLabel { get; }
     internal VBoxContainer LeaderBox { get; }
     internal PanelContainer LeaderWell { get; }
     internal Label IdentityLabel { get; }
@@ -29,7 +30,7 @@ internal sealed class CountryPickerDossier
     internal CountryPickerDossier()
     {
         Root = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        Root.AddThemeConstantOverride("separation", 8);
+        Root.AddThemeConstantOverride("separation", 6);
 
         var header = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         header.AddThemeConstantOverride("separation", 10);
@@ -59,6 +60,15 @@ internal sealed class CountryPickerDossier
         MenuChromeTheme.StyleExistingLabel(NameLabel, 22, MenuChromeTheme.Paper, serif: true);
         titles.AddChild(NameLabel);
 
+        var tierPill = new PanelContainer
+        {
+            Name = "PickerTierPill",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            ClipContents = true
+        };
+        tierPill.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(8, 2, highlighted: true));
+        titles.AddChild(tierPill);
+
         TierLabel = new Label
         {
             Name = "PickerCountryTier",
@@ -68,21 +78,35 @@ internal sealed class CountryPickerDossier
             TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        MenuChromeTheme.StyleExistingLabel(TierLabel, 12, MenuChromeTheme.BrassHi, tabular: true);
-        titles.AddChild(TierLabel);
+        MenuChromeTheme.StyleExistingLabel(TierLabel, 11, MenuChromeTheme.Paper, tabular: true);
+        tierPill.AddChild(TierLabel);
 
-        Root.AddChild(MenuChromeTheme.CreateEngravedRule("PickerDossierRule", 1f));
+        PrestigeLabel = new Label
+        {
+            Name = "PickerCountryPrestige",
+            Text = "",
+            Visible = false,
+            AutowrapMode = TextServer.AutowrapMode.Off,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            MouseFilter = Control.MouseFilterEnum.Stop
+        };
+        MenuChromeTheme.StyleExistingLabel(PrestigeLabel, 11, MenuChromeTheme.PaperDim, tabular: true);
+        titles.AddChild(PrestigeLabel);
+
+        Root.AddChild(MenuChromeTheme.CreateHairlineRule("PickerDossierRule", 1f));
 
         LeaderWell = new PanelContainer
         {
             Name = "PickerLeaderWell",
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        LeaderWell.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(9, 7));
+        LeaderWell.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(8, 5));
         Root.AddChild(LeaderWell);
 
         LeaderBox = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        LeaderBox.AddThemeConstantOverride("separation", 4);
+        LeaderBox.AddThemeConstantOverride("separation", 3);
         LeaderWell.AddChild(LeaderBox);
 
         var grid = new GridContainer
@@ -92,7 +116,7 @@ internal sealed class CountryPickerDossier
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
         grid.AddThemeConstantOverride("h_separation", 6);
-        grid.AddThemeConstantOverride("v_separation", 6);
+        grid.AddThemeConstantOverride("v_separation", 5);
         Root.AddChild(grid);
 
         for (var i = 0; i < MaxChips; i++)
@@ -122,16 +146,26 @@ internal sealed class CountryPickerDossier
         Root.AddChild(LocationLabel);
     }
 
-    internal void SetNationHeader(string displayName, string tierLine, string tag, Texture2D flagTexture)
+    internal void SetNationHeader(
+        string displayName,
+        string tierLine,
+        string tag,
+        Texture2D flagTexture,
+        string prestigeLine = "",
+        string prestigeTip = "")
     {
         NameLabel.Text = displayName;
         NameLabel.TooltipText = Ui.Tip(displayName);
         TierLabel.Text = tierLine;
         TierLabel.TooltipText = Ui.Tip(tierLine);
+        var hasPrestige = !string.IsNullOrWhiteSpace(prestigeLine);
+        PrestigeLabel.Text = prestigeLine;
+        PrestigeLabel.Visible = hasPrestige;
+        PrestigeLabel.TooltipText = hasPrestige ? Ui.Tip(string.IsNullOrWhiteSpace(prestigeTip) ? prestigeLine : prestigeTip) : "";
         MenuChromeTheme.UpdateFlagPocket(FlagPocket, tag, flagTexture, FlagMaxWidth, FlagMaxHeight);
     }
 
-    internal void SetStats(IReadOnlyList<(string Caption, string Value)> items, string identityBrief = "")
+    internal void SetStats(IReadOnlyList<(string Caption, string Value)> items, string identityBrief = "", IReadOnlyList<string> tooltips = null)
     {
         for (var i = 0; i < _chips.Count; i++)
         {
@@ -142,7 +176,8 @@ internal sealed class CountryPickerDossier
                 chip.Frame.Visible = true;
                 chip.Caption.Text = caption.ToUpperInvariant();
                 chip.Value.Text = value;
-                var tip = $"{caption}: {value}";
+                var customTip = tooltips is not null && i < tooltips.Count ? tooltips[i] : "";
+                var tip = string.IsNullOrWhiteSpace(customTip) ? $"{caption}: {value}" : customTip;
                 chip.Frame.TooltipText = Ui.Tip(tip);
                 chip.Caption.TooltipText = chip.Frame.TooltipText;
                 chip.Value.TooltipText = chip.Frame.TooltipText;
@@ -207,7 +242,7 @@ internal sealed class CountryPickerDossier
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             MouseFilter = Control.MouseFilterEnum.Stop
         };
-        frame.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(9, 6));
+        frame.AddThemeStyleboxOverride("panel", MenuChromeTheme.WellBox(9, 4));
 
         var stack = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         stack.AddThemeConstantOverride("separation", 1);
@@ -220,7 +255,9 @@ internal sealed class CountryPickerDossier
             TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        MenuChromeTheme.StyleExistingLabel(caption, 10, MenuChromeTheme.PaperFaint);
+        caption.AddThemeFontOverride("font", MenuChromeTheme.TrackedCaps());
+        caption.AddThemeFontSizeOverride("font_size", 10);
+        caption.AddThemeColorOverride("font_color", MenuChromeTheme.PaperFaint);
         stack.AddChild(caption);
 
         var value = new Label

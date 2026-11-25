@@ -29,8 +29,10 @@ internal sealed class ShellXpStripView
     private StyleBoxFlat _hoverStyle;
     private StyleBoxFlat _observerNormalStyle;
     private StyleBoxFlat _observerHoverStyle;
-    private string _lastObsSig = "";
-    private string _lastFullSig = "";
+    private (bool WatchingWorld, int WatchedId, int PlayerId, bool Compact, string Lang, string Note) _lastObsSig;
+    private bool _hasObsSig;
+    private (int PlayerId, int Day, int WarRev, int ArmyDeci, int AirDeci, int NavyDeci, int Engaged, int Drilling, int Flying, int AtSea, bool Compact, string Lang) _lastFullSig;
+    private bool _hasFullSig;
 
     private sealed class XpCellNodes
     {
@@ -45,8 +47,10 @@ internal sealed class ShellXpStripView
         public Control SepGroove;
         public float FillRatio;
         public bool Ready;
-        public string LastSig = "";
-        public string LastTooltip = "";
+        public bool HasSig;
+        public (int Deci, int DailyHunds, bool Ready, int RatioPct, bool Compact, string Lang) LastCellSig;
+        public int LastTipSig;
+        public bool HasTipSig;
     }
 
     public ShellXpStripView(ShellContext ctx)
@@ -327,20 +331,66 @@ internal sealed class ShellXpStripView
         if (!_observerFitsInStrip) _observerBadge.Visible = false;
         _observerIcon.CustomMinimumSize = new Vector2(compact ? 12 : 15, compact ? 12 : 15);
         _observerLabel.AddThemeFontSizeOverride("font_size", compact ? 10 : 12);
-        _lastObsSig = "";
+        _hasObsSig = false;
     }
 
     public void Refresh(Campaign world, Nation player)
     {
         if (_strip is null || world is null || player is null) return;
         var compact = _profile?.Compact ?? false;
+        var hs = _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId == player.Id ? snap : null;
 
         RefreshObserverBadge(world, player, compact);
 
-        var fullSig = $"{player.Id}|{world.ElapsedDays}|{world.WarRevision}|{(int)MathF.Floor(player.ArmyExperience * 10f)}|" +
-                      $"{(int)MathF.Floor(player.AirExperience * 10f)}|{(int)MathF.Floor(player.NavalExperience * 10f)}|{compact}|{Loc.Language}";
-        if (_lastFullSig == fullSig) return;
-        _lastFullSig = fullSig;
+        var day = hs?.ElapsedDays ?? world.ElapsedDays;
+        var warRev = hs?.WarRevision ?? world.WarRevision;
+        var armyXp = hs?.ArmyExperience ?? player.ArmyExperience;
+        var airXp = hs?.AirExperience ?? player.AirExperience;
+        var navyXp = hs?.NavalExperience ?? player.NavalExperience;
+
+        int engaged, drilling, flying, atSea;
+        if (hs is not null)
+        {
+            engaged = hs.PlayerEngagedArmies;
+            drilling = hs.PlayerDrillingArmies;
+            flying = hs.PlayerFlyingAir;
+            atSea = hs.PlayerAtSeaFleets;
+        }
+        else
+        {
+            engaged = 0;
+            drilling = 0;
+            for (var i = 0; i < world.Armies.Count; i++)
+            {
+                var a = world.Armies[i];
+                if (a.NationId != player.Id) continue;
+                if (a.InBattle) engaged++;
+                else if (a.Training) drilling++;
+            }
+            flying = 0;
+            for (var i = 0; i < world.SupportFormations.Count; i++)
+            {
+                var f = world.SupportFormations[i];
+                if (f.NationId == player.Id && f.Strength > 0.05f &&
+                    !string.IsNullOrEmpty(f.Mission) && f.Mission != SupportCore.MissionStandby)
+                    flying++;
+            }
+            atSea = 0;
+            for (var i = 0; i < world.Fleets.Count; i++)
+            {
+                var fl = world.Fleets[i];
+                if (fl.NationId == player.Id && fl.Hulls > 0 && (fl.InAction || fl.Mission != FleetMission.Anchored))
+                    atSea++;
+            }
+        }
+
+        var lang = Loc.Language;
+        var sig = (player.Id, day, warRev,
+            (int)MathF.Floor(armyXp * 10f), (int)MathF.Floor(airXp * 10f), (int)MathF.Floor(navyXp * 10f),
+            engaged, drilling, flying, atSea, compact, lang);
+        if (_hasFullSig && _lastFullSig.Equals(sig)) return;
+        _hasFullSig = true;
+        _lastFullSig = sig;
 
         var d = world.Defines;
         var strategy = StrategicDoctrines.Of(player);
@@ -348,93 +398,75 @@ internal sealed class ShellXpStripView
         var baseline = MathF.Max(0.0001f, d.BaselineMilitarySpending);
         var fundingDay = MathF.Max(0f, player.MilitarySpending / baseline - 1f) * d.ArmyExperienceFundingWeight / 7f;
 
-        var engaged = 0;
-        var drilling = 0;
-        for (var i = 0; i < world.Armies.Count; i++)
-        {
-            var a = world.Armies[i];
-            if (a.NationId != player.Id) continue;
-            if (a.InBattle) engaged++;
-            else if (a.Training) drilling++;
-        }
-
-        var flying = 0;
-        for (var i = 0; i < world.SupportFormations.Count; i++)
-        {
-            var f = world.SupportFormations[i];
-            if (f.NationId == player.Id && f.Strength > 0.05f &&
-                !string.IsNullOrEmpty(f.Mission) && f.Mission != SupportCore.MissionStandby)
-                flying++;
-        }
-
-        var atSea = 0;
-        for (var i = 0; i < world.Fleets.Count; i++)
-        {
-            var fl = world.Fleets[i];
-            if (fl.NationId == player.Id && fl.Hulls > 0 && (fl.InAction || fl.Mission != FleetMission.Anchored))
-                atSea++;
-        }
-
         var armyDaily = peacetimeDay + fundingDay +
             engaged * d.ArmyExperiencePerDivisionDay * (strategy?.BattleExperience ?? 1f) +
             drillsRate(drilling, d.TrainingExperiencePerDivisionDay, strategy?.DrillExperience ?? 1f);
         var airDaily = peacetimeDay + flying * d.AirExperiencePerMissionDay * (strategy?.AirExperience ?? 1f);
         var navyDaily = peacetimeDay + atSea * d.NavalExperiencePerHullDay * (strategy?.NavalExperience ?? 1f);
 
-        UpdateXpCell(_cells[0], world, player, player.ArmyExperience, armyDaily,
-            Loc.Get("shell.xp.army_title"),
-            Loc.Format("shell.xp.army_sources_fmt", engaged, drilling),
-            Loc.Get("shell.xp.army_unlocks"), compact);
+        UpdateXpCell(_cells[0], world, player, armyXp, armyDaily,
+            "shell.xp.army_title", "shell.xp.army_sources_fmt", engaged, drilling,
+            "shell.xp.army_unlocks", compact);
 
-        UpdateXpCell(_cells[1], world, player, player.AirExperience, airDaily,
-            Loc.Get("shell.xp.air_title"),
-            Loc.Format("shell.xp.air_sources_fmt", flying),
-            Loc.Get("shell.xp.air_unlocks"), compact);
+        UpdateXpCell(_cells[1], world, player, airXp, airDaily,
+            "shell.xp.air_title", "shell.xp.air_sources_fmt", flying, -1,
+            "shell.xp.air_unlocks", compact);
 
-        UpdateXpCell(_cells[2], world, player, player.NavalExperience, navyDaily,
-            Loc.Get("shell.xp.navy_title"),
-            Loc.Format("shell.xp.navy_sources_fmt", atSea),
-            Loc.Get("shell.xp.navy_unlocks"), compact);
+        UpdateXpCell(_cells[2], world, player, navyXp, navyDaily,
+            "shell.xp.navy_title", "shell.xp.navy_sources_fmt", atSea, -1,
+            "shell.xp.navy_unlocks", compact);
     }
 
     private static float drillsRate(int drills, float perDay, float mult) => drills * perDay * mult;
 
     private void UpdateXpCell(
         XpCellNodes cell, Campaign world, Nation player, float current, float dailyGain,
-        string title, string sourcesLine, string unlocksLine, bool compact)
+        string titleKey, string sourcesKey, int srcA, int srcB, string unlocksKey, bool compact)
     {
         var nextCost = NextArticlePrice(world, player, cell.Slot);
         var ready = nextCost > 0f && current >= nextCost;
         var ratio = nextCost > 0f ? Math.Clamp(current / nextCost, 0f, 1f) : (current > 0f ? 1f : 0f);
+        var deci = (int)MathF.Round(current * 10f);
+        var dailyHunds = (int)MathF.Round(dailyGain * 100f);
+        var ratioPct = (int)(ratio * 100f);
+        var lang = Loc.Language;
+        var cellSig = (deci, dailyHunds, ready, ratioPct, compact, lang);
 
-        var fig = Fmt.Number(current);
-        var rateTxt = !compact && dailyGain >= 0.005f ? $"+{dailyGain.ToString("0.0#", CultureInfo.InvariantCulture)}" : "";
-        var sig = $"{fig}|{rateTxt}|{ready}|{(int)(ratio * 100f)}";
-        if (cell.LastSig != sig)
+        if (!cell.HasSig || !cell.LastCellSig.Equals(cellSig))
         {
-            cell.LastSig = sig;
-            cell.Value.Text = fig;
+            cell.HasSig = true;
+            cell.LastCellSig = cellSig;
+            var fig = Fmt.Number(current);
+            var rateTxt = !compact && dailyGain >= 0.005f ? $"+{dailyGain.ToString("0.0#", CultureInfo.InvariantCulture)}" : "";
+            if (cell.Value.Text != fig) cell.Value.Text = fig;
             cell.Value.AddThemeColorOverride("font_color", Ui.Colour(ready ? "shell.state.positive" : "shell.paper"));
-            cell.Rate.Text = rateTxt;
-            cell.Rate.Visible = rateTxt.Length > 0;
-            cell.Rate.AddThemeColorOverride("font_color", Ui.Colour(dailyGain > 0.05f ? "shell.state.positive" : "shell.paper_faint"));
+            if (cell.Rate.Text != rateTxt) cell.Rate.Text = rateTxt;
+            var showRate = rateTxt.Length > 0;
+            if (cell.Rate.Visible != showRate) cell.Rate.Visible = showRate;
+            if (showRate)
+                cell.Rate.AddThemeColorOverride("font_color", Ui.Colour(dailyGain > 0.05f ? "shell.state.positive" : "shell.paper_faint"));
             cell.FillRatio = ratio;
             cell.Ready = ready;
             cell.ProgressBar.QueueRedraw();
         }
 
-        var nextLine = nextCost <= 0f
-            ? Loc.Get("shell.xp.no_doctrine")
-            : ready
-                ? Loc.Get("shell.xp.doctrine_ready")
-                : Loc.Format("shell.xp.next_doctrine_fmt", Fmt.Number(nextCost));
-        var rateFull = Loc.Format("shell.xp.daily_fmt",
-            dailyGain.ToString("0.00", CultureInfo.InvariantCulture),
-            (dailyGain * 7f).ToString("0.0", CultureInfo.InvariantCulture));
-        var tip = $"{title}: {current.ToString("0.0", CultureInfo.InvariantCulture)}\n{rateFull}\n{sourcesLine}\n{nextLine}\n{unlocksLine}\n{Loc.Get("shell.xp.click_doctrines")}";
-        if (cell.LastTooltip != tip)
+        var tipSig = HashCode.Combine(deci, dailyHunds, ready, (int)MathF.Round(nextCost * 10f), srcA, srcB, lang);
+        if (!cell.HasTipSig || cell.LastTipSig != tipSig)
         {
-            cell.LastTooltip = tip;
+            cell.HasTipSig = true;
+            cell.LastTipSig = tipSig;
+            var title = Loc.Get(titleKey);
+            var sourcesLine = srcB >= 0 ? Loc.Format(sourcesKey, srcA, srcB) : Loc.Format(sourcesKey, srcA);
+            var unlocksLine = Loc.Get(unlocksKey);
+            var nextLine = nextCost <= 0f
+                ? Loc.Get("shell.xp.no_doctrine")
+                : ready
+                    ? Loc.Get("shell.xp.doctrine_ready")
+                    : Loc.Format("shell.xp.next_doctrine_fmt", Fmt.Number(nextCost));
+            var rateFull = Loc.Format("shell.xp.daily_fmt",
+                dailyGain.ToString("0.00", CultureInfo.InvariantCulture),
+                (dailyGain * 7f).ToString("0.0", CultureInfo.InvariantCulture));
+            var tip = $"{title}: {current.ToString("0.0", CultureInfo.InvariantCulture)}\n{rateFull}\n{sourcesLine}\n{nextLine}\n{unlocksLine}\n{Loc.Get("shell.xp.click_doctrines")}";
             cell.Box.TooltipText = Ui.Tip(tip);
         }
     }
@@ -446,7 +478,7 @@ internal sealed class ShellXpStripView
         if (!observing || !_observerFitsInStrip)
         {
             if (_observerBadge.Visible) _observerBadge.Visible = false;
-            _lastObsSig = "off";
+            _hasObsSig = false;
             return;
         }
         if (!_observerBadge.Visible) _observerBadge.Visible = true;
@@ -454,8 +486,9 @@ internal sealed class ShellXpStripView
         var watchingWorld = _ctx.IsWatchingWorld?.Invoke() ?? false;
         var watched = _ctx.GetObservedNation?.Invoke();
         var note = _ctx.GetObserverTransientNote?.Invoke() ?? "";
-        var sig = $"{watchingWorld}|{watched?.Id ?? -1}|{player.Id}|{compact}|{Loc.Language}|{note}";
-        if (_lastObsSig == sig) return;
+        var sig = (watchingWorld, watched?.Id ?? -1, player.Id, compact, Loc.Language, note);
+        if (_hasObsSig && _lastObsSig.Equals(sig)) return;
+        _hasObsSig = true;
         _lastObsSig = sig;
 
         if (watchingWorld)

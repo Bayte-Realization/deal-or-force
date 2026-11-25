@@ -24,6 +24,7 @@ internal sealed class ShellMessageModalView
     private PanelContainer _panel;
     private Label _headerTitle;
     private Label _countBadgeLabel;
+    private Button _closeBtn;
     private VBoxContainer _newsRows;
     private int _activeTab;
     private readonly Button[] _tabButtons = new Button[3];
@@ -76,12 +77,12 @@ internal sealed class ShellMessageModalView
         _ => ShellMessageEvent.WorldNews
     };
 
-    public void RecordLine(NewsFeed.Line line)
+    public void RecordLine(NewsFeed.Line line, bool refresh = true)
     {
         _recentNews.Insert(0, line);
         if (_recentNews.Count > 24)
             _recentNews.RemoveRange(24, _recentNews.Count - 24);
-        if (IsVisible) Refresh();
+        if (refresh && IsVisible) Refresh();
     }
 
     public void Toggle()
@@ -105,6 +106,12 @@ internal sealed class ShellMessageModalView
     {
         if (_panel is null) return;
         var compact = profile.Compact;
+        var touch = profile.TouchMode || (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true);
+        if (_closeBtn is not null)
+        {
+            _closeBtn.CustomMinimumSize = touch ? new Vector2(42, 42) : new Vector2(32, 32);
+            _closeBtn.AddThemeFontSizeOverride("font_size", touch ? 20 : 17);
+        }
         var w = compact ? 372f : 464f;
         var y = profile.DatePlate.Bottom + 4f;
         var maxH = Math.Max(240f, profile.ViewportHeight - y - 16f);
@@ -235,20 +242,23 @@ internal sealed class ShellMessageModalView
         _countBadgeLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.brass_hi"));
         badge.AddChild(_countBadgeLabel);
 
-        var closeBtn = new Button
+        var touchInit = _ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true);
+        _closeBtn = new Button
         {
             Name = "CloseShellNewsModal",
             Text = "×",
-            CustomMinimumSize = new Vector2(28, 28),
+            CustomMinimumSize = touchInit ? new Vector2(42, 42) : new Vector2(32, 32),
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None,
             TooltipText = Ui.Tip(Loc.Get("shell.ws.modal.close_tip"))
         };
-        closeBtn.AddThemeStyleboxOverride("normal", _ctx.NineSlice("button_umber_9s", 8, 6, 2, 6, 2));
-        closeBtn.AddThemeStyleboxOverride("hover", _closeHover);
-        closeBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
-        closeBtn.Pressed += Close;
-        row.AddChild(closeBtn);
+        _closeBtn.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
+        _closeBtn.AddThemeFontSizeOverride("font_size", touchInit ? 20 : 17);
+        _closeBtn.AddThemeStyleboxOverride("normal", _ctx.NineSlice("button_umber_9s", 8, 6, 2, 6, 2));
+        _closeBtn.AddThemeStyleboxOverride("hover", _closeHover);
+        _closeBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
+        _closeBtn.Pressed += Close;
+        row.AddChild(_closeBtn);
     }
 
     private void BuildTabsRow(VBoxContainer parent)
@@ -382,39 +392,50 @@ internal sealed class ShellMessageModalView
         };
     }
 
+    private int _lastChromeSig;
+    private bool _hasChromeSig;
+
     public void Refresh()
     {
         if (_panel is null || !_panel.Visible) return;
 
-        _headerTitle.Text = Loc.Get("shell.ws.modal.title");
-        _countBadgeLabel.Text = _recentNews.Count.ToString(CultureInfo.InvariantCulture);
-
         var curPreset = CurrentPreset;
-        foreach (var (p, card) in _presetCards)
+        var chromeSig = HashCode.Combine((int)curPreset, _activeTab, _recentNews.Count, Loc.Language);
+        if (!_hasChromeSig || _lastChromeSig != chromeSig)
         {
-            var on = p == curPreset;
-            card.TitleLabel.Text = Loc.Get(card.TitleKey);
-            card.PillLabel.Text = Loc.Get(card.PillKey);
-            card.Button.TooltipText = Ui.Tip(Loc.Get(card.TipKey), 48);
-            card.Button.AddThemeStyleboxOverride("normal", on ? _presetActive : _presetNormal);
-            card.Button.AddThemeStyleboxOverride("hover", on ? _presetActive : _presetHover);
-            card.TitleLabel.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_muted"));
-            card.PillStyle.BgColor = Ui.Colour(card.AccentToken, on ? 0.30f : 0.14f);
-            card.PillStyle.BorderColor = Ui.Colour(card.AccentToken, on ? 0.92f : 0.55f);
-        }
+            _hasChromeSig = true;
+            _lastChromeSig = chromeSig;
+            var title = Loc.Get("shell.ws.modal.title");
+            if (_headerTitle.Text != title) _headerTitle.Text = title;
+            var cntStr = _recentNews.Count.ToString(CultureInfo.InvariantCulture);
+            if (_countBadgeLabel.Text != cntStr) _countBadgeLabel.Text = cntStr;
 
-        string[] tabKeys = { "Recent world news", "DEFCON", "shell.great_powers" };
-        for (var i = 0; i < _tabButtons.Length; i++)
-        {
-            var on = i == _activeTab;
-            var tb = _tabButtons[i];
-            tb.Text = Loc.Get(tabKeys[i]);
-            var normalTab = on
-                ? _ctx.NineSlice("tab_folder_9s", 10, 8, 4, 8, 4)
-                : _ctx.PressedWellStyle(padX: 8, padY: 4);
-            tb.AddThemeStyleboxOverride("normal", normalTab);
-            tb.AddThemeStyleboxOverride("hover", on ? normalTab : _tabHover);
-            tb.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_faint"));
+            foreach (var (p, card) in _presetCards)
+            {
+                var on = p == curPreset;
+                card.TitleLabel.Text = Loc.Get(card.TitleKey);
+                card.PillLabel.Text = Loc.Get(card.PillKey);
+                card.Button.TooltipText = Ui.Tip(Loc.Get(card.TipKey), 48);
+                card.Button.AddThemeStyleboxOverride("normal", on ? _presetActive : _presetNormal);
+                card.Button.AddThemeStyleboxOverride("hover", on ? _presetActive : _presetHover);
+                card.TitleLabel.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_muted"));
+                card.PillStyle.BgColor = Ui.Colour(card.AccentToken, on ? 0.30f : 0.14f);
+                card.PillStyle.BorderColor = Ui.Colour(card.AccentToken, on ? 0.92f : 0.55f);
+            }
+
+            string[] tabKeys = { "Recent world news", "DEFCON", "shell.great_powers" };
+            for (var i = 0; i < _tabButtons.Length; i++)
+            {
+                var on = i == _activeTab;
+                var tb = _tabButtons[i];
+                tb.Text = Loc.Get(tabKeys[i]);
+                var normalTab = on
+                    ? _ctx.NineSlice("tab_folder_9s", 10, 8, 4, 8, 4)
+                    : _ctx.PressedWellStyle(padX: 8, padY: 4);
+                tb.AddThemeStyleboxOverride("normal", normalTab);
+                tb.AddThemeStyleboxOverride("hover", on ? normalTab : _tabHover);
+                tb.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_faint"));
+            }
         }
 
         foreach (var ch in _newsRows.GetChildren()) ch.QueueFree();

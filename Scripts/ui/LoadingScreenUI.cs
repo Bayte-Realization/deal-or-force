@@ -34,7 +34,11 @@ public partial class DealOrForceGame
         _loadingScreen = new LoadingScreen { Name = "LoadingScreen" };
         _loadingCanvas.AddChild(_loadingScreen);
         _loadingScreen.GrabFocus();
-        if (_globe is not null) _globe.LoadingInputBlocked = true;
+        if (_globe is not null)
+        {
+            _globe.LoadingInputBlocked = true;
+            _globe.SetViewportRenderingPaused(true);
+        }
         try
         {
             await LoadingPhase("Opening the archive", 0);
@@ -43,6 +47,7 @@ public partial class DealOrForceGame
             LogLoadingStage();
             if (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary != true)
                 PrebuildScreens();
+            _globe?.SetViewportRenderingPaused(false);
             _loadingScreen.SetStage(_loadingHeading, "Ready", 100, "Loading advances as each stage is completed.");
             DiagnosticLogs.Write("performance", $"LOADING_COMPLETE operation={heading} elapsed_ms={_loadingClock.Elapsed.TotalMilliseconds:F1}");
             // Present the completed map once before uncovering it. No timer/minimum duration.
@@ -50,7 +55,7 @@ public partial class DealOrForceGame
             CloseLoadingScreen();
             return true;
         }
-        catch (OperationCanceledException) { return false; }
+        catch (OperationCanceledException) { _globe?.SetViewportRenderingPaused(false); return false; }
         catch (Exception exception)
         {
             if (!IsInsideTree()) return false;
@@ -66,7 +71,7 @@ public partial class DealOrForceGame
         }
     }
 
-    private async Task LoadingPhase(string stage, double completed, string detail = "Loading advances as each stage is completed.")
+    private async Task LoadingPhase(string stage, double completed, string detail = "Loading advances as each stage is completed.", bool fast = false)
     {
         EnsureLoadingAlive();
         if (_loadingStage != stage)
@@ -76,13 +81,21 @@ public partial class DealOrForceGame
             _loadingStageStart = _loadingClock.Elapsed.TotalMilliseconds;
         }
         _loadingScreen.SetStage(_loadingHeading, stage, completed, detail);
-        await PresentLoadingFrame();
+        if (fast) await PresentLoadingFrameFast();
+        else await PresentLoadingFrame();
     }
 
     private void LogLoadingStage()
     {
         if (_loadingStage.Length > 0)
             DiagnosticLogs.Write("performance", $"LOADING_STAGE stage={_loadingStage} elapsed_ms={_loadingClock.Elapsed.TotalMilliseconds - _loadingStageStart:F1}");
+    }
+
+    private async Task PresentLoadingFrameFast()
+    {
+        EnsureLoadingAlive();
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        EnsureLoadingAlive();
     }
 
     private async Task PresentLoadingFrame()
@@ -109,23 +122,31 @@ public partial class DealOrForceGame
         // loop waited for a ready flag that would never be set and had no idea anything was
         // wrong. Two minutes with no progress at all is not a slow map, it is a map that is
         // not coming - and the player is owed the stage it stopped at rather than a still frame.
-        var lastStage = "";
-        var lastProgress = -1d;
+        var lastDisplayedStage = "";
+        var lastDisplayedProgress = -1d;
+        var lastReportedStage = "";
+        var lastReportedProgress = -1d;
         var lastChange = Time.GetTicksMsec();
-        var tree = GetTree();
         while (!_globe.IsMapPresentationReady)
         {
             if (!string.IsNullOrEmpty(_globe.MapLoadingError)) throw new InvalidOperationException(_globe.MapLoadingError);
             var stage = _globe.MapLoadingStage;
             var progress = _globe.MapLoadingProgress;
             var now = Time.GetTicksMsec();
-            var changed = !string.Equals(stage, lastStage, StringComparison.Ordinal) || Math.Abs(progress - lastProgress) > 0.001f;
-            if (changed)
+            if (!string.Equals(stage, lastReportedStage, StringComparison.Ordinal) ||
+                Math.Abs(progress - lastReportedProgress) > 0.001)
             {
-                lastStage = stage;
-                lastProgress = progress;
+                lastReportedStage = stage;
+                lastReportedProgress = progress;
                 lastChange = now;
-                await LoadingPhase(stage, progress);
+            }
+            var shouldRedraw = !string.Equals(stage, lastDisplayedStage, StringComparison.Ordinal) ||
+                               Math.Abs(progress - lastDisplayedProgress) >= 8.0;
+            if (shouldRedraw)
+            {
+                lastDisplayedStage = stage;
+                lastDisplayedProgress = progress;
+                await LoadingPhase(stage, progress, fast: true);
             }
             else
             {
@@ -133,9 +154,7 @@ public partial class DealOrForceGame
                     throw new InvalidOperationException(
                         $"The map stopped answering while {stage} was in progress. " +
                         "Close any other copy of the game that is running, then try again.");
-                EnsureLoadingAlive();
-                await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
-                EnsureLoadingAlive();
+                await PresentLoadingFrameFast();
             }
         }
     }
@@ -148,7 +167,11 @@ public partial class DealOrForceGame
         // cover's child buttons through a surviving managed wrapper.
         _loadingCanvas = null;
         _loadingScreen = null;
-        if (_globe is not null) _globe.LoadingInputBlocked = false;
+        if (_globe is not null)
+        {
+            _globe.LoadingInputBlocked = false;
+            _globe.SetViewportRenderingPaused(IsGlobeObscuredByFullCoverModal());
+        }
         _isLoading = false;
         _frameClock.Reset();
         if (GodotObject.IsInstanceValid(_loadingPreviousFocus) && _loadingPreviousFocus.IsVisibleInTree())

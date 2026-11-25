@@ -22,12 +22,41 @@ static class BilateralPeaceTests
         RunBilateralOfferOffsetsDemandTest();
         RunLosingSideConcessionPeaceAndExecutionTest();
         RunValidationRefusalsAndFingerprintInvarianceTest();
+        RunRepeatedLandPricingTest();
         RunLocalizationAndWaveM1UiContractsTest();
     }
 
-    private static (Campaign c, Nation a, Nation b, StrategicWar war) BuildWarWorld(int seed, float warScore)
+    private static void RunRepeatedLandPricingTest()
     {
-        const int cols = 8, rows = 4, block = 8;
+        var (campaign, buyer, holder, war) = BuildWarWorld(20261124, warScore: 15f, block: 24);
+        campaign.Defines.PeaceResistanceShare = 1f;
+        campaign.Defines.PeaceCostReunificationFactor = 0.2f;
+        var region = campaign.StatesOf(holder).First(state =>
+            campaign.ProvinceMap.ProvincesOfState(state.MapIndex).Length >= 2);
+        var demand = new PeaceDemand { WarId = war.Id, ProposerId = buyer.Id };
+        foreach (var province in campaign.ProvinceMap.ProvincesOfState(region.MapIndex))
+            demand.Provinces.Add(province);
+
+        var ledger = new PeaceLedger(campaign, war, buyer.Id);
+        float IndividualPrices()
+        {
+            var total = 0f;
+            foreach (var province in demand.Provinces) total += ledger.Price(province).Cost;
+            return total;
+        }
+        var initial = ledger.DemandCost(demand);
+        Check(initial == IndividualPrices(),
+            "a multi-province total agrees with the individual province readouts");
+
+        region.CoreTags.Add(buyer.Tag);
+        var revised = ledger.DemandCost(demand);
+        Check(revised < initial && revised == IndividualPrices(),
+            "a later bill on the same ledger sees new regional claims and still matches the readouts");
+    }
+
+    private static (Campaign c, Nation a, Nation b, StrategicWar war) BuildWarWorld(int seed, float warScore, int block = 8)
+    {
+        const int cols = 8, rows = 4;
         int Reg(int col, int row) => 7501 + col + row * cols;
         var c = new Campaign(seed) { ScenarioId = "bilateral_peace_fixture" };
         var a = new Nation

@@ -189,6 +189,7 @@ public sealed class PlatformProfile
     public bool ShouldUseCompactTextureBudget { get; }
     public int RecommendedIdleFpsCap { get; }
     public int RecommendedActiveFpsCap { get; }
+    public float RecommendedCloseButtonPx => IsTouchPrimary ? Math.Clamp(MinimumTouchTargetPx * 0.92f, 42f, 52f) : 32f;
 
     private PlatformProfile(
         PlatformFormFactor formFactor,
@@ -316,7 +317,7 @@ public sealed class PlatformProfile
 
         var isDesktop = formFactor == PlatformFormFactor.Desktop;
         var compactTextures = graphicsTier == PlatformGraphicsTier.MobileLow ||
-                              (formFactor == PlatformFormFactor.AndroidPhone && snapshot.SystemMemoryMb > 0 && snapshot.SystemMemoryMb <= 6144);
+                              (formFactor == PlatformFormFactor.AndroidPhone && snapshot.SystemMemoryMb > 0 && snapshot.SystemMemoryMb <= 8500);
 
         return new PlatformProfile(
             formFactor: formFactor,
@@ -355,7 +356,33 @@ public sealed class PlatformProfile
         return MathF.Max(value, active.MinimumTouchTargetPx);
     }
 
-    /// <summary>Heuristic detector for older mobile GPUs or GLES3 fallback where <see cref="PlatformGraphicsTier.MobileLow"/> is safer.</summary>
+    private static readonly string[] LowEndMobileAdapterTokens =
+    {
+        "swiftshader",
+        "llvmpipe",
+        "powervr ge8",
+        "mali-g52",
+        "mali-g57",
+        "mali-g78",
+        "mali-t8",
+        "mali-400",
+        "adreno (tm) 5",
+        "adreno 5",
+        "adreno (tm) 610",
+        "adreno 610",
+        "bluestacks",
+        "bst",
+        "emulator",
+        "android sdk built",
+        "virtio",
+        "goldfish",
+        "ranchu",
+        "angle",
+        "vbox",
+        "vmware"
+    };
+
+    /// <summary>Heuristic detector for older mobile GPUs, Android emulators, or GLES3 fallback where <see cref="PlatformGraphicsTier.MobileLow"/> is safer.</summary>
     public static bool IsLowEndMobileAdapter(string adapterName, string renderingMethod)
     {
         if (!string.IsNullOrWhiteSpace(renderingMethod) &&
@@ -366,16 +393,11 @@ public sealed class PlatformProfile
         if (string.IsNullOrWhiteSpace(adapterName)) return false;
 
         var name = adapterName.ToLowerInvariant();
-        return name.Contains("swiftshader") ||
-               name.Contains("llvmpipe") ||
-               name.Contains("powervr ge8") ||
-               name.Contains("mali-g52") ||
-               name.Contains("mali-g57") ||
-               name.Contains("mali-t8") ||
-               name.Contains("mali-400") ||
-               name.Contains("adreno (tm) 5") ||
-               name.Contains("adreno 5") ||
-               name.Contains("adreno (tm) 610") ||
-               name.Contains("adreno 610");
+        foreach (var token in LowEndMobileAdapterTokens)
+        {
+            if (name.Contains(token, StringComparison.Ordinal))
+                return true;
+        }
+        return false;
     }
 }

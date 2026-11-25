@@ -203,19 +203,49 @@ public static class WarLosses
         war?.Prisoners.GetValueOrDefault(nationId) ?? 0f;
 
     /// <summary>
-    /// Everybody still held in a war that is over goes home. Once a day, over every war rather
-    /// than at each of the places a war can end - a peace treaty, a subjugation, a country that
-    /// stopped existing - because a prisoner forgotten by one of them would be held for ever.
+    /// Everybody still held in a war that is over goes home. Once a day, over wars from the first
+    /// unsettled war onward rather than scanning hundreds of long-ended wars forever.
     /// </summary>
     public static void Repatriate(Campaign campaign)
     {
-        foreach (var war in campaign.Wars)
+        if (campaign is null) return;
+        var wars = campaign.Wars;
+        var count = wars.Count;
+        var head = count > 0 ? wars[0] : null;
+        var tail = count > 0 ? wars[count - 1] : null;
+        if (count < campaign._repatriatedWarPrefix ||
+            !ReferenceEquals(campaign._repatriatedWarHead, head) ||
+            (campaign._repatriatedWarCount > 0 && count == campaign._repatriatedWarCount &&
+             !ReferenceEquals(campaign._repatriatedWarTail, tail)))
+            campaign._repatriatedWarPrefix = 0;
+
+        var prefix = campaign._repatriatedWarPrefix;
+        var advancing = true;
+        for (var i = prefix; i < count; i++)
         {
-            if (!war.Ended || war.Prisoners.Count == 0) continue;
-            foreach (var pair in war.Prisoners)
-                Release(campaign, pair.Key, pair.Value, war, "peace");
-            war.Prisoners.Clear();
+            var war = wars[i];
+            if (war is null)
+            {
+                if (advancing) prefix = i + 1;
+                continue;
+            }
+            if (!war.Ended)
+            {
+                advancing = false;
+                continue;
+            }
+            if (war.Prisoners.Count > 0)
+            {
+                foreach (var pair in war.Prisoners)
+                    Release(campaign, pair.Key, pair.Value, war, "peace");
+                war.Prisoners.Clear();
+            }
+            if (advancing) prefix = i + 1;
         }
+        campaign._repatriatedWarPrefix = prefix;
+        campaign._repatriatedWarCount = count;
+        campaign._repatriatedWarHead = head;
+        campaign._repatriatedWarTail = tail;
     }
 
     /// <summary>
@@ -276,7 +306,7 @@ public sealed class ExchangePrisonersCommand : ICampaignCommand
     public void Apply(Campaign campaign)
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
-        var war = campaign.Wars.Find(candidate => candidate.Id == WarId);
+        var war = Warfare.WarById(campaign, WarId);
         if (war is null || war.Ended || !war.Involves(IssuerId)) return;
         var refusal = WarLosses.ExchangeRefusal(campaign, war, IssuerId, CounterpartId);
         if (refusal.Length > 0) { war.LastNegotiation = Loc.Get(refusal); return; }

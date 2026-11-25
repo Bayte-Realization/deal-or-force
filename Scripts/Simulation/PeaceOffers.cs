@@ -49,11 +49,10 @@ public static class PeaceOffers
         if (demand is null || demand.ProposerId != proposer.Id || demand.WarId != war.Id) return false;
         if (DeliveryBlockReason(campaign, war, proposer, opponent).Length > 0) return false;
         if (!opponent.IsHuman) return PeaceConference.Resolve(campaign, war, demand);
-        if (PeaceConference.BlockReason(campaign, war, demand).Length > 0) return false;
+        if (PeaceConference.BlockReason(campaign, war, demand, out var rounded).Length > 0) return false;
 
         // Store the same whole-region border that validation priced and acceptance will
         // transfer. The recipient's map and written summary read this saved offer.
-        var rounded = PeaceConference.Round(campaign, war, demand);
         if (!proposer.IsHuman && ToPlayerBlockReason(campaign, war, true, rounded, PeaceTerms.WhitePeace).Length > 0)
             return false;
         war.PendingOffer = rounded;

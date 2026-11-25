@@ -21,8 +21,10 @@ internal sealed class ShellEconomyWorkspaceView
     private Control _layer;
     private PanelContainer _panel;
     private Label _subtitleLabel;
+    private Button _closeBtn;
     private readonly Button[] _tabButtons = new Button[5];
     private EconomyFiscalRibbonNodes _ribbon;
+    private EconomyBaseStripNodes _baseStrip;
 
     private GridContainer _budgetGrid;
     private VBoxContainer _revRows;
@@ -52,6 +54,10 @@ internal sealed class ShellEconomyWorkspaceView
     private string _focusedLineId = "";
     private bool _syncingSliders;
     private ShellLayoutProfile _profile;
+    private int _lastEcoSig;
+    private bool _hasEcoSig;
+    private int _localEcoRev;
+    private readonly List<(string Name, float Amount)> _expSharesScratch = new(16);
 
     private readonly Dictionary<string, BudgetRowNodes> _lineNodes = new(StringComparer.OrdinalIgnoreCase);
 
@@ -93,6 +99,7 @@ internal sealed class ShellEconomyWorkspaceView
 
         BuildHeader(rootCol);
         _ribbon = ShellEconomyCharts.BuildFiscalSummaryRibbon(_ctx, rootCol);
+        _baseStrip = ShellEconomyCharts.BuildBaseMetricsStrip(_ctx, rootCol);
         BuildBody(rootCol);
         BuildFooter(rootCol);
     }
@@ -179,12 +186,24 @@ internal sealed class ShellEconomyWorkspaceView
         gpBtn.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); _ctx.OpenGrandProjects?.Invoke(); };
         head.AddChild(gpBtn);
 
-        var closeBtn = new Button { Text = "×", CustomMinimumSize = new Vector2(32, 32), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter, MouseDefaultCursorShape = Control.CursorShape.PointingHand, FocusMode = Control.FocusModeEnum.None };
-        closeBtn.AddThemeStyleboxOverride("normal", _ctx.BorderedBox("shell.well", "shell.engrave", 1, 2, 0, 0, 0, 0));
-        closeBtn.AddThemeStyleboxOverride("hover", _ctx.BorderedBox("shell.plate_hover", "shell.brass_hi", 1, 2, 0, 0, 0, 0));
-        closeBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
-        closeBtn.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); Close(); };
-        head.AddChild(closeBtn);
+        var isTouch = _ctx.IsTouchMode?.Invoke() ?? (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true);
+        _closeBtn = new Button
+        {
+            Name = "CloseShellEconomyWorkspace",
+            Text = "×",
+            CustomMinimumSize = isTouch ? new Vector2(44, 44) : new Vector2(34, 34),
+            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+            FocusMode = Control.FocusModeEnum.None,
+            TooltipText = Ui.Tip(Loc.Get("Close"))
+        };
+        _closeBtn.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
+        _closeBtn.AddThemeFontSizeOverride("font_size", isTouch ? 22 : 18);
+        _closeBtn.AddThemeStyleboxOverride("normal", _ctx.BorderedBox("shell.well", "shell.engrave", 1, 2, 0, 0, 0, 0));
+        _closeBtn.AddThemeStyleboxOverride("hover", _ctx.BorderedBox("shell.plate_hover", "shell.brass_hi", 1, 2, 0, 0, 0, 0));
+        _closeBtn.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
+        _closeBtn.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); Close(); };
+        head.AddChild(_closeBtn);
     }
 
     private void BuildBody(VBoxContainer parent)
@@ -556,6 +575,14 @@ internal sealed class ShellEconomyWorkspaceView
         _profile = profile;
         if (_panel is null) return;
         ShellContext.PlaceRect(_panel, profile.FullWorkspace);
+        if (_closeBtn is not null)
+        {
+            var isTouch = profile.TouchMode || (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true);
+            _closeBtn.CustomMinimumSize = isTouch ? new Vector2(44, 44) : new Vector2(34, 34);
+            _closeBtn.AddThemeFontSizeOverride("font_size", isTouch ? 22 : 18);
+        }
+        if (_baseStrip?.Root is not null)
+            _baseStrip.Root.Columns = profile.Compact && profile.ViewportWidth < 1000f ? 2 : 4;
         if (_budgetGrid is not null) _budgetGrid.Columns = profile.Compact ? 1 : 2;
         if (_rightScroll is not null) _rightScroll.CustomMinimumSize = new Vector2(profile.Compact ? 280 : 336, 0);
     }
@@ -564,13 +591,57 @@ internal sealed class ShellEconomyWorkspaceView
     {
         if (!IsVisible || _ctx.World?.Player is not { } n) return;
         var world = _ctx.World;
-        var atWar = world.Wars.Any(w => !w.Ended && w.Involves(n.Id));
+        var atWar = false;
+        if (_ctx.HudSnapshot is { Version: > 0 } hs && hs.PlayerId == n.Id)
+            atWar = hs.OpenPlayerWars.Length > 0;
+        else
+        {
+            var openWars = Warfare.OpenWars(world);
+            for (var i = 0; i < openWars.Count; i++)
+                if (!openWars[i].Ended && openWars[i].Involves(n.Id)) { atWar = true; break; }
+        }
         var weeklyOut = n.Gdp / 52f;
+
+        var runningSites = 0;
+        for (var i = 0; i < world.Construction.Count; i++)
+            if (world.Construction[i].NationId == n.Id) runningSites++;
+        var siteSlots = ConstructionCost.Limit(world, n, world.Defines.MaxConstructionProjects);
+        var gpActive = 0;
+        var gpDone = 0;
+        for (var i = 0; i < world.GrandProjects.Count; i++)
+        {
+            var gp = world.GrandProjects[i];
+            if (gp.HostNationId != n.Id && gp.PartnerNationId != n.Id) continue;
+            if (gp.Status == GrandProjectStatus.Completed) gpDone++;
+            else gpActive++;
+        }
+        var sheet = SovereignBalanceSheet.Read(world, n);
+        var observer = _ctx.IsObserverMode?.Invoke() ?? false;
+        var lang = Loc.Language;
+
+        var ecoHc = new HashCode();
+        ecoHc.Add(n.Id); ecoHc.Add(n.Treasury); ecoHc.Add(n.WeeklyBalance); ecoHc.Add(n.Gdp);
+        ecoHc.Add(n.Population); ecoHc.Add(n.Inflation); ecoHc.Add(sheet.Principal); ecoHc.Add(sheet.Cash);
+        ecoHc.Add(atWar); ecoHc.Add(runningSites); ecoHc.Add(siteSlots); ecoHc.Add(gpActive); ecoHc.Add(gpDone);
+        ecoHc.Add(_selectedQuarter); ecoHc.Add(_focusedLineId, StringComparer.Ordinal);
+        ecoHc.Add(_localEcoRev); ecoHc.Add(observer); ecoHc.Add(lang, StringComparer.Ordinal);
+        ecoHc.Add(world.ElapsedDays); ecoHc.Add(world.MapRevision); ecoHc.Add(world.WarRevision);
+        foreach (var (_, node) in _lineNodes) ecoHc.Add(BudgetCore.RateOf(n, node.Line));
+        var ecoSig = ecoHc.ToHashCode();
+        if (_hasEcoSig && _lastEcoSig == ecoSig) return;
+        _hasEcoSig = true;
+        _lastEcoSig = ecoSig;
+
+        var gdpPerCapita = ShellCornerTelemetry.FormatGdpPerCapita(n.Gdp, n.Population);
+        var baseSubtitle = Loc.Format("shell.aaa.eco_sub_base_fmt",
+            Fmt.Money(n.Gdp), Fmt.People(n.Population), gdpPerCapita, runningSites, siteSlots);
+        if (_subtitleLabel.Text != baseSubtitle) _subtitleLabel.Text = baseSubtitle;
+        _subtitleLabel.TooltipText = Ui.Tip(baseSubtitle);
 
         _syncingSliders = true;
         var revTotal = 0f;
         var expTotal = 0f;
-        var expShares = new List<(string Name, float Amount)>();
+        _expSharesScratch.Clear();
 
         foreach (var (id, node) in _lineNodes)
         {
@@ -582,12 +653,12 @@ internal sealed class ShellEconomyWorkspaceView
             node.RateLabel.Text = $"{(rate * 100f):0.#}%";
             node.MoneyLabel.Text = Fmt.Money(amt);
             var focused = _focusedLineId == id;
-            node.QuickBar.Visible = focused;
+            if (node.QuickBar.Visible != focused) node.QuickBar.Visible = focused;
             node.NameBtn.Text = (focused ? "▾ " : "▸ ") + Loc.Get(node.Line.Name);
             node.NameBtn.AddThemeColorOverride("font_color", Ui.Colour(focused ? "shell.paper" : "shell.paper_muted"));
 
             if (node.Line.Side == BudgetSide.Revenue) revTotal += amt;
-            else { expTotal += amt; if (amt > 0.0001f) expShares.Add((Loc.Get(node.Line.Name), amt)); }
+            else { expTotal += amt; if (amt > 0.0001f) _expSharesScratch.Add((Loc.Get(node.Line.Name), amt)); }
         }
         _syncingSliders = false;
 
@@ -596,11 +667,11 @@ internal sealed class ShellEconomyWorkspaceView
         ShellEconomyCharts.RefreshTaxEfficiencyBanner(_ctx, _taxEfficiencyBanner, n, weeklyOut, atWar);
 
         var bal = revTotal - expTotal;
-        var sheet = SovereignBalanceSheet.Read(world, n);
         var debtPct = (sheet.Principal / MathF.Max(0.01f, n.Gdp)) * 100f;
         var inflPct = n.Inflation * 100f;
 
         ShellEconomyCharts.RefreshFiscalSummaryRibbon(_ribbon, n, sheet, revTotal, expTotal, bal, debtPct, inflPct);
+        ShellEconomyCharts.RefreshBaseMetricsStrip(_baseStrip, world, n);
 
         _balanceBigLabel.Text = Fmt.MoneyDelta(bal);
         _balanceBigLabel.AddThemeColorOverride("font_color", Ui.Colour(bal < -0.0005f ? "shell.state.negative_text" : "shell.state.positive"));
@@ -609,20 +680,18 @@ internal sealed class ShellEconomyWorkspaceView
         var yrCash = n.Treasury + bal * 52f;
         _forecastNoteLabel.Text = Loc.Format("shell.year_budget_forecast_fmt", Fmt.Money(MathF.Max(0f, yrCash)), $"{debtPct:0.1}%", $"{inflPct:0.1}%");
 
-        var gpActive = world.GrandProjects.Count(p => (p.HostNationId == n.Id || p.PartnerNationId == n.Id) && p.Status != GrandProjectStatus.Completed);
-        var gpDone = world.GrandProjects.Count(p => (p.HostNationId == n.Id || p.PartnerNationId == n.Id) && p.Status == GrandProjectStatus.Completed);
         _gpCardStatusLabel.Text = gpActive + gpDone > 0
             ? Loc.Format("shell.ws.eco.gp_cta_active_fmt", gpActive, gpDone)
             : Loc.Get("shell.ws.eco.gp_cta_none");
 
         ShellEconomyCharts.PopulateSupplyShortages(_ctx, _shortagesBox, n, () => { Close(); _ctx.OpenScreen?.Invoke("Trade"); });
-        ShellEconomyCharts.PopulateSpendingStack(_ctx, _spendingStackBar, expShares, expTotal);
+        ShellEconomyCharts.PopulateSpendingStack(_ctx, _spendingStackBar, _expSharesScratch, expTotal);
 
         _debtSummaryLabel.Text = $"{Fmt.Money(sheet.Principal)} · {debtPct:0.1}% {Loc.Get("GDP")}";
         var maxRepay = MathF.Max(0f, MathF.Min(sheet.Cash, sheet.Principal));
         var chosenAmt = maxRepay * ((_selectedQuarter + 1) * 0.25f);
         _repayAllBtn.Text = $"{Loc.Get("Repay all we can")} · {Fmt.Money(chosenAmt)}";
-        _repayAllBtn.Disabled = chosenAmt < 0.01f || (_ctx.IsObserverMode?.Invoke() ?? false);
+        _repayAllBtn.Disabled = chosenAmt < 0.01f || observer;
         _repayAmountField.Text = Fmt.Money(chosenAmt);
         _repayPreviewLabel.Text = Loc.Format("shell.after_repay_fmt",
             Fmt.Money(MathF.Max(0f, sheet.Cash - chosenAmt)),
@@ -640,7 +709,7 @@ internal sealed class ShellEconomyWorkspaceView
         _treasuryChart.TooltipText = Ui.Tip(Loc.Format("shell.ws.eco.chart_tip_fmt",
             Fmt.Money(n.Treasury), Fmt.MoneyDelta(bal), Fmt.Money(-MathF.Max(0.2f, sheet.NewCredit))));
         _treasuryChart.QueueRedraw();
-        ShellEconomyProductionMethods.Refresh(_ctx, _productionMethodsBox, world, n, () => { Refresh(); _ctx.RefreshAll?.Invoke(); });
+        ShellEconomyProductionMethods.Refresh(_ctx, _productionMethodsBox, world, n, () => { _localEcoRev++; Refresh(); _ctx.RefreshAll?.Invoke(); });
     }
 
     private void ExecuteQuickDebtRepay()

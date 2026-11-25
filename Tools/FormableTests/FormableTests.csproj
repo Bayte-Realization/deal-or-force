@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>disable</Nullable>
     <CodePage>65001</CodePage>
     <ServerGarbageCollection>false</ServerGarbageCollection>
@@ -44,8 +44,8 @@
   <ItemGroup><Compile Include="../../Scripts/Boot/DemographyRulesFSharpBoot.cs"/></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Boot/DiplomacyRulesFSharpBoot.cs"/></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Boot/CombatTempoRulesFSharpBoot.cs"/></ItemGroup>
-  <!-- The managed F# pure rule is part of the game now; the test stand references the same
-       net8.0 target the simulation sources compile against. -->
+  <!-- The managed F# pure rule targets net8.0 so both the net10.0 game/test stand
+       and net8.0 analyzers consume the same verified DealOrForce.Rules assembly. -->
   <ItemGroup><ProjectReference Include="../../Scripts/Rules/DealOrForce.Rules.fsproj" /></ItemGroup>
   <!-- Differential/failure tests of tools-only kernels; no native dependency in the game. -->
   <ItemGroup><Compile Include="../GodotLanguages/kernels/ownership/managed/*.cs" /></ItemGroup>

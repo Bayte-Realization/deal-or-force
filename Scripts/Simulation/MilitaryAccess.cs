@@ -14,8 +14,28 @@ public sealed partial class Defines
 public sealed partial class DiplomaticRelation
 {
     // A grant by A lets B enter A, not the reverse. Old saves default to no grant.
-    public bool MilitaryAccessByA;
-    public bool MilitaryAccessByB;
+    private bool _militaryAccessByA;
+    private bool _militaryAccessByB;
+    public bool MilitaryAccessByA
+    {
+        get => _militaryAccessByA;
+        set
+        {
+            if (value == _militaryAccessByA) return;
+            _militaryAccessByA = value;
+            System.Threading.Interlocked.Increment(ref _routeAccessMutationVersion);
+        }
+    }
+    public bool MilitaryAccessByB
+    {
+        get => _militaryAccessByB;
+        set
+        {
+            if (value == _militaryAccessByB) return;
+            _militaryAccessByB = value;
+            System.Threading.Interlocked.Increment(ref _routeAccessMutationVersion);
+        }
+    }
     public int MilitaryAccessRequestedBy = -1;
     public int MilitaryAccessRequestedDay = -9999;
     public bool GrantsMilitaryAccess(int hostId) => hostId == A ? MilitaryAccessByA : hostId == B && MilitaryAccessByB;
@@ -74,7 +94,71 @@ public static class MilitaryAccess
     [ThreadStatic] private static HashSet<int> _controllerHostileIds;
     [ThreadStatic] private static HashSet<int> _controllerSameSideIds;
 
+    /// <summary>Only relations that change access, borrowed by a single support movement pass.</summary>
+    internal sealed class RouteRelations
+    {
+        private List<(int Partner, DiplomaticRelation Relation)>[] _neighbors = Array.Empty<List<(int, DiplomaticRelation)>>();
+        private DiplomaticRelation[] _countryRow = Array.Empty<DiplomaticRelation>();
+        private int _awakeCount = -1, _dormantCount, _nationsCount, _accessVersion;
+
+        internal void Rebuild(Campaign campaign)
+        {
+            Clear();
+            _nationsCount = campaign.Nations.Count;
+            if (_neighbors.Length < _nationsCount)
+            {
+                Array.Resize(ref _neighbors, _nationsCount);
+                Array.Resize(ref _countryRow, _nationsCount);
+            }
+            _accessVersion = DiplomaticRelation.RouteAccessMutationVersion;
+            foreach (var (key, relation) in campaign.Relations)
+                if (AffectsAccess(relation)) Add(key, relation);
+            foreach (var (key, relation) in campaign.DormantRelations)
+                if (AffectsAccess(relation) && !campaign.Relations.ContainsKey(key))
+                    Add(key, relation);
+            _awakeCount = campaign.Relations.Count;
+            _dormantCount = campaign.DormantRelations.Count;
+        }
+
+        private void Add(long key, DiplomaticRelation relation)
+        {
+            var a = (int)(key >> 32);
+            var b = unchecked((int)(uint)key);
+            if ((uint)a >= (uint)_nationsCount || (uint)b >= (uint)_nationsCount || a == b) return;
+            (_neighbors[a] ??= new()).Add((b, relation));
+            (_neighbors[b] ??= new()).Add((a, relation));
+        }
+
+        internal DiplomaticRelation[] ForCountry(Campaign campaign, int country)
+        {
+            if (campaign.Relations.Count != _awakeCount || campaign.DormantRelations.Count != _dormantCount ||
+                campaign.Nations.Count != _nationsCount || DiplomaticRelation.RouteAccessMutationVersion != _accessVersion)
+                return null;
+            Array.Clear(_countryRow, 0, _nationsCount);
+            if (_neighbors[country] is { } neighbors)
+                foreach (var (partner, relation) in neighbors) _countryRow[partner] = relation;
+            return _countryRow;
+        }
+
+        internal void Clear()
+        {
+            for (var i = 0; i < _nationsCount; i++) _neighbors[i]?.Clear();
+            Array.Clear(_countryRow, 0, _nationsCount);
+            _nationsCount = 0;
+            _awakeCount = -1;
+        }
+
+        private static bool AffectsAccess(DiplomaticRelation relation) =>
+            relation is not null &&
+            (relation.Stance == DiplomaticStance.AtWar || relation.MilitaryAccessByA || relation.MilitaryAccessByB);
+    }
+
     public static void FillControllers(Campaign c, int guest, ISet<ushort> allowed)
+        => FillControllers(c, guest, allowed, enemies: null);
+
+    /// <summary>Optionally collect the enemy controllers needed by support movement in the same walk.</summary>
+    internal static void FillControllers(Campaign c, int guest, ISet<ushort> allowed, HashSet<ushort> enemies,
+        RouteRelations routeRelations = null)
     {
         if (allowed is null) return;
         var own = c?.NationById(guest);
@@ -90,39 +174,59 @@ public static class MilitaryAccess
         {
             var war = wars[index];
             if (war.Ended) continue;
-            if (war.IsAttacking(guest))
+            var attacking = war.IsAttacking(guest);
+            if (!attacking && !war.IsDefending(guest)) continue;
+            foreach (var id in war.Side(attacking)) sameSide.Add(id);
+            foreach (var id in war.Side(!attacking))
             {
-                foreach (var id in war.Side(true)) sameSide.Add(id);
-                foreach (var id in war.Side(false)) hostile.Add(id);
-            }
-            else if (war.IsDefending(guest))
-            {
-                foreach (var id in war.Side(false)) sameSide.Add(id);
-                foreach (var id in war.Side(true)) hostile.Add(id);
+                hostile.Add(id);
+                if (enemies is not null && c.NationById(id) is { MapIndex: > 0 } foe)
+                    enemies.Add((ushort)foe.MapIndex);
             }
         }
 
         var byMapIndex = c.NationsByMapIndex();
+        var routeRow = routeRelations?.ForCountry(c, guest);
+        var routeHosts = c.Nations.Count;
+        DiplomaticRelation RelationWith(int hostId) => routeRow is not null && (uint)hostId < (uint)routeHosts
+            ? routeRow[hostId] : CampaignDiplomacy.Peek(c, guest, hostId);
+        // Refresh retirement before reading RetiredDay. Relations alone count as enemies only
+        // for active countries, while the live belligerents above count regardless of retirement.
+        var active = enemies is null ? null : c.ActiveNations;
         foreach (var pair in byMapIndex)
         {
             var mapIndex = pair.Key;
             if (mapIndex <= 0) continue;
             var code = (ushort)mapIndex;
-            if (mapIndex == own.MapIndex)
+            var host = pair.Value;
+            var atHome = mapIndex == own.MapIndex;
+            if (atHome) allowed.Add(code);
+            if (atHome && enemies is null) continue;
+            if (host is null || (host.Id != guest && hostile.Contains(host.Id))) continue;
+            var rel = RelationWith(host.Id);
+            if (rel?.Stance == DiplomaticStance.AtWar)
             {
-                allowed.Add(code);
+                if (enemies is not null && host.RetiredDay < 0) enemies.Add(code);
                 continue;
             }
-            var host = pair.Value;
-            if (host is null || (host.Id != guest && hostile.Contains(host.Id))) continue;
-            var rel = CampaignDiplomacy.Peek(c, guest, host.Id);
-            if (rel?.Stance == DiplomaticStance.AtWar) continue;
-            if ((rel is not null && rel.GrantsMilitaryAccess(host.Id)) ||
+            if (!atHome && ((rel is not null && rel.GrantsMilitaryAccess(host.Id)) ||
                 own.AnswersTo(host.Id) || host.AnswersTo(guest) ||
-                sameSide.Contains(host.Id))
+                sameSide.Contains(host.Id)))
             {
                 allowed.Add(code);
             }
+        }
+
+        // Old scenarios can share a map code. The map index chooses the first owner; another
+        // active country using that code can still mark it hostile in support movement.
+        if (enemies is null || byMapIndex.Count == c.Nations.Count) return;
+        for (var i = 0; i < active.Count; i++)
+        {
+            var other = active[i];
+            if (other.Id != guest && other.MapIndex > 0 &&
+                !ReferenceEquals(byMapIndex.GetValueOrDefault(other.MapIndex), other) &&
+                RelationWith(other.Id)?.Stance == DiplomaticStance.AtWar)
+                enemies.Add((ushort)other.MapIndex);
         }
     }
 

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using DealOrForce.Platform;
 using DealOrForce.Simulation;
 using Godot;
 using DealOrForce.Modding;
@@ -81,6 +83,37 @@ public partial class MainMenuScene : Control
     private VBoxContainer _settingsRows;
     private readonly Dictionary<string, Button> _settingsTabs = new(StringComparer.OrdinalIgnoreCase);
     private string _settingsCategory = "";
+    private GameDiagnosticLogger _bootLogger;
+    private SubViewport _compatPrewarmViewport;
+    private TextureRect _compatPrewarmSink;
+    private readonly List<IDisposable> _compatPrewarmResources = new();
+    private int _compatPrewarmFrames;
+    private static bool _compatShaderPrewarmed;
+
+    private static bool IsMobileOrTouchPlatform =>
+        Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
+        Platform.PlatformProfile.Current?.IsMobile == true ||
+        OS.HasFeature("mobile") || OS.HasFeature("android") || OS.HasFeature("ios") ||
+        OS.GetName() is "Android" or "iOS";
+
+    private static void LogBootMilestone(string stage, string detail = "")
+    {
+        BootCrashDiagnostics.Step(stage, detail);
+    }
+
+    private static void LogMenuError(string stage, Exception exception)
+    {
+        var detail = $"{stage} failed: {exception.GetType().Name}: {exception.Message}";
+        GD.PrintErr($"[menu] {detail}\n{exception}");
+        BootCrashDiagnostics.RecordException($"MainMenuScene.{stage}", exception, stage, fatal: false);
+    }
+
+    private void ApplyDesktopCustomCursors()
+    {
+        if (IsMobileOrTouchPlatform) return;
+        Input.MouseMode = Input.MouseModeEnum.Visible;
+        GameCursorService.Ensure(this).Refresh();
+    }
 
     public override void _Ready()
     {
@@ -94,6 +127,22 @@ public partial class MainMenuScene : Control
         // No campaign here: a campaign option set from this screen is where new ones start.
         SettingsCatalog.CurrentCampaign = null;
 
+        // Initialize platform profile + mobile text adapter before cursors, fonts, paths, or intro chrome.
+        var initialViewHeight = Size.Y > 1f ? Size.Y : GetViewportRect().Size.Y;
+        Platform.GodotPlatformBridge.EnsureInitialized(initialViewHeight > 1f ? initialViewHeight : 1080f);
+        BootCrashDiagnostics.BeginSession("MainMenu",
+            $"renderer={RenderingServer.GetCurrentRenderingMethod()} adapter={RenderingServer.GetVideoAdapterName()}");
+        try
+        {
+            _bootLogger = new GameDiagnosticLogger();
+            OS.AddLogger(_bootLogger);
+        }
+        catch
+        {
+            _bootLogger = null;
+        }
+        LogBootMilestone("main_menu_ready_start");
+
         // The catalogues this screen needs and nothing else.
         //
         // `Loc` and `InterfaceSkin` load themselves the first time anybody asks, so the words
@@ -101,30 +150,39 @@ public partial class MainMenuScene : Control
         // is what normally calls these, and the mod loader lives in the campaign scene, which
         // is the whole point of this one. Two catalogue reads is a very different thing from
         // building a world.
-        SpriteCatalog.Load();
-        Input.MouseMode = Input.MouseModeEnum.Visible;
-        GameCursorService.Ensure(this).Refresh();
-        FontCatalog.Load();
-        if (PresentationFonts.For("ui.default") is { } face) AddThemeFontOverride("font", face);
+        try { SpriteCatalog.Load(); }
+        catch (Exception ex) { LogMenuError("SpriteCatalog.Load", ex); }
+        ApplyDesktopCustomCursors();
+        try
+        {
+            FontCatalog.Load();
+            if (PresentationFonts.For("ui.default") is { } face) AddThemeFontOverride("font", face);
+        }
+        catch (Exception ex) { LogMenuError("FontCatalog.Load", ex); }
 
         // And the language the player chose last time. The preferences live in the one game
-        // folder under Documents, and nothing has told the store where that is yet - the
-        // campaign scene is what normally does it, and it is not running.
-        GamePaths.Prepare();
-        PlayerSettings.UseDirectory(GamePaths.Settings);
-        var chosen = SettingsCatalog.Chosen("language");
-        if (chosen.Length > 0) Loc.Language = chosen;
-
-        // Initialize platform profile + mobile text adapter before building menu or intro chrome.
-        Platform.GodotPlatformBridge.EnsureInitialized(Size.Y > 1f ? Size.Y : 1080f);
+        // folder under Documents (or sandbox user:// on mobile), and nothing has told the store
+        // where that is yet - the campaign scene is what normally does it, and it is not running.
+        try
+        {
+            GamePaths.Prepare();
+            PlayerSettings.UseDirectory(GamePaths.Settings);
+            var chosen = SettingsCatalog.Chosen("language");
+            if (chosen.Length > 0) Loc.Language = chosen;
+        }
+        catch (Exception ex) { LogMenuError("SettingsInit", ex); }
 
         // And the music, which this screen had none of: the player for it used to live in the
         // campaign scene, so the menu theme only began once a world had been built. It lives
         // above the scenes now and carries on across them (MusicDirector). The catalogue is read
         // once - a campaign that has loaded mods has read it with their tracks, and coming back
         // here should not forget them.
-        if (MusicCatalog.Count == 0) MusicCatalog.Load();
-        MusicDirector.Ensure(this).FollowScene(this, () => MusicCatalog.Moment.Menu);
+        try
+        {
+            if (MusicCatalog.Count == 0) MusicCatalog.Load();
+            MusicDirector.Ensure(this).FollowScene(this, () => MusicCatalog.Moment.Menu);
+        }
+        catch (Exception ex) { LogMenuError("MusicInit", ex); }
 
         // The frame limit the player chose. It used to be applied only when the setting was
         // changed or the window lost focus, so a menu opened fresh ran uncapped - harmless over
@@ -177,76 +235,85 @@ public partial class MainMenuScene : Control
         headerBox.AddChild(MenuCaption("Choose a world. Shape its future.", 15, MenuChromeTheme.PaperDim, serif: true));
         rows.AddChild(MenuChromeTheme.CreateEngravedRule("CommandHeaderRule", 3f));
 
-        var saveRoot = DealOrForceGame.ResolveSaveRoot();
-        var saves = System.IO.Directory.Exists(saveRoot)
-            ? SaveSystem.List(saveRoot)
-            : new List<SaveMetadata>();
-        var hasSaves = saves.Count > 0;
-        var latestSave = hasSaves ? saves[0] : null;
-
-        if (latestSave is not null)
+        var hasSaves = false;
+        try
         {
-            var heroCard = new PanelContainer { Name = "HeroContinueCard", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            heroCard.AddThemeStyleboxOverride("panel", ChromePlateArt.BuildCardWrapperStyle(14, 10, 14, 10) ?? MenuChromeTheme.GradientPlateBox(
-                MenuChromeTheme.PlateHover, MenuChromeTheme.PlateBottom, MenuChromeTheme.Brass,
-                innerTopLine: new Color(MenuChromeTheme.Highlight, 0.08f), borderThickness: 1));
-            rows.AddChild(heroCard);
+            var saveRoot = DealOrForceGame.ResolveSaveRoot();
+            var saves = System.IO.Directory.Exists(saveRoot)
+                ? SaveSystem.List(saveRoot)
+                : new List<SaveMetadata>();
+            hasSaves = saves.Count > 0;
+            var latestSave = hasSaves ? saves[0] : null;
 
-            var heroCol = new VBoxContainer();
-            heroCol.AddThemeConstantOverride("separation", 4);
-            heroCard.AddChild(heroCol);
-
-            var heroTop = new HBoxContainer();
-            heroTop.AddThemeConstantOverride("separation", 8);
-            heroCol.AddChild(heroTop);
-
-            var flagTex = !string.IsNullOrEmpty(latestSave.NationTag) ? DealOrForceGame.FlagTextureFor(latestSave.NationTag) : null;
-            if (flagTex is not null)
+            if (latestSave is not null)
             {
-                var flagRect = new TextureRect
+                var heroCard = new PanelContainer { Name = "HeroContinueCard", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+                heroCard.AddThemeStyleboxOverride("panel", ChromePlateArt.BuildCardWrapperStyle(14, 10, 14, 10) ?? MenuChromeTheme.GradientPlateBox(
+                    MenuChromeTheme.PlateHover, MenuChromeTheme.PlateBottom, MenuChromeTheme.Brass,
+                    innerTopLine: new Color(MenuChromeTheme.Highlight, 0.08f), borderThickness: 1));
+
+                var heroCol = new VBoxContainer();
+                heroCol.AddThemeConstantOverride("separation", 4);
+                heroCard.AddChild(heroCol);
+
+                var heroTop = new HBoxContainer();
+                heroTop.AddThemeConstantOverride("separation", 8);
+                heroCol.AddChild(heroTop);
+
+                var flagTex = !string.IsNullOrEmpty(latestSave.NationTag) ? DealOrForceGame.FlagTextureFor(latestSave.NationTag) : null;
+                if (flagTex is not null)
                 {
-                    Texture = flagTex,
-                    CustomMinimumSize = new Vector2(28, 18),
-                    ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                    StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
-                    SizeFlagsVertical = SizeFlags.ShrinkCenter
+                    var flagRect = new TextureRect
+                    {
+                        Texture = flagTex,
+                        CustomMinimumSize = new Vector2(28, 18),
+                        ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                        StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+                        SizeFlagsVertical = SizeFlags.ShrinkCenter
+                    };
+                    heroTop.AddChild(flagRect);
+                }
+
+                var heroTitle = new Label
+                {
+                    Text = Loc.Get("shell.hero_continue_title"),
+                    ClipText = true,
+                    SizeFlagsHorizontal = SizeFlags.ExpandFill
                 };
-                heroTop.AddChild(flagRect);
+                MenuChromeTheme.StyleExistingLabel(heroTitle, 12, MenuChromeTheme.BrassHi, serif: false, bold: true);
+                heroTop.AddChild(heroTitle);
+
+                var heroCampName = string.IsNullOrWhiteSpace(latestSave.DisplayName)
+                    ? (string.IsNullOrWhiteSpace(latestSave.Slot) ? latestSave.NationName : latestSave.Slot)
+                    : latestSave.DisplayName;
+                var heroParts = new List<string>(3);
+                if (!string.IsNullOrWhiteSpace(heroCampName)) heroParts.Add(heroCampName);
+                if (!string.IsNullOrWhiteSpace(latestSave.NationName) &&
+                    !heroCampName.Contains(latestSave.NationName, StringComparison.OrdinalIgnoreCase))
+                    heroParts.Add(latestSave.NationName);
+                if (!string.IsNullOrWhiteSpace(latestSave.GameDate) &&
+                    !heroCampName.Contains(latestSave.GameDate, StringComparison.OrdinalIgnoreCase))
+                    heroParts.Add(latestSave.GameDate);
+                var heroSub = string.Join(" · ", heroParts);
+                var heroDesc = new Label
+                {
+                    Text = heroSub,
+                    ClipText = true
+                };
+                MenuChromeTheme.StyleExistingLabel(heroDesc, 13, MenuChromeTheme.Paper, serif: true);
+                heroCol.AddChild(heroDesc);
+
+                var continueBtn = MenuAction("Continue", () => Enter(MenuIntent.LoadLatest), 44, true);
+                ChromePlateArt.ApplyMenuButtonIcon(continueBtn, "icon_menu_continue");
+                heroCol.AddChild(continueBtn);
+                rows.AddChild(heroCard);
+                rows.AddChild(ChromePlateArt.CreateEngravedMedallionDivider("HeroMedallionDivider", 1f, 12f));
             }
-
-            var heroTitle = new Label
-            {
-                Text = Loc.Get("shell.hero_continue_title"),
-                ClipText = true,
-                SizeFlagsHorizontal = SizeFlags.ExpandFill
-            };
-            MenuChromeTheme.StyleExistingLabel(heroTitle, 12, MenuChromeTheme.BrassHi, serif: false, bold: true);
-            heroTop.AddChild(heroTitle);
-
-            var heroCampName = string.IsNullOrWhiteSpace(latestSave.DisplayName)
-                ? (string.IsNullOrWhiteSpace(latestSave.Slot) ? latestSave.NationName : latestSave.Slot)
-                : latestSave.DisplayName;
-            var heroParts = new List<string>(3);
-            if (!string.IsNullOrWhiteSpace(heroCampName)) heroParts.Add(heroCampName);
-            if (!string.IsNullOrWhiteSpace(latestSave.NationName) &&
-                !heroCampName.Contains(latestSave.NationName, StringComparison.OrdinalIgnoreCase))
-                heroParts.Add(latestSave.NationName);
-            if (!string.IsNullOrWhiteSpace(latestSave.GameDate) &&
-                !heroCampName.Contains(latestSave.GameDate, StringComparison.OrdinalIgnoreCase))
-                heroParts.Add(latestSave.GameDate);
-            var heroSub = string.Join(" · ", heroParts);
-            var heroDesc = new Label
-            {
-                Text = heroSub,
-                ClipText = true
-            };
-            MenuChromeTheme.StyleExistingLabel(heroDesc, 13, MenuChromeTheme.Paper, serif: true);
-            heroCol.AddChild(heroDesc);
-
-            var continueBtn = MenuAction("Continue", () => Enter(MenuIntent.LoadLatest), 44, true);
-            ChromePlateArt.ApplyMenuButtonIcon(continueBtn, "icon_menu_continue");
-            heroCol.AddChild(continueBtn);
-            rows.AddChild(ChromePlateArt.CreateEngravedMedallionDivider("HeroMedallionDivider", 1f, 12f));
+        }
+        catch (Exception ex)
+        {
+            hasSaves = false;
+            GD.PushWarning($"[menu] Save scan failed: {ex.Message}");
         }
 
         var btnNew = MenuAction("New campaign", () => Enter(MenuIntent.NewCampaign), hasSaves ? 38 : 48, !hasSaves);
@@ -290,7 +357,14 @@ public partial class MainMenuScene : Control
             quiet.AddChild(button);
         }
 
-        RefreshModFrontendMenu();
+        try
+        {
+            RefreshModFrontendMenu();
+        }
+        catch (Exception ex)
+        {
+            LogMenuError("RefreshModFrontendMenu", ex);
+        }
         _modActions = ModFrontendMenu.Create(_menuMods.FrontendActions, id =>
         { WantedModAction = id; Enter(MenuIntent.ModAction); });
         _modActions.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomLeft);
@@ -306,6 +380,8 @@ public partial class MainMenuScene : Control
         LayoutMainMenuChrome();
         StartupIntro.AttachIfNeeded(this);
         ExportVerification.AttachIfRequested(this);
+        TryStartCompatShaderPrewarm();
+        LogBootMilestone("main_menu_ready_done");
     }
 
     /// <summary>
@@ -376,9 +452,13 @@ public partial class MainMenuScene : Control
         var back = MenuAction("Back", HideArchive, 40);
         back.CustomMinimumSize = new Vector2(130, 40);
         actions.AddChild(back);
-        var folder = MenuAction("Open folder", () => OS.ShellOpen(DealOrForceGame.ResolveSaveRoot()), 40);
-        folder.CustomMinimumSize = new Vector2(170, 40);
-        actions.AddChild(folder);
+        if (Platform.PlatformProfile.Current.IsDesktopFileDialogSupported)
+        {
+            var folder = MenuAction("Open folder",
+                () => Platform.GodotPlatformBridge.TryOpenLocalFolderSafely(DealOrForceGame.ResolveSaveRoot()), 40);
+            folder.CustomMinimumSize = new Vector2(170, 40);
+            actions.AddChild(folder);
+        }
     }
 
     private void ShowArchive()
@@ -734,13 +814,14 @@ public partial class MainMenuScene : Control
 
             case "window_mode":
             case "window_size":
-                DealOrForceGame.ApplyWindowMode(SettingsCatalog.Chosen("window_mode"));
+                if (!IsMobileOrTouchPlatform) DealOrForceGame.ApplyWindowMode(SettingsCatalog.Chosen("window_mode"));
                 break;
 
             case "vsync":
-                DisplayServer.WindowSetVsyncMode(SettingsCatalog.Flag("vsync")
-                    ? DisplayServer.VSyncMode.Enabled
-                    : DisplayServer.VSyncMode.Disabled);
+                if (!IsMobileOrTouchPlatform)
+                    DisplayServer.WindowSetVsyncMode(SettingsCatalog.Flag("vsync")
+                        ? DisplayServer.VSyncMode.Enabled
+                        : DisplayServer.VSyncMode.Disabled);
                 break;
 
             case "max_fps":
@@ -748,7 +829,7 @@ public partial class MainMenuScene : Control
                 break;
 
             case "renderer":
-                GraphicsRenderer.Choose(this, SettingsCatalog.Chosen("renderer"));
+                if (!IsMobileOrTouchPlatform) GraphicsRenderer.Choose(this, SettingsCatalog.Chosen("renderer"));
                 break;
 
             case "interface_scale":
@@ -771,15 +852,12 @@ public partial class MainMenuScene : Control
 
     private static void ApplyMenuMaxFps()
     {
-        var configuredMaxFps = Math.Max(0, (int)MathF.Round(SettingsCatalog.Number("max_fps")));
-        if (DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true && configuredMaxFps == 0)
-        {
-            if (Engine.MaxFps == 0) Engine.MaxFps = 60;
-        }
-        else
-        {
-            Engine.MaxFps = configuredMaxFps;
-        }
+        var chosen = SettingsCatalog.Chosen("max_fps");
+        var configuredMaxFps = int.TryParse(chosen, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : (int)MathF.Round(SettingsCatalog.Number("max_fps"));
+        Engine.MaxFps = DealOrForceGame.ResolveEffectiveMaxFps(configuredMaxFps);
     }
 
     public override void _Notification(int what)
@@ -789,7 +867,7 @@ public partial class MainMenuScene : Control
         {
             var chosen = SettingsCatalog.Chosen("background_fps");
             if (int.TryParse(chosen, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var bgFps) && bgFps > 0)
-                Engine.MaxFps = bgFps;
+                Engine.MaxFps = DealOrForceGame.ResolveEffectiveMaxFps(bgFps);
         }
         else if (what == NotificationApplicationFocusIn)
         {
@@ -814,7 +892,187 @@ public partial class MainMenuScene : Control
     /// The same caption watch the campaign runs, over the menu and the settings screen it
     /// now opens inside itself. Debug builds only - see <see cref="LayoutAudit.Watch"/>.
     /// </summary>
-    public override void _Process(double delta) => LayoutAudit.Watch(this, delta);
+    public override void _Process(double delta)
+    {
+        LayoutAudit.Watch(this, delta);
+        TickCompatShaderPrewarm();
+    }
+
+    public override void _ExitTree()
+    {
+        CleanupCompatShaderPrewarm();
+        StartupIntro.ReleaseWarmResources();
+        if (_bootLogger is not null)
+        {
+            try { OS.RemoveLogger(_bootLogger); } catch { }
+            try { _bootLogger.Dispose(); } catch { }
+            _bootLogger = null;
+        }
+    }
+
+    /// <summary>
+    /// GLES3 (<c>gl_compatibility</c>) has no Vulkan ubershader pipeline, so compiling and drawing
+    /// the packed campaign globe shader for 3 tiny hidden frames during main-menu idle removes
+    /// the first-pan stall when entering the Country Picker or Campaign on ARM Mali / mobile GPUs.
+    /// </summary>
+    private void TryStartCompatShaderPrewarm()
+    {
+        if (_compatShaderPrewarmed) return;
+        var args = OS.GetCmdlineUserArgs();
+        if (Array.IndexOf(args, "--verify-build") >= 0 || Array.IndexOf(args, "--safe-map") >= 0)
+            return;
+        if (DisplayServer.GetName().Equals("headless", StringComparison.OrdinalIgnoreCase))
+            return;
+        if (!string.Equals(RenderingServer.GetCurrentRenderingMethod(), "gl_compatibility", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        try
+        {
+            BootCrashDiagnostics.Step("compat_shader_prewarm_start");
+            string rawSource = null;
+            if (Godot.FileAccess.FileExists(MapShaderSource.ResourcePath))
+                rawSource = Godot.FileAccess.GetFileAsString(MapShaderSource.ResourcePath).Replace("\r\n", "\n");
+            else
+            {
+                var disk = GameDataLoader.FindDataFile("shaders", "globe_map.gdshader");
+                if (!string.IsNullOrEmpty(disk) && File.Exists(disk))
+                    rawSource = File.ReadAllText(disk).Replace("\r\n", "\n");
+            }
+            if (string.IsNullOrWhiteSpace(rawSource))
+            {
+                _compatShaderPrewarmed = true;
+                return;
+            }
+
+            var builtSource = PackedMapShader.Build(MapColorSpaceShader.Build(rawSource));
+            var shader = new Shader { Code = builtSource };
+            var material = new ShaderMaterial { Shader = shader };
+
+            using var rgbaImg = Image.CreateEmpty(2, 2, false, Image.Format.Rgba8);
+            rgbaImg.Fill(Colors.White);
+            using var rgImg = Image.CreateEmpty(2, 2, false, Image.Format.Rg8);
+            using var rImg = Image.CreateEmpty(2, 2, false, Image.Format.R8);
+            rImg.Fill(Colors.White);
+
+            var lookups = BuildDummyTextureArray(rgbaImg, PackedMapShader.Lookups.Count);
+            var ids = BuildDummyTextureArray(rgImg, PackedMapShader.Ids.Count);
+            var waterTiles = BuildDummyTextureArray(rgbaImg, 2);
+            var politicalTex = ImageTexture.CreateFromImage(rgbaImg);
+            var waterMaskTex = ImageTexture.CreateFromImage(rImg);
+
+            _compatPrewarmResources.Add(shader);
+            _compatPrewarmResources.Add(material);
+            _compatPrewarmResources.Add(lookups);
+            _compatPrewarmResources.Add(ids);
+            _compatPrewarmResources.Add(waterTiles);
+            _compatPrewarmResources.Add(politicalTex);
+            _compatPrewarmResources.Add(waterMaskTex);
+
+            material.SetShaderParameter("packed_lookups", lookups);
+            material.SetShaderParameter("packed_ids", ids);
+            material.SetShaderParameter("packed_water_tiles", waterTiles);
+            material.SetShaderParameter("political_map", politicalTex);
+            material.SetShaderParameter("water_mask", waterMaskTex);
+            material.SetShaderParameter("quality_tier",
+                (float)(int)(PlatformProfile.Current?.GraphicsQualityTier ?? PlatformGraphicsTier.MobileLow));
+
+            var mesh = new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 8, Rings = 4 };
+            _compatPrewarmResources.Add(mesh);
+
+            var vp = new SubViewport
+            {
+                Name = "CompatShaderPrewarmView",
+                Size = new Vector2I(16, 16),
+                OwnWorld3D = true,
+                TransparentBg = false,
+                PhysicsObjectPicking = false,
+                HandleInputLocally = false,
+                Msaa3D = Viewport.Msaa.Disabled,
+                RenderTargetUpdateMode = SubViewport.UpdateMode.Always
+            };
+            vp.AddChild(new WorldEnvironment
+            {
+                Environment = new Godot.Environment
+                {
+                    BackgroundMode = Godot.Environment.BGMode.Color,
+                    BackgroundColor = MenuChromeTheme.BackdropColor,
+                    AmbientLightSource = Godot.Environment.AmbientSource.Disabled
+                }
+            });
+            vp.AddChild(new DirectionalLight3D { ShadowEnabled = false });
+            vp.AddChild(new Camera3D { Position = new Vector3(0f, 0f, 3f), Current = true });
+            vp.AddChild(new MeshInstance3D
+            {
+                Mesh = mesh,
+                MaterialOverride = material,
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off
+            });
+            AddChild(vp);
+
+            var sink = new TextureRect
+            {
+                Name = "CompatShaderPrewarmSink",
+                Texture = vp.GetTexture(),
+                CustomMinimumSize = new Vector2(16, 16),
+                Size = new Vector2(16, 16),
+                Position = Vector2.Zero,
+                ZIndex = -100,
+                Modulate = new Color(1f, 1f, 1f, 0.01f),
+                MouseFilter = MouseFilterEnum.Ignore
+            };
+            AddChild(sink);
+
+            _compatPrewarmViewport = vp;
+            _compatPrewarmSink = sink;
+            _compatPrewarmFrames = 3;
+        }
+        catch (Exception ex)
+        {
+            BootCrashDiagnostics.RecordException("MainMenuScene.CompatShaderPrewarm", ex, "non-fatal prewarm skip", fatal: false);
+            CleanupCompatShaderPrewarm();
+            _compatShaderPrewarmed = true;
+        }
+    }
+
+    private static Texture2DArray BuildDummyTextureArray(Image layer, int count)
+    {
+        var layers = new Godot.Collections.Array<Image>();
+        for (var i = 0; i < count; i++) layers.Add(layer);
+        var arr = new Texture2DArray();
+        var err = arr.CreateFromImages(layers);
+        if (err != Error.Ok)
+        {
+            arr.Dispose();
+            throw new InvalidDataException("Shader prewarm texture array failed: " + err);
+        }
+        return arr;
+    }
+
+    private void TickCompatShaderPrewarm()
+    {
+        if (_compatPrewarmViewport is null) return;
+        if (--_compatPrewarmFrames > 0) return;
+        CleanupCompatShaderPrewarm();
+        _compatShaderPrewarmed = true;
+        BootCrashDiagnostics.Step("compat_shader_prewarm_done");
+    }
+
+    private void CleanupCompatShaderPrewarm()
+    {
+        if (_compatPrewarmSink is not null && IsInstanceValid(_compatPrewarmSink))
+            _compatPrewarmSink.QueueFree();
+        _compatPrewarmSink = null;
+
+        if (_compatPrewarmViewport is not null && IsInstanceValid(_compatPrewarmViewport))
+            _compatPrewarmViewport.QueueFree();
+        _compatPrewarmViewport = null;
+
+        foreach (var resource in _compatPrewarmResources)
+        {
+            try { resource.Dispose(); } catch { }
+        }
+        _compatPrewarmResources.Clear();
+    }
 
     /// <summary>Escape closes whatever is open over the menu, the way it does everywhere.</summary>
     public override void _UnhandledInput(InputEvent @event)
@@ -832,6 +1090,7 @@ public partial class MainMenuScene : Control
     {
         if (intent != MenuIntent.ModAction) WantedModAction = "";
         Wanted = intent;
+        BootCrashDiagnostics.Step("menu_enter_campaign", intent.ToString());
         GetTree().ChangeSceneToFile(CampaignScene);
     }
 
